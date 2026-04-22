@@ -34,6 +34,20 @@ interface ConflictResolverProps {
   onCancel: () => void;
 }
 
+function getConflictTypeLabel(
+  type: ConflictFile["type"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  switch (type) {
+    case "content":
+      return t("conflictTypeContent");
+    case "delete-modify":
+      return t("conflictTypeDeleteModify");
+    case "add-add":
+      return t("conflictTypeAddAdd");
+  }
+}
+
 export function ConflictResolver(props: ConflictResolverProps) {
   const { t } = useI18n();
 
@@ -354,7 +368,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
                         "font-size": "0.6875rem",
                       }}
                     >
-                      {conflict().type}
+                      {getConflictTypeLabel(conflict().type, t)}
                     </span>
                   </div>
 
@@ -465,7 +479,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
                             : "transparent",
                         }}
                       >
-                        {conflict().ours || t('fileDoesNotExist')}
+                        {conflict().ours || t("fileDoesNotExist")}
                       </pre>
                     </div>
 
@@ -506,7 +520,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
                             : "transparent",
                         }}
                       >
-                        {conflict().theirs || t('fileDoesNotExist')}
+                        {conflict().theirs || t("fileDoesNotExist")}
                       </pre>
                     </div>
                   </div>

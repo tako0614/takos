@@ -19,10 +19,10 @@ Takos の deploy 入口はシンプルです。
 
 ## Store の役割
 
-Store は ActivityPub ベースのリポジトリ発見 SNS。
+Store は repository reference を共有する Store Network ベースの発見 surface。
 
 - リポジトリを検索・発見する
-- フォロー先のリポジトリがフィードに流れてくる
+- remote store の inventory / repo event を feed で取得する
 - リポジトリに deploy manifest (`.takos/app.yml` / `.takos/app.yaml`) がある =
   installable マーク
 
@@ -66,7 +66,7 @@ repo URL / `takos install` を使う場合、**CLI は repository URL を contro
 | --------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | source          | local working tree                                      | repo URL deploy: `repository_url + ref/ref_type`; install: catalog version/tag → Git tag |
 | source 解決     | CLI が manifest / artifact を読む                       | control plane が repo を fetch して manifest を parse する（CLI は URL を渡すだけ）      |
-| primitive apply | worker / service / route / publication / grant を apply | worker / service / route / publication / grant を apply                                  |
+| primitive apply | worker / service / route / publication / consume を apply | worker / service / route / publication / consume を apply                                |
 | group snapshot  | group 指定時に作る                                      | group 指定時に作る                                                                       |
 | rollback        | group snapshot がある場合に再適用                       | group snapshot がある場合に再適用                                                        |
 | API source kind | `manifest`                                              | `git_ref`                                                                                |

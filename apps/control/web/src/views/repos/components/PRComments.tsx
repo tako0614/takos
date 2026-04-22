@@ -26,6 +26,7 @@ interface PRCommentsProps {
 
 function renderAvatar(
   author: { name: string; avatar_url?: string },
+  alt: string,
   size: "sm" | "md" = "md",
 ) {
   const sizeClass = size === "sm" ? "w-5 h-5" : "w-10 h-10";
@@ -33,7 +34,7 @@ function renderAvatar(
     return (
       <img
         src={author.avatar_url}
-        alt={author.name}
+        alt={alt}
         class={`${sizeClass} rounded-full`}
       />
     );
@@ -72,6 +73,20 @@ function getReviewBadgeClasses(status: PRReview["status"]) {
   }
 }
 
+function getReviewStatusLabel(
+  status: PRReview["status"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  switch (status) {
+    case "approved":
+      return t("prReviewStatusApproved");
+    case "changes_requested":
+      return t("prReviewStatusChangesRequested");
+    default:
+      return t("prReviewStatusCommented");
+  }
+}
+
 export function PRComments(props: PRCommentsProps) {
   const { t } = useI18n();
 
@@ -81,7 +96,10 @@ export function PRComments(props: PRCommentsProps) {
         <Card padding="md">
           <div class="flex gap-4">
             <div class="flex-shrink-0">
-              {renderAvatar(props.pr.author)}
+              {renderAvatar(
+                props.pr.author,
+                t("avatarAlt", { name: props.pr.author.name }),
+              )}
             </div>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 text-sm">
@@ -105,7 +123,10 @@ export function PRComments(props: PRCommentsProps) {
           <Card padding="md">
             <div class="flex gap-4">
               <div class="flex-shrink-0">
-                {renderAvatar(review.author)}
+                {renderAvatar(
+                  review.author,
+                  t("avatarAlt", { name: review.author.name }),
+                )}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 text-sm flex-wrap">
@@ -114,7 +135,7 @@ export function PRComments(props: PRCommentsProps) {
                   </span>
                   <span class={getReviewBadgeClasses(review.status)}>
                     {getReviewStatusIcon(review.status)}
-                    {review.status.replace("_", " ")}
+                    {getReviewStatusLabel(review.status, t)}
                   </span>
                   <span class="text-zinc-500">
                     {formatDateTime(review.created_at)}
@@ -136,7 +157,10 @@ export function PRComments(props: PRCommentsProps) {
           <Card padding="md">
             <div class="flex gap-4">
               <div class="flex-shrink-0">
-                {renderAvatar(comment.author)}
+                {renderAvatar(
+                  comment.author,
+                  t("avatarAlt", { name: comment.author.name }),
+                )}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 text-sm">

@@ -31,20 +31,24 @@ server (`/mcp`) を同じ worker artifact で publish する。
 
 ## Publications
 
-`path: /` は built frontend / static asset surface の mount point を表し、server
-entrypoint 自体の root route を意味しない。
+`outputs.url.route: /` は built frontend / static asset surface の mount point を表し、
+server entrypoint 自体の root route を意味しない。
 
 ```yaml
 publish:
   - name: docs-ui
     type: UiSurface
     publisher: web
-    path: /
+    outputs:
+      url:
+        route: /
     title: Docs
   - name: docs-mcp
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     title: Docs MCP
     spec:
       transport: streamable-http
@@ -55,20 +59,21 @@ publish:
 `publish` entry で catalog を管理します。`McpServer` は agent runtime が
 参照する MCP catalog entry です。
 
-## Capability grants
+## Takos system publication
 
 `takos-api` は route / interface publication ではなく、kernel API への access を
-受け取る capability grant です。
+受け取る local consume 名です。
 
 ```yaml
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-        - files:write
+compute:
+  web:
+    consume:
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
+            - files:write
 ```
 
 ## UI と MCP server
@@ -81,7 +86,7 @@ worker-scoped secret env を用意する。`compute.web.env` には
 
 ## Storage との連携
 
-takos-docs は `takos-api` capability grant を consume して kernel API の
+takos-docs は `takos-api` system consume から kernel API の
 endpoint / credential を受け取り、Storage API
 を呼び出してファイルの読み書きを行う。
 

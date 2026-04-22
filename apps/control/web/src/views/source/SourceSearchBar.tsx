@@ -33,6 +33,7 @@ export function SourceSearchBar(props: SourceSearchBarProps) {
             type="button"
             class="absolute left-3 top-1/2 -translate-y-1/2 p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
             onClick={props.onExitSearch}
+            aria-label={t("goBack")}
           >
             <Icons.ChevronLeft class="w-5 h-5" />
           </button>
@@ -61,6 +62,7 @@ export function SourceSearchBar(props: SourceSearchBarProps) {
           type="button"
           class="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-zinc-400 hover:text-zinc-600 transition-colors"
           onClick={() => props.setQuery("")}
+          aria-label={t("clear")}
         >
           <Icons.X class="w-4 h-4" />
         </button>

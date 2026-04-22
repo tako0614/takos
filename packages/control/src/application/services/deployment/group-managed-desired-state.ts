@@ -15,6 +15,7 @@ import {
 } from "../platform/service-publications.ts";
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
 import { resolveLinkedCommonEnvState } from "../platform/env-state-resolution.ts";
+import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 import {
   createServiceBinding,
   deleteServiceBinding,
@@ -108,6 +109,7 @@ export type ManagedWorkloadDesiredStateSnapshot = {
   spaceId: string;
   serviceId: string;
   serviceName: string;
+  groupHostname?: string | null;
   consumes: AppConsume[];
   resourceBindings: Array<{
     name: string;
@@ -420,6 +422,7 @@ export async function captureManagedWorkloadDesiredState(
     spaceId: string;
     serviceId: string;
     serviceName: string;
+    groupHostname?: string | null;
   },
   deps: Partial<ManagedWorkloadDesiredStateHelpers> = {},
 ): Promise<ManagedWorkloadDesiredStateSnapshot> {
@@ -438,6 +441,7 @@ export async function captureManagedWorkloadDesiredState(
     spaceId: params.spaceId,
     serviceId: params.serviceId,
     serviceName: params.serviceName,
+    groupHostname: params.groupHostname,
     consumes,
     resourceBindings: resourceBindings.map((row) => ({
       name: row.name,
@@ -469,6 +473,7 @@ export async function restoreManagedWorkloadDesiredState(
       spaceId: snapshot.spaceId,
       serviceId: snapshot.serviceId,
       serviceName: snapshot.serviceName,
+      groupHostname: snapshot.groupHostname,
       consumes: snapshot.consumes,
     });
   } catch (error) {
@@ -542,6 +547,10 @@ export async function syncGroupManagedDesiredState(
   const desiredStateService = resolvedDeps.createDesiredStateService(env);
   const injectedEnv = buildInjectedEnv(input.desiredState, input.spaceId);
   const failures: Array<{ name: string; error: string }> = [];
+  const groupHostname = await getGroupAutoHostname(env, {
+    groupId: input.observedState.groupId,
+    spaceId: input.spaceId,
+  });
   const targetWorkloadNames = input.targetWorkloadNames
     ? new Set(
       input.targetWorkloadNames.map((name) => name.trim()).filter(Boolean),
@@ -563,6 +572,7 @@ export async function syncGroupManagedDesiredState(
       spaceId: input.spaceId,
       serviceId: observedWorkload.serviceId,
       serviceName: `${input.desiredState.manifest.name}:${workloadName}`,
+      groupHostname,
     }, {
       createDesiredStateService: resolvedDeps.createDesiredStateService,
       listServiceConsumes: resolvedDeps.listServiceConsumes,
@@ -623,6 +633,7 @@ export async function syncGroupManagedDesiredState(
         spaceId: input.spaceId,
         serviceId: observedWorkload.serviceId,
         serviceName: `${input.desiredState.manifest.name}:${workloadName}`,
+        groupHostname,
         consumes: workloadSpec.consume,
       });
 

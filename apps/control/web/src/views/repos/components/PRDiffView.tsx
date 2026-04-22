@@ -10,32 +10,34 @@ interface PRDiffViewProps {
   onToggleFile: (path: string) => void;
 }
 
-function getFileStatusIcon(status: FileDiff["status"]) {
+function getFileStatusLabel(
+  status: FileDiff["status"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
   switch (status) {
     case "added":
-      return (
-        <span class="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-          A
-        </span>
-      );
+      return t("fileStatusAdded");
     case "modified":
-      return (
-        <span class="text-xs font-bold text-zinc-600 dark:text-zinc-400">
-          M
-        </span>
-      );
+      return t("fileStatusModified");
     case "deleted":
-      return (
-        <span class="text-xs font-bold text-zinc-400 dark:text-zinc-500">
-          D
-        </span>
-      );
+      return t("fileStatusDeleted");
     case "renamed":
-      return (
-        <span class="text-xs font-bold text-zinc-500 dark:text-zinc-400">
-          R
-        </span>
-      );
+      return t("fileStatusRenamed");
+  }
+}
+
+function getFileStatusBadgeClasses(status: FileDiff["status"]) {
+  const base =
+    "rounded border px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap";
+  switch (status) {
+    case "added":
+      return `${base} border-zinc-300 text-zinc-900 dark:border-zinc-600 dark:text-zinc-100`;
+    case "modified":
+      return `${base} border-zinc-300 text-zinc-600 dark:border-zinc-600 dark:text-zinc-300`;
+    case "deleted":
+      return `${base} border-zinc-200 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500`;
+    case "renamed":
+      return `${base} border-zinc-300 text-zinc-500 dark:border-zinc-600 dark:text-zinc-400`;
   }
 }
 
@@ -80,7 +82,13 @@ export function PRDiffView(props: PRDiffViewProps) {
                   >
                     <Icons.ChevronDown class="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
                   </Show>
-                  {getFileStatusIcon(file.status)}
+                  <span
+                    class={getFileStatusBadgeClasses(file.status)}
+                    title={getFileStatusLabel(file.status, t)}
+                    aria-label={getFileStatusLabel(file.status, t)}
+                  >
+                    {getFileStatusLabel(file.status, t)}
+                  </span>
                   <span class="text-sm text-zinc-900 dark:text-zinc-100 font-mono">
                     <Show when={file.old_path && file.old_path !== file.path}>
                       <span class="text-zinc-400 dark:text-zinc-500 line-through">

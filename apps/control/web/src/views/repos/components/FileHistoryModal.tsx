@@ -28,6 +28,20 @@ interface FileHistoryModalProps {
   data: FileHistoryResponse | null;
 }
 
+function getFileStatusLabel(
+  status: FileHistoryCommit["status"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  switch (status) {
+    case "added":
+      return t("fileStatusAdded");
+    case "modified":
+      return t("fileStatusModified");
+    case "deleted":
+      return t("fileStatusDeleted");
+  }
+}
+
 export function FileHistoryModal(props: FileHistoryModalProps) {
   const { t } = useI18n();
 
@@ -91,7 +105,8 @@ export function FileHistoryModal(props: FileHistoryModalProps) {
                       ? "bg-red-500"
                       : "bg-blue-500"
                   }`}
-                  title={cmt.status}
+                  title={getFileStatusLabel(cmt.status, t)}
+                  aria-label={getFileStatusLabel(cmt.status, t)}
                 />
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">

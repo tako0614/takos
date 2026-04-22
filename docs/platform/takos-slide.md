@@ -31,20 +31,24 @@ single worker (web) 構成。
 
 ## Publications
 
-`path: /` は built frontend / static asset surface の mount point を表し、server
-entrypoint 自体の root route を意味しない。
+`outputs.url.route: /` は built frontend / static asset surface の mount point を
+表し、server entrypoint 自体の root route を意味しない。
 
 ```yaml
 publish:
   - name: slide-ui
     type: UiSurface
     publisher: web
-    path: /
+    outputs:
+      url:
+        route: /
     title: Slide
   - name: slide-mcp
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     title: Slide MCP
     spec:
       transport: streamable-http
@@ -55,20 +59,21 @@ publish:
 `publish` entry で catalog を管理します。`McpServer` は agent runtime が
 参照する MCP catalog entry です。
 
-## Capability grants
+## Takos system publication
 
 `takos-api` は route / interface publication ではなく、kernel API への access を
-受け取る capability grant です。
+受け取る local consume 名です。
 
 ```yaml
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-        - files:write
+compute:
+  web:
+    consume:
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
+            - files:write
 ```
 
 default app manifest / workflow は UI と `/mcp` を同じ worker に含める。MCP

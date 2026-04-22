@@ -1,6 +1,7 @@
 import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
 import { CloudflareApiClient } from "../cloudflare/api-client.ts";
 import { sha256Hex } from "../../../shared/utils/encoding-utils.ts";
+import { UnsupportedOperationError } from "../../../shared/utils/unsupported-operation.ts";
 
 type BackupEnv = {
   DB: D1Database;
@@ -99,6 +100,9 @@ function parseInventoryCreatedAtMs(key: string): number | null {
 }
 
 function isUnsupportedDbDumpError(err: unknown): boolean {
+  if (err instanceof UnsupportedOperationError) {
+    return err.capability === "dump";
+  }
   const message = err instanceof Error ? err.message : String(err);
   return message.includes("DB.dump() is not implemented");
 }

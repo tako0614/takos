@@ -50,6 +50,7 @@ export const common = {
   mainNavigation: "メインナビゲーション",
   resourceStatusLabel: "ステータス: {status}",
   avatar: "アバター",
+  avatarAlt: "{name}のアバター",
   selectOption: "選択してください",
 
   // App

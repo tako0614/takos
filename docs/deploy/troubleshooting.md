@@ -98,14 +98,15 @@ takos deploy --plan --env staging --space SPACE_ID --target routes.web:/
 
 ## publication / capability 解決失敗
 
-### `Error: publication ... publisher/type is unsupported`
+### `Error: ... system publication request ...`
 
-このエラーは `publisher: takos` の publication に未対応の `type`
-を指定した場合に 出ます。Takos publisher type は `api-key` と `oauth-client`
-です。SQL / object-store / queue などの resource type は publish に入れません。
+このエラーは `takos.api-key` / `takos.oauth-client` の `request` が足りない、
+または未知 field を含む場合に出ます。SQL / object-store / queue などの resource
+type は publish / consume に入れません。
 
-- `publish[].publisher` が `takos` の場合、`type` が `api-key` または
-  `oauth-client` か確認してください
+- `publication: takos.api-key` なら `request.scopes` があるか確認してください
+- `publication: takos.oauth-client` なら `request.redirectUris` と
+  `request.scopes` があるか確認してください
 - route publication の場合、`publisher` が route の `target`
   と一致しているか確認してください
 - publish / consume の shape は [Manifest Reference](/reference/manifest-spec)
@@ -129,7 +130,7 @@ takos deploy --plan --env staging --space SPACE_ID --target web
 
 3. よくある原因:
 
-- `consume` が存在しない publication / capability grant を参照している
+- `consume` が存在しない publication または未知の system publication source を参照している
 - `consume.env` が既存 env と衝突している
 - Worker のコードにシンタックスエラーがある
 - readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない

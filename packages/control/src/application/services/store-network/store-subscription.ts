@@ -1,5 +1,5 @@
 /**
- * Store Subscription Service — polls remote store outboxes for new activities
+ * Store Subscription Service — polls remote store feeds for new events
  * and caches them as updates for the subscribing workspace.
  */
 
@@ -11,11 +11,7 @@ import {
   storeRegistryUpdates,
 } from "../../../infra/db/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
-import {
-  fetchRemoteOutbox,
-  fetchRemoteRepositoryActor,
-  type RemoteRepository,
-} from "./remote-store-client.ts";
+import { fetchRemoteFeed } from "./remote-store-client.ts";
 import {
   listSubscribedStores,
   markOutboxChecked,
@@ -40,7 +36,7 @@ export interface StoreUpdate {
 }
 
 /**
- * Poll all subscribed remote stores for new outbox activities.
+ * Poll all subscribed remote stores for new feed events.
  * Intended to be called by a scheduled worker (cron).
  */
 export async function pollAllSubscribedStores(
@@ -66,7 +62,7 @@ export async function pollAllSubscribedStores(
 }
 
 /**
- * Poll a single remote store's outbox and save new activities.
+ * Poll a single remote store's feed and save new events.
  */
 export async function pollSingleStore(
   dbBinding: D1Database,
@@ -76,8 +72,8 @@ export async function pollSingleStore(
     return 0;
   }
 
-  // Fetch the first page of the outbox (preserves activity wrapper)
-  const result = await fetchRemoteOutbox(entry.outboxUrl, {
+  // Fetch the first page of the Store Network feed.
+  const result = await fetchRemoteFeed(entry.outboxUrl, {
     page: 1,
     limit: 50,
   });
@@ -107,10 +103,8 @@ export async function pollSingleStore(
       continue;
     }
 
-    const obj = await hydrateRepositoryReference(activity.object);
-    const objectType = Array.isArray(obj.type)
-      ? obj.type.join(",")
-      : String(obj.type || "");
+    const obj = activity.object;
+    const objectType = "RepositoryReference";
 
     await db.insert(storeRegistryUpdates).values({
       id: generateId(),
@@ -132,25 +126,6 @@ export async function pollSingleStore(
 
   await markOutboxChecked(dbBinding, entry.id);
   return newCount;
-}
-
-async function hydrateRepositoryReference(
-  obj: RemoteRepository,
-): Promise<RemoteRepository> {
-  if (!obj.id || obj.name) return obj;
-  try {
-    const fetched = await fetchRemoteRepositoryActor(obj.id);
-    return {
-      ...obj,
-      ...fetched,
-      id: fetched.id || obj.id,
-      url: fetched.url || obj.url,
-      published: fetched.published || obj.published,
-      updated: fetched.updated || obj.updated,
-    };
-  } catch {
-    return obj;
-  }
 }
 
 /**

@@ -144,13 +144,13 @@ const OVERRIDE_QUEUE_TRIGGER_FIELDS = new Set([
   "maxWaitTimeMs",
   "retryDelaySeconds",
 ]);
-const OVERRIDE_CONSUME_FIELDS = new Set(["publication", "env"]);
+const OVERRIDE_CONSUME_FIELDS = new Set(["publication", "as", "request", "env"]);
 const OVERRIDE_PUBLISH_FIELDS = new Set([
   "name",
   "publisher",
   "spec",
   "type",
-  "path",
+  "outputs",
   "title",
 ]);
 
@@ -438,6 +438,14 @@ function parseOverrideConsumes(
       `${prefix}[${index}].publication`,
     );
     const result: Record<string, unknown> = { publication };
+    const alias = asString(record.as, `${prefix}[${index}].as`);
+    if (alias) result.as = alias;
+    if (record.request != null) {
+      result.request = requireRecord(
+        record.request,
+        `${prefix}[${index}].request`,
+      );
+    }
     if (record.env != null) {
       result.env = asStringMap(
         record.env,
@@ -586,12 +594,33 @@ function parseOverridePublishEntry(
   if (spec != null) result.spec = requireRecord(spec, `${prefix}.spec`);
   const type = asString(record.type, `${prefix}.type`);
   if (type) result.type = type;
-  const path = asString(record.path, `${prefix}.path`);
-  if (path) {
-    if (!path.startsWith("/")) {
-      throw new Error(`${prefix}.path must start with '/' (got: ${path})`);
+  if (record.outputs != null) {
+    const outputs = requireRecord(record.outputs, `${prefix}.outputs`);
+    const parsedOutputs: Record<string, unknown> = {};
+    for (const [outputName, outputRaw] of Object.entries(outputs)) {
+      const output = requireRecord(
+        outputRaw,
+        `${prefix}.outputs.${outputName}`,
+      );
+      assertAllowedFields(
+        output,
+        `${prefix}.outputs.${outputName}`,
+        new Set(["route"]),
+      );
+      const route = asString(
+        output.route,
+        `${prefix}.outputs.${outputName}.route`,
+      );
+      if (route) {
+        if (!route.startsWith("/")) {
+          throw new Error(
+            `${prefix}.outputs.${outputName}.route must start with '/' (got: ${route})`,
+          );
+        }
+        parsedOutputs[outputName] = { route };
+      }
     }
-    result.path = path;
+    result.outputs = parsedOutputs;
   }
   const title = asString(record.title, `${prefix}.title`);
   if (title) result.title = title;

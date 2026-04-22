@@ -95,6 +95,10 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
                   : "text-zinc-400 dark:text-zinc-500 hover:text-amber-500"
               }`}
               onClick={() => props.onStar(props.item)}
+              aria-label={props.item.is_starred
+                ? t("unstarRepository", { name: props.item.name })
+                : t("starRepository", { name: props.item.name })}
+              aria-pressed={props.item.is_starred}
             >
               <Icons.Star class="w-3.5 h-3.5" />
               {props.item.stars > 0 ? props.item.stars : ""}

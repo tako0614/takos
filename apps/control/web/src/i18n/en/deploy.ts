@@ -153,6 +153,10 @@ export const deploy = {
   r2Storage: "R2 Storage",
   kvStore: "KV Store",
   vectorizeIndex: "Vectorize Index",
+  workerResource: "Worker",
+  resourceStatus_active: "Active",
+  resourceStatus_creating: "Creating",
+  resourceStatus_error: "Error",
 
   // R2 Browser
   r2LastModified: "Last Modified",

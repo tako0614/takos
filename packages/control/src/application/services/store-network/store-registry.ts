@@ -1,5 +1,5 @@
 /**
- * Store Registry Service — manages remote ActivityPub stores known to this instance.
+ * Store Registry Service — manages remote Store Network stores known to this instance.
  * Each workspace can register remote stores and switch between them.
  */
 
@@ -13,9 +13,9 @@ import {
 } from "../../../infra/db/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import {
-  fetchRemoteStoreActor,
-  type RemoteStoreActor,
-  resolveStoreViaWebFinger,
+  fetchRemoteStoreDocument,
+  type RemoteStoreDocument,
+  resolveStoreIdentifier,
 } from "./remote-store-client.ts";
 
 export interface StoreRegistryEntry {
@@ -40,7 +40,7 @@ export interface StoreRegistryEntry {
 }
 
 export interface AddRemoteStoreInput {
-  /** Store identifier: "slug@domain" or full AP actor URL */
+  /** Store identifier: "slug@domain" or full public Store API URL */
   identifier: string;
   /** Activate immediately */
   setActive?: boolean;
@@ -76,7 +76,7 @@ function actorToInsertValues(
   accountId: string,
   domain: string,
   storeSlug: string,
-  actor: RemoteStoreActor,
+  actor: RemoteStoreDocument,
   options: { setActive?: boolean; subscribe?: boolean },
 ) {
   const timestamp = new Date().toISOString();
@@ -88,11 +88,11 @@ function actorToInsertValues(
     storeSlug,
     name: actor.name || storeSlug,
     summary: actor.summary || null,
-    iconUrl: actor.icon?.url || null,
-    publicKeyPem: actor.publicKey?.publicKeyPem || null,
-    repositoriesUrl: actor.inventory || actor.repositories || null,
-    searchUrl: actor.repositorySearch || null,
-    outboxUrl: actor.outbox || null,
+    iconUrl: actor.iconUrl || null,
+    publicKeyPem: null,
+    repositoriesUrl: actor.inventoryUrl || null,
+    searchUrl: actor.searchUrl || null,
+    outboxUrl: actor.feedUrl || null,
     isActive: options.setActive ?? false,
     subscriptionEnabled: options.subscribe ?? false,
     lastFetchedAt: timestamp,
@@ -104,15 +104,15 @@ function actorToInsertValues(
 
 /**
  * Add a remote store to the workspace's registry.
- * Resolves via WebFinger, fetches the actor, and persists.
+ * Resolves the public Store API URL, fetches metadata, and persists.
  */
 export async function addRemoteStore(
   dbBinding: D1Database,
   accountId: string,
   input: AddRemoteStoreInput,
 ): Promise<StoreRegistryEntry> {
-  // 1. Resolve via WebFinger
-  const { actorUrl, domain, storeSlug } = await resolveStoreViaWebFinger(
+  // 1. Resolve Store Network public API URL
+  const { storeUrl, domain, storeSlug } = resolveStoreIdentifier(
     input.identifier,
   );
 
@@ -122,7 +122,7 @@ export async function addRemoteStore(
     .from(storeRegistry)
     .where(and(
       eq(storeRegistry.accountId, accountId),
-      eq(storeRegistry.actorUrl, actorUrl),
+      eq(storeRegistry.actorUrl, storeUrl),
     ))
     .limit(1)
     .get();
@@ -131,8 +131,8 @@ export async function addRemoteStore(
     throw new Error(`Store "${input.identifier}" is already registered`);
   }
 
-  // 3. Fetch the actor
-  const actor = await fetchRemoteStoreActor(actorUrl);
+  // 3. Fetch the store document
+  const actor = await fetchRemoteStoreDocument(storeUrl);
 
   // 4. If setting active, deactivate others
   if (input.setActive) {
@@ -283,17 +283,17 @@ export async function refreshRemoteStore(
 
   if (!existing) return null;
 
-  const actor = await fetchRemoteStoreActor(existing.actorUrl);
+  const actor = await fetchRemoteStoreDocument(existing.actorUrl);
   const timestamp = new Date().toISOString();
 
   const updates = {
     name: actor.name || existing.name,
     summary: actor.summary || null,
-    iconUrl: actor.icon?.url || null,
-    publicKeyPem: actor.publicKey?.publicKeyPem || null,
-    repositoriesUrl: actor.inventory || actor.repositories || null,
-    searchUrl: actor.repositorySearch || null,
-    outboxUrl: actor.outbox || null,
+    iconUrl: actor.iconUrl || null,
+    publicKeyPem: null,
+    repositoriesUrl: actor.inventoryUrl || null,
+    searchUrl: actor.searchUrl || null,
+    outboxUrl: actor.feedUrl || null,
     lastFetchedAt: timestamp,
     updatedAt: timestamp,
   };

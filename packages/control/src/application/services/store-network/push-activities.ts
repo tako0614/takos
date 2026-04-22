@@ -1,5 +1,5 @@
 /**
- * Push Activities Service — records ForgeFed Push activities for repo outbox.
+ * Push Activities Service — records repository change events for Store Network feeds.
  */
 
 import { count, desc, eq, inArray } from "drizzle-orm";

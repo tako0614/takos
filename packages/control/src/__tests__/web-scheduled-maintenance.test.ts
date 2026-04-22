@@ -83,10 +83,6 @@ function createDeps(
         errors: 0,
       };
     },
-    tickDeliveryQueue: async () => {
-      calls.push("ap");
-      return { scanned: 0, delivered: 0, requeued: 0, dlq: 0 };
-    },
     processDefaultAppPreinstallJobs: async () => {
       calls.push("default-app");
       return {
@@ -118,7 +114,7 @@ Deno.test("runScheduledFamilyMaintenance includes workflow artifact GC in the ho
     createDeps(env, calls),
   );
 
-  assertEquals(calls, ["cleanup", "snapshot", "orphan", "artifact", "ap"]);
+  assertEquals(calls, ["cleanup", "snapshot", "orphan", "artifact"]);
   assertEquals(errors, []);
 });
 
@@ -140,7 +136,7 @@ Deno.test("runScheduledFamilyMaintenance keeps hourly jobs running after workflo
     }),
   );
 
-  assertEquals(calls, ["cleanup", "snapshot", "orphan", "artifact", "ap"]);
+  assertEquals(calls, ["cleanup", "snapshot", "orphan", "artifact"]);
   assertEquals(errors, [{
     job: "workflow-artifact-gc",
     error: "artifact gc failed",

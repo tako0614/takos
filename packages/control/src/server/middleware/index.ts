@@ -8,7 +8,6 @@ export * from "./body-size.ts";
 export * from "./cache.ts";
 export * from "./content-type.ts";
 export * from "./git-auth.ts";
-export * from "./http-signature.ts";
 export * from "./oauth-auth.ts";
 export * from "./param-validation.ts";
 export * from "./plan-gates.ts";

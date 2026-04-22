@@ -28,7 +28,7 @@ import { accounts } from "./schema-accounts.ts";
 
 // ── Federation tables ────────────────────────────────────────────────
 
-// 121. APFollowers — ActivityPub follower relationships (Store/Repo followers)
+// 121. APFollowers — legacy follower relationships retained for migration safety
 export const apFollowers = sqliteTable("ap_followers", {
   id: text("id").primaryKey(),
   targetActorUrl: text("target_actor_url").notNull(),
@@ -42,13 +42,10 @@ export const apFollowers = sqliteTable("ap_followers", {
   ),
 }));
 
-// 122. APDeliveryQueue — retry/backoff/DLQ queue for outbound ActivityPub POSTs
+// 122. APDeliveryQueue — legacy retry/backoff/DLQ queue retained for migration safety
 //
-// Round 11 audit finding #4: deliverToFollowers previously used one-shot
-// Promise.allSettled and silently dropped failed deliveries. This table
-// persists each (activity, inbox) pair so the hourly cron tick can replay
-// failed POSTs with exponential backoff until either a 2xx or the
-// dead-letter threshold (attempts >= 7) is reached.
+// This table persists retired outbound federation delivery attempts so old
+// data remains readable after the Store Network migration.
 export const apDeliveryQueue = sqliteTable("ap_delivery_queue", {
   id: text("id").primaryKey(),
   activityId: text("activity_id").notNull(),
@@ -70,7 +67,7 @@ export const apDeliveryQueue = sqliteTable("ap_delivery_queue", {
   ),
 }));
 
-// 118. RepoPushActivities — ForgeFed Push activities for repo outbox
+// 118. RepoPushActivities — Store Network feed events for repository changes
 export const repoPushActivities = sqliteTable("repo_push_activities", {
   id: text("id").primaryKey(),
   repoId: text("repo_id").notNull(),
@@ -110,7 +107,7 @@ export const repoGrants = sqliteTable("repo_grants", {
   ),
 }));
 
-// 120. StoreInventoryItems — explicit inventory registration + outbox activity log
+// 120. StoreInventoryItems — explicit inventory registration + feed event log
 //
 // NOTE: migration 0042_store_inventory.sql also creates a partial unique index
 // `idx_store_inventory_unique_active ON (account_id, store_slug, repo_actor_url)
@@ -126,6 +123,10 @@ export const storeInventoryItems = sqliteTable("store_inventory_items", {
   repoName: text("repo_name"),
   repoSummary: text("repo_summary"),
   repoOwnerSlug: text("repo_owner_slug"),
+  repoCloneUrl: text("repo_clone_url"),
+  repoBrowseUrl: text("repo_browse_url"),
+  repoDefaultBranch: text("repo_default_branch"),
+  repoDefaultBranchHash: text("repo_default_branch_hash"),
   localRepoId: text("local_repo_id"),
   activityType: text("activity_type").notNull(),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
@@ -150,7 +151,7 @@ export const storeInventoryItems = sqliteTable("store_inventory_items", {
 
 // ── Store Registry tables ────────────────────────────────────────────
 
-// 115. StoreRegistry — tracks remote ActivityPub stores known to this instance
+// 115. StoreRegistry — tracks remote Store Network stores known to this instance
 export const storeRegistry = sqliteTable("store_registry", {
   id: text("id").primaryKey(),
   accountId: text("account_id").notNull().references(() => accounts.id),

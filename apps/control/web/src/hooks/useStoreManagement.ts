@@ -14,7 +14,12 @@ export interface StoreItem {
 
 export interface InventoryItem {
   id: string;
-  repo_actor_url: string;
+  repository_url: string;
+  clone_url: string | null;
+  browse_url: string | null;
+  default_branch: string | null;
+  default_branch_hash: string | null;
+  package_icon: string | null;
   repo_name: string | null;
   repo_summary: string | null;
   repo_owner_slug: string | null;
@@ -24,7 +29,7 @@ export interface InventoryItem {
 
 export interface RegistryEntry {
   id: string;
-  actor_url: string;
+  store_url: string;
   domain: string;
   store_slug: string;
   name: string;
@@ -174,7 +179,7 @@ export function useStoreInventory(
     }
   };
 
-  const addItem = async (repoActorUrl: string, repoName?: string) => {
+  const addItem = async (repositoryUrl: string, repoName?: string) => {
     const currentSpaceId = spaceId();
     const currentStoreSlug = storeSlug();
     if (!currentSpaceId || !currentStoreSlug) {
@@ -183,7 +188,7 @@ export function useStoreInventory(
     const res = await rpc.spaces[":spaceId"].stores[":storeSlug"].inventory
       .$post({
         param: { spaceId: currentSpaceId, storeSlug: currentStoreSlug },
-        json: { repo_actor_url: repoActorUrl, repo_name: repoName },
+        json: { repository_url: repositoryUrl, repo_name: repoName },
       });
     await rpcJson(res);
     await fetchItems();

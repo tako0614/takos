@@ -88,7 +88,7 @@ const QUEUE_TRIGGER_FIELDS = new Set([
   "maxWaitTimeMs",
   "retryDelaySeconds",
 ]);
-const CONSUME_FIELDS = new Set(["publication", "env"]);
+const CONSUME_FIELDS = new Set(["publication", "as", "request", "env"]);
 const CLOUDFLARE_FIELDS = new Set(["container"]);
 const CLOUDFLARE_CONTAINER_FIELDS = new Set([
   "binding",
@@ -406,6 +406,17 @@ function normalizeConsumeEnvAliases(
   return normalized;
 }
 
+function parseConsumeRequest(
+  raw: unknown,
+  field: string,
+): Record<string, unknown> | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`${field} must be an object`);
+  }
+  return raw as Record<string, unknown>;
+}
+
 function parseConsume(
   prefix: string,
   raw: unknown,
@@ -423,21 +434,28 @@ function parseConsume(
       asStringMap(record.env, `${consumePrefix}.env`),
       `${consumePrefix}.env`,
     );
+    const alias = asString(record.as, `${consumePrefix}.as`);
+    const request = parseConsumeRequest(
+      record.request,
+      `${consumePrefix}.request`,
+    );
     return {
       publication: asRequiredString(
         record.publication,
         `${consumePrefix}.publication`,
       ),
+      ...(alias ? { as: alias } : {}),
+      ...(request ? { request } : {}),
       ...(env ? { env } : {}),
     };
   });
 
   const seen = new Set<string>();
   for (const entry of result) {
-    const key = entry.publication.trim();
+    const key = (entry.as ?? entry.publication).trim();
     if (seen.has(key)) {
       throw new Error(
-        `${prefix}.consume contains duplicate publication reference: ${key}`,
+        `${prefix}.consume contains duplicate local consume name: ${key}`,
       );
     }
     seen.add(key);

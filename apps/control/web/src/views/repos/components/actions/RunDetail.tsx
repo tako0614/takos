@@ -2,7 +2,7 @@ import { For, Show } from "solid-js";
 import { Icons } from "../../../../lib/Icons.tsx";
 import { useI18n } from "../../../../store/i18n.ts";
 import type { JobLogState, WorkflowRunDetail } from "./actions-types.ts";
-import { statusBadge } from "./actions-types.ts";
+import { statusBadge, workflowRunStatusLabel } from "./actions-types.ts";
 import { JobCard } from "./JobCard.tsx";
 import { Button } from "../../../../components/ui/Button.tsx";
 import { Card } from "../../../../components/ui/Card.tsx";
@@ -91,8 +91,8 @@ export function RunDetail(props: RunDetailProps) {
                   class="text-xs mt-1"
                   style={{ color: "var(--color-text-tertiary)" }}
                 >
-                  {run().ref || "unknown ref"} ·{" "}
-                  {run().sha?.slice(0, 7) || "unknown sha"}
+                  {run().ref || t("unknownRef")} ·{" "}
+                  {run().sha?.slice(0, 7) || t("unknownSha")}
                 </div>
               </div>
               <span
@@ -103,7 +103,11 @@ export function RunDetail(props: RunDetailProps) {
                   )
                 }`}
               >
-                {run().status}
+                {workflowRunStatusLabel(
+                  run().status,
+                  run().conclusion,
+                  t,
+                )}
               </span>
             </div>
 

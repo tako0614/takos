@@ -99,6 +99,8 @@ export type AppTriggers = {
 
 export type AppConsume = {
   publication: string;
+  as?: string;
+  request?: Record<string, unknown>;
   env?: Record<string, string>;
 };
 
@@ -192,9 +194,15 @@ export type AppPublication = {
   name: string;
   publisher: string;
   type: string;
+  outputs?: Record<string, AppPublicationOutput>;
+  /** @deprecated retained for stored legacy rows only; public manifests use outputs. */
   path?: string;
   title?: string;
   spec?: Record<string, unknown>;
+};
+
+export type AppPublicationOutput = {
+  route?: string;
 };
 
 // --- Environment overrides ---

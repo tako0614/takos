@@ -26,7 +26,9 @@ publish:
   - name: my-tools
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       transport: streamable-http
 ```
@@ -100,7 +102,9 @@ publish:
   - name: my-tools
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       transport: streamable-http
       authSecretRef: MCP_AUTH_TOKEN

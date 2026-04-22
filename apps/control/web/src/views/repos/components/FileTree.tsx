@@ -89,7 +89,7 @@ export function FileTree(props: FileTreeProps) {
   };
 
   const getBreadcrumbs = (): BreadcrumbItem[] => {
-    const items: BreadcrumbItem[] = [{ name: "root", path: "" }];
+    const items: BreadcrumbItem[] = [{ name: t("rootDirectory"), path: "" }];
     const path = currentPath();
     if (path) {
       const parts = path.split("/");

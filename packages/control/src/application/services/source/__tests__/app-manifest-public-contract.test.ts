@@ -149,7 +149,9 @@ publish:
   - type: com.example.McpEndpoint
     name: notes
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       protocol: streamable-http
 `);
@@ -170,6 +172,7 @@ publish:
   );
   assertEquals(manifest.publish[0]?.name, "notes");
   assertEquals(manifest.publish[0]?.publisher, "web");
+  assertEquals(manifest.publish[0]?.outputs, { url: { route: "/mcp" } });
   assertEquals(manifest.publish[0]?.spec, { protocol: "streamable-http" });
 });
 
@@ -266,11 +269,11 @@ routes:
   );
 });
 
-Deno.test("public manifest contract - rejects Takos grants with missing required spec fields during parse", () => {
+Deno.test("public manifest contract - rejects Takos publications in app manifests during parse", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: missing-takos-grant-spec-app
+name: unsupported-takos-publication-app
 
 publish:
   - name: takos-api
@@ -288,33 +291,7 @@ compute:
         artifactPath: dist/worker
 `),
     Error,
-    "publication 'takos-api'.spec.scopes must be an array",
-  );
-
-  assertThrows(
-    () =>
-      parseAppManifestYaml(`
-name: missing-oauth-grant-spec-app
-
-publish:
-  - name: app-oauth
-    publisher: takos
-    type: oauth-client
-    spec:
-      scopes:
-        - threads:read
-
-compute:
-  web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
-`),
-    Error,
-    "publication 'app-oauth'.spec.redirectUris must be an array",
+    "publish[0].publisher 'takos' is not supported in app manifests",
   );
 });
 
@@ -657,7 +634,9 @@ publish:
   - name: notes
     type: com.example.McpEndpoint
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       protocol: streamable-http
 
@@ -676,7 +655,7 @@ overrides:
     name: "notes",
     type: "com.example.McpEndpoint",
     publisher: "web",
-    path: "/mcp",
+    outputs: { url: { route: "/mcp" } },
     spec: { protocol: "streamable-http" },
     title: "Production Notes",
   }]);
@@ -705,13 +684,17 @@ publish:
   - name: notes
     type: com.example.McpEndpoint
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       protocol: streamable-http
   - name: assets
     type: com.example.FileEndpoint
     publisher: web
-    path: /assets
+    outputs:
+      url:
+        route: /assets
     spec:
       contentTypes:
         - image/png
@@ -729,14 +712,14 @@ overrides:
       name: "notes",
       type: "com.example.McpEndpoint",
       publisher: "web",
-      path: "/mcp",
+      outputs: { url: { route: "/mcp" } },
       spec: { protocol: "streamable-http" },
     },
     {
       name: "assets",
       type: "com.example.FileEndpoint",
       publisher: "web",
-      path: "/assets",
+      outputs: { url: { route: "/assets" } },
       spec: { contentTypes: ["image/png"] },
       title: "Production Assets",
     },
@@ -1304,14 +1287,18 @@ publish:
   - type: com.example.McpEndpoint
     name: notes
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     title: Notes MCP
     spec:
       protocol: streamable-http
   - type: com.example.FileEndpoint
     name: assets
     publisher: web
-    path: /assets/:id
+    outputs:
+      url:
+        route: /assets/:id
     title: Asset Browser
     spec:
       contentTypes:
@@ -1320,7 +1307,7 @@ publish:
 
   assertEquals(manifest.publish[0]?.title, "Notes MCP");
   assertEquals(manifest.publish[1]?.title, "Asset Browser");
-  assertEquals(manifest.publish[1]?.path, "/assets/:id");
+  assertEquals(manifest.publish[1]?.outputs?.url?.route, "/assets/:id");
 });
 
 Deno.test("public manifest contract - preserves UiSurface launcher metadata", () => {
@@ -1344,7 +1331,9 @@ publish:
   - type: UiSurface
     name: launcher
     publisher: web
-    path: /
+    outputs:
+      url:
+        route: /
     title: Launcher
     spec:
       description: Launcher app
@@ -1386,7 +1375,9 @@ publish:
   - type: UiSurface
     name: launcher
     publisher: web
-    path: /
+    outputs:
+      url:
+        route: /
 `);
 
   assertEquals(manifest.compute.web?.icon, "/icons/search.png");
@@ -1414,20 +1405,22 @@ publish:
     name: markdown
     publisher: web
     title: Markdown
-    path: /files/:id
+    outputs:
+      url:
+        route: /files/:id
     spec:
       mimeTypes:
         - text/markdown
 `);
 
   assertEquals(manifest.publish[0]?.type, "FileHandler");
-  assertEquals(manifest.publish[0]?.path, "/files/:id");
+  assertEquals(manifest.publish[0]?.outputs?.url?.route, "/files/:id");
   assertEquals(manifest.publish[0]?.spec, {
     mimeTypes: ["text/markdown"],
   });
 });
 
-Deno.test("public manifest contract - rejects duplicate route publication publisher/path", () => {
+Deno.test("public manifest contract - rejects duplicate route publication publisher/route", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1450,14 +1443,18 @@ publish:
   - type: com.example.McpEndpoint
     name: notes
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
   - type: com.example.SearchEndpoint
     name: search
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
 `),
     Error,
-    "duplicate route publication publisher/path 'web /mcp'",
+    "duplicate route publication publisher/route 'web /mcp'",
   );
 });
 
@@ -1482,7 +1479,9 @@ publish:
   - type: com.example.McpEndpoint
     name: tools
     publisher: web
-    path: /production
+    outputs:
+      url:
+        route: /production
 
 overrides:
   production:
@@ -1493,7 +1492,7 @@ overrides:
 
   const resolved = applyManifestOverrides(manifest, "production");
   assertEquals(resolved.routes, [{ target: "web", path: "/production" }]);
-  assertEquals(resolved.publish[0]?.path, "/production");
+  assertEquals(resolved.publish[0]?.outputs?.url?.route, "/production");
 });
 
 Deno.test("public manifest contract - rejects FileHandler publications without :id launch paths", () => {
@@ -1520,13 +1519,15 @@ publish:
     name: markdown
     publisher: web
     title: Markdown
-    path: /files/open
+    outputs:
+      url:
+        route: /files/open
     spec:
       mimeTypes:
         - text/markdown
 `),
     Error,
-    "publish[0].path must include :id for FileHandler",
+    "publish[0].outputs must include a route with :id for FileHandler",
   );
 });
 
@@ -1554,7 +1555,9 @@ publish:
     name: markdown
     publisher: web
     title: Markdown
-    path: /files/:id
+    outputs:
+      url:
+        route: /files/:id
     spec:
       note: no selectors
 `),
@@ -1587,7 +1590,9 @@ publish:
     name: markdown
     publisher: web
     title: Markdown
-    path: /files/:id
+    outputs:
+      url:
+        route: /files/:id
     spec:
       mimeTypes:
         - text/markdown
@@ -1598,28 +1603,9 @@ publish:
   );
 });
 
-Deno.test("public manifest contract - parses Takos capability grants and compute consume", () => {
+Deno.test("public manifest contract - parses Takos system publications as compute consume requests", () => {
   const manifest = parseAppManifestYaml(`
 name: publication-app
-
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-  - name: app-oauth
-    publisher: takos
-    type: oauth-client
-    spec:
-      clientName: Notes App
-      redirectUris:
-        - https://example.com/oauth/callback
-      scopes:
-        - threads:read
-      metadata:
-        logoUri: https://example.com/logo.png
 
 compute:
   web:
@@ -1630,24 +1616,42 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: takos-api
-      - publication: app-oauth
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
+      - publication: takos.oauth-client
+        as: app-oauth
+        request:
+          clientName: Notes App
+          redirectUris:
+            - https://example.com/oauth/callback
+          scopes:
+            - threads:read
+          metadata:
+            logoUri: https://example.com/logo.png
 `);
 
-  assertEquals(manifest.publish[0]?.spec, {
-    scopes: ["files:read"],
-  });
-  assertEquals(manifest.publish[1]?.spec, {
-    clientName: "Notes App",
-    redirectUris: ["https://example.com/oauth/callback"],
-    scopes: ["threads:read"],
-    metadata: {
-      logoUri: "https://example.com/logo.png",
-    },
-  });
+  assertEquals(manifest.publish, []);
   assertEquals(manifest.compute.web.consume, [
-    { publication: "takos-api" },
-    { publication: "app-oauth" },
+    {
+      publication: "takos.api-key",
+      as: "takos-api",
+      request: { scopes: ["files:read"] },
+    },
+    {
+      publication: "takos.oauth-client",
+      as: "app-oauth",
+      request: {
+        clientName: "Notes App",
+        redirectUris: ["https://example.com/oauth/callback"],
+        scopes: ["threads:read"],
+        metadata: {
+          logoUri: "https://example.com/logo.png",
+        },
+      },
+    },
   ]);
 });
 
@@ -1655,16 +1659,6 @@ Deno.test("public manifest contract - allows relative OAuth redirect URIs", () =
   const manifest = parseAppManifestYaml(`
 name: relative-oauth-redirect-app
 
-publish:
-  - name: app-oauth
-    publisher: takos
-    type: oauth-client
-    spec:
-      redirectUris:
-        - /api/auth/callback
-      scopes:
-        - openid
-
 compute:
   web:
     build:
@@ -1673,27 +1667,31 @@ compute:
         job: bundle
         artifact: web
         artifactPath: dist/worker
+    consume:
+      - publication: takos.oauth-client
+        as: app-oauth
+        request:
+          redirectUris:
+            - /api/auth/callback
+          scopes:
+            - openid
 `);
 
-  assertEquals(manifest.publish[0]?.spec, {
-    redirectUris: ["/api/auth/callback"],
-    scopes: ["openid"],
+  assertEquals(manifest.compute.web.consume?.[0], {
+    publication: "takos.oauth-client",
+    as: "app-oauth",
+    request: {
+      redirectUris: ["/api/auth/callback"],
+      scopes: ["openid"],
+    },
   });
 });
 
-Deno.test("public manifest contract - rejects unknown Takos grant spec fields", () => {
+Deno.test("public manifest contract - rejects malformed Takos system consume requests", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: takos-grant-extra-spec-app
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-      extra: nope
+name: takos-api-request-array-app
 compute:
   web:
     build:
@@ -1702,27 +1700,20 @@ compute:
         job: bundle
         artifact: web
         artifactPath: dist/worker
+    consume:
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          - scopes
 `),
     Error,
-    "publish[0].spec.extra is not supported by the publish/consume contract",
+    "compute.web.consume[0].request must be an object",
   );
 
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: takos-oauth-extra-metadata-app
-publish:
-  - name: app-oauth
-    publisher: takos
-    type: oauth-client
-    spec:
-      redirectUris:
-        - https://example.com/oauth/callback
-      scopes:
-        - threads:read
-      metadata:
-        logoUri: https://example.com/logo.png
-        unknownUri: https://example.com/unknown
+name: takos-oauth-unsupported-consume-field-app
 compute:
   web:
     build:
@@ -1731,9 +1722,15 @@ compute:
         job: bundle
         artifact: web
         artifactPath: dist/worker
+    consume:
+      - publication: takos.oauth-client
+        as: app-oauth
+        spec:
+          scopes:
+            - threads:read
 `),
     Error,
-    "publish[0].spec.metadata.unknownUri is not supported by the publish/consume contract",
+    "compute.web.consume[0].spec is not supported by the app manifest contract",
   );
 });
 
@@ -1918,7 +1915,7 @@ compute:
   );
 });
 
-Deno.test("public manifest contract - rejects deploy resources as Takos publications", () => {
+Deno.test("public manifest contract - rejects Takos platform publications", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1939,11 +1936,11 @@ compute:
         artifactPath: dist/worker
 `),
     Error,
-    "publish[0].type is unsupported for publisher 'takos': resource",
+    "publish[0].publisher 'takos' is not supported in app manifests",
   );
 });
 
-Deno.test("public manifest contract - rejects route fields on Takos grants", () => {
+Deno.test("public manifest contract - rejects legacy route fields and Takos publication fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1966,7 +1963,7 @@ compute:
         artifactPath: dist/worker
 `),
     Error,
-    "publish[0].path is not supported for publisher 'takos'",
+    "publish[0].path is not supported by the publish/consume contract",
   );
 
   assertThrows(
@@ -1991,7 +1988,7 @@ compute:
         artifactPath: dist/worker
 `),
     Error,
-    "publish[0].title is not supported for publisher 'takos'",
+    "publish[0].publisher 'takos' is not supported in app manifests",
   );
 });
 

@@ -20,7 +20,7 @@ Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", (
         name: "search",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
         title: "Search MCP",
         spec: { protocol: "streamable-http" },
       },
@@ -28,7 +28,7 @@ Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", (
         name: "markdown",
         type: "com.example.FileEndpoint",
         publisher: "web",
-        path: "/files/:id",
+        outputs: { url: { route: "/files/:id" } },
         title: "Markdown",
         spec: {
           contentTypes: ["text/markdown"],
@@ -38,7 +38,7 @@ Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", (
         name: "docs",
         type: "com.example.Surface",
         publisher: "web",
-        path: "/",
+        outputs: { url: { route: "/" } },
         title: "Docs",
         spec: { placement: "sidebar" },
       },
@@ -56,52 +56,58 @@ Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", (
   ]);
   assertEquals(docs[1]?.config, {
     targetRef: "web",
-    path: "/mcp",
+    outputs: { url: { route: "/mcp" } },
     title: "Search MCP",
     protocol: "streamable-http",
   });
   assertEquals(docs[2]?.config, {
     targetRef: "web",
-    path: "/files/:id",
+    outputs: { url: { route: "/files/:id" } },
     title: "Markdown",
     contentTypes: ["text/markdown"],
   });
   assertEquals(docs[3]?.config, {
     targetRef: "web",
-    path: "/",
+    outputs: { url: { route: "/" } },
     title: "Docs",
     placement: "sidebar",
   });
 });
 
-Deno.test("buildBundleDocs preserves Takos grant publications", () => {
+Deno.test("buildBundleDocs preserves Takos system publication consumes on workloads", () => {
   const manifest: AppManifest = {
     name: "grant-bundle-app",
-    compute: {},
-    routes: [],
-    publish: [
-      {
-        name: "takos-api",
-        type: "api-key",
-        publisher: "takos",
-        spec: { scopes: ["files:read", "files:write"] },
+    compute: {
+      web: {
+        kind: "worker",
+        build: {
+          fromWorkflow: {
+            path: ".takos/workflows/deploy.yml",
+            job: "bundle",
+            artifact: "web",
+          },
+        },
+        consume: [{
+          publication: "takos.api-key",
+          as: "takos-api",
+          request: { scopes: ["files:read", "files:write"] },
+        }],
       },
-    ],
+    },
+    routes: [],
+    publish: [],
     env: {},
   };
 
   const docs = buildBundleDocs(manifest, emptyBuildSources());
 
-  assertEquals(docs.map((doc) => doc.type), ["Package", "Publication"]);
-  assertEquals(docs[1], {
-    type: "Publication",
-    name: "takos-api",
-    config: {
-      publisher: "takos",
-      type: "api-key",
-      spec: { scopes: ["files:read", "files:write"] },
-    },
-  });
+  assertEquals(docs.map((doc) => doc.type), ["Package", "Workload"]);
+  assertEquals(docs[1]?.name, "web");
+  assertEquals(docs[1]?.config?.consume, [{
+    publication: "takos.api-key",
+    as: "takos-api",
+    request: { scopes: ["files:read", "files:write"] },
+  }]);
 });
 
 Deno.test("buildBundleDocs emits image-backed attached container workloads with dockerfile metadata", () => {

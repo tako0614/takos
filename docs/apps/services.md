@@ -34,19 +34,12 @@ routes:
 
 ## env
 
-Service には環境変数を設定できる。publication / capability grant を `consume`
-する compute だけに、その outputs が注入される。Takos capability grant は
-`publish[].publisher/type` として書く。
+Service には環境変数を設定できる。publication を `consume` する compute
+だけに、その outputs が注入される。Takos API key / OAuth client も
+`takos.api-key` / `takos.oauth-client` という system publication source として
+同じ `consume` contract で受け取る。
 
 ```yaml
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-
 compute:
   api:
     image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
@@ -54,7 +47,11 @@ compute:
     env:
       NODE_ENV: production
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
         env:
           endpoint: TAKOS_API_ENDPOINT
           apiKey: TAKOS_API_KEY
@@ -68,7 +65,7 @@ compute:
 | `port`        | **yes**  | number | listen port                                            |
 | `dockerfile`  | no       | string | `image` 併用時の local/private build metadata          |
 | `env`         | no       | object | container env                                          |
-| `consume`     | no       | array  | grant / publication consume                            |
+| `consume`     | no       | array  | publication consume                                    |
 | `healthCheck` | no       | object | ヘルスチェック                                         |
 | `volumes`     | no       | object | parser / desired metadata。runtime へ直接 apply しない |
 | `scaling`     | no       | object | parser / desired metadata。runtime へ直接 apply しない |

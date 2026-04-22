@@ -73,7 +73,7 @@ Deno.test(
         name: string;
         publisher: string;
         type: string;
-        path?: string;
+        outputs?: Record<string, { route?: string }>;
         spec?: Record<string, unknown>;
       }>;
       routes: Array<{ target: string; path: string }>;
@@ -90,7 +90,7 @@ Deno.test(
           name: "tools",
           publisher: "web",
           type: "McpServer",
-          path: "/mcp-v2",
+          outputs: { url: { route: "/mcp-v2" } },
           spec: { transport: "streamable-http" },
         },
       ],
@@ -157,7 +157,7 @@ Deno.test(
         name: "tools",
         publisher: "web",
         type: "McpServer",
-        path: "/mcp-v2",
+        outputs: { url: { route: "/mcp-v2" } },
         spec: { transport: "streamable-http" },
       },
     ]);
@@ -170,7 +170,7 @@ Deno.test(
         name: "tools",
         publisher: "web",
         type: "McpServer",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
         spec: { transport: "streamable-http" },
       },
     ]);
@@ -433,7 +433,7 @@ Deno.test(
           name: "docs-mcp",
           publisher: "web",
           type: "McpServer",
-          path: "/mcp",
+          outputs: { url: { route: "/mcp" } },
           spec: {
             transport: "streamable-http",
             authSecretRef: "MCP_AUTH_TOKEN",

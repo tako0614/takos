@@ -268,13 +268,7 @@ Deno.test("validateConsumeReferences allows known outputs on known publications"
         name: "search",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
-      },
-      {
-        name: "takos-api",
-        publisher: "takos",
-        type: "api-key",
-        spec: { scopes: ["files:read"] },
+        outputs: { url: { route: "/mcp" } },
       },
     ],
     compute: {
@@ -290,7 +284,12 @@ Deno.test("validateConsumeReferences allows known outputs on known publications"
         },
         consume: [
           { publication: "search" },
-          { publication: "takos-api", env: { endpoint: "PRIMARY_API_URL" } },
+          {
+            publication: "takos.api-key",
+            as: "takos-api",
+            request: { scopes: ["files:read"] },
+            env: { endpoint: "PRIMARY_API_URL" },
+          },
         ],
       },
     },
@@ -357,7 +356,7 @@ Deno.test("validateConsumeReferences fails when consume aliases unknown output",
         name: "search",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
     ],
     compute: {
@@ -387,7 +386,7 @@ Deno.test("validateConsumeEnvCollision fails when consume aliases collide with l
         name: "search",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
     ],
     compute: {
@@ -471,16 +470,16 @@ Deno.test("validatePublicationKnownFields rejects unknown publication spec field
         name: "markdown",
         publisher: "web",
         type: "FileHandler",
-        path: "/files/:id",
+        outputs: { url: { route: "/files/:id" } },
         spec: { mimeTypes: ["text/markdown"], note: "oops" },
       },
     ],
   });
   const errors = validatePublicationKnownFields(manifest);
-  assertEquals(errors.length, 2);
+  assertEquals(errors.length, 1);
   assertEquals(
     errors.map((error) => error.path).sort(),
-    ["publish[0].spec.extra", "publish[1].spec.note"],
+    ["publish[1].spec.note"],
   );
   assert(errors.every((error) => error.code === "publication_unknown_field"));
 });
@@ -505,7 +504,7 @@ Deno.test("validatePublicationDefinitions rejects route fields on Takos grants",
   assert(definitionError);
   assert(
     definitionError.message.includes(
-      "must not combine publisher 'takos' with route fields path/title",
+      "must not combine publisher 'takos' with route fields outputs/path/title",
     ),
   );
 });
@@ -517,13 +516,13 @@ Deno.test("validatePublicationUniqueness rejects duplicate publish names", () =>
         name: "search",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
       {
         name: "search",
         type: "com.example.FileEndpoint",
         publisher: "web",
-        path: "/files",
+        outputs: { url: { route: "/files" } },
       },
     ],
   });
@@ -532,20 +531,20 @@ Deno.test("validatePublicationUniqueness rejects duplicate publish names", () =>
   assertEquals(errors[0].code, "publication_duplicate");
 });
 
-Deno.test("validatePublicationUniqueness rejects duplicate route publisher/path", () => {
+Deno.test("validatePublicationUniqueness rejects duplicate route publisher/route", () => {
   const manifest = makeManifest({
     publish: [
       {
         name: "notes",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
       {
         name: "search",
         type: "com.example.SearchEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
     ],
   });
@@ -554,7 +553,7 @@ Deno.test("validatePublicationUniqueness rejects duplicate route publisher/path"
   assertEquals(errors[0].code, "publication_duplicate");
   assert(
     errors[0].message.includes(
-      "route publication publisher/path 'web /mcp' duplicates publish[0]",
+      "route publication publisher/route 'web /mcp' duplicates publish[0]",
     ),
   );
 });
@@ -580,7 +579,7 @@ Deno.test("validatePublicationRouteMatches checks resolved routes after override
         name: "search",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
     ],
     overrides: {
@@ -607,7 +606,7 @@ Deno.test("validatePublicationRouteMatches allows method-split routes for one pu
         name: "tools",
         type: "com.example.McpEndpoint",
         publisher: "web",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
     ],
   });
@@ -655,7 +654,7 @@ Deno.test("runDeployValidations aggregates errors from every validator", () => {
         name: "search",
         type: "com.example.McpEndpoint",
         publisher: "api",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       },
     ],
     compute: {

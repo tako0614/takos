@@ -9,19 +9,19 @@ import {
   removeRemoteStore,
   setActiveStore,
   setSubscription,
-} from "../../../application/services/activitypub/store-registry.ts";
+} from "../../../application/services/store-network/store-registry.ts";
 import {
   fetchRemoteRepositories,
   RemoteStoreError,
   searchRemoteRepositories,
-} from "../../../application/services/activitypub/remote-store-client.ts";
-import { importRepositoryFromRemoteStore } from "../../../application/services/activitypub/remote-install.ts";
+} from "../../../application/services/store-network/remote-store-client.ts";
+import { importRepositoryFromRemoteStore } from "../../../application/services/store-network/remote-install.ts";
 import {
   getStoreUpdates,
   markAllUpdatesSeen,
   markUpdatesSeen,
   pollSingleStore,
-} from "../../../application/services/activitypub/store-subscription.ts";
+} from "../../../application/services/store-network/store-subscription.ts";
 
 export const storeRegistryRouteDeps = {
   requireSpaceAccess,
@@ -67,7 +67,7 @@ export function formatEntry(entry: {
 }) {
   return {
     id: entry.id,
-    actor_url: entry.actorUrl,
+    store_url: entry.actorUrl,
     domain: entry.domain,
     store_slug: entry.storeSlug,
     name: entry.name,
@@ -85,10 +85,11 @@ export function formatRepository(repo: {
   id: string;
   name?: string | null;
   summary?: string | null;
+  repositoryUrl?: string | null;
   url?: string | null;
   owner?: string | null;
-  visibility?: string | null;
   defaultBranch?: string | null;
+  defaultBranchHash?: string | null;
   cloneUrl?: string | null;
   browseUrl?: string | null;
   published?: string | null;
@@ -98,10 +99,11 @@ export function formatRepository(repo: {
     id: repo.id,
     name: repo.name,
     summary: repo.summary,
+    repository_url: repo.repositoryUrl || repo.url,
     url: repo.url,
     owner: repo.owner,
-    visibility: repo.visibility,
     default_branch: repo.defaultBranch,
+    default_branch_hash: repo.defaultBranchHash,
     clone_url: repo.cloneUrl,
     browse_url: repo.browseUrl,
     published: repo.published,

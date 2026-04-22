@@ -3,7 +3,7 @@
 `.takos/app.yml` は既定の deploy manifest path です。ファイル名に `app`
 が残りますが、Takos の deploy model では Store / UI の app catalog ではなく、
 primitive desired declaration を書く deploy manifest として扱います。worker /
-service / route / publication と grant を記述します。`takos deploy` /
+service / route / publication と consume request を記述します。`takos deploy` /
 `takos install` では manifest の `name` が group 名として使われ、`--group`
 を指定した場合は override されます。作成・更新される primitive は group
 inventory に所属し、group snapshot / rollback / uninstall などの group 機能を
@@ -35,19 +35,10 @@ routes:
     path: /
 ```
 
-## Takos capability grant を使う例
+## Takos system publication を consume する例
 
 ```yaml
 name: notes-app
-
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-        - files:write
 
 compute:
   web:
@@ -58,7 +49,12 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
+            - files:write
         env:
           endpoint: INTERNAL_TAKOS_API_URL
           apiKey: INTERNAL_TAKOS_API_KEY
@@ -91,12 +87,14 @@ publish:
   - name: search
     type: McpServer
     publisher: agent
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       transport: streamable-http
 ```
 
-publication / grant は自動注入されません。必要な consumer が明示的に `consume`
+publication は自動注入されません。必要な consumer が明示的に `consume`
 します。
 
 ## トップレベルフィールド
@@ -212,27 +210,35 @@ compute:
 
 ### consume
 
-`consume` は compute が publication / grant output を env として受け取る
+`consume` は compute が publication output を env として受け取る
 service-level dependency edge です。manifest 上では compute に書きますが、deploy
 時に対象 service の `service_consumes` record へ同期されます。manifest
 で管理する service では、次回 apply 時に manifest の内容で consume
 設定を置き換えます。
 
-`consume` は publication / grant 名と optional alias map を持ちます。alias map
-は output 名 -> env 名 の対応です。`consume.env` は output filter ではなく、
-publication / grant の全 outputs が inject 対象です。未指定の output は default
-env 名をそのまま使います。
+`consume` は publication source、optional local name、request、alias map を
+持ちます。`publication` は同じ space の catalog 名、または Takos が公開する
+system publication source（例: `takos.api-key`, `takos.oauth-client`）です。
+`as` はその compute 内での local consume 名で、stored consume record の識別に
+使われます。Takos system publication source では default env 名にも反映されます。
+`request` は system publication へ渡す要求です。
+`env` は output 名 -> env 名 の alias map です。`consume.env` は output filter
+ではなく、publication の全 outputs が inject 対象です。未指定の output は
+default env 名をそのまま使います。
 
 `consume.env` の env 名は任意文字列ではなく `[A-Za-z_][A-Za-z0-9_]*` に一致する
 必要があります。保存時と注入時には uppercase に正規化されます。
 
-`publication` は同じ space の publication catalog 名を参照します。publication
-名は current implementation では space 内で一意なので、別 primitive や
-API-managed grant と同じ名前を使わないでください。
+同じ compute 内では `as` があれば `as`、なければ `publication` が local consume
+名です。同じ local consume 名を重複させないでください。
 
 ```yaml
 consume:
-  - publication: takos-api
+  - publication: takos.api-key
+    as: takos-api
+    request:
+      scopes:
+        - files:read
     env:
       endpoint: INTERNAL_TAKOS_API_URL
       apiKey: INTERNAL_TAKOS_API_KEY
@@ -338,51 +344,51 @@ routes:
 
 `methods` を省略した route は全 HTTP method に一致します。同じ `path` で method
 が重なる route は duplicate として invalid です。同じ `target + path` を複数
-route に分けることも invalid です。route publication は `publisher + path` で
+route に分けることも invalid です。route publication は `publisher + route` で
 route を参照するため、endpoint は 1 つの route にまとめて必要な method を
 `methods` に列挙します。
 
 ## publish
 
 `publish` は primitive が space-level publication catalog に出す desired entries
-です。route publication は endpoint metadata を共有し、Takos capability grant は
-API key / OAuth client の access output を共有します。`publish` 自体は resource
-creation や backend selection、generic plugin resolver ではありません。Takos
-grant は `publisher: takos` と `type` / `spec` を持ち、backend 名は
-書きません。deploy pipeline は capability grant validation / env injection と
-catalog sync だけを行います。SQL / object-store / queue などの resource は
-publish ではなく resource API / runtime binding 側の責務です。
+です。route publication は endpoint metadata と route output を共有します。
+`publish` 自体は resource creation や backend selection、generic plugin resolver
+ではありません。Takos の API key / OAuth client は `publish[]` に
+`publisher: takos` として書かず、`compute.<name>.consume[]` で
+`takos.api-key` / `takos.oauth-client` を consume します。SQL / object-store /
+queue などの resource は publish ではなく resource API / runtime binding 側の
+責務です。
 
 manifest 由来の publication は primitive declaration の projection
-として保存され ますが、catalog 名は space 内で一意です。route publication は
-manifest-managed entry で、control plane API
-から直接作る対象ではありません。Takos capability grant は manifest
-から作ることも、API-managed space-level grant として作ることも できます。
+として保存されますが、catalog 名は space 内で一意です。route publication は
+manifest-managed entry で、control plane API から直接作る対象ではありません。
 
-### OAuth client grant
+### OAuth client system publication
 
 ```yaml
-publish:
-  - name: app-oauth
-    publisher: takos
-    type: oauth-client
-    spec:
-      redirectUris:
-        - https://example.com/callback
-      scopes:
-        - threads:read
-        - runs:write
-      clientName: My App
-      metadata:
-        logoUri: https://example.com/logo.png
+compute:
+  web:
+    consume:
+      - publication: takos.oauth-client
+        as: app-oauth
+        request:
+          clientName: My App
+          redirectUris:
+            - https://example.com/callback
+          scopes:
+            - threads:read
+            - runs:write
+          metadata:
+            logoUri: https://example.com/logo.png
 ```
 
-`oauth-client` は capability grant です。`redirectUris` と `scopes` は必須です。
+`takos.oauth-client` は Takos が公開する system publication source です。
+`request.redirectUris` と `request.scopes` は必須です。
 `redirectUris` は絶対 HTTPS URL に加えて、manifest では `/api/auth/callback`
 のような相対 path も受け付けます。相対 path は deploy 時に group の auto
 hostname へ解決されるため、hostname を解決できない環境では validation が失敗します。
-`clientName` と `metadata.*` は任意です。`metadata` 配下は `logoUri` / `tosUri`
-/ `policyUri` を受け付けます。
+`request.clientName` と `request.metadata.*` は任意です。`metadata` 配下は
+`logoUri` / `tosUri` / `policyUri` を受け付けます。
 
 ### route publication
 
@@ -391,13 +397,17 @@ publish:
   - name: search
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     title: Search MCP
     spec:
       transport: streamable-http
 ```
 
-route publication は `name` / `publisher` / `type` / `path` が必須です。`type`
+route publication は `name` / `publisher` / `type` / `outputs` が必須です。
+route output は `outputs.<name>.route` に書きます。慣例的な main URL は
+`outputs.url.route` です。`type`
 は custom string で、core は type の意味を解釈しません。`spec` は opaque object
 として保存され、platform / app 側が解釈します。`McpServer` / `FileHandler` /
 `UiSurface` は custom type の例です。
@@ -409,32 +419,30 @@ launcher icon として使われます。`spec.icon` / `compute.<name>.icon` は
 または publisher root-relative path として扱われます。
 `spec.launcher: false` を指定した `UiSurface` は launcher には表示されません。
 
-`publisher + path` は `routes[]` の 1 件に一致する必要があります。manifest
-全体で同じ `publisher + path` が複数件に一致する状態は invalid です。route
-publication の output `url` は assigned hostname と宣言した `path`
-から生成されます。`/files/:id` のような path template は許可され、output の
-`url` も template URL のまま consumer に渡ります。
+各 `outputs.*.route` は `publisher + route` として `routes[]` の 1 件に一致する
+必要があります。manifest 全体で同じ `publisher + route` が複数件に一致する状態は
+invalid です。route output の値は assigned hostname と宣言した `route` から
+生成されます。`/files/:id` のような path template は許可され、output の URL も
+template URL のまま consumer に渡ります。
 
 route publication を削除・変更する場合は manifest の `publish[]` entry
 を変更して deploy します。
 
-### Takos publisher types
+### Takos system publication sources
 
-`publish[].publisher/type` は strict です。以下の Takos publisher type
-だけを受け付け、未知の type は deploy validation で invalid です。`api-key` /
-`oauth-client` は capability grant です。SQL / object-store / queue などの
-resource type はここには入りません。
+Takos 自体が公開する情報は `publish[]` ではなく system publication source として
+`consume[]` から参照します。未知の `request` field は deploy validation で invalid
+です。SQL / object-store / queue などの resource type はここには入りません。
 
-| type           | spec                               | outputs                              |
-| -------------- | ---------------------------------- | ------------------------------------ |
-| `api-key`      | `spec.scopes`                      | `endpoint`, `apiKey`                 |
-| `oauth-client` | `spec.redirectUris`, `spec.scopes` | `clientId`, `clientSecret`, `issuer` |
+| source                 | required request fields         | outputs                              |
+| ---------------------- | ------------------------------- | ------------------------------------ |
+| `takos.api-key`        | `scopes`                        | `endpoint`, `apiKey`                 |
+| `takos.oauth-client`   | `redirectUris`, `scopes`        | `clientId`, `clientSecret`, `issuer` |
 
-`oauth-client` は capability grant です。`redirectUris` と `scopes` は必須、
-`clientName` と `metadata.*` は任意です。`metadata` 配下は `logoUri` / `tosUri`
-/ `policyUri` を受け付けます。
+`takos.oauth-client` の `clientName` と `metadata.*` は任意です。`metadata` 配下は
+`logoUri` / `tosUri` / `policyUri` を受け付けます。
 
-default env 名は publication 名から決まります。たとえば `takos-api` の
+default env 名は local consume 名から決まります。たとえば `as: takos-api` の
 `endpoint` は `PUBLICATION_TAKOS_API_ENDPOINT` です。
 
 ## overrides
@@ -463,7 +471,7 @@ merge rule:
   します。対応する base entry がなければ追加されます。
 - `env`: shallow merge です。同名 key は override 側が勝ちます。
 
-merge 後に route target、duplicate route、publication `publisher + path`、
+merge 後に route target、duplicate route、publication `publisher + route`、
 consume reference、env collision が再検証されます。
 
 ## deploy

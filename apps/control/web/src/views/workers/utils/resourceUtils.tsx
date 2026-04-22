@@ -1,6 +1,7 @@
 import type { JSX } from "solid-js";
 
 import { Icons } from "../../../lib/Icons.tsx";
+import type { TranslationKey } from "../../../store/i18n.ts";
 import type { Resource } from "../../../types/index.ts";
 
 export function getResourceTypeIcon(type: Resource["type"]): JSX.Element {
@@ -20,21 +21,33 @@ export function getResourceTypeIcon(type: Resource["type"]): JSX.Element {
   }
 }
 
-export function getResourceTypeName(type: Resource["type"]): string {
+export function getResourceTypeName(
+  type: Resource["type"],
+  t: (key: TranslationKey) => string,
+): string {
   switch (type) {
     case "d1":
-      return "D1 Database";
+      return t("d1Database");
     case "r2":
-      return "R2 Storage";
+      return t("r2Storage");
     case "kv":
-      return "KV Store";
+      return t("kvStore");
     case "vectorize":
-      return "Vectorize";
+      return t("vectorizeIndex");
     case "worker":
-      return "Worker";
+      return t("workerResource");
     default:
       return type;
   }
+}
+
+export function getResourceStatusLabel(
+  status: Resource["status"],
+  t: (key: TranslationKey) => string,
+): string {
+  const key = `resourceStatus_${status}` as TranslationKey;
+  const translated = t(key);
+  return translated === key ? status : translated;
 }
 
 export function getResourceStatusBgClass(status: Resource["status"]): string {

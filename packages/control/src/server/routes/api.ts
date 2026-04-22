@@ -40,6 +40,7 @@ import agentTasks from "./agent-tasks.ts";
 import authApi from "./auth-api.ts";
 import billingRoutes, { billingWebhookHandler } from "./billing/routes.ts";
 import publicShare from "./public-share.ts";
+import publicStores from "./public-store/index.ts";
 import mcpRoutes from "./mcp.ts";
 import groupDeploymentSnapshots from "./group-deployment-snapshots.ts";
 import oauthConsentApi from "./oauth-consent-api.ts";
@@ -230,6 +231,7 @@ export function createApiRouter({
   // Public share routes (no auth required)
   // Note: share views are read-only and sanitized by default.
   apiRouter.route("/public", publicShare);
+  apiRouter.route("/public/stores", publicStores);
 
   // MCP management routes (authenticated)
   apiRouter.use("/mcp/servers", requireAuth);

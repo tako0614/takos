@@ -38,6 +38,7 @@ function makePublicationRow(
     publisher: string;
     type: string;
     path?: string;
+    outputs?: Record<string, { route?: string }>;
     spec?: Record<string, unknown>;
   },
   resolved: Record<string, string> = {},
@@ -269,7 +270,7 @@ Deno.test("service publications keep Takos type strict and route type open-ended
       name: "custom-route",
       publisher: "web",
       type: "com.example.CustomSurface",
-      path: "/custom",
+      outputs: { url: { route: "/custom" } },
       title: " Custom route ",
       spec: {
         mode: "panel",
@@ -279,7 +280,7 @@ Deno.test("service publications keep Takos type strict and route type open-ended
       name: "custom-route",
       publisher: "web",
       type: "com.example.CustomSurface",
-      path: "/custom",
+      outputs: { url: { route: "/custom" } },
       title: "Custom route",
       spec: {
         mode: "panel",
@@ -313,7 +314,7 @@ Deno.test("service consumes normalize aliases and reject duplicates", () => {
         { publication: "shared-db" },
       ]),
     Error,
-    "duplicate publication reference",
+    "duplicate local consume name",
   );
 });
 
@@ -346,7 +347,7 @@ Deno.test("service publication output contracts are stable", () => {
       name: "mcp-search",
       publisher: "web",
       type: "com.example.McpEndpoint",
-      path: "/mcp",
+      outputs: { url: { route: "/mcp" } },
     }),
     [{
       name: "url",
@@ -424,7 +425,7 @@ Deno.test("route publications resolve URLs from the group hostname", () => {
       name: "search",
       publisher: "web",
       type: "McpServer",
-      path: "/mcp",
+      outputs: { url: { route: "/mcp" } },
     },
     {
       groupId: "group_1",
@@ -536,7 +537,7 @@ Deno.test("publication prerequisites allow same-manifest consumes before catalog
         name: "search",
         publisher: "web",
         type: "com.example.McpEndpoint",
-        path: "/mcp",
+        outputs: { url: { route: "/mcp" } },
       }],
       compute: {
         web: {
@@ -559,7 +560,7 @@ Deno.test("publication prerequisites require a group hostname for same-manifest 
             name: "search",
             publisher: "web",
             type: "com.example.McpEndpoint",
-            path: "/mcp",
+            outputs: { url: { route: "/mcp" } },
           }],
           compute: {
             web: {
@@ -657,9 +658,9 @@ Deno.test("service publication discovery lists supported Takos publisher types",
       name: "notes",
       publisher: "web",
       type: "com.example.McpEndpoint",
-      path: "/mcp",
+      outputs: { url: { route: "/mcp" } },
     })).sort(),
-    ["name", "path", "publisher", "spec", "title", "type"],
+    ["name", "outputs", "publisher", "spec", "title", "type"],
   );
 });
 
@@ -791,7 +792,7 @@ Deno.test("service publications reject manifest overwrite of another group publi
               name: "shared-name",
               publisher: "web",
               type: "McpServer",
-              path: "/mcp",
+              outputs: { url: { route: "/mcp" } },
             }],
           },
           observedState: {
@@ -919,6 +920,16 @@ Deno.test("service publications reject manifest removal while still consumed", a
       select: () => ({
         from: () => ({
           where: () => ({
+            all: () => [{
+              id: "consume_1",
+              accountId: "space_1",
+              serviceId: "svc_web",
+              publicationName: "shared-api",
+              configJson: JSON.stringify({ publication: "shared-api" }),
+              stateJson: "{}",
+              createdAt: "2026-04-18T00:00:00.000Z",
+              updatedAt: "2026-04-18T00:00:00.000Z",
+            }],
             orderBy: () => ({
               all: () => [row],
             }),
@@ -987,6 +998,16 @@ Deno.test("service publications preflight consumed removals before manifest writ
       select: () => ({
         from: () => ({
           where: () => ({
+            all: () => [{
+              id: "consume_1",
+              accountId: "space_1",
+              serviceId: "svc_web",
+              publicationName: "shared-api",
+              configJson: JSON.stringify({ publication: "shared-api" }),
+              stateJson: "{}",
+              createdAt: "2026-04-18T00:00:00.000Z",
+              updatedAt: "2026-04-18T00:00:00.000Z",
+            }],
             orderBy: () => ({
               all: () => [row],
             }),
@@ -1028,7 +1049,7 @@ Deno.test("service publications preflight consumed removals before manifest writ
             name: "new-api",
             publisher: "web",
             type: "McpServer",
-            path: "/mcp",
+            outputs: { url: { route: "/mcp" } },
           }],
           routes: [{ target: "web", path: "/mcp" }],
         },

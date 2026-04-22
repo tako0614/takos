@@ -16,6 +16,7 @@ export const source = {
   createRelease: "リリースを作成",
   updateRelease: "リリースを更新",
   releaseName: "リリース名",
+  releaseNamePlaceholder: "バージョン 1.0.0",
   releaseNotes: "リリースノート...",
   markAsPreRelease: "プレリリースとしてマーク（beta, alpha など）",
   saveDraftHint: "下書きとして保存（非公開）",
@@ -29,6 +30,7 @@ export const source = {
   noCommitsFound: "コミットが見つかりません",
   showFullCommitMessage: "コミットメッセージ全体を表示",
   copyCommitSha: "コミットSHAをコピー",
+  copyCommitShaWithValue: "コミットSHA {sha} をコピー",
   loadMoreCommits: "さらにコミットを読み込む",
 
   // Code Search
@@ -64,10 +66,26 @@ export const source = {
   loadingRun: "実行を読み込み中...",
   selectRunToSeeDetails: "実行を選択して詳細を表示",
   noJobsRecorded: "ジョブが記録されていません。",
+  workflowRunStatus_queued: "キュー待ち",
+  workflowRunStatus_in_progress: "実行中",
+  workflowRunStatus_completed: "完了",
+  workflowRunStatus_cancelled: "キャンセル",
+  workflowRunStatus_waiting: "待機中",
+  workflowRunConclusion_success: "成功",
+  workflowRunConclusion_failure: "失敗",
+  workflowRunConclusion_cancelled: "キャンセル",
+  workflowRunConclusion_skipped: "スキップ",
+  workflowRunConclusion_timed_out: "タイムアウト",
+  workflowStepStatus_pending: "未開始",
+  workflowStepStatus_in_progress: "実行中",
+  workflowStepStatus_completed: "完了",
+  workflowStepStatus_skipped: "スキップ",
+  unknownRef: "不明な参照",
+  unknownSha: "不明なSHA",
 
   // Dispatch Workflow Form
   workflowPathLabel: "ワークフローパス",
-  refBranchOrTag: "Ref（ブランチまたはタグ）",
+  refBranchOrTag: "参照（ブランチまたはタグ）",
   dispatching: "ディスパッチ中...",
   dispatch: "ディスパッチ",
 
@@ -113,21 +131,21 @@ export const source = {
   usersLabel: "ユーザー",
   storeManagementTitle: "ストア管理",
   storeManagementDescription:
-    "ActivityPubストア、インベントリ、リモートストア接続を管理します。",
+    "ストア、インベントリ、リモートストア接続を管理します。",
   newStoreSlugPlaceholder: "新しいストアslug...",
   noStoresYet: "ストアはまだありません",
   remoteStores: "リモートストア",
   selectOrCreateStore: "ストアを選択するか新しく作成してください",
   addRepositoryReference: "リポジトリ参照を追加",
   repositoryReferenceHint:
-    "ストアのインベントリに追加するリポジトリのActivityPub actor URLを入力してください。",
+    "ストアのインベントリに追加するリポジトリURLを入力してください。",
   inventoryCount: "インベントリ（{count}件）",
   inventoryEmpty:
     "インベントリに項目がありません。公開リポジトリはデフォルトで表示されます。",
   inventoryExplicitModeHint: "参照を追加すると明示モードに切り替わります。",
   connectRemoteStore: "リモートストアに接続",
   remoteStoreIdentifierHint:
-    "ストア識別子（slug@domain）または完全なActivityPub actor URLを入力してください。",
+    "ストア識別子（slug@domain）または公開Store API URLを入力してください。",
   connectedRemoteStoresCount: "接続済みリモートストア（{count}件）",
   noRemoteStoresConnected: "接続済みのリモートストアはまだありません。",
 

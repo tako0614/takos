@@ -1,3 +1,8 @@
+import type {
+  TranslationKey,
+  TranslationParams,
+} from "../../../../store/i18n.ts";
+
 /**
  * GitHub Actions workflow RunStatus for the web UI.
  *
@@ -22,6 +27,12 @@ export type RunConclusion =
   | "skipped"
   | "timed_out"
   | null;
+
+export type WorkflowStepStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "skipped";
 
 export interface WorkflowRunSummary {
   id: string;
@@ -55,7 +66,7 @@ export interface WorkflowJob {
   steps?: Array<{
     number: number;
     name: string;
-    status: "pending" | "in_progress" | "completed" | "skipped";
+    status: WorkflowStepStatus;
     conclusion: RunConclusion;
     started_at?: string | null;
     completed_at?: string | null;
@@ -87,6 +98,33 @@ export interface JobLogState {
 }
 
 export const LOG_CHUNK_BYTES = 128 * 1024;
+
+type Translate = (
+  key: TranslationKey,
+  params?: TranslationParams,
+) => string;
+
+export function workflowRunStatusLabel(
+  status: RunStatus,
+  conclusion: RunConclusion | undefined,
+  t: Translate,
+): string {
+  if (status === "completed" && conclusion) {
+    return t(`workflowRunConclusion_${conclusion}` as TranslationKey);
+  }
+  return t(`workflowRunStatus_${status}` as TranslationKey);
+}
+
+export function workflowStepStatusLabel(
+  status: WorkflowStepStatus,
+  conclusion: RunConclusion | undefined,
+  t: Translate,
+): string {
+  if (status === "completed" && conclusion) {
+    return t(`workflowRunConclusion_${conclusion}` as TranslationKey);
+  }
+  return t(`workflowStepStatus_${status}` as TranslationKey);
+}
 
 export function statusBadge(
   status: RunStatus,

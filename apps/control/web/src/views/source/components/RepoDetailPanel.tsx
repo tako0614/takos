@@ -7,8 +7,25 @@ import type {
   SourceItem,
   SourceItemPackage,
 } from "../../../hooks/useSourceData.ts";
+import type { TranslationKey } from "../../../store/i18n.ts";
 import { useI18n } from "../../../store/i18n.ts";
 import { getPackageIconImageSrc } from "../packageIcon.ts";
+
+const CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
+  app: "categoryApps",
+  service: "categoryServices",
+  library: "categoryLibraries",
+  template: "categoryTemplates",
+  social: "categorySocial",
+};
+
+function getCategoryLabel(
+  category: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  const key = CATEGORY_LABEL_KEYS[category];
+  return key ? t(key) : category;
+}
 
 interface RepoDetailPanelProps {
   item: SourceItem;
@@ -131,6 +148,10 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
                     : "text-zinc-500 dark:text-zinc-400 hover:text-amber-500"
                 }`}
                 onClick={() => props.onStar(props.item)}
+                aria-label={props.item.is_starred
+                  ? t("unstarRepository", { name: props.item.name })
+                  : t("starRepository", { name: props.item.name })}
+                aria-pressed={props.item.is_starred}
               >
                 <Icons.Star class="w-4 h-4" />
                 <span class="text-xs font-medium">
@@ -171,7 +192,7 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
             <div class="flex flex-wrap gap-1.5">
               {props.item.category && (
                 <span class="px-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs">
-                  {props.item.category}
+                  {getCategoryLabel(props.item.category, t)}
                 </span>
               )}
               {props.item.language && (

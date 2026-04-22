@@ -12,13 +12,15 @@ publish:
     name: markdown
     publisher: web
     title: Markdown
-    path: /files/:id
+    outputs:
+      url:
+        route: /files/:id
     spec:
       mimeTypes: [text/markdown]
       extensions: [.md]
 ```
 
-ユーザーがファイルを開くと `path` にリダイレクトされる。`:id` が URL encode
+ユーザーがファイルを開くと `outputs.url.route` にリダイレクトされる。`:id` が URL encode
 されたファイル ID に置換される。`:id` は path segment として必須で、`:id`
 を含まない `FileHandler` は storage の handler catalog には出ない。current
 storage UI は起動時に `space_id` query parameter も付ける。file ID を `file_id`
@@ -32,7 +34,9 @@ publish:
     name: markdown
     publisher: web
     title: Markdown
-    path: /files/:id
+    outputs:
+      url:
+        route: /files/:id
     spec:
       mimeTypes: [text/markdown]
       extensions: [.md]
@@ -40,7 +44,9 @@ publish:
     name: image
     publisher: web
     title: Images
-    path: /viewer/:id
+    outputs:
+      url:
+        route: /viewer/:id
     spec:
       mimeTypes: [image/png, image/jpeg, image/gif]
       extensions: [.png, .jpg, .jpeg, .gif]
@@ -58,14 +64,14 @@ platform / app は `spec` 内で以下の field を使います。
 | ----------------- | ----------- | ---------------------------------------------------------------------------------- |
 | `type`            | yes         | custom type 名 (`FileHandler`)                                                     |
 | `publisher`       | yes         | 対応する route の compute target                                                   |
-| `path`            | yes         | ファイルを開く際の path (`:id` path segment が必須。ファイル ID に置換)            |
+| `outputs`         | yes         | ファイルを開く route output (`:id` path segment が必須。ファイル ID に置換)        |
 | `name`            | yes         | publication 名。storage UI の handler 表示名にも使われる                           |
 | `title`           | no          | discovery metadata。storage API response には含まれるが、current UI 表示は `name`  |
 | `spec.mimeTypes`  | conditional | 対応する MIME type のリスト (`mimeTypes` または `extensions` の最低 1 つが必須)    |
 | `spec.extensions` | conditional | 対応するファイル拡張子のリスト (`mimeTypes` または `extensions` の最低 1 つが必須) |
 
-`path` は `/` で始まる group 内 path。route publication の output `url` は group
-の auto hostname とこの path から生成され、`:id` などの template segment は
+`outputs.*.route` は `/` で始まる group 内 path。route publication の output `url`
+は group の auto hostname とこの route から生成され、`:id` などの template segment は
 template URL のまま consumer に渡ります。storage の FileHandler discovery は
 `:id` path segment を含む handler だけを返します。current storage UI はこの
 template URL の `:id` を file ID に置換し、`space_id` query parameter を追加して

@@ -1,4 +1,7 @@
-import type { AppPublication } from "../source/app-manifest-types.ts";
+import type {
+  AppConsume,
+  AppPublication,
+} from "../source/app-manifest-types.ts";
 import {
   deleteManagedTakosTokenConfig,
   ensureManagedTakosTokenValue,
@@ -111,6 +114,8 @@ const PUBLICATION_OUTPUT_USERINFO_ENDPOINT_ENV =
   `PUBLICATION_${PUBLICATION_ENV_PLACEHOLDER}_USERINFO_ENDPOINT`;
 
 type TakosPublicationType = "api-key" | "oauth-client";
+export const TAKOS_API_KEY_SOURCE = "takos.api-key";
+export const TAKOS_OAUTH_CLIENT_SOURCE = "takos.oauth-client";
 
 export const GRANT_PUBLICATION_FIELDS = new Set([
   "name",
@@ -118,6 +123,41 @@ export const GRANT_PUBLICATION_FIELDS = new Set([
   "type",
   "spec",
 ]);
+
+const TAKOS_API_KEY_SPEC_FIELDS = new Set(["scopes"]);
+const TAKOS_OAUTH_SPEC_FIELDS = new Set([
+  "clientName",
+  "redirectUris",
+  "scopes",
+  "metadata",
+]);
+const TAKOS_OAUTH_METADATA_FIELDS = new Set([
+  "logoUri",
+  "tosUri",
+  "policyUri",
+]);
+
+function assertAllowedFields(
+  record: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  field: string,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) {
+      throw new Error(`${field}.${key} is not supported`);
+    }
+  }
+}
+
+export function isTakosSystemPublicationSource(source: string): boolean {
+  return source === TAKOS_API_KEY_SOURCE || source === TAKOS_OAUTH_CLIENT_SOURCE;
+}
+
+function takosTypeFromSource(source: string): TakosPublicationType {
+  if (source === TAKOS_API_KEY_SOURCE) return "api-key";
+  if (source === TAKOS_OAUTH_CLIENT_SOURCE) return "oauth-client";
+  throw new Error(`Unsupported Takos publication source: ${source}`);
+}
 
 function normalizeName(name: string, field: string): string {
   const normalized = String(name || "").trim();
@@ -200,6 +240,7 @@ function normalizePublicationMetadata(
     throw new Error(`${field} must be an object`);
   }
   const record = metadata as Record<string, unknown>;
+  assertAllowedFields(record, TAKOS_OAUTH_METADATA_FIELDS, field);
   const normalized = {
     ...(normalizeOptionalString(record.logoUri, `${field}.logoUri`)
       ? {
@@ -272,6 +313,11 @@ function normalizeTakosApiPublication(
     );
   }
   const spec = requireSpecRecord(publication);
+  assertAllowedFields(
+    spec,
+    TAKOS_API_KEY_SPEC_FIELDS,
+    `publication '${name}'.spec`,
+  );
   return {
     name,
     publisher: "takos",
@@ -297,6 +343,11 @@ function normalizeTakosOAuthPublication(
     );
   }
   const spec = requireSpecRecord(publication);
+  assertAllowedFields(
+    spec,
+    TAKOS_OAUTH_SPEC_FIELDS,
+    `publication '${name}'.spec`,
+  );
   const redirectUris = normalizeOAuthRedirectUris(
     spec.redirectUris,
     `publication '${name}'.spec.redirectUris`,
@@ -685,6 +736,24 @@ export function normalizeGrantPublication(
   options: PublicationNormalizeOptions = {},
 ): AppPublication {
   return getPublicationDefinition(publication).normalize(publication, options);
+}
+
+export function normalizeTakosSystemConsumePublication(
+  consume: AppConsume,
+  options: PublicationNormalizeOptions = {},
+): AppPublication {
+  const source = normalizeName(consume.publication, "consume.publication");
+  const localName = normalizeName(
+    consume.as ?? consume.publication,
+    "consume.as",
+  );
+  const type = takosTypeFromSource(source);
+  return normalizeGrantPublication({
+    name: localName,
+    publisher: "takos",
+    type,
+    spec: consume.request ?? {},
+  }, options);
 }
 
 export function assertGrantPublicationPrerequisites(params: {
