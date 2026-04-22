@@ -1,4 +1,4 @@
-import { createMemo } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import { For, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import type { TranslationKey } from "../../store/i18n.ts";
@@ -10,11 +10,20 @@ import { MessageBubble } from "./MessageBubble.tsx";
 import { MarkdownRenderer } from "./MarkdownRenderer.tsx";
 import { SessionDiffPanel } from "./SessionDiffPanel.tsx";
 import {
+  buildActiveRunActivityGroups,
   buildPersistentRunActivityGroups,
   type PersistentRunActivityGroup,
 } from "./run-activity.ts";
 
 type LiveToolCall = ChatStreamingState["toolCalls"][number];
+type ActivityDisplayEntry = {
+  key: string;
+  type: ChatTimelineEntry["type"];
+  message: string;
+  detail?: string;
+  failed?: boolean;
+  createdAt?: number;
+};
 
 function getToolLabel(name: string): string {
   const normalized = name.toLowerCase();
@@ -38,47 +47,37 @@ function LiveToolCalls(props: {
   toolCalls: LiveToolCall[];
   thinking: string | null;
 }) {
+  const entries = createMemo<ActivityDisplayEntry[]>(() => {
+    const items: ActivityDisplayEntry[] = [];
+    if (props.thinking) {
+      items.push({
+        key: "live-thinking",
+        type: "thinking",
+        message: props.thinking,
+      });
+    }
+    for (const toolCall of props.toolCalls) {
+      const isRunning = toolCall.status === "running" ||
+        toolCall.status === "pending";
+      items.push({
+        key: `tool:${toolCall.id}`,
+        type: toolCall.status === "completed" ? "tool_result" : "tool_call",
+        message: isRunning ? getToolLabel(toolCall.name) : toolCall.name,
+        detail: toolCall.error || toolCall.result,
+        failed: toolCall.status === "error",
+        createdAt: toolCall.startedAt,
+      });
+    }
+    return items;
+  });
+  const hasErrors = () => props.toolCalls.some((tc) => tc.status === "error");
+
   return (
-    <div class="py-2 px-4">
-      <Show when={props.thinking}>
-        <p class="text-sm text-zinc-500 dark:text-zinc-400 italic mb-2 animate-pulse">
-          {props.thinking}
-        </p>
-      </Show>
-      <div class="space-y-0.5">
-        <For each={props.toolCalls}>
-          {(tc) => {
-            const isRunning = tc.status === "running" ||
-              tc.status === "pending";
-            const isError = tc.status === "error";
-            return (
-              <div class="flex items-center gap-2 text-sm">
-                <span
-                  class={`text-xs ${
-                    isError
-                      ? "text-red-500"
-                      : isRunning
-                      ? "text-zinc-400 dark:text-zinc-500"
-                      : "text-green-500"
-                  }`}
-                >
-                  {isError ? "\u2715" : isRunning ? "\u25CF" : "\u2713"}
-                </span>
-                <span
-                  class={isRunning
-                    ? "text-zinc-600 dark:text-zinc-400 animate-pulse"
-                    : isError
-                    ? "text-red-500 dark:text-red-400"
-                    : "text-zinc-400 dark:text-zinc-500"}
-                >
-                  {isRunning ? getToolLabel(tc.name) : tc.name}
-                </span>
-              </div>
-            );
-          }}
-        </For>
-      </div>
-    </div>
+    <ThinkingDisclosure
+      entries={entries()}
+      live
+      hasErrors={hasErrors()}
+    />
   );
 }
 
@@ -88,44 +87,115 @@ function runStatusLabelKey(
   return `runStatus_${status}` as TranslationKey;
 }
 
-function RunActivityLog(props: { group: PersistentRunActivityGroup }) {
+function toActivityDisplayEntry(
+  entry: ChatTimelineEntry,
+): ActivityDisplayEntry {
+  return {
+    key: entry.key,
+    type: entry.type,
+    message: entry.message,
+    detail: entry.detail,
+    failed: entry.failed,
+    createdAt: entry.createdAt,
+  };
+}
+
+function getThinkingDurationSeconds(
+  entries: ActivityDisplayEntry[],
+): number | null {
+  const times = entries
+    .map((entry) => entry.createdAt)
+    .filter((time): time is number =>
+      typeof time === "number" && Number.isFinite(time)
+    );
+  if (times.length < 2) return null;
+  const start = Math.min(...times);
+  const end = Math.max(...times);
+  if (end <= start) return null;
+  return Math.max(1, Math.round((end - start) / 1000));
+}
+
+function activityDotClass(entry: ActivityDisplayEntry): string {
+  if (entry.failed) return "bg-red-500";
+  if (entry.type === "tool_result") return "bg-emerald-500";
+  if (entry.type === "tool_call") return "bg-blue-500";
+  if (entry.type === "thinking") return "bg-zinc-400 dark:bg-zinc-500";
+  return "bg-zinc-300 dark:bg-zinc-600";
+}
+
+function ThinkingDisclosure(props: {
+  entries: ActivityDisplayEntry[];
+  status?: PersistentRunActivityGroup["status"];
+  live?: boolean;
+  hasErrors?: boolean;
+}) {
   const { t } = useI18n();
-  const hasErrors = () => props.group.entries.some((entry) => entry.failed);
+  const [expanded, setExpanded] = createSignal(false);
+  const durationSeconds = createMemo(() =>
+    getThinkingDurationSeconds(props.entries)
+  );
+  const label = createMemo(() => {
+    if (props.live) return t("thinkingSummaryLive");
+    const seconds = durationSeconds();
+    if (seconds !== null) {
+      return t("thinkingSummaryTimed", { seconds });
+    }
+    return t("thinkingSummary");
+  });
+  const statusLabel = createMemo(() =>
+    props.status ? t(runStatusLabelKey(props.status)) : ""
+  );
+  const toneClass = () =>
+    props.hasErrors
+      ? "text-red-600 hover:text-red-700 dark:text-red-300 dark:hover:text-red-200"
+      : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200";
+  const borderClass = () =>
+    props.hasErrors
+      ? "border-red-200 dark:border-red-900/70"
+      : "border-zinc-200 dark:border-zinc-700";
 
   return (
-    <div class="py-2 px-4">
-      <div
-        class={`rounded-lg border px-3 py-2 ${
-          hasErrors()
-            ? "border-red-200 bg-red-50/70 dark:border-red-900/60 dark:bg-red-950/20"
-            : "border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/70"
-        }`}
+    <div class="py-1.5 px-4">
+      <button
+        type="button"
+        class={`group inline-flex max-w-full items-center gap-1.5 rounded-md py-1 pr-1 text-sm transition-colors ${toneClass()}`}
+        aria-expanded={expanded()}
+        aria-label={expanded() ? t("hideDetails") : t("showDetails")}
+        onClick={() => setExpanded((value) => !value)}
       >
-        <div class="mb-2 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <span
+          class={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center ${
+            props.live ? "animate-pulse" : ""
+          }`}
+        >
           <Icons.Sparkles class="h-3.5 w-3.5" />
-          <span class="font-medium text-zinc-700 dark:text-zinc-200">
-            {t("agentActivity")}
+        </span>
+        <span class="min-w-0 truncate">{label()}</span>
+        <Show when={!props.live && statusLabel()}>
+          <span class="flex-shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
+            {statusLabel()}
           </span>
-          <span>{t(runStatusLabelKey(props.group.status))}</span>
-        </div>
-        <div class="space-y-1">
-          <For each={props.group.entries}>
+        </Show>
+        <Icons.ChevronDown
+          class={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${
+            expanded() ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      <Show when={expanded() && props.entries.length > 0}>
+        <div class={`ml-2 mt-1 space-y-2 border-l pl-4 ${borderClass()}`}>
+          <For each={props.entries}>
             {(entry) => (
-              <div class="flex gap-2 text-sm">
+              <div class="flex min-w-0 gap-2 text-sm">
                 <span
-                  class={`mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                    entry.failed
-                      ? "bg-red-500"
-                      : entry.type === "tool_result"
-                      ? "bg-green-500"
-                      : entry.type === "tool_call"
-                      ? "bg-blue-500"
-                      : "bg-zinc-400 dark:bg-zinc-500"
+                  class={`mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                    activityDotClass(entry)
                   }`}
                 />
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                   <p
-                    class={`whitespace-pre-wrap ${
+                    class={`whitespace-pre-wrap break-words leading-relaxed ${
                       entry.failed
                         ? "text-red-700 dark:text-red-200"
                         : "text-zinc-600 dark:text-zinc-300"
@@ -133,8 +203,14 @@ function RunActivityLog(props: { group: PersistentRunActivityGroup }) {
                   >
                     {entry.message}
                   </p>
-                  <Show when={entry.failed && entry.detail}>
-                    <p class="mt-1 whitespace-pre-wrap text-xs text-red-600 dark:text-red-300">
+                  <Show when={entry.detail}>
+                    <p
+                      class={`mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed ${
+                        entry.failed
+                          ? "text-red-600 dark:text-red-300"
+                          : "text-zinc-400 dark:text-zinc-500"
+                      }`}
+                    >
                       {entry.detail}
                     </p>
                   </Show>
@@ -143,8 +219,27 @@ function RunActivityLog(props: { group: PersistentRunActivityGroup }) {
             )}
           </For>
         </div>
-      </div>
+      </Show>
     </div>
+  );
+}
+
+function RunActivityLog(props: {
+  group: PersistentRunActivityGroup;
+  live?: boolean;
+}) {
+  const hasErrors = () => props.group.entries.some((entry) => entry.failed);
+  const entries = createMemo(() =>
+    props.group.entries.map(toActivityDisplayEntry)
+  );
+
+  return (
+    <ThinkingDisclosure
+      entries={entries()}
+      status={props.group.status}
+      live={props.live}
+      hasErrors={hasErrors()}
+    />
   );
 }
 
@@ -164,8 +259,6 @@ interface ChatMessageFeedProps {
 }
 
 export function ChatMessageFeed(props: ChatMessageFeedProps) {
-  const { t } = useI18n();
-
   const uniqueMessages = createMemo(() => {
     const messageMap = new Map<string, Message>();
     for (const message of props.messages) {
@@ -176,6 +269,12 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
 
   const persistentRunActivity = createMemo(() =>
     buildPersistentRunActivityGroups(
+      props.timelineEntries,
+      props.runMetaById,
+    )
+  );
+  const restoredActiveRunActivity = createMemo(() =>
+    buildActiveRunActivityGroups(
       props.timelineEntries,
       props.runMetaById,
     )
@@ -242,6 +341,10 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
     !props.sessionDiff;
 
   const hasToolCalls = () => props.streaming.toolCalls.length > 0;
+  const hasLiveActivity = () => hasToolCalls() || !!props.streaming.thinking;
+  const showRestoredActiveActivity = () =>
+    props.isLoading && !hasLiveActivity() &&
+    restoredActiveRunActivity().length > 0;
 
   return (
     <div class="flex-1 overflow-y-auto flex flex-col">
@@ -269,6 +372,12 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
           )}
         </For>
 
+        <Show when={showRestoredActiveActivity()}>
+          <For each={restoredActiveRunActivity()}>
+            {(group) => <RunActivityLog group={group} live />}
+          </For>
+        </Show>
+
         <Show when={hasToolCalls()}>
           <LiveToolCalls
             toolCalls={props.streaming.toolCalls}
@@ -280,25 +389,21 @@ export function ChatMessageFeed(props: ChatMessageFeedProps) {
           when={!hasToolCalls() && !props.streaming.currentMessage &&
             props.streaming.thinking}
         >
-          <div class="py-2 px-4">
-            <p
-              class={`text-sm text-zinc-500 dark:text-zinc-400 italic${
-                props.isLoading ? " animate-pulse" : ""
-              }`}
-            >
-              {props.streaming.thinking}
-            </p>
-          </div>
+          <ThinkingDisclosure
+            live={props.isLoading}
+            entries={[{
+              key: "live-thinking",
+              type: "thinking",
+              message: props.streaming.thinking!,
+            }]}
+          />
         </Show>
 
         <Show
-          when={props.isLoading && !hasToolCalls() && !props.streaming.thinking}
+          when={props.isLoading && !hasLiveActivity() &&
+            restoredActiveRunActivity().length === 0}
         >
-          <div class="py-2 px-4">
-            <p class="text-sm text-zinc-500 dark:text-zinc-400 italic animate-pulse">
-              {t("thinking")}
-            </p>
-          </div>
+          <ThinkingDisclosure live entries={[]} />
         </Show>
 
         <Show

@@ -165,14 +165,18 @@ publish:
     manifest.compute.web.containers?.sandbox.consume,
     [{
       publication: "notes",
-      env: {
-        url: "SANDBOX_MCP_URL",
+      inject: {
+        env: {
+          url: "SANDBOX_MCP_URL",
+        },
       },
     }],
   );
   assertEquals(manifest.publish[0]?.name, "notes");
   assertEquals(manifest.publish[0]?.publisher, "web");
-  assertEquals(manifest.publish[0]?.outputs, { url: { route: "/mcp" } });
+  assertEquals(manifest.publish[0]?.outputs, {
+    url: { kind: "url", route: "/mcp" },
+  });
   assertEquals(manifest.publish[0]?.spec, { protocol: "streamable-http" });
 });
 
@@ -613,8 +617,10 @@ overrides:
   );
 });
 
-Deno.test("public manifest contract - accepts partial publish overrides", () => {
-  const manifest = parseAppManifestYaml(`
+Deno.test("public manifest contract - rejects unnamed publish overrides", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
 name: override-publish-app
 
 compute:
@@ -644,21 +650,10 @@ overrides:
   production:
     publish:
       - title: Production Notes
-`);
-
-  assertEquals(manifest.overrides?.production?.publish as unknown, [{
-    title: "Production Notes",
-  }]);
-
-  const resolved = applyManifestOverrides(manifest, "production");
-  assertEquals(resolved.publish, [{
-    name: "notes",
-    type: "com.example.McpEndpoint",
-    publisher: "web",
-    outputs: { url: { route: "/mcp" } },
-    spec: { protocol: "streamable-http" },
-    title: "Production Notes",
-  }]);
+`),
+    Error,
+    "overrides.publish[0].name is required",
+  );
 });
 
 Deno.test("public manifest contract - merges named publish overrides", () => {
@@ -712,14 +707,14 @@ overrides:
       name: "notes",
       type: "com.example.McpEndpoint",
       publisher: "web",
-      outputs: { url: { route: "/mcp" } },
+      outputs: { url: { kind: "url", route: "/mcp" } },
       spec: { protocol: "streamable-http" },
     },
     {
       name: "assets",
       type: "com.example.FileEndpoint",
       publisher: "web",
-      outputs: { url: { route: "/assets" } },
+      outputs: { url: { kind: "url", route: "/assets" } },
       spec: { contentTypes: ["image/png"] },
       title: "Production Assets",
     },
@@ -1334,21 +1329,25 @@ publish:
     outputs:
       url:
         route: /
-    title: Launcher
-    spec:
+    display:
+      title: Launcher
       description: Launcher app
       icon: /icons/launcher.svg
       category: office
       sortOrder: 10
+    spec:
       launcher: true
 `);
 
-  assertEquals(manifest.publish[0]?.type, "UiSurface");
-  assertEquals(manifest.publish[0]?.spec, {
+  assertEquals(manifest.publish[0]?.type, "takos.ui-surface.v1");
+  assertEquals(manifest.publish[0]?.display, {
+    title: "Launcher",
     description: "Launcher app",
     icon: "/icons/launcher.svg",
     category: "office",
     sortOrder: 10,
+  });
+  assertEquals(manifest.publish[0]?.spec, {
     launcher: true,
   });
 });
@@ -1413,7 +1412,7 @@ publish:
         - text/markdown
 `);
 
-  assertEquals(manifest.publish[0]?.type, "FileHandler");
+  assertEquals(manifest.publish[0]?.type, "takos.file-handler.v1");
   assertEquals(manifest.publish[0]?.outputs?.url?.route, "/files/:id");
   assertEquals(manifest.publish[0]?.spec, {
     mimeTypes: ["text/markdown"],
@@ -1755,7 +1754,7 @@ compute:
   assertEquals(manifest.compute.web.consume, [
     {
       publication: "external-api",
-      env: { endpoint: "EXTERNAL_API_URL" },
+      inject: { env: { endpoint: "EXTERNAL_API_URL" } },
     },
   ]);
 

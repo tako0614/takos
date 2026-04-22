@@ -16,12 +16,20 @@ Deno.test("agent prompts - keeps the default prompt focused on task completion w
     DEFAULT_CORE_PROMPT,
     "keep moving until the task is actually complete",
   );
+  assertStringIncludes(
+    DEFAULT_CORE_PROMPT,
+    "Do not wait for the user to name a tool",
+  );
   assertStringIncludes(DEFAULT_CORE_PROMPT, "Default to spawning sub-agents");
   assertStringIncludes(
     DEFAULT_CORE_PROMPT,
     "Infer the target product from thread context",
   );
-  assertStringIncludes(SYSTEM_PROMPTS.default, "Takos-managed skills");
+  assertStringIncludes(SYSTEM_PROMPTS.default, "workflow manuals");
+  assertStringIncludes(
+    SYSTEM_PROMPTS.default,
+    "before deciding the capability is unavailable",
+  );
   assertStringIncludes(
     SYSTEM_PROMPTS.default,
     "Treat the request as work to complete",
@@ -29,7 +37,7 @@ Deno.test("agent prompts - keeps the default prompt focused on task completion w
   assertStringIncludes(SYSTEM_PROMPTS.default, "spawn sub-agents early");
   assertStringIncludes(
     SYSTEM_PROMPTS.default,
-    "infer it from the thread, docs, and repo context first",
+    "infer it from the thread",
   );
 });
 Deno.test("agent prompts - injects only the runtime-available tool catalog", () => {
@@ -44,6 +52,18 @@ Deno.test("agent prompts - injects only the runtime-available tool catalog", () 
   assertStringIncludes(prompt, "`space_files_read`");
   assertStringIncludes(prompt, "If you are unsure which tool fits");
   assert(!prompt.includes("`web_search`"));
+});
+Deno.test("agent prompts - points toolbox runs toward early capability search", () => {
+  const prompt = buildAvailableToolsPrompt(SYSTEM_PROMPTS.default, [
+    { name: "toolbox", description: "Search and call tools" },
+    { name: "file_read", description: "Read a file" },
+    { name: "runtime_exec", description: "Run a command" },
+  ]);
+
+  assertStringIncludes(prompt, "`toolbox`");
+  assertStringIncludes(prompt, "use `toolbox` early");
+  assertStringIncludes(prompt, "action=`search`");
+  assertStringIncludes(prompt, "then `call`");
 });
 Deno.test("agent prompts - keeps specialized prompts focused without hardcoding tool inventories", () => {
   assertStringIncludes(SYSTEM_PROMPTS.implementer, "## Implementation Mode");
@@ -63,5 +83,5 @@ Deno.test("agent prompts - keeps assistant and planner as thin universal special
   );
   assertStringIncludes(SYSTEM_PROMPTS.planner, "## Planning Mode");
   assertStringIncludes(SYSTEM_PROMPTS.assistant, "follow-through");
-  assertStringIncludes(SYSTEM_PROMPTS.planner, "decision-ready outputs");
+  assertStringIncludes(SYSTEM_PROMPTS.planner, "decision-ready");
 });

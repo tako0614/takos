@@ -66,6 +66,10 @@ function makePublicationDb(row: PublicationTestRow | null) {
       from: () => ({
         where: () => ({
           get: () => row,
+          all: () => row ? [row] : [],
+          orderBy: () => ({
+            all: () => row ? [row] : [],
+          }),
         }),
       }),
     }),
@@ -77,39 +81,6 @@ function makePublicationDb(row: PublicationTestRow | null) {
 
 function makePublicationEnv(row: PublicationTestRow | null): Pick<Env, "DB"> {
   return { DB: makePublicationDb(row) } as unknown as Pick<Env, "DB">;
-}
-
-function makePublicationConflictEnv(
-  row: PublicationTestRow,
-): Pick<Env, "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN" | "TENANT_BASE_DOMAIN"> {
-  return {
-    DB: {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            get: () => row,
-            orderBy: () => ({
-              all: () => [],
-            }),
-          }),
-        }),
-      }),
-      insert: () => ({
-        values: () => {
-          throw new Error("insert should not run for ownership conflict");
-        },
-      }),
-      update: () => ({
-        set: () => {
-          throw new Error("update should not run for ownership conflict");
-        },
-      }),
-      delete: () => ({}),
-    } as never,
-    ENCRYPTION_KEY: "test-key",
-    ADMIN_DOMAIN: "admin.example.test",
-    TENANT_BASE_DOMAIN: "",
-  };
 }
 
 Deno.test("service publications normalize Takos grants via spec", () => {
@@ -280,7 +251,7 @@ Deno.test("service publications keep Takos type strict and route type open-ended
       name: "custom-route",
       publisher: "web",
       type: "com.example.CustomSurface",
-      outputs: { url: { route: "/custom" } },
+      outputs: { url: { kind: "url", route: "/custom" } },
       title: "Custom route",
       spec: {
         mode: "panel",
@@ -301,8 +272,10 @@ Deno.test("service consumes normalize aliases and reject duplicates", () => {
     ]),
     [{
       publication: "shared-db",
-      env: {
-        endpoint: "PRIMARY_DATABASE_URL",
+      inject: {
+        env: {
+          endpoint: "PRIMARY_DATABASE_URL",
+        },
       },
     }],
   );
@@ -353,6 +326,7 @@ Deno.test("service publication output contracts are stable", () => {
       name: "url",
       defaultEnv: "PUBLICATION_MCP_SEARCH_URL",
       secret: false,
+      kind: "url",
     }],
   );
   assertEquals(
@@ -367,11 +341,13 @@ Deno.test("service publication output contracts are stable", () => {
         name: "endpoint",
         defaultEnv: "PUBLICATION_TAKOS_API_ENDPOINT",
         secret: false,
+        kind: "url",
       },
       {
         name: "apiKey",
         defaultEnv: "PUBLICATION_TAKOS_API_API_KEY",
         secret: true,
+        kind: "secret",
       },
     ],
   );
@@ -390,26 +366,31 @@ Deno.test("service publication output contracts are stable", () => {
         name: "clientId",
         defaultEnv: "PUBLICATION_NOTES_OAUTH_CLIENT_ID",
         secret: false,
+        kind: "string",
       },
       {
         name: "clientSecret",
         defaultEnv: "PUBLICATION_NOTES_OAUTH_CLIENT_SECRET",
         secret: true,
+        kind: "secret",
       },
       {
         name: "issuer",
         defaultEnv: "PUBLICATION_NOTES_OAUTH_ISSUER",
         secret: false,
+        kind: "url",
       },
       {
         name: "tokenEndpoint",
         defaultEnv: "PUBLICATION_NOTES_OAUTH_TOKEN_ENDPOINT",
         secret: false,
+        kind: "url",
       },
       {
         name: "userinfoEndpoint",
         defaultEnv: "PUBLICATION_NOTES_OAUTH_USERINFO_ENDPOINT",
         secret: false,
+        kind: "url",
       },
     ],
   );
@@ -660,7 +641,16 @@ Deno.test("service publication discovery lists supported Takos publisher types",
       type: "com.example.McpEndpoint",
       outputs: { url: { route: "/mcp" } },
     })).sort(),
-    ["name", "outputs", "publisher", "spec", "title", "type"],
+    [
+      "auth",
+      "display",
+      "name",
+      "outputs",
+      "publisher",
+      "spec",
+      "title",
+      "type",
+    ],
   );
 });
 
@@ -744,82 +734,135 @@ Deno.test("service publications roll back new API publication when consumer sync
   assertEquals(row, null);
 });
 
-Deno.test("service publications reject API overwrite of manifest-owned publication", async () => {
-  await assertRejects(
-    () =>
-      upsertApiPublication(
-        makePublicationConflictEnv(
-          makePublicationRow({
-            name: "shared-name",
-            publisher: "web",
-            type: "McpServer",
-            path: "/mcp",
-          }, { url: "https://web.example/mcp" }),
-        ),
-        {
-          spaceId: "space_1",
-          publication: {
-            name: "shared-name",
-            publisher: "takos",
-            type: "api-key",
-            spec: { scopes: ["files:read"] },
+Deno.test("service publications allow API grants to share names with group publications", async () => {
+  const rows: PublicationTestRow[] = [
+    makePublicationRow({
+      name: "shared-name",
+      publisher: "web",
+      type: "McpServer",
+      path: "/mcp",
+    }, { url: "https://web.example/mcp" }),
+  ];
+  const env = {
+    DB: {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            all: () => table === publications ? rows : [],
+            orderBy: () => ({
+              all: () => table === publications ? rows : [],
+            }),
+          }),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (values: PublicationTestRow) => ({
+          run: () => {
+            if (table === publications) rows.push(values);
           },
-        },
-      ),
-    Error,
-    "already exists in this space and is owned by manifest group 'group_other'",
-  );
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ run: () => undefined }),
+        }),
+      }),
+      delete: () => ({}),
+    } as never,
+    ENCRYPTION_KEY: "test-key",
+    ADMIN_DOMAIN: "admin.example.test",
+  };
+
+  const stored = await upsertApiPublication(env, {
+    spaceId: "space_1",
+    publication: {
+      name: "shared-name",
+      publisher: "takos",
+      type: "api-key",
+      spec: { scopes: ["files:read"] },
+    },
+  });
+
+  assertEquals(stored.name, "shared-name");
+  assertEquals(stored.groupId, null);
+  assertEquals(rows.length, 2);
 });
 
-Deno.test("service publications reject manifest overwrite of another group publication", async () => {
-  await assertRejects(
-    () =>
-      replaceManifestPublications(
-        makePublicationConflictEnv(
-          makePublicationRow({
-            name: "shared-name",
-            publisher: "other-web",
-            type: "McpServer",
-            path: "/mcp",
-          }, { url: "https://other.example/mcp" }),
-        ),
-        {
-          spaceId: "space_1",
-          groupId: "group_current",
-          manifest: {
-            routes: [{ target: "web", path: "/mcp" }],
-            publish: [{
-              name: "shared-name",
-              publisher: "web",
-              type: "McpServer",
-              outputs: { url: { route: "/mcp" } },
-            }],
+Deno.test("service publications allow same publication name in different groups", async () => {
+  const rows: PublicationTestRow[] = [
+    makePublicationRow({
+      name: "shared-name",
+      publisher: "other-web",
+      type: "McpServer",
+      path: "/mcp",
+    }, { url: "https://other.example/mcp" }),
+  ];
+  const env = {
+    DB: {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            all: () => table === publications ? rows : [],
+            orderBy: () => ({
+              all: () => table === publications ? rows : [],
+            }),
+          }),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (values: PublicationTestRow) => ({
+          run: () => {
+            if (table === publications) rows.push(values);
           },
-          observedState: {
-            groupId: "group_current",
-            groupName: "current",
-            backend: "local",
-            env: "default",
-            updatedAt: "2026-04-18T00:00:00.000Z",
-            resources: {},
-            routes: {},
-            workloads: {
-              web: {
-                serviceId: "svc_web",
-                name: "web",
-                category: "worker",
-                status: "deployed",
-                hostname: "web.example.test",
-                routeRef: "web-route-ref",
-                updatedAt: "2026-04-18T00:00:00.000Z",
-              },
-            },
-          },
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({ run: () => undefined }),
+        }),
+      }),
+      delete: () => ({}),
+    } as never,
+    ENCRYPTION_KEY: "test-key",
+    ADMIN_DOMAIN: "admin.example.test",
+    TENANT_BASE_DOMAIN: "",
+  };
+
+  await replaceManifestPublications(env, {
+    spaceId: "space_1",
+    groupId: "group_current",
+    manifest: {
+      routes: [{ target: "web", path: "/mcp" }],
+      publish: [{
+        name: "shared-name",
+        publisher: "web",
+        type: "McpServer",
+        outputs: { url: { route: "/mcp" } },
+      }],
+    },
+    observedState: {
+      groupId: "group_current",
+      groupName: "current",
+      backend: "local",
+      env: "default",
+      updatedAt: "2026-04-18T00:00:00.000Z",
+      resources: {},
+      routes: {},
+      workloads: {
+        web: {
+          serviceId: "svc_web",
+          name: "web",
+          category: "worker",
+          status: "deployed",
+          hostname: "web.example.test",
+          routeRef: "web-route-ref",
+          updatedAt: "2026-04-18T00:00:00.000Z",
         },
-      ),
-    Error,
-    "already exists in this space and is owned by manifest group 'group_other'",
-  );
+      },
+    },
+  });
+
+  assertEquals(rows.some((row) => row.groupId === "group_current"), true);
 });
 
 Deno.test("service publications share identical manifest Takos grants across groups", async () => {
@@ -831,7 +874,7 @@ Deno.test("service publications share identical manifest Takos grants across gro
       spec: { scopes: ["files:read"] },
     }),
     sourceType: "manifest",
-    groupId: "group_other",
+    groupId: null,
   };
   const env = {
     DB: {
@@ -839,7 +882,12 @@ Deno.test("service publications share identical manifest Takos grants across gro
         from: (table: unknown) => ({
           where: () => ({
             get: () => table === publications ? row : null,
-            all: () => table === serviceConsumes ? [] : [],
+            all: () =>
+              table === publications && row
+                ? [row]
+                : table === serviceConsumes
+                ? []
+                : [],
             orderBy: () => ({
               all: () => {
                 if (table !== publications || !row) return [];
@@ -918,18 +966,22 @@ Deno.test("service publications reject manifest removal while still consumed", a
   const env = {
     DB: {
       select: () => ({
-        from: () => ({
+        from: (table: unknown) => ({
           where: () => ({
-            all: () => [{
-              id: "consume_1",
-              accountId: "space_1",
-              serviceId: "svc_web",
-              publicationName: "shared-api",
-              configJson: JSON.stringify({ publication: "shared-api" }),
-              stateJson: "{}",
-              createdAt: "2026-04-18T00:00:00.000Z",
-              updatedAt: "2026-04-18T00:00:00.000Z",
-            }],
+            all: () => {
+              if (table === publications) return [row];
+              if (table !== serviceConsumes) return [];
+              return [{
+                id: "consume_1",
+                accountId: "space_1",
+                serviceId: "svc_web",
+                publicationName: "shared-api",
+                configJson: JSON.stringify({ publication: "shared-api" }),
+                stateJson: "{}",
+                createdAt: "2026-04-18T00:00:00.000Z",
+                updatedAt: "2026-04-18T00:00:00.000Z",
+              }];
+            },
             orderBy: () => ({
               all: () => [row],
             }),
@@ -996,18 +1048,22 @@ Deno.test("service publications preflight consumed removals before manifest writ
   const env = {
     DB: {
       select: () => ({
-        from: () => ({
+        from: (table: unknown) => ({
           where: () => ({
-            all: () => [{
-              id: "consume_1",
-              accountId: "space_1",
-              serviceId: "svc_web",
-              publicationName: "shared-api",
-              configJson: JSON.stringify({ publication: "shared-api" }),
-              stateJson: "{}",
-              createdAt: "2026-04-18T00:00:00.000Z",
-              updatedAt: "2026-04-18T00:00:00.000Z",
-            }],
+            all: () => {
+              if (table === publications) return [row];
+              if (table !== serviceConsumes) return [];
+              return [{
+                id: "consume_1",
+                accountId: "space_1",
+                serviceId: "svc_web",
+                publicationName: "shared-api",
+                configJson: JSON.stringify({ publication: "shared-api" }),
+                stateJson: "{}",
+                createdAt: "2026-04-18T00:00:00.000Z",
+                updatedAt: "2026-04-18T00:00:00.000Z",
+              }];
+            },
             orderBy: () => ({
               all: () => [row],
             }),

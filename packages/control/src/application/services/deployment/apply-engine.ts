@@ -21,8 +21,8 @@ import {
   type ObservedGroupState,
 } from "./group-state.ts";
 import {
-  diffEntryMatchesTarget,
   type DiffEntry,
+  diffEntryMatchesTarget,
   type DiffResult,
   filterDiffByTargets,
   type GroupState,
@@ -388,6 +388,7 @@ export function buildPublicationPrerequisiteManifest(
       ),
     ),
     publish: (desiredState.manifest.publish ?? []).filter((publication) =>
+      typeof publication.publisher === "string" &&
       targeted.has(publication.publisher)
     ),
   };

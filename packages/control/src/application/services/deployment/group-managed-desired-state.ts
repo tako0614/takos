@@ -78,20 +78,34 @@ type DesiredResourceBinding = {
 };
 
 function readMcpAuthSecretRef(publication: AppPublication): string | null {
-  if (publication.type !== "McpServer") return null;
-  const raw = publication.spec?.authSecretRef;
+  if (
+    publication.type !== "McpServer" &&
+    publication.type !== "takos.mcp-server.v1"
+  ) return null;
+  const raw = publication.auth?.bearer?.secretRef ??
+    publication.spec?.authSecretRef;
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   return trimmed ? normalizeEnvName(trimmed) : null;
 }
 
 function collectMcpAuthSecretRefsForWorkload(
-  manifest: Pick<AppManifest, "publish">,
+  manifest: Pick<AppManifest, "publish" | "routes">,
   workloadName: string,
 ): string[] {
   const refs = new Set<string>();
   for (const publication of manifest.publish ?? []) {
-    if (publication.publisher !== workloadName) continue;
+    const routeRefTargets = Object.values(publication.outputs ?? {})
+      .map((output) =>
+        output.routeRef
+          ? manifest.routes.find((route) => route.id === output.routeRef)
+            ?.target
+          : publication.publisher
+      );
+    if (
+      publication.publisher !== workloadName &&
+      !routeRefTargets.includes(workloadName)
+    ) continue;
     const ref = readMcpAuthSecretRef(publication);
     if (ref) refs.add(ref);
   }
@@ -109,6 +123,7 @@ export type ManagedWorkloadDesiredStateSnapshot = {
   spaceId: string;
   serviceId: string;
   serviceName: string;
+  groupId?: string | null;
   groupHostname?: string | null;
   consumes: AppConsume[];
   resourceBindings: Array<{
@@ -212,15 +227,18 @@ async function captureManagedPublicationSnapshot(
 
 function manifestRoutesFromObservedState(
   observedState: ObservedGroupState,
-): Array<{ target: string; path: string }> {
-  return Object.values(observedState.routes)
-    .filter((route): route is ObservedGroupState["routes"][string] & {
-      path: string;
-    } => typeof route.path === "string" && route.path.length > 0)
-    .map((route) => ({
-      target: route.target,
-      path: route.path,
-    }));
+): Array<{ id?: string; target: string; path: string }> {
+  return Object.entries(observedState.routes)
+    .flatMap(([name, route]) => {
+      if (typeof route.path !== "string" || route.path.length === 0) {
+        return [];
+      }
+      return [{
+        id: route.name || name,
+        target: route.target,
+        path: route.path,
+      }];
+    });
 }
 
 function normalizeBindingName(name: string): string {
@@ -422,6 +440,7 @@ export async function captureManagedWorkloadDesiredState(
     spaceId: string;
     serviceId: string;
     serviceName: string;
+    groupId?: string | null;
     groupHostname?: string | null;
   },
   deps: Partial<ManagedWorkloadDesiredStateHelpers> = {},
@@ -441,6 +460,7 @@ export async function captureManagedWorkloadDesiredState(
     spaceId: params.spaceId,
     serviceId: params.serviceId,
     serviceName: params.serviceName,
+    groupId: params.groupId ?? null,
     groupHostname: params.groupHostname,
     consumes,
     resourceBindings: resourceBindings.map((row) => ({
@@ -473,6 +493,7 @@ export async function restoreManagedWorkloadDesiredState(
       spaceId: snapshot.spaceId,
       serviceId: snapshot.serviceId,
       serviceName: snapshot.serviceName,
+      consumerGroupId: snapshot.groupId,
       groupHostname: snapshot.groupHostname,
       consumes: snapshot.consumes,
     });
@@ -572,6 +593,7 @@ export async function syncGroupManagedDesiredState(
       spaceId: input.spaceId,
       serviceId: observedWorkload.serviceId,
       serviceName: `${input.desiredState.manifest.name}:${workloadName}`,
+      groupId: input.observedState.groupId,
       groupHostname,
     }, {
       createDesiredStateService: resolvedDeps.createDesiredStateService,
@@ -617,6 +639,7 @@ export async function syncGroupManagedDesiredState(
         env,
         {
           spaceId: input.spaceId,
+          consumerGroupId: input.observedState.groupId,
           consumes: workloadSpec.consume,
         },
       );
@@ -633,6 +656,7 @@ export async function syncGroupManagedDesiredState(
         spaceId: input.spaceId,
         serviceId: observedWorkload.serviceId,
         serviceName: `${input.desiredState.manifest.name}:${workloadName}`,
+        consumerGroupId: input.observedState.groupId,
         groupHostname,
         consumes: workloadSpec.consume,
       });

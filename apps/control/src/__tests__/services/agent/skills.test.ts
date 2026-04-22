@@ -352,12 +352,13 @@ Deno.test("skill prompt builder does not inject manuals before explicit activati
         triggers: ["research"],
         source: "managed",
         category: "research",
-        execution_contract: contract({
+        execution_contract: {
           preferred_tools: ["web_fetch"],
+          durable_output_hints: [],
           output_modes: ["chat"],
           required_mcp_servers: [],
           template_ids: [],
-        }),
+        },
         availability: "available",
         availability_reasons: [],
       },

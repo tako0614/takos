@@ -32,14 +32,20 @@ single worker (`web`) と attached container (`sandbox`) の構成。
 ## Publications
 
 ```yaml
+routes:
+  - id: gui
+    target: web
+    path: /gui
+
 publish:
   - name: computer-ui
-    publisher: web
-    type: UiSurface
+    type: takos.ui-surface.v1
+    display:
+      title: Computer
     outputs:
       url:
-        route: /gui
-    title: Computer
+        kind: url
+        routeRef: gui
 compute:
   web:
     consume:
@@ -63,7 +69,7 @@ compute:
             - events:subscribe
 ```
 
-`UiSurface` は custom route publication type であり、deploy manifest の
+`takos.ui-surface.v1` は UI surface publication type であり、deploy manifest の
 `publish` entry で catalog を管理します。`takos-computer-api` は route
 publication ではなく、kernel API への access を受け取る local consume 名です。
 

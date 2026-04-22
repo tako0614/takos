@@ -208,7 +208,9 @@ Deno.test("services settings route - replaces consumes as next-deploy desired st
   mocks.replaceServiceConsumes = spy(async () => [
     {
       publication: "auth.default",
-      env: { AUTH_URL: "PUBLIC_URL" },
+      as: "auth",
+      request: { scopes: ["auth:read"] },
+      inject: { env: { url: "PUBLIC_URL" } },
     },
   ]) as any;
 
@@ -222,7 +224,9 @@ Deno.test("services settings route - replaces consumes as next-deploy desired st
         consumes: [
           {
             publication: "auth.default",
-            env: { AUTH_URL: "PUBLIC_URL" },
+            as: "auth",
+            request: { scopes: ["auth:read"] },
+            inject: { env: { url: "PUBLIC_URL" } },
           },
         ],
       }),
@@ -237,7 +241,9 @@ Deno.test("services settings route - replaces consumes as next-deploy desired st
     consumes: [
       {
         publication: "auth.default",
-        env: { AUTH_URL: "PUBLIC_URL" },
+        as: "auth",
+        request: { scopes: ["auth:read"] },
+        inject: { env: { url: "PUBLIC_URL" } },
       },
     ],
     applies_on_next_deploy: true,
@@ -254,10 +260,13 @@ Deno.test("services settings route - replaces consumes as next-deploy desired st
       spaceId: "ws-1",
       serviceId: "service-1",
       serviceName: "api",
+      consumerGroupId: null,
       consumes: [
         {
           publication: "auth.default",
-          env: { AUTH_URL: "PUBLIC_URL" },
+          as: "auth",
+          request: { scopes: ["auth:read"] },
+          inject: { env: { url: "PUBLIC_URL" } },
         },
       ],
     },

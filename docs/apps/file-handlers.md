@@ -1,26 +1,32 @@
 # File Handlers
 
 特定の MIME type や拡張子のファイルを handler UI で開けるようにするには
-`publish` で `type: FileHandler` を宣言する。FileHandler catalog は deploy
+`publish` で `type: takos.file-handler.v1` を宣言する。FileHandler catalog は deploy
 manifest の `publish` entry で管理します。
 
 ## 基本
 
 ```yaml
+routes:
+  - id: file-open
+    target: web
+    path: /files/:id
+
 publish:
-  - type: FileHandler
+  - type: takos.file-handler.v1
     name: markdown
-    publisher: web
-    title: Markdown
+    display:
+      title: Markdown
     outputs:
       url:
-        route: /files/:id
+        kind: url
+        routeRef: file-open
     spec:
       mimeTypes: [text/markdown]
       extensions: [.md]
 ```
 
-ユーザーがファイルを開くと `outputs.url.route` にリダイレクトされる。`:id` が URL encode
+ユーザーがファイルを開くと `outputs.url.routeRef` が参照する route にリダイレクトされる。`:id` が URL encode
 されたファイル ID に置換される。`:id` は path segment として必須で、`:id`
 を含まない `FileHandler` は storage の handler catalog には出ない。current
 storage UI は起動時に `space_id` query parameter も付ける。file ID を `file_id`
@@ -29,24 +35,34 @@ query parameter で渡す fallback はありません。
 ## 複数ハンドラー
 
 ```yaml
+routes:
+  - id: file-open
+    target: web
+    path: /files/:id
+  - id: image-viewer
+    target: web
+    path: /viewer/:id
+
 publish:
-  - type: FileHandler
+  - type: takos.file-handler.v1
     name: markdown
-    publisher: web
-    title: Markdown
+    display:
+      title: Markdown
     outputs:
       url:
-        route: /files/:id
+        kind: url
+        routeRef: file-open
     spec:
       mimeTypes: [text/markdown]
       extensions: [.md]
-  - type: FileHandler
+  - type: takos.file-handler.v1
     name: image
-    publisher: web
-    title: Images
+    display:
+      title: Images
     outputs:
       url:
-        route: /viewer/:id
+        kind: url
+        routeRef: image-viewer
     spec:
       mimeTypes: [image/png, image/jpeg, image/gif]
       extensions: [.png, .jpg, .jpeg, .gif]
@@ -62,15 +78,15 @@ platform / app は `spec` 内で以下の field を使います。
 
 | field             | required    | 説明                                                                               |
 | ----------------- | ----------- | ---------------------------------------------------------------------------------- |
-| `type`            | yes         | custom type 名 (`FileHandler`)                                                     |
-| `publisher`       | yes         | 対応する route の compute target                                                   |
+| `type`            | yes         | standard type 名 (`takos.file-handler.v1`)。`FileHandler` は legacy alias          |
+| `routeRef`        | yes         | 対応する `routes[].id`                                                             |
 | `outputs`         | yes         | ファイルを開く route output (`:id` path segment が必須。ファイル ID に置換)        |
 | `name`            | yes         | publication 名。storage UI の handler 表示名にも使われる                           |
-| `title`           | no          | discovery metadata。storage API response には含まれるが、current UI 表示は `name`  |
+| `display.title`   | no          | discovery metadata。storage API response には含まれるが、current UI 表示は `name`  |
 | `spec.mimeTypes`  | conditional | 対応する MIME type のリスト (`mimeTypes` または `extensions` の最低 1 つが必須)    |
 | `spec.extensions` | conditional | 対応するファイル拡張子のリスト (`mimeTypes` または `extensions` の最低 1 つが必須) |
 
-`outputs.*.route` は `/` で始まる group 内 path。route publication の output `url`
+`outputs.*.routeRef` は `routes[].id` を参照します。route publication の output `url`
 は group の auto hostname とこの route から生成され、`:id` などの template segment は
 template URL のまま consumer に渡ります。storage の FileHandler discovery は
 `:id` path segment を含む handler だけを返します。current storage UI はこの
@@ -80,8 +96,8 @@ template URL の `:id` を file ID に置換し、`space_id` query parameter を
 
 ## Publication の仕組み
 
-kernel は `type` の意味を解釈しない。`FileHandler` は platform / app が解釈する
-custom route publication type です。`FileHandler` を理解するのは
+kernel は多くの `type` の意味を解釈しない。`takos.file-handler.v1` は platform /
+app が解釈する standard route publication type です。`FileHandler` を理解するのは
 利用する側（agent runtime や storage UI 等）の役割。`publish` は generic plugin
 resolver ではなく、manifest で宣言した route metadata の catalog です。
 

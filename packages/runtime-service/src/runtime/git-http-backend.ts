@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { filterSafeEnv } from "../utils/sandbox-env.ts";
+import { readSafeEnv } from "../utils/sandbox-env.ts";
 import { createLogger } from "takos-common/logger";
 import { gracefulKill } from "../utils/process-kill.ts";
 import { Buffer } from "node:buffer";
@@ -31,7 +31,7 @@ export function buildGitHttpBackendEnv(
   request: GitHttpBackendRequest,
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
-    ...filterSafeEnv(Deno.env.toObject()),
+    ...readSafeEnv(),
     GIT_PROJECT_ROOT: request.projectRoot,
     GIT_HTTP_EXPORT_ALL: "1",
     PATH_INFO: request.gitPath,

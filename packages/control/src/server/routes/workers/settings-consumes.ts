@@ -21,7 +21,13 @@ import { logError } from "../../../shared/utils/logger.ts";
 
 const consumeSchema = z.object({
   publication: z.string().min(1),
+  as: z.string().min(1).optional(),
+  request: z.record(z.unknown()).optional(),
   env: z.record(z.string().min(1)).optional(),
+  inject: z.object({
+    env: z.record(z.string().min(1)).optional(),
+    defaults: z.boolean().optional(),
+  }).optional(),
 });
 
 export const workersSettingsConsumesRouteDeps = {
@@ -95,6 +101,7 @@ const settingsConsumes = new Hono<AuthenticatedRouteEnv>()
             spaceId: worker.space_id,
             serviceId: worker.id,
             serviceName: worker.slug || worker.service_name || worker.id,
+            consumerGroupId: worker.group_id ?? null,
             consumes: body.consumes,
           });
 

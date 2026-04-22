@@ -84,13 +84,14 @@ object-store / queue などの resource API / runtime binding は publish catalo
 
 ### Default app distribution
 
-default app distribution の初期セットは以下の 4 つ。新規 space の bootstrap で
+default app distribution の初期セットは以下の 5 つ。新規 space の bootstrap で
 preinstall できるが、operator は別の app set に差し替えられる:
 
 - takos-docs
 - takos-excel
 - takos-slide
 - takos-computer
+- yurucommu
 
 default set に含まれても、primitive や group は特権化されない。
 
@@ -153,28 +154,28 @@ env を inject する。route publication は manifest の `publisher` + `type` 
 
 ### route publication
 
-route publication は group が公開する interface の metadata。`type` は custom
-string で、core は type の意味を解釈しない。
+route publication は group が公開する interface の metadata。Takos 標準 `type` は
+namespaced string で、core は platform-managed behavior 以外の metadata を解釈しない。
 
 ```yaml
 publish:
   - name: tools
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
     outputs:
       url:
-        route: /mcp
+        kind: url
+        routeRef: mcp
     spec:
       transport: streamable-http
   - name: docs
-    type: UiSurface
-    publisher: web
+    type: takos.ui-surface.v1
+    display:
+      title: Docs
+      icon: book
     outputs:
       url:
-        route: /
-    title: Docs
-    spec:
-      icon: book
+        kind: url
+        routeRef: ui
 ```
 
 必須 field:
@@ -203,9 +204,9 @@ consume:
 - `request`
 
 `request` は provider ごとの required / optional field が変わる。route publication
-の URL は assigned hostname と `outputs.*.route` から生成され、path template は
-template URL のまま扱う。Takos built-in provider publication は provider が定義
-する outputs を consumer ごとに env へ変換する。
+の URL は assigned hostname と `outputs.*.routeRef` が参照する route の `path`
+から生成され、path template は template URL のまま扱う。Takos built-in provider
+publication は provider が定義する outputs を consumer ごとに env へ変換する。
 
 deploy 時に kernel は:
 
@@ -238,9 +239,10 @@ compute:
         request:
           scopes:
             - files:read
-        env:
-          endpoint: INTERNAL_TAKOS_API_URL
-          apiKey: INTERNAL_TAKOS_API_KEY
+        inject:
+          env:
+            endpoint: INTERNAL_TAKOS_API_URL
+            apiKey: INTERNAL_TAKOS_API_KEY
 ```
 
 kernel は built-in provider publication outputs を解決するが、consumer が要求して

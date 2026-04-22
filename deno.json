@@ -40,6 +40,8 @@
     "lint": "deno lint",
     "lint:docs": "deno task --cwd scripts validate-docs",
     "lint:agent-docs": "deno task --cwd scripts validate-agent-docs",
+    "generate:agent-prompts": "deno run --allow-read --allow-write scripts/generate-agent-prompts.ts",
+    "check:agent-prompts": "deno run --allow-read scripts/generate-agent-prompts.ts --check",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
     "check:lockfiles": "deno task --cwd scripts check-lockfiles",

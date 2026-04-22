@@ -116,7 +116,7 @@ export const settings = {
   createSpaceHint: "チームで作業するにはチームスペースを作成してください",
   installDefaultAppsOnCreate: "default app をインストールする",
   installDefaultAppsOnCreateHint:
-    "Docs / Excel / Slide / Computer をプリインストールします。あとから Store でインストールする場合は外せます。",
+    "Docs / Excel / Slide / Computer / Yurucommu をプリインストールします。あとから Store でインストールする場合は外せます。",
   spaceCreated: "スペースを作成しました",
   targetSpace: "対象スペース",
 

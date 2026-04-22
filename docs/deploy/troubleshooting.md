@@ -131,7 +131,7 @@ takos deploy --plan --env staging --space SPACE_ID --target web
 3. よくある原因:
 
 - `consume` が存在しない publication または未知の built-in provider publication を参照している
-- `consume.env` が既存 env と衝突している
+- `consume.inject.env` が既存 env と衝突している
 - Worker のコードにシンタックスエラーがある
 - readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない
 

@@ -51,10 +51,14 @@ export class CapabilityRegistry {
     if (terms.length === 0) return this.all().slice(0, limit);
 
     const weights: [(_: CapabilityDescriptor) => string, number][] = [
+      [(d) => d.id, 35],
       [(d) => d.name, 30],
       [(d) => d.tags.join(" "), 30],
       [(d) => (d.triggers ?? []).join(" "), 40],
       [(d) => d.summary, 20],
+      [(d) => d.instructions ?? "", 10],
+      [(d) => (d.recommended_tools ?? []).join(" "), 15],
+      [(d) => searchableKindAliases(d), 25],
     ];
 
     return [...this.descriptors.values()]
@@ -76,4 +80,22 @@ export class CapabilityRegistry {
   get size(): number {
     return this.descriptors.size;
   }
+}
+
+function searchableKindAliases(descriptor: CapabilityDescriptor): string {
+  if (descriptor.kind === "skill") {
+    return [
+      "manual",
+      "workflow",
+      "guide",
+      "instructions",
+      "playbook",
+      "skill",
+      "取説",
+      "手順",
+      "使い方",
+      "マニュアル",
+    ].join(" ");
+  }
+  return descriptor.kind;
 }

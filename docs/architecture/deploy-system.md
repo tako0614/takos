@@ -49,24 +49,27 @@ compute:
         request:
           scopes:
             - files:read
-        env:
-          endpoint: TAKOS_API_ENDPOINT
-          apiKey: TAKOS_API_KEY
+        inject:
+          env:
+            endpoint: TAKOS_API_ENDPOINT
+            apiKey: TAKOS_API_KEY
 
 publish:
   - name: search
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
     outputs:
       url:
-        route: /mcp
+        kind: url
+        routeRef: mcp
     spec:
       transport: streamable-http
 
 routes:
-  - target: web
+  - id: ui
+    target: web
     path: /
-  - target: web
+  - id: mcp
+    target: web
     path: /mcp
 ```
 
@@ -124,8 +127,9 @@ hostname は routing layer で管理:
 - custom domain: 任意（DNS 検証 + SSL）
 
 同じ `path` で HTTP method が重なる route は duplicate として invalid。route
-publication は `publisher + route` で route を参照するため、同じ
-`publisher + route` を複数 route に分けることも invalid。
+publication は `outputs.*.routeRef` で route を参照するため、`routes[].id` は
+manifest 内で一意でなければならない。legacy `publisher + route` を使う場合も、
+同じ target/path を複数 route に分けることは invalid。
 
 ### Publications / consumes
 
@@ -141,22 +145,22 @@ group なし publication と同じ model で扱う。
 ```yaml
 publish:
   - name: tools
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
     outputs:
       url:
-        route: /mcp
+        kind: url
+        routeRef: mcp
     spec:
       transport: streamable-http
   - name: docs
-    type: UiSurface
-    publisher: web
+    type: takos.ui-surface.v1
+    display:
+      title: Docs
+      icon: book
     outputs:
       url:
-        route: /
-    title: Docs
-    spec:
-      icon: book
+        kind: url
+        routeRef: ui
 ```
 
 consumer は output ごとに env 名を決める。
@@ -170,9 +174,10 @@ compute:
         request:
           scopes:
             - files:read
-        env:
-          endpoint: INTERNAL_TAKOS_API_URL
-          apiKey: INTERNAL_TAKOS_API_KEY
+        inject:
+          env:
+            endpoint: INTERNAL_TAKOS_API_URL
+            apiKey: INTERNAL_TAKOS_API_KEY
 ```
 
 ## CLI / API

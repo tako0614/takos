@@ -24,8 +24,10 @@ import {
 } from "./publication-catalog.ts";
 import {
   getDb,
+  groups,
   publications,
   serviceConsumes,
+  services,
 } from "../../../infra/db/index.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
@@ -39,6 +41,8 @@ export interface PublicationRecord {
   name: string;
   sourceType: "manifest" | "api";
   groupId: string | null;
+  groupName?: string | null;
+  qualifiedName?: string;
   ownerServiceId: string | null;
   catalogName: string | null;
   publicationType: string;
@@ -61,9 +65,28 @@ const ROUTE_PUBLICATION_FIELDS = new Set([
   "publisher",
   "type",
   "outputs",
+  "display",
+  "auth",
   "title",
   "spec",
 ]);
+
+const STANDARD_PUBLICATION_TYPES: Record<string, string> = {
+  McpServer: "takos.mcp-server.v1",
+  FileHandler: "takos.file-handler.v1",
+  UiSurface: "takos.ui-surface.v1",
+};
+
+export function canonicalPublicationType(type: string): string {
+  return STANDARD_PUBLICATION_TYPES[type] ?? type;
+}
+
+export function isPublicationType(
+  type: string,
+  canonicalType: string,
+): boolean {
+  return canonicalPublicationType(type) === canonicalType;
+}
 
 function parseJsonRecord(raw: string): Record<string, unknown> {
   try {
@@ -80,7 +103,9 @@ function parsePublicationRecord(raw: string): AppPublication {
   const record = parseJsonRecord(raw);
   const publication: AppPublication = {
     name: typeof record.name === "string" ? record.name : "",
-    publisher: typeof record.publisher === "string" ? record.publisher : "",
+    ...(typeof record.publisher === "string"
+      ? { publisher: record.publisher }
+      : {}),
     type: typeof record.type === "string" ? record.type : "",
   };
   if (typeof record.path === "string") {
@@ -97,6 +122,20 @@ function parsePublicationRecord(raw: string): AppPublication {
   }
   if (typeof record.title === "string") {
     publication.title = record.title;
+  }
+  if (
+    record.display &&
+    typeof record.display === "object" &&
+    !Array.isArray(record.display)
+  ) {
+    publication.display = record.display as AppPublication["display"];
+  }
+  if (
+    record.auth &&
+    typeof record.auth === "object" &&
+    !Array.isArray(record.auth)
+  ) {
+    publication.auth = record.auth as AppPublication["auth"];
   }
   if (
     record.spec &&
@@ -120,7 +159,9 @@ function isGrantPublication(publication: AppPublication): boolean {
   return publication.publisher === "takos";
 }
 
-function consumeLocalName(consume: Pick<AppConsume, "publication" | "as">): string {
+function consumeLocalName(
+  consume: Pick<AppConsume, "publication" | "as">,
+): string {
   return normalizeName(
     consume.as ?? consume.publication,
     "consume.as",
@@ -183,7 +224,7 @@ function assertConsumeOutputAliases(
   outputs: PublicationOutputDescriptor[],
 ): void {
   const outputNames = new Set(outputs.map((entry) => entry.name));
-  for (const key of Object.keys(consume.env ?? {})) {
+  for (const key of Object.keys(consume.inject?.env ?? consume.env ?? {})) {
     if (outputNames.has(key)) continue;
     throw new Error(
       `consume '${consume.publication}' maps unknown output '${key}'. Known outputs: ${
@@ -193,11 +234,25 @@ function assertConsumeOutputAliases(
   }
 }
 
+function selectedConsumeOutputs(
+  consume: AppConsume,
+  outputs: PublicationOutputDescriptor[],
+): PublicationOutputDescriptor[] {
+  if (consume.inject?.defaults) return outputs;
+  const aliases = consume.inject?.env ?? consume.env ?? {};
+  const selected = new Set(Object.keys(aliases));
+  return outputs.filter((output) => selected.has(output.name));
+}
+
 export function resolveConsumeOutputEnvName(
-  consume: Pick<AppConsume, "env">,
+  consume: Pick<AppConsume, "env" | "inject">,
   output: Pick<PublicationOutputDescriptor, "name" | "defaultEnv">,
 ): string {
-  return normalizeEnvName(consume.env?.[output.name] ?? output.defaultEnv);
+  return normalizeEnvName(
+    consume.inject?.env?.[output.name] ??
+      consume.env?.[output.name] ??
+      output.defaultEnv,
+  );
 }
 
 function normalizePublicationEnvSegment(value: string): string {
@@ -259,11 +314,12 @@ function normalizeRoutePublication(
   publication: AppPublication,
 ): AppPublication {
   const name = normalizeName(publication.name, "publication.name");
-  const publisher = normalizeName(
-    publication.publisher || "",
-    "publication.publisher",
+  const publisher = publication.publisher
+    ? normalizeName(publication.publisher, "publication.publisher")
+    : undefined;
+  const type = canonicalPublicationType(
+    normalizeName(publication.type || "", "publication.type"),
   );
-  const type = normalizeName(publication.type || "", "publication.type");
   if (publisher === "takos") {
     throw new Error(
       `publication '${name}' uses reserved publisher 'takos'; use Takos built-in provider publications from consume[] instead`,
@@ -274,16 +330,44 @@ function normalizeRoutePublication(
   }
   const outputs: AppPublication["outputs"] = {};
   for (const [outputName, output] of Object.entries(publication.outputs)) {
-    const route = output.route?.trim();
-    if (!route) {
-      throw new Error(`publication '${name}'.outputs.${outputName}.route is required`);
+    const kind = output.kind ?? "url";
+    if (!["url", "string", "secret"].includes(kind)) {
+      throw new Error(
+        `publication '${name}'.outputs.${outputName}.kind must be url, string, or secret`,
+      );
     }
-    if (!route.startsWith("/")) {
+    if (kind !== "url") {
+      throw new Error(
+        `publication '${name}'.outputs.${outputName}.kind must be url for route outputs`,
+      );
+    }
+    const routeRef = output.routeRef?.trim();
+    const route = output.route?.trim();
+    if (route && routeRef) {
+      throw new Error(
+        `publication '${name}'.outputs.${outputName} must not combine route and routeRef`,
+      );
+    }
+    if (!route && !routeRef) {
+      throw new Error(
+        `publication '${name}'.outputs.${outputName}.routeRef is required`,
+      );
+    }
+    if (route && !route.startsWith("/")) {
       throw new Error(
         `publication '${name}'.outputs.${outputName}.route must start with '/'`,
       );
     }
-    outputs[outputName] = { route };
+    if (route && !publisher) {
+      throw new Error(
+        `publication '${name}'.publisher is required when outputs.${outputName}.route is used`,
+      );
+    }
+    outputs[outputName] = {
+      kind,
+      ...(routeRef ? { routeRef } : {}),
+      ...(route ? { route } : {}),
+    };
   }
   if (
     publication.spec != null &&
@@ -293,10 +377,12 @@ function normalizeRoutePublication(
   }
   return {
     name,
-    publisher,
+    ...(publisher ? { publisher } : {}),
     type,
     outputs,
+    ...(publication.display ? { display: publication.display } : {}),
     ...(publication.title ? { title: String(publication.title).trim() } : {}),
+    ...(publication.auth ? { auth: publication.auth } : {}),
     ...(publication.spec ? { spec: publication.spec } : {}),
   };
 }
@@ -392,19 +478,34 @@ export function normalizeServiceConsumes(
         return consume.request;
       })()
       : undefined;
-    const env = consume.env
+    if (consume.env && consume.inject) {
+      throw new Error(`consume '${localName}' must not combine env and inject`);
+    }
+    const rawInject = consume.inject ??
+      (consume.env ? { env: consume.env } : undefined);
+    const injectEnv = rawInject?.env
       ? Object.fromEntries(
-        Object.entries(consume.env).map(([outputName, envName]) => [
-          normalizeName(outputName, `consume '${localName}'.env output`),
+        Object.entries(rawInject.env).map(([outputName, envName]) => [
+          normalizeName(outputName, `consume '${localName}'.inject.env output`),
           normalizeEnvName(envName),
         ]),
       )
+      : undefined;
+    const inject = rawInject
+      ? {
+        ...(injectEnv && Object.keys(injectEnv).length > 0
+          ? { env: injectEnv }
+          : {}),
+        ...(rawInject.defaults != null
+          ? { defaults: Boolean(rawInject.defaults) }
+          : {}),
+      }
       : undefined;
     return {
       publication,
       ...(alias ? { as: alias } : {}),
       ...(request ? { request } : {}),
-      ...(env && Object.keys(env).length > 0 ? { env } : {}),
+      ...(inject && Object.keys(inject).length > 0 ? { inject } : {}),
     };
   });
 }
@@ -462,18 +563,35 @@ function parseConsumeConfig(
       !Array.isArray(config.env)
     ? config.env as Record<string, unknown>
     : undefined;
-  const env = envRaw
+  const injectRaw = config.inject && typeof config.inject === "object" &&
+      !Array.isArray(config.inject)
+    ? config.inject as Record<string, unknown>
+    : undefined;
+  const injectEnvRaw = injectRaw?.env && typeof injectRaw.env === "object" &&
+      !Array.isArray(injectRaw.env)
+    ? injectRaw.env as Record<string, unknown>
+    : envRaw;
+  const injectEnv = injectEnvRaw
     ? Object.fromEntries(
-      Object.entries(envRaw)
+      Object.entries(injectEnvRaw)
         .filter(([, value]) => typeof value === "string")
         .map(([key, value]) => [key, String(value)]),
     )
     : undefined;
+  const defaults = typeof injectRaw?.defaults === "boolean"
+    ? injectRaw.defaults
+    : undefined;
+  const inject = {
+    ...(injectEnv && Object.keys(injectEnv).length > 0
+      ? { env: injectEnv }
+      : {}),
+    ...(defaults != null ? { defaults } : {}),
+  };
   return {
     publication,
     ...(alias ? { as: alias } : {}),
     ...(request && Object.keys(request).length > 0 ? { request } : {}),
-    ...(env && Object.keys(env).length > 0 ? { env } : {}),
+    ...(Object.keys(inject).length > 0 ? { inject } : {}),
   };
 }
 
@@ -534,15 +652,116 @@ async function getPublicationRowByName(
   spaceId: string,
   name: string,
 ): Promise<PublicationRow | null> {
+  const rows = await getPublicationRowsByName(env, spaceId, name);
+  if (rows.length === 0) return null;
+  if (rows.length > 1) {
+    throw new BadRequestError(
+      `publication '${name}' is ambiguous; use <group>/<name>`,
+    );
+  }
+  return rows[0];
+}
+
+async function getPublicationRowsByName(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+  name: string,
+): Promise<PublicationRow[]> {
   const db = getDb(env.DB);
-  const row = await db.select()
+  return await db.select()
     .from(publications)
     .where(and(
       eq(publications.accountId, spaceId),
       eq(publications.name, name),
     ))
-    .get();
-  return row ?? null;
+    .all();
+}
+
+async function getGroupIdByName(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+  groupName: string,
+): Promise<string | null> {
+  const db = getDb(env.DB);
+  const rows = await db.select({ id: groups.id })
+    .from(groups)
+    .where(and(eq(groups.spaceId, spaceId), eq(groups.name, groupName)))
+    .all();
+  return rows[0]?.id ?? null;
+}
+
+async function getServiceGroupId(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+  serviceId: string,
+): Promise<string | null> {
+  const db = getDb(env.DB);
+  const rows = await db.select({ groupId: services.groupId })
+    .from(services)
+    .where(and(eq(services.accountId, spaceId), eq(services.id, serviceId)))
+    .all();
+  return rows[0]?.groupId ?? null;
+}
+
+async function getPublicationRowByIdentity(
+  env: Pick<Env, "DB">,
+  params: {
+    spaceId: string;
+    groupId: string | null;
+    name: string;
+  },
+): Promise<PublicationRow | null> {
+  const db = getDb(env.DB);
+  const rows = await db.select()
+    .from(publications)
+    .where(and(
+      eq(publications.accountId, params.spaceId),
+      eq(publications.name, params.name),
+    ))
+    .all();
+  return rows.find((row) => (row.groupId ?? null) === params.groupId) ?? null;
+}
+
+async function getPublicationRowByRef(
+  env: Pick<Env, "DB">,
+  params: {
+    spaceId: string;
+    ref: string;
+    consumerGroupId?: string | null;
+  },
+): Promise<PublicationRow | null> {
+  const ref = normalizeName(params.ref, "publication ref");
+  const slash = ref.indexOf("/");
+  if (slash > 0) {
+    const groupName = ref.slice(0, slash).trim();
+    const name = ref.slice(slash + 1).trim();
+    if (!groupName || !name || name.includes("/")) {
+      throw new BadRequestError(`invalid publication ref '${ref}'`);
+    }
+    const groupId = await getGroupIdByName(env, params.spaceId, groupName);
+    if (!groupId) return null;
+    return await getPublicationRowByIdentity(env, {
+      spaceId: params.spaceId,
+      groupId,
+      name,
+    });
+  }
+
+  if (params.consumerGroupId) {
+    const local = await getPublicationRowByIdentity(env, {
+      spaceId: params.spaceId,
+      groupId: params.consumerGroupId,
+      name: ref,
+    });
+    if (local) return local;
+  }
+  const global = await getPublicationRowByIdentity(env, {
+    spaceId: params.spaceId,
+    groupId: null,
+    name: ref,
+  });
+  if (global) return global;
+  return await getPublicationRowByName(env, params.spaceId, ref);
 }
 
 async function upsertPublicationRow(
@@ -555,16 +774,16 @@ async function upsertPublicationRow(
     publication: AppPublication;
     resolved?: Record<string, string>;
   },
-): Promise<void> {
+): Promise<PublicationRow> {
   const db = getDb(env.DB);
   const now = new Date().toISOString();
-  const existing = await getPublicationRowByName(
-    env,
-    params.spaceId,
-    params.publication.name,
-  );
   const grantPublication = isGrantPublication(params.publication);
   const groupId = grantPublication ? null : params.groupId ?? null;
+  const existing = await getPublicationRowByIdentity(env, {
+    spaceId: params.spaceId,
+    groupId,
+    name: params.publication.name,
+  });
   const catalogName = grantPublication ? "takos" : null;
   const values = {
     groupId,
@@ -593,7 +812,11 @@ async function upsertPublicationRow(
         .set(values)
         .where(eq(publications.id, existing.id))
         .run();
-      return;
+      return (await getPublicationRowByIdentity(env, {
+        spaceId: params.spaceId,
+        groupId,
+        name: params.publication.name,
+      }))!;
     }
     if (
       existing.sourceType !== params.sourceType || existingGroupId !== groupId
@@ -608,7 +831,11 @@ async function upsertPublicationRow(
       .set(values)
       .where(eq(publications.id, existing.id))
       .run();
-    return;
+    return (await getPublicationRowByIdentity(env, {
+      spaceId: params.spaceId,
+      groupId,
+      name: params.publication.name,
+    }))!;
   }
 
   await db.insert(publications)
@@ -620,6 +847,11 @@ async function upsertPublicationRow(
       ...values,
     })
     .run();
+  return (await getPublicationRowByIdentity(env, {
+    spaceId: params.spaceId,
+    groupId,
+    name: params.publication.name,
+  }))!;
 }
 
 async function deletePublicationRow(
@@ -655,16 +887,28 @@ async function restorePublicationRow(
 async function assertPublicationHasNoConsumers(
   env: Pick<Env, "DB">,
   spaceId: string,
-  name: string,
+  publication: PublicationRow,
 ): Promise<void> {
   const db = getDb(env.DB);
   const consumers = await db.select()
     .from(serviceConsumes)
     .where(eq(serviceConsumes.accountId, spaceId))
     .all();
-  if (consumers.some((row) => parseConsumeConfig(row).publication === name)) {
+  const groupIdByService = new Map<string, string | null>();
+  for (const row of consumers) {
+    let consumerGroupId = groupIdByService.get(row.serviceId);
+    if (!groupIdByService.has(row.serviceId)) {
+      consumerGroupId = await getServiceGroupId(env, spaceId, row.serviceId);
+      groupIdByService.set(row.serviceId, consumerGroupId);
+    }
+    const resolved = await getPublicationRowByRef(env, {
+      spaceId,
+      ref: parseConsumeConfig(row).publication,
+      consumerGroupId,
+    });
+    if (resolved?.id !== publication.id) continue;
     throw new Error(
-      `publication '${name}' is still consumed by one or more services`,
+      `publication '${publication.name}' is still consumed by one or more services`,
     );
   }
 }
@@ -700,7 +944,7 @@ async function upsertServiceConsumeRow(
     publication: params.consume.publication,
     ...(params.consume.as ? { as: params.consume.as } : {}),
     ...(params.consume.request ? { request: params.consume.request } : {}),
-    ...(params.consume.env ? { env: params.consume.env } : {}),
+    ...(params.consume.inject ? { inject: params.consume.inject } : {}),
   });
   await db.insert(serviceConsumes)
     .values({
@@ -783,9 +1027,25 @@ async function syncConsumeState(
 
 function findRouteTargetForPublication(
   publication: AppPublication,
-  manifestRoutes: Array<{ target: string; path: string }>,
-  routePath: string,
-): string {
+  manifestRoutes: Array<{ id?: string; target: string; path: string }>,
+  output: { route?: string; routeRef?: string },
+): { target: string; path: string } {
+  const routeRef = output.routeRef?.trim();
+  if (routeRef) {
+    const route = manifestRoutes.find((entry) => entry.id === routeRef);
+    if (!route) {
+      throw new Error(
+        `publication '${publication.name}' routeRef '${routeRef}' does not match any route id`,
+      );
+    }
+    if (publication.publisher && publication.publisher !== route.target) {
+      throw new Error(
+        `publication '${publication.name}' publisher '${publication.publisher}' does not match routeRef '${routeRef}' target '${route.target}'`,
+      );
+    }
+    return { target: route.target, path: route.path };
+  }
+  const routePath = output.route;
   const target = publication.publisher;
   if (!target || !routePath) {
     throw new Error(
@@ -800,26 +1060,32 @@ function findRouteTargetForPublication(
       `publication '${publication.name}' publisher/route '${target} ${routePath}' does not match any route`,
     );
   }
-  return routes[0].target;
+  return { target: routes[0].target, path: routes[0].path };
 }
 
 export function resolveRoutePublication(
   publication: AppPublication,
   observedState: ObservedGroupState,
-  manifestRoutes: Array<{ target: string; path: string }>,
+  manifestRoutes: Array<{ id?: string; target: string; path: string }>,
   options: { groupHostname?: string | null } = {},
 ): { ownerServiceId: string; resolved: Record<string, string> } {
   const outputs = publication.outputs ?? {};
   const resolved: Record<string, string> = {};
   let ownerServiceId: string | null = null;
+  let ownerTarget: string | null = null;
   for (const [outputName, output] of Object.entries(outputs)) {
-    const routePath = output.route;
-    if (!routePath) continue;
-    const target = findRouteTargetForPublication(
+    const route = findRouteTargetForPublication(
       publication,
       manifestRoutes,
-      routePath,
+      output,
     );
+    if (ownerTarget && ownerTarget !== route.target) {
+      throw new Error(
+        `publication '${publication.name}' route outputs must resolve to the same target`,
+      );
+    }
+    ownerTarget ??= route.target;
+    const target = route.target;
     const workload = observedState.workloads[target];
     const hostname = options.groupHostname ?? workload?.hostname;
     if (!workload?.serviceId || !hostname) {
@@ -828,7 +1094,7 @@ export function resolveRoutePublication(
       );
     }
     ownerServiceId ??= workload.serviceId;
-    resolved[outputName] = buildPublicUrl(hostname, routePath);
+    resolved[outputName] = buildPublicUrl(hostname, route.path);
   }
   if (!ownerServiceId || Object.keys(resolved).length === 0) {
     throw new Error(
@@ -852,7 +1118,8 @@ export function publicationOutputContract(
     defaultEnv: publicationUrlDefaultEnv(
       name === "url" ? publication.name : `${publication.name}-${name}`,
     ),
-    secret: false,
+    secret: publication.outputs?.[name]?.kind === "secret",
+    kind: publication.outputs?.[name]?.kind ?? "url",
   }));
 }
 
@@ -893,25 +1160,28 @@ async function syncConsumersForPublication(
   env: Pick<Env, "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN">,
   params: {
     spaceId: string;
-    publicationName: string;
+    publication: PublicationRow;
   },
 ): Promise<void> {
   const db = getDb(env.DB);
-  const publicationRow = await getPublicationRowByName(
-    env,
-    params.spaceId,
-    params.publicationName,
-  );
-  if (!publicationRow) return;
-  const publication = toPublicationRecord(publicationRow);
+  const publication = toPublicationRecord(params.publication);
   const rows = await db.select()
     .from(serviceConsumes)
     .where(eq(serviceConsumes.accountId, params.spaceId))
     .all();
   for (const row of rows) {
-    if (parseConsumeConfig(row).publication !== params.publicationName) {
-      continue;
-    }
+    const consume = parseConsumeConfig(row);
+    const consumerGroupId = await getServiceGroupId(
+      env,
+      params.spaceId,
+      row.serviceId,
+    );
+    const resolved = await getPublicationRowByRef(env, {
+      spaceId: params.spaceId,
+      ref: consume.publication,
+      consumerGroupId,
+    });
+    if (resolved?.id !== params.publication.id) continue;
     const state = await syncConsumeState(env, {
       spaceId: params.spaceId,
       serviceId: row.serviceId,
@@ -922,7 +1192,7 @@ async function syncConsumersForPublication(
     await upsertServiceConsumeRow(env, {
       spaceId: params.spaceId,
       serviceId: row.serviceId,
-      consume: parseConsumeConfig(row),
+      consume,
       state,
     });
   }
@@ -951,8 +1221,25 @@ export async function getPublicationByName(
   env: Pick<Env, "DB">,
   spaceId: string,
   name: string,
+  opts: { consumerGroupId?: string | null } = {},
 ): Promise<PublicationRecord | null> {
-  const row = await getPublicationRowByName(env, spaceId, name);
+  const row = await getPublicationRowByRef(env, {
+    spaceId,
+    ref: name,
+    consumerGroupId: opts.consumerGroupId,
+  });
+  return row ? toPublicationRecord(row) : null;
+}
+
+export async function resolvePublicationRef(
+  env: Pick<Env, "DB">,
+  params: {
+    spaceId: string;
+    ref: string;
+    consumerGroupId?: string | null;
+  },
+): Promise<PublicationRecord | null> {
+  const row = await getPublicationRowByRef(env, params);
   return row ? toPublicationRecord(row) : null;
 }
 
@@ -983,6 +1270,7 @@ async function resolveConsumePublicationDefinition(
   params: {
     spaceId: string;
     consume: AppConsume;
+    consumerGroupId?: string | null;
     groupHostname?: string | null;
   },
 ): Promise<ConsumePublicationDefinition | null> {
@@ -995,6 +1283,7 @@ async function resolveConsumePublicationDefinition(
     env,
     params.spaceId,
     params.consume.publication,
+    { consumerGroupId: params.consumerGroupId },
   );
   return record
     ? { publication: record.publication, outputs: record.outputs, record }
@@ -1015,12 +1304,12 @@ export async function upsertApiPublication(
   if (!isGrantPublication(publication)) {
     throw routePublicationApiWriteError();
   }
-  const previousRow = await getPublicationRowByName(
-    env,
-    params.spaceId,
-    publication.name,
-  );
-  await upsertPublicationRow(env, {
+  const previousRow = await getPublicationRowByIdentity(env, {
+    spaceId: params.spaceId,
+    groupId: null,
+    name: publication.name,
+  });
+  const row = await upsertPublicationRow(env, {
     spaceId: params.spaceId,
     sourceType: "api",
     publication,
@@ -1028,7 +1317,7 @@ export async function upsertApiPublication(
   try {
     await syncConsumersForPublication(env, {
       spaceId: params.spaceId,
-      publicationName: publication.name,
+      publication: row,
     });
   } catch (error) {
     if (previousRow) {
@@ -1036,7 +1325,11 @@ export async function upsertApiPublication(
     } else {
       await deletePublicationRow(
         env,
-        await getPublicationRowByName(env, params.spaceId, publication.name),
+        await getPublicationRowByIdentity(env, {
+          spaceId: params.spaceId,
+          groupId: null,
+          name: publication.name,
+        }),
       );
     }
     throw error;
@@ -1059,8 +1352,12 @@ export async function deletePublicationByName(
     name: string;
   },
 ): Promise<void> {
-  await assertPublicationHasNoConsumers(env, params.spaceId, params.name);
-  const row = await getPublicationRowByName(env, params.spaceId, params.name);
+  const row = await getPublicationRowByIdentity(env, {
+    spaceId: params.spaceId,
+    groupId: null,
+    name: params.name,
+  });
+  if (row) await assertPublicationHasNoConsumers(env, params.spaceId, row);
   await deletePublicationRow(env, row);
 }
 
@@ -1074,7 +1371,7 @@ export async function replaceManifestPublications(
     groupId: string;
     manifest: {
       publish?: AppPublication[];
-      routes?: Array<{ target: string; path: string }>;
+      routes?: Array<{ id?: string; target: string; path: string }>;
     };
     observedState: ObservedGroupState;
   },
@@ -1101,7 +1398,7 @@ export async function replaceManifestPublications(
     !desiredByName.has(row.name)
   );
   for (const row of staleRows) {
-    await assertPublicationHasNoConsumers(env, params.spaceId, row.name);
+    await assertPublicationHasNoConsumers(env, params.spaceId, row);
   }
   for (const publication of desired) {
     const routeResolved = !isGrantPublication(publication)
@@ -1112,7 +1409,7 @@ export async function replaceManifestPublications(
         { groupHostname },
       )
       : { ownerServiceId: null, resolved: {} };
-    await upsertPublicationRow(env, {
+    const row = await upsertPublicationRow(env, {
       spaceId: params.spaceId,
       groupId: params.groupId,
       ownerServiceId: routeResolved.ownerServiceId,
@@ -1122,7 +1419,7 @@ export async function replaceManifestPublications(
     });
     await syncConsumersForPublication(env, {
       spaceId: params.spaceId,
-      publicationName: publication.name,
+      publication: row,
     });
   }
 
@@ -1223,7 +1520,9 @@ export async function assertManifestPublicationPrerequisites(
     if (!publicationRecordCache.has(name)) {
       publicationRecordCache.set(
         name,
-        await getPublicationByName(env, params.spaceId, name),
+        await getPublicationByName(env, params.spaceId, name, {
+          consumerGroupId: params.groupId,
+        }),
       );
     }
     const record = publicationRecordCache.get(name) ?? null;
@@ -1297,7 +1596,9 @@ export async function assertManifestPublicationPrerequisites(
       continue;
     }
     const seen = seenEnvForCompute(entry);
-    for (const output of publication.outputs) {
+    for (
+      const output of selectedConsumeOutputs(entry.consume, publication.outputs)
+    ) {
       let envName: string;
       try {
         envName = resolveConsumeOutputEnvName(entry.consume, output);
@@ -1346,6 +1647,7 @@ export async function replaceServiceConsumes(
     spaceId: string;
     serviceId: string;
     serviceName: string;
+    consumerGroupId?: string | null;
     groupHostname?: string | null;
     consumes?: AppConsume[];
   },
@@ -1364,6 +1666,7 @@ export async function replaceServiceConsumes(
       resolveConsumePublicationDefinition(env, {
         spaceId: params.spaceId,
         consume,
+        consumerGroupId: params.consumerGroupId,
         groupHostname: params.groupHostname,
       })
     ),
@@ -1387,6 +1690,7 @@ export async function replaceServiceConsumes(
       await resolveConsumePublicationDefinition(env, {
         spaceId: params.spaceId,
         consume: existingConsume,
+        consumerGroupId: params.consumerGroupId,
         groupHostname: params.groupHostname,
       });
     const state = parseConsumeState(row);
@@ -1448,6 +1752,7 @@ export async function previewServiceConsumeEnvVars(
   env: Pick<Env, "DB">,
   params: {
     spaceId: string;
+    consumerGroupId?: string | null;
     consumes?: AppConsume[];
   },
 ): Promise<Array<{ name: string; secret: boolean }>> {
@@ -1457,6 +1762,7 @@ export async function previewServiceConsumeEnvVars(
       resolveConsumePublicationDefinition(env, {
         spaceId: params.spaceId,
         consume,
+        consumerGroupId: params.consumerGroupId,
       })
     ),
   );
@@ -1470,7 +1776,7 @@ export async function previewServiceConsumeEnvVars(
       );
     }
     assertConsumeOutputAliases(consume, publication.outputs);
-    for (const output of publication.outputs) {
+    for (const output of selectedConsumeOutputs(consume, publication.outputs)) {
       const envName = resolveConsumeOutputEnvName(consume, output);
       if (out.has(envName)) {
         throw new Error(
@@ -1499,6 +1805,11 @@ export async function deleteServiceConsumes(
     params.spaceId,
     params.serviceId,
   );
+  const consumerGroupId = await getServiceGroupId(
+    env,
+    params.spaceId,
+    params.serviceId,
+  );
   for (const row of rows) {
     const state = parseConsumeState(row);
     if (hasGrantCleanupEnv(env)) {
@@ -1506,6 +1817,7 @@ export async function deleteServiceConsumes(
       const publication = await resolveConsumePublicationDefinition(env, {
         spaceId: params.spaceId,
         consume,
+        consumerGroupId,
       });
       if (publication) {
         await cleanupConsumeState(env, {
@@ -1540,6 +1852,11 @@ export async function resolveServiceConsumeEnvVars(
     serviceId: string;
   },
 ): Promise<Array<{ name: string; value: string; secret: boolean }>> {
+  const consumerGroupId = await getServiceGroupId(
+    env,
+    params.spaceId,
+    params.serviceId,
+  );
   const rows = await listServiceConsumeRows(
     env,
     params.spaceId,
@@ -1552,6 +1869,7 @@ export async function resolveServiceConsumeEnvVars(
     const publication = await resolveConsumePublicationDefinition(env, {
       spaceId: params.spaceId,
       consume,
+      consumerGroupId,
     });
     if (!publication) {
       throw new Error(
@@ -1567,7 +1885,7 @@ export async function resolveServiceConsumeEnvVars(
         id: "",
         name: publication.publication.name,
         sourceType: "api",
-        groupId: null,
+        groupId: publication.record?.groupId ?? null,
         ownerServiceId: null,
         catalogName: null,
         publicationType: publication.publication.type,
@@ -1579,7 +1897,7 @@ export async function resolveServiceConsumeEnvVars(
       },
       consumeRow: row,
     });
-    for (const output of contract) {
+    for (const output of selectedConsumeOutputs(consume, contract)) {
       const resolved = values[output.name];
       if (!resolved) {
         throw new Error(

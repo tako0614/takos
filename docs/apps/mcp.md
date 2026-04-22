@@ -16,26 +16,28 @@ compute:
     readiness: /mcp
 
 routes:
-  - target: web
+  - id: mcp
+    target: web
     path: /mcp
 
 publish:
   - name: search
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
+    display:
+      title: Search MCP
     outputs:
       url:
-        route: /mcp
-    title: Search MCP
+        kind: url
+        routeRef: mcp
     spec:
       transport: streamable-http
 ```
 
 ## Manifest route publication
 
-`routes` が実際の ingress で、`publish` は MCP endpoint を共有する information
-catalog です。`McpServer` は platform / agent 側が解釈する custom route
-publication type です。MCP route publication は deploy manifest の `publish`
+`routes` が実際の ingress で、`publish` は MCP endpoint を共有する typed outputs
+catalog です。`takos.mcp-server.v1` は platform / agent 側が解釈する standard route
+publication type です。legacy alias として `McpServer` も受け付けます。MCP route publication は deploy manifest の `publish`
 entry で管理します。
 
 control plane は deploy 後に managed MCP server catalog entry を保存・参照します
@@ -67,7 +69,7 @@ gate を受けますが、external MCP 用の `egress.http` gate は追加され
 
 | source_type       | 作り方                                        | 主な用途                                    |
 | ----------------- | --------------------------------------------- | ------------------------------------------- |
-| publication       | deploy manifest の `publish: type: McpServer` | Takos app / group が公開する MCP endpoint   |
+| publication       | deploy manifest の `publish: type: takos.mcp-server.v1` | Takos app / group が公開する MCP endpoint   |
 | service           | service / worker 側の managed registration    | service-backed MCP endpoint                 |
 | bundle_deployment | bundle deployment 側の managed registration   | bundle-backed MCP endpoint                  |
 | external          | `/api/mcp/servers` または `mcp_add_server`    | 外部 HTTPS MCP server を agent tools に追加 |
@@ -91,30 +93,34 @@ compute:
     build: ...
     consume:
       - publication: search
-        env:
-          url: SEARCH_MCP_URL
+        inject:
+          env:
+            url: SEARCH_MCP_URL
 ```
 
 この例では `agent` に `SEARCH_MCP_URL` が入ります。
 
-## authSecretRef
+## auth.bearer.secretRef
 
-`authSecretRef` は `spec` 内の custom metadata です。MCP client に bearer auth
+`auth.bearer.secretRef` は platform-managed behavior です。MCP client に bearer auth
 が必要なことと、「publisher service のどの env/secret 名から token
 を解決するか」を伝えるために使います。
 
 ```yaml
 publish:
   - name: search
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
+    display:
+      title: Search MCP
     outputs:
       url:
-        route: /mcp
-    title: Search MCP
+        kind: url
+        routeRef: mcp
+    auth:
+      bearer:
+        secretRef: MCP_AUTH_TOKEN
     spec:
       transport: streamable-http
-      authSecretRef: MCP_AUTH_TOKEN
 ```
 
 group-managed deploy では、publisher service に同名の env/secret
@@ -128,6 +134,6 @@ standalone deploy では同名の secret を別途用意してください。Tak
 ## 実 URL
 
 route publication の main output は慣例的に `url` です。値は assigned hostname
-と宣言した `outputs.url.route` から生成されます。route が template の場合は
+と `outputs.url.routeRef` が参照する route の `path` から生成されます。route が template の場合は
 template URL のまま consumer に渡ります。default env 名は publication 名から決まり、`search` なら
 `PUBLICATION_SEARCH_URL` になります。

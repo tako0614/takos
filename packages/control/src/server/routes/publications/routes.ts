@@ -23,6 +23,7 @@ import {
   listPublicationKinds,
   listPublications,
   type PublicationRecord,
+  resolvePublicationRef,
   upsertApiPublication,
 } from "../../../application/services/platform/service-publications.ts";
 import type { AppPublication } from "../../../application/services/source/app-manifest-types.ts";
@@ -165,6 +166,35 @@ const app = new Hono<AuthenticatedRouteEnv>()
       throw new InternalError("Failed to list publications");
     }
   })
+  .get("/resolve", async (c) => {
+    const user = c.get("user");
+    const spaceId = await resolveSpaceId(c, user.id);
+    const ref = c.req.query("ref")?.trim();
+    const consumerGroupId = c.req.query("consumerGroupId")?.trim() || null;
+    if (!ref) {
+      throw new BadRequestError("query parameter 'ref' is required");
+    }
+
+    try {
+      const publication = await resolvePublicationRef(c.env, {
+        spaceId,
+        ref,
+        consumerGroupId,
+      });
+      if (!publication) {
+        throw new NotFoundError("Publication");
+      }
+      return c.json({ publication: toPublicPublication(publication) });
+    } catch (err) {
+      if (err instanceof NotFoundError || err instanceof BadRequestError) {
+        throw err;
+      }
+      logError("Failed to resolve publication", err, {
+        module: "routes/publications",
+      });
+      throw new InternalError("Failed to resolve publication");
+    }
+  })
   .get("/:name", async (c) => {
     const user = c.get("user");
     const spaceId = await resolveSpaceId(c, user.id);
@@ -177,7 +207,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }
       return c.json({ publication: toPublicPublication(publication) });
     } catch (err) {
-      if (err instanceof NotFoundError) throw err;
+      if (err instanceof NotFoundError || err instanceof BadRequestError) {
+        throw err;
+      }
       logError("Failed to get publication", err, {
         module: "routes/publications",
       });

@@ -15,10 +15,11 @@ platform / app 側が行います。
 
 ## 実体モデル
 
-publication は group 内だけの state ではなく、space-level の catalog entry
-です。実装では `publications` record として保存され、`name` は space 内で一意に
-扱われます。manifest から作られた publication は `group_id` と
-`source_type=manifest` を持ち、route publication では owner service
+publication は space-level catalog entry ですが、manifest 由来の `publish[].name`
+は group-local です。実装では `publications` record として保存され、同一 group 内で
+一意に扱われます。他 group から参照する場合は `<group>/<name>` を使います。
+Takos built-in provider は `takos.*` namespace です。manifest から作られた
+publication は `group_id` と `source_type=manifest` を持ち、route publication では owner service
 も記録します。Takos built-in provider publication は DB 上の route publication
 ではなく、consume request から grant state を生成します。
 
@@ -50,25 +51,26 @@ managed entry で、control plane API から直接作る対象ではありませ
 ```yaml
 publish:
   - name: search
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
     outputs:
       url:
-        route: /mcp
+        kind: url
+        routeRef: mcp
     spec:
       transport: streamable-http
 ```
 
 route publication の main output は慣例的に `url` です。値は assigned hostname
-と宣言した `outputs.url.route` から生成されます。route が template の場合は
-template URL のまま consumer に渡ります。必須 field は `name` / `publisher` /
-`type` / `outputs` です。`type` は custom string で、core は type の意味を解釈しません。
-`McpServer` / `FileHandler` / `UiSurface` は platform / app が解釈する custom
-type です。`spec` は platform / app が解釈する opaque object です。
+と `outputs.url.routeRef` が参照する route の `path` から生成されます。route が
+template の場合は template URL のまま consumer に渡ります。必須 field は
+`name` / `type` / `outputs` です。`type` は custom string ですが、Takos 標準 type
+は `takos.mcp-server.v1` のように namespaced にします。`McpServer` /
+`FileHandler` / `UiSurface` は legacy alias です。`spec` は consumer-facing
+metadata、`auth` は platform-managed behavior です。
 
-route publication は `publisher + route` で route を参照します。同じ
-`publisher + route` に複数 route がある manifest は invalid です。endpoint は 1
-つの route にまとめます。
+route publication は `routeRef` で `routes[].id` を参照します。legacy
+`publisher + route` も受け付けます。同じ route target/path を複数 publication が
+公開する manifest は invalid です。endpoint は 1 つの route にまとめます。
 
 ## Takos built-in provider publication
 
@@ -110,18 +112,19 @@ compute:
         request:
           scopes:
             - files:read
-        env:
-          endpoint: INTERNAL_TAKOS_API_URL
-          apiKey: INTERNAL_TAKOS_API_KEY
+        inject:
+          env:
+            endpoint: INTERNAL_TAKOS_API_URL
+            apiKey: INTERNAL_TAKOS_API_KEY
 ```
 
-alias を省略した場合は default env 名が使われます。SQL / object-store / queue
-などの resource access は publication consume ではなく、resource API / runtime
-binding 側で扱います。
+明示した output だけが inject 対象です。default env 名を使って全 output を注入したい
+場合は `inject.defaults: true` を書きます。SQL / object-store / queue などの
+resource access は publication consume ではなく、resource API / runtime binding
+側で扱います。
 
-`consume.env` は output 名から env 名への alias map です。output filter では
-ないため、publication の全 outputs が inject 対象になります。将来は互換を保った
-まま `inject.env` のように inject 先を明示する shape へ寄せる可能性があります。
+`consume.env` は legacy shorthand です。docs では `inject.env` を使います。
+legacy `env` も現在は explicit output inject として扱われます。
 
 manifest の consume は service の desired edge です。deploy 時に service-level
 の `service_consumes` record へ同期されます。manifest 外で

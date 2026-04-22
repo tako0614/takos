@@ -403,7 +403,7 @@ Deno.test("validateConsumeEnvCollision fails when consume aliases collide with l
         env: {
           PUBLICATION_SEARCH_URL: "override",
         },
-        consume: [{ publication: "search" }],
+        consume: [{ publication: "search", inject: { defaults: true } }],
       },
     },
   });
@@ -553,7 +553,7 @@ Deno.test("validatePublicationUniqueness rejects duplicate route publisher/route
   assertEquals(errors[0].code, "publication_duplicate");
   assert(
     errors[0].message.includes(
-      "route publication publisher/route 'web /mcp' duplicates publish[0]",
+      "route publication target/path 'web /mcp' duplicates publish[0]",
     ),
   );
 });
@@ -666,7 +666,7 @@ Deno.test("runDeployValidations aggregates errors from every validator", () => {
         env: {
           PUBLICATION_SEARCH_URL: "override",
         },
-        consume: [{ publication: "search" }],
+        consume: [{ publication: "search", inject: { defaults: true } }],
       },
     },
     routes: [

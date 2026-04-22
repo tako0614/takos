@@ -106,16 +106,16 @@ worker / service / route / publication / resource を使う。
 
 ### Publication
 
-space-level の typed outputs catalog entry。`publications` record として保存され、
-名前は space 内で一意。manifest 由来の publication は primitive declaration
-の projection として保存される。Takos API key / OAuth client は manifest の
+space-level の typed outputs catalog entry。`publications` record として保存される。
+manifest 由来の publication 名は group-local で、他 group からは `<group>/<name>`
+で参照する。Takos API key / OAuth client は manifest の
 `publish[]` ではなく built-in provider publication として `consume[]` から
 request する。
 
 route publication は route primitive から作られる catalog projection
-で、`name` + `publisher` + `type` + `outputs` で表す。`publisher` は対応する
-compute target であり、各 `outputs.*.route` の `publisher + route` は manifest の
-`routes[]` 1 件に一致する必要がある。publication output は
+で、`name` + `type` + `outputs.*.routeRef` で表す。`routeRef` は manifest の
+`routes[]` 1 件に一致する必要があり、publisher は route の `target` から推論される。
+publication output は
 `compute.<name>.consume` を宣言した
 consumer にだけ env として渡される。ここでの publish は resource creation
 ではなく access output の共有を指す。kernel features (Agent / Chat, Git, Store,
@@ -207,13 +207,13 @@ deploy dashboard から deployed UI を開くための URL。
 ### MCP (Model Context Protocol)
 
 repo や group がツール surface を公開するための主要 protocol。manifest の
-`publish` に `type: McpServer` として宣言する。MCP server catalog は deploy
+`publish` に `type: takos.mcp-server.v1` として宣言する。MCP server catalog は deploy
 manifest の `publish` entry で管理する。
 
 ### File Handler
 
 storage/file 系 UI から handler UI を開く contract。manifest の `publish` に
-`type: FileHandler` として宣言する。FileHandler catalog は deploy manifest の
+`type: takos.file-handler.v1` として宣言する。FileHandler catalog は deploy manifest の
 `publish` entry で管理する。
 
 ## 実行基盤

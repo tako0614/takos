@@ -28,6 +28,7 @@ export interface PublicationOutputDescriptor {
   name: string;
   defaultEnv: string;
   secret: boolean;
+  kind: "url" | "string" | "secret";
 }
 
 export interface PublicationSpecFieldDescriptor {
@@ -150,7 +151,8 @@ function assertAllowedFields(
 }
 
 export function isTakosSystemPublicationSource(source: string): boolean {
-  return source === TAKOS_API_KEY_SOURCE || source === TAKOS_OAUTH_CLIENT_SOURCE;
+  return source === TAKOS_API_KEY_SOURCE ||
+    source === TAKOS_OAUTH_CLIENT_SOURCE;
 }
 
 function takosTypeFromSource(source: string): TakosPublicationType {
@@ -227,8 +229,9 @@ function withDefaultEnvTemplate(
   name: string,
   defaultEnv: string,
   secret: boolean,
+  kind: "url" | "string" | "secret" = secret ? "secret" : "string",
 ): PublicationOutputDescriptor {
-  return { name, defaultEnv, secret };
+  return { name, defaultEnv, secret, kind };
 }
 
 function normalizePublicationMetadata(
@@ -503,6 +506,7 @@ const takosApiDefinition: PublicationKindDefinition = {
         "endpoint",
         PUBLICATION_OUTPUT_ENDPOINT_ENV,
         false,
+        "url",
       ),
       withDefaultEnvTemplate("apiKey", PUBLICATION_OUTPUT_API_KEY_ENV, true),
     ],
@@ -565,22 +569,30 @@ const takosOAuthDefinition: PublicationKindDefinition = {
         "clientId",
         PUBLICATION_OUTPUT_CLIENT_ID_ENV,
         false,
+        "string",
       ),
       withDefaultEnvTemplate(
         "clientSecret",
         PUBLICATION_OUTPUT_CLIENT_SECRET_ENV,
         true,
       ),
-      withDefaultEnvTemplate("issuer", PUBLICATION_OUTPUT_ISSUER_ENV, false),
+      withDefaultEnvTemplate(
+        "issuer",
+        PUBLICATION_OUTPUT_ISSUER_ENV,
+        false,
+        "url",
+      ),
       withDefaultEnvTemplate(
         "tokenEndpoint",
         PUBLICATION_OUTPUT_TOKEN_ENDPOINT_ENV,
         false,
+        "url",
       ),
       withDefaultEnvTemplate(
         "userinfoEndpoint",
         PUBLICATION_OUTPUT_USERINFO_ENDPOINT_ENV,
         false,
+        "url",
       ),
     ],
   },

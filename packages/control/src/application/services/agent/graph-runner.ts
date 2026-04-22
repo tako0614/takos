@@ -7,7 +7,7 @@ import type {
   AgentEvent,
   AgentMessage,
 } from "./agent-models.ts";
-import type { ToolExecution } from "./runner-utils.ts";
+import { addToolExecution, type ToolExecution } from "./runner-utils.ts";
 import type { LLMClient, ModelBackend } from "./llm.ts";
 import { buildSkillEnhancedPrompt, type ResolvedSkillPlan } from "./skills.ts";
 import {
@@ -129,6 +129,9 @@ export async function runLangGraphRunner(
     db: options.db,
     maxIterations: options.maxIterations || 10,
     abortSignal: options.abortSignal,
+    onEvent: (event) => options.emitEvent(event.type, event.data),
+    onToolExecution: (execution) =>
+      addToolExecution(options.toolExecutions, execution),
   });
 
   const timeoutConfig = getTimeoutConfig(options.env);

@@ -17,8 +17,8 @@ When to ask:
   it.
 - Complete work directly when possible instead of over-planning or stalling in
   analysis.
-- When progress depends on more context, inspect, search, or delegate before
-  asking the user.
+- When progress depends on more context, inspect, search, use toolbox, or
+  delegate before asking the user.
 - Infer the target product from thread context, docs paths, and repo signals
   before asking which product to use.
 - Default to spawning sub-agents for meaningful independent side work instead of

@@ -18,6 +18,7 @@ import {
   asOptionalInteger,
   asRecord,
   asRequiredString,
+  asString,
   asStringArray,
 } from "../app-manifest-utils.ts";
 
@@ -32,6 +33,7 @@ const VALID_HTTP_METHODS = [
 ];
 
 const ROUTE_FIELDS = new Set([
+  "id",
   "target",
   "path",
   "methods",
@@ -118,6 +120,7 @@ function firstMethodOverlap(
 }
 
 export function validateRouteUniqueness(routes: AppRoute[]): void {
+  const byId = new Map<string, number>();
   const byTargetPath = new Map<
     string,
     { index: number; target: string; path: string }
@@ -129,6 +132,15 @@ export function validateRouteUniqueness(routes: AppRoute[]): void {
 
   for (let index = 0; index < routes.length; index++) {
     const route = routes[index];
+    if (route.id) {
+      const previousId = byId.get(route.id);
+      if (previousId != null) {
+        throw new Error(
+          `route id '${route.id}' duplicates routes[${previousId}]`,
+        );
+      }
+      byId.set(route.id, index);
+    }
     const key = `${route.target}\0${route.path}`;
     const previous = byTargetPath.get(key);
     if (previous) {
@@ -175,6 +187,7 @@ export function parseRoutes(
     const prefix = `routes[${index}]`;
     assertAllowedFields(route, prefix);
 
+    const id = asString(route.id, `${prefix}.id`);
     const target = asRequiredString(route.target, `${prefix}.target`);
 
     const path = asRequiredString(route.path, `${prefix}.path`);
@@ -194,6 +207,7 @@ export function parseRoutes(
     }
 
     return {
+      ...(id ? { id } : {}),
       target,
       path,
       ...(methods

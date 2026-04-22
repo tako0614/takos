@@ -64,6 +64,25 @@ export function buildPersistentRunActivityGroups(
   entries: ChatTimelineEntry[],
   runMetaById: ChatRunMetaMap,
 ): PersistentRunActivityGroup[] {
+  return buildRunActivityGroups(entries, runMetaById, {
+    includeActive: false,
+  });
+}
+
+export function buildActiveRunActivityGroups(
+  entries: ChatTimelineEntry[],
+  runMetaById: ChatRunMetaMap,
+): PersistentRunActivityGroup[] {
+  return buildRunActivityGroups(entries, runMetaById, {
+    includeActive: true,
+  }).filter((group) => ACTIVE_RUN_STATUSES.has(group.status));
+}
+
+function buildRunActivityGroups(
+  entries: ChatTimelineEntry[],
+  runMetaById: ChatRunMetaMap,
+  options: { includeActive: boolean },
+): PersistentRunActivityGroup[] {
   const entriesByRunId = new Map<string, ChatTimelineEntry[]>();
   for (const entry of entries) {
     const list = entriesByRunId.get(entry.runId) ?? [];
@@ -83,6 +102,7 @@ export function buildPersistentRunActivityGroups(
     const status = derivedTerminalStatus ?? metaStatus ?? "running";
 
     if (
+      !options.includeActive &&
       ACTIVE_RUN_STATUSES.has(status) &&
       !TERMINAL_RUN_STATUSES.has(status)
     ) {

@@ -194,9 +194,9 @@ kernel が所有する DB schema。Agent, Git, Storage, Store は kernel
 
 ## Deploy pipeline
 
-kernel 外の primitive に適用される。docs, excel, slide, computer, user-defined workloads
-は同じ primitive model で扱う。kernel の機能（agent, git, storage, store）は
-kernel に統合済みであり、deploy pipeline の対象外。
+kernel 外の primitive に適用される。docs, excel, slide, computer, yurucommu,
+user-defined workloads は同じ primitive model で扱う。kernel の機能（agent, git,
+storage, store）は kernel に統合済みであり、deploy pipeline の対象外。
 
 ```text
 1. Parse manifest (.takos/app.yml)
@@ -236,15 +236,16 @@ pipeline と連動する:
 publication に TTL はない。manifest-managed entry が存在する限り publication
 も存在する。必須 field は entry の種類によって異なる。
 
-- route publication: `name` + `publisher` + `type` + `outputs`
+- route publication: `name` + `type` + `outputs.*.routeRef`
 - Takos built-in provider publication: `takos.api-key` / `takos.oauth-client` を
   `compute.<name>.consume` から request
 
-route publication の URL は assigned hostname と `outputs.*.route` から
-生成され、path template は template URL のまま扱う。`type` は custom string
-で、core は type の意味を解釈しない。Takos built-in provider publication の
-`request` は provider ごとの required / optional field を持つ。kernel features (Agent / Chat, Git, Storage,
-Store, Auth) は kernel API として直接提供されるため、route publication
+route publication の URL は assigned hostname と `outputs.*.routeRef` が参照する
+route の `path` から生成され、path template は template URL のまま扱う。`type`
+は custom string だが、Takos 標準 type は `takos.mcp-server.v1` のように
+namespaced にする。Takos built-in provider publication の `request` は provider
+ごとの required / optional field を持つ。kernel features (Agent / Chat, Git,
+Storage, Store, Auth) は kernel API として直接提供されるため、route publication
 の対象外。
 
 ## Routing layer
@@ -410,9 +411,9 @@ routes:
 
 1 つの group hostname に対して複数の route を設定可能。dispatch は path + method
 で最長一致を選択する。同じ path で method が重なる route は duplicate として
-invalid。route publication は `publisher + route` で route
-を参照するため、manifest 全体で同じ `publisher + route`
-が複数件に一致してはいけない。
+invalid。route publication は `outputs.*.routeRef` で route を参照するため、
+`routes[].id` は manifest 内で一意でなければならない。legacy `publisher + route`
+を使う場合も、manifest 全体で同じ target/path が複数件に一致してはいけない。
 
 ### Dispatch の routing 境界
 
@@ -434,9 +435,9 @@ group の worker は自分宛の request だけを受け取る。
 space の初回起動時の順序:
 
 1. kernel が起動する（auth, routing が ready）
-2. docs, excel, slide, computer は default app distribution の初期セットとして
-   preinstall 対象にできる。operator はこの app set を差し替えられる。default set
-   に含まれても primitive や group は特権化されない。
+2. docs, excel, slide, computer, yurucommu は default app distribution の初期セット
+   として preinstall 対象にできる。operator はこの app set を差し替えられる。
+   default set に含まれても primitive や group は特権化されない。
 3. deploy 時に kernel が各 primitive の `publish` / `compute.<name>.consume`
    を解決し、consumer が要求した env だけを inject する（全 group 自動注入は
    しない）

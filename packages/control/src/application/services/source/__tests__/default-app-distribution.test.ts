@@ -45,9 +45,11 @@ Deno.test("resolveDefaultAppDistribution returns default app fallback set", () =
     "takos-excel",
     "takos-slide",
     "takos-computer",
+    "yurucommu",
   ]);
   assertEquals(entries.every((entry) => entry.preinstall), true);
   assertEquals(entries.map((entry) => entry.ref), [
+    "master",
     "master",
     "master",
     "master",
@@ -60,6 +62,7 @@ Deno.test("resolveDefaultAppDistribution returns default app fallback set", () =
       "https://github.com/tako0614/takos-excel.git",
       "https://github.com/tako0614/takos-slide.git",
       "https://github.com/tako0614/takos-computer.git",
+      "https://github.com/tako0614/yurucommu.git",
     ],
   );
 });
@@ -198,6 +201,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap honors the preinstall kill 
     "takos-excel",
     "takos-slide",
     "takos-computer",
+    "yurucommu",
   ]);
   assertEquals(entries.every((entry) => entry.preinstall === false), true);
 });
@@ -312,6 +316,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap falls back when DB read fai
       "takos-excel",
       "takos-slide",
       "takos-computer",
+      "yurucommu",
     ]);
   } finally {
     clearDefaultAppDistributionCache();
@@ -1259,7 +1264,7 @@ Deno.test("processDefaultAppPreinstallJobs sends deployment jobs and waits for d
     assertEquals(summary.requeued, 0);
     assertEquals(jobStatuses, ["in_progress", "deployment_queued"]);
     assertEquals(groupsInserted.length, 0);
-    assertEquals(sentMessages.length, 4);
+    assertEquals(sentMessages.length, 5);
     assertEquals(sentMessages[0].reason, "default_app_preinstall");
     assertEquals(sentMessages[0].groupId, undefined);
     assertEquals(sentMessages[0].groupName, undefined);
@@ -1804,9 +1809,10 @@ Deno.test("preinstallDefaultAppsForSpace queues manifest-driven git-ref deploys"
       "takos-excel",
       "takos-slide",
       "takos-computer",
+      "yurucommu",
     ]);
     assertEquals(inserts.length, 0);
-    assertEquals(sentMessages.length, 4);
+    assertEquals(sentMessages.length, 5);
     assertEquals(sentMessages[0].type, "group_deployment_snapshot");
     assertEquals(sentMessages[0].spaceId, "space-1");
     assertEquals(sentMessages[0].groupId, undefined);

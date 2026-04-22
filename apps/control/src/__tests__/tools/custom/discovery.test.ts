@@ -3,6 +3,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import type { Env } from "@/types";
 
 import {
+  CAPABILITY_DESCRIBE,
   CAPABILITY_FAMILIES,
   CAPABILITY_INVOKE,
   CAPABILITY_SEARCH,
@@ -11,6 +12,7 @@ import {
   capabilitySearchHandler,
   DISCOVERY_HANDLERS,
   DISCOVERY_TOOLS,
+  TOOLBOX,
 } from "@/tools/custom/discovery";
 
 import {
@@ -36,11 +38,13 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   };
 }
 
-Deno.test("discovery tool definitions - defines three tools", () => {
-  assertEquals(DISCOVERY_TOOLS.length, 3);
+Deno.test("discovery tool definitions - defines router tools", () => {
+  assertEquals(DISCOVERY_TOOLS.length, 5);
   assertEquals(DISCOVERY_TOOLS.map((t) => t.name), [
+    "toolbox",
     "capability_search",
     "capability_families",
+    "capability_describe",
     "capability_invoke",
   ]);
 });
@@ -60,7 +64,9 @@ Deno.test("discovery tool definitions - DISCOVERY_HANDLERS maps all tools", () =
 Deno.test("discovery tool definitions - parameter contracts are stable", () => {
   assertEquals(CAPABILITY_SEARCH.parameters.required, ["query"]);
   assertEquals(CAPABILITY_FAMILIES.parameters.required, undefined);
+  assertEquals(CAPABILITY_DESCRIBE.parameters.required, undefined);
   assertEquals(CAPABILITY_INVOKE.parameters.required, ["tool_name"]);
+  assertEquals(TOOLBOX.parameters.required, ["action"]);
 });
 
 Deno.test("capabilitySearchHandler - returns error when no registry is available", async () => {
@@ -100,6 +106,28 @@ Deno.test("capabilitySearchHandler - searches registry and returns discoverable 
     ],
     families: () => [],
     get: (_key: string) => undefined,
+    all: () => [
+      {
+        id: "tool:file_read",
+        kind: "tool",
+        name: "file_read",
+        summary: "Read a file",
+        family: "file",
+        namespace: "file",
+        risk_level: "low",
+        discoverable: true,
+      },
+      {
+        id: "tool:secret_tool",
+        kind: "tool",
+        name: "secret_tool",
+        summary: "Hidden tool",
+        family: "internal",
+        namespace: "file",
+        risk_level: "high",
+        discoverable: false,
+      },
+    ],
   };
 
   const result = JSON.parse(
@@ -111,8 +139,8 @@ Deno.test("capabilitySearchHandler - searches registry and returns discoverable 
 
   assertEquals(result.results.length, 1);
   assertEquals(result.results[0].name, "file_read");
-  assertEquals(result.total_available, 42);
-  assertStringIncludes(result.hint, "capability_invoke");
+  assertEquals(result.total_available, 1);
+  assertStringIncludes(result.hint, "toolbox action=describe");
 });
 
 Deno.test("capabilitySearchHandler - uses custom limit", async () => {
@@ -125,13 +153,14 @@ Deno.test("capabilitySearchHandler - uses custom limit", async () => {
     },
     families: () => [],
     get: (_key: string) => undefined,
+    all: () => [],
   };
 
   await capabilitySearchHandler(
     { query: "test", limit: 5 },
     makeContext({ capabilityRegistry: capabilityRegistry as any }),
   );
-  assertEquals(calls, [["test", { limit: 5 }]]);
+  assertEquals(calls, [["test", { limit: 10 }]]);
 });
 
 Deno.test("capabilitySearchHandler - defaults limit to 10", async () => {
@@ -144,13 +173,14 @@ Deno.test("capabilitySearchHandler - defaults limit to 10", async () => {
     },
     families: () => [],
     get: (_key: string) => undefined,
+    all: () => [],
   };
 
   await capabilitySearchHandler(
     { query: "test" },
     makeContext({ capabilityRegistry: capabilityRegistry as any }),
   );
-  assertEquals(calls, [["test", { limit: 10 }]]);
+  assertEquals(calls, [["test", { limit: 15 }]]);
 });
 
 Deno.test("capabilityFamiliesHandler - returns error when no registry is available", async () => {
@@ -167,11 +197,30 @@ Deno.test("capabilityFamiliesHandler - returns families and total count", async 
   const capabilityRegistry = {
     size: 42,
     search: () => [],
-    families: () => [
-      { family: "file", count: 8 },
-      { family: "storage", count: 12 },
-    ],
+    families: () => [],
     get: (_key: string) => undefined,
+    all: () => [
+      {
+        id: "tool:file_read",
+        kind: "tool",
+        name: "file_read",
+        summary: "Read a file",
+        family: "file",
+        namespace: "file",
+        risk_level: "low",
+        discoverable: true,
+      },
+      {
+        id: "tool:kv_get",
+        kind: "tool",
+        name: "kv_get",
+        summary: "Read KV",
+        family: "storage",
+        namespace: "storage",
+        risk_level: "none",
+        discoverable: true,
+      },
+    ],
   };
 
   const result = JSON.parse(
@@ -182,7 +231,7 @@ Deno.test("capabilityFamiliesHandler - returns families and total count", async 
   );
   assertEquals(result.families.length, 2);
   assertEquals(result.families[0].family, "file");
-  assertEquals(result.total_capabilities, 42);
+  assertEquals(result.total_capabilities, 2);
 });
 
 Deno.test("capabilityInvokeHandler - throws when tool_name is empty", async () => {
@@ -204,7 +253,7 @@ Deno.test("capabilityInvokeHandler - throws when trying to invoke itself", async
         { capabilityRegistry: { get: async () => undefined } as any } as any,
       ),
     );
-  }, "cannot invoke itself");
+  }, "cannot invoke router tool");
 });
 
 Deno.test("capabilityInvokeHandler - throws when tool is not discoverable", async () => {
@@ -223,7 +272,11 @@ Deno.test("capabilityInvokeHandler - throws when tool is not discoverable", asyn
 
 Deno.test("capabilityInvokeHandler - throws when tool executor is not available", async () => {
   const capabilityRegistry = {
-    get: (_key: string) => ({ discoverable: true }),
+    get: (_key: string) => ({
+      kind: "tool",
+      discoverable: true,
+      selectable: true,
+    }),
   };
   await assertRejects(async () => {
     await capabilityInvokeHandler(
@@ -235,11 +288,21 @@ Deno.test("capabilityInvokeHandler - throws when tool executor is not available"
 
 Deno.test("capabilityInvokeHandler - executes a tool and returns output", async () => {
   const capabilityRegistry = {
-    get: (_key: string) => ({ discoverable: true }),
+    get: (_key: string) => ({
+      kind: "tool",
+      discoverable: true,
+      selectable: true,
+    }),
   };
   const ctx = makeContext({
     capabilityRegistry: capabilityRegistry as any,
     _toolExecutor: {
+      getAvailableTools: () => [{
+        name: "file_read",
+        description: "Read a file",
+        category: "file",
+        parameters: { type: "object", properties: {} },
+      }],
       execute: async () => ({ output: "file content here" }),
     } as any,
   } as any);

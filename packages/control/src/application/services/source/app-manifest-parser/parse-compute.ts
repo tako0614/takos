@@ -44,6 +44,7 @@ import {
 } from "../app-manifest-validation.ts";
 
 const COMPUTE_FIELDS = new Set([
+  "kind",
   "icon",
   "build",
   "image",
@@ -60,7 +61,7 @@ const COMPUTE_FIELDS = new Set([
   "consume",
   "cloudflare",
 ]);
-const INTERNAL_COMPUTE_FIELDS = new Set([...COMPUTE_FIELDS, "kind"]);
+const INTERNAL_COMPUTE_FIELDS = COMPUTE_FIELDS;
 
 const BUILD_FIELDS = new Set(["fromWorkflow"]);
 const FROM_WORKFLOW_FIELDS = new Set([
@@ -88,7 +89,14 @@ const QUEUE_TRIGGER_FIELDS = new Set([
   "maxWaitTimeMs",
   "retryDelaySeconds",
 ]);
-const CONSUME_FIELDS = new Set(["publication", "as", "request", "env"]);
+const CONSUME_FIELDS = new Set([
+  "publication",
+  "as",
+  "request",
+  "inject",
+  "env",
+]);
+const CONSUME_INJECT_FIELDS = new Set(["env", "defaults"]);
 const CLOUDFLARE_FIELDS = new Set(["container"]);
 const CLOUDFLARE_CONTAINER_FIELDS = new Set([
   "binding",
@@ -406,6 +414,25 @@ function normalizeConsumeEnvAliases(
   return normalized;
 }
 
+function parseConsumeInject(
+  raw: unknown,
+  field: string,
+): AppConsume["inject"] | undefined {
+  if (raw == null) return undefined;
+  const record = asRecord(raw);
+  assertAllowedFields(record, field, CONSUME_INJECT_FIELDS);
+  const env = normalizeConsumeEnvAliases(
+    asStringMap(record.env, `${field}.env`),
+    `${field}.env`,
+  );
+  const defaults = asOptionalBoolean(record.defaults, `${field}.defaults`);
+  const inject = {
+    ...(env ? { env } : {}),
+    ...(defaults != null ? { defaults } : {}),
+  };
+  return Object.keys(inject).length > 0 ? inject : undefined;
+}
+
 function parseConsumeRequest(
   raw: unknown,
   field: string,
@@ -430,10 +457,17 @@ function parseConsume(
     const record = asRecord(entry);
     const consumePrefix = `${prefix}.consume[${index}]`;
     assertAllowedFields(record, consumePrefix, CONSUME_FIELDS);
-    const env = normalizeConsumeEnvAliases(
+    if (record.env != null && record.inject != null) {
+      throw new Error(`${consumePrefix} must not combine env and inject`);
+    }
+    const legacyEnv = normalizeConsumeEnvAliases(
       asStringMap(record.env, `${consumePrefix}.env`),
       `${consumePrefix}.env`,
     );
+    const inject = parseConsumeInject(
+      record.inject,
+      `${consumePrefix}.inject`,
+    ) ?? (legacyEnv ? { env: legacyEnv } : undefined);
     const alias = asString(record.as, `${consumePrefix}.as`);
     const request = parseConsumeRequest(
       record.request,
@@ -446,7 +480,7 @@ function parseConsume(
       ),
       ...(alias ? { as: alias } : {}),
       ...(request ? { request } : {}),
-      ...(env ? { env } : {}),
+      ...(inject ? { inject } : {}),
     };
   });
 
@@ -644,9 +678,28 @@ function detectComputeKind(
   record: Record<string, unknown>,
   parentKind: ComputeKind | null,
 ): ComputeKind {
+  const explicitKind = asString(record.kind, `${prefix}.kind`) as
+    | ComputeKind
+    | undefined;
+  if (
+    explicitKind &&
+    !["worker", "service", "attached-container"].includes(explicitKind)
+  ) {
+    throw new Error(
+      `${prefix}.kind must be worker, service, or attached-container`,
+    );
+  }
   const hasBuild = record.build != null;
   const hasImage = record.image != null;
   const hasDockerfile = record.dockerfile != null;
+  const assertKind = (inferred: ComputeKind): ComputeKind => {
+    if (explicitKind && explicitKind !== inferred) {
+      throw new Error(
+        `${prefix}.kind '${explicitKind}' does not match inferred ${inferred}`,
+      );
+    }
+    return inferred;
+  };
   if (parentKind === "worker") {
     if (hasBuild) {
       throw new Error(
@@ -660,7 +713,7 @@ function detectComputeKind(
     }
     if (hasImage) {
       // Nested entries under a worker's `containers` map are attached-containers.
-      return "attached-container";
+      return assertKind("attached-container");
     }
     throw new Error(
       `${prefix} must define 'image' for attached container compute`,
@@ -672,10 +725,10 @@ function detectComputeKind(
     );
   }
   if (hasBuild) {
-    return "worker";
+    return assertKind("worker");
   }
   if (hasImage) {
-    return "service";
+    return assertKind("service");
   }
   if (hasDockerfile) {
     throw new Error(
