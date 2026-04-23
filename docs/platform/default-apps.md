@@ -21,7 +21,7 @@ default app distribution の初期セットは以下の 5 つ（Agent / Chat / G
 | [takos-docs](/platform/takos-docs)         | `master` | リッチテキストエディタ                | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
 | [takos-excel](/platform/takos-excel)       | `master` | スプレッドシート                      | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
 | [takos-slide](/platform/takos-slide)       | `master` | プレゼンテーション                    | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
-| [takos-computer](/platform/takos-computer) | `master` | sandbox computer / browser automation | takos.ui-surface.v1 / container workload | takos-api         |
+| [takos-computer](/platform/takos-computer) | `master` | sandbox computer / browser automation | takos.ui-surface.v1 / takos.mcp-server.v1 / container workload | takos-api         |
 | [yurucommu](/platform/yurucommu)           | `master` | ActivityPub / community social        | takos.ui-surface.v1 / queue worker | takos.oauth-client |
 
 `takos-api` は route / interface publication ではなく、`takos.api-key` built-in
@@ -32,8 +32,11 @@ MCP publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言する。gr
 deploy は publisher workload に `MCP_AUTH_TOKEN` を service secret env として
 生成/注入し、app 実装は token 未設定時に fail closed する。local/dev 等で意図的に
 認証なしにする場合だけ `MCP_ALLOW_UNAUTHENTICATED=true` を設定する。
-takos-computer は `takos.ui-surface.v1` を publish し、`takos.api-key` を consume して
-worker + attached container で sandbox session / MCP proxy routes を提供する。
+takos-computer は `takos.ui-surface.v1` と `/mcp` の `takos.mcp-server.v1` を publish し、
+agent が `computer_*` tools 経由で sandbox session / shell / file / process 操作を
+使えるようにする。MCP publication は `auth.bearer.secretRef: PUBLISHED_MCP_AUTH_TOKEN`
+を宣言し、worker + attached container で session ごとの MCP proxy routes も提供する。
+`takos.api-key` を consume して sandbox 内の Takos API access を受け取る。
 yurucommu は `takos.ui-surface.v1` を publish し、`takos.oauth-client` を consume して
 Takos OAuth で sign-in する。自前の sql/object-store/key-value/queue/secret
 resources を持つため、office 系 default apps より resource footprint が大きい。
@@ -70,6 +73,11 @@ compute を持ちうる。
 - `TAKOS_DEFAULT_APPS_PREINSTALL=false` の場合、bootstrap は default app group
   も deploy job も作成しない
 - default set に含まれても primitive や group 自体は特権化されない
+
+default app を git push だけで随時更新できる運用にする場合は、distribution entry
+を `refType: "branch"` とし、`ref` に `master` / `main` などの追跡 branch を指定する。
+各 space の installed app は update / redeploy 時にその branch の最新 commit を解決する。
+`refType: "tag"` は staging や production を特定 release に固定したい場合に使う。
 
 default app は通常の group として扱われるため、次の責務は app 側で実装します。
 

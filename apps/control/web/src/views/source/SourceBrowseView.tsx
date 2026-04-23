@@ -89,7 +89,8 @@ export function SourceBrowseView(props: SourceBrowseViewProps) {
                 onStar={props.onStar}
                 onOpenRepo={props.onOpenRepo}
                 onManage={(action, itm) => {
-                  if (action === "rollback") props.onRollback(itm);
+                  if (action === "update") props.onInstall(itm);
+                  else if (action === "rollback") props.onRollback(itm);
                   else props.onUninstall(itm);
                 }}
               />
