@@ -15,7 +15,10 @@ interface CatalogRepoCardProps {
   onInstall: (item: SourceItem) => void;
   onStar: (item: SourceItem) => void;
   onOpenRepo: (item: SourceItem) => void;
-  onManage: (action: "rollback" | "uninstall", item: SourceItem) => void;
+  onManage: (
+    action: "rollback" | "uninstall" | "update",
+    item: SourceItem,
+  ) => void;
 }
 
 export function CatalogRepoCard(props: CatalogRepoCardProps) {
@@ -142,6 +145,17 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
                     onClick={() => setManageOpen(false)}
                   />
                   <div class="absolute right-0 bottom-full mb-1 z-20 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden min-w-[130px]">
+                    <button
+                      type="button"
+                      disabled={installing()}
+                      class="w-full text-left px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+                      onClick={() => {
+                        props.onManage("update", props.item);
+                        setManageOpen(false);
+                      }}
+                    >
+                      {installing() ? t("updatingApp") : t("updateApp")}
+                    </button>
                     <button
                       type="button"
                       class="w-full text-left px-3 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"

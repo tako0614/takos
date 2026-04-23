@@ -108,13 +108,18 @@ export function useSourceFetchActions({
       const data = await rpcJson<
         { group_deployment_snapshot?: { id?: string } }
       >(response);
-      showToast("success", t("deployedItem", { name: item.name }));
+      const wasInstalled = item.installation?.installed === true;
+      showToast(
+        "success",
+        t(wasInstalled ? "updatedItem" : "deployedItem", { name: item.name }),
+      );
 
       const installation: SourceItemInstallation = {
         installed: true,
         group_deployment_snapshot_id: data.group_deployment_snapshot?.id ??
-          null,
-        installed_version: item.package.latest_version,
+          item.installation?.group_deployment_snapshot_id ?? null,
+        installed_version: item.package.latest_version ??
+          item.installation?.installed_version ?? null,
         deployed_at: new Date().toISOString(),
       };
       const updateItem = (

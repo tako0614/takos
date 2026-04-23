@@ -60,9 +60,14 @@ function AppTile(props: {
       <div onClick={(e) => e.stopPropagation()}>
         {installed()
           ? (
-            <div class="text-center text-[11px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 rounded-full py-1">
-              {t("installed")}
-            </div>
+            <button
+              type="button"
+              disabled={installing()}
+              class="w-full text-center text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 rounded-full py-1 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 disabled:opacity-50 transition-colors"
+              onClick={() => props.onInstall(props.item)}
+            >
+              {installing() ? "…" : t("updateApp")}
+            </button>
           )
           : props.item.is_mine
           ? (

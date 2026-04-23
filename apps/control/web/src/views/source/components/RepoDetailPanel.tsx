@@ -252,6 +252,17 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
                         })
                         : t("installed")}
                     </p>
+                    <button
+                      type="button"
+                      disabled={installing()}
+                      class="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-50 transition-colors"
+                      onClick={() => props.onInstall(props.item)}
+                    >
+                      {installing()
+                        ? <Icons.Loader class="w-4 h-4 animate-spin" />
+                        : <Icons.Download class="w-4 h-4" />}
+                      {installing() ? t("updatingApp") : t("updateApp")}
+                    </button>
                     <div class="flex gap-2">
                       <button
                         type="button"
