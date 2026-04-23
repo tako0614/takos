@@ -90,6 +90,17 @@ function createSnapshot() {
   };
 }
 
+function createSourceCacheSnapshot() {
+  return {
+    ...createSnapshot(),
+    bundleData: new ArrayBuffer(0),
+    r2Key: "",
+    sha256: "",
+    sizeBytes: 0,
+    format: "source-cache-v1",
+  };
+}
+
 function createGroupDeploymentSnapshotWriteDb() {
   const rows = new Map<string, Record<string, unknown>>();
   const inserted: Array<Record<string, unknown>> = [];
@@ -374,6 +385,75 @@ Deno.test("group deployment snapshot records - finalize in_progress records afte
   assertEquals(finalized.hostnames, ["demo.example.com"]);
 });
 
+Deno.test("group deployment snapshot records - source cache records do not persist bundled snapshots", async () => {
+  const { db, inserted } = createGroupDeploymentSnapshotWriteDb();
+  const group = {
+    id: "group-1",
+    spaceId: "space-1",
+    name: "demo-group",
+    backend: "cloudflare",
+    env: "default",
+  };
+  const applyResult: GroupDeploymentSnapshotMutationResult["applyResult"] = {
+    groupId: "group-1",
+    applied: [],
+    skipped: [],
+    diff: {
+      entries: [],
+      hasChanges: false,
+      summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
+    },
+    translationReport: {
+      supported: true,
+      requirements: [],
+      workloads: [],
+      routes: [],
+      unsupported: [],
+    },
+  };
+
+  const record = await createGroupDeploymentSnapshotRecord(
+    { DB: db } as never,
+    {
+      deploymentId: "appdep-source-cache",
+      group: group as never,
+      target: {
+        repositoryUrl: "https://github.com/acme/demo.git",
+        normalizedRepositoryUrl: "https://github.com/acme/demo.git",
+        ref: "main",
+        refType: "branch",
+        commitSha: "0123456789abcdef0123456789abcdef01234567",
+        treeSha: null,
+        resolvedRepoId: null,
+        archiveFiles: null,
+        remoteCapabilities: null,
+      },
+      manifest: {
+        name: "demo-group",
+        version: "1.0.0",
+        compute: {},
+        routes: [],
+        publish: [],
+      } as never,
+      buildSources: [],
+      hostnames: [],
+      applyResult,
+      createdByAccountId: "user-1",
+      snapshot: createSourceCacheSnapshot() as never,
+    },
+  );
+
+  assertEquals(inserted[0].snapshotR2Key, null);
+  assertEquals(inserted[0].snapshotSha256, null);
+  assertEquals(inserted[0].snapshotSizeBytes, null);
+  assertEquals(inserted[0].snapshotFormat, "source-cache-v1");
+  assertEquals(record.snapshot, {
+    state: "source_cached",
+    rollback_ready: true,
+    format: "source-cache-v1",
+  });
+});
+
 Deno.test("group deployment snapshot service - local manifest artifact directories resolve to one script bundle", () => {
   const artifacts = normalizeManifestArtifacts([
     {
@@ -491,7 +571,7 @@ Deno.test("group deployment snapshot service - rollback fails when the target gr
       "Cannot roll back a group that has already been uninstalled or deleted",
     );
     assertSpyCalls(ensureSnapshotForRowStub, 1);
-    assertSpyCalls(loadSnapshotStub, 1);
+    assertSpyCalls(loadSnapshotStub, 0);
     assertSpyCalls(ensureTargetGroupStub, 0);
   } finally {
     ensureSnapshotForRowStub.restore();

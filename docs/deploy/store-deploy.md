@@ -14,7 +14,7 @@ Takos の deploy 入口はシンプルです。
 
 両者はどちらも同じ group-scoped `takos deploy` pipeline を通ります。manifest
 の `name` または `--group` override で決まる group に、作成・更新された primitive
-が所属し、group snapshot などの group 機能を使えます。`takos install` は catalog
+が所属し、group deployment history などの group 機能を使えます。`takos install` は catalog
 で発見した package を楽に呼び出すための薄いラッパーです。
 
 ## Store の役割
@@ -67,14 +67,18 @@ repo URL / `takos install` を使う場合、**CLI は repository URL を contro
 | source          | local working tree                                      | repo URL deploy: `repository_url + ref/ref_type`; install: catalog version/tag → Git tag |
 | source 解決     | CLI が manifest / artifact を読む                       | control plane が repo を fetch して manifest を parse する（CLI は URL を渡すだけ）      |
 | primitive apply | worker / service / route / publication / consume を apply | worker / service / route / publication / consume を apply                                |
-| group snapshot  | group 指定時に作る                                      | group 指定時に作る                                                                       |
-| rollback        | group snapshot がある場合に再適用                       | group snapshot がある場合に再適用                                                        |
+| deployment record | group 指定時に manifest / artifacts を記録              | group 指定時に repository URL / ref / commit / manifest metadata を source cache として記録 |
+| rollback        | 前回成功 record の manifest / artifacts を使う           | 前回成功 record の commit を再解決して source redeploy                                    |
 | API source kind | `manifest`                                              | `git_ref`                                                                                |
 | 表示名          | `local`                                                 | `repo:owner/repo@ref`                                                                    |
 | 主な用途        | 開発中の manifest 反映                                  | release / catalog install / repo-based deploy                                            |
 
 API source kind は `manifest` / `git_ref` で分かれますが、これは manifest
 の出どころを示す metadata です。lifecycle の差ではありません。
+
+repo URL deploy / `takos install` は install 時に app bundle を固めて保存しません。
+更新や rollback に必要な source metadata と解決済み commit を cache
+し、実行時に repository source から再解決します。
 
 ## `takos deploy`
 
@@ -119,14 +123,14 @@ target space に Store app-label / package が install
 
 ## `takos rollback`
 
-rollback は group snapshot を再適用する group 機能です。
+rollback は group の前回成功 deployment record へ戻す group 機能です。
 
 ```bash
 takos rollback my-app --space SPACE_ID
 ```
 
 - 引数は group 名
-- code + config + consume declarations が snapshot の状態に戻る
+- code + config + consume declarations が前回成功 record の状態に戻る
 - consumed publication output values は rollback 実行時に再解決される
 - DB data は戻らない（forward-only migration）
 - group がすでに削除されている場合は失敗し、deleted group を再生成しない
@@ -193,8 +197,9 @@ public repo では、archive download も host-specific な取得経路の 1 つ
 
 ## API
 
-local / repo / catalog source の snapshot history には、HTTP API path family
-`group-deployment-snapshots` を使います。扱う対象は group snapshot です。
+local / repo / catalog source の deployment history には、HTTP API path family
+`group-deployment-snapshots` を使います。repo source 由来の record は bundled
+snapshot ではなく source cache として保存されます。
 
 ```text
 POST   /api/spaces/:spaceId/group-deployment-snapshots/plan

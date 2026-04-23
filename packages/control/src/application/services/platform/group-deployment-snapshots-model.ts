@@ -108,7 +108,7 @@ export type StoredDeploymentSnapshot = {
   r2Key: string;
   sha256: string;
   sizeBytes: number;
-  format: "deployment-snapshot-v1";
+  format: "deployment-snapshot-v1" | "source-cache-v1";
 };
 
 export type GroupDeploymentSnapshotRow =
@@ -137,7 +137,7 @@ export type GroupDeploymentSnapshotRecord = {
   group: { id: string; name: string };
   source: GroupDeploymentSnapshotSource;
   snapshot: {
-    state: "available" | "backfill_required" | "unsupported";
+    state: "available" | "source_cached" | "unsupported";
     rollback_ready: boolean;
     format: string | null;
   };

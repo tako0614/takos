@@ -9,7 +9,7 @@ manifest の `name` で決まる group inventory へ渡します。`--group` は
 runtime model は tenant runtime で、operator-selected backend に backend-neutral
 schema / translation surface を流します。これは runtime behavior や provider
 resource existence の一致を意味しません。manifest の `name` または `--group`
-override で決まる group に作成・更新される primitive が所属し、group snapshot / rollback / uninstall
+override で決まる group に作成・更新される primitive が所属し、deployment history / rollback / uninstall
 などの group 機能を使えます。group 所属は runtime や resource provider
 の特別処理ではありません。group なしの primitive は個別 primitive API
 で管理します。
@@ -74,7 +74,7 @@ positional argument を省略するとローカルの `.takos/app.yml` または
    group-scoped state を更新する
 5. workload / routes の差分を計算し、publication は catalog として同期する。
    Takos built-in provider publication consume は validation / state sync する
-6. 指定した group の snapshot を更新する
+6. 指定した group の deployment record / source cache を更新する
 
 - `takos deploy --plan --space SPACE_ID` は DB
   を更新しません。group が未作成でも preview だけ返します。
@@ -87,9 +87,9 @@ positional argument を省略するとローカルの `.takos/app.yml` または
   を通ります。API の source kind はローカル manifest では `manifest`、repo URL
   では `git_ref` で、人間向けの表示名として `local` / `repo:owner/repo@ref`
   を使います。
-- group snapshot がある primitive
-  は、`takos rollback GROUP_NAME --space SPACE_ID` で snapshot
-  を再適用できます。
+- group deployment record がある primitive は、`takos rollback GROUP_NAME --space SPACE_ID`
+  で前回成功 record へ戻せます。repo URL 由来の record は app bundle
+  ではなく source cache から記録済み commit を再解決します。
 - `--target` は `takos deploy --plan` と `takos install --plan` で使える diff
   entry filter です。target は diff entry 名で、`web`, `web:/` のほか
   `workers.web`, `routes.web:/` のような dotted category key も受け付けます。
@@ -116,8 +116,8 @@ control plane が repo を fetch し、manifest を parse し、deploy pipeline
 | source          | local working tree                                      | `repository_url + ref/ref_type`                                                     |
 | source 解決     | CLI が manifest / artifact を読む                       | control plane が repo を fetch して manifest を parse する（CLI は URL を渡すだけ） |
 | primitive apply | worker / service / route / publication / consume を apply | worker / service / route / publication / consume を apply                           |
-| group snapshot  | group 指定時に作る                                      | group 指定時に作る                                                                  |
-| rollback 可否   | group snapshot がある場合に再適用                       | group snapshot がある場合に再適用                                                   |
+| deployment record | group 指定時に manifest / artifacts を記録              | group 指定時に repository URL / ref / commit / manifest metadata を source cache として記録 |
+| rollback 可否   | 前回成功 record の manifest / artifacts を使う           | 前回成功 record の commit を再解決して source redeploy                              |
 | API source kind | `manifest`                                              | `git_ref`                                                                           |
 | 表示名          | `local`                                                 | `repo:owner/repo@ref`                                                               |
 

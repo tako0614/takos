@@ -99,10 +99,11 @@ export async function toGroupDeploymentSnapshotRecord(
   const hasSnapshot = Boolean(
     row.snapshotR2Key && row.snapshotSha256 && row.snapshotFormat,
   );
-  const canBackfillSnapshot = Boolean(
+  const canRedeployFromSource = Boolean(
     row.sourceRepositoryUrl || row.sourceResolvedRepoId || row.sourceRepoId ||
       (row.sourceOwner && row.sourceRepoName),
   );
+  const snapshotState = canRedeployFromSource ? "source_cached" : "unsupported";
   return {
     id: row.id,
     group: {
@@ -117,8 +118,8 @@ export async function toGroupDeploymentSnapshotRecord(
         format: row.snapshotFormat ?? null,
       }
       : {
-        state: canBackfillSnapshot ? "backfill_required" : "unsupported",
-        rollback_ready: false,
+        state: snapshotState,
+        rollback_ready: canRedeployFromSource && groupExists,
         format: row.snapshotFormat ?? null,
       },
     status: row.status as GroupDeploymentSnapshotStatus,
@@ -253,9 +254,9 @@ export async function createGroupDeploymentSnapshotRecord(
     manifestJson: JSON.stringify(input.manifest),
     buildSourcesJson: JSON.stringify(input.buildSources),
     hostnamesJson: JSON.stringify(isInProgress ? [] : input.hostnames),
-    snapshotR2Key: input.snapshot.r2Key,
-    snapshotSha256: input.snapshot.sha256,
-    snapshotSizeBytes: input.snapshot.sizeBytes,
+    snapshotR2Key: input.snapshot.r2Key || null,
+    snapshotSha256: input.snapshot.sha256 || null,
+    snapshotSizeBytes: input.snapshot.sizeBytes || null,
     snapshotFormat: input.snapshot.format,
     resultJson: isInProgress ? null : JSON.stringify(input.applyResult),
     rollbackOfGroupDeploymentSnapshotId:

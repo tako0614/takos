@@ -549,7 +549,7 @@ binding と migration は backend 側で管理する。
 
 ### Rollback と migration
 
-group snapshot には migration 状態が含まれる。rollback 時、kernel は
+group deployment record には migration 状態が含まれる。rollback 時、kernel は
 forward-only migration のみサポートする。schema
 を巻き戻す必要がある場合は、新しい migration として書く。
 
@@ -564,6 +564,6 @@ group を指定した deploy の atomicity は group inventory 単位。
   として atomic
 - migration 成功 → worker deploy 失敗 の場合、migration は rollback
   されない（forward-only）
-- 代わりに deploy 全体が fail 状態になり、前の group snapshot が serve
+- 代わりに deploy 全体が fail 状態になり、前の group deployment record が serve
   され続ける
 - 別の group の deploy には影響しない（group 間の deploy は独立）

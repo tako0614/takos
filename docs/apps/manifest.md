@@ -6,7 +6,7 @@ primitive desired declaration を書く deploy manifest として扱います。
 service / route / publication と consume request を記述します。`takos deploy` /
 `takos install` では manifest の `name` が group 名として使われ、`--group`
 を指定した場合は override されます。作成・更新される primitive は group
-inventory に所属し、group snapshot / rollback / uninstall などの group 機能を
+inventory に所属し、deployment history / rollback / uninstall などの group 機能を
 使えます。`.takos/app.yaml` も受け付けます。
 
 Group は primitive を任意に束ねる state scope です。manifest は worker / service

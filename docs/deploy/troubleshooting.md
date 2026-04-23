@@ -18,7 +18,7 @@ name: my-app
 
 ### `group_name is required when the deploy manifest does not provide name`
 
-`takos deploy` / `takos install` は group snapshot 機能を使います。通常は
+`takos deploy` / `takos install` は group deployment history を使います。通常は
 manifest の `name` が group 名として使われます。このエラーは manifest に
 `name` がなく、かつ `--group` / API の `group_name` override もない場合に出ます。
 

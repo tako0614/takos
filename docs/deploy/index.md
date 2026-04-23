@@ -7,7 +7,7 @@ publication / resource はそれぞれ個別の record として存在し、grou
 - **Primitive** — deploy や管理の対象になる個別 record。workload、route、
   publication、resource、consume edge などを含む
 - **Group** — primitive を任意に束ねる state scope。所属 primitive は
-  inventory、group snapshot、rollback、uninstall、updates などの group
+  inventory、deployment history、rollback、uninstall、updates などの group
   機能を使える
 - **Manifest** — primitive の desired declaration を書く入力ファイル。group
   専用形式ではなく、group 所属を付ける場合も付けない場合も同じ primitive
@@ -15,7 +15,7 @@ publication / resource はそれぞれ個別の record として存在し、grou
 
 group は便利な collection ですが、特権的な runtime ではありません。group なしの
 primitive も同じ API / runtime model で扱います。group に所属すると、その
-primitive が inventory、snapshot、rollback などの group 機能に参加できる
+primitive が inventory、deployment history、rollback などの group 機能に参加できる
 だけです。
 
 ## 現在使うコマンド
@@ -27,7 +27,7 @@ primitive が inventory、snapshot、rollback などの group 機能に参加で
 | `takos deploy`        | local manifest または repository URL から group inventory へ primitive declaration を apply |
 | `takos deploy --plan` | `takos deploy` の group-scoped non-mutating preview（dry-run）                              |
 | `takos install`       | `takos deploy` の sugar。catalog で owner/repo を解決して同じ pipeline を呼ぶ               |
-| `takos rollback`      | group snapshot を再適用する group 機能                                                      |
+| `takos rollback`      | group の前回成功 deployment record へ戻す group 機能                                        |
 | `takos uninstall`     | group に所属する manifest-managed primitive を削除し、group scope を閉じる                  |
 | `takos group ...`     | group inventory / group-scoped declaration / group 機能の管理                               |
 | `takos resource ...`  | resource primitive の個別管理                                                               |

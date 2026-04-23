@@ -75,6 +75,45 @@ function packageFilesFor(
     : new Map<string, ArrayBuffer | Uint8Array | string>();
 }
 
+export function buildSnapshotPayload(input: {
+  groupName: string;
+  backendName: "cloudflare" | "local" | "aws" | "gcp" | "k8s" | null;
+  envName: string | null;
+  source: BuildSnapshotSource;
+  manifest: AppManifest;
+  artifacts: Record<string, SnapshotApplyArtifact>;
+}): DeploymentSnapshotPayload {
+  return {
+    schema_version: SNAPSHOT_SCHEMA_VERSION,
+    created_at: new Date().toISOString(),
+    group_name: input.groupName,
+    backend: input.backendName,
+    env_name: input.envName,
+    source: toSnapshotSource(input.source),
+    manifest: input.manifest,
+    build_sources: buildSourcesFor(input.source),
+    artifacts: input.artifacts,
+  };
+}
+
+export function buildSourceCacheSnapshot(input: {
+  groupName: string;
+  backendName: "cloudflare" | "local" | "aws" | "gcp" | "k8s" | null;
+  envName: string | null;
+  source: BuildSnapshotSource;
+  manifest: AppManifest;
+  artifacts: Record<string, SnapshotApplyArtifact>;
+}): StoredDeploymentSnapshot {
+  return {
+    payload: buildSnapshotPayload(input),
+    bundleData: new ArrayBuffer(0),
+    r2Key: "",
+    sha256: "",
+    sizeBytes: 0,
+    format: "source-cache-v1",
+  };
+}
+
 export async function buildSnapshot(
   env: Env,
   deploymentId: string,
@@ -95,17 +134,7 @@ export async function buildSnapshot(
   }
 
   const buildSources = buildSourcesFor(input.source);
-  const payload: DeploymentSnapshotPayload = {
-    schema_version: SNAPSHOT_SCHEMA_VERSION,
-    created_at: new Date().toISOString(),
-    group_name: input.groupName,
-    backend: input.backendName,
-    env_name: input.envName,
-    source: toSnapshotSource(input.source),
-    manifest: input.manifest,
-    build_sources: buildSources,
-    artifacts: input.artifacts,
-  };
+  const payload = buildSnapshotPayload(input);
 
   const files = packageFilesFor(input.source);
   files.set("snapshot.json", JSON.stringify(payload, null, 2));

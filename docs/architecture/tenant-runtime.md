@@ -44,8 +44,8 @@ scope での役割が異なる。
 - AWS / GCP / k8s では backend-specific adapter (`ecs`, `cloud-run`, `k8s`)
   に解決される。`ecs` / `cloud-run` は tenant image workload adapter であり、
   Takos kernel hosting target ではない
-- `image` は digest pin (`@sha256:...`) 必須。rollback は group snapshot
-  に保存された image ref と execution context を再適用する
+- `image` は digest pin (`@sha256:...`) 必須。rollback は group deployment
+  record に保存された image ref と execution context を再適用する
 - Service / Attached Container は listen port を推測しないため、manifest の
   `port` が必須
 
