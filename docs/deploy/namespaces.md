@@ -31,11 +31,11 @@ namespace が `takos-tenants`、staging namespace が `takos-staging-tenants`
 group は primitive を束ねる state scope、dispatch namespace は backend 側の
 worker 隔離単位。
 
-- group: inventory / current snapshot pointer / source / reconcile status を持つ
+- group: inventory / current deployment pointer / source / reconcile status を持つ
   state scope
 - dispatch namespace: Cloudflare backend 上の worker 配置先
 
-group 名は inventory や snapshot の識別に使われるが、namespace 指定自体は public
+group 名は inventory や deployment history の識別に使われるが、namespace 指定自体は public
 CLI surface ではない。
 
 ## operator の準備

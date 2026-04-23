@@ -88,7 +88,7 @@ curl "https://takos.example.com/api/explore/catalog?tags=docs,notes&limit=10"
 ```
 
 `space_id` を付けた場合、レスポンスの
-`installation.group_deployment_snapshot_id` は current group snapshot の ID
+`installation.group_deployment_snapshot_id` は current group deployment record の ID
 です。legacy `bundle_deployments` ID はここに入りません。
 
 ### パッケージ検索

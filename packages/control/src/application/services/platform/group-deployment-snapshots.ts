@@ -53,6 +53,7 @@ import type {
 } from "./group-deployment-snapshots-model.ts";
 import {
   buildSnapshot,
+  buildSourceCacheSnapshot,
   cloneSnapshotToDeployment,
   loadSnapshot,
 } from "./group-deployment-snapshot-archives.ts";
@@ -298,7 +299,7 @@ function assertNoTargetedImmutableDeployment(targets?: string[]): void {
     .filter(Boolean);
   if (normalizedTargets.length === 0) return;
   throw new BadRequestError(
-    "Targeted deployment snapshots are not supported; apply the full immutable snapshot instead",
+    "Targeted group source deploys are not supported; apply the full group instead",
   );
 }
 
@@ -585,7 +586,7 @@ export class GroupDeploymentSnapshotService {
       },
     );
     const deploymentId = generateId();
-    const snapshot = await this.buildSnapshot(deploymentId, {
+    const snapshot = buildSourceCacheSnapshot({
       groupName: group.name,
       backendName: parseBackendName(group.backend) ?? input.backendName ??
         null,
@@ -638,58 +639,11 @@ export class GroupDeploymentSnapshotService {
     row: GroupDeploymentSnapshotRow,
     userId: string,
   ): Promise<GroupDeploymentSnapshotRow> {
+    void userId;
     if (row.snapshotR2Key && row.snapshotSha256 && row.snapshotFormat) {
       return row;
     }
-
-    const source = await deriveSourceInputFromRow(this.env, row);
-    if (!source) {
-      throw new ConflictError(
-        "This deployment predates immutable snapshots and its repository URL could not be reconstructed",
-      );
-    }
-
-    const resolved = await this.resolveGitSource(row.spaceId, userId, source);
-    const group = await findGroupById(this.env, row.groupId);
-    const snapshot = await this.buildSnapshot(row.id, {
-      groupName: fallbackGroupName(row),
-      backendName: parseBackendName(group?.backend),
-      envName: group?.env ?? null,
-      source: {
-        kind: "git_ref",
-        target: resolved.target,
-        buildSources: resolved.buildSources,
-        packageFiles: resolved.packageFiles,
-      },
-      manifest: resolved.manifest,
-      artifacts: resolved.artifacts,
-    });
-
-    const db = getDb(this.env.DB);
-    await db.update(groupDeploymentSnapshots).set({
-      sourceKind: "git_ref",
-      sourceRepositoryUrl: resolved.target.repositoryUrl,
-      sourceResolvedRepoId: resolved.target.resolvedRepoId,
-      sourceRepoId: resolved.target.resolvedRepoId,
-      sourceRef: resolved.target.ref,
-      sourceRefType: resolved.target.refType,
-      sourceCommitSha: resolved.target.commitSha,
-      manifestJson: JSON.stringify(resolved.manifest),
-      buildSourcesJson: JSON.stringify(resolved.buildSources),
-      snapshotR2Key: snapshot.r2Key,
-      snapshotSha256: snapshot.sha256,
-      snapshotSizeBytes: snapshot.sizeBytes,
-      snapshotFormat: snapshot.format,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(groupDeploymentSnapshots.id, row.id)).run();
-
-    const updated = await db.select().from(groupDeploymentSnapshots)
-      .where(eq(groupDeploymentSnapshots.id, row.id))
-      .get();
-    if (!updated) {
-      throw new NotFoundError("Group deployment snapshot");
-    }
-    return updated;
+    return row;
   }
 
   async deploy(
@@ -1030,22 +984,43 @@ export class GroupDeploymentSnapshotService {
     }
 
     const row = await this.ensureSnapshotForRow(snapshotRow, userId);
-    if (!row.snapshotR2Key || !row.snapshotSha256) {
-      throw new ConflictError(
-        "This deployment does not have an immutable snapshot and could not be backfilled",
-      );
-    }
-
-    const snapshot = await this.loadSnapshot(
-      row.snapshotR2Key,
-      row.snapshotSha256,
-    );
     const currentGroup = await findGroupById(this.env, row.groupId);
     if (!currentGroup) {
       throw new ConflictError(
         "Cannot roll back a group that has already been uninstalled or deleted. Create a new deployment explicitly.",
       );
     }
+
+    if (!row.snapshotR2Key || !row.snapshotSha256) {
+      const source = await deriveSourceInputFromRow(this.env, row);
+      if (!source) {
+        throw new ConflictError(
+          "This deployment does not have source metadata and cannot be redeployed",
+        );
+      }
+      const resolved = await this.resolveGitSource(
+        row.spaceId,
+        userId,
+        source,
+      );
+      return await this.deployResolved(row.spaceId, userId, {
+        target: resolved.target,
+        manifest: resolved.manifest,
+        buildSources: resolved.buildSources,
+        artifacts: resolved.artifacts,
+        packageFiles: resolved.packageFiles,
+        groupName: currentGroup.name,
+        backendName: parseBackendName(currentGroup.backend) ?? undefined,
+        envName: currentGroup.env ?? undefined,
+        rollbackOfGroupDeploymentSnapshotId:
+          currentGroup.currentGroupDeploymentSnapshotId ?? null,
+      });
+    }
+
+    const snapshot = await this.loadSnapshot(
+      row.snapshotR2Key,
+      row.snapshotSha256,
+    );
     const backendName = snapshot.payload.backend;
     const envName = snapshot.payload.env_name;
     const group = await this.ensureTargetGroup(

@@ -4,7 +4,7 @@ import { BadRequestError } from "takos-common/errors";
 import type { Env } from "../../../../shared/types/index.ts";
 import { GroupDeploymentSnapshotService } from "../group-deployment-snapshots.ts";
 
-Deno.test("GroupDeploymentSnapshotService rejects targeted immutable snapshot deploys", async () => {
+Deno.test("GroupDeploymentSnapshotService rejects targeted group source deploys", async () => {
   const env = {
     DB: {} as Env["DB"],
     TENANT_SOURCE: {} as never,
@@ -26,7 +26,7 @@ Deno.test("GroupDeploymentSnapshotService rejects targeted immutable snapshot de
         targets: ["web"],
       }),
     BadRequestError,
-    "Targeted deployment snapshots are not supported",
+    "Targeted group source deploys are not supported",
   );
 });
 

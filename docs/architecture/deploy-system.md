@@ -14,15 +14,16 @@ publication / resource / consume edge は個別 record として保存され、g
 - **Primitive records** — service、deployment、route、custom domain、resource、
   publication、consume edge などの実体 record
 - **Group** — primitive を任意に束ねる state scope。inventory、source metadata、
-  current snapshot pointer、reconcile status など group 機能の state を持つ
+  current deployment pointer、reconcile status など group 機能の state を持つ
 - **Manifest / source** — primitive desired declaration の入力。local file、
   repository ref、catalog package から解決される
-- **Deployment snapshot** — group に所属する deployable primitive の applied
-  state を保存する immutable history
+- **Deployment record** — group に所属する deployable primitive の applied
+  state と source metadata を保存する history。repository source 由来は
+  bundled snapshot ではなく source cache として保存する
 
 Group は runtime backend でも resource provider でもありません。worker /
 container / resource はそれぞれ個別 record として存在し、group は `group_id` と
-snapshot metadata でそれらを同じ inventory / lifecycle scope に載せます。group
+deployment metadata でそれらを同じ inventory / lifecycle scope に載せます。group
 なし primitive も、group 所属 primitive も、個別 API と runtime adapter 上は同じ
 primitive です。
 
@@ -184,14 +185,14 @@ compute:
 
 CLI は manifest / repository / catalog source から primitive declaration を
 apply する task-oriented surface を提供する。`takos deploy` / `takos install` は
-group snapshot 機能なので group 名を明示し、その group inventory と group
-snapshot に参加する。
+group deployment history を更新するため、group 名を明示し、その group inventory
+に参加する。
 
 ```bash
 takos deploy --space SPACE_ID --group my-app              # group inventory へ apply
 takos deploy --plan --space SPACE_ID --group my-app       # 差分プレビュー（non-mutating）
 takos install OWNER/REPO --space SPACE_ID --group my-app  # catalog から source を解決して apply
-takos rollback GROUP_NAME --space SPACE_ID # group snapshot を再適用
+takos rollback GROUP_NAME --space SPACE_ID # group の前回成功 record へ戻す
 takos uninstall GROUP_NAME --space SPACE_ID
 takos group list --space SPACE_ID          # group inventory
 takos group show NAME --space SPACE_ID
@@ -215,17 +216,17 @@ Group と primitive record の責務は次のように分ける。
 - route は routing / custom-domain record に保存される
 - publication は `publications`、consume は `service_consumes` に保存される
 - resource は `resources` に保存される
-- group は `groups` row として inventory / source metadata / current snapshot
+- group は `groups` row として inventory / source metadata / current deployment
   pointer / reconcile status を持つ
-- group snapshot / rollback / uninstall は group inventory に対する機能であり、
+- deployment history / rollback / uninstall は group inventory に対する機能であり、
   primitive runtime の特別処理ではない
 
 ```text
 group "my-app":
   groups row:
-    inventory / source metadata / current snapshot pointer / reconcile status
+    inventory / source metadata / current deployment pointer / reconcile status
   group features:
-    plan / apply / snapshot / rollback / uninstall
+    plan / apply / deployment history / rollback / uninstall
   inventory:
     service: web
     route: /
@@ -259,13 +260,13 @@ group なし primitive:
      `compute.<name>.consume` を宣言した consumer の env に inject
 5. Routing reconcile
    - workload apply と managed-state sync が成功した場合だけ route を reconcile
-6. Snapshot update
-   - group がある場合は group-scoped declaration / observed state / snapshot
+6. Deployment record update
+   - group がある場合は group-scoped declaration / observed state / deployment
      pointer を更新する
 
 ## Rollback
 
-rollback は group snapshot を再適用する group 機能です。
+rollback は group の前回成功 deployment record へ戻す group 機能です。
 
 - code + config + bindings が戻る
 - DB data は戻らない（forward-only migration）
@@ -286,7 +287,7 @@ name: my-app
 version: "1.2.0" # display 用。Git tag と一致させる慣習
 ```
 
-group がある場合、source 情報を group metadata と snapshot に保存します。
+group がある場合、source 情報を group metadata と deployment record に保存します。
 
 - `local`: takos deploy で手元から deploy
 - `repo:owner/repo@v1.2.0`:
@@ -306,8 +307,8 @@ Takos deploy system (primitive-first):
 
   Optional group scope
     - groups row
-    - inventory / source metadata / current snapshot pointer / reconcile status
-    - features: plan / apply / snapshot / rollback / uninstall / updates
+    - inventory / source metadata / current deployment pointer / reconcile status
+    - features: plan / apply / deployment history / rollback / uninstall / updates
 
   CLI / API surface
     - deploy:    takos deploy / install

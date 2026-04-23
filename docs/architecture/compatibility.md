@@ -19,7 +19,7 @@ Takos が parity の対象にしているもの:
 - manifest で宣言される workload / route / route publication / Takos built-in
   provider publication consume edge と compute trigger (`scheduled`) の contract
 - resource API / runtime binding で扱う abstract resource type
-- group snapshot
+- group deployment history / rollback contract
 - routing target が保持する service identity / deployment identity
 - deployment ごとの runtime config / bindings / env vars
 - dispatch を経由して tenant runtime に到達する request contract
