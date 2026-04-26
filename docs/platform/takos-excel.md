@@ -1,0 +1,136 @@
+# takos-excel
+
+Google Sheets alternative のスプレッドシートエディタ。default app distribution
+metadata を持つが、primitive や group は特権化されない。
+
+## 役割
+
+- スプレッドシートの作成・編集
+- セル操作・範囲操作・書式設定
+- 数式の評価・計算
+- CSV / JSON エクスポート
+- source tree の standalone MCP server で 26 tools を提供
+- UiSurface でスプレッドシート UI を提供
+- group に所属しなくても動作可能
+
+## Takos 上での動作
+
+hostname は routing layer が割り当てる。
+
+- auto: `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}`
+- custom slug / custom domain もオプションで設定可能
+
+例: `team-a-my-excel.app.example.com` or `sheets.mycompany.com`
+
+single worker (web) 構成。
+
+```text
+{hostname}
+  /     → built frontend / static asset surface (deployment mount)
+  /mcp  → Excel MCP server (streamable HTTP)
+```
+
+## Publications
+
+`outputs.url.routeRef` が参照する `/` route は built frontend / static asset surface の mount point を
+表し、server entrypoint 自体の root route を意味しない。
+
+```yaml
+routes:
+  - id: ui
+    target: web
+    path: /
+  - id: mcp
+    target: web
+    path: /mcp
+
+publish:
+  - name: excel-ui
+    type: takos.ui-surface.v1
+    display:
+      title: Excel
+    outputs:
+      url:
+        kind: url
+        routeRef: ui
+  - name: excel-mcp
+    type: takos.mcp-server.v1
+    display:
+      title: Excel MCP
+    outputs:
+      url:
+        kind: url
+        routeRef: mcp
+    auth:
+      bearer:
+        secretRef: MCP_AUTH_TOKEN
+    spec:
+      transport: streamable-http
+```
+
+`takos.ui-surface.v1` は UI surface publication type であり、deploy manifest の
+`publish` entry で catalog を管理します。`takos.mcp-server.v1` は agent runtime が
+参照する MCP catalog entry です。
+
+## Takos built-in provider publication
+
+`takos-api` は route / interface publication ではなく、kernel API への access を
+受け取る local consume 名です。実体は `takos.api-key` built-in provider
+publication の consume です。
+
+```yaml
+compute:
+  web:
+    consume:
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
+            - files:write
+```
+
+default app manifest / workflow は UI と `/mcp` を同じ worker に含める。MCP
+publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言し、control plane が
+worker-scoped secret env を用意する。実装は `MCP_AUTH_TOKEN` が未設定、かつ
+`MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed する。
+manifest の `routes` は `/` と `/mcp` の両方を `web` target に向ける。`/` を
+UI 直下として扱うのは deployment 側の責務で、entrypoint そのものの責務ではない。
+
+## MCP tools
+
+| tool                          | 内容                   |
+| ----------------------------- | ---------------------- |
+| sheet_list                    | シート一覧             |
+| sheet_create                  | シート作成             |
+| sheet_get                     | シート取得             |
+| sheet_delete                  | シート削除             |
+| sheet_set_title               | タイトル変更           |
+| sheet_add_tab                 | タブ追加               |
+| sheet_remove_tab              | タブ削除               |
+| sheet_rename_tab              | タブ名変更             |
+| sheet_get_cell                | セル取得               |
+| sheet_set_cell                | セル書き込み           |
+| sheet_get_range               | 範囲取得               |
+| sheet_set_range               | 範囲書き込み           |
+| sheet_clear_range             | 範囲クリア             |
+| sheet_format_cell             | セル書式設定           |
+| sheet_format_range            | 範囲書式設定           |
+| sheet_evaluate                | 数式評価               |
+| sheet_get_computed            | 計算済み値取得         |
+| sheet_set_column_width        | 列幅設定               |
+| sheet_set_row_height          | 行高設定               |
+| sheet_screenshot              | スクリーンショット     |
+| sheet_import_csv              | CSV インポート         |
+| sheet_export_csv              | CSV エクスポート       |
+| sheet_export_json             | JSON エクスポート      |
+| sheet_add_conditional_rule    | 条件付き書式ルール追加 |
+| sheet_remove_conditional_rule | 条件付き書式ルール削除 |
+| sheet_list_conditional_rules  | 条件付き書式ルール一覧 |
+
+## Scopes
+
+| scope       | 用途                                   |
+| ----------- | -------------------------------------- |
+| files:read  | kernel の Storage からファイル読み取り |
+| files:write | kernel の Storage へファイル書き込み   |
