@@ -130,7 +130,7 @@ const assets: PromptAsset[] = [
 
 const tsOutputPath =
   "packages/control/src/application/services/agent/prompt-assets.generated.ts";
-const rustOutputPath = "apps/rust-agent/src/prompt_assets.rs";
+const rustOutputPath = "agent/src/prompt_assets.rs";
 
 async function readAsset(asset: PromptAsset): Promise<[PromptAsset, string]> {
   const url = new URL(asset.path, repoRoot);
@@ -168,7 +168,7 @@ function renderTs(entries: Array<[PromptAsset, string]>): string {
 function renderRust(entries: Array<[PromptAsset, string]>): string {
   const lines: string[] = [
     "// This file is generated from packages/control/src/application/services/agent/prompts/*.md.",
-    "// Run `deno task generate:agent-prompts` from the repository root after editing prompt markdown.",
+    "// Run `deno task generate:agent-prompts` from the Takos repository root after editing prompt markdown.",
     "",
   ];
 

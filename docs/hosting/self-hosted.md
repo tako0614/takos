@@ -338,14 +338,14 @@ services:
 #### Executor
 
 - **イメージ**: private server stack / OSS local stack とも
-  `apps/rust-agent/Dockerfile` から `takos-rust-agent` container をビルド
+  `agent/Dockerfile` から `takos-agent` container をビルド
 - **ポート**: `TAKOS_EXECUTOR_PORT`（デフォルト `8082`）→ コンテナポート `8080`
 - **役割**: エージェント実行コンテナ
-- **構成**: `apps/rust-agent` が Takos control RPC / remote tools /
+- **構成**: `agent/` が Takos control RPC / remote tools /
   skill prompt bridge を提供。`takos-private/apps/executor` は legacy / fallback
   用の TypeScript executor として残す
 
-この executor container は private server stack でも `rust-agent` container
+この executor container は private server stack でも `takos-agent` container
 を使います。Takos
 は platform 全体を単一の runtime に寄せず、agent loop を executor container
 に分離し、control plane は space state と remote tool 実体を保持します。

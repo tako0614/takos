@@ -242,8 +242,8 @@ services:
 
   runtime:
     build:
-      context: ..
-      dockerfile: takos/apps/runtime/Dockerfile
+      context: .
+      dockerfile: apps/runtime/Dockerfile
     depends_on:
       minio-init:
         condition: service_completed_successfully
@@ -266,10 +266,10 @@ services:
       timeout: 5s
       retries: 10
 
-  rust-agent:
+  takos-agent:
     build:
       context: .
-      dockerfile: apps/rust-agent/Dockerfile
+      dockerfile: agent/Dockerfile
     depends_on:
       executor-host:
         condition: service_healthy
@@ -279,11 +279,11 @@ services:
       - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
     environment:
       PORT: 8080
-      TAKOS_RUST_AGENT_DATA_DIR: /var/lib/takos/rust-agent
+      TAKOS_AGENT_DATA_DIR: /var/lib/takos/agent
     ports:
       - "${TAKOS_EXECUTOR_PORT}:8080"
     volumes:
-      - takos-rust-agent-data:/var/lib/takos/rust-agent
+      - takos-agent-data:/var/lib/takos/agent
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null"]
       interval: 15s
@@ -300,4 +300,4 @@ volumes:
   takos-redis:
   takos-minio:
   takos-control-data:
-  takos-rust-agent-data:
+  takos-agent-data:

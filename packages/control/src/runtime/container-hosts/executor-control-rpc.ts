@@ -154,8 +154,8 @@ function cleanupRecentRunEventKeys(nowMs: number): void {
  * Resolve the agent runtime config for a run.
  *
  * Mirrors the local-platform handler at
- * `local-platform/executor-control-rpc.ts:localHandleRunConfig`. The rust-agent
- * (`apps/rust-agent/src/control_rpc.rs`) calls `/rpc/control/run-config`
+ * `local-platform/executor-control-rpc.ts:localHandleRunConfig`. The takos-agent
+ * (`agent/src/control_rpc.rs`) calls `/rpc/control/run-config`
  * unconditionally before each iteration to learn its system prompt, max
  * iterations, temperature, and tool list.
  */

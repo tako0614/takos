@@ -15,7 +15,7 @@ takos-worker / takos (kernel)
 takos-executor-host  (Container DO host)
   │  ② container.dispatchStart(payload)
   ▼
-ExecutorContainerTier1/2/3  (CF Container DO with rust-agent inside)
+ExecutorContainerTier1/2/3  (CF Container DO with takos-agent inside)
   │  ③ POST /rpc/control/*  (RPC into kernel)
   ▼
 takos-executor-host  (proxy / forward)
@@ -123,7 +123,7 @@ TTL を持ち、`/session/destroy` の成功後に該当 session の token を r
 | `billing-run-usage`     | run 終了時の usage を recordUsage                    |
 | `api-keys`              | OpenAI / Anthropic / Google の API キー              |
 
-heartbeat は rust-agent (`apps/rust-agent/src/main.rs`) が **15 秒間隔** で emit
+heartbeat は takos-agent (`agent/src/main.rs`) が **15 秒間隔** で emit
 する。`STALE_WORKER_THRESHOLD_MS = 5 min` (`runner-constants.ts`) で 20 missed
 beats まで許容。
 
@@ -134,7 +134,7 @@ durable authority ではない。D1 `run_events` path では `event_key` unique
 index、RunNotifier DO では storage-backed dedupe key が重複 emit
 抑止の本体になる。`heartbeat` は timestamp update なので実質 idempotent。
 `add-message` は任意の `idempotencyKey` を受け取り、同一 thread + 同一 key
-を同じ replay として扱う。rust-agent の assistant message は run id + content
+を同じ replay として扱う。takos-agent の assistant message は run id + content
 hash を key にする。`update-run-status` は明示的な idempotency key
 はないが、同一 terminal status / usage / output / error の replay では
 `completed_at` を更新しない。caller は retry する endpoint ごとの contract
@@ -149,7 +149,7 @@ container host endpoint は **internal RPC** なので、public API common envel
 (`shared/utils/http-response.ts
 errorJsonResponse`)。
 
-これは rust-agent / kernel 間の transport に寄せた意図的な設計で、public api.md
+これは takos-agent / kernel 間の transport に寄せた意図的な設計で、public api.md
 の error code table はこの層には適用しない。
 
 ## デプロイ

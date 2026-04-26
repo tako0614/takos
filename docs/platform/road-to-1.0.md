@@ -12,7 +12,7 @@ Takos 1.0 の目標は、Takos core を OSS GA として扱える状態にする
 
 - `takos/`
 - `takos-cli/`
-- `takos/` 内の Rust agent runtime integration
+- `agent/` agent service
 
 default app distribution は 1.0 の検証 fixture / example として使いますが、
 core 1.0 の blocker にはしません。
