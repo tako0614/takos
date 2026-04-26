@@ -1,5 +1,7 @@
 # Takos Deploy v2 Final Architecture Contract
 
+Finalized operational semantics update
+
 This kit is the final-form architecture package for Takos Deploy v2.
 
 The design goal is simple:
@@ -17,7 +19,7 @@ Takos Core owns meaning and safety. ProviderPackages own typed native power and 
    The small core: AppSpec, EnvSpec, PolicySpec, Plan, Apply, AppRelease, NetworkConfig, RuntimeNetworkPolicy, ActivationRecord, ResourceInstance, and ProviderMaterialization.
 
 2. `02-registry-and-packages.md`  
-   ProviderPackage, ResourceContractPackage, DataContractPackage, NativeSchema, PackageResolution, trust, revocation, conformance, provider targets, and provider-native configuration.
+   ProviderPackage, ResourceContractPackage, DataContractPackage, PublicationContractPackage, NativeSchema, PackageResolution, trust, revocation, conformance, provider targets, and provider-native configuration.
 
 3. `03-operational-semantics.md`  
    RolloutRun, ChangeSetPlan, DependencyGraph, operation semantics, scoped locks, phase-boundary revalidation, canary side effects, shadow traffic, repair, restore, GC, and audit.
@@ -34,6 +36,9 @@ Takos Core owns meaning and safety. ProviderPackages own typed native power and 
 7. `takos-deploy-v2-final-architecture-contract.md`  
    A combined single-file version of the same specification.
 
+8. `07-settled-operational-semantics.md`  
+   Final decisions for readiness/convergence, RuntimeNetworkPolicy selectors, canary side-effect enforcement, publication withdrawal, built-in credential lifecycle, emergency rollback, idempotency, module conformance, and acceptance test severity.
+
 ## Design compass
 
 ```text
@@ -42,6 +47,7 @@ EnvSpec binds meaning to an environment.
 PolicySpec constrains meaning.
 ResourceContractPackages define durable resource meaning.
 DataContractPackages define payload meaning.
+PublicationContractPackages define typed output and consume semantics.
 ProviderPackages materialize meaning into real infrastructure.
 PackageResolution pins refs to digests.
 Plan computes safe change.
@@ -87,11 +93,13 @@ Provider state is observed. It is never canonical.
 5. GroupActivationPointer selects the current ActivationRecord.
 6. ActivationRecord records desired HTTP serving assignment, not proof of provider convergence.
 7. Weighted ActivationRecord assignments apply to HTTP ingress only.
-8. Queue, schedule, internal events, and publications resolve through primaryAppReleaseId unless an explicit extension says otherwise.
-9. ResourceInstance carries durable state outside AppRelease rollback.
-10. Rollback reactivates a compatible prior assignment. It does not reverse migrations, restore DB data, restore object contents, restore queue contents, or restore secret values.
-11. AppSpec in portable mode must not contain providerNative blocks.
-12. Runtime egress and service identity are RuntimeNetworkPolicy concerns, not HTTP ingress route concerns.
+8. Queue, schedule, and internal events resolve through primaryAppReleaseId unless an explicit extension says otherwise.
+9. Publications are declared outputs. They are never injected automatically; consumers must bind them explicitly.
+10. Publication consumption must be represented by PublicationConsumerBinding and included in BindingSetRevision.
+11. ResourceInstance carries durable state outside AppRelease rollback.
+12. Rollback reactivates a compatible prior assignment. It does not reverse migrations, restore DB data, restore object contents, restore queue contents, or restore secret values.
+13. AppSpec in portable mode must not contain providerNative blocks.
+14. Runtime egress and service identity are RuntimeNetworkPolicy concerns, not HTTP ingress route concerns.
 ```
 
 ## 3. Input specifications
@@ -173,6 +181,23 @@ exposures:
   web:
     endpoint: api.http
     visibility: public
+
+publications:
+  apiUrl:
+    contract: publication.http-endpoint@v1
+    from: exposure:web
+    outputs:
+      url:
+        route: primary
+
+  mcp:
+    contract: publication.mcp-server@v1
+    from: exposure:web
+    outputs:
+      url:
+        path: /mcp
+    spec:
+      transport: streamable-http
 ```
 
 ### 3.2 EnvSpec
@@ -898,7 +923,64 @@ interface DataContractDescriptor {
 
 DataContracts make cross-release compatibility testable.
 
-## 6. ProviderPackage
+## 6. PublicationContractPackage
+
+PublicationContractPackage defines typed outputs that apps may publish and other apps may consume.
+
+Publication contracts are distinct from ResourceContracts:
+
+```text
+ResourceContract:
+  durable resource capability, such as sql.postgres@v1 or object-store.s3@v1
+
+PublicationContract:
+  typed output/interface, such as publication.mcp-server@v1, publication.file-handler@v1, publication.http-endpoint@v1, or takos.oauth-client@v1
+```
+
+ProviderPackages and app manifests may materialize publications, but they must not redefine publication contract semantics.
+
+```ts
+interface PublicationContractPackage {
+  ref: string;
+  digest: string;
+  publisher: string;
+  descriptors: PublicationContractDescriptor[];
+}
+
+interface PublicationContractDescriptor {
+  ref: string;
+  outputDescriptors: PublicationOutputDescriptor[];
+  specSchemaRef?: string;
+  dataContractRefs?: string[];
+  secretOutputs?: string[];
+  compatibility: "backward-compatible" | "exact" | "custom";
+  breakingChangePolicy: "new-major-version" | "plan-required";
+}
+
+interface PublicationOutputDescriptor {
+  name: string;
+  valueType: "string" | "url" | "json" | "secret-ref" | "service";
+  required: boolean;
+  secret: boolean;
+}
+```
+
+Examples:
+
+```text
+publication.mcp-server@v1
+publication.file-handler@v1
+publication.http-endpoint@v1
+publication.ui-surface@v1
+takos.api-key@v1
+takos.oauth-client@v1
+```
+
+Built-in Takos provider publications use the same contract model. They may create credentials or client registrations, but they must be represented as publication bindings and grants rather than implicit environment injection.
+
+PublicationContractPackage resolution follows the same PackageResolution and trust rules as ResourceContractPackage.
+
+## 7. ProviderPackage
 
 ProviderPackage materializes Takos meaning into real infrastructure.
 
@@ -929,7 +1011,7 @@ interface ProviderPackageTrustRecord {
 }
 ```
 
-## 7. Capability and resource support
+## 8. Capability and resource support
 
 Capability support is descriptor-based, not a string list.
 
@@ -963,7 +1045,7 @@ interface ResourceContractSupport {
 }
 ```
 
-## 8. NativeSchema
+## 9. NativeSchema
 
 Native config is typed, versioned, policy-governed, and Plan-visible.
 
@@ -1003,7 +1085,7 @@ interface NativeSchemaFieldDescriptor {
 
 Schema-level lifecycle rules may override or combine field effects when field combinations matter.
 
-## 9. ProviderTarget
+## 10. ProviderTarget
 
 ProviderTarget selects a provider package family and environment location.
 
@@ -1019,7 +1101,7 @@ providerTargets:
 
 ProviderTarget does not pin package digest. ResolvedGraph and ProviderMaterialization pin digests through PackageResolution.
 
-## 10. ProviderMapping
+## 11. ProviderMapping
 
 Mappings use refs, not ad-hoc keys.
 
@@ -1054,7 +1136,7 @@ claim-level mapping
 -> unresolved means Plan blocked
 ```
 
-## 11. Satisfaction reports
+## 12. Satisfaction reports
 
 Resource satisfaction is reported explicitly.
 
@@ -1083,7 +1165,7 @@ interface ResourceFeatureRealization {
 }
 ```
 
-## 12. Trust revocation
+## 13. Trust revocation
 
 Trust revocation does not mutate active state automatically.
 
@@ -1370,13 +1452,138 @@ shared resource migration cycle
 
 Runtime call cycles may be allowed if they do not create deployment-time or activation-time cycles.
 
-## 9. Publication propagation
+## 9. Publication propagation and consume bindings
+
+Publication is a typed output/interface exposed by a producer. Consumption is an explicit binding created by a consumer.
+
+```text
+PublicationDeclaration:
+  producer declares a typed output
+
+PublicationBinding:
+  resolved producer output value for an AppRelease / NetworkConfig / built-in provider
+
+PublicationConsumerBinding:
+  consumer binds selected outputs into its BindingSetRevision
+```
+
+Publications are never injected automatically into every workload in a space. A consumer must explicitly bind the publication and its selected outputs.
+
+### 9.1 Publication addresses
+
+Space-wide short names are not sufficient for durable operation. Publications have stable addresses.
+
+```text
+publication:<group>/<name>
+publication:<group>/<name>#<output>
+builtin:takos.oauth-client@v1
+builtin:takos.api-key@v1
+```
+
+Short names may be accepted only when unambiguous according to policy. Plan must block ambiguous publication references.
+
+### 9.2 Explicit output injection
+
+Publication consume uses explicit injection by default.
+
+```yaml
+consumes:
+  SEARCH_MCP:
+    publication: publication:search-agent/search
+    outputs:
+      url:
+        inject:
+          env: SEARCH_MCP_URL
+    mode: explicit-only
+```
+
+`consume.env` style alias maps are legacy shorthand. They must not cause newly-added publication outputs to appear in a consumer runtime without an updated Plan. Secret outputs require explicit injection and approval unless policy says otherwise.
+
+### 9.3 Rebind Plans
 
 Producer publication changes may create dependent consumer Plans.
 
-Producer activation may be blocked by policy until consumer compatibility or rebind Plans are accepted.
+Examples that require rebind evaluation:
 
-Consumer rebind is represented as a Plan. Takos must not silently mutate consumer runtime bindings without a Plan unless policy explicitly allows automatic rebind.
+```text
+output added / removed
+output type changed
+secret output added
+route-derived URL changed
+PublicationContract major version changed
+DataContract compatibility range changed
+```
+
+Consumer rebind is represented as a Plan. Takos must not silently mutate consumer runtime bindings without a Plan unless policy explicitly allows automatic rebind for that publication contract and output class.
+
+Producer activation may be blocked by policy until required consumer compatibility or rebind Plans are accepted. For multi-group updates, ChangeSetPlan orchestrates producer and consumer group Plans.
+
+### 9.4 Managed registry projections
+
+Some publication contracts create projections into runtime registries, such as MCP server registry, file-handler discovery, UI surface registry, or webhook endpoint catalogs.
+
+These projections are materialized state, not canonical state.
+
+```text
+Canonical:
+  PublicationDeclaration / PublicationBinding / PublicationConsumerBinding
+
+Materialized projection:
+  MCP registry entry
+  FileHandler discovery entry
+  UI surface registry entry
+```
+
+Managed projections must expose conditions.
+
+```text
+PublicationReady
+RouteResolved
+AuthReady
+ProjectionReady
+ConsumerBindingsReady
+```
+
+A registry entry must not appear healthy if its route, auth secret, provider materialization, or publication binding is unresolved.
+
+### 9.5 Auth and secret outputs
+
+Publication contracts may expose secret outputs or auth metadata. Secret values are not ordinary strings.
+
+```ts
+interface PublicationSecretOutput {
+  outputName: string;
+  secretName: string;
+  resolution: "latest-at-activation" | "pinned-version";
+  rollbackPolicy: "re-resolve" | "reuse-pinned-version";
+  owner: "producer" | "builtin-provider";
+}
+```
+
+`authSecretRef`-style metadata must resolve through SecretBindingRef or PublicationSecretOutput. Consumer workloads must not receive raw secret values unless the publication contract, injection declaration, grant, and policy all allow it.
+
+### 9.6 Grants
+
+Publication consumption requires a grant. Space role alone is not enough for cross-app invocation or credential-bearing outputs.
+
+```ts
+interface PublicationConsumerGrant {
+  consumerGroupId: string;
+  publicationAddress: string;
+  actions: string[];
+  scopes?: unknown;
+  expiresAt?: string;
+}
+```
+
+Examples:
+
+```text
+mcp:invoke
+file-handler:open
+ui-surface:embed
+credential:read
+```
 
 ## 10. Long-running operations
 
@@ -1682,6 +1889,27 @@ rollbackPolicy: re-resolve
 ```
 
 Rollback does not restore old secret values by default.
+
+PublicationConsumerBinding is also part of BindingSetRevision.
+
+```ts
+interface PublicationConsumerBinding {
+  publicationAddress: string;
+  contract: string;
+  outputs: Record<string, PublicationOutputInjection>;
+  grantRef: string;
+  resolution: "latest-at-activation" | "pinned-version";
+}
+
+interface PublicationOutputInjection {
+  env?: string;
+  binding?: string;
+  valueType: "string" | "url" | "json" | "secret-ref" | "service";
+  explicit: true;
+}
+```
+
+New publication outputs are not injected into existing BindingSetRevisions. Rebinding requires a Plan unless policy explicitly allows automatic rebind.
 
 ## 8. Resource access
 
@@ -2148,6 +2376,11 @@ In-flight message behavior follows queue profile.
 ```text
 Producer breaking publication change creates dependent consumer Plan.
 Consumer binding does not silently update without Plan unless policy allows automatic rebind.
+New publication output is not injected into consumer unless explicitly selected.
+Secret publication output requires explicit injection and approval.
+Ambiguous short publication name is blocked.
+Managed MCP/FileHandler/UI projection is unhealthy when route/auth/provider materialization is unresolved.
+PublicationConsumerGrant is required for cross-group consume.
 Deployment-time publication binding cycle is blocked.
 ChangeSetPlan is orchestration, not distributed transaction.
 ```
@@ -2189,3 +2422,661 @@ PreparedArtifact cannot be reused if packageResolutionDigest differs.
 External image mirroring retains image through rollback window.
 Native raw binding requires policy approval.
 ```
+
+
+---
+
+# 07. Settled Operational Semantics
+
+This section fixes the operational decisions that are easy to leave ambiguous after the core architecture is defined.
+
+The goal is not to add new primitives. The goal is to decide how the existing primitives behave at the edges: convergence, publication withdrawal, credential lifecycle, emergency rollback, idempotency, module conformance, and user-facing readiness.
+
+## 1. Canonical activation vs observed serving
+
+ActivationRecord is canonical desired HTTP serving assignment. It is not proof that a provider, gateway, proxy, cache, registry projection, or DNS layer has converged.
+
+User-facing status must distinguish canonical activation from observed convergence.
+
+```text
+ActivationCommitted:
+  GroupActivationPointer references an ActivationRecord.
+  Takos canonical desired state has advanced.
+
+ServingConverged:
+  provider/gateway/cache observation agrees with the current ActivationRecord.
+
+ServingDegraded:
+  ActivationRecord exists, but provider materialization, gateway, DNS, or route cache has not converged.
+```
+
+Summary status must be layered rather than collapsed into one `ready` bit.
+
+```ts
+interface GroupSummaryStatus {
+  desired: "ready" | "reconciling" | "stalled" | "degraded";
+  serving: "not-activated" | "activation-committed" | "converged" | "degraded";
+  dependencies: "ready" | "pending" | "degraded";
+  security: "ready" | "warning" | "blocked";
+}
+```
+
+Rules:
+
+```text
+1. ActivationCommitted does not imply ServingConverged.
+2. ServingConverged requires ProviderMaterialization and observed provider state to match the current ActivationRecord.
+3. Publication projections and consumer bindings affect dependencies status, not ActivationRecord itself.
+4. Trust revocation or secret revocation affects security status.
+```
+
+## 2. Condition ownership
+
+Conditions must have stable owners. Multiple controllers must not write the same condition type for the same object without an ownership rule.
+
+```ts
+interface ConditionOwnership {
+  conditionType: string;
+  owner:
+    | "plan-controller"
+    | "apply-controller"
+    | "activation-controller"
+    | "route-controller"
+    | "provider-observer"
+    | "publication-controller"
+    | "projection-controller"
+    | "security-controller"
+    | "resource-controller"
+    | "event-controller";
+}
+```
+
+Default ownership:
+
+```text
+ActivationCommitted      -> activation-controller
+ServingConverged         -> provider-observer
+MaterializationFailed    -> provider-observer
+RouteResolved            -> route-controller
+PublicationReady         -> publication-controller
+ProjectionReady          -> projection-controller
+ConsumerBindingsReady    -> publication-controller
+TrustRevoked             -> security-controller
+SecretRevoked            -> security-controller
+ResourceReady            -> resource-controller
+MigrationRunning         -> resource-controller
+EventSubscriptionReady   -> event-controller
+```
+
+## 3. RuntimeNetworkPolicy selector grammar
+
+RuntimeNetworkPolicy rules must be workload-scoped and assignment-aware. This prevents candidate releases from broadening egress or service permissions for primary releases during canary.
+
+```ts
+interface RuntimeSelector {
+  workload?: string;             // ObjectAddress, e.g. app.workload:api
+  workloadLabels?: Record<string, string>;
+  assignment?: "primary" | "candidate" | "all";
+}
+```
+
+Assignment is computed from ActivationRecord:
+
+```text
+primary:
+  appReleaseId == ActivationRecord.primaryAppReleaseId
+
+candidate:
+  appReleaseId is assigned in ActivationRecord but is not primaryAppReleaseId
+
+all:
+  both primary and candidate assignments
+```
+
+Example:
+
+```yaml
+egressRules:
+  - match:
+      workload: app.workload:api
+      assignment: primary
+    allow:
+      - scheme: https
+        host: api.stripe.com
+        ports: [443]
+
+  - match:
+      workload: app.workload:api
+      assignment: candidate
+    allow:
+      - scheme: https
+        host: sandbox.stripe.com
+        ports: [443]
+```
+
+Policy rule:
+
+```text
+A rule without match.assignment applies to all assignments only if PolicySpec allows broad egress rules.
+```
+
+## 4. Egress enforcement report
+
+Egress rules must report whether enforcement is real.
+
+```ts
+interface EgressPolicySatisfactionReport {
+  ruleId: string;
+  providerTarget: string;
+  enforcement: "enforced" | "advisory" | "unsupported";
+  limitations: string[];
+}
+```
+
+If PolicySpec requires enforced egress, advisory or unsupported rules must block the Plan.
+
+```text
+denyPrivateNetworks=true with unsupported enforcement -> Plan blocked
+external-api allowlist with advisory enforcement -> warning or block according to PolicySpec
+```
+
+## 5. Canary side-effect enforcement
+
+Canary checks are not just Plan assertions. Each side-effect class must declare its enforcement level.
+
+```ts
+interface CanarySideEffectEnforcement {
+  sideEffect:
+    | "queue:new-schema"
+    | "object-store:new-prefix"
+    | "publication:new-version"
+    | "external-api:new-destination"
+    | "internal-service:new-contract"
+    | "db:semantic-write-change";
+
+  enforcement: "enforced" | "advisory" | "plan-only" | "unsupported";
+
+  enforcementPoint:
+    | "binding-wrapper"
+    | "runtime-network-policy"
+    | "service-identity"
+    | "publication-resolver"
+    | "plan-validation"
+    | "unsupported";
+}
+```
+
+Default expectations:
+
+```text
+queue emit:
+  enforceable by queue binding wrapper when queue profile supports DataContract checks
+
+object-store write:
+  enforceable by object-store binding wrapper for prefix/key-family rules
+
+external API call:
+  enforceable by RuntimeNetworkPolicy when provider target supports enforced egress
+
+internal service call:
+  enforceable by WorkloadIdentity + ServiceGrant
+
+publication version change:
+  enforceable by PublicationResolver / PublicationBinding
+
+DB semantic write change:
+  plan-only by default; requires author assertion and optional test evidence
+```
+
+DB semantic side-effect compatibility is not fully inferable by Takos. Takos may validate migration compatibility and SQL access mode, but app-level write semantics require explicit assertion or configured tests.
+
+## 6. Shadow traffic vs live canary
+
+Live canary and shadow traffic are separate modes.
+
+```text
+live canary:
+  candidate release can serve user response and may produce allowed side effects.
+
+shadow traffic:
+  candidate release observes mirrored requests.
+  candidate response is discarded.
+  side effects are forbidden unless explicitly gated.
+```
+
+Shadow traffic must not be represented as an ActivationRecord assignment. It is represented as TrafficExperiment.
+
+```ts
+interface TrafficExperiment {
+  mode: "shadow" | "live-canary";
+  sourceAppReleaseId: string;
+  candidateAppReleaseId: string;
+  sampleRate: number;
+  sideEffects: "forbidden" | "allowed" | "gated";
+}
+```
+
+## 7. Publication rebind policy
+
+Publication changes must not silently mutate existing consumer BindingSetRevisions.
+
+Automatic rebind is allowed only by policy and still creates a new BindingSetRevision.
+
+```ts
+interface PublicationRebindPolicy {
+  default: "plan-required" | "automatic-if-safe";
+  allowAutomaticFor: Array<
+    | "non-secret-output-added"
+    | "route-url-change-same-contract"
+    | "backward-compatible-data-contract"
+  >;
+  requireApprovalFor: Array<
+    | "secret-output-added"
+    | "credential-output"
+    | "major-contract-change"
+    | "data-contract-breaking-change"
+  >;
+}
+```
+
+Rules:
+
+```text
+1. New publication outputs are never injected into existing consumer BindingSetRevisions.
+2. Automatic rebind may create a new BindingSetRevision only if policy allows it.
+3. Secret outputs always require explicit injection and approval unless PolicySpec explicitly says otherwise.
+4. Producer activation may be blocked by policy until required consumer rebind Plans are accepted.
+```
+
+## 8. Publication withdrawal
+
+Removing a PublicationDeclaration from the producer manifest withdraws the publication. It does not automatically rewrite consumer specs.
+
+```text
+Publication withdrawn:
+  new consumers cannot bind
+  existing consumer bindings become Stalled / PublicationWithdrawn
+  consumer must deploy, rebind, or remove the consume edge
+```
+
+Secret-bearing publication withdrawal must also evaluate credential lifecycle.
+
+```ts
+interface PublicationWithdrawalPolicy {
+  existingConsumers: "stall" | "auto-remove-if-policy-allows";
+  credentialOutputs: "revoke" | "retain-disabled" | "retain-until-consumer-unbind";
+}
+```
+
+Producer uninstall must withdraw all managed publications and create dependent consumer rebind/remove Plans when consumers exist.
+
+## 9. Built-in credential publication lifecycle
+
+Built-in publications such as `takos.api-key@v1` and `takos.oauth-client@v1` may create credentials or client registrations. They need lifecycle rules.
+
+```ts
+interface BuiltinCredentialPublicationLifecycle {
+  onConsumerUnbind: "revoke" | "disable" | "retain";
+  onConsumerUninstall: "revoke" | "disable" | "retain";
+  onRollback: "re-resolve" | "reuse-pinned-version";
+  rotation: "supported" | "unsupported";
+}
+```
+
+Default:
+
+```text
+onConsumerUnbind: revoke
+onConsumerUninstall: revoke
+onRollback: re-resolve
+rotation: supported when provider supports it
+```
+
+Generated credentials must be represented as secret-ref outputs by default.
+
+## 10. Secret publication output boundary
+
+Secret publication outputs are not plain strings by default.
+
+```text
+Preferred output value type:
+  secret-ref
+
+Exceptional output value type:
+  raw secret string, only if contract and policy allow credential:read
+```
+
+A consumer binding resolves a secret-ref through SecretBindingRef.
+
+```ts
+interface PublicationOutputInjection {
+  inject: {
+    env?: string;
+    binding?: string;
+    secretRef?: string;
+  };
+  valueType: "string" | "url" | "json" | "secret-ref" | "service";
+}
+```
+
+Raw secret-to-env injection requires:
+
+```text
+PublicationContract allows raw credential output
+PublicationConsumerGrant includes credential:read
+PolicySpec permits raw secret injection
+Plan approval is present
+```
+
+## 11. PublicationProjection
+
+Publication projection is distinct from ProviderMaterialization.
+
+```text
+ProviderMaterialization:
+  provider infrastructure object reference
+
+PublicationProjection:
+  internal registry/discovery projection derived from publication state
+```
+
+```ts
+interface PublicationProjection {
+  publicationAddress: string;
+  projectionKind:
+    | "mcp-registry"
+    | "file-handler-discovery"
+    | "ui-surface-registry"
+    | "webhook-catalog";
+  status: "ready" | "degraded" | "failed";
+  conditions: Condition[];
+}
+```
+
+Examples:
+
+```text
+MCP registry entry
+FileHandler discovery entry
+UI surface registry entry
+Webhook endpoint catalog entry
+```
+
+Projection health must account for route resolution, auth secret resolution, provider materialization, and publication binding readiness.
+
+## 12. PublicationContract portability impact
+
+Publication contracts may themselves be provider-native.
+
+```ts
+interface PublicationContractDescriptor {
+  ref: string;
+  portabilityImpact: "portable" | "provider-native-required";
+}
+```
+
+Rules:
+
+```text
+1. portable AppSpec may use only portable publication contracts.
+2. provider-native publication contracts require portability.mode = provider-native.
+3. Plan must show provider-native publication dependencies.
+```
+
+## 13. Contract revocation impact on publications and data contracts
+
+Trust revocation applies to PublicationContractPackage and DataContractPackage as well as ProviderPackage and ResourceContractPackage.
+
+```text
+PublicationContract revoked:
+  producer publication condition -> ContractRevoked
+  consumer binding condition -> ConsumesRevokedContract
+  new binding Plans -> blocked
+  repair Plan required
+
+DataContract revoked:
+  producer/consumer compatibility evidence invalidated
+  new canary Plans using the contract -> blocked
+  active groups -> Degraded / DataContractRevoked
+```
+
+Revocation must not mutate active ActivationRecord. It records conditions and blocks new unsafe Plans.
+
+## 14. DataContract required conditions
+
+DataContract is required when payload shape crosses a deployment or trust boundary.
+
+Required:
+
+```text
+cross-group publication
+queue/event consumed by another workload or group
+canary candidate may emit events or payloads
+internal service consumed across group boundary
+object-store payload consumed by another app or release
+webhook payload consumed by external systems
+```
+
+Optional:
+
+```text
+single workload internal implementation detail
+same-release private local payload
+non-shared debug output
+```
+
+When required DataContract is missing, Plan must block or require explicit policy override.
+
+## 15. ChangeSetPlan partial success
+
+ChangeSetPlan is orchestration, not a distributed transaction.
+
+```text
+ChangeSetPlan coordinates group-local Plans.
+Each group advances its own GroupActivationPointer.
+Global atomic activation is not guaranteed.
+```
+
+```ts
+interface ChangeSetPlanStatus {
+  status:
+    | "valid"
+    | "running"
+    | "partially-applied"
+    | "succeeded"
+    | "failed"
+    | "cancelled";
+  completedGroupPlans: string[];
+  failedGroupPlans: string[];
+}
+```
+
+Failure strategies:
+
+```text
+stop:
+  stop at first failed dependency barrier
+
+continue-independent:
+  continue group Plans that do not depend on the failed group
+
+compensating-plans-required:
+  stop and require explicit repair / rollback / rebind Plans
+```
+
+## 16. Emergency rollback during long Apply
+
+Long-running Apply operations must not prevent emergency rollback by default, but rollback is allowed only when safety checks pass.
+
+Emergency rollback can acquire ActivationLock if:
+
+```text
+1. target AppRelease is compatible with current ResourceInstance state.
+2. current ResourceMigrationLock is not in a non-resumable activation-blocking phase.
+3. current ApplyRun can be interrupted by policy.
+4. target ActivationRecord / NetworkConfig / RuntimeNetworkPolicy passes preview validation.
+```
+
+The interrupted ApplyRun must transition to one of:
+
+```text
+interrupted
+cancelled
+stalled
+failed
+```
+
+It must not continue to ActivationRecord creation after emergency rollback unless explicitly resumed and revalidated.
+
+## 17. Operation idempotency key derivation
+
+Each OperationSemantics must define idempotency key derivation.
+
+Default form:
+
+```text
+idempotencyKey = applyRunId + operationKind + objectAddress + desiredDigest
+```
+
+Special cases:
+
+```text
+migration operation:
+  resourceInstanceId + migrationId + checksum
+
+activation.create:
+  groupId + activationRecordDigest
+
+provider.materialize:
+  providerTarget + providerObjectKind + objectAddress + desiredDigest
+
+publication.rebind:
+  consumerGroupId + publicationAddress + bindingDigest
+
+resource.restore:
+  resourceInstanceId + restoreSourceDigest + targetMode
+```
+
+A retry must reuse the same idempotency key. Changing the desired digest creates a new operation.
+
+## 18. Provider operation failure reasons
+
+Provider operation failures must use stable reason codes.
+
+```text
+ProviderCredentialDenied
+ProviderRateLimited
+ProviderPartialSuccess
+ProviderObjectConflict
+ProviderPackageExecutionFailed
+ProviderPackageTrustRevokedDuringRun
+ProviderOperationTimedOut
+ProviderUnsupportedOperation
+ProviderObservedDrift
+```
+
+Every ProviderOperation failure must include:
+
+```text
+provider target
+provider package digest
+operation kind
+idempotency key
+retryability
+observed provider reference if known
+```
+
+## 19. Resource restore and rebind
+
+Restore is not rollback. Restore is a ResourceInstance operation.
+
+When restore creates a new instance and ResourceBinding changes, runtime bindings change too.
+
+```text
+Resource restore-to-new-instance
+  -> new ResourceInstance
+  -> ResourceBinding switch
+  -> new BindingSetRevision
+  -> usually new AppRelease
+  -> new ActivationRecord after compatibility checks
+```
+
+NetworkConfig may be reused if HTTP ingress does not change.
+
+Plan must show:
+
+```text
+ResourceBinding old instance -> restored instance
+BindingSetRevision changes
+AppRelease required or not
+rollback/restore limitations
+```
+
+## 20. Module conformance tiers
+
+Takos Deploy v2 implementations may claim module conformance.
+
+```text
+Core Conformant:
+  Plan / Apply / Activation / ResourceInstance / ProviderMaterialization basics
+
+Registry Conformant:
+  ProviderPackage / ResourceContractPackage / DataContractPackage / PublicationContractPackage / PackageResolution
+
+Publication Module Conformant:
+  PublicationBinding / PublicationConsumerBinding / PublicationProjection / grants / withdrawal
+
+Provider-Native Module Conformant:
+  providerNative config / NativeSchema / ProviderPackage execution / ProviderMaterialization
+
+Canary Module Conformant:
+  weighted HTTP ActivationRecord / RolloutRun / side-effect policy
+
+ChangeSet Module Conformant:
+  multi-group orchestration / DependencyGraph / partial success semantics
+
+Security Module Conformant:
+  Provider execution isolation / trust revocation / secret handling / audit / redaction
+```
+
+Implementations must advertise supported modules. Optional modules must not be silently assumed.
+
+## 21. Acceptance test severity
+
+Acceptance tests must be classified.
+
+```text
+MUST:
+  required for the claimed conformance tier
+
+SHOULD:
+  recommended; failure must be documented
+
+MAY:
+  optional extension behavior
+```
+
+Examples:
+
+```text
+MUST for Core:
+  Plan stale rejection
+  ActivationRecord immutability
+  provider state not canonical
+  rollback does not restore DB
+
+MUST for Publication Module:
+  no implicit publication injection
+  ambiguous short publication blocked
+  publication withdrawal stalls consumers
+
+MUST for Security Module:
+  build cannot read provider credential
+  provider package cannot read tenant secret
+  trust revoked package blocks new Plans
+
+SHOULD for Canary Module:
+  candidate DB semantic side-effect assertion checked
+  shadow traffic forbids side effects
+```
+
