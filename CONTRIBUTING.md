@@ -1,8 +1,8 @@
 # Contributing to Takos
 
 - Run Deno tasks from this repo root
-- Keep implementation ownership inside `takos/`; do not move product logic to
-  the ecosystem root
+- Keep Takos implementation ownership inside this repo; do not move product
+  logic to the ecosystem root
 - Keep `packages/*` as the source of truth and treat `apps/*` as thin
   composition only
 - Treat `docs/` as the source of truth for Takos docs

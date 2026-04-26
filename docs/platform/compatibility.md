@@ -15,7 +15,7 @@ configuration であり、deploy manifest には書きません。
 | -------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
 | Cloudflare Workers + container adapter | `stable`    | tracked Cloudflare templates                                                                           | current primary deploy surface                                                     |
 | Local Docker Compose                   | `stable`    | `.env.local.example`, `compose.local.yml`                                                              | local backend / 開発・smoke 用                                                     |
-| takos-private server stack             | `supported` | `takos-private/.env.server.example`, `takos-private/compose.server.yml`, `apps/rust-agent/Dockerfile`  | local backend の private composition                                               |
+| takos-private server stack             | `supported` | `takos-private/.env.server.example`, `takos-private/compose.server.yml`, `agent/Dockerfile`           | local backend の private composition                                               |
 | Local-platform manual process          | `supported` | `apps/control/.env.self-host.example` / `apps/control/.env.self-host` + `dev:local:*` scripts          | local backend の manual 起動                                                       |
 | Helm / Kubernetes self-host packaging  | `supported` | Helm chart                                                                                             | k8s backend packaging                                                              |
 | Generic OCI orchestrator               | `supported` | `OCI_ORCHESTRATOR_*`, `TAKOS_LOCAL_*`                                                                  | tenant image workload adapter integration                                          |
@@ -37,7 +37,7 @@ existence や behavior parity ではありません。詳細は
 | `apps/control/.env.self-host.example` | control local-platform manual process template |
 | `takos-private/.env.server.example`   | takos-private server stack template            |
 | `takos-private/compose.server.yml`    | takos-private server compose                   |
-| `apps/rust-agent/Dockerfile`          | Rust executor container                        |
+| `agent/Dockerfile`                   | Rust executor container                        |
 | `takos-private/apps/executor`         | legacy TypeScript executor fallback            |
 | `apps/control/SECRETS.md`             | Cloudflare / self-host secret inventory        |
 | `apps/control/wrangler*.toml`         | Cloudflare deploy template                     |

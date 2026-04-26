@@ -53,7 +53,7 @@ Cloudflare 依存のルーティングが紛れ込んでいないかを検証す
 | `runtime-host`     | `8789`            | runtime-service host / compatibility endpoint |
 | `runtime`          | `8081`            | `takos-runtime-service` container             |
 | `executor-host`    | `8790`            | エージェント executor の control-plane host   |
-| `rust-agent`       | `8082`            | エージェント executor container               |
+| `takos-agent`       | `8082`            | エージェント executor container               |
 | `oci-orchestrator` | `9002`            | コンテナライフサイクル管理                    |
 | `postgres`         | `15432`           | PostgreSQL（D1 互換）                         |
 | `redis`            | `16379`           | Redis（queue / durable runtime の backing）   |
@@ -78,7 +78,7 @@ app container ではない。image-backed Service / Attached Container は
 
 private server stack の基準は `takos-private/`
 で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、
-`apps/rust-agent/Dockerfile`
+`agent/Dockerfile`
 を使います。OSS local stack は `./.env.local.example` と `compose.local.yml`
 を使い、private 側は sibling checkout で別管理です。
 

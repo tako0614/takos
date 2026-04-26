@@ -1,0 +1,7 @@
+[submodule "agent"]
+	path = agent
+	url = https://github.com/tako0614/takos-agent.git
+
+[submodule "agent-engine"]
+	path = agent-engine
+	url = https://github.com/tako0614/takos-agent-engine.git
