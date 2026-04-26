@@ -1,18 +1,18 @@
 # Road to Takos 1.0
 
-この文書は Takos core の 1.0 OSS GA に向けた内部計画の正本です。1.0
-の対象は `takos/` と `takos-cli/` です。`takos/` 内の Rust agent runtime
-integration は core に含めます。default apps は検証 fixture / example
-として扱い、1.0 blocker にはしません。
+この文書は Takos core の 1.0 OSS GA に向けた内部計画の正本です。1.0 の対象は
+`takos/` と `takos-cli/` です。`agent/` agent service は core
+に含めます。default apps は検証 fixture / example として扱い、1.0 blocker
+にはしません。
 
 この roadmap は gate-driven です。固定公開日は置かず、各 milestone の exit
 criteria を満たした時点で次へ進みます。
 
 ## 1.0 Definition
 
-Takos 1.0 は、外部ユーザーが OSS checkout から single-node production
-self-host を立ち上げ、CLI で login / repo / deploy / rollback / uninstall
-を行い、Agent / Thread / Run を production feature として利用できる状態です。
+Takos 1.0 は、外部ユーザーが OSS checkout から single-node production self-host
+を立ち上げ、CLI で login / repo / deploy / rollback / uninstall を行い、Agent /
+Thread / Run を production feature として利用できる状態です。
 
 1.0 で互換性を約束する public surface:
 
@@ -55,14 +55,15 @@ Implementation:
 - CLI public help に出す command を auth / endpoint / deploy / install /
   rollback / uninstall / group / resource / thread / run に揃える。
 - REST API reference の public route と internal RPC route を明確に分離する。
-- `README.md`, `LICENSE`, `CLA.md`, package metadata の license 表記を
-  1.0 方針に合わせる。
+- `README.md`, `LICENSE`, `CLA.md`, package metadata の license 表記を 1.0
+  方針に合わせる。
 - `plan/docs-alignment/target-model.md` とこの文書の語彙を揃える。
 
 Exit criteria:
 
 - docs lint が public deploy terminology の drift を検出できる。
-- CLI help snapshot または equivalent test が public command surface を固定する。
+- CLI help snapshot または equivalent test が public command surface
+  を固定する。
 - manifest examples が parser / CLI / API contract test で検証される。
 - 1.0 compatibility statement の draft がある。
 
@@ -74,8 +75,8 @@ self-host を再現できるようにする。
 Implementation:
 
 - `takos/` に public single-node production guide を整備する。
-- secret generation command / procedure を docs に固定し、placeholder secret
-  を production unsafe として fail-fast または warning できるようにする。
+- secret generation command / procedure を docs に固定し、placeholder secret を
+  production unsafe として fail-fast または warning できるようにする。
 - PostgreSQL / Redis / S3-compatible storage の required config を整理する。
 - migrations from empty DB と previous schema の手順を固定する。
 - backup / restore / upgrade / rollback notes を self-host docs に追加する。
@@ -91,7 +92,8 @@ Exit criteria:
 
 ## M2: Deploy / Git / API GA
 
-Goal: deploy kernel と Git-native workflow を 1.0 public surface として安定化する。
+Goal: deploy kernel と Git-native workflow を 1.0 public surface
+として安定化する。
 
 Implementation:
 
@@ -99,8 +101,8 @@ Implementation:
   `takos uninstall` を canonical lifecycle として test する。
 - group deployment snapshot、inventory、rollback、uninstall の API / CLI
   behavior を docs と一致させる。
-- Git Smart HTTP clone / fetch / push と repository source deploy を smoke
-  test に含める。
+- Git Smart HTTP clone / fetch / push と repository source deploy を smoke test
+  に含める。
 - Store package install は release-backed deployable package の sugar として
   `takos deploy` pipeline に固定する。
 - resource CRUD / access grant / runtime binding の境界を reference docs と
@@ -110,8 +112,8 @@ Exit criteria:
 
 - local manifest deploy と repository URL deploy が同じ group snapshot lifecycle
   を通る。
-- non-mutating `--plan` が DB row / deployment artifact を作らないことを
-  test する。
+- non-mutating `--plan` が DB row / deployment artifact を作らないことを test
+  する。
 - docs の manifest examples が all-green。
 - public API examples が schema / error envelope と一致する。
 
@@ -123,15 +125,15 @@ Implementation:
 
 - Thread / Run state machine、SSE / WebSocket follow、cancel / retry / failure
   propagation を contract test する。
-- Rust agent wrapper の OpenAI-compatible configuration を整理する
-  (`model`, API key source, base URL, temperature, tool calling behavior)。
-- remote tool catalog / execution / cleanup と local skill / memory tool intercept
-  の precedence を docs と tests で固定する。
+- Rust agent wrapper の OpenAI-compatible configuration を整理する (`model`, API
+  key source, base URL, temperature, tool calling behavior)。
+- remote tool catalog / execution / cleanup と local skill / memory tool
+  intercept の precedence を docs と tests で固定する。
 - memory object store の restart continuity、checkpoint / resume、distillation
   lifecycle、overflow-aware retrieval を integration test する。
 - usage reporting と billing gate の agent path を verify する。
-- no-LLM smoke path は test/support mode として残し、production GA path と
-  docs 上で混同しないようにする。
+- no-LLM smoke path は test/support mode として残し、production GA path と docs
+  上で混同しないようにする。
 
 Exit criteria:
 
@@ -163,14 +165,14 @@ Exit criteria:
 
 ## Verification Matrix
 
-| Area | Required checks |
-| ---- | --------------- |
-| Deno core | `deno task test:all`, `deno lint`, `deno fmt --check`, `deno task docs:build` |
-| Rust agent | `cargo test` for `apps/rust-agent` and `packages/rust-agent-engine` |
-| CLI | `deno task check`, `deno task test`, `deno task compile`, `deno task lint`, `deno task fmt:check` |
-| Self-host | clean-machine single-node smoke |
-| Agent | OpenAI-compatible tool-calling smoke and restart/memory smoke |
-| Docs | docs lint, agent-doc lint, public link check where available |
+| Area       | Required checks                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| Deno core  | `deno task test:all`, `deno lint`, `deno fmt --check`, `deno task docs:build`                     |
+| Rust agent | `cargo test` for `agent` and `../takos-agent-engine`                                              |
+| CLI        | `deno task check`, `deno task test`, `deno task compile`, `deno task lint`, `deno task fmt:check` |
+| Self-host  | clean-machine single-node smoke                                                                   |
+| Agent      | OpenAI-compatible tool-calling smoke and restart/memory smoke                                     |
+| Docs       | docs lint, agent-doc lint, public link check where available                                      |
 
 ## Operating Rules
 

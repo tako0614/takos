@@ -268,8 +268,8 @@ services:
 
   takos-agent:
     build:
-      context: .
-      dockerfile: agent/Dockerfile
+      context: ..
+      dockerfile: takos/agent/Dockerfile
     depends_on:
       executor-host:
         condition: service_healthy
