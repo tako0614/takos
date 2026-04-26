@@ -17,6 +17,14 @@ takos/
 `takos-agent-engine` is a Rust library, not a Takos service. It remains an independent checkout at the ecosystem root
 and is not vendored into any service repo.
 
+## Boundary Names
+
+Use the split repository boundaries below when adding docs, scripts, imports, or local composition. Do not reintroduce
+pre-split path references such as `takos/apps` or `takos/packages`, path-level legacy references such as
+`takos/app/legacy` or `takos/runtime/legacy`, or stale service names such as `control-legacy`, `runtime-legacy`, or
+`takos-web`. Keep compatibility behavior and legacy data migrations documented where they are still part of the
+contract, but avoid using legacy names as current source paths or service identities.
+
 ## Responsibility Split
 
 - `app`: accounts, auth, profiles, billing, OAuth, user settings, user-facing management UI, public/browser/CLI API
