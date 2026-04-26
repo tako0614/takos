@@ -3,18 +3,32 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: takos
       POSTGRES_USER: takos
       POSTGRES_PASSWORD: takos
+      POSTGRES_DB: takos_web
     ports:
       - "${TAKOS_POSTGRES_PORT:-15432}:5432"
     volumes:
       - takos-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U takos -d takos"]
+      test: ["CMD-SHELL", "pg_isready -U takos -d takos_web"]
       interval: 10s
       timeout: 5s
       retries: 10
+
+  postgres-init:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      PGPASSWORD: takos
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        psql -h postgres -U takos -d takos_web -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_paas'" | grep -q 1 || psql -h postgres -U takos -d takos_web -c "CREATE DATABASE takos_paas"
 
   redis:
     image: redis:7-alpine
@@ -23,281 +37,62 @@ services:
       - "${TAKOS_REDIS_PORT:-16379}:6379"
     volumes:
       - takos-redis:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
 
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: server /data --console-address :9001
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    ports:
-      - "${TAKOS_MINIO_PORT:-19000}:9000"
-      - "${TAKOS_MINIO_CONSOLE_PORT:-19001}:9001"
-    volumes:
-      - takos-minio:/data
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /data/.minio.sys/format.json"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-
-  minio-init:
-    image: minio/mc:latest
+  takos-web:
+    image: denoland/deno:latest
     depends_on:
-      minio:
-        condition: service_healthy
-    restart: "no"
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-          until mc alias set takos http://minio:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"; do sleep 1; done
-          mc mb --ignore-existing takos/${S3_BUCKET}
-
-  oci-orchestrator:
-    build:
-      context: .
-      dockerfile: apps/control/Dockerfile.local
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      PORT: ${TAKOS_OCI_ORCHESTRATOR_PORT}
-      OCI_ORCHESTRATOR_DATA_DIR: ${OCI_ORCHESTRATOR_DATA_DIR:-/var/lib/takos/control/oci-orchestrator}
-      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
-      TAKOS_DOCKER_NETWORK: takos-containers
-    command: ["deno", "task", "dev:local:oci-orchestrator"]
-    ports:
-      - "${TAKOS_OCI_ORCHESTRATOR_PORT}:${TAKOS_OCI_ORCHESTRATOR_PORT}"
-    volumes:
-      - takos-control-data:/var/lib/takos/control
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - default
-      - takos-containers
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_OCI_ORCHESTRATOR_PORT}/health');Deno.exit(r.ok?0:1)\"",
-      ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  control-web:
-    build:
-      context: .
-      dockerfile: apps/control/Dockerfile.local
-    depends_on:
-      minio-init:
+      postgres-init:
         condition: service_completed_successfully
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    working_dir: /workspace
+    command: ["deno", "task", "dev:api"]
     environment:
-      PORT: ${TAKOS_CONTROL_WEB_PORT}
-      ADMIN_DOMAIN: ${TAKOS_ADMIN_DOMAIN}
-      TENANT_BASE_DOMAIN: ${TAKOS_TENANT_BASE_DOMAIN}
-      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
+      PORT: "${TAKOS_WEB_PORT:-8787}"
+      TAKOS_WEB_URL: "${TAKOS_WEB_URL:-http://localhost:8787}"
+      TAKOS_PAAS_INTERNAL_URL: "http://takos-paas:${TAKOS_PAAS_PORT:-8788}"
+      TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOS_WEB_DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_web"
+    ports:
+      - "${TAKOS_WEB_PORT:-8787}:${TAKOS_WEB_PORT:-8787}"
+    volumes:
+      - ./web:/workspace
+      - ./paas:/paas:ro
+
+  takos-paas:
+    build:
+      context: ./paas
+      dockerfile: apps/control/Dockerfile.local
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
     command: ["deno", "task", "dev:local:web"]
-    ports:
-      - "${TAKOS_CONTROL_WEB_PORT}:${TAKOS_CONTROL_WEB_PORT}"
-    volumes:
-      - takos-control-data:/var/lib/takos/control
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_WEB_PORT}/health');Deno.exit(r.ok?0:1)\"",
-      ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  control-dispatch:
-    build:
-      context: .
-      dockerfile: apps/control/Dockerfile.local
-    depends_on:
-      control-web:
-        condition: service_healthy
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+    working_dir: /workspace/apps/control
     environment:
-      PORT: ${TAKOS_CONTROL_DISPATCH_PORT}
-      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
-      TAKOS_LOCAL_WEB_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}/
-    command: ["deno", "task", "dev:local:dispatch"]
+      PORT: "${TAKOS_PAAS_PORT:-8788}"
+      TAKOS_WEB_URL: "${TAKOS_WEB_URL:-http://takos-web:8787}"
+      TAKOS_PAAS_INTERNAL_URL: "http://takos-paas:${TAKOS_PAAS_PORT:-8788}"
+      TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOS_PAAS_DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_paas"
+      DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_paas"
+      REDIS_URL: "redis://redis:6379"
     ports:
-      - "${TAKOS_CONTROL_DISPATCH_PORT}:${TAKOS_CONTROL_DISPATCH_PORT}"
-    volumes:
-      - takos-control-data:/var/lib/takos/control
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_DISPATCH_PORT}/health');Deno.exit(r.ok?0:1)\"",
-      ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  control-worker:
-    build:
-      context: .
-      dockerfile: apps/control/Dockerfile.local
-    depends_on:
-      control-web:
-        condition: service_healthy
-      runtime-host:
-        condition: service_started
-      executor-host:
-        condition: service_started
-      oci-orchestrator:
-        condition: service_healthy
-    restart: unless-stopped
-    user: "0:0"
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
-      TAKOS_LOCAL_RUNTIME_HOST_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}/
-      TAKOS_LOCAL_EXECUTOR_HOST_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}/
-      TAKOS_LOCAL_WORKER_POLL_INTERVAL_MS: ${TAKOS_CONTROL_WORKER_POLL_INTERVAL_MS:-250}
-      TAKOS_LOCAL_WORKER_SCHEDULED_INTERVAL_MS: ${TAKOS_CONTROL_WORKER_SCHEDULED_INTERVAL_MS:-60000}
-      TAKOS_LOCAL_WORKER_HEARTBEAT_FILE: ${TAKOS_CONTROL_WORKER_HEARTBEAT_FILE:-/var/lib/takos/control/worker-heartbeat.json}
-      TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS: ${TAKOS_CONTROL_WORKER_HEARTBEAT_TTL_MS:-120000}
-    command: ["deno", "task", "dev:local:worker"]
-    volumes:
-      - takos-control-data:/var/lib/takos/control
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "deno eval \"const path=Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_FILE')||'/var/lib/takos/control/worker-heartbeat.json';const ttl=Number(Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS')||'120000');try{const s=Deno.statSync(path);const age=Date.now()-(s.mtime?.getTime()??0);Deno.exit(age<=ttl?0:1)}catch{Deno.exit(1)}\"",
-      ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  runtime-host:
-    build:
-      context: .
-      dockerfile: apps/control/Dockerfile.local
-    depends_on:
-      control-web:
-        condition: service_healthy
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      PORT: ${TAKOS_RUNTIME_HOST_PORT}
-      ADMIN_DOMAIN: ${TAKOS_ADMIN_DOMAIN}
-      TAKOS_LOCAL_WEB_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}/
-      TAKOS_LOCAL_RUNTIME_URL: ${TAKOS_LOCAL_RUNTIME_URL}
-      PROXY_BASE_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}
-    command: ["deno", "task", "dev:local:runtime-host"]
-    ports:
-      - "${TAKOS_RUNTIME_HOST_PORT}:${TAKOS_RUNTIME_HOST_PORT}"
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_RUNTIME_HOST_PORT}/health');Deno.exit(r.ok?0:1)\"",
-      ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  executor-host:
-    build:
-      context: .
-      dockerfile: apps/control/Dockerfile.local
-    depends_on:
-      runtime-host:
-        condition: service_healthy
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      PORT: ${TAKOS_EXECUTOR_HOST_PORT}
-      TAKOS_LOCAL_RUNTIME_HOST_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}/
-      TAKOS_LOCAL_EXECUTOR_URL: ${TAKOS_LOCAL_EXECUTOR_URL}
-      PROXY_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
-      CONTROL_RPC_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
-    command: ["deno", "task", "dev:local:executor-host"]
-    ports:
-      - "${TAKOS_EXECUTOR_HOST_PORT}:${TAKOS_EXECUTOR_HOST_PORT}"
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_EXECUTOR_HOST_PORT}/health');Deno.exit(r.ok?0:1)\"",
-      ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  runtime:
-    build:
-      context: .
-      dockerfile: apps/runtime/Dockerfile
-    depends_on:
-      minio-init:
-        condition: service_completed_successfully
-      control-web:
-        condition: service_healthy
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      PORT: 8080
-      TAKOS_API_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}
-    ports:
-      - "${TAKOS_RUNTIME_PORT}:8080"
-    healthcheck:
-      test: [
-        "CMD-SHELL",
-        "deno eval \"const r=await fetch('http://127.0.0.1:8080/health');Deno.exit(r.ok?0:1)\"",
-      ]
-      interval: 15s
-      timeout: 5s
-      retries: 10
+      - "${TAKOS_PAAS_PORT:-8788}:${TAKOS_PAAS_PORT:-8788}"
 
   takos-agent:
     build:
       context: ..
       dockerfile: takos/agent/Dockerfile
     depends_on:
-      executor-host:
-        condition: service_healthy
-    restart: unless-stopped
-    user: "0:0"
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
+      takos-paas:
+        condition: service_started
     environment:
-      PORT: 8080
-      TAKOS_AGENT_DATA_DIR: /var/lib/takos/agent
+      PORT: "${TAKOS_AGENT_PORT:-8789}"
+      TAKOS_PAAS_INTERNAL_URL: "http://takos-paas:${TAKOS_PAAS_PORT:-8788}"
+      TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
     ports:
-      - "${TAKOS_EXECUTOR_PORT}:8080"
-    volumes:
-      - takos-agent-data:/var/lib/takos/agent
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-networks:
-  default:
-  takos-containers:
-    name: takos-containers
+      - "${TAKOS_AGENT_PORT:-8789}:${TAKOS_AGENT_PORT:-8789}"
 
 volumes:
   takos-postgres:
   takos-redis:
-  takos-minio:
-  takos-control-data:
-  takos-agent-data:
