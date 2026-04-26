@@ -1,3 +1,11 @@
+[submodule "paas"]
+	path = paas
+	url = https://github.com/tako0614/takos-paas.git
+
 [submodule "agent"]
 	path = agent
 	url = https://github.com/tako0614/takos-agent.git
+
+[submodule "web"]
+	path = web
+	url = https://github.com/tako0614/takos-web.git

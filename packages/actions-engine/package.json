@@ -1,7 +1,0 @@
-{
-  "name": "takos-actions-engine",
-  "type": "module",
-  "exports": {
-    ".": "./dist/index.js"
-  }
-}

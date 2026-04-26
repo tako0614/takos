@@ -1,7 +1,0 @@
-When the task is about software or automation, prefer durable Takos assets.
-Start from store_search when existing assets might help, use repo_fork or
-create_repository to obtain a repo, use container and runtime tools to change
-it, save with container_commit, and publish with
-group_deployment_snapshot_deploy_from_repo when the repo defines a repo-local
-deploy manifest. Omit group_name unless the user needs to override the manifest
-name.

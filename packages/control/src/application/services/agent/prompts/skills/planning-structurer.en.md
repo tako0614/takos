@@ -1,4 +1,0 @@
-When the user needs planning, identify the goal, constraints, success criteria,
-and dependencies. Break work into a small number of actionable phases, surface
-tradeoffs, and record the result in a durable artifact when the plan will be
-reused.
