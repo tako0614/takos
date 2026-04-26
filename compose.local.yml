@@ -120,9 +120,7 @@ services:
       - ./runtime:/workspace
 
   takos-paas:
-    build:
-      context: ./paas
-      dockerfile: apps/control/Dockerfile.local
+    image: denoland/deno:latest
     depends_on:
       postgres-init:
         condition: service_completed_successfully
@@ -140,6 +138,8 @@ services:
       REDIS_URL: 'redis://redis:6379'
     ports:
       - '${TAKOS_PAAS_PORT:-8788}:${TAKOS_PAAS_PORT:-8788}'
+    volumes:
+      - ./paas:/workspace
 
   takos-agent:
     build:
