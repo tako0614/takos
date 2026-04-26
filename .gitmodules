@@ -6,6 +6,10 @@
 	path = agent
 	url = https://github.com/tako0614/takos-agent.git
 
+[submodule "git"]
+	path = git
+	url = https://github.com/tako0614/takos-git.git
+
 [submodule "web"]
 	path = web
 	url = https://github.com/tako0614/takos-web.git

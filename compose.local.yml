@@ -29,6 +29,7 @@ services:
       - -c
       - |
         psql -h postgres -U takos -d takos_web -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_paas'" | grep -q 1 || psql -h postgres -U takos -d takos_web -c "CREATE DATABASE takos_paas"
+        psql -h postgres -U takos -d takos_web -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_git'" | grep -q 1 || psql -h postgres -U takos -d takos_web -c "CREATE DATABASE takos_git"
 
   redis:
     image: redis:7-alpine
@@ -48,6 +49,7 @@ services:
     environment:
       PORT: "${TAKOS_WEB_PORT:-8787}"
       TAKOS_WEB_URL: "${TAKOS_WEB_URL:-http://localhost:8787}"
+      TAKOS_GIT_INTERNAL_URL: "http://takos-git:${TAKOS_GIT_PORT:-8790}"
       TAKOS_PAAS_INTERNAL_URL: "http://takos-paas:${TAKOS_PAAS_PORT:-8788}"
       TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
       TAKOS_WEB_DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_web"
@@ -56,6 +58,24 @@ services:
     volumes:
       - ./web:/workspace
       - ./paas:/paas:ro
+      - ./git:/git:ro
+
+  takos-git:
+    image: denoland/deno:latest
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+    working_dir: /workspace
+    command: ["deno", "task", "dev"]
+    environment:
+      PORT: "${TAKOS_GIT_PORT:-8790}"
+      TAKOS_GIT_INTERNAL_URL: "http://takos-git:${TAKOS_GIT_PORT:-8790}"
+      TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
+      TAKOS_GIT_DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_git"
+    ports:
+      - "${TAKOS_GIT_PORT:-8790}:${TAKOS_GIT_PORT:-8790}"
+    volumes:
+      - ./git:/workspace
 
   takos-paas:
     build:
@@ -71,6 +91,7 @@ services:
     environment:
       PORT: "${TAKOS_PAAS_PORT:-8788}"
       TAKOS_WEB_URL: "${TAKOS_WEB_URL:-http://takos-web:8787}"
+      TAKOS_GIT_INTERNAL_URL: "http://takos-git:${TAKOS_GIT_PORT:-8790}"
       TAKOS_PAAS_INTERNAL_URL: "http://takos-paas:${TAKOS_PAAS_PORT:-8788}"
       TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
       TAKOS_PAAS_DATABASE_URL: "postgres://takos:takos@postgres:5432/takos_paas"
@@ -89,6 +110,7 @@ services:
     environment:
       PORT: "${TAKOS_AGENT_PORT:-8789}"
       TAKOS_PAAS_INTERNAL_URL: "http://takos-paas:${TAKOS_PAAS_PORT:-8788}"
+      TAKOS_GIT_INTERNAL_URL: "http://takos-git:${TAKOS_GIT_PORT:-8790}"
       TAKOS_INTERNAL_SERVICE_SECRET: "${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}"
     ports:
       - "${TAKOS_AGENT_PORT:-8789}:${TAKOS_AGENT_PORT:-8789}"
