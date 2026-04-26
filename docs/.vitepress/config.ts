@@ -92,6 +92,10 @@ export default defineConfig({
         text: "アーキテクチャ",
         items: [
           { text: "概要", link: "/architecture/" },
+          {
+            text: "System Architecture",
+            link: "/architecture/system-architecture",
+          },
           { text: "Kernel", link: "/architecture/kernel" },
           { text: "Deploy System", link: "/architecture/deploy-system" },
           { text: "App Publications", link: "/architecture/app-publications" },

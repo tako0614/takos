@@ -1,5 +1,6 @@
 {
   "version": "1.0.0",
+  "lock": false,
   "imports": {
     "vitepress": "npm:vitepress@^1.0.0",
     "@vueuse/core": "npm:@vueuse/core@^12.4.0",
@@ -7,9 +8,9 @@
     "vue/server-renderer": "npm:vue@^3.5.0/server-renderer"
   },
   "tasks": {
-    "dev": "deno run -A npm:vitepress dev",
-    "build": "deno run -A npm:vitepress build",
-    "preview": "deno run -A npm:vitepress preview",
-    "deploy": "deno run -A npm:wrangler pages deploy .vitepress/dist --project-name takos-docs"
+    "dev": "deno run -A --node-modules-dir=auto npm:vitepress dev",
+    "build": "deno run -A --node-modules-dir=auto npm:vitepress build",
+    "preview": "deno run -A --node-modules-dir=auto npm:vitepress preview",
+    "deploy": "deno run -A --node-modules-dir=auto npm:wrangler pages deploy .vitepress/dist --project-name takos-docs"
   }
 }

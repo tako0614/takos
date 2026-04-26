@@ -81,6 +81,11 @@ In-flight message behavior follows queue profile.
 ```text
 Producer breaking publication change creates dependent consumer Plan.
 Consumer binding does not silently update without Plan unless policy allows automatic rebind.
+New publication output is not injected into consumer unless explicitly selected.
+Secret publication output requires explicit injection and approval.
+Ambiguous short publication name is blocked.
+Managed MCP/FileHandler/UI projection is unhealthy when route/auth/provider materialization is unresolved.
+PublicationConsumerGrant is required for cross-group consume.
 Deployment-time publication binding cycle is blocked.
 ChangeSetPlan is orchestration, not distributed transaction.
 ```

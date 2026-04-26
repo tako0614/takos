@@ -38,6 +38,8 @@ kernel が提供するもの:
 
 ## 詳細ページ
 
+- [Takos System Architecture](./system-architecture.md) — Takos 全体の service /
+  repository boundary と相互関係
 - [Kernel](./kernel.md) — Takos の定義、routing、publication
 - [Deploy System](./deploy-system.md) — primitive と group 機能の deploy
   pipeline

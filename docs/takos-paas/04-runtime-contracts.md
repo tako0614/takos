@@ -160,6 +160,27 @@ rollbackPolicy: re-resolve
 
 Rollback does not restore old secret values by default.
 
+PublicationConsumerBinding is also part of BindingSetRevision.
+
+```ts
+interface PublicationConsumerBinding {
+  publicationAddress: string;
+  contract: string;
+  outputs: Record<string, PublicationOutputInjection>;
+  grantRef: string;
+  resolution: "latest-at-activation" | "pinned-version";
+}
+
+interface PublicationOutputInjection {
+  env?: string;
+  binding?: string;
+  valueType: "string" | "url" | "json" | "secret-ref" | "service";
+  explicit: true;
+}
+```
+
+New publication outputs are not injected into existing BindingSetRevisions. Rebinding requires a Plan unless policy explicitly allows automatic rebind.
+
 ## 8. Resource access
 
 Resource access is declared by consume edges and migrations.
@@ -289,3 +310,6 @@ resource ready:
   migration ledger readable
   required grants/bindings available
 ```
+
+
+---

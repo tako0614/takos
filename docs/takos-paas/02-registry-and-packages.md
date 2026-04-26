@@ -228,7 +228,64 @@ interface DataContractDescriptor {
 
 DataContracts make cross-release compatibility testable.
 
-## 6. ProviderPackage
+## 6. PublicationContractPackage
+
+PublicationContractPackage defines typed outputs that apps may publish and other apps may consume.
+
+Publication contracts are distinct from ResourceContracts:
+
+```text
+ResourceContract:
+  durable resource capability, such as sql.postgres@v1 or object-store.s3@v1
+
+PublicationContract:
+  typed output/interface, such as publication.mcp-server@v1, publication.file-handler@v1, publication.http-endpoint@v1, or takos.oauth-client@v1
+```
+
+ProviderPackages and app manifests may materialize publications, but they must not redefine publication contract semantics.
+
+```ts
+interface PublicationContractPackage {
+  ref: string;
+  digest: string;
+  publisher: string;
+  descriptors: PublicationContractDescriptor[];
+}
+
+interface PublicationContractDescriptor {
+  ref: string;
+  outputDescriptors: PublicationOutputDescriptor[];
+  specSchemaRef?: string;
+  dataContractRefs?: string[];
+  secretOutputs?: string[];
+  compatibility: "backward-compatible" | "exact" | "custom";
+  breakingChangePolicy: "new-major-version" | "plan-required";
+}
+
+interface PublicationOutputDescriptor {
+  name: string;
+  valueType: "string" | "url" | "json" | "secret-ref" | "service";
+  required: boolean;
+  secret: boolean;
+}
+```
+
+Examples:
+
+```text
+publication.mcp-server@v1
+publication.file-handler@v1
+publication.http-endpoint@v1
+publication.ui-surface@v1
+takos.api-key@v1
+takos.oauth-client@v1
+```
+
+Built-in Takos provider publications use the same contract model. They may create credentials or client registrations, but they must be represented as publication bindings and grants rather than implicit environment injection.
+
+PublicationContractPackage resolution follows the same PackageResolution and trust rules as ResourceContractPackage.
+
+## 7. ProviderPackage
 
 ProviderPackage materializes Takos meaning into real infrastructure.
 
@@ -259,7 +316,7 @@ interface ProviderPackageTrustRecord {
 }
 ```
 
-## 7. Capability and resource support
+## 8. Capability and resource support
 
 Capability support is descriptor-based, not a string list.
 
@@ -293,7 +350,7 @@ interface ResourceContractSupport {
 }
 ```
 
-## 8. NativeSchema
+## 9. NativeSchema
 
 Native config is typed, versioned, policy-governed, and Plan-visible.
 
@@ -333,7 +390,7 @@ interface NativeSchemaFieldDescriptor {
 
 Schema-level lifecycle rules may override or combine field effects when field combinations matter.
 
-## 9. ProviderTarget
+## 10. ProviderTarget
 
 ProviderTarget selects a provider package family and environment location.
 
@@ -349,7 +406,7 @@ providerTargets:
 
 ProviderTarget does not pin package digest. ResolvedGraph and ProviderMaterialization pin digests through PackageResolution.
 
-## 10. ProviderMapping
+## 11. ProviderMapping
 
 Mappings use refs, not ad-hoc keys.
 
@@ -384,7 +441,7 @@ claim-level mapping
 -> unresolved means Plan blocked
 ```
 
-## 11. Satisfaction reports
+## 12. Satisfaction reports
 
 Resource satisfaction is reported explicitly.
 
@@ -413,7 +470,7 @@ interface ResourceFeatureRealization {
 }
 ```
 
-## 12. Trust revocation
+## 13. Trust revocation
 
 Trust revocation does not mutate active state automatically.
 
@@ -431,3 +488,6 @@ interface TrustRevocationImpact {
   >;
 }
 ```
+
+
+---

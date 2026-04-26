@@ -27,11 +27,13 @@ Provider state is observed. It is never canonical.
 5. GroupActivationPointer selects the current ActivationRecord.
 6. ActivationRecord records desired HTTP serving assignment, not proof of provider convergence.
 7. Weighted ActivationRecord assignments apply to HTTP ingress only.
-8. Queue, schedule, internal events, and publications resolve through primaryAppReleaseId unless an explicit extension says otherwise.
-9. ResourceInstance carries durable state outside AppRelease rollback.
-10. Rollback reactivates a compatible prior assignment. It does not reverse migrations, restore DB data, restore object contents, restore queue contents, or restore secret values.
-11. AppSpec in portable mode must not contain providerNative blocks.
-12. Runtime egress and service identity are RuntimeNetworkPolicy concerns, not HTTP ingress route concerns.
+8. Queue, schedule, and internal events resolve through primaryAppReleaseId unless an explicit extension says otherwise.
+9. Publications are declared outputs. They are never injected automatically; consumers must bind them explicitly.
+10. Publication consumption must be represented by PublicationConsumerBinding and included in BindingSetRevision.
+11. ResourceInstance carries durable state outside AppRelease rollback.
+12. Rollback reactivates a compatible prior assignment. It does not reverse migrations, restore DB data, restore object contents, restore queue contents, or restore secret values.
+13. AppSpec in portable mode must not contain providerNative blocks.
+14. Runtime egress and service identity are RuntimeNetworkPolicy concerns, not HTTP ingress route concerns.
 ```
 
 ## 3. Input specifications
@@ -113,6 +115,23 @@ exposures:
   web:
     endpoint: api.http
     visibility: public
+
+publications:
+  apiUrl:
+    contract: publication.http-endpoint@v1
+    from: exposure:web
+    outputs:
+      url:
+        route: primary
+
+  mcp:
+    contract: publication.mcp-server@v1
+    from: exposure:web
+    outputs:
+      url:
+        path: /mcp
+    spec:
+      transport: streamable-http
 ```
 
 ### 3.2 EnvSpec
@@ -604,3 +623,6 @@ Plan.intent:
 ```
 
 Repair handles drift, trust revocation, materialization failure, provider package upgrade, and resource rebind.
+
+
+---
