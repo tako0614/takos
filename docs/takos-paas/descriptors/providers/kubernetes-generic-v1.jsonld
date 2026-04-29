@@ -1,0 +1,35 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/providers/kubernetes/generic/v1",
+  "@type": "ProviderCapabilityDescriptor",
+  "shortRef": "provider.kubernetes.generic@v1",
+  "materializationProfiles": [
+    {
+      "ref": "materialize.k8s-deployment-service-http@v1",
+      "contracts": {
+        "runtime": "runtime.oci-container@v1",
+        "artifact": "artifact.oci-image@v1",
+        "interfaces": [
+          "interface.http@v1"
+        ]
+      },
+      "roles": [
+        "runtime",
+        "router"
+      ],
+      "limitations": [
+        "requires-cluster-controller",
+        "ingress-http-focused-unless-gateway-descriptor-provided"
+      ]
+    }
+  ],
+  "providerNativeSchemas": [
+    "kubernetes.deployment@v1",
+    "kubernetes.service@v1",
+    "kubernetes.ingress@v1"
+  ],
+  "sourceDocs": [
+    "https://kubernetes.io/docs/concepts/services-networking/service/",
+    "https://kubernetes.io/docs/concepts/services-networking/ingress/"
+  ]
+}

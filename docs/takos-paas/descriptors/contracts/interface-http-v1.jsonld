@@ -1,0 +1,27 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/interface/http/v1",
+  "@type": "InterfaceContractDescriptor",
+  "shortRef": "interface.http@v1",
+  "domain": "interface",
+  "lifecycleDomain": "revisioned-runtime",
+  "changeEffect": "network-config",
+  "exposureEligible": true,
+  "assignmentGranularity": [
+    "request"
+  ],
+  "weightedAssignment": true,
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "port": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 65535
+      },
+      "readinessPath": {
+        "type": "string"
+      }
+    }
+  }
+}

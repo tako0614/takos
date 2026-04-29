@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://takos.dev/schemas/deploy-v2/core-v1.0.json",
+  "title": "Takos Deploy v2 Core v1.0 schema",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/AppSpec"
+    },
+    {
+      "$ref": "#/$defs/EnvSpec"
+    },
+    {
+      "$ref": "#/$defs/PolicySpec"
+    },
+    {
+      "$ref": "#/$defs/Plan"
+    },
+    {
+      "$ref": "#/$defs/ActivationRecord"
+    }
+  ],
+  "$defs": {
+    "Digest": {
+      "type": "string",
+      "pattern": "^sha256:[A-Za-z0-9+/=._:-]+$"
+    },
+    "ObjectAddress": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*:[^/]+(/[a-z][a-z0-9.-]*:[^/]+)*$"
+    },
+    "AppSpec": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "components"
+      ],
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "App"
+        },
+        "name": {
+          "type": "string"
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ComponentSpec"
+          }
+        },
+        "exposures": {
+          "type": "object"
+        },
+        "consumes": {
+          "type": "object"
+        },
+        "publications": {
+          "type": "object"
+        },
+        "requirements": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ComponentSpec": {
+      "type": "object",
+      "required": [
+        "contracts"
+      ],
+      "properties": {
+        "contracts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ContractInstanceSpec"
+          }
+        },
+        "consumes": {
+          "type": "object"
+        },
+        "requirements": {
+          "type": "object"
+        },
+        "previousAddresses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ObjectAddress"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ContractInstanceSpec": {
+      "type": "object",
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "config": {}
+      },
+      "additionalProperties": false
+    },
+    "EnvSpec": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind"
+      ],
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "Environment"
+        },
+        "providerTargets": {
+          "type": "object"
+        },
+        "router": {
+          "type": "object"
+        },
+        "runtimeNetworkPolicy": {
+          "type": "object"
+        },
+        "accessPathPreferences": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "PolicySpec": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind"
+      ],
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "Policy"
+        },
+        "descriptorPolicy": {
+          "type": "object"
+        },
+        "bindingPolicy": {
+          "type": "object"
+        },
+        "routerPolicy": {
+          "type": "object"
+        },
+        "resourcePolicy": {
+          "type": "object"
+        },
+        "approvals": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "DescriptorResolution": {
+      "type": "object",
+      "required": [
+        "id",
+        "mediaType",
+        "rawDigest",
+        "resolvedAt",
+        "policyDecisionId"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uri"
+        },
+        "alias": {
+          "type": "string"
+        },
+        "documentUrl": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "rawDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "expandedDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "contextDigests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Digest"
+          }
+        },
+        "policyDecisionId": {
+          "type": "string"
+        },
+        "resolvedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "Plan": {
+      "type": "object",
+      "required": [
+        "id",
+        "intent",
+        "groupId",
+        "descriptorClosureId",
+        "resolvedGraphDigest",
+        "status",
+        "approvalState",
+        "readSet",
+        "operations",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "intent": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "descriptorClosureId": {
+          "type": "string"
+        },
+        "resolvedGraphDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "status": {
+          "enum": [
+            "valid",
+            "invalid",
+            "stale",
+            "expired",
+            "superseded"
+          ]
+        },
+        "approvalState": {
+          "enum": [
+            "not_required",
+            "required",
+            "approved",
+            "rejected",
+            "expired"
+          ]
+        },
+        "readSet": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ActivationRecord": {
+      "type": "object",
+      "required": [
+        "id",
+        "groupId",
+        "routerConfigId",
+        "runtimeNetworkPolicyId",
+        "primaryAppReleaseId",
+        "assignments",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "routerConfigId": {
+          "type": "string"
+        },
+        "runtimeNetworkPolicyId": {
+          "type": "string"
+        },
+        "primaryAppReleaseId": {
+          "type": "string"
+        },
+        "assignments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "appReleaseId",
+              "weight"
+            ],
+            "properties": {
+              "appReleaseId": {
+                "type": "string"
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "labels": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "takos-deploy-v2-v1.0-final-complete-kit",
+  "status": "v1.0-final",
+  "core": "core/01-core-contract-v1.0.md",
+  "cloudflareWorkersProvider": "descriptors/providers/cloudflare-workers-v1.jsonld",
+  "notes": "Core is kindless; provider descriptors are implementation seed descriptors; Workers for Platforms is a Cloudflare Workers topology, not a provider mode."
+}

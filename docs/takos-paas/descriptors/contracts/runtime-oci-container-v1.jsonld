@@ -1,0 +1,40 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/runtime/oci-container/v1",
+  "@type": "RuntimeContractDescriptor",
+  "shortRef": "runtime.oci-container@v1",
+  "domain": "runtime",
+  "lifecycleDomain": "revisioned-runtime",
+  "changeEffect": "app-release",
+  "injectionModes": [
+    "env",
+    "secret-ref",
+    "mount",
+    "internal-url"
+  ],
+  "requires": [
+    "process-model",
+    "readiness-observation",
+    "log-redaction-declaration"
+  ],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "command": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "args": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "readOnlyRootFilesystem": {
+        "type": "boolean"
+      }
+    }
+  }
+}

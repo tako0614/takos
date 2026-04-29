@@ -1,0 +1,25 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/artifact/js-module/v1",
+  "@type": "ArtifactContractDescriptor",
+  "shortRef": "artifact.js-module@v1",
+  "domain": "artifact",
+  "lifecycleDomain": "revisioned-runtime",
+  "changeEffect": "app-release",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "moduleFormat": {
+        "enum": [
+          "esm"
+        ]
+      },
+      "entrypoint": {
+        "type": "string"
+      },
+      "artifactDigest": {
+        "type": "string"
+      }
+    }
+  }
+}

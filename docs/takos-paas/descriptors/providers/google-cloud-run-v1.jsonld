@@ -1,0 +1,38 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/providers/google/cloud-run/v1",
+  "@type": "ProviderCapabilityDescriptor",
+  "shortRef": "provider.google.cloud-run@v1",
+  "materializationProfiles": [
+    {
+      "ref": "materialize.cloud-run-service-http@v1",
+      "contracts": {
+        "runtime": "runtime.oci-container@v1",
+        "artifact": "artifact.oci-image@v1",
+        "interfaces": [
+          "interface.http@v1"
+        ]
+      },
+      "roles": [
+        "runtime",
+        "router"
+      ],
+      "limitations": [
+        "http-oriented-service",
+        "provider-managed-revisions",
+        "provider-managed-scaling"
+      ]
+    }
+  ],
+  "providerNativeSchemas": [
+    "google.cloudrun.service@v1",
+    "google.cloudrun.traffic@v1",
+    "google.cloudrun.job@v1"
+  ],
+  "sourceDocs": [
+    "https://docs.cloud.google.com/run/docs",
+    "https://docs.cloud.google.com/run/docs/configuring/services/containers",
+    "https://docs.cloud.google.com/run/docs/rollouts-rollbacks-traffic-migration",
+    "https://docs.cloud.google.com/run/docs/create-jobs"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/resource/object-store/s3/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.object-store.s3@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-state",
+  "changeEffect": "resource-instance",
+  "accessModes": [
+    "s3-api",
+    "object-runtime-binding",
+    "object-api"
+  ],
+  "permissions": [
+    "object:get",
+    "object:put",
+    "object:delete",
+    "object:list"
+  ],
+  "schemaModel": "opaque"
+}

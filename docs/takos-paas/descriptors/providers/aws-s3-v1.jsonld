@@ -1,0 +1,21 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/providers/aws/s3/v1",
+  "@type": "ProviderCapabilityDescriptor",
+  "shortRef": "provider.aws.s3@v1",
+  "resourceContracts": [
+    {
+      "contract": "resource.object-store.s3@v1",
+      "accessModes": [
+        "s3-api"
+      ],
+      "limitations": [
+        "aws-iam-credential-boundary"
+      ]
+    }
+  ],
+  "sourceDocs": [
+    "https://docs.aws.amazon.com/AmazonS3/latest/API/Welcome.html",
+    "https://docs.aws.amazon.com/AmazonS3/latest/API/Type_API_Reference.html"
+  ]
+}

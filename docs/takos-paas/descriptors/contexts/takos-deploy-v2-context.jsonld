@@ -1,0 +1,27 @@
+{
+  "@context": {
+    "takos": "https://takos.dev/vocab/deploy-v2#",
+    "id": "@id",
+    "type": "@type",
+    "shortRef": "takos:shortRef",
+    "domain": "takos:domain",
+    "lifecycleDomain": "takos:lifecycleDomain",
+    "changeEffect": "takos:changeEffect",
+    "configSchema": "takos:configSchema",
+    "contracts": "takos:contracts",
+    "materializationProfiles": "takos:materializationProfiles",
+    "resourceAccessPaths": "takos:resourceAccessPaths",
+    "limitations": "takos:limitations",
+    "providerNativeSchemas": "takos:providerNativeSchemas",
+    "supports": "takos:supports",
+    "requires": "takos:requires",
+    "runtime": "takos:runtime",
+    "artifact": "takos:artifact",
+    "interfaces": "takos:interfaces",
+    "resources": "takos:resources",
+    "accessModes": "takos:accessModes",
+    "injectionModes": "takos:injectionModes",
+    "pathStages": "takos:pathStages",
+    "enforcement": "takos:enforcement"
+  }
+}
