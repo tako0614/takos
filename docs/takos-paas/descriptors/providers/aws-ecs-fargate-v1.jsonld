@@ -1,0 +1,36 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/providers/aws/ecs-fargate/v1",
+  "@type": "ProviderCapabilityDescriptor",
+  "shortRef": "provider.aws.ecs-fargate@v1",
+  "materializationProfiles": [
+    {
+      "ref": "materialize.ecs-fargate-container-service@v1",
+      "contracts": {
+        "runtime": "runtime.oci-container@v1",
+        "artifact": "artifact.oci-image@v1",
+        "interfaces": [
+          "interface.http@v1"
+        ]
+      },
+      "roles": [
+        "runtime",
+        "router"
+      ],
+      "limitations": [
+        "task-definition-backed",
+        "load-balancer-needed-for-public-routing",
+        "aws-iam-task-role-boundary"
+      ]
+    }
+  ],
+  "providerNativeSchemas": [
+    "aws.ecs.task-definition@v1",
+    "aws.ecs.service@v1",
+    "aws.elb.target-group@v1"
+  ],
+  "sourceDocs": [
+    "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html",
+    "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definitions.html"
+  ]
+}

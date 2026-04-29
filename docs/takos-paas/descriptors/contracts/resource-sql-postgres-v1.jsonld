@@ -1,0 +1,23 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/resource/sql/postgres/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.sql.postgres@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-state",
+  "changeEffect": "resource-instance",
+  "accessModes": [
+    "database-url",
+    "migration-admin",
+    "sql-query-api"
+  ],
+  "permissions": [
+    "sql:read",
+    "sql:write",
+    "sql:ddl"
+  ],
+  "schemaModel": "sql",
+  "migrationEngines": [
+    "postgres@16"
+  ]
+}

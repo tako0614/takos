@@ -1,0 +1,57 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/providers/cloudflare/workers/v1",
+  "@type": "ProviderCapabilityDescriptor",
+  "shortRef": "provider.cloudflare.workers@v1",
+  "materializationProfiles": [
+    {
+      "ref": "materialize.cloudflare-workers-dispatch-js-http@v1",
+      "contracts": {
+        "runtime": "runtime.js-worker@v1",
+        "artifact": "artifact.js-module@v1",
+        "interfaces": [
+          "interface.http@v1"
+        ]
+      },
+      "roles": [
+        "runtime",
+        "router"
+      ],
+      "limitations": [
+        "dispatch-namespace-backed",
+        "dynamic-dispatch-worker-required",
+        "user-worker-bindings-explicit-only",
+        "user-workers-untrusted-by-default"
+      ],
+      "implementationTopology": {
+        "name": "cloudflare-workers-for-platforms",
+        "description": "Dispatch namespace, dynamic dispatch Worker, user Workers, and optional outbound Worker. This topology is implementation detail, not a provider mode or Core semantic axis.",
+        "terms": [
+          "dispatch namespace",
+          "dynamic dispatch Worker",
+          "user Worker",
+          "outbound Worker optional"
+        ]
+      }
+    }
+  ],
+  "resourceAccessPaths": [
+    {
+      "resourceContract": "resource.sql.sqlite-serverless@v1",
+      "accessMode": "sql-runtime-binding",
+      "injectionMode": "runtime-binding",
+      "stages": [
+        "direct-runtime-binding"
+      ],
+      "enforcement": "enforced"
+    }
+  ],
+  "providerNativeSchemas": [
+    "cloudflare.workers.compatibility@v1",
+    "cloudflare.workers.dispatch-namespace@v1"
+  ],
+  "sourceDocs": [
+    "https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/how-workers-for-platforms-works/",
+    "https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/"
+  ]
+}

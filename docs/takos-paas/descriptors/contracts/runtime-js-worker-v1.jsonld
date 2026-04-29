@@ -1,0 +1,29 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/runtime/js-worker/v1",
+  "@type": "RuntimeContractDescriptor",
+  "shortRef": "runtime.js-worker@v1",
+  "domain": "runtime",
+  "lifecycleDomain": "revisioned-runtime",
+  "changeEffect": "app-release",
+  "injectionModes": [
+    "runtime-binding",
+    "secret-ref",
+    "service-binding",
+    "env"
+  ],
+  "requires": [
+    "descriptor.declarative-only"
+  ],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "features": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

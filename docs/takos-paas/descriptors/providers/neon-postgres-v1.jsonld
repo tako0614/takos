@@ -1,0 +1,31 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/providers/neon/postgres/v1",
+  "@type": "ProviderCapabilityDescriptor",
+  "shortRef": "provider.neon.postgres@v1",
+  "resourceContracts": [
+    {
+      "contract": "resource.sql.postgres@v1",
+      "accessModes": [
+        "database-url",
+        "migration-admin"
+      ],
+      "restoreModes": [
+        "backup-to-new-instance",
+        "pitr-to-new-instance"
+      ],
+      "limitations": [
+        "provider-managed-compute",
+        "branching-supported-by-provider"
+      ]
+    }
+  ],
+  "providerNativeSchemas": [
+    "neon.project@v1",
+    "neon.branch@v1"
+  ],
+  "sourceDocs": [
+    "https://neon.com/docs/introduction/serverless",
+    "https://neon.com/docs/introduction/autoscaling"
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/providers/cloudflare/containers/v1",
+  "@type": "ProviderCapabilityDescriptor",
+  "shortRef": "provider.cloudflare.containers@v1",
+  "materializationProfiles": [
+    {
+      "ref": "materialize.cf-container-http@v1",
+      "contracts": {
+        "runtime": "runtime.oci-container@v1",
+        "artifact": "artifact.oci-image@v1",
+        "interfaces": [
+          "interface.http@v1"
+        ]
+      },
+      "roles": [
+        "runtime",
+        "router",
+        "access"
+      ],
+      "limitations": [
+        "worker-fronted",
+        "durable-object-backed",
+        "http-ingress-only",
+        "no-direct-end-user-tcp-udp",
+        "image-retention-required-for-rollback"
+      ]
+    }
+  ],
+  "resourceAccessPaths": [
+    {
+      "resourceContract": "resource.sql.sqlite-serverless@v1",
+      "accessMode": "sql-query-api",
+      "injectionMode": "internal-url",
+      "stages": [
+        "internal-endpoint",
+        "provider-mediator",
+        "direct-runtime-binding"
+      ],
+      "enforcement": "enforced",
+      "limitations": [
+        "mediated-by-worker-outbound-handler",
+        "not-raw-d1-binding"
+      ]
+    },
+    {
+      "resourceContract": "resource.object-store.s3@v1",
+      "accessMode": "object-api",
+      "injectionMode": "internal-url",
+      "stages": [
+        "internal-endpoint",
+        "provider-mediator",
+        "direct-runtime-binding"
+      ],
+      "enforcement": "enforced",
+      "limitations": [
+        "mediated-by-worker-outbound-handler"
+      ]
+    }
+  ],
+  "providerNativeSchemas": [
+    "cloudflare.containers.class@v1"
+  ],
+  "sourceDocs": [
+    "https://developers.cloudflare.com/containers/",
+    "https://developers.cloudflare.com/containers/container-class/",
+    "https://developers.cloudflare.com/containers/platform-details/architecture/",
+    "https://developers.cloudflare.com/containers/platform-details/workers-connections/"
+  ]
+}
