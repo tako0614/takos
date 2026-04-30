@@ -1,8 +1,8 @@
 # File Handlers
 
 特定の MIME type や拡張子のファイルを handler UI で開けるようにするには
-`publish` で `type: takos.file-handler.v1` を宣言する。FileHandler catalog は deploy
-manifest の `publish` entry で管理します。
+`publish` で `type: takos.file-handler.v1` を宣言する。`takos.file-handler.v1`
+catalog は deploy manifest の `publish` entry で管理します。
 
 ## 基本
 
@@ -28,7 +28,7 @@ publish:
 
 ユーザーがファイルを開くと `outputs.url.routeRef` が参照する route にリダイレクトされる。`:id` が URL encode
 されたファイル ID に置換される。`:id` は path segment として必須で、`:id`
-を含まない `FileHandler` は storage の handler catalog には出ない。current
+を含まない `takos.file-handler.v1` publication は storage の handler catalog には出ない。current
 storage UI は起動時に `space_id` query parameter も付ける。file ID を `file_id`
 query parameter で渡す fallback はありません。
 
@@ -68,17 +68,17 @@ publish:
       extensions: [.png, .jpg, .jpeg, .gif]
 ```
 
-`publish` に複数の `FileHandler` を並べればよい。同一 manifest 内で publication
-名は一意である必要があります。
+`publish` に複数の `takos.file-handler.v1` entry を並べればよい。同一 manifest
+内で publication 名は一意である必要があります。
 
 ## フィールド
 
-route publication は core では generic object です。`FileHandler` を解釈する
-platform / app は `spec` 内で以下の field を使います。
+route publication は core では generic object です。`takos.file-handler.v1`
+を解釈する platform / app は `spec` 内で以下の field を使います。
 
 | field             | required    | 説明                                                                               |
 | ----------------- | ----------- | ---------------------------------------------------------------------------------- |
-| `type`            | yes         | standard type 名 (`takos.file-handler.v1`)。`FileHandler` は legacy alias          |
+| `type`            | yes         | standard type 名 (`takos.file-handler.v1`)。canonical / legacy alias は [Publication types](/reference/glossary#publication-types) 参照 |
 | `routeRef`        | yes         | 対応する `routes[].id`                                                             |
 | `outputs`         | yes         | ファイルを開く route output (`:id` path segment が必須。ファイル ID に置換)        |
 | `name`            | yes         | publication 名。storage UI の handler 表示名にも使われる                           |
@@ -88,7 +88,7 @@ platform / app は `spec` 内で以下の field を使います。
 
 `outputs.*.routeRef` は `routes[].id` を参照します。route publication の output `url`
 は group の auto hostname とこの route から生成され、`:id` などの template segment は
-template URL のまま consumer に渡ります。storage の FileHandler discovery は
+template URL のまま consumer に渡ります。storage の file handler discovery は
 `:id` path segment を含む handler だけを返します。current storage UI はこの
 template URL の `:id` を file ID に置換し、`space_id` query parameter を追加して
 開きます。handler 側は path segment の file ID を primary contract として扱い、
@@ -97,16 +97,17 @@ template URL の `:id` を file ID に置換し、`space_id` query parameter を
 ## Publication の仕組み
 
 kernel は多くの `type` の意味を解釈しない。`takos.file-handler.v1` は platform /
-app が解釈する standard route publication type です。`FileHandler` を理解するのは
-利用する側（agent runtime や storage UI 等）の役割。`publish` は generic plugin
-resolver ではなく、manifest で宣言した route metadata の catalog です。
+app が解釈する standard route publication type です。`takos.file-handler.v1`
+を理解するのは利用する側（agent runtime や storage UI 等）の役割。`publish` は
+generic plugin resolver ではなく、manifest で宣言した route metadata の catalog
+です。
 
-他の primitive が FileHandler を使うには、その publication を `consume` するか、
+他の primitive が file handler を使うには、その publication を `consume` するか、
 既存の storage endpoint (`GET /api/spaces/:spaceId/storage/file-handlers`)
 から参照します。この endpoint は manifest publication catalog を参照して handler
 を選択します。kernel は未参照の publication を自動で space 全体へ inject
-しません。control plane API で FileHandler route publication を直接作る運用は
-推奨しません。
+しません。control plane API で `takos.file-handler.v1` route publication を直接
+作る運用は推奨しません。
 
 ## Discovery API selection ranking
 

@@ -14,10 +14,10 @@ kernel が提供するもの:
 - **Store**（配布 / カタログ）
 - **Auth / Deploy / Routing / Resources / Billing**
 
-外部ワークロードは **primitive-first deploy model**:
+外部ワークロードは authoring/API surface では **primitive-first deploy model**:
 
 - **primitive**: service / deployment / route / publication / resource / consume
-  edge などの個別 record
+  edge などの authoring/API projection
 - **group**: primitive を任意に束ねる state scope。所属 primitive は inventory、
   snapshot、rollback、uninstall などの group 機能を使える
 - **manifest**: primitive desired declaration の入力。group 専用形式ではない
@@ -31,10 +31,20 @@ kernel が提供するもの:
 
 ## Backend
 
-- Cloudflare: 主要 production backend
+- Cloudflare: tracked reference Workers backend (固有用語の対応は
+  [Glossary - Workers backend implementation note](/reference/glossary#workers-backend-implementation-note)
+  を参照)
 - local: 検証用 backend
 - backend / adapter で backend 差分を閉じ込める。backend 名は operator-only
   configuration で、public deploy manifest には書かない
+
+## SoT 参照
+
+- service set / repository boundary: [System Architecture](./system-architecture.md)
+- meta-object / Deployment / ProviderObservation / GroupHead などの Core 定義: [Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0)
+- 実装 split status: [takos-paas Current State](/takos-paas/current-state)
+- manifest spec: [Manifest Reference](/reference/manifest-spec)
+- 用語と canonical / legacy alias: [Glossary](/reference/glossary)
 
 ## 詳細ページ
 

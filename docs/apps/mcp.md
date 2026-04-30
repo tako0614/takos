@@ -36,9 +36,10 @@ publish:
 ## Manifest route publication
 
 `routes` が実際の ingress で、`publish` は MCP endpoint を共有する typed outputs
-catalog です。`takos.mcp-server.v1` は platform / agent 側が解釈する standard route
-publication type です。legacy alias として `McpServer` も受け付けます。MCP route publication は deploy manifest の `publish`
-entry で管理します。
+catalog です。`takos.mcp-server.v1` は platform / agent 側が解釈する standard
+route publication type です（canonical / legacy alias は
+[Publication types](/reference/glossary#publication-types) を参照）。MCP route
+publication は deploy manifest の `publish` entry で管理します。
 
 control plane は deploy 後に managed MCP server catalog entry を保存・参照します
 が、manifest 外で route publication を作る入口ではありません。`publish` は

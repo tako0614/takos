@@ -1,0 +1,19 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/resource/queue/at-least-once/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.queue.at-least-once@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-state",
+  "changeEffect": "resource-instance",
+  "deliveryModel": "at-least-once",
+  "accessModes": [
+    "queue-runtime-binding"
+  ],
+  "permissions": [
+    "queue:send",
+    "queue:consume",
+    "queue:ack"
+  ],
+  "schemaModel": "message"
+}

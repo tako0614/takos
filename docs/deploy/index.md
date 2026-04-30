@@ -1,47 +1,56 @@
 # デプロイ
 
-Takos の deploy system は **primitive-first** です。worker / service / route /
-publication / resource はそれぞれ個別の record として存在し、group
-に所属しているかどうかで runtime や resource provider の扱いは変わりません。
+Takos の deploy system は **Deployment-centric** です。authoring manifest は
+1 つの Deployment record として resolve され、その Deployment が apply されると
+GroupHead が新しい Deployment を指します。worker / service / route / publication
+/ resource は Deployment.desired の field として束ねられ、group は Deployment
+を順序付ける compatibility state scope です。
 
-- **Primitive** — deploy や管理の対象になる個別 record。workload、route、
-  publication、resource、consume edge などを含む
-- **Group** — primitive を任意に束ねる state scope。所属 primitive は
-  inventory、deployment history、rollback、uninstall、updates などの group
-  機能を使える
-- **Manifest** — primitive の desired declaration を書く入力ファイル。group
-  専用形式ではなく、group 所属を付ける場合も付けない場合も同じ primitive
-  declaration として扱う
+> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
 
-group は便利な collection ですが、特権的な runtime ではありません。group なしの
-primitive も同じ API / runtime model で扱います。group に所属すると、その
-primitive が inventory、deployment history、rollback などの group 機能に参加できる
-だけです。
+- **Deployment** — manifest snapshot + descriptor closure + desired state を
+  1 record として保持する core record。`preview` → `resolved` → `applying` →
+  `applied` (もしくは `failed` / `rolled-back`) という state machine を持つ
+- **GroupHead** — group ごとの current Deployment pointer。rollback は GroupHead
+  を previous Deployment に切り替える pointer move
+- **ProviderObservation** — provider 側の observed state stream。Deployment.desired
+  に対する eventual consistency 観測点であり、canonical state ではない
+- **Manifest** — Deployment の input。primitive desired declaration (worker /
+  service / resource / route / publication / consume) を書く
+
+group は便利な scope ですが、特権的な runtime ではありません。group を持たない
+primitive declaration も同じ Deployment lifecycle を通ります。group に所属すると、
+その primitive を含む Deployment が GroupHead 経由で履歴・rollback の対象になります。
 
 ## 現在使うコマンド
 
 ### deploy operations
 
-| コマンド              | 用途                                                                                        |
-| --------------------- | ------------------------------------------------------------------------------------------- |
-| `takos deploy`        | local manifest または repository URL から group inventory へ primitive declaration を apply |
-| `takos deploy --plan` | `takos deploy` の group-scoped non-mutating preview（dry-run）                              |
-| `takos install`       | `takos deploy` の sugar。catalog で owner/repo を解決して同じ pipeline を呼ぶ               |
-| `takos rollback`      | group の前回成功 deployment record へ戻す group 機能                                        |
-| `takos uninstall`     | group に所属する manifest-managed primitive を削除し、group scope を閉じる                  |
-| `takos group ...`     | group inventory / group-scoped declaration / group 機能の管理                               |
-| `takos resource ...`  | resource primitive の個別管理                                                               |
+| コマンド                       | 用途                                                                                     |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| `takos deploy`                 | local manifest または repository URL から resolve + apply (Heroku-like sugar)            |
+| `takos deploy --preview`       | in-memory preview。Deployment record は持続化しない                                      |
+| `takos deploy --resolve-only`  | resolved Deployment record だけ作って apply は保留する                                   |
+| `takos apply <deployment-id>`  | resolved Deployment を apply に進める                                                    |
+| `takos diff <deployment-id>`   | resolved Deployment の expansion / 現在 GroupHead との diff を表示                       |
+| `takos approve <deployment-id>`| `require-approval` policy decision に approval を添付する                                |
+| `takos rollback [<group>]`     | group の GroupHead を previous Deployment に切り替える                                   |
+| `takos install`                | `takos deploy` の sugar。catalog で owner/repo を解決して同じ Deployment pipeline を呼ぶ |
+| `takos uninstall`              | group に所属する manifest-managed primitive を削除し、group scope を閉じる               |
+| `takos group ...`              | group inventory / GroupHead 状態の管理                                                   |
+| `takos resource ...`           | resource primitive の個別管理                                                            |
 
 ### primitive operations
 
-worker / service / route / publication / resource は個別 record
-として追跡されます。resource は `takos resource` / `takos res`
-で操作できます。compute / route / publication の個別 CRUD は control plane の
+worker / service / route / publication / resource は Deployment.desired
+の field として記録されます。resource は `takos resource` / `takos res`
+で個別操作できます。compute / route / publication の個別 CRUD は control plane の
 HTTP API で扱います。
 
-`takos deploy` / `takos deploy --plan` は manifest や repository を入力にして、
-manifest の `name` で決まる group inventory へ primitive declaration を apply / preview
-する入口です。group なしの primitive は個別 primitive API / CLI で管理します。
+`takos deploy` は manifest や repository を入力として、Deployment record の作成と
+apply を 1 step で行う sugar です。reviewer flow が必要な場合は
+`takos deploy --resolve-only` で Deployment record だけ作り、`takos diff` /
+`takos approve` / `takos apply` で確認・承認・適用を分離できます。
 
 ## クイックスタート
 
@@ -49,17 +58,19 @@ manifest の `name` で決まる group inventory へ primitive declaration を a
 takos deploy --env staging --space SPACE_ID
 ```
 
-group 名を変えたい場合だけ `--group` を指定します:
+3 行サマリ:
 
-```bash
-takos deploy --plan --env staging --space SPACE_ID --group custom-name
-```
+1. ローカル `.takos/app.yml` を読んで Deployment を resolve + apply (default)
+2. `--preview` で持続化しない preview、`--resolve-only` で apply 待ち、
+   `--group NAME` で group 名を override
+3. 詳細な lifecycle と option 一覧は [`takos deploy` の canonical 入門](/deploy/deploy) を参照
 
 ## 関連ページ
 
-- [deploy コマンド](/deploy/deploy) - `takos deploy` の詳細
+- [deploy コマンド](/deploy/deploy) - `takos deploy` / `takos apply` / `takos diff` /
+  `takos approve` の詳細
 - [Repository / Catalog デプロイ](/deploy/store-deploy) - local / repo / catalog
-  からの deploy
-- [Deploy Group](/deploy/deploy-group) - group 機能と inventory
+  からの Deployment
+- [Deploy Group](/deploy/deploy-group) - group / GroupHead と inventory
 - [ロールバック](/deploy/rollback)
 - [トラブルシューティング](/deploy/troubleshooting)

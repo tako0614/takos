@@ -42,7 +42,7 @@ Space は Takos の最上位の隔離単位です。
 Kernel は primitive を安全に動かすための共通基盤です。
 
 - auth / principal / built-in provider publication grants
-- deploy / deployment history / rollback
+- Deployment lifecycle (Deployment record / GroupHead / rollback)
 - resource broker
 - publication index
 - metering / billing / audit

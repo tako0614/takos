@@ -1,0 +1,18 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/resource/workflow/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.workflow@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-process",
+  "changeEffect": "resource-instance",
+  "accessModes": [
+    "workflow-runtime-binding"
+  ],
+  "permissions": [
+    "workflow:start",
+    "workflow:read",
+    "workflow:signal"
+  ],
+  "schemaModel": "workflow"
+}

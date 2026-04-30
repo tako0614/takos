@@ -1,8 +1,9 @@
 # Routes
 
-トップレベルの compute (Worker または Service)
-をどのパスで公開するかを宣言する。
-ドメインはシステムが自動付与するので書かない。
+トップレベルの compute (Worker または Service) を外部入口に接続する。
+HTTP/HTTPS は path で公開し、TCP/UDP は listener port で公開する。queue /
+schedule / event は外部 listener ではなく subscription として宣言する。
+ドメインはシステムが自動付与するので通常は書かない。
 
 `target` は **compute 名のみ**を受け取る。attached container は単独の route
 target には ならない。attached container を外部から呼びたい場合は、親 worker
@@ -34,15 +35,40 @@ routes:
     target: executor-host
 ```
 
+## Protocol routes
+
+```yaml
+routes:
+  - id: web
+    protocol: https
+    path: /
+    target: web
+  - id: ssh
+    protocol: tcp
+    port: 2222
+    target: shell
+  - id: dns
+    protocol: udp
+    port: 5353
+    target: resolver
+  - id: jobs
+    protocol: queue
+    source: jobs.incoming
+    target: worker
+```
+
 ## フィールド
 
-| field       | required | 説明                                                                   |
-| ----------- | -------- | ---------------------------------------------------------------------- |
-| `id`        | no       | routeRef 用の stable route ID                                          |
-| `target`    | yes      | 対象の compute 名 (Worker または Service)。attached container 名は不可 |
-| `path`      | yes      | 公開パス                                                               |
-| `methods`   | no       | 許可する HTTP メソッド                                                 |
-| `timeoutMs` | no       | ルートのタイムアウト (ms)                                              |
+| field       | required       | 説明                                                                   |
+| ----------- | -------------- | ---------------------------------------------------------------------- |
+| `id`        | no             | routeRef 用の stable route ID                                          |
+| `target`    | yes            | 対象の compute 名 (Worker または Service)。attached container 名は不可 |
+| `protocol`  | no             | `https` default。`http` / `https` / `tcp` / `udp` / `queue` / `schedule` / `event` |
+| `path`      | HTTP/HTTPS     | `/` で始まる公開パス。TCP/UDP/event 系では不可                         |
+| `port`      | TCP/UDP        | listener port。省略時は `compute.<target>.port` を使う                 |
+| `source`    | event 系       | queue / schedule / event source。省略時は route `id`                   |
+| `methods`   | HTTP/HTTPS のみ | 許可する HTTP メソッド                                                 |
+| `timeoutMs` | no             | ルートのタイムアウト (ms)                                              |
 
 ### Method default と競合解決
 

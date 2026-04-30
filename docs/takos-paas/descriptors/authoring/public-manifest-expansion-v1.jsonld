@@ -1,0 +1,20 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/descriptors/authoring/public-manifest-expansion/v1",
+  "@type": "takos:AuthoringExpansionDescriptor",
+  "shortRef": "authoring.public-manifest-expansion@v1",
+  "domain": "authoring",
+  "lifecycleDomain": "shape-derivation",
+  "changeEffect": "shape-derivation",
+  "description": "Public deploy manifest authoring expansion into canonical Core AppSpec, EnvSpec, and PolicySpec records before Plan.",
+  "expandsTo": [
+    "takos.dev/v1 App",
+    "takos.dev/v1 Environment",
+    "takos.dev/v1 Policy"
+  ],
+  "invariants": [
+    "expansion-before-plan",
+    "descriptor-digest-pinned",
+    "no-runtime-or-provider-semantics"
+  ]
+}

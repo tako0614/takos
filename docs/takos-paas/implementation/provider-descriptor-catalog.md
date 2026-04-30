@@ -1,8 +1,9 @@
-# Takos Deploy v2 Implementation Provider Catalog
+# Takos Deploy v3 Implementation Provider Catalog
 
 Status: implementation guideline, non-core.
 
-This document defines a recommended implementation catalog for common provider targets. It does not change Takos Deploy v2 Core semantics.
+This document defines a recommended implementation catalog for common provider targets. It does not change Takos Deploy v3 Core semantics
+([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md)).
 
 Core remains small:
 
@@ -17,9 +18,18 @@ This catalog provides practical JSON-LD descriptor examples for common provider 
 
 ## 1. Non-normative status
 
-The JSON-LD descriptors in this folder are implementation templates. A Takos implementation may ship them as official descriptors, replace them with equivalent descriptors, or load a different descriptor set, as long as Plan pins descriptor digests and conformance tests pass.
+The JSON-LD descriptors in this folder are implementation templates. A Takos implementation may ship them as official descriptors, replace them with equivalent descriptors, or load a different descriptor set, as long as `Deployment.resolution.descriptor_closure` pins descriptor digests and conformance tests pass.
 
 These examples are intentionally provider capability descriptors, not Core domain kinds.
+
+Provider descriptors are examples and capability profiles. Self-hosted and
+cloud provider implementations are external operator-registered plugin bundles;
+the PaaS kernel ships no built-in provider implementations. External bundles
+must use `TAKOS_KERNEL_PLUGIN_CONFIG` / `pluginConfig[pluginId].clients` to map
+adapter keys to operator-owned `KernelPluginClientRegistry` entries. Staging and
+production profiles fail closed unless required adapters such as `actor`,
+`auth`, `provider`, `storage`, and `runtimeAgent` are supplied. They must not
+construct cloud provider SDK clients inside the kernel.
 
 ```text
 Bad:
@@ -57,13 +67,13 @@ Provider descriptors must not redefine contract semantics. They may constrain, r
 | Provider target | Typical materialization | Notes |
 |---|---|---|
 | `provider.cloudflare.workers@v1` | JS module worker + HTTP routed interface | Uses dispatch namespace, dynamic dispatch Worker, user Workers, optional outbound Worker. |
-| `provider.cloudflare.containers@v1` | OCI image + HTTP interface | Worker-fronted, Durable-Object-backed, container access through provider bridge. |
+| `provider.cloudflare.containers@v1` | OCI image + HTTP interface | Worker-fronted, Durable-Object-backed, on-demand container access through provider bridge; not an always-on process host. |
 | `provider.google.cloud-run@v1` | OCI image + HTTP service | Cloud Run revision/traffic model; one container ingress port in the service API. |
 | `provider.aws.ecs-fargate@v1` | OCI container service/task | Task definition + service; router usually via ALB/NLB or service mesh. |
 | `provider.aws.app-runner@v1` | Source/image to managed web service | Simpler web-app target than ECS. |
 | `provider.azure.container-apps@v1` | OCI container app revisions | Supports revisions and ingress traffic split. |
-| `provider.kubernetes@v1` | Pods/Deployments/Services/Ingress/Gateway | Flexible provider for containerized workloads. |
-| `provider.selfhosted.docker-podman@v1` | OCI container on local host | Reference self-hosted path, usually with Caddy/Traefik. |
+| `provider.kubernetes@v1` | Pods/Deployments/Services/Ingress/Gateway | An always-on provider target for long-running container workloads. |
+| `provider.selfhosted.docker-podman@v1` | OCI container on local host | Example operator-owned self-hosted plugin path, usually with Caddy/Traefik. |
 | `provider.takos.runtime-host@v1` | JS module runtime host | Self-hosted runtime path for `runtime.js-worker@v1`. |
 
 ## 4. Workers family guidance
@@ -86,17 +96,22 @@ interface.http@v1
 Provider materialization should look like:
 
 ```text
-AppRelease component revision
+Deployment.resolution.resolved_graph component
   -> Cloudflare user Worker in dispatch namespace
 
-RouterConfig / ActivationRecord
+Deployment.desired.routes + Deployment.desired.activation_envelope
   -> dynamic dispatch Worker route table / assignment logic
 
-ResourceAccessPath
+Deployment.desired.bindings[*].accessPath
   -> direct runtime bindings to D1 / KV / R2 / Queues when supported
 ```
 
 Cloudflare Workers resource bindings are direct runtime bindings where possible.
+Cloudflare D1, R2, Queues, and Durable Objects are represented as resource or
+coordination targets with Cloudflare-injected runtime bindings. Provider plugins
+receive operator-injected control-plane client references and fail closed when
+those references are absent; descriptor metadata must not imply that the PaaS
+kernel constructs Cloudflare SDK/network clients.
 
 ### Cloudflare Containers
 
@@ -116,6 +131,12 @@ Router request
   -> Cloudflare container instance
 ```
 
+Cloudflare Containers are on-demand materialization behind the Worker/Durable
+Object bridge. They may keep instances warm according to provider-native policy,
+but they are not an always-on container baseline. Use Kubernetes or another
+external always-on provider plugin when the environment requires always-running
+processes, pod/service semantics, or operator-managed cluster networking.
+
 Resource access may use a mediated access path:
 
 ```text
@@ -126,13 +147,14 @@ component container
   -> D1 / R2 / KV / Durable Object
 ```
 
-This is not a different resource contract. It is a different ResourceAccessPath.
+This is not a different resource contract. It is a different
+`Deployment.desired.bindings[*].accessPath` selection.
 
 ## 5. Other cloud guidance
 
 ### Cloud Run
 
-Cloud Run materializes OCI image HTTP services. It has revision and traffic split concepts, so it can support ActivationRecord assignment materialization when provider capability and RouterDescriptor allow it.
+Cloud Run materializes OCI image HTTP services. It has revision and traffic split concepts, so it can support `Deployment.desired.activation_envelope` assignment materialization when provider capability and RouteDescriptor allow it.
 
 Typical descriptor support:
 
@@ -158,7 +180,7 @@ Azure Container Apps materializes container apps with revisions and ingress. Its
 
 ### Self-hosted Docker/Podman
 
-Self-hosted Docker/Podman is the reference self-hosted container provider path. It should use RouterConfig materialization through Caddy/Traefik or another router, and ResourceAccessPath through credentials, internal endpoints, or Takos-managed resource gateways.
+An operator-owned Docker/Podman plugin can provide a self-hosted container materialization path. It should materialize `Deployment.desired.routes` through Caddy/Traefik or another router, and resolve `Deployment.desired.bindings[*].accessPath` through credentials, internal endpoints, or Takos-managed resource gateways.
 
 ## 6. Resource provider examples
 
@@ -174,6 +196,13 @@ Cloudflare D1:
 Cloudflare R2:
   resource.object-store.s3@v1 or object-runtime-binding descriptor
 
+Cloudflare Queues:
+  interface.queue@v1 and queue-resource access through injected Worker bindings
+
+Cloudflare Durable Objects:
+  provider coordination / runtime binding; not canonical durable state unless a
+  descriptor explicitly defines the resource contract and access path
+
 AWS RDS Postgres / Cloud SQL / Neon:
   resource.sql.postgres@v1
   access: database-url, migration-admin
@@ -182,7 +211,7 @@ S3 / GCS / MinIO:
   resource.object-store.s3@v1 or provider-specific object descriptor if S3 compatibility is not exact
 ```
 
-Do not publish resource credentials as publication outputs. Use ResourceBinding and ResourceAccessPath.
+Do not publish resource credentials as publication outputs. Use `Deployment.desired.bindings` (with the inline `accessPath` for each binding).
 
 ## 7. Descriptor authoring rule
 
@@ -210,24 +239,26 @@ A provider descriptor should state:
 - provider-native fields, if any
 ```
 
-## 9. Plan display expectations
+## 9. Deployment display expectations
 
-Plan should show provider descriptor choices.
+The Deployment record (resolution + desired + conditions) should expose
+provider descriptor choices to CLI / API consumers.
 
 ```text
 Provider target:
   provider.google.cloud-run@v1
-  descriptor digest: sha256:...
+  descriptor digest: sha256:...   (from Deployment.resolution.descriptor_closure)
 
 Materialization profile:
   materialize.google-cloud-run.http-service@v1
+  (recorded as a projection in Deployment.resolution.resolved_graph)
 
 Component tuple:
   runtime.oci-container@v1
   artifact.oci-image@v1
   interface.http@v1
 
-Limitations:
+Limitations (Deployment.conditions[]):
   single ingress port
   provider revision traffic split
 ```

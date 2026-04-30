@@ -7,8 +7,8 @@ Descriptors define meaning. They are dictionaries, not programs.
 ```text
 1. Descriptor identity is a canonical URI.
 2. Authoring aliases are conveniences only.
-3. Descriptor content must be digest-pinned in Plan.
-4. Descriptor dependencies must be included in DescriptorClosure.
+3. Descriptor content must be digest-pinned in Deployment.resolution.descriptor_closure.
+4. Descriptor dependencies must be included in the descriptor closure.
 5. Descriptor rules must be declarative.
 6. Provider capability descriptors must not redefine contract semantics.
 ```
@@ -54,7 +54,9 @@ Apply must not re-fetch remote contexts
 
 ## Field-level change effects
 
-Descriptors with config fields SHOULD define field-level change effects. If omitted, the contract-level changeEffect is used as fallback and Plan SHOULD warn.
+Descriptors with config fields SHOULD define field-level change effects. If
+omitted, the contract-level changeEffect is used as fallback and resolution
+SHOULD warn through a `Deployment.conditions[]` entry.
 
 ## Exposure eligibility
 

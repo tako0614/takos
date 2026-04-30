@@ -1,6 +1,6 @@
 # トラブルシューティング
 
-> このページでわかること: デプロイ時のよくあるエラーと対処法。
+> このページでわかること: Deployment 時のよくあるエラーと対処法。
 
 ## バリデーションエラー
 
@@ -16,11 +16,11 @@ name: my-app
 # NG（name がない、または apiVersion/kind/metadata でラップしている）
 ```
 
-### `group_name is required when the deploy manifest does not provide name`
+### `group is required when the deploy manifest does not provide name`
 
-`takos deploy` / `takos install` は group deployment history を使います。通常は
-manifest の `name` が group 名として使われます。このエラーは manifest に
-`name` がなく、かつ `--group` / API の `group_name` override もない場合に出ます。
+`takos deploy` / `takos install` は GroupHead を advance します。通常は manifest
+の `name` が group 名として使われます。このエラーは manifest に `name` がなく、
+かつ `--group` / API body の `group` override もない場合に出ます。
 
 ```bash
 takos deploy --space SPACE_ID --group my-app
@@ -80,22 +80,6 @@ build:
 は、`esbuild --bundle --outfile=dist/worker.js` のように単一 bundle
 にまとめ、`artifactPath` をその file に向けてください。
 
-### `--target` は plan でだけ使う
-
-`--target` は `takos deploy --plan` / `takos install --plan` の diff entry
-filter です。workload は compute 名、route は `${target}:${path}` 形式です。
-`web`, `web:/` のような canonical entry 名に加えて、`workers.web`,
-`routes.web:/` のような dotted category key も受け付けます。publication は
-target filter の対象外で、manifest catalog として同期されます。
-
-```bash
-# deploy manifest に compute.web と routes: [{ target: web, path: "/" }] がある場合
-takos deploy --plan --env staging --space SPACE_ID --target web       # workload
-takos deploy --plan --env staging --space SPACE_ID --target 'web:/'   # route
-takos deploy --plan --env staging --space SPACE_ID --target workers.web
-takos deploy --plan --env staging --space SPACE_ID --target routes.web:/
-```
-
 ## publication / capability 解決失敗
 
 ### `Error: ... provider publication request ...`
@@ -116,16 +100,18 @@ type は publish / consume に入れません。
 
 ### `Error: Worker deploy failed`
 
-1. まず plan を確認しましょう:
+1. まず in-memory preview で manifest だけ検証します。
 
 ```bash
-takos deploy --plan --space SPACE_ID
+takos deploy --preview --space SPACE_ID
 ```
 
-2. 変更対象を絞って切り分けます:
+2. reviewer flow で resolved Deployment を確認したい場合は `--resolve-only`
+   を使い、`takos diff <id>` で expansion / GroupHead diff を見ます。
 
 ```bash
-takos deploy --plan --env staging --space SPACE_ID --target web
+takos deploy --resolve-only --space SPACE_ID
+takos diff dep_abc123 --space SPACE_ID
 ```
 
 3. よくある原因:
@@ -134,6 +120,8 @@ takos deploy --plan --env staging --space SPACE_ID --target web
 - `consume.inject.env` が既存 env と衝突している
 - Worker のコードにシンタックスエラーがある
 - readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない
+- `Deployment.conditions[]` に `provider.materialize` の operation 失敗が記録
+  されている (CLI / API の Deployment 詳細から見える)
 
 ### `Error: Authentication failed`
 
@@ -143,12 +131,25 @@ takos login
 takos endpoint show
 ```
 
-## デプロイ前の検証
+## Approval 待ちの Deployment
 
-デプロイ前に manifest だけ検証したい場合:
+PolicySpec が `require-approval` decision を出した resolved Deployment は
+`takos apply` で「approval required」エラーになります。次のいずれかで approval
+を添付してから apply します。
 
 ```bash
-takos deploy --plan --space SPACE_ID
+takos approve dep_abc123 --space SPACE_ID
+takos apply dep_abc123 --space SPACE_ID
+```
+
+`Deployment.policy_decisions[]` で policy decision id を確認できます。
+
+## デプロイ前の検証
+
+deploy 前に manifest だけ検証したい場合:
+
+```bash
+takos deploy --preview --space SPACE_ID
 ```
 
 以下の項目が検証されます。
@@ -158,20 +159,23 @@ takos deploy --plan --space SPACE_ID
 - worker bundle が単一 file、または一意に解決できる directory artifact
   であること
 - compute / routes / publication の参照が整合していること
-- `--target` を使う場合は `--plan` が必要で、指定した workload / route の diff
-  entry 名が plan と一致すること
+- descriptor 解決と Deployment.desired の構造的整合 (resolve gate)
+
+reviewer に渡したい場合は `--resolve-only` で resolved Deployment を作って
+`takos diff <id>` を共有してください。
 
 ## それでも解決しない場合
 
-1. `takos deploy --plan --space SPACE_ID` で manifest
-   の解釈結果と差分を確認
-2. `takos deploy status --space SPACE_ID` で control plane 側の deployment
-   状態を確認
-3. `takos group show GROUP_NAME --space SPACE_ID` で group inventory を確認
-4. backend 固有の問題は operator-only の [Hosting docs](/hosting/) を参照
+1. `takos deploy --preview --space SPACE_ID` で manifest の解釈結果を確認
+2. `takos deploy --resolve-only --space SPACE_ID` で resolved Deployment を作り、
+   `takos diff <id>` で expansion + GroupHead 差分を確認
+3. `takos deploy status --space SPACE_ID` で Deployment service 側の状態を確認
+4. `takos group show GROUP_NAME --space SPACE_ID` で group inventory と
+   GroupHead を確認
+5. backend 固有の問題は operator-only の [Hosting docs](/hosting/) を参照
 
 ## 次のステップ
 
 - [deploy](/deploy/deploy) --- `takos deploy` の詳細
-- [ロールバック](/deploy/rollback) --- ロールバックの手順
+- [ロールバック](/deploy/rollback) --- rollback の手順
 - [CLI コマンド](/reference/cli) --- CLI の全コマンド

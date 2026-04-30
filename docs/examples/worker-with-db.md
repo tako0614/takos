@@ -1,5 +1,9 @@
 # Worker + DB
 
+この例は
+[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
+を top-level `env` で拡張したものです。
+
 ```yaml
 name: notes-app
 
@@ -17,7 +21,8 @@ compute:
         artifactPath: dist/worker
 
 routes:
-  - target: web
+  - id: web
+    target: web
     path: /
 ```
 

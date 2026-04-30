@@ -17,6 +17,9 @@
         "runtime",
         "router"
       ],
+      "runtimeCapabilities": [
+        "always-on-container"
+      ],
       "limitations": [
         "requires-cluster-controller",
         "ingress-http-focused-unless-gateway-descriptor-provided"

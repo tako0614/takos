@@ -17,6 +17,9 @@
         "runtime",
         "router"
       ],
+      "runtimeCapabilities": [
+        "always-on-container"
+      ],
       "limitations": [
         "task-definition-backed",
         "load-balancer-needed-for-public-routing",

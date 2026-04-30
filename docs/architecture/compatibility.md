@@ -88,12 +88,14 @@ resource binding の入口ではない。
 
 ## Cloudflare
 
-Cloudflare は reference / primary production backend。
+Cloudflare は **tracked reference Workers backend** の reference materialization。
+tracked reference Workers backend 固有の用語と Core 用語の対応は
+[Glossary - Workers backend implementation note](/reference/glossary#workers-backend-implementation-note)
+を参照。
 
-- actual Cloudflare backend
-- actual Workers backend
+- tracked reference Workers backend の reference materialization
 - actual deploy / rollback / routing backend
-- worker workload は Cloudflare adapter で materialize される
+- worker workload は tracked reference Workers backend adapter で materialize される
 - image-backed workload は selected container adapter / orchestrator 経由
 
 ## Local / Self-host
@@ -131,9 +133,9 @@ local の control plane は Node-backed。control plane の起動性と local DX
 ### local tenant runtime は worker runtime path
 
 local の tenant runtime は runtime-host worker runtime path で、内部では
-Workers-compatible local adapter を使う。Cloudflare backend と byte-for-byte
-同一ではない。local は `worker-bundle` を local adapter 上で materialize
-して実行する。
+Workers-compatible local adapter を使う。tracked reference Workers backend と
+byte-for-byte 同一ではない。local は `worker-bundle` を local adapter 上で
+materialize して実行する。
 
 ### non-AI features の parity
 

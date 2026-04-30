@@ -1,8 +1,11 @@
-# Takos Deploy v2 Implementation Strategy
+# Takos Deploy v3 Implementation Strategy
 
-This document complements the Takos Deploy v2 Simple Core Architecture Contract.
+This document complements the Takos Deploy v3 Core Contract
+([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md)).
 
-The core specification stays implementation-neutral. This document explains how to implement it without becoming cloud-dependent, while still allowing cloud providers and optional plugin-style extensions.
+The core specification stays implementation-neutral. This document explains how
+to implement it without becoming cloud-dependent, while still allowing cloud
+providers and optional plugin-style extensions.
 
 ```text
 Core defines meaning boundaries.
@@ -16,7 +19,7 @@ Plugins are an implementation strategy, not a core requirement.
 
 ## 1. Goal
 
-Takos Deploy v2 should support both:
+Takos Deploy v3 should support both:
 
 ```text
 Self-sufficient Takos:
@@ -34,7 +37,10 @@ Takos Core owns meaning.
 Provider implementations materialize meaning.
 ```
 
-A cloud provider may offer stronger native behavior, but it must not redefine core semantics such as Plan, Apply, ActivationRecord, ResourceInstance, BindingSetRevision, or rollback.
+A cloud provider may offer stronger native behavior, but it must not redefine
+core semantics such as Deployment resolution, Deployment apply, the
+`Deployment.desired.activation_envelope`, ResourceInstance, the
+`Deployment.desired.bindings` shape, GroupHead advancement, or rollback.
 
 ---
 
@@ -47,17 +53,16 @@ The core specification defines:
 ```text
 Component
 Named contract instance
-Binding
-Plan
-ApplyRun
-AppRelease
-NetworkConfig
-RuntimeNetworkPolicy
-ActivationRecord
+Deployment (with input / resolution / desired / status / conditions)
+Deployment.resolution.descriptor_closure
+Deployment.resolution.resolved_graph
+Deployment.desired.bindings
+Deployment.desired.routes
+Deployment.desired.runtime_network_policy
+Deployment.desired.activation_envelope
 ResourceInstance
-ResourceBinding
-BindingSetRevision
-ProviderMaterialization
+ProviderObservation
+GroupHead
 ```
 
 Core does not define:
@@ -104,7 +109,9 @@ local directories
 operator-installed packages
 ```
 
-Core does not care which mechanism is used as long as the resulting resolved graph, plan, apply behavior, and materialization records satisfy the core contract.
+Core does not care which mechanism is used as long as the resulting
+`Deployment.resolution.resolved_graph`, `Deployment.desired`, apply behavior,
+and ProviderObservation records satisfy the core contract.
 
 ---
 
@@ -113,28 +120,31 @@ Core does not care which mechanism is used as long as the resulting resolved gra
 Use a hybrid implementation model:
 
 ```text
-1. Built-in official provider bundle for self-hosted Takos.
-2. Built-in official provider bundle for current cloud integrations.
-3. Stable provider interface internally.
-4. Optional dynamic plugins later.
+1. Core kernel and reference adapters first.
+2. Stable provider/plugin port interface internally.
+3. External operator-registered self-hosted/provider plugin bundles.
+4. Trusted plugin manifest/signature policy for production selection.
 ```
 
 In other words:
 
 ```text
-Do not require plugins to ship v1.
-Design provider implementations as if they could become plugins.
+Do not require cloud plugins or third-party dynamic plugin installation for Core
+conformance.
+Design provider implementations as plugins from the beginning.
 ```
 
 This keeps the first implementation simple while avoiding a closed architecture.
 
 ---
 
-## 4. Self-hosted reference provider bundle
+## 4. Self-hosted provider bundle
 
-Takos should ship a self-hosted provider bundle that can run on a single VPS or local server stack.
+Takos PaaS does not ship a built-in self-hosted provider implementation. A
+self-hosted bundle can run on a single VPS or local server stack, but it is an
+operator-owned external plugin bundle and not a Core semantic dependency.
 
-This bundle should be able to satisfy the common contracts without any required cloud provider.
+The bundle should satisfy common contracts without any required cloud provider.
 
 ### 4.1 Suggested self-hosted stack
 
@@ -170,7 +180,7 @@ DNS/TLS:
   Caddy/Traefik ACME for public domains, manual DNS support, wildcard local domain for dev
 ```
 
-This gives Takos a default non-cloud materialization path:
+This gives Takos an example operator-owned non-cloud materialization path:
 
 ```text
 runtime.js-worker@v1          -> takos.runtime-host@v1
@@ -182,6 +192,20 @@ resource.sql.postgres@v1      -> local.postgres@v1
 resource.object-store.s3@v1   -> minio.object-store@v1
 resource.queue.at-least-once@v1 -> local.queue@v1
 ```
+
+Use an operator-owned plugin id such as:
+
+```text
+operator.example.self-hosted
+```
+
+It is selected per kernel I/O port through `TAKOS_*_PLUGIN` or
+`TAKOS_KERNEL_PLUGIN_SELECTIONS` and configured through
+`TAKOS_KERNEL_PLUGIN_CONFIG`. That config stores per-plugin client references
+under `pluginConfig[pluginId].clients`; the actual clients are injected by the
+operator-owned `KernelPluginClientRegistry`, not constructed by the PaaS kernel.
+Production and staging must select trusted external plugins for required ports
+and cannot select reference/noop plugins.
 
 ### 4.2 Self-hosted environment example
 
@@ -228,7 +252,8 @@ providerMappings:
       target: queue
 ```
 
-This environment may not support every feature. Unsupported features must be visible in Plan.
+This environment may not support every feature. Unsupported features must be
+visible on the Deployment record (resolution / desired / conditions).
 
 Example:
 
@@ -243,7 +268,8 @@ Or:
 ```text
 Warning:
   egress private-network deny is advisory on docker.host@v1.
-  Policy requires enforced egress, so Plan is blocked.
+  Policy requires enforced egress, so the Deployment is blocked
+  (Deployment.conditions[].reason="AccessPathExternalBoundaryRequiresPolicy").
 ```
 
 ---
@@ -252,7 +278,8 @@ Warning:
 
 Cloud providers are not special in the core.
 
-Cloudflare Workers, Cloud Run, ECS, Kubernetes, Neon, R2, S3, and similar systems are provider targets that satisfy contracts.
+Cloudflare Workers, Cloud Run, ECS, Kubernetes, Neon, R2, S3, and similar
+systems are provider targets that satisfy contracts.
 
 Example:
 
@@ -274,47 +301,29 @@ R2 / S3 / MinIO:
   resource.object-store.s3@v1
 ```
 
-A cloud provider may expose provider-native configuration, but that configuration must be:
+A cloud provider may expose provider-native configuration, but that
+configuration must be:
 
 ```text
 typed
 versioned
 policy-governed
-Plan-visible
+Deployment-resolution-visible (resolved_graph projections + descriptor_closure)
 not allowed to redefine core semantics
 ```
 
 ---
 
-## 6. Built-in vs plugin provider implementations
+## 6. Provider plugin implementations
 
-Takos can support both implementation styles.
+Provider implementations are external plugin bundles or operator bootstrap
+adapters. The kernel may include reference adapters only for local/conformance
+use.
 
-### 6.1 Built-in provider
+### 6.1 External provider plugin
 
-A built-in provider is compiled into or shipped with Takos.
-
-Advantages:
-
-```text
-simpler security model
-easier bootstrap
-stable official support
-better for self-hosted reference implementation
-```
-
-Disadvantages:
-
-```text
-slower ecosystem extension
-requires Takos release to add provider code
-```
-
-### 6.2 Plugin provider
-
-A plugin provider is loaded dynamically or installed by an operator.
-
-Advantages:
+An external provider plugin is registered by an operator and selected per kernel
+port.
 
 ```text
 extensible
@@ -323,23 +332,23 @@ operator-specific providers
 faster experimentation
 ```
 
-Disadvantages:
+Requirements:
 
 ```text
-harder security model
-provider credential isolation required
-plugin trust and signing required
-compatibility testing required
+explicit port capabilities
+plugin trust and signing
+provider credential isolation
+compatibility testing
 ```
 
-### 6.3 Recommended stance
+### 6.2 Recommended stance
 
 ```text
 Core spec: no plugin requirement.
-Implementation: support built-in providers first.
-Architecture: design provider interface so plugins can be added later.
-Production: only official or verified providers by default.
-Local/operator mode: allow local providers by policy.
+Implementation: support explicit provider ports and trusted external plugin selection first.
+Architecture: keep provider code outside the PaaS kernel.
+Production: only verified or operator-trusted providers.
+Local/conformance mode: allow reference adapters by policy.
 ```
 
 ---
@@ -379,7 +388,8 @@ delete:
   Deletes provider-side materialization only when lifecycle and policy allow.
 ```
 
-Provider implementations must not define what Plan, Apply, ActivationRecord, ResourceInstance, or rollback mean.
+Provider implementations must not define what the Deployment record, apply
+phases, the activation envelope, ResourceInstance, or rollback mean.
 
 They only materialize resolved meaning.
 
@@ -387,7 +397,8 @@ They only materialize resolved meaning.
 
 ## 8. Provider execution isolation
 
-Provider implementations may use powerful credentials. They must be isolated from workload runtime and build runtime.
+Provider implementations may use powerful credentials. They must be isolated
+from workload runtime and build runtime.
 
 Minimum rules:
 
@@ -412,7 +423,8 @@ revocation behavior
 conformance tests
 ```
 
-For built-in providers, the same semantic rules apply, but the packaging and trust mechanism can be simpler.
+For operator-provided external plugins, the same semantic rules apply and the
+operator-owned trust mechanism decides which implementations are available.
 
 ---
 
@@ -431,7 +443,8 @@ plugin metadata
 compiled code
 ```
 
-Core only requires that the compiler can produce a deterministic resolved graph and PackageResolution-like records.
+Core only requires that the compiler can produce a deterministic
+`Deployment.resolution.resolved_graph` and matching descriptor closure entries.
 
 ### 9.1 Contract descriptor responsibilities
 
@@ -466,16 +479,18 @@ conformance status
 
 ### 9.3 Input translation descriptors
 
-Authoring conveniences such as `kind: js-worker`, `takos deploy image`, or `takos deploy compose` are translated before Plan.
+Authoring conveniences such as `kind: js-worker`, `takos deploy image`, or
+`takos deploy compose` are translated before Deployment resolution finalizes.
 
-Core does not specify the syntax. Implementation documentation should specify official input forms.
+Core does not specify the syntax. Implementation documentation should specify
+official input forms.
 
 Rules:
 
 ```text
-translated output must be visible in Plan
+translated output must be visible in Deployment.resolution.resolved_graph
 translation mechanism must be deterministic
-translation mechanism version/digest must be included in Plan read set or equivalent reproducibility record
+translation mechanism version/digest must be included in Deployment.resolution.descriptor_closure
 production should use trusted official translators by default
 ```
 
@@ -498,7 +513,7 @@ Secrets
 Artifact storage
 Basic routing
 TLS with manual or ACME DNS setup
-Rollback to compatible AppRelease
+Rollback to a compatible retained Deployment via GroupHead
 Resource restore where provider supports it
 ```
 
@@ -512,7 +527,8 @@ full egress enforcement
 native cloud resource features
 ```
 
-Unsupported or advisory features must be Plan-visible.
+Unsupported or advisory features must be visible on the Deployment record
+(resolution / desired payload + `Deployment.conditions[]`).
 
 Self-hosted mode must not silently fall back to unsafe behavior.
 
@@ -538,9 +554,10 @@ R2 / S3 provider:
   materializes S3-compatible object-store contract
 ```
 
-Cloud providers must pass the same Plan / Apply / Activation / Materialization rules as self-hosted providers.
+Cloud providers must pass the same Deployment resolution / apply / GroupHead
+advancement / observation rules as self-hosted providers.
 
-They may offer provider-native config, but Plan must show:
+They may offer provider-native config, but the Deployment must show:
 
 ```text
 native feature used
@@ -555,7 +572,26 @@ fallback or block behavior
 
 ## 12. Implementation phases
 
-### Phase 1: Built-in self-hosted bundle
+### Phase 1: Core kernel and reference adapters
+
+Implement:
+
+```text
+descriptor-pinned Deployment resolution
+apply-time read-set validation
+Deployment.desired.activation_envelope
+inlined Deployment.desired.bindings + access paths
+ProviderObservation separation
+reference adapters for conformance
+```
+
+Goal:
+
+```text
+Takos can prove Core semantics without claiming real provider ownership.
+```
+
+### Phase 2: Self-hosted provider bundle
 
 Implement:
 
@@ -576,9 +612,10 @@ Goal:
 Takos can deploy meaningful apps without Cloudflare/GCP/AWS.
 ```
 
-### Phase 2: Cloud built-in providers
+### Phase 3: Cloud provider bundle requirements
 
-Implement official providers for the clouds already used operationally.
+Define descriptor-backed external provider bundle requirements for the clouds
+already used operationally.
 
 Likely candidates:
 
@@ -589,7 +626,7 @@ Neon or Postgres provider
 S3-compatible provider
 ```
 
-### Phase 3: Stable provider interface
+### Phase 4: Stable provider interface
 
 Stabilize internal provider implementation interface:
 
@@ -605,9 +642,9 @@ credential isolation
 audit
 ```
 
-### Phase 4: Optional plugin loading
+### Phase 5: Trusted plugin loading
 
-Only after built-in provider semantics are stable:
+After the port contracts and conformance tests are stable:
 
 ```text
 plugin package format
@@ -618,34 +655,35 @@ conformance tests
 operator enablement policy
 ```
 
-Plugins should be optional. Takos should remain fully usable with built-in providers.
+Takos should remain usable with explicit operator-provided plugins or reference
+adapters where allowed.
 
 ---
 
 ## 13. Decision matrix
 
-| Approach | Pros | Cons | Recommendation |
-|---|---|---|---|
-| Built-in only | Simple, secure, easy bootstrap | Harder ecosystem extension | Good for first implementation |
-| Plugin only | Extensible | Security and bootstrap complexity | Avoid as initial requirement |
-| Built-in + optional plugins | Balanced | Requires clean provider interface | Recommended |
-| Cloud-first providers | Fast if existing infra is cloud-heavy | Weak self-sufficiency | Avoid as only path |
-| Self-hosted reference bundle | Ownership, portability, local dev | Some features weaker than cloud | Required baseline |
+| Approach                    | Pros                                  | Cons                                                 | Recommendation                |
+| --------------------------- | ------------------------------------- | ---------------------------------------------------- | ----------------------------- |
+| Built-in only               | Simple, secure, easy bootstrap        | Harder ecosystem extension                           | Good for first implementation |
+| Plugin only                 | Extensible                            | Security and bootstrap complexity                    | Avoid as initial requirement  |
+| Built-in + optional plugins | Balanced                              | Requires clean provider interface                    | Recommended                   |
+| Cloud-first providers       | Fast if existing infra is cloud-heavy | Weak self-sufficiency                                | Avoid as only path            |
+| Self-hosted provider bundle | Ownership, portability, local dev     | Outside Core kernel; some features weaker than cloud | Future operator bundle        |
 
 ---
 
 ## 14. Non-negotiable rules
 
 ```text
-1. Takos must have a self-hosted provider path.
+1. Takos Core must not require a self-hosted provider path for conformance.
 2. Cloud providers must be optional provider targets, not core assumptions.
 3. Provider implementations materialize meaning; they do not define core meaning.
-4. Provider state is observed, never canonical.
-5. Built-in providers and plugins must obey the same Plan / Apply / Activation rules.
+4. Provider state is observed (ProviderObservation), never canonical.
+5. Built-in providers and plugins must obey the same Deployment resolution / apply / GroupHead-advance rules.
 6. Provider credentials must be isolated from workload and build runtimes.
-7. Unsupported enforcement must be visible in Plan.
+7. Unsupported enforcement must be visible on the Deployment (resolution + desired + conditions).
 8. No silent unsafe fallback.
-9. Authoring conveniences must compile to canonical specs before Plan.
+9. Authoring conveniences must compile to canonical AppSpec/EnvSpec/PolicySpec before resolution finalizes.
 10. Dynamic plugins are optional, not required for core conformance.
 ```
 
@@ -656,10 +694,9 @@ Plugins should be optional. Takos should remain fully usable with built-in provi
 Use this implementation direction:
 
 ```text
-Build Takos Deploy v2 as descriptor-driven and provider-interface-driven.
-Ship official built-in providers first.
-Make the self-hosted provider bundle a required reference implementation.
-Design provider implementations so they can later be loaded as plugins.
+Build Takos Deploy v3 as descriptor-driven and provider-interface-driven.
+Keep the PaaS kernel reference-only and register self-hosted/provider implementations as external plugins.
+Design provider implementations so they can be loaded through the trusted plugin path.
 Do not make dynamic plugins required for the core system.
 ```
 
@@ -672,4 +709,3 @@ Plugins optional.
 Provider interface stable.
 Core remains small.
 ```
-

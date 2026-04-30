@@ -5,8 +5,7 @@ manifest author** はこのページを読む必要はありません。`takos l
 Takos endpoint に認証して `takos deploy --space SPACE_ID --group GROUP_NAME`
 するだけで開発できます。
 
-このページは **Takos kernel 自体を local に立ち上げる operator** 向けです。
-:::
+このページは **Takos kernel 自体を local に立ち上げる operator** 向けです。 :::
 
 Docker Compose ベースのローカル開発環境。
 
@@ -19,16 +18,16 @@ Docker Compose ベースのローカル開発環境。
 ## セットアップ
 
 ```bash
-deno task build:all
+deno task --cwd takos/app check
 cp .env.local.example .env.local
 ```
 
 ## 起動・停止
 
 ```bash
-deno task local:up             # 起動（foreground）
-deno task local:logs           # ログ確認
-deno task local:down           # 停止
+docker compose --env-file .env.local -f compose.local.yml up --build
+docker compose --env-file .env.local -f compose.local.yml logs -f
+docker compose --env-file .env.local -f compose.local.yml down
 ```
 
 バックグラウンドで起動したい場合:
@@ -40,30 +39,30 @@ docker compose --env-file .env.local -f compose.local.yml up --build -d
 ## スモークテスト
 
 ```bash
-deno task local:smoke                  # 全体の疎通確認
-deno task local:proxyless-smoke        # CF 固有 path の逆流チェック
+deno task --cwd takos/app/apps/control dev:local:run-smoke
+deno task --cwd takos/app/apps/control dev:local:run-smoke-proxyless
 ```
 
 ## 主要サービス
 
-| service                        | role                             |
-| ------------------------------ | -------------------------------- |
-| `control-web`                  | web/API worker                   |
-| `control-dispatch`             | tenant dispatch                  |
-| `control-worker`               | background worker                |
-| `runtime-host` / `runtime`     | runtime-service host / container |
+| service                         | role                             |
+| ------------------------------- | -------------------------------- |
+| `control-web`                   | web/API worker                   |
+| `control-dispatch`              | tenant dispatch                  |
+| `control-worker`                | background worker                |
+| `runtime-host` / `runtime`      | runtime-service host / container |
 | `executor-host` / `takos-agent` | agent executor                   |
-| `postgres` / `redis` / `minio` | infra backing services           |
+| `postgres` / `redis` / `minio`  | infra backing services           |
 
 ## 個別起動
 
 ```bash
-deno task --cwd apps/control dev:local:web
-deno task --cwd apps/control dev:local:dispatch
-deno task --cwd apps/control dev:local:worker
+deno task --cwd takos/app/apps/control dev:local:web
+deno task --cwd takos/app/apps/control dev:local:dispatch
+deno task --cwd takos/app/apps/control dev:local:worker
 ```
 
-compose を使わない場合は `apps/control/.env.self-host.example` を参考に。
+compose を使わない場合は `takos/app/apps/control/.env.self-host.example` を参考に。
 
 ## 既知の差分
 

@@ -1,8 +1,11 @@
 # takos-runtime-service
 
-`takos-runtime-service` は **Deno で動作する独立 HTTP サーバー** で、kernel
-(`takos-control`) とは別の runtime-service container として `takos-runtime-host`
-から呼び出される。
+`takos-runtime-service` は Deno で動作する独立 HTTP サーバーで、kernel
+(`takos-control`) とは別の internal execution plane。control-plane の
+process role の一つとして runtime host から呼び出される。Deployment lifecycle
+を扱う Core process のうち、sandbox shell / workflow job / git smart-http
+/ CLI proxy を担当する provider operation 側 execution plane に位置する
+(observed 側は `Deployment.conditions[]` および ProviderObservation に落ちる)。
 
 主な責務:
 
@@ -13,22 +16,26 @@
 - CLI proxy (loopback bypass)
 
 ソースは runtime-service package、entry point は runtime service の container
-bootstrap。Deno container として `apps/runtime/Dockerfile`
-でビルドし、Cloudflare Container DO (`takos-runtime-host`
-worker、`apps/control/wrangler.runtime-host.toml`) にマウントする。
+bootstrap。Deno container として
+`takos/runtime/apps/runtime-service/Dockerfile` でビルドし、
+backend-specific な runtime host worker からマウントされる。tracked reference
+Workers backend での実装詳細は本ページ末尾の collapsible 節 (Workers backend
+reference materialization) を参照。
 
 これは user group の Worker / Service runtime とは別の internal execution
 plane。
 
 ## 認証
 
-すべての API は `Authorization: Bearer <jwt>` を要求し、runtime-service
-container の `JWT_PUBLIC_KEY` で RS256 検証する。署名鍵の基準は
-`PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY`:
+`GET /health` と `GET /healthz` 以外の API は `Authorization: Bearer <jwt>`
+を要求し、runtime-service container の `JWT_PUBLIC_KEY` で RS256 検証する。
+`GET /ping` は control plane からの authenticated smoke probe であり、public
+health check ではない。署名鍵の基準は `PLATFORM_PRIVATE_KEY` /
+`PLATFORM_PUBLIC_KEY`:
 
-- `takos` / `takos-worker` は `PLATFORM_PRIVATE_KEY` で runtime-service JWT
-  を署名する
-- `takos-runtime-host` は `PLATFORM_PUBLIC_KEY` を container env の
+- control-plane process (kernel main / background worker process role) は
+  `PLATFORM_PRIVATE_KEY` で runtime-service JWT を署名する
+- runtime host process role は `PLATFORM_PUBLIC_KEY` を container env の
   `JWT_PUBLIC_KEY` として渡す
 - 互換用に `JWT_PUBLIC_KEY` を明示する場合も `PLATFORM_PUBLIC_KEY`
   と同じ公開鍵にする
@@ -43,9 +50,9 @@ token claims:
 | `session_id`     | 関連 session (optional) |
 | `exp`            | 有効期限                |
 
-::: warning JWT_PUBLIC_KEY `takos-runtime-host` 経由の Cloudflare Container では
-host worker が `PLATFORM_PUBLIC_KEY` から注入する。runtime-service を直接起動
-する local/self-host 構成では、`JWT_PUBLIC_KEY` に `PLATFORM_PUBLIC_KEY` と同じ
+::: warning JWT_PUBLIC_KEY runtime host process 経由の container では host
+process が `PLATFORM_PUBLIC_KEY` から注入する。runtime-service を直接起動する
+local/self-host 構成では、`JWT_PUBLIC_KEY` に `PLATFORM_PUBLIC_KEY` と同じ
 公開鍵を設定する。未設定や不一致の状態では service-token JWT を検証できない。
 :::
 
@@ -62,8 +69,12 @@ service-token JWT 不要で通る (`isLocalCliProxyBypassRequest`):
    (`getServiceTokenFromHeader` が null を返す)
 3. `X-Takos-Session-Id` header が存在する (caller が持っている sandbox session
    id)
-4. `X-Forwarded-For` の先頭 IP または `X-Real-IP` が loopback address
-   (`127.0.0.1` / `::1` / `::ffff:127.0.0.1`) のいずれかに一致する
+4. runtime-service が実接続元を loopback address (`127.0.0.1` / `::1` /
+   `::ffff:127.0.0.1`) と判定できる
+
+`X-Forwarded-For` / `X-Real-IP` は trust boundary ではありません。PaaS の
+internal RPC は service identity / signed RPC を原則とし、この bypass は local
+data dir 付き runtime-service の CLI proxy に限定した compatibility path です。
 
 上記を通過した request は次の 5 件の allowlist 正規表現にある API path のみ
 forward される (`ALLOWED_PATHS`)。request path の `/cli-proxy` prefix
@@ -85,18 +96,18 @@ session が持つ `spaceId` と request header の `X-Takos-Space-Id` が一致
 check が実効的な space 分離として機能する。
 
 ::: warning Ingress spoof 防止が前提 loopback bypass は `X-Forwarded-For` /
-`X-Real-IP` header を trust boundary として使う。つまり client が直接 control
-できる ingress ではなく、Cloudflare Container や direct Deno serve のような
-trusted ingress が **外部入力の header を strip または上書き** する前提に
-なっている。spoof 防止が保証できない deployment では、
-`TAKOS_RUNTIME_ALLOW_LOOPBACK_CLI_PROXY_BYPASS=1` を設定せず、local data-dir /
-`allowLocalCliProxyBypass` option も有効化しない。この経路は public API では
-なく internal fast path なので、trusted ingress が維持できない環境では使わない。
-CF Container runtime は internal loopback のみ `127.0.0.1` を立てるため、この
-仮定は production では成立する。
+`X-Real-IP` header を trust boundary として使わず、runtime-service に渡された
+実接続元 address だけを見る。client が直接 control できる ingress ではなく、
+trusted binding として接続元 address を渡せる runtime host process / direct
+Deno serve のような実行環境が前提になる。spoof 防止が保証できない deployment
+では、`TAKOS_RUNTIME_ALLOW_LOOPBACK_CLI_PROXY_BYPASS=1` を設定せず、local
+data-dir / `allowLocalCliProxyBypass` option も有効化しない。この経路は public
+API ではなく internal fast path なので、trusted ingress が維持できない環境では
+使わない。tracked reference Workers backend の Container runtime は internal
+loopback のみ `127.0.0.1` を立てるため、この仮定は production では成立する。
 
-kernel 側の CLI traffic flow (PAT auth → runtime-host service binding →
-container loopback) については
+kernel 側の CLI traffic flow (PAT auth → runtime host process → container
+loopback) については
 [Control plane § CLI proxy loopback bypass](/architecture/control-plane#cli-proxy-loopback-bypass)
 を参照。
 :::
@@ -110,28 +121,30 @@ request path。runtime-service は repo 操作を直接実行せず、session / 
 ```text
 CLI on operator workstation
   → HTTPS POST → kernel (PAT auth)
-  → kernel forwards via service binding to runtime-host
-  → runtime-host /forward/cli-proxy/...
+  → kernel forwards via internal binding to runtime host process
+  → runtime host /forward/cli-proxy/...
   → runtime-service /cli-proxy/api/repos/:id/...    (loopback bypass enabled when configured)
-  → runtime-host /forward/cli-proxy/api/repos/:id/...
+  → runtime host /forward/cli-proxy/api/repos/:id/...
   → kernel /api/repos/:id/...
 ```
 
 - CLI → kernel は通常の PAT 認証 (`Authorization: Bearer <pat>`)
-- kernel → runtime-host は Cloudflare service binding (`RUNTIME_HOST`)
-- runtime-host は `/forward/cli-proxy/*` を runtime-service の `/cli-proxy/*`
+- kernel → runtime host は backend-specific な internal binding
+- runtime host は `/forward/cli-proxy/*` を runtime-service の `/cli-proxy/*`
   に中継する
 - runtime-service 側は container 内の loopback (`127.0.0.1`) で到達する
-- runtime-service は `X-Forwarded-For` が loopback であることを確認し、path が
-  CLI proxy allowlist にあれば bypass を許可する
-- runtime-service は session の proxy token で runtime-host に戻し、runtime-host
-  が kernel の `/api/repos/:id/*` に中継する
+- runtime-service は実接続元が loopback であることを確認し、path が CLI proxy
+  allowlist にあれば bypass を許可する。proxy header は bypass
+  判定の信頼根にしない
+- runtime-service は session の proxy token で runtime host に戻し、runtime
+  host が kernel の `/api/repos/:id/*` に中継する
 
 ## エンドポイント
 
 | group     | exact routes                                                                                                                                                                                                                                                                  | description                                        |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| health    | `GET /ping`, `GET /health`, `GET /healthz`                                                                                                                                                                                                                                    | liveness / health check                            |
+| health    | `GET /health`, `GET /healthz`                                                                                                                                                                                                                                                 | public liveness / health check                     |
+| health    | `GET /ping`                                                                                                                                                                                                                                                                   | authenticated smoke probe                          |
 | exec      | `POST /exec`, `POST /execute-tool`                                                                                                                                                                                                                                            | sandboxed shell execution / named tool execution   |
 | exec      | `GET /status/:id`                                                                                                                                                                                                                                                             | process status lookup                              |
 | sessions  | `POST /sessions`, `POST /sessions/:id/commit`                                                                                                                                                                                                                                 | sandbox session lifecycle                          |
@@ -243,17 +256,55 @@ SSRF パターン等)。`COMMAND_PROFILE=extended` で追加コマンドを opt-
 ```
 
 `/execute-tool` も現在は同じ envelope に揃っている。`details` は必要な endpoint
-だけが追加する任意フィールド。
+だけが追加する任意フィールド。Git smart-http endpoint は成功時には Git protocol
+response の media type/body をそのまま返すが、route validation や
+`git http-backend` 起動失敗など runtime-service が生成する失敗 response は
+common error envelope を返す。
 
 ## デプロイ
 
-`takos-runtime-service` は CF worker ではなく **CF Container DO** として
-動く。env vars は wrangler 経由ではなく Docker secret + `apps/runtime/.env`
-で供給する (`apps/runtime/Dockerfile` 参照)。host worker (`takos-runtime-host`)
-は `apps/control/wrangler.runtime-host.toml` で deploy する。
+runtime-service container は backend-specific な runtime host process role
+からマウントされる。container build は
+`takos/runtime/apps/runtime-service/Dockerfile` で行い、env vars は Docker
+secret + `takos/runtime/apps/runtime-service/.env` で供給する。tracked
+reference Workers backend での具体的な host worker / container 配置は
+本ページ末尾の collapsible 節を参照。
 
 ## 関連ドキュメント
 
-- [Control plane](/architecture/control-plane) — 親の worker / container DO 構造
+- [Control plane](/architecture/control-plane) — 親の process role / queue / cron
+  全体図
 - [Threads and Runs](/platform/threads-and-runs) — sandbox session lifecycle
 - [Workflows](/reference/api#repos-actions) — GitHub Actions 互換 workflow API
+
+## Workers backend reference materialization
+
+::: details tracked reference Workers backend の実装詳細
+
+> このセクションは Cloudflare Workers backend に固有の materialization
+> detail。Core 用語との対応は
+> [Glossary § Workers backend implementation note](/reference/glossary#workers-backend-implementation-note)
+> を参照。
+
+tracked reference Workers backend では runtime-service container は
+`takos-runtime-host` worker (Cloudflare Container DO host) にマウントされる。
+
+- runtime-service は CF worker ではなく **CF Container DO** として動く
+- host worker (`takos-runtime-host`) は
+  `takos/app/apps/control/wrangler.runtime-host.toml` で deploy する
+- env vars は wrangler 経由ではなく Docker secret +
+  `takos/runtime/apps/runtime-service/.env` で供給する
+  (`takos/runtime/apps/runtime-service/Dockerfile` 参照)
+- kernel から runtime-service への呼び出しは Cloudflare worker 間 service
+  binding (`RUNTIME_HOST`) で行う
+- runtime-host worker は `/forward/cli-proxy/*` を container 内部 loopback
+  (`127.0.0.1`) に中継する
+- container runtime は internal loopback だけ `127.0.0.1` を立てるため、
+  CLI-proxy loopback bypass の trust 仮定が production で成立する
+
+`takos-runtime-host` という worker 名 / binding 名は本 backend の
+materialization detail で、Core 用語ではない。Core 視点では runtime host は
+process role の一つで、tracked reference では Cloudflare worker + Container DO
+として展開される。
+
+:::

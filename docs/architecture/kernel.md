@@ -10,6 +10,17 @@ Takos は AI によるソフトウェア民主化基盤。kernel は Agent / Cha
 Store, Auth を統合した単一のサービス。これらは kernel features であり、group
 ではない。アンインストール不可。
 
+kernel が serve する request は PaaS Core の Deployment / ProviderObservation
+/ GroupHead といった meta-objects に従って routing / activation / binding が
+解決される。Deployment は authoring expansion → resolution
+(`Deployment.resolution.descriptor_closure` / `.resolved_graph`) → desired
+(`Deployment.desired.routes` / `.bindings` / `.resources` /
+`.runtime_network_policy` / `.activation_envelope`) → conditions
+(`Deployment.conditions[]`) の 4 layer を 1 record に内包する。Core の
+normative 定義は
+[`takos-paas/core/01-core-contract-v1.0.md`](/takos-paas/core/01-core-contract-v1.0)
+を、用語表は [Glossary § Core meta-objects](/reference/glossary) を参照。
+
 ## Takos の定義
 
 AI agent がソフトウェアを作り・管理し・配布する基盤。以下は **kernel
@@ -45,7 +56,7 @@ space は Takos の分離単位。法人のようなもの。
 外部ワークロードは **primitive-first deploy model** で構成される:
 
 - **Primitive** — service / deployment / route / publication / resource /
-  consume edge などの個別 record
+  consume edge などの authoring/API projection
 - **Group** — primitive を任意に束ねる state scope。所属 primitive は
   inventory、snapshot、rollback、uninstall などの group 機能を使える
 - **Workload** — worker / service (常設 container) / attached
@@ -58,7 +69,11 @@ space は Takos の分離単位。法人のようなもの。
   interface の公開情報
 
 CLI は manifest / repository / catalog source から primitive declaration を
-apply し、API は個別 primitive の管理もサポートする。
+apply し、API は個別 primitive の管理もサポートする。primitive の desired state
+は Deployment record の `desired` field に固定され、status が `resolved` →
+`applying` → `applied` と遷移する。Deployment が `applied` になると GroupHead
+の `current_deployment_id` がその Deployment を指し、kernel はそれを current
+として serve する。
 
 group は kernel features ではない (agent, git, storage, store は kernel 機能で
 あり group ではない)。"app" は Store / UI 上の product label であり、deploy
@@ -73,7 +88,7 @@ primitive desired declaration を書く flat YAML。envelope なし、全 field
 
 | field     | 役割                                                          |
 | --------- | ------------------------------------------------------------- |
-| `name`    | group 名（routing の hostname に使用）                        |
+| `name`    | display 名。deploy / install では既定の group 名にもなる       |
 | `compute` | worker, service, attached container (consume は各 compute 内) |
 | `routes`  | path → workload のマッピング                                  |
 | `publish` | typed outputs publication catalog                             |
@@ -121,13 +136,15 @@ Groups (routing layer で hostname 割り当て):
   3. custom domain: 任意のドメイン（optional、DNS 検証）
 ```
 
-Session cookie は host-only の `__Host-tp_session` として発行する（`Domain`
-attribute なし）。kernel と group subdomain では cookie を共有しない。
+Session cookie は host-only として発行する（`Domain` attribute なし）。kernel
+と group subdomain では cookie を共有しない。
 
-dispatch が hostname で kernel or group に振り分ける。group 内に複数 worker
-がある場合、dispatch が RoutingRecord の path + method で適切な worker を選ぶ。
+routing layer は GroupHead が指す current Deployment の `desired.routes` /
+`desired.activation_envelope` から導出される route projection を解決し、
+hostname で kernel か group に振り分ける。group 内に複数 worker がある場合は
+path + method で適切な worker を選ぶ。
 
-routing の実装詳細は
+routing の実装詳細と route projection の cache / dispatch process role は
 [Control Plane - Routing layer](./control-plane.md#routing-layer) を参照。
 
 ## Resource broker
@@ -140,6 +157,12 @@ kernel は compute に対する resource / publication の解決を行う。
 - resource access は resource API / runtime binding で扱う。publish は
   typed outputs catalog に使い、Takos API key / OAuth client は built-in
   provider publication として consume する
+
+resource は ResourceInstance として control plane が record し、Deployment や
+provider の lifecycle と independent な durable record を持つ。provider 側の
+observed state は ProviderObservation stream として記録され、canonical な真値
+は常に Deployment.desired 側にある。compute への接続は
+`Deployment.desired.bindings` field に Deployment 単位で固定される。
 
 kernel 自身の storage は kernel DB / object-store を使う（group とは別）。
 
@@ -264,3 +287,37 @@ kernel が発行するイベント:
 - `group.deployed`, `group.deleted`, `group.rollback`, `group.unhealthy`
 
 Event 処理の原則: idempotent, graceful, non-blocking。
+
+## Workers backend reference materialization
+
+::: details tracked reference Workers backend の実装詳細
+
+> このセクションは Cloudflare Workers backend に固有の materialization
+> detail。Core 用語との対応は
+> [Glossary § Workers backend implementation note](/reference/glossary#workers-backend-implementation-note)
+> を参照。
+
+tracked reference Workers backend では、kernel は admin host と tenant
+hostname を分離した複数 worker / Container DO に展開される。
+
+- kernel host (`{KERNEL_DOMAIN}` に対応する `{ADMIN_DOMAIN}` 配備変数) は
+  control-web worker が serve する
+- session cookie は host-only `__Host-tp_session` として発行する。kernel と
+  tenant hostname で cookie を共有しない
+- tenant hostname (auto / custom slug / custom domain) は `takos-dispatch`
+  worker が受け取り、RoutingRecord の hostname → group worker / endpoint
+  解決を行う。RoutingRecord は GroupHead が指す Deployment の
+  `desired.routes` / `desired.activation_envelope` から導出した route
+  projection の Workers backend 側 record
+- group 内に複数 worker がある場合、`takos-dispatch` が RoutingRecord の path
+  + method で適切な worker を選ぶ
+- route projection の解決は `RoutingDO` を底にした 3 階層 cache (L1 isolate
+  Map / L2 KV / L3 DO) を経由する
+- 配備設定は `takos/app/apps/control/wrangler.toml` 系の wrangler.toml ファイル
+  に配置する
+
+詳細な実行コンポーネント / cache 構造 / dispatch namespace は
+[Control plane § Workers backend reference materialization](./control-plane.md#workers-backend-reference-materialization)
+を参照。
+
+:::

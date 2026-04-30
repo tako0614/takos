@@ -1,8 +1,8 @@
 # Default App Distribution
 
 Takos の default app distribution は、新規 space に preinstall する app
-候補の初期セットです。`takos-apps/` 配下と `yurucommu/` の
-product/reference repos は default app の参照元であり、fallback distribution
+候補の初期セットです。`takos-apps/` 配下と `yurucommu/` の product/reference
+repos は default app の参照元であり、fallback distribution
 の直接管理元ではありません。実際の fallback distribution は control code の
 repository refs と env / operator overrides から解決されます。
 
@@ -16,30 +16,61 @@ repository refs と env / operator overrides から解決されます。
 default app distribution の初期セットは以下の 5 つ（Agent / Chat / Git / Storage
 / Store は kernel 機能のため含まれない）:
 
-| group                                      | 既定 ref | 役割                                  | custom publication examples    | built-in consumes |
-| ------------------------------------------ | -------- | ------------------------------------- | ------------------------------ | ----------------- |
-| [takos-docs](/platform/takos-docs)         | `master` | リッチテキストエディタ                | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
-| [takos-excel](/platform/takos-excel)       | `master` | スプレッドシート                      | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
-| [takos-slide](/platform/takos-slide)       | `master` | プレゼンテーション                    | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
-| [takos-computer](/platform/takos-computer) | `master` | sandbox computer / browser automation | takos.ui-surface.v1 / takos.mcp-server.v1 / container workload | takos-api         |
-| [yurucommu](/platform/yurucommu)           | `master` | ActivityPub / community social        | takos.ui-surface.v1 / queue worker | takos.oauth-client |
+| group                                      | 既定 ref | 役割                                  | custom publication examples                                                        | built-in consumes  |
+| ------------------------------------------ | -------- | ------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
+| [takos-docs](/platform/takos-docs)         | `master` | リッチテキストエディタ                | takos.ui-surface.v1 / takos.mcp-server.v1 / takos.file-handler.v1                  | takos-api          |
+| [takos-excel](/platform/takos-excel)       | `master` | スプレッドシート                      | takos.ui-surface.v1 / takos.mcp-server.v1 / takos.file-handler.v1                  | takos-api          |
+| [takos-slide](/platform/takos-slide)       | `master` | プレゼンテーション                    | takos.ui-surface.v1 / takos.mcp-server.v1 / takos.file-handler.v1                  | takos-api          |
+| [takos-computer](/platform/takos-computer) | `master` | sandbox computer / browser automation | takos.ui-surface.v1 / takos.mcp-server.v1 / container workload                     | takos-api          |
+| [yurucommu](/platform/yurucommu)           | `master` | ActivityPub / community social        | takos.ui-surface.v1 / queue worker                                                 | takos.oauth-client |
 
 `takos-api` は route / interface publication ではなく、`takos.api-key` built-in
 provider publication を consume する local consume 名です。
 
-office 系 default apps は `takos.ui-surface.v1` と `/mcp` の `takos.mcp-server.v1` を publish し、
-MCP publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言する。group-managed
-deploy は publisher workload に `MCP_AUTH_TOKEN` を service secret env として
-生成/注入し、app 実装は token 未設定時に fail closed する。local/dev 等で意図的に
-認証なしにする場合だけ `MCP_ALLOW_UNAUTHENTICATED=true` を設定する。
-takos-computer は `takos.ui-surface.v1` と `/mcp` の `takos.mcp-server.v1` を publish し、
-agent が `computer_*` tools 経由で sandbox session / shell / file / process 操作を
-使えるようにする。MCP publication は `auth.bearer.secretRef: PUBLISHED_MCP_AUTH_TOKEN`
-を宣言し、worker + attached container で session ごとの MCP proxy routes も提供する。
-`takos.api-key` を consume して sandbox 内の Takos API access を受け取る。
-yurucommu は `takos.ui-surface.v1` を publish し、`takos.oauth-client` を consume して
-Takos OAuth で sign-in する。自前の sql/object-store/key-value/queue/secret
-resources を持つため、office 系 default apps より resource footprint が大きい。
+default app manifest の `display.icon` と `compute.<name>.icon` は current
+manifest field です。office 系 default apps は launcher 表示用に `display.icon`
+を持ち、同じ画像を `compute.web.icon` にも置いて `takos.ui-surface.v1` publication の
+fallback として preserve / expose されるようにします。
+
+office 系 default apps は `takos.ui-surface.v1`、`/mcp` の
+`takos.mcp-server.v1`、`/files/:id` の `takos.file-handler.v1` を publish
+する。 MCP publication は
+`auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言する。group-managed deploy は
+publisher workload に `MCP_AUTH_TOKEN` を service secret env として
+生成/注入し、app 実装は token 未設定時に fail closed する。local/dev
+等で意図的に 認証なしにする場合だけ `MCP_ALLOW_UNAUTHENTICATED=true`
+を設定する。office 系 default apps は `/api` route、`takos.oauth-client`
+consume、`APP_SESSION_SECRET` generated secret も持ち、app session と Takos
+OAuth callback を worker 内で処理する。 takos-computer は `takos.ui-surface.v1`
+と `/mcp` の `takos.mcp-server.v1` を publish し、 agent が `computer_*` tools
+経由で sandbox session / shell / file / process 操作を 使えるようにする。MCP
+publication は `auth.bearer.secretRef: PUBLISHED_MCP_AUTH_TOKEN`
+を宣言し、worker + attached container で session ごとの MCP proxy routes
+も提供する。 `takos.api-key` を consume して sandbox 内の Takos API access
+を受け取る。 yurucommu は `takos.ui-surface.v1` を publish
+し、`takos.oauth-client` を consume して Takos OAuth で sign-in する。自前の
+sql/object-store/key-value/queue/secret resources を持つため、office 系 default
+apps より resource footprint が大きい。
+
+## Office file contracts
+
+office 系 default apps は Storage の file handler catalog に登録され、Storage UI
+から該当ファイルを開くと各 app の `/files/:id` route に遷移する。handler は
+manifest の `takos.file-handler.v1` publication で宣言し、`outputs.url.routeRef`
+は `file-open` (`/files/:id`) を指す。
+
+| app         | route        | extension     | MIME type                         |
+| ----------- | ------------ | ------------- | --------------------------------- |
+| takos-docs  | `/files/:id` | `.takosdoc`   | `application/vnd.takos.docs+json` |
+| takos-excel | `/files/:id` | `.takossheet` | `application/vnd.takos.excel+json` |
+| takos-slide | `/files/:id` | `.takosslide` | `application/vnd.takos.slide+json` |
+
+office 系 app の API / UI / MCP は request ごとに `space_id` または `spaceId`
+query parameter を読む。指定がある場合はそれを Storage space として使い、指定が
+ない場合は optional env `TAKOS_SPACE_ID` を fallback として使う。どちらもない
+request は `space_id is required` として失敗する。Takos managed deploy では
+Storage への endpoint / token は `takos.api-key` consume から
+`TAKOS_STORAGE_API_URL` / `TAKOS_STORAGE_ACCESS_TOKEN` に inject される。
 
 ## 動作原理
 
@@ -50,9 +81,9 @@ compute を持ちうる。
 - 新規 space の bootstrap で default app preinstall job を
   `default_app_preinstall_jobs` に作成し、space 作成自体は default app deploy
   の成功/失敗に依存しない
-- preinstall job の作成時点では repository refs / operator overrides を固定しない。
-  job 処理時に現在の distribution を解決し、deploy queue に group deploy job を
-  enqueue する
+- preinstall job の作成時点では repository refs / operator overrides
+  を固定しない。 job 処理時に現在の distribution を解決し、deploy queue に group
+  deploy job を enqueue する
 - deploy queue に投入した preinstall 対象は
   `default_app_preinstall_jobs.distribution_json` に cache として保存する。
   これにより queued のまま残っている job は最新 distribution を拾い、
@@ -75,28 +106,38 @@ compute を持ちうる。
 - default set に含まれても primitive や group 自体は特権化されない
 
 default app を git push だけで随時更新できる運用にする場合は、distribution entry
-を `refType: "branch"` とし、`ref` に `master` / `main` などの追跡 branch を指定する。
-各 space の installed app は update / redeploy 時にその branch の最新 commit を解決する。
-`refType: "tag"` は staging や production を特定 release に固定したい場合に使う。
-install / preinstall 時に default app の bundled snapshot は作らず、repository URL /
-ref / 解決済み commit / manifest metadata を deployment record に保存する。
+を `refType: "branch"` とし、`ref` に `master` / `main` などの追跡 branch
+を指定する。 各 space の installed app は update / redeploy 時にその branch
+の最新 commit を解決する。 `refType: "tag"` は staging や production を特定
+release に固定したい場合に使う。 install / preinstall 時に default app の
+bundled snapshot は作らず、repository URL / ref / 解決済み commit / manifest
+metadata を deployment record に保存する。
 
 default app は通常の group として扱われるため、次の責務は app 側で実装します。
 
 - 自前の sql/object-store で data を管理する
 - 自前の HTTP API を expose する
-- kernel の auth (`/auth/*`) を使って認証する
+- kernel の OAuth / Takos API token flow を使って API access token を得る
 - env injection で他 group の URL を得る
 
 一方で default app は kernel 内部 API を直接呼び出す特権を持ちません。Takos API
 への access は、他の app と同じく built-in provider publication consume と
 injected secret を経由します。
 
+default app の UI / API は通常 group subdomain で serve されます。kernel の
+browser session cookie は host-only の `__Host-tp_session` であり、`Domain`
+attribute を持たないため、kernel host と group subdomain
+の間では共有されません。 default app が Takos API を呼ぶ場合は cookie
+共有に依存せず、OAuth bearer token または injected Takos API token を
+`Authorization: Bearer ...` として送ります。
+
 kernel は deploy manifest の `publish` から route publication catalog
-を保存する。`UiSurface` などの custom type を sidebar + iframe 統合に使うか
-どうかは platform 側の解釈です。`McpServer` は agent 側が参照する MCP catalog
-entry として扱う。Takos API access は route publication ではなく built-in
-provider publication consume として扱う。各 entry は group に所属しなくても動作する。
+を保存する。`takos.ui-surface.v1` などの custom type を sidebar + iframe 統合に使うか
+どうかは platform 側の解釈です。`takos.mcp-server.v1` は agent 側が参照する MCP catalog
+entry として扱う。canonical / legacy alias は
+[publication types](/reference/glossary#publication-types) を参照。Takos API access は route publication ではなく built-in
+provider publication consume として扱う。各 entry は group
+に所属しなくても動作する。
 
 ## Operator overrides
 
@@ -105,20 +146,20 @@ space bootstrap 時に作る group scope と deploy queue job の入力であり
 app を特権化しません。backend / env の指定も operator-only で、`.takos/app.yml`
 の public manifest に provider / backend を書く仕組みではありません。
 
-| env                                         | 説明                                                                                                                 |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `TAKOS_DEFAULT_APPS_PREINSTALL`             | `false` / `0` / `no` / `off` の場合、default app group と deploy job を作らない                                      |
-| `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON`       | distribution 全体を JSON array で置き換える                                                                          |
-| `TAKOS_DEFAULT_APP_REPOSITORIES_JSON`       | repository list を JSON array で渡す。`repositoryUrl` または `url` を受け付け、`name` 省略時は repo URL から推定する |
-| `TAKOS_DEFAULT_APP_REF`                     | fallback distribution 全体の ref override。省略時、builtin fallback は各 entry の既定 ref、JSON entry は `main`      |
-| `TAKOS_DEFAULT_APP_REF_TYPE`                | `branch` / `tag` / `commit`。未知値は validation error になる                                                        |
-| `TAKOS_DEFAULT_APP_BACKEND`                 | deploy queue job に渡す operator-only backend 名。`cloudflare` / `local` / `aws` / `gcp` / `k8s`                     |
-| `TAKOS_DEFAULT_APP_ENV`                     | deploy queue job に渡す environment 名                                                                               |
-| `TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL`     | fallback の `takos-docs` repository URL を置き換える                                                                 |
-| `TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL`    | fallback の `takos-excel` repository URL を置き換える                                                                |
-| `TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL`    | fallback の `takos-slide` repository URL を置き換える                                                                |
-| `TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL` | fallback の `takos-computer` repository URL を置き換える                                                             |
-| `TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL` | fallback の `yurucommu` repository URL を置き換える                                                                  |
+| env                                          | 説明                                                                                                                                                                                                                         |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TAKOS_DEFAULT_APPS_PREINSTALL`              | `false` / `0` / `no` / `off` の場合、default app group と deploy job を作らない                                                                                                                                              |
+| `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON`        | distribution 全体を JSON array で置き換える                                                                                                                                                                                  |
+| `TAKOS_DEFAULT_APP_REPOSITORIES_JSON`        | repository list を JSON array で渡す。`repositoryUrl` または `url` を受け付け、`name` 省略時は repo URL から推定する                                                                                                         |
+| `TAKOS_DEFAULT_APP_REF`                      | fallback distribution 全体の ref override。省略時、builtin fallback は各 entry の既定 ref、JSON entry は `main`                                                                                                              |
+| `TAKOS_DEFAULT_APP_REF_TYPE`                 | `branch` / `tag` / `commit`。未知値は validation error になる                                                                                                                                                                |
+| `TAKOS_DEFAULT_APP_BACKEND`                  | app/deploy queue compatibility job に渡す operator-only backend label。`cloudflare` / `local` / `aws` / `gcp` / `k8s`。PaaS kernel の provider/plugin 選択は `TAKOS_KERNEL_PLUGIN_CONFIG` と external plugin bundle 側で行う |
+| `TAKOS_DEFAULT_APP_ENV`                      | deploy queue job に渡す environment 名                                                                                                                                                                                       |
+| `TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL`      | fallback の `takos-docs` repository URL を置き換える                                                                                                                                                                         |
+| `TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL`     | fallback の `takos-excel` repository URL を置き換える                                                                                                                                                                        |
+| `TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL`     | fallback の `takos-slide` repository URL を置き換える                                                                                                                                                                        |
+| `TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL`  | fallback の `takos-computer` repository URL を置き換える                                                                                                                                                                     |
+| `TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL` | fallback の `yurucommu` repository URL を置き換える                                                                                                                                                                          |
 
 `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON` の entry は以下を受け付けます。
 
@@ -192,19 +233,18 @@ repository URL の duplicate 判定は scheme / host と `.git` suffix / trailin
 slash を正規化するが、path の大文字小文字は保持する。
 
 preinstall job は `queued` → `in_progress` → `deployment_queued` を経て、deploy
-queue 側で expected group の deployment record 適用が確認されたときに `completed`
-になる。deploy が失敗または DLQ に入った場合は `failed` になる。
+queue 側で expected group の deployment record 適用が確認されたときに
+`completed` になる。deploy が失敗または DLQ に入った場合は `failed` になる。
 `blocked_by_config` と `paused_by_operator` は backoff 後に再 scan される。
-`in_progress` の lease が古くなった job は cron で再 claim される。
-`queued` / `blocked_by_config` / `paused_by_operator` / stale `in_progress` の job
-は処理時に現在の distribution を解決し直す。
-`deployment_queued` のまま watchdog 時間を超えた job も再 scan され、expected
-group が未適用なら保存済み `distribution_json` から queue job を再送する。
-deploy queue 側の完了/失敗通知は `expected_group_ids_json` と
-`distribution_json` に一致する message だけ preinstall job に反映するため、古い
-queue message や operator 変更前の message で新しい job を完了/失敗にしない。
-同名の既存 group が distribution entry と異なる source を指す場合は silent skip
-せず conflict として failed にする。
+`in_progress` の lease が古くなった job は cron で再 claim される。 `queued` /
+`blocked_by_config` / `paused_by_operator` / stale `in_progress` の job
+は処理時に現在の distribution を解決し直す。 `deployment_queued` のまま watchdog
+時間を超えた job も再 scan され、expected group が未適用なら保存済み
+`distribution_json` から queue job を再送する。 deploy queue 側の完了/失敗通知は
+`expected_group_ids_json` と `distribution_json` に一致する message だけ
+preinstall job に反映するため、古い queue message や operator 変更前の message
+で新しい job を完了/失敗にしない。 同名の既存 group が distribution entry
+と異なる source を指す場合は silent skip せず conflict として failed にする。
 
 ## Admin API boundary
 
@@ -301,7 +341,8 @@ kernel と group はドメインが完全に分離される。
 group が他 group のサーバー API や kernel API を呼ぶ場合は publication または
 Takos built-in provider publication が供給する endpoint / credential を使う。
 
-1. group が route publication を publish する、または Takos built-in provider publication を consume する
+1. group が route publication を publish する、または Takos built-in provider
+   publication を consume する
 2. 呼び出し側 compute が `consume` で endpoint / credential を受け取る
 3. 呼び出し元 group はその credential を `Authorization` header 等に載せる
 4. 受信側は通常の PAT / OAuth / integration-managed credential として検証する

@@ -5,14 +5,30 @@
 [API reference](/reference/api) を参照。
 :::
 
-Takos の deploy system は **primitive-first** です。worker / service / route /
-publication / resource / consume edge は個別 record として保存され、group
-に所属しているかどうかで runtime や resource provider の扱いは変わりません。
+Takos の deploy system は authoring/API surface では **primitive-first** です。
+worker / service / route / publication / resource / consume edge は compatibility
+projection として個別 record に見えますが、`takos-paas` Core の正本は
+3 つの record に集約されています:
+
+- **Deployment** — input (`manifest_snapshot`) → resolution
+  (`descriptor_closure` / `resolved_graph`) → desired (`routes` / `bindings` /
+  `resources` / `runtime_network_policy` / `activation_envelope`) → conditions
+  の 4 layer を 1 record に内包する中核 record
+- **ProviderObservation** — provider 側の observed state を separate stream
+  として記録 (canonical な真値ではない)
+- **GroupHead** — group ごとの `current_deployment_id` / `previous_deployment_id`
+  pointer
+
+`ResourceInstance` / `MigrationLedger` のみ Deployment 外の独立 record として
+durable state を持ちます。group に所属しているかどうかで runtime や resource
+provider の扱いは変わりません。
+
+> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
 
 実装上の分かれ方:
 
 - **Primitive records** — service、deployment、route、custom domain、resource、
-  publication、consume edge などの実体 record
+  publication、consume edge などの authoring/API projection record
 - **Group** — primitive を任意に束ねる state scope。inventory、source metadata、
   current deployment pointer、reconcile status など group 機能の state を持つ
 - **Manifest / source** — primitive desired declaration の入力。local file、
@@ -22,10 +38,10 @@ publication / resource / consume edge は個別 record として保存され、g
   bundled snapshot ではなく source metadata / resolved commit として保存する
 
 Group は runtime backend でも resource provider でもありません。worker /
-container / resource はそれぞれ個別 record として存在し、group は `group_id` と
-deployment metadata でそれらを同じ inventory / lifecycle scope に載せます。group
-なし primitive も、group 所属 primitive も、個別 API と runtime adapter 上は同じ
-primitive です。
+container / resource はそれぞれ compatibility projection として存在し、group は
+`group_id` と deployment metadata でそれらを同じ inventory / lifecycle scope に
+載せます。group なし primitive も、group 所属 primitive も、個別 API と runtime
+adapter 上は同じ primitive projection です。
 
 ## Manifest format
 
@@ -189,10 +205,14 @@ group deployment history を更新するため、group 名を明示し、その 
 に参加する。
 
 ```bash
-takos deploy --space SPACE_ID --group my-app              # group inventory へ apply
-takos deploy --plan --space SPACE_ID --group my-app       # 差分プレビュー（non-mutating）
-takos install OWNER/REPO --space SPACE_ID --group my-app  # catalog から source を解決して apply
-takos rollback GROUP_NAME --space SPACE_ID # group の前回成功 record へ戻す
+takos deploy --space SPACE_ID --group my-app                       # resolve + apply (Heroku-like sugar)
+takos deploy --resolve-only --space SPACE_ID --group my-app        # resolved Deployment を作成 (apply 待ち)
+takos deploy --preview --space SPACE_ID --group my-app             # 差分プレビュー（non-mutating、record なし）
+takos apply <deployment-id> --space SPACE_ID                        # resolved Deployment を apply
+takos diff <deployment-id> --space SPACE_ID                         # resolved expansion + diff
+takos approve <deployment-id> --space SPACE_ID                      # optional approval を attach
+takos install OWNER/REPO --space SPACE_ID --group my-app            # catalog から source を解決して apply
+takos rollback GROUP_NAME --space SPACE_ID # GroupHead を previous_deployment_id に切替
 takos uninstall GROUP_NAME --space SPACE_ID
 takos group list --space SPACE_ID          # group inventory
 takos group show NAME --space SPACE_ID
@@ -209,7 +229,7 @@ takos group show NAME --space SPACE_ID
 
 ## Group features
 
-Group と primitive record の責務は次のように分ける。
+Group と primitive projection record の責務は次のように分ける。
 
 - worker / service / attached container は `services` と `deployments`
   に保存される
@@ -217,16 +237,16 @@ Group と primitive record の責務は次のように分ける。
 - publication は `publications`、consume は `service_consumes` に保存される
 - resource は `resources` に保存される
 - group は `groups` row として inventory / source metadata / current deployment
-  pointer / reconcile status を持つ
+  pointer / reconcile status を持つ compatibility projection
 - deployment history / rollback / uninstall は group inventory に対する機能であり、
   primitive runtime の特別処理ではない
 
 ```text
 group "my-app":
   groups row:
-    inventory / source metadata / current deployment pointer / reconcile status
+    inventory / source metadata / GroupHead pointer / reconcile status
   group features:
-    plan / apply / deployment history / rollback / uninstall
+    deploy (resolve + apply) / deployment history / rollback / uninstall
   inventory:
     service: web
     route: /
@@ -241,35 +261,57 @@ group なし primitive:
 
 ## Deploy pipeline
 
-`takos deploy` / `takos deploy --plan` が public deploy entrypoint。group apply
-の HTTP API path も同じ内部 pipeline を通る。
+`takos deploy` / `takos deploy --resolve-only` が public deploy entrypoint。
+group apply の HTTP API path も同じ内部 pipeline を通る。pipeline は
+Deployment lifecycle (`preview` → `resolved` → `applying` → `applied` /
+`failed` / `rolled-back`) を 1 record で表現する。
 
-1. Desired declaration の生成
+1. Authoring expansion
    - deploy manifest を parse して primitive desired declaration に compile
+   - `kind: container` / `kind: js-worker` などの authoring 形式は canonical
+     component / contract instance form に展開され、その descriptor 拡張 digest
+     も descriptor_closure に含める
    - group が指定されている場合は group membership を付与する
-2. Diff
-   - worker / service / attached container / route / publication / consume を現在
-     state と比較
+2. Resolution (status → `resolved`)
+   - descriptor を resolve して digest pin、`Deployment.resolution.descriptor_closure`
+     と `Deployment.resolution.resolved_graph` (component / projection) を確定
+   - `Deployment.desired.routes` / `.bindings` / `.resources` /
+     `.runtime_network_policy` / `.activation_envelope` を生成
+   - resolution-gate の policy decision を `Deployment.policy_decisions[]` に記録
+3. Diff (read-set validation)
+   - 現在 GroupHead が指す Deployment.desired と新 Deployment.desired を比較
    - resource creation は resource API 側の責務として扱う
-3. Workload apply
-   - worker / service / attached container を topological order で apply
-   - per-compute `depends` で順序を制御
-4. Managed-state sync
+4. Workload apply (status → `applying`)
+   - worker / service / attached container を topological order で apply、
+     per-compute `depends` で順序を制御
+   - 各 provider operation は `Deployment.conditions[]`
+     (scope.kind="operation" / "phase") に append される
+5. Managed-state sync
    - publication catalog を同期
    - Takos built-in provider publication consume を検証し、
      `compute.<name>.consume` を宣言した consumer の env に inject
-5. Routing reconcile
-   - workload apply と managed-state sync が成功した場合だけ route を reconcile
-6. Deployment record update
+6. Routing reconcile
+   - workload apply と managed-state sync が成功した場合だけ route projection
+     を reconcile (RoutingRecord として materialize)
+7. Activation commit (status → `applied`)
+   - `Deployment.desired.activation_envelope` を commit、GroupHead の
+     `current_deployment_id` を新 Deployment に進め、`previous_deployment_id`
+     に旧 current を保持
    - group がある場合は group-scoped declaration / observed state / deployment
      pointer を更新する
 
 ## Rollback
 
-rollback は group の前回成功 deployment record へ戻す group 機能です。
+rollback は GroupHead の `current_deployment_id` を `previous_deployment_id`
+(または明示指定された retained Deployment id) に向けて切り替える pointer
+move です。新 Deployment record は作成されず、旧 current Deployment は
+`rolled-back` status に遷移します。
 
-- code + config + bindings が戻る
-- DB data は戻らない（forward-only migration）
+- code + config + bindings が戻る (retained
+  `Deployment.input.manifest_snapshot` と `Deployment.resolution.descriptor_closure`
+  を再利用)
+- DB data は戻らない（forward-only migration、`MigrationLedger` は逆方向に
+  進まない）
 - resource の data / schema は自動巻き戻ししない
 - group なし primitive の個別 rollback は、その primitive API の contract に従う
 
@@ -307,8 +349,8 @@ Takos deploy system (primitive-first):
 
   Optional group scope
     - groups row
-    - inventory / source metadata / current deployment pointer / reconcile status
-    - features: plan / apply / deployment history / rollback / uninstall / updates
+    - inventory / source metadata / GroupHead pointer / reconcile status
+    - features: deploy (resolve + apply) / deployment history / rollback / uninstall / updates
 
   CLI / API surface
     - deploy:    takos deploy / install

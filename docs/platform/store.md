@@ -87,9 +87,10 @@ GET /api/explore/catalog?sort=trending&limit=20
 curl "https://takos.example.com/api/explore/catalog?tags=docs,notes&limit=10"
 ```
 
-`space_id` を付けた場合、レスポンスの
-`installation.group_deployment_snapshot_id` は current group deployment record の ID
-です。legacy `bundle_deployments` ID はここに入りません。
+`space_id` を付けた場合、レスポンスの `installation.deployment_id` は current
+group の `GroupHead.current_deployment_id` を指す Deployment record の ID
+です。legacy `bundle_deployments` ID や旧 `group_deployment_snapshot_id`
+はここに入りません。
 
 ### パッケージ検索
 
@@ -216,7 +217,8 @@ publish:
 
 MCP server catalog は deploy manifest の `publish` entry で管理します。deploy
 後に control plane が catalog entry を保存し、agent 側が server をロードする。
-`takos.mcp-server.v1` は standard route publication type です。詳細は [MCP Server](/apps/mcp) を参照。publication
+`takos.mcp-server.v1` の canonical 定義は
+[publication types](/reference/glossary#publication-types) を参照。詳細は [MCP Server](/apps/mcp) を参照。publication
 の仕組みについては [Publication](/architecture/app-publications)
 を参照。
 
@@ -242,13 +244,14 @@ publish:
       extensions: [.md]
 ```
 
-FileHandler catalog は deploy manifest の `publish` entry で管理します。space
-storage と deployed UI が loose coupling のまま連携できる。`FileHandler` の
+`takos.file-handler.v1` catalog は deploy manifest の `publish` entry で管理します。space
+storage と deployed UI が loose coupling のまま連携できる。`takos.file-handler.v1` の
 route output は `:id` path segment を必ず含み、storage catalog では `:id` を含まない
 handler を公開しません。`takos.file-handler.v1` の launch contract は file ID の path
 segment が primary です。current storage UI は起動時に `space_id` query
-parameter も追加しますが、`file_id` query fallback はありません。 `FileHandler`
-は standard route publication type です。詳細は
+parameter も追加しますが、`file_id` query fallback はありません。
+canonical / legacy alias は
+[publication types](/reference/glossary#publication-types) を参照。詳細は
 [File Handlers](/apps/file-handlers) を参照。publication の仕組みについては
 [Publication](/architecture/app-publications) を参照。
 

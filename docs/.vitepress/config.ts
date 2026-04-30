@@ -30,7 +30,9 @@ export default defineConfig({
       { text: "デプロイ", link: "/deploy/" },
       { text: "ホスティング", link: "/hosting/" },
       { text: "プラットフォーム", link: "/platform/" },
+      { text: "PaaS Core", link: "/takos-paas/" },
       { text: "リファレンス", link: "/reference/" },
+      { text: "Contributing", link: "/contributing/" },
       { text: "サンプル", link: "/examples/" },
     ],
     sidebar: [
@@ -85,6 +87,7 @@ export default defineConfig({
           { text: "GCP", link: "/hosting/gcp" },
           { text: "Kubernetes", link: "/hosting/kubernetes" },
           { text: "セルフホスト", link: "/hosting/self-hosted" },
+          { text: "Multi-cloud", link: "/hosting/multi-cloud" },
           { text: "ローカル開発", link: "/hosting/local" },
         ],
       },
@@ -114,7 +117,6 @@ export default defineConfig({
           { text: "Threads and Runs", link: "/platform/threads-and-runs" },
           { text: "Store", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
-          { text: "ActivityPub", link: "/platform/activitypub" },
           { text: "Default Groups", link: "/platform/default-apps" },
           { text: "互換性", link: "/platform/compatibility" },
           {
@@ -129,6 +131,44 @@ export default defineConfig({
         ],
       },
       {
+        text: "Takos PaaS Core",
+        collapsed: true,
+        items: [
+          { text: "概要", link: "/takos-paas/" },
+          { text: "Current State (実装状況)", link: "/takos-paas/current-state" },
+          { text: "Core Contract v1.0", link: "/takos-paas/core/01-core-contract-v1.0" },
+          { text: "v1.0 Implementation Checklist", link: "/takos-paas/10-v1.0-implementation-checklist" },
+          {
+            text: "Authoring Guides",
+            items: [
+              { text: "Authoring Guide", link: "/takos-paas/guides/authoring-guide" },
+              { text: "Descriptor Authoring", link: "/takos-paas/guides/descriptor-authoring-guide" },
+              { text: "Plugin Authoring", link: "/takos-paas/guides/plugin-authoring-guide" },
+            ],
+          },
+          {
+            text: "Implementation",
+            items: [
+              { text: "Implementation Strategy", link: "/takos-paas/implementation/implementation-strategy" },
+              { text: "Cloudflare Containers Strategy", link: "/takos-paas/implementation/cloudflare-containers-strategy" },
+              { text: "Provider Descriptor Catalog", link: "/takos-paas/implementation/provider-descriptor-catalog" },
+              { text: "Provider Descriptor Guidelines", link: "/takos-paas/implementation/provider-descriptor-guidelines" },
+              { text: "Cloudflare Containers Provider", link: "/takos-paas/implementation/providers/cloudflare-containers" },
+              { text: "Cloudflare Workers Provider", link: "/takos-paas/implementation/providers/cloudflare-workers" },
+            ],
+          },
+          { text: "Official Descriptor Set v1", link: "/takos-paas/descriptors/official-descriptor-set-v1" },
+          { text: "Migration: current → deploy-v2", link: "/takos-paas/migration/current-takos-to-deploy-v2" },
+          {
+            text: "Tests",
+            items: [
+              { text: "Conformance Tests", link: "/takos-paas/tests/conformance-tests" },
+              { text: "Condition Reason Catalog", link: "/takos-paas/tests/condition-reason-catalog" },
+            ],
+          },
+        ],
+      },
+      {
         text: "リファレンス",
         items: [
           { text: "CLI", link: "/reference/cli" },
@@ -137,6 +177,94 @@ export default defineConfig({
           { text: "Database", link: "/reference/database" },
           { text: "Manifest Spec", link: "/reference/manifest-spec" },
           { text: "用語集", link: "/reference/glossary" },
+        ],
+      },
+      {
+        text: "Contributing",
+        collapsed: true,
+        items: [
+          { text: "概要", link: "/contributing/" },
+          { text: "Current State", link: "/contributing/current-state" },
+          { text: "Acceptance Matrix", link: "/contributing/acceptance-matrix" },
+          {
+            text: "Acceptance Test Backlog",
+            link: "/contributing/acceptance-test-backlog",
+          },
+          { text: "API Surface", link: "/contributing/api-surface" },
+          {
+            text: "System Architecture Plan",
+            link: "/contributing/system-architecture-implementation-plan",
+          },
+          {
+            text: "Architecture Alignment",
+            link: "/contributing/architecture-alignment-validation",
+          },
+          {
+            text: "Process Role Validation",
+            link: "/contributing/process-role-validation",
+          },
+          {
+            text: "Kernel Plugin Boundary Audit",
+            link: "/contributing/kernel-plugin-boundary-audit",
+          },
+          {
+            text: "Control to PaaS Migration",
+            link: "/contributing/control-to-paas-migration-inventory",
+          },
+          {
+            text: "Deploy Topology Notes",
+            link: "/contributing/deploy-topology-notes",
+          },
+          {
+            text: "Production Gap Burndown",
+            link: "/contributing/production-gap-burndown",
+          },
+          { text: "Release Gate", link: "/contributing/release-gate" },
+          { text: "CI Release Gate", link: "/contributing/ci-release-gate" },
+          {
+            text: "Release Artifact Manifest",
+            link: "/contributing/release-artifact-manifest",
+          },
+          {
+            text: "Real Backend E2E Plan",
+            link: "/contributing/real-backend-e2e-plan",
+          },
+          { text: "Self-host E2E", link: "/contributing/self-host-e2e" },
+          {
+            text: "Self-host Runbook",
+            link: "/contributing/self-host-runbook",
+          },
+          { text: "Smoke", link: "/contributing/smoke" },
+          { text: "Compose Smoke", link: "/contributing/compose-smoke" },
+          {
+            text: "Compose Real Smoke",
+            link: "/contributing/compose-real-smoke",
+          },
+          {
+            text: "Docker Provider Smoke",
+            link: "/contributing/docker-provider-smoke",
+          },
+          { text: "Git Source Smoke", link: "/contributing/git-source-smoke" },
+          {
+            text: "Postgres Storage Smoke",
+            link: "/contributing/postgres-storage-smoke",
+          },
+          {
+            text: "Redis Queue Smoke",
+            link: "/contributing/redis-queue-smoke",
+          },
+          {
+            text: "Object Storage Smoke",
+            link: "/contributing/object-storage-smoke",
+          },
+          {
+            text: "Router Config Smoke",
+            link: "/contributing/router-config-smoke",
+          },
+          {
+            text: "Runtime Agent API Smoke",
+            link: "/contributing/runtime-agent-api-smoke",
+          },
         ],
       },
       {

@@ -26,6 +26,8 @@ CLI の deploy surface は [Deploy System](/deploy/) の public contract
 rollback の business logic は control plane に置きます。`repositoryUrl` と
 `--manifest` の同時指定は CLI で拒否します。
 
+> 現行 API gateway split status は [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照
+
 ## 認証
 
 ### `takos login`
@@ -48,8 +50,7 @@ takos logout
 ::: tip Device Flow との違い
 [OAuth の Device Authorization Grant](/apps/oauth#device-flow) はサードパーティ
 OAuth client が CLI / IoT クライアント向けに用意するフローです。`takos login`
-自体はブラウザコールバック方式を使い、Device Flow は使いません。
-:::
+自体はブラウザコールバック方式を使い、Device Flow は使いません。 :::
 
 ## 認証情報の解決順序
 
@@ -107,15 +108,17 @@ takos endpoint show
 ## task-oriented CLI
 
 Takos CLI では、単純な HTTP verb 直叩きではなく `domain + task` を使います。
-deploy system は primitive-first model で、worker / service / route /
-publication / resource を個別 record として扱います。group は primitive
-を任意に束ねる state scope で、deployment history / rollback などの group 機能を持ちます。
-CLI は `takos deploy` と group 機能 (`takos rollback`, `takos uninstall`) を
-1st-class でサポートします。個別操作のうち resource は `takos resource` /
-`takos res` でも扱い、compute / route は control-plane HTTP API
-(`/api/services/*`) を使います。`/api/publications/*` は grant 管理 surface
-で、MCP / FileHandler などの route publication は deploy manifest の `publish`
-で管理します。
+deploy system は authoring/API surface では primitive-first model で、worker /
+service / route / publication / resource を Deployment 内 projection として
+扱います。group は primitive declaration を任意に束ねる compatibility state
+scope で、deployment history / rollback などの group 機能を持ちます。CLI は
+`takos deploy` / `takos apply` / `takos diff` / `takos approve` /
+`takos rollback` を 1st-class でサポートします。個別操作のうち resource は
+`takos resource` / `takos res` でも扱い、compute / route は control-plane HTTP
+API (`/api/services/*`) を使います。`/api/publications/*` は grant 管理 surface
+で、`takos.mcp-server.v1` / `takos.file-handler.v1` などの route publication は
+deploy manifest の `publish` で管理します（canonical / legacy alias は
+[publication types](/reference/glossary#publication-types) を参照）。
 
 ```bash
 takos space list
@@ -143,26 +146,32 @@ stream 対応 domain は追加で `watch` と `follow` を持ちます。
 ## deploy CLI
 
 `takos deploy` は Takos の current preferred deploy entrypoint です。positional
-argument を 省略するとローカルの `.takos/app.yml` または `.takos/app.yaml` を
-source にし、repository URL を渡すと その repo を source
-にします。`takos install owner/repo --version TAG` は catalog item
-(Store) の owner/repo + version/tag を repository URL + Git tag
-に解決し、`source.kind = "git_ref"` / `ref_type = "tag"` として同じ pipeline
-を呼び出します。CLI は repo を clone せず、control plane が repo を fetch して
+argument を省略するとローカルの `.takos/app.yml` または `.takos/app.yaml` を
+source にし、repository URL を渡すとその repo を source にします。default の
+`takos deploy <manifest>` は **resolve + apply** の Heroku 風 sugar として動き、
+1 回の呼び出しで Deployment 作成と GroupHead 進行まで実行します。
+
+`takos install owner/repo --version TAG` は catalog item (Store) の
+owner/repo + version/tag を repository URL + Git tag に解決し、
+`source.kind = "git_ref"` / `ref_type = "tag"` として同じ pipeline を呼び出
+します。CLI は repo を clone せず、control plane が repo を fetch して
 manifest を parse します（thin client）。
 
-`takos rollback GROUP_NAME --space SPACE_ID` は前回成功 deployment record を既存 group
-に再適用する操作です。group row が既に削除されている場合は失敗し、deleted group
-を再生成しません。
+`takos rollback [<group>] --space SPACE_ID` は GroupHead を
+`previous_deployment_id`（または `--target-id` で指定した retained Deployment）
+へ atomically swap する操作です。group row が既に削除されている場合は失敗し、
+deleted group を再生成しません。
 
 ```bash
-takos deploy --space SPACE_ID                                                   # local manifest
+takos deploy --space SPACE_ID                                                   # local manifest, resolve+apply
 takos deploy --env staging --space SPACE_ID                                     # local manifest with env
 takos deploy https://github.com/acme/my-app.git --ref main --space SPACE_ID     # repo URL
-takos deploy --plan --space SPACE_ID                                            # dry-run preview
-takos deploy status --space SPACE_ID
-takos deploy status GROUP_DEPLOYMENT_SNAPSHOT_ID --space SPACE_ID
-takos rollback GROUP_NAME --space SPACE_ID
+takos deploy --preview --space SPACE_ID                                         # in-memory preview
+takos deploy --resolve-only --space SPACE_ID                                    # persist resolved Deployment only
+takos apply DEPLOYMENT_ID --space SPACE_ID                                      # apply a resolved Deployment
+takos diff DEPLOYMENT_ID --space SPACE_ID                                       # show expansion + diff vs GroupHead
+takos approve DEPLOYMENT_ID --space SPACE_ID                                    # attach approval (if required)
+takos rollback [GROUP_NAME] --space SPACE_ID                                    # flip GroupHead to previous
 takos install OWNER/REPO --space SPACE_ID --version v1.0.0
 takos uninstall GROUP_NAME --space SPACE_ID
 ```
@@ -173,17 +182,17 @@ takos uninstall GROUP_NAME --space SPACE_ID
 | `--ref`                    | no               | branch / tag / commit（repo URL 指定時）                                 |
 | `--ref-type`               | no               | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation） |
 | `--manifest`               | no               | local manifest path（既定は `.takos/app.yml` / `.takos/app.yaml`）       |
-| `--plan`                   | no               | dry-run preview                                                          |
+| `--preview`                | no               | in-memory preview（Deployment record を作らない）                         |
+| `--resolve-only`           | no               | resolved Deployment を作って apply は別途行う                            |
 | `--group`                  | deploy / install | manifest の `name` 由来の group 名を override                            |
 | `--env`                    | no               | target env                                                               |
 | `--space`                  | no               | target space ID                                                          |
-| `--target`                 | no               | plan-only diff entry name filter                                         |
 | `--auto-approve`           | no               | 確認プロンプトを省略                                                     |
 | `--json`                   | no               | JSON 出力                                                                |
 
-`takos deploy --plan --space SPACE_ID` は manifest validation
-と現在状態との差分確認を行います。preview は non-mutating で、group が未作成でも
-DB row は作りません。
+`takos deploy --preview --space SPACE_ID` は manifest validation と現在状態
+との差分確認を行います。preview は non-mutating で、Deployment record も
+作りません（`deployment_id` は `preview:<digest>` として返される）。
 
 deploy surface の詳細な options と group 機能の扱いは
 [CLI command reference](/reference/cli) を参照してください。
