@@ -1,0 +1,27 @@
+{
+  "tasks": {
+    "doctor": "node scripts/doctor.mjs",
+    "check": "node scripts/doctor.mjs --check",
+    "local:config": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -f compose.local.yml config'",
+    "local:up": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -f compose.local.yml up --build'",
+    "local:down": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -f compose.local.yml down'",
+    "local:logs": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -f compose.local.yml logs -f'",
+    "docs:dev": "deno task --cwd docs dev",
+    "docs:build": "deno task --cwd docs build",
+    "submodules:update": "git submodule update --init --recursive"
+  },
+  "nodeModulesDir": "auto",
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 120,
+    "indentWidth": 2,
+    "singleQuote": true,
+    "semiColons": true
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"],
+      "include": ["no-eval"]
+    }
+  }
+}
