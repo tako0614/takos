@@ -4,7 +4,7 @@
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **GCP 単独 hosting (GKE Helm)** ―
-   `takos/deploy/helm/takos/values-gcp.yaml` overlay。Kubernetes
+   `takos/paas/deploy/helm/takos/values-gcp.yaml` overlay。Kubernetes
    ベースで control plane / runtime / executor を運用する path。
 2. **GCP provider plugin (Phase 17A2)** ― Cloud Run / Cloud SQL / GCS / Pub/Sub
    / Cloud KMS / Secret Manager の 6 provider を Takos PaaS kernel から
@@ -87,7 +87,7 @@ FQDN policy を使う場合は `networkPolicy.runtime.extraEgress`
 ### インストール
 
 ```bash
-cd takos/deploy/helm/takos
+cd takos/paas/deploy/helm/takos
 helm dependency update
 
 helm upgrade --install takos . \

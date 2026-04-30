@@ -332,7 +332,7 @@ services:
 
 #### Runtime
 
-- **イメージ**: `takos/runtime/apps/runtime-service/Dockerfile` からビルド
+- **イメージ**: `ghcr.io/takos/runtime-service:latest` からビルド
 - **ポート**: `TAKOS_RUNTIME_PORT`（デフォルト `8081`）→ コンテナポート `8080`
 - **役割**: sandbox shell / workflow job / git / CLI proxy 用の
   `takos-runtime-service` container

@@ -67,6 +67,66 @@ the summary is:
    `/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*`. Spec § 17
    carries the full path mapping.
 
+   - **5a (snapshot before forward migration)**: take a logical dump of
+     `deploy_plans`, `deploy_activation_records`,
+     `deploy_group_activation_pointers`, `deploy_operation_records`, and the
+     structural columns of `resource_binding_set_revisions`. The v3 collapse
+     migration drops these tables; the snapshot is the only path back to v2
+     data if `db:migrate:rollback` is run later.
+   - **5b (point-of-no-return marker)**: once the v3 collapse migration has
+     completed and v3 endpoints are accepting traffic, retain the snapshot
+     for at least the configured rollback window. Rolling back the v3
+     collapse migration without restoring this snapshot is a *structural*
+     revert only; deploy history is lost.
+
+### v2 → v3 deterministic ID mapping {#v3-id-mapping}
+
+The collapse migration (`20260430000010_unify_to_deployments`) preserves v2
+ids so any retained reference (rollback target, audit trail, CLI output) keeps
+resolving against v3 rows without a translation table.
+
+| Rule | v2 source                                                     | v3 destination                                              | Note                                                                                                                            |
+| ---- | ------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `deploy_activation_records.id` (plan has activations)         | `deployments.id`                                            | Preferred. Preserves any v2 `rollback_json -> targetActivationId`.                                                              |
+| 2    | `deploy_plans.id` (plan has no activation_record)             | `deployments.id`                                            | Plan-only Deployments collapse to `status='resolved'` or `'failed'`.                                                            |
+| 3    | `deploy_activation_records.id` (orphan: plan already pruned)  | `deployments.id`                                            | Same id space as Rule 1.                                                                                                        |
+| 4    | `deploy_group_activation_pointers.activation_id`              | `group_heads.current_deployment_id`                         | Rule 1 guarantees the id survives.                                                                                              |
+| 5    | most-recent prior `deployments` row for the same `group_id`   | `group_heads.previous_deployment_id`                        | Selected via `order by coalesce(applied_at, created_at) desc`; restricted to status `applied` / `rolled-back` and `id <> head`. |
+| 6    | `deploy_operation_records.id`                                 | `deployments.conditions[].scope.ref`                        | Operation rows fold into `coalesce(activation_id, plan_id)`'s Deployment; the operation id is preserved in `scope.ref`.         |
+| 7    | `deploy_activation_records.rollback_json.targetActivationId`  | `deployments.rollback_target`                               | Rule 1 ensures the target row still exists.                                                                                     |
+
+Rule 5 is what closes H3 (Phase 18.2): without it, every migrated
+`group_heads.previous_deployment_id` would be `NULL`, and v3
+`POST /groups/:group_id/rollback` could never resolve the rollback target for
+groups whose only previous deployment was created under v2.
+
+### DB migration rollback strategy {#db-migration-rollback}
+
+Forward-only migrations are unrecoverable in production. The Phase 18.2
+migration runner (`apps/paas/src/adapters/storage/migration-runner/mod.ts`) and
+the `db:migrate:down` / `db:migrate:rollback` CLI scripts therefore provide:
+
+1. **Per-migration `down` clause** in `StorageMigrationStatement`. Each
+   `down` reverts only the schema this migration created (or the columns it
+   added) and is idempotent (`drop table if exists`, `drop column if exists`).
+2. **`db:migrate:down --target=<version>`** rolls back every applied migration
+   with `version > <version>` in reverse order; **`db:migrate:rollback
+   --steps=<n>`** rolls back the N most recent applied migrations.
+3. **Production guard**: `--env=production` refuses to execute unless the
+   operator passes `--allow-production-rollback`. With that flag the CLI
+   additionally requires either an interactive `ROLLBACK` prompt
+   confirmation or the non-interactive `--confirm=ROLLBACK` form. Staging
+   and local runs do not require these flags.
+4. **Forward-only safety valve**: a migration may omit `down` to declare
+   itself irreversible (the storage migration ledger itself is one such
+   case). The down runner refuses to rollback past such a migration with
+   `StorageMigrationDownNotSupportedError` rather than silently leaving
+   schema drift.
+5. **Data preservation**: down clauses revert structure, not data. Operators
+   wanting full data rollback must restore from the snapshot taken in step
+   5a above. The v3 collapse migration explicitly documents this in its
+   `down` comment.
+
 The legacy v2 migration steps below are retained for the migration validator
 (coverage matrix + descriptor bootstrap + safety checklist) and for operators
 running the projection layer that bridges legacy v2 stores into the v3 record

@@ -3,7 +3,7 @@
 このページは **Takos kernel を AWS にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
-1. **AWS 単独 hosting (EKS Helm)** ― `takos/deploy/helm/takos/values-aws.yaml`
+1. **AWS 単独 hosting (EKS Helm)** ― `takos/paas/deploy/helm/takos/values-aws.yaml`
    overlay。Kubernetes ベースで control plane / runtime / executor を運用する
    旧来 path。
 2. **AWS provider plugin (Phase 17A1)** ― ECS Fargate / RDS / S3 / SQS / KMS /
@@ -86,7 +86,7 @@ standard Kubernetes NetworkPolicy で DNS 名を指定できないため、priva
 ### インストール
 
 ```bash
-cd takos/deploy/helm/takos
+cd takos/paas/deploy/helm/takos
 helm dependency update
 
 helm upgrade --install takos . \
