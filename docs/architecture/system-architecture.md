@@ -139,7 +139,8 @@ Target service set:
 | `takos-cli` | `takos-cli` | user/operator CLI |
 | `takos-private` | `takos-private` | private operator config, secrets, production/staging deploy config |
 
-`takos-deploy` and `takos-runtime` are not target top-level product roots. They are internal domains of `takos-paas`.
+Standalone deploy and runtime services are not target top-level product roots. They are internal domains of
+`takos-paas`.
 
 > 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
 
@@ -1298,7 +1299,7 @@ These planes may share product root, but they must not share authority implicitl
 3. `takos-paas` is one product root by default. It is not split into many default microservices.
 4. Integrated, standalone, and distributed modes use the same PaaS core semantics.
 5. Differences between modes are host adapters, topology, and process shape, not core object semantics.
-6. `takos-deploy` and `takos-runtime` are internal domains of `takos-paas`, not semantic concepts to erase.
+6. Deploy and runtime lifecycles are internal domains of `takos-paas`, not semantic concepts to erase.
 7. `takos-app`, `takos-git`, and `takos-agent` remain separate in Full Takos distribution.
 8. `takos-paas` product root may contain multiple process roles, but the PaaS core remains the same.
 9. Service split inside `takos-paas` is a scale/operation decision, not a semantic requirement.

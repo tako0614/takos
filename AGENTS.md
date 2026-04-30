@@ -7,9 +7,11 @@ This repository is the Takos product shell.
   must not move product implementation code into it.
 - Treat `app/` as the repo root for user-facing Takos app/API gateway work.
 - Treat `git/` as the repo root for Takos Git hosting work.
-- Treat `paas/` as the repo root for canonical Takos deploy/runtime lifecycle work.
+- Treat `paas/` as the repo root for canonical Takos deploy and runtime lifecycle work.
 - Treat `agent/` as the repo root for agent execution service work.
 - Do not add product implementation code or workspace configuration to this shell repo.
+- Do not reintroduce standalone deploy or runtime services in shell compose/env files; those lifecycles are owned by
+  `paas/`.
 - `takos-agent-engine/` is a Rust library, not a Takos service. It is owned by the ecosystem root checkout and must stay
   outside all service repos.
 - Do not add generic `common` packages. Shared behavior must be service-local unless it is a named domain library with a
