@@ -17,8 +17,12 @@
 ## Internal Calls
 
 - Browser and CLI traffic enters through `takos-app`.
-- `takos-app` calls `takos-paas` and `takos-git` with signed internal requests and actor context.
+- `takos-app` calls `takos-paas` and `takos-git` with the v3 `takos-paas-contract/internal-rpc` envelope, actor context,
+  caller/audience, and route capabilities.
+- Git Smart HTTP is public at `takos-app`; `takos-git` only accepts signed internal Smart HTTP requests.
 - `takos-agent` calls `takos-paas` for control work and can read Git internal endpoints when needed.
+- Local service discovery falls back to `TAKOS_PAAS_INTERNAL_URL`, `TAKOS_GIT_INTERNAL_URL`, and
+  `TAKOS_AGENT_INTERNAL_URL`.
 - Internal services share `TAKOS_INTERNAL_SERVICE_SECRET` only in local compose.
 
 ## Boundary Rules

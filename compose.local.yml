@@ -51,6 +51,7 @@ services:
       TAKOS_APP_URL: '${TAKOS_APP_URL:-http://localhost:8787}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOS_PAAS_INTERNAL_URL: 'http://takos-paas:${TAKOS_PAAS_PORT:-8788}'
+      TAKOS_AGENT_INTERNAL_URL: 'http://takos-agent:${TAKOS_AGENT_PORT:-8789}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOS_APP_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
     ports:
