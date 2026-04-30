@@ -1,78 +1,39 @@
-# Takos Deploy v2 v1.0 Authoring Guide
+# Takos PaaS Public Manifest Authoring Guide
 
-Core is canonical and flat. Users should not have to write the canonical form for every simple app.
-
-This guide defines recommended authoring conveniences and how they expand to canonical AppSpec / EnvSpec before Plan.
+Core is canonical and descriptor-pinned. Authors normally write the flat public
+manifest (`.takos/app.yml`), and PaaS expands it to AppSpec / EnvSpec /
+PolicySpec before the Deployment is resolved (see
+[`core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 4).
 
 ## Rule
 
 ```text
 Authoring form is user-facing.
-Canonical form is Plan-facing.
+Canonical form is Deployment-resolution-facing.
 ```
 
-Every authoring convenience must expand before Plan. The expansion descriptor/digest must be part of DescriptorClosure.
+Every public manifest convenience must expand before resolution finalizes. The
+expansion descriptor/digest is recorded in
+`Deployment.resolution.descriptor_closure`.
 
----
-
-## Container shorthand
+## Worker shorthand
 
 Authoring form:
 
 ```yaml
-components:
-  api:
-    kind: container
-    image: ghcr.io/acme/api@sha256:abc
-    port: 8080
-```
+name: web-app
 
-Canonical expansion:
-
-```yaml
-components:
-  api:
-    contracts:
-      runtime:
-        ref: runtime.oci-container@v1
-
-      artifact:
-        ref: artifact.oci-image@v1
-        config:
-          image: ghcr.io/acme/api@sha256:abc
-
-      http:
-        ref: interface.http@v1
-        config:
-          port: 8080
-```
-
-Plan output should show:
-
-```text
-kind: container expanded to:
-  runtime.oci-container@v1
-  artifact.oci-image@v1
-  interface.http@v1
-```
-
----
-
-## JavaScript worker shorthand
-
-Authoring form:
-
-```yaml
-components:
+compute:
   web:
-    kind: js-worker
-    entry: ./src/index.ts
     build:
-      command: pnpm build
-      output: ./dist/worker.mjs
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: build-web
+        artifact: web
+        artifactPath: dist/worker.js
 ```
 
-Canonical expansion:
+Compiler result:
 
 ```yaml
 components:
@@ -80,24 +41,26 @@ components:
     contracts:
       runtime:
         ref: runtime.js-worker@v1
-
-      artifact:
-        ref: artifact.js-module@v1
-        config:
-          entry: ./src/index.ts
-          build:
-            command: pnpm build
-            output: ./dist/worker.mjs
-
-      http:
-        ref: interface.http@v1
 ```
 
----
+`build.fromWorkflow.path` must be under `.takos/workflows/`.
+`artifactPath`, when present, is repository-relative and must not contain path
+traversal.
 
-## Multiple interfaces
+## Service shorthand
 
-Canonical form supports multiple instances of the same contract:
+Authoring form:
+
+```yaml
+name: api-app
+
+compute:
+  api:
+    image: ghcr.io/acme/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    port: 8080
+```
+
+Compiler result:
 
 ```yaml
 components:
@@ -105,122 +68,252 @@ components:
     contracts:
       runtime:
         ref: runtime.oci-container@v1
-      artifact:
-        ref: artifact.oci-image@v1
         config:
-          image: ghcr.io/acme/api@sha256:abc
-      publicHttp:
-        ref: interface.http@v1
-        config:
+          image: ghcr.io/acme/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
           port: 8080
-      adminHttp:
-        ref: interface.http@v1
-        config:
-          port: 9090
-
-exposures:
-  public:
-    target:
-      component: api
-      contract: publicHttp
-  admin:
-    target:
-      component: api
-      contract: adminHttp
 ```
 
----
+Service `image` must be digest-pinned with a 64-hex `sha256` digest. Service
+`port` is required because the runtime does not infer the listen port.
 
-## Resource consume
+## Attached container
 
-Resource credentials are not publication outputs. Resource access uses ResourceBinding and ResourceAccessPath.
+Authoring form:
 
 ```yaml
-components:
-  api:
-    consumes:
-      DATABASE_URL:
-        resource: db
-        access:
-          contract: resource.sql.postgres@v1
-          mode: database-url
-        inject:
-          mode: env
-          target: DATABASE_URL
-
-resources:
-  db:
-    ref: resource.sql.postgres@v1
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: build-web
+        artifact: web
+    containers:
+      sandbox:
+        image: ghcr.io/acme/sandbox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+        port: 8080
 ```
 
-Plan should show a BindingResolutionReport.
+Attached containers are declared below a worker. They also require a port.
+Public routes target the parent worker/service, not the attached container.
 
----
+For native Cloudflare Containers, the CLI/default-app manifest contract also
+allows a repository-relative Dockerfile path in `image` when
+`cloudflare.container` is present:
+
+```yaml
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: build-web
+        artifact: web
+    containers:
+      sandbox:
+        image: apps/sandbox/Dockerfile
+        dockerfile: apps/sandbox/Dockerfile
+        port: 8080
+        cloudflare:
+          container:
+            binding: SANDBOX_CONTAINER
+            className: SandboxSessionContainer
+            instanceType: basic
+            migrationTag: v1
+```
+
+## Routes
+
+HTTP public manifest routes use the array form:
+
+```yaml
+routes:
+  - id: ui
+    target: web
+    path: /
+  - id: mcp
+    target: web
+    path: /mcp
+    methods: [GET, POST]
+```
+
+`path` is required for HTTP routes and must start with `/`. `methods` are
+normalized to uppercase; omitting `methods` means all HTTP methods. CLI
+validation rejects duplicate route ids, duplicate `target + path`, and
+overlapping methods for the same path. The PaaS compiler compatibility surface
+also accepts record routes, `to`, `host`, `protocol`, and `source`; for
+HTTP/HTTPS it validates duplicate `target + host + path + methods`.
+
+`source` is for PaaS event route compatibility (`protocol: queue`,
+`protocol: schedule`, or `protocol: event`). It names the event source and
+defaults to the route name when omitted. HTTP public app manifests should not
+use `source`.
 
 ## Publication consume
 
-Publication does not imply injection. Outputs must be selected explicitly.
+Publication outputs are not injected automatically. Authors must select outputs
+explicitly or opt into default output names.
 
 ```yaml
-components:
+compute:
   web:
-    consumes:
-      SEARCH_MCP:
-        publication: publication:search-agent/search
-        outputs:
-          url:
-            inject:
-              mode: env
-              target: SEARCH_MCP_URL
+    consume:
+      - publication: search
+        as: search
+        inject:
+          env:
+            url: SEARCH_MCP_URL
 ```
 
-If a new output is added to the publication, it is not injected into this existing binding.
+If a new output is added to a publication, it is not injected into an existing
+binding unless `inject.defaults: true` covers that output.
 
----
+## Built-in credential publications
 
-## Built-in credential publication
-
-Credential outputs should use `secret-ref` by default.
+Takos-owned credentials are consumed through built-in provider publications.
+They are not declared in `publish[]` with `publisher: takos`.
 
 ```yaml
-components:
+compute:
   web:
-    consumes:
-      TAKOS_API:
-        publication: builtin:takos.api-key@v1
+    consume:
+      - publication: takos.api-key
+        as: takos-api
         request:
           scopes:
             - files:read
-        outputs:
-          endpoint:
-            inject:
-              mode: env
-              target: TAKOS_API_ENDPOINT
-          apiKey:
-            inject:
-              mode: secret-ref
-              target: TAKOS_API_KEY
+        inject:
+          env:
+            endpoint: TAKOS_API_URL
+            apiKey: TAKOS_TOKEN
+      - publication: takos.oauth-client
+        as: app-oauth
+        request:
+          clientName: My App
+          redirectUris:
+            - /api/auth/callback
+          scopes:
+            - openid
+            - profile
+        inject:
+          env:
+            clientId: OAUTH_CLIENT_ID
+            clientSecret: OAUTH_CLIENT_SECRET
+            issuer: OAUTH_ISSUER_URL
+            tokenEndpoint: OAUTH_TOKEN_URL
+            userinfoEndpoint: OAUTH_USERINFO_URL
 ```
 
-Raw env injection of credential output requires explicit contract support, grant, policy, and approval.
+`takos.api-key` requires `request.scopes`. `takos.oauth-client` requires
+`request.redirectUris` and `request.scopes`; `clientName` and `metadata` are
+optional. Unknown request fields are invalid.
 
----
+Default injection names are generated from the local consume name:
+`PUBLICATION_<LOCAL_NAME>_<OUTPUT>`. Current defaults are `endpoint` / `apiKey`
+for `takos.api-key`, and `clientId` / `clientSecret` / `issuer` for
+`takos.oauth-client`. `tokenEndpoint` and `userinfoEndpoint` should be mapped
+with `inject.env` when an app needs them.
+
+## Publish catalog
+
+Route-backed publications expose typed outputs that reference route ids.
+
+```yaml
+routes:
+  - id: mcp
+    target: web
+    path: /mcp
+
+publish:
+  - name: web-mcp
+    type: takos.mcp-server.v1
+    outputs:
+      url:
+        kind: url
+        routeRef: mcp
+    spec:
+      transport: streamable-http
+```
+
+`publish` and `publications` are aliases; do not use both in the same manifest.
+`outputs.*.routeRef` must match a route id. Use the canonical publication types
+(`takos.mcp-server.v1` / `takos.file-handler.v1` / `takos.ui-surface.v1`); legacy
+aliases are listed in
+[reference/glossary#publication-types](../../reference/glossary#publication-types)
+and should not be used in new manifests.
+
+## Resource bindings
+
+Resource credentials are not publication outputs. Resource access is represented
+as manifest resources and runtime bindings.
+
+```yaml
+resources:
+  db:
+    type: sql
+    bindings:
+      web: DB
+  session-secret:
+    type: secret
+    generate: true
+    bind: APP_SESSION_SECRET
+    to: web
+```
+
+Bindings target top-level compute names. Binding names must match
+`[A-Za-z_][A-Za-z0-9_]*` and are normalized to uppercase.
+
+## Environment overrides
+
+```yaml
+overrides:
+  production:
+    env:
+      LOG_LEVEL: warn
+    compute:
+      web:
+        scaling:
+          minInstances: 2
+    routes:
+      - id: ui
+        target: web
+        path: /
+    publications:
+      - name: web-ui
+        display:
+          title: Web UI
+```
+
+`overrides.<env>` may contain `compute`, `resources`, `routes`, `publish` /
+`publications`, and `env`. `compute` and `resources` merge by name, `env`
+shallow-merges, `routes` replace the base route collection, and publications
+merge by `name`. The merged manifest is validated again.
 
 ## Direct deploy
 
 Direct deploy commands are authoring conveniences:
 
 ```bash
-takos deploy image ghcr.io/acme/api@sha256:abc --port 8080
-takos deploy worker ./dist/worker.mjs
+takos deploy image ghcr.io/acme/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef --port 8080
 ```
 
-They must compile into canonical AppSpec / EnvSpec before Plan and must not bypass Plan / Apply / Activation.
+They compile to a generated public manifest, AppSpec, EnvSpec, and PolicySpec
+before resolution. They do not bypass the Deployment lifecycle (resolve →
+apply → GroupHead advance). The generated manifest carries:
 
-If a group is manifest-managed, direct deploy must not silently mutate AppSpec. It must either:
-
-```text
-write manifest
-create explicit patch
-or block with warning
+```yaml
+overrides:
+  takos.directDeploy:
+    generated: true
+    inputKind: image
 ```
+
+For image direct deploys, PaaS uses `port: 8080` when the caller does not pass
+an explicit port. This default is only for generated direct deploy manifests;
+normal `.takos/app.yml` service and attached-container entries must declare
+`port`.
+
+If a group's `GroupHead` already points to a Deployment whose
+`Deployment.input.manifest_snapshot` came from a non-generated manifest, direct
+deploy is blocked unless the caller explicitly opts into mutating that
+manifest-managed group.

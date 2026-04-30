@@ -31,7 +31,7 @@ features:
     link: /apps/
   - icon: 🌐
     title: デプロイと配布
-    details: "`takos deploy` / `takos deploy --plan` / `takos install` / `takos rollback` の違いと使い分けを整理する"
+    details: "`takos deploy` / `takos deploy --preview` / `takos install` / `takos rollback` の違いと使い分けを整理する"
     link: /deploy/
   - icon: 🏪
     title: プラットフォーム
@@ -42,3 +42,15 @@ features:
     details: "CLI、API、deploy manifest、用語集を参照する"
     link: /reference/
 ---
+
+## Single Source of Truth
+
+このサイトの canonical な参照点。各章はこれらを引用する立場で書かれており、定義の重複を避けてここから参照してください。
+
+- [System Architecture](/architecture/system-architecture) — service set / repository boundary の正本
+- [PaaS Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0) — Core meta-objects の normative spec
+- [Current State](/takos-paas/current-state) — 実装ステータスと split shell の現状
+- [Manifest Reference](/reference/manifest-spec) — Deploy manifest spec
+- [Glossary](/reference/glossary) — 用語集と canonical / legacy alias
+
+開発者向け運用 docs は [Contributing](/contributing/) を参照。

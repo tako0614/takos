@@ -17,6 +17,9 @@
         "runtime",
         "router"
       ],
+      "runtimeCapabilities": [
+        "request-driven-js-worker"
+      ],
       "limitations": [
         "dispatch-namespace-backed",
         "dynamic-dispatch-worker-required",

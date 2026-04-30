@@ -1,12 +1,25 @@
-# Takos Deploy v2 v1.0 Condition Reason Catalog
+# Takos Deploy v3 v1.0 Condition Reason Catalog
 
 This catalog gives stable reason names for CLI, API, UI, controllers, and audit.
+PaaS also validates the same catalog on status projection and runtime readiness
+surfaces. v3 surfaces these reasons exclusively through `Deployment.conditions[]`
+(see [`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 13).
 
-## Descriptor / Plan
+The source of truth is `CORE_CONDITION_REASONS` exported by
+`takos-paas-contract`. PaaS API responses and controller/status DTOs that expose
+`condition.reason` must use only these values. External repos such as
+`takos-cli` and `takos-app` consume the exported contract or OpenAPI schema;
+they are not validated from the PaaS repository. Runtime-agent work failure text
+such as `failureReason` remains free-form diagnostics and is not a Core
+condition reason unless it is projected into a `Deployment.conditions[].reason`
+field.
+
+## Descriptor / Deployment resolution
 
 ```text
 PlanStale
 ReadSetChanged
+DescriptorPinned
 DescriptorChanged
 DescriptorUnavailable
 DescriptorUntrusted
@@ -77,6 +90,7 @@ ServingConvergenceUnknown
 ## Provider materialization / observation
 
 ```text
+ProviderMaterializing
 ProviderMaterializationFailed
 ProviderObjectMissing
 ProviderConfigDrift

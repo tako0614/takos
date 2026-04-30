@@ -1,16 +1,17 @@
 # Dispatch Namespace
 
-> このページでわかること: Cloudflare backend が使う dispatch namespace
-> の位置づけと、group との関係。
+> このページでわかること: tracked reference Workers backend が使う dispatch
+> namespace の位置づけと、group との関係。
 
-dispatch namespace は Cloudflare backend で tenant worker を論理分離するための
-backend detail。Takos の public spec では manifest に書く対象ではなく、operator
-が Cloudflare 側で準備する実行基盤の一部として扱う。
+dispatch namespace は tracked reference Workers backend で tenant worker
+を論理分離するための backend detail。Takos の public spec では manifest
+に書く対象ではなく、operator が Cloudflare 側で準備する実行基盤の一部として扱う。
 
 ## 何に使うか
 
-Cloudflare backend では worker workload が dispatch namespace 配下に載る。
-これにより、tenant worker を control plane や他 tenant から論理分離できる。
+tracked reference Workers backend では worker workload が dispatch namespace
+配下に載る。これにより、tenant worker を control plane や他 tenant
+から論理分離できる。
 
 ## public CLI との関係
 
@@ -28,19 +29,18 @@ namespace が `takos-tenants`、staging namespace が `takos-staging-tenants`
 
 ## group との関係
 
-group は primitive を束ねる state scope、dispatch namespace は backend 側の
-worker 隔離単位。
+group は Deployment record を順序付ける state scope、dispatch namespace は
+backend 側の worker 隔離単位。
 
-- group: inventory / current deployment pointer / source / reconcile status を持つ
-  state scope
-- dispatch namespace: Cloudflare backend 上の worker 配置先
+- group: inventory / GroupHead / source / reconcile status を持つ state scope
+- dispatch namespace: tracked reference Workers backend 上の worker 配置先
 
-group 名は inventory や deployment history の識別に使われるが、namespace 指定自体は public
-CLI surface ではない。
+group 名は inventory や Deployment 履歴 (GroupHead 経由) の識別に使われるが、
+namespace 指定自体は public CLI surface ではない。
 
 ## operator の準備
 
-Cloudflare backend では namespace 自体を先に作る。
+tracked reference Workers backend では namespace 自体を先に作る。
 
 ```bash
 wrangler dispatch-namespace create takos-tenants

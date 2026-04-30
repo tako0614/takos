@@ -14,6 +14,23 @@
       ]
     }
   ],
+  "resourceAccessPaths": [
+    {
+      "resourceContract": "resource.object-store.s3@v1",
+      "accessMode": "s3-api",
+      "injectionMode": "env",
+      "stages": [
+        "provider-credential",
+        "external-provider-api"
+      ],
+      "networkBoundary": "external",
+      "enforcement": "enforced",
+      "limitations": [
+        "aws-iam-credential-boundary",
+        "requires-runtime-egress-policy"
+      ]
+    }
+  ],
   "sourceDocs": [
     "https://docs.aws.amazon.com/AmazonS3/latest/API/Welcome.html",
     "https://docs.aws.amazon.com/AmazonS3/latest/API/Type_API_Reference.html"

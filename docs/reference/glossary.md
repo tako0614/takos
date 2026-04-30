@@ -75,6 +75,87 @@ compute に capability や resource を渡す接続。publication の output を
 `compute.<name>.consume` に宣言する。resource access は `publish` / `consume`
 ではなく resource API / runtime binding 側で扱う。
 
+## Core meta-objects (PaaS Core normative)
+
+これらは `takos-paas/core/01-core-contract-v1.0.md` で normative に定義された
+PaaS Core meta-objects。Takos Deploy v3 では Core record は **Deployment /
+ProviderObservation / GroupHead** の 3 つに圧縮される。`takos-paas` Core を
+canonical とする全 docs の参照点。
+
+### Component
+
+名前付き contract instance の bundle。worker / service / resource / route /
+publication などの primitive declaration を 1 単位として束ねた contract instance。
+Core 自体は worker / service / sql / queue 等を built-in kind として持たない
+（descriptor が meaning を供給する）。
+
+### Deployment
+
+Core 中核 record。`input` (manifest snapshot + source provenance) /
+`resolution` (descriptor closure + resolved graph) /
+`desired` (routes / bindings / resources / runtime network policy / activation
+envelope) を 1 record に束ねた immutable record。`status` は
+`preview` / `resolved` / `applying` / `applied` / `failed` / `rolled-back`
+を遷移する。`policy_decisions[]` / `approval` は optional inline field として
+保持される。`Deployment.desired` は `applied` 以降 immutable で、変更は新
+Deployment を作る。
+
+### ProviderObservation
+
+provider 側 observed state の append-only stream。`deployment_id` /
+`provider_id` / `object_address` / `observed_state` /
+`drift_status` / `observed_digest` / `observed_at` を持つ。observed state は
+canonical でなく、`Deployment.desired` を mutate しない。drift 検知や
+repair plan の trigger になるが、それ自体が新 Deployment を作るわけではない。
+
+### GroupHead
+
+group ごとの strongly consistent pointer。`current_deployment_id` と
+`previous_deployment_id` を持ち、rollback は `current` <-> `previous` の atomic
+swap として表現される。GroupHead 進行は Deployment の `ActivationCommitted`
+condition と紐づき、新しい `current_deployment_id` の Deployment が group の
+canonical 表現になる。
+
+### ResourceInstance
+
+Deployment / ProviderObservation / GroupHead 以外で Core が独立 record として
+保持する 2 つの record の 1 つ（もう 1 つは MigrationLedger）。durable state を
+複数 Deployment にまたがって保持し、Deployment 間で再利用される。
+`status` は `preparing` / `ready` / `retired` / `failed`。
+
+### MigrationLedger
+
+resource migration の forward-only 履歴 record。rollback では巻き戻されない
+（`Deployment` の rollback は pointer move であって durable resource 状態の
+復元ではない）。
+
+## Migration aliases (v2 → v3)
+
+これらは Takos Deploy v2 で独立 record / projection だった概念で、v3 では
+`Deployment` の field か `ProviderObservation` / `GroupHead` に collapse される。
+docs / migration ノート / 旧 API の説明以外で使わない。完全な対応表は
+[Core contract v1.0 § 18](/takos-paas/core/01-core-contract-v1.0#v2-migration)。
+
+| v2 record / concept       | v3 location                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| Plan                      | `Deployment` with `status="resolved"` and beyond                             |
+| ApplyRun                  | `Deployment` の `status` 遷移 `applying` -> `applied` と conditions[]        |
+| ApplyPhase                | `Deployment.conditions[]` with `scope.kind="phase"`                          |
+| OperationRun              | `Deployment.conditions[]` with `scope.kind="operation"`                      |
+| RolloutRun                | `Deployment.desired.activation_envelope.rollout_strategy`                    |
+| AppRelease                | `Deployment` 自体（Deployment が release を表す）                            |
+| ActivationRecord          | `Deployment.desired.activation_envelope`                                     |
+| GroupActivationPointer    | `GroupHead`                                                                  |
+| BindingSetRevision        | `Deployment.desired.bindings`                                                |
+| RouterConfig              | `Deployment.desired.routes` + `activation_envelope.route_assignments`        |
+| RuntimeNetworkPolicy      | `Deployment.desired.runtime_network_policy`                                  |
+| DescriptorClosure         | `Deployment.resolution.descriptor_closure`                                   |
+| ResolvedGraph             | `Deployment.resolution.resolved_graph`                                       |
+| CoreProjectionRecord      | `Deployment.resolution.resolved_graph.projections`                           |
+| CorePolicyDecisionRecord  | `Deployment.policy_decisions[]`                                              |
+| CoreApprovalRecord        | `Deployment.approval`                                                        |
+| ProviderMaterialization   | `Deployment.conditions[]` (desired side; observation 側は ProviderObservation) |
+
 ## Deploy
 
 ### Deploy Manifest (`.takos/app.yml` / `.takos/app.yaml`)
@@ -94,10 +175,11 @@ catalog と resource API / runtime binding を分ける。
 
 ### Group
 
-`groups` row として保存される optional state scope。group 名、source metadata、
-current deployment pointer、reconcile status、inventory を持つ。group に所属する
-primitive は inventory、deployment history、rollback、uninstall などの group
-機能を使える。kernel features (agent, git, storage, store) は group ではない。
+`groups` row として保存される optional compatibility state scope。group 名、
+source metadata、current deployment pointer、reconcile status、inventory を持つ。
+group に所属する primitive projection は inventory、deployment history、rollback、
+uninstall などの group 機能を使える。kernel features (agent, git, storage, store)
+は group ではない。
 
 ### App
 
@@ -188,6 +270,29 @@ Takos API へアクセスする third-party OAuth client の登録単位。
 
 OAuth / managed token が要求・付与する権限の粒度。
 
+## Publication types (canonical / legacy aliases) {#publication-types}
+
+| canonical type            | legacy alias              | 用途                  |
+| ------------------------- | ------------------------- | --------------------- |
+| `takos.mcp-server.v1`     | `McpServer` (deprecated)  | MCP server publication |
+| `takos.file-handler.v1`   | `FileHandler` (deprecated) | file handler publication |
+| `takos.ui-surface.v1`     | `UiSurface` (deprecated)  | UI surface publication |
+
+以後 docs では canonical type を使う。`McpServer` / `FileHandler` / `UiSurface`
+は backward compatibility 用 alias であり、新規 manifest では使わない。
+
+## Consume env injection (canonical / legacy aliases) {#consume-env-injection}
+
+| form                       | status            | 説明                                          |
+| -------------------------- | ----------------- | --------------------------------------------- |
+| `consume[].inject.env`     | canonical         | publication output -> env 名 explicit map     |
+| `consume[].inject.defaults` | canonical        | 全 output を default env 名で inject          |
+| `consume[].consume.env`    | deprecated alias  | `inject.env` と同じ explicit map              |
+| `consume[].env`            | deprecated alias  | 同上                                          |
+
+以後 docs では `inject.env` を canonical とし、`consume.env` / `env` は legacy
+alias として 1 度だけここで言及する。
+
 ## 配布と連携
 
 ### Store
@@ -231,3 +336,25 @@ deploy された artifact が実際に request を処理する実行面。
 deploy backend の種類。Cloudflare と local などの差分は operator-only
 configuration / architecture で扱う。public deploy manifest には backend
 名を書かない。
+
+## Workers backend implementation note
+
+Cloudflare Workers / Cloudflare Containers / wrangler.toml 系の固有用語は
+`takos-paas` の reference materialization detail であり、Core 用語ではない。
+各 architecture / hosting 章では Workers backend collapsible 節に集約する。
+
+| Cloudflare-shaped 名                                          | 役割 (Core 用語との対応)                                        |
+| ------------------------------------------------------------- | --------------------------------------------------------------- |
+| `{ADMIN_DOMAIN}` / `{KERNEL_DOMAIN}`                          | kernel host (canonical: `{KERNEL_DOMAIN}`)                      |
+| `takos-dispatch` worker                                       | dispatch / RouteProjection の Workers materialization           |
+| `takos-worker` (background)                                   | ApplyRun worker process role の Workers materialization         |
+| `RoutingDO` (L1/L2/L3 cache)                                  | RouteProjection の Workers backend cache 層                     |
+| Container DO (`takos-runtime-host` / `takos-executor-host`)   | runtime host process role の Workers materialization            |
+| wrangler.toml                                                 | Workers backend 用 deploy 設定 (current path: `takos/app/apps/control/wrangler.toml`) |
+
+architecture/control-plane.md 等の collapsible 節以外でこれらの固有名を本文で
+使わないこと。
+
+統一呼称: Cloudflare Workers backend を docs では一律 **"tracked reference
+Workers backend"** と呼ぶ（'Cloudflare backend' / 'Workers backend' / 'primary
+production backend' / 'tracked reference template' を使い分けない）。

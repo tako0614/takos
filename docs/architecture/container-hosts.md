@@ -1,34 +1,38 @@
 # Container host RPC
 
-`takos-runtime-host`, `takos-executor-host` は Cloudflare Container DO sidecar
-を持つ専用 worker で、コンテナ内のプロセスと control-plane の間を仲介する
-**Control RPC + Proxy** layer。
+Container host RPC は runtime-service container と control-plane の間を仲介
+する **Control RPC + Proxy** layer。process role としては runtime host
+(`takos-runtime-service` container を扱う) と executor host (agent run の
+container を扱う) の 2 種類があり、どちらも Deployment lifecycle の
+provider operation (apply 側) で起動する container と control plane の
+`Deployment.desired.activation_envelope` から導出される route projection を
+仲介する。
 
 ソース: `packages/control/src/runtime/container-hosts/`
 
 ## 全体像
 
 ```
-takos-worker / takos (kernel)
+control-plane main / background process role (kernel)
   │  ① POST /dispatch  (run start)
   ▼
-takos-executor-host  (Container DO host)
+executor host process role
   │  ② container.dispatchStart(payload)
   ▼
-ExecutorContainerTier1/2/3  (CF Container DO with takos-agent inside)
+Executor container (tier 1/2/3 で takos-agent を実行)
   │  ③ POST /rpc/control/*  (RPC into kernel)
   ▼
-takos-executor-host  (proxy / forward)
-  │  ④ TAKOS_CONTROL.fetch  (service binding)
+executor host process role (proxy / forward)
+  │  ④ internal control binding fetch
   ▼
-takos /internal/executor-rpc/*
+control-plane main /internal/executor-rpc/*
   │  ⑤ DB / queue / billing / memory-graph 等
   ▼
-D1 / Vectorize / Queues / Run-notifier DO
+provider-side materialization (DB / vector index / queue / run-notifier)
 ```
 
-`takos-runtime-host` も同じ pattern で、container 内の Deno runtime-service
-に対する proxy として動く。
+runtime host process role も同じ pattern で、container 内の Deno
+runtime-service に対する proxy として動く。
 
 このページで扱う `/rpc/control/*`, `/forward/*` は **internal RPC contract**
 であり、public API の common error envelope や retry contract をそのまま
@@ -37,57 +41,59 @@ D1 / Vectorize / Queues / Run-notifier DO
 
 ## Tier 構成 (executor)
 
-`takos-executor-host` は 3 つの tier の Container DO class を export する:
+executor host process は agent run の負荷分類で 3 つの tier に container class
+を分割する。tier 1 は常時 warm な軽量 agent、tier 2 は一般的な agent run、tier
+3 は max memory を確保した custom load 向け。
 
-| tier | class                    | sleepAfter | max instances | 用途                         |
-| ---- | ------------------------ | ---------- | ------------- | ---------------------------- |
-| 1    | `ExecutorContainerTier1` | `10m`      | ~20           | lite (常時 warm、軽量 agent) |
-| 2    | `ExecutorContainerTier2` | `5m`       | ~200          | basic (一般的な agent run)   |
-| 3    | `ExecutorContainerTier3` | `3m`       | ~25           | custom (max memory 12GiB)    |
+dispatch payload に `tier?: 1 | 2 | 3` または `executorTier?: 1 | 2 | 3`
+を含めると、`resolveContainerNamespace` (`executor-utils.ts`) が指定 tier の
+namespace を選択する。指定 tier の binding が無ければ tier 1 へ fallback する。
 
-dispatch payload に `tier?: 1 | 2 | 3` (default 1) を含めると、
-`resolveContainerNamespace` (`executor-utils.ts`) が namespace を選択する。
-fallback: 上位 tier の binding が無ければ tier 1 へ。
+tier 未指定の `/dispatch` は固定の default tier ではなく executor pool を使う。
+まず warm tier 1 pool (`EXECUTOR_TIER1_WARM_POOL_SIZE`,
+`EXECUTOR_TIER1_MAX_CONCURRENT_RUNS`) の空き slot を探し、空きがなければ
+configured tier 3 pool (`EXECUTOR_TIER3_POOL_SIZE`,
+`EXECUTOR_TIER3_MAX_CONCURRENT_RUNS`) の最も空いている slot に spill する。
+tier 2 は automatic spill には使わず、payload で明示指定されたときだけ使う。
+
+各 tier の sleepAfter / max instances / class 名など backend-specific な数値は
+本ページ末尾の collapsible 節を参照。
 
 ## 認証
 
-`takos` worker の内部 call に使われる header は **2 つの別名** に分離 されている
-(Round 11 MEDIUM #11 fix)。混同しないこと:
+control plane main process の内部 call に使われる header は **2 つの別名** に
+分離されている。混同しないこと:
 
-1. **`X-Takos-Internal-Marker: "1"`** — edge auth middleware
-   (`server/middleware/auth.ts` + `server/routes/sessions/auth.ts`) が読む
-   sentinel。`takos-runtime-host` worker が `/forward/cli-proxy/*` /
-   `/forward/heartbeat/*` を `env.TAKOS_WEB.fetch(...)` で kernel に渡す際に
-   付ける。kernel 側では「このリクエストは service binding 経由で runtime-host
-   内から来た」と認識し、`X-Takos-Session-Id` / `X-Takos-Space-Id` header で
-   container session を解決する。値 `"1"` は単なる in/out flag で secret
-   ではない
-2. **`X-Takos-Internal: <secret>`** — executor proxy API
-   (`runtime/executor-proxy-api.ts`) の shared secret。`EXECUTOR_PROXY_SECRET`
-   env var と constant-time 比較される。`takos-executor-host` worker が
-   `TAKOS_CONTROL` service binding 経由で kernel の `/internal/executor-rpc/*`
-   を呼ぶ際に付ける
+1. **`X-Takos-Internal-Marker: "1"`** — edge auth middleware が読む sentinel。
+   runtime host process が `/forward/cli-proxy/*` / `/forward/heartbeat/*` を
+   internal binding 経由で kernel に渡す際に付ける。値 `"1"` は単なる in/out
+   flag で secret ではない。
+2. **`X-Takos-Internal: <secret>`** — executor proxy API の shared secret。
+   `EXECUTOR_PROXY_SECRET` env var と constant-time 比較される。executor host
+   process が control binding 経由で kernel の `/internal/executor-rpc/*`
+   を呼ぶ際に付ける。
 
-両 header は **同じ worker (`takos`) に到達する別経路** の認証に使う。marker と
-shared secret は別名にしてあり、sentinel 値 `"1"` を secret と
+両 header は **同じ control-plane main process に到達する別経路** の認証に
+使う。marker と shared secret は別名にしてあり、sentinel 値 `"1"` を secret と
 取り違えないように攻撃面を分離してある。
 
-container は自身の control RPC (runtime-service 内) では (2) の secret を
-知らず、runtime-host を介した forward は (1) の marker を使う。container →
-executor-host → kernel の dispatch path では executor-host の
-`forwardToControlPlane` が (2) の secret を自前で付与する。
-
-container 自身が control RPC を呼ぶ際の auth は **proxy token** で、
+container 自身が control RPC を呼ぶ際の auth は **proxy token**。
 `dispatchStart` 時に `executor-proxy-config.ts buildAgentExecutorProxyConfig`
-が生成 し、container env vars (`AGENT_EXECUTOR_PROXY_TOKEN`) として渡される。
-executor-host 側では proxy token は DO storage の `proxyTokens` map に保存され、
-token → `{runId, serviceId, capability: 'control'}` を解決する。
+が生成し、container env vars (`AGENT_EXECUTOR_PROXY_TOKEN`) として渡される。
+executor host 側では proxy token は host storage の `proxyTokens` map に保存
+され、token → `{runId, serviceId, capability: 'control'}` を解決する。
 
-::: tip Token lifetime proxy token は host 側 DO storage の `proxyTokens` map に
-保存される。executor-host の control token は terminal status update / fail /
-reset の成功応答後に revoke される。runtime-host の session proxy token は 24h
-TTL を持ち、`/session/destroy` の成功後に該当 session の token を revoke する。
+::: tip Token lifetime proxy token は host process の storage `proxyTokens`
+map に保存される。executor host の control token は terminal status update /
+fail / reset の成功応答後に revoke される。runtime host の session proxy token
+は 24h TTL を持ち、`/session/destroy` の成功後に該当 session の token を
+revoke する。
 :::
+
+`X-Takos-Internal-Marker` / `X-Takos-Internal` header の具体的な edge auth
+middleware や detect path、`EXECUTOR_PROXY_SECRET` の wiring 詳細は public
+contract 側 [API reference](/reference/api) を参照。tracked reference Workers
+backend での実装詳細は本ページ末尾の collapsible 節を参照。
 
 ## Control RPC endpoint matrix
 
@@ -128,11 +134,11 @@ heartbeat は takos-agent (`agent/src/main.rs`) が **15 秒間隔** で emit
 beats まで許容。
 
 ::: warning Idempotency control RPC は endpoint ごとに retry safety が異なる。
-`run-event` は run id + type + sequence を dedupe key として扱う。executor-host
+`run-event` は run id + type + sequence を dedupe key として扱う。executor host
 isolate の 1h 短期 cache は best-effort で、host restart や cache expiry 後の
-durable authority ではない。D1 `run_events` path では `event_key` unique
-index、RunNotifier DO では storage-backed dedupe key が重複 emit
-抑止の本体になる。`heartbeat` は timestamp update なので実質 idempotent。
+durable authority ではない。control-plane DB の `run_events` path では
+`event_key` unique index、run notifier では storage-backed dedupe key が重複
+emit 抑止の本体になる。`heartbeat` は timestamp update なので実質 idempotent。
 `add-message` は任意の `idempotencyKey` を受け取り、同一 thread + 同一 key
 を同じ replay として扱う。takos-agent の assistant message は run id + content
 hash を key にする。`update-run-status` は明示的な idempotency key
@@ -154,25 +160,90 @@ errorJsonResponse`)。
 
 ## デプロイ
 
-| worker                | wrangler 設定                             | container class                   |
-| --------------------- | ----------------------------------------- | --------------------------------- |
-| `takos-executor-host` | `apps/control/wrangler.executor.toml`     | `ExecutorContainerTier1/2/3`      |
-| `takos-runtime-host`  | `apps/control/wrangler.runtime-host.toml` | `takos-runtime-service` container |
+container host process は backend-specific な host worker / process としてマウント
+される。tracked reference Workers backend での具体的な host 配置 / container
+class 名 / 配備設定は本ページ末尾の collapsible 節を参照。
+
+container host process role と main control-plane process は同じ
+`EXECUTOR_PROXY_SECRET` を共有する。executor host は DB / object-store binding
+を持たず、必要な control RPC は internal control binding 経由で main process
+に forward する。LLM backend API key は通常 `/rpc/control/api-keys` 経由で
+main process から run ごとに取得するが、host 側でも optional fallback secret
+として `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` を設定可能。
+設定された非空の provider key は `executor-proxy-config.ts` により container
+env vars に渡される。
+
+## 関連ドキュメント
+
+- [Runtime Service](/architecture/runtime-service) — runtime host 内で
+  動く Deno HTTP server
+- [Control plane](/architecture/control-plane) — kernel 側の queue / cron
+  全体図
+- [Threads and Runs](/platform/threads-and-runs) — agent run lifecycle の user
+  視点
+
+## Workers backend reference materialization
+
+::: details tracked reference Workers backend の実装詳細
+
+> このセクションは Cloudflare Workers backend に固有の materialization
+> detail。Core 用語との対応は
+> [Glossary § Workers backend implementation note](/reference/glossary#workers-backend-implementation-note)
+> を参照。
+
+tracked reference Workers backend では container host process role は
+Cloudflare Container DO sidecar を持つ専用 worker として動く。
+
+### Worker name と Container DO
+
+| process role        | worker 名             | container class                   |
+| ------------------- | --------------------- | --------------------------------- |
+| executor host       | `takos-executor-host` | `ExecutorContainerTier1/2/3`      |
+| runtime host        | `takos-runtime-host`  | `takos-runtime-service` container |
+
+### Tier 構成 (Cloudflare 数値)
+
+`takos-executor-host` は 3 つの tier の Container DO class を export する:
+
+| tier | class                    | sleepAfter | max instances | 用途                         |
+| ---- | ------------------------ | ---------- | ------------- | ---------------------------- |
+| 1    | `ExecutorContainerTier1` | `10m`      | ~20           | lite (常時 warm、軽量 agent) |
+| 2    | `ExecutorContainerTier2` | `5m`       | ~200          | basic (一般的な agent run)   |
+| 3    | `ExecutorContainerTier3` | `3m`       | ~25           | custom (max memory 12GiB)    |
+
+### Wrangler 配置
+
+| worker                | wrangler 設定                                       | container class                   |
+| --------------------- | --------------------------------------------------- | --------------------------------- |
+| `takos-executor-host` | `takos/app/apps/control/wrangler.executor.toml`     | `ExecutorContainerTier1/2/3`      |
+| `takos-runtime-host`  | `takos/app/apps/control/wrangler.runtime-host.toml` | `takos-runtime-service` container |
 
 worker ごとの主な service binding は次のとおり。
 
 - `takos-executor-host`: `TAKOS_CONTROL`
 - `takos-runtime-host`: `TAKOS_WEB`
 
+### Auth header の Cloudflare 接続
+
+- `X-Takos-Internal-Marker: "1"`: `takos-runtime-host` worker が
+  `/forward/cli-proxy/*` / `/forward/heartbeat/*` を `env.TAKOS_WEB.fetch(...)`
+  で kernel に渡す際に付ける。kernel 側 (`server/middleware/auth.ts` +
+  `server/routes/sessions/auth.ts`) は「このリクエストは service binding 経由で
+  runtime-host 内から来た」と認識し、`X-Takos-Session-Id` / `X-Takos-Space-Id`
+  header で container session を解決する。
+- `X-Takos-Internal: <secret>`: `takos-executor-host` worker が `TAKOS_CONTROL`
+  service binding 経由で kernel の `/internal/executor-rpc/*` を呼ぶ際に
+  `EXECUTOR_PROXY_SECRET` の値を付ける (constant-time 比較)。
+
+container は自身の control RPC では shared secret を知らず、runtime host を
+介した forward は marker を使う。container → executor host → kernel の
+dispatch path では executor host の `forwardToControlPlane` が secret を自前で
+付与する。
+
+### Provider key fallback
+
 `takos-executor-host` と main `takos` worker は同じ `EXECUTOR_PROXY_SECRET`
-を持つ。executor-host は LLM backend API key や DB/R2 binding を持たず、必要な
-control RPC は `TAKOS_CONTROL` 経由で main worker に forward する。
+を持つ。`wrangler.executor.toml` では `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` /
+`GOOGLE_API_KEY` を optional fallback secret として設定できる。
 
-## 関連ドキュメント
-
-- [Runtime Service](/architecture/runtime-service) — `takos-runtime-host` 内で
-  動く Deno HTTP server
-- [Control plane](/architecture/control-plane) — kernel 側の DO / queue / cron
-  全体図
-- [Threads and Runs](/platform/threads-and-runs) — agent run lifecycle の user
-  視点
+:::

@@ -3,6 +3,10 @@
 MCP Server を公開する最小構成です。現行 contract では route publication を
 `publish` に書き、必要なら他 compute が explicit consume します。
 
+この例は
+[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
+を `readiness` / `routes[].id` / `publish` で拡張したものです。
+
 ## deploy manifest
 
 ```yaml

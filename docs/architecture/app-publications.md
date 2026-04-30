@@ -63,10 +63,9 @@ publish:
 route publication の main output は慣例的に `url` です。値は assigned hostname
 と `outputs.url.routeRef` が参照する route の `path` から生成されます。route が
 template の場合は template URL のまま consumer に渡ります。必須 field は
-`name` / `type` / `outputs` です。`type` は custom string ですが、Takos 標準 type
-は `takos.mcp-server.v1` のように namespaced にします。`McpServer` /
-`FileHandler` / `UiSurface` は legacy alias です。`spec` は consumer-facing
-metadata、`auth` は platform-managed behavior です。
+`name` / `type` / `outputs` です。`type` の canonical 値と legacy alias は
+[Glossary - Publication types](/reference/glossary#publication-types) を参照。
+`spec` は consumer-facing metadata、`auth` は platform-managed behavior です。
 
 route publication は `routeRef` で `routes[].id` を参照します。legacy
 `publisher + route` も受け付けます。同じ route target/path を複数 publication が
@@ -123,8 +122,9 @@ compute:
 resource access は publication consume ではなく、resource API / runtime binding
 側で扱います。
 
-`consume.env` は legacy shorthand です。docs では `inject.env` を使います。
-legacy `env` も現在は explicit output inject として扱われます。
+`inject.env` の canonical / legacy alias (`consume.env` / `env`) の対応は
+[Glossary - Consume env injection](/reference/glossary#consume-env-injection)
+を参照。
 
 manifest の consume は service の desired edge です。deploy 時に service-level
 の `service_consumes` record へ同期されます。manifest 外で

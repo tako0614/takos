@@ -31,7 +31,8 @@ Coolify-like UX:
   apps / deployments / resources / domains / secrets / providers / logs / backups
 
 Takos-native semantics:
-  Plan / Apply / ActivationRecord / RuntimeNetworkPolicy / ResourceContract / DataContract / ProviderPackage / Agent-created app lifecycle
+  Deployment (input + resolution + desired + conditions) / ProviderObservation / GroupHead /
+  ResourceContract / DataContract / ProviderPackage / Agent-created app lifecycle
 ```
 
 ---
@@ -140,13 +141,7 @@ Target service set:
 
 `takos-deploy` and `takos-runtime` are not target top-level product roots. They are internal domains of `takos-paas`.
 
-```text
-takos-deploy as product root:
-  absorbed into takos/paas domains/deploy
-
-takos-runtime as product root:
-  absorbed into takos/paas domains/runtime
-```
+> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
 
 Their semantics remain. Their standalone service boundary is removed unless future scale requires extraction.
 
@@ -195,10 +190,11 @@ membership and role context
 entitlement and effective policy context
 route ownership and domain ownership
 PaaS control-plane domain model
-Plan / Apply / Activation through deploy domain
+Deployment lifecycle (resolved -> applying -> applied / rolled-back / failed) through deploy domain
+GroupHead advancement and rollback pointer move through deploy domain
 runtime materialization coordination through runtime domain
-ResourceInstance / ResourceBinding lifecycle through resources domain
-RuntimeNetworkPolicy through network domain
+ResourceInstance lifecycle and bindings (Deployment.desired.bindings) through resources domain
+runtime_network_policy (Deployment.desired.runtime_network_policy) through network domain
 ProviderPackage / ResourceContractPackage / DataContractPackage through registry domain
 audit projection and security events through audit domain
 ```
@@ -255,19 +251,24 @@ takos/paas/src/domains/core
   tenant / space / group / membership / entitlement / ownership
 
 takos/paas/src/domains/deploy
-  Plan / ApplyRun / OperationRun / RolloutRun / ActivationRecord / GroupActivationPointer
+  Deployment (input / resolution / desired / status / conditions / policy_decisions / approval) /
+  ProviderObservation / GroupHead
 
 takos/paas/src/domains/runtime
-  WorkloadRevision / ProviderMaterialization / ObservedProviderState / logs / health / readiness
+  WorkloadRevision / Deployment.conditions[] (provider operation 進捗) /
+  ProviderObservation / logs / health / readiness
 
 takos/paas/src/domains/resources
-  ResourceInstance / ResourceBinding / MigrationLedger / restore / backup metadata
+  ResourceInstance / Deployment.desired.bindings projection / MigrationLedger /
+  restore / backup metadata
 
 takos/paas/src/domains/routing
-  route ownership / domain ownership / ingress materialization / RouteProjection
+  route ownership / domain ownership / ingress materialization /
+  route projection (Deployment.desired.routes + activation_envelope)
 
 takos/paas/src/domains/network
-  RuntimeNetworkPolicy / ServiceGrant / WorkloadIdentity / egress satisfaction
+  Deployment.desired.runtime_network_policy / ServiceGrant / WorkloadIdentity /
+  egress satisfaction
 
 takos/paas/src/domains/registry
   ProviderPackage / ResourceContractPackage / DataContractPackage / PackageResolution / trust
@@ -276,7 +277,8 @@ takos/paas/src/domains/audit
   append-only audit / audit projection / security events
 
 takos/paas/src/workers
-  Apply jobs / provider materialization / repair / registry sync / outbox consumers / background tasks
+  Deployment apply jobs (resolved -> applying -> applied) / provider operations /
+  repair / registry sync / outbox consumers / background tasks
 
 takos/paas/src/agents
   runtime agent protocol / work leases / host operations / heartbeat / drain / revoke
@@ -300,16 +302,17 @@ takos-paas-api:
   must not run long provider operations
 
 takos-paas-worker:
-  ApplyRun / build / provider materialization / outbox event processing
+  Deployment apply jobs (resolved -> applying -> applied) / build /
+  provider operations / outbox event processing
   must not serve tenant HTTP traffic
 
 takos-paas-router:
   runtime request routing, if hosted by PaaS
-  must not mutate Plan/Apply/Activation state
+  must not mutate Deployment.desired or GroupHead
 
 takos-paas-runtime-agent:
   Docker host / local runtime host operation
-  must not own ActivationRecord
+  must not advance GroupHead.current_deployment_id
 
 takos-paas-log-worker:
   logs / metrics / redaction
@@ -333,11 +336,11 @@ Other domains must not import a domain's store/repository directly.
 Examples:
 
 ```text
-runtime may read ActivationRecord projection but must not mutate ActivationRecord.
-deploy may request runtime materialization but must not write observed runtime state.
-registry may resolve packages but must not apply provider operations.
+runtime may read Deployment.desired.activation_envelope projection but must not mutate Deployment.desired.
+deploy may request runtime materialization but must not write ProviderObservation directly.
+registry may resolve packages but must not execute provider operations.
 audit records facts but must not become business logic.
-routing may read activation and ownership projections but must not infer tenant authority alone.
+routing may read Deployment.desired.routes + activation_envelope and ownership projections but must not infer tenant authority alone.
 ```
 
 Service split is a scale/operation decision, not a semantic requirement.
@@ -354,9 +357,9 @@ Takos supports distributed dependencies and remote agents, but canonical writes 
 tenant / space / group ownership writes
 membership and role writes
 entitlement decisions at mutation boundaries
-Plan / Apply locks
-GroupActivationPointer advancement
-ActivationRecord creation
+Deployment status transitions (resolved -> applying -> applied / failed)
+GroupHead.current_deployment_id advancement
+Deployment.desired immutability after applied
 ResourceMigrationLock
 provider package trust decisions
 provider credential binding
@@ -380,8 +383,8 @@ billing usage aggregates
 Important invariant:
 
 ```text
-GroupActivationPointer update must be strongly consistent.
-ProviderMaterialization observation may be eventually consistent.
+GroupHead.current_deployment_id advancement must be strongly consistent.
+ProviderObservation may be eventually consistent.
 ```
 
 ---
@@ -674,8 +677,8 @@ Consumer failure must not roll back the original domain state transition.
 Example:
 
 ```text
-paas-deploy commits ActivationRecord
-  -> deploy.ActivationRecordCreated
+paas-deploy advances Deployment to applied and advances GroupHead
+  -> deploy.DeploymentApplied
   -> paas-runtime materializes desired state
   -> paas-routing refreshes route projection
   -> paas-audit records activation event
@@ -774,7 +777,7 @@ ProviderPackage cannot access build secrets.
 ProviderPackage cannot access unrelated provider credentials.
 ProviderPackage cannot access paas DB directly.
 ProviderPackage credential use must be audit logged.
-Untrusted packages cannot Apply or materialize.
+Untrusted packages cannot advance a Deployment to applied or materialize provider state.
 ```
 
 ---
@@ -908,7 +911,7 @@ artifact store
 package registry cache
 trust records
 audit log
-ProviderMaterialization references
+ProviderObservation stream and Deployment.conditions[] references
 operator config
 ```
 
@@ -960,13 +963,13 @@ interface ControlPlaneUpgradePlan {
 ControlPlaneMigration:
   operator operation
   runs during self-update / maintenance
-  cannot be triggered by tenant Plan
+  cannot be triggered by a tenant Deployment
 ```
 
 Invariant:
 
 ```text
-Tenant Plan must never apply control-plane schema migrations.
+A tenant Deployment must never apply control-plane schema migrations.
 ```
 
 ---
@@ -1034,7 +1037,7 @@ ProviderOperationLog:
   provider package execution logs
 
 ControlPlaneEvent:
-  Plan / Apply / Activation / Repair progress
+  Deployment lifecycle (resolve / apply / activation / repair) progress
 
 Metric:
   health / latency / usage
@@ -1086,7 +1089,7 @@ Expected reactions:
 
 ```text
 deploy:
-  block Apply
+  block advancing Deployment to applied
 
 runtime:
   disable or degrade serving according to policy
@@ -1105,19 +1108,23 @@ routing:
 
 ## 18. RouteProjection
 
-RouteProjection lets routers detect stale routing state.
+RouteProjection lets routers detect stale routing state. It is the runtime
+materialization of the route fragment of `Deployment.desired` for the
+GroupHead's current Deployment.
 
 ```ts
 interface RouteProjection {
   routeId: string;
   ownershipGeneration: number;
-  activationGeneration: number;
-  networkConfigId: string;
+  groupHeadGeneration: number;
+  runtimeNetworkPolicyDigest: string;
   updatedAt: string;
 }
 ```
 
-Router reads RouteProjection and ActivationRecord. Router must not mutate canonical ownership or activation.
+Router reads RouteProjection (derived from `Deployment.desired.routes` +
+`activation_envelope`) and the GroupHead pointer. Router must not mutate
+canonical ownership, GroupHead, or `Deployment.desired`.
 
 ---
 
@@ -1128,8 +1135,8 @@ AgentPort is optional and capability-gated.
 ```ts
 interface AgentCapabilitySet {
   canReadLogs: boolean;
-  canProposePlan: boolean;
-  canApplyPlan: boolean;
+  canResolveDeployment: boolean;   // create resolved Deployment (status: resolved)
+  canApplyDeployment: boolean;     // advance Deployment to applied
   canEditSource: boolean;
   canManageProviderTargets: boolean;
   canRequestSecrets: boolean;
@@ -1139,8 +1146,8 @@ interface AgentCapabilitySet {
 Recommended standalone default:
 
 ```text
-agent can propose Plans
-agent cannot Apply without approval
+agent can create resolved Deployments (status: resolved)
+agent cannot apply (advance to applied) without approval
 agent cannot manage provider targets by default
 agent cannot request secrets by default
 ```
@@ -1188,14 +1195,13 @@ bootstrap/recovery config
 | route ownership / domain ownership | `paas-routing` |
 | repository, ref, object, source truth | `takos-git` or SourcePort provider |
 | SourceSnapshot metadata | `paas-deploy` with SourcePort origin |
-| Plan, ApplyRun, OperationRun | `paas-deploy` |
-| ActivationRecord, GroupActivationPointer | `paas-deploy` |
-| AppRelease, NetworkConfig desired state | `paas-deploy` |
-| RuntimeNetworkPolicy desired state | `paas-network` + `paas-deploy` activation reference |
+| Deployment (input / resolution / desired / status / conditions / policy_decisions / approval) | `paas-deploy` |
+| GroupHead (current_deployment_id / previous_deployment_id) | `paas-deploy` |
+| Deployment.desired.runtime_network_policy | `paas-network` + `paas-deploy` (Deployment.desired field) |
 | WorkloadRevision | `paas-runtime` |
-| ProviderMaterialization | `paas-runtime` |
-| ObservedProviderState, health, logs | `paas-runtime` |
-| ResourceInstance, ResourceBinding | `paas-resources` |
+| Deployment.conditions[] (provider operation 進捗 / 観測フィードバック) | `paas-deploy` (apply 側) / `paas-runtime` (observe 側) |
+| ProviderObservation, health, logs | `paas-runtime` |
+| ResourceInstance, Deployment.desired.bindings projection | `paas-resources` |
 | MigrationLedger | `paas-resources` |
 | ProviderPackage, ResourceContractPackage, DataContractPackage | `paas-registry` |
 | PackageResolution | `paas-registry` + `paas-deploy` read set |
@@ -1266,7 +1272,7 @@ public plane:
   browser / CLI / public API
 
 control plane:
-  Plan / Apply / registry / auth / policy / audit
+  Deployment lifecycle (resolve / apply) / registry / auth / policy / audit
 
 data plane:
   user request routing to workloads
@@ -1299,7 +1305,7 @@ These planes may share product root, but they must not share authority implicitl
 10. `takos-paas` core must not depend on physical co-location.
 11. Dependencies are reached through ports, adapters, ServiceEndpointRegistry, ProviderTargets, RuntimeAgents, or external APIs.
 12. Canonical writes use primary control-plane authority.
-13. Strongly consistent writes include ownership, Plan/Apply locks, GroupActivationPointer, ResourceMigrationLock, package trust, and credential binding.
+13. Strongly consistent writes include ownership, Deployment status transitions, GroupHead.current_deployment_id, ResourceMigrationLock, package trust, and credential binding.
 14. Private network does not imply trust.
 15. Remote internal calls require signed RPC, mTLS, or equivalent service identity.
 16. ServiceEndpoint, ServiceTrustRecord, and ServiceGrant are separate concepts.
@@ -1310,10 +1316,10 @@ These planes may share product root, but they must not share authority implicitl
 21. Tenant workloads must not access control-plane DB, provider credentials, operator secrets, internal signing keys, or control-plane private endpoints.
 22. Standalone mode still uses Tenant / Space / Group.
 23. SourcePort adapters must return immutable SourceSnapshot values.
-24. Agent output and source connector output are untrusted until validated through source/build/Plan/policy.
+24. Agent output and source connector output are untrusted until validated through source/build/Deployment resolution/policy.
 25. Control-plane restore and ControlPlaneMigration are operator operations, not tenant app operations.
 26. Registry trust/revocation behavior must be defined for online, manual, and offline sync modes.
 27. Self-update is operator operation unless explicitly enabled by policy.
-28. Router reads route projections and activation state but must not mutate canonical ownership or activation.
+28. Router reads route projections (derived from Deployment.desired) and the GroupHead pointer but must not mutate canonical ownership, Deployment.desired, or GroupHead.
 29. No distributed transaction is assumed across providers, clouds, agents, or services.
 30. Provider state is observed and materialized, never canonical Takos state.

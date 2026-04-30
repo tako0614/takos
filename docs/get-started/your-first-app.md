@@ -56,7 +56,8 @@ compute:
         artifactPath: dist/worker
 
 routes:
-  - target: web
+  - id: web
+    target: web
     path: /
 ```
 
@@ -116,10 +117,14 @@ takos deploy --env staging --space SPACE_ID
 :::
 
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
-が出れば成功。
+が出れば成功。`takos deploy` は default で resolve + apply を 1 step
+で実行する Heroku 風 sugar です。
 
 manifest の整合性だけ先に確認したい場合:
-`takos deploy --plan --space SPACE_ID`
+`takos deploy --preview --space SPACE_ID` (in-memory preview)。
+reviewer に渡したい場合は `takos deploy --resolve-only --space SPACE_ID`
+で resolved Deployment record を作り、`takos diff <id>` / `takos apply <id>`
+で確認・適用を分離できます。
 
 ::: tip flat manifest `app.yml` は flat 構造です。`apiVersion` / `kind` /
 `metadata` / `spec` のラッパーは不要で、`name` をトップレベルに書きます。

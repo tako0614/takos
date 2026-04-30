@@ -1,0 +1,19 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/composite/serverless-with-postgres/v1",
+  "@type": "CompositeContractDescriptor",
+  "shortRef": "composite.serverless-with-postgres@v1",
+  "domain": "composite",
+  "lifecycleDomain": "revisioned-runtime",
+  "changeEffect": "app-release",
+  "description": "Serverless API with managed Postgres database. Expands into a runtime.js-worker@v1 component plus a resource.sql.postgres@v1 binding under env DATABASE_URL.",
+  "expandsTo": [
+    "runtime.js-worker@v1",
+    "resource.sql.postgres@v1"
+  ],
+  "invariants": [
+    "expansion-before-plan",
+    "descriptor-digest-pinned",
+    "no-provider-semantics"
+  ]
+}

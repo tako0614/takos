@@ -1,0 +1,19 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/resource/key-value/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.key-value@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-state",
+  "changeEffect": "resource-instance",
+  "accessModes": [
+    "kv-runtime-binding"
+  ],
+  "permissions": [
+    "kv:read",
+    "kv:write",
+    "kv:delete",
+    "kv:list"
+  ],
+  "schemaModel": "key-value"
+}

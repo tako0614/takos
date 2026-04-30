@@ -18,6 +18,7 @@
         "router",
         "access"
       ],
+      "runtimeCapabilities": [],
       "limitations": [
         "worker-fronted",
         "durable-object-backed",
@@ -55,6 +56,20 @@
       "enforcement": "enforced",
       "limitations": [
         "mediated-by-worker-outbound-handler"
+      ]
+    },
+    {
+      "resourceContract": "resource.object-store.s3@v1",
+      "accessMode": "s3-api",
+      "injectionMode": "env",
+      "stages": [
+        "provider-credential",
+        "external-provider-api"
+      ],
+      "networkBoundary": "external",
+      "enforcement": "enforced",
+      "limitations": [
+        "requires-runtime-egress-policy"
       ]
     }
   ],

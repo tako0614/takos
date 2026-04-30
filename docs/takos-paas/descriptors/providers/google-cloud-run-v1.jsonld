@@ -17,6 +17,9 @@
         "runtime",
         "router"
       ],
+      "runtimeCapabilities": [
+        "request-driven-container"
+      ],
       "limitations": [
         "http-oriented-service",
         "provider-managed-revisions",

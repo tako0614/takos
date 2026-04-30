@@ -10,6 +10,10 @@ Agent runtime の worker + attached container pattern
 同じ manifest は repo/ref source の `takos deploy URL` や catalog package
 install でも使えます。
 
+この例は
+[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
+を `containers` と複数 `routes` で拡張したものです。
+
 ## deploy manifest
 
 ```yaml
@@ -29,9 +33,11 @@ compute:
         port: 8080
 
 routes:
-  - target: processor-host
+  - id: api
+    target: processor-host
     path: /api
-  - target: processor-host
+  - id: gui
+    target: processor-host
     path: /gui
 
 env:

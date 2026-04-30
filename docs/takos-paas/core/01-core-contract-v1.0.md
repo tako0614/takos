@@ -1,30 +1,39 @@
-# Takos Deploy v2 Core Contract v1.0
+# Takos Deploy v3 Core Contract v1.0
 
-**Status:** v1.0 final  
-**Scope:** Core semantics only  
-**Non-goal:** This document does not specify plugin loading, package managers, descriptor registry APIs, billing, concrete JavaScript Worker / container / SQL implementations, or concrete cloud provider APIs.
+**Status:** v1.0 core contract for Deployment-centric design\
+**Scope:** Core semantics only\
+**Non-goal:** This document does not specify plugin loading, package managers,
+descriptor registry APIs, billing, concrete JavaScript Worker / container / SQL
+implementations, or concrete cloud provider APIs.
 
-Takos Deploy v2 is a deployment meaning system.
+Takos Deploy v3 is a deployment meaning system organized around three records:
+
+```text
+Deployment            — input + resolution + desired state + status
+ProviderObservation   — observed provider state (separate from canonical)
+GroupHead             — group-scoped pointer to the current Deployment
+```
+
+All other meta-records that previous Core revisions tracked separately are
+collapsed into a field of `Deployment`, or onto one of the other two records.
+See § 18 for the full v2 → v3 mapping.
+
+Core defines no domain kinds. Core does not define `js-worker`, `container`,
+`sql`, `queue`, `mcp-server`, `file-handler`, `Cloudflare`, `Cloud Run`,
+`Docker`, or `Kubernetes`. Concrete meanings are supplied by descriptors.
 
 ```text
 Core has no domain kinds.
-Core defines deployment meta-objects.
+Core defines Deployment / ProviderObservation / GroupHead.
 Descriptors define meaning.
-Plans pin descriptors.
+Deployments pin descriptors.
 Apply uses pinned meaning.
 Bindings are explicit.
 Routed serving is protocol-agnostic and descriptor-defined.
 Resources are reached through access paths.
 Providers materialize; they do not define.
-Provider capability descriptors MAY constrain, reject, or report limitations for contract configurations. They MUST NOT reinterpret contract semantics.
 Observed provider state is never canonical.
 ```
-
-Core does not define built-in concepts such as `js-worker`, `container`, `sql`, `queue`, `mcp-server`, `file-handler`, `Cloudflare`, `Cloud Run`, `Docker`, or `Kubernetes`.
-
-Core still defines deployment meta-objects such as `Component`, `Plan`, `ApplyRun`, `ActivationRecord`, `ResourceInstance`, `BindingSetRevision`, and `ProviderMaterialization`.
-
-Concrete meanings are supplied by descriptors. A Takos distribution may ship official descriptor sets, and an implementation may support authoring conveniences, but those are outside Core semantics.
 
 ---
 
@@ -32,7 +41,7 @@ Concrete meanings are supplied by descriptors. A Takos distribution may ship off
 
 ```text
 MUST      required for Core conformance
-SHOULD    strongly recommended, but may be relaxed with documented rationale
+SHOULD    strongly recommended, but relaxable with documented rationale
 MAY       optional
 MUST NOT  forbidden for Core conformance
 ```
@@ -42,26 +51,22 @@ MUST NOT  forbidden for Core conformance
 ## 2. Core invariants
 
 ```text
-1. Core MUST NOT assign built-in meaning to workload, resource, publication, or provider names.
-2. Every concrete meaning used by Plan MUST come from descriptor resolutions.
-Descriptors MUST be declarative. Descriptors MUST NOT contain arbitrary executable behavior, provider-specific callbacks, or implementation-specific code.
-3. Apply MUST use the DescriptorClosure fixed by Plan.
-4. Apply MUST NOT reinterpret descriptor URLs, aliases, or remote contexts at execution time.
-5. Publication MUST NOT imply injection.
-6. Resource credentials MUST NOT be publication outputs by default.
-7. Provider-assigned outputs MUST NOT be directly injectable.
-8. Binding material MUST be explicitly selected in a BindingSetRevision.
-9. BindingSetRevision structure MUST be immutable.
-10. Binding values MAY refresh only according to BindingValueResolution policy.
-11. ProviderMaterialization is Takos-side desired/reference state.
-12. ProviderObservation is observed provider state.
-13. Observed provider state MUST NOT be canonical.
-14. ActivationRecord records a desired routed serving envelope, not proof of router/provider convergence.
-15. GroupActivationPointer selects the current immutable ActivationRecord.
-16. RouterConfig and RuntimeNetworkPolicy changes require a new ActivationRecord.
-17. Rollback MUST NOT reverse migrations or restore durable resource contents.
-18. Retained releases MUST use retained immutable artifacts and retained or policy-approved immutable descriptors.
+1.  Core MUST NOT assign built-in meaning to workload, resource, publication, or provider names.
+2.  Every concrete meaning used by Deployment.resolution MUST come from descriptor resolutions.
+3.  Apply MUST use the descriptor_closure fixed in Deployment.resolution. Apply MUST NOT reinterpret descriptor URLs, aliases, or remote contexts at execution time.
+4.  Publication MUST NOT imply injection.
+5.  Resource credentials MUST NOT be publication outputs by default.
+6.  Provider-assigned outputs MUST NOT be directly injectable.
+7.  Binding material MUST be explicitly selected in Deployment.desired.bindings.
+8.  Deployment.desired is immutable once Deployment.status is `applied`.
+9.  ProviderObservation is observed provider state and MUST NOT be canonical.
+10. Deployment.desired.activation_envelope records a desired routed serving envelope, not proof of router/provider convergence.
+11. GroupHead.current_deployment_id advancement MUST be strongly consistent.
+12. Rollback MUST reuse Deployment.input.manifest_snapshot and the retained descriptor_closure of the rollback target. Rollback MUST NOT reverse migrations or restore durable resource contents.
 ```
+
+These twelve invariants are the load-bearing semantics of Core.
+Implementations MAY surface additional checks but MUST NOT relax any of these.
 
 ---
 
@@ -81,65 +86,47 @@ multi-region active-active semantics
 automatic application-level DB write compatibility inference
 ```
 
-Core defines only the meaning boundaries and required records for deterministic Plan, Apply, Activation, Binding, Resource access, and Materialization.
-
-Core is router-layer protocol-agnostic. Core does not define HTTP, TCP, UDP, WebSocket, gRPC, QUIC, or any other protocol as a built-in kind. Routable protocols and their matching, assignment, health, and materialization semantics are descriptor-defined.
+Core is router-layer protocol-agnostic. Core does not define HTTP, TCP, UDP,
+WebSocket, gRPC, QUIC, or any other protocol as a built-in kind. Routable
+protocols and their matching, assignment, health, and materialization
+semantics are descriptor-defined.
 
 ---
 
 ## 4. AppSpec, EnvSpec, and PolicySpec
 
-### AppSpec
+A Deployment is produced from a manifest snapshot combining AppSpec, EnvSpec,
+and PolicySpec inputs. The combined snapshot is recorded as
+`Deployment.input.manifest_snapshot` and is the immutable input to resolution.
 
-AppSpec declares application meaning:
+**AppSpec** declares application meaning (components, named contract instances,
+exposures, consume / publication declarations, application-level requirements).
+AppSpec MUST NOT silently encode environment provider choices unless a
+descriptor explicitly marks the configuration as application behavior.
 
-```text
-components
-named contract instances
-exposures
-consume declarations
-publication declarations
-application-level requirements
+**EnvSpec** binds application meaning to an environment (provider targets,
+route / listener / domain / transport security choices, runtime network policy,
+materialization preferences, access path preferences). EnvSpec MUST NOT
+redefine AppSpec meaning.
+
+**PolicySpec** constrains and defaults behavior (allow / deny / require
+approval / defaults / limits / credential and trust policy). Policy precedence
+is `deny > require-approval > allow`. Approval MUST NOT override deny unless
+PolicySpec explicitly defines break-glass behavior. Policy defaults MAY
+influence resolution choices captured in `Deployment.resolution.resolved_graph`.
+
+```ts
+type DeploymentInput = {
+  manifest_snapshot: string;     // canonical bytes / digest reference
+  source_kind: "git" | "registry" | "inline" | "store" | string;
+  source_ref?: string;           // commit SHA, registry digest, store address
+  env?: string;                  // selected environment label
+  group?: string;                // requested group (overrides manifest default)
+};
 ```
 
-AppSpec MUST NOT silently encode environment provider choices unless the relevant descriptor explicitly marks the configuration as application behavior.
-
-### EnvSpec
-
-EnvSpec binds application meaning to an environment:
-
-```text
-provider targets
-route / listener / domain / transport security choices
-runtime network policy choices
-environment-specific materialization preferences
-access path preferences
-```
-
-EnvSpec MUST NOT redefine AppSpec meaning.
-
-### PolicySpec
-
-PolicySpec constrains and defaults behavior:
-
-```text
-allow
-deny
-require approval
-defaults
-limits
-credential and trust policy
-```
-
-PolicySpec does not define application intent, but policy defaults MAY affect ResolvedGraph materialization choices.
-
-Policy precedence is:
-
-```text
-deny > require-approval > allow
-```
-
-Approval MUST NOT override deny unless PolicySpec explicitly defines break-glass behavior.
+`Deployment.input` is immutable from the moment a Deployment record is
+persisted (i.e. from `status: "resolved"` onward).
 
 ---
 
@@ -153,24 +140,16 @@ components:
     contracts:
       runtime:
         ref: runtime.oci-container@v1
-
       artifact:
         ref: artifact.oci-image@v1
-        config:
-          image: ghcr.io/acme/api@sha256:abc
-
+        config: { image: ghcr.io/acme/api@sha256:abc }
       publicHttp:
         ref: interface.http@v1
-        config:
-          port: 8080
-
+        config: { port: 8080 }
       adminHttp:
         ref: interface.http@v1
-        config:
-          port: 9090
+        config: { port: 9090 }
 ```
-
-Rules:
 
 ```text
 Contract ref is the type.
@@ -179,166 +158,140 @@ The same contract ref MAY be used more than once with different instance names.
 Core behavior MUST be derived from descriptor semantics, not from instance names.
 ```
 
-A canonical component MUST have exactly one selected revisioned-runtime root unless a descriptor explicitly defines a composite component. If multiple possible runtime roots exist and no materialization profile binds them unambiguously, Plan MUST be blocked.
+A canonical component MUST have exactly one selected revisioned-runtime root
+unless a descriptor explicitly defines a composite component. Otherwise
+resolution MUST be blocked.
 
-Authoring conveniences such as `kind: container`, `kind: js-worker`, `takos deploy image`, or `takos deploy worker` are outside Core semantics. They MUST expand to canonical component and contract instance form before Plan. Their expansion descriptor digest MUST be included in the DescriptorClosure.
+Authoring conveniences (`kind: container`, `kind: js-worker`,
+`takos deploy image`, etc.) MUST expand to canonical component / contract
+instance form before resolution finalizes, and their expansion descriptor
+digest MUST be included in `Deployment.resolution.descriptor_closure`.
 
 ---
 
-## 6. Descriptors and DescriptorClosure
+## 6. Descriptors and descriptor_closure
 
-Descriptors define meaning. A descriptor is identified by a canonical URI and fixed by digest.
-
-```text
-alias:  runtime.oci-container@v1
-id:     https://takos.dev/contracts/runtime/oci-container/v1
-digest: sha256:...
-```
-
-Aliases are authoring conveniences. Canonical descriptor identity is the URI. Execution truth is digest.
-
-### DescriptorResolution
+Descriptors define meaning. A descriptor is identified by a canonical URI and
+fixed by digest. Aliases are authoring conveniences; canonical descriptor
+identity is the URI; execution truth is the digest.
 
 ```ts
-interface DescriptorResolution {
-  id: string;                    // canonical URI
-  alias?: string;                // authoring alias, if any
-  documentUrl?: string;          // where it was loaded from
-  mediaType: string;             // application/json, application/ld+json, etc.
-  rawDigest: string;             // fetched bytes
-  expandedDigest?: string;       // canonical semantic form, if applicable
-  contextDigests?: string[];     // JSON-LD or equivalent contexts
-  canonicalization?: {
-    algorithm: string;
-    version: string;
-  };
-  policyDecisionId: string;
+interface CoreDescriptorResolution {
+  id: string;                   // canonical URI
+  alias?: string; documentUrl?: string;
+  mediaType: string; rawDigest: string;
+  expandedDigest?: string; contextDigests?: string[];
+  canonicalization?: { algorithm: string; version: string };
+  policyDecisionId?: string;    // optional reference into Deployment.policy_decisions
+  resolvedAt: string;
 }
-```
 
-If a descriptor declares an internal canonical id, it MUST match the expected id unless PolicySpec explicitly allows aliasing.
-
-### DescriptorClosure
-
-```ts
-interface DescriptorClosure {
-  id: string;
-  digest: string;
-  resolutions: DescriptorResolution[];
-  dependencies: DescriptorDependency[];
+interface CoreDescriptorClosure {
+  resolutions: CoreDescriptorResolution[];
+  dependencies?: CoreDescriptorDependency[];
+  closureDigest: string;        // stable digest over the sorted resolutions
   createdAt: string;
 }
 
-interface DescriptorDependency {
-  fromDescriptorId: string;
-  toDescriptorId: string;
+interface CoreDescriptorDependency {
+  fromDescriptorId: string; toDescriptorId: string;
   reason:
-    | "jsonld-context"
-    | "schema"
-    | "compatibility-rule"
-    | "permission-scope"
-    | "resolver"
-    | "shape-derivation"
-    | "access-mode"
-    | "policy";
+    | "jsonld-context" | "schema" | "compatibility-rule" | "permission-scope"
+    | "resolver" | "shape-derivation" | "access-mode" | "policy" | string;
 }
 ```
 
-Rules:
+If a descriptor declares an internal canonical id, it MUST match the expected
+id unless PolicySpec explicitly allows aliasing.
+
+Rules for `Deployment.resolution.descriptor_closure`:
 
 ```text
-DescriptorClosure MUST include every descriptor that can affect shape derivation, provider matching, binding resolution, access path selection, publication resolution, policy evaluation, or operation planning.
-DescriptorClosure MUST include transitive descriptor dependencies.
-Apply MUST use the DescriptorClosure fixed by Plan.
-Apply MUST NOT fetch a new descriptor version or reinterpret remote context URLs.
+descriptor_closure MUST include every descriptor that can affect shape derivation, provider matching, binding resolution, access path selection, publication resolution, policy evaluation, or operation planning.
+descriptor_closure MUST include transitive descriptor dependencies.
+Apply MUST use the descriptor_closure fixed in Deployment.resolution and MUST NOT fetch a new descriptor version or reinterpret remote context URLs.
 ```
 
-Same major ref updates MUST be backward-compatible. Breaking changes require a new major ref. Compatibility MAY be established by descriptor compatibility declarations, conformance tests, schema diff, author attestation, or policy approval. Policy MAY block unknown or weak compatibility evidence.
+Same major ref updates MUST be backward-compatible; breaking changes require a
+new major ref. Compatibility MAY be established by descriptor compatibility
+declarations, conformance tests, schema diff, author attestation, or policy
+approval.
 
-Retained releases MUST retain descriptor digests required for interpretation, binding, and materialization in Takos-controlled storage or in a policy-approved immutable source for the rollback window.
+Retained Deployments MUST retain their descriptor digests for the rollback
+window; otherwise they are not safely reusable for rollback (§ 15).
 
 ---
 
 ## 7. Policy decisions and approvals
 
 Policy MUST be evaluated before irreversible or externally visible action.
-
-Policy gates are grouped as:
-
-```text
-Resolution gate:
-  descriptor resolution, authoring expansion, graph projection, provider target selection
-
-Planning gate:
-  binding resolution, access path selection, operation planning, approval evaluation
-
-Execution gate:
-  apply phase revalidation, provider materialization, activation preview
-
-Recovery gate:
-  rollback, restore, repair, rebind, retained release interpretation
-```
-
-Every meaningful policy decision SHOULD produce a PolicyDecisionRecord.
+Policy decisions and approvals are recorded inline on the Deployment. Policy
+gates are grouped as **Resolution**, **Planning**, **Execution**, and
+**Recovery**.
 
 ```ts
-interface PolicyDecisionRecord {
+type DeploymentPolicyDecision = {
   id: string;
+  gateGroup: "resolution" | "planning" | "execution" | "recovery" | string;
   gate:
-    | "resolution"
-    | "planning"
-    | "execution"
-    | "recovery"
-    | string;
-  subjectAddress?: string;
-  subjectDigest: string;
+    | "descriptor-resolution" | "authoring-expansion" | "graph-projection"
+    | "provider-selection" | "binding-resolution" | "access-path-selection"
+    | "operation-planning" | "activation-preview" | "apply-phase-revalidation"
+    | "repair-planning" | "rollback-planning" | string;
   decision: "allow" | "deny" | "require-approval";
-  ruleRef?: string;
+  ruleRef?: string; subjectAddress?: string; subjectDigest: string;
   decidedAt: string;
-}
+};
 
-interface ApprovalRecord {
-  id: string;
-  policyDecisionId: string;
-  subjectDigest: string;
-  approvedBy: string;
-  approvedAt: string;
-  expiresAt?: string;
-}
+type DeploymentApproval = {
+  approved_by: string; approved_at: string;
+  policy_decision_id: string;   // refers into Deployment.policy_decisions
+  expires_at?: string;
+};
 ```
 
-Policy says whether approval is required. ApprovalRecord records the human or system approval that satisfies that requirement. Approval MUST NOT convert a deny decision into allow unless explicit break-glass policy permits it.
-
-Descriptor policy itself MUST be evaluated by a bootstrap trust rule, not by the policy descriptor it is currently defining.
+Every meaningful policy decision SHOULD produce an entry in
+`Deployment.policy_decisions[]`. `Deployment.approval` is optional and, when
+present, satisfies a `require-approval` decision recorded there. Approval MUST
+NOT convert a deny decision into allow unless explicit break-glass policy
+permits it. Descriptor policy itself MUST be evaluated by a bootstrap trust
+rule, not by the policy descriptor it is currently defining.
 
 ---
 
-## 8. ResolvedGraph and projections
+## 8. resolved_graph and projections {#resolved-graph}
 
-The compiler turns AppSpec + EnvSpec + PolicySpec + DescriptorClosure into ResolvedGraph.
-
-ResolvedGraph MAY be flat internally, but it SHOULD expose deterministic projections for controllers. Controllers SHOULD consume projections rather than reinterpret raw descriptors independently.
+The compiler turns AppSpec + EnvSpec + PolicySpec + descriptor_closure into a
+resolved graph and stores it as `Deployment.resolution.resolved_graph`.
 
 ```ts
-interface ProjectionRecord {
-  projectionType: string;
-  objectAddress: string;
-  sourceComponentAddress: string;
-  sourceContractInstance: string;
-  descriptorResolutionId: string;
+type ResolvedGraph = {
+  digest: string;                // stable digest of the canonical graph
+  components: ResolvedComponent[];
+  projections: GraphProjection[];
+};
+
+type GraphProjection = {
+  projectionType: string;        // e.g. "runtime-claim", "exposure-target"
+  objectAddress: string; sourceComponentAddress: string;
+  sourceContractInstance: string; descriptorResolutionId: string;
   digest: string;
-}
+};
 ```
 
-Projection families are compiler outputs for controller routing, not authoring kinds. Examples include runtime claims, resource claims, exposure targets, publication declarations, binding requests, and access path requests.
+The graph MAY be flat internally, but SHOULD expose deterministic projections
+for controllers. Controllers SHOULD consume projections rather than
+reinterpret raw descriptors. Projection families (runtime claim, resource
+claim, exposure target, publication declaration, binding request, access path
+request, etc.) are compiler outputs for controller routing, not authoring
+kinds.
 
 ---
 
 ## 9. ObjectAddress
 
-ObjectAddress is the stable address used for diff, audit, idempotency, repair, binding, and ownership.
-
-Formal grammar:
+ObjectAddress is the stable address used for diff, audit, idempotency, repair,
+binding, and ownership.
 
 ```text
 ObjectAddress = Segment ("/" Segment)*
@@ -356,44 +309,27 @@ app.exposure:web
 app.binding:api%2FDATABASE_URL
 resource.instance:db_inst_123
 publication:search-agent%2Fsearch
-publication:search-agent%2Fsearch#url
-runtime.app-release:rel_123
-network.activation:act_456
-provider.materialization:pm_789
+deployment:dep_123
+group:checkout-prod
 ```
 
-Rules:
-
-```text
-Addresses are case-sensitive.
-Path separators inside names MUST be percent-encoded.
-Renames MUST NOT be inferred by similarity.
-Rename/adoption requires previousAddress or explicit adoption metadata.
-Cross-contract rename is a dangerous change unless an explicit migration/rebind plan exists.
-```
+Addresses are case-sensitive. Path separators inside names MUST be
+percent-encoded. Renames MUST NOT be inferred by similarity; they require
+`previousAddress` or explicit adoption metadata. Cross-contract rename is a
+dangerous change unless an explicit migration/rebind plan exists.
 
 ---
 
 ## 10. Interface, exposure, route, router, and publication
 
-The boundaries are:
+Boundaries:
 
 ```text
-Interface:
-  component-side reachable surface; how the component can receive traffic or calls
-
-Exposure:
-  app-level intent to expose a component interface
-
-Route:
-  environment/router binding of an exposure to a listener, protocol-specific match,
-  gateway, and transport/security policy
-
-Router:
-  materialized routing layer that can serve protocol-specific routes
-
-Publication:
-  typed output that says what an endpoint or value means
+Interface:    component-side reachable surface
+Exposure:     app-level intent to expose a component interface
+Route:        environment binding of an exposure to a listener / match / transport
+Router:       materialized routing layer
+Publication:  typed output that says what an endpoint or value means
 ```
 
 Invariants:
@@ -407,73 +343,35 @@ Publication does not imply injection.
 Transport protocol does not determine object type.
 ```
 
-Exposure target MUST reference a contract instance whose descriptor has `exposureEligible=true` or equivalent descriptor semantics.
+Routes are recorded in `Deployment.desired.routes`. Each route references an
+exposure target whose descriptor declares `exposureEligible=true` (or
+equivalent), plus a route descriptor that defines listener, matching, and
+transport/security shape.
 
-### InterfaceDescriptor and RouteDescriptor
+Core is protocol-agnostic. A routable interface/route descriptor MAY define
+HTTP, TCP, UDP, WebSocket, gRPC, QUIC, or internal-only routing. Core MUST NOT
+assume that every route is HTTP or that every serving channel supports
+weighted assignment, request mirroring, header/path matching, TLS termination,
+connection draining, or health probing — those are descriptor-defined and
+provider-validated. If a channel descriptor does not support weighted
+assignment, the Deployment MUST record a single assignment with weight 100 or
+resolution MUST be blocked.
 
-Router-agnostic Core separates component-side protocol capability from router-side protocol binding:
+Publication is typed output. Publication output descriptors MUST define value
+type and sensitivity. A change in publication resolution MUST NOT mutate
+existing consumer bindings; it creates a rebind candidate requiring a new
+Deployment with updated `desired.bindings`.
 
-```text
-InterfaceDescriptor:
-  defines what a component can receive or serve.
-  Examples: HTTP request surface, TCP connection surface, UDP datagram surface,
-  gRPC service surface, internal service surface.
+---
 
-RouteDescriptor:
-  defines how RouterConfig can match, listen, terminate transport/security,
-  and forward traffic to an Exposure.
-```
+## 11. Bindings
 
-They MUST be compatible during activation preview. A RouteDescriptor MUST NOT redefine the component-side interface meaning. An InterfaceDescriptor MUST NOT define environment route/domain/provider choices.
+Bindings are recorded in `Deployment.desired.bindings` — a structural,
+immutable shape tying consumer targets to typed sources.
 
-### Serving channel descriptors
-
-Core is protocol-agnostic. A routable interface/route descriptor MAY define, for example:
-
-```text
-HTTP host/path/request routing
-TCP listener/connection routing
-UDP datagram or flow routing
-WebSocket session routing
-gRPC service/method/stream routing
-QUIC or future transport routing
-internal-only service routing
-```
-
-Core MUST NOT assume that every route is HTTP. Core also MUST NOT assume that every serving channel supports weighted assignment, request mirroring, header/path matching, TLS termination, connection draining, or health probing. Those capabilities are descriptor-defined and provider-validated.
-
-Serving channel descriptors MUST be declarative. They MAY define routing semantics, assignment granularity, health observation requirements, and compatibility rules, but MUST NOT contain arbitrary routing code or provider-specific executable behavior.
-
-If a serving channel descriptor does not support weighted assignment, Plan MUST require a single assignment with weight 100 for that channel or block the rollout strategy. If a serving channel has connection, flow, stream, session, or datagram semantics, the descriptor MUST define how assignment is applied. If deterministic assignment semantics cannot be defined for the protocol/provider combination, weighted assignment MUST be unsupported.
-
-Transport protocol does not determine object type:
-
-```text
-external client -> routed listener -> component:
-  RouterConfig
-
-component -> resource over TCP/HTTP/connector:
-  ResourceAccessPath
-
-component -> arbitrary external destination:
-  RuntimeNetworkPolicy
-```
-
-For long-lived sessions or streams, the descriptor SHOULD define assignment point, drain behavior, and session affinity semantics. For protocols without observable health, `ServingConverged` MAY remain unknown unless the descriptor or provider materialization profile defines a probe or observation model.
-
-## 11. Bindings, access modes, and injection modes
-
-AccessMode and InjectionMode are different.
-
-```text
-AccessMode:
-  what is obtained from the source
-
-InjectionMode:
-  how the material is delivered to the component
-```
-
-Canonical access modes are contract-scoped:
+AccessMode (what is obtained from the source) and InjectionMode (how it is
+delivered to the component) are different. Canonical access modes are
+contract-scoped:
 
 ```yaml
 access:
@@ -481,126 +379,89 @@ access:
   mode: database-url
 ```
 
-Authoring shorthand MAY omit the contract only when the source is already unambiguous. Ambiguous shorthand MUST block Plan.
-
-Binding material MUST pass:
-
-```text
-source contract permits access
-provider supports access
-output descriptor permits injection
-runtime supports injection
-provider supports injection
-policy permits sensitivity and injection
-grant exists
-no injection target collision
-```
-
-### BindingResolutionReport
+Authoring shorthand MAY omit the contract only when the source is
+unambiguous; ambiguous shorthand MUST block resolution.
 
 ```ts
-interface BindingResolutionReport {
-  componentAddress: string;
-  bindingSetRevisionId?: string;
-  inputs: BindingResolutionInput[];
-  blockers: string[];
-  warnings: string[];
-}
-
-interface BindingResolutionInput {
-  bindingName: string;
+type DeploymentBinding = {
+  bindingName: string; componentAddress: string;
   source: "resource" | "publication" | "secret" | "provider-output";
   sourceAddress: string;
   access?: { contract: string; mode: string };
   injection: { mode: string; target: string };
   sensitivity: "public" | "internal" | "secret" | "credential";
   enforcement: "enforced" | "advisory" | "unsupported";
-}
-```
-
-Binding target collisions MUST block Plan unless the relevant runtime descriptor explicitly supports ordered merge and every binding declares precedence.
-
----
-
-## 12. BindingSetRevision and BindingValueResolution
-
-BindingSetRevision is an immutable structure record.
-
-```text
-source
-access mode
-injection mode
-target name
-sensitivity
-grant reference
-```
-
-Changing structure requires a new BindingSetRevision and normally a new AppRelease.
-
-BindingValueResolution records value/version resolution.
-
-```ts
-interface BindingValueResolution {
-  bindingSetRevisionId: string;
-  bindingName: string;
-  sourceAddress: string;
   resolutionPolicy: "latest-at-activation" | "pinned-version" | "latest-at-invocation";
-  resolvedVersion?: string;
-  resolvedAt: string;
-  sensitivity: "public" | "internal" | "secret" | "credential";
-}
+  resolvedVersion?: string; resolvedAt?: string; grantRef?: string;
+};
 ```
 
-Core default allowed policies are `latest-at-activation` and `pinned-version`. `latest-at-invocation` MAY be used only if the RuntimeContract and PolicySpec explicitly permit it.
+Binding material MUST pass: source contract permits access; provider supports
+access; output descriptor permits injection; runtime / provider support
+injection; policy permits sensitivity and injection; grant exists; no
+injection target collision. Binding target collisions MUST block resolution
+unless the runtime descriptor explicitly supports ordered merge and every
+binding declares precedence.
 
-If a secret or credential version referenced by BindingValueResolution is revoked, the implementation MUST surface a condition such as `SecretVersionRevoked` or `SecretResolutionFailed`. Repair or re-resolution MUST be planned explicitly.
+Core default allowed resolution policies are `latest-at-activation` and
+`pinned-version`. `latest-at-invocation` MAY be used only if the runtime
+contract and PolicySpec explicitly permit it.
+
+If a referenced secret/credential version is revoked, the implementation MUST
+surface a condition (e.g. `SecretVersionRevoked`, `SecretResolutionFailed`) on
+the Deployment and MUST plan repair or re-resolution explicitly through a new
+Deployment. Changing binding structure (target, source, access, injection)
+requires a new Deployment.
 
 ---
 
-## 13. ResourceInstance, ResourceBinding, and ResourceAccessPath
+## 12. Resources and ResourceInstance
 
-ResourceInstance carries durable state. ResourceBinding connects a claim to an instance. ResourceAccessPath records how a component reaches that resource.
-
-Resource access is not determined by the resource alone. It is selected by:
-
-```text
-Resource contract
-consumer component shape
-requested AccessMode
-requested InjectionMode
-provider support
-policy
-grant
-selected ResourceAccessPath
-```
-
-ResourceAccessPath is resource-only. External egress and internal service calls are governed by RuntimeNetworkPolicy and ServiceGrant-like semantics, not by ResourceAccessPath.
+`ResourceInstance` and `MigrationLedger` are the only records outside
+Deployment / ProviderObservation / GroupHead that Core retains as independent
+records. They carry durable state across Deployments.
 
 ```ts
-interface ResourceAccessPath {
-  id: string;
-  networkBoundary: "internal" | "provider-internal" | "external";
-  consumerAddress: string;
-  resourceBindingId: string;
+type ResourceInstance = {
+  id: string;                   // resource.instance:<id>
+  contract: string; groupOwner?: string;
+  status: "preparing" | "ready" | "retired" | "failed";
+  createdAt: string;
+};
+```
+
+Resource access is selected by: resource contract, consumer shape, requested
+AccessMode / InjectionMode, provider support, policy, grant, and selected
+access path. Access paths are recorded inline through
+`Deployment.desired.bindings[*].access` / `.injection`, plus the supplementary
+access path record below.
+
+```ts
+interface CoreResourceAccessPath {
+  bindingName: string; componentAddress: string;
   access: { contract: string; mode: string };
   injection: { mode: string; target: string };
-  stages: AccessPathStage[];
+  stages: CoreAccessPathStage[];
+  networkBoundary: "internal" | "provider-internal" | "external";
   enforcement: "enforced" | "advisory" | "unsupported";
   limitations?: string[];
 }
 
-interface AccessPathStage {
-  category: "direct" | "credential" | "mediated" | "brokered";
-  materializationRef?: string;
+interface CoreAccessPathStage {
+  kind: string;
+  role?: "access-mediator" | "resource-host" | "credential-source";
   providerTarget?: string;
   owner?: "takos" | "provider" | "operator";
   lifecycle?: "per-component" | "per-resource" | "shared";
   readiness?: "required" | "optional";
-  credentialVisibility?: "consumer-runtime" | "mediator-only" | "provider-only" | "control-plane-only" | "none";
+  credentialBoundary?: "none" | "provider-credential" | "resource-credential";
+  credentialVisibility?:
+    | "consumer-runtime" | "mediator-only" | "provider-only"
+    | "control-plane-only" | "none";
 }
 ```
 
-If multiple valid resource access paths exist, selection order is:
+If multiple valid access paths exist, selection order is:
 
 ```text
 1. explicit EnvSpec selection
@@ -608,369 +469,355 @@ If multiple valid resource access paths exist, selection order is:
 3. strongest enforcement level
 4. lowest credential visibility / sensitivity exposure
 5. provider priority / cost / locality rule
-6. otherwise Plan blocked with alternatives
+6. otherwise resolution blocked with alternatives
 ```
 
-If a resource-access path crosses an external network boundary, RuntimeNetworkPolicy MUST also be satisfied.
+External-boundary access paths MUST also satisfy
+`Deployment.desired.runtime_network_policy`. Migrations recorded in
+`MigrationLedger` are not reversed by rollback (§ 15).
 
 ---
 
-## 14. Minimal release and router/network objects
+## 13. Deployment record
 
-Core does not define concrete runtime or provider behavior, but it does define minimum identity and status for these records.
+`Deployment` is the central record of Core. Every other concept is either an
+input to a Deployment, a field of a Deployment, or a separate observation /
+pointer that references a Deployment.
 
 ```ts
-interface AppRelease {
-  id: string;
-  groupId: string;
-  resolvedGraphDigest: string;
-  componentRevisionRefs: string[];
-  bindingSetRevisionRefs: string[];
-  status: "preparing" | "ready" | "failed" | "retired";
-}
+type Deployment = {
+  id: string; group_id: string; space_id: string;
+  input: DeploymentInput;
+  resolution: { descriptor_closure: CoreDescriptorClosure; resolved_graph: ResolvedGraph };
+  desired: {
+    routes: DeploymentRoute[];
+    bindings: DeploymentBinding[];
+    resources: DeploymentResourceClaim[];
+    runtime_network_policy: DeploymentRuntimeNetworkPolicy;
+    activation_envelope: DeploymentActivationEnvelope;
+  };
+  status: "preview" | "resolved" | "applying" | "applied" | "failed" | "rolled-back";
+  conditions: DeploymentCondition[];
+  policy_decisions?: DeploymentPolicyDecision[];
+  approval?: DeploymentApproval;
+  rollback_target?: string | null;
+  created_at: string; applied_at?: string; finalized_at?: string;
+};
 
-interface RouterConfig {
-  id: string;
-  groupId: string;
-  routeRefs: string[];        // protocol-agnostic route/listener references
-  status: "preparing" | "ready" | "failed" | "retired";
-}
+type DeploymentRoute = {
+  id: string; exposureAddress: string; routeDescriptorId: string;
+  match: Record<string, unknown>;
+  transport?: { security?: string; tls?: Record<string, unknown> };
+};
 
-interface RuntimeNetworkPolicy {
-  id: string;
-  groupId: string;
+type DeploymentResourceClaim = {
+  claimAddress: string; contract: string;
+  bindingNames: string[]; resourceInstanceId?: string;
+};
+
+type DeploymentRuntimeNetworkPolicy = {
   policyDigest: string;
-  status: "preparing" | "ready" | "failed" | "retired";
-}
+  defaultEgress: "allow" | "deny" | "deny-by-default";
+  egressRules?: DeploymentEgressRule[];
+  serviceIdentity?: Record<string, unknown>;
+};
+
+type DeploymentActivationEnvelope = {
+  primary_assignment: { componentAddress: string; weight: number };
+  assignments?: { componentAddress: string; weight: number; labels?: Record<string, string> }[];
+  route_assignments?: {
+    routeId: string; protocol?: string;
+    assignments: { componentAddress: string; weightPermille: number }[];
+  }[];
+  rollout_strategy?: { kind: "immediate" | "blue-green" | "canary" | string; steps?: unknown[] };
+  non_routed_defaults?: {
+    events?: { componentAddress: string; reason?: string };
+    publications?: { componentAddress: string; reason?: string };
+  };
+  envelopeDigest: string;
+};
+
+type DeploymentCondition = {
+  type: string;                  // e.g. "DescriptorPinned", "ProviderMaterializing"
+  status: "true" | "false" | "unknown";
+  reason?: string; message?: string;
+  observed_generation: number; last_transition_time: string;
+  scope?: { kind: "operation" | "phase" | "deployment"; ref?: string };
+};
 ```
 
-RuntimeNetworkPolicy governs external egress, internal service identity, component-to-service permissions, and primary/candidate assignment-specific runtime access. It is distinct from RouterConfig.
-
-RouterConfig governs inbound routed serving: listeners, protocol-specific route matching, domains when applicable, gateways, and transport/security policy for traffic entering the platform.
-
-Boundary:
+### State machine
 
 ```text
-client -> router:
-  RouterConfig
+preview                   in-memory only, no DB record
+  -> resolved             record persisted, descriptor_closure pinned
+  -> applying             provider operations in-flight
+  -> applied              GroupHead advanced
+  -> rolled-back          GroupHead points back to a previous Deployment
+                          (no new Deployment is created for rollback itself)
 
-router -> component runtime:
-  RouterConfig + ProviderMaterialization
-
-component -> resource:
-  ResourceAccessPath
-
-component -> external destination:
-  RuntimeNetworkPolicy
-
-component -> internal service:
-  RuntimeNetworkPolicy / service identity semantics
+any state -> failed       terminal failure; conditions[] explain why
 ```
 
-RouterConfig is protocol-agnostic. A route may target any routable interface contract whose descriptor declares it routable. Concrete protocol examples such as HTTP, TCP, UDP, WebSocket, gRPC, or QUIC are non-normative examples, not Core kinds. Protocol descriptors define listener shape, routing keys, assignment granularity, health/probe model, and materialization requirements.
+Transition rules:
 
-Changing RouterConfig or RuntimeNetworkPolicy requires a new ActivationRecord, even if AppRelease assignments do not change. This keeps the active runtime/router/policy envelope immutable.
+```text
+preview -> resolved:
+  Persist Deployment with full input, resolution, desired, and any resolution-gate policy_decisions[].
+
+resolved -> applying:
+  Begin provider operations. Each operation contributes a DeploymentCondition entry with scope.kind="operation".
+  Phase boundaries contribute scope.kind="phase" conditions.
+
+applying -> applied:
+  All required operations succeeded. applied_at set. GroupHead advanced (§ 15).
+
+applying / resolved -> failed:
+  At least one required operation or policy gate failed. conditions[] explain. No GroupHead advancement.
+
+applied -> rolled-back:
+  Triggered via § 15. Reflected by GroupHead motion; the rollback_target Deployment becomes current.
+```
+
+`Deployment.desired` is immutable once `Deployment.status` is `applied`. While
+`applying`, only operation status reflected in `conditions[]` MAY change.
+
+Apply executes operations against the desired state with idempotent operation
+keys. Default key: `deploymentId + operationKind + objectAddress +
+desiredDigest`. Operation kinds are stable strings such as
+`descriptor.resolve`, `component.project`, `resource.bind`,
+`resource.migrate`, `resource.restore`, `binding.create`, `runtime.deploy`,
+`router.prepare`, `publication.resolve`, `publication.rebind`,
+`access-path.materialize`, `activation.commit`, `provider.materialize`,
+`provider.observe`, `repair.plan`. Operation-level state lives entirely in
+`Deployment.conditions[]` with `scope.kind="operation"`. Provider
+materialization failure MUST NOT mutate `Deployment.desired`; repair or
+rollback creates a new Deployment.
+
+Activation preview MUST verify: exposure target exists and is
+exposureEligible; InterfaceDescriptor is compatible with RouteDescriptor;
+router provider/materialization supports required protocol/listener
+semantics; assignment semantics are supported or blocked; health/probe model
+is declared or explicitly unknown; transport/security policy is supported;
+runtime_network_policy covers every assigned component and primary/candidate
+selector used. For non-routed groups, `desired.routes` MAY be empty and the
+activation envelope SHOULD record a single assignment with weight 100 for the
+primary component.
+
+Serving status uses condition types `ActivationCommitted`,
+`ServingMaterializing`, `ServingConverged`, `ServingDegraded`.
+`ServingConverged` MUST require ProviderObservation evidence (§ 14) for the
+materializations required by the current routes, runtime network policy, and
+activation envelope. For non-HTTP protocols, the descriptor or provider
+profile MUST define what observation is sufficient; protocols without
+observable health MAY remain `unknown`.
 
 ---
 
-## 15. PublicationResolution and PublicationConsumerBinding
+## 14. ProviderObservation {#provider-observation}
 
-Publication is typed output. It is not injection.
-
-Publication output descriptors MUST define value type and sensitivity. HTTP URL outputs are one possible value shape, not a Core assumption. Non-normative examples include `url`, `endpoint`, `host`, `port`, `protocol`, `service-ref`, `secret-ref`, `json`, and `string`. TCP, UDP, gRPC, QUIC, and future routed protocols MAY publish endpoint-shaped outputs defined by their descriptors.
-
-PublicationResolution records output values.
+ProviderObservation is a separate, append-only stream of observations against
+provider state. It is never canonical. The canonical desired state is
+`Deployment.desired`.
 
 ```ts
-interface PublicationResolution {
-  publicationAddress: string;
-  resolverRef: string;
-  inputDigests: string[];
-  outputDigest: string;
-  values: Record<string, unknown>;
-}
-```
-
-PublicationResolution changes MUST NOT mutate existing PublicationConsumerBindings. A change creates a rebind candidate. If policy permits automatic rebind, a new BindingSetRevision is created. Otherwise a consumer rebind Plan is required.
-
-`PublicationWithdrawn` means the producer declaration was removed. `PublicationUnavailable` means the declaration exists but resolution, projection, route, or auth is not currently usable.
-
-PublicationProjection is discovery/projection state, not provider infra. It MUST NOT be recorded as ProviderMaterialization.
-
----
-
-## 16. Plan
-
-Plan records:
-
-```text
-diff
-risk
-approval requirements
-DescriptorClosure
-PolicyDecisionRecords
-ApprovalRecords, if any
-ResolvedGraph digest
-BindingResolutionReport
-operation graph
-read set
-staleness behavior
-```
-
-Plan MUST include descriptor resolutions for every descriptor that can affect:
-
-```text
-shape derivation
-provider matching
-binding resolution
-access path selection
-publication resolution
-policy evaluation
-operation planning
-```
-
-Plan MUST show significant descriptor trust warnings, binding sensitivity, access path enforcement, and provider limitations.
-
----
-
-## 17. ApplyRun, ApplyPhase, and OperationRun
-
-Apply executes a Plan with scoped locks, idempotent operations, and phase-boundary revalidation.
-
-```ts
-interface ApplyPhase {
+type ProviderObservation = {
   id: string;
-  applyRunId: string;
-  name: string;
-  status: "pending" | "running" | "succeeded" | "failed" | "skipped";
-  revalidationRequired: boolean;
-}
+  deployment_id: string;        // the Deployment whose desired state was observed against
+  provider_id: string; object_address: string;
+  observed_state: "present" | "missing" | "drifted" | "unknown";
+  drift_status?:
+    | "provider-object-missing" | "config-drift" | "status-drift"
+    | "security-drift" | "ownership-drift" | "cache-drift";
+  observed_digest?: string; observed_at: string;
+};
 ```
-
-OperationRun belongs to an ApplyPhase. Operation kind names are stable strings such as:
 
 ```text
-descriptor.resolve
-component.project
-resource.bind
-resource.migrate
-resource.restore
-binding-set.create
-runtime.deploy
-router.prepare
-publication.resolve
-publication.rebind
-access-path.materialize
-activation.create
-provider.materialize
-provider.observe
-repair.plan
+ProviderObservation MUST NOT mutate Deployment.desired.
+ProviderObservation MAY trigger a new Deployment (e.g. repair) but MUST NOT replace fields of an existing one.
+ProviderObservation digests reference desired digests recorded in Deployment.resolution / desired; mismatches surface as drift_status="config-drift" or "status-drift".
+ProviderObservation visibility against retired Deployments is permitted; a retired Deployment does not invalidate prior observations.
 ```
-
-Default idempotency key:
-
-```text
-applyRunId + operationKind + objectAddress + desiredDigest
-```
-
-Operation-specific keys MAY override this when required, such as migration checksum or ActivationRecord digest.
 
 ---
 
-## 18. ActivationRecord, GroupActivationPointer, RouterConfig, and serving status
+## 15. GroupHead and rollback
 
-ActivationRecord is an immutable desired routed serving envelope. It selects the AppRelease records, RouterConfig, and RuntimeNetworkPolicy that should be active for the group.
-
-For routed components, ActivationRecord also records desired routed serving assignment. For non-routed groups, ActivationRecord still acts as the active runtime/policy envelope.
-
-ActivationRecord is protocol-agnostic. HTTP is one possible routed protocol, not a Core assumption. TCP, UDP, WebSocket, gRPC, QUIC, or future protocols are valid when their interface/route descriptors define the semantics and the selected provider/materialization supports them.
+`GroupHead` is the strongly consistent pointer that selects the current
+Deployment for a group.
 
 ```ts
-interface ActivationAssignment {
-  appReleaseId: string;
-  weight: number;
-  labels?: Record<string, string>;
-}
-
-interface ActivationRecord {
-  id: string;
-  groupId: string;
-  routerConfigId: string;
-  runtimeNetworkPolicyId: string;
-  primaryAppReleaseId: string;
-  assignments: ActivationAssignment[];
-  createdAt: string;
-}
-
-interface GroupActivationPointer {
-  groupId: string;
-  currentActivationRecordId: string;
-  generation: number;
-  updatedAt: string;
-}
+type GroupHead = {
+  group_id: string;
+  current_deployment_id: string;
+  previous_deployment_id?: string | null;
+  generation: number; advanced_at: string;
+};
 ```
-
-ActivationRecord invariants:
 
 ```text
-ActivationRecord MUST be immutable.
-GroupActivationPointer selects the current ActivationRecord.
-Advancing GroupActivationPointer is the canonical activation commit.
-assignment weights MUST sum to 100 for weighted routed serving assignments.
-primaryAppReleaseId MUST be one of assignments.
-assigned AppRelease records MUST be ready and not retired.
-routerConfigId MUST be compatible with every assigned AppRelease.
-runtimeNetworkPolicyId MUST be compatible with every assigned AppRelease and assignment role.
-RuntimeNetworkPolicy MUST be compatible with primary and candidate assignments.
-RouterConfig MUST support the assignment granularity required by each routed interface descriptor.
-If a route/interface/provider combination does not support weighted assignment, ActivationRecord MUST use a single assignment with weight 100 for that routed traffic or Plan MUST be blocked.
-Protocol-specific routing constraints MUST be validated by descriptors and provider materialization profiles during activation preview.
+GroupHead.current_deployment_id MUST advance atomically (invariant 11).
+A GroupHead MUST NOT point to a Deployment whose status is not in {applied, rolled-back}.
+GroupHead.previous_deployment_id MUST point to a Deployment whose desired state, descriptor_closure, and manifest_snapshot remain retained for the rollback window.
+Advancing GroupHead is the canonical activation commit. ActivationCommitted is recorded as a Deployment condition on the new current Deployment.
 ```
 
-Activation preview MUST include at least:
+### Rollback
+
+Rollback is a pointer move, not a new Deployment. Given a GroupHead `H`:
 
 ```text
-exposure target exists and is exposureEligible
-InterfaceDescriptor is compatible with RouteDescriptor
-router provider/materialization supports required protocol/listener semantics
-assignment semantics are supported or blocked
-health/probe/convergence model is declared or explicitly unknown
-transport/security policy is supported
-RuntimeNetworkPolicy covers every assigned AppRelease and primary/candidate selector used
+1. Select target_deployment_id = H.previous_deployment_id (default) or an explicit retained Deployment id.
+2. Validate target Deployment is retained (manifest_snapshot, descriptor_closure, desired).
+3. Atomically swap: H.current_deployment_id <- target_deployment_id; H.previous_deployment_id <- prior current; generation += 1.
+4. Mark the previously current Deployment as rolled-back via a status transition. No new Deployment is created.
 ```
 
-For non-routed groups:
+Rollback MUST reuse retained `Deployment.input.manifest_snapshot` and the
+retained `descriptor_closure`. Rollback MUST NOT reverse migrations or restore
+durable resource contents (invariant 12). Restore-to-new-instance is a
+resource operation that requires a new Deployment with updated bindings.
 
-```text
-RouterConfig MAY contain zero routes.
-ActivationRecord SHOULD contain one assignment for primaryAppReleaseId with weight 100.
-This records the active AppRelease and RuntimeNetworkPolicy even when there is no routed ingress.
-```
-
-Protocol-specific assignment semantics are descriptor-defined:
-
-```text
-HTTP-like protocols MAY use request-level weighted assignment.
-TCP-like protocols MAY use connection-level weighted assignment.
-UDP-like protocols MAY use flow-level, datagram-level, or provider-defined assignment.
-gRPC-like protocols MAY use request, stream, service, or method assignment.
-A descriptor MAY declare weighted assignment unsupported.
-If a descriptor cannot define deterministic assignment semantics, weighted assignment MUST be unsupported.
-```
-
-Core default assignment applies globally across routed traffic selected by the current RouterConfig. Route-specific or protocol-specific assignment MAY be supported. If supported, its canonical desired state MUST be recorded in ActivationRecord or an ActivationRecord-owned extension digest, not hidden in provider state.
-
-Specific RuntimeNetworkPolicy selectors MAY match `appReleaseId` directly. The assignment role `primary` is derived from `primaryAppReleaseId`; `candidate` means an assigned AppRelease that is not primary.
-
-ActivationRecord is not proof of provider/router convergence. It is the Takos desired active envelope and routed serving assignment.
-
-Serving status uses conditions:
-
-```text
-ActivationCommitted
-ServingMaterializing
-ServingConverged
-ServingDegraded
-```
-
-`ServingConverged` MUST require provider observation for materializations required by the current RouterConfig, RuntimeNetworkPolicy when relevant, and ActivationRecord. For non-HTTP protocols, the descriptor or provider materialization profile MUST define what observation is sufficient for convergence. Protocols without observable health MAY remain unknown or materializing until descriptor-defined observation succeeds.
-
-Provider materialization failure MUST NOT mutate or delete ActivationRecord. Repair or rollback creates new Plan and, if needed, a new ActivationRecord. Auto rollback, if supported by policy, MUST also create a new ActivationRecord and advance GroupActivationPointer.
+Repair is expressed as a new Deployment whose `rollback_target` MAY reference
+a prior healthy Deployment. Repair MUST NOT mutate canonical state of any
+existing Deployment.
 
 ---
 
-## 19. ProviderMaterialization and ProviderObservation
+## 16. CLI surface
 
-ProviderMaterialization is Takos-side desired materialization reference. `role="router"` records routed serving materialization, including provider-created bridges, gateways, dispatchers, listeners, or protocol frontends.
-
-```ts
-interface ProviderMaterialization {
-  id: string;
-  desiredObjectRef: string;
-  providerTarget: string;
-  objectAddress: string;
-  role: "router" | "runtime" | "resource" | "access";
-  createdByOperationId: string;
-}
-```
-
-`desiredObjectRef` MUST point to an immutable desired materialization payload, ResolvedGraph fragment digest, or OperationRun desired payload digest. ProviderMaterialization MUST NOT depend on mutable provider configuration by reference.
-
-ProviderObservation is point-in-time observation.
-
-```ts
-interface ProviderObservation {
-  materializationId: string;
-  observedState: "present" | "missing" | "drifted" | "unknown";
-  driftReason?:
-    | "provider-object-missing"
-    | "config-drift"
-    | "status-drift"
-    | "security-drift"
-    | "ownership-drift"
-    | "cache-drift";
-  observedDigest?: string;
-  observedAt: string;
-}
-```
-
-Observed provider state is never canonical.
-
----
-
-## 20. Rollback, restore, and repair
-
-Rollback activates a previous compatible AppRelease and/or ActivationRecord. It does not roll back durable resource state, object-store contents, queue messages, or secret values.
-
-Rollback MUST use retained immutable artifacts. It MUST NOT depend on rebuilding source.
-
-DescriptorClosure is part of release interpretability. A retained AppRelease without its descriptor closure is not safely reusable.
-
-Restore is a resource operation. Restore-to-new-instance usually implies ResourceBinding switch, new BindingSetRevision, and usually new AppRelease.
-
-Repair is a Plan intent. Repair MUST NOT mutate canonical state invisibly. Repair may rematerialize provider state, refresh descriptor closures, restore access path mediators, recreate publication projections, rebind resources, or recover retained artifacts.
-
----
-
-## 21. Required conformance invariants
-
-Core conformant implementations MUST satisfy:
+Core defines the contract; the canonical CLI surface that exercises it is:
 
 ```text
-DescriptorClosure is used by Apply.
-Descriptor URL/content changes do not silently alter Apply.
-Ambiguous aliases block Plan.
-ObjectAddress is stable and used for diff/audit/idempotency.
-PolicyDecisionRecord and ApprovalRecord are separate.
-Publication does not imply injection.
-Binding target collisions block Plan.
-ResourceAccessPath is resource-only and shown in Plan when resource binding is used.
-External network boundary requires RuntimeNetworkPolicy satisfaction.
-ProviderMaterialization.role does not include projection and uses router for routed serving materialization.
-ProviderMaterialization is separated from ProviderObservation.
-ActivationRecord is immutable and satisfies assignment/primary/readiness/router-policy invariants.
-GroupActivationPointer selects the current ActivationRecord.
-Router/provider convergence is reported separately from activation commit.
-RouterConfig and RuntimeNetworkPolicy changes create a new ActivationRecord.
-Rollback does not restore durable state or secret values.
-Rollback does not rebuild source.
-Retained releases retain immutable artifacts and required descriptor digests.
+takos deploy <manifest>           default: resolve + apply (Heroku-like sugar)
+takos deploy --preview            in-memory preview, no DB record
+takos deploy --resolve-only       create resolved Deployment, do not apply
+takos apply <deployment-id>       advance a resolved Deployment to applied
+takos diff <deployment-id>        show resolved expansion + diff vs current GroupHead
+takos approve <deployment-id>     attach an approval to a resolved Deployment
+takos rollback [<group>]          flip GroupHead to previous_deployment_id
 ```
+
+The default `takos deploy <manifest>` MUST be equivalent to:
+
+```text
+1. POST /api/public/v1/deployments with mode="resolve"  -> deployment_id
+2. POST /api/public/v1/deployments/:id/apply
+```
+
+When PolicySpec records a `require-approval` decision in
+`Deployment.policy_decisions[]`, `takos apply` MUST refuse until
+`Deployment.approval` is attached or PolicySpec break-glass is permitted.
 
 ---
 
-## 22. Final sentence
+## 17. API surface
+
+A single endpoint family covers the lifecycle, all under public v1.
+
+```text
+POST /api/public/v1/deployments
+  body:     { manifest, mode: "preview"|"resolve"|"apply"|"rollback", target_id?, group?, env? }
+  response: { deployment_id, status, conditions, expansion_summary }
+
+GET  /api/public/v1/deployments/:id
+GET  /api/public/v1/deployments?group=&status=
+GET  /api/public/v1/groups/:group_id/head
+
+POST /api/public/v1/deployments/:id/apply
+POST /api/public/v1/deployments/:id/approve
+POST /api/public/v1/groups/:group_id/rollback
+
+GET  /api/public/v1/deployments/:id/observations
+```
+
+Mode behavior:
+
+```text
+mode="preview":   synchronous resolution against in-memory state. No record persisted. deployment_id="preview:<digest>".
+mode="resolve":   persist a Deployment with status="resolved". descriptor_closure pinned.
+mode="apply":     resolve (if no target_id) and apply in one call.
+mode="rollback":  operate on group + optional target_id. Atomically flips GroupHead.
+
+apply / approve / rollback endpoints are idempotent with respect to deployment_id and group_id.
+```
+
+The previous public paths (`/api/public/v1/deploy/plans`,
+`/api/public/v1/deploy/applies`,
+`/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*`,
+`/api/deploy/plans`, `/api/deploy/apply-runs`) are removed in v3. This is a
+breaking change. Migration mapping is in § 18.
+
+---
+
+## 18. Migration from v2 {#v2-migration}
+
+This section is the **only** place in the Core spec where v2 record names
+appear as record names. They are listed here purely to anchor the migration.
+
+| v2 record / concept            | v3 location                                                          |
+| ------------------------------ | -------------------------------------------------------------------- |
+| Plan                           | Deployment with status `resolved` (and beyond)                       |
+| ApplyRun                       | Deployment status transition `applying` -> `applied`                 |
+| ApplyPhase                     | Deployment.conditions[] entries with `scope.kind="phase"`            |
+| OperationRun                   | Deployment.conditions[] entries with `scope.kind="operation"`        |
+| RolloutRun                     | Deployment.desired.activation_envelope.rollout_strategy              |
+| AppRelease                     | Deployment itself; the Deployment is the release                     |
+| ActivationRecord               | Deployment.desired.activation_envelope                               |
+| GroupActivationPointer         | GroupHead                                                            |
+| BindingSetRevision             | Deployment.desired.bindings                                          |
+| BindingValueResolution         | resolutionPolicy / resolvedVersion / resolvedAt on each binding      |
+| RouterConfig                   | Deployment.desired.routes (+ activation_envelope.route_assignments)  |
+| RuntimeNetworkPolicy           | Deployment.desired.runtime_network_policy                            |
+| DescriptorClosure              | Deployment.resolution.descriptor_closure                             |
+| ResolvedGraph                  | Deployment.resolution.resolved_graph                                 |
+| CoreProjectionRecord           | Deployment.resolution.resolved_graph.projections                     |
+| CorePolicyDecisionRecord       | Deployment.policy_decisions[]                                        |
+| CoreApprovalRecord             | Deployment.approval                                                  |
+| ProviderMaterialization        | Deployment.conditions[] on the desired side                          |
+| ProviderObservation            | ProviderObservation (retained as a separate stream)                  |
+| ResourceInstance               | retained as an independent record                                    |
+| MigrationLedger                | retained as an independent record                                    |
+| ObjectAddress                  | retained unchanged                                                   |
+
+Public API path mapping:
+
+| v2 path                                                                  | v3 path                                                  |
+| ------------------------------------------------------------------------ | -------------------------------------------------------- |
+| `POST /api/public/v1/deploy/plans`                                       | `POST /api/public/v1/deployments` with `mode="resolve"`  |
+| `POST /api/public/v1/deploy/applies`                                     | `POST /api/public/v1/deployments/:id/apply`              |
+| `GET  /api/public/v1/deploy/plans/:id`                                   | `GET  /api/public/v1/deployments/:id`                    |
+| `GET  /api/public/v1/spaces/:spaceId/group-deployment-snapshots`         | `GET  /api/public/v1/deployments?group=&status=`         |
+| `GET  /api/public/v1/spaces/:spaceId/group-deployment-snapshots/current` | `GET  /api/public/v1/groups/:group_id/head`              |
+| `POST /api/public/v1/spaces/:spaceId/group-deployment-snapshots/rollback`| `POST /api/public/v1/groups/:group_id/rollback`          |
+
+CLI mapping:
+
+| v2 CLI                          | v3 CLI                                              |
+| ------------------------------- | --------------------------------------------------- |
+| `takos deploy --plan <manifest>`| `takos deploy --resolve-only <manifest>`            |
+| `takos deploy --apply <plan>`   | `takos apply <deployment-id>`                       |
+| `takos deploy <manifest>`       | `takos deploy <manifest>` (now resolve+apply sugar) |
+| `takos rollback --activation`   | `takos rollback [<group>]`                          |
+
+DB migration is covered separately (Phase 2). It collapses `deploy_plans`,
+`deploy_activation_records`, `deploy_operation_records`, and
+`deploy_group_activation_pointers` into `deployments` + `group_heads`, joining
+on group + activation generation. History is preserved as Deployment rows
+with synthesized `resolution` / `desired` payloads.
+
+---
 
 ```text
 Core has no domain kinds.
-Core defines deployment meta-objects.
+Core defines Deployment / ProviderObservation / GroupHead.
 Descriptors define meaning.
-Plans pin descriptors.
+Deployments pin descriptors.
 Apply uses pinned meaning.
 Bindings are explicit.
 Routed serving is protocol-agnostic and descriptor-defined.
 Resources are reached through access paths.
 Providers materialize; they do not define.
-Provider capability descriptors MAY constrain, reject, or report limitations for contract configurations. They MUST NOT reinterpret contract semantics.
 Observed provider state is never canonical.
 ```

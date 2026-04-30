@@ -1,0 +1,16 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/contracts/interface/schedule/v1",
+  "@type": "InterfaceContractDescriptor",
+  "shortRef": "interface.schedule@v1",
+  "domain": "interface",
+  "lifecycleDomain": "event-delivery",
+  "changeEffect": "declaration-output",
+  "deliveryModel": "scheduled-event",
+  "assignmentModel": "primary-release-only",
+  "sideEffectSurface": true,
+  "requires": [
+    "schedule-identity",
+    "idempotent-consumer-rebind"
+  ]
+}

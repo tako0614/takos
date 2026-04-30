@@ -1,11 +1,13 @@
 # API リファレンス
 
-<!-- docs:api-families seed-repositories,explore,public-stores,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,publications,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,events,pull-requests,deploy,groups,billing,auth,oauth -->
+<!-- docs:api-families seed-repositories,explore,public-stores,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,publications,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,events,pull-requests,deployments,groups,billing,auth,oauth -->
 
 ::: tip Coverage このページは Takos の **public HTTP contract**
 をまとめたリファレンスです。default distribution に含まれる kernel API と
 first-party app API を含みます。implementation-only な互換 alias や内部 endpoint
 は明示しない限りここでは扱いません。 :::
+
+> 現行 API gateway split status は [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照
 
 ## 認証
 
@@ -40,9 +42,9 @@ Authorization: Bearer <access_token>
 
 deploy/app runtime から Takos API や Takos-managed resource を使う場合は、
 manifest の `publish + compute.<name>.consume` か `/api/publications` /
-`/api/services/:id/consumes` を使います。deploy system は JWT deploy credential
-を public contract としては使いません。manifest の public contract では
-`storage:` は使わず、resource は control-plane の API で管理します。 :::
+`/api/services/:id/consumes` を使います。Deployment lifecycle は JWT deploy
+credential を public contract としては使いません。manifest の public contract
+では `storage:` は使わず、resource は control-plane の API で管理します。 :::
 
 ## エラーレスポンスの共通形式
 
@@ -79,10 +81,11 @@ manifest の `publish + compute.<name>.consume` か `/api/publications` /
 | `SERVICE_UNAVAILABLE`      | 503         | サービスが一時的に利用不可                     |
 | `GATEWAY_TIMEOUT`          | 504         | 上流サービスがタイムアウト                     |
 
-::: tip OAuth endpoints `/oauth/*` endpoints は RFC 6749/6750 準拠の error
-format を使用
-(`{ error: "invalid_token", error_description: "..." }`)。これは仕様上意図的に
-common envelope と異なります。 :::
+::: tip OAuth endpoints `/oauth/*` と consent UI 用の `/api/oauth/*` endpoints
+は RFC 6749/6750 準拠または consent UI 用の flat JSON error/status を使用します
+(`{ error: "invalid_token", error_description: "..." }` や
+`{ status: "error", title, message }`)。これは仕様上意図的に common envelope
+と異なります。 :::
 
 ## Rate limit
 
@@ -182,8 +185,8 @@ GET /api/resources?limit=20&offset=0
 | [`agent-tasks`](#agent-tasks)                     | task orchestration                                           |
 | [`notifications`](#notifications)                 | notification list / SSE / WS                                 |
 | [`events`](#events)                               | group lifecycle event の SSE 配信                            |
-| [`deploy`](#deploy)                               | plan / apply / rollback / activation lifecycle               |
-| [`groups`](#groups)                               | group 管理 / plan / apply                                    |
+| [`deployments`](#deployments)                     | Deployment lifecycle: preview / resolve / apply / approve / rollback |
+| [`groups`](#groups)                               | group 管理 / GroupHead / inventory                           |
 | [`billing`](#billing)                             | billing / usage / invoices                                   |
 | [`auth`](#auth)                                   | authenticated auth/profile actions                           |
 
@@ -375,11 +378,11 @@ MCP (Model Context Protocol) サーバー管理。
 
 初期セットアップ状態の確認・完了。
 
-| method | path                        | description                       |
-| ------ | --------------------------- | --------------------------------- |
-| GET    | `/api/setup/status`         | セットアップ状態確認              |
-| POST   | `/api/setup/complete`       | セットアップ完了（username 必須） |
-| POST   | `/api/setup/check-username` | ユーザー名の利用可能性チェック    |
+| method | path                        | description                                      |
+| ------ | --------------------------- | ------------------------------------------------ |
+| GET    | `/api/setup/status`         | セットアップ状態確認                             |
+| POST   | `/api/setup/complete`       | セットアップ完了（username 必須、password 任意） |
+| POST   | `/api/setup/check-username` | ユーザー名の利用可能性チェック                   |
 
 ---
 
@@ -431,6 +434,17 @@ MCP (Model Context Protocol) サーバー管理。
 ```json
 { "username": "new-name" }
 ```
+
+### Password credentials
+
+| method | path               | description           |
+| ------ | ------------------ | --------------------- |
+| GET    | `/api/me/password` | パスワード設定有無    |
+| PATCH  | `/api/me/password` | パスワード設定 / 変更 |
+
+`PATCH /api/me/password` は `{ "new_password": "..." }` を受け取ります。既に
+パスワードが設定されている場合は
+`{ "current_password": "...", "new_password": "..." }` が必要です。
 
 ### OAuth consents
 
@@ -980,7 +994,7 @@ certificate manager など operator-managed / external TLS を使います。
 
 リソースの CRUD・アクセス管理。これは manifest の `storage:` 宣言ではなく、
 control-plane の internal resource model を扱う surface です。public surface は
-backend-neutral な canonical resource kind を使います。Cloudflare backend では
+backend-neutral な canonical resource kind を使います。tracked reference Workers backend では
 対応する Cloudflare resource に解決されることがありますが、compatible は API
 schema / translation parity を指し、provider resource existence や behavior
 parity を保証しません。互換 backend では operator が用意した backing service
@@ -1856,252 +1870,169 @@ space lifecycle event の SSE 配信。
 
 ---
 
-## deploy
+## deployments
 
-deploy manifest / repository source を明示した group inventory に apply し、plan
-/ apply / rollback / uninstall と immutable ActivationRecord を扱う public
-surface。 `group_name` は任意で、省略時は deploy manifest の `name` を group
-名として使います。 `source` は `git_ref` と `manifest` の 2 種類を discriminated
-union として受け付けます。`takos install` は catalog metadata から
-`repository_url + tag` を解決し、`source.kind = "git_ref"` で同じ endpoint
-を使います。ローカル CLI の `takos deploy` は working tree から parse した flat
-manifest を `source.kind = "manifest"` payload として送信します。
+Takos Deploy v3 の Deployment lifecycle endpoint family です。`Deployment`
+record は preview / resolve / apply / rollback の 4 mode を持ち、`POST
+/api/public/v1/deployments` 1 endpoint と関連 sub-endpoint で全ライフサイクル
+を扱います（[Core contract v1.0 § 17](/takos-paas/core/01-core-contract-v1.0)）。
+旧 `/api/public/v1/deploy/plans` / `/api/public/v1/deploy/applies` /
+`/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*` などは v3 で
+削除されました（breaking change）。`/api/deploy/*` の app gateway compatibility
+surface も Deployment endpoint family に統合されています。`group` は任意で、
+省略時は manifest の `name` を group 名として使います。
 
-remote public repo の source 解決は bounded/configurable な full pack
-を先に試し、pack size / object count / inflated size のような
-content-size・pack-limit 系の失敗だけを blobless partial fetch の対象にします。
-任意の fetch error で fallback するわけではありません。blobless partial fetch は
-remote が `filter` と `allow-reachable-sha1-in-want` を advertise
-している場合に限ります。archive download は GitHub / GitLab public repo 向けの
-host-specific な最終 fallback です。上限は `TAKOS_APP_DEPLOY_REMOTE_*`
-環境変数で調整できます。
+`source` は `manifest` と `git_ref` の 2 種類を受け付けます（CLI / `takos
+install` / `takos deploy <URL>` は内部で `git_ref` を使い、ローカル `takos
+deploy` は `manifest` を使う）。remote public repo の source 解決は
+bounded/configurable な full pack を先に試し、pack size / object count /
+inflated size のような content-size・pack-limit 系の失敗だけを blobless partial
+fetch の対象にします。blobless partial fetch は remote が `filter` と
+`allow-reachable-sha1-in-want` を advertise している場合に限ります。archive
+download は GitHub / GitLab public repo 向けの host-specific な最終 fallback
+です。上限は `TAKOS_APP_DEPLOY_REMOTE_*` 環境変数で調整できます。
 
-| method | path                                                         | description                            |
-| ------ | ------------------------------------------------------------ | -------------------------------------- |
-| POST   | `/api/deploy/plans`                                          | 非破壊の deploy preview                |
-| GET    | `/api/deploy/plans/:planId?spaceId=:spaceId`                 | plan 詳細                              |
-| POST   | `/api/deploy/apply-runs`                                     | plan apply / rollback / uninstall 実行 |
-| GET    | `/api/deploy/apply-runs/:applyRunId?spaceId=:spaceId`        | apply run 詳細                         |
-| GET    | `/api/deploy/groups?spaceId=:spaceId`                        | deploy group 一覧                      |
-| GET    | `/api/deploy/groups/:groupName?spaceId=:spaceId`             | deploy group 詳細                      |
-| GET    | `/api/deploy/groups/:groupName/activations?spaceId=:spaceId` | ActivationRecord history               |
+| method | path                                                            | description                                                            |
+| ------ | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| POST   | `/api/public/v1/deployments`                                    | Deployment 作成（mode で preview / resolve / apply / rollback を選択） |
+| GET    | `/api/public/v1/deployments`                                    | Deployment 一覧（`?group=` / `?status=` / `?space=` で filter）         |
+| GET    | `/api/public/v1/deployments/:deploymentId`                      | Deployment 詳細                                                        |
+| POST   | `/api/public/v1/deployments/:deploymentId/apply`                | resolved Deployment を applied に進める                                |
+| POST   | `/api/public/v1/deployments/:deploymentId/approve`              | Deployment に approval を attach                                       |
+| GET    | `/api/public/v1/deployments/:deploymentId/observations`         | Deployment に紐づく ProviderObservation stream                         |
+| GET    | `/api/public/v1/groups/:groupId/head`                           | GroupHead pointer 取得                                                 |
+| POST   | `/api/public/v1/groups/:groupId/rollback`                       | GroupHead を `previous_deployment_id` へ flip                          |
 
-### Apply run status
+### Deployment status
 
-| status      | 意味                                     |
-| ----------- | ---------------------------------------- |
-| `running`   | apply 中                                 |
-| `succeeded` | apply が完了し ActivationRecord が進んだ |
-| `failed`    | deploy pipeline の一部が失敗した         |
+| status        | 意味                                                                          |
+| ------------- | ----------------------------------------------------------------------------- |
+| `preview`     | in-memory preview（`mode="preview"` 時。DB に record は作らない）             |
+| `resolved`    | descriptor closure pinned。apply 待ち                                         |
+| `applying`    | provider operations in-flight                                                  |
+| `applied`     | 全必要 operation 成功、GroupHead 進行                                         |
+| `failed`      | resolution / apply で要件 operation が失敗（`conditions[]` に詳細）           |
+| `rolled-back` | GroupHead が previous_deployment_id を指し、この Deployment は退役した         |
 
-各 workload の詳細は `applied[].status` と deployment / managed service 側の
-record を参照します。
+各 operation / phase の詳細は `Deployment.conditions[]` の
+`scope.kind="operation"` / `"phase"` entry に記録されます。
 
-#### `POST /api/deploy/plans`
-
-`space_id` と `source` payload を受け取り、repo / manifest source を解決して
-non-mutating preview を返します。`group_name` を省略した場合は manifest の
-`name` を使います。 DB row や group-scoped declaration は作成・更新しません。
-
-レスポンス:
+#### `POST /api/public/v1/deployments`
 
 ```json
 {
-  "group": {
-    "id": "grp_123",
+  "mode": "resolve",
+  "group": "my-app",
+  "env": "staging",
+  "manifest": {
     "name": "my-app",
-    "exists": true
-  },
-  "diff": {
-    "entries": [
-      {
-        "name": "web",
-        "category": "worker",
-        "action": "create",
-        "type": "worker",
-        "reason": "new"
-      }
-    ],
-    "hasChanges": true,
-    "summary": {
-      "create": 1,
-      "update": 0,
-      "delete": 0,
-      "unchanged": 0
-    }
-  },
-  "translationReport": {
-    "supported": true,
-    "spec": "Takos Deploy",
-    "runtime": "tenant runtime",
-    "surface": "portable",
-    "issues": []
+    "compute": { "web": { "build": { "fromWorkflow": { "path": ".takos/workflows/deploy.yml", "job": "bundle", "artifact": "web", "artifactPath": "dist/worker" } } } },
+    "routes": [{ "id": "web", "target": "web", "path": "/" }]
   }
 }
 ```
 
-#### `POST /api/deploy/apply-runs`
+mode 別の挙動:
 
-`source` は `kind` で分岐する discriminated union です:
-
-- `source.kind = "git_ref"` — repository URL + ref/ref_type を指定し、control
-  plane が repo を fetch して manifest と artifact を解決します。`takos install`
-  / `takos deploy <URL>` がこの形式を使います。
-- `source.kind = "manifest"` — CLI がローカルで parse した flat `AppManifest` を
-  payload として送信します。必要に応じて `artifacts` (inline worker bundle 等)
-  を添えます。`takos deploy`（ローカル manifest）がこの形式を使います。
-
-どちらの形式でも `group_name` は任意です。指定した場合は override として扱い、
-省略した場合は manifest の `name` を group 名として使います。
-
-`git_ref` plan リクエスト:
-
-```json
-{
-  "space_id": "spc_123",
-  "group_name": "my-app",
-  "env": "staging",
-  "intent": "deploy",
-  "mode": "static",
-  "source": {
-    "kind": "git_ref",
-    "repository_url": "https://github.com/acme/my-app.git",
-    "ref": "main",
-    "ref_type": "branch"
-  }
-}
-```
-
-`manifest` apply リクエスト:
-
-```json
-{
-  "space_id": "spc_123",
-  "group_name": "my-app",
-  "env": "staging",
-  "intent": "deploy",
-  "mode": "prepared",
-  "source": {
-    "kind": "manifest",
-    "manifest": {
-      "name": "my-app",
-      "publish": [
-        {
-          "name": "takos-api",
-          "publisher": "web",
-          "type": "api-key",
-          "path": "/",
-          "spec": {
-            "scopes": ["files:read"]
-          }
-        }
-      ],
-      "compute": {
-        "web": {
-          "build": {
-            "fromWorkflow": {
-              "path": ".takos/workflows/deploy.yml",
-              "job": "bundle",
-              "artifact": "web",
-              "artifactPath": "dist/worker"
-            }
-          },
-          "consume": [
-            {
-              "publication": "takos-api",
-              "env": {
-                "apiKey": "TAKOS_API_KEY"
-              }
-            }
-          ]
-        }
-      },
-      "routes": [{ "target": "web", "path": "/" }]
-    },
-    "artifacts": [
-      {
-        "compute": "web",
-        "workflow": {
-          "path": ".takos/workflows/deploy.yml",
-          "job": "bundle",
-          "artifact": "web",
-          "artifactPath": "dist/worker"
-        },
-        "files": [
-          {
-            "path": "index.js",
-            "encoding": "base64",
-            "content": "<base64-worker-bundle>"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-`manifest` source の `artifacts[].files` は、単一 bundle file、または directory
-artifact 内で一意に決まる `.js` / `.mjs` / `.cjs` bundle を前提にします。複数の
-JavaScript file に分かれる module graph は、現行の Worker apply path
-では扱いません。
-
-レスポンスの `source` は入力に対応します。`git_ref` deployment は repository /
-ref / commit を返し、`manifest` deployment は
-`{ "kind": "manifest",
-"artifact_count": N }` を返します。
-
-`git_ref` deployment は bundled snapshot を永続化せず、repository URL / ref /
-commit / manifest metadata を ActivationRecord と ApplyRun に保存します。
+| mode         | 役割                                                                                                            |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| `preview`    | synchronous resolution against in-memory state。DB に record を作らない。`deployment_id` は `preview:<digest>` |
+| `resolve`    | Deployment を `resolved` で persist。descriptor_closure を pin                                                  |
+| `apply`      | resolve + apply を 1 call で実行（または `target_id` 指定で resolved Deployment を apply）                      |
+| `rollback`   | `group` (+ optional `target_id`) で GroupHead を atomically flip                                                |
 
 レスポンス (201):
 
 ```json
 {
-  "applyRun": {
-    "id": "ap_xyz789",
-    "planId": "pln_123",
-    "spaceId": "spc_123",
-    "group": {
-      "id": "grp_123",
-      "name": "my-app"
-    },
-    "intent": "deploy",
-    "status": "succeeded",
-    "source": {
-      "kind": "git_ref",
-      "repository_url": "https://github.com/acme/my-app.git",
-      "ref": "main",
-      "ref_type": "branch",
-      "commit_sha": "abc123def456"
-    },
-    "applied": [],
-    "skipped": [],
-    "activationRecordId": "act_456",
-    "startedAt": "2026-03-28T00:00:00.000Z",
-    "completedAt": "2026-03-28T00:00:00.000Z"
+  "deployment_id": "dep_xyz789",
+  "status": "resolved",
+  "conditions": [
+    {
+      "type": "DescriptorPinned",
+      "status": "true",
+      "observed_generation": 1,
+      "last_transition_time": "2026-03-28T00:00:00.000Z"
+    }
+  ],
+  "expansion_summary": {
+    "components": 1,
+    "bindings": 0,
+    "routes": 1,
+    "resources": 0
   }
 }
 ```
 
-rollback は `POST /api/deploy/apply-runs` に
-`{ "intent": "rollback", "group_name": "...", "space_id": "..." }`
-を送ります。対象 group row が削除されている場合、rollback が group
-を再生成することはありません。
+`apply` / `approve` / `rollback` endpoints は `deployment_id` / `group_id` に
+対して idempotent です。
+
+#### `GET /api/public/v1/deployments/:deploymentId`
+
+Deployment 1 件を返します。`Deployment.input` / `.resolution` / `.desired` /
+`.status` / `.conditions[]` / `.policy_decisions[]` / `.approval` / `.rollback_target`
+を含みます。
+
+#### `POST /api/public/v1/deployments/:deploymentId/apply`
+
+resolved Deployment (`status="resolved"`) を `applying` → `applied` へ進めます。
+PolicySpec が `require-approval` decision を残している場合は、まず
+`/approve` で approval を attach する必要があります（PolicySpec break-glass が
+許可されていない限り）。
+
+#### `POST /api/public/v1/deployments/:deploymentId/approve`
+
+```json
+{ "policy_decision_id": "pol_123", "expires_at": "2026-04-01T00:00:00.000Z", "note": "approved by ops" }
+```
+
+`Deployment.approval` を attach します。`apply` 前の任意 step。
+
+#### `GET /api/public/v1/deployments/:deploymentId/observations`
+
+Deployment の desired state に対する `ProviderObservation` を返します。observed
+state は canonical でなく、Deployment.desired を mutate しません。drift 検知に
+使います。
+
+#### `GET /api/public/v1/groups/:groupId/head`
+
+```json
+{
+  "group_id": "grp_123",
+  "current_deployment_id": "dep_xyz789",
+  "previous_deployment_id": "dep_prev456",
+  "generation": 7,
+  "advanced_at": "2026-03-28T00:00:00.000Z"
+}
+```
+
+#### `POST /api/public/v1/groups/:groupId/rollback`
+
+```json
+{ "target_id": "dep_prev456" }
+```
+
+GroupHead を `previous_deployment_id`（または `target_id` で指定した retained
+Deployment）へ atomically swap します。新しい Deployment record は作成されず、
+旧 current は `rolled-back` に遷移します。durable resource の状態は復元されません
+（forward-only migration）。
 
 ---
 
 ## groups
 
-group 機能の管理・プラン・適用。group は primitive を任意に束ねる state scope
-です。group に所属した primitive は inventory、deployment
-history、rollback、uninstall などの group 機能を使えます。
+group 機能の管理 API です。group は primitive declaration を束ねる optional
+state scope で、group ごとに `GroupHead`（current `Deployment` を指す pointer）
+を持ちます。`takos-paas` Core では Deployment 中で
+`Deployment.group_id` として参照され、`/api/public/v1/groups/:groupId/head` で
+GroupHead pointer、`/api/public/v1/groups/:groupId/rollback` で GroupHead 切替を
+行います。group に所属した primitive projection は inventory、deployment
+history、rollback、uninstall などの機能を使えます。
 
 | method | path                                                      | description                                                     |
 | ------ | --------------------------------------------------------- | --------------------------------------------------------------- |
 | GET    | `/api/spaces/:spaceId/groups`                             | グループ一覧                                                    |
 | POST   | `/api/spaces/:spaceId/groups`                             | グループ作成 _(owner/admin/editor)_                             |
-| POST   | `/api/spaces/:spaceId/groups/plan`                        | group_name 指定で non-mutating preview _(owner/admin/editor)_   |
-| POST   | `/api/spaces/:spaceId/groups/apply`                       | group_name 指定で apply _(owner/admin/editor)_                  |
 | POST   | `/api/spaces/:spaceId/groups/uninstall`                   | group_name 指定で uninstall _(owner/admin/editor)_              |
 | GET    | `/api/spaces/:spaceId/groups/:groupId`                    | グループ詳細（インベントリ含む）                                |
 | PATCH  | `/api/spaces/:spaceId/groups/:groupId/metadata`           | グループ metadata 更新 _(owner/admin/editor)_                   |
@@ -2110,57 +2041,25 @@ history、rollback、uninstall などの group 機能を使えます。
 | DELETE | `/api/spaces/:spaceId/groups/:groupId`                    | グループ削除 _(owner/admin)_                                    |
 | GET    | `/api/spaces/:spaceId/groups/:groupId/resources`          | グループリソース一覧                                            |
 | GET    | `/api/spaces/:spaceId/groups/:groupId/services`           | グループサービス一覧                                            |
-| GET    | `/api/spaces/:spaceId/groups/:groupId/deployments`        | グループデプロイ一覧                                            |
-| POST   | `/api/spaces/:spaceId/groups/:groupId/plan`               | 既存 group ID 向けマニフェストプラン _(owner/admin/editor)_     |
-| POST   | `/api/spaces/:spaceId/groups/:groupId/apply`              | 既存 group ID 向けマニフェスト適用 _(owner/admin/editor)_       |
-| POST   | `/api/spaces/:spaceId/groups/:groupId/rollback`           | group を直前成功 record にロールバック _(owner/admin/editor)_   |
-| POST   | `/api/spaces/:spaceId/groups/by-name/:groupName/rollback` | group 名で直前成功 record にロールバック _(owner/admin/editor)_ |
+| GET    | `/api/spaces/:spaceId/groups/:groupId/deployments`        | グループ Deployment 一覧                                        |
 | GET    | `/api/spaces/:spaceId/groups/:groupId/updates`            | 更新チェック                                                    |
 
-`POST /api/spaces/:spaceId/groups/:groupId/rollback` は deploy family の
-`POST /api/deploy/apply-runs` に `intent = "rollback"` を渡す互換 surface です。
-対象 group に対して直前成功の ActivationRecord を適用し、apply pipeline を通して
-reconcile します。
-
-レスポンス:
-
-```json
-{
-  "group_id": "grp_123",
-  "applyRun": {
-    "id": "ap_prev456",
-    "group": { "id": "grp_123", "name": "my-app" },
-    "status": "succeeded",
-    "applied": [],
-    "skipped": []
-  }
-}
-```
-
-`POST /api/spaces/:spaceId/groups/plan` と
-`POST /api/spaces/:spaceId/groups/apply` は group-scoped authoring surface
-です。group は primitive 群を束ねる optional scope であり、API はその group
-inventory に対して preview / apply を実行します。`plan` は non-mutating
-preview、`apply` は必要なら group を作成して反映します。 `group_name`
-は必須で、manifest の `name` から暗黙解決しません。
-`POST /api/spaces/:spaceId/groups/uninstall` は empty declaration を apply して
-inventory を drain したあと group を削除します。
-
-primitive (compute / storage / route / publish) を個別に CRUD したい場合は
-`/api/services/*` / `/api/resources/*` / `/api/services/:id/custom-domains/*`
-などの primitive surface を直接呼び出します。`PATCH /api/services/:id/group` /
-`PATCH /api/resources/:id/group` で既存 primitive を group に所属させることも
-できます。
+manifest preview / resolve / apply / rollback は public Deployment endpoint
+family (`POST /api/public/v1/deployments` 等) を使います（[deployments
+section](#deployments)）。primitive (compute / storage / route / publish) を
+個別に CRUD したい場合は `/api/services/*` / `/api/resources/*` /
+`/api/services/:id/custom-domains/*` などの primitive surface を直接呼び出し
+ます。`PATCH /api/services/:id/group` / `PATCH /api/resources/:id/group` で
+既存 primitive を group に所属させることもできます。
 
 group には source projection が保存されます。`takos deploy` は local working
-tree 由来でも repo/ref 由来でも同じ pipeline を通り、group を指定した場合は
-deployment record を作って current deployment pointer を更新します。repo/ref
-由来は bundled snapshot ではなく source metadata / resolved commit
-を保存します。API source kind は `manifest` / `git_ref`、group projection は
-`local_upload` / `git_ref` です。 CLI / UI の表示名として `local` /
-`repo:owner/repo@ref` を使いますが、これは manifest の出どころを示す metadata
-であり、lifecycle の差ではありません。 `groups/apply` も group deployment record
-を作ります。
+tree 由来でも repo/ref 由来でも Deployment endpoint へ投影され、apply 成功時に
+`GroupHead.current_deployment_id` を新 Deployment に進めます。repo/ref 由来は
+bundled snapshot ではなく source metadata / resolved commit を
+`Deployment.input.source_ref` に保存します。API source kind は `manifest` /
+`git_ref`、group projection は `local_upload` / `git_ref` です。CLI / UI の
+表示名として `local` / `repo:owner/repo@ref` を使いますが、これは manifest の
+出どころを示す metadata であり、Core lifecycle の差ではありません。
 
 `POST /api/spaces/:spaceId/groups/uninstall` は terminal 操作です。group row
 を削除したあとは rollback で deleted group を再生成できません。
@@ -2171,10 +2070,15 @@ deployment record を作って current deployment pointer を更新します。r
 
 課金・使用量・サブスクリプション管理。
 
+> 現行 API gateway split status は [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照 (billing routes は control 側)
+
+`GET /api/billing` は payment processor 非依存の `has_payment_account` を返し、
+既存 Stripe client 互換のため `has_stripe_customer` も同じ値で返します。
+
 | method | path                             | description                               |
 | ------ | -------------------------------- | ----------------------------------------- |
 | GET    | `/api/billing`                   | 課金情報取得                              |
-| GET    | `/api/billing/usage`             | 当月使用量                                |
+| GET    | `/api/billing/usage`             | billing account 全体の当月使用量          |
 | POST   | `/api/billing/subscribe`         | サブスクリプション開始（Stripe Checkout） |
 | POST   | `/api/billing/credits/checkout`  | クレジットトップアップ（Stripe Checkout） |
 | POST   | `/api/billing/portal`            | Stripe カスタマーポータルセッション作成   |
@@ -2194,6 +2098,8 @@ deployment record を作って current deployment pointer を更新します。r
 
 認証・プロファイル操作。
 
+> 現行 API gateway split status は [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照 (auth routes は control 側)
+
 | method | path                       | description                          |
 | ------ | -------------------------- | ------------------------------------ |
 | GET    | `/api/auth/me`             | 認証中ユーザー情報                   |
@@ -2206,6 +2112,10 @@ deployment record を作って current deployment pointer を更新します。r
 ## oauth-consent
 
 OAuth 同意 UI 用 API。
+
+この family は browser session cookie を前提にした SPA 用 API です。エラーは
+common envelope ではなく、OAuth/consent UI 用の flat JSON (`error` /
+`error_description` または `status: "error"`) で返します。
 
 | method | path                            | description                |
 | ------ | ------------------------------- | -------------------------- |
@@ -2238,6 +2148,9 @@ git clone https://your-takos.example/git/tako/my-app.git
 ### well-known
 
 OAuth / OIDC ディスカバリーエンドポイント。
+
+`grant_types_supported` は `authorization_code`, `refresh_token`,
+`client_credentials`, device code grant を公開します。
 
 | method | path                                      | description                                        |
 | ------ | ----------------------------------------- | -------------------------------------------------- |
@@ -2278,6 +2191,7 @@ claim は issuance 時に **`client_id`** を埋め込みます。validation 側
 | method | path                         | description                           |
 | ------ | ---------------------------- | ------------------------------------- |
 | GET    | `/auth/login`                | Google OAuth フロー開始               |
+| POST   | `/auth/password`             | username/password ログイン            |
 | GET    | `/auth/cli`                  | CLI 認証エンドポイント                |
 | GET    | `/auth/external/session`     | 外部サービス用セッション確認          |
 | GET    | `/auth/external/callback`    | 外部認証コールバック（flow-internal） |
@@ -2305,14 +2219,14 @@ curl -X POST \
   https://your-takos.example/api/spaces/ws_123/threads
 ```
 
-### deploy apply run を作成
+### Deployment を作成して apply
 
 ```bash
 curl -X POST \
   -H "Authorization: Bearer tak_pat_..." \
   -H "Content-Type: application/json" \
-  -d '{"space_id":"ws_123","group_name":"my-app","intent":"deploy","mode":"prepared","source":{"kind":"git_ref","repository_url":"https://github.com/acme/my-app.git","ref":"main","ref_type":"branch"}}' \
-  https://your-takos.example/api/deploy/apply-runs
+  -d '{"mode":"apply","group":"my-app","env":"staging","source":{"kind":"git_ref","repository_url":"https://github.com/acme/my-app.git","ref":"main","ref_type":"branch"}}' \
+  https://your-takos.example/api/public/v1/deployments
 ```
 
 ### run event を SSE で追う
@@ -2381,23 +2295,32 @@ curl -X POST \
   https://your-takos.example/api/resources/res_123/sql/query
 ```
 
-### グループにマニフェスト適用
+### グループを rollback
 
 ```bash
 curl -X POST \
   -H "Authorization: Bearer tak_pat_..." \
   -H "Content-Type: application/json" \
-  -d '{"manifest":{...}}' \
-  https://your-takos.example/api/spaces/ws_123/groups/grp_456/apply
+  -d '{}' \
+  https://your-takos.example/api/public/v1/groups/grp_456/rollback
 ```
 
 ---
 
 ## implementation note
 
-deploy family は current public surface です。`git_ref` / `manifest` の 2 つの
-source kind と group-level rollback を public contract として扱います。rollback
-は既存 group があることを前提にします。
+deployments family は v3 current public surface です。`manifest` / `git_ref`
+の 2 つの source kind と group-level rollback を public contract として扱い、
+すべての mutation は `Deployment` record（`status` 遷移と `conditions[]`）と
+`GroupHead`（pointer move）に表されます。rollback は既存 group と retained
+Deployment があることを前提にします。
+
+旧 v2 endpoint family（`/api/public/v1/deploy/plans` /
+`/api/public/v1/deploy/applies` /
+`/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*` /
+`/api/deploy/plans` / `/api/deploy/apply-runs`）は v3 で削除されました。
+完全な対応表は
+[Core contract v1.0 § 18](/takos-paas/core/01-core-contract-v1.0#v2-migration)。
 
 ## 次に読むページ
 

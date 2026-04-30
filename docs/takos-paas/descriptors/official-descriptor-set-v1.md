@@ -1,8 +1,13 @@
-# Takos Deploy v2 Official Descriptor Set v1.0
+# Takos Deploy v3 Official Descriptor Set v1.0
 
-This document proposes the initial official descriptor set for a Takos distribution.
+This document proposes the initial official descriptor set for a Takos
+distribution. Deployments pin descriptors via
+`Deployment.resolution.descriptor_closure`
+([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 6).
 
-These descriptors are **not Core built-ins**. Core remains kindless. A Takos distribution may ship this descriptor set so users have a practical standard vocabulary.
+These descriptors are **not Core built-ins**. Core remains kindless. A Takos
+distribution may ship this descriptor set so users have a practical standard
+vocabulary.
 
 ## Naming rule
 
@@ -56,7 +61,8 @@ neon.postgres.managed@v1
 cloudflare-d1-db@v1
 ```
 
-Provider-specific behavior belongs in provider materialization descriptors, EnvSpec, and PolicySpec.
+Provider-specific behavior belongs in provider materialization descriptors,
+EnvSpec, and PolicySpec.
 
 ---
 
@@ -97,7 +103,9 @@ Typical interface contracts:
 
 ```text
 interface.http@v1
-interface.internal-service@v1
+interface.queue@v1
+interface.schedule@v1
+interface.event@v1
 ```
 
 ### `runtime.oci-container@v1`
@@ -140,7 +148,7 @@ Typical interface contracts:
 interface.http@v1
 interface.tcp@v1
 interface.udp@v1
-interface.internal-service@v1
+interface.queue@v1
 ```
 
 ---
@@ -208,7 +216,7 @@ Descriptor must define:
 
 ```text
 routable protocol model
-route compatibility with route.http@v1
+HTTP routing compatibility
 health/probe model
 assignment granularity, usually request-level
 whether weighted assignment is supported
@@ -243,58 +251,77 @@ https://takos.dev/contracts/interface/udp/v1
 Meaning:
 
 ```text
-Component can receive UDP-like routed traffic.
+Component can receive UDP datagram routed traffic.
 ```
 
-Descriptor must define whether assignment is:
+Descriptor must define:
 
 ```text
-flow-level
-datagram-level
-provider-defined
-unsupported
+packet-level assignment semantics
+probe model or unknown convergence status
+weighted assignment limits for stateless traffic
 ```
 
-If deterministic assignment semantics cannot be defined, weighted assignment must be unsupported.
-
----
-
-## Minimum route descriptors
-
-### `route.http@v1`
+### `interface.queue@v1`
 
 ```text
-https://takos.dev/contracts/route/http/v1
+https://takos.dev/contracts/interface/queue/v1
 ```
 
 Meaning:
 
 ```text
-RouterConfig can match HTTP host/path/method-like routing keys and forward to compatible interface descriptors.
+Component can receive queued asynchronous messages.
 ```
 
-### `route.tcp@v1`
+Descriptor must define:
 
 ```text
-https://takos.dev/contracts/route/tcp/v1
+delivery model
+assignment model
+consumer rebind behavior
+retry and dead-letter expectations when supported
 ```
 
-Meaning:
+### `interface.schedule@v1`
 
 ```text
-RouterConfig can bind/listen on TCP-like endpoint and forward connections to compatible interface descriptors.
-```
-
-### `route.udp@v1`
-
-```text
-https://takos.dev/contracts/route/udp/v1
+https://takos.dev/contracts/interface/schedule/v1
 ```
 
 Meaning:
 
 ```text
-RouterConfig can bind/listen on UDP-like endpoint and forward datagrams or flows according to descriptor-defined semantics.
+Component can receive scheduler-triggered invocations.
+```
+
+Descriptor must define:
+
+```text
+schedule expression model
+assignment model
+catch-up and missed-run behavior
+```
+
+### `interface.event@v1`
+
+```text
+https://takos.dev/contracts/interface/event/v1
+```
+
+Meaning:
+
+```text
+Component can receive asynchronous event delivery.
+```
+
+Descriptor must define:
+
+```text
+delivery model
+assignment model
+target stability expectations
+idempotent consumer rebind expectations
 ```
 
 ---
@@ -359,6 +386,24 @@ object-runtime-binding
 object-api
 ```
 
+### `resource.key-value@v1`
+
+```text
+https://takos.dev/contracts/resource/key-value/v1
+```
+
+Meaning:
+
+```text
+Durable key-value storage exposed through a runtime binding.
+```
+
+Access modes may include:
+
+```text
+kv-runtime-binding
+```
+
 ### `resource.queue.at-least-once@v1`
 
 ```text
@@ -377,6 +422,72 @@ Access modes may include:
 queue-producer
 queue-consumer-subscription
 queue-runtime-binding
+```
+
+### `resource.secret@v1`
+
+```text
+https://takos.dev/contracts/resource/secret/v1
+```
+
+Meaning:
+
+```text
+Credential material generated or managed by Takos and injected only through explicit bindings.
+```
+
+Access modes may include:
+
+```text
+secret-env-binding
+```
+
+### `resource.vector-index@v1`
+
+```text
+https://takos.dev/contracts/resource/vector-index/v1
+```
+
+Access modes may include:
+
+```text
+vector-runtime-binding
+```
+
+### `resource.analytics-engine@v1`
+
+```text
+https://takos.dev/contracts/resource/analytics-engine/v1
+```
+
+Access modes may include:
+
+```text
+analytics-runtime-binding
+```
+
+### `resource.workflow@v1`
+
+```text
+https://takos.dev/contracts/resource/workflow/v1
+```
+
+Access modes may include:
+
+```text
+workflow-runtime-binding
+```
+
+### `resource.durable-object@v1`
+
+```text
+https://takos.dev/contracts/resource/durable-object/v1
+```
+
+Access modes may include:
+
+```text
+durable-object-runtime-binding
 ```
 
 ---
@@ -402,37 +513,172 @@ transport
 metadata
 ```
 
-### `publication.file-handler@v1`
+### `publication.topic@v1`
 
 Output examples:
 
 ```text
-url
-mimeTypes
-extensions
+message-payload
+consumer-binding
 ```
 
-### `publication.ui-surface@v1`
-
-Output examples:
-
-```text
-url
-embed metadata
-```
-
-Credential-bearing built-in publications, such as API keys or OAuth clients, should use `secret-ref` by default and must define lifecycle semantics.
+Credential-bearing built-in publications, such as API keys or OAuth clients,
+should use `secret-ref` by default and must define lifecycle semantics.
 
 ---
 
-## Minimum data descriptors
+## Composite descriptors
 
-### `data.generic-json@v1`
+A composite descriptor bundles a runtime contract instance with one or more
+related resource, route, or publication contract instances under a single
+authoring alias. Composites are an authoring convenience: the compiler MUST
+expand a composite reference into canonical
+component / contract instance form before resolution finalises, and the
+expansion descriptor's digest MUST be included in
+`Deployment.resolution.descriptor_closure`
+([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 5).
 
-Meaning:
+Composites are profile-agnostic. The shape they emit always uses canonical
+`runtime.*` and `resource.*` contract refs. Provider materialisation
+(Cloudflare Workers vs AWS Lambda, Cloudflare D1 vs AWS RDS, R2 vs S3,
+Cloud Run vs Workers) is decided downstream by the `provider-selection`
+policy gate, exactly as it is for non-composite components. The composite
+fixes the *shape*, not the provider.
+
+The compiler emits one additional descriptor pin per composite expansion:
 
 ```text
-Generic JSON payload descriptor for low-risk internal payloads.
+authoring.composite-expansion@v1
 ```
 
-For cross-group event/publication/service payloads, implementations SHOULD define specific data descriptors.
+Plus the composite's authoring alias itself (e.g.
+`composite.serverless-with-postgres@v1`). Both are recorded in
+`descriptor_closure.resolutions[]`, and a `shape-derivation` dependency edge
+is added from each pinned canonical descriptor to the composite alias.
+
+### Naming
+
+Canonical composite descriptor URI:
+
+```text
+https://takos.dev/contracts/composite/<name>/v<major>
+```
+
+Authoring alias:
+
+```text
+composite.<name>@v<major>
+```
+
+### `composite.serverless-with-postgres@v1`
+
+Canonical URI:
+
+```text
+https://takos.dev/contracts/composite/serverless-with-postgres/v1
+```
+
+Lifecycle domain:
+
+```text
+revisioned-runtime
+```
+
+Expansion table (canonical contract refs that the compiler emits):
+
+```text
+runtime    = runtime.js-worker@v1
+resources  = resource.sql.postgres@v1   (binding env DATABASE_URL)
+```
+
+Provider materialisation table (decided by `provider-selection`):
+
+```text
+Cloudflare profile  -> runtime: Cloudflare Workers
+                       resource: Cloudflare Hyperdrive Postgres
+                       or external resource.sql.postgres@v1 provider
+AWS profile         -> runtime: AWS Lambda or ECS Fargate
+                       resource: AWS RDS Postgres
+GCP profile         -> runtime: Cloud Run
+                       resource: Cloud SQL Postgres
+Selfhosted / k8s    -> runtime: process / k8s deployment
+                       resource: selfhosted Postgres
+```
+
+Manifest example:
+
+```yaml
+name: my-saas
+compute:
+  api:
+    type: composite.serverless-with-postgres@v1
+    build:
+      fromWorkflow:
+        path: .takos/workflows/build.yml
+        job: build
+        artifact: bundle
+```
+
+### `composite.web-app-with-cdn@v1`
+
+Canonical URI:
+
+```text
+https://takos.dev/contracts/composite/web-app-with-cdn/v1
+```
+
+Lifecycle domain:
+
+```text
+revisioned-runtime
+```
+
+Expansion table:
+
+```text
+runtime       = runtime.js-worker@v1   (with runtimeCapabilities = [edge-cdn])
+resources     = resource.object-store.s3@v1   (binding env ASSETS_BUCKET)
+publications  = publication.http-endpoint@v1
+routes        = interface.http@v1   (path /, protocol https)
+```
+
+Provider materialisation table:
+
+```text
+Cloudflare profile  -> runtime: Cloudflare Workers
+                       resource: Cloudflare R2
+                       cdn:      Cloudflare custom hostname
+AWS profile         -> runtime: AWS Lambda
+                       resource: AWS S3
+                       cdn:      AWS CloudFront custom domain
+GCP profile         -> runtime: Cloud Run
+                       resource: Google Cloud Storage
+                       cdn:      Cloud CDN custom domain
+Selfhosted / k8s    -> runtime: process / k8s deployment
+                       resource: selfhosted object-store
+                       cdn:      Caddy / nginx
+```
+
+Manifest example:
+
+```yaml
+name: marketing-site
+compute:
+  web:
+    type: composite.web-app-with-cdn@v1
+    build:
+      fromWorkflow:
+        path: .takos/workflows/build.yml
+        job: build
+        artifact: bundle
+```
+
+### Authoring rules
+
+A composite reference MUST appear as a `compute.<name>.type` value. All other
+authoring fields on the same compute (env, depends, consume, build, image,
+requirements, triggers, containers) are preserved through the expansion.
+Composite-emitted resources, publications, and routes are named
+`<component>-<suffix>` (e.g. `api-db`, `web-edge`, `web-site`). A composite
+expansion MUST NOT clobber a user-declared resource, publication, or route of
+the same name; the compiler refuses to compile in that case.

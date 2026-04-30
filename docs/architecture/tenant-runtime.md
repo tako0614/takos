@@ -1,7 +1,10 @@
 # Tenant Runtime
 
 Tenant runtime は deploy された group の workload が実際の HTTP request
-を処理する execution plane。
+を処理する execution plane。GroupHead が指す current Deployment の
+`desired.activation_envelope` と `desired.routes` から導出した route projection
+に従って request を受け、`Deployment.desired.bindings` で固定された binding を
+通じて ResourceInstance / publication output を参照する。
 
 このページでいう tenant runtime は、user-defined group の `compute` workload を
 request に応じて実行する面を指す。sandbox shell / workflow job / git / CLI proxy
@@ -12,7 +15,7 @@ request に応じて実行する面を指す。sandbox shell / workflow job / gi
 
 Worker workload の artifact は `worker-bundle`。
 
-- Cloudflare: Workers backend 上で実行
+- tracked reference Workers backend: Workers runtime 上で実行
 - local / self-host: tenant worker runtime path（Workers-compatible
   adapter）上で実行
 - AWS / GCP / k8s: tenant worker runtime path で実行
@@ -40,7 +43,8 @@ scope での役割が異なる。
 - routing は dispatch が `service-ref` または `http-url` target として到達する
 - local backend では oci-orchestrator が Docker Engine API 経由で lifecycle
   を管理する
-- Cloudflare backend でも current 実装では OCI deployment adapter を使う
+- tracked reference Workers backend でも current 実装では OCI deployment adapter
+  を使う
 - AWS / GCP / k8s では backend-specific adapter (`ecs`, `cloud-run`, `k8s`)
   に解決される。`ecs` / `cloud-run` は tenant image workload adapter であり、
   Takos kernel hosting target ではない
@@ -73,16 +77,19 @@ compute:
 
 worker 側には attached container binding が注入される。binding 名は child 名を
 uppercase に正規化した `${NAME}_CONTAINER` になる。たとえば `worker` は
-`env.WORKER_CONTAINER` で参照する。DurableObjectNamespace-compatible な
-namespace binding として expose されるが、これは current runtime detail で
-あり、Cloudflare product surface と 1 対 1 に固定された契約ではない。
+`env.WORKER_CONTAINER` で参照する。namespace binding として expose されるが、
+これは current runtime detail であり、provider product surface と 1 対 1 に固定
+された契約ではない。
 
 `__TAKOS_ATTACHED_CONTAINER_${NAME}_URL` 形式の internal URL env は runtime
 generated であり、public contract ではない。
 
 ## Dispatch の役割
 
-tenant request は直接 bundle に届くのではなく、dispatch を経由する。
+tenant request は直接 bundle に届くのではなく、dispatch を経由する。dispatch
+は GroupHead が指す current Deployment の `desired.routes` /
+`desired.activation_envelope` から導出した route projection に基づいて
+request を振り分ける。
 
 dispatch は次を行う。
 
@@ -95,23 +102,11 @@ dispatch は次を行う。
 - tenant request に内部ヘッダを付与する
 - control plane と tenant runtime の境界を固定する
 
-## Cloudflare backend
-
-Cloudflare では `worker-bundle` を Workers backend に載せ、tenant runtime
-として実行する。Cloudflare は reference / primary backend。
-
-- deploy backend は Cloudflare backend
-- worker artifact は Cloudflare Workers backend で materialize
-- image-backed service / container workload は OCI deployment adapter 経由
-- tenant routing は dispatch と deployment routing contract に従う
-- Worker deploy / readiness / routing は Cloudflare backend 側の backend
-  能力も使って成立する。image-backed workload の healthCheck は OCI deployment
-  adapter / orchestrator に渡す deploy 入力として扱う
-
 ## Local backend
 
 local でも Worker workload の artifact は `worker-bundle` のまま。local は
-Cloudflare account なしで tenant worker contract を検証するための backend。
+provider account なしで tenant worker contract を検証するための backend で、
+tracked reference Workers backend と対比される。
 
 - control plane は Node-backed
 - tenant runtime は runtime-host worker runtime path（Workers-compatible local
@@ -134,7 +129,9 @@ hosting surface の contract 境界は
 
 ## Routing contract
 
-tenant runtime が受ける target は dispatch が RoutingRecord から解決した結果。
+tenant runtime が受ける target は dispatch が route projection (current
+Deployment の `desired.routes` / `desired.activation_envelope` から導出)
+から解決した結果。
 
 - `service-ref` (`routeRef`): dispatch namespace 内の worker 参照。RoutingRecord
   の deployments[].routeRef と同義
@@ -146,14 +143,16 @@ dispatch が canary weight の解決と path routing を行った後、tenant ru
 
 ## Snapshot-based execution
 
-runtime deployment は実行 contract を snapshot として持つ。
+runtime deployment は実行 contract を snapshot として持つ。これは
+`Deployment.desired.activation_envelope` と `Deployment.desired.bindings` の
+materialized form に相当する。
 
 - runtime config
 - bindings
 - env vars
 
-この snapshot により、local と Cloudflare は同じ runtime deployment 入力をもとに
-tenant runtime を再現する。
+この snapshot により、local と tracked reference Workers backend は同じ runtime
+deployment 入力をもとに tenant runtime を再現する。
 
 ## Compatibility
 
@@ -161,3 +160,35 @@ Takos は backend-neutral tenant contract を共有するが、compatible は sc
 translation parity を指し、runtime behavior や resource existence
 の一致ではない。 詳細は [互換性と制限](./compatibility.md) と
 [環境ごとの差異](/hosting/differences) を参照。
+
+## Workers backend reference materialization
+
+::: details tracked reference Workers backend の実装詳細
+
+> このセクションは Cloudflare Workers backend に固有の materialization
+> detail。Core 用語との対応は
+> [Glossary § Workers backend implementation note](/reference/glossary#workers-backend-implementation-note)
+> を参照。
+
+tracked reference Workers backend では `worker-bundle` を Cloudflare Workers
+runtime に載せ、tenant runtime として実行する。Cloudflare 側は tracked
+reference Workers backend の materialization detail であり、PaaS Core の
+canonical provider ではない。
+
+- deploy backend は tracked reference Workers backend (Cloudflare Workers)
+- worker artifact は Cloudflare Workers runtime で materialize
+  (`Deployment.conditions[]` の provider operation 進捗として記録され、
+  observed 側は ProviderObservation stream に落ちる)
+- image-backed service / container workload は OCI deployment adapter 経由で
+  Cloudflare Container DO 上にマウントする
+- tenant routing は dispatch worker (`takos-dispatch`) と RoutingDO ベースの
+  route projection cache に従う
+- Worker deploy / readiness / routing は Workers backend 側の能力
+  (dispatch namespace / Container DO / KV / DO) も使って成立する。
+  image-backed workload の healthCheck は OCI deployment adapter / orchestrator
+  に渡す deploy 入力として扱う
+- attached container binding は Cloudflare の DurableObjectNamespace-compatible
+  namespace binding として expose されるが、これは current runtime detail で
+  あり、Cloudflare product surface と 1 対 1 に固定された契約ではない
+
+:::

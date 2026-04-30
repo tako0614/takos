@@ -10,7 +10,7 @@ metadata を持つが、primitive や group は特権化されない。
 - 数式の評価・計算
 - CSV / JSON エクスポート
 - source tree の standalone MCP server で 26 tools を提供
-- UiSurface でスプレッドシート UI を提供
+- `takos.ui-surface.v1` でスプレッドシート UI を提供
 - group に所属しなくても動作可能
 
 ## Takos 上での動作
@@ -26,23 +26,33 @@ single worker (web) 構成。
 
 ```text
 {hostname}
-  /     → built frontend / static asset surface (deployment mount)
-  /mcp  → Excel MCP server (streamable HTTP)
+  /                         → built frontend / static asset surface (deployment mount)
+  /api                      → app API, OAuth callback, session routes
+  /api/auth/callback        → Takos OAuth callback
+  /mcp                      → Excel MCP server (streamable HTTP)
+  /files/:id                → Storage file handler open route
 ```
 
 ## Publications
 
-`outputs.url.routeRef` が参照する `/` route は built frontend / static asset surface の mount point を
-表し、server entrypoint 自体の root route を意味しない。
+`outputs.url.routeRef` が参照する `/` route は built frontend / static asset
+surface の mount point を 表し、server entrypoint 自体の root route
+を意味しない。
 
 ```yaml
 routes:
   - id: ui
     target: web
     path: /
+  - id: api
+    target: web
+    path: /api
   - id: mcp
     target: web
     path: /mcp
+  - id: file-open
+    target: web
+    path: /files/:id
 
 publish:
   - name: excel-ui
@@ -66,11 +76,25 @@ publish:
         secretRef: MCP_AUTH_TOKEN
     spec:
       transport: streamable-http
+  - name: excel-file-handler
+    type: takos.file-handler.v1
+    display:
+      title: Excel
+    outputs:
+      url:
+        kind: url
+        routeRef: file-open
+    spec:
+      mimeTypes:
+        - application/vnd.takos.excel+json
+      extensions:
+        - .takossheet
 ```
 
-`takos.ui-surface.v1` は UI surface publication type であり、deploy manifest の
-`publish` entry で catalog を管理します。`takos.mcp-server.v1` は agent runtime が
-参照する MCP catalog entry です。
+`takos.ui-surface.v1` / `takos.mcp-server.v1` /
+`takos.file-handler.v1` の canonical 定義は
+[publication types](/reference/glossary#publication-types) を参照。`takos.mcp-server.v1` entry は agent runtime
+が参照する MCP catalog entry です。
 
 ## Takos built-in provider publication
 
@@ -88,14 +112,45 @@ compute:
           scopes:
             - files:read
             - files:write
+      - publication: takos.oauth-client
+        as: excel-oauth
+        request:
+          clientName: Takos Excel
+          redirectUris:
+            - /api/auth/callback
+          scopes:
+            - openid
+            - profile
+            - email
 ```
 
 default app manifest / workflow は UI と `/mcp` を同じ worker に含める。MCP
-publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言し、control plane が
-worker-scoped secret env を用意する。実装は `MCP_AUTH_TOKEN` が未設定、かつ
+publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言し、control plane
+が worker-scoped secret env を用意する。実装は `MCP_AUTH_TOKEN` が未設定、かつ
 `MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed する。
-manifest の `routes` は `/` と `/mcp` の両方を `web` target に向ける。`/` を
-UI 直下として扱うのは deployment 側の責務で、entrypoint そのものの責務ではない。
+manifest の `routes` は `/`、`/api`、`/mcp`、`/files/:id` を `web` target
+に向ける。`/` を UI 直下として扱うのは deployment 側の責務で、entrypoint
+そのものの責務ではない。`/api` は app session API と OAuth callback を含む。
+manifest は generated secret resource を `APP_SESSION_SECRET` として `web` に bind し、OAuth consume の
+client/issuer/token/userinfo env を `OAUTH_CLIENT_ID`、`OAUTH_CLIENT_SECRET`、
+`OAUTH_ISSUER_URL`、`OAUTH_TOKEN_URL`、`OAUTH_USERINFO_URL` に inject する。
+
+## Storage との連携
+
+takos-excel は `takos-api` built-in provider consume から kernel API の endpoint
+/ credential を受け取り、Storage API を呼び出して spreadsheet file を読み書き
+する。Takos managed deploy では consume env として `TAKOS_STORAGE_API_URL` /
+`TAKOS_STORAGE_ACCESS_TOKEN` が inject される。
+
+Storage UI から spreadsheet file を開く場合は `takos.file-handler.v1`
+publication の `/files/:id` route を使う。新規作成または保存する Takos
+spreadsheet file は `.takossheet` extension と
+`application/vnd.takos.excel+json` MIME type を使う。既存 file を読む場合もこの
+MIME type を canonical contract として扱う。
+
+API / UI / MCP request は `space_id` または `spaceId` query parameter を優先し、
+指定がない場合は optional env `TAKOS_SPACE_ID` を default Storage space として
+使う。どちらもない request は `space_id is required` として失敗する。
 
 ## MCP tools
 
@@ -134,3 +189,12 @@ UI 直下として扱うのは deployment 側の責務で、entrypoint そのも
 | ----------- | -------------------------------------- |
 | files:read  | kernel の Storage からファイル読み取り |
 | files:write | kernel の Storage へファイル書き込み   |
+| openid      | Takos OAuth sign-in                    |
+| profile     | ユーザープロフィール取得               |
+| email       | メールアドレス取得                     |
+
+## Resources
+
+takos-excel の spreadsheet storage は kernel の Storage に委譲する。app 自体の
+generated secret resource として `excel-session-secret` を持ち、
+`APP_SESSION_SECRET` に bind して cookie/session signing に使う。

@@ -56,7 +56,8 @@ compute:
         artifactPath: dist/worker
 
 routes:
-  - target: web
+  - id: web
+    target: web
     path: /
 ```
 
@@ -91,6 +92,12 @@ jobs:
 ```bash
 takos deploy --env staging --space SPACE_ID
 ```
+
+`takos deploy` は default で manifest を 1 つの Deployment として resolve し、
+そのまま apply まで進めます (Heroku 風の sugar)。reviewer flow が必要な場合は
+`takos deploy --resolve-only` で resolved Deployment record だけ作って、
+`takos diff <id>` / `takos apply <id>` で確認・適用を分離できます。手元で
+manifest だけ検証したい場合は `takos deploy --preview` を使います。
 
 ステージング環境にデプロイされます。URL
 がターミナルに表示されるので、ブラウザで開いてみましょう。`routes` で宣言した

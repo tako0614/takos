@@ -39,7 +39,7 @@ deno task local:proxyless-smoke    # CF 固有 path の逆流チェック
 
 ### `deno task local:proxyless-smoke` とは
 
-Cloudflare backend
+tracked reference Workers backend
 固有のルーティングパスがローカル環境で意図せず「逆流」しないかを確認するテスト。セルフホスト環境で
 Cloudflare 依存のルーティングが紛れ込んでいないかを検証する。
 
@@ -78,7 +78,7 @@ app container ではない。image-backed Service / Attached Container は
 
 private server stack の基準は `takos-private/`
 で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、
-`agent/Dockerfile`
+`takos/agent/Dockerfile`
 を使います。OSS local stack は `./.env.local.example` と `compose.local.yml`
 を使い、private 側は sibling checkout で別管理です。
 
@@ -110,22 +110,22 @@ MinIO が起動している前提。
 ### Control Plane サービス
 
 ```bash
-deno task --cwd apps/control dev:local:web       # Web / API サーバー
-deno task --cwd apps/control dev:local:dispatch  # テナントリクエストの dispatch
-deno task --cwd apps/control dev:local:worker    # バックグラウンドジョブ処理
+cd takos/app/apps/control && deno task dev:local:web       # Web / API サーバー
+cd takos/app/apps/control && deno task dev:local:dispatch  # テナントリクエストの dispatch
+cd takos/app/apps/control && deno task dev:local:worker    # バックグラウンドジョブ処理
 ```
 
 ### Host サービス
 
 ```bash
-deno task --cwd apps/control dev:local:runtime-host   # runtime-service host
-deno task --cwd apps/control dev:local:executor-host  # エージェント executor host
+cd takos/app/apps/control && deno task dev:local:runtime-host   # runtime-service host
+cd takos/app/apps/control && deno task dev:local:executor-host  # エージェント executor host
 ```
 
 ### OCI Orchestrator
 
 ```bash
-deno task --cwd apps/control dev:local:oci-orchestrator  # コンテナ管理
+cd takos/app/apps/control && deno task dev:local:oci-orchestrator  # コンテナ管理
 ```
 
 private server stack を構成する場合は `takos-private/.env.server.example` と
@@ -218,27 +218,27 @@ takos endpoint use https://custom.example.com
 ## 初回マイグレーション
 
 `compose.local.yml` の PostgreSQL backend は起動時に
-`apps/control/db/migrations` を self-host migration runner で自動適用する。
-手動で以下を実行する必要はない。
+`takos/app/apps/control/db/migrations` を self-host migration runner で自動適用
+する。手動で以下を実行する必要はない。
 
 Wrangler の local D1 backend を単体で使う場合だけ、同じ migration source
 に対して 次を実行する:
 
 ```bash
-deno task --cwd apps/control db:migrate
+cd takos/app/apps/control && deno task db:migrate
 ```
 
 ## ローカル環境の制限
 
-- backend-neutral deploy spec を local backend 上で実現するが、Cloudflare
-  backend と完全同一ではない
+- backend-neutral deploy spec を local backend 上で実現するが、tracked reference
+  Workers backend と完全同一ではない
 - backend-specific な queue consumer / scheduler / workflow semantics
   は再現しきれない。queue binding の basic delivery は動かせるが、
   `triggers.queues` の deploy は `workers-dispatch` backend 必須で、local
   `runtime-host` では fail-fast する
 - vectorize binding には PostgreSQL + pgvector が必要（`PGVECTOR_ENABLED=true`）
-- Durable Object binding は persistent local runtime で利用できるが、Cloudflare
-  backend と byte-for-byte 同一ではない
+- Durable Object binding は persistent local runtime で利用できるが、tracked
+  reference Workers backend と byte-for-byte 同一ではない
 - Dispatch Namespace は提供されず、tenant runtime compatibility path を使う
 
 詳しくは [環境ごとの差異](/hosting/differences) を参照。

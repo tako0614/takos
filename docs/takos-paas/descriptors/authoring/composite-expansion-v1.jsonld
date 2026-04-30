@@ -1,0 +1,19 @@
+{
+  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@id": "https://takos.dev/descriptors/authoring/composite-expansion/v1",
+  "@type": "takos:AuthoringExpansionDescriptor",
+  "shortRef": "authoring.composite-expansion@v1",
+  "domain": "authoring",
+  "lifecycleDomain": "shape-derivation",
+  "changeEffect": "shape-derivation",
+  "description": "Authoring expansion that replaces a composite.* compute reference with its canonical runtime + resource (+ optional publication + route) contract instances before plan finalises.",
+  "expandsTo": [
+    "takos.dev/v1 App",
+    "takos.dev/v1 Environment"
+  ],
+  "invariants": [
+    "expansion-before-plan",
+    "descriptor-digest-pinned",
+    "no-runtime-or-provider-semantics"
+  ]
+}

@@ -70,7 +70,7 @@ pending (生成直後) → queued (実行待ち) → running → completed
 
 ```bash
 # SSE
-GET /api/runs/:id/sse
+GET /api/runs/:id/events
 
 # WebSocket
 takos run follow RUN_ID --transport ws

@@ -2,6 +2,10 @@
 
 > このページでわかること: Worker 1 つだけの最小構成の書き方。
 
+この例は
+[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
+そのままの構成です。
+
 ## 完成形
 
 ```text
@@ -30,7 +34,8 @@ compute:
         artifactPath: dist/worker
 
 routes:
-  - target: web
+  - id: web
+    target: web
     path: /
 ```
 

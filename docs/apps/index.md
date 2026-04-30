@@ -10,18 +10,10 @@ boundary は [Kernel](/architecture/kernel) を参照。
 
 ## 最小構成
 
-```yaml
-name: my-app
-
-compute:
-  web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
-```
+最小 manifest は `name` / `compute.web.build.fromWorkflow` / `routes` の 3 ブロックで成立する。
+詳細な canonical 例は
+[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
+を参照。各章 (apps / examples / get-started / deploy) で minimal example を出すときは、この canonical を引用するか短い変形のみとする。
 
 ## セクション別ガイド
 

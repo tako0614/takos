@@ -1,12 +1,13 @@
-# Takos Deploy v2 Implementation Provider Descriptor Guidelines
+# Takos Deploy v3 Implementation Provider Descriptor Guidelines
 
 Status: implementation guidance, not Core semantics.
 
-This document defines how an implementation can ship practical descriptor definitions for Workers-like runtimes, containers, cloud services, and self-hosted providers while keeping Takos Deploy v2 Core kindless.
+This document defines how an implementation can ship practical descriptor definitions for Workers-like runtimes, containers, cloud services, and self-hosted providers while keeping Takos Deploy v3 Core kindless
+([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md)).
 
 ## 1. Principle
 
-Takos Deploy v2 Core does not define provider-specific kinds.
+Takos Deploy v3 Core does not define provider-specific kinds.
 
 Do not add Core kinds such as:
 
@@ -41,6 +42,10 @@ artifact.js-module@v1
 artifact.oci-image@v1
 interface.http@v1
 interface.tcp@v1
+interface.udp@v1
+interface.queue@v1
+interface.schedule@v1
+interface.event@v1
 resource.sql.postgres@v1
 resource.sql.sqlite-serverless@v1
 resource.object-store.s3@v1
@@ -118,7 +123,8 @@ Examples:
 
 ```text
 Cloudflare Containers:
-  Worker-fronted, Durable-Object-backed, HTTP-oriented container runtime.
+  Worker-fronted, Durable-Object-backed, on-demand HTTP-oriented container
+  runtime. It is not an always-on provider target.
 
 Google Cloud Run:
   Managed container service with revisions and traffic split.
@@ -127,7 +133,8 @@ AWS ECS/Fargate:
   Task-definition/service-based container runtime with load balancer integration.
 
 Kubernetes:
-  Deployment/Pod + Service + Ingress/Gateway materialization.
+  Deployment/Pod + Service + Ingress/Gateway materialization. This is the first
+  always-on provider target for long-running container workloads.
 
 Self-hosted Docker/Podman:
   Container runtime behind Caddy/Traefik or Takos gateway.
@@ -169,7 +176,8 @@ Major cloud providers differ most in resource access paths.
 
 ```text
 Cloudflare Workers:
-  direct runtime binding
+  direct runtime binding for D1, R2, Queues, and Durable Objects where the
+  descriptor and provider capability allow it
 
 Cloudflare Containers:
   internal endpoint -> provider mediator -> direct runtime binding
@@ -187,7 +195,13 @@ Self-hosted Docker:
   env credential, internal service URL, local gateway
 ```
 
-The Core should not care which path is used. Plan must show the selected ResourceAccessPath.
+The Core should not care which path is used. The Deployment must record the selected access path on `Deployment.desired.bindings[*].accessPath`.
+
+Cloudflare provider plugins must rely on Cloudflare-injected runtime bindings
+inside Workers and operator-injected control-plane client references for
+deployment, migration, and observation operations. They must fail closed when
+the operator has not supplied the required client references. Descriptor text
+must not suggest that the PaaS kernel constructs Cloudflare SDK/network clients.
 
 ## 7. Provider descriptor JSON-LD pattern
 
@@ -215,6 +229,12 @@ Good:
   ]
 }
 ```
+
+Provider support reports can also declare protocol reachability explicitly with
+`interfaceContracts` and `routeProtocols`. The PaaS conformance service derives
+`routeProtocols` from materialization profile interfaces when possible, and uses
+the explicit fields to validate external provider plugins without bundling a
+provider implementation into the kernel.
 
 Bad:
 
@@ -245,21 +265,21 @@ Suggested implementation order:
 
 Self-hosted providers should exist before cloud-only paths so Takos can run without depending on a public cloud.
 
-## 9. Required Plan output
+## 9. Required Deployment output
 
-For every selected provider, Plan should show:
+For every selected provider, the resolved Deployment should expose:
 
 ```text
-provider descriptor id and digest
-selected materialization profile
+provider descriptor id and digest (Deployment.resolution.descriptor_closure)
+selected materialization profile (Deployment.resolution.resolved_graph projections)
 contract tuple matched
 slot mapping
-provider limitations
-ResourceAccessPath selection
-egress enforcement report
+provider limitations (Deployment.conditions[])
+access path selection (Deployment.desired.bindings[*].accessPath)
+egress enforcement report (Deployment.conditions[] tied to runtime_network_policy)
 artifact retention requirements
-assignment support / weighted support
-ServingConverged observation model
+assignment support / weighted support (Deployment.desired.activation_envelope)
+ServingConverged observation model (ProviderObservation)
 ```
 
 ## 10. Descriptor pack in this kit
@@ -273,4 +293,4 @@ providers/
 selfhost/
 ```
 
-These examples are seed definitions. Production implementations must pin descriptor digests in DescriptorClosure and enforce PolicySpec before use.
+These examples are seed definitions. Production implementations must pin descriptor digests in `Deployment.resolution.descriptor_closure` and enforce PolicySpec before use.
