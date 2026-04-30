@@ -27,7 +27,7 @@ deno task check
 ```
 
 Doctor verifies required tools, submodule initialization, the local compose service set, expected ports, internal URL
-environment, and forbidden shell-level deploy/runtime service names.
+environment, and forbidden shell-level deploy/runtime service names or stale split-era internal URL aliases.
 
 ## 3. Inspect Compose
 

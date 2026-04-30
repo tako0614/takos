@@ -31,6 +31,7 @@ const expectedPortMarkers = [
 const expectedInternalUrlMarkers = [
   'TAKOS_GIT_INTERNAL_URL',
   'TAKOS_PAAS_INTERNAL_URL',
+  'TAKOS_AGENT_INTERNAL_URL',
   'TAKOS_INTERNAL_SERVICE_SECRET',
 ];
 const forbiddenSurfacePatterns = [
@@ -45,6 +46,14 @@ const forbiddenSurfacePatterns = [
   {
     name: 'legacy deploy env',
     pattern: /\bTAKOS_DEPLOY_[A-Z0-9_]*\b/g,
+  },
+  {
+    name: 'legacy control internal URL env',
+    pattern: /\bTAKOS_CONTROL_INTERNAL_URL\b/g,
+  },
+  {
+    name: 'legacy runtime internal URL env',
+    pattern: /\bTAKOS_RUNTIME_INTERNAL_URL\b/g,
   },
   {
     name: 'shell deploy implementation mount',
