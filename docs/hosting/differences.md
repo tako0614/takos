@@ -19,7 +19,7 @@ production-grade backing services を組み合わせれば production packaging 
 | [Cloudflare](/hosting/cloudflare)   | Cloudflare Workers / D1 / R2 / KV / Queues を使う tracked reference Workers backend | Cloudflare resources                                  |
 | [Local](/hosting/local)             | local development runtime                                           | local services                                        |
 | [Self-hosted](/hosting/self-hosted) | VM / Docker Compose / Helm packaging guidance                       | PostgreSQL / Redis / S3-compatible storage            |
-| [Kubernetes](/hosting/kubernetes)   | `takos/deploy/helm/takos` base chart                                | Bitnami PostgreSQL / Redis / MinIO by default         |
+| [Kubernetes](/hosting/kubernetes)   | `takos/paas/deploy/helm/takos` base chart                                | Bitnami PostgreSQL / Redis / MinIO by default         |
 | [AWS](/hosting/aws)                 | EKS 向け Helm overlay (`values-aws.yaml`)                           | external PostgreSQL / Redis / S3-compatible storage   |
 | [GCP](/hosting/gcp)                 | GKE 向け Helm overlay (`values-gcp.yaml`)                           | external PostgreSQL / Redis / GCS S3 interoperability |
 

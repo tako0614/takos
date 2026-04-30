@@ -17,7 +17,7 @@ process role の一つとして runtime host から呼び出される。Deployme
 
 ソースは runtime-service package、entry point は runtime service の container
 bootstrap。Deno container として
-`takos/runtime/apps/runtime-service/Dockerfile` でビルドし、
+`ghcr.io/takos/runtime-service:latest` でビルドし、
 backend-specific な runtime host worker からマウントされる。tracked reference
 Workers backend での実装詳細は本ページ末尾の collapsible 節 (Workers backend
 reference materialization) を参照。
@@ -265,8 +265,8 @@ common error envelope を返す。
 
 runtime-service container は backend-specific な runtime host process role
 からマウントされる。container build は
-`takos/runtime/apps/runtime-service/Dockerfile` で行い、env vars は Docker
-secret + `takos/runtime/apps/runtime-service/.env` で供給する。tracked
+`ghcr.io/takos/runtime-service:latest` で行い、env vars は Docker
+secret + `runtime-service artifact secret file` で供給する。tracked
 reference Workers backend での具体的な host worker / container 配置は
 本ページ末尾の collapsible 節を参照。
 
@@ -293,8 +293,8 @@ tracked reference Workers backend では runtime-service container は
 - host worker (`takos-runtime-host`) は
   `takos/app/apps/control/wrangler.runtime-host.toml` で deploy する
 - env vars は wrangler 経由ではなく Docker secret +
-  `takos/runtime/apps/runtime-service/.env` で供給する
-  (`takos/runtime/apps/runtime-service/Dockerfile` 参照)
+  `runtime-service artifact secret file` で供給する
+  (`ghcr.io/takos/runtime-service:latest` 参照)
 - kernel から runtime-service への呼び出しは Cloudflare worker 間 service
   binding (`RUNTIME_HOST`) で行う
 - runtime-host worker は `/forward/cli-proxy/*` を container 内部 loopback

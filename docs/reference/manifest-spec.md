@@ -20,7 +20,7 @@ rollback、uninstall などの group 機能を使えますが、runtime や reso
 この manifest contract と group 機能は `takos/paas` の PaaS control plane が
 提供する canonical semantics です。`POST /api/public/v1/deployments` (Deployment
 lifecycle endpoint) を通じて preview / resolve / apply / rollback の 4 mode を
-扱います。split repo の `takos/deploy` compatibility shell は manifest fetch /
+扱います。split repo の `former deploy compatibility shell は manifest fetch /
 parse、persistent deployment history、rollback を実装していません。
 
 ## 0. Canonical minimal manifest {#canonical-minimal-manifest}

@@ -150,9 +150,9 @@ staging and production.
 
 `takos/paas` の PaaS control plane が deploy (Deployment / GroupHead) / runtime
 / resource / routing / network / registry / audit の canonical semantics を提供
-する。`takos/deploy` および `takos/runtime` は migration 中の compatibility
-shell / stub であり、 Git repository fetch、manifest parse、persistent
-Deployment history、rollback 等の business logic は実装していない。現行 CLI は
+する。旧 deploy/runtime compatibility shell は削除済みであり、 Git repository fetch、
+manifest parse、persistent Deployment history、rollback 等の business logic は
+`takos/paas` に寄せる。現行 CLI は
 `takos/app` の deploy compatibility API (`/api/deploy/plans`,
 `/api/deploy/apply-runs`) を経由する v2 facade と、Phase 3 で再構築中の v3
 public surface (`POST /api/public/v1/deployments`,

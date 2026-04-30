@@ -13,11 +13,3 @@
 [submodule "git"]
 	path = git
 	url = https://github.com/tako0614/takos-git.git
-
-[submodule "deploy"]
-	path = deploy
-	url = https://github.com/tako0614/takos-deploy.git
-
-[submodule "runtime"]
-	path = runtime
-	url = https://github.com/tako0614/takos-runtime.git

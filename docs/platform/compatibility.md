@@ -43,7 +43,7 @@ existence や behavior parity ではありません。詳細は
 | `takos/app/apps/control/SECRETS.md`             | Cloudflare / self-host secret inventory        |
 | `takos/app/apps/control/wrangler*.toml`         | tracked reference Workers backend deploy template |
 | `takos/app/apps/control/.secrets/<env>`         | tracked reference Workers backend runtime secret 管理元 |
-| `takos/deploy/helm/takos/`                      | self-host Helm chart                           |
+| `takos/paas/deploy/helm/takos/`                      | self-host Helm chart                           |
 
 ## current env groups
 
