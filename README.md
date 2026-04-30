@@ -3,14 +3,14 @@
 Takos product shell.
 
 Implementation is split into nested Takos repositories. The target control plane shape is `takos-paas` as the PaaS
-monolith with deploy/runtime domains inside it.
+monolith with deploy and runtime lifecycle domains inside it.
 
 ```text
 takos/
   agent/  -> takos-agent
   app/    -> takos-app
   git/    -> takos-git
-  paas/   -> takos-paas
+  paas/   -> takos-paas, including deploy and runtime lifecycle ownership
   docs/contributing/ -> shell-owned Takos planning docs
 ```
 
@@ -32,8 +32,8 @@ identities.
 
 - `app`: accounts, auth, profiles, billing, OAuth, user settings, user-facing management UI, public/browser/CLI API
   gateway, and product API that is not owned by another Takos service.
-- `paas`: tenant/platform management, tenant and space registry, routing/entitlement context,
-  deploy/runtime/resource/routing/publication domains, and internal tenant/control API.
+- `paas`: tenant/platform management, tenant and space registry, routing/entitlement context, deploy and runtime
+  lifecycle domains, resource/routing/publication domains, and internal tenant/control API.
 - `git`: Git hosting, Git Smart HTTP, repositories/source, refs, object storage, source resolution, and repository API
   contracts.
 - `agent`: agent execution service. It calls PaaS internal control RPC.
@@ -65,4 +65,5 @@ docker compose --env-file ${TAKOS_LOCAL_ENV_FILE:-.env.local} -f compose.local.y
 ```
 
 The local compose entrypoint should expose the core service set: `takos-app`, `takos-git`, `takos-paas`, and
-`takos-agent`.
+`takos-agent`. Do not add standalone deploy or runtime services to this shell compose file; those lifecycles are local
+process roles and domains of `takos-paas`.

@@ -30,8 +30,6 @@ services:
       - |
           psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_paas'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takos_paas"
           psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_git'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takos_git"
-          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_deploy'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takos_deploy"
-          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_runtime'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takos_runtime"
 
   redis:
     image: redis:7-alpine
@@ -53,8 +51,6 @@ services:
       TAKOS_APP_URL: '${TAKOS_APP_URL:-http://localhost:8787}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOS_PAAS_INTERNAL_URL: 'http://takos-paas:${TAKOS_PAAS_PORT:-8788}'
-      TAKOS_DEPLOY_INTERNAL_URL: 'http://takos-deploy:${TAKOS_DEPLOY_PORT:-8791}'
-      TAKOS_RUNTIME_INTERNAL_URL: 'http://takos-runtime:${TAKOS_RUNTIME_INTERNAL_PORT:-8792}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOS_APP_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
     ports:
@@ -63,8 +59,6 @@ services:
       - ./app:/workspace
       - ./paas:/paas:ro
       - ./git:/git:ro
-      - ./deploy:/deploy:ro
-      - ./runtime:/runtime:ro
 
   takos-git:
     image: denoland/deno:latest
@@ -82,42 +76,6 @@ services:
       - '${TAKOS_GIT_PORT:-8790}:${TAKOS_GIT_PORT:-8790}'
     volumes:
       - ./git:/workspace
-
-  takos-deploy:
-    image: denoland/deno:latest
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-    working_dir: /workspace
-    command: ['deno', 'task', 'dev']
-    environment:
-      PORT: '${TAKOS_DEPLOY_PORT:-8791}'
-      TAKOS_DEPLOY_INTERNAL_URL: 'http://takos-deploy:${TAKOS_DEPLOY_PORT:-8791}'
-      TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
-      TAKOS_RUNTIME_INTERNAL_URL: 'http://takos-runtime:${TAKOS_RUNTIME_INTERNAL_PORT:-8792}'
-      TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_DEPLOY_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_deploy'
-    ports:
-      - '${TAKOS_DEPLOY_PORT:-8791}:${TAKOS_DEPLOY_PORT:-8791}'
-    volumes:
-      - ./deploy:/workspace
-
-  takos-runtime:
-    image: denoland/deno:latest
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-    working_dir: /workspace
-    command: ['deno', 'task', 'dev']
-    environment:
-      PORT: '${TAKOS_RUNTIME_INTERNAL_PORT:-8792}'
-      TAKOS_RUNTIME_INTERNAL_URL: 'http://takos-runtime:${TAKOS_RUNTIME_INTERNAL_PORT:-8792}'
-      TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_RUNTIME_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_runtime'
-    ports:
-      - '${TAKOS_RUNTIME_INTERNAL_PORT:-8792}:${TAKOS_RUNTIME_INTERNAL_PORT:-8792}'
-    volumes:
-      - ./runtime:/workspace
 
   takos-paas:
     image: denoland/deno:latest
@@ -152,8 +110,6 @@ services:
       PORT: '${TAKOS_AGENT_PORT:-8789}'
       TAKOS_PAAS_INTERNAL_URL: 'http://takos-paas:${TAKOS_PAAS_PORT:-8788}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
-      TAKOS_DEPLOY_INTERNAL_URL: 'http://takos-deploy:${TAKOS_DEPLOY_PORT:-8791}'
-      TAKOS_RUNTIME_INTERNAL_URL: 'http://takos-runtime:${TAKOS_RUNTIME_INTERNAL_PORT:-8792}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
     ports:
       - '${TAKOS_AGENT_PORT:-8789}:${TAKOS_AGENT_PORT:-8789}'
