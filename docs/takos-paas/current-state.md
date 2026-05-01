@@ -20,12 +20,11 @@ product root, not as separate top-level service boundaries.
 ## current surface status
 
 Deployment-centric is the canonical Core surface. The spec at
-[`core/01-core-contract-v1.0.md`](./core/01-core-contract-v1.0.md) collapses the
-prior v2 records onto three: `Deployment` (input + resolution + desired +
-status + conditions + optional policy / approval), `ProviderObservation`
-(observed-side stream), and `GroupHead` (group-scoped pointer). The contract
-types are exported from `takos-paas-contract` (`Deployment`,
-`ProviderObservation`, `GroupHead`).
+[`core/01-core-contract-v1.0.md`](./core/01-core-contract-v1.0.md) defines three
+records: `Deployment` (input + resolution + desired + status + conditions +
+optional policy / approval), `ProviderObservation` (observed-side stream), and
+`GroupHead` (group-scoped pointer). The contract types are exported from
+`takos-paas-contract` (`Deployment`, `ProviderObservation`, `GroupHead`).
 
 `DeploymentService` (`apps/paas/src/domains/deploy/deployment_service.ts`) is
 the canonical entry point. It resolves public manifests into
@@ -45,10 +44,8 @@ The public HTTP surface is mounted under `/api/public/v1/deployments`,
 `/api/public/v1/deployments/:deploymentId/approve`,
 `/api/public/v1/deployments/:deploymentId/observations`,
 `/api/public/v1/groups/:groupId/head`, and
-`/api/public/v1/groups/:groupId/rollback`. Legacy public plan/apply/snapshot
-paths are intentionally absent from the PaaS OpenAPI route inventory. Some
-implementation shim modules and migration docs retain v2 names only to map old
-state into current records; they are not the canonical Core API.
+`/api/public/v1/groups/:groupId/rollback`. Removed public plan/apply/snapshot
+paths are absent from the PaaS OpenAPI route inventory.
 
 The kernel does not make cloud provider APIs canonical. Cloudflare, AWS, GCP,
 Kubernetes, Neon, R2, S3, and similar systems remain provider targets described
