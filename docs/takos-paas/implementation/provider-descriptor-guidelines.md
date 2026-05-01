@@ -69,7 +69,7 @@ provider.cloudflare.d1@v1
 provider.cloudflare.r2@v1
 provider.aws.s3@v1
 provider.neon.postgres@v1
-provider.selfhost.takos-runtime-host@v1
+provider.selfhost.takos-runtime-agent@v1
 provider.selfhost.docker-podman@v1
 provider.selfhost.postgres@v1
 provider.selfhost.minio@v1
@@ -260,7 +260,7 @@ Descriptors are dictionaries, not programs.
 Suggested implementation order:
 
 ```text
-1. provider.selfhost.takos-runtime-host@v1
+1. provider.selfhost.takos-runtime-agent@v1
 2. provider.selfhost.docker-podman@v1
 3. provider.selfhost.postgres@v1 / provider.selfhost.minio@v1
 4. provider.cloudflare.workers@v1

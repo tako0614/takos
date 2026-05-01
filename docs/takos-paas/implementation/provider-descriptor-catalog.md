@@ -84,7 +84,7 @@ reject, or report limitations.
 | `provider.azure.container-apps@v1`     | OCI container app revisions               | Supports revisions and ingress traffic split.                                                                             |
 | `provider.kubernetes@v1`               | Pods/Deployments/Services/Ingress/Gateway | An always-on provider target for long-running container workloads.                                                        |
 | `provider.selfhosted.docker-podman@v1` | OCI container on local host               | Example operator-owned self-hosted plugin path, usually with Caddy/Traefik.                                               |
-| `provider.takos.runtime-host@v1`       | JS module runtime host                    | Self-hosted runtime path for `runtime.js-worker@v1`.                                                                      |
+| `provider.takos.runtime-agent@v1`       | JS module runtime host                    | Self-hosted runtime path for `runtime.js-worker@v1`.                                                                      |
 
 ## 4. Workers family guidance
 
@@ -311,7 +311,7 @@ implementation/provider-descriptors/
   provider.azure.container-apps.v1.jsonld
   provider.kubernetes.v1.jsonld
   provider.selfhosted.docker-podman.v1.jsonld
-  provider.takos.runtime-host.v1.jsonld
+  provider.takos.runtime-agent.v1.jsonld
 
 implementation/resource-provider-descriptors/
   provider.cloudflare.d1.v1.jsonld

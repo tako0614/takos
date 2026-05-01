@@ -32,7 +32,7 @@ resource runtime-binding injection
 ```
 
 The Core must not special-case Cloudflare. A self-hosted runtime provider, such
-as `takos.runtime-host`, should be able to satisfy the same runtime contract
+as `takos.runtime-agent`, should be able to satisfy the same runtime contract
 where possible.
 
 ## Cloudflare mapping

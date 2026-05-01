@@ -1663,7 +1663,7 @@ Space File Sync セッションのライフサイクル管理。
 
 ::: warning Artifact upload 現状、artifact の **作成** は workflow runner
 内部からのみ可能で、専用の HTTP POST endpoint はありません。ステップ内で
-`actions/upload-artifact` 相当の処理を行うには、runtime-host が R2
+`actions/upload-artifact` 相当の処理を行うには、runtime-agent が R2
 に直接書き込む必要があります。retention は **30 日 fixed** で、`expiresAt`
 を超えた行は kernel の hourly cron が R2 + DB から自動削除します。 :::
 
@@ -2205,9 +2205,9 @@ OAuth 2.0 サーバーエンドポイント。詳しいフローは
 | DELETE | `/oauth/register/:clientId` | クライアント登録削除                                                                         |
 
 ::: tip Audience claim validation OAuth access token (`tak_oat_...`) の `aud`
-claim は issuance 時に **`client_id`** を埋め込みます。validation 側 (introspect
-/ API auth middleware) では legacy compatibility のため `client_id` / `issuer` /
-`${issuer}/api` のいずれかを accept する fallback がある。 :::
+claim は issuance 時に **`client_id`** を埋め込みます。validation 側
+(introspect / API auth middleware) は `client_id` を audience として検証する。
+:::
 
 ### auth (server-side)
 

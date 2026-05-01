@@ -153,7 +153,7 @@ HTTP gateway:
   Caddy or Traefik
 
 JS runtime:
-  Takos runtime-host
+  Takos runtime-agent
 
 Container runtime:
   Docker or Podman
@@ -183,7 +183,7 @@ DNS/TLS:
 This gives Takos an example operator-owned non-cloud materialization path:
 
 ```text
-runtime.js-worker@v1          -> takos.runtime-host@v1
+runtime.js-worker@v1          -> takos.runtime-agent@v1
 runtime.oci-container@v1      -> docker.host@v1
 artifact.js-module@v1         -> local artifact store
 artifact.oci-image@v1         -> local/remote OCI registry
@@ -211,8 +211,8 @@ and cannot select reference/noop plugins.
 
 ```yaml
 providerTargets:
-  runtime-host:
-    provider: takos.runtime-host@v1
+  runtime-agent:
+    provider: takos.runtime-agent@v1
 
   docker-host:
     provider: docker.host@v1
@@ -232,7 +232,7 @@ providerTargets:
 providerMappings:
   componentProfiles:
     workload.js-http@v1:
-      target: runtime-host
+      target: runtime-agent
 
     workload.oci-http@v1:
       target: docker-host
@@ -504,7 +504,7 @@ A minimal self-hosted deployment should support:
 
 ```text
 HTTP apps
-JS runtime-host apps
+JS runtime-agent apps
 OCI container apps
 Postgres resources
 S3-compatible object storage
@@ -596,7 +596,7 @@ Takos can prove Core semantics without claiming real provider ownership.
 Implement:
 
 ```text
-runtime-host provider
+runtime-agent provider
 Docker/Podman provider
 Caddy/Traefik gateway provider
 local Postgres provider
