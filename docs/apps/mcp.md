@@ -1,6 +1,6 @@
 # MCP Server
 
-MCP endpoint を公開するには route publication を `publish` に書きます。
+MCP endpoint を公開するには route publication を `publications` に書きます。
 
 ## 基本
 
@@ -20,9 +20,9 @@ routes:
     target: web
     path: /mcp
 
-publish:
+publications:
   - name: search
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     display:
       title: Search MCP
     outputs:
@@ -35,14 +35,14 @@ publish:
 
 ## Manifest route publication
 
-`routes` が実際の ingress で、`publish` は MCP endpoint を共有する typed outputs
-catalog です。`takos.mcp-server.v1` は platform / agent 側が解釈する standard
-route publication type です（canonical / legacy alias は
+`routes` が実際の ingress で、`publications` は MCP endpoint を共有する typed outputs
+catalog です。`publication.mcp-server@v1` は platform / agent 側が解釈する standard
+route publication type です（canonical ref は
 [Publication types](/reference/glossary#publication-types) を参照）。MCP route
-publication は deploy manifest の `publish` entry で管理します。
+publication は deploy manifest の `publications` entry で管理します。
 
 control plane は deploy 後に managed MCP server catalog entry を保存・参照します
-が、manifest 外で route publication を作る入口ではありません。`publish` は
+が、manifest 外で route publication を作る入口ではありません。`publications` は
 generic plugin resolver ではなく、宣言済み route の metadata を共有する catalog
 です。
 
@@ -70,7 +70,7 @@ gate を受けますが、external MCP 用の `egress.http` gate は追加され
 
 | source_type       | 作り方                                        | 主な用途                                    |
 | ----------------- | --------------------------------------------- | ------------------------------------------- |
-| publication       | deploy manifest の `publish: type: takos.mcp-server.v1` | Takos app / group が公開する MCP endpoint   |
+| publication       | deploy manifest の `publications: type: publication.mcp-server@v1` | Takos app / group が公開する MCP endpoint   |
 | service           | service / worker 側の managed registration    | service-backed MCP endpoint                 |
 | bundle_deployment | bundle deployment 側の managed registration   | bundle-backed MCP endpoint                  |
 | external          | `/api/mcp/servers` または `mcp_add_server`    | 外部 HTTPS MCP server を agent tools に追加 |
@@ -108,9 +108,9 @@ compute:
 を解決するか」を伝えるために使います。
 
 ```yaml
-publish:
+publications:
   - name: search
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     display:
       title: Search MCP
     outputs:

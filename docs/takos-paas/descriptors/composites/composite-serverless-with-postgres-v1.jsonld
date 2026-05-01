@@ -1,5 +1,5 @@
 {
-  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@context": "https://takos.dev/contexts/deploy.jsonld",
   "@id": "https://takos.dev/contracts/composite/serverless-with-postgres/v1",
   "@type": "CompositeContractDescriptor",
   "shortRef": "composite.serverless-with-postgres@v1",

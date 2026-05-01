@@ -4,30 +4,85 @@
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **GCP 単独 hosting (GKE Helm)** ―
-   `takos/paas/deploy/helm/takos/values-gcp.yaml` overlay。Kubernetes
-   ベースで control plane / runtime / executor を運用する path。
+   `takos/paas/deploy/helm/takos/values-gcp.yaml` overlay。Kubernetes ベースで
+   control plane / runtime / executor を運用する path。
 2. **GCP provider plugin (Phase 17A2)** ― Cloud Run / Cloud SQL / GCS / Pub/Sub
    / Cloud KMS / Secret Manager の 6 provider を Takos PaaS kernel から
    `provider` 契約として呼び出す path。Cloudflare control plane + GCP tenant
-   runtime (`composite.cf-control-gcp-tenant@v1`) や GCP 単独
-   profile (`profiles/gcp.example.json`) で使う。
+   runtime (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
+   (`profiles/gcp.example.json`) で使う。
 
 ::: warning current contract section 1 (Helm overlay) は Cloud Run へ Takos
-kernel を直接デプロイする手順、Firestore を control-plane storage として
-使う matrix、Terraform overlay を含みません。section 2 (provider plugin) は
-Phase 17A2 で追加された 6 provider の materialization 契約までです。
-:::
+kernel を直接デプロイする手順、Firestore を control-plane storage として 使う
+matrix、Terraform overlay を含みません。section 2 (provider plugin) は Phase
+17A2 で追加された 6 provider の materialization 契約までです。 :::
 
-Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
-4 cloud 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
+Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
+target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
+
+## 統合 distribution からこの target を選ぶ
+
+Takos kernel の deploy は target に関わらず `takos-private/distribution.yml`
+を正本とします。GCP GKE を kernel host に選ぶには:
+
+```yaml
+# takos-private/distribution.yml
+distribution:
+  kernel_host:
+    target: gcp
+    region: us-central1
+    project_id: takos-jp-prod
+    cluster_name: takos-control
+    values_file: deploy/helm/values-gcp.yaml
+```
+
+## target-specific 設定
+
+GCP GKE target に固有の prerequisites:
+
+- GCP project + billing account link
+- GKE cluster (Standard / Autopilot)
+- Cloud SQL PostgreSQL + Cloud SQL Auth Proxy or connector
+- Memorystore for Redis endpoint
+- GCS bucket with HMAC interoperability access
+- GCE Ingress / static external IP
+- Google-managed SSL certificate (admin + tenant wildcard domain)
+- Workload Identity-enabled service account (`iam.gke.io/gcp-service-account`
+  annotation 用)
+- External Secrets Operator などの secret 管理
+
+詳細な values overlay と外部 secret 構成は
+[Section 1: Helm overlay (kernel hosting)](#section-1-helm-overlay-kernel-hosting)
+を参照してください。
+
+## deploy 実行
+
+5 target 共通の quick runbook です。target ごとの差は `distribution.yml` の
+`kernel_host.target` だけで、`distribute:apply` が target 固有 backend (wrangler
+/ Helm / docker-compose) に dispatch します:
+
+```bash
+# 共通手順 (5 target で同じ)
+cd takos-private
+deno task generate:keys:production --per-cloud
+# distribution.yml を編集 (kernel_host.target = gcp)
+deno task distribute:dry-run --confirm production
+deno task distribute:apply --confirm production
+cd ../takos/paas
+deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+```
+
+`distribute:apply` は `kernel_host.target=gcp` を見て内部で
+`helm upgrade --install takos-control deploy/helm/takos -f deploy/helm/values-gcp.yaml`
+を呼び出します。
 
 ## どちらを選ぶか
 
-| 状況                                                                     | 推奨 path           |
-| ------------------------------------------------------------------------ | ------------------- |
-| Takos kernel 全体を GCP の k8s に置く                                    | section 1 (Helm)    |
-| Cloudflare で kernel を動かしつつ tenant runtime / DB を GCP に置きたい  | section 2 (plugin)  |
-| GCP のみで tenant runtime + control-plane provider を組む                | section 2 + Helm    |
+| 状況                                                                    | 推奨 path          |
+| ----------------------------------------------------------------------- | ------------------ |
+| Takos kernel 全体を GCP の k8s に置く                                   | section 1 (Helm)   |
+| Cloudflare で kernel を動かしつつ tenant runtime / DB を GCP に置きたい | section 2 (plugin) |
+| GCP のみで tenant runtime + control-plane provider を組む               | section 2 + Helm   |
 
 ---
 
@@ -116,34 +171,34 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 `takos-paas-plugins` の GCP provider plugin は 6 provider を提供します:
 
-| provider client                | 用途                          | 参照クラス                                                |
-| ------------------------------ | ----------------------------- | --------------------------------------------------------- |
-| `gcp-control-plane`            | Cloud Run service / revision  | `src/providers/gcp/cloud_run.ts`                          |
-| `gcp-cloud-sql-postgres`       | Cloud SQL Postgres lifecycle  | `src/providers/gcp/cloud_sql.ts`                          |
-| `gcp-cloud-storage-artifacts`  | GCS bucket lifecycle          | `src/providers/gcp/gcs.ts`                                |
-| `gcp-pubsub-control-plane`     | Pub/Sub topic + subscription  | `src/providers/gcp/pubsub.ts`                             |
-| `gcp-cloud-kms`                | Cloud KMS key + version       | `src/providers/gcp/kms.ts`                                |
-| `gcp-secret-manager`           | Secret Manager rotation       | `src/providers/gcp/secret_manager.ts`                     |
-| `gcp-load-balancer-router`     | HTTP(S) LB + Cloud DNS        | `src/providers/gcp/load_balancer.ts`                      |
-| `gcp-runtime-agent-registry`   | runtime-agent enrolment store | `src/providers/gcp/gateway.ts`                            |
+| provider client               | 用途                          | 参照クラス                            |
+| ----------------------------- | ----------------------------- | ------------------------------------- |
+| `gcp-control-plane`           | Cloud Run service / revision  | `src/providers/gcp/cloud_run.ts`      |
+| `gcp-cloud-sql-postgres`      | Cloud SQL Postgres lifecycle  | `src/providers/gcp/cloud_sql.ts`      |
+| `gcp-cloud-storage-artifacts` | GCS bucket lifecycle          | `src/providers/gcp/gcs.ts`            |
+| `gcp-pubsub-control-plane`    | Pub/Sub topic + subscription  | `src/providers/gcp/pubsub.ts`         |
+| `gcp-cloud-kms`               | Cloud KMS key + version       | `src/providers/gcp/kms.ts`            |
+| `gcp-secret-manager`          | Secret Manager rotation       | `src/providers/gcp/secret_manager.ts` |
+| `gcp-load-balancer-router`    | HTTP(S) LB + Cloud DNS        | `src/providers/gcp/load_balancer.ts`  |
+| `gcp-runtime-agent-registry`  | runtime-agent enrolment store | `src/providers/gcp/gateway.ts`        |
 
-profile JSON (`profiles/gcp.example.json`) で `clients.*`
-を上記 client 名に向けると Takos PaaS kernel が `provider` 契約を GCP
-materializer 経由で実行します。
+profile JSON (`profiles/gcp.example.json`) で `clients.*` を上記 client
+名に向けると Takos PaaS kernel が `provider` 契約を GCP materializer
+経由で実行します。
 
 ### Operator が手動でやること / kernel が plugin 経由でやること
 
-| step                                                              | operator                | kernel (plugin) |
-| ----------------------------------------------------------------- | ----------------------- | --------------- |
-| GCP project 作成 / billing account link                           | yes                     | no              |
-| service account JSON / Workload Identity 設定                     | yes                     | no              |
-| IAM role attach (Cloud Run / Cloud SQL / Storage / Pub/Sub / KMS / Secret) | yes                     | no              |
-| service account JSON または OAuth2 token を kernel に inject       | yes (operator-managed)  | no              |
-| Cloud SQL / GCS / Pub/Sub / KMS / Secret resource lifecycle       | no                      | yes (provider)  |
-| Cloud Run service deploy / revision traffic split                 | no                      | yes (provider)  |
-| HTTP(S) LB url-map + Cloud DNS record 同期                        | no                      | yes (provider)  |
-| runtime-agent enrolment + work lease                              | yes (process deploy)    | yes (work pull) |
-| drift 検出 / rollback                                             | no                      | yes (provider)  |
+| step                                                                       | operator               | kernel (plugin) |
+| -------------------------------------------------------------------------- | ---------------------- | --------------- |
+| GCP project 作成 / billing account link                                    | yes                    | no              |
+| service account JSON / Workload Identity 設定                              | yes                    | no              |
+| IAM role attach (Cloud Run / Cloud SQL / Storage / Pub/Sub / KMS / Secret) | yes                    | no              |
+| service account JSON または OAuth2 token を kernel に inject               | yes (operator-managed) | no              |
+| Cloud SQL / GCS / Pub/Sub / KMS / Secret resource lifecycle                | no                     | yes (provider)  |
+| Cloud Run service deploy / revision traffic split                          | no                     | yes (provider)  |
+| HTTP(S) LB url-map + Cloud DNS record 同期                                 | no                     | yes (provider)  |
+| runtime-agent enrolment + work lease                                       | yes (process deploy)   | yes (work pull) |
+| drift 検出 / rollback                                                      | no                     | yes (provider)  |
 
 ### IAM role 設計
 
@@ -229,8 +284,8 @@ Cloudflare Worker から GCP API を直接呼べない場合 (request size / aut
 
 #### C. Workload Identity Federation (推奨 production)
 
-`gcp.example.json` で `clients.auth: "gcp-iam-iap-auth"` を選ぶと、Identity
-Pool / Provider 経由の short-lived token を使えます。Worker 側の secret は
+`gcp.example.json` で `clients.auth: "gcp-iam-iap-auth"` を選ぶと、Identity Pool
+/ Provider 経由の short-lived token を使えます。Worker 側の secret は
 `GCP_WORKLOAD_IDENTITY_PROVIDER` (provider resource path) と
 `GCP_WORKLOAD_IDENTITY_AUDIENCE` を設定するだけで済み、long-lived service
 account JSON を持たずに済みます。
@@ -300,8 +355,8 @@ spec:
             - secretRef: { name: takos-runtime-agent-token }
 ```
 
-agent は kernel に enroll → heartbeat → lease pull → Cloud Run / Cloud SQL /
-GCS / Pub/Sub / KMS / Secret ops を実行 → 結果を report します。
+agent は kernel に enroll → heartbeat → lease pull → Cloud Run / Cloud SQL / GCS
+/ Pub/Sub / KMS / Secret ops を実行 → 結果を report します。
 
 ### GCP LB routing (Phase 17C) の DNS 設定
 
@@ -317,10 +372,10 @@ operator がやること:
 
 - Cloud DNS managed zone (`takos.example.com`) 作成
 - static external IP 取得 (`gcloud compute addresses create takos-app --global`)
-- Google-managed SSL cert または独自 cert を target proxy に
-  attach (wildcard 推奨: `*.app.takos.example.com`)
-- profile の `pluginConfig.operator.takos.gcp.routerConfig` に
-  `urlMapName` / `dnsZoneName` / `staticIpName` / `sslCertificateName` を設定
+- Google-managed SSL cert または独自 cert を target proxy に attach (wildcard
+  推奨: `*.app.takos.example.com`)
+- profile の `pluginConfig.operator.takos.gcp.routerConfig` に `urlMapName` /
+  `dnsZoneName` / `staticIpName` / `sslCertificateName` を設定
 
 kernel がやること:
 

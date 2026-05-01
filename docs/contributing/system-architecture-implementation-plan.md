@@ -1,7 +1,7 @@
 # Takos PaaS System Architecture Implementation Plan
 
 This plan maps the architecture contract in
-`../architecture/system-architecture.md` and the Deploy v2 spec kit in
+`../architecture/system-architecture.md` and the Takos Deploy spec kit in
 `../takos-paas/` onto the `takos/paas` product root.
 
 ## Ground rules
@@ -26,7 +26,7 @@ This plan maps the architecture contract in
 ```text
 apps/paas/src/api/                  HTTP API, internal API, standalone host
 apps/paas/src/domains/core/         tenant / space / group / membership / entitlement
-apps/paas/src/domains/deploy/       Plan / ApplyRun / RolloutRun / ActivationRecord
+apps/paas/src/domains/deploy/       Deployment / ProviderObservation / GroupHead
 apps/paas/src/domains/runtime/      WorkloadRevision / ProviderMaterialization / observed state
 apps/paas/src/domains/resources/    ResourceInstance / ResourceBinding / MigrationLedger
 apps/paas/src/domains/routing/      route ownership / RouteProjection
@@ -35,7 +35,7 @@ apps/paas/src/domains/registry/     package resolution / trust / provider packag
 apps/paas/src/domains/audit/        append-only audit and security events
 apps/paas/src/workers/              apply jobs / materialization / outbox consumers
 apps/paas/src/agents/               runtime agent protocol and work leases
-apps/paas/src/adapters/             kernel reference ports and legacy local adapters
+apps/paas/src/adapters/             kernel reference ports and local adapters
 apps/paas/src/plugins/              kernel plugin ABI registry, loader, reference plugin
 apps/paas/src/shared/               ids / time / errors / common helpers
 packages/paas-contract/src/         public/internal/plugin TypeScript contracts
@@ -79,16 +79,16 @@ Implement:
 - compiler from public manifest to internal `AppSpec` / `EnvSpec` /
   `PolicySpec`.
 - immutable `SourceSnapshot` for source adapters.
-- non-mutating Plan creation with read set.
-- ApplyRun state machine.
-- immutable `ActivationRecord` creation.
-- strongly consistent `GroupActivationPointer` advancement in store boundary.
+- non-mutating Deployment resolution with read set.
+- Deployment apply state machine.
+- immutable applied `Deployment` state.
+- strongly consistent `GroupHead` advancement in store boundary.
 
 Exit criteria:
 
-- plan-only deploy creates no activation or workload materialization.
-- apply creates an `ActivationRecord` and advances `GroupActivationPointer`.
-- provider/materialization failure cannot mutate `ActivationRecord`.
+- resolve-only deploy creates no activation or workload materialization.
+- apply records desired activation state and advances `GroupHead`.
+- provider/materialization failure cannot mutate the applied `Deployment`.
 
 ### M3: Runtime/routing kernel vertical slice
 

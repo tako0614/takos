@@ -9,9 +9,9 @@ agents can work independently.
 - Plan read set changed with `must-replan` rejects Apply.
 - Plan read set changed with `must-revalidate` reruns validation before phase
   transition.
-- ActivationRecord is immutable.
-- GroupActivationPointer advances atomically to a new ActivationRecord.
-- Provider materialization failure does not mutate ActivationRecord.
+- Applied Deployment desired state is immutable.
+- GroupHead advances atomically to an applied Deployment.
+- Provider materialization failure does not mutate the applied Deployment.
 - Approval subject digest changes invalidate approval.
 
 ## P1 First vertical slice
@@ -20,7 +20,7 @@ agents can work independently.
 - Signed internal create/list group works.
 - Unsigned or tampered internal requests are rejected.
 - `deploy plan` is non-mutating.
-- `deploy apply` creates activation and pointer.
+- `deploy apply` records desired activation state and advances GroupHead.
 - Group summary distinguishes desired, serving, dependencies, and security
   state.
 - Audit events are appended for space/group/plan/apply/activation.
@@ -65,4 +65,4 @@ agents can work independently.
 - Deployment-time publication binding cycle is blocked.
 - Weighted assignments affect HTTP only.
 - Queue/schedule/event defaults resolve through primaryAppReleaseId.
-- Canary step creates a new ActivationRecord.
+- Canary step creates a new rollout step Deployment.

@@ -40,6 +40,55 @@ storage / TLS / secret management を production-grade backing services
 [Not A Current Contract](/hosting/differences#not-a-current-contract)
 を参照してください。
 
+## 統合 distribution からこの target を選ぶ
+
+Takos kernel の deploy は target に関わらず `takos-private/distribution.yml`
+を正本とします。Self-hosted (docker-compose) を kernel host に選ぶには:
+
+```yaml
+# takos-private/distribution.yml
+distribution:
+  kernel_host:
+    target: selfhosted
+    region: local
+    compose_file: compose.server.yml
+```
+
+## target-specific 設定
+
+Self-hosted (docker-compose) target に固有の prerequisites:
+
+- Docker + Docker Compose V2
+- PostgreSQL 16+ (pgvector 対応が望ましい)
+- Redis 7+
+- MinIO または他の S3 互換ストレージ
+- TLS 終端 / リバースプロキシ (Caddy / nginx / Traefik) を前段に配置
+- Let's Encrypt / 内部 CA で発行した cert (operator 管理)
+- 公開ドメインは `*.localhost` ではなく実ドメインに変更
+
+詳細な env / compose 設定は [セットアップ](#セットアップ) と
+[サービス構成](#サービス構成) を参照。
+
+## deploy 実行
+
+5 target 共通の quick runbook です。target ごとの差は `distribution.yml` の
+`kernel_host.target` だけで、`distribute:apply` が target 固有 backend (wrangler
+/ Helm / docker-compose) に dispatch します:
+
+```bash
+# 共通手順 (5 target で同じ)
+cd takos-private
+deno task generate:keys:production --per-cloud
+# distribution.yml を編集 (kernel_host.target = selfhosted)
+deno task distribute:dry-run --confirm production
+deno task distribute:apply --confirm production
+cd ../takos/paas
+deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+```
+
+`distribute:apply` は `kernel_host.target=selfhosted` を見て内部で
+`docker compose -f compose.server.yml up -d` を呼び出します。
+
 ## 必要なもの
 
 - Docker + Docker Compose V2
@@ -353,9 +402,10 @@ services:
   `takos/agent/Dockerfile` から `takos-agent` container をビルド
 - **ポート**: `TAKOS_EXECUTOR_PORT`（デフォルト `8082`）→ コンテナポート `8080`
 - **役割**: エージェント実行コンテナ
-- **構成**: `takos/agent/` が Takos control RPC / remote tools / skill prompt
-  bridge を提供。`takos-private/apps/executor` は legacy / fallback 用の
-  TypeScript executor として残す
+- **構成**: `takos/agent/` が PaaS-owned `/api/internal/v1/agent-control/*`
+  client / remote tools / skill prompt bridge
+  を提供する。`takos-private/apps/executor` は開発用 TypeScript executor
+  として残す
 
 この executor container は private server stack でも `takos-agent` container
 を使います。Takos は platform 全体を単一の runtime に寄せず、agent loop を

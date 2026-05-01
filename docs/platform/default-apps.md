@@ -18,22 +18,22 @@ default app distribution の初期セットは以下の 5 つ（Agent / Chat / G
 
 | group                                      | 既定 ref | 役割                                  | custom publication examples                                                        | built-in consumes  |
 | ------------------------------------------ | -------- | ------------------------------------- | ---------------------------------------------------------------------------------- | ------------------ |
-| [takos-docs](/platform/takos-docs)         | `master` | リッチテキストエディタ                | takos.ui-surface.v1 / takos.mcp-server.v1 / takos.file-handler.v1                  | takos-api          |
-| [takos-excel](/platform/takos-excel)       | `master` | スプレッドシート                      | takos.ui-surface.v1 / takos.mcp-server.v1 / takos.file-handler.v1                  | takos-api          |
-| [takos-slide](/platform/takos-slide)       | `master` | プレゼンテーション                    | takos.ui-surface.v1 / takos.mcp-server.v1 / takos.file-handler.v1                  | takos-api          |
-| [takos-computer](/platform/takos-computer) | `master` | sandbox computer / browser automation | takos.ui-surface.v1 / takos.mcp-server.v1 / container workload                     | takos-api          |
-| [yurucommu](/platform/yurucommu)           | `master` | ActivityPub / community social        | takos.ui-surface.v1 / queue worker                                                 | takos.oauth-client |
+| [takos-docs](/platform/takos-docs)         | `master` | リッチテキストエディタ                | publication.http-endpoint@v1 / publication.mcp-server@v1 / publication.http-endpoint@v1                  | takos-api          |
+| [takos-excel](/platform/takos-excel)       | `master` | スプレッドシート                      | publication.http-endpoint@v1 / publication.mcp-server@v1 / publication.http-endpoint@v1                  | takos-api          |
+| [takos-slide](/platform/takos-slide)       | `master` | プレゼンテーション                    | publication.http-endpoint@v1 / publication.mcp-server@v1 / publication.http-endpoint@v1                  | takos-api          |
+| [takos-computer](/platform/takos-computer) | `master` | sandbox computer / browser automation | publication.http-endpoint@v1 / publication.mcp-server@v1 / container workload                     | takos-api          |
+| [yurucommu](/platform/yurucommu)           | `master` | ActivityPub / community social        | publication.http-endpoint@v1 / queue worker                                                 | takos.oauth-client |
 
 `takos-api` は route / interface publication ではなく、`takos.api-key` built-in
 provider publication を consume する local consume 名です。
 
 default app manifest の `display.icon` と `compute.<name>.icon` は current
 manifest field です。office 系 default apps は launcher 表示用に `display.icon`
-を持ち、同じ画像を `compute.web.icon` にも置いて `takos.ui-surface.v1` publication の
+を持ち、同じ画像を `compute.web.icon` にも置いて `publication.http-endpoint@v1` publication の
 fallback として preserve / expose されるようにします。
 
-office 系 default apps は `takos.ui-surface.v1`、`/mcp` の
-`takos.mcp-server.v1`、`/files/:id` の `takos.file-handler.v1` を publish
+office 系 default apps は `publication.http-endpoint@v1`、`/mcp` の
+`publication.mcp-server@v1`、`/files/:id` の `publication.http-endpoint@v1` を publish
 する。 MCP publication は
 `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言する。group-managed deploy は
 publisher workload に `MCP_AUTH_TOKEN` を service secret env として
@@ -41,13 +41,13 @@ publisher workload に `MCP_AUTH_TOKEN` を service secret env として
 等で意図的に 認証なしにする場合だけ `MCP_ALLOW_UNAUTHENTICATED=true`
 を設定する。office 系 default apps は `/api` route、`takos.oauth-client`
 consume、`APP_SESSION_SECRET` generated secret も持ち、app session と Takos
-OAuth callback を worker 内で処理する。 takos-computer は `takos.ui-surface.v1`
-と `/mcp` の `takos.mcp-server.v1` を publish し、 agent が `computer_*` tools
+OAuth callback を worker 内で処理する。 takos-computer は `publication.http-endpoint@v1`
+と `/mcp` の `publication.mcp-server@v1` を publish し、 agent が `computer_*` tools
 経由で sandbox session / shell / file / process 操作を 使えるようにする。MCP
 publication は `auth.bearer.secretRef: PUBLISHED_MCP_AUTH_TOKEN`
 を宣言し、worker + attached container で session ごとの MCP proxy routes
 も提供する。 `takos.api-key` を consume して sandbox 内の Takos API access
-を受け取る。 yurucommu は `takos.ui-surface.v1` を publish
+を受け取る。 yurucommu は `publication.http-endpoint@v1` を publish
 し、`takos.oauth-client` を consume して Takos OAuth で sign-in する。自前の
 sql/object-store/key-value/queue/secret resources を持つため、office 系 default
 apps より resource footprint が大きい。
@@ -56,7 +56,7 @@ apps より resource footprint が大きい。
 
 office 系 default apps は Storage の file handler catalog に登録され、Storage UI
 から該当ファイルを開くと各 app の `/files/:id` route に遷移する。handler は
-manifest の `takos.file-handler.v1` publication で宣言し、`outputs.url.routeRef`
+manifest の `publication.http-endpoint@v1` publication で宣言し、`outputs.url.routeRef`
 は `file-open` (`/files/:id`) を指す。
 
 | app         | route        | extension     | MIME type                         |
@@ -131,10 +131,10 @@ attribute を持たないため、kernel host と group subdomain
 共有に依存せず、OAuth bearer token または injected Takos API token を
 `Authorization: Bearer ...` として送ります。
 
-kernel は deploy manifest の `publish` から route publication catalog
-を保存する。`takos.ui-surface.v1` などの custom type を sidebar + iframe 統合に使うか
-どうかは platform 側の解釈です。`takos.mcp-server.v1` は agent 側が参照する MCP catalog
-entry として扱う。canonical / legacy alias は
+kernel は deploy manifest の `publications` から route publication catalog
+を保存する。`publication.http-endpoint@v1` などの custom type を sidebar + iframe 統合に使うか
+どうかは platform 側の解釈です。`publication.mcp-server@v1` は agent 側が参照する MCP catalog
+entry として扱う。canonical ref は
 [publication types](/reference/glossary#publication-types) を参照。Takos API access は route publication ではなく built-in
 provider publication consume として扱う。各 entry は group
 に所属しなくても動作する。

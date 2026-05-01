@@ -9,7 +9,7 @@ metadata を持つが、primitive や group は特権化されない。
 - スライド操作 (追加 / 削除 / 並び替え)
 - テキスト・図形・画像の配置
 - source tree の standalone MCP server でスライド操作 tools を提供
-- `takos.ui-surface.v1` でプレゼンテーション UI を提供
+- `publication.http-endpoint@v1` でプレゼンテーション UI を提供
 - group に所属しなくても動作可能
 
 ## Takos 上での動作
@@ -53,9 +53,9 @@ routes:
     target: web
     path: /files/:id
 
-publish:
+publications:
   - name: slide-ui
-    type: takos.ui-surface.v1
+    type: publication.http-endpoint@v1
     display:
       title: Slide
     outputs:
@@ -63,7 +63,7 @@ publish:
         kind: url
         routeRef: ui
   - name: slide-mcp
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     display:
       title: Slide MCP
     outputs:
@@ -76,7 +76,7 @@ publish:
     spec:
       transport: streamable-http
   - name: slide-file-handler
-    type: takos.file-handler.v1
+    type: publication.http-endpoint@v1
     display:
       title: Slide
     outputs:
@@ -90,9 +90,9 @@ publish:
         - .takosslide
 ```
 
-`takos.ui-surface.v1` / `takos.mcp-server.v1` /
-`takos.file-handler.v1` の canonical 定義は
-[publication types](/reference/glossary#publication-types) を参照。`takos.mcp-server.v1` entry は agent runtime
+`publication.http-endpoint@v1` / `publication.mcp-server@v1` /
+`publication.http-endpoint@v1` の canonical 定義は
+[publication types](/reference/glossary#publication-types) を参照。`publication.mcp-server@v1` entry は agent runtime
 が参照する MCP catalog entry です。
 
 ## Takos built-in provider publication
@@ -140,7 +140,7 @@ takos-slide は `takos-api` built-in provider consume から kernel API の endp
 する。Takos managed deploy では consume env として `TAKOS_STORAGE_API_URL` /
 `TAKOS_STORAGE_ACCESS_TOKEN` が inject される。
 
-Storage UI から presentation file を開く場合は `takos.file-handler.v1`
+Storage UI から presentation file を開く場合は `publication.http-endpoint@v1`
 publication の `/files/:id` route を使う。新規作成または保存する Takos
 presentation file は `.takosslide` extension と
 `application/vnd.takos.slide+json` MIME type を使う。既存 file を読む場合もこの

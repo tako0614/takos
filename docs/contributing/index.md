@@ -14,10 +14,7 @@ commands from the `takos/paas` product root unless a document says otherwise.
 - [`api-surface.md`](./api-surface.md) — OpenAPI-ish route snapshot owned by
   `apps/paas/src/api/openapi.ts` and its route-source-of-truth boundary.
 - [`deploy-topology-notes.md`](./deploy-topology-notes.md) — process-role naming
-  alignment for Compose/Helm plus remaining compatibility cutover work.
-- [`control-to-paas-migration-inventory.md`](./control-to-paas-migration-inventory.md)
-  — concise inventory for the first control-to-PaaS decoupling steps across
-  deploy, routing, resources, and publications.
+  alignment for Compose/Helm.
 - [`kernel-plugin-boundary-audit.md`](./kernel-plugin-boundary-audit.md) —
   source-of-truth checklist for keeping docs and implementation aligned around
   the kernel-only / plugin-backed infrastructure split.
@@ -95,7 +92,7 @@ commands from the `takos/paas` product root unless a document says otherwise.
 - Remaining phase-boundary and catalog gaps are tracked in
   [`acceptance-matrix.md`](./acceptance-matrix.md) and backed by the backlog in
   [`acceptance-test-backlog.md`](./acceptance-test-backlog.md).
-- Topology/resource-name migration gaps are tracked in
+- Topology/resource-name alignment gaps are tracked in
   [`deploy-topology-notes.md`](./deploy-topology-notes.md).
 
 ## Plugin-backed infrastructure
@@ -103,8 +100,8 @@ commands from the `takos/paas` product root unless a document says otherwise.
 Self-host and cloud connectivity are not PaaS kernel responsibilities. External
 systems are reached through kernel plugins loaded by
 `TAKOS_KERNEL_PLUGIN_MODULES` or injected by the host process. The scripts below
-remain safe by default and exercise legacy/local adapter behavior only when
-explicitly opted in:
+remain safe by default and exercise local adapter behavior only when explicitly
+opted in:
 
 - Real git resolution: [`git-source-smoke.md`](./git-source-smoke.md) /
   [`../../paas/scripts/git-source-smoke.ts`](../../paas/scripts/git-source-smoke.ts)

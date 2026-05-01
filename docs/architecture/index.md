@@ -44,7 +44,7 @@ kernel が提供するもの:
 - meta-object / Deployment / ProviderObservation / GroupHead などの Core 定義: [Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0)
 - 実装 split status: [takos-paas Current State](/takos-paas/current-state)
 - manifest spec: [Manifest Reference](/reference/manifest-spec)
-- 用語と canonical / legacy alias: [Glossary](/reference/glossary)
+- 用語と canonical ref: [Glossary](/reference/glossary)
 
 ## 詳細ページ
 

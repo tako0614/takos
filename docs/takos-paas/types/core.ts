@@ -1,4 +1,4 @@
-// Takos Deploy v2 Core v1.0 TypeScript surface.
+// Takos Deploy Core v1.0 TypeScript surface.
 //
 // The implementation contract in takos-paas is the source of truth. This docs
 // file intentionally re-exports that contract instead of maintaining a parallel
@@ -7,9 +7,6 @@
 import type {
   CoreAccessModeRef,
   CoreAccessPathStage,
-  CoreActivationAssignment,
-  CoreActivationNonHttpDefaults,
-  CoreActivationRecord,
   CoreApplyPhase,
   CoreAppRelease,
   CoreApprovalRecord,
@@ -21,17 +18,12 @@ import type {
   CoreComponentSpec,
   CoreConsumeSpec,
   CoreContractInstanceSpec,
-  CoreDefaultAppReleaseAssignment,
   CoreDescriptorClosure,
   CoreDescriptorDependency,
   CoreDescriptorResolution,
   CoreEnvSpec,
   CoreExposureSpec,
-  CoreGroupActivationPointer,
   CoreInjectionTarget,
-  CorePlan,
-  CorePlannedOperation,
-  CorePlanReadSetEntry,
   CorePolicyDecisionRecord,
   CorePolicySpec,
   CoreProjectionRecord,
@@ -44,8 +36,6 @@ import type {
   CoreResolvedContractInstance,
   CoreResolvedGraph,
   CoreResourceAccessPath,
-  CoreRouteActivationAssignment,
-  CoreRouteAppReleaseAssignment,
   CoreRouterConfig,
   CoreRuntimeNetworkPolicy,
 } from "../../../paas/packages/paas-contract/src/core-v1.ts";
@@ -53,13 +43,9 @@ import type {
 export type {
   CoreAccessModeRef,
   CoreAccessPathStage,
-  CoreActivationAssignment,
-  CoreActivationNonHttpDefaults,
-  CoreActivationRecord,
   CoreApplyPhase,
   CoreAppRelease,
   CoreApprovalRecord,
-  CoreApprovalState,
   CoreBindingResolutionInput,
   CoreBindingResolutionReport,
   CoreBindingSetRevision,
@@ -68,22 +54,15 @@ export type {
   CoreConditionReason,
   CoreConsumeSpec,
   CoreContractInstanceSpec,
-  CoreDefaultAppReleaseAssignment,
   CoreDescriptorClosure,
   CoreDescriptorDependency,
   CoreDescriptorResolution,
   CoreEnforcement,
   CoreEnvSpec,
   CoreExposureSpec,
-  CoreGroupActivationPointer,
   CoreInjectionTarget,
   CoreMaterializationStatus,
   CoreNetworkBoundary,
-  CorePlan,
-  CorePlanIntent,
-  CorePlannedOperation,
-  CorePlanReadSetEntry,
-  CorePlanStatus,
   CorePolicyDecision,
   CorePolicyDecisionRecord,
   CorePolicySpec,
@@ -97,12 +76,9 @@ export type {
   CoreResolvedContractInstance,
   CoreResolvedGraph,
   CoreResourceAccessPath,
-  CoreRouteActivationAssignment,
-  CoreRouteAppReleaseAssignment,
   CoreRouterConfig,
   CoreRuntimeNetworkPolicy,
   CoreSensitivity,
-  CoreStalenessImpact,
   DescriptorId,
   Digest,
   IsoTimestamp,
@@ -128,18 +104,8 @@ export type ResolvedGraph = CoreResolvedGraph;
 export type ResolvedComponent = CoreResolvedComponent;
 export type ResolvedContractInstance = CoreResolvedContractInstance;
 export type ProjectionRecord = CoreProjectionRecord;
-export type Plan = CorePlan;
-export type PlanReadSetEntry = CorePlanReadSetEntry;
-export type PlannedOperation = CorePlannedOperation;
 export type PolicyDecisionRecord = CorePolicyDecisionRecord;
 export type ApprovalRecord = CoreApprovalRecord;
-export type ActivationRecord = CoreActivationRecord;
-export type ActivationAssignment = CoreActivationAssignment;
-export type RouteActivationAssignment = CoreRouteActivationAssignment;
-export type RouteAppReleaseAssignment = CoreRouteAppReleaseAssignment;
-export type ActivationNonHttpDefaults = CoreActivationNonHttpDefaults;
-export type DefaultAppReleaseAssignment = CoreDefaultAppReleaseAssignment;
-export type GroupActivationPointer = CoreGroupActivationPointer;
 export type BindingSetRevision = CoreBindingSetRevision;
 export type BindingValueResolution = CoreBindingValueResolution;
 export type BindingResolutionReport = CoreBindingResolutionReport;

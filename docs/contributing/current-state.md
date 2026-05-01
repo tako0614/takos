@@ -17,8 +17,7 @@ remains
     groups, deploy planning, and deploy apply.
 - `packages/paas-contract` contains shared DTOs and signed internal request
   helpers. Internal auth binds method, path, timestamp, request id, actor
-  context, and body digest; legacy signatures without actor digest are still
-  accepted by tests.
+  context, caller/audience, and body digest.
 - `apps/paas/src/app_context.ts` is the main in-process composition point. It
   wires in-memory stores, configurable local adapters, core services, deploy
   plan/apply services, and the runtime materializer.
@@ -94,8 +93,8 @@ Result on 2026-04-29: `240 passed | 0 failed`.
 
 Covered areas include:
 
-- signed internal API request generation/verification, legacy signature
-  compatibility, local actor auth, and signed service actor auth.
+- signed internal API request generation/verification, local actor auth, and
+  signed service actor auth.
 - public and internal route mounting behavior, standalone route defaults, and
   unsigned internal route rejection.
 - core space/group creation, owner membership, and non-admin denial.
@@ -170,8 +169,8 @@ Notes:
 - `deno task dev:paas` runs the Hono entrypoint with `--allow-net --allow-env`.
 - docs tasks currently print that Takos docs moved out of the `takos-paas`
   service scope.
-- local Compose and Helm metadata carry the new PaaS process-role labels/envs
-  while retaining legacy service/resource names for compatibility.
+- local Compose and Helm metadata carry the current PaaS process-role
+  labels/envs.
 
 ## In-memory vs real boundaries
 
@@ -235,8 +234,8 @@ Real/prod-facing boundaries that exist as code but are not the default wiring:
 - Move real self-host/cloud provider/source/storage/queue/object/KMS/secret
   implementations into kernel plugins, then run plugin-specific release gates
   outside the PaaS kernel release gate.
-- Reconcile local Compose/Helm legacy resource names and command paths with the
-  current PaaS process-role model through an explicit migration plan.
+- Reconcile local Compose/Helm resource names and command paths with the current
+  PaaS process-role model.
 - Keep expanding acceptance coverage in
   [`acceptance-matrix.md`](./acceptance-matrix.md) until the remaining
   production gaps have route/worker-level regression tests.

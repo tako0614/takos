@@ -10,7 +10,7 @@ metadata を持つが、primitive や group は特権化されない。
 - 数式の評価・計算
 - CSV / JSON エクスポート
 - source tree の standalone MCP server で 26 tools を提供
-- `takos.ui-surface.v1` でスプレッドシート UI を提供
+- `publication.http-endpoint@v1` でスプレッドシート UI を提供
 - group に所属しなくても動作可能
 
 ## Takos 上での動作
@@ -54,9 +54,9 @@ routes:
     target: web
     path: /files/:id
 
-publish:
+publications:
   - name: excel-ui
-    type: takos.ui-surface.v1
+    type: publication.http-endpoint@v1
     display:
       title: Excel
     outputs:
@@ -64,7 +64,7 @@ publish:
         kind: url
         routeRef: ui
   - name: excel-mcp
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     display:
       title: Excel MCP
     outputs:
@@ -77,7 +77,7 @@ publish:
     spec:
       transport: streamable-http
   - name: excel-file-handler
-    type: takos.file-handler.v1
+    type: publication.http-endpoint@v1
     display:
       title: Excel
     outputs:
@@ -91,9 +91,9 @@ publish:
         - .takossheet
 ```
 
-`takos.ui-surface.v1` / `takos.mcp-server.v1` /
-`takos.file-handler.v1` の canonical 定義は
-[publication types](/reference/glossary#publication-types) を参照。`takos.mcp-server.v1` entry は agent runtime
+`publication.http-endpoint@v1` / `publication.mcp-server@v1` /
+`publication.http-endpoint@v1` の canonical 定義は
+[publication types](/reference/glossary#publication-types) を参照。`publication.mcp-server@v1` entry は agent runtime
 が参照する MCP catalog entry です。
 
 ## Takos built-in provider publication
@@ -142,7 +142,7 @@ takos-excel は `takos-api` built-in provider consume から kernel API の endp
 する。Takos managed deploy では consume env として `TAKOS_STORAGE_API_URL` /
 `TAKOS_STORAGE_ACCESS_TOKEN` が inject される。
 
-Storage UI から spreadsheet file を開く場合は `takos.file-handler.v1`
+Storage UI から spreadsheet file を開く場合は `publication.http-endpoint@v1`
 publication の `/files/:id` route を使う。新規作成または保存する Takos
 spreadsheet file は `.takossheet` extension と
 `application/vnd.takos.excel+json` MIME type を使う。既存 file を読む場合もこの

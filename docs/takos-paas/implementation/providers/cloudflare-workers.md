@@ -8,8 +8,7 @@ Workers implementation topology for tenant/user Workers: dispatch namespace,
 dynamic dispatch Worker, user Workers, and optional outbound Worker.
 
 This document describes how a Cloudflare Workers provider can materialize Takos
-Deploy v3 canonical component contracts. It does not change Takos Core
-semantics
+Deploy canonical component contracts. It does not change Takos Core semantics
 ([`../../core/01-core-contract-v1.0.md`](../../core/01-core-contract-v1.0.md)).
 
 ## Positioning
@@ -41,17 +40,17 @@ where possible.
 Workers for Platforms maps naturally onto these Takos concepts as an
 implementation topology of the Cloudflare Workers provider:
 
-| Takos concept                                  | Cloudflare Workers topology concept                                      |
-| ---------------------------------------------- | ------------------------------------------------------------------------ |
-| Provider target                                | Cloudflare account + dispatch namespace + dispatch Worker                |
-| Component revision                             | User Worker script in a dispatch namespace                               |
-| Runtime contract                               | JavaScript Worker runtime                                                |
-| Artifact contract                              | ESM Worker module bundle                                                 |
-| HTTP interface                                 | `fetch()` handler invoked by the dispatch Worker                         |
-| Deployment.desired.routes                      | Host/path routing handled by Takos dispatch logic                        |
-| Deployment.desired.activation_envelope         | Desired routed assignment from request to User Worker script name        |
-| Deployment.conditions[] / ProviderObservation  | Uploaded User Worker, attached bindings, dispatch route table generation |
-| Deployment.desired.runtime_network_policy      | Custom limits, dispatch middleware, optional outbound Worker             |
+| Takos concept                                 | Cloudflare Workers topology concept                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------ |
+| Provider target                               | Cloudflare account + dispatch namespace + dispatch Worker                |
+| Component revision                            | User Worker script in a dispatch namespace                               |
+| Runtime contract                              | JavaScript Worker runtime                                                |
+| Artifact contract                             | ESM Worker module bundle                                                 |
+| HTTP interface                                | `fetch()` handler invoked by the dispatch Worker                         |
+| Deployment.desired.routes                     | Host/path routing handled by Takos dispatch logic                        |
+| Deployment.desired.activation_envelope        | Desired routed assignment from request to User Worker script name        |
+| Deployment.conditions[] / ProviderObservation | Uploaded User Worker, attached bindings, dispatch route table generation |
+| Deployment.desired.runtime_network_policy     | Custom limits, dispatch middleware, optional outbound Worker             |
 
 ## Reference architecture
 
@@ -163,8 +162,8 @@ Deployment resolution must block (status="failed" with the appropriate
 
 ## Apply behavior
 
-Apply should follow this outline (each step appends a
-`Deployment.conditions[]` entry with `scope.kind="operation"`):
+Apply should follow this outline (each step appends a `Deployment.conditions[]`
+entry with `scope.kind="operation"`):
 
 ```text
 1. Revalidate the Deployment resolution read set.
@@ -210,14 +209,14 @@ envelope weights and then call the selected User Worker through the dispatch
 namespace binding.
 
 Weighted assignment is routed-serving only. Queue/schedule/event delivery
-remains bound to
-`Deployment.desired.activation_envelope.non_routed_defaults` unless a separate
-event canary contract is implemented.
+remains bound to `Deployment.desired.activation_envelope.non_routed_defaults`
+unless a separate event canary contract is implemented.
 
 ## Resource bindings
 
-Cloudflare Workers resource bindings should be treated as `Deployment.desired.bindings`
-material (with the inline `accessPath` per binding), not publication outputs.
+Cloudflare Workers resource bindings should be treated as
+`Deployment.desired.bindings` material (with the inline `accessPath` per
+binding), not publication outputs.
 
 Examples:
 
@@ -266,10 +265,11 @@ unsupported enforcement must block Deployment resolution.
 ## Provider operation queue
 
 Cloudflare API operations are provider operations and should be queued with
-idempotency keys (default `deploymentId + operationKind + objectAddress + desiredDigest`)
-and retry/backoff. The implementation should handle API rate limits and record
-provider operation reasons via `Deployment.conditions[]` (`scope.kind="operation"`)
-such as:
+idempotency keys (default
+`deploymentId + operationKind + objectAddress + desiredDigest`) and
+retry/backoff. The implementation should handle API rate limits and record
+provider operation reasons via `Deployment.conditions[]`
+(`scope.kind="operation"`) such as:
 
 ```text
 ProviderRateLimited

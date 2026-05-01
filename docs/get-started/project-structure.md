@@ -62,9 +62,9 @@ routes:
 ビルド手順と artifact の出力先を記述。`app.yml` の `build.fromWorkflow`
 がこのファイルを参照する。
 
-stateful resource の schema や初期化手順は publish ではなく resource API /
-runtime binding 側で扱う。Takos API key / OAuth client は `publish[]` ではなく
-`takos.api-key` / `takos.oauth-client` を `consume` して受け取る。
+stateful resource の schema や初期化手順は publications ではなく resource API /
+runtime binding 側で扱う。Takos API key / OAuth client は `publications[]`
+ではなく `takos.api-key` / `takos.oauth-client` を `consume` して受け取る。
 
 ## 制約
 

@@ -1,6 +1,6 @@
-# Takos Deploy v3 Implementation Strategy
+# Takos Deploy Implementation Strategy
 
-This document complements the Takos Deploy v3 Core Contract
+This document complements the Takos Deploy Core Contract
 ([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md)).
 
 The core specification stays implementation-neutral. This document explains how
@@ -19,7 +19,7 @@ Plugins are an implementation strategy, not a core requirement.
 
 ## 1. Goal
 
-Takos Deploy v3 should support both:
+Takos Deploy should support both:
 
 ```text
 Self-sufficient Takos:
@@ -694,7 +694,7 @@ adapters where allowed.
 Use this implementation direction:
 
 ```text
-Build Takos Deploy v3 as descriptor-driven and provider-interface-driven.
+Build Takos Deploy as descriptor-driven and provider-interface-driven.
 Keep the PaaS kernel reference-only and register self-hosted/provider implementations as external plugins.
 Design provider implementations so they can be loaded through the trusted plugin path.
 Do not make dynamic plugins required for the core system.

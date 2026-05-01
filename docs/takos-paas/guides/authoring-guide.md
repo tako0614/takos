@@ -43,9 +43,8 @@ components:
         ref: runtime.js-worker@v1
 ```
 
-`build.fromWorkflow.path` must be under `.takos/workflows/`.
-`artifactPath`, when present, is repository-relative and must not contain path
-traversal.
+`build.fromWorkflow.path` must be under `.takos/workflows/`. `artifactPath`,
+when present, is repository-relative and must not contain path traversal.
 
 ## Service shorthand
 
@@ -140,14 +139,12 @@ routes:
 `path` is required for HTTP routes and must start with `/`. `methods` are
 normalized to uppercase; omitting `methods` means all HTTP methods. CLI
 validation rejects duplicate route ids, duplicate `target + path`, and
-overlapping methods for the same path. The PaaS compiler compatibility surface
-also accepts record routes, `to`, `host`, `protocol`, and `source`; for
-HTTP/HTTPS it validates duplicate `target + host + path + methods`.
+overlapping methods for the same path. For HTTP/HTTPS the PaaS compiler
+validates duplicate `target + host + path + methods`.
 
-`source` is for PaaS event route compatibility (`protocol: queue`,
-`protocol: schedule`, or `protocol: event`). It names the event source and
-defaults to the route name when omitted. HTTP public app manifests should not
-use `source`.
+`source` is for PaaS event routes (`protocol: queue`, `protocol: schedule`, or
+`protocol: event`). It names the event source and defaults to the route name
+when omitted. HTTP public app manifests should not use `source`.
 
 ## Publication consume
 
@@ -171,7 +168,7 @@ binding unless `inject.defaults: true` covers that output.
 ## Built-in credential publications
 
 Takos-owned credentials are consumed through built-in provider publications.
-They are not declared in `publish[]` with `publisher: takos`.
+They are not declared in `publications[]` with `publisher: takos`.
 
 ```yaml
 compute:
@@ -224,9 +221,9 @@ routes:
     target: web
     path: /mcp
 
-publish:
+publications:
   - name: web-mcp
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     outputs:
       url:
         kind: url
@@ -235,12 +232,9 @@ publish:
       transport: streamable-http
 ```
 
-`publish` and `publications` are aliases; do not use both in the same manifest.
 `outputs.*.routeRef` must match a route id. Use the canonical publication types
-(`takos.mcp-server.v1` / `takos.file-handler.v1` / `takos.ui-surface.v1`); legacy
-aliases are listed in
-[reference/glossary#publication-types](../../reference/glossary#publication-types)
-and should not be used in new manifests.
+(`publication.mcp-server@v1` / `publication.http-endpoint@v1` /
+`publication.topic@v1`).
 
 ## Resource bindings
 
@@ -284,10 +278,10 @@ overrides:
           title: Web UI
 ```
 
-`overrides.<env>` may contain `compute`, `resources`, `routes`, `publish` /
-`publications`, and `env`. `compute` and `resources` merge by name, `env`
-shallow-merges, `routes` replace the base route collection, and publications
-merge by `name`. The merged manifest is validated again.
+`overrides.<env>` may contain `compute`, `resources`, `routes`, `publications`,
+and `env`. `compute` and `resources` merge by name, `env` shallow-merges,
+`routes` replace the base route collection, and publications merge by `name`.
+The merged manifest is validated again.
 
 ## Direct deploy
 
@@ -298,8 +292,8 @@ takos deploy image ghcr.io/acme/api@sha256:0123456789abcdef0123456789abcdef01234
 ```
 
 They compile to a generated public manifest, AppSpec, EnvSpec, and PolicySpec
-before resolution. They do not bypass the Deployment lifecycle (resolve →
-apply → GroupHead advance). The generated manifest carries:
+before resolution. They do not bypass the Deployment lifecycle (resolve → apply
+→ GroupHead advance). The generated manifest carries:
 
 ```yaml
 overrides:

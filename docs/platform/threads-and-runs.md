@@ -6,11 +6,12 @@ execution model。Thread で対話コンテキストを管理し、Run で実行
 > Agent / Chat は kernel feature であり、常に利用可能です。Thread / Run は
 > kernel が提供する execution model contract です。
 
-実行ループ本体は `takos-agent` runtime container が担う。kernel/control plane は
+実行ループ本体は `takos-agent` runtime container が担う。PaaS control plane は
 Thread/Run の lifecycle、queue、DB、billing、auth、space state、remote tool
-backend を管理し、`takos-agent` は control RPC から run context を受け取って
-prompt construction、managed/custom skill selection、local tool bridge、model
-runner wiring を実行する。
+backend を管理し、`takos-agent` は agent-control RPC から run context
+を受け取って prompt construction、managed/custom skill selection、local tool
+bridge、model runner wiring を実行する。canonical agent-control RPC surface は
+PaaS-owned `/api/internal/v1/agent-control/*`。
 
 managed skills は control plane から渡された catalog が優先される。control
 payload に managed skill が無い場合だけ、`takos-agent` 内の localized fallback

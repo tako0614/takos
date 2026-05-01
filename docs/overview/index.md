@@ -85,7 +85,7 @@ Takos Docs では、次の 3 層を分けて読みます。
   [Kernel](/architecture/kernel)
 - primitive の deploy/runtime contract は [Deploy 構成](/apps/) と
   [デプロイ](/deploy/)
-- 用語の canonical / legacy alias は [用語集](/reference/glossary)
+- 用語の canonical ref は [用語集](/reference/glossary)
 - CLI / API は [リファレンス](/reference/)
 - 実装ステータスと split shell の現状は
   [takos-paas Current State](/takos-paas/current-state)

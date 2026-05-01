@@ -1,6 +1,7 @@
 # Database Reference
 
-Takos control plane の canonical SQLite / D1 baseline schema です。このページは baseline SQL から同期し、DB contract test で照合します。
+Takos control plane の canonical SQLite / D1 baseline schema です。このページは
+baseline SQL から同期し、DB contract test で照合します。
 
 ```sql
 -- CreateTable
@@ -2847,18 +2848,18 @@ CREATE UNIQUE INDEX "workflows_repo_id_path_key" ON "workflows"("repo_id", "path
 
 ## takos-paas Core schema (Deployment-centric)
 
-`takos-paas` の Deploy v3 では、Core record は `deployments` /
-`provider_observations` / `group_heads` の 3 つに圧縮されます。Phase 2
-migration (`takos/paas/apps/paas/db/migrations/20260430000010_unify_to_deployments.sql`)
+`takos-paas` の Deploy では、Core record は `deployments` /
+`provider_observations` / `group_heads` の 3 つに圧縮されます。Phase 2 migration
+(`takos/paas/apps/paas/db/migrations/20260430000010_unify_to_deployments.sql`)
 は v2 の `deploy_plans` / `deploy_activation_records` /
-`deploy_operation_records` / `deploy_group_activation_pointers` を
-`deployments` に collapse し、`resource_binding_set_revisions` の structural side
-は `deployments.desired.bindings` field に内包します。`resource_migration_ledger`
+`deploy_operation_records` / `deploy_group_activation_pointers` を `deployments`
+に collapse し、`resource_binding_set_revisions` の structural side は
+`deployments.desired.bindings` field に内包します。`resource_migration_ledger`
 は forward-only history record として独立に維持されます。完全な spec は
 [Core contract v1.0 § 13–§ 18](/takos-paas/core/01-core-contract-v1.0)。
 
 ```sql
--- v3 baseline: Deployment / ProviderObservation / GroupHead
+-- current baseline: Deployment / ProviderObservation / GroupHead
 CREATE TABLE deployments (
     "id"                       TEXT        NOT NULL PRIMARY KEY,
     "group_id"                 TEXT        NOT NULL,
@@ -2922,14 +2923,13 @@ CREATE INDEX "group_heads_current_idx"
 
 `takos/paas` Core schema は SQLite / D1 baseline からは独立した PostgreSQL
 backend として配布されます。control plane の SQLite / D1 baseline（このページ
-冒頭の schema）は Takos app gateway / Git hosting / billing / sessions など
-の primary store であり、`deployments` テーブル名は **app/gateway worker
-deployment record** 用に予約されています（PaaS Core の Deployment record
+冒頭の schema）は Takos app gateway / Git hosting / billing / sessions など の
+primary store であり、`deployments` テーブル名は **app/gateway worker deployment
+record** 用に予約されています（PaaS Core の Deployment record
 ではない）。両者の混同を避けるため、PaaS Core 配下の table は
-`takos/paas/apps/paas/db/migrations/` の独立 migration として管理されます。
-v2 PaaS で存在した `deploy_plans` / `deploy_activation_records` /
+`takos/paas/apps/paas/db/migrations/` の独立 migration として管理されます。 v2
+PaaS で存在した `deploy_plans` / `deploy_activation_records` /
 `deploy_operation_records` / `deploy_group_activation_pointers` /
-`resource_binding_set_revisions` の structural columns は v3 migration
+`resource_binding_set_revisions` の structural columns は deployment migration
 で `deployments` (3 JSONB field) と `group_heads` に折り畳まれ、history は
 preserve されます。
-

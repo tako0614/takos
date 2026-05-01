@@ -1,10 +1,12 @@
-# Takos Deploy v3 Cloudflare Containers Implementation Strategy
+# Takos Deploy Cloudflare Containers Implementation Strategy
 
-This document complements the Takos Deploy v3 Core Contract
-([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md))
-with Cloudflare Containers-specific implementation guidance.
+This document complements the Takos Deploy Core Contract
+([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md)) with
+Cloudflare Containers-specific implementation guidance.
 
-The core specification stays implementation-neutral. This document explains how to implement it without becoming cloud-dependent, while still allowing cloud providers and optional plugin-style extensions.
+The core specification stays implementation-neutral. This document explains how
+to implement it without becoming cloud-dependent, while still allowing cloud
+providers and optional plugin-style extensions.
 
 ```text
 Core defines meaning boundaries.
@@ -18,7 +20,7 @@ Plugins are an implementation strategy, not a core requirement.
 
 ## 1. Goal
 
-Takos Deploy v3 should support both:
+Takos Deploy should support both:
 
 ```text
 Self-sufficient Takos:
@@ -31,10 +33,10 @@ Cloud-integrated Takos:
 
 Cloudflare Containers are an on-demand, Worker/Durable-Object-backed container
 materialization option. They are useful for HTTP-oriented container workloads
-that can tolerate provider-managed instance lifecycle. They are not an
-always-on provider target. Kubernetes or another external always-on provider
-plugin can satisfy long-running container workloads that require process,
-pod/service, or cluster networking semantics.
+that can tolerate provider-managed instance lifecycle. They are not an always-on
+provider target. Kubernetes or another external always-on provider plugin can
+satisfy long-running container workloads that require process, pod/service, or
+cluster networking semantics.
 
 The goal is not to make every provider identical. The goal is:
 
@@ -43,7 +45,10 @@ Takos Core owns meaning.
 Provider implementations materialize meaning.
 ```
 
-A cloud provider may offer stronger native behavior, but it must not redefine core semantics such as Deployment resolution, Deployment apply, the `Deployment.desired.activation_envelope`, ResourceInstance, the `Deployment.desired.bindings` shape, GroupHead advancement, or rollback.
+A cloud provider may offer stronger native behavior, but it must not redefine
+core semantics such as Deployment resolution, Deployment apply, the
+`Deployment.desired.activation_envelope`, ResourceInstance, the
+`Deployment.desired.bindings` shape, GroupHead advancement, or rollback.
 
 ---
 
@@ -112,7 +117,9 @@ local directories
 operator-installed packages
 ```
 
-Core does not care which mechanism is used as long as the resulting `Deployment.resolution.resolved_graph`, `Deployment.desired`, apply behavior, and ProviderObservation records satisfy the core contract.
+Core does not care which mechanism is used as long as the resulting
+`Deployment.resolution.resolved_graph`, `Deployment.desired`, apply behavior,
+and ProviderObservation records satisfy the core contract.
 
 ---
 
@@ -239,7 +246,8 @@ providerMappings:
       target: queue
 ```
 
-This environment may not support every feature. Unsupported features must be visible on the Deployment record (resolution / desired / conditions).
+This environment may not support every feature. Unsupported features must be
+visible on the Deployment record (resolution / desired / conditions).
 
 Example:
 
@@ -264,7 +272,8 @@ Warning:
 
 Cloud providers are not special in the core.
 
-Cloudflare Workers, Cloud Run, ECS, Kubernetes, Neon, R2, S3, and similar systems are provider targets that satisfy contracts.
+Cloudflare Workers, Cloud Run, ECS, Kubernetes, Neon, R2, S3, and similar
+systems are provider targets that satisfy contracts.
 
 Example:
 
@@ -286,7 +295,8 @@ R2 / S3 / MinIO:
   resource.object-store.s3@v1
 ```
 
-A cloud provider may expose provider-native configuration, but that configuration must be:
+A cloud provider may expose provider-native configuration, but that
+configuration must be:
 
 ```text
 typed
@@ -372,7 +382,8 @@ delete:
   Deletes provider-side materialization only when lifecycle and policy allow.
 ```
 
-Provider implementations must not define what the Deployment record, apply phases, the activation envelope, ResourceInstance, or rollback mean.
+Provider implementations must not define what the Deployment record, apply
+phases, the activation envelope, ResourceInstance, or rollback mean.
 
 They only materialize resolved meaning.
 
@@ -380,7 +391,8 @@ They only materialize resolved meaning.
 
 ## 8. Provider execution isolation
 
-Provider implementations may use powerful credentials. They must be isolated from workload runtime and build runtime.
+Provider implementations may use powerful credentials. They must be isolated
+from workload runtime and build runtime.
 
 Minimum rules:
 
@@ -425,7 +437,8 @@ plugin metadata
 compiled code
 ```
 
-Core only requires that the compiler can produce a deterministic `Deployment.resolution.resolved_graph` and matching descriptor closure entries.
+Core only requires that the compiler can produce a deterministic
+`Deployment.resolution.resolved_graph` and matching descriptor closure entries.
 
 ### 9.1 Contract descriptor responsibilities
 
@@ -460,9 +473,11 @@ conformance status
 
 ### 9.3 Input translation descriptors
 
-Authoring conveniences such as `kind: js-worker`, `takos deploy image`, or `takos deploy compose` are translated before Deployment resolution finalizes.
+Authoring conveniences such as `kind: js-worker`, `takos deploy image`, or
+`takos deploy compose` are translated before Deployment resolution finalizes.
 
-Core does not specify the syntax. Implementation documentation should specify official input forms.
+Core does not specify the syntax. Implementation documentation should specify
+official input forms.
 
 Rules:
 
@@ -506,7 +521,8 @@ full egress enforcement
 native cloud resource features
 ```
 
-Unsupported or advisory features must be visible on the Deployment record (resolution / desired payload + `Deployment.conditions[]`).
+Unsupported or advisory features must be visible on the Deployment record
+(resolution / desired payload + `Deployment.conditions[]`).
 
 Self-hosted mode must not silently fall back to unsafe behavior.
 
@@ -535,7 +551,8 @@ R2 / S3 provider:
   materializes S3-compatible object-store contract
 ```
 
-Cloud providers must pass the same Deployment resolution / apply / GroupHead advancement / observation rules as self-hosted providers.
+Cloud providers must pass the same Deployment resolution / apply / GroupHead
+advancement / observation rules as self-hosted providers.
 
 They may offer provider-native config, but the Deployment must show:
 
@@ -548,13 +565,12 @@ approval requirements
 fallback or block behavior
 ```
 
-
-
 ---
 
 ## 12. Cloudflare Containers implementation path
 
-Cloudflare Containers can be supported as a cloud provider target for the canonical contract tuple:
+Cloudflare Containers can be supported as a cloud provider target for the
+canonical contract tuple:
 
 ```text
 runtime.oci-container@v1
@@ -575,9 +591,12 @@ request
   -> Container instance
 ```
 
-The provider implementation may create Worker, Durable Object, Container class, container image registry, and routing-side state as provider-owned infrastructure observed through ProviderObservation.
+The provider implementation may create Worker, Durable Object, Container class,
+container image registry, and routing-side state as provider-owned
+infrastructure observed through ProviderObservation.
 
-These provider-owned bridge objects are not AppSpec components unless the user explicitly declares them as components.
+These provider-owned bridge objects are not AppSpec components unless the user
+explicitly declares them as components.
 
 ### 12.2 Supported contract tuple
 
@@ -608,11 +627,13 @@ materializationProfiles:
       - image-retention-required-for-rollback
 ```
 
-If a component requires a non-HTTP end-user interface, the Deployment resolution must block unless the provider explicitly supports that interface.
+If a component requires a non-HTTP end-user interface, the Deployment resolution
+must block unless the provider explicitly supports that interface.
 
 ### 12.3 Provider-native config
 
-Cloudflare Containers settings are provider-native environment configuration, not portable AppSpec meaning.
+Cloudflare Containers settings are provider-native environment configuration,
+not portable AppSpec meaning.
 
 Example:
 
@@ -631,7 +652,9 @@ providerNative:
           maxInstances: 10
 ```
 
-Provider-native values must be visible on the Deployment record (resolution / desired / conditions), policy-governed, and included in the `Deployment.resolution.resolved_graph.digest`.
+Provider-native values must be visible on the Deployment record (resolution /
+desired / conditions), policy-governed, and included in the
+`Deployment.resolution.resolved_graph.digest`.
 
 ### 12.4 Runtime network policy
 
@@ -643,7 +666,9 @@ enableInternet=false
 + explicit Deployment.desired.runtime_network_policy allowlist
 ```
 
-Resource access from the container should be represented as binding material, commonly through `internal-url`, `secret-ref`, or other runtime-supported injection modes.
+Resource access from the container should be represented as binding material,
+commonly through `internal-url`, `secret-ref`, or other runtime-supported
+injection modes.
 
 Example:
 
@@ -655,7 +680,10 @@ api.ASSETS:
   enforcement: provider-mediated
 ```
 
-The provider must produce an egress policy satisfaction report (typically as a `Deployment.conditions[]` entry referencing the relevant access path). If policy requires enforced egress and the provider can only provide advisory enforcement, Deployment resolution must block.
+The provider must produce an egress policy satisfaction report (typically as a
+`Deployment.conditions[]` entry referencing the relevant access path). If policy
+requires enforced egress and the provider can only provide advisory enforcement,
+Deployment resolution must block.
 
 ### 12.5 Activation and convergence
 
@@ -704,7 +732,9 @@ artifactPolicy:
   retainForRollbackWindow: true
 ```
 
-The provider must protect images referenced by the current Deployment via `GroupHead`, retained Deployments inside the rollback window, and any resolved-but-not-yet-applied Deployment.
+The provider must protect images referenced by the current Deployment via
+`GroupHead`, retained Deployments inside the rollback window, and any
+resolved-but-not-yet-applied Deployment.
 
 ### 12.7 Relationship to self-hosted containers
 
@@ -726,11 +756,13 @@ interface.http@v1
   -> Worker + Durable Object-backed Container class
 ```
 
-Core semantics remain identical. The provider apply graph (and the resulting ProviderObservation stream) differs.
+Core semantics remain identical. The provider apply graph (and the resulting
+ProviderObservation stream) differs.
 
 ### 12.8 Implementation warning
 
-Cloudflare Containers is not a general-purpose Kubernetes or Docker replacement in the Takos model.
+Cloudflare Containers is not a general-purpose Kubernetes or Docker replacement
+in the Takos model.
 
 It is best treated as:
 
@@ -738,8 +770,9 @@ It is best treated as:
 Worker-fronted, Durable-Object-backed, HTTP-oriented serverless container materialization.
 ```
 
-Takos should not silently map unsupported interfaces, host networking, persistent local disk assumptions, or direct end-user TCP/UDP needs onto this provider.
-
+Takos should not silently map unsupported interfaces, host networking,
+persistent local disk assumptions, or direct end-user TCP/UDP needs onto this
+provider.
 
 ---
 
@@ -835,13 +868,13 @@ adapters where allowed.
 
 ## 13. Decision matrix
 
-| Approach | Pros | Cons | Recommendation |
-|---|---|---|---|
-| Built-in only | Simple, secure, easy bootstrap | Harder ecosystem extension | Good for first implementation |
-| Plugin only | Extensible | Security and bootstrap complexity | Avoid as initial requirement |
-| Built-in + optional plugins | Balanced | Requires clean provider interface | Recommended |
-| Cloud-first providers | Fast if existing infra is cloud-heavy | Weak self-sufficiency | Avoid as only path |
-| Self-hosted provider bundle | Ownership, portability, local dev | Outside Core kernel; some features weaker than cloud | Future operator bundle |
+| Approach                    | Pros                                  | Cons                                                 | Recommendation                |
+| --------------------------- | ------------------------------------- | ---------------------------------------------------- | ----------------------------- |
+| Built-in only               | Simple, secure, easy bootstrap        | Harder ecosystem extension                           | Good for first implementation |
+| Plugin only                 | Extensible                            | Security and bootstrap complexity                    | Avoid as initial requirement  |
+| Built-in + optional plugins | Balanced                              | Requires clean provider interface                    | Recommended                   |
+| Cloud-first providers       | Fast if existing infra is cloud-heavy | Weak self-sufficiency                                | Avoid as only path            |
+| Self-hosted provider bundle | Ownership, portability, local dev     | Outside Core kernel; some features weaker than cloud | Future operator bundle        |
 
 ---
 
@@ -867,7 +900,7 @@ adapters where allowed.
 Use this implementation direction:
 
 ```text
-Build Takos Deploy v3 as descriptor-driven and provider-interface-driven.
+Build Takos Deploy as descriptor-driven and provider-interface-driven.
 Keep the PaaS kernel reference-only and register self-hosted/provider implementations as external plugins.
 Design provider implementations so they can be loaded through the trusted plugin path.
 Do not make dynamic plugins required for the core system.

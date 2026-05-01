@@ -58,7 +58,8 @@ manually from `takos/paas` on a host with Docker Compose available.
 
    TAKOS_LOCAL_ENV_FILE=.env.local \
      docker compose --env-file .env.local -f compose.local.yml logs -f \
-       control-web control-dispatch control-worker runtime-host executor-host runtime takos-agent
+       takos-paas-api takos-paas-router takos-paas-worker \
+       takos-paas-runtime-agent takos-paas-log-worker takos-agent
    ```
 
 6. Run HTTP health checks against the host-mapped ports:
@@ -92,12 +93,11 @@ manually from `takos/paas` on a host with Docker Compose available.
 
 ## Expected service roles
 
-- `control-web`: `takos-paas-api`
-- `control-dispatch`: `takos-paas-router`
-- `control-worker`: `takos-paas-worker`
-- `runtime-host`: `takos-paas-runtime-agent`
-- `runtime`: `takos-paas-runtime-agent`
+- `takos-paas-api`
+- `takos-paas-router`
+- `takos-paas-worker`
+- `takos-paas-runtime-agent`
+- `takos-paas-log-worker`
 
-The legacy compose service names are intentionally retained for local DNS
-compatibility; current process boundaries are asserted through
-`TAKOS_PAAS_PROCESS_ROLE` and `takos.io/process-role`.
+Process boundaries are asserted through `TAKOS_PAAS_PROCESS_ROLE` and
+`takos.io/process-role`.

@@ -51,6 +51,6 @@ features:
 - [PaaS Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0) — Core meta-objects の normative spec
 - [Current State](/takos-paas/current-state) — 実装ステータスと split shell の現状
 - [Manifest Reference](/reference/manifest-spec) — Deploy manifest spec
-- [Glossary](/reference/glossary) — 用語集と canonical / legacy alias
+- [Glossary](/reference/glossary) — 用語集と canonical ref
 
 開発者向け運用 docs は [Contributing](/contributing/) を参照。

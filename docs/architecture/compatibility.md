@@ -58,23 +58,23 @@ orchestrator を通る。
 
 ### manifest-level feature support
 
-| feature                                                  | manifest | bundle docs | runtime notes                                            |
-| -------------------------------------------------------- | -------- | ----------- | -------------------------------------------------------- |
-| worker / service compute                                 | yes      | yes         | selected worker / container runtime adapter              |
-| attached container                                       | yes      | yes         | selected container runtime adapter + worker-side binding |
-| route                                                    | yes      | yes         | selected routing runtime                                 |
-| route publication (`publish[].type/outputs.*.routeRef`)  | yes      | yes         | publication catalog + route URL output                   |
-| Takos built-in provider publication consume (`takos.api-key` / `takos.oauth-client`) | yes | yes | grant output for declared consumer                       |
-| explicit consume edge (`compute.*.consume`)              | yes      | yes         | env injection only for declared consumer                 |
-| `scheduled` (`compute.triggers.schedules`)               | yes      | yes         | backend 依存                                             |
-| `queue trigger` (`compute.triggers.queues`)              | yes      | yes         | backend 依存。Cloudflare/WFP は queue consumer を同期    |
+| feature                                                                              | manifest | bundle docs | runtime notes                                            |
+| ------------------------------------------------------------------------------------ | -------- | ----------- | -------------------------------------------------------- |
+| worker / service compute                                                             | yes      | yes         | selected worker / container runtime adapter              |
+| attached container                                                                   | yes      | yes         | selected container runtime adapter + worker-side binding |
+| route                                                                                | yes      | yes         | selected routing runtime                                 |
+| route publication (`publications[].type/outputs.*.routeRef`)                         | yes      | yes         | publication catalog + route URL output                   |
+| Takos built-in provider publication consume (`takos.api-key` / `takos.oauth-client`) | yes      | yes         | grant output for declared consumer                       |
+| explicit consume edge (`compute.*.consume`)                                          | yes      | yes         | env injection only for declared consumer                 |
+| `scheduled` (`compute.triggers.schedules`)                                           | yes      | yes         | backend 依存                                             |
+| `queue trigger` (`compute.triggers.queues`)                                          | yes      | yes         | backend 依存。Cloudflare/WFP は queue consumer を同期    |
 
 SQL / object-store / queue / analytics-engine / workflow / vector-index /
-durable-object などの resource access は manifest の `publish` / `consume`
-surface ではなく、resource API / runtime binding 側で扱う。`publish` は route
-publication catalog であり、Takos API key / OAuth client は built-in provider
-publication を consume する。resource creation や
-resource binding の入口ではない。
+durable-object などの resource access は manifest の `publications` / `consume`
+surface ではなく、resource API / runtime binding 側で扱う。`publications` は
+route publication catalog であり、Takos API key / OAuth client は built-in
+provider publication を consume する。resource creation や resource binding
+の入口ではない。
 
 ### resource runtime binding support
 
@@ -88,14 +88,16 @@ resource binding の入口ではない。
 
 ## Cloudflare
 
-Cloudflare は **tracked reference Workers backend** の reference materialization。
-tracked reference Workers backend 固有の用語と Core 用語の対応は
+Cloudflare は **tracked reference Workers backend** の reference
+materialization。 tracked reference Workers backend 固有の用語と Core
+用語の対応は
 [Glossary - Workers backend implementation note](/reference/glossary#workers-backend-implementation-note)
 を参照。
 
 - tracked reference Workers backend の reference materialization
 - actual deploy / rollback / routing backend
-- worker workload は tracked reference Workers backend adapter で materialize される
+- worker workload は tracked reference Workers backend adapter で materialize
+  される
 - image-backed workload は selected container adapter / orchestrator 経由
 
 ## Local / Self-host
@@ -142,8 +144,8 @@ materialize して実行する。
 feature ごとに成熟度が異なる。
 
 - `queue`: resource API / runtime binding 対応。delivery parity は backend 依存
-- `queue trigger`: manifest / bundle docs 対応済み。consumer delivery と
-  batch / retry semantics は backend 依存
+- `queue trigger`: manifest / bundle docs 対応済み。consumer delivery と batch /
+  retry semantics は backend 依存
 - `scheduled`: manifest / bundle docs 対応済み。cron delivery は backend 依存
 - `workflow`: resource API / runtime binding 対応。orchestration は backend 依存
 - `analytics-engine`: resource API / runtime binding 対応。write path は
