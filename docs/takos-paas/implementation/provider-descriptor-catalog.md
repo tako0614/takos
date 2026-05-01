@@ -1,8 +1,9 @@
-# Takos Deploy v3 Implementation Provider Catalog
+# Takos Deploy Implementation Provider Catalog
 
 Status: implementation guideline, non-core.
 
-This document defines a recommended implementation catalog for common provider targets. It does not change Takos Deploy v3 Core semantics
+This document defines a recommended implementation catalog for common provider
+targets. It does not change Takos Deploy Core semantics
 ([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md)).
 
 Core remains small:
@@ -14,18 +15,26 @@ Providers materialize; they do not define.
 Observed provider state is never canonical.
 ```
 
-This catalog provides practical JSON-LD descriptor examples for common provider targets such as Cloudflare Workers, Cloudflare Containers, Cloud Run, Kubernetes, ECS/Fargate, App Runner, Azure Container Apps, and self-hosted Docker/Podman.
+This catalog provides practical JSON-LD descriptor examples for common provider
+targets such as Cloudflare Workers, Cloudflare Containers, Cloud Run,
+Kubernetes, ECS/Fargate, App Runner, Azure Container Apps, and self-hosted
+Docker/Podman.
 
 ## 1. Non-normative status
 
-The JSON-LD descriptors in this folder are implementation templates. A Takos implementation may ship them as official descriptors, replace them with equivalent descriptors, or load a different descriptor set, as long as `Deployment.resolution.descriptor_closure` pins descriptor digests and conformance tests pass.
+The JSON-LD descriptors in this folder are implementation templates. A Takos
+implementation may ship them as official descriptors, replace them with
+equivalent descriptors, or load a different descriptor set, as long as
+`Deployment.resolution.descriptor_closure` pins descriptor digests and
+conformance tests pass.
 
-These examples are intentionally provider capability descriptors, not Core domain kinds.
+These examples are intentionally provider capability descriptors, not Core
+domain kinds.
 
-Provider descriptors are examples and capability profiles. Self-hosted and
-cloud provider implementations are external operator-registered plugin bundles;
-the PaaS kernel ships no built-in provider implementations. External bundles
-must use `TAKOS_KERNEL_PLUGIN_CONFIG` / `pluginConfig[pluginId].clients` to map
+Provider descriptors are examples and capability profiles. Self-hosted and cloud
+provider implementations are external operator-registered plugin bundles; the
+PaaS kernel ships no built-in provider implementations. External bundles must
+use `TAKOS_KERNEL_PLUGIN_CONFIG` / `pluginConfig[pluginId].clients` to map
 adapter keys to operator-owned `KernelPluginClientRegistry` entries. Staging and
 production profiles fail closed unless required adapters such as `actor`,
 `auth`, `provider`, `storage`, and `runtimeAgent` are supplied. They must not
@@ -60,21 +69,22 @@ A provider descriptor should declare four kinds of facts.
    What is unsupported, advisory, provider-fronted, cost-affecting, or security-sensitive.
 ```
 
-Provider descriptors must not redefine contract semantics. They may constrain, reject, or report limitations.
+Provider descriptors must not redefine contract semantics. They may constrain,
+reject, or report limitations.
 
 ## 3. Recommended provider targets
 
-| Provider target | Typical materialization | Notes |
-|---|---|---|
-| `provider.cloudflare.workers@v1` | JS module worker + HTTP routed interface | Uses dispatch namespace, dynamic dispatch Worker, user Workers, optional outbound Worker. |
-| `provider.cloudflare.containers@v1` | OCI image + HTTP interface | Worker-fronted, Durable-Object-backed, on-demand container access through provider bridge; not an always-on process host. |
-| `provider.google.cloud-run@v1` | OCI image + HTTP service | Cloud Run revision/traffic model; one container ingress port in the service API. |
-| `provider.aws.ecs-fargate@v1` | OCI container service/task | Task definition + service; router usually via ALB/NLB or service mesh. |
-| `provider.aws.app-runner@v1` | Source/image to managed web service | Simpler web-app target than ECS. |
-| `provider.azure.container-apps@v1` | OCI container app revisions | Supports revisions and ingress traffic split. |
-| `provider.kubernetes@v1` | Pods/Deployments/Services/Ingress/Gateway | An always-on provider target for long-running container workloads. |
-| `provider.selfhosted.docker-podman@v1` | OCI container on local host | Example operator-owned self-hosted plugin path, usually with Caddy/Traefik. |
-| `provider.takos.runtime-host@v1` | JS module runtime host | Self-hosted runtime path for `runtime.js-worker@v1`. |
+| Provider target                        | Typical materialization                   | Notes                                                                                                                     |
+| -------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `provider.cloudflare.workers@v1`       | JS module worker + HTTP routed interface  | Uses dispatch namespace, dynamic dispatch Worker, user Workers, optional outbound Worker.                                 |
+| `provider.cloudflare.containers@v1`    | OCI image + HTTP interface                | Worker-fronted, Durable-Object-backed, on-demand container access through provider bridge; not an always-on process host. |
+| `provider.google.cloud-run@v1`         | OCI image + HTTP service                  | Cloud Run revision/traffic model; one container ingress port in the service API.                                          |
+| `provider.aws.ecs-fargate@v1`          | OCI container service/task                | Task definition + service; router usually via ALB/NLB or service mesh.                                                    |
+| `provider.aws.app-runner@v1`           | Source/image to managed web service       | Simpler web-app target than ECS.                                                                                          |
+| `provider.azure.container-apps@v1`     | OCI container app revisions               | Supports revisions and ingress traffic split.                                                                             |
+| `provider.kubernetes@v1`               | Pods/Deployments/Services/Ingress/Gateway | An always-on provider target for long-running container workloads.                                                        |
+| `provider.selfhosted.docker-podman@v1` | OCI container on local host               | Example operator-owned self-hosted plugin path, usually with Caddy/Traefik.                                               |
+| `provider.takos.runtime-host@v1`       | JS module runtime host                    | Self-hosted runtime path for `runtime.js-worker@v1`.                                                                      |
 
 ## 4. Workers family guidance
 
@@ -82,10 +92,16 @@ Provider descriptors must not redefine contract semantics. They may constrain, r
 
 ### Naming note
 
-Use `provider.cloudflare.workers@v1` as the provider identity. Treat Workers for Platforms as an implementation topology of the Cloudflare Workers provider, not as a provider identity or canonical mode. Implementation notes should still use Cloudflare official terms: dispatch namespace, dynamic dispatch Worker, user Worker, and outbound Worker.
+Use `provider.cloudflare.workers@v1` as the provider identity. Treat Workers for
+Platforms as an implementation topology of the Cloudflare Workers provider, not
+as a provider identity or canonical mode. Implementation notes should still use
+Cloudflare official terms: dispatch namespace, dynamic dispatch Worker, user
+Worker, and outbound Worker.
 
-
-Cloudflare Workers materializes JS runtime components. Workers for Platforms is the recommended implementation topology for tenant/user Workers, using a dispatch namespace, dynamic dispatch Worker, user Workers, and optional outbound Worker.
+Cloudflare Workers materializes JS runtime components. Workers for Platforms is
+the recommended implementation topology for tenant/user Workers, using a
+dispatch namespace, dynamic dispatch Worker, user Workers, and optional outbound
+Worker.
 
 ```text
 runtime.js-worker@v1
@@ -115,7 +131,8 @@ kernel constructs Cloudflare SDK/network clients.
 
 ### Cloudflare Containers
 
-Cloudflare Containers materializes OCI container components, but not like a generic VM/container host. It is worker-fronted and Durable-Object-backed.
+Cloudflare Containers materializes OCI container components, but not like a
+generic VM/container host. It is worker-fronted and Durable-Object-backed.
 
 ```text
 runtime.oci-container@v1
@@ -154,7 +171,10 @@ This is not a different resource contract. It is a different
 
 ### Cloud Run
 
-Cloud Run materializes OCI image HTTP services. It has revision and traffic split concepts, so it can support `Deployment.desired.activation_envelope` assignment materialization when provider capability and RouteDescriptor allow it.
+Cloud Run materializes OCI image HTTP services. It has revision and traffic
+split concepts, so it can support `Deployment.desired.activation_envelope`
+assignment materialization when provider capability and RouteDescriptor allow
+it.
 
 Typical descriptor support:
 
@@ -164,27 +184,42 @@ artifact.oci-image@v1
 interface.http@v1
 ```
 
-Cloud Run provider descriptors should declare constraints such as single ingress container port, supported traffic assignment semantics, ingress settings, VPC egress support, and service/job distinction.
+Cloud Run provider descriptors should declare constraints such as single ingress
+container port, supported traffic assignment semantics, ingress settings, VPC
+egress support, and service/job distinction.
 
 ### ECS/Fargate
 
-ECS/Fargate materializes OCI containers through task definitions and services. It is not itself a router; router materialization usually depends on ALB/NLB, service discovery, or another gateway.
+ECS/Fargate materializes OCI containers through task definitions and services.
+It is not itself a router; router materialization usually depends on ALB/NLB,
+service discovery, or another gateway.
 
 ### Kubernetes
 
-Kubernetes materializes runtime/artifact/interface contracts through Pods, Deployments, Services, Ingress, Gateway API, NetworkPolicy, Secrets, and ConfigMaps. Kubernetes descriptors should be explicit about whether a route is implemented by Service, Ingress, Gateway API, service mesh, or another controller.
+Kubernetes materializes runtime/artifact/interface contracts through Pods,
+Deployments, Services, Ingress, Gateway API, NetworkPolicy, Secrets, and
+ConfigMaps. Kubernetes descriptors should be explicit about whether a route is
+implemented by Service, Ingress, Gateway API, service mesh, or another
+controller.
 
 ### Azure Container Apps
 
-Azure Container Apps materializes container apps with revisions and ingress. Its provider descriptor should distinguish revision assignment, ingress, and runtime/network policy capability.
+Azure Container Apps materializes container apps with revisions and ingress. Its
+provider descriptor should distinguish revision assignment, ingress, and
+runtime/network policy capability.
 
 ### Self-hosted Docker/Podman
 
-An operator-owned Docker/Podman plugin can provide a self-hosted container materialization path. It should materialize `Deployment.desired.routes` through Caddy/Traefik or another router, and resolve `Deployment.desired.bindings[*].accessPath` through credentials, internal endpoints, or Takos-managed resource gateways.
+An operator-owned Docker/Podman plugin can provide a self-hosted container
+materialization path. It should materialize `Deployment.desired.routes` through
+Caddy/Traefik or another router, and resolve
+`Deployment.desired.bindings[*].accessPath` through credentials, internal
+endpoints, or Takos-managed resource gateways.
 
 ## 6. Resource provider examples
 
-Resource providers should declare ResourceContract support, access modes, and access path support.
+Resource providers should declare ResourceContract support, access modes, and
+access path support.
 
 Examples:
 
@@ -211,7 +246,8 @@ S3 / GCS / MinIO:
   resource.object-store.s3@v1 or provider-specific object descriptor if S3 compatibility is not exact
 ```
 
-Do not publish resource credentials as publication outputs. Use `Deployment.desired.bindings` (with the inline `accessPath` for each binding).
+Do not publish resource credentials as publication outputs. Use
+`Deployment.desired.bindings` (with the inline `accessPath` for each binding).
 
 ## 7. Descriptor authoring rule
 
@@ -241,8 +277,8 @@ A provider descriptor should state:
 
 ## 9. Deployment display expectations
 
-The Deployment record (resolution + desired + conditions) should expose
-provider descriptor choices to CLI / API consumers.
+The Deployment record (resolution + desired + conditions) should expose provider
+descriptor choices to CLI / API consumers.
 
 ```text
 Provider target:

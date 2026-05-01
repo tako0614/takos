@@ -108,7 +108,23 @@ export default defineConfig({
           { text: 'Tenant Runtime', link: '/architecture/tenant-runtime' },
           { text: 'Container Hosts', link: '/architecture/container-hosts' },
           { text: 'Runtime Service', link: '/architecture/runtime-service' },
+          { text: 'Diagrams', link: '/architecture/diagrams' },
           { text: '互換性と制限', link: '/architecture/compatibility' },
+        ],
+      },
+      {
+        text: 'Operations',
+        items: [
+          {
+            text: 'Troubleshooting Playbook',
+            link: '/operations/troubleshooting',
+          },
+        ],
+      },
+      {
+        text: 'Performance',
+        items: [
+          { text: 'Baseline', link: '/performance/baseline' },
         ],
       },
       {
@@ -169,7 +185,6 @@ export default defineConfig({
             ],
           },
           { text: 'Official Descriptor Set v1', link: '/takos-paas/descriptors/official-descriptor-set-v1' },
-          { text: 'Migration: current → deploy-v2', link: '/takos-paas/migration/current-takos-to-deploy-v2' },
           {
             text: 'Tests',
             items: [
@@ -189,6 +204,12 @@ export default defineConfig({
           { text: 'Manifest Spec', link: '/reference/manifest-spec' },
           { text: 'Component Matrix', link: '/reference/component-matrix' },
           { text: '用語集', link: '/reference/glossary' },
+        ],
+      },
+      {
+        text: 'Performance',
+        items: [
+          { text: 'Baseline Metrics', link: '/performance/baseline' },
         ],
       },
       {
@@ -218,10 +239,6 @@ export default defineConfig({
           {
             text: 'Kernel Plugin Boundary Audit',
             link: '/contributing/kernel-plugin-boundary-audit',
-          },
-          {
-            text: 'Control to PaaS Migration',
-            link: '/contributing/control-to-paas-migration-inventory',
           },
           {
             text: 'Deploy Topology Notes',

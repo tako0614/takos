@@ -1,5 +1,5 @@
 {
-  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@context": "https://takos.dev/contexts/deploy.jsonld",
   "@id": "https://takos.dev/providers/cloudflare/workers/v1",
   "@type": "ProviderCapabilityDescriptor",
   "shortRef": "provider.cloudflare.workers@v1",

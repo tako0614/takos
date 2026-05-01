@@ -196,7 +196,7 @@ manifest と deploy を通じて、以下が自動的に関連づけられます
 
 ## MCP 統合
 
-manifest の `publish` で `type: takos.mcp-server.v1` を宣言する。
+manifest の `publications` で `type: publication.mcp-server@v1` を宣言する。
 
 ```yaml
 routes:
@@ -204,9 +204,9 @@ routes:
     target: web
     path: /mcp
 
-publish:
+publications:
   - name: tools
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     outputs:
       url:
         kind: url
@@ -215,16 +215,16 @@ publish:
       transport: streamable-http
 ```
 
-MCP server catalog は deploy manifest の `publish` entry で管理します。deploy
+MCP server catalog は deploy manifest の `publications` entry で管理します。deploy
 後に control plane が catalog entry を保存し、agent 側が server をロードする。
-`takos.mcp-server.v1` の canonical 定義は
+`publication.mcp-server@v1` の canonical 定義は
 [publication types](/reference/glossary#publication-types) を参照。詳細は [MCP Server](/apps/mcp) を参照。publication
 の仕組みについては [Publication](/architecture/app-publications)
 を参照。
 
 ## file handler 統合
 
-manifest の `publish` で `type: takos.file-handler.v1` を宣言する。
+manifest の `publications` で `type: publication.http-endpoint@v1` を宣言する。
 
 ```yaml
 routes:
@@ -232,9 +232,9 @@ routes:
     target: web
     path: /files/:id
 
-publish:
+publications:
   - name: markdown
-    type: takos.file-handler.v1
+    type: publication.http-endpoint@v1
     outputs:
       url:
         kind: url
@@ -244,13 +244,13 @@ publish:
       extensions: [.md]
 ```
 
-`takos.file-handler.v1` catalog は deploy manifest の `publish` entry で管理します。space
-storage と deployed UI が loose coupling のまま連携できる。`takos.file-handler.v1` の
+`publication.http-endpoint@v1` catalog は deploy manifest の `publications` entry で管理します。space
+storage と deployed UI が loose coupling のまま連携できる。`publication.http-endpoint@v1` の
 route output は `:id` path segment を必ず含み、storage catalog では `:id` を含まない
-handler を公開しません。`takos.file-handler.v1` の launch contract は file ID の path
+handler を公開しません。`publication.http-endpoint@v1` の launch contract は file ID の path
 segment が primary です。current storage UI は起動時に `space_id` query
 parameter も追加しますが、`file_id` query fallback はありません。
-canonical / legacy alias は
+canonical ref は
 [publication types](/reference/glossary#publication-types) を参照。詳細は
 [File Handlers](/apps/file-handlers) を参照。publication の仕組みについては
 [Publication](/architecture/app-publications) を参照。

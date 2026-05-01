@@ -5,23 +5,41 @@
 
 Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
 
-Cloudflare は tracked reference Workers backend です。self-host は
-production-grade backing services を組み合わせれば production packaging として
-運用できます。AWS / GCP は current docs では Helm overlay のみを扱います。
+`distribution.yml` の `kernel_host.target` で 1 つを選ぶ canonical target は
+`cloudflare` / `aws` / `gcp` / `kubernetes` / `selfhosted` です。Cloudflare は
+tracked reference Workers backend で公開 spec の 参照実装の役割も持ちます。AWS /
+GCP / Kubernetes は Helm overlay、 selfhosted は docker-compose packaging
+として扱います。
 
 このページでの compatible は schema / translation parity を指し、全 provider
 で同じ runtime behavior や resource existence を保証する意味ではありません。
 
 ## Current Hosting Surface
 
-| page                                | current contract                                                    | bundled / expected backing services                   |
-| ----------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
-| [Cloudflare](/hosting/cloudflare)   | Cloudflare Workers / D1 / R2 / KV / Queues を使う tracked reference Workers backend | Cloudflare resources                                  |
-| [Local](/hosting/local)             | local development runtime                                           | local services                                        |
-| [Self-hosted](/hosting/self-hosted) | VM / Docker Compose / Helm packaging guidance                       | PostgreSQL / Redis / S3-compatible storage            |
-| [Kubernetes](/hosting/kubernetes)   | `takos/paas/deploy/helm/takos` base chart                                | Bitnami PostgreSQL / Redis / MinIO by default         |
-| [AWS](/hosting/aws)                 | EKS 向け Helm overlay (`values-aws.yaml`)                           | external PostgreSQL / Redis / S3-compatible storage   |
-| [GCP](/hosting/gcp)                 | GKE 向け Helm overlay (`values-gcp.yaml`)                           | external PostgreSQL / Redis / GCS S3 interoperability |
+| page                                | `kernel_host.target` | current contract                                                                    | bundled / expected backing services                   |
+| ----------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [Cloudflare](/hosting/cloudflare)   | `cloudflare`         | Cloudflare Workers / D1 / R2 / KV / Queues を使う tracked reference Workers backend | Cloudflare resources                                  |
+| [AWS](/hosting/aws)                 | `aws`                | EKS 向け Helm overlay (`values-aws.yaml`)                                           | external PostgreSQL / Redis / S3-compatible storage   |
+| [GCP](/hosting/gcp)                 | `gcp`                | GKE 向け Helm overlay (`values-gcp.yaml`)                                           | external PostgreSQL / Redis / GCS S3 interoperability |
+| [Kubernetes](/hosting/kubernetes)   | `kubernetes`         | `takos/paas/deploy/helm/takos` base chart                                           | Bitnami PostgreSQL / Redis / MinIO by default         |
+| [Self-hosted](/hosting/self-hosted) | `selfhosted`         | docker-compose (`compose.server.yml`)                                               | PostgreSQL / Redis / S3-compatible storage            |
+| [Local](/hosting/local)             | -                    | local development runtime (target ではなく独立 dev runtime)                         | local services                                        |
+
+## Parity / Gate Matrix
+
+| surface                  | parity claim                                                  | proof / gate                              |
+| ------------------------ | ------------------------------------------------------------- | ----------------------------------------- |
+| Deploy manifest schema   | Same schema and resolution contract across targets            | PaaS docs / contract / release gates      |
+| Dispatch target ids      | Canonical ids are validated before command construction       | `takos-private` `distribute:test`         |
+| Cloudflare hosting       | Reference Workers backend for the public contract             | opt-in Cloudflare dry-run / deploy gate   |
+| AWS / GCP hosting        | Helm packaging for EKS / GKE, not ECS / Cloud Run kernel host | opt-in Helm/preflight gate                |
+| Kubernetes / selfhosted  | Packaging for operator-owned cluster / Docker host            | opt-in Helm or compose preflight gate     |
+| Provider materialization | Provider-specific behavior, not default kernel release parity | opt-in provider-plugin smoke / live proof |
+
+Provider proof は opt-in です。provider credentials、cluster、account、remote
+gateway を必要とする proof は、operator がそれらを用意した環境で gate-backed
+に実行します。default docs build / PaaS kernel release gate は provider 実環境の
+到達性や resource existence parity を要求しません。
 
 ## Workload Surface
 

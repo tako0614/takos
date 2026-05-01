@@ -1,6 +1,7 @@
-# Takos Deploy v3 Cloudflare Containers Provider Notes
+# Takos Deploy Cloudflare Containers Provider Notes
 
-Cloudflare Containers should be implemented as a provider target, not as a Takos Core kind. v3 surfaces this through the Deployment record
+Cloudflare Containers should be implemented as a provider target, not as a Takos
+Core kind. The current surface exposes this through the Deployment record
 ([`../../core/01-core-contract-v1.0.md`](../../core/01-core-contract-v1.0.md)).
 
 ## Position
@@ -22,7 +23,10 @@ request
   -> Container instance
 ```
 
-Provider-created Worker / Durable Object / Container bridge objects are surfaced through `Deployment.conditions[]` (apply-time scope.kind="operation") and the ProviderObservation stream, not as AppSpec components, unless the user explicitly declares them.
+Provider-created Worker / Durable Object / Container bridge objects are surfaced
+through `Deployment.conditions[]` (apply-time scope.kind="operation") and the
+ProviderObservation stream, not as AppSpec components, unless the user
+explicitly declares them.
 
 Cloudflare Containers are on-demand container materialization behind the
 Worker/Durable Object bridge. They may use provider-native warmup or
@@ -90,16 +94,17 @@ enableInternet=false
 + explicit Deployment.desired.runtime_network_policy allowlist
 ```
 
-Resource access should be represented as `Deployment.desired.bindings` material, not as publication output.
+Resource access should be represented as `Deployment.desired.bindings` material,
+not as publication output.
 
 D1, R2, Queues, and Durable Objects should be reached through explicit
 `Deployment.desired.bindings[*].accessPath` entries. For container workloads,
 that usually means an internal endpoint or provider mediator that uses
 Cloudflare-injected Worker bindings. Control-plane operations still require
-operator-injected client references in the trusted Cloudflare plugin. In
-staging and production this includes the auth/actor boundary and every required
-PaaS adapter selected for the profile; the PaaS kernel does not construct
-Cloudflare SDK/network clients by default.
+operator-injected client references in the trusted Cloudflare plugin. In staging
+and production this includes the auth/actor boundary and every required PaaS
+adapter selected for the profile; the PaaS kernel does not construct Cloudflare
+SDK/network clients by default.
 
 ## Activation
 
@@ -141,7 +146,10 @@ Deployment must be protected from garbage collection.
 ## Cloudflare references
 
 - Cloudflare Containers overview: https://developers.cloudflare.com/containers/
-- Container Interface: https://developers.cloudflare.com/containers/container-class/
-- Lifecycle / architecture: https://developers.cloudflare.com/containers/platform-details/architecture/
-- Image management: https://developers.cloudflare.com/containers/platform-details/image-management/
+- Container Interface:
+  https://developers.cloudflare.com/containers/container-class/
+- Lifecycle / architecture:
+  https://developers.cloudflare.com/containers/platform-details/architecture/
+- Image management:
+  https://developers.cloudflare.com/containers/platform-details/image-management/
 - Pricing: https://developers.cloudflare.com/containers/pricing/

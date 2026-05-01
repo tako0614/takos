@@ -1,40 +1,54 @@
 # Takos PaaS Current State
 
-Date: 2026-04-30
+Date: 2026-05-01
 
 ## Strict reference-kernel-with-external-plugins
 
 The current `takos-paas` implementation treats Core kernel semantics as the
 release boundary. The implemented path is descriptor-pinned Deployment
 resolution (`Deployment.resolution.descriptor_closure`), canonical authoring
-expansion, resolved graph digests carried in `Deployment.resolution.resolved_graph`,
-apply-time read-set validation reflected as `Deployment.conditions[]`, immutable
-`Deployment.desired` (including `desired.activation_envelope`), resource and
-binding reports inlined into `Deployment.desired.bindings`, ProviderObservation
-separation as a non-canonical observed-state stream, reference adapter
-conformance, trusted plugin manifest verification, and operator-registered
-external plugin selection. Deploy and runtime behavior are implemented as
-internal domain modules inside the PaaS product root, not as separate top-level
-service boundaries.
+expansion, resolved graph digests carried in
+`Deployment.resolution.resolved_graph`, apply-time read-set validation reflected
+as `Deployment.conditions[]`, immutable `Deployment.desired` (including
+`desired.activation_envelope`), resource and binding reports inlined into
+`Deployment.desired.bindings`, ProviderObservation separation as a non-canonical
+observed-state stream, reference adapter conformance, trusted plugin manifest
+verification, and operator-registered external plugin selection. Deploy and
+runtime behavior are implemented as internal domain modules inside the PaaS
+product root, not as separate top-level service boundaries.
 
-## v2 → v3 record migration status
+## current surface status
 
-v3 (Deployment-centric) is the canonical Core surface. The Phase 1 spec at
-[`core/01-core-contract-v1.0.md`](./core/01-core-contract-v1.0.md) collapses
-the prior v2 records onto three: `Deployment` (input + resolution + desired +
+Deployment-centric is the canonical Core surface. The spec at
+[`core/01-core-contract-v1.0.md`](./core/01-core-contract-v1.0.md) collapses the
+prior v2 records onto three: `Deployment` (input + resolution + desired +
 status + conditions + optional policy / approval), `ProviderObservation`
-(observed-side stream), and `GroupHead` (group-scoped pointer). The Phase 2
-contract types are exported from `takos-paas-contract` (`Deployment`,
-`ProviderObservation`, `GroupHead`). The Phase 3 deploy-domain
+(observed-side stream), and `GroupHead` (group-scoped pointer). The contract
+types are exported from `takos-paas-contract` (`Deployment`,
+`ProviderObservation`, `GroupHead`).
+
 `DeploymentService` (`apps/paas/src/domains/deploy/deployment_service.ts`) is
-the canonical v3 entry point; it currently writes Deployment records with stub
-`emptyResolution()` / `emptyDesired()` payloads while the v2 plan / apply
-pipeline business logic (`buildCorePlanArtifacts`, `compileManifestToAppSpec`,
-`resolvePublicDeployManifest`, `commitActivation`, `_recordCoreOperationGraph`,
-`buildRollbackDeployPlan`) is being ported into the new helper layout. v2
-record types remain exported for migration shims and for the docs/checklist /
-migration validators that still pin the legacy names; they are not Core
-canonical going forward.
+the canonical entry point. It resolves public manifests into
+`Deployment.resolution` (`descriptor_closure` + `resolved_graph`),
+`Deployment.desired` (routes, bindings, resources, runtime network policy,
+activation envelope), and resolution-time policy decisions. `mode="preview"` is
+non-mutating; `mode="resolve"` persists the resolved Deployment.
+`applyDeployment` runs preflight validators, approval gates, provider operation
+planning, provider operation conditions, rollback for provider operations that
+started before a failure, and atomic GroupHead advancement. `rollbackGroup` is a
+GroupHead pointer move against retained history and does not create a new
+Deployment. `ProviderObservation` is stored and listed separately from canonical
+desired state.
+
+The public HTTP surface is mounted under `/api/public/v1/deployments`,
+`/api/public/v1/deployments/:deploymentId/apply`,
+`/api/public/v1/deployments/:deploymentId/approve`,
+`/api/public/v1/deployments/:deploymentId/observations`,
+`/api/public/v1/groups/:groupId/head`, and
+`/api/public/v1/groups/:groupId/rollback`. Legacy public plan/apply/snapshot
+paths are intentionally absent from the PaaS OpenAPI route inventory. Some
+implementation shim modules and migration docs retain v2 names only to map old
+state into current records; they are not the canonical Core API.
 
 The kernel does not make cloud provider APIs canonical. Cloudflare, AWS, GCP,
 Kubernetes, Neon, R2, S3, and similar systems remain provider targets described
@@ -73,8 +87,8 @@ backend selectors.
 
 When a storage plugin is selected, canonical PaaS stores for core, deploy
 (Deployment / GroupHead), runtime desired/observed state, ProviderObservation
-streams, resources, registry, audit, usage aggregates, and service endpoints
-are all routed through the selected `StorageDriver` transaction boundary.
+streams, resources, registry, audit, usage aggregates, and service endpoints are
+all routed through the selected `StorageDriver` transaction boundary.
 Local/reference mode can still use in-memory stores for conformance and tests.
 
 ## Access path coverage
@@ -85,16 +99,21 @@ preserves contract-scoped access modes, and surfaces ambiguous or unsupported
 access selection as a blocking `Deployment.conditions[]` entry. When a selected
 provider descriptor has a matching `resourceAccessPaths` entry, the Deployment
 carries the descriptor's injection mode, stages, enforcement, limitations, and
-provider-internal/external boundary. Locally represented paths are still
-emitted with an internal network boundary.
+provider-internal/external boundary. Locally represented paths are still emitted
+with an internal network boundary.
 
 The v1.0 rule that an external access-path `networkBoundary` must satisfy
-`Deployment.desired.runtime_network_policy` is enforced at resolution time.
-The resolver emits a blocking condition for external resource access paths
-unless the environment runtime network policy allows external egress through
+`Deployment.desired.runtime_network_policy` is enforced at resolution time. The
+resolver emits a blocking condition for external resource access paths unless
+the environment runtime network policy allows external egress through
 `defaultEgress: "allow"` or an explicit egress rule to `internet` / `0.0.0.0/0`
-/ `::/0`. External provider bundles must continue to fail closed for their
-own provider/client references.
+/ `::/0`. External provider bundles must continue to fail closed for their own
+provider/client references.
+
+Explicit native raw binding requests are represented as resolution-time policy
+decisions with `decision: "require-approval"` and `gate: "binding-resolution"`.
+Apply fails with `ApprovalRequired` unless the matching `DeploymentApproval` is
+attached.
 
 ## Plugin Loader
 
@@ -110,6 +129,17 @@ external bundles should integrate those targets through `TAKOS_*_PLUGIN`
 selectors. They require operator-injected configuration or client references in
 `TAKOS_KERNEL_PLUGIN_CONFIG`; the PaaS kernel does not construct cloud SDK or
 provider network clients by default.
+
+Official integrated distribution manifests live in
+`takos/paas/deploy/distributions`. They are public templates for self-hosted,
+Cloudflare, AWS, GCP, and Kubernetes targets and name the external provider
+profile, required services, health probes, artifacts, and provider proof task.
+`deno task validate:distributions` and the dry-run
+`deno task distribution:smoke --all` are part of the PaaS release gate. Live
+distribution proof is deliberately opt-in
+(`deno task distribution:smoke
+--manifest deploy/distributions/<target>.json --live`)
+and requires an operator-deployed target.
 
 The PaaS API can be created through a side-effect-free bootstrap factory, so an
 operator runtime can register trusted plugins and a `KernelPluginClientRegistry`
@@ -131,8 +161,10 @@ requires an injected Takos storage client or gateway. AWS and GCP gateway
 clients call operator-controlled JSON endpoints; callback-based storage
 transactions still require an injected storage driver because they cannot be
 represented as a single stateless HTTP request. Credentialed live provider
-checks are available through the `takos-paas-plugins` opt-in `live-smoke` task
-and are skipped unless the operator sets `TAKOS_PAAS_PLUGIN_LIVE_PROVIDER`.
+checks are available through the `takos-paas-plugins` opt-in
+`live-smoke:<target>` and `live-provisioning-smoke:<target>` tasks. Those checks
+are external provider proof, not kernel release proof, and are skipped unless
+the operator supplies target-specific credentials and fixtures.
 
 The `runtime-agent` port is a real plugin adapter port. Staging and production
 plugins must return a `RuntimeAgentRegistry`; the route layer uses the selected
@@ -150,16 +182,17 @@ staging and production.
 
 `takos/paas` の PaaS control plane が deploy (Deployment / GroupHead) / runtime
 / resource / routing / network / registry / audit の canonical semantics を提供
-する。旧 deploy/runtime compatibility shell は削除済みであり、 Git repository fetch、
-manifest parse、persistent Deployment history、rollback 等の business logic は
-`takos/paas` に寄せる。現行 CLI は
-`takos/app` の deploy compatibility API (`/api/deploy/plans`,
-`/api/deploy/apply-runs`) を経由する v2 facade と、Phase 3 で再構築中の v3
-public surface (`POST /api/public/v1/deployments`,
-`POST /api/public/v1/deployments/:id/apply`,
+する。manifest resolution、persistent Deployment history、rollback 等の business logic は
+`takos/paas` に寄せる。現行 PaaS public surface は Deployment-centric API
+(`POST /api/public/v1/deployments`, `POST /api/public/v1/deployments/:id/apply`,
+`POST /api/public/v1/deployments/:id/approve`,
+`GET /api/public/v1/deployments/:id/observations`,
 `POST /api/public/v1/groups/:group_id/rollback`,
-`GET /api/public/v1/groups/:group_id/head`) が並走する。Phase 1 spec の API
-mapping は core contract § 17–§ 18 を参照。
+`GET /api/public/v1/groups/:group_id/head`) である。削除済み public
+`/api/public/v1/deploy/plans` / `/api/public/v1/deploy/applies` /
+`group-deployment-snapshots` path と app-side `/api/deploy/plans` /
+`/api/deploy/apply-runs` は PaaS route inventory から外れている。Core contract §
+17 は current API を参照。
 
 他章は
 `> 現行実装の split status は [Current Implementation Note](/current-state#deploy-shell) を参照`
@@ -170,12 +203,10 @@ mapping は core contract § 17–§ 18 を参照。
 Takos app/API gateway は migration 中で 2 系統が並走している:
 
 - `takos/app/apps/api`: split 後の minimum gateway。`/health`, `/api/spaces`,
-  repository/source resolution, deploy snapshot routes, deploy compatibility
-  routes, runtime-facing `/api/services` / `/api/resources` / `/api/sessions` の
-  forwarding subset
+  repository/source resolution, Deployment routes, runtime-facing
+  `/api/services` / `/api/resources` / `/api/sessions` の forwarding subset
 - `takos/app/apps/control` + `takos/app/packages/control`: account / auth /
-  profile / billing / OAuth と広い compatibility API を提供する compatibility
-  app
+  profile / billing / OAuth を提供する app
 
 この境界は migration 完了まで維持。public docs は `takos/app/apps/control` 側を
 canonical reference として記述する。

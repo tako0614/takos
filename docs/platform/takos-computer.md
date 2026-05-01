@@ -71,9 +71,9 @@ routes:
     target: web
     path: /gui/api/sandbox-session/:id/mcp
 
-publish:
+publications:
   - name: computer-ui
-    type: takos.ui-surface.v1
+    type: publication.http-endpoint@v1
     display:
       title: Computer
     outputs:
@@ -81,7 +81,7 @@ publish:
         kind: url
         routeRef: gui
   - name: computer-mcp
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     auth:
       bearer:
         secretRef: PUBLISHED_MCP_AUTH_TOKEN
@@ -114,7 +114,7 @@ compute:
             - events:subscribe
 ```
 
-`takos.ui-surface.v1` / `takos.mcp-server.v1` の canonical 定義は
+`publication.http-endpoint@v1` / `publication.mcp-server@v1` の canonical 定義は
 [publication types](/reference/glossary#publication-types) を参照。`/mcp` は `computer_shell_exec`
 / `computer_file_read` / `computer_file_write` などの `computer_*` tools
 を公開し、必要に応じて sandbox session を作成して `/session/:id/mcp` に proxy

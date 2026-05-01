@@ -19,7 +19,7 @@ override で決まる group の GroupHead が advance され、その group の 
 や resource provider の特別処理ではありません。group なしの primitive は個別
 primitive API で管理します。
 
-`publish` は他の primitive へ共有する typed outputs publication catalog です。
+`publications` は他の primitive へ共有する typed outputs publication catalog です。
 Takos API key / OAuth client は `takos.api-key` / `takos.oauth-client` built-in
 provider publication を `consume` して受け取ります。SQL / object-store / queue
 などの resource は manifest の `resources`、または `/api/resources/*` などの
@@ -155,7 +155,7 @@ consume の整合性は manifest validation と Deployment service の resolve g
 ごとに異なります。backend / adapter 名は operator-only configuration
 であり、public deploy manifest には書きません。runtime translation report で
 `unsupported` と判定された workload / route は実行前に失敗します。resource は
-manifest の publish catalog ではなく、manifest `resources` または resource API
+manifest の publications catalog ではなく、manifest `resources` または resource API
 で扱います。operator 向けの現在の backing 実装は
 [hosting/aws](/hosting/aws)、[hosting/gcp](/hosting/gcp)、[hosting/kubernetes](/hosting/kubernetes)
 と [Not A Current Contract](/hosting/differences#not-a-current-contract)

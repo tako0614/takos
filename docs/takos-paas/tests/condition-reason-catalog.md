@@ -1,9 +1,10 @@
-# Takos Deploy v3 v1.0 Condition Reason Catalog
+# Takos Deploy v1.0 Condition Reason Catalog
 
 This catalog gives stable reason names for CLI, API, UI, controllers, and audit.
 PaaS also validates the same catalog on status projection and runtime readiness
-surfaces. v3 surfaces these reasons exclusively through `Deployment.conditions[]`
-(see [`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 13).
+surfaces. The current surface exposes these reasons exclusively through
+`Deployment.conditions[]` (see
+[`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 13).
 
 The source of truth is `CORE_CONDITION_REASONS` exported by
 `takos-paas-contract`. PaaS API responses and controller/status DTOs that expose

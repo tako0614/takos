@@ -1,13 +1,15 @@
-# Takos Deploy v3 Implementation Provider Descriptor Guidelines
+# Takos Deploy Implementation Provider Descriptor Guidelines
 
 Status: implementation guidance, not Core semantics.
 
-This document defines how an implementation can ship practical descriptor definitions for Workers-like runtimes, containers, cloud services, and self-hosted providers while keeping Takos Deploy v3 Core kindless
+This document defines how an implementation can ship practical descriptor
+definitions for Workers-like runtimes, containers, cloud services, and
+self-hosted providers while keeping Takos Deploy Core kindless
 ([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md)).
 
 ## 1. Principle
 
-Takos Deploy v3 Core does not define provider-specific kinds.
+Takos Deploy Core does not define provider-specific kinds.
 
 Do not add Core kinds such as:
 
@@ -31,7 +33,9 @@ Provider implementations materialize; they do not define Core meaning.
 
 ## 2. Descriptor seed set
 
-A Takos distribution should ship a small official descriptor seed set. These descriptors are not Core built-ins. They are the first dictionary a normal implementation can use.
+A Takos distribution should ship a small official descriptor seed set. These
+descriptors are not Core built-ins. They are the first dictionary a normal
+implementation can use.
 
 Recommended contract descriptors:
 
@@ -73,8 +77,10 @@ provider.selfhost.minio@v1
 
 ## 3. Workers-like providers
 
-For Cloudflare, use `provider.cloudflare.workers@v1` as the provider descriptor. Treat Workers for Platforms as an implementation topology that uses dispatch namespaces, dynamic dispatch Workers, user Workers, and optional outbound Workers.
-
+For Cloudflare, use `provider.cloudflare.workers@v1` as the provider descriptor.
+Treat Workers for Platforms as an implementation topology that uses dispatch
+namespaces, dynamic dispatch Workers, user Workers, and optional outbound
+Workers.
 
 Workers-like providers usually materialize:
 
@@ -94,7 +100,8 @@ explicit user worker bindings
 optional outbound worker / egress mediator
 ```
 
-The provider descriptor should expose Cloudflare Workers as a materializer of JS-worker contracts, not as a Core kind.
+The provider descriptor should expose Cloudflare Workers as a materializer of
+JS-worker contracts, not as a Core kind.
 
 ## 4. Container providers
 
@@ -168,7 +175,8 @@ provider.selfhost.minio@v1:
   access modes: s3-api
 ```
 
-Resource provider descriptors must not redefine the ResourceContract. They may constrain support, declare access paths, and report limitations.
+Resource provider descriptors must not redefine the ResourceContract. They may
+constrain support, declare access paths, and report limitations.
 
 ## 6. Resource access paths
 
@@ -195,7 +203,8 @@ Self-hosted Docker:
   env credential, internal service URL, local gateway
 ```
 
-The Core should not care which path is used. The Deployment must record the selected access path on `Deployment.desired.bindings[*].accessPath`.
+The Core should not care which path is used. The Deployment must record the
+selected access path on `Deployment.desired.bindings[*].accessPath`.
 
 Cloudflare provider plugins must rely on Cloudflare-injected runtime bindings
 inside Workers and operator-injected control-plane client references for
@@ -211,7 +220,7 @@ Good:
 
 ```json
 {
-  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@context": "https://takos.dev/contexts/deploy.jsonld",
   "@id": "https://takos.dev/providers/google/cloud-run/v1",
   "@type": "ProviderCapabilityDescriptor",
   "shortRef": "provider.google.cloud-run@v1",
@@ -263,7 +272,8 @@ Suggested implementation order:
 10. provider.aws.s3@v1 / provider.neon.postgres@v1
 ```
 
-Self-hosted providers should exist before cloud-only paths so Takos can run without depending on a public cloud.
+Self-hosted providers should exist before cloud-only paths so Takos can run
+without depending on a public cloud.
 
 ## 9. Required Deployment output
 
@@ -293,4 +303,6 @@ providers/
 selfhost/
 ```
 
-These examples are seed definitions. Production implementations must pin descriptor digests in `Deployment.resolution.descriptor_closure` and enforce PolicySpec before use.
+These examples are seed definitions. Production implementations must pin
+descriptor digests in `Deployment.resolution.descriptor_closure` and enforce
+PolicySpec before use.

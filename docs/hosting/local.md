@@ -3,6 +3,12 @@
 Docker Compose ベースのローカル開発環境。Cloudflare アカウントなしで Takos
 tenant runtime の local backend を動かせる。
 
+::: info これは production deploy target ではありません ローカル開発は
+`distribution.yml` の `kernel_host.target` には含めません (5 target =
+`cloudflare` / `aws` / `gcp` / `kubernetes` / `selfhosted`)。本番 deploy target
+として bare metal / VM を使う場合は [Self-hosted](/hosting/self-hosted)
+(`selfhosted`) を選んでください。 :::
+
 ## 前提
 
 - Deno
@@ -53,7 +59,7 @@ Cloudflare 依存のルーティングが紛れ込んでいないかを検証す
 | `runtime-host`     | `8789`            | runtime-service host / compatibility endpoint |
 | `runtime`          | `8081`            | `takos-runtime-service` container             |
 | `executor-host`    | `8790`            | エージェント executor の control-plane host   |
-| `takos-agent`       | `8082`            | エージェント executor container               |
+| `takos-agent`      | `8082`            | エージェント executor container               |
 | `oci-orchestrator` | `9002`            | コンテナライフサイクル管理                    |
 | `postgres`         | `15432`           | PostgreSQL（D1 互換）                         |
 | `redis`            | `16379`           | Redis（queue / durable runtime の backing）   |
@@ -78,9 +84,8 @@ app container ではない。image-backed Service / Attached Container は
 
 private server stack の基準は `takos-private/`
 で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、
-`takos/agent/Dockerfile`
-を使います。OSS local stack は `./.env.local.example` と `compose.local.yml`
-を使い、private 側は sibling checkout で別管理です。
+`takos/agent/Dockerfile` を使います。OSS local stack は `./.env.local.example`
+と `compose.local.yml` を使い、private 側は sibling checkout で別管理です。
 
 ### ローカル service target override
 

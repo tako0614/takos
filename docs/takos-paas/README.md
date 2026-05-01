@@ -1,15 +1,12 @@
-# Takos Deploy v3 v1.0 Core Kit
+# Takos Deploy v1.0 Core Kit
 
 This kit bundles the Core contract, implementation guidance, official seed
-descriptors, provider descriptor examples, tests, and migration notes for the
-Deployment-centric v3 surface defined in
-[`core/01-core-contract-v1.0.md`](./core/01-core-contract-v1.0.md). v3 organizes
-Core around three records: `Deployment` (input + resolution + desired state +
-status + conditions), `ProviderObservation` (observed-side stream), and
-`GroupHead` (group-scoped pointer to the current Deployment). The full v2 → v3
-record mapping (legacy v2 record names listed only as migration anchors) lives
-in [`migration/current-takos-to-deploy-v2.md`](./migration/current-takos-to-deploy-v2.md)
-and in spec § 18.
+descriptors, provider descriptor examples, and tests for the Deployment-centric
+surface defined in
+[`core/01-core-contract-v1.0.md`](./core/01-core-contract-v1.0.md). The Core
+organizes Core around three records: `Deployment` (input + resolution + desired
+state + status + conditions), `ProviderObservation` (observed-side stream), and
+`GroupHead` (group-scoped pointer to the current Deployment).
 
 > 現行実装の status は [Current Implementation Note](./current-state) を参照。
 
@@ -74,18 +71,15 @@ tests/
   conformance-tests.md
   condition-reason-catalog.md
 
-migration/
-  current-takos-to-deploy-v2.md
-
 current-state.md
 ```
 
 ## Cloudflare 用語
 
-Cloudflare Workers / Containers の固有用語 (`{ADMIN_DOMAIN}` /
-`takos-dispatch` / `RoutingDO` / Container DO / dispatch namespace 等) は Core
-用語ではなく tracked reference Workers backend のみで使う materialization
-detail。canonical な対応関係は
+Cloudflare Workers / Containers の固有用語 (`{ADMIN_DOMAIN}` / `takos-dispatch`
+/ `RoutingDO` / Container DO / dispatch namespace 等) は Core 用語ではなく
+tracked reference Workers backend のみで使う materialization detail。canonical
+な対応関係は
 [Workers backend implementation note](../reference/glossary#workers-backend-implementation-note)
 を参照し、具体的な実装は各 architecture / hosting 章の tracked reference Workers
 backend 節に置く。
@@ -94,5 +88,5 @@ backend 節に置く。
 
 The JSON-LD descriptors included here are implementation seed descriptors. They
 are not Core built-ins. A Takos distribution may ship them as official
-descriptors and must pin their digests in `Deployment.resolution.descriptor_closure`
-when the Deployment is recorded.
+descriptors and must pin their digests in
+`Deployment.resolution.descriptor_closure` when the Deployment is recorded.

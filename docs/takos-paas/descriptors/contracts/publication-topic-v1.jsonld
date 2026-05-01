@@ -1,5 +1,5 @@
 {
-  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@context": "https://takos.dev/contexts/deploy.jsonld",
   "@id": "https://takos.dev/contracts/publication/topic/v1",
   "@type": "PublicationContractDescriptor",
   "shortRef": "publication.topic@v1",

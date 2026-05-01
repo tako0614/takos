@@ -1,5 +1,5 @@
 {
-  "@context": "https://takos.dev/contexts/deploy-v2.jsonld",
+  "@context": "https://takos.dev/contexts/deploy.jsonld",
   "@id": "https://takos.dev/providers/google/cloud-run/v1",
   "@type": "ProviderCapabilityDescriptor",
   "shortRef": "provider.google.cloud-run@v1",

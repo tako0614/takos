@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://takos.dev/schemas/deploy-v2/core-v1.0.json",
-  "title": "Takos Deploy v2 Core v1.0 schema",
+  "$id": "https://takos.dev/schemas/deploy/core-v1.0.json",
+  "title": "Takos Deploy Core v1.0 schema",
   "type": "object",
   "oneOf": [
     {
@@ -20,16 +20,7 @@
       "$ref": "#/$defs/CoreResolvedGraph"
     },
     {
-      "$ref": "#/$defs/CorePlan"
-    },
-    {
       "$ref": "#/$defs/CoreApprovalRecord"
-    },
-    {
-      "$ref": "#/$defs/CoreActivationRecord"
-    },
-    {
-      "$ref": "#/$defs/CoreGroupActivationPointer"
     },
     {
       "$ref": "#/$defs/CoreBindingSetRevision"
@@ -84,48 +75,11 @@
       "type": "string",
       "minLength": 1
     },
-    "CorePlanIntent": {
-      "enum": [
-        "deploy",
-        "update",
-        "rollback",
-        "restore",
-        "repair",
-        "uninstall",
-        "rebind",
-        "network-update"
-      ]
-    },
-    "CorePlanStatus": {
-      "enum": [
-        "valid",
-        "invalid",
-        "stale",
-        "expired",
-        "superseded"
-      ]
-    },
-    "CoreApprovalState": {
-      "enum": [
-        "not_required",
-        "required",
-        "approved",
-        "rejected",
-        "expired"
-      ]
-    },
     "CorePolicyDecision": {
       "enum": [
         "allow",
         "deny",
         "require-approval"
-      ]
-    },
-    "CoreStalenessImpact": {
-      "enum": [
-        "must-replan",
-        "must-revalidate",
-        "warning-only"
       ]
     },
     "CoreSensitivity": {
@@ -807,161 +761,6 @@
       },
       "additionalProperties": false
     },
-    "CorePlan": {
-      "type": "object",
-      "required": [
-        "id",
-        "intent",
-        "groupId",
-        "descriptorClosureId",
-        "resolvedGraphDigest",
-        "status",
-        "approvalState",
-        "readSet",
-        "operations",
-        "policyDecisions",
-        "createdAt"
-      ],
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "intent": {
-          "$ref": "#/$defs/CorePlanIntent"
-        },
-        "groupId": {
-          "type": "string"
-        },
-        "descriptorClosureId": {
-          "type": "string"
-        },
-        "resolvedGraphDigest": {
-          "$ref": "#/$defs/Digest"
-        },
-        "status": {
-          "$ref": "#/$defs/CorePlanStatus"
-        },
-        "approvalState": {
-          "$ref": "#/$defs/CoreApprovalState"
-        },
-        "readSet": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CorePlanReadSetEntry"
-          }
-        },
-        "operations": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CorePlannedOperation"
-          }
-        },
-        "policyDecisions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CorePolicyDecisionRecord"
-          }
-        },
-        "bindingReports": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CoreBindingResolutionReport"
-          }
-        },
-        "resourceAccessPaths": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CoreResourceAccessPath"
-          }
-        },
-        "blockers": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "warnings": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "createdAt": {
-          "$ref": "#/$defs/IsoTimestamp"
-        },
-        "expiresAt": {
-          "$ref": "#/$defs/IsoTimestamp"
-        }
-      },
-      "additionalProperties": false
-    },
-    "CorePlanReadSetEntry": {
-      "type": "object",
-      "required": [
-        "objectType",
-        "objectId",
-        "stalenessImpact"
-      ],
-      "properties": {
-        "objectType": {
-          "type": "string"
-        },
-        "objectId": {
-          "type": "string"
-        },
-        "version": {
-          "type": [
-            "string",
-            "number"
-          ]
-        },
-        "digest": {
-          "$ref": "#/$defs/Digest"
-        },
-        "stalenessImpact": {
-          "$ref": "#/$defs/CoreStalenessImpact"
-        }
-      },
-      "additionalProperties": false
-    },
-    "CorePlannedOperation": {
-      "type": "object",
-      "required": [
-        "kind",
-        "objectAddress",
-        "idempotencyKey"
-      ],
-      "properties": {
-        "kind": {
-          "type": "string"
-        },
-        "objectAddress": {
-          "$ref": "#/$defs/ObjectAddress"
-        },
-        "desiredDigest": {
-          "$ref": "#/$defs/Digest"
-        },
-        "dependsOn": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "risk": {
-          "enum": [
-            "safe",
-            "attention",
-            "dangerous",
-            "blocked"
-          ]
-        },
-        "idempotencyKey": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "additionalProperties": false
-    },
     "CorePolicyDecisionRecord": {
       "type": "object",
       "required": [
@@ -1108,173 +907,6 @@
         },
         "enforcement": {
           "$ref": "#/$defs/CoreEnforcement"
-        }
-      },
-      "additionalProperties": false
-    },
-    "CoreActivationRecord": {
-      "type": "object",
-      "required": [
-        "id",
-        "groupId",
-        "routerConfigId",
-        "runtimeNetworkPolicyId",
-        "primaryAppReleaseId",
-        "assignments",
-        "createdAt"
-      ],
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "groupId": {
-          "type": "string"
-        },
-        "routerConfigId": {
-          "type": "string"
-        },
-        "runtimeNetworkPolicyId": {
-          "type": "string"
-        },
-        "primaryAppReleaseId": {
-          "type": "string"
-        },
-        "assignments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CoreActivationAssignment"
-          }
-        },
-        "routeAssignments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CoreRouteActivationAssignment"
-          }
-        },
-        "nonHttpDefaults": {
-          "$ref": "#/$defs/CoreActivationNonHttpDefaults"
-        },
-        "extensionDigest": {
-          "$ref": "#/$defs/Digest"
-        },
-        "createdAt": {
-          "$ref": "#/$defs/IsoTimestamp"
-        }
-      },
-      "additionalProperties": false
-    },
-    "CoreActivationAssignment": {
-      "type": "object",
-      "required": [
-        "appReleaseId",
-        "weight"
-      ],
-      "properties": {
-        "appReleaseId": {
-          "type": "string"
-        },
-        "weight": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "labels": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "CoreRouteActivationAssignment": {
-      "type": "object",
-      "required": [
-        "routeName",
-        "assignments"
-      ],
-      "properties": {
-        "routeName": {
-          "type": "string"
-        },
-        "protocol": {
-          "type": "string"
-        },
-        "assignments": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/CoreRouteAppReleaseAssignment"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "CoreRouteAppReleaseAssignment": {
-      "type": "object",
-      "required": [
-        "appReleaseId",
-        "weightPermille"
-      ],
-      "properties": {
-        "appReleaseId": {
-          "type": "string"
-        },
-        "weightPermille": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 1000
-        }
-      },
-      "additionalProperties": false
-    },
-    "CoreActivationNonHttpDefaults": {
-      "type": "object",
-      "properties": {
-        "events": {
-          "$ref": "#/$defs/CoreDefaultAppReleaseAssignment"
-        },
-        "publications": {
-          "$ref": "#/$defs/CoreDefaultAppReleaseAssignment"
-        }
-      },
-      "additionalProperties": false
-    },
-    "CoreDefaultAppReleaseAssignment": {
-      "type": "object",
-      "required": [
-        "appReleaseId"
-      ],
-      "properties": {
-        "appReleaseId": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "CoreGroupActivationPointer": {
-      "type": "object",
-      "required": [
-        "groupId",
-        "currentActivationRecordId",
-        "generation",
-        "updatedAt"
-      ],
-      "properties": {
-        "groupId": {
-          "type": "string"
-        },
-        "currentActivationRecordId": {
-          "type": "string"
-        },
-        "generation": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "updatedAt": {
-          "$ref": "#/$defs/IsoTimestamp"
         }
       },
       "additionalProperties": false

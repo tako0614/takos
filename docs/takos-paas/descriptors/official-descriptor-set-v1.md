@@ -1,4 +1,4 @@
-# Takos Deploy v3 Official Descriptor Set v1.0
+# Takos Deploy Official Descriptor Set v1.0
 
 This document proposes the initial official descriptor set for a Takos
 distribution. Deployments pin descriptors via
@@ -532,18 +532,16 @@ should use `secret-ref` by default and must define lifecycle semantics.
 A composite descriptor bundles a runtime contract instance with one or more
 related resource, route, or publication contract instances under a single
 authoring alias. Composites are an authoring convenience: the compiler MUST
-expand a composite reference into canonical
-component / contract instance form before resolution finalises, and the
-expansion descriptor's digest MUST be included in
-`Deployment.resolution.descriptor_closure`
+expand a composite reference into canonical component / contract instance form
+before resolution finalises, and the expansion descriptor's digest MUST be
+included in `Deployment.resolution.descriptor_closure`
 ([`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 5).
 
 Composites are profile-agnostic. The shape they emit always uses canonical
-`runtime.*` and `resource.*` contract refs. Provider materialisation
-(Cloudflare Workers vs AWS Lambda, Cloudflare D1 vs AWS RDS, R2 vs S3,
-Cloud Run vs Workers) is decided downstream by the `provider-selection`
-policy gate, exactly as it is for non-composite components. The composite
-fixes the *shape*, not the provider.
+`runtime.*` and `resource.*` contract refs. Provider materialisation (Cloudflare
+Workers vs AWS Lambda, Cloudflare D1 vs AWS RDS, R2 vs S3, Cloud Run vs Workers)
+is decided downstream by the `provider-selection` policy gate, exactly as it is
+for non-composite components. The composite fixes the _shape_, not the provider.
 
 The compiler emits one additional descriptor pin per composite expansion:
 
@@ -553,8 +551,8 @@ authoring.composite-expansion@v1
 
 Plus the composite's authoring alias itself (e.g.
 `composite.serverless-with-postgres@v1`). Both are recorded in
-`descriptor_closure.resolutions[]`, and a `shape-derivation` dependency edge
-is added from each pinned canonical descriptor to the composite alias.
+`descriptor_closure.resolutions[]`, and a `shape-derivation` dependency edge is
+added from each pinned canonical descriptor to the composite alias.
 
 ### Naming
 

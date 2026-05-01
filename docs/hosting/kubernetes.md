@@ -3,35 +3,87 @@
 このページは **Takos kernel を Kubernetes にホストする operator**
 向けです。カバー範囲は 2 通りです:
 
-1. **base Helm chart で kernel hosting** ―
-   `takos/paas/deploy/helm/takos` chart を直接使う、または AWS / GCP overlay
-   と組み合わせる path。
+1. **base Helm chart で kernel hosting** ― `takos/paas/deploy/helm/takos` chart
+   を直接使う、または AWS / GCP overlay と組み合わせる path。
 2. **k8s provider plugin (Phase 17A3)** ― namespace / Deployment / Service /
    Ingress / Secret / ConfigMap を Takos PaaS kernel から `provider` 契約
    として呼び出す path。Cloudflare control plane + k8s tenant runtime
    (`composite.cf-control-k8s-tenant@v1`) や k8s 単独 profile
    (`profiles/cloudflare-kubernetes.example.json`) で使う。
 
-Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
-4 cloud 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
+Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
+target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
 ::: warning current contract このページは Helm chart と Phase 17A3 の k8s
 provider plugin が表現している contract だけを説明します。任意の cloud-managed
-service への自動 provisioning matrix は current contract ではありません。
-:::
+service への自動 provisioning matrix は current contract ではありません。 :::
 
 AWS / GCP 向けの current docs はこの chart の Helm overlay です。current
 contract に含まれない項目は
 [Not A Current Contract](/hosting/differences#not-a-current-contract)
 を参照してください。
 
+## 統合 distribution からこの target を選ぶ
+
+Takos kernel の deploy は target に関わらず `takos-private/distribution.yml`
+を正本とします。汎用 Kubernetes を kernel host に選ぶには:
+
+```yaml
+# takos-private/distribution.yml
+distribution:
+  kernel_host:
+    target: kubernetes
+    region: on-prem
+    kubeconfig: ~/.kube/config
+    values_file: deploy/helm/values-k8s.yaml
+```
+
+## target-specific 設定
+
+汎用 Kubernetes target に固有の prerequisites:
+
+- Kubernetes cluster (EKS / GKE / AKS / on-prem / kind / k3s 何でも可)
+- `kubectl` access (operator 端末から cluster API server に到達できる
+  kubeconfig)
+- Helm v3 CLI
+- Ingress controller (nginx / traefik / Istio Gateway)
+- cert-manager + ClusterIssuer (Let's Encrypt 推奨)
+- external-dns (DNS 自動同期する場合)
+- StorageClass (PostgreSQL / Redis / MinIO の PVC backing)
+- External Secrets Operator / Sealed Secrets / 既存 Secret 連携
+
+bundled subchart (PostgreSQL / Redis / MinIO) を使うか、external 接続を使うかは
+[Values contract](#values-contract) と [External services](#external-services)
+を参照してください。
+
+## deploy 実行
+
+5 target 共通の quick runbook です。target ごとの差は `distribution.yml` の
+`kernel_host.target` だけで、`distribute:apply` が target 固有 backend (wrangler
+/ Helm / docker-compose) に dispatch します:
+
+```bash
+# 共通手順 (5 target で同じ)
+cd takos-private
+deno task generate:keys:production --per-cloud
+# distribution.yml を編集 (kernel_host.target = kubernetes)
+deno task distribute:dry-run --confirm production
+deno task distribute:apply --confirm production
+cd ../takos/paas
+deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+```
+
+`distribute:apply` は `kernel_host.target=kubernetes` を見て内部で
+`helm upgrade --install takos-control deploy/helm/takos -f deploy/helm/values-k8s.yaml`
+を呼び出します。
+
 ## どちらを選ぶか
 
-| 状況                                                                  | 推奨 path           |
-| --------------------------------------------------------------------- | ------------------- |
-| 自分の k8s クラスタに Takos kernel 全体を置きたい                     | section 1 (Helm)    |
-| Cloudflare で kernel を動かしつつ tenant workload を k8s に置きたい   | section 2 (plugin)  |
-| k8s 上で kernel + tenant workload を組む                              | section 1 + section 2 |
+| 状況                                                                | 推奨 path             |
+| ------------------------------------------------------------------- | --------------------- |
+| 自分の k8s クラスタに Takos kernel 全体を置きたい                   | section 1 (Helm)      |
+| Cloudflare で kernel を動かしつつ tenant workload を k8s に置きたい | section 2 (plugin)    |
+| k8s 上で kernel + tenant workload を組む                            | section 1 + section 2 |
 
 ---
 
@@ -156,36 +208,37 @@ platform secret または `secrets.existingSecrets.platform` の
 
 ### 構成
 
-`takos-paas-plugins` の k8s provider plugin は次の resource lifecycle を提供します:
+`takos-paas-plugins` の k8s provider plugin は次の resource lifecycle
+を提供します:
 
-| provider client                | 用途                          | 参照クラス                                             |
-| ------------------------------ | ----------------------------- | ------------------------------------------------------ |
-| `k8s-provider-gateway`         | namespace / Deployment / Service / Ingress lifecycle | `src/providers/k8s/provider.ts`         |
-| `k8s-runtime-agent-gateway`    | runtime-agent enrolment store | `src/providers/k8s/provider.ts` (`runtimeAgent`)       |
-| `k8s-ingress-router`           | Ingress + cert-manager        | `src/providers/k8s/ingress.ts`                         |
-| `k8s-secret`                   | Kubernetes Secret rotation    | `src/providers/k8s/secret.ts`                          |
-| `k8s-configmap`                | ConfigMap publication         | `src/providers/k8s/configmap.ts`                       |
-| `k8s-deployment`               | Deployment + replicas         | `src/providers/k8s/deployment.ts`                      |
+| provider client             | 用途                                                 | 参照クラス                                       |
+| --------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
+| `k8s-provider-gateway`      | namespace / Deployment / Service / Ingress lifecycle | `src/providers/k8s/provider.ts`                  |
+| `k8s-runtime-agent-gateway` | runtime-agent enrolment store                        | `src/providers/k8s/provider.ts` (`runtimeAgent`) |
+| `k8s-ingress-router`        | Ingress + cert-manager                               | `src/providers/k8s/ingress.ts`                   |
+| `k8s-secret`                | Kubernetes Secret rotation                           | `src/providers/k8s/secret.ts`                    |
+| `k8s-configmap`             | ConfigMap publication                                | `src/providers/k8s/configmap.ts`                 |
+| `k8s-deployment`            | Deployment + replicas                                | `src/providers/k8s/deployment.ts`                |
 
 `profiles/cloudflare-kubernetes.example.json` のように
-`clients.provider: "k8s-provider-gateway"` を設定すると、Takos PaaS kernel
-が k8s API server (kubectl proxy / API gateway) 経由で resource を materialize
+`clients.provider: "k8s-provider-gateway"` を設定すると、Takos PaaS kernel が
+k8s API server (kubectl proxy / API gateway) 経由で resource を materialize
 します。
 
 ### Operator が手動でやること / kernel が plugin 経由でやること
 
-| step                                                            | operator                | kernel (plugin) |
-| --------------------------------------------------------------- | ----------------------- | --------------- |
-| k8s cluster 作成 (EKS / GKE / AKS / on-prem)                    | yes                     | no              |
-| ServiceAccount + RBAC (Role / RoleBinding) 作成                 | yes                     | no              |
-| kubeconfig または Bearer token を kernel に inject              | yes (operator-managed)  | no              |
-| cert-manager / Ingress controller (nginx / traefik / Istio) deploy | yes                     | no              |
-| DNS zone (Route53 / Cloud DNS) 設定                             | yes                     | no              |
-| namespace / Deployment / Service の lifecycle                   | no                      | yes (provider)  |
-| Ingress / TLS Secret rotation                                   | no                      | yes (provider)  |
-| ConfigMap / Secret 同期                                         | no                      | yes (provider)  |
-| runtime-agent enrolment + work lease                            | yes (pod deploy)        | yes (work pull) |
-| drift 検出 / rollback                                           | no                      | yes (provider)  |
+| step                                                               | operator               | kernel (plugin) |
+| ------------------------------------------------------------------ | ---------------------- | --------------- |
+| k8s cluster 作成 (EKS / GKE / AKS / on-prem)                       | yes                    | no              |
+| ServiceAccount + RBAC (Role / RoleBinding) 作成                    | yes                    | no              |
+| kubeconfig または Bearer token を kernel に inject                 | yes (operator-managed) | no              |
+| cert-manager / Ingress controller (nginx / traefik / Istio) deploy | yes                    | no              |
+| DNS zone (Route53 / Cloud DNS) 設定                                | yes                    | no              |
+| namespace / Deployment / Service の lifecycle                      | no                     | yes (provider)  |
+| Ingress / TLS Secret rotation                                      | no                     | yes (provider)  |
+| ConfigMap / Secret 同期                                            | no                     | yes (provider)  |
+| runtime-agent enrolment + work lease                               | yes (pod deploy)       | yes (work pull) |
+| drift 検出 / rollback                                              | no                     | yes (provider)  |
 
 ### kubeconfig / ServiceAccount 設計
 
@@ -216,7 +269,11 @@ metadata: { name: takos-provider }
 subjects:
   - { kind: ServiceAccount, name: takos-provider, namespace: takos-system }
 roleRef:
-  { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: takos-provider }
+  {
+    apiGroup: rbac.authorization.k8s.io,
+    kind: ClusterRole,
+    name: takos-provider,
+  }
 ```
 
 token 取得 (k8s 1.24+ では `kubectl create token`):
@@ -285,10 +342,15 @@ spec:
           env:
             - name: TAKOS_KERNEL_URL
               value: "https://admin.takos.example.com"
-            - { name: TAKOS_RUNTIME_AGENT_TOKEN, valueFrom: { secretKeyRef: { name: takos-agent-token, key: token } } }
+            - {
+                name: TAKOS_RUNTIME_AGENT_TOKEN,
+                valueFrom: {
+                  secretKeyRef: { name: takos-agent-token, key: token },
+                },
+              }
           resources:
             requests: { cpu: "100m", memory: "128Mi" }
-            limits:   { cpu: "500m", memory: "512Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -300,7 +362,11 @@ metadata: { name: takos-runtime-agent, namespace: takos-tenants }
 subjects:
   - { kind: ServiceAccount, name: takos-runtime-agent, namespace: takos-system }
 roleRef:
-  { apiGroup: rbac.authorization.k8s.io, kind: Role, name: takos-tenant-deployer }
+  {
+    apiGroup: rbac.authorization.k8s.io,
+    kind: Role,
+    name: takos-tenant-deployer,
+  }
 ```
 
 agent は kernel に enroll → heartbeat → lease pull → namespace / Deployment /
@@ -323,8 +389,8 @@ operator がやること:
 - Ingress controller deploy (nginx / traefik / Istio Gateway)
 - cert-manager + ClusterIssuer (Let's Encrypt) deploy
 - external-dns + DNS provider credential 設定
-- profile の `pluginConfig.operator.takos.cloudflare-kubernetes.routerConfig`
-  に `ingressClass` / `clusterIssuer` / `externalDnsZone` を設定
+- profile の `pluginConfig.operator.takos.cloudflare-kubernetes.routerConfig` に
+  `ingressClass` / `clusterIssuer` / `externalDnsZone` を設定
 
 kernel がやること:
 

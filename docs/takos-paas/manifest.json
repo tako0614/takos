@@ -1,5 +1,5 @@
 {
-  "name": "takos-deploy-v2-v1.0-core-kit",
+  "name": "takos-deploy-v1.0-core-kit",
   "status": "v1.0-reference-kernel-with-external-plugins",
   "core": "core/01-core-contract-v1.0.md",
   "cloudflareWorkersProvider": "descriptors/providers/cloudflare-workers-v1.jsonld",
@@ -8,7 +8,7 @@
     "descriptors/authoring/public-manifest-expansion-v1.jsonld",
     "descriptors/composites/composite-serverless-with-postgres-v1.jsonld",
     "descriptors/composites/composite-web-app-with-cdn-v1.jsonld",
-    "descriptors/contexts/takos-deploy-v2-context.jsonld",
+    "descriptors/contexts/takos-deploy-context.jsonld",
     "descriptors/contracts/artifact-js-module-v1.jsonld",
     "descriptors/contracts/artifact-oci-image-v1.jsonld",
     "descriptors/contracts/interface-event-v1.jsonld",

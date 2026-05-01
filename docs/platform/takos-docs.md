@@ -54,9 +54,9 @@ routes:
     target: web
     path: /files/:id
 
-publish:
+publications:
   - name: docs-ui
-    type: takos.ui-surface.v1
+    type: publication.http-endpoint@v1
     display:
       title: Docs
     outputs:
@@ -64,7 +64,7 @@ publish:
         kind: url
         routeRef: ui
   - name: docs-mcp
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     display:
       title: Docs MCP
     outputs:
@@ -77,7 +77,7 @@ publish:
     spec:
       transport: streamable-http
   - name: docs-file-handler
-    type: takos.file-handler.v1
+    type: publication.http-endpoint@v1
     display:
       title: Docs
     outputs:
@@ -91,9 +91,9 @@ publish:
         - .takosdoc
 ```
 
-`takos.ui-surface.v1` / `takos.mcp-server.v1` /
-`takos.file-handler.v1` の canonical 定義は
-[publication types](/reference/glossary#publication-types) を参照。`takos.mcp-server.v1` entry は agent runtime
+`publication.http-endpoint@v1` / `publication.mcp-server@v1` /
+`publication.http-endpoint@v1` の canonical 定義は
+[publication types](/reference/glossary#publication-types) を参照。`publication.mcp-server@v1` entry は agent runtime
 が参照する MCP catalog entry です。
 
 ## Takos built-in provider publication
@@ -143,7 +143,7 @@ takos-docs は `takos-api` built-in provider consume から kernel API の endpo
 Takos managed deploy では consume env として `TAKOS_STORAGE_API_URL` /
 `TAKOS_STORAGE_ACCESS_TOKEN` が inject される。
 
-Storage UI から document file を開く場合は `takos.file-handler.v1` publication
+Storage UI から document file を開く場合は `publication.http-endpoint@v1` publication
 の `/files/:id` route を使う。新規作成または保存する Takos document file は
 `.takosdoc` extension と `application/vnd.takos.docs+json` MIME type を使う。
 既存 file を読む場合もこの MIME type を canonical contract として扱う。

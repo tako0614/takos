@@ -1,11 +1,11 @@
 # MCP Server
 
 MCP Server を公開する最小構成です。現行 contract では route publication を
-`publish` に書き、必要なら他 compute が explicit consume します。
+`publications` に書き、必要なら他 compute が explicit consume します。
 
 この例は
 [Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
-を `readiness` / `routes[].id` / `publish` で拡張したものです。
+を `readiness` / `routes[].id` / `publications` で拡張したものです。
 
 ## deploy manifest
 
@@ -27,9 +27,9 @@ routes:
     target: web
     path: /mcp
 
-publish:
+publications:
   - name: my-tools
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     outputs:
       url:
         kind: url
@@ -103,9 +103,9 @@ MCP client は owner service からその値を解決して `Authorization: Bear
 を送るので、worker 側でも同じ token を検証して ください。
 
 ```yaml
-publish:
+publications:
   - name: my-tools
-    type: takos.mcp-server.v1
+    type: publication.mcp-server@v1
     outputs:
       url:
         kind: url

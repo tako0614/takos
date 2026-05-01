@@ -1,9 +1,9 @@
-# Takos Deploy v3 v1.0 Conformance Tests
+# Takos Deploy v1.0 Conformance Tests
 
-This catalog defines acceptance tests for implementations of the Deployment-centric
-Core surface defined in
-[`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md).
-Tests are grouped by conformance surface.
+This catalog defines acceptance tests for implementations of the
+Deployment-centric Core surface defined in
+[`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md). Tests
+are grouped by conformance surface.
 
 ## Severity
 
@@ -20,11 +20,12 @@ MAY     optional
 ### Descriptor and Deployment resolution
 
 - A resolved Deployment MUST include `Deployment.resolution.descriptor_closure`.
-- Apply MUST use `Deployment.resolution.descriptor_closure` and MUST NOT re-fetch
-  descriptor URLs or remote contexts to reinterpret meaning (invariant 3).
-- A descriptor digest change after resolution MUST surface a
-  `DescriptorChanged` / `ReadSetChanged` condition and force re-resolution; the
-  existing Deployment MUST NOT be silently re-pinned.
+- Apply MUST use `Deployment.resolution.descriptor_closure` and MUST NOT
+  re-fetch descriptor URLs or remote contexts to reinterpret meaning (invariant
+  3).
+- A descriptor digest change after resolution MUST surface a `DescriptorChanged`
+  / `ReadSetChanged` condition and force re-resolution; the existing Deployment
+  MUST NOT be silently re-pinned.
 - Ambiguous alias expansion MUST block resolution (`DescriptorAliasAmbiguous`).
 - A descriptor denied by PolicySpec MUST block resolution (`PolicyDenied`).
 - Descriptors MUST be declarative; descriptors that contain arbitrary executable
@@ -36,7 +37,8 @@ MAY     optional
 - Every projection in `Deployment.resolution.resolved_graph` and every entry in
   `Deployment.desired.{routes,bindings,resources}` MUST carry an ObjectAddress.
 - Operation idempotency keys MUST include the object address or an equivalent
-  stable reference (default key: `deploymentId + operationKind + objectAddress + desiredDigest`).
+  stable reference (default key:
+  `deploymentId + operationKind + objectAddress + desiredDigest`).
 - Rename MUST NOT be inferred by name similarity.
 
 ### Deployment lifecycle and activation
@@ -50,8 +52,8 @@ MAY     optional
 - Assignments inside `Deployment.desired.activation_envelope` MUST sum to a
   total weight of 100 across `assignments[]`, with `primary_assignment` always
   present.
-- Provider convergence failure MUST NOT mutate `Deployment.desired` or any
-  prior Deployment's fields. Repair creates a new Deployment.
+- Provider convergence failure MUST NOT mutate `Deployment.desired` or any prior
+  Deployment's fields. Repair creates a new Deployment.
 - A change to `Deployment.desired.routes` MUST require a new Deployment.
 - A change to `Deployment.desired.runtime_network_policy` MUST require a new
   Deployment.
@@ -72,8 +74,8 @@ MAY     optional
 ### Rollback
 
 - Rollback MUST be a `GroupHead` pointer move that retargets
-  `current_deployment_id` to a retained Deployment; no new Deployment is
-  created for rollback itself (invariant 12).
+  `current_deployment_id` to a retained Deployment; no new Deployment is created
+  for rollback itself (invariant 12).
 - Rollback MUST NOT restore durable ResourceInstance state by default.
 - Rollback MUST NOT reverse migrations by default.
 - Rollback MUST use the retained `Deployment.input.manifest_snapshot` and the
@@ -94,8 +96,8 @@ MAY     optional
   policy, and approval.
 - The structure of `Deployment.desired.bindings` MUST be immutable after
   `applied` (invariant 8).
-- Binding value resolution MUST record `resolvedVersion` / `resolvedAt` for
-  each binding when available.
+- Binding value resolution MUST record `resolvedVersion` / `resolvedAt` for each
+  binding when available.
 - `SecretVersionRevoked` MUST mark affected bindings degraded or require a new
   repair Deployment.
 
@@ -103,8 +105,8 @@ MAY     optional
 
 ## Resource access conformance MUST tests
 
-- Each `Deployment.desired.bindings[*]` MUST expose its access path entry to
-  the Deployment record.
+- Each `Deployment.desired.bindings[*]` MUST expose its access path entry to the
+  Deployment record.
 - AccessMode MUST be contract-scoped in the canonical
   `Deployment.resolution.resolved_graph`.
 - Multiple valid access paths MUST be selected by EnvSpec/PolicySpec or
@@ -131,8 +133,9 @@ MAY     optional
 - `ServingConverged` MUST be separate from `ActivationCommitted`.
 - Provider/router convergence failure MUST create `ServingDegraded` or an
   equivalent `Deployment.conditions[]` entry.
-- Cloudflare Containers MUST be treated as on-demand Worker/Durable-Object-backed
-  materialization, not as the always-on provider baseline.
+- Cloudflare Containers MUST be treated as on-demand
+  Worker/Durable-Object-backed materialization, not as the always-on provider
+  baseline.
 - Kubernetes or another external always-on provider plugin MUST satisfy
   long-running container workload conformance.
 
@@ -140,8 +143,8 @@ MAY     optional
 
 ## Publication conformance MUST tests
 
-- A publication resolution change MUST NOT mutate existing consumer bindings
-  on previously applied Deployments.
+- A publication resolution change MUST NOT mutate existing consumer bindings on
+  previously applied Deployments.
 - Publication withdrawal MUST prevent new consumers and stall/degrade existing
   consumers.
 - Publication projection MUST NOT be ProviderObservation.
