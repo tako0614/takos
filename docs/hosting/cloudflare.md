@@ -533,7 +533,7 @@ control plane の deploy が完了したら、初期 admin account / tenant Spac
 
 ```bash
 # プレビュー (DB に書き込まない)
-cd takos/paas/apps/paas
+cd takosumi/packages/kernel
 deno task bootstrap:initial -- \
   --admin-email=admin@takos.jp \
   --tenant-name="Takos" \

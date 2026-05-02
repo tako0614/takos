@@ -11,7 +11,7 @@ takos/
   agent/  -> takos-agent
   app/    -> takos-app
   git/    -> takos-git
-  paas/   -> takosumi, including deploy and runtime lifecycle ownership
+  paas/   -> Takos deploy artifacts (helm/terraform/distributions). Kernel itself is external (jsr:@takos/takosumi-kernel)
   docs/   -> shell-owned product architecture, runbooks, and planning docs
 ```
 
