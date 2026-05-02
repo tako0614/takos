@@ -115,7 +115,7 @@ operator が選ぶのは:
 Phase 13 で導入した composite descriptor は **runtime + resource + publication
 
 - route の組** を 1 つの authoring alias として manifest に書けるようにします。
-  canonical な 4 個 (`takos-paas-plugins/src/profiles/composite/mod.ts`) を
+  canonical な 4 個 (`takosumi/src/profiles/composite/mod.ts`) を
   operator が deploy manifest 上で参照します。
 
 | alias                                   | 構成                                               |
@@ -156,7 +156,7 @@ Cloudflare profile に当てれば Workers + Hyperdrive Postgres、AWS profile
 `distribution.yml` の `kernel_host.target` / `tenant_runtime.targets` は deploy
 入口を切り替える top-level switch です。kernel が tenant request の
 materialization に使う **provider plugin profile** は、その下で profile JSON
-(`takos-paas-plugins/profiles/*.example.json`) に展開され、
+(`takosumi/profiles/*.example.json`) に展開され、
 `pluginConfig.operator.takos.<profile>.clients.*` で各 PaaS plugin slot を どの
 provider client に向けるかを宣言します。
 
@@ -422,7 +422,7 @@ echo "$SECRET_KEY" | deno task secrets put AWS_SECRET_ACCESS_KEY --env productio
 cd ../..
 
 # 5. provider plugin profile を cloudflare-aws に切替
-cd ../takos-paas-plugins
+cd ../takosumi
 cp profiles/cloudflare-aws.example.json deploy/cloudflare/profiles/production.json
 # accountId / region / artifactBucket を実値に編集
 deno task profile:apply --env production

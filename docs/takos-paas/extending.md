@@ -2,7 +2,7 @@
 
 このページは provider plugin / Shape / Template を **追加・拡張** する RFC-style
 ガイドです。canonical な命名規則と最小コミットメントは
-[`takos-paas-plugins/CONVENTIONS.md`](https://github.com/takos-jp/takos-paas-plugins/blob/main/CONVENTIONS.md)
+[`takosumi/CONVENTIONS.md`](https://github.com/takos-jp/takosumi/blob/main/CONVENTIONS.md)
 を正本とし、本ページは docs site での日本語サマリです。
 
 ## 拡張の選び方
@@ -32,8 +32,8 @@ src/shape-providers/<shape-id>/<provider-id>.ts
 
 ### 2. ProviderPlugin factory を export する
 
-既存の [`object-store/aws-s3.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/object-store/aws-s3.ts)
-や [`web-service/cloud-run.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/web-service/cloud-run.ts)
+既存の [`object-store/aws-s3.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/object-store/aws-s3.ts)
+や [`web-service/cloud-run.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/web-service/cloud-run.ts)
 をテンプレに `ProviderPlugin<TSpec, TOutputs>` を返す factory を書きます。
 
 ```ts
@@ -244,4 +244,4 @@ secret の raw value は **絶対に返しません**。`*Ref` field に
 - [Templates](./templates.md)
 - [Manifest](./manifest.md)
 - [Operator Bootstrap](./operator-bootstrap.md)
-- [`CONVENTIONS.md`](https://github.com/takos-jp/takos-paas-plugins/blob/main/CONVENTIONS.md) (canonical)
+- [`CONVENTIONS.md`](https://github.com/takos-jp/takosumi/blob/main/CONVENTIONS.md) (canonical)

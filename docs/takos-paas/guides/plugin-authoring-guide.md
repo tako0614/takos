@@ -133,7 +133,7 @@ streams, resources, registry, audit, usage aggregates, and service endpoints.
 
 ## Operator profile bundles
 
-The ecosystem external plugin root (`takos-paas-plugins/` working tree,
+The ecosystem external plugin root (`takosumi/` working tree,
 published as **Takosumi**: JSR `@takosumi/plugins`) provides profile bundle
 implementations for:
 

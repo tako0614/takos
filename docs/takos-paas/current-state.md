@@ -71,7 +71,7 @@ Self-hosted and cloud production behavior, including signed service auth,
 database storage, source snapshots, provider materialization, queue/object
 storage, router config, KMS, secret storage, notifications, observability, and
 runtime agent integration, belongs in operator-provided external plugin bundles.
-The ecosystem checkout contains a separate `takos-paas-plugins` working tree
+The ecosystem checkout contains a separate `takosumi` working tree
 (published as the `@takosumi/plugins` JSR package, an independent product
 called **Takosumi**) with operator profile bundles for self-hosted, Cloudflare,
 AWS, GCP, and Kubernetes. Those
@@ -143,7 +143,7 @@ and requires an operator-deployed target.
 The PaaS API can be created through a side-effect-free bootstrap factory, so an
 operator runtime can register trusted plugins and a `KernelPluginClientRegistry`
 before serving traffic. The Takosumi `deploy/cloudflare` scaffold (path:
-`takos-paas-plugins/deploy/cloudflare`) documents the Worker, D1, R2, Queue,
+`takosumi/deploy/cloudflare`) documents the Worker, D1, R2, Queue,
 Durable Object, and Container binding shape
 for running the PaaS API behind Cloudflare infrastructure, and includes a Deno
 container template for the PaaS API. Operators still need to inject real

@@ -83,13 +83,13 @@ Provider proof belongs to the external plugin bundle. From the ecosystem root
 layout, the self-host manifest advertises:
 
 ```sh
-cd ../../takos-paas-plugins && deno task live-smoke:selfhosted
+cd ../../takosumi && deno task live-smoke:selfhosted
 
-cd ../../takos-paas-plugins && deno task live-provisioning-smoke:selfhosted
+cd ../../takosumi && deno task live-provisioning-smoke:selfhosted
 ```
 
 Use the fixture and environment variables required by Takosumi
-(`@takosumi/plugins`, working tree at `takos-paas-plugins/`). Keep the live
+(`@takosumi/plugins`, working tree at `takosumi/`). Keep the live
 output with the release/distribution evidence, separate from the kernel docs
 lint and local release gate.
 
@@ -100,7 +100,7 @@ lint and local release gate.
 - Dry-run smoke passes but `--live` fails: the deployed target URLs are not
   reachable, a service returns a non-200 health response, or expected health
   JSON does not match the manifest.
-- Provider live smoke fails: inspect Takosumi (`takos-paas-plugins/`) credentials, fixture
+- Provider live smoke fails: inspect Takosumi (`takosumi/`) credentials, fixture
   values, client injection, and provider endpoint permissions.
 - Kernel-local smoke fails: fix the PaaS current surface before treating any
   self-host provider proof as meaningful.

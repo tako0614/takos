@@ -1,6 +1,6 @@
 # Provider Plugins
 
-`takos-paas-plugins` は curated [Shape](./shape-catalog.md) を実装する
+`takosumi` は curated [Shape](./shape-catalog.md) を実装する
 **18 個の provider plugin** を bundle しています。各 provider は `ProviderPlugin<Spec, Outputs>`
 を返す factory として `src/shape-providers/<shape>/<provider-id>.ts` に実装され、
 `createTakosumiProductionProviders(opts)` 経由で operator が wire-in します
@@ -26,7 +26,7 @@ interface ProviderPlugin<Spec, Outputs> {
 `factories.ts` 内の **gateway adapter** が wire されます (operator gateway を
 HTTP で叩く)。lifecycle adapter が credential を直接保持することはありません。
 
-source 一覧: [`src/shape-providers/`](https://github.com/takos-jp/takos-paas-plugins/tree/main/src/shape-providers)
+source 一覧: [`src/shape-providers/`](https://github.com/takos-jp/takosumi/tree/main/src/shape-providers)
 
 ## ObjectStore (5 providers)
 
@@ -38,7 +38,7 @@ source 一覧: [`src/shape-providers/`](https://github.com/takos-jp/takos-paas-p
 | `minio`          | MinIO HTTP API (selfhosted)                           | `versioning`, `presigned-urls`, `server-side-encryption`, `public-access`, `lifecycle-rules`, `multipart-upload`  |
 | `filesystem`     | local FS (dev / single-host)                          | `presigned-urls`                                                                                                  |
 
-source 例: [`object-store/aws-s3.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/object-store/aws-s3.ts)
+source 例: [`object-store/aws-s3.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/object-store/aws-s3.ts)
 
 ## WebService (6 providers)
 
@@ -51,7 +51,7 @@ source 例: [`object-store/aws-s3.ts`](https://github.com/takos-jp/takos-paas-pl
 | `k3s-deployment`       | Kubernetes gateway (Deployment + Service apply) | `always-on`, `websocket`, `long-request`, `private-networking`              |
 | `systemd-unit`         | local systemd `*.service` unit writer           | `always-on`, `long-request`                                                 |
 
-source 例: [`web-service/cloudflare-container.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/web-service/cloudflare-container.ts)
+source 例: [`web-service/cloudflare-container.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/web-service/cloudflare-container.ts)
 
 ## Database.Postgres (3 providers)
 
@@ -61,7 +61,7 @@ source 例: [`web-service/cloudflare-container.ts`](https://github.com/takos-jp/
 | `cloud-sql`     | GCP gateway (Cloud SQL admin API)              | `pitr`, `read-replicas`, `high-availability`, `backups`, `ssl-required`, `extensions` |
 | `local-docker`  | local `docker run` CLI adapter (selfhosted)    | `ssl-required`, `extensions`                                                     |
 
-source 例: [`database-postgres/aws-rds.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/database-postgres/aws-rds.ts)
+source 例: [`database-postgres/aws-rds.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/database-postgres/aws-rds.ts)
 
 ## CustomDomain (4 providers)
 
@@ -72,7 +72,7 @@ source 例: [`database-postgres/aws-rds.ts`](https://github.com/takos-jp/takos-p
 | `cloud-dns`        | GCP gateway (Cloud DNS API)                 | `wildcard`, `auto-tls`, `sni`          |
 | `coredns-local`    | local Corefile writer (selfhosted)          | `wildcard`                             |
 
-source 例: [`custom-domain/cloudflare-dns.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/custom-domain/cloudflare-dns.ts)
+source 例: [`custom-domain/cloudflare-dns.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/custom-domain/cloudflare-dns.ts)
 
 ## Provider selection と `requires:`
 
@@ -97,7 +97,7 @@ manifest validation で reject されます (cf.
 ## Real client / lifecycle adapter {#real-client--lifecycle-adapter}
 
 production 用の lifecycle adapter は
-[`src/shape-providers/factories.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/factories.ts)
+[`src/shape-providers/factories.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/factories.ts)
 に集約されています。
 
 - AWS / GCP / Cloudflare / Kubernetes: `JsonGateway` 経由で operator gateway に POST する
