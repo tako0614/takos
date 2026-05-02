@@ -155,17 +155,6 @@ export default defineConfig({
           { text: 'Core Contract v1.0', link: '/takos-paas/core/01-core-contract-v1.0' },
           { text: 'v1.0 Implementation Checklist', link: '/takos-paas/10-v1.0-implementation-checklist' },
           {
-            text: 'Shape Model',
-            items: [
-              { text: 'Shape Catalog', link: '/takos-paas/shape-catalog' },
-              { text: 'Provider Plugins', link: '/takos-paas/provider-plugins' },
-              { text: 'Templates', link: '/takos-paas/templates' },
-              { text: 'Manifest (Shape Model)', link: '/takos-paas/manifest' },
-              { text: 'Operator Bootstrap', link: '/takos-paas/operator-bootstrap' },
-              { text: 'Extending', link: '/takos-paas/extending' },
-            ],
-          },
-          {
             text: 'Authoring Guides',
             items: [
               { text: 'Authoring Guide', link: '/takos-paas/guides/authoring-guide' },

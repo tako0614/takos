@@ -2,8 +2,9 @@
 
 ::: tip Shape Model envelope を使う場合
 新しい portable Shape Model の manifest envelope (`resources[]` / `template:` /
-`${ref:...}`) を使う場合は
-[**Manifest (Shape Model)**](/takos-paas/manifest) を参照してください。
+`${ref:...}`) を使う場合は Takosumi リポジトリの
+[`docs/manifest.md`](https://github.com/tako0614/takosumi/blob/main/docs/manifest.md)
+を参照してください。
 このページは Core descriptor (`components` / `contracts` / `routes` /
 `bindings` / `publications`) を直接書く canonical 形式の guide です。
 :::

@@ -10,19 +10,13 @@ state + status + conditions), `ProviderObservation` (observed-side stream), and
 
 > 現行実装の status は [Current Implementation Note](./current-state) を参照。
 
-## Shape Model (新)
+## Shape Model (Takosumi)
 
-Takosumi の portable resource model は **Shape + Provider + Template** に
-集約されています。新規 manifest は `resources[]` で portable な Shape resource を
-declarative に並べ、`provider:` で実装を選び、`${ref:...}` syntax で配線します。
-
-- [Shape Catalog](./shape-catalog) — 4 つの curated Shape (`object-store@v1` /
-  `web-service@v1` / `database-postgres@v1` / `custom-domain@v1`)
-- [Provider Plugins](./provider-plugins) — bundled 18 provider と capabilities
-- [Templates](./templates) — `selfhosted-single-vm@v1` / `web-app-on-cloudflare@v1`
-- [Manifest (Shape Model)](./manifest) — `resources[]` / `template:` / `${ref:...}`
-- [Operator Bootstrap](./operator-bootstrap) — `createTakosumiProductionProviders(opts)` 配線
-- [Extending](./extending) — 新 provider 追加 / Shape RFC / template 追加フロー
+Takosumi の portable resource model (Shape + Provider + Template) は独立した
+Takosumi リポジトリに移管されました。Shape Catalog / Provider Plugins /
+Templates / Manifest envelope / Operator Bootstrap / Extending の docs は
+[`takosumi/docs/`](https://github.com/tako0614/takosumi/tree/main/docs) を
+参照してください。
 
 ## Boundary
 
