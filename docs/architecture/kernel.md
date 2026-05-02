@@ -17,7 +17,7 @@ GroupHead といった meta-objects に従って routing / activation / binding 
 `.runtime_network_policy` / `.activation_envelope`) → conditions
 (`Deployment.conditions[]`) の 4 layer を 1 record に内包する。Core の normative
 定義は
-[`takos-paas/core/01-core-contract-v1.0.md`](/takos-paas/core/01-core-contract-v1.0)
+[`takosumi/core/01-core-contract-v1.0.md`](/takos-paas/core/01-core-contract-v1.0)
 を、用語表は [Glossary § Core meta-objects](/reference/glossary) を参照。
 
 ## Takos の定義

@@ -11,7 +11,7 @@ takos/
   agent/  -> takos-agent
   app/    -> takos-app
   git/    -> takos-git
-  paas/   -> takos-paas, including deploy and runtime lifecycle ownership
+  paas/   -> takosumi, including deploy and runtime lifecycle ownership
   docs/   -> shell-owned product architecture, runbooks, and planning docs
 ```
 
@@ -83,9 +83,9 @@ The planned remote repositories are:
 deno task local:up
 ```
 
-The local compose entrypoint should expose the core service set: `takos-app`, `takos-git`, `takos-paas`, and
+The local compose entrypoint should expose the core service set: `takos-app`, `takos-git`, `takosumi`, and
 `takos-agent`. Do not add standalone deploy or runtime services to this shell compose file; those lifecycles are local
-process roles and domains of `takos-paas`.
+process roles and domains of `takosumi`.
 
 See also:
 

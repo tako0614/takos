@@ -373,7 +373,7 @@ kernel が必要とする 5 つの platform secret を生成します:
   `TAKOS_SECRET_ENCRYPTION_KEY` のいずれかでも可)
 
 ::: danger production / staging では encryption key が必須
-`TAKOS_ENVIRONMENT=production` または `staging` で起動するとき、Takos PaaS は
+`TAKOS_ENVIRONMENT=production` または `staging` で起動するとき、Takosumi は
 `TAKOS_SECRET_STORE_PASSPHRASE` / `TAKOS_SECRET_STORE_KEY` /
 `TAKOS_SECRET_ENCRYPTION_KEY` / `ENCRYPTION_KEY` のいずれか 1 つを **必須** と
 します。これらが未設定だと boot 時に fail-closed で `process exit 1` し、 secret
@@ -392,7 +392,7 @@ crypto を許可できます (production では opt-in を渡しても fail- clo
 ::: danger production / staging では DB at-rest encryption が必須 (Phase 18.3
 M7)
 
-`TAKOS_ENVIRONMENT=production` または `staging` で起動するとき、Takos PaaS は
+`TAKOS_ENVIRONMENT=production` または `staging` で起動するとき、Takosumi は
 boot 時に `DATABASE_URL` (`TAKOS_DATABASE_URL` / `TAKOS_PRODUCTION_DATABASE_URL`
 / `TAKOS_STAGING_DATABASE_URL`) を inspect し、at-rest encryption signal を 1
 つ以上 含むことを **必須** とします。signal が無い場合は `process exit 1` で
@@ -413,7 +413,7 @@ M5)
 
 audit_events table の hash chain は app 層で計算されますが、DBA が直接 table
 を改竄できる脅威モデルでは、**off-DB の immutable replication sink** が 独立した
-tamper evidence の正本となります。Takos PaaS は production / staging boot で
+tamper evidence の正本となります。Takosumi は production / staging boot で
 `TAKOS_AUDIT_REPLICATION_KIND` を要求します:
 
 - `TAKOS_AUDIT_REPLICATION_KIND=s3` ― S3 versioning + Object Lock (COMPLIANCE /

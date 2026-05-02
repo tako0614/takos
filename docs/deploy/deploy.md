@@ -3,7 +3,7 @@
 `takos deploy` は Takos の Deployment lifecycle entrypoint です。deploy manifest
 (`.takos/app.yml` / `.takos/app.yaml`) または repository URL を入力にして、
 worker / service / resource / route / publication / consume の authoring
-declaration を 1 つの Deployment record として resolve し、`takos-paas` Core の
+declaration を 1 つの Deployment record として resolve し、`takosumi` Core の
 `Deployment.desired` (routes / bindings / resources / runtime_network_policy /
 activation_envelope) を pin します。default では resolve に続けて apply まで
 1 step で実行されます。manifest の `name` で決まる group が GroupHead pointer

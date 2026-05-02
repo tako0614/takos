@@ -1,6 +1,6 @@
 # Production Gap Burndown
 
-This is the concise burndown for the current Takos PaaS current surface. It
+This is the concise burndown for the current Takosumi current surface. It
 records the strongest state currently present in the `takos/paas` product root
 and keeps external self-host/cloud proof separate from the kernel release gate.
 Run proof commands from `/home/tako/Desktop/takos/takos/paas`.

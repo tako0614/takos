@@ -10,7 +10,7 @@ and provider credentials belong outside this repo.
 
 The self-host template is `deploy/distributions/selfhosted.json`. It declares
 the `@takosumi/plugins` self-hosted profile, required services (`takos-app`,
-`takos-paas`, `takos-git`, `takos-agent`), service health probes, required
+`takosumi`, `takos-git`, `takos-agent`), service health probes, required
 bindings, and provider proof tasks.
 
 ```sh
@@ -50,7 +50,7 @@ self-host artifact path.
 
 Before live proof, ensure the operator deployment provides:
 
-- immutable service images for `takos-app`, `takos-paas`, `takos-git`, and
+- immutable service images for `takos-app`, `takosumi`, `takos-git`, and
   `takos-agent`
 - target URLs matching the concrete self-host manifest
 - Docker/Podman or equivalent process hosting

@@ -79,9 +79,9 @@ top-level `bindings[]` に declaration し、 `from` の 4 source kind
 
 ## Core meta-objects (PaaS Core normative)
 
-これらは `takos-paas/core/01-core-contract-v1.0.md` で normative に定義された
+これらは `takosumi/core/01-core-contract-v1.0.md` で normative に定義された
 PaaS Core meta-objects。Takos Deploy では Core record は **Deployment /
-ProviderObservation / GroupHead** の 3 つに圧縮される。`takos-paas` Core を
+ProviderObservation / GroupHead** の 3 つに圧縮される。`takosumi` Core を
 canonical とする全 docs の参照点。
 
 ### Component (Core)
@@ -319,7 +319,7 @@ configuration / architecture で扱う。public deploy manifest には backend
 ## Workers backend implementation note
 
 Cloudflare Workers / Cloudflare Containers / wrangler.toml 系の固有用語は
-`takos-paas` の reference materialization detail であり、Core 用語ではない。 各
+`takosumi` の reference materialization detail であり、Core 用語ではない。 各
 architecture / hosting 章では Workers backend collapsible 節に集約する。
 
 | Cloudflare-shaped 名                                        | 役割 (Core 用語との対応)                                                              |

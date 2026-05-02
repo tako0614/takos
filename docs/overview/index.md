@@ -88,7 +88,7 @@ Takos Docs では、次の 3 層を分けて読みます。
 - 用語の canonical ref は [用語集](/reference/glossary)
 - CLI / API は [リファレンス](/reference/)
 - 実装ステータスと split shell の現状は
-  [takos-paas Current State](/takos-paas/current-state)
+  [takosumi Current State](/takos-paas/current-state)
 
 ## 次に読むページ
 

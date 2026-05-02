@@ -49,7 +49,7 @@ deno task local:logs
 deno task local:down
 ```
 
-The shell starts `takos-app`, `takos-paas`, `takos-git`, `takos-agent`, Postgres, and Redis. Product implementation
+The shell starts `takos-app`, `takosumi`, `takos-git`, `takos-agent`, Postgres, and Redis. Product implementation
 changes still happen inside each product root.
 
 ## Product Root Commands

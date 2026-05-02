@@ -66,7 +66,7 @@ Thread / Run を production feature として利用できる状態です。
 1.0 で production target とする hosting bundle:
 
 - single-node production self-host
-- PostgreSQL / Redis / S3-compatible object storage through Takos PaaS kernel
+- PostgreSQL / Redis / S3-compatible object storage through Takosumi kernel
   plugins
 - TLS / reverse proxy は operator が前段で提供する
 - Cloudflare は kernel 外の reference plugin/backend として維持する

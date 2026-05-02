@@ -1,6 +1,6 @@
 # Kernel / Plugin Boundary Audit
 
-This document is the working checklist for keeping Takos PaaS docs aligned with
+This document is the working checklist for keeping Takosumi docs aligned with
 the kernel-only implementation model.
 
 ## Source of truth

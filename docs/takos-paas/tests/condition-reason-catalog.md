@@ -7,7 +7,7 @@ surfaces. The current surface exposes these reasons exclusively through
 [`../core/01-core-contract-v1.0.md`](../core/01-core-contract-v1.0.md) § 13).
 
 The source of truth is `CORE_CONDITION_REASONS` exported by
-`takos-paas-contract`. PaaS API responses and controller/status DTOs that expose
+`takosumi-contract`. PaaS API responses and controller/status DTOs that expose
 `condition.reason` must use only these values. External repos such as
 `takos-cli` and `takos-app` consume the exported contract or OpenAPI schema;
 they are not validated from the PaaS repository. Runtime-agent work failure text

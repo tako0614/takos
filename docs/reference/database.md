@@ -2846,9 +2846,9 @@ CREATE INDEX "workflows_repo_id_idx" ON "workflows"("repo_id");
 CREATE UNIQUE INDEX "workflows_repo_id_path_key" ON "workflows"("repo_id", "path");
 ```
 
-## takos-paas Core schema (Deployment-centric)
+## takosumi Core schema (Deployment-centric)
 
-`takos-paas` の Deploy では、Core record は `deployments` /
+`takosumi` の Deploy では、Core record は `deployments` /
 `provider_observations` / `group_heads` の 3 つに圧縮されます。Phase 2 migration
 (`takos/paas/apps/paas/db/migrations/20260430000010_unify_to_deployments.sql`)
 は v2 の `deploy_plans` / `deploy_activation_records` /
