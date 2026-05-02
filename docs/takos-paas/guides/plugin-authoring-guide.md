@@ -1,6 +1,6 @@
-# Takos PaaS Kernel Plugin Authoring Guide
+# Takosumi Kernel Plugin Authoring Guide
 
-Takos PaaS plugins provide implementation adapters for kernel I/O ports. They do
+Takosumi plugins provide implementation adapters for kernel I/O ports. They do
 not define Core semantics. Core records — `Deployment` (with its inlined
 `resolution.descriptor_closure`, `resolution.resolved_graph`, `desired.bindings`,
 `desired.routes`, `desired.runtime_network_policy`, `desired.activation_envelope`,
@@ -12,7 +12,7 @@ not define Core semantics. Core records — `Deployment` (with its inlined
 A plugin exports a `TakosPaaSKernelPlugin` with a manifest.
 
 ```ts
-import type { TakosPaaSKernelPlugin } from "takos-paas-contract/plugin";
+import type { TakosPaaSKernelPlugin } from "takosumi-contract/plugin";
 
 export default {
   manifest: {

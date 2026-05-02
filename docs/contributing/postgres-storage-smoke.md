@@ -3,7 +3,7 @@
 ## Purpose
 
 `/scripts/postgres-storage-smoke.ts` is a safe-by-default smoke check for the
-Takos PaaS storage plugin/adapter boundary:
+Takosumi storage plugin/adapter boundary:
 
 - `PostgresStorageDriver` can be constructed with a `SqlClient`.
 - `StorageMigrationRunner` can compute a dry-run plan over the bundled Postgres

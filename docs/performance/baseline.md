@@ -1,6 +1,6 @@
 # Performance Baseline Metrics (Phase 20C)
 
-Takos PaaS deploy lifecycle の in-process performance baseline。Phase 20C
+Takosumi deploy lifecycle の in-process performance baseline。Phase 20C
 で計測。`takos/paas/scripts/load-test/` の Deno スクリプトと
 `k6-load-test.js` を用いて計測した結果をまとめる。
 

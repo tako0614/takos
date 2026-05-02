@@ -213,7 +213,7 @@ private stack の `takos-private/compose.server.yml` は MinIO を host `9000` /
 | `EXECUTOR_PROXY_SECRET`         | executor-host から control-web への内部 RPC secret                             |
 
 ::: danger production / staging では secret-store encryption key が必須
-`TAKOS_ENVIRONMENT=production` または `staging` で takos-paas を起動するとき、
+`TAKOS_ENVIRONMENT=production` または `staging` で takosumi を起動するとき、
 `TAKOS_SECRET_STORE_PASSPHRASE` / `TAKOS_SECRET_STORE_KEY` /
 `TAKOS_SECRET_ENCRYPTION_KEY` / `ENCRYPTION_KEY` のいずれか 1 つは **必須** で、
 未設定だと boot 時に fail-closed (`process exit 1`) します。これにより
@@ -537,7 +537,7 @@ k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes)
 
 ## selfhosted provider plugin (Phase 17A3)
 
-bare metal / Docker Compose / VM 上の resource を Takos PaaS kernel から
+bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
 `provider` 契約として呼び出したい場合は **selfhosted provider plugin** を
 使います。`profiles/selfhosted.example.json` で
 `clients.provider: "local-container-provider"` を選ぶ構成です。

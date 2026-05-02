@@ -1,7 +1,7 @@
-# Takos PaaS API surface
+# Takosumi API surface
 
 `apps/paas/src/api/openapi.ts` owns a dependency-free OpenAPI-ish JSON snapshot
-for the current Takos PaaS mounted route surface. It is intentionally a plain
+for the current Takosumi mounted route surface. It is intentionally a plain
 TypeScript object generator so API documentation can be checked without adding a
 docs/runtime dependency to the PaaS service.
 

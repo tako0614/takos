@@ -1,4 +1,4 @@
-# Takos PaaS Acceptance Test Backlog
+# Takosumi Acceptance Test Backlog
 
 This backlog translates `../takos-paas/tests/conformance-tests.md` into
 implementation test groups. It is intentionally severity ordered so multiple

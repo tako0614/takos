@@ -1,4 +1,4 @@
-# Takos PaaS Public Manifest Authoring Guide
+# Takosumi Public Manifest Authoring Guide
 
 Core は canonical で descriptor-pinned。 Authors は flat な public manifest
 (`.takos/app.yml`) を書き、PaaS は Deployment が resolved になる前に

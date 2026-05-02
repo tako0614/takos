@@ -6,7 +6,7 @@
 1. **base Helm chart で kernel hosting** ― `takos/paas/deploy/helm/takos` chart
    を直接使う、または AWS / GCP overlay と組み合わせる path。
 2. **k8s provider plugin (Phase 17A3)** ― namespace / Deployment / Service /
-   Ingress / Secret / ConfigMap を Takos PaaS kernel から `provider` 契約
+   Ingress / Secret / ConfigMap を Takosumi kernel から `provider` 契約
    として呼び出す path。Cloudflare control plane + k8s tenant runtime
    (`composite.cf-control-k8s-tenant@v1`) や k8s 単独 profile
    (`profiles/cloudflare-kubernetes.example.json`) で使う。
@@ -221,7 +221,7 @@ Takosumi (`@takosumi/plugins`) の k8s provider plugin は次の resource lifecy
 | `k8s-deployment`            | Deployment + replicas                                | `src/providers/k8s/deployment.ts`                |
 
 `profiles/cloudflare-kubernetes.example.json` のように
-`clients.provider: "k8s-provider-gateway"` を設定すると、Takos PaaS kernel が
+`clients.provider: "k8s-provider-gateway"` を設定すると、Takosumi kernel が
 k8s API server (kubectl proxy / API gateway) 経由で resource を materialize
 します。
 

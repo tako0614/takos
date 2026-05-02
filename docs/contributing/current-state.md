@@ -1,4 +1,4 @@
-# Takos PaaS Current State
+# Takosumi Current State
 
 This snapshot summarizes the implementation currently present in this product
 root. It is intentionally descriptive rather than prescriptive; the forward plan
@@ -12,7 +12,7 @@ remains
 - `apps/paas/src/api` exposes:
   - `GET /health` and `GET /capabilities`.
   - signed internal service routes for spaces, groups, deploy plans, and deploy
-    applies through `takos-paas-contract` path constants.
+    applies through `takosumi-contract` path constants.
   - public standalone routes under `/api/public/v1` for capabilities, spaces,
     groups, deploy planning, and deploy apply.
 - `packages/paas-contract` contains shared DTOs and signed internal request
@@ -167,7 +167,7 @@ Notes:
 - `deno task test:all` delegates to
   `deno test --allow-all --permit-no-files apps/paas packages/paas-contract`.
 - `deno task dev:paas` runs the Hono entrypoint with `--allow-net --allow-env`.
-- docs tasks currently print that Takos docs moved out of the `takos-paas`
+- docs tasks currently print that Takos docs moved out of the `takosumi`
   service scope.
 - local Compose and Helm metadata carry the current PaaS process-role
   labels/envs.

@@ -76,12 +76,12 @@ distribution:
 
 ## Multi-cloud topology の前提
 
-Takos PaaS kernel は **kernel と provider plugin** に分かれた two-layer
+Takosumi kernel は **kernel と provider plugin** に分かれた two-layer
 architecture です:
 
 ```
                +-------------------+
-               |  Takos PaaS       |
+               |  Takosumi       |
                |  kernel           |  ← Cloudflare Worker
                |  (control plane)  |     (canonical hosting)
                +---------+---------+
@@ -676,7 +676,7 @@ emit すると dashboards で観測できます。
 
 ## DB at-rest encryption の enforce (Phase 18.3 M7)
 
-Takos PaaS は production / staging boot で **DB connection の at-rest encryption
+Takosumi は production / staging boot で **DB connection の at-rest encryption
 flag** を強制チェックします。recognised signals は次のとおりです:
 
 | backend             | recognised signal                                                   |
@@ -706,7 +706,7 @@ local / dev で encryption の無い DB を使う場合は `TAKOS_ALLOW_UNENCRYP
 
 audit_events table の SHA-256 hash chain は app 層で計算されますが、DBA が DB
 上で chain を再計算しながら row を改竄するシナリオでは **off-DB の immutable
-replica** が canonical な tamper evidence になります。Takos PaaS は production /
+replica** が canonical な tamper evidence になります。Takosumi は production /
 staging boot で `AuditExternalReplicationSink` を必須化します:
 
 | `TAKOS_AUDIT_REPLICATION_KIND` | 実装                            | 用途                              |

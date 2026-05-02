@@ -2,17 +2,17 @@
 
 このドキュメントは Takos 全体の構成、各 repository / service / domain の責務、相互関係、通信方式、authority、standalone / integrated / distributed topology を 1 枚で読めるようにまとめた architecture map です。
 
-これは `takos-paas` だけの設計書ではありません。Takos 全体の architecture map です。
+これは `takosumi` だけの設計書ではありません。Takos 全体の architecture map です。
 
 Takos は、AI agent が software を作り、配布し、運用し、ユーザーや tenant に届けるための AI-native PaaS software です。
 
 最終方針:
 
 ```text
-takos-paas は Takos の構成要素として残す。
-takos-paas は standalone PaaS としても単体起動できる。
-takos-paas から deploy/runtime/registry/audit を別 service としてさらに分けない。
-takos-paas 内部は domain module と process role で分ける。
+takosumi は Takos の構成要素として残す。
+takosumi は standalone PaaS としても単体起動できる。
+takosumi から deploy/runtime/registry/audit を別 service としてさらに分けない。
+takosumi 内部は domain module と process role で分ける。
 ```
 
 Core rule:
@@ -21,10 +21,10 @@ Core rule:
 Same PaaS core semantics.
 Different host modes.
 Different adapters.
-No default microservice split inside takos-paas.
+No default microservice split inside takosumi.
 ```
 
-`takos-paas` standalone は UX としては Coolify-like PaaS ですが、内部意味論は Takos-native です。
+`takosumi` standalone は UX としては Coolify-like PaaS ですが、内部意味論は Takos-native です。
 
 ```text
 Coolify-like UX:
@@ -49,7 +49,7 @@ takos-app
   public API gateway / auth / account / billing / OAuth / product UI shell
   │ signed internal RPC
   ▼
-takos-paas
+takosumi
   PaaS control plane
   tenant / space / entitlement / deploy / runtime / resource / routing / network / registry / audit
   │
@@ -68,13 +68,13 @@ takos-paas
   └── audit / observability / registry / provider APIs
 ```
 
-### 1.2 Standalone Takos PaaS distribution
+### 1.2 Standalone Takosumi distribution
 
 ```text
 User / Browser / CLI
   │ HTTPS
   ▼
-takos-paas
+takosumi
   standalone PaaS control plane
   public API / UI / local or OIDC auth
   deploy / runtime / resources / routing / network / registry / audit
@@ -102,7 +102,7 @@ Cloudflare / edge:
   takos-app or public edge gateway
 
 VPS / Kubernetes / private cloud:
-  takos-paas primary control plane
+  takosumi primary control plane
 
 GitHub / Gitea / takos-git:
   source truth
@@ -133,14 +133,14 @@ Target service set:
 | service | product root | responsibility |
 |---|---|---|
 | `takos-app` | `takos/app` | public API gateway, auth, account, billing, OAuth, product UI shell |
-| `takos-paas` | `takos/paas` | standalone-capable PaaS control plane and Full Takos internal PaaS component |
+| `takosumi` | `takos/paas` | standalone-capable PaaS control plane and Full Takos internal PaaS component |
 | `takos-git` | `takos/git` | Git hosting, repository object storage, source truth, source resolution |
 | `takos-agent` | `takos/agent` | agent execution service |
 | `takos-cli` | `takos-cli` | user/operator CLI |
 | `takos-private` | `takos-private` | private operator config, secrets, production/staging deploy config |
 
 Standalone deploy and runtime services are not target top-level product roots. They are internal domains of
-`takos-paas`.
+`takosumi`.
 
 > 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
 
@@ -168,9 +168,9 @@ They deploy through the same PaaS / deploy / runtime / tenant context model as u
 
 ---
 
-## 3. takos-paas final role
+## 3. takosumi final role
 
-`takos-paas` is the Takos PaaS control plane.
+`takosumi` is the Takosumi control plane.
 
 It owns platform context and coordinates deploy/runtime/resource/routing/registry/audit domains.
 
@@ -183,7 +183,7 @@ It is both:
 
 Integrated and standalone modes run the same PaaS core. They differ by host and adapters.
 
-### 3.1 takos-paas does own
+### 3.1 takosumi does own
 
 ```text
 tenant / space / group platform context
@@ -200,7 +200,7 @@ ProviderPackage / ResourceContractPackage / DataContractPackage through registry
 audit projection and security events through audit domain
 ```
 
-### 3.2 takos-paas does not own
+### 3.2 takosumi does not own
 
 ```text
 Full Takos public account/profile/billing shell when integrated
@@ -212,33 +212,33 @@ tenant workload code semantics
 operator secrets in plaintext
 ```
 
-### 3.3 takos-paas modes
+### 3.3 takosumi modes
 
 ```text
 Integrated mode:
-  takos-paas is an internal component of Full Takos.
+  takosumi is an internal component of Full Takos.
   takos-app owns public auth and API gateway.
   takos-git owns source truth.
   takos-agent owns agent execution.
   takos-private owns operator config and secrets.
 
 Standalone mode:
-  takos-paas is independently bootable.
+  takosumi is independently bootable.
   It includes public API, UI shell, auth adapter, source connectors, deploy/runtime/resource/routing/registry/audit domains, and provider adapters.
 ```
 
 Invariant:
 
 ```text
-takos-paas core must not know whether it is integrated or standalone.
+takosumi core must not know whether it is integrated or standalone.
 Host mode is selected by adapters.
 ```
 
 ---
 
-## 4. takos-paas implementation architecture
+## 4. takosumi implementation architecture
 
-`takos-paas` remains one product root. It is not split into many default microservices.
+`takosumi` remains one product root. It is not split into many default microservices.
 
 It may run multiple process roles, but its domain model stays in one product.
 
@@ -295,7 +295,7 @@ This is code and process organization, not service decomposition.
 
 ### 4.1 Process roles
 
-`takos-paas` may run multiple process roles from the same product root.
+`takosumi` may run multiple process roles from the same product root.
 
 ```text
 takos-paas-api:
@@ -392,7 +392,7 @@ ProviderObservation may be eventually consistent.
 
 ## 6. Ports, adapters, and capabilities
 
-Takos PaaS depends on capabilities, not concrete services.
+Takosumi depends on capabilities, not concrete services.
 
 ```text
 AuthCapability
@@ -433,7 +433,7 @@ disabled agent adapter:
 | SourcePort | `takos-git` | GitHub / GitLab / raw Git / local upload / tarball |
 | AgentPort | `takos-agent` | disabled / local / external |
 | BillingPort | `takos-app` billing | noop / license |
-| EntitlementPolicyPort | `takos-paas` / product policy | local entitlement policy |
+| EntitlementPolicyPort | `takosumi` / product policy | local entitlement policy |
 | SecretStorePort | platform secret resolver | local encrypted store / secret manager |
 | ProviderRegistryPort | platform registry | bundled / local / remote registry |
 | OperatorConfigPort | `takos-private` | local config / env / secret manager |
@@ -689,7 +689,7 @@ paas-deploy advances Deployment to applied and advances GroupHead
 
 ## 9. Runtime agents
 
-Runtime agents allow `takos-paas` to materialize workloads on remote hosts, Docker hosts, GPU hosts, edge hosts, or private networks.
+Runtime agents allow `takosumi` to materialize workloads on remote hosts, Docker hosts, GPU hosts, edge hosts, or private networks.
 
 Default communication should be pull-based.
 
@@ -791,7 +791,7 @@ Runtime zones:
 
 ```text
 control-plane:
-  takos-paas API / DB / internal services
+  takosumi API / DB / internal services
 
 provider-execution:
   provider packages, provider credentials
@@ -924,7 +924,7 @@ operator config
 3. restore paas database
 4. restore package registry cache and trust records
 5. restore artifact store
-6. restart takos-paas in recovery mode
+6. restart takosumi in recovery mode
 7. rebuild route/runtime/audit projections
 8. reconnect runtime agents
 9. observe provider state
@@ -940,8 +940,8 @@ Recovery mode should not immediately run provider repair until operator confirms
 Self-update is an operator operation, not a tenant app deployment by default.
 
 ```text
-takos-paas manages apps.
-takos-paas self-update is operator operation.
+takosumi manages apps.
+takosumi self-update is operator operation.
 ```
 
 ### 14.1 ControlPlaneUpgradePlan
@@ -1294,16 +1294,16 @@ These planes may share product root, but they must not share authority implicitl
 
 ## 25. Design invariants
 
-1. This is Takos-wide architecture, not only takos-paas architecture.
-2. `takos-paas` is both a Takos component and standalone-capable PaaS control plane.
-3. `takos-paas` is one product root by default. It is not split into many default microservices.
+1. This is Takos-wide architecture, not only takosumi architecture.
+2. `takosumi` is both a Takos component and standalone-capable PaaS control plane.
+3. `takosumi` is one product root by default. It is not split into many default microservices.
 4. Integrated, standalone, and distributed modes use the same PaaS core semantics.
 5. Differences between modes are host adapters, topology, and process shape, not core object semantics.
-6. Deploy and runtime lifecycles are internal domains of `takos-paas`, not semantic concepts to erase.
+6. Deploy and runtime lifecycles are internal domains of `takosumi`, not semantic concepts to erase.
 7. `takos-app`, `takos-git`, and `takos-agent` remain separate in Full Takos distribution.
-8. `takos-paas` product root may contain multiple process roles, but the PaaS core remains the same.
-9. Service split inside `takos-paas` is a scale/operation decision, not a semantic requirement.
-10. `takos-paas` core must not depend on physical co-location.
+8. `takosumi` product root may contain multiple process roles, but the PaaS core remains the same.
+9. Service split inside `takosumi` is a scale/operation decision, not a semantic requirement.
+10. `takosumi` core must not depend on physical co-location.
 11. Dependencies are reached through ports, adapters, ServiceEndpointRegistry, ProviderTargets, RuntimeAgents, or external APIs.
 12. Canonical writes use primary control-plane authority.
 13. Strongly consistent writes include ownership, Deployment status transitions, GroupHead.current_deployment_id, ResourceMigrationLock, package trust, and credential binding.

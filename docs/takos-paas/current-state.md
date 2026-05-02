@@ -1,10 +1,10 @@
-# Takos PaaS Current State
+# Takosumi Current State
 
 Date: 2026-05-01
 
 ## Strict reference-kernel-with-external-plugins
 
-The current `takos-paas` implementation treats Core kernel semantics as the
+The current `takosumi` implementation treats Core kernel semantics as the
 release boundary. The implemented path is descriptor-pinned Deployment
 resolution (`Deployment.resolution.descriptor_closure`), canonical authoring
 expansion, resolved graph digests carried in
@@ -24,7 +24,7 @@ Deployment-centric is the canonical Core surface. The spec at
 records: `Deployment` (input + resolution + desired + status + conditions +
 optional policy / approval), `ProviderObservation` (observed-side stream), and
 `GroupHead` (group-scoped pointer). The contract types are exported from
-`takos-paas-contract` (`Deployment`, `ProviderObservation`, `GroupHead`).
+`takosumi-contract` (`Deployment`, `ProviderObservation`, `GroupHead`).
 
 `DeploymentService` (`apps/paas/src/domains/deploy/deployment_service.ts`) is
 the canonical entry point. It resolves public manifests into

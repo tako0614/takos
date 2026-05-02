@@ -2,7 +2,7 @@
 
 ## Process role alignment done here
 
-- `takos-paas` stays a single product root and monolith. The names below are
+- `takosumi` stays a single product root and monolith. The names below are
   process roles for API, worker, router, runtime-agent, and log-worker
   execution, not separate default services.
 - Added non-selector metadata for the current PaaS process roles:

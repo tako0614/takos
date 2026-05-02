@@ -1,7 +1,15 @@
 # Deploy Manifest (`.takos/app.yml`)
 
+::: tip Shape Model envelope を使う場合
+新しい portable Shape Model の manifest envelope (`resources[]` / `template:` /
+`${ref:...}`) を使う場合は
+[**Manifest (Shape Model)**](/takos-paas/manifest) を参照してください。
+このページは Core descriptor (`components` / `contracts` / `routes` /
+`bindings` / `publications`) を直接書く canonical 形式の guide です。
+:::
+
 `.takos/app.yml` は Takos の deploy manifest です。 ファイル名に `app` が
-残りますが、Store / UI の app catalog ではなく、 `takos-paas` Core の
+残りますが、Store / UI の app catalog ではなく、 `takosumi` Core の
 Deployment への入力 (AppSpec / EnvSpec / PolicySpec) を 1 ファイルで宣言
 する **primitive desired declaration** です。
 

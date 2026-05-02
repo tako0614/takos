@@ -6,7 +6,7 @@
 
 Takos の deploy system は authoring/API surface では **primitive-first**
 です。component / route / publication / resource / consume edge は
-compatibility projection として個別 record に見えますが、`takos-paas` Core
+compatibility projection として個別 record に見えますが、`takosumi` Core
 の正本は 3 つの record に集約されています:
 
 - **Deployment** — input (`manifest_snapshot`) → resolution

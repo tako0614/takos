@@ -1,6 +1,6 @@
 # CI Release Gate
 
-Takos PaaS uses `.github/workflows/paas-release-gate.yml` as a safe GitHub
+Takosumi uses `.github/workflows/paas-release-gate.yml` as a safe GitHub
 Actions release gate for pull requests, pushes to `main`, and manual dispatches.
 
 The workflow sets up Deno and runs only local validation:

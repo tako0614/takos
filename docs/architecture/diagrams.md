@@ -14,7 +14,7 @@
 
 ## Component Diagram
 
-Takos kernel (`takos-paas`) を中心に、user / AI agent から provider 実体まで
+Takos kernel (`takosumi`) を中心に、user / AI agent から provider 実体まで
 の主要 component を表す。 `takos-app` は public API gateway として user request
 を kernel に橋渡しする。 provider plugin bundle は kernel の lookup で動的に
 読み込まれ、Cloudflare / AWS / GCP / Kubernetes / Self-hosted 各 target に
@@ -25,7 +25,7 @@ graph TB
   User[User / AI Agent]
   CLI[takos-cli]
   AppGateway[takos-app<br/>public API gateway]
-  Kernel[takos-paas Kernel<br/>resolveDeployment / applyDeployment]
+  Kernel[takosumi Kernel<br/>resolveDeployment / applyDeployment]
   Storage[(Deployment Store<br/>Postgres / D1)]
   Plugin[Provider Plugin Bundle<br/>composite resolver / binding resolver / materializer]
   Agent[takos-agent<br/>Rust execution service]
@@ -72,7 +72,7 @@ sequenceDiagram
   participant User
   participant CLI as takos-cli
   participant App as takos-app
-  participant K as Kernel<br/>(takos-paas)
+  participant K as Kernel<br/>(takosumi)
   participant CR as Composite Resolver
   participant DC as Descriptor Closure
   participant BR as Binding Resolver

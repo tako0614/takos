@@ -1,7 +1,7 @@
 # Release artifact manifest
 
 `scripts/build-release-manifest.ts` emits a JSON manifest for the current
-`takos-paas` checkout without network access.
+`takosumi` checkout without network access.
 
 ## Scope
 

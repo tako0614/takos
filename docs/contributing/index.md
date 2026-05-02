@@ -8,7 +8,7 @@ commands from the `takos/paas` product root unless a document says otherwise.
 ## Architecture
 
 - [`system-architecture-implementation-plan.md`](./system-architecture-implementation-plan.md)
-  — target Takos PaaS domain layout, ground rules, and milestones.
+  — target Takosumi domain layout, ground rules, and milestones.
 - [`current-state.md`](./current-state.md) — snapshot of the implemented PaaS
   API, domains, process roles, adapters, storage, and production-safety checks.
 - [`api-surface.md`](./api-surface.md) — OpenAPI-ish route snapshot owned by
@@ -25,7 +25,7 @@ commands from the `takos/paas` product root unless a document says otherwise.
 ## Validation
 
 - [`acceptance-test-backlog.md`](./acceptance-test-backlog.md) —
-  severity-ordered acceptance-test backlog translated from the Takos PaaS
+  severity-ordered acceptance-test backlog translated from the Takosumi
   acceptance catalog.
 - [`acceptance-matrix.md`](./acceptance-matrix.md) — acceptance catalog coverage
   matrix with covered, partial, and gap classifications.

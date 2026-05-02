@@ -1,4 +1,4 @@
-# Takos PaaS System Architecture Implementation Plan
+# Takosumi System Architecture Implementation Plan
 
 This plan maps the architecture contract in
 `../architecture/system-architecture.md` and the Takos Deploy spec kit in
@@ -6,12 +6,12 @@ This plan maps the architecture contract in
 
 ## Ground rules
 
-- `takos-paas` remains one product root. Domain boundaries are modules, not
+- `takosumi` remains one product root. Domain boundaries are modules, not
   default microservices.
 - Integrated and standalone modes share the same PaaS core semantics.
   Differences are plugins, adapters, process roles, and topology.
 - `takos-deploy` and `takos-runtime` are implemented as `domains/deploy` and
-  `domains/runtime` inside `takos-paas`.
+  `domains/runtime` inside `takosumi`.
 - Canonical writes stay in the primary control plane. Provider/runtime observed
   state is never canonical.
 - Every domain exposes commands, queries, events, ports, and a store interface;
@@ -48,7 +48,7 @@ packages/paas-contract/src/         public/internal/plugin TypeScript contracts
 Exit criteria:
 
 - Architecture-to-code map exists.
-- Contract package exports the core Takos PaaS vocabulary.
+- Contract package exports the core Takosumi vocabulary.
 - App package has domain boundaries for core and deploy.
 - `deno task check` passes.
 
@@ -164,7 +164,7 @@ Implement:
 
 Exit criteria:
 
-- `takos-paas` boots without `takos-app`.
+- `takosumi` boots without `takos-app`.
 - space/group/deploy/rollback/uninstall work through the API with injected
   reference or operator plugins.
 - same core services are used in integrated mode.

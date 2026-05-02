@@ -147,7 +147,7 @@ This keeps the first implementation simple while avoiding a closed architecture.
 
 ## 4. Self-hosted provider bundle
 
-Takos PaaS does not ship `takos.kernel.self-hosted` or any other built-in
+Takosumi does not ship `takos.kernel.self-hosted` or any other built-in
 self-hosted provider implementation. A self-hosted bundle can run on a single
 VPS or local server stack, but it is an operator-owned external plugin bundle
 and not a Core semantic dependency.
