@@ -213,7 +213,7 @@ mTLS / VPC-only API endpoint) は operator が gateway を立てます:
 ```jsonc
 {
   "pluginConfig": {
-    "operator.takos.cloudflare-aws": {
+    "operator.takosumi.cloudflare-aws": {
       "clients": { "...": "..." },
       "gatewayUrl": "https://aws-gateway.internal.takos.example/v1/",
       "gatewayToken": "operator-issued-token"
@@ -278,7 +278,7 @@ agent process の最小構成:
 import {
   RuntimeAgentHttpClient,
   RuntimeAgentLoop,
-} from "takos-paas-plugins/runtime-agent";
+} from "@takosumi/plugins/runtime-agent";
 
 const client = new RuntimeAgentHttpClient({
   baseUrl: Deno.env.get("TAKOS_KERNEL_URL")!,

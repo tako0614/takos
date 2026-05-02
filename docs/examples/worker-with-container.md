@@ -1,47 +1,69 @@
-# Worker + Container
+# Component + 子 component (sidecar)
 
-> このページでわかること: Worker と Docker コンテナを組み合わせる方法。
+> このページでわかること: JS bundle component と OCI container component を
+> 組み合わせる方法。
 
-Agent runtime の worker + attached container pattern
-と同じ考え方です。重い画像処理や API backend など、Docker
-が必要な場合に使います。
+旧 worker + attached container pattern と同じ用途です。 親 component が
+ルーティング、 子 component が重い処理を担当します。
 
-この例は現行の `takos deploy`（ローカル manifest）で読める構成に合わせています。
-同じ manifest は repo/ref source の `takos deploy URL` や catalog package
-install でも使えます。
-
-この例は
-[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
-を `containers` と複数 `routes` で拡張したものです。
+新 schema では「attached container」 は別 component として declaration
+します。 `runtime.oci-container@v1` を ref に持つ component を `depends:` で
+親に紐付け、 親から runtime binding 経由で呼び出します。
 
 ## deploy manifest
 
 ```yaml
 name: processor-service
 
-compute:
+components:
   processor-host:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: build-host
-        artifact: processor-host
-        artifactPath: dist/host.js
-    containers:
-      processor:
-        image: ghcr.io/example/processor-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-        port: 8080
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: build-host
+              artifact: processor-host
+              entry: dist/host.js
+      api:
+        ref: interface.http@v1
+      gui:
+        ref: interface.http@v1
+  processor:
+    contracts:
+      runtime:
+        ref: runtime.oci-container@v1
+        config:
+          source:
+            ref: artifact.oci-image@v1
+            config:
+              image: ghcr.io/example/processor-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          port: 8080
+      gateway:
+        ref: interface.http@v1
+    depends: [processor-host]
+
+resources:
+  api-secret:
+    ref: resource.secret@v1
+    config: { generate: true }
+
+bindings:
+  - from: { secret: api-secret }
+    to: { component: processor-host, env: API_SECRET }
+  - from: { secret: api-secret }
+    to: { component: processor, env: API_SECRET }
 
 routes:
   - id: api
-    target: processor-host
-    path: /api
+    expose: { component: processor-host, contract: api }
+    via: { ref: route.https@v1, config: { path: /api } }
   - id: gui
-    target: processor-host
-    path: /gui
-
-env:
-  API_SECRET: ""
+    expose: { component: processor-host, contract: gui }
+    via: { ref: route.https@v1, config: { path: /gui } }
 ```
 
 ## ワークフロー
@@ -55,7 +77,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: npm install
-      - name: Build host worker
+      - name: Build host bundle
         run: npm run build:host
     artifacts:
       processor-host:
@@ -77,48 +99,47 @@ EXPOSE 8080
 CMD ["node", "dist/server.js"]
 ```
 
-## Worker のコード（ホスト側）
+## ホスト側コード
 
 ```typescript
 // src/host.ts
 interface Env {
-  PROCESSOR_CONTAINER: DurableObjectNamespace;
+  PROCESSOR_GATEWAY: Fetcher;        // 子 component の interface.http instance
   API_SECRET: string;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // 認証チェック
     const auth = request.headers.get("Authorization");
     if (auth !== `Bearer ${env.API_SECRET}`) {
       return new Response("Unauthorized", { status: 401 });
     }
-
-    // コンテナにリクエストを転送
-    const id = env.PROCESSOR_CONTAINER.idFromName("default");
-    const stub = env.PROCESSOR_CONTAINER.get(id);
-    return stub.fetch(request);
+    return env.PROCESSOR_GATEWAY.fetch(request);
   },
 };
 ```
 
 ## ポイント
 
-- `compute.<name>.containers` でコンテナを Worker 内に定義します
-- コンテナは worker-attached container workload として実行されます
-- Worker がルーティングを担当し、コンテナがヘビーな処理を担当します
+- 子 component は `runtime.oci-container@v1` を ref に持つ独立 component
+  として宣言する (旧 `containers:` 配下ではない)
+- `depends: [processor-host]` で起動順序の hint を declaration
+- 共通 secret は `resource.secret@v1` を作って **親と子の両方** に明示 binding
+- 子 component を外に直接公開する場合は子側の `interface.http@v1`
+  contract instance を route で `expose` する。 親経由でないと届かないわけではない
 
-## compute の 3 形態
+## runtime descriptor の選び分け
 
-|               | Worker                     | Service                      | Worker + Attached Container  |
-| ------------- | -------------------------- | ---------------------------- | ---------------------------- |
-| 判定条件      | `build` あり               | `image` あり（`build` なし） | `build` + `containers` あり  |
-| 実行モデル    | serverless, request-driven | always-on container          | worker に container が紐づく |
-| 用途          | ルーティング、軽量処理     | 独立稼働する Docker コンテナ | Docker が必要な処理          |
-| deploy source | workflow artifact          | digest-pinned `image`        | workflow artifact + `image`  |
+| component の特性                 | runtime ref                     | source ref                     |
+| -------------------------------- | ------------------------------- | ------------------------------ |
+| serverless / request-driven JS    | `runtime.js-worker@v1`          | `artifact.workflow-bundle@v1`  |
+| 常設 container                    | `runtime.oci-container@v1`      | `artifact.oci-image@v1`        |
+
+provider 選択 (Cloudflare Workers / Cloud Run / k8s) は `provider-selection`
+policy gate と operator-only configuration が決定する。 manifest には
+provider 名は出ない。
 
 ## 次のステップ
 
 - MCP Server を公開したい → [MCP Server](/examples/mcp-server)
-- コンテナの詳細 → [Containers ガイド](/apps/containers)
 - 完全な構成例 → [Deploy Manifest リファレンス](/reference/manifest-spec)

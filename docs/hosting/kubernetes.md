@@ -208,7 +208,7 @@ platform secret または `secrets.existingSecrets.platform` の
 
 ### 構成
 
-`takos-paas-plugins` の k8s provider plugin は次の resource lifecycle
+Takosumi (`@takosumi/plugins`) の k8s provider plugin は次の resource lifecycle
 を提供します:
 
 | provider client             | 用途                                                 | 参照クラス                                       |
@@ -303,7 +303,7 @@ kubectl get secret -n takos-system takos-provider-token -o json \
 ```
 
 profile (`profiles/cloudflare-kubernetes.example.json`) の
-`pluginConfig.operator.takos.cloudflare-kubernetes.clusterName` を合わせます。
+`pluginConfig.operator.takosumi.cloudflare-kubernetes.clusterName` を合わせます。
 
 #### B. operator-managed gateway URL
 
@@ -313,7 +313,7 @@ k8s API server が internet-facing でない場合、bastion host に kubectl pr
 ```jsonc
 {
   "pluginConfig": {
-    "operator.takos.cloudflare-kubernetes": {
+    "operator.takosumi.cloudflare-kubernetes": {
       "clients": { "...": "..." },
       "clusterName": "takos-prod",
       "gatewayUrl": "https://k8s-gateway.internal.takos.example/api/",
@@ -389,7 +389,7 @@ operator がやること:
 - Ingress controller deploy (nginx / traefik / Istio Gateway)
 - cert-manager + ClusterIssuer (Let's Encrypt) deploy
 - external-dns + DNS provider credential 設定
-- profile の `pluginConfig.operator.takos.cloudflare-kubernetes.routerConfig` に
+- profile の `pluginConfig.operator.takosumi.cloudflare-kubernetes.routerConfig` に
   `ingressClass` / `clusterIssuer` / `externalDnsZone` を設定
 
 kernel がやること:

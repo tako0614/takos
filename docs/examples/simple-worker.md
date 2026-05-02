@@ -1,6 +1,6 @@
-# Worker だけのシンプルな group
+# JS bundle component だけのシンプルな group
 
-> このページでわかること: Worker 1 つだけの最小構成の書き方。
+> このページでわかること: component 1 つだけの最小構成の書き方。
 
 この例は
 [Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
@@ -24,19 +24,28 @@ my-app/
 ```yaml
 name: simple-worker
 
-compute:
+components:
   web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: bundle
+              artifact: web
+              entry: dist/worker.js
+      ui:
+        ref: interface.http@v1
 
 routes:
   - id: web
-    target: web
-    path: /
+    expose: { component: web, contract: ui }
+    via:
+      ref: route.https@v1
+      config: { path: / }
 ```
 
 ## ワークフロー
@@ -88,15 +97,18 @@ takos deploy --env staging --space SPACE_ID
 
 ## ポイント
 
-- `name` は display 名であり、deploy / install 時の既定 group 名にもなります
-- `routes` の `path: /` で Worker
-  をルートパスに公開しています。ドメインはシステムが自動付与します
-- Worker のコードは標準 Fetch API の `fetch` ハンドラです
+- `name` は display 名であり、 deploy / install 時の既定 group 名にもなる
+- `components.web.contracts.runtime` で component の runtime descriptor
+  (`runtime.js-worker@v1`) を pin
+- `components.web.contracts.ui` で `interface.http@v1` の expose 可能 endpoint を declaration
+- `routes[]` で `expose` (どの component / contract) と `via` (route descriptor) を bind
+- `path: /` でルートパスに公開。 ドメインはシステムが自動付与する
+- component のコードは標準 Fetch API の `fetch` ハンドラ
 
 ## 次のステップ
 
 - データベースを追加したい →
-  [Worker + SQL データベース](/examples/worker-with-db)
-- Docker コンテナを使いたい →
-  [Worker + Container](/examples/worker-with-container)
+  [Component + SQL データベース](/examples/worker-with-db)
+- 子 component を併設したい →
+  [Component + 子 component](/examples/worker-with-container)
 - MCP Server を公開したい → [MCP Server](/examples/mcp-server)

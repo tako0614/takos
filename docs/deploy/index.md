@@ -1,10 +1,10 @@
 # デプロイ
 
-Takos の deploy system は **Deployment-centric** です。authoring manifest は
-1 つの Deployment record として resolve され、その Deployment が apply されると
-GroupHead が新しい Deployment を指します。worker / service / route / publication
-/ resource は Deployment.desired の field として束ねられ、group は Deployment
-を順序付ける compatibility state scope です。
+Takos の deploy system は **Deployment-centric** です。 authoring manifest は
+1 つの Deployment record として resolve され、 その Deployment が apply
+されると GroupHead が新しい Deployment を指します。 component / route /
+publication / resource / binding は Deployment.desired の field として
+束ねられ、 group は Deployment を順序付ける compatibility state scope です。
 
 > 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
 
@@ -15,8 +15,9 @@ GroupHead が新しい Deployment を指します。worker / service / route / p
   を previous Deployment に切り替える pointer move
 - **ProviderObservation** — provider 側の observed state stream。Deployment.desired
   に対する eventual consistency 観測点であり、canonical state ではない
-- **Manifest** — Deployment の input。primitive desired declaration (worker /
-  service / resource / route / publication / consume) を書く
+- **Manifest** — Deployment の input。 primitive desired declaration
+  (component / resource / route / publication / binding) を書く。 author 向け
+  全体ガイドは [マニフェスト](/deploy/manifest)
 
 group は便利な scope ですが、特権的な runtime ではありません。group を持たない
 primitive declaration も同じ Deployment lifecycle を通ります。group に所属すると、
@@ -42,10 +43,10 @@ primitive declaration も同じ Deployment lifecycle を通ります。group に
 
 ### primitive operations
 
-worker / service / route / publication / resource は Deployment.desired
-の field として記録されます。resource は `takos resource` / `takos res`
-で個別操作できます。compute / route / publication の個別 CRUD は control plane の
-HTTP API で扱います。
+component / route / publication / resource / binding は Deployment.desired
+の field として記録されます。 resource は `takos resource` / `takos res` で
+個別操作できます。 component / route / publication の個別 CRUD は control
+plane の HTTP API で扱います。
 
 `takos deploy` は manifest や repository を入力として、Deployment record の作成と
 apply を 1 step で行う sugar です。reviewer flow が必要な場合は

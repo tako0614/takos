@@ -11,7 +11,7 @@ record に対する 5 verb (`deploy` / `apply` / `diff` / `approve` / `rollback`
   SoT。canonical minimal manifest yaml と全 field 定義の正本
 - **[Glossary](/reference/glossary)** — 用語集の SoT。Core meta-objects
   (Deployment / ProviderObservation / GroupHead) と v2 → deployment migration
-  alias、publication type の canonical ref、`inject.env` canonical 形式、Workers
+  alias、 publication descriptor の canonical ref、 `bindings[]` の canonical 形式、 Workers
   backend implementation note を集約
 
 | 確認したいこと                                            | ページ                                    |

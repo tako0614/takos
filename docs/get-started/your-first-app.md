@@ -46,19 +46,28 @@ mkdir -p .takos/workflows
 # .takos/app.yml
 name: my-first-group
 
-compute:
+components:
   web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: bundle
+              artifact: web
+              entry: dist/worker.js
+      ui:
+        ref: interface.http@v1
 
 routes:
   - id: web
-    target: web
-    path: /
+    expose: { component: web, contract: ui }
+    via:
+      ref: route.https@v1
+      config: { path: / }
 ```
 
 ## 4. ワークフローを書く

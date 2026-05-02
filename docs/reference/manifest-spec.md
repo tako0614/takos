@@ -1,522 +1,594 @@
 # マニフェストリファレンス
 
-Takos の deploy manifest は primitive desired declaration を宣言する public
-contract です。既定の deploy manifest path は `.takos/app.yml` で、
-`.takos/app.yaml` も受け付けます。ファイル名には `app` が残りますが、deploy
-model では app catalog item ではなく、worker / service / resource / route /
-publication と consume request を記述する manifest
-として扱います。`publications` は typed outputs publication catalog
-であり、resource creation や backend 選択、 generic plugin resolver
-の入口ではありません。
+`.takos/app.yml` は Takos の deploy manifest であり、`takos-paas` Core の
+Deployment への入力 (`Deployment.input.manifest_snapshot`) として canonical
+form に展開される public contract です。`.takos/app.yaml` も受け付けます。
 
-Group は primitive declaration を任意に束ねる state scope です。
-worker / service / attached container、resource、publication は authoring/API
-projection として個別に扱われ、`takos-paas` Core では descriptor-pinned
-`Deployment` (input + resolution + desired) と `GroupHead`
-ポインタへ投影されます。 group に所属している primitive projection は
-inventory、deployment history、 rollback、uninstall などの group
-機能を使えますが、runtime や resource binding の扱いは group なし primitive
-と同じです。Core が `worker` / `service` / `sql` などを built-in kind
-として持つという意味ではありません。
+manifest は AppSpec / EnvSpec / PolicySpec の 3 つの input layer を 1
+ファイルで表現します (Core
+[§ 4](/takos-paas/core/01-core-contract-v1.0#_4-appspec-envspec-and-policyspec))。
+トップレベル field がそのまま Core の primitive (component / route / resource
+/ binding / publication) に対応し、deploy 時には authoring expansion を経て
+canonical な component / contract instance form
+([Core § 5](/takos-paas/core/01-core-contract-v1.0#_5-components-and-named-contract-instances))
+に展開されます。 expansion descriptor digest は
+`Deployment.resolution.descriptor_closure` に記録されます。
 
-この manifest contract と group 機能は `takos/paas` の PaaS control plane が
-提供する canonical semantics です。`POST /api/public/v1/deployments` (Deployment
-lifecycle endpoint) を通じて preview / resolve / apply / rollback の 4 mode を
-扱います。旧 deploy shell は使わず、manifest fetch / parse、persistent
-deployment history、rollback は PaaS が扱います。
+manifest 内には `worker` / `service` / `attached container` / `compute` /
+`triggers` / `consume` といった旧 authoring 語彙は **存在しません**。 全ての
+具体性は `ref: <descriptor-uri-or-alias>` (descriptor 参照) と `config:`
+(descriptor schema に従う) で表現されます。Core が知らない domain kind は
+manifest 表面にも出ません。
+
+公開 descriptor set は
+[Official Descriptor Set v1](/takos-paas/descriptors/official-descriptor-set-v1)
+を参照してください。
 
 ## 0. Canonical minimal manifest {#canonical-minimal-manifest}
-
-以下は Takos の canonical minimal manifest example です。`get-started/` /
-`apps/` / `deploy/` / `examples/` 章で minimal example を出すときは、この yaml
-を引用するか、これに変形・追加するだけにしてください。**章ごとに別の minimal
-manifest を出さないこと**。
 
 ```yaml
 name: my-app
 
-compute:
+components:
   web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: bundle
+              artifact: web
+              entry: dist/worker.js
+      ui:
+        ref: interface.http@v1
 
 routes:
-  - id: web
-    target: web
-    path: /
+  - id: ui
+    expose: { component: web, contract: ui }
+    via:
+      ref: route.https@v1
+      config: { path: / }
 ```
 
 ポイント:
 
-- `name` は display 名であり、deploy 時の既定 group 名でもある (`--group` で
-  override 可能)
-- `compute.web.build.fromWorkflow` で `.takos/workflows/deploy.yml` の `bundle`
-  job を referenced workflow とする
-- `routes[0].id` は publication が `outputs.*.routeRef` で参照するための stable
-  id
-- top-level `version` / `publications` / `consume` / `resources` / `env` /
-  `overrides` は optional
-
-完全な field の意味は § 1 以降を参照してください。
+- top-level field は Core 語彙のみ (`components` / `routes` / `resources` /
+  `bindings` / `publications` / `environments` / `policy`)
+- 各 component は `contracts` map で名前付き contract instance を宣言する
+- 値の意味は全て `ref: <descriptor>` が決め、`config:` がその schema に従う
+- route は exposure を listener / match / transport descriptor に bind する
+- 詳細仕様は § 1 以降を参照
 
 ## 1. top-level fields
 
-| field          | required | type   | 説明                                                     |
-| -------------- | -------- | ------ | -------------------------------------------------------- |
+| field          | required | type   | 説明                                                |
+| -------------- | -------- | ------ | --------------------------------------------------- |
 | `name`         | yes      | string | display 名。deploy / install では既定の group 名にもなる |
-| `version`      | no       | string | semver の display 用 version                             |
-| `compute`      | no       | object | workload map                                             |
-| `resources`    | no       | object | managed resource map                                     |
-| `routes`       | no       | array  | route 定義                                               |
-| `publications` | no       | array  | typed outputs publication catalog                        |
-| `env`          | no       | object | top-level env                                            |
-| `overrides`    | no       | object | 環境別 override                                          |
+| `version`      | no       | string | display 用 version (semver 推奨)                    |
+| `components`   | no       | map    | component declaration map (AppSpec)                 |
+| `routes`       | no       | array  | route declaration (AppSpec)                         |
+| `resources`    | no       | map    | resource claim map (AppSpec)                        |
+| `bindings`     | no       | array  | explicit binding edge (AppSpec)                     |
+| `publications` | no       | array  | typed outputs publication catalog (AppSpec)         |
+| `environments` | no       | map    | EnvSpec hooks per environment label                 |
+| `policy`       | no       | object | PolicySpec hooks                                    |
 
-未知 field は deploy 前に invalid です。拡張データは route publication の `spec`
-など、明示された object に入れます。
+未知 top-level field は invalid です。custom metadata は対応 descriptor が
+許可する `metadata` slot に入れます。
 
-## 2. compute
+`name` は deploy 時の既定 group 名にもなります。 `--group` で override 可能
+です。
 
-### 2.1 Worker
+## 2. components
 
-`build` を持つ compute は worker です。
-
-| field                             | required | type   | 説明                                                                                         |
-| --------------------------------- | -------- | ------ | -------------------------------------------------------------------------------------------- |
-| `icon`                            | no       | string | publisher launcher image URL/path。`publication.http-endpoint@v1` `display.icon` の fallback |
-| `build.fromWorkflow.path`         | yes      | string | workflow path                                                                                |
-| `build.fromWorkflow.job`          | yes      | string | job 名                                                                                       |
-| `build.fromWorkflow.artifact`     | yes      | string | artifact 名                                                                                  |
-| `build.fromWorkflow.artifactPath` | no       | string | local/private build metadata。bundle file または一意な bundle directory                      |
-| `readiness`                       | no       | string | readiness probe path。HTTP 200 のみ ready                                                    |
-| `containers`                      | no       | object | attached container map                                                                       |
-| `triggers.schedules`              | no       | array  | cron schedule                                                                                |
-| `triggers.queues`                 | no       | array  | queue consumer trigger                                                                       |
-| `consume`                         | no       | array  | publication consume                                                                          |
-| `env`                             | no       | object | local env                                                                                    |
-| `depends`                         | no       | array  | compute 依存                                                                                 |
-| `scaling`                         | no       | object | parser / desired metadata。runtime へ直接 apply しない                                       |
-
-`build.fromWorkflow.path` は `.takos/workflows/` 配下である必要があります。
-`build.fromWorkflow.artifactPath` は local/private build metadata です。指定する
-場合は repository relative path で、絶対パスと `..` path traversal
-は使えません。`artifactPath` は artifact 内の単一 bundle file、または `.js` /
-`.mjs` / `.cjs` が 1 つだけに定まる directory artifact を指します。複数の
-JavaScript file に分かれる module graph は、現行の local artifact collection
-path では扱いません。`readiness` は HTTP 200 のみ ready で、201 / 204 / 3xx /
-4xx / 5xx / timeout (10s) は fail です。
-
-### 2.2 Service
-
-`image` を持つ compute は service です。
-
-| field         | required | type   | 説明                                                                                         |
-| ------------- | -------- | ------ | -------------------------------------------------------------------------------------------- |
-| `icon`        | no       | string | publisher launcher image URL/path。`publication.http-endpoint@v1` `display.icon` の fallback |
-| `image`       | yes      | string | digest-pinned image                                                                          |
-| `port`        | yes      | number | listen port                                                                                  |
-| `dockerfile`  | no       | string | `image` 併用時の local build metadata                                                        |
-| `healthCheck` | no       | object | health check                                                                                 |
-| `volumes`     | no       | object | parser / desired metadata。runtime へ直接 apply しない                                       |
-| `scaling`     | no       | object | parser / desired metadata。runtime へ直接 apply しない                                       |
-| `consume`     | no       | array  | publication consume                                                                          |
-| `env`         | no       | object | local env                                                                                    |
-| `depends`     | no       | array  | compute 依存                                                                                 |
-
-`dockerfile` だけの Service は online deploy source としては不十分です。Service
-deploy は digest-pinned `image` を基準にし、`dockerfile` は local/private
-builder metadata として保持します。Service は image-backed runtime に渡す listen
-port を推測しないため、`port` が必須です。
-
-### 2.3 Attached container
-
-worker の `containers` 配下に定義します。
-
-| field                  | required      | type   | 説明                                                      |
-| ---------------------- | ------------- | ------ | --------------------------------------------------------- |
-| `image`                | online deploy | string | digest-pinned container image (64-hex `sha256` digest)    |
-| `port`                 | yes           | number | listen port                                               |
-| `env`                  | no            | object | local env                                                 |
-| `healthCheck`          | no            | object | health check                                              |
-| `volumes`              | no            | object | parser / desired metadata。runtime へ直接 apply しない    |
-| `scaling`              | no            | object | parser / desired metadata。runtime へ直接 apply しない    |
-| `consume`              | no            | array  | publication consume                                       |
-| `depends`              | no            | array  | compute 依存                                              |
-| `dockerfile`           | local only    | string | local/private build 用。online deploy では `image` も必要 |
-| `cloudflare.container` | no            | object | native Cloudflare Containers metadata                     |
-
-`dockerfile` は `image` と併用する local/private builder metadata です。
-`dockerfile` だけの attached container は current public deploy manifest として
-invalid です。online deploy する場合は digest-pinned `image` が必須。Attached
-container も runtime binding / health check の接続先を推測しないため、`port`
-が必須です。
-
-Attached container も Worker / Service と同じ publish / consume contract の
-consumer になれます。ただし attached container は `routes[].target` ではなく、
-public route publication の `publisher` にもしません。外部公開が必要な場合は親
-Worker / Service が route と publication を公開し、親から attached container を
-呼び出します。
-
-`cloudflare.container` を指定した attached container は、generic attached
-workload ではなく parent worker の native Cloudflare Containers metadata として
-deploy されます。この場合、`image` は digest-pinned image ref または
-repository-relative Dockerfile path を許可します。
-
-| field                      | required | type            | 説明                                                       |
-| -------------------------- | -------- | --------------- | ---------------------------------------------------------- |
-| `className`                | yes      | string          | worker bundle が export する Durable Object class          |
-| `binding`                  | no       | string          | DO namespace binding 名（current public contract）         |
-| `instanceType`             | no       | string          | `lite` / `basic` / `standard-1..4`                         |
-| `maxInstances`             | no       | number          | Cloudflare Containers max instances                        |
-| `name`                     | no       | string          | Cloudflare container name metadata                         |
-| `imageBuildContext`        | no       | string          | repository-relative build context metadata                 |
-| `imageVars`                | no       | object          | image build env metadata                                   |
-| `rolloutActiveGracePeriod` | no       | number          | rollout grace period metadata                              |
-| `rolloutStepPercentage`    | no       | number or array | rollout step metadata                                      |
-| `migrationTag`             | no       | string          | DO migration tag。default `v1`                             |
-| `sqlite`                   | no       | boolean         | default `true`; `false` の時だけ DO class migration |
-
-## 3. consume
-
-`consume` は compute が publication output を env として受け取る service-level
-dependency edge です。manifest 上では compute に書きますが、実体は deploy 時に
-対象 service の `service_consumes` record へ同期されます。manifest で管理する
-service では、次回 deploy 時に service consume 設定を manifest の内容で
-置き換えます。
+`components.<name>` は `app.component:<name>` として ObjectAddress に登場する
+canonical declaration です
+([Core § 5](/takos-paas/core/01-core-contract-v1.0#_5-components-and-named-contract-instances))。
+各 component は名前付き **contract instance** を `contracts` map で宣言します。
 
 ```yaml
-consume:
-  - publication: takos.api-key
-    as: takos-api
-    request:
-      scopes:
-        - files:read
-    inject:
-      env:
-        endpoint: INTERNAL_TAKOS_API_URL
-        apiKey: INTERNAL_TAKOS_API_KEY
+components:
+  web:
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: build-web
+              artifact: web
+              entry: dist/worker.js
+          readiness: /readyz
+          env:
+            APP_AUTH_REQUIRED: "1"
+      ui:
+        ref: interface.http@v1
+      delivery:
+        ref: interface.queue@v1
 ```
 
-| field             | required | type    | 説明                                                       |
-| ----------------- | -------- | ------- | ---------------------------------------------------------- |
-| `publication`     | yes      | string  | catalog publication 名または built-in provider publication |
-| `as`              | no       | string  | compute-local consume 名                                   |
-| `request`         | no       | object  | provider publication への request                          |
-| `inject.env`      | no       | object  | output 名 -> env 名 explicit inject map                    |
-| `inject.defaults` | no       | boolean | 全 outputs を default env 名で inject                      |
+| field       | required | type   | 説明                                              |
+| ----------- | -------- | ------ | ------------------------------------------------- |
+| `contracts` | one of   | map    | 名前付き contract instance map                    |
+| `expand`    | one of   | object | composite descriptor 展開 (§ 2.2)                 |
+| `env`       | no       | object | component-local env (全 contract instance に渡る) |
+| `depends`   | no       | array  | 同一 manifest の component 名による依存            |
 
-`publication` は同じ space の publication catalog 名、または Takos が公開する
-built-in provider publication（`takos.api-key`,
-`takos.oauth-client`）を参照します。 `as` がある場合は `as`、ない場合は
-`publication` が compute-local consume 名 です。同じ compute 内で同じ local
-consume 名を重複させないでください。
+`contracts` か `expand` のどちらか一方が必須です。両方は invalid です。
 
-`inject.env` は explicit output inject map です。明示した output だけ inject
-されます。全 outputs を default env 名で inject したい場合は
-`inject.defaults: true` を書きます。env 名は任意文字列ではなく
-`[A-Za-z_][A-Za-z0-9_]*` に一致する必要があります。保存時と注入時には uppercase
-に正規化されます。
+### 2.1 contracts
 
-SQL / object-store / queue などの resource access は publish / consume
-ではなく、`resources` か resource API / runtime binding 側で扱います。
+`contracts.<instance>` は contract instance の declaration。ObjectAddress は
+`app.component:<name>/app.contract:<instance>` です。同じ contract ref を
+異なる instance 名で複数回宣言してかまいません
+([Core § 5](/takos-paas/core/01-core-contract-v1.0#_5-components-and-named-contract-instances))。
 
-## 4. resources
+| field    | required | type   | 説明                                              |
+| -------- | -------- | ------ | ------------------------------------------------- |
+| `ref`    | yes      | string | descriptor canonical URI または authoring alias  |
+| `config` | no       | object | descriptor が定義する config schema に従う        |
 
-`resources` は manifest-managed resource を作成・更新・削除し、必要に応じて
-compute へ runtime binding として同期します。resource は group inventory
-に所属し、workload deploy の前に reconcile されます。target を絞った partial
-deploy は resource binding 同期と整合しないため、`resources` を持つ manifest
-では無効です。
+manifest parser は `ref` の形式チェックと存在チェックだけを行います。`config`
+の中身は descriptor digest 解決後に descriptor schema で validate されます。
+
+canonical component は exactly one `revisioned-runtime` lifecycle domain の
+root contract instance を持つ必要があります。 違反した component は
+resolution がブロックされます (Core § 5)。
+
+### 2.2 expand
 
 ```yaml
-resources:
-  session-index:
-    type: key-value
-    # current public contract
-    bindings:
-      web: SESSION_INDEX # current public contract
-  host-token:
-    type: secret
-    generate: true
-    # current public contract
-    bindings:
-      web: SANDBOX_HOST_AUTH_TOKEN # current public contract
+components:
+  api:
+    expand:
+      ref: composite.serverless-with-postgres@v1
+      config:
+        source:
+          ref: artifact.workflow-bundle@v1
+          config:
+            workflow: .takos/workflows/build.yml
+            job: build
+            artifact: bundle
 ```
 
-| field      | required | type            | 説明                                                            |
-| ---------- | -------- | --------------- | --------------------------------------------------------------- |
-| `type`     | yes      | string          | resource type                                                   |
-| `bindings` | no       | object or array | compute target -> binding name（current public contract）       |
-| `bind`     | no       | string          | `to` と併用する shorthand binding 名（current public contract） |
-| `to`       | no       | string or array | `bind` の target compute 名                                     |
-| `generate` | no       | boolean         | secret などで自動生成する intent                                |
+composite descriptor は authoring convenience です。compiler が canonical
+component / contract instance form に展開し、 expansion descriptor digest
+(`authoring.composite-expansion@v1` と composite alias) を
+`Deployment.resolution.descriptor_closure` に追加します (Core § 5)。
 
-`type` は `sql` / `object-store` / `key-value` / `queue` / `vector-index` /
-`secret` / `analytics-engine` / `workflow` / `durable-object` のいずれかです。
-`bindings` の target は top-level `compute` 名です（current public contract）。
-attached container は 親 worker 経由で使うため、binding target にはできません。
+`expand` を持つ component は `contracts` を同時に持てません。 expansion 後の
+追加 contract instance / resource / publication / route が同名で既存
+declaration と衝突する場合、resolution はブロックされます。
 
-binding 名は `[A-Za-z_][A-Za-z0-9_]*` に一致する必要があり、parser が uppercase
-に正規化します。同じ workload で同名 binding を複数 resource に割り当てると
-deploy 時に失敗します。
+## 3. routes
 
-## 5. triggers
-
-```yaml
-triggers:
-  schedules:
-    - cron: "0 * * * *"
-  queues:
-    - binding: JOBS
-      deadLetterQueue: JOBS_DLQ
-      maxBatchSize: 10
-      maxRetries: 3
-```
-
-schedule trigger は `triggers.schedules` に宣言します。queue consumer は
-`triggers.queues` に宣言し、通常は worker に bind した queue binding 名を
-`binding` で参照します。`queue` に backing queue
-名を直接指定することもできます。
-
-| field               | required | type   | 説明                                  |
-| ------------------- | -------- | ------ | ------------------------------------- |
-| `binding`           | one of   | string | worker queue binding 名。uppercase 化 |
-| `queue`             | one of   | string | backing queue 名                      |
-| `deadLetterQueue`   | no       | string | DLQ 名                                |
-| `maxBatchSize`      | no       | number | batch size                            |
-| `maxConcurrency`    | no       | number | concurrency                           |
-| `maxRetries`        | no       | number | retry count                           |
-| `maxWaitTimeMs`     | no       | number | batch wait time                       |
-| `retryDelaySeconds` | no       | number | retry delay                           |
-
-`binding` と `queue` は同時には指定できません。`triggers` は worker compute
-だけで使えます。
-
-## 6. depends
-
-`depends` は同一 manifest の compute 名だけを参照します。
-
-```yaml
-depends:
-  - api
-```
-
-## 7. routes
+`routes[]` は AppSpec の exposure ↔ listener / match / transport binding
+declaration。`Deployment.desired.routes[]` の入力です
+([Core § 10](/takos-paas/core/01-core-contract-v1.0#_10-interface-exposure-route-router-and-publication))。
 
 ```yaml
 routes:
-  - id: web
-    target: web
-    path: /
-    methods: [GET, POST]
-    timeoutMs: 30000
+  - id: ui
+    expose: { component: web, contract: ui }
+    via:
+      ref: route.https@v1
+      config:
+        path: /
+        methods: [GET, POST]
+        timeoutMs: 30000
 ```
 
-| field       | required | type     | 説明              |
-| ----------- | -------- | -------- | ----------------- |
-| `id`        | no       | string   | routeRef 用 ID    |
-| `target`    | yes      | string   | compute 名        |
-| `protocol`  | no       | string   | `https` default   |
-| `path`      | HTTP     | string   | `/` で始まる path |
-| `port`      | TCP/UDP  | number   | listener port     |
-| `source`    | event 系 | string   | event source      |
-| `methods`   | HTTP     | string[] | allowed methods   |
-| `timeoutMs` | no       | number   | timeout           |
+| field    | required | type   | 説明                                                |
+| -------- | -------- | ------ | --------------------------------------------------- |
+| `id`     | yes      | string | manifest 内一意 (`app.route:<id>` の ObjectAddress) |
+| `expose` | yes      | object | exposure target (component + contract instance)     |
+| `via`    | yes      | object | route descriptor pin                                |
 
-`.takos/app.yml` で使う public manifest の route は `routes[]` の array で
-書き、HTTP/HTTPS は `path`、TCP/UDP は `port`、queue / schedule / event は
-`source` で入口を表します。`protocol` は `https` default で、 `http` / `https` /
-`tcp` / `udp` / `queue` / `schedule` / `event` をサポートします。
+### 3.1 expose
 
-`routes[]` の dispatch では path と method で最長一致を選択します。`methods`
-省略時は全 HTTP method を意味します。同じ `path` で method が重なる route は
-duplicate として invalid です。CLI はさらに同じ `target + path` を複数 route
-に分けることも invalid として扱います。PaaS compiler の HTTP/HTTPS route
-validation は `target + host + path + methods` の重複を検出します。
+```yaml
+expose:
+  component: web      # required, components map の key
+  contract: ui        # required, components.<>.contracts の key
+```
 
-route publication は `outputs.*.routeRef` で `routes[].id`
-を参照します。そのため公開したい endpoint は stable な `id` を持つ 1 つの route
-にまとめて、method を分けたい場合も `methods` に列挙します。
+route の expose target は component の `interface.*` 系 contract instance に
+限られます。runtime / artifact contract instance は expose target になりません。
+exposure に `exposureEligible=true` を持つ contract descriptor だけが route
+target として valid です (Core § 10)。
 
-PaaS compiler の event route surface では `protocol: queue` /
-`protocol: schedule` / `protocol: event` と `source` を使って event subscription
-を表せます。この場合 `source` は queue / schedule / event source 名で、省略時は
-route 名が使われます。HTTP/HTTPS route では `source` は使いません。
+### 3.2 via
 
-## 8. publications catalog
+```yaml
+via:
+  ref: route.https@v1
+  config:
+    path: /
+    methods: [GET, POST]
+```
 
-`publications` は primitive が space-level publication catalog に出す typed
-outputs の desired entries です。route publication は endpoint metadata と route
-output を共有します。 `publications` 自体は resource creation や backend
-selection、generic plugin resolver ではありません。Takos の API key / OAuth
-client は `publications[]` に `publisher: takos`
-として書かず、`compute.<name>.consume[]` で `takos.api-key` /
-`takos.oauth-client` を consume します。
+`ref` は route descriptor (官公 set: `route.https@v1` / `route.queue@v1` /
+`route.schedule@v1` / `route.event@v1` / `route.tcp@v1` / `route.udp@v1`)。
+`config` schema は各 route descriptor 側で定義されます。
 
-manifest 由来の publication は primitive declaration の projection として
-保存されます。`publications[].name` は group-local で、他 group からは
-`<group>/<name>` で参照します。route publication は manifest-managed entry
-です。
+### 3.3 validation
 
-backend 名は manifest には書きません。backend / adapter の選択は operator-only
-runtime configuration で解決されます。SQL / object-store / queue などの resource
-type は resource API / runtime binding の対象であり、Takos built-in provider
-publication ではありません。
+route descriptor 別の典型 invariant:
 
-### 8.1 route publication
+- `route.https@v1`: `path` 必須 (`/` で始まる); `methods` 省略時は全 method;
+  同じ `path` で method が重なる route は invalid; 同じ `expose` を別 path に
+  分けるのは invalid (1 contract instance につき 1 expose path); CLI と PaaS
+  compiler は HTTP/HTTPS route の `target + host + path + methods` 重複を
+  検出する
+- `route.tcp@v1` / `route.udp@v1`: `port` 必須
+- `route.queue@v1` / `route.schedule@v1` / `route.event@v1`: `source` 必須。
+  省略時は `route.id` が source 名として使われる
+
+## 4. resources
+
+`resources.<name>` は manifest-managed resource claim。 group inventory と
+`Deployment.desired.resources[]`、 durable な `ResourceInstance` lifecycle に
+マップされます
+([Core § 12](/takos-paas/core/01-core-contract-v1.0#_12-resources-and-resourceinstance))。
+
+```yaml
+resources:
+  app-db:
+    ref: resource.sql.postgres@v1
+    config:
+      migrations: migrations
+  app-secret:
+    ref: resource.secret@v1
+    config: { generate: true }
+```
+
+| field    | required | type   | 説明                                              |
+| -------- | -------- | ------ | ------------------------------------------------- |
+| `ref`    | yes      | string | resource descriptor (例: `resource.sql.postgres@v1`) |
+| `config` | no       | object | descriptor schema に従う config                   |
+
+`config` の意味は descriptor 側責務です。`generate: true` (secret) /
+`migrations: <dir>` (sql) のような field は対応 descriptor が定義します。
+
+resource access は `bindings[]` で **明示** に行います (§ 5)。 manifest 内の
+`resources.<name>` 自体は env / binding を inject しません
+([Core invariant 5](/takos-paas/core/01-core-contract-v1.0#_2-core-invariants))。
+
+## 5. bindings
+
+`bindings[]` は consumer ↔ source の **explicit** edge。
+`Deployment.desired.bindings[]`
+([Core § 11](/takos-paas/core/01-core-contract-v1.0#_11-bindings))
+の入力です。
+
+Core invariant 4 / 7 により、publication / resource は injection を含意せず、
+binding material は `bindings[]` で明示する必要があります。
+
+```yaml
+bindings:
+  - from: { resource: app-db }
+    to: { component: web, env: DATABASE_URL }
+    access: database-url
+```
+
+| field         | required | type   | 説明                                              |
+| ------------- | -------- | ------ | ------------------------------------------------- |
+| `from`        | yes      | object | binding source (4 種、§ 5.1)                      |
+| `to`          | yes      | object | injection target (§ 5.2)                          |
+| `access`      | optional | string | source contract が定義する access mode (§ 5.3)    |
+| `sensitivity` | optional | string | `public` / `internal` / `secret` / `credential`   |
+| `enforcement` | optional | string | `enforced` / `advisory` / `unsupported`           |
+| `resolution`  | optional | string | `latest-at-activation` / `pinned-version`         |
+
+### 5.1 from (4 source kinds)
+
+Core § 11 の 4 source kind に対応します。
+
+```yaml
+# 1. resource
+from: { resource: app-db }
+
+# 2. publication (catalog 名 または built-in provider publication)
+from:
+  publication: takos.oauth-client
+  request:
+    clientName: My App
+    redirectUris: [/api/auth/callback]
+    scopes: [openid, profile]
+
+# 3. secret (resource.secret@v1 の short alias)
+from: { secret: app-session-secret }
+
+# 4. provider-output (descriptor が許可する場合のみ)
+from:
+  provider-output:
+    component: web
+    output: assigned-url
+```
+
+`publication` は同 space catalog 名、または Takos built-in
+(`takos.api-key` / `takos.oauth-client`) を参照します。 `request` は
+publication descriptor が定義する request schema に従い、未知 field は
+invalid です。
+
+`secret` は `resources.<name>` で `ref: resource.secret@v1` を持つ resource
+への short alias。`from: { resource: <name> }` と同義です。
+
+`provider-output` は対応 descriptor が `directly injectable` を declaration
+で明示している場合だけ許可されます
+([Core invariant 6](/takos-paas/core/01-core-contract-v1.0#_2-core-invariants))。
+
+### 5.2 to
+
+```yaml
+to:
+  component: web
+  env: DATABASE_URL          # 単一 output (resource binding)
+
+# OR multi-output (publication に複数 output がある場合)
+to:
+  component: web
+  env:
+    OAUTH_CLIENT_ID: clientId
+    OAUTH_CLIENT_SECRET: clientSecret
+    OAUTH_ISSUER_URL: issuer
+
+# OR runtime-binding (env ではなく runtime binding 名)
+to:
+  component: web
+  binding: DB
+```
+
+env / binding 名は `[A-Za-z_][A-Za-z0-9_]*` に一致し、保存時に uppercase に
+正規化されます。同 component 内で同じ env / binding 名を複数 binding が
+target にすると invalid です (binding target collision, Core § 11)。
+
+env map の向きは **`{ ENV_NAME: outputName }`** (env 慣例と同じ)。 単一
+output の resource binding は `env: ENV_NAME` のスカラで十分です。
+
+### 5.3 access
+
+`access` は source contract scope の access mode (Core § 11)。 source ref が
+1 access mode しか持たない場合は省略可。 複数候補を持つ ref で省略すると
+ambiguous shorthand として resolution がブロックされます。
+
+各 ref の access mode set は
+[Official Descriptor Set v1](/takos-paas/descriptors/official-descriptor-set-v1)
+を参照。
+
+## 6. publications
+
+`publications[]` は primitive が space-level publication catalog に出す
+typed outputs declaration
+([Core § 10](/takos-paas/core/01-core-contract-v1.0#_10-interface-exposure-route-router-and-publication))。
+publication は injection を含意せず、 consumer は
+`bindings[].from.publication` で明示的に consume します
+([Core invariant 4](/takos-paas/core/01-core-contract-v1.0#_2-core-invariants))。
 
 ```yaml
 publications:
-  - name: search
-    type: publication.mcp-server@v1
+  - name: web-mcp
+    ref: publication.mcp-server@v1
     outputs:
-      url:
-        kind: url
-        routeRef: mcp
+      url: { from: { route: mcp } }
     spec:
       transport: streamable-http
 ```
 
-required fields:
+| field      | required | type   | 説明                                              |
+| ---------- | -------- | ------ | ------------------------------------------------- |
+| `name`     | yes      | string | group-local publication 名                        |
+| `ref`      | yes      | string | publication descriptor (例: `publication.mcp-server@v1`) |
+| `outputs`  | yes      | map    | output 名 -> source declaration                   |
+| `spec`     | no       | object | descriptor が定義する consumer-facing metadata    |
+| `metadata` | no       | object | descriptor が定義する authoring metadata          |
 
-| field     | required | type   | 説明                              |
-| --------- | -------- | ------ | --------------------------------- |
-| `name`    | yes      | string | publication 名                    |
-| `type`    | yes      | string | namespaced route publication type |
-| `outputs` | yes      | object | output 名 -> route descriptor     |
+`name` は group-local 一意。他 group からは `<group>/<name>` で参照されます。
 
-optional route metadata:
-
-- `display`
-- `auth`
-- `spec`
-
-route publication の `type` は custom string です。Takos 標準 type は
-[Glossary § Publication types](/reference/glossary#publication-types) を参照。
-core は `spec` を consumer-facing metadata として保存し、 platform / app
-が解釈します。`auth` は platform-managed behavior です。
-`publication.http-endpoint@v1` の route output は `:id` segment
-を含む必要があり、`spec` は `mimeTypes` / `extensions`
-の少なくとも一方を持てます。両方を指定することも できます。
-
-`publication.http-endpoint@v1` は app launcher / アプリ一覧の entry
-としても扱われます。 launcher metadata として `display.description` /
-`display.icon` / `display.category` / `display.sortOrder`
-を指定できます。`spec.launcher: false` の entry は一覧に出ません。
-`display.icon` を省略した場合は、route target の `compute.<name>.icon` を
-launcher icon として使います。`display.icon` / `compute.<name>.icon` は HTTPS
-URL または publisher origin からの root-relative path（例:
-`/icons/app.png`）を推奨 します。
-
-各 `outputs.*.routeRef` は `routes[].id` の 1 件に一致する必要があります。
-manifest 全体で同じ route target/path を複数 publication が公開する状態は
-invalid です。 route output は assigned hostname と参照先 route の `path`
-から生成されます。 `/files/:id` のような path template は許可され、output の URL
-も template URL として consumer に渡ります。
-
-route publication は manifest-managed entry です。`/api/publications/:name` から
-`publication.mcp-server@v1` / `publication.http-endpoint@v1` /
-`publication.http-endpoint@v1` などの route publication
-を直接作る運用は推奨しません。
-
-### 8.2 Takos built-in provider publication
+### 6.1 outputs
 
 ```yaml
-consume:
-  - publication: takos.api-key
-    as: takos-api
-    request:
-      scopes:
-        - files:read
+outputs:
+  url:
+    from: { route: ui }      # routes[].id を参照
+  endpoint:
+    from: { value: "https://example.com" }
 ```
 
-| field         | required | type   | 説明                                        |
-| ------------- | -------- | ------ | ------------------------------------------- |
-| `publication` | yes      | string | `takos.api-key` または `takos.oauth-client` |
-| `as`          | no       | string | local consume 名                            |
-| `request`     | yes      | object | source-specific request                     |
-| `inject`      | no       | object | output inject rule                          |
+各 output は `from` で値の source を宣言します。 source kind:
 
-Takos が公開する情報も他の publication と同じ `consume` contract で扱います。
-`publisher: takos` は app manifest の `publications[]` には書きません。output は
-`consume.inject.env` で alias できます。default env 名で全 output を使う場合は
-`inject.defaults: true` を書きます。
+- `from: { route: <id> }` — route の assigned URL から導出
+- `from: { value: <const> }` — 静的値
+- `from: { component: <name>, output: <key> }` — component が公開する
+  provider-output
 
-### 8.3 Takos built-in provider publications
+output 名と値型 (`url` / `endpoint` / `secret-ref` / `string` 等) は
+publication descriptor が定義します。
 
-以下の Takos built-in provider publication だけを受け付け、未知の `request`
-field は deploy validation で invalid です。
+### 6.2 metadata
 
-| source               | required request fields  | outputs                                                                                                                 |
-| -------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `takos.api-key`      | `scopes`                 | `endpoint` (`url`), `apiKey` (`secret`)                                                                                 |
-| `takos.oauth-client` | `redirectUris`, `scopes` | `clientId` (`string`), `clientSecret` (`secret`), `issuer` (`url`), `tokenEndpoint` (`url`), `userinfoEndpoint` (`url`) |
+publication descriptor が `metadata` schema を持つ場合のみ書けます。
 
-`redirectUris` は HTTPS が基本です。manifest では `/api/auth/callback` のような
-相対 path も書けます。この場合は deploy 時に group の auto hostname へ解決される
-ため、`TENANT_BASE_DOMAIN` と space / group slug から hostname
-を解決できる必要が あります。local development では `localhost`, `127.0.0.1`,
-`[::1]`, `.localhost` の HTTP URI も受け付けます。`clientName` と `metadata.*`
-は optional です。`metadata` 配下は `logoUri` / `tosUri` / `policyUri` を
-受け付けます。
-
-default injection (`inject.defaults: true`) の対象は `takos.api-key` が
-`endpoint` / `apiKey`、`takos.oauth-client` が `clientId` / `clientSecret` /
-`issuer` です。`tokenEndpoint` / `userinfoEndpoint` が必要な app は default apps
-と同じように `inject.env` で明示します。
-
-## 9. env
+例: `publication.app-launcher@v1` の launcher metadata:
 
 ```yaml
-env:
-  NODE_ENV: production
-  LOG_LEVEL: info
+publications:
+  - name: web-ui
+    ref: publication.app-launcher@v1
+    outputs:
+      url: { from: { route: ui } }
+    metadata:
+      display:
+        title: My App
+        description: Notes editor
+        icon: /icons/notes.svg
+        category: office
+        sortOrder: 20
 ```
 
-publication outputs と local env が衝突すると deploy / settings update
-は失敗します。衝突判定は uppercase 正規化後に行われ、top-level `env`、
-`compute.<name>.env`、同一 compute の consumed publication outputs
-のいずれかが同じ env 名に解決されると invalid です。
+`publication.http-endpoint@v1` は launcher metadata schema を持ちません。
+launcher として一覧に出したい endpoint は `publication.app-launcher@v1` を
+使います。
 
-## 10. overrides
+## 7. environments
+
+`environments.<env>` は EnvSpec の hooks。 base manifest に対する
+environment-specific override を declarative に書きます。
 
 ```yaml
-overrides:
+environments:
   production:
-    env:
-      LOG_LEVEL: warn
-    compute:
+    components:
       web:
-        scaling:
-          minInstances: 2
-    resources:
-      cache:
-        type: key-value
-        bindings:
-          web: CACHE
-    publications:
-      - name: web-ui
-        display:
-          title: Web UI
+        contracts:
+          runtime:
+            config:
+              env: { LOG_LEVEL: warn }
+    bindings:
+      - from: { resource: prod-cache }
+        to: { component: web, env: CACHE_URL }
+    routes:
+      - id: ui
+        via:
+          config: { tls: { mode: strict } }
 ```
 
-`overrides.<env>` で指定できる field は `compute`, `routes`, `publications`,
-`resources`, `env` です。未知 field と retired field は invalid です。
+`environments.<env>` で指定できる field は base manifest と同じ
+(`components` / `routes` / `resources` / `bindings` / `publications` /
+`env`)。
 
-merge rule:
+EnvSpec は AppSpec 意味を redefine してはいけません
+([Core § 4](/takos-paas/core/01-core-contract-v1.0#_4-appspec-envspec-and-policyspec))。
+`components.<>.contracts.<>.ref` の変更や `bindings[].from.<kind>` 種別の
+変更は AppSpec の意味変更にあたるため invalid です。
 
-- `compute`: compute 名ごとに deep merge し、merge 後の full compute
-  として再検証します。Service / Attached container を追加または変更する場合も
-  `port` は必須です。
-- `routes`: base の `routes` array を環境別 array で全置換します。merge 後に
-  target と duplicate policy を再検証します。
-- `publications`: override entry は `name` が必須です。同名 publication に deep
-  merge します。配列 index による merge はしません。
-- `resources`: resource 名ごとに deep merge し、merge 後の full resources として
-  parse / binding target validation を行います。
-- `env`: shallow merge です。同名 key は override 側が勝ちます。merge 後に
-  consumed publication output との env collision を再検証します。
+### 7.1 merge rules
+
+全 field 共通で **deep merge** を基本とし、array field は entry の
+**identity key** で keyed merge します。
+
+| field          | identity key                              | merge                                                |
+| -------------- | ----------------------------------------- | ---------------------------------------------------- |
+| `components`   | map key                                   | deep merge per name; merge 後 full validation        |
+| `routes`       | `id`                                      | id keyed deep merge; 新 entry は append              |
+| `resources`    | map key                                   | deep merge per name                                  |
+| `bindings`     | (`to.component`, `to.env` / `to.binding`) | keyed deep merge; 新 entry は append                 |
+| `publications` | `name`                                    | deep merge per name                                  |
+| `env`          | shallow merge                             | 同名 key は override 側が勝つ                        |
+
+merge 後に全 validation (§ 10) が再実行されます。
+
+base entry を削除したい場合は `<entry>: { $remove: true }` を明示します。
+`$remove` 以外の sentinel は使えません。
+
+## 8. policy
+
+PolicySpec hooks。allow / deny / require-approval / defaults を declarative
+に書きます。
+
+```yaml
+policy:
+  defaults:
+    bindings:
+      sensitivity: internal
+      enforcement: enforced
+    resolution: latest-at-activation
+  rules:
+    - match: { source: publication, ref: takos.oauth-client }
+      decision: require-approval
+    - match: { source: provider-output }
+      decision: deny
+```
+
+policy decision precedence は `deny > require-approval > allow`
+([Core § 7](/takos-paas/core/01-core-contract-v1.0#_7-policy-decisions-and-approvals))。
+評価結果は `Deployment.policy_decisions[]` に記録されます。
+
+approval (`takos approve <deployment-id>`) は `require-approval` decision を
+満たしますが、`deny` を上書きしません (break-glass policy が明示で許可
+する場合を除く)。
+
+## 9. ObjectAddress 規則
+
+manifest field は次の ObjectAddress に対応します
+([Core § 9](/takos-paas/core/01-core-contract-v1.0#_9-objectaddress)):
+
+| manifest path                            | ObjectAddress                                  |
+| ---------------------------------------- | ---------------------------------------------- |
+| `components.<name>`                      | `app.component:<name>`                         |
+| `components.<name>.contracts.<instance>` | `app.component:<name>/app.contract:<instance>` |
+| `routes[].id`                            | `app.route:<id>`                               |
+| `routes[].expose`                        | `app.exposure:<component>:<contract>`          |
+| `resources.<name>`                       | `resource.claim:<name>`                        |
+| `bindings[]` (synthetic)                 | `app.binding:<component>%2F<env-or-binding>`   |
+| `publications[].name`                    | `publication:<group>%2F<name>`                 |
+
+addresses は case-sensitive。 path separator (`/`) を name に含む場合は
+percent-encode (`%2F`) します。
+
+## 10. Validation invariants
+
+deploy 前に次の invariant が validated されます:
+
+1. 未知 top-level field は invalid
+2. component の `contracts` か `expand` のいずれか必須 (両方は invalid)
+3. canonical component には exactly one `revisioned-runtime` root contract
+   instance (Core § 5)
+4. `routes[].expose.contract` は `interface.*` 系 contract instance のみ
+   (`exposureEligible=true` の descriptor)
+5. `bindings[].to.component` は components map に存在する必要がある
+6. `bindings[].from.<kind>` の参照先が存在する必要がある
+7. binding access mode が複数候補のとき `access:` 省略は invalid (Core § 11
+   ambiguous shorthand)
+8. 同 component 内で同名 env / binding 名を複数 binding が target に
+   できない (binding target collision)
+9. publication output の `from.route` は `routes[].id` の 1 件に一致
+10. `publications[].ref` の descriptor が `metadata` schema を持たない場合、
+    `metadata:` 指定は invalid
+11. `environments.<env>` の merge 後 manifest が full validation を通る
+    必要がある
+12. EnvSpec から AppSpec 意味の redefine は invalid (`ref` 変更、`from.<kind>`
+    変更等)
+13. provider-output binding source は対応 descriptor が directly injectable
+    を declaration で許可している場合だけ valid (Core invariant 6)
+
+## 11. Authoring expansion と descriptor closure
+
+公開 manifest convenience は resolution 前に canonical form に展開され、
+expansion descriptor digest が `descriptor_closure` に含まれます (Core § 5)。
+
+主な expansion:
+
+- `components.<>.expand` → composite descriptor 展開 (composite alias と
+  `authoring.composite-expansion@v1` を closure に追加)
+- `bindings[].from.secret` → `from.resource` への alias 展開
+  (`authoring.binding-secret-alias@v1`)
+- `bindings[].access` 省略 → 単一 access mode の解決
+  (`authoring.binding-access-default@v1`)
+- 単一 output `to.env: SCALAR` → `to.env: { SCALAR: <default-output> }`
+  への展開 (`authoring.binding-env-default@v1`)
+
+これら expansion descriptor は manifest author が直接書く必要は
+ありませんが、`descriptor_closure` には必ず記録されます。 expansion 結果は
+`takos diff <deployment-id>` で確認できます。
+
+## 12. CLI
+
+```bash
+takos deploy <manifest>           # resolve + apply (Heroku-like sugar)
+takos deploy --preview            # in-memory preview, no DB record
+takos deploy --resolve-only       # resolved Deployment 作成 (apply 待ち)
+takos apply <deployment-id>       # resolved Deployment を apply
+takos diff <deployment-id>        # resolved expansion + diff vs current GroupHead
+takos approve <deployment-id>     # require-approval decision に approval を attach
+takos rollback [<group>]          # GroupHead を previous_deployment_id に切替
+```
+
+詳細は
+[`takos-paas/core/01-core-contract-v1.0.md`](/takos-paas/core/01-core-contract-v1.0)
+§ 16 を参照。

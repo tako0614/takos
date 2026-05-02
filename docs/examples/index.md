@@ -1,37 +1,37 @@
 # サンプル集
 
-Takos の group / publication / consume contract を前提にした最小構成を
+Takos の component / publication / binding contract を前提にした最小構成を
 まとめています。
 
 ## サンプル一覧
 
-### [Worker だけのシンプルな group](/examples/simple-worker)
+### [JS bundle component だけのシンプルな group](/examples/simple-worker)
 
-- Worker 1 つ
+- component 1 つ (`runtime.js-worker@v1`)
 - route 1 つ
-- publication / built-in provider consume なし
+- publication / built-in provider binding なし
 
-### [Worker + DB](/examples/worker-with-db)
+### [Component + DB](/examples/worker-with-db)
 
-- Worker 1 つ
-- DB / object-store 接続先を env で受け取る
+- component 1 つ
+- DB / object-store 接続先を `bindings[]` で env として受け取る
 
-### [Worker + Container](/examples/worker-with-container)
+### [Component + 子 component (sidecar)](/examples/worker-with-container)
 
-- Worker 1 つ + attached container 1 つ
-- publication contract と attached container を併用
+- 親 component + 子 component (`runtime.oci-container@v1`)
+- publication と子 component を併用
 
 ### [MCP Server](/examples/mcp-server)
 
-- Worker 1 つ
+- component 1 つ
 - `publication.mcp-server@v1` publication を公開
-- 他 compute / client は explicit consume で使う
+- 他 component / client は explicit `bindings[].from.publication` で使う
 
-### [マルチサービス構成](/examples/multi-service)
+### [マルチ component 構成](/examples/multi-service)
 
-- compute 2 つ
+- component 2 つ
 - 同じ publication を複数 consumer が共有
-- background job は schedule trigger で起動
+- background job は `interface.schedule@v1` + `route.schedule@v1` で起動
 
 ## Default Group 構成
 

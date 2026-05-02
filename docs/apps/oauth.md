@@ -1,64 +1,62 @@
 # OAuth
 
-Takos の OAuth client は `takos.oauth-client` built-in provider publication を
-`compute.<name>.consume` で request して受け取ります。group 層の専用 field
-ではなく、他の publication と同じ publish / consume contract の一部です。
+Takos の OAuth client は `takos.oauth-client` built-in provider publication
+を `bindings[].from.publication` で request して受け取ります。 group 層の
+専用 field ではなく、 他の publication と同じ binding contract の一部です。
 未知の `request` field は deploy validation で invalid です。
 
 ## 基本
 
 ```yaml
-compute:
-  web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
-    consume:
-      - publication: takos.oauth-client
-        as: app-oauth
-        request:
-          clientName: My App
-          redirectUris:
-            - https://example.com/callback
-          scopes:
-            - threads:read
-            - runs:write
-        inject:
-          env:
-            clientId: OAUTH_CLIENT_ID
-            clientSecret: OAUTH_CLIENT_SECRET
-            issuer: OAUTH_ISSUER_URL
+bindings:
+  - from:
+      publication: takos.oauth-client
+      request:
+        clientName: My App
+        redirectUris:
+          - https://example.com/callback
+        scopes: [threads:read, runs:write]
+    to:
+      component: web
+      env:
+        OAUTH_CLIENT_ID: clientId
+        OAUTH_CLIENT_SECRET: clientSecret
+        OAUTH_ISSUER_URL: issuer
 ```
 
-`inject.env` に明示した output だけが注入されます。全 output を default env 名で
-注入したい場合は `inject.defaults: true` を指定します。default env 名は次の通りです。
-
-- `PUBLICATION_APP_OAUTH_CLIENT_ID`
-- `PUBLICATION_APP_OAUTH_CLIENT_SECRET`
-- `PUBLICATION_APP_OAUTH_ISSUER`
+`to.env` で明示した output だけが injection されます。 default 注入は
+ありません — 全 output を渡したい場合も明示してください。
 
 ## 利用可能な request fields
 
 | field                | required | 説明                                                                                                                |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `redirectUris`       | yes      | HTTPS の redirect URI 一覧。manifest では `/api/auth/callback` のような相対 path も可                               |
+| `redirectUris`       | yes      | HTTPS の redirect URI 一覧。 manifest では `/api/auth/callback` のような相対 path も可                              |
 | `scopes`             | yes      | OAuth scope 一覧                                                                                                    |
 | `clientName`         | no       | 認可画面に表示する client 名                                                                                        |
 | `metadata.logoUri`   | no       | ロゴ URL                                                                                                            |
 | `metadata.tosUri`    | no       | 利用規約 URL                                                                                                        |
 | `metadata.policyUri` | no       | プライバシーポリシー URL                                                                                            |
 
-相対 `redirectUris` は manifest deploy 時に group の auto hostname へ解決されます。
-そのため `TENANT_BASE_DOMAIN` と space / group slug から hostname を解決できない
-環境では deploy validation が失敗します。API から OAuth client を直接作る場合は、
-相対 path ではなく絶対 HTTPS URL を渡してください。local development では
-`localhost`, `127.0.0.1`, `[::1]`, `.localhost` の HTTP URI も受け付けます。
+相対 `redirectUris` は manifest deploy 時に group の auto hostname へ
+解決されます。 そのため `TENANT_BASE_DOMAIN` と space / group slug から
+hostname を解決できない環境では deploy validation が失敗します。 API から
+OAuth client を直接作る場合は、 相対 path ではなく絶対 HTTPS URL を渡して
+ください。 local development では `localhost`, `127.0.0.1`, `[::1]`,
+`.localhost` の HTTP URI も受け付けます。
 
-`clientName` と `metadata.*` は optional です。`metadata` 配下は `logoUri` /
-`tosUri` / `policyUri` を受け付けます。
+`clientName` と `metadata.*` は optional です。 `metadata` 配下は
+`logoUri` / `tosUri` / `policyUri` を受け付けます。
+
+## Output
+
+| output             | type   |
+| ------------------ | ------ |
+| `clientId`         | string |
+| `clientSecret`     | secret |
+| `issuer`           | url    |
+| `tokenEndpoint`    | url    |
+| `userinfoEndpoint` | url    |
 
 ## Authorization Code Flow
 

@@ -196,6 +196,32 @@ platform if relevant
 mirrored ref if retained by Takos
 ```
 
+### `artifact.workflow-bundle@v1`
+
+```text
+https://takos.dev/contracts/artifact/workflow-bundle/v1
+```
+
+Meaning:
+
+```text
+An artifact produced by a `.takos/workflows/<file>.yml` build job, identified by workflow path, job, and named artifact, with an `entry` pointing to the bundle entry inside the produced artifact.
+```
+
+Required config:
+
+```text
+workflow         repository-relative path under .takos/workflows/
+job              workflow job name
+artifact         artifact name produced by the job
+entry            repository-relative path inside the artifact (single bundle file or unambiguous .js/.mjs/.cjs entry)
+```
+
+The compiler resolves the artifact at deploy time and pins the resolved
+artifact digest in `Deployment.resolution.descriptor_closure`. `entry` MUST
+NOT contain `..` traversal or absolute paths. Multiple-bundle module graphs
+that cannot resolve to a single entry MUST be rejected.
+
 ---
 
 ## Minimum interface descriptors
@@ -322,6 +348,147 @@ delivery model
 assignment model
 target stability expectations
 idempotent consumer rebind expectations
+```
+
+---
+
+## Minimum route descriptors
+
+Route descriptors define listener / match / transport semantics for an
+exposure. They are referenced by `routes[].via.ref` in the public manifest
+and are recorded in `Deployment.desired.routes`
+([Core § 10](../core/01-core-contract-v1.0.md#_10-interface-exposure-route-router-and-publication)).
+
+A route descriptor MUST declare which interface contract refs it can bind
+to. `route.https@v1` binds `interface.http@v1`; `route.queue@v1` binds
+`interface.queue@v1`; etc.
+
+### `route.https@v1`
+
+```text
+https://takos.dev/contracts/route/https/v1
+```
+
+Eligible interface refs: `interface.http@v1`.
+
+Required config:
+
+```text
+path             string starting with "/"
+```
+
+Optional config:
+
+```text
+methods          string[] (uppercase HTTP methods); omit = all methods
+timeoutMs        number
+tls              { mode: "strict" | "permissive" }
+```
+
+Validation:
+
+```text
+Same `path` with overlapping `methods` is invalid.
+A single interface contract instance may be exposed at one path only.
+PaaS compiler validates duplicate `target + host + path + methods`.
+```
+
+### `route.tcp@v1`
+
+```text
+https://takos.dev/contracts/route/tcp/v1
+```
+
+Eligible interface refs: `interface.tcp@v1`.
+
+Required config:
+
+```text
+port             number
+```
+
+### `route.udp@v1`
+
+```text
+https://takos.dev/contracts/route/udp/v1
+```
+
+Eligible interface refs: `interface.udp@v1`.
+
+Required config:
+
+```text
+port             number
+```
+
+### `route.queue@v1`
+
+```text
+https://takos.dev/contracts/route/queue/v1
+```
+
+Eligible interface refs: `interface.queue@v1`.
+
+Required config:
+
+```text
+source           string (manifest resource name with ref `resource.queue.*@v1`)
+```
+
+Optional config:
+
+```text
+deadLetter           string (manifest resource name)
+maxBatchSize         number
+maxConcurrency       number
+maxRetries           number
+maxWaitTimeMs        number
+retryDelaySeconds    number
+```
+
+The `source` value references a manifest `resources.<name>` entry, NOT an
+env / binding name. Producer-side access is declared separately through
+`bindings[]`.
+
+### `route.schedule@v1`
+
+```text
+https://takos.dev/contracts/route/schedule/v1
+```
+
+Eligible interface refs: `interface.schedule@v1`.
+
+Required config:
+
+```text
+cron             string (5-field cron expression)
+```
+
+Optional config:
+
+```text
+source           string (event source name; defaults to route id)
+catchUp          boolean
+```
+
+### `route.event@v1`
+
+```text
+https://takos.dev/contracts/route/event/v1
+```
+
+Eligible interface refs: `interface.event@v1`.
+
+Required config:
+
+```text
+source           string (event source name)
+```
+
+Optional config:
+
+```text
+filter           descriptor-defined filter expression
 ```
 
 ---
@@ -494,36 +661,190 @@ durable-object-runtime-binding
 
 ## Minimum publication descriptors
 
+Each publication descriptor declares its `outputs` schema (output name →
+value type) and, optionally, `metadata` and `spec` schemas. Authors put
+descriptor-defined consumer-facing metadata in `spec:` and authoring-time
+metadata in `metadata:`.
+
 ### `publication.http-endpoint@v1`
 
-Output examples:
+```text
+https://takos.dev/contracts/publication/http-endpoint/v1
+```
+
+Outputs:
 
 ```text
-url
-endpoint
+url         url
+endpoint    url
 ```
+
+`metadata` schema: none. `spec` schema: descriptor-defined consumer-facing
+metadata only. This descriptor MUST NOT carry launcher / file-handler
+metadata; use `publication.app-launcher@v1` or `publication.file-handler@v1`.
+
+### `publication.app-launcher@v1`
+
+```text
+https://takos.dev/contracts/publication/app-launcher/v1
+```
+
+Outputs:
+
+```text
+url         url
+```
+
+`metadata.display`:
+
+```text
+title          string
+description    string
+icon           string (HTTPS URL or publisher-origin root-relative path, e.g. /icons/notes.svg)
+category       string
+sortOrder      number
+```
+
+App launcher / app catalog entries MUST use this descriptor. Consumers
+(launcher UI, dashboard) read `metadata.display.*` to render launcher
+entries. The `url` output points at the route URL the launcher should open.
+
+### `publication.file-handler@v1`
+
+```text
+https://takos.dev/contracts/publication/file-handler/v1
+```
+
+Outputs:
+
+```text
+url         url (path template such as `/files/:id` is preserved)
+```
+
+`spec`:
+
+```text
+mimeTypes      string[]
+extensions     string[]
+```
+
+`metadata.display`: same shape as `publication.app-launcher@v1`'s `display`.
+
+At least one of `spec.mimeTypes` / `spec.extensions` MUST be present. The
+referenced route MAY contain a `:id` segment; the output `url` is delivered
+as a template URL.
 
 ### `publication.mcp-server@v1`
 
-Output examples:
+```text
+https://takos.dev/contracts/publication/mcp-server/v1
+```
+
+Outputs:
 
 ```text
-url
-transport
-metadata
+url           url
+transport     string
+metadata      object
+```
+
+`spec`:
+
+```text
+transport      "streamable-http" | descriptor-defined transport name
+description    string
 ```
 
 ### `publication.topic@v1`
 
-Output examples:
-
 ```text
-message-payload
-consumer-binding
+https://takos.dev/contracts/publication/topic/v1
 ```
 
-Credential-bearing built-in publications, such as API keys or OAuth clients,
-should use `secret-ref` by default and must define lifecycle semantics.
+Outputs:
+
+```text
+message-payload      descriptor-defined typed payload
+consumer-binding     binding-handle
+```
+
+---
+
+## Built-in provider publications
+
+Built-in provider publications are emitted by Takos kernel itself, not by
+group manifests. They are consumed via `bindings[].from.publication` with
+the namespaced name. They MUST NOT appear in `publications[]`.
+
+### `takos.api-key`
+
+Required request:
+
+```text
+scopes         string[]
+```
+
+Outputs:
+
+```text
+endpoint       url
+apiKey         secret
+```
+
+### `takos.oauth-client`
+
+Required request:
+
+```text
+redirectUris   string[] (HTTPS absolute or manifest-relative path)
+scopes         string[]
+```
+
+Optional request:
+
+```text
+clientName     string
+metadata       { logoUri?: string, tosUri?: string, policyUri?: string }
+```
+
+Outputs:
+
+```text
+clientId           string
+clientSecret       secret
+issuer             url
+tokenEndpoint      url
+userinfoEndpoint   url
+```
+
+`redirectUris` accepts manifest-relative paths (e.g. `/api/auth/callback`).
+Relative paths resolve to the group's auto hostname at deploy time. Local
+development additionally accepts `localhost`, `127.0.0.1`, `[::1]`, and
+`*.localhost` HTTP URIs.
+
+There is no implicit default-output injection for either built-in
+publication. All consumed outputs MUST be listed in
+`bindings[].to.env: { ENV_NAME: outputName }`.
+
+---
+
+## Authoring expansion descriptors
+
+Public manifest authoring shorthands are expanded into canonical form
+before resolution finalizes (Core § 5). Each expansion descriptor's digest
+is included in `Deployment.resolution.descriptor_closure`.
+
+| descriptor                                    | expansion                                                                                |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `authoring.composite-expansion@v1`            | composite descriptor → canonical components / contract instances / resources / bindings  |
+| `authoring.binding-secret-alias@v1`           | `from: { secret: X }` → `from: { resource: X }` (X.ref must be `resource.secret@v1`)     |
+| `authoring.binding-env-default@v1`            | `to: { env: SCALAR }` → `to: { env: { SCALAR: <descriptor-default-output> } }`           |
+| `authoring.binding-access-default@v1`         | `access` omitted, single access mode → `access: <descriptor-default-mode>`               |
+| `authoring.launcher-icon-default@v1`          | `metadata.display.icon` omitted → fallback from route target component icon hint         |
+
+Custom authoring shorthands MAY be shipped by adding new
+`authoring.*@v1` descriptors. The compiler MUST refuse to apply a shorthand
+whose expansion descriptor is not pinnable in the closure.
 
 ---
 
@@ -607,14 +928,38 @@ Manifest example:
 
 ```yaml
 name: my-saas
-compute:
+components:
   api:
-    type: composite.serverless-with-postgres@v1
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build
-        artifact: bundle
+    expand:
+      ref: composite.serverless-with-postgres@v1
+      config:
+        source:
+          ref: artifact.workflow-bundle@v1
+          config:
+            workflow: .takos/workflows/build.yml
+            job: build
+            artifact: bundle
+```
+
+Compiler-emitted canonical form:
+
+```yaml
+components:
+  api:
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source: { ref: artifact.workflow-bundle@v1, config: { ... } }
+      ui:
+        ref: interface.http@v1
+resources:
+  api-db:
+    ref: resource.sql.postgres@v1
+bindings:
+  - from: { resource: api-db }
+    to: { component: api, env: DATABASE_URL }
+    access: database-url
 ```
 
 ### `composite.web-app-with-cdn@v1`
@@ -661,22 +1006,32 @@ Manifest example:
 
 ```yaml
 name: marketing-site
-compute:
+components:
   web:
-    type: composite.web-app-with-cdn@v1
-    build:
-      fromWorkflow:
-        path: .takos/workflows/build.yml
-        job: build
-        artifact: bundle
+    expand:
+      ref: composite.web-app-with-cdn@v1
+      config:
+        source:
+          ref: artifact.workflow-bundle@v1
+          config:
+            workflow: .takos/workflows/build.yml
+            job: build
+            artifact: bundle
 ```
 
 ### Authoring rules
 
-A composite reference MUST appear as a `compute.<name>.type` value. All other
-authoring fields on the same compute (env, depends, consume, build, image,
-requirements, triggers, containers) are preserved through the expansion.
+A composite reference MUST appear as `components.<name>.expand.ref`. The
+component MUST NOT also declare `contracts:` (the compiler emits the
+canonical contract instances itself). `components.<name>.env` and
+`components.<name>.depends` are preserved through expansion.
+
 Composite-emitted resources, publications, and routes are named
 `<component>-<suffix>` (e.g. `api-db`, `web-edge`, `web-site`). A composite
-expansion MUST NOT clobber a user-declared resource, publication, or route of
-the same name; the compiler refuses to compile in that case.
+expansion MUST NOT clobber a user-declared resource, publication, or route
+of the same name; the compiler refuses to compile in that case.
+
+Composites are intended for the "1 runtime + closely related resource /
+publication / route" pattern. Bundling unrelated multiple publications or
+routes into a single composite is discouraged; write them as canonical
+multiple contract instances and multiple top-level entries instead.

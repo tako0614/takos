@@ -1,31 +1,56 @@
-# Worker + DB
+# Component + DB
 
-この例は
-[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
-を top-level `env` で拡張したものです。
+`resources[]` で SQL resource を claim し、 `bindings[]` で component に
+runtime binding として渡します。
 
 ```yaml
 name: notes-app
 
-env:
-  DATABASE_URL: postgres://example.local/notes
-  ASSETS_ENDPOINT: https://assets.example.local
-
-compute:
+components:
   web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: bundle
+              artifact: web
+              entry: dist/worker.js
+      ui:
+        ref: interface.http@v1
+
+resources:
+  notes-db:
+    ref: resource.sql.postgres@v1
+    config:
+      migrations: migrations
+  notes-assets:
+    ref: resource.object-store.s3@v1
+
+bindings:
+  - from: { resource: notes-db }
+    to: { component: web, env: DATABASE_URL }
+    access: database-url
+  - from: { resource: notes-assets }
+    to: { component: web, binding: ASSETS }
+    access: object-runtime-binding
 
 routes:
   - id: web
-    target: web
-    path: /
+    expose: { component: web, contract: ui }
+    via: { ref: route.https@v1, config: { path: / } }
 ```
 
-この例では DB / object store の接続先を env として渡しています。SQL や
-object-store は publish ではなく resource API / runtime binding
-側で扱う対象です。
+ポイント:
+
+- `resources[]` で resource claim を declaration し、 backend は
+  `provider-selection` policy gate と operator-only configuration が解決する
+  (manifest には provider 名は出ない)
+- `bindings[]` で **明示** の binding edge を書く。 `to.env` で env、
+  `to.binding` で runtime binding handle として渡る
+- `access:` mode は resource ref が単一 access mode なら省略可、 複数候補を
+  持つ ref では明示が必要 (`resource.sql.postgres@v1` は `database-url` /
+  `migration-admin` / `sql-query-api` を持つので明示)

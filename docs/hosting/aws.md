@@ -163,7 +163,7 @@ certificate ARN を設定します。
 
 ### 構成
 
-`takos-paas-plugins` の AWS provider plugin は 6 provider を提供します:
+Takosumi (`@takosumi/plugins`) の AWS provider plugin は 6 provider を提供します:
 
 | provider client              | 用途                          | 参照クラス                             |
 | ---------------------------- | ----------------------------- | -------------------------------------- |
@@ -296,19 +296,19 @@ echo "ap-northeast-1" | deno task secrets put AWS_REGION --env production
 ```
 
 profile (`profiles/cloudflare-aws.example.json`) で
-`pluginConfig.operator.takos.cloudflare-aws.region` / `accountId` /
+`pluginConfig.operator.takosumi.cloudflare-aws.region` / `accountId` /
 `clusterName` を合わせます。
 
 #### B. operator-managed gateway URL (kernel が AWS の外にある場合)
 
 provider plugin は SDK を直接 import せず、operator が用意する HTTP gateway
 を介して呼ぶ前提です。`src/providers/aws/gateway.ts` の URL 構成は profile の
-`pluginConfig.operator.takos.aws.gatewayUrl` で上書きできます:
+`pluginConfig.operator.takosumi.aws.gatewayUrl` で上書きできます:
 
 ```jsonc
 {
   "pluginConfig": {
-    "operator.takos.aws": {
+    "operator.takosumi.aws": {
       "clients": { "...": "..." },
       "region": "ap-northeast-1",
       "accountId": "123456789012",
@@ -334,8 +334,8 @@ runtime-agent を常駐させて work lease を pull する方式です。
 import {
   RuntimeAgentHttpClient,
   RuntimeAgentLoop,
-} from "takos-paas-plugins/runtime-agent";
-import { awsProviderExecutors } from "takos-paas-plugins/providers/aws";
+} from "@takosumi/plugins/runtime-agent";
+import { awsProviderExecutors } from "@takosumi/plugins/providers/aws";
 
 const client = new RuntimeAgentHttpClient({
   baseUrl: Deno.env.get("TAKOS_KERNEL_URL")!,
@@ -428,7 +428,7 @@ operator がやること:
 - wildcard ACM certificate (`*.app.takos.example.com`) を us-east-1 / region
   内で発行 (DNS validation 推奨)
 - ALB の internet-facing security group / WAF 設定
-- profile の `pluginConfig.operator.takos.aws.routerConfig` に `albArn` /
+- profile の `pluginConfig.operator.takosumi.aws.routerConfig` に `albArn` /
   `hostedZoneId` / `certificateArn` を設定
 
 kernel がやること:

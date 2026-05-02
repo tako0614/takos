@@ -1,88 +1,104 @@
 # Tenant Runtime
 
-Tenant runtime は deploy された group の workload が実際の HTTP request
-を処理する execution plane。GroupHead が指す current Deployment の
-`desired.activation_envelope` と `desired.routes` から導出した route projection
-に従って request を受け、`Deployment.desired.bindings` で固定された binding を
-通じて ResourceInstance / publication output を参照する。
+Tenant runtime は deploy された group の component が実際の HTTP request
+を処理する execution plane。 GroupHead が指す current Deployment の
+`desired.activation_envelope` と `desired.routes` から導出した route
+projection に従って request を受け、 `Deployment.desired.bindings` で固定
+された binding を通じて ResourceInstance / publication output を参照する。
 
-このページでいう tenant runtime は、user-defined group の `compute` workload を
-request に応じて実行する面を指す。sandbox shell / workflow job / git / CLI proxy
-を扱う内部 service は [takos-runtime-service](./runtime-service.md)
-であり、tenant workload の runtime contract とは別の execution plane。
+このページでいう tenant runtime は、 user-defined group の `components`
+workload を request に応じて実行する面を指す。 sandbox shell / workflow job
+/ git / CLI proxy を扱う内部 service は
+[takos-runtime-service](./runtime-service.md) であり、 tenant workload の
+runtime contract とは別の execution plane。
 
 ## Workload artifacts
 
-Worker workload の artifact は `worker-bundle`。
+`runtime.js-worker@v1` を ref に持つ component の artifact は
+`artifact.workflow-bundle@v1` 経由の `worker-bundle`。
 
 - tracked reference Workers backend: Workers runtime 上で実行
-- local / self-host: tenant worker runtime path（Workers-compatible
-  adapter）上で実行
+- local / self-host: tenant worker runtime path (Workers-compatible adapter)
+  上で実行
 - AWS / GCP / k8s: tenant worker runtime path で実行
 
-image-backed Service / Attached Container の artifact は `container-image`。
-これらも user group workload だが、Worker の `worker-bundle` path とは別に OCI
-deployment adapter / backend-specific adapter で materialize される。backend /
-adapter の選択は operator-only configuration で、public deploy manifest
-には書かない。
+`runtime.oci-container@v1` を ref に持つ component の artifact は
+`artifact.oci-image@v1` 経由の `container-image`。 これらも user group
+workload だが、 worker bundle path とは別に OCI deployment adapter /
+backend-specific adapter で materialize される。 provider 選択は
+`provider-selection` policy gate と operator-only configuration で行い、
+public deploy manifest には provider 名を書かない。
 
 ## Container runtime
 
-`compute.<name>` の `kind="service"` (image-only) と
-`compute.<name>.containers.<sub>` の `kind="attached-container"` はどちらも
-`container-image` artifact を持つ container-service workload だが、group deploy
-scope での役割が異なる。
-
-- service (`compute.<name>` with `image`): top-level compute の long-running
-  HTTP service
-- attached container (`compute.<name>.containers.<sub>`): worker に紐づく
-  attached container workload
+`runtime.oci-container@v1` を ref に持つ component (旧 service / attached
+container) はいずれも `container-image` artifact を持つ container-service
+workload。 manifest 上は他 component と同じ `components.<name>` として
+declaration し、 親子関係を持ちたい場合は `depends:` で順序 hint を渡す
+(旧 `containers:` 配下の nesting は廃止)。
 
 共通する runtime contract:
 
-- routing は dispatch が `service-ref` または `http-url` target として到達する
+- routing は dispatch が `service-ref` または `http-url` target として到達
+  する
 - local backend では oci-orchestrator が Docker Engine API 経由で lifecycle
   を管理する
-- tracked reference Workers backend でも current 実装では OCI deployment adapter
-  を使う
+- tracked reference Workers backend でも current 実装では OCI deployment
+  adapter を使う
 - AWS / GCP / k8s では backend-specific adapter (`ecs`, `cloud-run`, `k8s`)
-  に解決される。`ecs` / `cloud-run` は tenant image workload adapter であり、
-  Takos kernel hosting target ではない
-- `image` は digest pin (`@sha256:...`) 必須。rollback は group deployment
-  record に保存された image ref と execution context を再適用する
-- Service / Attached Container は listen port を推測しないため、manifest の
-  `port` が必須
+  に解決される。 `ecs` / `cloud-run` は tenant image workload adapter で
+  あり、 Takos kernel hosting target ではない
+- `artifact.oci-image@v1.config.image` は digest pin (`@sha256:...`) 必須。
+  rollback は group deployment record に保存された image ref と execution
+  context を再適用する
+- `runtime.oci-container@v1.config.port` は listen port として明示が必要
 
-container runtime は v1 では HTTP routable な service に限定される。
+container runtime は v1 では HTTP routable な component に限定される。
 
-## Attached containers
+## 子 component (旧 attached container)
 
-`containers` は worker に紐づく image-backed workload。manifest 上は
-`compute.<name>.containers` で参照する。
+子 component は別 component として declaration し、 親 component から
+runtime binding 経由で呼び出します。 旧 `compute.<>.containers.<sub>`
+nesting は廃止されました。
 
 ```yaml
-compute:
+components:
   api:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: build-api
-        artifact: api
-        artifactPath: dist/api.js
-    containers:
-      worker:
-        image: ghcr.io/example/worker-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-        port: 8080
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: build-api
+              artifact: api
+              entry: dist/api.js
+      api:
+        ref: interface.http@v1
+  worker:
+    contracts:
+      runtime:
+        ref: runtime.oci-container@v1
+        config:
+          source:
+            ref: artifact.oci-image@v1
+            config:
+              image: ghcr.io/example/worker-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          port: 8080
+      gateway:
+        ref: interface.http@v1
+    depends: [api]
 ```
 
-worker 側には attached container binding が注入される。binding 名は child 名を
-uppercase に正規化した `${NAME}_CONTAINER` になる。たとえば `worker` は
-`env.WORKER_CONTAINER` で参照する。namespace binding として expose されるが、
-これは current runtime detail であり、provider product surface と 1 対 1 に固定
-された契約ではない。
+親側に子 component を runtime binding として渡したい場合は `bindings[]` で
+明示します。 binding 名 / handle 形式は backend 固有 (current runtime
+detail であり、 provider product surface と 1 対 1 に固定された契約では
+ない)。
 
-`__TAKOS_ATTACHED_CONTAINER_${NAME}_URL` 形式の internal URL env は runtime
-generated であり、public contract ではない。
+`__TAKOS_ATTACHED_CONTAINER_${NAME}_URL` 形式の internal URL env は legacy
+runtime generated であり、 public contract ではない。
 
 ## Dispatch の役割
 
@@ -187,8 +203,9 @@ canonical provider ではない。
   (dispatch namespace / Container DO / KV / DO) も使って成立する。
   image-backed workload の healthCheck は OCI deployment adapter / orchestrator
   に渡す deploy 入力として扱う
-- attached container binding は Cloudflare の DurableObjectNamespace-compatible
-  namespace binding として expose されるが、これは current runtime detail で
-  あり、Cloudflare product surface と 1 対 1 に固定された契約ではない
+- 子 component (旧 attached container) binding は Cloudflare の
+  DurableObjectNamespace-compatible namespace binding として expose される
+  が、 これは current runtime detail であり、 Cloudflare product surface と
+  1 対 1 に固定された契約ではない
 
 :::
