@@ -183,4 +183,4 @@ protect acceptance-critical seams and should remain in the refresh inventory.
   prepared-artifact TTL expiry, and provider-package retention references.
 - External self-host/cloud live proof is intentionally separate from the kernel
   matrix; distribution manifests and dry-run smoke are covered here, while real
-  provider proof belongs to `takos-paas-plugins` live smoke tasks.
+  provider proof belongs to the Takosumi (`@takosumi/plugins`) live smoke tasks.

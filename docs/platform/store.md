@@ -196,59 +196,57 @@ manifest と deploy を通じて、以下が自動的に関連づけられます
 
 ## MCP 統合
 
-manifest の `publications` で `type: publication.mcp-server@v1` を宣言する。
+manifest の `publications` で `ref: publication.mcp-server@v1` を declaration
+する。
 
 ```yaml
 routes:
   - id: mcp
-    target: web
-    path: /mcp
+    expose: { component: web, contract: mcp }
+    via: { ref: route.https@v1, config: { path: /mcp } }
 
 publications:
   - name: tools
-    type: publication.mcp-server@v1
+    ref: publication.mcp-server@v1
     outputs:
-      url:
-        kind: url
-        routeRef: mcp
+      url: { from: { route: mcp } }
     spec:
       transport: streamable-http
 ```
 
-MCP server catalog は deploy manifest の `publications` entry で管理します。deploy
-後に control plane が catalog entry を保存し、agent 側が server をロードする。
-`publication.mcp-server@v1` の canonical 定義は
-[publication types](/reference/glossary#publication-types) を参照。詳細は [MCP Server](/apps/mcp) を参照。publication
-の仕組みについては [Publication](/architecture/app-publications)
-を参照。
+MCP server catalog は deploy manifest の `publications` entry で管理します。
+deploy 後に control plane が catalog entry を保存し、 agent 側が server を
+ロードする。 `publication.mcp-server@v1` の canonical 定義は
+[publication descriptors](/reference/glossary#publication-types) を参照。
+詳細は [MCP Server](/apps/mcp) を参照。 publication の仕組みについては
+[Publication](/architecture/app-publications) を参照。
 
 ## file handler 統合
 
-manifest の `publications` で `type: publication.http-endpoint@v1` を宣言する。
+manifest の `publications` で `ref: publication.file-handler@v1` を declaration
+する。
 
 ```yaml
 routes:
   - id: file-open
-    target: web
-    path: /files/:id
+    expose: { component: web, contract: ui }
+    via: { ref: route.https@v1, config: { path: /files/:id } }
 
 publications:
   - name: markdown
-    type: publication.http-endpoint@v1
+    ref: publication.file-handler@v1
     outputs:
-      url:
-        kind: url
-        routeRef: file-open
+      url: { from: { route: file-open } }
     spec:
       mimeTypes: [text/markdown]
       extensions: [.md]
 ```
 
-`publication.http-endpoint@v1` catalog は deploy manifest の `publications` entry で管理します。space
-storage と deployed UI が loose coupling のまま連携できる。`publication.http-endpoint@v1` の
-route output は `:id` path segment を必ず含み、storage catalog では `:id` を含まない
-handler を公開しません。`publication.http-endpoint@v1` の launch contract は file ID の path
-segment が primary です。current storage UI は起動時に `space_id` query
+`publication.file-handler@v1` catalog は deploy manifest の `publications`
+entry で管理します。 space storage と deployed UI が loose coupling のまま
+連携できる。 route output は `:id` path segment を必ず含み、 storage catalog
+では `:id` を含まない handler を公開しません。 launch contract は file ID の
+path segment が primary です。 current storage UI は起動時に `space_id` query
 parameter も追加しますが、`file_id` query fallback はありません。
 canonical ref は
 [publication types](/reference/glossary#publication-types) を参照。詳細は
@@ -257,6 +255,6 @@ canonical ref は
 
 ## 次に読むページ
 
-- [Deploy Manifest の書き方](/apps/manifest)
+- [Deploy Manifest の書き方](/deploy/manifest)
 - [マニフェストリファレンス](/reference/manifest-spec)
 - [Repository / Catalog デプロイ](/deploy/store-deploy)

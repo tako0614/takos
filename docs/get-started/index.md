@@ -46,27 +46,37 @@ takos whoami
 # .takos/app.yml
 name: my-app
 
-compute:
+components:
   web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
+    contracts:
+      runtime:
+        ref: runtime.js-worker@v1
+        config:
+          source:
+            ref: artifact.workflow-bundle@v1
+            config:
+              workflow: .takos/workflows/deploy.yml
+              job: bundle
+              artifact: web
+              entry: dist/worker.js
+      ui:
+        ref: interface.http@v1
 
 routes:
   - id: web
-    target: web
-    path: /
+    expose: { component: web, contract: ui }
+    via:
+      ref: route.https@v1
+      config: { path: / }
 ```
 
-`routes` で `/` を `web` compute に紐づけることで、ドメイン直下が公開されます。
-ドメインはシステムが自動付与します。
+`routes` で `/` を `web` component の `interface.http@v1` instance に紐づける
+ことで、 ドメイン直下が公開されます。 ドメインはシステムが自動付与します。
 
 ### 4. ビルドワークフローを書く
 
-manifest の `build.fromWorkflow.path` で参照する workflow を作ります。
+manifest の `artifact.workflow-bundle@v1.config.workflow` で参照する
+workflow を作ります。
 
 ```yaml
 # .takos/workflows/deploy.yml

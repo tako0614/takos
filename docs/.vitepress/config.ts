@@ -55,12 +55,7 @@ export default defineConfig({
       {
         text: 'アプリ構成',
         items: [
-          { text: 'アプリマニフェスト', link: '/apps/manifest' },
-          { text: 'Services', link: '/apps/services' },
-          { text: 'Containers', link: '/apps/containers' },
-          { text: 'Workers', link: '/apps/workers' },
-          { text: 'Routes', link: '/apps/routes' },
-          { text: '環境変数', link: '/apps/environment' },
+          { text: '概要', link: '/apps/' },
           { text: 'MCP Server', link: '/apps/mcp' },
           { text: 'OAuth', link: '/apps/oauth' },
           { text: 'File Handlers', link: '/apps/file-handlers' },
@@ -70,6 +65,9 @@ export default defineConfig({
         text: 'デプロイ',
         items: [
           { text: '概要', link: '/deploy/' },
+          { text: 'マニフェスト', link: '/deploy/manifest' },
+          { text: 'Routes', link: '/deploy/routes' },
+          { text: '環境変数', link: '/deploy/environment' },
           { text: 'deploy', link: '/deploy/deploy' },
           { text: 'deploy-group', link: '/deploy/deploy-group' },
           { text: 'Repository / Catalog', link: '/deploy/store-deploy' },

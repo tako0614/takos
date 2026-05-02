@@ -36,45 +36,45 @@ availability、runtime behavior parity を判定する report ではない。以
 adapter 名は operator-only configuration であり、public deploy manifest の field
 ではない。
 
-| manifest workload                                | Public surface | Internal materialization                                 |
-| ------------------------------------------------ | -------------- | -------------------------------------------------------- |
-| `compute.<name>` (Worker = `build` あり)         | compatible     | selected worker runtime adapter                          |
-| `compute.<name>` (Service = `image` あり)        | compatible     | selected container runtime adapter / OCI orchestrator    |
-| `compute.<name>.containers` (Attached Container) | compatible     | selected container runtime adapter + worker-side binding |
+| manifest declaration                              | Public surface | Internal materialization                              |
+| ------------------------------------------------- | -------------- | ----------------------------------------------------- |
+| `runtime.js-worker@v1` を ref に持つ component    | compatible     | selected worker runtime adapter                       |
+| `runtime.oci-container@v1` を ref に持つ component | compatible    | selected container runtime adapter / OCI orchestrator |
 
 ### container-image deploy の制約
 
 - `workers-dispatch` と `runtime-host` は direct `container-image` deploy
   を受け付けない
-- 同一 service で artifact kind の混在はできない（初回 deploy で確定）
+- 同一 component で artifact kind の混在はできない (初回 deploy で確定)
 - worker bindings は container runtime には注入されない
 - `container-image` deploy では canary strategy は使えない
-- online `takos deploy` で image-backed compute (Service / Attached Container)
-  を反映するときは `image` field（digest pin 必須）が必要
+- online `takos deploy` で `runtime.oci-container@v1` component を反映する
+  ときは `artifact.oci-image@v1.config.image` (digest pin 必須) が必要
 
-image-backed な compute (Service / Attached Container) は backend に関係なく
-Takos の public contract では同じ扱いで、内部では選択された container adapter /
-orchestrator を通る。
+`runtime.oci-container@v1` を ref に持つ component は backend に関係なく
+Takos の public contract では同じ扱いで、 内部では選択された container
+adapter / orchestrator を通る。
 
 ### manifest-level feature support
 
 | feature                                                                              | manifest | bundle docs | runtime notes                                            |
 | ------------------------------------------------------------------------------------ | -------- | ----------- | -------------------------------------------------------- |
-| worker / service compute                                                             | yes      | yes         | selected worker / container runtime adapter              |
-| attached container                                                                   | yes      | yes         | selected container runtime adapter + worker-side binding |
+| `runtime.js-worker@v1` / `runtime.oci-container@v1` component                        | yes      | yes         | selected worker / container runtime adapter              |
+| 子 component (旧 attached container)                                                 | yes      | yes         | selected container runtime adapter + parent-side binding |
 | route                                                                                | yes      | yes         | selected routing runtime                                 |
-| route publication (`publications[].type/outputs.*.routeRef`)                         | yes      | yes         | publication catalog + route URL output                   |
-| Takos built-in provider publication consume (`takos.api-key` / `takos.oauth-client`) | yes      | yes         | grant output for declared consumer                       |
-| explicit consume edge (`compute.*.consume`)                                          | yes      | yes         | env injection only for declared consumer                 |
-| `scheduled` (`compute.triggers.schedules`)                                           | yes      | yes         | backend 依存                                             |
-| `queue trigger` (`compute.triggers.queues`)                                          | yes      | yes         | backend 依存。Cloudflare/WFP は queue consumer を同期    |
+| route-backed publication (`publications[].outputs.*.from.route`)                     | yes      | yes         | publication catalog + route URL output                   |
+| Takos built-in provider publication binding (`takos.api-key` / `takos.oauth-client`) | yes      | yes         | grant output for declared consumer                       |
+| explicit binding edge (`bindings[]`)                                                 | yes      | yes         | env / runtime binding injection only for declared consumer |
+| `route.schedule@v1`                                                                  | yes      | yes         | backend 依存                                             |
+| `route.queue@v1`                                                                     | yes      | yes         | backend 依存。 Cloudflare/WFP は queue consumer を同期   |
 
 SQL / object-store / queue / analytics-engine / workflow / vector-index /
-durable-object などの resource access は manifest の `publications` / `consume`
-surface ではなく、resource API / runtime binding 側で扱う。`publications` は
-route publication catalog であり、Takos API key / OAuth client は built-in
-provider publication を consume する。resource creation や resource binding
-の入口ではない。
+durable-object などの resource access は manifest の `publications` /
+binding surface 単独ではなく、 `resources[]` で claim し `bindings[]` で
+明示 binding する。 `publications` は route-backed publication catalog で
+あり、 Takos API key / OAuth client は built-in provider publication を
+binding する。 resource creation や resource binding の入口は `resources[]`
++ `bindings[]`。
 
 ### resource runtime binding support
 

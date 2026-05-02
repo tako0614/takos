@@ -67,7 +67,7 @@ Deployment を作成し、apply 時に GroupHead を進めます。API の sourc
 出どころを示す `Deployment.input.source_kind` / `source_ref` metadata であり、
 lifecycle の差ではありません。
 
-ローカル manifest 経路では、CLI が `build.fromWorkflow` の workflow を
+ローカル manifest 経路では、CLI が `runtime.js-worker@v1` config の `source.config` (`artifact.workflow-bundle@v1`) が指す workflow を
 workflow-runner でローカル実行し、生成した build artifact を Deployment の
 manifest snapshot に添えます。repository URL 経路では CLI は repo を fetch
 せず、 `POST /api/public/v1/deployments` に `repository_url + ref/ref_type`
@@ -153,9 +153,9 @@ takos deploy --resolve-only --space SPACE_ID             # persist resolved Depl
 Heroku 風 sugar として `mode="resolve"` → `mode="apply"` を 1 step
 で呼び、成功時に GroupHead を新 Deployment に進めます。
 
-ローカル manifest 経路では `compute.<name>.build.fromWorkflow.artifactPath` を
+ローカル manifest 経路では `artifact.workflow-bundle@v1.config.entry` を
 local artifact collection の入力として CLI が API call 前に確認します。
-`artifactPath` は public manifest schema では optional の local/private build
+`entry` は public manifest schema では optional の local/private build
 metadata ですが、local deploy で worker bundle を収集する場合は必要です。worker
 bundle が見つからない場合や directory 内に複数の JavaScript bundle 候補がある
 場合は `takos deploy --preview` でも `takos deploy` でも失敗します。

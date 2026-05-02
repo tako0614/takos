@@ -71,8 +71,10 @@ Self-hosted and cloud production behavior, including signed service auth,
 database storage, source snapshots, provider materialization, queue/object
 storage, router config, KMS, secret storage, notifications, observability, and
 runtime agent integration, belongs in operator-provided external plugin bundles.
-The ecosystem checkout contains a separate `takos-paas-plugins` root with
-operator profile bundles for self-hosted, Cloudflare, AWS, and GCP. Those
+The ecosystem checkout contains a separate `takos-paas-plugins` working tree
+(published as the `@takosumi/plugins` JSR package, an independent product
+called **Takosumi**) with operator profile bundles for self-hosted, Cloudflare,
+AWS, GCP, and Kubernetes. Those
 profiles declare every required kernel port plus `coordination` and provide
 adapter wrappers for Cloudflare D1/R2/Queues/Durable Objects/Workers/Containers,
 AWS RDS/S3/SQS/KMS/Secrets/ECS-style control clients, GCP Cloud
@@ -140,8 +142,9 @@ and requires an operator-deployed target.
 
 The PaaS API can be created through a side-effect-free bootstrap factory, so an
 operator runtime can register trusted plugins and a `KernelPluginClientRegistry`
-before serving traffic. The `takos-paas-plugins/deploy/cloudflare` scaffold
-documents the Worker, D1, R2, Queue, Durable Object, and Container binding shape
+before serving traffic. The Takosumi `deploy/cloudflare` scaffold (path:
+`takos-paas-plugins/deploy/cloudflare`) documents the Worker, D1, R2, Queue,
+Durable Object, and Container binding shape
 for running the PaaS API behind Cloudflare infrastructure, and includes a Deno
 container template for the PaaS API. Operators still need to inject real
 Cloudflare clients and plugin config before serving traffic. Cloudflare
@@ -158,7 +161,7 @@ requires an injected Takos storage client or gateway. AWS and GCP gateway
 clients call operator-controlled JSON endpoints; callback-based storage
 transactions still require an injected storage driver because they cannot be
 represented as a single stateless HTTP request. Credentialed live provider
-checks are available through the `takos-paas-plugins` opt-in
+checks are available through the Takosumi (`@takosumi/plugins`) opt-in
 `live-smoke:<target>` and `live-provisioning-smoke:<target>` tasks. Those checks
 are external provider proof, not kernel release proof, and are skipped unless
 the operator supplies target-specific credentials and fixtures.

@@ -18,15 +18,38 @@ Core defines no domain kinds. Core does not define `js-worker`, `container`,
 `sql`, `queue`, `mcp-server`, `file-handler`, `Cloudflare`, `Cloud Run`,
 `Docker`, or `Kubernetes`. Concrete meanings are supplied by descriptors.
 
+Takos separates **declaration**, **resolution**, and **injection**:
+
+```text
+Output         = producer-side typed value declaration
+Binding        = consumer-side explicit injection request
+BindingResolution = resolved policy / grant / approval / source revision
+BindingSetRevision = immutable runtime binding snapshot used by AppRelease
+```
+
+Short form:
+
+```text
+Output   = 出す
+Binding  = 入れる
+BindingResolution = 許可・解決する
+BindingSetRevision = 有効化する
+```
+
 ```text
 Core has no domain kinds.
 Core defines Deployment / ProviderObservation / GroupHead.
 Descriptors define meaning.
 Deployments pin descriptors.
 Apply uses pinned meaning.
-Bindings are explicit.
+Output does not imply Binding.
+Binding is explicit.
+Binding does not imply raw env.
+BindingResolution is planned.
+BindingSetRevision is immutable.
 Routed serving is protocol-agnostic and descriptor-defined.
 Resources are reached through access paths.
+Resource credentials are not Outputs by default.
 Providers materialize; they do not define.
 Observed provider state is never canonical.
 ```
@@ -47,22 +70,33 @@ MUST NOT  forbidden for Core conformance
 ## 2. Core invariants
 
 ```text
-1.  Core MUST NOT assign built-in meaning to workload, resource, publication, or provider names.
+1.  Core MUST NOT assign built-in meaning to workload, resource, output, or provider names.
 2.  Every concrete meaning used by Deployment.resolution MUST come from descriptor resolutions.
 3.  Apply MUST use the descriptor_closure fixed in Deployment.resolution. Apply MUST NOT reinterpret descriptor URLs, aliases, or remote contexts at execution time.
-4.  Publication MUST NOT imply injection.
-5.  Resource credentials MUST NOT be publication outputs by default.
-6.  Provider-assigned outputs MUST NOT be directly injectable.
-7.  Binding material MUST be explicitly selected in Deployment.desired.bindings.
-8.  Deployment.desired is immutable once Deployment.status is `applied`.
-9.  ProviderObservation is observed provider state and MUST NOT be canonical.
-10. Deployment.desired.activation_envelope records a desired routed serving envelope, not proof of router/provider convergence.
-11. GroupHead.current_deployment_id advancement MUST be strongly consistent.
-12. Rollback MUST reuse Deployment.input.manifest_snapshot and the retained descriptor_closure of the rollback target. Rollback MUST NOT reverse migrations or restore durable resource contents.
+4.  Output MUST NOT imply Binding. Catalog / discovery projection of an Output MUST NOT imply Binding either.
+5.  Binding MUST be explicit. Binding material MUST be explicitly selected as a BindingDeclaration in Deployment.desired.bindings.
+6.  BindingResolution is planned: every BindingDeclaration MUST have a corresponding BindingResolution carrying policyDecisionId, grantRef, approvalRecordId, sensitivity, and resolvedSourceRevision before runtime injection.
+7.  BindingSetRevision is immutable. Output changes MUST NOT mutate existing BindingSetRevisions. An Output change creates rebind candidates or a consumer rebind Plan; Binding structure changes require a new AppRelease.
+8.  Resource credentials MUST NOT be Output fields by default. A credential Output MUST be declared by an Output contract that explicitly permits credential outputs and MUST be protected by policy + grant + approval + secret-ref injection rules.
+9.  Provider-assigned outputs MUST NOT be directly injectable. A `provider-output` source is reachable only through an explicit BindingDeclaration of `kind: "provider-output"`.
+10. Secret / credential Outputs default to secret-ref injection. Raw env injection of a secret or credential Output requires an explicit Output contract permitting raw env, plus PolicySpec allow + approval (CredentialOutputRequiresApproval / RawCredentialInjectionDenied gate this).
+11. Deployment.desired is immutable once Deployment.status is `applied`.
+12. ProviderObservation is observed provider state and MUST NOT be canonical.
+13. Deployment.desired.activation_envelope records a desired routed serving envelope, not proof of router/provider convergence.
+14. GroupHead.current_deployment_id advancement MUST be strongly consistent.
+15. Rollback MUST reuse Deployment.input.manifest_snapshot and the retained descriptor_closure of the rollback target. Rollback MUST NOT reverse migrations or restore durable resource contents.
 ```
 
-These twelve invariants are the load-bearing semantics of Core. Implementations
+These fifteen invariants are the load-bearing semantics of Core. Implementations
 MAY surface additional checks but MUST NOT relax any of these.
+
+> **Vocabulary note.** The legacy authoring nouns `publish` / `consume` are
+> retained as authoring shorthand; the canonical Core vocabulary is **Output**
+> (producer-side typed value), **Binding** (consumer-side explicit injection
+> request), **BindingResolution** (resolved policy + grant + approval +
+> revision), and **BindingSetRevision** (immutable runtime snapshot).
+> `PublicationContract` is preserved as one class of Output contract, but
+> Core objects are spelled `Output*` / `Binding*`.
 
 ---
 
@@ -96,9 +130,12 @@ and PolicySpec inputs. The combined snapshot is recorded as
 `Deployment.input.manifest_snapshot` and is the immutable input to resolution.
 
 **AppSpec** declares application meaning (components, named contract instances,
-exposures, consume / publication declarations, application-level requirements).
-AppSpec MUST NOT silently encode environment provider choices unless a
-descriptor explicitly marks the configuration as application behavior.
+exposures, Output declarations, component-level Binding declarations, and
+application-level requirements). The legacy `publish` / `consume` authoring
+keys are accepted as shorthand and expand to `outputs` / component-level
+`bindings` during resolution. AppSpec MUST NOT silently encode environment
+provider choices unless a descriptor explicitly marks the configuration as
+application behavior.
 
 **EnvSpec** binds application meaning to an environment (provider targets, route
 / listener / domain / transport security choices, runtime network policy,
@@ -214,7 +251,7 @@ unless PolicySpec explicitly allows aliasing.
 Rules for `Deployment.resolution.descriptor_closure`:
 
 ```text
-descriptor_closure MUST include every descriptor that can affect shape derivation, provider matching, binding resolution, access path selection, publication resolution, policy evaluation, or operation planning.
+descriptor_closure MUST include every descriptor that can affect shape derivation, provider matching, binding resolution, access path selection, output resolution, policy evaluation, or operation planning.
 descriptor_closure MUST include transitive descriptor dependencies.
 Apply MUST use the descriptor_closure fixed in Deployment.resolution and MUST NOT fetch a new descriptor version or reinterpret remote context URLs.
 ```
@@ -302,7 +339,7 @@ type GraphProjection = {
 The graph MAY be flat internally, but SHOULD expose deterministic projections
 for controllers. Controllers SHOULD consume projections rather than reinterpret
 raw descriptors. Projection families (runtime claim, resource claim, exposure
-target, publication declaration, binding request, access path request, etc.) are
+target, Output declaration, BindingDeclaration, access path request, etc.) are
 compiler outputs for controller routing, not authoring kinds.
 
 ---
@@ -327,7 +364,8 @@ app.component:api/app.contract:publicHttp
 app.exposure:web
 app.binding:api%2FDATABASE_URL
 resource.instance:db_inst_123
-publication:search-agent%2Fsearch
+output:search-agent%2Fsearch
+publication:search-agent%2Fsearch   (legacy alias of output:...)
 deployment:dep_123
 group:checkout-prod
 ```
@@ -339,16 +377,18 @@ dangerous change unless an explicit migration/rebind plan exists.
 
 ---
 
-## 10. Interface, exposure, route, router, and publication
+## 10. Interface, exposure, route, router, and Output
 
 Boundaries:
 
 ```text
-Interface:    component-side reachable surface
-Exposure:     app-level intent to expose a component interface
-Route:        environment binding of an exposure to a listener / match / transport
-Router:       materialized routing layer
-Publication:  typed output that says what an endpoint or value means
+Interface:           component-side reachable surface
+Exposure:            app-level intent to expose a component interface
+Route:               environment binding of an exposure to a listener / match / transport
+Router:              materialized routing layer
+Output:              producer-side typed value declaration
+OutputRevision:      resolved values for an Output
+OutputProjection:    discovery / catalog projection of an Output (e.g. MCP registry, FileHandler discovery, UI catalog)
 ```
 
 Invariants:
@@ -358,7 +398,8 @@ Interface does not know domain.
 Exposure does not know provider implementation.
 Route does not know artifact or runtime implementation.
 Router materialization does not define application meaning.
-Publication does not imply injection.
+Output does not imply Binding.
+OutputProjection (catalog / discovery) does not imply Binding.
 Transport protocol does not determine object type.
 ```
 
@@ -376,17 +417,103 @@ provider-validated. If a channel descriptor does not support weighted
 assignment, the Deployment MUST record a single assignment with weight 100 or
 resolution MUST be blocked.
 
-Publication is typed output. Publication output descriptors MUST define value
-type and sensitivity. A change in publication resolution MUST NOT mutate
-existing consumer bindings; it creates a rebind candidate requiring a new
-Deployment with updated `desired.bindings`.
+### 10.1 Output
+
+`Output` is producer-side typed output. An Output is declared by an Output
+contract (e.g. `publication.mcp-server@v1`, `publication.http-endpoint@v1`,
+`publication.topic@v1`, `builtin:takos.api-key@v1`). Output contract
+descriptors MUST define value type and sensitivity per output field.
+
+```ts
+interface CoreOutputDeclaration {
+  address: string; // output:<group>/<name>  (legacy alias: publication:...)
+  producerGroupId: string;
+  contract: string; // canonical Output contract id
+  source: unknown; // descriptor-defined source projection (exposure / path / lookup)
+  visibility: "private" | "explicit" | "space" | "public";
+  status?: "declared" | "withdrawn";
+}
+
+interface CoreOutputValue {
+  valueType:
+    | "string"
+    | "url"
+    | "json"
+    | "secret-ref"
+    | "service-ref"
+    | "endpoint";
+  sensitivity: "public" | "internal" | "secret" | "credential";
+  value?: unknown;
+  secretRef?: string;
+}
+
+interface CoreOutputRevision {
+  outputAddress: string;
+  revisionId: string;
+  activationRecordId?: string;
+  resolverDescriptorId?: string;
+  inputDigests: string[];
+  values: Record<string, CoreOutputValue>;
+  status: "ready" | "unavailable" | "withdrawn";
+  digest: string;
+  createdAt: string;
+}
+```
+
+Output change semantics:
+
+```text
+A change in Output declaration produces a new OutputRevision.
+A new OutputRevision MUST NOT mutate an existing BindingSetRevision.
+Affected BindingDeclarations become rebind candidates.
+If policy permits automatic rebind, a new BindingSetRevision is produced and a new AppRelease may be generated.
+Otherwise a consumer rebind Plan is produced and existing runtime bindings remain unchanged until the new AppRelease activates.
+```
+
+Output withdrawal semantics:
+
+```text
+OutputRevision.status="withdrawn" blocks new BindingDeclarations against the Output.
+Existing BindingResolutions targeting the withdrawn revision become status="withdrawn" or "stale".
+The runtime binding is NOT silently deleted. Consumers MUST remove, rebind, or accept a degraded state, surfaced as OutputWithdrawn / BindingSourceWithdrawn conditions.
+```
+
+`PublicationContract` is preserved as **one class of Output contract**.
+`publication.<...>@v<n>` descriptor IDs continue to identify Output contracts;
+the Core noun is `Output`.
+
+### 10.2 OutputProjection (discovery / catalog)
+
+MCP registry entries, FileHandler discovery, and UI catalog views are
+**projections of Output**, not Bindings. Catalog visibility is metadata only:
+
+```text
+Visible in catalog != linked / authorized != injected into runtime.
+```
+
+Projection failures surface as `OutputProjectionFailed` /
+`RepairOutputProjectionRequired` conditions; they MUST NOT be interpreted as
+binding failures.
 
 ---
 
 ## 11. Bindings
 
-Bindings are recorded in `Deployment.desired.bindings` — a structural, immutable
-shape tying consumer targets to typed sources.
+Bindings are explicit. Three Core records describe a binding lifecycle:
+
+```text
+BindingDeclaration   — consumer-side explicit injection request (declared shape)
+BindingResolution    — resolved policy + grant + approval + revision (planned)
+BindingSetRevision   — immutable per-component snapshot consumed by AppRelease
+```
+
+`BindingValueResolution` remains for value-level resolution (secret version
+selection, etc.) and is captured per-value inside a BindingSetRevision:
+
+```text
+BindingSetRevision      = binding structure snapshot
+BindingValueResolution  = actual resolved value / version snapshot
+```
 
 AccessMode (what is obtained from the source) and InjectionMode (how it is
 delivered to the component) are different. Canonical access modes are
@@ -401,11 +528,175 @@ access:
 Authoring shorthand MAY omit the contract only when the source is unambiguous;
 ambiguous shorthand MUST block resolution.
 
+### 11.1 BindingDeclaration
+
+```ts
+interface CoreBindingDeclaration {
+  // app.binding:<component>/<bindingName>
+  address: string;
+  componentAddress: string;
+  bindingName: string;
+  source:
+    | {
+      kind: "resource";
+      resource: string; // ObjectAddress of a ResourceClaim / ResourceInstance
+      access: { contract: string; mode: string };
+    }
+    | {
+      kind: "output";
+      output: string; // ObjectAddress of an OutputDeclaration
+      field: string;
+    }
+    | {
+      kind: "secret";
+      secret: string;
+    }
+    | {
+      kind: "provider-output";
+      materialization: string; // ObjectAddress of a provider materialization
+      field: string;
+    };
+  inject: {
+    mode:
+      | "env"
+      | "secret-ref"
+      | "runtime-binding"
+      | "service-binding"
+      | "mount"
+      | "internal-url";
+    target: string;
+  };
+}
+```
+
+Authoring example (consumer side):
+
+```yaml
+components:
+  web:
+    contracts:
+      runtime: { ref: runtime.js-worker@v1 }
+      artifact: { ref: artifact.js-module@v1 }
+      http: { ref: interface.http@v1 }
+    bindings:
+      SEARCH_MCP_URL:
+        from:
+          output: output:search-agent/search
+          field: url
+        inject:
+          mode: env
+          target: SEARCH_MCP_URL
+```
+
+Resource binding remains a separate source kind — resource credentials are
+**not** Outputs by default:
+
+```yaml
+resources:
+  db:
+    contract: resource.sql.postgres@v1
+components:
+  api:
+    bindings:
+      DATABASE_URL:
+        from:
+          resource: db
+          access:
+            contract: resource.sql.postgres@v1
+            mode: database-url
+        inject:
+          mode: env
+          target: DATABASE_URL
+```
+
+Built-in credential Outputs MUST default to `secret-ref` injection. Raw env
+injection of a credential field requires explicit Output-contract permission
+plus `CredentialOutputRequiresApproval` policy approval; otherwise resolution
+MUST emit `RawCredentialInjectionDenied`:
+
+```yaml
+components:
+  web:
+    bindings:
+      TAKOS_API_ENDPOINT:
+        from: { output: builtin:takos.api-key@v1, field: endpoint }
+        inject: { mode: env, target: TAKOS_API_ENDPOINT }
+      TAKOS_API_KEY:
+        from: { output: builtin:takos.api-key@v1, field: apiKey }
+        inject: { mode: secret-ref, target: TAKOS_API_KEY }
+```
+
+### 11.2 BindingResolution
+
+Plan / Apply produce one BindingResolution for each BindingDeclaration. The
+resolution carries everything needed for runtime injection to be authorized:
+
+```ts
+interface CoreBindingResolution {
+  bindingDeclarationAddress: string;
+  // OutputRevision id, ResourceAccessPath id, secret version, or provider
+  // materialization id depending on source.kind.
+  resolvedSourceRevision?: string;
+  policyDecisionId: string;
+  approvalRecordId?: string;
+  grantRef?: string;
+  sensitivity: "public" | "internal" | "secret" | "credential";
+  status: "ready" | "blocked" | "stale" | "withdrawn" | "unavailable";
+  blockers?: string[];
+  warnings?: string[];
+  digest: string;
+}
+```
+
+Binding material MUST pass: source contract permits access; provider supports
+access; Output / source descriptor permits injection at the requested mode;
+runtime / provider support the injection mode; policy permits the resulting
+sensitivity; grant exists; no injection target collision. Binding target
+collisions MUST block resolution unless the runtime descriptor explicitly
+supports ordered merge and every binding declares precedence.
+
+A BindingResolution against a withdrawn or unavailable source MUST surface
+`BindingSourceWithdrawn` / `BindingSourceUnavailable` and MUST NOT silently
+delete the existing runtime binding. Required consumer action is recorded as
+`BindingRebindRequired`.
+
+Core default allowed resolution policies are `latest-at-activation` and
+`pinned-version`. `latest-at-invocation` MAY be used only if the runtime
+contract and PolicySpec explicitly permit it. If a referenced
+secret / credential version is revoked, the implementation MUST surface
+`SecretVersionRevoked` / `SecretResolutionFailed` on the Deployment and MUST
+plan repair or re-resolution explicitly through a new Deployment.
+
+### 11.3 BindingSetRevision
+
+```ts
+interface CoreBindingSetRevision {
+  id: string;
+  componentAddress: string;
+  structureDigest: string;
+  bindingDeclarations: CoreBindingDeclaration[];
+  bindingResolutions: CoreBindingResolution[];
+  bindingValueResolutions?: CoreBindingValueResolution[];
+  digest: string;
+}
+```
+
+BindingSetRevision is **immutable** once produced. Output changes MUST NOT
+mutate existing BindingSetRevisions; instead a new BindingSetRevision is
+produced for a rebind plan. Changing binding structure (target, source,
+access, injection) requires a new AppRelease — i.e. a new Deployment.
+
+### 11.4 Legacy `DeploymentBinding` form
+
+For source-level compatibility, `Deployment.desired.bindings` continues to
+record the structural binding shape. The `source` enum accepts `"output"` as
+the canonical value and `"publication"` as a retained legacy alias:
+
 ```ts
 type DeploymentBinding = {
   bindingName: string;
   componentAddress: string;
-  source: "resource" | "publication" | "secret" | "provider-output";
+  source: "resource" | "output" | "publication" | "secret" | "provider-output";
   sourceAddress: string;
   access?: { contract: string; mode: string };
   injection: { mode: string; target: string };
@@ -421,22 +712,56 @@ type DeploymentBinding = {
 };
 ```
 
-Binding material MUST pass: source contract permits access; provider supports
-access; output descriptor permits injection; runtime / provider support
-injection; policy permits sensitivity and injection; grant exists; no injection
-target collision. Binding target collisions MUST block resolution unless the
-runtime descriptor explicitly supports ordered merge and every binding declares
-precedence.
+`Deployment.desired.bindings` is the immutable structural snapshot of
+BindingDeclarations for the Deployment; per-component BindingResolutions and
+BindingSetRevisions are produced during planning and pinned into the
+generated AppRelease.
 
-Core default allowed resolution policies are `latest-at-activation` and
-`pinned-version`. `latest-at-invocation` MAY be used only if the runtime
-contract and PolicySpec explicitly permit it.
+### 11.5 Conformance assertions
 
-If a referenced secret/credential version is revoked, the implementation MUST
-surface a condition (e.g. `SecretVersionRevoked`, `SecretResolutionFailed`) on
-the Deployment and MUST plan repair or re-resolution explicitly through a new
-Deployment. Changing binding structure (target, source, access, injection)
-requires a new Deployment.
+Conformant implementations MUST exercise:
+
+```text
+- Output does not imply Binding.
+- OutputProjection (catalog / discovery) does not imply Binding.
+- A new field added to an OutputRevision MUST NOT be injected into an existing
+  BindingSetRevision; injection requires a new BindingDeclaration in a new
+  AppRelease.
+- An OutputRevision change creates a rebind candidate or a rebind Plan; it
+  never mutates a BindingSetRevision in place.
+- A withdrawn OutputRevision stalls dependent BindingResolutions
+  (status=withdrawn|stale, blockers reference OutputWithdrawn /
+  BindingSourceWithdrawn) but MUST NOT silently delete the existing runtime
+  binding.
+- Secret / credential Output fields default to secret-ref injection. Raw env
+  injection requires an explicit Output-contract permission and PolicySpec
+  approval; absent either, resolution emits CredentialOutputRequiresApproval
+  or RawCredentialInjectionDenied.
+- A resource credential MUST NOT be exported as an Output unless the
+  descriptor explicitly allows credential output AND policy approves it.
+```
+
+Condition reason catalog updates (additions):
+
+```text
+OutputWithdrawn
+OutputUnavailable
+OutputResolutionFailed
+OutputProjectionFailed
+BindingRebindRequired
+BindingSourceWithdrawn
+BindingSourceUnavailable
+CredentialOutputRequiresApproval
+RawCredentialInjectionDenied
+```
+
+The legacy `Publication*` reasons (`PublicationWithdrawn`,
+`PublicationUnavailable`, `PublicationResolutionFailed`,
+`PublicationProjectionFailed`, `PublicationConsumerRebindRequired`,
+`PublicationConsumerGrantMissing`, `PublicationOutputInjectionDenied`,
+`PublicationRouteUnavailable`, `PublicationAuthUnavailable`) remain in the
+catalog as aliases for source-level compatibility but new code MUST emit the
+`Output*` / `Binding*` / `Credential*` forms above.
 
 ---
 
@@ -505,6 +830,26 @@ If multiple valid access paths exist, selection order is:
 External-boundary access paths MUST also satisfy
 `Deployment.desired.runtime_network_policy`. Migrations recorded in
 `MigrationLedger` are not reversed by rollback (§ 15).
+
+### 12.1 Resource and Output separation (hard invariant)
+
+```text
+Resource sharing uses ResourceBinding / ResourceAccessPath.
+Typed output sharing uses OutputDeclaration / OutputRevision / BindingDeclaration.
+Resource credentials are NOT Output fields by default.
+```
+
+A credential Output MAY exist only if its Output contract explicitly permits
+credential output AND PolicySpec approves it. Such Outputs MUST default to
+`secret-ref` injection and MUST be backed by `OutputValue.secretRef`.
+
+`ImportDeclaration` and `ExportLink` are NOT Core objects. Authoring
+conveniences MAY surface import-style sugar, but Core records only
+OutputDeclaration / OutputRevision / BindingDeclaration / BindingResolution /
+BindingSetRevision. Permission, compatibility, and resolution responsibilities
+formerly attributed to a separate "Link" object are folded into
+BindingResolution (`policyDecisionId`, `approvalRecordId`, `grantRef`,
+`resolvedSourceRevision`, `status`).
 
 ---
 
@@ -587,6 +932,8 @@ type DeploymentActivationEnvelope = {
   };
   non_routed_defaults?: {
     events?: { componentAddress: string; reason?: string };
+    outputs?: { componentAddress: string; reason?: string };
+    // legacy alias for `outputs`
     publications?: { componentAddress: string; reason?: string };
   };
   envelopeDigest: string;
@@ -645,10 +992,14 @@ keys. Default key:
 desiredDigest`. Operation kinds
 are stable strings such as `descriptor.resolve`, `component.project`,
 `resource.bind`, `resource.migrate`, `resource.restore`, `binding.create`,
-`runtime.deploy`, `router.prepare`, `publication.resolve`, `publication.rebind`,
+`binding.resolve`, `binding.rebind`, `runtime.deploy`, `router.prepare`,
+`output.resolve`, `output.rebind`, `output.project`,
 `access-path.materialize`, `activation.commit`, `provider.materialize`,
-`provider.observe`, `repair.plan`. Operation-level state lives entirely in
-`Deployment.conditions[]` with `scope.kind="operation"`. Provider
+`provider.observe`, `repair.plan`. The legacy `publication.resolve` /
+`publication.rebind` operation kinds are retained as aliases of
+`output.resolve` / `output.rebind` for source-level compatibility but new
+implementations MUST emit the `output.*` form. Operation-level state lives
+entirely in `Deployment.conditions[]` with `scope.kind="operation"`. Provider
 materialization failure MUST NOT mutate `Deployment.desired`; repair or rollback
 creates a new Deployment.
 
@@ -822,7 +1173,12 @@ Core defines Deployment / ProviderObservation / GroupHead.
 Descriptors define meaning.
 Deployments pin descriptors.
 Apply uses pinned meaning.
-Bindings are explicit.
+Output is a producer-side typed value declaration.
+Binding is a consumer-side explicit injection request.
+BindingResolution records policy / grant / approval / compatibility / source revision.
+BindingSetRevision is the immutable runtime binding snapshot used by AppRelease.
+Output does not imply Binding. Binding does not imply raw env.
+Resource credentials are not Outputs by default.
 Routed serving is protocol-agnostic and descriptor-defined.
 Resources are reached through access paths.
 Providers materialize; they do not define.

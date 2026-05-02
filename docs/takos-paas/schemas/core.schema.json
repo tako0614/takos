@@ -41,6 +41,21 @@
       "$ref": "#/$defs/CorePublicationResolution"
     },
     {
+      "$ref": "#/$defs/CoreOutputDeclaration"
+    },
+    {
+      "$ref": "#/$defs/CoreOutputValue"
+    },
+    {
+      "$ref": "#/$defs/CoreOutputRevision"
+    },
+    {
+      "$ref": "#/$defs/CoreBindingDeclaration"
+    },
+    {
+      "$ref": "#/$defs/CoreBindingResolution"
+    },
+    {
       "$ref": "#/$defs/CoreApplyPhase"
     },
     {
@@ -134,12 +149,17 @@
         "BindingCollision",
         "BindingResolutionFailed",
         "BindingTargetUnsupported",
+        "BindingRebindRequired",
+        "BindingSourceWithdrawn",
+        "BindingSourceUnavailable",
         "InjectionModeUnsupported",
         "AccessModeUnsupported",
         "SecretResolutionFailed",
         "SecretVersionRevoked",
         "CredentialVisibilityUnsupported",
         "CredentialRawEnvDenied",
+        "CredentialOutputRequiresApproval",
+        "RawCredentialInjectionDenied",
         "AccessPathUnsupported",
         "AccessPathAmbiguous",
         "AccessPathMaterializationFailed",
@@ -174,6 +194,15 @@
         "ProviderCredentialDenied",
         "ProviderPartialSuccess",
         "ProviderOperationTimedOut",
+        "OutputWithdrawn",
+        "OutputUnavailable",
+        "OutputResolutionFailed",
+        "OutputProjectionFailed",
+        "OutputRouteUnavailable",
+        "OutputAuthUnavailable",
+        "OutputConsumerRebindRequired",
+        "OutputConsumerGrantMissing",
+        "OutputInjectionDenied",
         "PublicationWithdrawn",
         "PublicationUnavailable",
         "PublicationResolutionFailed",
@@ -190,6 +219,7 @@
         "RepairPlanRequired",
         "RepairMaterializationRequired",
         "RepairAccessPathRequired",
+        "RepairOutputProjectionRequired",
         "RepairPublicationProjectionRequired",
         "ArtifactUnavailable",
         "ArtifactRetentionMissing",
@@ -1073,13 +1103,16 @@
     "CorePublicationResolution": {
       "type": "object",
       "required": [
-        "publicationAddress",
+        "outputAddress",
         "resolverRef",
         "inputDigests",
         "outputDigest",
         "values"
       ],
       "properties": {
+        "outputAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
         "publicationAddress": {
           "$ref": "#/$defs/ObjectAddress"
         },
@@ -1098,6 +1131,247 @@
         "values": {
           "type": "object",
           "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreOutputDeclaration": {
+      "type": "object",
+      "required": [
+        "address",
+        "producerGroupId",
+        "contract",
+        "source",
+        "visibility"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "producerGroupId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "source": {},
+        "visibility": {
+          "enum": ["private", "explicit", "space", "public"]
+        },
+        "status": {
+          "enum": ["declared", "withdrawn"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreOutputValue": {
+      "type": "object",
+      "required": ["valueType", "sensitivity"],
+      "properties": {
+        "valueType": {
+          "enum": [
+            "string",
+            "url",
+            "json",
+            "secret-ref",
+            "service-ref",
+            "endpoint"
+          ]
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/CoreSensitivity"
+        },
+        "value": {},
+        "secretRef": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreOutputRevision": {
+      "type": "object",
+      "required": [
+        "outputAddress",
+        "revisionId",
+        "inputDigests",
+        "values",
+        "status",
+        "digest",
+        "createdAt"
+      ],
+      "properties": {
+        "outputAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activationRecordId": {
+          "type": "string"
+        },
+        "resolverDescriptorId": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "inputDigests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Digest"
+          }
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreOutputValue"
+          }
+        },
+        "status": {
+          "enum": ["ready", "unavailable", "withdrawn"]
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingDeclaration": {
+      "type": "object",
+      "required": [
+        "address",
+        "componentAddress",
+        "bindingName",
+        "source",
+        "inject"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "componentAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "bindingName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind", "resource", "access"],
+              "properties": {
+                "kind": { "const": "resource" },
+                "resource": {
+                  "$ref": "#/$defs/ObjectAddress"
+                },
+                "access": {
+                  "$ref": "#/$defs/CoreAccessModeRef"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind", "output", "field"],
+              "properties": {
+                "kind": { "const": "output" },
+                "output": {
+                  "$ref": "#/$defs/ObjectAddress"
+                },
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind", "secret"],
+              "properties": {
+                "kind": { "const": "secret" },
+                "secret": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind", "materialization", "field"],
+              "properties": {
+                "kind": { "const": "provider-output" },
+                "materialization": {
+                  "$ref": "#/$defs/ObjectAddress"
+                },
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "inject": {
+          "$ref": "#/$defs/CoreInjectionTarget"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingResolution": {
+      "type": "object",
+      "required": [
+        "bindingDeclarationAddress",
+        "policyDecisionId",
+        "sensitivity",
+        "status",
+        "digest"
+      ],
+      "properties": {
+        "bindingDeclarationAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "resolvedSourceRevision": {
+          "type": "string"
+        },
+        "policyDecisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approvalRecordId": {
+          "type": "string"
+        },
+        "grantRef": {
+          "type": "string"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/CoreSensitivity"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "blocked",
+            "stale",
+            "withdrawn",
+            "unavailable"
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
         }
       },
       "additionalProperties": false

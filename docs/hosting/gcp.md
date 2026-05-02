@@ -169,7 +169,7 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 ### 構成
 
-`takos-paas-plugins` の GCP provider plugin は 6 provider を提供します:
+Takosumi (`@takosumi/plugins`) の GCP provider plugin は 6 provider を提供します:
 
 | provider client               | 用途                          | 参照クラス                            |
 | ----------------------------- | ----------------------------- | ------------------------------------- |
@@ -271,7 +271,7 @@ Cloudflare Worker から GCP API を直接呼べない場合 (request size / aut
 ```jsonc
 {
   "pluginConfig": {
-    "operator.takos.gcp": {
+    "operator.takosumi.gcp": {
       "clients": { "...": "..." },
       "region": "asia-northeast1",
       "projectId": "takos-prod",
@@ -374,7 +374,7 @@ operator がやること:
 - static external IP 取得 (`gcloud compute addresses create takos-app --global`)
 - Google-managed SSL cert または独自 cert を target proxy に attach (wildcard
   推奨: `*.app.takos.example.com`)
-- profile の `pluginConfig.operator.takos.gcp.routerConfig` に `urlMapName` /
+- profile の `pluginConfig.operator.takosumi.gcp.routerConfig` に `urlMapName` /
   `dnsZoneName` / `staticIpName` / `sslCertificateName` を設定
 
 kernel がやること:

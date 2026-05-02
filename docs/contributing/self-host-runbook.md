@@ -9,7 +9,7 @@ and provider credentials belong outside this repo.
 ## 1. Validate the public template
 
 The self-host template is `deploy/distributions/selfhosted.json`. It declares
-the `@takos/paas-plugins` self-hosted profile, required services (`takos-app`,
+the `@takosumi/plugins` self-hosted profile, required services (`takos-app`,
 `takos-paas`, `takos-git`, `takos-agent`), service health probes, required
 bindings, and provider proof tasks.
 
@@ -88,9 +88,10 @@ cd ../../takos-paas-plugins && deno task live-smoke:selfhosted
 cd ../../takos-paas-plugins && deno task live-provisioning-smoke:selfhosted
 ```
 
-Use the fixture and environment variables required by `takos-paas-plugins`. Keep
-the live output with the release/distribution evidence, separate from the kernel
-docs lint and local release gate.
+Use the fixture and environment variables required by Takosumi
+(`@takosumi/plugins`, working tree at `takos-paas-plugins/`). Keep the live
+output with the release/distribution evidence, separate from the kernel docs
+lint and local release gate.
 
 ## Expected failures and triage
 
@@ -99,7 +100,7 @@ docs lint and local release gate.
 - Dry-run smoke passes but `--live` fails: the deployed target URLs are not
   reachable, a service returns a non-200 health response, or expected health
   JSON does not match the manifest.
-- Provider live smoke fails: inspect `takos-paas-plugins` credentials, fixture
+- Provider live smoke fails: inspect Takosumi (`takos-paas-plugins/`) credentials, fixture
   values, client injection, and provider endpoint permissions.
 - Kernel-local smoke fails: fix the PaaS current surface before treating any
   self-host provider proof as meaningful.

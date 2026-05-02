@@ -133,14 +133,15 @@ streams, resources, registry, audit, usage aggregates, and service endpoints.
 
 ## Operator profile bundles
 
-The ecosystem external plugin root `takos-paas-plugins` provides profile bundle
+The ecosystem external plugin root (`takos-paas-plugins/` working tree,
+published as **Takosumi**: JSR `@takosumi/plugins`) provides profile bundle
 implementations for:
 
 ```text
-operator.takos.selfhosted
-operator.takos.cloudflare
-operator.takos.aws
-operator.takos.gcp
+operator.takosumi.selfhosted
+operator.takosumi.cloudflare
+operator.takosumi.aws
+operator.takosumi.gcp
 ```
 
 Each profile declares all required ports plus `coordination`. Local/test

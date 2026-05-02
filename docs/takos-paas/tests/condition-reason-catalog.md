@@ -48,12 +48,17 @@ BreakGlassDenied
 BindingCollision
 BindingResolutionFailed
 BindingTargetUnsupported
+BindingRebindRequired
+BindingSourceWithdrawn
+BindingSourceUnavailable
 InjectionModeUnsupported
 AccessModeUnsupported
 SecretResolutionFailed
 SecretVersionRevoked
 CredentialVisibilityUnsupported
 CredentialRawEnvDenied
+CredentialOutputRequiresApproval
+RawCredentialInjectionDenied
 ```
 
 ## Resource access
@@ -105,7 +110,26 @@ ProviderPartialSuccess
 ProviderOperationTimedOut
 ```
 
-## Publication
+## Output (canonical) / Publication (legacy aliases)
+
+The `Output*` reasons are the canonical Core vocabulary. `Publication*` names
+remain in the catalog as aliases so existing controllers and dashboards keep
+surfacing previously persisted conditions; new code MUST emit the `Output*`
+forms.
+
+```text
+OutputWithdrawn
+OutputUnavailable
+OutputResolutionFailed
+OutputProjectionFailed
+OutputRouteUnavailable
+OutputAuthUnavailable
+OutputConsumerRebindRequired
+OutputConsumerGrantMissing
+OutputInjectionDenied
+```
+
+Legacy aliases (retained):
 
 ```text
 PublicationWithdrawn
@@ -129,6 +153,7 @@ RollbackResourceIncompatible
 RepairPlanRequired
 RepairMaterializationRequired
 RepairAccessPathRequired
+RepairOutputProjectionRequired
 RepairPublicationProjectionRequired
 ArtifactUnavailable
 ArtifactRetentionMissing
