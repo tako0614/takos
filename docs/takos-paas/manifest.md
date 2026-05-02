@@ -73,7 +73,7 @@ resources:
 ```
 
 Syntax 仕様 (cf.
-[`manifest-resource.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/sdk/manifest.ts) /
+[`manifest-resource.ts`](https://github.com/takos-jp/takosumi/blob/main/src/sdk/manifest.ts) /
 contract `parseRef` / `extractRefs`):
 
 | 記法                                  | 意味                                                              |
@@ -107,7 +107,7 @@ resources:
 ```
 
 検証は contract `capabilitySubsetIssues(required, provided, path)` (cf.
-[provider-plugin.ts](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/operator/client_registry.ts))
+[provider-plugin.ts](https://github.com/takos-jp/takosumi/blob/main/src/operator/client_registry.ts))
 で行われます。
 
 ## DAG / topological apply order

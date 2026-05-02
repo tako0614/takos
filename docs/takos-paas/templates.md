@@ -23,14 +23,14 @@ selection します ([Provider Plugins § Provider selection](./provider-plugins
 
 ## Bundled templates
 
-`takos-paas-plugins` は 2 つの template を bundle しています。
+`takosumi` は 2 つの template を bundle しています。
 
 | template id              | version | summary                                                        |
 | ------------------------ | ------- | -------------------------------------------------------------- |
 | `selfhosted-single-vm`   | `v1`    | 1 ホスト selfhost — web + Postgres + filesystem + (任意で DNS) |
 | `web-app-on-cloudflare`  | `v1`    | Cloudflare edge — CF Container + R2 + DNS + pluggable Postgres |
 
-source: [`src/templates/`](https://github.com/takos-jp/takos-paas-plugins/tree/main/src/templates)
+source: [`src/templates/`](https://github.com/takos-jp/takosumi/tree/main/src/templates)
 
 ## `selfhosted-single-vm@v1` {#selfhosted-single-vm-v1}
 
@@ -77,7 +77,7 @@ template:
 `bindings` には `DATABASE_URL=${ref:db.connectionString}`, `ASSETS_BUCKET=${ref:assets.bucket}`
 が自動注入されます。
 
-source: [`templates/selfhosted-single-vm.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/templates/selfhosted-single-vm.ts)
+source: [`templates/selfhosted-single-vm.ts`](https://github.com/takos-jp/takosumi/blob/main/src/templates/selfhosted-single-vm.ts)
 
 ## `web-app-on-cloudflare@v1`
 
@@ -127,7 +127,7 @@ template:
 `${ref:...}` 形式で自動注入されます。CF Container は `scale.min: 0` で
 scale-to-zero (cf. [`cloudflare-container` capabilities](./provider-plugins.md#webservice-6-providers))。
 
-source: [`templates/web-app-on-cloudflare.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/templates/web-app-on-cloudflare.ts)
+source: [`templates/web-app-on-cloudflare.ts`](https://github.com/takos-jp/takosumi/blob/main/src/templates/web-app-on-cloudflare.ts)
 
 ## Template と `resources[]` の関係
 

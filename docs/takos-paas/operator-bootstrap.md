@@ -3,7 +3,7 @@
 operator が **18 個の bundled provider plugin** を一括で wire するための
 factory `createTakosumiProductionProviders(opts)` の使い方をまとめます。
 
-source: [`src/shape-providers/factories.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/factories.ts)
+source: [`src/shape-providers/factories.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/factories.ts)
 
 > 重要: factory 経由で wire された provider は **operator gateway** または
 > local Deno API adapter を通って upstream cloud API を呼びます。kernel
@@ -173,7 +173,7 @@ const providers = createTakosumiProductionProviders({
 production wire を bypass し、`InMemory<Provider>Lifecycle` を直接渡したい
 場合は factory を使わず、各 `create<Provider>(...)` を個別に呼んで
 `registerProvider` してください (cf.
-[`object-store/aws-s3.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shape-providers/object-store/aws-s3.ts)
+[`object-store/aws-s3.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shape-providers/object-store/aws-s3.ts)
 の `InMemoryAwsS3Lifecycle`)。
 
 ## 関連ページ

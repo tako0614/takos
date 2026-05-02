@@ -69,7 +69,7 @@ interface ObjectStoreSpec {
 | `lifecycle-rules`        | TTL / archive lifecycle rule                               |
 | `multipart-upload`       | マルチパートアップロード API                               |
 
-source: [`src/shapes/object-store.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shapes/object-store.ts)
+source: [`src/shapes/object-store.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shapes/object-store.ts)
 
 ## `web-service@v1`
 
@@ -119,7 +119,7 @@ runtime env として注入する用途です。`env` は plain literal 用。
 | `crons`               | scheduled invocation                            |
 | `private-networking`  | private VPC / mesh 経由通信                     |
 
-source: [`src/shapes/web-service.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shapes/web-service.ts)
+source: [`src/shapes/web-service.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shapes/web-service.ts)
 
 ## `database-postgres@v1`
 
@@ -161,7 +161,7 @@ interface DatabasePostgresSpec {
 | `ipv6`               | IPv6 host                                       |
 | `extensions`         | PostgreSQL extension のロード                   |
 
-source: [`src/shapes/database-postgres.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shapes/database-postgres.ts)
+source: [`src/shapes/database-postgres.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shapes/database-postgres.ts)
 
 ## `custom-domain@v1`
 
@@ -198,7 +198,7 @@ interface CustomDomainSpec {
 | `alpn-acme`   | ALPN-based ACME challenge                       |
 | `redirects`   | declarative redirect rule                       |
 
-source: [`src/shapes/custom-domain.ts`](https://github.com/takos-jp/takos-paas-plugins/blob/main/src/shapes/custom-domain.ts)
+source: [`src/shapes/custom-domain.ts`](https://github.com/takos-jp/takosumi/blob/main/src/shapes/custom-domain.ts)
 
 ## 関連ページ
 
