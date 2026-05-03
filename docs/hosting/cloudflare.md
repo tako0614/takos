@@ -58,7 +58,7 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = cloudflare)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos/paas
+cd ../takos
 deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 ```
 
@@ -591,9 +591,9 @@ deno task staging:integration-test
      5 secret files generated at /tmp/takos-test-secrets/staging, all shapes valid
 [OK] 2) takos-private deploy script smoke
      deploy.mjs imported, buildD1MigrationArgs(staging) -> 12 args
-[OK] 3) takos/paas db:migrate --dry-run
+[OK] 3) takos db:migrate --dry-run
      [db-migrate] env=staging dryRun=true catalog=10 migrations | 53 log lines
-[OK] 4) takos/paas bootstrap:initial --dry-run
+[OK] 4) takos bootstrap:initial --dry-run
      dry-run preview produced for admin=test@example.com env=staging
 summary: 4 success, 0 skip, 0 fail
 ```

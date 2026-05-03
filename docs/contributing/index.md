@@ -1,9 +1,9 @@
 # Implementation Plan Index
 
 This directory is the Takos shell-owned planning index for PaaS implementation
-work. It lives outside the `takos/paas` product repo so the kernel plan can
+work. It lives outside the `takos` product repo so the kernel plan can
 reference shell-level boundaries without making PaaS own the plan. Run PaaS
-commands from the `takos/paas` product root unless a document says otherwise.
+commands from the `takos` product root unless a document says otherwise.
 
 ## Architecture
 

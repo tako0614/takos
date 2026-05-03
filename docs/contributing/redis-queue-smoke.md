@@ -19,7 +19,7 @@ object-storage, MinIO, or storage migration code.
 
 ## Default behavior
 
-Run from `takos/paas`:
+Run from `takos`:
 
 ```sh
 deno run --config deno.json \

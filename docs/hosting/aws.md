@@ -4,7 +4,7 @@
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **AWS 単独 hosting (EKS Helm)** ―
-   `takos/paas/deploy/helm/takos/values-aws.yaml` overlay。Kubernetes ベースで
+   `takos/deploy/helm/takos/values-aws.yaml` overlay。Kubernetes ベースで
    control plane / runtime / executor を運用する 旧来 path。
 2. **AWS provider plugin (Phase 17A1)** ― ECS Fargate / RDS / S3 / SQS / KMS /
    Secrets Manager の 6 provider を Takosumi kernel から `provider` 契約として
@@ -66,7 +66,7 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = aws)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos/paas
+cd ../takos
 deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 ```
 
@@ -139,7 +139,7 @@ standard Kubernetes NetworkPolicy で DNS 名を指定できないため、priva
 ### インストール
 
 ```bash
-cd takos/paas/deploy/helm/takos
+cd takos/deploy/helm/takos
 helm dependency update
 
 helm upgrade --install takos . \

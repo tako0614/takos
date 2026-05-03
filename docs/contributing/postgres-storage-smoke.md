@@ -13,7 +13,7 @@ Takosumi storage plugin/adapter boundary:
 
 ## Default behavior
 
-Run from `takos/paas`:
+Run from `takos`:
 
 ```sh
 deno run --config deno.json --allow-env scripts/postgres-storage-smoke.ts

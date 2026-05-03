@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "takos.fullname" . }}-oci-orchestrator
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    app.kubernetes.io/component: oci-orchestrator
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.ociOrchestrator.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/component: oci-orchestrator
+    {{- include "takos.selectorLabels" . | nindent 4 }}

@@ -1,0 +1,110 @@
+# AWS fail-closed overlay template.
+# This file is not a complete production profile by itself: every empty
+# runtimeConfig.plugins entry must be replaced by a trusted, non-reference
+# kernel plugin id supplied by the operator/plugin bundle.
+# Usage: helm install takos . -f values.yaml -f values-aws.yaml
+
+runtimeConfig:
+  environment: production
+  # Empty plugin ids intentionally fail runtime config validation. Override all
+  # ports with non-reference plugins; do not inject DATABASE_URL/REDIS_URL/S3
+  # backend credentials directly into PaaS control pods.
+  plugins:
+    auth: ""
+    notification: ""
+    operator-config: ""
+    storage: ""
+    source: ""
+    provider: ""
+    queue: ""
+    object-storage: ""
+    kms: ""
+    secret-store: ""
+    router-config: ""
+    observability: ""
+    runtime-agent: ""
+
+# AWS managed-service connection details belong to the selected external
+# plugin bundle/operator config. This kernel chart does not inject database,
+# Redis, or S3 credentials directly into PaaS control pods.
+
+networkPolicy:
+  runtime:
+    extraEgress:
+      # Standard Kubernetes NetworkPolicy cannot match AWS S3 by DNS name.
+      # This keeps the default runtime egress policy usable with managed S3 by
+      # allowing public HTTPS while continuing to deny private-network egress.
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except:
+                - 10.0.0.0/8
+                - 172.16.0.0/12
+                - 192.168.0.0/16
+                - 100.64.0.0/10
+        ports:
+          - protocol: TCP
+            port: 443
+
+# Production domains
+domains:
+  admin: "admin.takos.example.com"
+  tenantBase: "app.takos.example.com"
+
+# Empty values keep the chart default secret names derived from the Helm release:
+# <release>-platform, <release>-auth, <release>-llm. Set a field only when an
+# external secret uses a different name.
+secrets:
+  create: false
+  existingSecrets:
+    platform: ""
+    auth: ""
+    llm: ""
+
+# AWS ALB Ingress
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "" # Set to ACM certificate ARN
+  tls:
+    enabled: false # ALB handles TLS termination via ACM
+
+# Production resource tuning
+paasApi:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+paasRouter:
+  replicaCount: 3
+
+paasWorker:
+  replicaCount: 2
+
+runtime:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 20
+
+executor:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+
+# EKS service account for IAM roles (IRSA)
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "" # Set to IAM role ARN

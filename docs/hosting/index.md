@@ -57,7 +57,7 @@ deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
 
 # 5. 初期 admin / tenant / registry trust roots を seed
-cd ../takos/paas
+cd ../takos
 deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 ```
 

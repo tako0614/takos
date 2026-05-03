@@ -83,7 +83,7 @@ remains
 
 ## Verified tests
 
-Ran from `/home/tako/Desktop/takos/takos/paas`:
+Ran from `/home/tako/Desktop/takos/takos`:
 
 ```sh
 deno task test:all

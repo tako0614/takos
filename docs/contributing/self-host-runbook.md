@@ -1,7 +1,7 @@
 # Self-host Distribution Runbook
 
 This runbook covers the current self-host proof path for the current PaaS
-surface. Run local validation from `takos/paas`. Treat live self-host execution
+surface. Run local validation from `takos`. Treat live self-host execution
 as operator-owned evidence: the OSS PaaS repo contains public distribution
 templates and smoke tooling, while concrete deploy files, secrets, hostnames,
 and provider credentials belong outside this repo.

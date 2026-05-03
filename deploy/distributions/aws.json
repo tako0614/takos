@@ -1,0 +1,121 @@
+{
+  "apiVersion": "takosumi.com/hosting/v1",
+  "kind": "TakosDistribution",
+  "environment": "production",
+  "profile": "@takosumi/plugins/profiles/aws",
+  "providerProfile": {
+    "bundle": "@takosumi/plugins",
+    "profileId": "operator.takosumi.aws",
+    "pluginIds": ["operator.takosumi.aws"]
+  },
+  "artifacts": [
+    {
+      "kind": "terraform",
+      "ref": "deploy/terraform/environments/aws-prod"
+    },
+    {
+      "kind": "helm",
+      "ref": "deploy/helm/takos/values-aws.yaml"
+    }
+  ],
+  "providerProof": {
+    "readOnlySmokeTask": "cd ../../takosumi && deno task live-smoke:aws",
+    "provisioningSmokeTask": "cd ../../takosumi && deno task live-provisioning-smoke:aws",
+    "cleanupTask": "cd ../../takosumi && deno task live-provisioning-cleanup:aws",
+    "fixturePath": "../../takosumi/fixtures/live-provisioning/aws.json",
+    "liveEnvPrefix": "TAKOSUMI_PLUGIN_AWS"
+  },
+  "requiredBindings": [
+    {
+      "kind": "aws-iam-role",
+      "name": "takos-provider"
+    },
+    {
+      "kind": "aws-vpc",
+      "name": "takos-vpc"
+    }
+  ],
+  "target": {
+    "id": "aws",
+    "accountId": "123456789012",
+    "region": "ap-northeast-1",
+    "clusterName": "takos-eks",
+    "loadBalancerName": "takos-alb",
+    "route53ZoneId": "Z00000000000000000000",
+    "metadata": {
+      "providerBundle": "@takosumi/plugins",
+      "terraform": "deploy/terraform/environments/aws-prod",
+      "helmOverlay": "deploy/helm/takos/values-aws.yaml"
+    }
+  },
+  "routing": {
+    "publicBaseUrl": "https://takos.example.com",
+    "adminBaseUrl": "https://admin.takos.example.com",
+    "wildcardDomain": "*.app.takos.example.com",
+    "dnsProvider": "aws"
+  },
+  "services": [
+    {
+      "serviceId": "takos-app",
+      "runtime": "container",
+      "hostingTargetId": "aws",
+      "image": "ghcr.io/takos/takos-app:latest",
+      "internalUrl": "http://takos-app.takos-system.svc.cluster.local:8080",
+      "publicUrl": "https://admin.takos.example.com",
+      "smoke": {
+        "healthPath": "/health",
+        "expectedStatus": 200,
+        "expectedJson": {
+          "service": "takos-app"
+        }
+      }
+    },
+    {
+      "serviceId": "takosumi",
+      "runtime": "container",
+      "hostingTargetId": "aws",
+      "image": "ghcr.io/takos/takosumi:latest",
+      "internalUrl": "http://takosumi.takos-system.svc.cluster.local:8080",
+      "smoke": {
+        "healthPath": "/health",
+        "expectedStatus": 200,
+        "expectedJson": {
+          "service": "takosumi"
+        }
+      }
+    },
+    {
+      "serviceId": "takos-git",
+      "runtime": "container",
+      "hostingTargetId": "aws",
+      "image": "ghcr.io/takos/takos-git:latest",
+      "internalUrl": "http://takos-git.takos-system.svc.cluster.local:8790",
+      "smoke": {
+        "healthPath": "/health",
+        "expectedStatus": 200,
+        "expectedJson": {
+          "service": "takos-git"
+        }
+      }
+    },
+    {
+      "serviceId": "takos-agent",
+      "runtime": "container",
+      "hostingTargetId": "aws",
+      "image": "ghcr.io/takos/takos-agent:latest",
+      "internalUrl": "http://takos-agent.takos-system.svc.cluster.local:8080",
+      "smoke": {
+        "healthPath": "/health",
+        "expectedStatus": 200,
+        "expectedJson": {
+          "service": "takos-agent"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "official": true,
+    "liveSmokeTask": "deno task distribution:smoke --manifest deploy/distributions/aws.json",
+    "providerSmokeTask": "cd ../../takosumi && deno task live-smoke:aws"
+  }
+}

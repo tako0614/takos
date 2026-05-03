@@ -1,15 +1,15 @@
 # Architecture alignment validation
 
-This guard documents `takos/paas/scripts/validate-architecture-alignment.ts`, a
+This guard documents `takos/scripts/validate-architecture-alignment.ts`, a
 text-only validation pass for stale terminology and path drift across the
 `takosumi` product root and the shell-owned `takos/docs/contributing` docs.
 
 ## Checks
 
-- `takos/paas/README.md` and `takos/docs/contributing/current-state.md` must
+- `takos/README.md` and `takos/docs/contributing/current-state.md` must
   describe the Takosumi shape as internal domains under `takosumi`,
   including the deploy/runtime domain wording.
-- `takos/paas/README.md` and `takos/docs/contributing/**/*.md` must not describe
+- `takos/README.md` and `takos/docs/contributing/**/*.md` must not describe
   `takos-deploy` or `takos-runtime` as stale top-level product roots or default
   top-level service boundaries unless the same paragraph qualifies them as
   internal domains, compatibility, or legacy wording.
@@ -20,7 +20,7 @@ text-only validation pass for stale terminology and path drift across the
 ## Command
 
 ```sh
-cd takos/paas
+cd takos
 deno run --config deno.json --allow-read scripts/validate-architecture-alignment.ts
 ```
 

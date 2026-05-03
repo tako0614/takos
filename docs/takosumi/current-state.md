@@ -130,7 +130,7 @@ selectors. They require operator-injected configuration or client references in
 provider network clients by default.
 
 Official integrated distribution manifests live in
-`takos/paas/deploy/distributions`. They are public templates for self-hosted,
+`takos/deploy/distributions`. They are public templates for self-hosted,
 Cloudflare, AWS, GCP, and Kubernetes targets and name the external provider
 profile, required services, health probes, artifacts, and provider proof task.
 `deno task validate:distributions` and the dry-run
@@ -180,10 +180,10 @@ staging and production.
 
 ## Deploy shell status {#deploy-shell}
 
-`takos/paas` の PaaS control plane が deploy (Deployment / GroupHead) / runtime
+`takos` の PaaS control plane が deploy (Deployment / GroupHead) / runtime
 / resource / routing / network / registry / audit の canonical semantics を提供
 する。manifest resolution、persistent Deployment history、rollback 等の business logic は
-`takos/paas` に寄せる。現行 PaaS public surface は Deployment-centric API
+`takos` に寄せる。現行 PaaS public surface は Deployment-centric API
 (`POST /api/public/v1/deployments`, `POST /api/public/v1/deployments/:id/apply`,
 `POST /api/public/v1/deployments/:id/approve`,
 `GET /api/public/v1/deployments/:id/observations`,

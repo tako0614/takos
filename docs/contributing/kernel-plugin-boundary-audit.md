@@ -5,7 +5,7 @@ the kernel-only implementation model.
 
 ## Source of truth
 
-- `takos/paas` owns the PaaS kernel: control-plane semantics, domains, API
+- `takos` owns the PaaS kernel: control-plane semantics, domains, API
   contracts, signed internal RPC, plan/apply, activation truth, resources,
   routing projections, publications, events, audit, and security policy.
 - `packages/paas-contract/src/plugin.ts` owns the public kernel plugin ABI.

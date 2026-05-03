@@ -82,7 +82,7 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = selfhosted)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos/paas
+cd ../takos
 deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 ```
 

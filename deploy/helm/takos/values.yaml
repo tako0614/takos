@@ -1,0 +1,264 @@
+## -----------------------------------------------------------------
+## Global settings
+## -----------------------------------------------------------------
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+## -----------------------------------------------------------------
+## Domain configuration
+## -----------------------------------------------------------------
+domains:
+  admin: "admin.takos.example.com"
+  tenantBase: "app.takos.example.com"
+
+## -----------------------------------------------------------------
+## Container images
+## -----------------------------------------------------------------
+images:
+  control:
+    repository: takos/control
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  runtime:
+    repository: ghcr.io/takos/runtime-service
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  executor:
+    repository: takos/executor
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+## -----------------------------------------------------------------
+## Runtime configuration
+## -----------------------------------------------------------------
+## These bundled values are local/reference defaults. Staging/production
+## overlays must replace every plugin id with trusted non-reference selections.
+runtimeConfig:
+  environment: local
+  publicRoutesEnabled: false
+  allowUnsafeProductionDefaults: false
+  plugins:
+    auth: takos.kernel.reference
+    notification: takos.kernel.reference
+    operator-config: takos.kernel.reference
+    storage: takos.kernel.reference
+    source: takos.kernel.reference
+    provider: takos.kernel.reference
+    queue: takos.kernel.reference
+    object-storage: takos.kernel.reference
+    kms: takos.kernel.reference
+    secret-store: takos.kernel.reference
+    router-config: takos.kernel.reference
+    observability: takos.kernel.reference
+    runtime-agent: takos.kernel.reference
+
+## -----------------------------------------------------------------
+## PaaS process role: takosumi-api.
+## Values key: paasApi (HTTP API).
+## Port defaults are kept aligned with local process checks.
+## -----------------------------------------------------------------
+paasApi:
+  replicaCount: 2
+  port: 8787
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+## -----------------------------------------------------------------
+## PaaS process role: takosumi-router.
+## Values key: paasRouter.
+## -----------------------------------------------------------------
+paasRouter:
+  replicaCount: 2
+  port: 8788
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## -----------------------------------------------------------------
+## PaaS process role: takosumi-worker.
+## Values key: paasWorker.
+## -----------------------------------------------------------------
+paasWorker:
+  replicaCount: 1
+  pollIntervalMs: 250
+  scheduledIntervalMs: 60000
+  heartbeatTtlMs: 120000
+  cronJob:
+    enabled: false
+    schedule: "*/15 * * * *"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+
+## -----------------------------------------------------------------
+## PaaS process role: takosumi-runtime-agent host/controller.
+## Values key: paasRuntimeAgent.
+## -----------------------------------------------------------------
+paasRuntimeAgent:
+  replicaCount: 1
+  port: 8789
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## -----------------------------------------------------------------
+## PaaS process role: takosumi-log-worker.
+## -----------------------------------------------------------------
+paasLogWorker:
+  replicaCount: 1
+  port: 8790
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## -----------------------------------------------------------------
+## OCI Orchestrator
+## -----------------------------------------------------------------
+ociOrchestrator:
+  replicaCount: 1
+  port: 9002
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  persistence:
+    enabled: true
+    size: 1Gi
+
+## -----------------------------------------------------------------
+## PaaS process role: takosumi-runtime-agent workload.
+## Values key: runtime.
+## Keep this at a single replica unless sessions/jobs/workspaces are moved
+## to sticky or external storage; runtime keeps state in memory.
+## -----------------------------------------------------------------
+runtime:
+  replicaCount: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+## -----------------------------------------------------------------
+## Executor workload.
+## -----------------------------------------------------------------
+executor:
+  replicaCount: 1
+  port: 8080
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+## -----------------------------------------------------------------
+## Secrets
+## -----------------------------------------------------------------
+secrets:
+  create: true
+
+  ## Use existing secrets instead of creating new ones.
+  ## When set, the chart will reference these secret names directly.
+  existingSecrets:
+    platform: ""
+    auth: ""
+    llm: ""
+
+  ## Values used when secrets.create is true.
+  ## In production, use existingSecrets or an external secrets operator.
+  platformPrivateKey: ""
+  platformPublicKey: ""
+  encryptionKey: ""
+  executorProxySecret: ""
+  internalApiSecret: ""
+  googleClientId: ""
+  googleClientSecret: ""
+  openaiApiKey: ""
+  anthropicApiKey: ""
+  googleApiKey: ""
+  ociOrchestratorToken: ""
+
+## -----------------------------------------------------------------
+## Ingress
+## -----------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  gcpManagedCertificate:
+    enabled: false
+    name: ""
+    domains: []
+  tls:
+    enabled: true
+    secretName: "takos-tls"
+    clusterIssuer: ""
+
+## -----------------------------------------------------------------
+## Service Account
+## -----------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+## -----------------------------------------------------------------
+## Pod Security Context
+## -----------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 1000
+
+## -----------------------------------------------------------------
+## Network Policy
+## Runtime executes user-controlled commands, so egress is restricted by
+## default. Add explicit runtime.extraEgress peers for cluster-specific
+## dependencies such as private Git mirrors or object storage endpoints required
+## by your cluster/CNI.
+## -----------------------------------------------------------------
+networkPolicy:
+  enabled: true
+  runtime:
+    allowDns: true
+    extraEgress: []
