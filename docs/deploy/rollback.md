@@ -2,7 +2,7 @@
 
 > このページでわかること: Deployment を rollback する手順と注意点。
 
-> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
+> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 ## `takos rollback`
 

@@ -1,0 +1,1599 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://takosumi.com/schemas/deploy/core-v1.0.json",
+  "title": "Takos Deploy Core v1.0 schema",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CoreAppSpec"
+    },
+    {
+      "$ref": "#/$defs/CoreEnvSpec"
+    },
+    {
+      "$ref": "#/$defs/CorePolicySpec"
+    },
+    {
+      "$ref": "#/$defs/CoreDescriptorClosure"
+    },
+    {
+      "$ref": "#/$defs/CoreResolvedGraph"
+    },
+    {
+      "$ref": "#/$defs/CoreApprovalRecord"
+    },
+    {
+      "$ref": "#/$defs/CoreBindingSetRevision"
+    },
+    {
+      "$ref": "#/$defs/CoreBindingValueResolution"
+    },
+    {
+      "$ref": "#/$defs/CoreAppRelease"
+    },
+    {
+      "$ref": "#/$defs/CoreRouterConfig"
+    },
+    {
+      "$ref": "#/$defs/CoreRuntimeNetworkPolicy"
+    },
+    {
+      "$ref": "#/$defs/CorePublicationResolution"
+    },
+    {
+      "$ref": "#/$defs/CoreOutputDeclaration"
+    },
+    {
+      "$ref": "#/$defs/CoreOutputValue"
+    },
+    {
+      "$ref": "#/$defs/CoreOutputRevision"
+    },
+    {
+      "$ref": "#/$defs/CoreBindingDeclaration"
+    },
+    {
+      "$ref": "#/$defs/CoreBindingResolution"
+    },
+    {
+      "$ref": "#/$defs/CoreApplyPhase"
+    },
+    {
+      "$ref": "#/$defs/CoreResourceAccessPath"
+    },
+    {
+      "$ref": "#/$defs/CoreProviderMaterialization"
+    },
+    {
+      "$ref": "#/$defs/CoreProviderObservation"
+    }
+  ],
+  "$defs": {
+    "Digest": {
+      "type": "string",
+      "pattern": "^sha256:.+$"
+    },
+    "IsoTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "JsonObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "ObjectAddress": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9.-]*:(?:[A-Za-z0-9_.!~*'()-]|%[0-9A-Fa-f]{2})+(?:/[a-z][a-z0-9.-]*:(?:[A-Za-z0-9_.!~*'()-]|%[0-9A-Fa-f]{2})+)*$"
+    },
+    "DescriptorId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "CorePolicyDecision": {
+      "enum": [
+        "allow",
+        "deny",
+        "require-approval"
+      ]
+    },
+    "CoreSensitivity": {
+      "enum": [
+        "public",
+        "internal",
+        "secret",
+        "credential"
+      ]
+    },
+    "CoreEnforcement": {
+      "enum": [
+        "enforced",
+        "advisory",
+        "unsupported"
+      ]
+    },
+    "CoreNetworkBoundary": {
+      "enum": [
+        "internal",
+        "provider-internal",
+        "external"
+      ]
+    },
+    "CoreMaterializationStatus": {
+      "enum": [
+        "preparing",
+        "ready",
+        "failed",
+        "retired"
+      ]
+    },
+    "CoreConditionReason": {
+      "enum": [
+        "PlanStale",
+        "ReadSetChanged",
+        "DescriptorPinned",
+        "DescriptorChanged",
+        "DescriptorUnavailable",
+        "DescriptorUntrusted",
+        "DescriptorCompatibilityUnknown",
+        "DescriptorAliasAmbiguous",
+        "DescriptorContextChanged",
+        "DescriptorBootstrapTrustMissing",
+        "ResolvedGraphChanged",
+        "PolicyDenied",
+        "ApprovalRequired",
+        "ApprovalMissing",
+        "ApprovalInvalidated",
+        "BreakGlassRequired",
+        "BreakGlassDenied",
+        "BindingCollision",
+        "BindingResolutionFailed",
+        "BindingTargetUnsupported",
+        "BindingRebindRequired",
+        "BindingSourceWithdrawn",
+        "BindingSourceUnavailable",
+        "InjectionModeUnsupported",
+        "AccessModeUnsupported",
+        "SecretResolutionFailed",
+        "SecretVersionRevoked",
+        "CredentialVisibilityUnsupported",
+        "CredentialRawEnvDenied",
+        "CredentialOutputRequiresApproval",
+        "RawCredentialInjectionDenied",
+        "AccessPathUnsupported",
+        "AccessPathAmbiguous",
+        "AccessPathMaterializationFailed",
+        "AccessPathExternalBoundaryRequiresPolicy",
+        "AccessPathCredentialBoundaryFailed",
+        "ResourceCompatibilityFailed",
+        "ResourceBindingFailed",
+        "ResourceRestoreUnsupported",
+        "ResourceRebindRequired",
+        "ActivationCommitted",
+        "ActivationPreviewFailed",
+        "ActivationAssignmentInvalid",
+        "ActivationPrimaryMissing",
+        "RouterConfigIncompatible",
+        "RouteDescriptorIncompatible",
+        "InterfaceDescriptorIncompatible",
+        "RouterAssignmentUnsupported",
+        "RouterProtocolUnsupported",
+        "ServingMaterializing",
+        "ServingConverged",
+        "ServingDegraded",
+        "ServingConvergenceUnknown",
+        "ProviderMaterializing",
+        "ProviderMaterializationFailed",
+        "ProviderObjectMissing",
+        "ProviderConfigDrift",
+        "ProviderStatusDrift",
+        "ProviderSecurityDrift",
+        "ProviderOwnershipDrift",
+        "ProviderCacheDrift",
+        "ProviderRateLimited",
+        "ProviderCredentialDenied",
+        "ProviderPartialSuccess",
+        "ProviderOperationTimedOut",
+        "OutputWithdrawn",
+        "OutputUnavailable",
+        "OutputResolutionFailed",
+        "OutputProjectionFailed",
+        "OutputRouteUnavailable",
+        "OutputAuthUnavailable",
+        "OutputConsumerRebindRequired",
+        "OutputConsumerGrantMissing",
+        "OutputInjectionDenied",
+        "PublicationWithdrawn",
+        "PublicationUnavailable",
+        "PublicationResolutionFailed",
+        "PublicationProjectionFailed",
+        "PublicationRouteUnavailable",
+        "PublicationAuthUnavailable",
+        "PublicationConsumerRebindRequired",
+        "PublicationConsumerGrantMissing",
+        "PublicationOutputInjectionDenied",
+        "RollbackIncompatible",
+        "RollbackDescriptorUnavailable",
+        "RollbackArtifactUnavailable",
+        "RollbackResourceIncompatible",
+        "RepairPlanRequired",
+        "RepairMaterializationRequired",
+        "RepairAccessPathRequired",
+        "RepairOutputProjectionRequired",
+        "RepairPublicationProjectionRequired",
+        "ArtifactUnavailable",
+        "ArtifactRetentionMissing",
+        "RuntimeNotReady",
+        "RuntimeReadinessUnknown",
+        "RuntimeLiveRebindUnsupported",
+        "RuntimeShutdownFailed",
+        "RuntimeDrainTimeout"
+      ]
+    },
+    "CoreAppSpec": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "components"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": "takosumi.com/v1"
+        },
+        "kind": {
+          "const": "App"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreComponentSpec"
+          }
+        },
+        "exposures": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreExposureSpec"
+          }
+        },
+        "consumes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreConsumeSpec"
+          }
+        },
+        "publications": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CorePublicationSpec"
+          }
+        },
+        "requirements": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreComponentSpec": {
+      "type": "object",
+      "required": [
+        "contracts"
+      ],
+      "properties": {
+        "contracts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreContractInstanceSpec"
+          }
+        },
+        "consumes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreConsumeSpec"
+          }
+        },
+        "requirements": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "previousAddresses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ObjectAddress"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreContractInstanceSpec": {
+      "type": "object",
+      "required": [
+        "ref"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config": true
+      },
+      "additionalProperties": false
+    },
+    "CoreExposureSpec": {
+      "type": "object",
+      "required": [
+        "target"
+      ],
+      "properties": {
+        "target": {
+          "type": "object",
+          "required": [
+            "component",
+            "contract"
+          ],
+          "properties": {
+            "component": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contract": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "visibility": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreConsumeSpec": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string"
+        },
+        "publication": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "string"
+        },
+        "access": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CoreAccessModeRef"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "inject": {
+          "$ref": "#/$defs/CoreInjectionTarget"
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "inject"
+            ],
+            "properties": {
+              "inject": {
+                "$ref": "#/$defs/CoreInjectionTarget"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreAccessModeRef": {
+      "type": "object",
+      "required": [
+        "contract",
+        "mode"
+      ],
+      "properties": {
+        "contract": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreInjectionTarget": {
+      "type": "object",
+      "required": [
+        "mode",
+        "target"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CorePublicationSpec": {
+      "type": "object",
+      "required": [
+        "contract"
+      ],
+      "properties": {
+        "contract": {
+          "type": "string"
+        },
+        "source": true,
+        "outputs": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreEnvSpec": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": "takosumi.com/v1"
+        },
+        "kind": {
+          "const": "Environment"
+        },
+        "providerTargets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreProviderTargetSpec"
+          }
+        },
+        "router": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "runtimeNetworkPolicy": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "accessPathPreferences": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreProviderTargetSpec": {
+      "type": "object",
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CorePolicySpec": {
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind"
+      ],
+      "properties": {
+        "apiVersion": {
+          "const": "takosumi.com/v1"
+        },
+        "kind": {
+          "const": "Policy"
+        },
+        "descriptorPolicy": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "bindingPolicy": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "routerPolicy": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "resourcePolicy": {
+          "$ref": "#/$defs/JsonObject"
+        },
+        "approvals": {
+          "$ref": "#/$defs/JsonObject"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreDescriptorResolution": {
+      "type": "object",
+      "required": [
+        "id",
+        "mediaType",
+        "rawDigest",
+        "policyDecisionId",
+        "resolvedAt"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "alias": {
+          "type": "string"
+        },
+        "documentUrl": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string"
+        },
+        "rawDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "expandedDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "contextDigests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Digest"
+          }
+        },
+        "canonicalization": {
+          "type": "object",
+          "required": [
+            "algorithm",
+            "version"
+          ],
+          "properties": {
+            "algorithm": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "policyDecisionId": {
+          "type": "string"
+        },
+        "resolvedAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreDescriptorDependency": {
+      "type": "object",
+      "required": [
+        "fromDescriptorId",
+        "toDescriptorId",
+        "reason"
+      ],
+      "properties": {
+        "fromDescriptorId": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "toDescriptorId": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreDescriptorClosure": {
+      "type": "object",
+      "required": [
+        "id",
+        "digest",
+        "resolutions",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "resolutions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreDescriptorResolution"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreDescriptorDependency"
+          }
+        },
+        "createdAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreResolvedGraph": {
+      "type": "object",
+      "required": [
+        "id",
+        "digest",
+        "appSpecDigest",
+        "envSpecDigest",
+        "policySpecDigest",
+        "descriptorClosureDigest",
+        "components"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "appSpecDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "envSpecDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "policySpecDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "descriptorClosureDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreResolvedComponent"
+          }
+        },
+        "projections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreProjectionRecord"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreResolvedComponent": {
+      "type": "object",
+      "required": [
+        "address",
+        "contractInstances"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "contractInstances": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreResolvedContractInstance"
+          }
+        },
+        "shapeRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreResolvedContractInstance": {
+      "type": "object",
+      "required": [
+        "address",
+        "localName",
+        "descriptorId",
+        "descriptorDigest"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "localName": {
+          "type": "string"
+        },
+        "descriptorId": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "descriptorDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "configDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "lifecycleDomain": {
+          "type": "string"
+        },
+        "changeEffects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreChangeEffectRule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreChangeEffectRule": {
+      "type": "object",
+      "required": [
+        "path",
+        "effect"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "effect": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreProjectionRecord": {
+      "type": "object",
+      "required": [
+        "projectionType",
+        "objectAddress",
+        "sourceComponentAddress",
+        "sourceContractInstance",
+        "descriptorResolutionId",
+        "digest"
+      ],
+      "properties": {
+        "projectionType": {
+          "type": "string"
+        },
+        "objectAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "sourceComponentAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "sourceContractInstance": {
+          "type": "string"
+        },
+        "descriptorResolutionId": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CorePolicyDecisionRecord": {
+      "type": "object",
+      "required": [
+        "id",
+        "gateGroup",
+        "gate",
+        "decision",
+        "subjectDigest",
+        "decidedAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "gateGroup": {
+          "enum": [
+            "resolution",
+            "planning",
+            "execution",
+            "recovery"
+          ]
+        },
+        "gate": {
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/CorePolicyDecision"
+        },
+        "ruleRef": {
+          "type": "string"
+        },
+        "subjectAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "subjectDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "decidedAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreApprovalRecord": {
+      "type": "object",
+      "required": [
+        "id",
+        "policyDecisionId",
+        "subjectDigest",
+        "approvedBy",
+        "approvedAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "policyDecisionId": {
+          "type": "string"
+        },
+        "subjectDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "approvedBy": {
+          "type": "string"
+        },
+        "approvedAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingResolutionReport": {
+      "type": "object",
+      "required": [
+        "componentAddress",
+        "inputs",
+        "blockers",
+        "warnings"
+      ],
+      "properties": {
+        "componentAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "bindingSetRevisionId": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreBindingResolutionInput"
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingResolutionInput": {
+      "type": "object",
+      "required": [
+        "bindingName",
+        "source",
+        "sourceAddress",
+        "injection",
+        "sensitivity",
+        "enforcement"
+      ],
+      "properties": {
+        "bindingName": {
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "resource",
+            "publication",
+            "secret",
+            "provider-output"
+          ]
+        },
+        "sourceAddress": {
+          "type": "string"
+        },
+        "access": {
+          "$ref": "#/$defs/CoreAccessModeRef"
+        },
+        "injection": {
+          "$ref": "#/$defs/CoreInjectionTarget"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/CoreSensitivity"
+        },
+        "enforcement": {
+          "$ref": "#/$defs/CoreEnforcement"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingSetRevision": {
+      "type": "object",
+      "required": [
+        "id",
+        "groupId",
+        "componentAddress",
+        "structureDigest",
+        "inputs"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "componentAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "structureDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreBindingResolutionInput"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingValueResolution": {
+      "type": "object",
+      "required": [
+        "bindingSetRevisionId",
+        "bindingName",
+        "sourceAddress",
+        "resolutionPolicy",
+        "resolvedAt",
+        "sensitivity"
+      ],
+      "properties": {
+        "bindingSetRevisionId": {
+          "type": "string"
+        },
+        "bindingName": {
+          "type": "string"
+        },
+        "sourceAddress": {
+          "type": "string"
+        },
+        "resolutionPolicy": {
+          "enum": [
+            "latest-at-activation",
+            "pinned-version",
+            "latest-at-invocation"
+          ]
+        },
+        "resolvedVersion": {
+          "type": "string"
+        },
+        "resolvedAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/CoreSensitivity"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreAppRelease": {
+      "type": "object",
+      "required": [
+        "id",
+        "groupId",
+        "resolvedGraphDigest",
+        "componentRevisionRefs",
+        "bindingSetRevisionRefs",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "resolvedGraphDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "componentRevisionRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bindingSetRevisionRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/CoreMaterializationStatus"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreRouterConfig": {
+      "type": "object",
+      "required": [
+        "id",
+        "groupId",
+        "routeRefs",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "routeRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/CoreMaterializationStatus"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreRuntimeNetworkPolicy": {
+      "type": "object",
+      "required": [
+        "id",
+        "groupId",
+        "policyDigest",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "policyDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "status": {
+          "$ref": "#/$defs/CoreMaterializationStatus"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CorePublicationResolution": {
+      "type": "object",
+      "required": [
+        "outputAddress",
+        "resolverRef",
+        "inputDigests",
+        "outputDigest",
+        "values"
+      ],
+      "properties": {
+        "outputAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "publicationAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "resolverRef": {
+          "type": "string"
+        },
+        "inputDigests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Digest"
+          }
+        },
+        "outputDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreOutputDeclaration": {
+      "type": "object",
+      "required": [
+        "address",
+        "producerGroupId",
+        "contract",
+        "source",
+        "visibility"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "producerGroupId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contract": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "source": {},
+        "visibility": {
+          "enum": ["private", "explicit", "space", "public"]
+        },
+        "status": {
+          "enum": ["declared", "withdrawn"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreOutputValue": {
+      "type": "object",
+      "required": ["valueType", "sensitivity"],
+      "properties": {
+        "valueType": {
+          "enum": [
+            "string",
+            "url",
+            "json",
+            "secret-ref",
+            "service-ref",
+            "endpoint"
+          ]
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/CoreSensitivity"
+        },
+        "value": {},
+        "secretRef": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreOutputRevision": {
+      "type": "object",
+      "required": [
+        "outputAddress",
+        "revisionId",
+        "inputDigests",
+        "values",
+        "status",
+        "digest",
+        "createdAt"
+      ],
+      "properties": {
+        "outputAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activationRecordId": {
+          "type": "string"
+        },
+        "resolverDescriptorId": {
+          "$ref": "#/$defs/DescriptorId"
+        },
+        "inputDigests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Digest"
+          }
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/CoreOutputValue"
+          }
+        },
+        "status": {
+          "enum": ["ready", "unavailable", "withdrawn"]
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingDeclaration": {
+      "type": "object",
+      "required": [
+        "address",
+        "componentAddress",
+        "bindingName",
+        "source",
+        "inject"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "componentAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "bindingName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["kind", "resource", "access"],
+              "properties": {
+                "kind": { "const": "resource" },
+                "resource": {
+                  "$ref": "#/$defs/ObjectAddress"
+                },
+                "access": {
+                  "$ref": "#/$defs/CoreAccessModeRef"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind", "output", "field"],
+              "properties": {
+                "kind": { "const": "output" },
+                "output": {
+                  "$ref": "#/$defs/ObjectAddress"
+                },
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind", "secret"],
+              "properties": {
+                "kind": { "const": "secret" },
+                "secret": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["kind", "materialization", "field"],
+              "properties": {
+                "kind": { "const": "provider-output" },
+                "materialization": {
+                  "$ref": "#/$defs/ObjectAddress"
+                },
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "inject": {
+          "$ref": "#/$defs/CoreInjectionTarget"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreBindingResolution": {
+      "type": "object",
+      "required": [
+        "bindingDeclarationAddress",
+        "policyDecisionId",
+        "sensitivity",
+        "status",
+        "digest"
+      ],
+      "properties": {
+        "bindingDeclarationAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "resolvedSourceRevision": {
+          "type": "string"
+        },
+        "policyDecisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approvalRecordId": {
+          "type": "string"
+        },
+        "grantRef": {
+          "type": "string"
+        },
+        "sensitivity": {
+          "$ref": "#/$defs/CoreSensitivity"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "blocked",
+            "stale",
+            "withdrawn",
+            "unavailable"
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreApplyPhase": {
+      "type": "object",
+      "required": [
+        "id",
+        "applyRunId",
+        "name",
+        "status",
+        "revalidationRequired"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "applyRunId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "running",
+            "succeeded",
+            "failed",
+            "skipped"
+          ]
+        },
+        "revalidationRequired": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreResourceAccessPath": {
+      "type": "object",
+      "required": [
+        "id",
+        "resourceBindingId",
+        "componentAddress",
+        "access",
+        "injection",
+        "stages",
+        "networkBoundary",
+        "enforcement"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "resourceBindingId": {
+          "type": "string"
+        },
+        "componentAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "access": {
+          "$ref": "#/$defs/CoreAccessModeRef"
+        },
+        "injection": {
+          "$ref": "#/$defs/CoreInjectionTarget"
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoreAccessPathStage"
+          }
+        },
+        "networkBoundary": {
+          "$ref": "#/$defs/CoreNetworkBoundary"
+        },
+        "enforcement": {
+          "$ref": "#/$defs/CoreEnforcement"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreAccessPathStage": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "access-mediator",
+            "resource-host",
+            "credential-source"
+          ]
+        },
+        "materializationRef": {
+          "type": "string"
+        },
+        "providerTarget": {
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "takos",
+            "provider",
+            "operator"
+          ]
+        },
+        "lifecycle": {
+          "enum": [
+            "per-component",
+            "per-resource",
+            "shared"
+          ]
+        },
+        "readiness": {
+          "enum": [
+            "required",
+            "optional"
+          ]
+        },
+        "credentialBoundary": {
+          "enum": [
+            "none",
+            "provider-credential",
+            "resource-credential"
+          ]
+        },
+        "credentialVisibility": {
+          "enum": [
+            "consumer-runtime",
+            "mediator-only",
+            "provider-only",
+            "control-plane-only",
+            "none"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreProviderMaterialization": {
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "desiredObjectRef",
+        "providerTarget",
+        "objectAddress",
+        "createdByOperationId"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "router",
+            "runtime",
+            "resource",
+            "access"
+          ]
+        },
+        "desiredObjectRef": {
+          "type": "string"
+        },
+        "providerTarget": {
+          "type": "string"
+        },
+        "objectAddress": {
+          "$ref": "#/$defs/ObjectAddress"
+        },
+        "createdByOperationId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CoreProviderObservation": {
+      "type": "object",
+      "required": [
+        "materializationId",
+        "observedState",
+        "observedAt"
+      ],
+      "properties": {
+        "materializationId": {
+          "type": "string"
+        },
+        "observedState": {
+          "enum": [
+            "present",
+            "missing",
+            "drifted",
+            "unknown"
+          ]
+        },
+        "driftReason": {
+          "enum": [
+            "provider-object-missing",
+            "config-drift",
+            "status-drift",
+            "security-drift",
+            "ownership-drift",
+            "cache-drift"
+          ]
+        },
+        "observedDigest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "observedAt": {
+          "$ref": "#/$defs/IsoTimestamp"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

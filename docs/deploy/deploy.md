@@ -9,7 +9,7 @@ activation_envelope) を pin します。default では resolve に続けて app
 1 step で実行されます。manifest の `name` で決まる group が GroupHead pointer
 を進める対象で、`--group` は override です。
 
-> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
+> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 runtime model は tenant runtime で、operator-selected backend に backend-neutral
 schema / translation surface を流します。これは runtime behavior や provider

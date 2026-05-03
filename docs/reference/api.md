@@ -8,7 +8,7 @@ first-party app API を含みます。implementation-only な内部 endpoint
 は明示しない限りここでは扱いません。 :::
 
 > 現行 API gateway split status は
-> [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照
+> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
 
 ## 認証
 
@@ -1878,7 +1878,7 @@ Takos Deploy の Deployment lifecycle endpoint family です。`Deployment` reco
 を持ち、`POST
 /api/public/v1/deployments` 1 endpoint と関連 sub-endpoint
 で全ライフサイクル
-を扱います（[Core contract v1.0 § 17](/takos-paas/core/01-core-contract-v1.0)）。
+を扱います（[Core contract v1.0 § 17](/takosumi/core/01-core-contract-v1.0)）。
 削除済みの `/api/public/v1/deploy/plans` / `/api/public/v1/deploy/applies` /
 `/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*` などは current で
 削除されました（breaking change）。`/api/deploy/*` も Deployment endpoint
@@ -2092,7 +2092,7 @@ bundled snapshot ではなく source metadata / resolved commit を
 課金・使用量・サブスクリプション管理。
 
 > 現行 API gateway split status は
-> [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照
+> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
 > (billing routes は control 側)
 
 `GET /api/billing` は payment processor 非依存の `has_payment_account` を返し、
@@ -2122,7 +2122,7 @@ bundled snapshot ではなく source metadata / resolved commit を
 認証・プロファイル操作。
 
 > 現行 API gateway split status は
-> [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照 (auth
+> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照 (auth
 > routes は control 側)
 
 | method | path                       | description                          |
@@ -2345,7 +2345,7 @@ Deployment があることを前提にします。
 `/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*` /
 `/api/deploy/plans` / `/api/deploy/apply-runs`）は current で削除されました。
 完全な対応表は
-[Core contract v1.0 § 18](/takos-paas/core/01-core-contract-v1.0#v2-migration)。
+[Core contract v1.0 § 18](/takosumi/core/01-core-contract-v1.0#v2-migration)。
 
 ## 次に読むページ
 

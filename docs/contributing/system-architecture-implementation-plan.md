@@ -2,7 +2,7 @@
 
 This plan maps the architecture contract in
 `../architecture/system-architecture.md` and the Takos Deploy spec kit in
-`../takos-paas/` onto the `takos/paas` product root.
+`../takosumi/` onto the `takos/paas` product root.
 
 ## Ground rules
 
@@ -171,7 +171,7 @@ Exit criteria:
 
 ### M8: Acceptance test hardening
 
-Convert `../takos-paas/tests/conformance-tests.md` into tests grouped by:
+Convert `../takosumi/tests/conformance-tests.md` into tests grouped by:
 
 - plan/apply
 - activation

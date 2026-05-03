@@ -142,7 +142,7 @@ Target service set:
 Standalone deploy and runtime services are not target top-level product roots. They are internal domains of
 `takosumi`.
 
-> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
+> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 Their semantics remain. Their standalone service boundary is removed unless future scale requires extraction.
 
@@ -298,24 +298,24 @@ This is code and process organization, not service decomposition.
 `takosumi` may run multiple process roles from the same product root.
 
 ```text
-takos-paas-api:
+takosumi-api:
   HTTP API / UI / auth / request handling
   must not run long provider operations
 
-takos-paas-worker:
+takosumi-worker:
   Deployment apply jobs (resolved -> applying -> applied) / build /
   provider operations / outbox event processing
   must not serve tenant HTTP traffic
 
-takos-paas-router:
+takosumi-router:
   runtime request routing, if hosted by PaaS
   must not mutate Deployment.desired or GroupHead
 
-takos-paas-runtime-agent:
+takosumi-runtime-agent:
   Docker host / local runtime host operation
   must not advance GroupHead.current_deployment_id
 
-takos-paas-log-worker:
+takosumi-log-worker:
   logs / metrics / redaction
   must not receive provider credentials
 ```
@@ -989,7 +989,7 @@ Example Full Takos:
 {
   "distribution": "full-takos",
   "paasMode": "integrated",
-  "apiVersion": "takos-paas/v1",
+  "apiVersion": "takosumi/v1",
   "deployContract": "deploy-core",
   "registryContract": "registry-v1",
   "runtimeContract": "runtime-v1",
@@ -1008,7 +1008,7 @@ Example standalone:
 {
   "distribution": "standalone-paas",
   "paasMode": "standalone",
-  "apiVersion": "takos-paas/v1",
+  "apiVersion": "takosumi/v1",
   "deployContract": "deploy-core",
   "registryContract": "registry-v1",
   "runtimeContract": "runtime-v1",

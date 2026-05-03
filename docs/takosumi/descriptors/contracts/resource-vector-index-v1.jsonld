@@ -1,0 +1,18 @@
+{
+  "@context": "https://takosumi.com/contexts/deploy.jsonld",
+  "@id": "https://takosumi.com/contracts/resource/vector-index/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.vector-index@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-state",
+  "changeEffect": "resource-instance",
+  "accessModes": [
+    "vector-runtime-binding"
+  ],
+  "permissions": [
+    "vector:read",
+    "vector:write",
+    "vector:query"
+  ],
+  "schemaModel": "vector-index"
+}

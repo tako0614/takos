@@ -1,7 +1,7 @@
 # Acceptance Matrix
 
-Source catalog: `../takos-paas/tests/conformance-tests.md` and
-`../takos-paas/core/01-core-contract-v1.0.md`. The canonical surface is
+Source catalog: `../takosumi/tests/conformance-tests.md` and
+`../takosumi/core/01-core-contract-v1.0.md`. The canonical surface is
 `Deployment` / `ProviderObservation` / `GroupHead`.
 
 Legend: **Covered** has an implemented local test for the catalog item.

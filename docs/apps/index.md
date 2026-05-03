@@ -25,8 +25,8 @@ deploy manifest の書き方そのものは
 | [Routes](/deploy/routes)                                                         | `routes[]` の declaration                                                         |
 | [環境変数](/deploy/environment)                                                  | env / binding の詳細                                                              |
 | [マニフェストリファレンス](/reference/manifest-spec)                             | normative な field 定義                                                           |
-| [Authoring Guide](/takos-paas/guides/authoring-guide)                            | authoring → canonical 展開の写像                                                  |
-| [Official Descriptor Set v1](/takos-paas/descriptors/official-descriptor-set-v1) | runtime / artifact / interface / route / resource / publication descriptor 一覧  |
+| [Authoring Guide](/takosumi/guides/authoring-guide)                            | authoring → canonical 展開の写像                                                  |
+| [Official Descriptor Set v1](/takosumi/descriptors/official-descriptor-set-v1) | runtime / artifact / interface / route / resource / publication descriptor 一覧  |
 
 ## 次のステップ
 

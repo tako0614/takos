@@ -23,7 +23,7 @@ durable state を持ちます。group に所属しているかどうかで runti
 provider の扱いは変わりません。
 
 > 現行実装の split status は
-> [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
+> [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 実装上の分かれ方:
 

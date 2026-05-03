@@ -9,7 +9,7 @@ const expectedSubmodules = {
   agent: 'https://github.com/tako0614/takos-agent.git',
   app: 'https://github.com/tako0614/takos-app.git',
   git: 'https://github.com/tako0614/takos-git.git',
-  paas: 'https://github.com/tako0614/takos-paas.git',
+  paas: 'https://github.com/tako0614/takosumi.git',
 };
 const expectedServices = [
   'postgres',
@@ -17,7 +17,7 @@ const expectedServices = [
   'redis',
   'takos-app',
   'takos-git',
-  'takos-paas',
+  'takosumi',
   'takos-agent',
 ];
 const expectedPortMarkers = [

@@ -5,7 +5,7 @@
 > 発見と source 解決を担当し、Deployment service は manifest snapshot を resolve
 > + apply する。
 
-> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
+> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 Takos の deploy 入口はシンプルです。
 

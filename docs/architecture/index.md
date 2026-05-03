@@ -41,8 +41,8 @@ kernel が提供するもの:
 ## SoT 参照
 
 - service set / repository boundary: [System Architecture](./system-architecture.md)
-- meta-object / Deployment / ProviderObservation / GroupHead などの Core 定義: [Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0)
-- 実装 split status: [takosumi Current State](/takos-paas/current-state)
+- meta-object / Deployment / ProviderObservation / GroupHead などの Core 定義: [Core Contract v1.0](/takosumi/core/01-core-contract-v1.0)
+- 実装 split status: [takosumi Current State](/takosumi/current-state)
 - manifest spec: [Manifest Reference](/reference/manifest-spec)
 - 用語と canonical ref: [Glossary](/reference/glossary)
 

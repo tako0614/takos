@@ -3,7 +3,7 @@
 Takos
 の課金システム。使用量ベースで、プランに応じた無料枠と従量課金が適用される。
 
-> 現行 API gateway split status は [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照
+> 現行 API gateway split status は [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
 
 ## プラン
 

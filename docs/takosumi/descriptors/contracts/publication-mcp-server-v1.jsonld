@@ -1,0 +1,28 @@
+{
+  "@context": "https://takosumi.com/contexts/deploy.jsonld",
+  "@id": "https://takosumi.com/contracts/publication/mcp-server/v1",
+  "@type": "PublicationContractDescriptor",
+  "shortRef": "publication.mcp-server@v1",
+  "domain": "publication",
+  "lifecycleDomain": "declaration-output",
+  "changeEffect": "publication-binding",
+  "outputs": {
+    "url": {
+      "valueType": "url",
+      "sensitivity": "internal",
+      "allowedInjections": [
+        "env",
+        "service-binding"
+      ],
+      "defaultInjectable": false
+    },
+    "auth": {
+      "valueType": "secret-ref",
+      "sensitivity": "credential",
+      "allowedInjections": [
+        "secret-ref"
+      ],
+      "defaultInjectable": false
+    }
+  }
+}

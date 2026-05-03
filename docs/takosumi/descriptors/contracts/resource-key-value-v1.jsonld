@@ -1,0 +1,19 @@
+{
+  "@context": "https://takosumi.com/contexts/deploy.jsonld",
+  "@id": "https://takosumi.com/contracts/resource/key-value/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.key-value@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-state",
+  "changeEffect": "resource-instance",
+  "accessModes": [
+    "kv-runtime-binding"
+  ],
+  "permissions": [
+    "kv:read",
+    "kv:write",
+    "kv:delete",
+    "kv:list"
+  ],
+  "schemaModel": "key-value"
+}

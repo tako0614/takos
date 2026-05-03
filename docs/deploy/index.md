@@ -6,7 +6,7 @@ Takos の deploy system は **Deployment-centric** です。 authoring manifest 
 publication / resource / binding は Deployment.desired の field として
 束ねられ、 group は Deployment を順序付ける compatibility state scope です。
 
-> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
+> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 - **Deployment** — manifest snapshot + descriptor closure + desired state を
   1 record として保持する core record。`preview` → `resolved` → `applying` →

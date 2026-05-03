@@ -21,9 +21,9 @@ uninstall などの group 機能を使えます。`.takos/app.yaml` も受け付
 
 normative な field 定義は [マニフェストリファレンス](/reference/manifest-spec)
 を、authoring → canonical 展開の写像は
-[Authoring Guide](/takos-paas/guides/authoring-guide)
+[Authoring Guide](/takosumi/guides/authoring-guide)
 を参照してください。 公開 descriptor set は
-[Official Descriptor Set v1](/takos-paas/descriptors/official-descriptor-set-v1)
+[Official Descriptor Set v1](/takosumi/descriptors/official-descriptor-set-v1)
 にあります。
 
 ## 思想
@@ -339,7 +339,7 @@ bindings:
 へ解決されます。
 
 `takos.api-key` / `takos.oauth-client` の request schema と output 一覧は
-[Official Descriptor Set v1](/takos-paas/descriptors/official-descriptor-set-v1)
+[Official Descriptor Set v1](/takosumi/descriptors/official-descriptor-set-v1)
 を参照。
 
 ## App launcher
@@ -411,7 +411,7 @@ components:
 ```
 
 公開 composite の一覧は
-[Official Descriptor Set v1 § Composite descriptors](/takos-paas/descriptors/official-descriptor-set-v1#composite-descriptors)
+[Official Descriptor Set v1 § Composite descriptors](/takosumi/descriptors/official-descriptor-set-v1#composite-descriptors)
 を参照。
 
 ## environments (env override)

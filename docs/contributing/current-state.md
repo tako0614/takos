@@ -29,8 +29,8 @@ remains
   They expose type/store/service-level boundaries instead of separate default
   microservices.
 - Process roles are declared in `apps/paas/src/process/roles.ts` as deployment
-  roles for the same product root: `takos-paas-api`, `takos-paas-worker`,
-  `takos-paas-router`, `takos-paas-runtime-agent`, and `takos-paas-log-worker`.
+  roles for the same product root: `takosumi-api`, `takosumi-worker`,
+  `takosumi-router`, `takosumi-runtime-agent`, and `takosumi-log-worker`.
 - Workers and orchestration helpers exist for apply jobs, outbox dispatch,
   registry sync, repair, runtime vertical slice activation, deploy-to-runtime
   orchestration, event planning, publication planning, change-set planning,

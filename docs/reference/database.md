@@ -2856,7 +2856,7 @@ CREATE UNIQUE INDEX "workflows_repo_id_path_key" ON "workflows"("repo_id", "path
 に collapse し、`resource_binding_set_revisions` の structural side は
 `deployments.desired.bindings` field に内包します。`resource_migration_ledger`
 は forward-only history record として独立に維持されます。完全な spec は
-[Core contract v1.0 § 13–§ 18](/takos-paas/core/01-core-contract-v1.0)。
+[Core contract v1.0 § 13–§ 18](/takosumi/core/01-core-contract-v1.0)。
 
 ```sql
 -- current baseline: Deployment / ProviderObservation / GroupHead

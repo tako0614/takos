@@ -3,7 +3,7 @@
 > このページでわかること: Takos エコシステムの主要な component / sequence /
 > state 関係を mermaid 図で俯瞰する。文字情報は
 > [System Architecture](./system-architecture.md) と
-> [Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0) を正本とし、本
+> [Core Contract v1.0](/takosumi/core/01-core-contract-v1.0) を正本とし、本
 > ページはその図示版として位置付ける。
 
 ## ねらい
@@ -148,7 +148,7 @@ sequenceDiagram
 ## State Machine: Deployment Lifecycle
 
 Deployment 行が取りうる主要 state とその遷移。 condition reason との対応は
-[Condition Reason Catalog](/takos-paas/tests/condition-reason-catalog) を参照。
+[Condition Reason Catalog](/takosumi/tests/condition-reason-catalog) を参照。
 
 ```mermaid
 stateDiagram-v2
@@ -185,9 +185,9 @@ state 遷移の補足:
   boundary の正本
 - [Deploy System](./deploy-system.md) — primitive と group 機能の deploy
   pipeline
-- [Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0) — Deployment /
+- [Core Contract v1.0](/takosumi/core/01-core-contract-v1.0) — Deployment /
   ProviderObservation など Core 定義
-- [Condition Reason Catalog](/takos-paas/tests/condition-reason-catalog) —
+- [Condition Reason Catalog](/takosumi/tests/condition-reason-catalog) —
   `Deployment.conditions[].reason` の正本
 - [Operations: Troubleshooting](/operations/troubleshooting) — 実運用での
   failure 対応

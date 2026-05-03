@@ -3,12 +3,12 @@
 `routes[]` は AppSpec の exposure ↔ listener / match / transport binding
 declaration です。 各 route は component の `interface.*` 系 contract
 instance を route descriptor が定義する入口に bind します
-([Core § 10](/takos-paas/core/01-core-contract-v1.0#_10-interface-exposure-route-router-and-publication))。
+([Core § 10](/takosumi/core/01-core-contract-v1.0#_10-interface-exposure-route-router-and-publication))。
 
 normative な field 定義は
 [マニフェストリファレンス § 3](/reference/manifest-spec#_3-routes)、
 公開 route descriptor 一覧は
-[Official Descriptor Set v1 § Minimum route descriptors](/takos-paas/descriptors/official-descriptor-set-v1#minimum-route-descriptors)
+[Official Descriptor Set v1 § Minimum route descriptors](/takosumi/descriptors/official-descriptor-set-v1#minimum-route-descriptors)
 を参照。
 
 ## 基本
