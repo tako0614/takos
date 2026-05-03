@@ -1,0 +1,17 @@
+{
+  "@context": "https://takosumi.com/contexts/deploy.jsonld",
+  "@id": "https://takosumi.com/contracts/resource/analytics-engine/v1",
+  "@type": "ResourceContractDescriptor",
+  "shortRef": "resource.analytics-engine@v1",
+  "domain": "resource",
+  "lifecycleDomain": "durable-state",
+  "changeEffect": "resource-instance",
+  "accessModes": [
+    "analytics-runtime-binding"
+  ],
+  "permissions": [
+    "analytics:write",
+    "analytics:query"
+  ],
+  "schemaModel": "analytics-event"
+}

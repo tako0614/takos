@@ -5,7 +5,7 @@
 > 復旧 → 恒久対策の順に書く。
 
 `Deployment.conditions[].reason` の値は
-[Condition Reason Catalog](/takos-paas/tests/condition-reason-catalog) が正本で、
+[Condition Reason Catalog](/takosumi/tests/condition-reason-catalog) が正本で、
 ここでは operator が遭遇する代表シナリオに紐付けて手順をまとめる。
 
 ## 早見表
@@ -269,7 +269,7 @@ audit に組み込む。
 
 ## 関連ドキュメント
 
-- [Condition Reason Catalog](/takos-paas/tests/condition-reason-catalog)
+- [Condition Reason Catalog](/takosumi/tests/condition-reason-catalog)
 - [Architecture Diagrams](/architecture/diagrams)
 - [Deploy: Troubleshooting (manifest validation)](/deploy/troubleshooting) —
   manifest 入力エラーはこちら

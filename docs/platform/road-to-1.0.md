@@ -106,7 +106,7 @@ Implementation:
   contract を照合し、flat manifest schema を 1.0 canonical contract
   として固定する。
 - Core Deployment 仕様 (Deployment record / ProviderObservation / GroupHead) を
-  [`../takos-paas/core/01-core-contract-v1.0.md`](../takos-paas/core/01-core-contract-v1.0.md)
+  [`../takosumi/core/01-core-contract-v1.0.md`](../takosumi/core/01-core-contract-v1.0.md)
   と一致させ、Deployment.input / Deployment.resolution / Deployment.desired /
   Deployment.status の field を 1.0 contract として固定する。
 - CLI public help に出す command を auth / endpoint / deploy / apply / diff /

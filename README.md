@@ -72,7 +72,7 @@ git submodule update --init --recursive
 
 The planned remote repositories are:
 
-- `https://github.com/tako0614/takos-paas.git`
+- `https://github.com/tako0614/takosumi.git`
 - `https://github.com/tako0614/takos-git.git`
 - `https://github.com/tako0614/takos-app.git`
 - `https://github.com/tako0614/takos-agent.git`

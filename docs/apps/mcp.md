@@ -44,7 +44,7 @@ typed outputs catalog です。 publication 自体は injection を含意せず
 consume します。
 
 `publication.mcp-server@v1` の output / spec schema は
-[Official Descriptor Set v1 § publication.mcp-server@v1](/takos-paas/descriptors/official-descriptor-set-v1#publicationmcp-serverv1)
+[Official Descriptor Set v1 § publication.mcp-server@v1](/takosumi/descriptors/official-descriptor-set-v1#publicationmcp-serverv1)
 を参照。
 
 ## MCP server registry

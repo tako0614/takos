@@ -58,8 +58,8 @@ manually from `takos/paas` on a host with Docker Compose available.
 
    TAKOS_LOCAL_ENV_FILE=.env.local \
      docker compose --env-file .env.local -f compose.local.yml logs -f \
-       takos-paas-api takos-paas-router takos-paas-worker \
-       takos-paas-runtime-agent takos-paas-log-worker takos-agent
+       takosumi-api takosumi-router takosumi-worker \
+       takosumi-runtime-agent takosumi-log-worker takos-agent
    ```
 
 6. Run HTTP health checks against the host-mapped ports:
@@ -93,11 +93,11 @@ manually from `takos/paas` on a host with Docker Compose available.
 
 ## Expected service roles
 
-- `takos-paas-api`
-- `takos-paas-router`
-- `takos-paas-worker`
-- `takos-paas-runtime-agent`
-- `takos-paas-log-worker`
+- `takosumi-api`
+- `takosumi-router`
+- `takosumi-worker`
+- `takosumi-runtime-agent`
+- `takosumi-log-worker`
 
-Process boundaries are asserted through `TAKOS_PAAS_PROCESS_ROLE` and
+Process boundaries are asserted through `TAKOSUMI_PROCESS_ROLE` and
 `takos.io/process-role`.

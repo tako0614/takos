@@ -26,7 +26,7 @@ CLI の deploy surface は [Deploy System](/deploy/) の public contract
 rollback の business logic は control plane に置きます。`repositoryUrl` と
 `--manifest` の同時指定は CLI で拒否します。
 
-> 現行 API gateway split status は [API Gateway Split](/takos-paas/current-state#api-gateway-split) を参照
+> 現行 API gateway split status は [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
 
 ## 認証
 

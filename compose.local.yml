@@ -50,7 +50,7 @@ services:
       PORT: '${TAKOS_APP_PORT:-8787}'
       TAKOS_APP_URL: '${TAKOS_APP_URL:-http://localhost:8787}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
-      TAKOS_PAAS_INTERNAL_URL: 'http://takos-paas:${TAKOS_PAAS_PORT:-8788}'
+      TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_AGENT_INTERNAL_URL: 'http://takos-agent:${TAKOS_AGENT_PORT:-8789}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOS_APP_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
@@ -78,7 +78,7 @@ services:
     volumes:
       - ./git:/workspace
 
-  takos-paas:
+  takosumi:
     image: denoland/deno:latest
     depends_on:
       postgres-init:
@@ -88,15 +88,15 @@ services:
     command: ['deno', 'task', 'dev:paas']
     working_dir: /workspace
     environment:
-      PORT: '${TAKOS_PAAS_PORT:-8788}'
+      PORT: '${TAKOSUMI_PORT:-8788}'
       TAKOS_APP_URL: '${TAKOS_APP_URL:-http://takos-app:8787}'
-      TAKOS_PAAS_INTERNAL_URL: 'http://takos-paas:${TAKOS_PAAS_PORT:-8788}'
+      TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_PAAS_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_paas'
+      TAKOSUMI_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_paas'
       DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_paas'
       REDIS_URL: 'redis://redis:6379'
     ports:
-      - '${TAKOS_PAAS_PORT:-8788}:${TAKOS_PAAS_PORT:-8788}'
+      - '${TAKOSUMI_PORT:-8788}:${TAKOSUMI_PORT:-8788}'
     volumes:
       - ./paas:/workspace
 
@@ -105,11 +105,11 @@ services:
       context: ..
       dockerfile: takos/agent/Dockerfile
     depends_on:
-      takos-paas:
+      takosumi:
         condition: service_started
     environment:
       PORT: '${TAKOS_AGENT_PORT:-8789}'
-      TAKOS_PAAS_INTERNAL_URL: 'http://takos-paas:${TAKOS_PAAS_PORT:-8788}'
+      TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
     ports:

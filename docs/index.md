@@ -48,8 +48,8 @@ features:
 このサイトの canonical な参照点。各章はこれらを引用する立場で書かれており、定義の重複を避けてここから参照してください。
 
 - [System Architecture](/architecture/system-architecture) — service set / repository boundary の正本
-- [PaaS Core Contract v1.0](/takos-paas/core/01-core-contract-v1.0) — Core meta-objects の normative spec
-- [Current State](/takos-paas/current-state) — 実装ステータスと split shell の現状
+- [PaaS Core Contract v1.0](/takosumi/core/01-core-contract-v1.0) — Core meta-objects の normative spec
+- [Current State](/takosumi/current-state) — 実装ステータスと split shell の現状
 - [Manifest Reference](/reference/manifest-spec) — Deploy manifest spec
 - [Glossary](/reference/glossary) — 用語集と canonical ref
 

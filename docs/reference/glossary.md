@@ -74,7 +74,7 @@ top-level `bindings[]` に declaration し、 `from` の 4 source kind
 (`resource` / `publication` / `secret` / `provider-output`) と `to.component`
 + `to.env` または `to.binding` を持つ。 publication / resource は injection
 を含意せず、 binding が明示されない限り env / runtime binding に渡らない
-([Core invariant 4 / 7](/takos-paas/core/01-core-contract-v1.0#_2-core-invariants))。
+([Core invariant 4 / 7](/takosumi/core/01-core-contract-v1.0#_2-core-invariants))。
 内部では `service_consumes` record として保存される。
 
 ## Core meta-objects (PaaS Core normative)
@@ -257,7 +257,7 @@ OAuth / managed token が要求・付与する権限の粒度。
 | `publication.topic@v1`           | event topic                              |
 
 完全な一覧と output / spec / metadata schema は
-[Official Descriptor Set v1 § Minimum publication descriptors](/takos-paas/descriptors/official-descriptor-set-v1#minimum-publication-descriptors)
+[Official Descriptor Set v1 § Minimum publication descriptors](/takosumi/descriptors/official-descriptor-set-v1#minimum-publication-descriptors)
 を参照。 manifest では `ref:` でこの canonical descriptor URI / alias を
 指定します。
 

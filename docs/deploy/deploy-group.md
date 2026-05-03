@@ -3,7 +3,7 @@
 > このページでわかること: group の役割、group に所属した primitive
 > が使える機能、`takos deploy` / `takos install` との関係。
 
-> 現行実装の split status は [Current Implementation Note](/takos-paas/current-state#deploy-shell) を参照
+> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 Takos の group は **Deployment record を順序付ける compatibility state scope**
 です。service / resource / route / publication は group に所属していても、

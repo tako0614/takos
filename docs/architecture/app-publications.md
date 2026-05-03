@@ -68,7 +68,7 @@ assigned hostname と output `from: { route: <id> }` が参照する route の
 `path` から生成されます。 route が template の場合は template URL のまま
 consumer に渡ります。 必須 field は `name` / `ref` / `outputs` です。
 公開 publication descriptor 一覧は
-[Official Descriptor Set v1 § Minimum publication descriptors](/takos-paas/descriptors/official-descriptor-set-v1#minimum-publication-descriptors)
+[Official Descriptor Set v1 § Minimum publication descriptors](/takosumi/descriptors/official-descriptor-set-v1#minimum-publication-descriptors)
 を参照。 `spec` は consumer-facing metadata、 `metadata` は authoring metadata
 で、 各 publication descriptor が schema を定義します。
 
