@@ -27,7 +27,7 @@ surface / docs) を完了したあと、Phase 7-16 で deploy-ready 状態まで
 | 15 (auth / 3rd party smoke)                 | Google OAuth / takos login / PAT issue / OpenAI agent run の dry-run + live smoke                           | M3 agent GA                            | done |
 | 16 (e2e smoke + release gate)               | `e2e:smoke:dry-run` / `release-gate` 17 gate green / `road-to-1.0.md` 更新                                  | M4 release hardening                   | done |
 
-Phase 7-16 完了時点で `cd takos/paas && deno task release-gate` は 17 gate
+Phase 7-16 完了時点で `cd takos && deno task release-gate` は 17 gate
 すべて green、`cd takos-private && deno task e2e:smoke:dry-run` は 5 step すべて
 success / skip 0 fail で完走します。`deno test --allow-all` は 345 passed / 0
 failed / 21 ignored (intentional contract gaps) です。
@@ -35,7 +35,7 @@ failed / 21 ignored (intentional contract gaps) です。
 operator が 1.0 release candidate を切る前に必ず通すべきコマンドは:
 
 ```bash
-cd takos/paas && deno task release-gate            # 17 gate green
+cd takos && deno task release-gate            # 17 gate green
 cd takos-private && deno task e2e:smoke:dry-run    # 5 step success
 cd takos-private && deno task e2e:smoke:real \
   --api-url=https://staging.takos.example.com      # live staging smoke
@@ -253,7 +253,7 @@ Goal: 1.0 release candidate を切れる品質状態にする。
 
 Phase 16 mapping:
 
-- Phase 16: `cd takos/paas && deno task release-gate` を 17 gate (check /
+- Phase 16: `cd takos && deno task release-gate` を 17 gate (check /
   test:all / lint / fmt:check / lint:docs / validate-docs / docs:build /
   process-role-validator / validate-architecture-alignment /
   validate-core-conformance / validate-migration-core-coverage /
@@ -263,7 +263,7 @@ Phase 16 mapping:
 - `cd takos-private && deno task e2e:smoke:dry-run` を 5 step
   (staging-integration-test / auth-smoke / composite expansion / rollback wiring
   / docs build) すべて success で完走
-- `cd takos/paas && deno task docs:deploy` で `docs.takos.jp` を更新
+- `cd takos && deno task docs:deploy` で `docs.takos.jp` を更新
 
 Implementation:
 

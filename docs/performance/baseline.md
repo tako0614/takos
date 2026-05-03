@@ -1,7 +1,7 @@
 # Performance Baseline Metrics (Phase 20C)
 
 Takosumi deploy lifecycle の in-process performance baseline。Phase 20C
-で計測。`takos/paas/scripts/load-test/` の Deno スクリプトと
+で計測。`takos/scripts/load-test/` の Deno スクリプトと
 `k6-load-test.js` を用いて計測した結果をまとめる。
 
 ## 計測環境
@@ -122,7 +122,7 @@ in-process baseline + 業務想定 throughput から導いた scaling 指針。
 
 ## k6 load test (real env、operator 用)
 
-`takos/paas/scripts/load-test/k6-load-test.js` を staging / production-mirror
+`takos/scripts/load-test/k6-load-test.js` を staging / production-mirror
 で実行する。
 
 ```bash
@@ -130,7 +130,7 @@ k6 run \
   -e TAKOS_PAAS_BASE_URL=https://paas-staging.example.test \
   -e TAKOS_PAAS_TOKEN=$TAKOS_TOKEN \
   -e TAKOS_PAAS_SPACE_ID=space_bench \
-  takos/paas/scripts/load-test/k6-load-test.js
+  takos/scripts/load-test/k6-load-test.js
 ```
 
 ramp profile:
@@ -159,7 +159,7 @@ thresholds (失敗するとexit code != 0):
 ## 再実行手順
 
 ```bash
-cd takos/paas
+cd takos
 deno task load-test                    # in-process 全 scenario
 deno task load-test:concurrent-deploys # 並行 deploy 単体
 deno task load-test:kernel-api-bench   # HTTP API 単体

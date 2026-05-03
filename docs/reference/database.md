@@ -2921,7 +2921,7 @@ CREATE INDEX "group_heads_current_idx"
 
 ### Migration notes
 
-`takos/paas` Core schema は SQLite / D1 baseline からは独立した PostgreSQL
+`takos` Core schema は SQLite / D1 baseline からは独立した PostgreSQL
 backend として配布されます。control plane の SQLite / D1 baseline（このページ
 冒頭の schema）は Takos app gateway / Git hosting / billing / sessions など の
 primary store であり、`deployments` テーブル名は **app/gateway worker deployment

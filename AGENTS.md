@@ -27,5 +27,5 @@ Layer rules:
 - `agent/` may depend on `../takos-agent-engine` as an external path/package.
 - Provider plugins must depend on Takosumi plugin contracts/SDK (`jsr:@takos/takosumi-plugins`), not on kernel implementation paths.
 - The PaaS kernel implementation lives in the standalone Takosumi repository (`jsr:@takos/takosumi-kernel`). `paas/` here only carries Takos-specific deploy artifacts (helm chart, terraform, distribution manifests) that wrap the upstream kernel.
-- The official provider bundle is **Takosumi** (`@takosumi/plugins`, in-tree at `takosumi/`). Treat it as an independent product: distribution manifests reference it by JSR package name and `operator.takosumi.*` plugin ids, not by the legacy `@takos/paas-plugins` / `operator.takos.*` names.
+- The official provider bundle is **Takosumi** (`@takosumi/plugins`, in-tree at `takosumi/`). Treat it as an independent product: distribution manifests reference it by JSR package name and `operator.takosumi.*` plugin ids, not by the legacy `@takos-plugins` / `operator.takos.*` names.
 - Hosting target ids are now an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`. Adding Azure / Fly.io / OCI etc. is a Takosumi profile + registry-call change, not a contract schema change.

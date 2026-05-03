@@ -7,7 +7,7 @@ Docker/Compose path for a host distribution.
 
 ## Static checklist
 
-Run from `takos/paas`:
+Run from `takos`:
 
 ```sh
 deno run --no-config --allow-read scripts/self-host-e2e-check.ts
@@ -21,7 +21,7 @@ orchestrator, and named volumes needed by a single-node self-host smoke.
 ## Manual Docker plugin smoke
 
 Do not run these commands from automation unless explicitly requested. Run them
-manually from `takos/paas` on a host with Docker Compose available.
+manually from `takos` on a host with Docker Compose available.
 
 1. Prepare an env file and replace placeholder secrets/keys as needed:
 

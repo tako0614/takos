@@ -8,6 +8,11 @@
     "local:logs": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -f compose.local.yml logs -f'",
     "docs:dev": "deno task --cwd docs dev",
     "docs:build": "deno task --cwd docs build",
+    "validate:helm": "deno run --config deno.json --allow-read scripts/validate-helm-chart.ts",
+    "validate:agent-docs": "deno run --config deno.json --allow-read scripts/validate-agent-docs.ts",
+    "validate:architecture": "deno run --config deno.json --allow-read scripts/validate-architecture-alignment.ts",
+    "validate:process-roles": "deno run --config deno.json --allow-read scripts/validate-process-roles.ts",
+    "release-gate": "deno run --config deno.json --allow-read --allow-run scripts/release-gate.ts",
     "submodules:update": "git submodule update --init --recursive"
   },
   "nodeModulesDir": "auto",
@@ -16,7 +21,11 @@
     "lineWidth": 120,
     "indentWidth": 2,
     "singleQuote": true,
-    "semiColons": true
+    "semiColons": true,
+    "exclude": [
+      "deploy/helm/takos/templates",
+      "docs/**/*.md"
+    ]
   },
   "lint": {
     "rules": {

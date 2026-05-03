@@ -4,7 +4,7 @@
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **GCP 単独 hosting (GKE Helm)** ―
-   `takos/paas/deploy/helm/takos/values-gcp.yaml` overlay。Kubernetes ベースで
+   `takos/deploy/helm/takos/values-gcp.yaml` overlay。Kubernetes ベースで
    control plane / runtime / executor を運用する path。
 2. **GCP provider plugin (Phase 17A2)** ― Cloud Run / Cloud SQL / GCS / Pub/Sub
    / Cloud KMS / Secret Manager の 6 provider を Takosumi kernel から
@@ -68,7 +68,7 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = gcp)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos/paas
+cd ../takos
 deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 ```
 
@@ -142,7 +142,7 @@ FQDN policy を使う場合は `networkPolicy.runtime.extraEgress`
 ### インストール
 
 ```bash
-cd takos/paas/deploy/helm/takos
+cd takos/deploy/helm/takos
 helm dependency update
 
 helm upgrade --install takos . \

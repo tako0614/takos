@@ -21,7 +21,7 @@ GCP / Kubernetes は Helm overlay、 selfhosted は docker-compose packaging
 | [Cloudflare](/hosting/cloudflare)   | `cloudflare`         | Cloudflare Workers / D1 / R2 / KV / Queues を使う tracked reference Workers backend | Cloudflare resources                                  |
 | [AWS](/hosting/aws)                 | `aws`                | EKS 向け Helm overlay (`values-aws.yaml`)                                           | external PostgreSQL / Redis / S3-compatible storage   |
 | [GCP](/hosting/gcp)                 | `gcp`                | GKE 向け Helm overlay (`values-gcp.yaml`)                                           | external PostgreSQL / Redis / GCS S3 interoperability |
-| [Kubernetes](/hosting/kubernetes)   | `kubernetes`         | `takos/paas/deploy/helm/takos` base chart                                           | Bitnami PostgreSQL / Redis / MinIO by default         |
+| [Kubernetes](/hosting/kubernetes)   | `kubernetes`         | `takos/deploy/helm/takos` base chart                                           | Bitnami PostgreSQL / Redis / MinIO by default         |
 | [Self-hosted](/hosting/self-hosted) | `selfhosted`         | docker-compose (`compose.server.yml`)                                               | PostgreSQL / Redis / S3-compatible storage            |
 | [Local](/hosting/local)             | -                    | local development runtime (target ではなく独立 dev runtime)                         | local services                                        |
 

@@ -1,7 +1,7 @@
 # Plugin-backed infrastructure readiness runbook
 
 `scripts/real-backend-readiness.ts` is a no-start readiness gate for deciding
-which plugin-backed infrastructure smoke checks can run from `takos/paas`. These
+which plugin-backed infrastructure smoke checks can run from `takos`. These
 checks are operator proofs for plugin/local adapter wiring. They are not PaaS
 kernel release criteria.
 
@@ -22,7 +22,7 @@ service.
 ## Run readiness
 
 ```sh
-cd takos/paas
+cd takos
 deno run \
   --config deno.json \
   --allow-read=compose.local.yml,.env.local,.env.local.example \

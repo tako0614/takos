@@ -443,7 +443,7 @@ ssh ec2-user@runtime-agent.takos.example.com \
   'sudo systemctl enable --now takos-runtime-agent'
 
 # 9. 初期 admin / tenant / registry trust roots を seed
-cd ../takos/paas
+cd ../takos
 deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 
 # 10. 動作確認

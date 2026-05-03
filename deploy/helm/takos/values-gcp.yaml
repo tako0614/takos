@@ -1,0 +1,113 @@
+# GCP fail-closed overlay template.
+# This file is not a complete production profile by itself: every empty
+# runtimeConfig.plugins entry must be replaced by a trusted, non-reference
+# kernel plugin id supplied by the operator/plugin bundle.
+# Usage: helm install takos . -f values.yaml -f values-gcp.yaml
+
+runtimeConfig:
+  environment: production
+  # Empty plugin ids intentionally fail runtime config validation. Override all
+  # ports with non-reference plugins; do not inject DATABASE_URL/REDIS_URL/S3
+  # backend credentials directly into PaaS control pods.
+  plugins:
+    auth: ""
+    notification: ""
+    operator-config: ""
+    storage: ""
+    source: ""
+    provider: ""
+    queue: ""
+    object-storage: ""
+    kms: ""
+    secret-store: ""
+    router-config: ""
+    observability: ""
+    runtime-agent: ""
+
+# GCP managed-service connection details belong to the selected external
+# plugin bundle/operator config. This kernel chart does not inject database,
+# Redis, or object-storage credentials directly into PaaS control pods.
+
+networkPolicy:
+  runtime:
+    extraEgress:
+      # Standard Kubernetes NetworkPolicy cannot match GCS by DNS name.
+      # This keeps the default runtime egress policy usable with managed GCS by
+      # allowing public HTTPS while continuing to deny private-network egress.
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except:
+                - 10.0.0.0/8
+                - 172.16.0.0/12
+                - 192.168.0.0/16
+                - 100.64.0.0/10
+        ports:
+          - protocol: TCP
+            port: 443
+
+# Production domains
+domains:
+  admin: "admin.takos.example.com"
+  tenantBase: "app.takos.example.com"
+
+# Empty values keep the chart default secret names derived from the Helm release:
+# <release>-platform, <release>-auth, <release>-llm. Set a field only when an
+# external secret uses a different name.
+secrets:
+  create: false
+  existingSecrets:
+    platform: ""
+    auth: ""
+    llm: ""
+
+# GCE Ingress
+ingress:
+  enabled: true
+  className: "gce"
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "" # Set to reserved static IP name
+    networking.gke.io/managed-certificates: "takos-managed-cert"
+  gcpManagedCertificate:
+    enabled: true
+    name: "takos-managed-cert"
+    domains: []
+  tls:
+    enabled: false # GCP managed certificates handle TLS
+
+# Production resource tuning
+paasApi:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+paasRouter:
+  replicaCount: 3
+
+paasWorker:
+  replicaCount: 2
+
+runtime:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 20
+
+executor:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+
+# GKE Workload Identity for Kubernetes API/cloud integrations. Object storage
+# still uses the S3-compatible GCS interoperability HMAC credentials above.
+serviceAccount:
+  create: true
+  annotations:
+    iam.gke.io/gcp-service-account: "" # Set to GCP service account email

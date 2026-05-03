@@ -1,6 +1,6 @@
 # Release Gate Script
 
-`scripts/release-gate.ts` runs the safe local release gates for `takos/paas`
+`scripts/release-gate.ts` runs the safe local release gates for `takos`
 sequentially and emits a machine-readable JSON summary on stdout.
 
 ## Usage

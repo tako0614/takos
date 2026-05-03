@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "takos.fullname" . }}-global
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+data:
+  TAKOS_ENVIRONMENT: {{ .Values.runtimeConfig.environment | default "local" | quote }}
+  TAKOS_PUBLIC_ROUTES_ENABLED: {{ ternary "1" "0" (.Values.runtimeConfig.publicRoutesEnabled | default false) | quote }}
+  {{ if .Values.runtimeConfig.allowUnsafeProductionDefaults }}
+  TAKOS_ALLOW_UNSAFE_PRODUCTION_DEFAULTS: "1"
+  {{ end }}
+  {{ with .Values.runtimeConfig.plugins }}
+  TAKOS_KERNEL_PLUGIN_SELECTIONS: {{ toJson . | quote }}
+  {{ end }}
+  ADMIN_DOMAIN: {{ .Values.domains.admin | quote }}
+  TENANT_BASE_DOMAIN: {{ .Values.domains.tenantBase | quote }}
+  OCI_ORCHESTRATOR_URL: {{ include "takos.ociOrchestratorUrl" . | quote }}
+  TAKOS_LOCAL_DATA_DIR: "/var/lib/takos/control"
+  NODE_ENV: {{ .Values.runtimeConfig.environment | default "local" | quote }}

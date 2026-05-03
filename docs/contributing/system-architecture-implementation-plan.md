@@ -2,7 +2,7 @@
 
 This plan maps the architecture contract in
 `../architecture/system-architecture.md` and the Takos Deploy spec kit in
-`../takosumi/` onto the `takos/paas` product root.
+`../takosumi/` onto the `takos` product root.
 
 ## Ground rules
 

@@ -133,7 +133,7 @@ Target service set:
 | service | product root | responsibility |
 |---|---|---|
 | `takos-app` | `takos/app` | public API gateway, auth, account, billing, OAuth, product UI shell |
-| `takosumi` | `takos/paas` | standalone-capable PaaS control plane and Full Takos internal PaaS component |
+| `takosumi` | `takos` | standalone-capable PaaS control plane and Full Takos internal PaaS component |
 | `takos-git` | `takos/git` | Git hosting, repository object storage, source truth, source resolution |
 | `takos-agent` | `takos/agent` | agent execution service |
 | `takos-cli` | `takos-cli` | user/operator CLI |
@@ -245,49 +245,49 @@ It may run multiple process roles, but its domain model stays in one product.
 Recommended code structure:
 
 ```text
-takos/paas/src/api
+takos/src/api
   public API / standalone host / integrated internal API / capabilities endpoint
 
-takos/paas/src/domains/core
+takos/src/domains/core
   tenant / space / group / membership / entitlement / ownership
 
-takos/paas/src/domains/deploy
+takos/src/domains/deploy
   Deployment (input / resolution / desired / status / conditions / policy_decisions / approval) /
   ProviderObservation / GroupHead
 
-takos/paas/src/domains/runtime
+takos/src/domains/runtime
   WorkloadRevision / Deployment.conditions[] (provider operation 進捗) /
   ProviderObservation / logs / health / readiness
 
-takos/paas/src/domains/resources
+takos/src/domains/resources
   ResourceInstance / Deployment.desired.bindings projection / MigrationLedger /
   restore / backup metadata
 
-takos/paas/src/domains/routing
+takos/src/domains/routing
   route ownership / domain ownership / ingress materialization /
   route projection (Deployment.desired.routes + activation_envelope)
 
-takos/paas/src/domains/network
+takos/src/domains/network
   Deployment.desired.runtime_network_policy / ServiceGrant / WorkloadIdentity /
   egress satisfaction
 
-takos/paas/src/domains/registry
+takos/src/domains/registry
   ProviderPackage / ResourceContractPackage / DataContractPackage / PackageResolution / trust
 
-takos/paas/src/domains/audit
+takos/src/domains/audit
   append-only audit / audit projection / security events
 
-takos/paas/src/workers
+takos/src/workers
   Deployment apply jobs (resolved -> applying -> applied) / provider operations /
   repair / registry sync / outbox consumers / background tasks
 
-takos/paas/src/agents
+takos/src/agents
   runtime agent protocol / work leases / host operations / heartbeat / drain / revoke
 
-takos/paas/src/adapters
+takos/src/adapters
   auth / source / agent / billing / secret store / provider / registry / audit adapters
 
-takos/paas/src/shared
+takos/src/shared
   ids / errors / conditions / common contracts / utility types
 ```
 
