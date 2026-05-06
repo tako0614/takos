@@ -162,6 +162,14 @@ deno task helm:generate-overlays
 deno task helm:check-overlays
 ```
 
+CI は Helm v3 と kind cluster を setup した上で base / AWS / GCP values の
+`helm template` と `helm install --dry-run=client` を
+`TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:template-smoke`
+で検査します。test CRD は kind 上で GCP `ManagedCertificate` resource mapping
+を検査するためだけに入れます。ローカルで kubeconfig がない場合、この task は
+template smoke を必須とし、install dry-run は cluster unreachable として skip
+します。
+
 production では Secret 値を `--set` で渡す代わりに External Secrets Operator /
 Sealed Secrets / platform secret manager を使い、`secrets.create: false` と
 `secrets.existingSecrets.*` を設定してください。

@@ -34,11 +34,18 @@ Useful shell tasks:
 - `deno task local:config`: render the local compose config without starting services.
 - `deno task local:up` / `deno task local:down` / `deno task local:logs`: run the local shell.
 - `deno task local:smoke`: check the four local service health endpoints.
-- `deno task local:e2e`: run the isolated docker compose e2e smoke used by CI, including a seeded Smart HTTP git clone through apps/api.
+- `deno task local:e2e`: run the isolated docker compose e2e smoke used by CI, including a seeded Smart HTTP git clone
+  through apps/api.
 - `deno task docs:dev` / `deno task docs:build`: work on the shell docs.
-- `deno task helm:generate-overlays` / `deno task helm:check-overlays`: generate or verify AWS/GCP Helm overlays from distribution profiles.
-- `deno task validate:distributions`: verify official distribution profiles against the schema contract, artifact refs, target-specific bindings, service specs, provider proof commands, fixtures, and service smoke metadata.
-- `deno task validate:service-set`: verify the Helm chart exposes only `takos-app`, `takosumi`, `takos-git`, and `takos-agent`, with operator-overridable images.
+- `deno task helm:generate-overlays` / `deno task helm:check-overlays`: generate or verify AWS/GCP Helm overlays from
+  distribution profiles.
+- `deno task helm:template-smoke`: run Helm v3 template smoke for the base/AWS/GCP chart values. Set
+  `TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1` in a kubeconfig-backed environment to require client install dry-run cases too.
+  CI also sets `TAKOS_HELM_INSTALL_TEST_CRDS=1` so kind can validate the GCP ManagedCertificate resource.
+- `deno task validate:distributions`: verify official distribution profiles against the schema contract, artifact refs,
+  target-specific bindings, service specs, provider proof commands, fixtures, and service smoke metadata.
+- `deno task validate:service-set`: verify the Helm chart exposes only `takos-app`, `takosumi`, `takos-git`, and
+  `takos-agent`, with operator-overridable images.
 - `deno task submodules:update`: initialize or refresh nested service checkouts.
 
 ## Boundary Names
