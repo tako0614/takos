@@ -163,6 +163,10 @@ export default defineConfig({
             link: "/operations/patch-management",
           },
           {
+            text: "Online DB Migrations",
+            link: "/operations/online-db-migrations",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },
