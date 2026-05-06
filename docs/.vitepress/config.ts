@@ -28,6 +28,7 @@ export default defineConfig({
       { text: 'はじめる', link: '/get-started/' },
       { text: 'アプリ構成', link: '/apps/' },
       { text: 'デプロイ', link: '/deploy/' },
+      { text: 'Operator', link: '/operator/' },
       { text: 'ホスティング', link: '/hosting/' },
       { text: 'プラットフォーム', link: '/platform/' },
       { text: 'Takosumi Core', link: '/takosumi/' },
@@ -59,6 +60,14 @@ export default defineConfig({
           { text: 'MCP Server', link: '/apps/mcp' },
           { text: 'OAuth', link: '/apps/oauth' },
           { text: 'File Handlers', link: '/apps/file-handlers' },
+        ],
+      },
+      {
+        text: 'Operator',
+        items: [
+          { text: '概要', link: '/operator/' },
+          { text: 'OAuth Setup', link: '/operator/oauth-setup' },
+          { text: 'Bootstrap', link: '/operator/bootstrap' },
         ],
       },
       {

@@ -491,8 +491,8 @@ MCP (Model Context Protocol) サーバー管理。
 
 ```json
 {
-  "name": "CLI token",
-  "scopes": "*",
+  "name": "Automation token",
+  "scope": "write",
   "expiresAt": "2027-01-01T00:00:00Z"
 }
 ```
@@ -502,10 +502,10 @@ MCP (Model Context Protocol) サーバー管理。
 ```json
 {
   "id": "pat_abc123",
-  "name": "CLI token",
+  "name": "Automation token",
   "token": "tak_pat_...",
   "token_prefix": "tak_pat_abcd",
-  "scopes": "*",
+  "scopes": "[\"openid\",\"threads:read\",\"threads:write\"]",
   "expires_at": "2027-01-01T00:00:00Z",
   "created_at": "2026-03-29T10:00:00Z"
 }
@@ -514,9 +514,8 @@ MCP (Model Context Protocol) サーバー管理。
 ::: warning `token`
 フィールドは作成時のレスポンスにのみ含まれる。再取得はできない。 :::
 
-::: tip Scope wildcard `scopes: "*"` を指定すると、issuance 時点の **全 scope**
-を expand して付与する。新しく追加された scope は自動 grant されない
-(再発行が必要)。 :::
+`scope` は coarse bucket です。`read` / `write` / `admin` のいずれかを指定します。
+`admin` は全 scope を付与するため、短い TTL と厳格な secret 管理が必要です。
 
 ---
 

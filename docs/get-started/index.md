@@ -7,112 +7,95 @@ Takos は、AIエージェントによるサービスとソフトウェアの民
 resource API / runtime binding で管理・利用できます。
 
 group を構成するときは `.takos/app.yml` と `.takos/workflows/`
-を使いますが、Takos Docs は manifest だけの説明書ではありません。この章では、CLI
-のセットアップから最初の deploy まで、Takos を使い始める流れを揃えます。
+を使いますが、Takos Docs は manifest だけの説明書ではありません。この章では、
+Takos Web での初回操作と、manifest / workflow authoring を担当する
+Takosumi 系 CLI との境界を揃えます。
 
 ## 3 分で始める
 
-### 1. CLI をインストール
+### 1. Takos Web に入る
 
-Takos CLI は `takos-cli/` repository が基準です。現時点では JSR package release
-flow は未整備のため、compiled binary か direct Deno 実行を使います。開発用の
-ecosystem checkout では、`takos/` と同じ階層にある `takos-cli/` から install
-します。
+Takos product の primary surface は Web UI です。operator bootstrap の詳細は
+[Bootstrap](/operator/bootstrap) を参照してください。
 
-```bash
-# takos-ecosystem checkout root で実行
-cd takos-cli
-deno install -gA -n takos src/index.ts
+```text
+https://<ADMIN_DOMAIN>/
 ```
 
-### 2. ログイン
+未ログインなら `/auth/login` から Google OAuth へ進みます。初回ユーザーは
+`/setup` で username を決めます。
+
+### 2. API token を発行する
+
+Takos Web の account settings から OAuth settings を開き、Personal Access
+Tokens tab で PAT を発行します。automation には Web UI で発行した
+`tak_pat_...` を使います。
 
 ```bash
-takos login
-# ブラウザが開いて認証 → 完了
+curl -fsS \
+  -H "Authorization: Bearer $TAKOS_PAT" \
+  https://<ADMIN_DOMAIN>/api/me
 ```
 
-ログインできたか確認しましょう。
+### 3. app project を用意する
 
-```bash
-takos whoami
-```
+application の manifest / workflow / git bridge は `takosumi-git` が担当します。
+Takos product 側に app authoring 用の primary CLI を増やしません。
 
-### 3. deploy manifest を書く
-
-プロジェクトのルートに、Takos の deploy manifest `.takos/app.yml` を作ります。
+プロジェクトのルートに、Takosumi-git の project convention
+`.takosumi/manifest.yml` と `.takosumi/workflows/` を用意します。
 
 ```yaml
-# .takos/app.yml
-name: my-app
-
-components:
-  web:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: bundle
-              artifact: web
-              entry: dist/worker.js
-      ui:
-        ref: interface.http@v1
-
-routes:
-  - id: web
-    expose: { component: web, contract: ui }
-    via:
-      ref: route.https@v1
-      config: { path: / }
+# .takosumi/manifest.yml
+resources:
+  - name: web
+    shape: web-service@v1
+    provider: "@takos/aws-fargate"
+    spec:
+      port: 8080
+    workflowRef:
+      file: build.yml
+      job: image
+      artifact: image
 ```
 
-`routes` で `/` を `web` component の `interface.http@v1` instance に紐づける
-ことで、 ドメイン直下が公開されます。 ドメインはシステムが自動付与します。
+実際の manifest vocabulary は `takosumi-git` docs を正本にします。
 
 ### 4. ビルドワークフローを書く
 
-manifest の `artifact.workflow-bundle@v1.config.workflow` で参照する
-workflow を作ります。
+`workflowRef` で参照する workflow を作ります。
 
 ```yaml
-# .takos/workflows/deploy.yml
-name: deploy
+# .takosumi/workflows/build.yml
+version: "0"
 jobs:
-  bundle:
-    runs-on: ubuntu-latest
+  - name: image
     steps:
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Build
-        run: npm run build
-    artifacts:
-      web:
-        path: dist/worker
+        run: |
+          npm run build
+          echo "ghcr.io/example/my-app@sha256:0123456789abcdef"
+    artifact:
+      name: image
 ```
 
-このワークフローが build artifact を生成し、Takos がそれを Worker として deploy
+workflow / git event / artifact resolution は `takosumi-git` の責務です。
+Takosumi kernel は build concept を持たず、最終 manifest を受け取って deploy
 します。
 
 ### 5. デプロイ
 
 ```bash
-takos deploy --env staging --space SPACE_ID
+takosumi-git push \
+  --endpoint "$TAKOSUMI_ENDPOINT" \
+  --token "$TAKOSUMI_TOKEN"
 ```
 
-`takos deploy` は default で manifest を 1 つの Deployment として resolve し、
-そのまま apply まで進めます (Heroku 風の sugar)。reviewer flow が必要な場合は
-`takos deploy --resolve-only` で resolved Deployment record だけ作って、
-`takos diff <id>` / `takos apply <id>` で確認・適用を分離できます。手元で
-manifest だけ検証したい場合は `takos deploy --preview` を使います。
-
-ステージング環境にデプロイされます。URL
-がターミナルに表示されるので、ブラウザで開いてみましょう。`routes` で宣言した
-`/` がそのまま開きます。`TAKOS_SPACE_ID` または `.takos-session` で既定 space
-が決まっている場合は `--space` を省略できます。
+`takosumi-git` は workflow を実行して artifact URI を確定し、Takosumi kernel
+の `POST /v1/deployments` に manifest を渡します。Takos product は Web UI
+と public API で multi-tenant / OAuth / billing / catalog を扱う層です。
 
 ## 次のステップ
 

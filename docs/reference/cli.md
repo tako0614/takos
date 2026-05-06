@@ -1,7 +1,15 @@
 # CLI
 
+::: warning Boundary note
+Takos product は Web UI / public API を primary surface とします。git /
+workflow / manifest authoring の CLI は `takosumi-git`、Takosumi kernel の
+explicit manifest apply は `takosumi` の責務です。このページは移行期間中に残る
+Takos CLI surface の reference であり、新しい operator bootstrap や app
+authoring の primary UX として増やしません。
+:::
+
 Takos CLI は、認証、manifest の preview / deploy / apply / rollback、 group
-inventory、task-oriented API surface を扱う current public entrypoint
+inventory、task-oriented API surface を扱う transitional public surface
 です。Takos Deploy では deploy lifecycle は `Deployment` record に対する 5 つの
 verb (`deploy` / `apply` / `diff` / `approve` / `rollback`) で表現し、
 `takos deploy <manifest>` は default で resolve + apply の sugar

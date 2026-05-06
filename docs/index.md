@@ -23,7 +23,7 @@ features:
     link: /overview/
   - icon: 🚀
     title: はじめる
-    details: "CLI ログインから最初の group 作成、`.takos/` ディレクトリ構成、最初の deploy まで順に追う"
+    details: "Web login、operator bootstrap、Takosumi / takosumi-git との境界を順に追う"
     link: /get-started/
   - icon: 🧩
     title: Deploy 構成
@@ -31,7 +31,7 @@ features:
     link: /apps/
   - icon: 🌐
     title: デプロイと配布
-    details: "`takos deploy` / `takos deploy --preview` / `takos install` / `takos rollback` の違いと使い分けを整理する"
+    details: "Takos Web / public API と、takosumi-git 経由の manifest deploy flow を整理する"
     link: /deploy/
   - icon: 🏪
     title: プラットフォーム
@@ -39,7 +39,7 @@ features:
     link: /platform/
   - icon: 📚
     title: リファレンス
-    details: "CLI、API、deploy manifest、用語集を参照する"
+    details: "API、deploy manifest、Takosumi 関連 surface、用語集を参照する"
     link: /reference/
 ---
 

@@ -8,6 +8,13 @@ publication / resource / binding は Deployment.desired の field として
 
 > 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
+::: warning Boundary note
+Takos product の primary surface は Web UI / public API です。git / workflow /
+manifest authoring の CLI は `takosumi-git`、kernel への explicit manifest
+apply は `takosumi` が担当します。この章に残る `takos deploy` 系の記述は
+移行期間中の Takos CLI surface の説明であり、新しい primary UX として拡張しません。
+:::
+
 - **Deployment** — manifest snapshot + descriptor closure + desired state を
   1 record として保持する core record。`preview` → `resolved` → `applying` →
   `applied` (もしくは `failed` / `rolled-back`) という state machine を持つ
