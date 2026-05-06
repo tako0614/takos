@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "takos.fullname" . }}-paas-log-worker
+  name: {{ include "takos.fullname" . }}-takosumi-log-worker
   labels:
     {{- include "takos.labels" . | nindent 4 }}
-    app.kubernetes.io/component: paas-log-worker
+    app.kubernetes.io/component: takosumi-log-worker
 spec:
   replicas: {{ .Values.paasLogWorker.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/component: paas-log-worker
+      app.kubernetes.io/component: takosumi-log-worker
       {{- include "takos.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
         {{- include "takos.labels" . | nindent 8 }}
-        app.kubernetes.io/component: paas-log-worker
+        app.kubernetes.io/component: takosumi-log-worker
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -24,7 +24,7 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: paas-log-worker
+        - name: takosumi-log-worker
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
           command: ["deno", "task", "start"]
@@ -39,7 +39,7 @@ spec:
               value: {{ include "takos.paasLogWorkerUrl" . | quote }}
             - name: CONTROL_RPC_BASE_URL
               value: {{ include "takos.paasLogWorkerUrl" . | quote }}
-            - name: TAKOS_PAAS_RUNTIME_AGENT_URL
+            - name: TAKOSUMI_RUNTIME_AGENT_URL
               value: {{ include "takos.paasRuntimeAgentUrl" . | quote }}
             - name: TAKOS_LOCAL_EXECUTOR_URL
               value: {{ include "takos.executorUrl" . | quote }}

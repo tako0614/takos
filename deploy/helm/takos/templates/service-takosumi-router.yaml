@@ -1,18 +1,18 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "takos.fullname" . }}-paas-api
+  name: {{ include "takos.fullname" . }}-takosumi-router
   labels:
     {{- include "takos.labels" . | nindent 4 }}
-    takos.io/process-role: takosumi-api
-    app.kubernetes.io/component: paas-api
+    takos.io/process-role: takosumi-router
+    app.kubernetes.io/component: takosumi-router
 spec:
   type: ClusterIP
   ports:
-    - port: {{ .Values.paasApi.port }}
+    - port: {{ .Values.paasRouter.port }}
       targetPort: http
       protocol: TCP
       name: http
   selector:
-    app.kubernetes.io/component: paas-api
+    app.kubernetes.io/component: takosumi-router
     {{- include "takos.selectorLabels" . | nindent 4 }}

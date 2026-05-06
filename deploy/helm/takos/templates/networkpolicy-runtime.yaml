@@ -35,7 +35,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/component: paas-api
+              app.kubernetes.io/component: takosumi-api
               {{- include "takos.selectorLabels" . | nindent 14 }}
       ports:
         - protocol: TCP
@@ -43,7 +43,7 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/component: paas-runtime-agent
+              app.kubernetes.io/component: takosumi-runtime-agent
               {{- include "takos.selectorLabels" . | nindent 14 }}
       ports:
         - protocol: TCP

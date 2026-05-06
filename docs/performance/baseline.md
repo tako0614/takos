@@ -127,9 +127,9 @@ in-process baseline + 業務想定 throughput から導いた scaling 指針。
 
 ```bash
 k6 run \
-  -e TAKOS_PAAS_BASE_URL=https://paas-staging.example.test \
-  -e TAKOS_PAAS_TOKEN=$TAKOS_TOKEN \
-  -e TAKOS_PAAS_SPACE_ID=space_bench \
+  -e TAKOSUMI_BASE_URL=https://takosumi-staging.example.test \
+  -e TAKOSUMI_TOKEN=$TAKOS_TOKEN \
+  -e TAKOSUMI_SPACE_ID=space_bench \
   takos/scripts/load-test/k6-load-test.js
 ```
 

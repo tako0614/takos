@@ -55,7 +55,7 @@ runtimeConfig:
     runtime-agent: takos.kernel.reference
 
 ## -----------------------------------------------------------------
-## PaaS process role: takosumi-api.
+## Takosumi process role: takosumi-api.
 ## Values key: paasApi (HTTP API).
 ## Port defaults are kept aligned with local process checks.
 ## -----------------------------------------------------------------
@@ -71,7 +71,7 @@ paasApi:
       memory: 1Gi
 
 ## -----------------------------------------------------------------
-## PaaS process role: takosumi-router.
+## Takosumi process role: takosumi-router.
 ## Values key: paasRouter.
 ## -----------------------------------------------------------------
 paasRouter:
@@ -86,7 +86,7 @@ paasRouter:
       memory: 512Mi
 
 ## -----------------------------------------------------------------
-## PaaS process role: takosumi-worker.
+## Takosumi process role: takosumi-worker.
 ## Values key: paasWorker.
 ## -----------------------------------------------------------------
 paasWorker:
@@ -106,7 +106,7 @@ paasWorker:
       memory: 2Gi
 
 ## -----------------------------------------------------------------
-## PaaS process role: takosumi-runtime-agent host/controller.
+## Takosumi process role: takosumi-runtime-agent host/controller.
 ## Values key: paasRuntimeAgent.
 ## -----------------------------------------------------------------
 paasRuntimeAgent:
@@ -121,7 +121,7 @@ paasRuntimeAgent:
       memory: 512Mi
 
 ## -----------------------------------------------------------------
-## PaaS process role: takosumi-log-worker.
+## Takosumi process role: takosumi-log-worker.
 ## -----------------------------------------------------------------
 paasLogWorker:
   replicaCount: 1
@@ -152,7 +152,7 @@ ociOrchestrator:
     size: 1Gi
 
 ## -----------------------------------------------------------------
-## PaaS process role: takosumi-runtime-agent workload.
+## Takosumi process role: takosumi-runtime-agent workload.
 ## Values key: runtime.
 ## Keep this at a single replica unless sessions/jobs/workspaces are moved
 ## to sticky or external storage; runtime keeps state in memory.

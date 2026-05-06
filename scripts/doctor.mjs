@@ -32,6 +32,8 @@ const expectedInternalUrlMarkers = [
   'TAKOSUMI_INTERNAL_URL',
   'TAKOS_AGENT_INTERNAL_URL',
   'TAKOS_INTERNAL_SERVICE_SECRET',
+  'TAKOS_INTERNAL_API_SECRET',
+  'TAKOSUMI_INTERNAL_API_SECRET',
 ];
 const forbiddenSurfacePatterns = [
   {

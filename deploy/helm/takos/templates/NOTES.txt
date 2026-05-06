@@ -9,7 +9,7 @@
 {{- if .Values.ingress.enabled }}
    https://{{ .Values.domains.admin }}
 {{- else }}
-   kubectl port-forward svc/{{ $fullname }}-paas-api {{ .Values.paasApi.port }}:{{ .Values.paasApi.port }}
+   kubectl port-forward svc/{{ $fullname }}-takosumi-api {{ .Values.paasApi.port }}:{{ .Values.paasApi.port }}
    Then open: http://localhost:{{ .Values.paasApi.port }}
 {{- end }}
 

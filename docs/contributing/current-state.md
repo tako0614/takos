@@ -153,9 +153,8 @@ deno fmt
 Additional useful commands:
 
 ```sh
-deno task --cwd apps/paas check
-deno task --cwd packages/paas-contract check
-deno task dev:paas
+cd ../takosumi && deno task check
+cd ../takosumi && deno test --allow-all packages/kernel/src/domains/deploy
 deno run --allow-read scripts/validate-process-roles.ts
 deno task local:up
 deno task local:logs
@@ -164,12 +163,13 @@ deno task local:down
 
 Notes:
 
-- `deno task test:all` delegates to
-  `deno test --allow-all --permit-no-files apps/paas packages/paas-contract`.
-- `deno task dev:paas` runs the Hono entrypoint with `--allow-net --allow-env`.
+- Takosumi full test execution is owned by the sibling kernel repo
+  (`cd ../takosumi && deno test --allow-all`).
+- Takosumi kernel local development runs from the sibling `../takosumi` repo;
+  this shell owns local composition and Takos-specific deploy artifacts only.
 - docs tasks currently print that Takos docs moved out of the `takosumi`
   service scope.
-- local Compose and Helm metadata carry the current PaaS process-role
+- local Compose and Helm metadata carry the current Takosumi process-role
   labels/envs.
 
 ## In-memory vs real boundaries

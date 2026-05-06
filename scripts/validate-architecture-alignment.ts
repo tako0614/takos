@@ -3,80 +3,71 @@ type CheckFailure = {
   message: string;
 };
 
-const README_PATH = "README.md";
-const TAKOSUMI_DOCS_ROOT = "../docs/takosumi";
+const README_PATH = 'README.md';
+const TAKOSUMI_DOCS_ROOT = 'docs/takosumi';
 const CURRENT_STATE_PATH = `${TAKOSUMI_DOCS_ROOT}/current-state.md`;
-const CHECKLIST_PATH =
-  `${TAKOSUMI_DOCS_ROOT}/10-v1.0-implementation-checklist.md`;
-const DOMAIN_ROOT = "apps/paas/src/domains";
+const CHECKLIST_PATH = `${TAKOSUMI_DOCS_ROOT}/10-v1.0-implementation-checklist.md`;
+const DOMAIN_ROOT = '../takosumi/packages/kernel/src/domains';
 
-const REQUIRED_INTERNAL_DOMAIN_DOCS = [
-  README_PATH,
-  CURRENT_STATE_PATH,
-];
-const REQUIRED_KERNEL_PLUGIN_DOCS = [
-  README_PATH,
-  CURRENT_STATE_PATH,
-  CHECKLIST_PATH,
-];
+const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
+const REQUIRED_KERNEL_PLUGIN_DOCS = [CURRENT_STATE_PATH, CHECKLIST_PATH];
 const REQUIRED_DOMAIN_DIRS = [
-  "core",
-  "deploy",
-  "runtime",
-  "resources",
-  "routing",
-  "network",
-  "registry",
-  "audit",
-  "events",
-  "publications",
-  "supply-chain",
+  'core',
+  'deploy',
+  'runtime',
+  'resources',
+  'routing',
+  'network',
+  'registry',
+  'audit',
+  'events',
+  'outputs',
+  'service-endpoints',
+  'supply-chain',
 ];
 
 const PRODUCT_ROOT_TERMS = [
-  "product root",
-  "repo",
-  "repository",
-  "top-level service",
-  "service boundary",
-  "service boundaries",
+  'product root',
+  'repo',
+  'repository',
+  'top-level service',
+  'service boundary',
+  'service boundaries',
 ];
 
 const SAFE_DRIFT_TERMS = [
-  "internal domain",
-  "internal domains",
-  "domain modules",
-  "domains/deploy",
-  "domains/runtime",
-  "inside `takosumi`",
-  "inside takosumi",
-  "implemented as",
-  "not default top-level",
-  "not a default top-level",
-  "not top-level",
-  "no longer top-level",
-  "compatibility",
-  "legacy",
+  'internal domain',
+  'internal domains',
+  'domain modules',
+  'domains/deploy',
+  'domains/runtime',
+  'inside `takosumi`',
+  'inside takosumi',
+  'implemented as',
+  'not default top-level',
+  'not a default top-level',
+  'not top-level',
+  'no longer top-level',
+  'compatibility',
+  'legacy',
 ];
 
 const KERNEL_PLUGIN_REQUIRED_TERMS = [
-  "kernel",
-  "plugin",
-  "self-host",
-  "cloud",
+  'kernel',
+  'plugin',
+  'self-host',
+  'cloud',
 ];
 
 const FORBIDDEN_CURRENT_BOUNDARY_PATTERNS = [
   {
     pattern: /Implement local Docker\/single-node only first/i,
     message:
-      "Runtime/routing milestones must describe kernel ports/projections first; Docker/self-host belongs to plugins.",
+      'Runtime/routing milestones must describe kernel ports/projections first; Docker/self-host belongs to plugins.',
   },
   {
-    pattern:
-      /real backend[^.\n]*(kernel release|release gate|criterion|criteria)/i,
-    message:
-      "Real backend proofs must not be described as kernel release criteria.",
+    pattern: /real backend[^.\n]*(kernel release|release gate|criterion|criteria)/i,
+    message: 'Real backend proofs must not be described as kernel release criteria.',
   },
 ];
 
@@ -101,11 +92,9 @@ async function readText(
   } catch (error) {
     failures.push({
       path,
-      message: `Unable to read file: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      message: `Unable to read file: ${error instanceof Error ? error.message : String(error)}`,
     });
-    return "";
+    return '';
   }
 }
 
@@ -117,7 +106,7 @@ async function collectMarkdownFiles(root: string): Promise<string[]> {
       const entryPath = `${directory}/${entry.name}`;
       if (entry.isDirectory) {
         await walk(entryPath);
-      } else if (entry.isFile && entry.name.endsWith(".md")) {
+      } else if (entry.isFile && entry.name.endsWith('.md')) {
         files.push(entryPath);
       }
     }
@@ -128,15 +117,15 @@ async function collectMarkdownFiles(root: string): Promise<string[]> {
 }
 
 function paragraphAt(text: string, index: number): string {
-  const before = text.lastIndexOf("\n\n", index);
-  const after = text.indexOf("\n\n", index);
+  const before = text.lastIndexOf('\n\n', index);
+  const after = text.indexOf('\n\n', index);
   const start = before === -1 ? 0 : before + 2;
   const end = after === -1 ? text.length : after;
   return text.slice(start, end).trim();
 }
 
 function lineNumberAt(text: string, index: number): number {
-  return text.slice(0, index).split("\n").length;
+  return text.slice(0, index).split('\n').length;
 }
 
 function hasAny(text: string, terms: string[]): boolean {
@@ -150,15 +139,15 @@ function validateInternalDomainMentions(
   failures: CheckFailure[],
 ): void {
   const lowerText = text.toLowerCase();
-  const mentionsPaas = lowerText.includes("takosumi") ||
-    lowerText.includes("takos paas");
-  const mentionsInternalDomains = lowerText.includes("internal domain") ||
-    lowerText.includes("internal domains") ||
-    lowerText.includes("domain modules") ||
-    lowerText.includes("apps/paas/src/domains");
-  const mentionsDeployRuntimeDomains = lowerText.includes("domains/deploy") ||
-    lowerText.includes("domains/runtime") ||
-    (lowerText.includes("deploy") && lowerText.includes("runtime"));
+  const mentionsPaas = lowerText.includes('takosumi') ||
+    lowerText.includes('takos paas');
+  const mentionsInternalDomains = lowerText.includes('internal domain') ||
+    lowerText.includes('internal domains') ||
+    lowerText.includes('domain modules') ||
+    lowerText.includes('packages/kernel/src/domains');
+  const mentionsDeployRuntimeDomains = lowerText.includes('domains/deploy') ||
+    lowerText.includes('domains/runtime') ||
+    (lowerText.includes('deploy') && lowerText.includes('runtime'));
 
   if (
     !mentionsPaas || !mentionsInternalDomains || !mentionsDeployRuntimeDomains
@@ -166,7 +155,7 @@ function validateInternalDomainMentions(
     failures.push({
       path,
       message:
-        "Expected README/current-state docs to describe takosumi internal domains, including deploy/runtime as domains inside the PaaS root.",
+        'Expected README/current-state docs to describe takosumi internal domains, including deploy/runtime as domains inside the Takosumi kernel.',
     });
   }
 }
@@ -181,8 +170,7 @@ function validateKernelPluginBoundaryMentions(
     if (lowerText.includes(term)) continue;
     failures.push({
       path,
-      message:
-        `Expected kernel/plugin boundary docs to mention "${term}" explicitly.`,
+      message: `Expected kernel/plugin boundary docs to mention "${term}" explicitly.`,
     });
   }
 }
@@ -238,7 +226,7 @@ async function validateDomainDirs(failures: CheckFailure[]): Promise<void> {
     if (!(await pathExists(domainPath))) {
       failures.push({
         path: domainPath,
-        message: "Required takosumi core domain directory is missing.",
+        message: 'Required takosumi core domain directory is missing.',
       });
     }
   }
@@ -270,14 +258,14 @@ async function main(): Promise<void> {
   await validateDomainDirs(failures);
 
   if (failures.length > 0) {
-    console.error("Architecture alignment validation failed:");
+    console.error('Architecture alignment validation failed:');
     for (const failure of failures) {
       console.error(`- ${failure.path}: ${failure.message}`);
     }
     Deno.exit(1);
   }
 
-  console.log("Architecture alignment validation passed.");
+  console.log('Architecture alignment validation passed.');
   console.log(`Checked ${markdownFiles.length} README/plan markdown files.`);
   console.log(`Verified ${REQUIRED_DOMAIN_DIRS.length} domain directories.`);
 }
