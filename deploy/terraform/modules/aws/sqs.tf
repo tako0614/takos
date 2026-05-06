@@ -34,8 +34,8 @@ resource "aws_sqs_queue" "dlq" {
 resource "aws_sqs_queue" "main" {
   for_each = toset(local.sqs_queues)
 
-  name                      = "${each.value}-${var.environment}"
-  message_retention_seconds = var.sqs_message_retention
+  name                       = "${each.value}-${var.environment}"
+  message_retention_seconds  = var.sqs_message_retention
   visibility_timeout_seconds = 60
 
   redrive_policy = jsonencode({
