@@ -49,7 +49,7 @@ takosumi-git push
 
 ### `Worker compute (...) requires worker bundle artifacts`
 
-`source.kind="git_ref"` の Takos repo deploy は `compute.build.fromWorkflow`
+`source.kind="git_ref"` の Takos repo deploy は legacy workflow build metadata
 を解決しません。worker を含む app は `takosumi-git` 経由で build / artifact
 解決を済ませるか、API caller が `source.kind="manifest"` の `artifacts` に
 `worker_bundle` file を添えてください。image-backed service だけの manifest

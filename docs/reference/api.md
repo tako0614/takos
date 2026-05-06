@@ -1895,8 +1895,8 @@ inflated size のような content-size・pack-limit 系の失敗だけを blobl
 fetch の対象にします。blobless partial fetch は remote が `filter` と
 `allow-reachable-sha1-in-want` を advertise している場合に限ります。archive
 download は GitHub / GitLab public repo 向けの host-specific な最終 fallback
-です。上限は `TAKOS_APP_DEPLOY_REMOTE_*` 環境変数で調整できます。
-旧 `source.kind="inline"` + workflow artifact / `compute.build.fromWorkflow`
+です。上限は `TAKOS_APP_DEPLOY_REMOTE_*` 環境変数で調整できます。 旧
+`source.kind="inline"` + workflow artifact や legacy worker build metadata
 payload は受け付けません。worker bundle build は `takosumi-git init` /
 `takosumi-git push` で解決するか、API caller が `source.kind="manifest"` の
 artifact input として渡します。
