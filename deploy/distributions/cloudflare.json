@@ -11,18 +11,18 @@
   "artifacts": [
     {
       "kind": "wrangler",
-      "ref": "../../takosumi/deploy/cloudflare/wrangler.toml"
+      "ref": "../takosumi/deploy/cloudflare/wrangler.toml"
     },
     {
       "kind": "operator",
-      "ref": "../../takosumi/deploy/cloudflare"
+      "ref": "../takosumi/deploy/cloudflare"
     }
   ],
   "providerProof": {
-    "readOnlySmokeTask": "cd ../../takosumi && deno task live-smoke:cloudflare",
-    "provisioningSmokeTask": "cd ../../takosumi && deno task live-provisioning-smoke:cloudflare",
-    "cleanupTask": "cd ../../takosumi && deno task live-provisioning-cleanup:cloudflare",
-    "fixturePath": "../../takosumi/fixtures/live-provisioning/cloudflare.json",
+    "readOnlySmokeTask": "cd ../takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=cloudflare TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/cloudflare.shape-v1.json deno task live-provisioning-smoke",
+    "provisioningSmokeTask": "cd ../takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=cloudflare TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/cloudflare.shape-v1.json deno task live-provisioning-smoke",
+    "cleanupTask": "cd ../takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=cloudflare TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live TAKOSUMI_PLUGIN_LIVE_CLEANUP_ONLY=1 TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/cloudflare.shape-v1.json deno task live-provisioning-smoke",
+    "fixturePath": "../takosumi/fixtures/live-provisioning/cloudflare.shape-v1.json",
     "liveEnvPrefix": "TAKOSUMI_PLUGIN_CLOUDFLARE"
   },
   "requiredBindings": [
@@ -122,6 +122,6 @@
   "metadata": {
     "official": true,
     "liveSmokeTask": "deno task distribution:smoke --manifest deploy/distributions/cloudflare.json",
-    "providerSmokeTask": "cd ../../takosumi && deno task live-smoke:cloudflare"
+    "providerSmokeTask": "cd ../takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=cloudflare TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/cloudflare.shape-v1.json deno task live-provisioning-smoke"
   }
 }

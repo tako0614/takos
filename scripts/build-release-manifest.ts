@@ -135,6 +135,10 @@ function validationCommands(): CommandManifest[] {
       ],
     },
     {
+      name: 'validate-distributions',
+      command: ['deno', 'task', 'validate:distributions'],
+    },
+    {
       name: 'validate-helm',
       command: ['deno', 'task', 'validate:helm'],
     },
@@ -173,6 +177,7 @@ function assertRequiredValidationCommands(
   const required: Record<string, readonly string[]> = {
     'validate-agent-docs': ['deno', 'task', 'validate:agent-docs'],
     'validate-architecture': ['deno', 'task', 'validate:architecture'],
+    'validate-distributions': ['deno', 'task', 'validate:distributions'],
     'validate-helm': ['deno', 'task', 'validate:helm'],
     'docs:build': ['deno', 'task', 'docs:build'],
   };

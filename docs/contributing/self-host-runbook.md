@@ -19,9 +19,9 @@ deno task validate:distributions
 deno task distribution:smoke --manifest deploy/distributions/selfhosted.json
 ```
 
-The second command is a dry-run unless `--live` or
-`TAKOS_DISTRIBUTION_SMOKE_LIVE=1` is set. In dry-run mode it validates the
-manifest and prints that live smoke was skipped.
+The second command is a dry-run unless `--live` is set. In dry-run mode it
+validates the manifest smoke metadata and prints the service probe URLs without
+performing network requests.
 
 ## 2. Run kernel-local proof
 
@@ -45,7 +45,7 @@ real self-host stack.
 
 Use the public template as the contract for the concrete self-host deployment,
 but keep the concrete manifest and secrets in the operator/private repo. The
-template currently points at `../../takos-private/compose.server.yml` as the
+template currently points at `../takos-private/compose.server.yml` as the
 self-host artifact path.
 
 Before live proof, ensure the operator deployment provides:
@@ -83,9 +83,16 @@ Provider proof belongs to the external plugin bundle. From the ecosystem root
 layout, the self-host manifest advertises:
 
 ```sh
-cd ../../takosumi && deno task live-smoke:selfhosted
+cd ../takosumi && \
+  TAKOSUMI_PLUGIN_LIVE_PROVIDER=selfhosted \
+  TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/selfhosted.shape-v1.json \
+  deno task live-provisioning-smoke
 
-cd ../../takosumi && deno task live-provisioning-smoke:selfhosted
+cd ../takosumi && \
+  TAKOSUMI_PLUGIN_LIVE_PROVIDER=selfhosted \
+  TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live \
+  TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/selfhosted.shape-v1.json \
+  deno task live-provisioning-smoke
 ```
 
 Use the fixture and environment variables required by Takosumi

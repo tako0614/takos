@@ -20,29 +20,15 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
 ## Gate order
 
 1. `deno task check`
-2. `deno task test:all`
-3. `deno lint`
-4. `deno fmt --check`
-5. Process role validator: `scripts/validate-process-roles.ts`
-6. Architecture alignment validator:
+2. Agent docs validator: `deno task validate:agent-docs`
+3. Architecture alignment validator:
    `scripts/validate-architecture-alignment.ts`
-7. Self-host E2E compose check: `scripts/self-host-e2e-check.ts`
-8. Compose smoke default dry-run: `scripts/compose-smoke.ts`
-9. Router config smoke dry-run: `scripts/router-config-smoke.ts`
-10. Git source smoke dry-run: `scripts/git-source-smoke.ts`
-11. Object storage smoke dry-run: `scripts/object-storage-smoke.ts`
-12. Postgres storage smoke dry-run: `scripts/postgres-storage-smoke.ts`
-13. Redis queue smoke dry-run: `scripts/redis-queue-smoke.ts`
-14. Docker provider smoke dry-run: `scripts/docker-provider-smoke.ts`
-15. Compose real smoke dry-run: `scripts/compose-real-smoke.ts`
-16. Runtime agent API smoke: `scripts/runtime-agent-api-smoke.ts`
-17. Real backend readiness no-start check: `scripts/real-backend-readiness.ts`
-18. Release manifest build: `scripts/build-release-manifest.ts`
-19. PaaS in-process smoke: `scripts/paas-smoke.ts`
-
-The compose, git, object-storage, postgres, redis queue, docker, and
-compose-real smokes are forced into dry-run mode by setting their opt-in
-execution variables to `0` in the child process environment.
+4. `deno task docs:build`
+5. Process role validator: `deno task validate:process-roles`
+6. Distribution profile validator: `deno task validate:distributions`
+7. Helm chart validator: `deno task validate:helm`
+8. Release manifest build: `scripts/build-release-manifest.ts`
+9. Compose config render: `deno task local:config`
 
 ## Output
 
