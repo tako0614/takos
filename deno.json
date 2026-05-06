@@ -17,6 +17,7 @@
     "terraform:helm-values": "deno run --config deno.json --allow-read --allow-write=deploy/helm/takos --allow-run=terraform scripts/terraform-output-to-helm-values.ts",
     "terraform:helm-values:check": "deno run --config deno.json --allow-read scripts/terraform-output-to-helm-values.ts --check-fixtures",
     "terraform:plan-gate": "deno run --config deno.json --allow-read --allow-write=.terraform-plan --allow-run --allow-env=TAKOS_TERRAFORM_BIN scripts/terraform-plan-gate.ts",
+    "validate:terraform-secrets": "deno run --config deno.json --allow-read --allow-run=git scripts/validate-terraform-secret-policy.ts",
     "validate:helm": "deno run --config deno.json --allow-read scripts/validate-helm-chart.ts",
     "validate:agent-docs": "deno run --config deno.json --allow-read --allow-env=TAKOS_ECOSYSTEM_ROOT scripts/validate-agent-docs.ts",
     "validate:architecture": "deno run --config deno.json --allow-read scripts/validate-architecture-alignment.ts",

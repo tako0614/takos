@@ -67,6 +67,10 @@ const gates: GateCommand[] = [
     command: ['deno', 'task', 'terraform:helm-values:check'],
   },
   {
+    name: 'terraform-secret-policy',
+    command: ['deno', 'task', 'validate:terraform-secrets'],
+  },
+  {
     name: 'release-manifest',
     command: [
       'deno',

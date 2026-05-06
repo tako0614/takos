@@ -36,15 +36,12 @@ environment backend を使う場合は
 `deploy/terraform/environments/{aws-prod,aws-staging,gcp-prod,gcp-staging}` を
 root として実行します。各 env dir には `terraform.tfvars.example` があり、実
 secret 値は `takos-private` から operator が注入します。backend を使わない
-composition 検証は次の形です:
+composition 検証は secret を使わない範囲に限定します:
 
 ```bash
 cd takos/deploy/terraform
 terraform init -backend=false
 terraform validate
-terraform plan \
-  -var='target=aws' \
-  -var='db_password=replace-with-operator-secret'
 ```
 
 Terraform apply 後は `terraform output -json` から Helm overlay values を生成します:
@@ -75,6 +72,7 @@ deno task terraform:plan-gate
 `terraform_plan_mode = true` を使い、`terraform plan -refresh=false` の結果を
 `.terraform-plan/summary.md` と full plan text artifact に出します。実環境 state
 backend / live credentials を使う plan は operator が `takos-private` 側で実行します。
+secret 境界の詳細は [Hosting Secret Policy](/hosting/secrets) を参照してください。
 
 ## kernel host target を multi-cloud で選ぶ
 

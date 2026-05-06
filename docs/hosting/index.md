@@ -65,6 +65,11 @@ target 固有の prerequisites (Cloudflare account / IAM role / kubeconfig / Doc
 host など) は各 target page の "target-specific 設定" セクションを
 参照してください。
 
+secret 値、provider credentials、Terraform live tfvars は `takos-private` が
+正本です。`takos/` 側の Terraform / Helm は non-secret managed resource id と
+Secret 名だけを扱います。詳細は
+[Hosting Secret Policy](/hosting/secrets) を参照してください。
+
 ## Backend の差分
 
 current hosting surface の比較と current contract に含まれない項目は
@@ -119,4 +124,5 @@ gate は provider 実環境の proof を要求しません。
 - [Self-hosted](/hosting/self-hosted) --- docker-compose + selfhosted plugin
 - [Multi-cloud](/hosting/multi-cloud) --- 5 target 横断 runbook
 - [Target Parity](/hosting/target-parity) --- target ごとの readiness status
+- [Secret Policy](/hosting/secrets) --- Terraform / Helm / takos-private の secret 境界
 - [ローカル開発](/hosting/local) --- 開発用 dev runtime
