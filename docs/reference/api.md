@@ -2093,7 +2093,8 @@ bundled snapshot ではなく source metadata / resolved commit を
 
 > 現行 API gateway split status は
 > [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照 (billing
-> routes は control 側)
+> public entrypoint は apps/api、handler 実装は migration window 中 control
+> compatibility backend)
 
 `GET /api/billing` は payment processor 非依存の `has_payment_account` を返し、
 既存 Stripe client 互換のため `has_stripe_customer` も同じ値で返します。
@@ -2123,7 +2124,8 @@ bundled snapshot ではなく source metadata / resolved commit を
 
 > 現行 API gateway split status は
 > [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照 (auth
-> routes は control 側)
+> public entrypoint は apps/api、handler 実装は migration window 中 control
+> compatibility backend)
 
 | method | path                       | description                          |
 | ------ | -------------------------- | ------------------------------------ |
@@ -2137,6 +2139,11 @@ bundled snapshot ではなく source metadata / resolved commit を
 ## oauth-consent
 
 OAuth 同意 UI 用 API。
+
+> 現行 API gateway split status は
+> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
+> (`/api/oauth/*` は apps/api で受け、migration window 中は control
+> compatibility backend へ proxy)
 
 この family は browser session cookie を前提にした SPA 用 API です。エラーは
 common envelope ではなく、OAuth/consent UI 用の flat JSON (`error` /
@@ -2189,7 +2196,9 @@ OAuth 2.0 サーバーエンドポイント。詳しいフローは
 [OAuth ドキュメント](/apps/oauth) を参照してください。
 
 canonical path は `/api/public/v1/oauth/*` です。既存 OAuth client と browser
-flow の互換性のため、legacy `/oauth/*` も同じ handler に到達します。
+flow の互換性のため、legacy `/oauth/*` も同じ handler に到達します。どちらも
+apps/api で受け、migration window 中は control compatibility backend へ proxy
+されます。
 
 | method | path                                      | description                                                                                  |
 | ------ | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -2227,6 +2236,9 @@ claim は issuance 時に **`client_id`** を埋め込みます。validation 側
 ### auth (server-side)
 
 サーバーサイド認証フロー。
+
+`/auth/*` は apps/api で受け、migration window 中は control compatibility
+backend へ proxy されます。
 
 | method | path                         | description                           |
 | ------ | ---------------------------- | ------------------------------------- |
