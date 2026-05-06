@@ -155,6 +155,10 @@ export default defineConfig({
             link: "/operations/capacity",
           },
           {
+            text: "Cost Monitoring",
+            link: "/operations/cost-monitoring",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },

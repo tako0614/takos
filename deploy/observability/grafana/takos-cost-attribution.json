@@ -1,0 +1,368 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(increase(takos_cloud_spend_cents_total{provider=~\"$provider\",space_id=~\"$space_id\"}[30d])) / 100",
+          "legendFormat": "cloud spend",
+          "refId": "A"
+        }
+      ],
+      "title": "Cloud Spend 30d",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(increase(takos_billing_usage_cost_cents_total{space_id=~\"$space_id\"}[30d])) / 100",
+          "legendFormat": "billed usage",
+          "refId": "A"
+        }
+      ],
+      "title": "Billed Usage 30d",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "(sum(increase(takos_billing_usage_cost_cents_total{space_id=~\"$space_id\"}[30d])) - sum(increase(takos_cloud_spend_cents_total{provider=~\"$provider\",space_id=~\"$space_id\"}[30d]))) / clamp_min(sum(increase(takos_billing_usage_cost_cents_total{space_id=~\"$space_id\"}[30d])), 1)",
+          "legendFormat": "gross margin",
+          "refId": "A"
+        }
+      ],
+      "title": "Gross Margin 30d",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum(increase(takos_cloud_spend_cents_total{provider=~\"$provider\",space_id!=\"\"}[24h])) / clamp_min(sum(increase(takos_cloud_spend_cents_total{provider=~\"$provider\"}[24h])), 1)",
+          "legendFormat": "attributed spend",
+          "refId": "A"
+        }
+      ],
+      "title": "Attribution Coverage 24h",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "topk(20, sum by (space_id) (increase(takos_cloud_spend_cents_total{provider=~\"$provider\",space_id=~\"$space_id\"}[30d])) / 100)",
+          "legendFormat": "{{space_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Tenants by Cloud Spend",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum by (provider, service) (increase(takos_cloud_spend_cents_total{provider=~\"$provider\",space_id=~\"$space_id\"}[30d])) / 100",
+          "legendFormat": "{{provider}} / {{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Cloud Spend by Provider and Service",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "topk(20, sum by (space_id) (increase(takos_billing_usage_cost_cents_total{space_id=~\"$space_id\"}[30d])) / 100)",
+          "legendFormat": "{{space_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Top Tenants by Billed Usage",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "sum by (meter_type) (increase(takos_billing_usage_cost_cents_total{space_id=~\"$space_id\"}[30d])) / 100",
+          "legendFormat": "{{meter_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Billed Usage by Meter",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "sum by (cost_center, project_code) (increase(takos_cloud_spend_cents_total{provider=~\"$provider\",space_id=~\"$space_id\"}[30d])) / 100",
+          "legendFormat": "{{cost_center}} / {{project_code}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Cloud Spend by Cost Center",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum by (provider, service) (increase(takos_cloud_spend_cents_total{provider=~\"$provider\",space_id=\"\"}[24h])) / 100",
+          "legendFormat": "{{provider}} / {{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Unattributed Cloud Spend 24h",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "takos",
+    "billing",
+    "cost-attribution"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Prometheus",
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(takos_cloud_spend_cents_total, space_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Space",
+        "multi": true,
+        "name": "space_id",
+        "options": [],
+        "query": {
+          "query": "label_values(takos_cloud_spend_cents_total, space_id)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": ".*",
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(takos_cloud_spend_cents_total, provider)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Provider",
+        "multi": true,
+        "name": "provider",
+        "options": [],
+        "query": {
+          "query": "label_values(takos_cloud_spend_cents_total, provider)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Takos Cost Attribution",
+  "uid": "takos-cost-attribution",
+  "version": 1,
+  "weekStart": ""
+}
