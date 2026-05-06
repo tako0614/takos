@@ -1,6 +1,37 @@
 const chartRoot = 'deploy/helm/takos';
 const templateRoot = `${chartRoot}/templates`;
 
+const expectedServices = [
+  {
+    id: 'takos-app',
+    deploymentFile: 'deployment-takos-app.yaml',
+    serviceFile: 'service-takos-app.yaml',
+    imageKey: 'takosApp',
+    valuesKey: 'takosApp',
+  },
+  {
+    id: 'takosumi',
+    deploymentFile: 'deployment-takosumi.yaml',
+    serviceFile: 'service-takosumi.yaml',
+    imageKey: 'takosumi',
+    valuesKey: 'takosumi',
+  },
+  {
+    id: 'takos-git',
+    deploymentFile: 'deployment-takos-git.yaml',
+    serviceFile: 'service-takos-git.yaml',
+    imageKey: 'takosGit',
+    valuesKey: 'takosGit',
+  },
+  {
+    id: 'takos-agent',
+    deploymentFile: 'deployment-takos-agent.yaml',
+    serviceFile: 'service-takos-agent.yaml',
+    imageKey: 'takosAgent',
+    valuesKey: 'takosAgent',
+  },
+] as const;
+
 const templateFiles: string[] = [];
 for await (const entry of Deno.readDir(templateRoot)) {
   if (entry.isFile && entry.name.endsWith('.yaml')) {
@@ -9,46 +40,58 @@ for await (const entry of Deno.readDir(templateRoot)) {
 }
 
 const errors: string[] = [];
+const valuesText = await Deno.readTextFile(`${chartRoot}/values.yaml`);
+
+assertExactTemplateSet(
+  'Deployment',
+  templateFiles.filter((file) => file.includes('/deployment-')),
+  expectedServices.map((service) => `${templateRoot}/${service.deploymentFile}`),
+);
+assertExactTemplateSet(
+  'Service',
+  templateFiles.filter((file) => file.includes('/service-')),
+  expectedServices.map((service) => `${templateRoot}/${service.serviceFile}`),
+);
+
+for (const service of expectedServices) {
+  const deploymentPath = `${templateRoot}/${service.deploymentFile}`;
+  const servicePath = `${templateRoot}/${service.serviceFile}`;
+  const deploymentText = await readTextIfExists(deploymentPath);
+  const serviceText = await readTextIfExists(servicePath);
+
+  assertContains(deploymentPath, deploymentText, `kind: Deployment`);
+  assertContains(deploymentPath, deploymentText, `takos.io/service-id: ${service.id}`);
+  assertContains(deploymentPath, deploymentText, `app.kubernetes.io/component: ${service.id}`);
+  assertContains(
+    deploymentPath,
+    deploymentText,
+    `image: "{{ .Values.images.${service.imageKey}.repository }}:{{ .Values.images.${service.imageKey}.tag }}"`,
+  );
+  assertContains(
+    deploymentPath,
+    deploymentText,
+    `containerPort: {{ .Values.services.${service.valuesKey}.port }}`,
+  );
+
+  assertContains(servicePath, serviceText, `kind: Service`);
+  assertContains(servicePath, serviceText, `takos.io/service-id: ${service.id}`);
+  assertContains(servicePath, serviceText, `app.kubernetes.io/component: ${service.id}`);
+  assertContains(
+    servicePath,
+    serviceText,
+    `port: {{ .Values.services.${service.valuesKey}.port }}`,
+  );
+
+  assertValuesKey('images', service.imageKey);
+  assertValuesKey('services', service.valuesKey);
+}
 
 for (const file of templateFiles.sort()) {
   const text = await Deno.readTextFile(file);
   if (text.includes('dev:local:')) {
     errors.push(`${file} must not use dev:local commands`);
   }
-  if (text.includes('path: /health')) {
-    errors.push(`${file} must use /livez or /readyz probes, not /health`);
-  }
-  if (
-    text.includes('TAKOSUMI_PROCESS_ROLE') &&
-    text.includes('kind: Deployment') &&
-    !text.includes('command: ["deno", "task", "start"]')
-  ) {
-    errors.push(`${file} must run the production start task`);
-  }
-  if (file.endsWith('deployment-takosumi-worker.yaml')) {
-    assertSinglePath(
-      text,
-      file,
-      'TAKOSUMI_WORKER_HEARTBEAT_FILE',
-      /name:\s+TAKOSUMI_WORKER_HEARTBEAT_FILE\s*\n\s*value:\s*"([^"]+)"/,
-      '/var/lib/takos/worker-heartbeat.json',
-    );
-    assertSinglePath(
-      text,
-      file,
-      'takosumi-worker liveness heartbeat',
-      /const f = '([^']+)';/,
-      '/var/lib/takos/worker-heartbeat.json',
-    );
-    if (!text.includes('mountPath: /var/lib/takos')) {
-      errors.push(`${file} must mount takosumi worker data at /var/lib/takos`);
-    }
-    if (text.includes('mountPath: /var/lib/takos/control')) {
-      errors.push(
-        `${file} must not mount takosumi worker heartbeat data at /var/lib/takos/control`,
-      );
-    }
-  }
+  assertNoStaleWorkloadSurface(file, text);
 }
 
 for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
@@ -65,6 +108,17 @@ for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
   if (/takos\.kernel\.reference/.test(text)) {
     errors.push(`${path} must not select the reference plugin in production`);
   }
+  for (const service of expectedServices) {
+    assertContains(path, text, `${service.valuesKey}:`);
+  }
+  assertNoStaleWorkloadSurface(path, text);
+}
+
+for (const ingress of ['ingress-admin.yaml', 'ingress-tenant.yaml']) {
+  const path = `${templateRoot}/${ingress}`;
+  const text = await Deno.readTextFile(path);
+  assertContains(path, text, `name: {{ include "takos.fullname" . }}-takos-app`);
+  assertContains(path, text, `number: {{ .Values.services.takosApp.port }}`);
 }
 
 if (errors.length > 0) {
@@ -77,23 +131,73 @@ console.log(
   JSON.stringify({
     ok: true,
     checkedTemplates: templateFiles.length,
+    checkedServiceSet: expectedServices.map((service) => service.id),
     checkedOverlays: ['values-aws.yaml', 'values-gcp.yaml'],
   }),
 );
 
-function assertSinglePath(
-  text: string,
-  file: string,
-  label: string,
-  pattern: RegExp,
-  expected: string,
+function assertExactTemplateSet(
+  kind: string,
+  actualFiles: string[],
+  expectedFiles: string[],
 ): void {
-  const match = text.match(pattern);
-  if (!match) {
-    errors.push(`${file} must declare ${label}`);
+  const actual = actualFiles.toSorted();
+  const expected = expectedFiles.toSorted();
+  if (actual.length !== expected.length) {
+    errors.push(
+      `${kind} template set must be exactly ${expected.map(basename).join(', ')}, got ${
+        actual.map(basename).join(', ')
+      }`,
+    );
     return;
   }
-  if (match[1] !== expected) {
-    errors.push(`${file} ${label} must be ${expected}, got ${match[1]}`);
+  for (const [index, expectedPath] of expected.entries()) {
+    if (actual[index] !== expectedPath) {
+      errors.push(
+        `${kind} template set must include ${basename(expectedPath)}, got ${basename(actual[index])}`,
+      );
+    }
   }
+}
+
+async function readTextIfExists(path: string): Promise<string> {
+  try {
+    return await Deno.readTextFile(path);
+  } catch {
+    errors.push(`missing required Helm template ${path}`);
+    return '';
+  }
+}
+
+function assertContains(path: string, text: string, expected: string): void {
+  if (!text.includes(expected)) {
+    errors.push(`${path} must contain ${expected}`);
+  }
+}
+
+function assertValuesKey(section: 'images' | 'services', key: string): void {
+  const pattern = new RegExp(`^${section}:\\n(?:[\\s\\S]*?\\n)?  ${key}:`, 'm');
+  if (!pattern.test(valuesText)) {
+    errors.push(`${chartRoot}/values.yaml must define ${section}.${key}`);
+  }
+}
+
+function assertNoStaleWorkloadSurface(path: string, text: string): void {
+  const stalePatterns: Array<[RegExp, string]> = [
+    [/takos\.io\/process-role/, 'takos.io/process-role'],
+    [/TAKOSUMI_PROCESS_ROLE/, 'TAKOSUMI_PROCESS_ROLE'],
+    [/\bpaas(Api|Router|Worker|RuntimeAgent|LogWorker)\b/, 'paas* values keys'],
+    [/\bociOrchestrator\b/, 'ociOrchestrator values key'],
+    [/takosumi-(api|router|worker|runtime-agent|log-worker)/, 'old takosumi role resource name'],
+  ];
+
+  for (const [pattern, label] of stalePatterns) {
+    if (pattern.test(text)) {
+      errors.push(`${path} must not contain stale ${label}`);
+    }
+  }
+}
+
+function basename(path: string): string {
+  return path.split('/').at(-1) ?? path;
 }

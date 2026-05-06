@@ -11,7 +11,7 @@ The manifest captures:
 - version-ish local git metadata when `git` is available (`branch`, `commit`,
   `shortCommit`, `describe`, dirty flag)
 - release validation command inventory
-- expected and observed process roles from compose/Helm manifests
+- expected and observed Takos service IDs from Helm manifests
 - `apps/paas/src/domains/*` domain directories
 - local smoke/e2e script inventory
 

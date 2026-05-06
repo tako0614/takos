@@ -35,7 +35,7 @@ const manifest = {
   validationCommands: commands,
   distributionContract: await collectDistributionContract(),
   distributions: await collectDistributionManifests(),
-  processRoles: await collectProcessRoles(),
+  serviceSet: await collectServiceSet(),
   domainDirs: await collectDomainDirs(),
   smokeScripts: await collectSmokeScripts(),
 };
@@ -125,14 +125,11 @@ function validationCommands(): CommandManifest[] {
       command: ['deno', 'task', 'docs:build'],
     },
     {
-      name: 'process-role-validator',
+      name: 'service-set-validator',
       command: [
         'deno',
-        'run',
-        '--config',
-        'deno.json',
-        '--allow-read',
-        'scripts/validate-process-roles.ts',
+        'task',
+        'validate:service-set',
       ],
     },
     {
@@ -179,6 +176,7 @@ function assertRequiredValidationCommands(
     'validate-agent-docs': ['deno', 'task', 'validate:agent-docs'],
     'validate-architecture': ['deno', 'task', 'validate:architecture'],
     'validate-distributions': ['deno', 'task', 'validate:distributions'],
+    'service-set-validator': ['deno', 'task', 'validate:service-set'],
     'validate-helm': ['deno', 'task', 'validate:helm'],
     'docs:build': ['deno', 'task', 'docs:build'],
   };
@@ -303,13 +301,12 @@ function stringArraysEqual(
     left.every((item, index) => item === right[index]);
 }
 
-async function collectProcessRoles(): Promise<JsonValue> {
+async function collectServiceSet(): Promise<JsonValue> {
   const expected = [
-    'takosumi-api',
-    'takosumi-worker',
-    'takosumi-router',
-    'takosumi-runtime-agent',
-    'takosumi-log-worker',
+    'takos-app',
+    'takosumi',
+    'takos-git',
+    'takos-agent',
   ];
   const targets: string[] = [];
   const helmDir = 'deploy/helm/takos/templates';
@@ -325,8 +322,8 @@ async function collectProcessRoles(): Promise<JsonValue> {
   }
 
   const observations: Array<{
-    role: string;
-    kind: 'label' | 'env';
+    serviceId: string;
+    kind: 'label';
     file: string;
     line: number;
   }> = [];
@@ -334,39 +331,35 @@ async function collectProcessRoles(): Promise<JsonValue> {
   for (const file of targets.sort()) {
     const text = await readTextIfExists(file);
     if (text === null) continue;
-    observations.push(...collectRoleObservations(file, text));
+    observations.push(...collectServiceObservations(file, text));
   }
 
-  const observed = [...new Set(observations.map((entry) => entry.role))].sort();
+  const observed = [...new Set(observations.map((entry) => entry.serviceId))]
+    .sort();
   return { expected, observed, observations };
 }
 
-function collectRoleObservations(
+function collectServiceObservations(
   file: string,
   text: string,
-): Array<{ role: string; kind: 'label' | 'env'; file: string; line: number }> {
+): Array<{ serviceId: string; kind: 'label'; file: string; line: number }> {
   const observations: Array<{
-    role: string;
-    kind: 'label' | 'env';
+    serviceId: string;
+    kind: 'label';
     file: string;
     line: number;
   }> = [];
-  const patterns: Array<['label' | 'env', RegExp]> = [
-    ['label', /takos\.io\/process-role:\s*([^\n]+)/g],
-    ['env', /TAKOSUMI_PROCESS_ROLE:\s*([^\n]+)/g],
-    ['env', /-\s+name:\s*TAKOSUMI_PROCESS_ROLE\s*\n\s+value:\s*([^\n]+)/g],
-  ];
+  const pattern = /takos\.io\/service-id:\s*([^\n]+)/g;
 
-  for (const [kind, pattern] of patterns) {
-    for (const match of text.matchAll(pattern)) {
-      observations.push({
-        role: unquote(stripInlineComment(match[1])),
-        kind,
-        file,
-        line: lineOf(text, match.index ?? 0),
-      });
-    }
+  for (const match of text.matchAll(pattern)) {
+    observations.push({
+      serviceId: unquote(stripInlineComment(match[1])),
+      kind: 'label',
+      file,
+      line: lineOf(text, match.index ?? 0),
+    });
   }
+
   return observations.sort((a, b) =>
     a.file.localeCompare(b.file) || a.line - b.line ||
     a.kind.localeCompare(b.kind)

@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "takos.fullname" . }}-takosumi-router
+  name: {{ include "takos.fullname" . }}-takos-agent
   labels:
     {{- include "takos.labels" . | nindent 4 }}
-    takos.io/process-role: takosumi-router
-    app.kubernetes.io/component: takosumi-router
+    takos.io/service-id: takos-agent
+    app.kubernetes.io/component: takos-agent
 spec:
-  replicas: {{ .Values.paasRouter.replicaCount }}
+  replicas: {{ .Values.services.takosAgent.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/component: takosumi-router
+      app.kubernetes.io/component: takos-agent
       {{- include "takos.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
         {{- include "takos.labels" . | nindent 8 }}
-        takos.io/process-role: takosumi-router
-        app.kubernetes.io/component: takosumi-router
+        takos.io/service-id: takos-agent
+        app.kubernetes.io/component: takos-agent
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -26,42 +26,41 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: takosumi-router
-          image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
-          imagePullPolicy: {{ .Values.images.control.pullPolicy }}
-          command: ["deno", "task", "start"]
+        - name: takos-agent
+          image: "{{ .Values.images.takosAgent.repository }}:{{ .Values.images.takosAgent.tag }}"
+          imagePullPolicy: {{ .Values.images.takosAgent.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.paasRouter.port }}
+              containerPort: {{ .Values.services.takosAgent.port }}
               protocol: TCP
           env:
-            - name: TAKOSUMI_PROCESS_ROLE
-              value: "takosumi-router"
             - name: PORT
-              value: {{ .Values.paasRouter.port | quote }}
-            - name: TAKOS_LOCAL_WEB_URL
-              value: {{ include "takos.paasApiUrl" . | quote }}
+              value: {{ .Values.services.takosAgent.port | quote }}
+            - name: TAKOS_AGENT_SERVICE_ID
+              value: "takos-agent"
+            - name: TAKOS_APP_INTERNAL_URL
+              value: {{ include "takos.appUrl" . | quote }}
+            - name: TAKOSUMI_INTERNAL_URL
+              value: {{ include "takos.takosumiUrl" . | quote }}
           envFrom:
             - configMapRef:
                 name: {{ include "takos.fullname" . }}-global
             - secretRef:
                 name: {{ .Values.secrets.existingSecrets.platform | default (printf "%s-platform" (include "takos.fullname" .)) }}
             - secretRef:
-                name: {{ .Values.secrets.existingSecrets.auth | default (printf "%s-auth" (include "takos.fullname" .)) }}
-            - secretRef:
                 name: {{ .Values.secrets.existingSecrets.llm | default (printf "%s-llm" (include "takos.fullname" .)) }}
                 optional: true
           livenessProbe:
             httpGet:
-              path: /livez
+              path: {{ .Values.services.takosAgent.healthPath | quote }}
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: {{ .Values.services.takosAgent.healthPath | quote }}
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
-            {{- toYaml .Values.paasRouter.resources | nindent 12 }}
+            {{- toYaml .Values.services.takosAgent.resources | nindent 12 }}

@@ -12,7 +12,7 @@ Run proof commands from `/home/tako/Desktop/takos/takos`.
 - Public PaaS routes expose the Deployment / GroupHead / ProviderObservation
   surface and omit removed public plan/apply/snapshot paths.
 - `scripts/release-gate.ts` is the safe local gate. It runs type check, tests,
-  lint, fmt check, docs lint, docs build, process-role and architecture
+  lint, fmt check, docs lint, docs build, service-set and architecture
   validators, core validators, Helm validation, distribution manifest
   validation, distribution dry-run smoke, router config smoke, runtime-agent API
   smoke, release manifest generation, and PaaS in-process smoke.

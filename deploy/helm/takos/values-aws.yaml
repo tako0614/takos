@@ -25,26 +25,8 @@ runtimeConfig:
     runtime-agent: ""
 
 # AWS managed-service connection details belong to the selected external
-# plugin bundle/operator config. This kernel chart does not inject database,
-# Redis, or S3 credentials directly into PaaS control pods.
-
-networkPolicy:
-  runtime:
-    extraEgress:
-      # Standard Kubernetes NetworkPolicy cannot match AWS S3 by DNS name.
-      # This keeps the default runtime egress policy usable with managed S3 by
-      # allowing public HTTPS while continuing to deny private-network egress.
-      - to:
-          - ipBlock:
-              cidr: 0.0.0.0/0
-              except:
-                - 10.0.0.0/8
-                - 172.16.0.0/12
-                - 192.168.0.0/16
-                - 100.64.0.0/10
-        ports:
-          - protocol: TCP
-            port: 443
+# plugin bundle/operator config. This product chart does not inject database,
+# Redis, or S3 credentials directly into service pods.
 
 # Production domains
 domains:
@@ -74,34 +56,22 @@ ingress:
     enabled: false # ALB handles TLS termination via ACM
 
 # Production resource tuning
-paasApi:
-  replicaCount: 3
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
-    limits:
-      cpu: "2"
-      memory: 2Gi
-
-paasRouter:
-  replicaCount: 3
-
-paasWorker:
-  replicaCount: 2
-
-runtime:
-  replicaCount: 1
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 20
-
-executor:
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 20
+services:
+  takosApp:
+    replicaCount: 3
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+  takosumi:
+    replicaCount: 3
+  takosGit:
+    replicaCount: 2
+  takosAgent:
+    replicaCount: 2
 
 # EKS service account for IAM roles (IRSA)
 serviceAccount:
