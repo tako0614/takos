@@ -22,6 +22,7 @@ const expectedServices = [
 ] as const;
 type ExpectedTargetId = typeof expectedTargets[number];
 type ExpectedServiceId = typeof expectedServices[number];
+type ExpectedArtifact = { kind: string; ref: string };
 type ExpectedBinding = { kind: string; name: string };
 type ExpectedServiceSpec = {
   runtime: string;
@@ -29,6 +30,26 @@ type ExpectedServiceSpec = {
   artifact: string;
   internalUrl: string;
   publicUrl?: string;
+};
+const expectedArtifacts: Record<ExpectedTargetId, readonly ExpectedArtifact[]> = {
+  aws: [
+    { kind: 'terraform', ref: 'deploy/terraform/environments/aws-prod' },
+    { kind: 'helm', ref: 'deploy/helm/takos/values-aws.yaml' },
+  ],
+  cloudflare: [
+    { kind: 'wrangler', ref: '../takosumi/deploy/cloudflare/wrangler.toml' },
+    { kind: 'operator', ref: '../takosumi/deploy/cloudflare' },
+  ],
+  gcp: [
+    { kind: 'terraform', ref: 'deploy/terraform/environments/gcp-prod' },
+    { kind: 'helm', ref: 'deploy/helm/takos/values-gcp.yaml' },
+  ],
+  kubernetes: [
+    { kind: 'helm', ref: 'deploy/helm/takos' },
+  ],
+  selfhosted: [
+    { kind: 'compose', ref: '../takos-private/compose.server.yml' },
+  ],
 };
 const expectedRequiredBindings: Record<ExpectedTargetId, readonly ExpectedBinding[]> = {
   aws: [
@@ -144,7 +165,7 @@ async function validateDistribution(path: string): Promise<void> {
   expectString(profile.environment, 'production', `${label}.environment`);
   expectString(targetId, expectedTarget, `${label}.target.id`);
 
-  validateArtifacts(arrayAt(profile, 'artifacts', label), label);
+  validateArtifacts(arrayAt(profile, 'artifacts', label), label, expectedTarget);
   validateProviderProof(providerProof, label, expectedTarget);
   validateServices(arrayAt(profile, 'services', label), label, targetId);
   validateRequiredBindings(arrayAt(profile, 'requiredBindings', label), label, expectedTarget);
@@ -213,11 +234,16 @@ function processServiceSpecs(): Record<ExpectedServiceId, ExpectedServiceSpec> {
   };
 }
 
-function validateArtifacts(artifacts: readonly unknown[], label: string): void {
+function validateArtifacts(
+  artifacts: readonly unknown[],
+  label: string,
+  targetId: ExpectedTargetId,
+): void {
   if (artifacts.length === 0) {
     errors.push(`${label}.artifacts must not be empty`);
     return;
   }
+  const actual: ExpectedArtifact[] = [];
 
   artifacts.forEach((artifact, index) => {
     const record = requireRecord(artifact, `${label}.artifacts[${index}]`);
@@ -228,7 +254,25 @@ function validateArtifacts(artifacts: readonly unknown[], label: string): void {
     }
     checkedArtifacts += 1;
     assertPathExists(ref, `${label}.artifacts[${index}].ref`);
+    if (kind && ref) actual.push({ kind, ref });
   });
+  compareArtifacts(actual, expectedArtifacts[targetId], `${label}.artifacts`);
+}
+
+function compareArtifacts(
+  actual: readonly ExpectedArtifact[],
+  expected: readonly ExpectedArtifact[],
+  label: string,
+): void {
+  const actualKeys = actual.map(artifactKey).sort();
+  const expectedKeys = expected.map(artifactKey).sort();
+  if (actualKeys.join(',') !== expectedKeys.join(',')) {
+    errors.push(`${label} must include exactly ${expectedKeys.join(', ')}, got ${actualKeys.join(', ')}`);
+  }
+}
+
+function artifactKey(artifact: ExpectedArtifact): string {
+  return `${artifact.kind}:${artifact.ref}`;
 }
 
 function validateProviderProof(

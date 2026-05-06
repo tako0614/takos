@@ -40,6 +40,14 @@ cluster、account、public URL を必要とする proof は operator-owned evide
 | provider fixture proof        | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json deno task live-provisioning-smoke` | no           |
 | provider live proof           | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json deno task live-provisioning-smoke` | no           |
 
+## Artifact Ownership
+
+Takos product distribution artifacts are owned by `takos/deploy/`. AWS and GCP
+use `takos/deploy/terraform/environments/*-prod` plus `takos/deploy/helm/takos`
+overlays. The README-only `takosumi/deploy/aws` and `takosumi/deploy/gcp`
+directories are Takosumi provider runbooks, not release artifact directories for
+Takos product distributions.
+
 ## Promotion Rules
 
 Promotion is monotonic. A target can move from `smoke-only` to `beta` when its
