@@ -7,6 +7,7 @@ const requiredDocs = [
       'Data Processing Agreement template',
       'Sub-processor list',
       'Data residency policy',
+      'Privacy rights and lawful bases',
       'License compliance',
       'Third-party dependency inventory',
       'SOC 2 readiness checklist',
@@ -62,6 +63,22 @@ const requiredDocs = [
     ],
   },
   {
+    path: 'docs/legal/privacy-rights.md',
+    expected: [
+      'Last reviewed | 2026-05-07',
+      'Data Subject Rights Handler',
+      '/api/me/privacy/access',
+      '/api/me/privacy/export',
+      '/api/me/privacy/deletion-requests',
+      'Export Redaction Rules',
+      'Lawful Bases',
+      'Cookie Consent',
+      '__Host-tp_session',
+      'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
+      'https://cppa.ca.gov/regulations/pdf/cppa_regs.pdf',
+    ],
+  },
+  {
     path: 'docs/legal/license-compliance.md',
     expected: [
       'First-party License Inventory',
@@ -105,6 +122,7 @@ validateTextIncludes('docs/.vitepress/config.ts', [
   'link: "/legal/data-processing-agreement"',
   'link: "/legal/subprocessors"',
   'link: "/legal/data-residency"',
+  'link: "/legal/privacy-rights"',
   'link: "/legal/license-compliance"',
   'link: "/legal/third-party-license-inventory"',
   'link: "/legal/soc2-readiness"',

@@ -202,6 +202,10 @@ export default defineConfig({
             link: "/legal/data-residency",
           },
           {
+            text: "Privacy Rights",
+            link: "/legal/privacy-rights",
+          },
+          {
             text: "License Compliance",
             link: "/legal/license-compliance",
           },
