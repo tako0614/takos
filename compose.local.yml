@@ -62,7 +62,9 @@ services:
       - ./git:/git:ro
 
   takos-git:
-    image: denoland/deno:latest
+    build:
+      context: ./git
+      dockerfile: Dockerfile
     depends_on:
       postgres-init:
         condition: service_completed_successfully
@@ -72,11 +74,17 @@ services:
       PORT: '${TAKOS_GIT_PORT:-8790}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_GIT_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_git'
+      TAKOS_GIT_REPOSITORY_ROOT: '/var/lib/takos-git/repositories'
+      TAKOS_GIT_DATABASE_URL: 'sqlite:///var/lib/takos-git/repositories/.takos/git.sqlite'
+      GIT_CONFIG_COUNT: '1'
+      GIT_CONFIG_KEY_0: 'safe.directory'
+      GIT_CONFIG_VALUE_0: '*'
     ports:
       - '${TAKOS_GIT_PORT:-8790}:${TAKOS_GIT_PORT:-8790}'
     volumes:
       - ./git:/workspace
+      - takos-git-node-modules:/workspace/node_modules
+      - '${TAKOS_GIT_REPOSITORY_HOST_ROOT:-./.takos-git/repositories}:/var/lib/takos-git/repositories'
 
   takosumi:
     image: denoland/deno:latest
@@ -119,3 +127,4 @@ services:
 volumes:
   takos-postgres:
   takos-redis:
+  takos-git-node-modules:
