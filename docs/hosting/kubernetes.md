@@ -111,12 +111,14 @@ admin / tenant ingress はどちらも `takos-app` に向きます。Browser / C
 
 | value                                      | 説明                                               |
 | ------------------------------------------ | -------------------------------------------------- |
+| `global.imageRegistry`                     | 全 service image registry の operator override     |
+| `global.imagePullSecrets`                  | private registry 用 image pull secrets             |
 | `domains.admin`                            | admin / API host                                   |
 | `domains.tenantBase`                       | tenant app base host                               |
-| `images.takosApp.repository` / `tag`       | `takos-app` image                                  |
-| `images.takosumi.repository` / `tag`       | `takosumi` image                                   |
-| `images.takosGit.repository` / `tag`       | `takos-git` image                                  |
-| `images.takosAgent.repository` / `tag`     | `takos-agent` image                                |
+| `images.takosApp.registry` / `repository` / `tag`   | `takos-app` image                      |
+| `images.takosumi.registry` / `repository` / `tag`   | `takosumi` image                       |
+| `images.takosGit.registry` / `repository` / `tag`   | `takos-git` image                      |
+| `images.takosAgent.registry` / `repository` / `tag` | `takos-agent` image                    |
 | `services.<service>.replicaCount`          | service replica count                              |
 | `services.<service>.port`                  | service container / ClusterIP port                 |
 | `services.<service>.healthPath`            | liveness / readiness HTTP path                     |
@@ -136,6 +138,20 @@ helm upgrade --install takos . \
   --namespace takos-system \
   --create-namespace \
   -f values.yaml
+```
+
+private registry を使う場合は、operator overlay で次のように上書きします:
+
+```yaml
+global:
+  imageRegistry: registry.example.com
+  imagePullSecrets:
+    - name: takos-registry
+
+images:
+  takosApp:
+    repository: takos/takos-app
+    tag: "2026.05.06"
 ```
 
 production では Secret 値を `--set` で渡す代わりに External Secrets Operator /

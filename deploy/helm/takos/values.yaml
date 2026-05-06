@@ -18,19 +18,23 @@ domains:
 ## -----------------------------------------------------------------
 images:
   takosApp:
-    repository: ghcr.io/takos/takos-app
+    registry: ghcr.io
+    repository: takos/takos-app
     tag: "latest"
     pullPolicy: IfNotPresent
   takosumi:
-    repository: ghcr.io/takos/takosumi
+    registry: ghcr.io
+    repository: takos/takosumi
     tag: "latest"
     pullPolicy: IfNotPresent
   takosGit:
-    repository: ghcr.io/takos/takos-git
+    registry: ghcr.io
+    repository: takos/takos-git
     tag: "latest"
     pullPolicy: IfNotPresent
   takosAgent:
-    repository: ghcr.io/takos/takos-agent
+    registry: ghcr.io
+    repository: takos/takos-agent
     tag: "latest"
     pullPolicy: IfNotPresent
 
