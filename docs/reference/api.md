@@ -514,8 +514,9 @@ MCP (Model Context Protocol) サーバー管理。
 ::: warning `token`
 フィールドは作成時のレスポンスにのみ含まれる。再取得はできない。 :::
 
-`scope` は coarse bucket です。`read` / `write` / `admin` のいずれかを指定します。
-`admin` は全 scope を付与するため、短い TTL と厳格な secret 管理が必要です。
+`scope` は coarse bucket です。`read` / `write` / `admin`
+のいずれかを指定します。 `admin` は全 scope を付与するため、短い TTL と厳格な
+secret 管理が必要です。
 
 ---
 
@@ -1880,9 +1881,9 @@ Takos Deploy の Deployment lifecycle endpoint family です。`Deployment` reco
 を扱います（[Core contract v1.0 § 17](/takosumi/core/01-core-contract-v1.0)）。
 削除済みの `/api/public/v1/deploy/plans` / `/api/public/v1/deploy/applies` /
 `/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*` などは current で
-削除されました（breaking change）。`/api/deploy/*` も Deployment endpoint
-family に統合されています。`group` は任意で、
-省略時は manifest の `name` を group 名として使います。
+削除されました（breaking change）。`/api/deploy/*` も Deployment endpoint family
+に統合されています。`group` は任意で、 省略時は manifest の `name` を group
+名として使います。
 
 `source` は `manifest` と `git_ref` の 2 種類を受け付けます（CLI /
 `takos
@@ -2091,8 +2092,8 @@ bundled snapshot ではなく source metadata / resolved commit を
 課金・使用量・サブスクリプション管理。
 
 > 現行 API gateway split status は
-> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
-> (billing routes は control 側)
+> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照 (billing
+> routes は control 側)
 
 `GET /api/billing` は payment processor 非依存の `has_payment_account` を返し、
 既存 Stripe client 互換のため `has_stripe_customer` も同じ値で返します。
@@ -2187,26 +2188,41 @@ OAuth / OIDC ディスカバリーエンドポイント。
 OAuth 2.0 サーバーエンドポイント。詳しいフローは
 [OAuth ドキュメント](/apps/oauth) を参照してください。
 
-| method | path                        | description                                                                                  |
-| ------ | --------------------------- | -------------------------------------------------------------------------------------------- |
-| GET    | `/oauth/authorize`          | 認可ページの表示 (Authorization Code Flow)                                                   |
-| POST   | `/oauth/authorize`          | 認可フォーム送信                                                                             |
-| GET    | `/oauth/device`             | Device Authorization UI                                                                      |
-| POST   | `/oauth/device`             | Device Authorization UI の同意 / 拒否フォーム送信                                            |
-| POST   | `/oauth/device/code`        | Device Authorization Grant の device_code 発行 (RFC 8628)                                    |
-| POST   | `/oauth/token`              | トークンエンドポイント（authorization_code, refresh_token, client_credentials, device_code） |
-| POST   | `/oauth/introspect`         | トークンイントロスペクション                                                                 |
-| POST   | `/oauth/revoke`             | トークン失効                                                                                 |
-| GET    | `/oauth/userinfo`           | OpenID Connect UserInfo                                                                      |
-| POST   | `/oauth/register`           | 動的クライアント登録                                                                         |
-| GET    | `/oauth/register/:clientId` | クライアント登録情報取得                                                                     |
-| PUT    | `/oauth/register/:clientId` | クライアント登録情報更新                                                                     |
-| DELETE | `/oauth/register/:clientId` | クライアント登録削除                                                                         |
+canonical path は `/api/public/v1/oauth/*` です。既存 OAuth client と browser
+flow の互換性のため、legacy `/oauth/*` も同じ handler に到達します。
+
+| method | path                                      | description                                                                                  |
+| ------ | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| GET    | `/api/public/v1/oauth/authorize`          | 認可ページの表示 (Authorization Code Flow)                                                   |
+| POST   | `/api/public/v1/oauth/authorize`          | 認可フォーム送信                                                                             |
+| GET    | `/api/public/v1/oauth/device`             | Device Authorization UI                                                                      |
+| POST   | `/api/public/v1/oauth/device`             | Device Authorization UI の同意 / 拒否フォーム送信                                            |
+| POST   | `/api/public/v1/oauth/device/code`        | Device Authorization Grant の device_code 発行 (RFC 8628)                                    |
+| POST   | `/api/public/v1/oauth/token`              | トークンエンドポイント（authorization_code, refresh_token, client_credentials, device_code） |
+| POST   | `/api/public/v1/oauth/introspect`         | トークンイントロスペクション                                                                 |
+| POST   | `/api/public/v1/oauth/revoke`             | トークン失効                                                                                 |
+| GET    | `/api/public/v1/oauth/userinfo`           | OpenID Connect UserInfo                                                                      |
+| POST   | `/api/public/v1/oauth/register`           | 動的クライアント登録                                                                         |
+| GET    | `/api/public/v1/oauth/register/:clientId` | クライアント登録情報取得                                                                     |
+| PUT    | `/api/public/v1/oauth/register/:clientId` | クライアント登録情報更新                                                                     |
+| DELETE | `/api/public/v1/oauth/register/:clientId` | クライアント登録削除                                                                         |
+| GET    | `/oauth/authorize`                        | 認可ページの表示 (Authorization Code Flow)                                                   |
+| POST   | `/oauth/authorize`                        | 認可フォーム送信                                                                             |
+| GET    | `/oauth/device`                           | Device Authorization UI                                                                      |
+| POST   | `/oauth/device`                           | Device Authorization UI の同意 / 拒否フォーム送信                                            |
+| POST   | `/oauth/device/code`                      | Device Authorization Grant の device_code 発行 (RFC 8628)                                    |
+| POST   | `/oauth/token`                            | トークンエンドポイント（authorization_code, refresh_token, client_credentials, device_code） |
+| POST   | `/oauth/introspect`                       | トークンイントロスペクション                                                                 |
+| POST   | `/oauth/revoke`                           | トークン失効                                                                                 |
+| GET    | `/oauth/userinfo`                         | OpenID Connect UserInfo                                                                      |
+| POST   | `/oauth/register`                         | 動的クライアント登録                                                                         |
+| GET    | `/oauth/register/:clientId`               | クライアント登録情報取得                                                                     |
+| PUT    | `/oauth/register/:clientId`               | クライアント登録情報更新                                                                     |
+| DELETE | `/oauth/register/:clientId`               | クライアント登録削除                                                                         |
 
 ::: tip Audience claim validation OAuth access token (`tak_oat_...`) の `aud`
-claim は issuance 時に **`client_id`** を埋め込みます。validation 側
-(introspect / API auth middleware) は `client_id` を audience として検証する。
-:::
+claim は issuance 時に **`client_id`** を埋め込みます。validation 側 (introspect
+/ API auth middleware) は `client_id` を audience として検証する。 :::
 
 ### auth (server-side)
 
