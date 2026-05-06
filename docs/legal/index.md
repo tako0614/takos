@@ -17,6 +17,7 @@ authentication、profile、billing、public API、UI の正本は `takos/app/`
 | Sub-processor list | `/legal/subprocessors` | Published baseline; vendor review evidence is private |
 | Data residency policy | `/legal/data-residency` | Published policy; enforcement evidence required before GA |
 | Privacy rights and lawful bases | `/legal/privacy-rights` | Published handler / consent / lawful-basis baseline; legal review required before GA |
+| Security disclosure policy | `/legal/security-disclosure` | Published policy; `security@` delivery evidence and PGP key publication required before GA |
 | License compliance | `/legal/license-compliance` | Published first-party license / REUSE / SPDX baseline |
 | Third-party dependency inventory | `/legal/third-party-license-inventory` | Published lockfile and review-required package inventory |
 | SOC 2 readiness checklist | `/legal/soc2-readiness` | Readiness artifact; not an audit report |
@@ -25,5 +26,5 @@ authentication、profile、billing、public API、UI の正本は `takos/app/`
 
 - Privacy Policy and Terms of Service final legal review.
 - Data residency enforcement evidence for production spaces.
-- Security disclosure policy with working `security@` intake and PGP key.
+- `security@takos.jp` inbound delivery evidence and PGP encrypted loopback proof.
 - Third-party license inventory refresh on every dependency-changing release.
