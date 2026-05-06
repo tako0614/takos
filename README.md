@@ -42,6 +42,8 @@ Useful shell tasks:
 - `deno task helm:template-smoke`: run Helm v3 template smoke for the base/AWS/GCP chart values. Set
   `TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1` in a kubeconfig-backed environment to require client install dry-run cases too.
   CI also sets `TAKOS_HELM_INSTALL_TEST_CRDS=1` so kind can validate the GCP ManagedCertificate resource.
+- `deno task helm:install-smoke`: run a real Helm install/status/manifest/uninstall smoke against the current Kubernetes
+  context for the base/AWS/GCP chart values.
 - `deno task validate:distributions`: verify official distribution profiles against the schema contract, artifact refs,
   target-specific bindings, service specs, provider proof commands, fixtures, and service smoke metadata.
 - `deno task validate:service-set`: verify the Helm chart exposes only `takos-app`, `takosumi`, `takos-git`, and

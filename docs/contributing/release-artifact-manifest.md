@@ -14,6 +14,7 @@ The manifest captures:
 - expected and observed Takos service IDs from Helm manifests
 - AWS/GCP Helm overlay generator drift check command
 - Helm template/client dry-run smoke command and CI-required env overrides
+- Helm cluster install smoke command and CI-required test CRD override
 - `apps/paas/src/domains/*` domain directories
 - local smoke/e2e script inventory
 

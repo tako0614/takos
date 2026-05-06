@@ -153,6 +153,13 @@ function validationCommands(): CommandManifest[] {
       },
     },
     {
+      name: 'helm-install-smoke',
+      command: ['deno', 'task', 'helm:install-smoke'],
+      env: {
+        TAKOS_HELM_INSTALL_TEST_CRDS: '1',
+      },
+    },
+    {
       name: 'release-gate',
       command: [
         'deno',
@@ -191,6 +198,8 @@ function assertRequiredValidationCommands(
     'service-set-validator': ['deno', 'task', 'validate:service-set'],
     'validate-helm': ['deno', 'task', 'validate:helm'],
     'helm-overlay-generator': ['deno', 'task', 'helm:check-overlays'],
+    'helm-template-smoke': ['deno', 'task', 'helm:template-smoke'],
+    'helm-install-smoke': ['deno', 'task', 'helm:install-smoke'],
     'docs:build': ['deno', 'task', 'docs:build'],
   };
   const errors: string[] = [];
