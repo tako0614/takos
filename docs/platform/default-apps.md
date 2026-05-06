@@ -290,6 +290,13 @@ DB-managed distribution を clear し、`default_app_distribution_config` の
 `configured=false` を保存するため、runtime は fallback distribution へ戻ります。
 env JSON override が設定されている場合は DELETE も `409 CONFLICT` で拒否します。
 
+reconcile 状態は `GET /api/internal/v1/default-apps/status` で取得できます。
+response には解決中の distribution source (`env_distribution` /
+`env_repositories` / `db` / `fallback` / `disabled`)、entry 数、preinstall
+対象数、`default_app_preinstall_jobs` の status 別件数、最新更新時刻、直近の
+job error が含まれます。この endpoint も loopback / cluster-internal hostname
+向けで、public user API ではありません。
+
 `PUT /internal/default-app-distribution` は operator 入力の validation error を
 `400 BAD REQUEST` として返します。DB write / transaction などの platform failure
 は validation error として扱わず、server error として失敗させます。
