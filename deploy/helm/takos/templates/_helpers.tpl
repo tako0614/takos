@@ -64,6 +64,27 @@ Create the name of the service account to use.
 {{- end }}
 
 {{/* ================================================================
+     Image helpers
+     ================================================================ */}}
+
+{{/*
+Render an image reference from per-service image values. global.imageRegistry
+overrides image.registry when set by an operator overlay.
+*/}}
+{{- define "takos.image" -}}
+{{- $root := .root -}}
+{{- $image := .image -}}
+{{- $registry := default $image.registry $root.Values.global.imageRegistry -}}
+{{- $repository := required "image.repository is required" $image.repository -}}
+{{- $tag := required "image.tag is required" $image.tag -}}
+{{- if $registry -}}
+{{- printf "%s/%s:%s" ($registry | trimSuffix "/") ($repository | trimPrefix "/") $tag -}}
+{{- else -}}
+{{- printf "%s:%s" $repository $tag -}}
+{{- end -}}
+{{- end }}
+
+{{/* ================================================================
      Internal service URL helpers
      ================================================================ */}}
 

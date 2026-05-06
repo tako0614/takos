@@ -27,7 +27,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: takosumi
-          image: "{{ .Values.images.takosumi.repository }}:{{ .Values.images.takosumi.tag }}"
+          image: "{{ include "takos.image" (dict "root" . "image" .Values.images.takosumi) }}"
           imagePullPolicy: {{ .Values.images.takosumi.pullPolicy }}
           ports:
             - name: http

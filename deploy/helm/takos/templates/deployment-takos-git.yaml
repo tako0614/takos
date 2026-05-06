@@ -27,7 +27,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: takos-git
-          image: "{{ .Values.images.takosGit.repository }}:{{ .Values.images.takosGit.tag }}"
+          image: "{{ include "takos.image" (dict "root" . "image" .Values.images.takosGit) }}"
           imagePullPolicy: {{ .Values.images.takosGit.pullPolicy }}
           ports:
             - name: http

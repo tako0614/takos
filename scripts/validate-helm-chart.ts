@@ -42,6 +42,14 @@ for await (const entry of Deno.readDir(templateRoot)) {
 const errors: string[] = [];
 const valuesText = await Deno.readTextFile(`${chartRoot}/values.yaml`);
 
+assertContains(`${chartRoot}/values.yaml`, valuesText, '  imageRegistry: ""');
+assertContains(`${chartRoot}/values.yaml`, valuesText, '  imagePullSecrets: []');
+assertContains(
+  `${templateRoot}/_helpers.tpl`,
+  await Deno.readTextFile(`${templateRoot}/_helpers.tpl`),
+  'define "takos.image"',
+);
+
 assertExactTemplateSet(
   'Deployment',
   templateFiles.filter((file) => file.includes('/deployment-')),
@@ -65,7 +73,12 @@ for (const service of expectedServices) {
   assertContains(
     deploymentPath,
     deploymentText,
-    `image: "{{ .Values.images.${service.imageKey}.repository }}:{{ .Values.images.${service.imageKey}.tag }}"`,
+    `image: "{{ include "takos.image" (dict "root" . "image" .Values.images.${service.imageKey}) }}"`,
+  );
+  assertContains(
+    deploymentPath,
+    deploymentText,
+    '{{- with .Values.global.imagePullSecrets }}',
   );
   assertContains(
     deploymentPath,
@@ -83,6 +96,10 @@ for (const service of expectedServices) {
   );
 
   assertValuesKey('images', service.imageKey);
+  assertImageSubkey(service.imageKey, 'registry');
+  assertImageSubkey(service.imageKey, 'repository');
+  assertImageSubkey(service.imageKey, 'tag');
+  assertImageSubkey(service.imageKey, 'pullPolicy');
   assertValuesKey('services', service.valuesKey);
 }
 
@@ -179,6 +196,16 @@ function assertValuesKey(section: 'images' | 'services', key: string): void {
   const pattern = new RegExp(`^${section}:\\n(?:[\\s\\S]*?\\n)?  ${key}:`, 'm');
   if (!pattern.test(valuesText)) {
     errors.push(`${chartRoot}/values.yaml must define ${section}.${key}`);
+  }
+}
+
+function assertImageSubkey(imageKey: string, subkey: string): void {
+  const pattern = new RegExp(
+    `^  ${imageKey}:\\n(?:    [^\\n]+\\n)*    ${subkey}:`,
+    'm',
+  );
+  if (!pattern.test(valuesText)) {
+    errors.push(`${chartRoot}/values.yaml must define images.${imageKey}.${subkey}`);
   }
 }
 
