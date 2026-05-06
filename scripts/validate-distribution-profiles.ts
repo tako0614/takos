@@ -20,6 +20,73 @@ const expectedServices = [
   'takos-git',
   'takosumi',
 ] as const;
+type ExpectedTargetId = typeof expectedTargets[number];
+type ExpectedServiceId = typeof expectedServices[number];
+type ExpectedBinding = { kind: string; name: string };
+type ExpectedServiceSpec = {
+  runtime: string;
+  artifactField: 'image' | 'artifactRef';
+  artifact: string;
+  internalUrl: string;
+  publicUrl?: string;
+};
+const expectedRequiredBindings: Record<ExpectedTargetId, readonly ExpectedBinding[]> = {
+  aws: [
+    { kind: 'aws-iam-role', name: 'takos-provider' },
+    { kind: 'aws-vpc', name: 'takos-vpc' },
+  ],
+  cloudflare: [
+    { kind: 'cloudflare-d1', name: 'TAKOS_DB' },
+    { kind: 'cloudflare-r2', name: 'TAKOS_OBJECTS' },
+    { kind: 'cloudflare-queue', name: 'TAKOS_QUEUE' },
+    { kind: 'cloudflare-durable-object', name: 'TAKOS_COORDINATION' },
+  ],
+  gcp: [
+    { kind: 'gcp-service-account', name: 'takos-provider' },
+    { kind: 'gcp-vpc', name: 'takos-vpc' },
+  ],
+  kubernetes: [
+    { kind: 'kubernetes-namespace', name: 'takos-system' },
+    { kind: 'kubernetes-ingress-class', name: 'nginx' },
+  ],
+  selfhosted: [
+    { kind: 'container-engine', name: 'docker-or-podman' },
+    { kind: 'reverse-proxy', name: 'caddy' },
+  ],
+};
+const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, ExpectedServiceSpec>> = {
+  aws: kubernetesLikeServiceSpecs('container'),
+  cloudflare: {
+    'takos-app': {
+      runtime: 'worker',
+      artifactField: 'artifactRef',
+      artifact: 'worker:takos-app',
+      internalUrl: 'https://takos-app.internal.takos.example',
+      publicUrl: 'https://admin.takos.example.com',
+    },
+    takosumi: {
+      runtime: 'worker',
+      artifactField: 'artifactRef',
+      artifact: 'worker:takosumi',
+      internalUrl: 'https://takosumi.internal.takos.example',
+    },
+    'takos-git': {
+      runtime: 'container',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-git:latest',
+      internalUrl: 'https://takos-git.internal.takos.example',
+    },
+    'takos-agent': {
+      runtime: 'container',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-agent:latest',
+      internalUrl: 'https://takos-agent.internal.takos.example',
+    },
+  },
+  gcp: kubernetesLikeServiceSpecs('container'),
+  kubernetes: kubernetesLikeServiceSpecs('kubernetes-deployment'),
+  selfhosted: processServiceSpecs(),
+};
 const providerTaskName = 'live-provisioning-smoke';
 
 const takosDenoConfig = await readJson(join(takosRoot, 'deno.json'));
@@ -29,6 +96,8 @@ const manifestFilter = parseManifestFilter(Deno.args);
 const distributionFiles = await distributionManifestFiles(manifestFilter);
 const errors: string[] = [];
 let checkedArtifacts = 0;
+let checkedRequiredBindings = 0;
+let checkedServiceSpecs = 0;
 let checkedProviderCommands = 0;
 let checkedServiceSmokes = 0;
 
@@ -51,6 +120,8 @@ console.log(JSON.stringify(
     ok: true,
     checkedProfiles: distributionFiles.length,
     checkedArtifacts,
+    checkedRequiredBindings,
+    checkedServiceSpecs,
     checkedProviderCommands,
     checkedServiceSmokes,
   },
@@ -63,7 +134,8 @@ async function validateDistribution(path: string): Promise<void> {
   const profile = await readJson(resolve(takosRoot, path));
   validateJsonSchema(profile, distributionProfileSchema, label);
   const targetId = stringAt(recordAt(profile, 'target', label), 'id', `${label}.target`);
-  const expectedTarget = basename(path, '.json');
+  const expectedTarget = requireExpectedTargetId(basename(path, '.json'), `${label} filename target`);
+  if (!expectedTarget) return;
   const providerProof = recordAt(profile, 'providerProof', label);
   const metadata = maybeRecord(profile.metadata);
 
@@ -75,8 +147,70 @@ async function validateDistribution(path: string): Promise<void> {
   validateArtifacts(arrayAt(profile, 'artifacts', label), label);
   validateProviderProof(providerProof, label, expectedTarget);
   validateServices(arrayAt(profile, 'services', label), label, targetId);
-  validateRequiredBindings(arrayAt(profile, 'requiredBindings', label), label);
+  validateRequiredBindings(arrayAt(profile, 'requiredBindings', label), label, expectedTarget);
   validateMetadataCommands(metadata, label);
+}
+
+function kubernetesLikeServiceSpecs(
+  runtime: string,
+): Record<ExpectedServiceId, ExpectedServiceSpec> {
+  return {
+    'takos-app': {
+      runtime,
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-app:latest',
+      internalUrl: 'http://takos-app.takos-system.svc.cluster.local:8080',
+      publicUrl: 'https://admin.takos.example.com',
+    },
+    takosumi: {
+      runtime,
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takosumi:latest',
+      internalUrl: 'http://takosumi.takos-system.svc.cluster.local:8080',
+    },
+    'takos-git': {
+      runtime,
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-git:latest',
+      internalUrl: 'http://takos-git.takos-system.svc.cluster.local:8790',
+    },
+    'takos-agent': {
+      runtime,
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-agent:latest',
+      internalUrl: 'http://takos-agent.takos-system.svc.cluster.local:8080',
+    },
+  };
+}
+
+function processServiceSpecs(): Record<ExpectedServiceId, ExpectedServiceSpec> {
+  return {
+    'takos-app': {
+      runtime: 'process',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-app:latest',
+      internalUrl: 'http://takos-app:8080',
+      publicUrl: 'https://admin.takos.example.internal',
+    },
+    takosumi: {
+      runtime: 'process',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takosumi:latest',
+      internalUrl: 'http://takosumi:8080',
+    },
+    'takos-git': {
+      runtime: 'process',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-git:latest',
+      internalUrl: 'http://takos-git:8790',
+    },
+    'takos-agent': {
+      runtime: 'process',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takos-agent:latest',
+      internalUrl: 'http://takos-agent:8080',
+    },
+  };
 }
 
 function validateArtifacts(artifacts: readonly unknown[], label: string): void {
@@ -183,6 +317,8 @@ function validateProviderCommand(input: {
 }
 
 function validateServices(services: readonly unknown[], label: string, targetId: string): void {
+  const expectedTargetId = requireExpectedTargetId(targetId, `${label}.target.id`);
+  const expectedSpecs = expectedTargetId ? expectedServiceSpecs[expectedTargetId] : null;
   const serviceIds = services.map((service, index) =>
     stringAt(requireRecord(service, `${label}.services[${index}]`), 'serviceId', `${label}.services[${index}]`)
   ).sort();
@@ -194,6 +330,7 @@ function validateServices(services: readonly unknown[], label: string, targetId:
   services.forEach((service, index) => {
     const record = requireRecord(service, `${label}.services[${index}]`);
     const serviceId = stringAt(record, 'serviceId', `${label}.services[${index}]`);
+    const expectedServiceId = requireExpectedServiceId(serviceId, `${label}.services[${index}].serviceId`);
     expectString(
       stringAt(record, 'hostingTargetId', `${label}.services[${index}]`),
       targetId,
@@ -203,6 +340,13 @@ function validateServices(services: readonly unknown[], label: string, targetId:
     if (!runtime) errors.push(`${label}.services[${index}].runtime must not be empty`);
     if (!isString(record.image) && !isString(record.artifactRef)) {
       errors.push(`${label}.services[${index}] must declare image or artifactRef`);
+    }
+    if (isString(record.image) && isString(record.artifactRef)) {
+      errors.push(`${label}.services[${index}] must declare exactly one of image or artifactRef`);
+    }
+
+    if (expectedSpecs && expectedServiceId) {
+      validateServiceSpec(record, `${label}.services[${index}]`, expectedSpecs[expectedServiceId]);
     }
 
     const smoke = recordAt(record, 'smoke', `${label}.services[${index}]`);
@@ -225,20 +369,103 @@ function validateServices(services: readonly unknown[], label: string, targetId:
   });
 }
 
-function validateRequiredBindings(bindings: readonly unknown[], label: string): void {
+function validateServiceSpec(
+  service: JsonRecord,
+  label: string,
+  expected: ExpectedServiceSpec,
+): void {
+  expectString(
+    stringAt(service, 'runtime', label),
+    expected.runtime,
+    `${label}.runtime`,
+  );
+  expectString(
+    stringAt(service, expected.artifactField, label),
+    expected.artifact,
+    `${label}.${expected.artifactField}`,
+  );
+  const forbiddenArtifactField = expected.artifactField === 'image' ? 'artifactRef' : 'image';
+  if (isString(service[forbiddenArtifactField])) {
+    errors.push(`${label}.${forbiddenArtifactField} must be absent for ${expected.artifactField}-backed service`);
+  }
+  expectString(
+    stringAt(service, 'internalUrl', label),
+    expected.internalUrl,
+    `${label}.internalUrl`,
+  );
+  if (expected.publicUrl) {
+    expectString(
+      stringAt(service, 'publicUrl', label),
+      expected.publicUrl,
+      `${label}.publicUrl`,
+    );
+  } else if (isString(service.publicUrl)) {
+    errors.push(`${label}.publicUrl must be absent for internal-only service`);
+  }
+  checkedServiceSpecs += 1;
+}
+
+function validateRequiredBindings(
+  bindings: readonly unknown[],
+  label: string,
+  targetId: ExpectedTargetId,
+): void {
   if (bindings.length === 0) {
     errors.push(`${label}.requiredBindings must not be empty`);
     return;
   }
+  const actual: ExpectedBinding[] = [];
   bindings.forEach((binding, index) => {
     const record = requireRecord(binding, `${label}.requiredBindings[${index}]`);
-    if (!stringAt(record, 'kind', `${label}.requiredBindings[${index}]`)) {
+    const kind = stringAt(record, 'kind', `${label}.requiredBindings[${index}]`);
+    const name = stringAt(record, 'name', `${label}.requiredBindings[${index}]`);
+    if (!kind) {
       errors.push(`${label}.requiredBindings[${index}].kind must not be empty`);
     }
-    if (!stringAt(record, 'name', `${label}.requiredBindings[${index}]`)) {
+    if (!name) {
       errors.push(`${label}.requiredBindings[${index}].name must not be empty`);
     }
+    if (kind && name) actual.push({ kind, name });
   });
+  const expected = expectedRequiredBindings[targetId];
+  compareBindings(actual, expected, `${label}.requiredBindings`);
+  checkedRequiredBindings += actual.length;
+}
+
+function compareBindings(
+  actual: readonly ExpectedBinding[],
+  expected: readonly ExpectedBinding[],
+  label: string,
+): void {
+  const actualKeys = actual.map(bindingKey).sort();
+  const expectedKeys = expected.map(bindingKey).sort();
+  if (actualKeys.join(',') !== expectedKeys.join(',')) {
+    errors.push(`${label} must include exactly ${expectedKeys.join(', ')}, got ${actualKeys.join(', ')}`);
+  }
+}
+
+function bindingKey(binding: ExpectedBinding): string {
+  return `${binding.kind}:${binding.name}`;
+}
+
+function requireExpectedTargetId(value: string, label: string): ExpectedTargetId | null {
+  if (isExpectedTargetId(value)) return value;
+  errors.push(`${label} must be one of ${expectedTargets.join(', ')}`);
+  return null;
+}
+
+function requireExpectedServiceId(value: string, label: string): ExpectedServiceId | null {
+  if (isExpectedServiceId(value)) return value;
+  errors.push(`${label} must be one of ${expectedServices.join(', ')}`);
+  return null;
+}
+
+function isExpectedTargetId(value: string): value is ExpectedTargetId {
+  return (expectedTargets as readonly string[]).includes(value);
+}
+
+function isExpectedServiceId(value: string): value is ExpectedServiceId {
+  return (expectedServices as readonly string[]).includes(value);
 }
 
 function validateMetadataCommands(metadata: JsonRecord | null, label: string): void {
