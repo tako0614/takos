@@ -15,6 +15,7 @@
     "requiredBindings",
     "target",
     "routing",
+    "defaultApps",
     "services",
     "metadata"
   ],
@@ -163,6 +164,110 @@
         "dnsProvider": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "defaultApps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "environmentOverrides"],
+      "properties": {
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "title", "repositoryUrl", "ref", "refType", "preinstall"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "icon": {
+                "type": "string",
+                "minLength": 1
+              },
+              "repositoryUrl": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^https://"
+              },
+              "ref": {
+                "type": "string",
+                "minLength": 1
+              },
+              "refType": {
+                "type": "string",
+                "enum": ["branch", "tag", "commit"]
+              },
+              "preinstall": {
+                "type": "boolean"
+              },
+              "backendName": {
+                "type": "string",
+                "enum": ["cloudflare", "local", "aws", "gcp", "k8s"]
+              },
+              "envName": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "environmentOverrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["local", "staging", "production"],
+          "properties": {
+            "local": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["preinstall"],
+              "properties": {
+                "preinstall": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "staging": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["preinstall"],
+              "properties": {
+                "preinstall": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "production": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["preinstall"],
+              "properties": {
+                "preinstall": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

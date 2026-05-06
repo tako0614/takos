@@ -31,6 +31,14 @@ type ExpectedServiceSpec = {
   internalUrl: string;
   publicUrl?: string;
 };
+type ExpectedDefaultAppEntry = {
+  name: string;
+  title: string;
+  repositoryUrl: string;
+  ref: string;
+  refType: 'branch' | 'tag' | 'commit';
+  preinstall: boolean;
+};
 const expectedArtifacts: Record<ExpectedTargetId, readonly ExpectedArtifact[]> = {
   aws: [
     { kind: 'terraform', ref: 'deploy/terraform/environments/aws-prod' },
@@ -109,6 +117,54 @@ const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, E
   selfhosted: processServiceSpecs(),
 };
 const providerTaskName = 'live-provisioning-smoke';
+const expectedDefaultAppEntries: readonly ExpectedDefaultAppEntry[] = [
+  {
+    name: 'takos-docs',
+    title: 'Docs',
+    repositoryUrl: 'https://github.com/tako0614/takos-docs.git',
+    ref: 'master',
+    refType: 'branch',
+    preinstall: true,
+  },
+  {
+    name: 'takos-excel',
+    title: 'Excel',
+    repositoryUrl: 'https://github.com/tako0614/takos-excel.git',
+    ref: 'master',
+    refType: 'branch',
+    preinstall: true,
+  },
+  {
+    name: 'takos-slide',
+    title: 'Slide',
+    repositoryUrl: 'https://github.com/tako0614/takos-slide.git',
+    ref: 'master',
+    refType: 'branch',
+    preinstall: true,
+  },
+  {
+    name: 'takos-computer',
+    title: 'Computer',
+    repositoryUrl: 'https://github.com/tako0614/takos-computer.git',
+    ref: 'master',
+    refType: 'branch',
+    preinstall: true,
+  },
+  {
+    name: 'yurucommu',
+    title: 'Yurucommu',
+    repositoryUrl: 'https://github.com/tako0614/yurucommu.git',
+    ref: 'master',
+    refType: 'branch',
+    preinstall: true,
+  },
+];
+const expectedDefaultAppNames = expectedDefaultAppEntries.map((entry) => entry.name);
+const expectedDefaultAppPreinstallByEnvironment = {
+  local: [],
+  staging: expectedDefaultAppNames,
+  production: expectedDefaultAppNames,
+} as const;
 
 const takosDenoConfig = await readJson(join(takosRoot, 'deno.json'));
 const takosumiDenoConfig = await readJson(resolve(takosRoot, '../takosumi/deno.json'));
@@ -121,6 +177,7 @@ let checkedRequiredBindings = 0;
 let checkedServiceSpecs = 0;
 let checkedProviderCommands = 0;
 let checkedServiceSmokes = 0;
+let checkedDefaultApps = 0;
 
 if (distributionFiles.length === 0) {
   errors.push('no distribution manifests matched the requested filter');
@@ -145,6 +202,7 @@ console.log(JSON.stringify(
     checkedServiceSpecs,
     checkedProviderCommands,
     checkedServiceSmokes,
+    checkedDefaultApps,
   },
   null,
   2,
@@ -169,6 +227,7 @@ async function validateDistribution(path: string): Promise<void> {
   validateProviderProof(providerProof, label, expectedTarget);
   validateServices(arrayAt(profile, 'services', label), label, targetId);
   validateRequiredBindings(arrayAt(profile, 'requiredBindings', label), label, expectedTarget);
+  validateDefaultApps(recordAt(profile, 'defaultApps', label), label);
   validateMetadataCommands(metadata, label);
 }
 
@@ -490,6 +549,80 @@ function compareBindings(
 
 function bindingKey(binding: ExpectedBinding): string {
   return `${binding.kind}:${binding.name}`;
+}
+
+function validateDefaultApps(defaultApps: JsonRecord, label: string): void {
+  const entries = arrayAt(defaultApps, 'entries', `${label}.defaultApps`)
+    .map((entry, index) => defaultAppEntryFromRecord(entry, `${label}.defaultApps.entries[${index}]`));
+  const actualNames = entries.map((entry) => entry.name).sort();
+  const expectedNames = [...expectedDefaultAppNames].sort();
+  if (actualNames.join(',') !== expectedNames.join(',')) {
+    errors.push(`${label}.defaultApps.entries must include exactly ${expectedNames.join(', ')}`);
+  }
+
+  for (const expected of expectedDefaultAppEntries) {
+    const actual = entries.find((entry) => entry.name === expected.name);
+    if (!actual) continue;
+    expectString(actual.title, expected.title, `${label}.defaultApps.entries.${expected.name}.title`);
+    expectString(
+      actual.repositoryUrl,
+      expected.repositoryUrl,
+      `${label}.defaultApps.entries.${expected.name}.repositoryUrl`,
+    );
+    expectString(actual.ref, expected.ref, `${label}.defaultApps.entries.${expected.name}.ref`);
+    expectString(actual.refType, expected.refType, `${label}.defaultApps.entries.${expected.name}.refType`);
+    if (actual.preinstall !== expected.preinstall) {
+      errors.push(
+        `${label}.defaultApps.entries.${expected.name}.preinstall must be ${expected.preinstall}, got ${
+          String(actual.preinstall)
+        }`,
+      );
+    }
+  }
+
+  const overrides = recordAt(defaultApps, 'environmentOverrides', `${label}.defaultApps`);
+  for (const [environment, expected] of Object.entries(expectedDefaultAppPreinstallByEnvironment)) {
+    const override = recordAt(overrides, environment, `${label}.defaultApps.environmentOverrides`);
+    const preinstall = stringArray(
+      arrayAt(override, 'preinstall', `${label}.defaultApps.environmentOverrides.${environment}`),
+    );
+    const unknown = preinstall.filter((name) => !expectedDefaultAppNames.includes(name));
+    if (unknown.length > 0) {
+      errors.push(
+        `${label}.defaultApps.environmentOverrides.${environment}.preinstall references unknown apps: ${
+          unknown.join(', ')
+        }`,
+      );
+    }
+    if (preinstall.length !== new Set(preinstall).size) {
+      errors.push(`${label}.defaultApps.environmentOverrides.${environment}.preinstall must not contain duplicates`);
+    }
+    if (preinstall.slice().sort().join(',') !== [...expected].sort().join(',')) {
+      errors.push(
+        `${label}.defaultApps.environmentOverrides.${environment}.preinstall must be ${[...expected].join(', ')}`,
+      );
+    }
+  }
+  checkedDefaultApps += entries.length;
+}
+
+function defaultAppEntryFromRecord(value: unknown, label: string): ExpectedDefaultAppEntry {
+  const record = requireRecord(value, label);
+  const refType = stringAt(record, 'refType', label);
+  if (refType !== 'branch' && refType !== 'tag' && refType !== 'commit') {
+    errors.push(`${label}.refType must be one of branch, tag, commit`);
+  }
+  if (typeof record.preinstall !== 'boolean') {
+    errors.push(`${label}.preinstall must be a boolean`);
+  }
+  return {
+    name: stringAt(record, 'name', label),
+    title: stringAt(record, 'title', label),
+    repositoryUrl: stringAt(record, 'repositoryUrl', label),
+    ref: stringAt(record, 'ref', label),
+    refType: refType === 'tag' || refType === 'commit' ? refType : 'branch',
+    preinstall: record.preinstall === true,
+  };
 }
 
 function requireExpectedTargetId(value: string, label: string): ExpectedTargetId | null {
