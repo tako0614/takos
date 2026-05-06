@@ -28,7 +28,7 @@ services:
       - /bin/sh
       - -c
       - |
-          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_paas'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takos_paas"
+          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takosumi'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takosumi"
           psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_git'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takos_git"
 
   redis:
@@ -58,7 +58,6 @@ services:
       - '${TAKOS_APP_PORT:-8787}:${TAKOS_APP_PORT:-8787}'
     volumes:
       - ./app:/workspace
-      - ./paas:/paas:ro
       - ./git:/git:ro
 
   takos-git:
@@ -85,20 +84,20 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_started
-    command: ['deno', 'task', 'dev:paas']
+    command: ['deno', 'task', '--cwd', 'packages/kernel', 'start']
     working_dir: /workspace
     environment:
       PORT: '${TAKOSUMI_PORT:-8788}'
       TAKOS_APP_URL: '${TAKOS_APP_URL:-http://takos-app:8787}'
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOSUMI_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_paas'
-      DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_paas'
+      TAKOSUMI_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takosumi'
+      DATABASE_URL: 'postgres://takos:takos@postgres:5432/takosumi'
       REDIS_URL: 'redis://redis:6379'
     ports:
       - '${TAKOSUMI_PORT:-8788}:${TAKOSUMI_PORT:-8788}'
     volumes:
-      - ./paas:/workspace
+      - ../takosumi:/workspace
 
   takos-agent:
     build:

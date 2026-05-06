@@ -9,7 +9,6 @@ const expectedSubmodules = {
   agent: 'https://github.com/tako0614/takos-agent.git',
   app: 'https://github.com/tako0614/takos-app.git',
   git: 'https://github.com/tako0614/takos-git.git',
-  paas: 'https://github.com/tako0614/takosumi.git',
 };
 const expectedServices = [
   'postgres',
@@ -22,7 +21,7 @@ const expectedServices = [
 ];
 const expectedPortMarkers = [
   '${TAKOS_APP_PORT:-8787}',
-  '${TAKOS_PAAS_PORT:-8788}',
+  '${TAKOSUMI_PORT:-8788}',
   '${TAKOS_AGENT_PORT:-8789}',
   '${TAKOS_GIT_PORT:-8790}',
   '${TAKOS_POSTGRES_PORT:-15432}',
@@ -30,7 +29,7 @@ const expectedPortMarkers = [
 ];
 const expectedInternalUrlMarkers = [
   'TAKOS_GIT_INTERNAL_URL',
-  'TAKOS_PAAS_INTERNAL_URL',
+  'TAKOSUMI_INTERNAL_URL',
   'TAKOS_AGENT_INTERNAL_URL',
   'TAKOS_INTERNAL_SERVICE_SECRET',
 ];
