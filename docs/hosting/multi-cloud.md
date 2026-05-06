@@ -31,9 +31,11 @@ module だけを instantiate し、`database_url` / `redis_url` /
 `workload_identity` を共通 output として返します。C-3.3 の Helm values bridge
 はこの共通 output vocabulary を入力にします。
 
-production 用 backend を使う場合は
-`deploy/terraform/environments/{aws-prod,gcp-prod}` を root として実行します。
-backend を使わない composition 検証は次の形です:
+environment backend を使う場合は
+`deploy/terraform/environments/{aws-prod,aws-staging,gcp-prod,gcp-staging}` を
+root として実行します。各 env dir には `terraform.tfvars.example` があり、実
+secret 値は `takos-private` から operator が注入します。backend を使わない
+composition 検証は次の形です:
 
 ```bash
 cd takos/deploy/terraform
