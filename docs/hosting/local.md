@@ -30,10 +30,13 @@ deno task local:logs      # ログ確認
 deno task local:down      # 停止
 ```
 
+compose project 名は既定で `takos-local` です。既存 stack と分離したい場合は
+`TAKOS_LOCAL_COMPOSE_PROJECT=<name>` を指定します。
+
 バックグラウンドで起動したい場合:
 
 ```bash
-docker compose --env-file .env.local -f compose.local.yml up --build -d
+docker compose --env-file .env.local -p takos-local -f compose.local.yml up --build -d
 ```
 
 ## スモークテスト

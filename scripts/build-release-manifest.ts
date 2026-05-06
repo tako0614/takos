@@ -49,9 +49,9 @@ if (outputArg) {
 function parseOutputArg(args: string[]): string | null {
   if (args.length === 0) return null;
   const [flag, value, ...rest] = args;
-  if (flag !== "--output" || !value || rest.length > 0) {
+  if (flag !== '--output' || !value || rest.length > 0) {
     console.error(
-      "Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>]",
+      'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>]',
     );
     Deno.exit(2);
   }
@@ -59,12 +59,12 @@ function parseOutputArg(args: string[]): string | null {
 }
 
 async function collectPackageManifest(): Promise<JsonValue> {
-  const rootConfig = await readJson<DenoConfig>("deno.json");
+  const rootConfig = await readJson<DenoConfig>('deno.json');
   const workspace = rootConfig.workspace ?? [];
   const packages = [];
 
   for (const workspacePath of workspace) {
-    const configPath = `${workspacePath.replace(/\/$/, "")}/deno.json`;
+    const configPath = `${workspacePath.replace(/\/$/, '')}/deno.json`;
     const config = await readJson<DenoConfig>(configPath);
     packages.push({
       path: workspacePath,
@@ -78,7 +78,7 @@ async function collectPackageManifest(): Promise<JsonValue> {
 
   return {
     root,
-    config: "deno.json",
+    config: 'deno.json',
     name: rootConfig.name ?? null,
     version: rootConfig.version ?? null,
     tasks: Object.keys(rootConfig.tasks ?? {}).sort(),
@@ -88,11 +88,11 @@ async function collectPackageManifest(): Promise<JsonValue> {
 }
 
 async function collectGitInfo(): Promise<JsonValue> {
-  const commit = await git(["rev-parse", "HEAD"]);
-  const shortCommit = await git(["rev-parse", "--short", "HEAD"]);
-  const branch = await git(["branch", "--show-current"]);
-  const describe = await git(["describe", "--tags", "--always", "--dirty"]);
-  const status = await git(["status", "--short"]);
+  const commit = await git(['rev-parse', 'HEAD']);
+  const shortCommit = await git(['rev-parse', '--short', 'HEAD']);
+  const branch = await git(['branch', '--show-current']);
+  const describe = await git(['describe', '--tags', '--always', '--dirty']);
+  const status = await git(['status', '--short']);
 
   if (!commit && !shortCommit && !branch && !describe && status === null) {
     return { available: false };
@@ -110,105 +110,57 @@ async function collectGitInfo(): Promise<JsonValue> {
 
 function validationCommands(): CommandManifest[] {
   return [
-    { name: "check", command: ["deno", "task", "check"] },
-    { name: "test:all", command: ["deno", "task", "test:all"] },
-    { name: "lint", command: ["deno", "lint"] },
-    { name: "fmt:check", command: ["deno", "fmt", "--check"] },
+    { name: 'check', command: ['deno', 'task', 'check'] },
     {
-      name: "lint:docs",
-      command: ["deno", "task", "lint:docs"],
+      name: 'validate-agent-docs',
+      command: ['deno', 'task', 'validate:agent-docs'],
     },
     {
-      name: "validate-docs",
-      command: ["deno", "task", "validate-docs"],
+      name: 'validate-architecture',
+      command: ['deno', 'task', 'validate:architecture'],
     },
     {
-      name: "docs:build",
-      command: ["deno", "task", "docs:build"],
+      name: 'docs:build',
+      command: ['deno', 'task', 'docs:build'],
     },
     {
-      name: "process-role-validator",
+      name: 'process-role-validator',
       command: [
-        "deno",
-        "run",
-        "--config",
-        "deno.json",
-        "--allow-read",
-        "scripts/validate-process-roles.ts",
+        'deno',
+        'run',
+        '--config',
+        'deno.json',
+        '--allow-read',
+        'scripts/validate-process-roles.ts',
       ],
     },
     {
-      name: "validate-architecture-alignment",
+      name: 'validate-helm',
+      command: ['deno', 'task', 'validate:helm'],
+    },
+    {
+      name: 'release-gate',
       command: [
-        "deno",
-        "run",
-        "--no-config",
-        "--allow-read",
-        "scripts/validate-architecture-alignment.ts",
+        'deno',
+        'run',
+        '--config',
+        'deno.json',
+        '--allow-run=deno',
+        '--allow-env',
+        'scripts/release-gate.ts',
+        '--keep-going',
       ],
     },
     {
-      name: "validate-core-conformance",
+      name: 'release-manifest',
       command: [
-        "deno",
-        "run",
-        "--config",
-        "deno.json",
-        "--allow-read",
-        "scripts/validate-core-conformance.ts",
-      ],
-    },
-    {
-      name: "validate-distributions",
-      command: ["deno", "task", "validate:distributions"],
-    },
-    {
-      name: "validate-distributions:release",
-      command: ["deno", "task", "validate:distributions:release"],
-      env: {
-        TAKOS_RELEASE_DISTRIBUTION_DIR:
-          "path to concrete release distribution manifests",
-      },
-    },
-    {
-      name: "distribution-smoke:dry-run",
-      command: ["deno", "task", "distribution:smoke", "--all"],
-    },
-    {
-      name: "release-gate",
-      command: [
-        "deno",
-        "run",
-        "--config",
-        "deno.json",
-        "--allow-run=deno",
-        "--allow-env",
-        "scripts/release-gate.ts",
-        "--keep-going",
-      ],
-    },
-    {
-      name: "runtime-agent-api-smoke",
-      command: [
-        "deno",
-        "run",
-        "--config",
-        "deno.json",
-        "--allow-read",
-        "--allow-env",
-        "scripts/runtime-agent-api-smoke.ts",
-      ],
-    },
-    {
-      name: "release-manifest",
-      command: [
-        "deno",
-        "run",
-        "--config",
-        "deno.json",
-        "--allow-read",
-        "--allow-run=git",
-        "scripts/build-release-manifest.ts",
+        'deno',
+        'run',
+        '--config',
+        'deno.json',
+        '--allow-read',
+        '--allow-run=git',
+        'scripts/build-release-manifest.ts',
       ],
     },
   ];
@@ -219,21 +171,10 @@ function assertRequiredValidationCommands(
 ) {
   const byName = new Map(commands.map((command) => [command.name, command]));
   const required: Record<string, readonly string[]> = {
-    "validate-docs": ["deno", "task", "validate-docs"],
-    "docs:build": ["deno", "task", "docs:build"],
-    "lint:docs": ["deno", "task", "lint:docs"],
-    "validate-distributions": ["deno", "task", "validate:distributions"],
-    "validate-distributions:release": [
-      "deno",
-      "task",
-      "validate:distributions:release",
-    ],
-    "distribution-smoke:dry-run": [
-      "deno",
-      "task",
-      "distribution:smoke",
-      "--all",
-    ],
+    'validate-agent-docs': ['deno', 'task', 'validate:agent-docs'],
+    'validate-architecture': ['deno', 'task', 'validate:architecture'],
+    'validate-helm': ['deno', 'task', 'validate:helm'],
+    'docs:build': ['deno', 'task', 'docs:build'],
   };
   const errors: string[] = [];
 
@@ -245,25 +186,23 @@ function assertRequiredValidationCommands(
     }
     if (!stringArraysEqual(actual.command, expectedCommand)) {
       errors.push(
-        `release manifest validationCommands.${name} must be ${
-          expectedCommand.join(" ")
-        }`,
+        `release manifest validationCommands.${name} must be ${expectedCommand.join(' ')}`,
       );
     }
   }
 
   if (errors.length > 0) {
-    console.error(errors.join("\n"));
+    console.error(errors.join('\n'));
     Deno.exit(1);
   }
 }
 
 async function collectDistributionManifests(): Promise<JsonValue> {
-  const dir = "deploy/distributions";
+  const dir = 'deploy/distributions';
   const manifests: Array<Record<string, JsonValue>> = [];
   try {
     for await (const entry of Deno.readDir(dir)) {
-      if (!entry.isFile || !entry.name.endsWith(".json")) continue;
+      if (!entry.isFile || !entry.name.endsWith('.json')) continue;
       const path = `${dir}/${entry.name}`;
       const text = await Deno.readTextFile(path);
       const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -323,9 +262,7 @@ async function collectDistributionManifests(): Promise<JsonValue> {
   }
   return {
     available: true,
-    manifests: manifests.sort((a, b) =>
-      String(a.targetId).localeCompare(String(b.targetId))
-    ),
+    manifests: manifests.sort((a, b) => String(a.targetId).localeCompare(String(b.targetId))),
   };
 }
 
@@ -339,14 +276,14 @@ function stringArraysEqual(
 
 async function collectProcessRoles(): Promise<JsonValue> {
   const expected = [
-    "takosumi-api",
-    "takosumi-worker",
-    "takosumi-router",
-    "takosumi-runtime-agent",
-    "takosumi-log-worker",
+    'takosumi-api',
+    'takosumi-worker',
+    'takosumi-router',
+    'takosumi-runtime-agent',
+    'takosumi-log-worker',
   ];
   const targets: string[] = [];
-  const helmDir = "deploy/helm/takos/templates";
+  const helmDir = 'deploy/helm/takos/templates';
 
   try {
     for await (const entry of Deno.readDir(helmDir)) {
@@ -360,7 +297,7 @@ async function collectProcessRoles(): Promise<JsonValue> {
 
   const observations: Array<{
     role: string;
-    kind: "label" | "env";
+    kind: 'label' | 'env';
     file: string;
     line: number;
   }> = [];
@@ -378,17 +315,17 @@ async function collectProcessRoles(): Promise<JsonValue> {
 function collectRoleObservations(
   file: string,
   text: string,
-): Array<{ role: string; kind: "label" | "env"; file: string; line: number }> {
+): Array<{ role: string; kind: 'label' | 'env'; file: string; line: number }> {
   const observations: Array<{
     role: string;
-    kind: "label" | "env";
+    kind: 'label' | 'env';
     file: string;
     line: number;
   }> = [];
-  const patterns: Array<["label" | "env", RegExp]> = [
-    ["label", /takos\.io\/process-role:\s*([^\n]+)/g],
-    ["env", /TAKOSUMI_PROCESS_ROLE:\s*([^\n]+)/g],
-    ["env", /-\s+name:\s*TAKOSUMI_PROCESS_ROLE\s*\n\s+value:\s*([^\n]+)/g],
+  const patterns: Array<['label' | 'env', RegExp]> = [
+    ['label', /takos\.io\/process-role:\s*([^\n]+)/g],
+    ['env', /TAKOSUMI_PROCESS_ROLE:\s*([^\n]+)/g],
+    ['env', /-\s+name:\s*TAKOSUMI_PROCESS_ROLE\s*\n\s+value:\s*([^\n]+)/g],
   ];
 
   for (const [kind, pattern] of patterns) {
@@ -408,17 +345,21 @@ function collectRoleObservations(
 }
 
 async function collectDomainDirs(): Promise<JsonValue> {
-  const domainRoot = "apps/paas/src/domains";
+  const domainRoot = '../takosumi/packages/kernel/src/domains';
   const dirs: Array<{ name: string; path: string; files: string[] }> = [];
 
-  for await (const entry of Deno.readDir(domainRoot)) {
-    if (!entry.isDirectory) continue;
-    const path = `${domainRoot}/${entry.name}`;
-    dirs.push({
-      name: entry.name,
-      path,
-      files: await listRelativeFiles(path),
-    });
+  try {
+    for await (const entry of Deno.readDir(domainRoot)) {
+      if (!entry.isDirectory) continue;
+      const path = `${domainRoot}/${entry.name}`;
+      dirs.push({
+        name: entry.name,
+        path,
+        files: await listRelativeFiles(path),
+      });
+    }
+  } catch {
+    return { available: false, root: domainRoot, dirs: [] };
   }
 
   return dirs.sort((a, b) => a.name.localeCompare(b.name));
@@ -426,64 +367,23 @@ async function collectDomainDirs(): Promise<JsonValue> {
 
 async function collectSmokeScripts(): Promise<JsonValue> {
   const kernelSmokeScripts = new Set([
-    "distribution-smoke.ts",
-    "paas-smoke.ts",
-    "router-config-smoke.ts",
-    "runtime-agent-api-smoke.ts",
+    'local-smoke.mjs',
   ]);
   const knownEnv: Record<string, Record<string, string>> = {};
   const knownCommands: Record<string, string[]> = {
-    "paas-smoke.ts": [
-      "deno",
-      "run",
-      "--config",
-      "deno.json",
-      "--allow-read",
-      "--allow-env",
-      "scripts/paas-smoke.ts",
-    ],
-    "distribution-smoke.ts": [
-      "deno",
-      "run",
-      "--config",
-      "deno.json",
-      "--allow-read",
-      "--allow-env",
-      "--allow-net",
-      "scripts/distribution-smoke.ts",
-      "--all",
-    ],
-    "router-config-smoke.ts": [
-      "deno",
-      "run",
-      "--config",
-      "deno.json",
-      "--allow-read",
-      "scripts/router-config-smoke.ts",
-    ],
-    "runtime-agent-api-smoke.ts": [
-      "deno",
-      "run",
-      "--config",
-      "deno.json",
-      "--allow-read",
-      "--allow-env",
-      "scripts/runtime-agent-api-smoke.ts",
-    ],
+    'local-smoke.mjs': ['node', 'scripts/local-smoke.mjs'],
   };
   const scripts: Array<CommandManifest & { path: string }> = [];
 
-  for await (const entry of Deno.readDir("scripts")) {
+  for await (const entry of Deno.readDir('scripts')) {
     if (!entry.isFile) continue;
     if (!/(smoke|e2e).*\.(ts|mjs)$/.test(entry.name)) continue;
     if (!kernelSmokeScripts.has(entry.name)) continue;
     const path = `scripts/${entry.name}`;
     const command = knownCommands[entry.name] ??
-      (entry.name.endsWith(".ts")
-        ? ["deno", "run", "--config", "deno.json", "--allow-read", path]
-        : ["node", path]);
+      (entry.name.endsWith('.ts') ? ['deno', 'run', '--config', 'deno.json', '--allow-read', path] : ['node', path]);
     scripts.push({
-      name: entry.name.replace(/\.(ts|mjs)$/, ""),
+      name: entry.name.replace(/\.(ts|mjs)$/, ''),
       path,
       command,
       ...(knownEnv[entry.name] ? { env: knownEnv[entry.name] } : {}),
@@ -495,10 +395,10 @@ async function collectSmokeScripts(): Promise<JsonValue> {
 
 async function git(args: string[]): Promise<string | null> {
   try {
-    const output = await new Deno.Command("git", {
+    const output = await new Deno.Command('git', {
       args,
-      stdout: "piped",
-      stderr: "null",
+      stdout: 'piped',
+      stderr: 'null',
     }).output();
     if (!output.success) return null;
     return new TextDecoder().decode(output.stdout).trim();
@@ -533,40 +433,36 @@ function emptyToNull(value: string | null): string | null {
 }
 
 function lineOf(text: string, index: number): number {
-  return text.slice(0, index).split("\n").length;
+  return text.slice(0, index).split('\n').length;
 }
 
 function stripInlineComment(value: string): string {
   const quote = value.trimStart()[0];
   if (quote === '"' || quote === "'") return value.trim();
-  return value.replace(/\s+#.*$/, "").trim();
+  return value.replace(/\s+#.*$/, '').trim();
 }
 
 async function sha256(value: string): Promise<string> {
   const bytes = await crypto.subtle.digest(
-    "SHA-256",
+    'SHA-256',
     new TextEncoder().encode(value),
   );
   return `sha256:${
-    [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("")
+    [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
   }`;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
 function jsonString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
+  return typeof value === 'string' ? value : null;
 }
 
 function jsonStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string")
-    : [];
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 function unquote(value: string): string {

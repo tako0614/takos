@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "takos.fullname" . }}-paas-worker
+  name: {{ include "takos.fullname" . }}-takosumi-worker
   labels:
     {{- include "takos.labels" . | nindent 4 }}
     takos.io/process-role: takosumi-worker
-    app.kubernetes.io/component: paas-worker
+    app.kubernetes.io/component: takosumi-worker
 spec:
   replicas: {{ .Values.paasWorker.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/component: paas-worker
+      app.kubernetes.io/component: takosumi-worker
       {{- include "takos.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
         {{- include "takos.labels" . | nindent 8 }}
         takos.io/process-role: takosumi-worker
-        app.kubernetes.io/component: paas-worker
+        app.kubernetes.io/component: takosumi-worker
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -26,7 +26,7 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: paas-worker
+        - name: takosumi-worker
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
           command: ["deno", "task", "start"]
@@ -72,8 +72,8 @@ spec:
           resources:
             {{- toYaml .Values.paasWorker.resources | nindent 12 }}
           volumeMounts:
-            - name: paas-data
+            - name: takosumi-data
               mountPath: /var/lib/takos
       volumes:
-        - name: paas-data
+        - name: takosumi-data
           emptyDir: {}

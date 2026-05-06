@@ -48,11 +48,12 @@ services:
     command: ['deno', 'task', 'dev:api']
     environment:
       PORT: '${TAKOS_APP_PORT:-8787}'
-      TAKOS_APP_URL: '${TAKOS_APP_URL:-http://localhost:8787}'
+      TAKOS_APP_URL: '${TAKOS_APP_URL:-http://localhost:${TAKOS_APP_PORT:-8787}}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_AGENT_INTERNAL_URL: 'http://takos-agent:${TAKOS_AGENT_PORT:-8789}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
+      TAKOS_INTERNAL_API_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOS_APP_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
     ports:
       - '${TAKOS_APP_PORT:-8787}:${TAKOS_APP_PORT:-8787}'
@@ -88,12 +89,13 @@ services:
     working_dir: /workspace
     environment:
       PORT: '${TAKOSUMI_PORT:-8788}'
-      TAKOS_APP_URL: '${TAKOS_APP_URL:-http://takos-app:8787}'
+      TAKOS_APP_URL: '${TAKOS_APP_URL:-http://takos-app:${TAKOS_APP_PORT:-8787}}'
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
+      TAKOSUMI_INTERNAL_API_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOSUMI_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takosumi'
       DATABASE_URL: 'postgres://takos:takos@postgres:5432/takosumi'
-      REDIS_URL: 'redis://redis:6379'
+      TAKOSUMI_DEV_MODE: '${TAKOSUMI_DEV_MODE:-1}'
     ports:
       - '${TAKOSUMI_PORT:-8788}:${TAKOSUMI_PORT:-8788}'
     volumes:
@@ -101,8 +103,8 @@ services:
 
   takos-agent:
     build:
-      context: ..
-      dockerfile: takos/agent/Dockerfile
+      context: ./agent
+      dockerfile: Dockerfile
     depends_on:
       takosumi:
         condition: service_started

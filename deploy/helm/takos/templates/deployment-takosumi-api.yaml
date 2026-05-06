@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "takos.fullname" . }}-paas-runtime-agent
+  name: {{ include "takos.fullname" . }}-takosumi-api
   labels:
     {{- include "takos.labels" . | nindent 4 }}
-    takos.io/process-role: takosumi-runtime-agent
-    app.kubernetes.io/component: paas-runtime-agent
+    takos.io/process-role: takosumi-api
+    app.kubernetes.io/component: takosumi-api
 spec:
-  replicas: {{ .Values.paasRuntimeAgent.replicaCount }}
+  replicas: {{ .Values.paasApi.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/component: paas-runtime-agent
+      app.kubernetes.io/component: takosumi-api
       {{- include "takos.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
         {{- include "takos.labels" . | nindent 8 }}
-        takos.io/process-role: takosumi-runtime-agent
-        app.kubernetes.io/component: paas-runtime-agent
+        takos.io/process-role: takosumi-api
+        app.kubernetes.io/component: takosumi-api
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -26,25 +26,19 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: paas-runtime-agent
+        - name: takosumi-api
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
           command: ["deno", "task", "start"]
           ports:
             - name: http
-              containerPort: {{ .Values.paasRuntimeAgent.port }}
+              containerPort: {{ .Values.paasApi.port }}
               protocol: TCP
           env:
             - name: TAKOSUMI_PROCESS_ROLE
-              value: "takosumi-runtime-agent"
+              value: "takosumi-api"
             - name: PORT
-              value: {{ .Values.paasRuntimeAgent.port | quote }}
-            - name: PROXY_BASE_URL
-              value: {{ include "takos.paasRuntimeAgentUrl" . | quote }}
-            - name: TAKOS_LOCAL_WEB_URL
-              value: {{ include "takos.paasApiUrl" . | quote }}
-            - name: TAKOS_LOCAL_RUNTIME_URL
-              value: {{ include "takos.runtimeUrl" . | quote }}
+              value: {{ .Values.paasApi.port | quote }}
           envFrom:
             - configMapRef:
                 name: {{ include "takos.fullname" . }}-global
@@ -68,4 +62,10 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
-            {{- toYaml .Values.paasRuntimeAgent.resources | nindent 12 }}
+            {{- toYaml .Values.paasApi.resources | nindent 12 }}
+          volumeMounts:
+            - name: control-data
+              mountPath: /var/lib/takos/control
+      volumes:
+        - name: control-data
+          emptyDir: {}

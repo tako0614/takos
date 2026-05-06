@@ -68,31 +68,31 @@ Create the name of the service account to use.
      ================================================================ */}}
 
 {{/*
-PaaS API internal URL
+Takosumi API internal URL
 */}}
 {{- define "takos.paasApiUrl" -}}
-{{- printf "http://%s-paas-api:%v" (include "takos.fullname" .) (int .Values.paasApi.port) }}
+{{- printf "http://%s-takosumi-api:%v" (include "takos.fullname" .) (int .Values.paasApi.port) }}
 {{- end }}
 
 {{/*
-PaaS router internal URL
+Takosumi router internal URL
 */}}
 {{- define "takos.paasRouterUrl" -}}
-{{- printf "http://%s-paas-router:%v" (include "takos.fullname" .) (int .Values.paasRouter.port) }}
+{{- printf "http://%s-takosumi-router:%v" (include "takos.fullname" .) (int .Values.paasRouter.port) }}
 {{- end }}
 
 {{/*
-PaaS runtime-agent internal URL
+Takosumi runtime-agent internal URL
 */}}
 {{- define "takos.paasRuntimeAgentUrl" -}}
-{{- printf "http://%s-paas-runtime-agent:%v" (include "takos.fullname" .) (int .Values.paasRuntimeAgent.port) }}
+{{- printf "http://%s-takosumi-runtime-agent:%v" (include "takos.fullname" .) (int .Values.paasRuntimeAgent.port) }}
 {{- end }}
 
 {{/*
-PaaS log-worker internal URL
+Takosumi log-worker internal URL
 */}}
 {{- define "takos.paasLogWorkerUrl" -}}
-{{- printf "http://%s-paas-log-worker:%v" (include "takos.fullname" .) (int .Values.paasLogWorker.port) }}
+{{- printf "http://%s-takosumi-log-worker:%v" (include "takos.fullname" .) (int .Values.paasLogWorker.port) }}
 {{- end }}
 
 {{/*
