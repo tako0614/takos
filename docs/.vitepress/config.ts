@@ -135,6 +135,10 @@ export default defineConfig({
         text: "Operations",
         items: [
           {
+            text: "On-call and SEV Policy",
+            link: "/operations/oncall",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },
