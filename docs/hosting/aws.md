@@ -117,6 +117,12 @@ deno task helm:check-overlays
   values で secret を作成する運用
 - Takosumi provider plugin が参照する AWS managed-service credentials
 
+Terraform apply 後の DB endpoint / Redis URL / SQS URL / S3 bucket 名は
+`deno task terraform:helm-values` で generated values に変換し、base overlay の
+後に重ねます。生成 values は non-secret resource id だけを
+`runtimeConfig.managedResources` へ入れ、secret は `takos-private` / external
+secrets 側に残します。
+
 `values-aws.yaml` は `secrets.create: false` を前提に、既定では chart の release
 fullname 由来の Secret 名を参照します。`<release>` は Helm release
 名から決まり、各 Secret は `<release>-platform` / `<release>-auth` /

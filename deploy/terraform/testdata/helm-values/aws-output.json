@@ -1,0 +1,73 @@
+{
+  "target": {
+    "sensitive": false,
+    "type": "string",
+    "value": "aws"
+  },
+  "database_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "takos-staging-postgres.cluster-example.ap-northeast-1.rds.amazonaws.com:5432"
+  },
+  "database_url": {
+    "sensitive": true,
+    "type": "string",
+    "value": "postgresql://takos:secret@takos-staging-postgres.cluster-example.ap-northeast-1.rds.amazonaws.com:5432/takos"
+  },
+  "redis_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "redis://takos-staging-cache.example.cache.amazonaws.com:6379"
+  },
+  "queue_bindings": {
+    "sensitive": false,
+    "type": [
+      "map",
+      "string"
+    ],
+    "value": {
+      "runs": "https://sqs.ap-northeast-1.amazonaws.com/123456789012/takos-runs",
+      "index": "https://sqs.ap-northeast-1.amazonaws.com/123456789012/takos-index-jobs",
+      "workflow": "https://sqs.ap-northeast-1.amazonaws.com/123456789012/takos-workflow-jobs",
+      "deployment": "https://sqs.ap-northeast-1.amazonaws.com/123456789012/takos-deployment-jobs"
+    }
+  },
+  "object_storage_buckets": {
+    "sensitive": false,
+    "type": [
+      "map",
+      "string"
+    ],
+    "value": {
+      "git_objects": "takos-staging-git-objects",
+      "offload": "takos-staging-offload",
+      "tenant_source": "takos-staging-tenant-source",
+      "worker_bundles": "takos-staging-worker-bundles",
+      "tenant_builds": "takos-staging-tenant-builds",
+      "ui_bundles": "takos-staging-ui-bundles"
+    }
+  },
+  "network": {
+    "sensitive": false,
+    "type": "object",
+    "value": {
+      "vpc_id": "vpc-0abc123",
+      "private_subnet_ids": [
+        "subnet-private-a",
+        "subnet-private-b"
+      ],
+      "public_subnet_ids": [
+        "subnet-public-a",
+        "subnet-public-b"
+      ]
+    }
+  },
+  "workload_identity": {
+    "sensitive": false,
+    "type": "object",
+    "value": {
+      "ecs_task_execution_role_arn": "arn:aws:iam::123456789012:role/takos-staging-ecs-exec",
+      "ecs_task_role_arn": "arn:aws:iam::123456789012:role/takos-staging-ecs-task"
+    }
+  }
+}

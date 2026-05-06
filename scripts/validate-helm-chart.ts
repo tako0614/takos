@@ -41,9 +41,16 @@ for await (const entry of Deno.readDir(templateRoot)) {
 
 const errors: string[] = [];
 const valuesText = await Deno.readTextFile(`${chartRoot}/values.yaml`);
+const globalConfigMapText = await Deno.readTextFile(`${templateRoot}/configmap-global.yaml`);
 
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  imageRegistry: ""');
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  imagePullSecrets: []');
+assertContains(`${chartRoot}/values.yaml`, valuesText, '  managedResources: {}');
+assertContains(
+  `${templateRoot}/configmap-global.yaml`,
+  globalConfigMapText,
+  'TAKOS_MANAGED_RESOURCES_JSON: {{ toJson . | quote }}',
+);
 assertContains(
   `${templateRoot}/_helpers.tpl`,
   await Deno.readTextFile(`${templateRoot}/_helpers.tpl`),
