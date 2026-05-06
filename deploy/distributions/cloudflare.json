@@ -60,6 +60,73 @@
     "wildcardDomain": "*.app.takos.example.com",
     "dnsProvider": "cloudflare"
   },
+  "defaultApps": {
+    "entries": [
+      {
+        "name": "takos-docs",
+        "title": "Docs",
+        "repositoryUrl": "https://github.com/tako0614/takos-docs.git",
+        "ref": "master",
+        "refType": "branch",
+        "preinstall": true
+      },
+      {
+        "name": "takos-excel",
+        "title": "Excel",
+        "repositoryUrl": "https://github.com/tako0614/takos-excel.git",
+        "ref": "master",
+        "refType": "branch",
+        "preinstall": true
+      },
+      {
+        "name": "takos-slide",
+        "title": "Slide",
+        "repositoryUrl": "https://github.com/tako0614/takos-slide.git",
+        "ref": "master",
+        "refType": "branch",
+        "preinstall": true
+      },
+      {
+        "name": "takos-computer",
+        "title": "Computer",
+        "repositoryUrl": "https://github.com/tako0614/takos-computer.git",
+        "ref": "master",
+        "refType": "branch",
+        "preinstall": true
+      },
+      {
+        "name": "yurucommu",
+        "title": "Yurucommu",
+        "repositoryUrl": "https://github.com/tako0614/yurucommu.git",
+        "ref": "master",
+        "refType": "branch",
+        "preinstall": true
+      }
+    ],
+    "environmentOverrides": {
+      "local": {
+        "preinstall": []
+      },
+      "staging": {
+        "preinstall": [
+          "takos-docs",
+          "takos-excel",
+          "takos-slide",
+          "takos-computer",
+          "yurucommu"
+        ]
+      },
+      "production": {
+        "preinstall": [
+          "takos-docs",
+          "takos-excel",
+          "takos-slide",
+          "takos-computer",
+          "yurucommu"
+        ]
+      }
+    }
+  },
   "services": [
     {
       "serviceId": "takos-app",
