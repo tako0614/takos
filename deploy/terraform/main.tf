@@ -14,12 +14,16 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws.region
+  region                      = var.aws.region
+  skip_credentials_validation = var.terraform_plan_mode
+  skip_metadata_api_check     = var.terraform_plan_mode
+  skip_requesting_account_id  = var.terraform_plan_mode
 }
 
 provider "google" {
-  project = var.gcp.project_id
-  region  = var.gcp.region
+  project      = var.gcp.project_id
+  region       = var.gcp.region
+  access_token = var.terraform_plan_mode ? "mock-token-for-plan-only" : null
 }
 
 module "aws" {
@@ -40,6 +44,9 @@ module "aws" {
   sqs_message_retention = var.aws.sqs_message_retention
   dynamo_kv_table_name  = var.aws.dynamo_kv_table_name
   ecs_cluster_name      = var.aws.ecs_cluster_name
+  plan_mode             = var.terraform_plan_mode
+  aws_account_id        = var.terraform_plan_mode ? "000000000000" : ""
+  availability_zones    = var.terraform_plan_mode ? ["${var.aws.region}a", "${var.aws.region}c"] : []
 
   tags = merge(
     {

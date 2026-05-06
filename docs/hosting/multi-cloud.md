@@ -63,6 +63,19 @@ workload identity を渡し、chart は `TAKOS_MANAGED_RESOURCES_JSON` として
 各 service に配布します。credentials や secret material は
 `takos-private` / external secrets から注入します。
 
+PR / release CI は Terraform 1.9.8 で credential-free の staging plan gate も
+実行します:
+
+```bash
+cd takos
+deno task terraform:plan-gate
+```
+
+この gate は `deploy/terraform/plan/{aws-staging,gcp-staging}.tfvars` と
+`terraform_plan_mode = true` を使い、`terraform plan -refresh=false` の結果を
+`.terraform-plan/summary.md` と full plan text artifact に出します。実環境 state
+backend / live credentials を使う plan は operator が `takos-private` 側で実行します。
+
 ## kernel host target を multi-cloud で選ぶ
 
 Takos kernel の deploy 正本は `takos-private/distribution.yml` です。
