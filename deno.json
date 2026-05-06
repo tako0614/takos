@@ -13,7 +13,9 @@
     "validate:helm": "deno run --config deno.json --allow-read scripts/validate-helm-chart.ts",
     "validate:agent-docs": "deno run --config deno.json --allow-read --allow-env=TAKOS_ECOSYSTEM_ROOT scripts/validate-agent-docs.ts",
     "validate:architecture": "deno run --config deno.json --allow-read scripts/validate-architecture-alignment.ts",
+    "validate:distributions": "deno run --config deno.json --allow-read scripts/validate-distribution-profiles.ts",
     "validate:process-roles": "deno run --config deno.json --allow-read scripts/validate-process-roles.ts",
+    "distribution:smoke": "deno run --config deno.json --allow-read --allow-env --allow-net scripts/distribution-smoke.ts",
     "release-gate": "deno run --config deno.json --allow-read --allow-run scripts/release-gate.ts",
     "submodules:update": "git submodule update --init --recursive"
   },

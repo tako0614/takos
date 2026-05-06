@@ -159,9 +159,11 @@ clients call operator-controlled JSON endpoints; callback-based storage
 transactions still require an injected storage driver because they cannot be
 represented as a single stateless HTTP request. Credentialed live provider
 checks are available through the Takosumi (`@takosumi/plugins`) opt-in
-`live-smoke:<target>` and `live-provisioning-smoke:<target>` tasks. Those checks
-are external provider proof, not kernel release proof, and are skipped unless
-the operator supplies target-specific credentials and fixtures.
+`live-provisioning-smoke` task with `TAKOSUMI_PLUGIN_LIVE_PROVIDER`,
+`TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE`, and optionally
+`TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live`. Those checks are external provider
+proof, not kernel release proof, and are skipped unless the operator supplies
+target-specific credentials and fixtures.
 
 The `runtime-agent` port is a real plugin adapter port. Staging and production
 plugins must return a `RuntimeAgentRegistry`; the route layer uses the selected
