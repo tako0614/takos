@@ -159,6 +159,10 @@ export default defineConfig({
             link: "/operations/cost-monitoring",
           },
           {
+            text: "Patch Management",
+            link: "/operations/patch-management",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },
