@@ -90,6 +90,7 @@ export default defineConfig({
         items: [
           { text: '概要', link: '/hosting/' },
           { text: '環境ごとの差異', link: '/hosting/differences' },
+          { text: 'Target Parity', link: '/hosting/target-parity' },
           { text: 'Cloudflare', link: '/hosting/cloudflare' },
           { text: 'AWS', link: '/hosting/aws' },
           { text: 'GCP', link: '/hosting/gcp' },
