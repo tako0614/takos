@@ -25,7 +25,7 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
    `scripts/validate-architecture-alignment.ts`
 4. `deno task docs:build`
 5. Process role validator: `deno task validate:process-roles`
-6. Distribution profile validator: `deno task validate:distributions`
+6. Distribution profile schema and artifact validator: `deno task validate:distributions`
 7. Helm chart validator: `deno task validate:helm`
 8. Release manifest build: `scripts/build-release-manifest.ts`
 9. Compose config render: `deno task local:config`
