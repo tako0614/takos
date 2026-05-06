@@ -183,6 +183,15 @@ export default defineConfig({
         ],
       },
       {
+        text: "Legal",
+        items: [
+          {
+            text: "SOC 2 Readiness",
+            link: "/legal/soc2-readiness",
+          },
+        ],
+      },
+      {
         text: "プラットフォーム",
         items: [
           { text: "Road to 1.0", link: "/platform/road-to-1.0" },
