@@ -49,6 +49,7 @@ runtimeConfig:
   allowUnsafeProductionDefaults: false
   managedResources: {}
   defaultAppDistributionJson: ""
+  supportLegacyFromWorkflow: true
   plugins:
     auth: takos.kernel.reference
     notification: takos.kernel.reference

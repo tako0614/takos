@@ -47,6 +47,7 @@ assertContains(`${chartRoot}/values.yaml`, valuesText, '  imageRegistry: ""');
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  imagePullSecrets: []');
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  managedResources: {}');
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  defaultAppDistributionJson: ""');
+assertContains(`${chartRoot}/values.yaml`, valuesText, "  supportLegacyFromWorkflow: true");
 assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
@@ -56,6 +57,11 @@ assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
   'TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}',
+);
+assertContains(
+  `${templateRoot}/configmap-global.yaml`,
+  globalConfigMapText,
+  'SUPPORT_LEGACY_FROMWORKFLOW: {{ if hasKey .Values.runtimeConfig "supportLegacyFromWorkflow" }}',
 );
 assertContains(
   `${templateRoot}/_helpers.tpl`,
