@@ -139,6 +139,10 @@ export default defineConfig({
             link: "/operations/oncall",
           },
           {
+            text: "Incident Response",
+            link: "/operations/incident-response",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },
