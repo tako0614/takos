@@ -157,6 +157,10 @@ function validationCommands(): CommandManifest[] {
       command: ['deno', 'task', 'validate:terraform-secrets'],
     },
     {
+      name: 'validate-release-promotion',
+      command: ['deno', 'task', 'validate:release-promotion'],
+    },
+    {
       name: 'helm-template-smoke',
       command: ['deno', 'task', 'helm:template-smoke'],
       env: {
@@ -213,6 +217,11 @@ function assertRequiredValidationCommands(
     'terraform-helm-values': ['deno', 'task', 'terraform:helm-values:check'],
     'terraform-plan-gate': ['deno', 'task', 'terraform:plan-gate'],
     'terraform-secret-policy': ['deno', 'task', 'validate:terraform-secrets'],
+    'validate-release-promotion': [
+      'deno',
+      'task',
+      'validate:release-promotion',
+    ],
     'helm-template-smoke': ['deno', 'task', 'helm:template-smoke'],
     'helm-install-smoke': ['deno', 'task', 'helm:install-smoke'],
     'docs:build': ['deno', 'task', 'docs:build'],

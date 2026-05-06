@@ -71,6 +71,10 @@ const gates: GateCommand[] = [
     command: ['deno', 'task', 'validate:legal-docs'],
   },
   {
+    name: 'validate-release-promotion',
+    command: ['deno', 'task', 'validate:release-promotion'],
+  },
+  {
     name: 'validate-helm',
     command: ['deno', 'task', 'validate:helm'],
   },

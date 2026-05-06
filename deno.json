@@ -26,6 +26,7 @@
     "validate:patch-management": "deno run --config deno.json --allow-read scripts/validate-patch-management.ts",
     "validate:migration-safety": "deno task --cwd app validate:migration-safety",
     "validate:legal-docs": "deno run --config deno.json --allow-read scripts/validate-legal-docs.ts",
+    "validate:release-promotion": "deno run --config deno.json --allow-read scripts/validate-release-promotion.ts",
     "validate:service-set": "deno run --config deno.json --allow-read scripts/validate-service-set.ts",
     "validate:process-roles": "deno task validate:service-set",
     "distribution:smoke": "deno run --config deno.json --allow-read --allow-env --allow-net scripts/distribution-smoke.ts",

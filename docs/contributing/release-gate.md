@@ -30,12 +30,13 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
 8. Patch management validator: `deno task validate:patch-management`
 9. Migration safety validator: `deno task validate:migration-safety`
 10. Legal docs validator: `deno task validate:legal-docs`
-11. Helm chart validator: `deno task validate:helm`
-12. Helm overlay generator drift check: `deno task helm:check-overlays`
-13. Terraform output to Helm values fixture check:
+11. Release promotion validator: `deno task validate:release-promotion`
+12. Helm chart validator: `deno task validate:helm`
+13. Helm overlay generator drift check: `deno task helm:check-overlays`
+14. Terraform output to Helm values fixture check:
    `deno task terraform:helm-values:check`
-14. Release manifest build: `scripts/build-release-manifest.ts`
-15. Compose config render: `deno task local:config`
+15. Release manifest build: `scripts/build-release-manifest.ts`
+16. Compose config render: `deno task local:config`
 
 The GitHub `release-gate` workflow also sets up Helm v3 and a kind cluster, then
 runs
