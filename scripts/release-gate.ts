@@ -63,6 +63,10 @@ const gates: GateCommand[] = [
     command: ['deno', 'task', 'helm:check-overlays'],
   },
   {
+    name: 'terraform-helm-values',
+    command: ['deno', 'task', 'terraform:helm-values:check'],
+  },
+  {
     name: 'release-manifest',
     command: [
       'deno',

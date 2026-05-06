@@ -1,0 +1,65 @@
+{
+  "target": {
+    "sensitive": false,
+    "type": "string",
+    "value": "gcp"
+  },
+  "database_endpoint": {
+    "sensitive": false,
+    "type": "string",
+    "value": "takos-staging:asia-northeast1:takos-staging-postgres"
+  },
+  "database_url": {
+    "sensitive": true,
+    "type": "string",
+    "value": "postgresql://takos:secret@/takos?host=/cloudsql/takos-staging:asia-northeast1:takos-staging-postgres"
+  },
+  "redis_url": {
+    "sensitive": false,
+    "type": "string",
+    "value": "redis://10.10.0.5:6379"
+  },
+  "queue_bindings": {
+    "sensitive": false,
+    "type": [
+      "map",
+      "string"
+    ],
+    "value": {
+      "runs": "takos-runs",
+      "index": "takos-index-jobs",
+      "workflow": "takos-workflow-jobs",
+      "deployment": "takos-deployment-jobs"
+    }
+  },
+  "object_storage_buckets": {
+    "sensitive": false,
+    "type": [
+      "map",
+      "string"
+    ],
+    "value": {
+      "git_objects": "takos-staging-git-objects",
+      "offload": "takos-staging-offload",
+      "tenant_source": "takos-staging-tenant-source",
+      "worker_bundles": "takos-staging-worker-bundles",
+      "tenant_builds": "takos-staging-tenant-builds",
+      "ui_bundles": "takos-staging-ui-bundles"
+    }
+  },
+  "network": {
+    "sensitive": false,
+    "type": "object",
+    "value": {
+      "vpc_id": "projects/takos-staging/global/networks/takos-staging-vpc",
+      "subnet_id": "projects/takos-staging/regions/asia-northeast1/subnetworks/takos-staging-private"
+    }
+  },
+  "workload_identity": {
+    "sensitive": false,
+    "type": "object",
+    "value": {
+      "service_account_email": "takos-workload@takos-staging.iam.gserviceaccount.com"
+    }
+  }
+}

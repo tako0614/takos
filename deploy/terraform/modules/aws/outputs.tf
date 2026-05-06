@@ -8,6 +8,11 @@ output "database_url" {
   sensitive   = true
 }
 
+output "database_endpoint" {
+  description = "Non-secret RDS endpoint for Helm/operator config"
+  value       = aws_db_instance.main.endpoint
+}
+
 ################################################################################
 # Redis
 ################################################################################

@@ -26,10 +26,11 @@ target ごとの current readiness は
 
 `takos/deploy/terraform/main.tf` は AWS / GCP managed resource の root
 composition です。`target = "aws"` または `target = "gcp"` を選ぶと、対応する
-module だけを instantiate し、`database_url` / `redis_url` /
-`queue_bindings` / `object_storage_buckets` / `network` /
-`workload_identity` を共通 output として返します。C-3.3 の Helm values bridge
-はこの共通 output vocabulary を入力にします。
+module だけを instantiate し、`database_endpoint` / `database_url` /
+`redis_url` / `queue_bindings` / `object_storage_buckets` / `network` /
+`workload_identity` を共通 output として返します。Helm values bridge は
+`database_endpoint` と non-secret managed resource id だけを入力にし、
+sensitive な `database_url` は Helm values へ書き出しません。
 
 environment backend を使う場合は
 `deploy/terraform/environments/{aws-prod,aws-staging,gcp-prod,gcp-staging}` を
@@ -45,6 +46,22 @@ terraform plan \
   -var='target=aws' \
   -var='db_password=replace-with-operator-secret'
 ```
+
+Terraform apply 後は `terraform output -json` から Helm overlay values を生成します:
+
+```bash
+cd takos
+deno task terraform:helm-values \
+  --target aws \
+  --terraform-dir deploy/terraform/environments/aws-staging \
+  --output deploy/helm/takos/values-aws-staging.generated.yaml
+```
+
+生成された values は `runtimeConfig.managedResources` として DB endpoint /
+Redis URL / queue bindings / object storage bucket 名 / network /
+workload identity を渡し、chart は `TAKOS_MANAGED_RESOURCES_JSON` として
+各 service に配布します。credentials や secret material は
+`takos-private` / external secrets から注入します。
 
 ## kernel host target を multi-cloud で選ぶ
 

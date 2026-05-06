@@ -3,6 +3,13 @@ output "target" {
   value       = var.target
 }
 
+output "database_endpoint" {
+  description = "Non-secret database endpoint or cloud connection name for the selected target."
+  value = var.target == "aws" ? module.aws[0].database_endpoint : (
+    var.target == "gcp" ? module.gcp[0].database_endpoint : null
+  )
+}
+
 output "database_url" {
   description = "PostgreSQL connection URL for the selected target."
   value = var.target == "aws" ? module.aws[0].database_url : (

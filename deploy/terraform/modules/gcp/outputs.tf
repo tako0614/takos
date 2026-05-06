@@ -3,6 +3,11 @@ output "database_connection_name" {
   value       = google_sql_database_instance.main.connection_name
 }
 
+output "database_endpoint" {
+  description = "Non-secret Cloud SQL connection name for Helm/operator config"
+  value       = google_sql_database_instance.main.connection_name
+}
+
 output "database_url" {
   description = "PostgreSQL connection URL"
   value       = "postgresql://${google_sql_user.main.name}:${var.db_password}@/${google_sql_database.main.name}?host=/cloudsql/${google_sql_database_instance.main.connection_name}"

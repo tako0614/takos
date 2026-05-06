@@ -47,6 +47,7 @@ runtimeConfig:
   environment: local
   publicRoutesEnabled: false
   allowUnsafeProductionDefaults: false
+  managedResources: {}
   plugins:
     auth: takos.kernel.reference
     notification: takos.kernel.reference

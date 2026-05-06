@@ -44,6 +44,14 @@ variable "db_password" {
   sensitive = true
 }
 
+output "target" {
+  value = "aws"
+}
+
+output "database_endpoint" {
+  value = module.takos.database_endpoint
+}
+
 output "database_url" {
   value     = module.takos.database_url
   sensitive = true
@@ -67,4 +75,39 @@ output "sqs_workflow_queue_url" {
 
 output "sqs_deployment_queue_url" {
   value = module.takos.sqs_deployment_jobs_queue_url
+}
+
+output "queue_bindings" {
+  value = {
+    runs       = module.takos.sqs_runs_queue_url
+    index      = module.takos.sqs_index_jobs_queue_url
+    workflow   = module.takos.sqs_workflow_jobs_queue_url
+    deployment = module.takos.sqs_deployment_jobs_queue_url
+  }
+}
+
+output "object_storage_buckets" {
+  value = {
+    git_objects    = module.takos.s3_git_objects_bucket
+    offload        = module.takos.s3_offload_bucket
+    tenant_source  = module.takos.s3_tenant_source_bucket
+    worker_bundles = module.takos.s3_worker_bundles_bucket
+    tenant_builds  = module.takos.s3_tenant_builds_bucket
+    ui_bundles     = module.takos.s3_ui_bundles_bucket
+  }
+}
+
+output "network" {
+  value = {
+    vpc_id             = module.takos.vpc_id
+    private_subnet_ids = module.takos.private_subnet_ids
+    public_subnet_ids  = module.takos.public_subnet_ids
+  }
+}
+
+output "workload_identity" {
+  value = {
+    ecs_task_execution_role_arn = module.takos.ecs_task_execution_role_arn
+    ecs_task_role_arn           = module.takos.ecs_task_role_arn
+  }
 }

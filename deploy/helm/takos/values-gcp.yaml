@@ -47,9 +47,9 @@ runtimeConfig:
     observability: ""
     runtime-agent: ""
 
-# GCP managed-service connection details belong to the selected external
-# plugin bundle/operator config. This product chart does not inject database,
-# Redis, or object-storage credentials directly into service pods.
+# GCP managed-resource identifiers can be supplied by the Terraform
+# bridge values overlay. Credentials and secret material stay in takos-private
+# or external secrets, not in generated Helm values.
 
 # Production domains
 domains:

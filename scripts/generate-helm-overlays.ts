@@ -147,9 +147,9 @@ function generateOverlay(
     '  plugins:',
     ...pluginKeys.map((key) => `    ${key}: ""`),
     '',
-    `# ${provider.label} managed-service connection details belong to the selected external`,
-    '# plugin bundle/operator config. This product chart does not inject database,',
-    provider.objectStorageComment,
+    `# ${provider.label} managed-resource identifiers can be supplied by the Terraform`,
+    '# bridge values overlay. Credentials and secret material stay in takos-private',
+    '# or external secrets, not in generated Helm values.',
     '',
     '# Production domains',
     'domains:',
@@ -274,7 +274,6 @@ function providerConfig(targetId: 'aws' | 'gcp') {
   if (targetId === 'aws') {
     return {
       label: 'AWS',
-      objectStorageComment: '# Redis, or S3 credentials directly into service pods.',
       ingressLabel: 'AWS ALB Ingress',
       ingressClass: 'alb',
       annotations: [
@@ -294,7 +293,6 @@ function providerConfig(targetId: 'aws' | 'gcp') {
 
   return {
     label: 'GCP',
-    objectStorageComment: '# Redis, or object-storage credentials directly into service pods.',
     ingressLabel: 'GCE Ingress',
     ingressClass: 'gce',
     annotations: [

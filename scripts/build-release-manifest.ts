@@ -145,6 +145,10 @@ function validationCommands(): CommandManifest[] {
       command: ['deno', 'task', 'helm:check-overlays'],
     },
     {
+      name: 'terraform-helm-values',
+      command: ['deno', 'task', 'terraform:helm-values:check'],
+    },
+    {
       name: 'helm-template-smoke',
       command: ['deno', 'task', 'helm:template-smoke'],
       env: {
@@ -198,6 +202,7 @@ function assertRequiredValidationCommands(
     'service-set-validator': ['deno', 'task', 'validate:service-set'],
     'validate-helm': ['deno', 'task', 'validate:helm'],
     'helm-overlay-generator': ['deno', 'task', 'helm:check-overlays'],
+    'terraform-helm-values': ['deno', 'task', 'terraform:helm-values:check'],
     'helm-template-smoke': ['deno', 'task', 'helm:template-smoke'],
     'helm-install-smoke': ['deno', 'task', 'helm:install-smoke'],
     'docs:build': ['deno', 'task', 'docs:build'],
