@@ -202,6 +202,14 @@ export default defineConfig({
             link: "/legal/data-residency",
           },
           {
+            text: "License Compliance",
+            link: "/legal/license-compliance",
+          },
+          {
+            text: "Third-party Licenses",
+            link: "/legal/third-party-license-inventory",
+          },
+          {
             text: "SOC 2 Readiness",
             link: "/legal/soc2-readiness",
           },

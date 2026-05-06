@@ -7,6 +7,8 @@ const requiredDocs = [
       'Data Processing Agreement template',
       'Sub-processor list',
       'Data residency policy',
+      'License compliance',
+      'Third-party dependency inventory',
       'SOC 2 readiness checklist',
     ],
   },
@@ -60,6 +62,30 @@ const requiredDocs = [
     ],
   },
   {
+    path: 'docs/legal/license-compliance.md',
+    expected: [
+      'First-party License Inventory',
+      'REUSE / SPDX Baseline',
+      'takos-private',
+      'deno task check:license-compliance',
+      'AGPL-3.0-only',
+      'GPL-3.0-only',
+      'MIT',
+    ],
+  },
+  {
+    path: 'docs/legal/third-party-license-inventory.md',
+    expected: [
+      'Third-party Dependency Inventory',
+      'Hyperformula',
+      'GPL-3.0-only',
+      '@img/sharp-libvips',
+      'LGPL-3.0-or-later',
+      'jszip',
+      'MIT OR GPL-3.0-or-later',
+    ],
+  },
+  {
     path: 'docs/legal/soc2-readiness.md',
     expected: [
       'Vendor Management',
@@ -79,6 +105,8 @@ validateTextIncludes('docs/.vitepress/config.ts', [
   'link: "/legal/data-processing-agreement"',
   'link: "/legal/subprocessors"',
   'link: "/legal/data-residency"',
+  'link: "/legal/license-compliance"',
+  'link: "/legal/third-party-license-inventory"',
   'link: "/legal/soc2-readiness"',
 ]);
 
