@@ -5,32 +5,35 @@
 worker / service / resource / route / publication / consume の authoring
 declaration を 1 つの Deployment record として resolve し、`takosumi` Core の
 `Deployment.desired` (routes / bindings / resources / runtime_network_policy /
-activation_envelope) を pin します。default では resolve に続けて apply まで
-1 step で実行されます。manifest の `name` で決まる group が GroupHead pointer
+activation_envelope) を pin します。default では resolve に続けて apply まで 1
+step で実行されます。manifest の `name` で決まる group が GroupHead pointer
 を進める対象で、`--group` は override です。
 
-> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
+> 現行実装の split status は
+> [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 runtime model は tenant runtime で、operator-selected backend に backend-neutral
 schema / translation surface を流します。これは runtime behavior や provider
 resource existence の一致を意味しません。manifest の `name` または `--group`
 override で決まる group の GroupHead が advance され、その group の deployment
-履歴 / rollback / uninstall などの group 機能が使えます。group 所属は runtime
-や resource provider の特別処理ではありません。group なしの primitive は個別
+履歴 / rollback / uninstall などの group 機能が使えます。group 所属は runtime や
+resource provider の特別処理ではありません。group なしの primitive は個別
 primitive API で管理します。
 
-`publications` は他の primitive へ共有する typed outputs publication catalog です。
-Takos API key / OAuth client は `takos.api-key` / `takos.oauth-client` built-in
-provider publication を `consume` して受け取ります。SQL / object-store / queue
-などの resource は manifest の `resources`、または `/api/resources/*` などの
-resource API / runtime binding で管理します。backend の選択は operator-only
-で、manifest には書きません。
+`publications` は他の primitive へ共有する typed outputs publication catalog
+です。 Takos API key / OAuth client は `takos.api-key` / `takos.oauth-client`
+built-in provider publication を `consume` して受け取ります。SQL / object-store
+/ queue などの resource は manifest の `resources`、または `/api/resources/*`
+などの resource API / runtime binding で管理します。backend の選択は
+operator-only で、manifest には書きません。
 
-ローカル manifest 経路では、CLI が `build.fromWorkflow` の workflow を
-workflow-runner でローカル実行し、その build artifact を `source.artifacts`
-として送ります。repository URL deploy では CLI は repo を fetch せず、
-`repository_url + ref/ref_type` を `POST /api/public/v1/deployments` に渡します。
-その先の Deployment service が repo fetch、manifest parse、resolve、apply を担当します。
+Takos の deploy endpoint は最終 manifest と artifact input を受け取る Web/API
+surface です。workflow / build / git push 連携は `takosumi-git` が担当し、 Takos
+へは digest-pinned image を持つ service manifest、または worker bundle artifact
+を添えた `source.kind="manifest"` deploy を渡します。repository URL deploy では
+CLI は repo を fetch せず、`repository_url + ref/ref_type` を
+`POST /api/public/v1/deployments` に渡します。その先の Deployment service が
+repo fetch、manifest parse、resolve、apply を担当します。
 
 ## 基本
 
@@ -56,19 +59,19 @@ positional argument を省略するとローカルの `.takos/app.yml` または
 
 ## 主なオプション
 
-| option                     | 説明                                                                                |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest            |
-| `--preview`                | in-memory preview。Deployment record は持続化されない                               |
-| `--resolve-only`           | resolved Deployment を作るだけで apply しない (`takos apply <id>` が必要)           |
-| `--env <name>`             | 反映先環境                                                                          |
-| `--manifest <path>`        | manifest path。既定は `.takos/app.yml` / `.takos/app.yaml`                          |
-| `--auto-approve`           | apply 時の確認プロンプトを省略                                                      |
-| `--json`                   | machine-readable JSON output                                                        |
-| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                            |
-| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）            |
-| `--group <name>`           | manifest の `name` から決まる group 名を override する                              |
-| `--space <id>`             | 対象 space ID                                                                       |
+| option                     | 説明                                                                      |
+| -------------------------- | ------------------------------------------------------------------------- |
+| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest  |
+| `--preview`                | in-memory preview。Deployment record は持続化されない                     |
+| `--resolve-only`           | resolved Deployment を作るだけで apply しない (`takos apply <id>` が必要) |
+| `--env <name>`             | 反映先環境                                                                |
+| `--manifest <path>`        | manifest path。既定は `.takos/app.yml` / `.takos/app.yaml`                |
+| `--auto-approve`           | apply 時の確認プロンプトを省略                                            |
+| `--json`                   | machine-readable JSON output                                              |
+| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                  |
+| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）  |
+| `--group <name>`           | manifest の `name` から決まる group 名を override する                    |
+| `--space <id>`             | 対象 space ID                                                             |
 
 `repositoryUrl` と `--manifest` は同時指定できません。`--preview` と
 `--resolve-only` も排他です。
@@ -76,13 +79,14 @@ positional argument を省略するとローカルの `.takos/app.yml` または
 ## resolve と apply の境界
 
 1. `.takos/app.yml` / `.takos/app.yaml` か `--manifest` で指定した deploy
-   manifest を読み込み、CLI が build artifact を集める
-2. `POST /api/public/v1/deployments` (`mode="apply"` が default、`mode="preview"` /
-   `mode="resolve"` が flag で選べる) を呼ぶ
+   manifest を読み込み、必要な worker bundle artifact input を添える
+2. `POST /api/public/v1/deployments` (`mode="apply"` が
+   default、`mode="preview"` / `mode="resolve"` が flag で選べる) を呼ぶ
 3. Deployment service が manifest snapshot を pin し、descriptor closure を
-   resolve して Deployment.resolution / Deployment.desired を作る (`status="resolved"`)
-4. apply mode では続けて provider operations を順次実行する (`status="applying"` →
-   `applied`)。すべての required operation が成功すると GroupHead が新しい
+   resolve して Deployment.resolution / Deployment.desired を作る
+   (`status="resolved"`)
+4. apply mode では続けて provider operations を順次実行する (`status="applying"`
+   → `applied`)。すべての required operation が成功すると GroupHead が新しい
    Deployment を指す
 5. workload / routes / publication / binding は Deployment.desired の field と
    して同期され、Takos built-in provider publication consume の validation も
@@ -104,42 +108,45 @@ positional argument を省略するとローカルの `.takos/app.yml` または
   metadata から記録済み commit を再解決します
 - `takos deploy` は canonical PaaS implementation ではローカル manifest 由来
   でも repo URL 由来でも同じ `POST /api/public/v1/deployments` endpoint を通り
-  ます。`source.kind` はローカルでは `inline`、repo URL では `git`。人間向け
-  表示名として `local` / `repo:owner/repo@ref` を使います
+  ます。`source.kind` はローカルでは `manifest`、repo URL では `git_ref`。
+  人間向け表示名として `local` / `repo:owner/repo@ref` を使います
 
 ## ローカル deploy と repo deploy の違い
 
 canonical PaaS implementation では、ローカル manifest 由来でも repo URL 由来でも
 `takos deploy` の Deployment lifecycle は同じです。違いは
-「Deployment.input.manifest_snapshot がどこから来るか」という provenance だけです。
-現行 CLI の HTTP path は `POST /api/public/v1/deployments` (resolve+apply 1 step)
-と、追加で `POST /api/public/v1/deployments/:id/apply` などの advanced endpoint
-です。
+「Deployment.input.manifest_snapshot がどこから来るか」という provenance
+だけです。 現行 CLI の HTTP path は `POST /api/public/v1/deployments`
+(resolve+apply 1 step) と、追加で `POST /api/public/v1/deployments/:id/apply`
+などの advanced endpoint です。
 
-repo URL を指定した場合、**CLI は repository URL を `POST /api/public/v1/deployments`
-の `source.kind="git"` として渡す。** repo fetch、manifest parse、resolve、apply
-は Deployment service の責務です。CLI 側で repo を clone することはありません。
+repo URL を指定した場合、**CLI は repository URL を
+`POST /api/public/v1/deployments` の `source.kind="git_ref"` として渡す。** repo
+fetch、manifest parse、resolve、apply は Deployment service の責務です。CLI 側で
+repo を clone することはありません。
 
-| 観点              | local manifest flow                                                             | repo URL deploy                                                                           |
-| ----------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| source            | local working tree                                                              | `repository_url + ref/ref_type`                                                           |
-| source 解決       | CLI が manifest / artifact を読み、`POST /api/public/v1/deployments` に送る     | Deployment service が repo fetch / manifest parse を担当する                              |
-| desired apply     | Deployment.desired に worker / service / route / publication / consume を pin   | Deployment.desired に worker / service / route / publication / consume を pin             |
-| Deployment record | Deployment.input に manifest / artifacts を記録                                 | Deployment.input に repository URL / ref / commit / manifest metadata を記録              |
-| rollback 可否     | GroupHead を retained Deployment に切り替えて再 apply                           | GroupHead を retained Deployment に切り替えて再 apply (commit を再解決)                   |
-| API source kind   | `inline`                                                                        | `git`                                                                                     |
-| 表示名            | `local`                                                                         | `repo:owner/repo@ref`                                                                     |
+| 観点              | local manifest flow                                                                              | repo URL deploy                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| source            | local working tree                                                                               | `repository_url + ref/ref_type`                                               |
+| source 解決       | CLI / takosumi-git が manifest / artifact input を読み、`POST /api/public/v1/deployments` に送る | Deployment service が repo fetch / manifest parse を担当する                  |
+| desired apply     | Deployment.desired に worker / service / route / publication / consume を pin                    | Deployment.desired に worker / service / route / publication / consume を pin |
+| Deployment record | Deployment.input に manifest / artifacts を記録                                                  | Deployment.input に repository URL / ref / commit / manifest metadata を記録  |
+| rollback 可否     | GroupHead を retained Deployment に切り替えて再 apply                                            | GroupHead を retained Deployment に切り替えて再 apply (commit を再解決)       |
+| API source kind   | `manifest`                                                                                       | `git_ref`                                                                     |
+| 表示名            | `local`                                                                                          | `repo:owner/repo@ref`                                                         |
 
 ## runtime translation report
 
-`takos deploy` は resolve / apply の前に runtime translation report を表示します。
-CLI では `Spec: Takos deploy manifest`、`Runtime: tenant runtime`、
-`Surface: Portable` として、Deployment.desired を tenant runtime
-へ渡すための backend requirement preflight を示します。backend adapter 名は
-operator 内部の実装詳細として扱い、通常の report には出しません。
+`takos deploy` は resolve / apply の前に runtime translation report
+を表示します。 CLI では
+`Spec: Takos deploy manifest`、`Runtime: tenant runtime`、 `Surface: Portable`
+として、Deployment.desired を tenant runtime へ渡すための backend requirement
+preflight を示します。backend adapter 名は operator
+内部の実装詳細として扱い、通常の report には出しません。
 
 - `compatible`: tenant runtime へ渡す schema / translation が成立する
-- `unsupported`: current Deployment service には接続されておらず fail-fast で止まる
+- `unsupported`: current Deployment service には接続されておらず fail-fast
+  で止まる
 
 runtime translation report が対象にするのは `Deployment.desired.routes` と
 Deployment.desired の workload 部分、runtime が満たすべき operator/backend 要件
@@ -155,24 +162,23 @@ consume の整合性は manifest validation と Deployment service の resolve g
 ごとに異なります。backend / adapter 名は operator-only configuration
 であり、public deploy manifest には書きません。runtime translation report で
 `unsupported` と判定された workload / route は実行前に失敗します。resource は
-manifest の publications catalog ではなく、manifest `resources` または resource API
-で扱います。operator 向けの現在の backing 実装は
+manifest の publications catalog ではなく、manifest `resources` または resource
+API で扱います。operator 向けの現在の backing 実装は
 [hosting/aws](/hosting/aws)、[hosting/gcp](/hosting/gcp)、[hosting/kubernetes](/hosting/kubernetes)
 と [Not A Current Contract](/hosting/differences#not-a-current-contract)
-を参照してください。
-:::
+を参照してください。 :::
 
 ## 関連 verb
 
 `takos deploy` だけでなく、Deployment lifecycle を細かく制御したいときは以下の
 verb を組み合わせます。詳細は [CLI コマンド](/reference/cli) を参照。
 
-| verb                                | 用途                                                              |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| `takos apply <deployment-id>`       | resolved Deployment を applied に進める                           |
-| `takos diff <deployment-id>`        | resolved Deployment の expansion + GroupHead 比較を表示する       |
-| `takos approve <deployment-id>`     | `require-approval` decision に approval を添付する                |
-| `takos rollback [<group>]`          | group の GroupHead を previous Deployment に切り替える            |
+| verb                            | 用途                                                        |
+| ------------------------------- | ----------------------------------------------------------- |
+| `takos apply <deployment-id>`   | resolved Deployment を applied に進める                     |
+| `takos diff <deployment-id>`    | resolved Deployment の expansion + GroupHead 比較を表示する |
+| `takos approve <deployment-id>` | `require-approval` decision に approval を添付する          |
+| `takos rollback [<group>]`      | group の GroupHead を previous Deployment に切り替える      |
 
 ## 例
 
@@ -191,8 +197,8 @@ takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref v1.2.0 --
 ```
 
 canonical PaaS implementation では、ローカル working tree からの `takos deploy`
-も repo URL からの `takos deploy` も同じ Deployment endpoint を通ります。
-CLI 側の役割が異なるだけで（local は CLI が manifest / artifacts を読んで
+も repo URL からの `takos deploy` も同じ Deployment endpoint を通ります。 CLI
+側の役割が異なるだけで（local / takosumi-git は manifest / artifacts を読んで
 `POST /api/public/v1/deployments` に渡し、repo は Deployment service が repo
 を解決する）、Deployment.desired の構造は同じです。release / catalog package
 からの deploy は [Repository / Catalog デプロイ](/deploy/store-deploy) を参照

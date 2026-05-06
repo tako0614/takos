@@ -1933,14 +1933,8 @@ download は GitHub / GitLab public repo 向けの host-specific な最終 fallb
     "name": "my-app",
     "compute": {
       "web": {
-        "build": {
-          "fromWorkflow": {
-            "path": ".takos/workflows/deploy.yml",
-            "job": "bundle",
-            "artifact": "web",
-            "artifactPath": "dist/worker"
-          }
-        }
+        "image": "ghcr.io/acme/web@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "port": 8080
       }
     },
     "routes": [{ "id": "web", "target": "web", "path": "/" }]
