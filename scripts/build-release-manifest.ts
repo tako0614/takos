@@ -141,6 +141,10 @@ function validationCommands(): CommandManifest[] {
       command: ['deno', 'task', 'validate:helm'],
     },
     {
+      name: 'helm-overlay-generator',
+      command: ['deno', 'task', 'helm:check-overlays'],
+    },
+    {
       name: 'release-gate',
       command: [
         'deno',
@@ -178,6 +182,7 @@ function assertRequiredValidationCommands(
     'validate-distributions': ['deno', 'task', 'validate:distributions'],
     'service-set-validator': ['deno', 'task', 'validate:service-set'],
     'validate-helm': ['deno', 'task', 'validate:helm'],
+    'helm-overlay-generator': ['deno', 'task', 'helm:check-overlays'],
     'docs:build': ['deno', 'task', 'docs:build'],
   };
   const errors: string[] = [];

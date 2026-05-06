@@ -12,6 +12,7 @@ The manifest captures:
   `shortCommit`, `describe`, dirty flag)
 - release validation command inventory
 - expected and observed Takos service IDs from Helm manifests
+- AWS/GCP Helm overlay generator drift check command
 - `apps/paas/src/domains/*` domain directories
 - local smoke/e2e script inventory
 

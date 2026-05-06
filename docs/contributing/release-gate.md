@@ -27,8 +27,9 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
 5. Service set validator: `deno task validate:service-set`
 6. Distribution profile schema and artifact validator: `deno task validate:distributions`
 7. Helm chart validator: `deno task validate:helm`
-8. Release manifest build: `scripts/build-release-manifest.ts`
-9. Compose config render: `deno task local:config`
+8. Helm overlay generator drift check: `deno task helm:check-overlays`
+9. Release manifest build: `scripts/build-release-manifest.ts`
+10. Compose config render: `deno task local:config`
 
 ## Output
 

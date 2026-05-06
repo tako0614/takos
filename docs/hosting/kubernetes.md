@@ -154,6 +154,14 @@ images:
     tag: "2026.05.06"
 ```
 
+AWS / GCP overlay は distribution profile から生成します:
+
+```bash
+cd takos
+deno task helm:generate-overlays
+deno task helm:check-overlays
+```
+
 production では Secret 値を `--set` で渡す代わりに External Secrets Operator /
 Sealed Secrets / platform secret manager を使い、`secrets.create: false` と
 `secrets.existingSecrets.*` を設定してください。
