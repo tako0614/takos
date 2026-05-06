@@ -3,7 +3,8 @@
 > このページでわかること: group の役割、group に所属した primitive
 > が使える機能、`takos deploy` / `takos install` との関係。
 
-> 現行実装の split status は [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
+> 現行実装の split status は
+> [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
 Takos の group は **Deployment record を順序付ける compatibility state scope**
 です。service / resource / route / publication は group に所属していても、
@@ -30,19 +31,20 @@ binding 上は同じ扱いです。
 ## group とは
 
 group は `groups` row として保存される optional scope です。group 自体は
-workload を実行せず、primitive の集合と、その集合に対する GroupHead /
-Deployment 履歴 state を持ちます。
+workload を実行せず、primitive の集合と、その集合に対する GroupHead / Deployment
+履歴 state を持ちます。
 
 - 構成要素: 0..N 個の service / resource / route / publication / consume edge
 - 所属: primitive は `group_id` を持つことで group inventory に入る
 - 入力: manifest / repository / catalog install / API から Deployment を resolve
-  + apply できる
+  - apply できる
 - 境界: group 所属は runtime の特権や resource の特別処理を意味しない
 
 manifest は group 専用ファイルではありません。manifest に書かれた primitive
 declaration を resolve するとき、既定では manifest の `name` が所属先 group
-名になります。`--group` や API の `group` body field は override として使います。
-group を指定しない primitive は、同じ primitive API で個別に管理できます。
+名になります。`--group` や API の `group` body field は override
+として使います。 group を指定しない primitive は、同じ primitive API
+で個別に管理できます。
 
 ## group の作成
 
@@ -63,8 +65,7 @@ takos deploy --env staging --space SPACE_ID --group my-custom-group
 
 ::: info `takos deploy` / `takos install` は GroupHead を advance します。
 manifest の `name` が group 名になり、`--group` は override です。group なし
-primitive は個別 primitive API で管理します。
-:::
+primitive は個別 primitive API で管理します。 :::
 
 ## group の管理
 
@@ -96,25 +97,24 @@ takos group delete my-app --space SPACE_ID
 ```
 
 ::: danger group を削除すると、group inventory と GroupHead が消えます。
-稼働中の workload がある場合は先に
-`takos uninstall GROUP_NAME --space SPACE_ID` で停止・削除してください。
-:::
+稼働中の workload がある場合は先に `takos uninstall GROUP_NAME --space SPACE_ID`
+で停止・削除してください。 :::
 
 ## deploy / install と group の関係
 
-| 観点              | local manifest flow                                              | repo URL deploy / `takos install`                                |
-| ----------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| source            | local working tree                                               | repository URL / catalog metadata                                |
-| group 作成        | group 指定時、未作成なら apply 時に GroupHead と一緒に作成       | group 指定時、未作成なら apply 時に GroupHead と一緒に作成       |
-| group 指定        | `--group`                                                        | `--group` または API body の `group`                             |
-| Deployment.input  | CLI が manifest snapshot / artifacts を inline で送る            | Deployment service が repo source から Deployment.input を組む   |
-| Deployment.desired| Deployment.desired に worker / route / publication / binding を pin | Deployment.desired に worker / route / publication / binding を pin |
-| rollback          | GroupHead を retained Deployment に切り替え                      | GroupHead を retained Deployment に切り替え (commit 再解決)      |
+| 観点               | local manifest flow                                                 | repo URL deploy / `takos install`                                   |
+| ------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| source             | local working tree                                                  | repository URL / catalog metadata                                   |
+| group 作成         | group 指定時、未作成なら apply 時に GroupHead と一緒に作成          | group 指定時、未作成なら apply 時に GroupHead と一緒に作成          |
+| group 指定         | `--group`                                                           | `--group` または API body の `group`                                |
+| Deployment.input   | CLI / takosumi-git が manifest snapshot / artifacts を送る          | Deployment service が repo source から Deployment.input を組む      |
+| Deployment.desired | Deployment.desired に worker / route / publication / binding を pin | Deployment.desired に worker / route / publication / binding を pin |
+| rollback           | GroupHead を retained Deployment に切り替え                         | GroupHead を retained Deployment に切り替え (commit 再解決)         |
 
 どちらの経路でも、manifest は Deployment.input.manifest_snapshot の入力です。
-`source.kind` は local manifest flow では `inline`、repo URL / install では
-`git` で、Deployment.input の出どころを示す metadata です。Deployment.desired の
-構造の差ではありません。
+`source.kind` は local manifest flow では `manifest`、repo URL / install では
+`git_ref` で、Deployment.input の出どころを示す metadata
+です。Deployment.desired の 構造の差ではありません。
 
 ## マルチテナント構成での group
 
@@ -153,28 +153,25 @@ env:
 
 compute:
   api:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: build-api
-        artifact: api
-        artifactPath: dist/api.js
+    image: ghcr.io/acme/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    port: 8080
   jobs:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: build-jobs
-        artifact: jobs
-        artifactPath: dist/jobs.js
+    kind: worker
+    triggers:
+      schedules:
+        - cron: "*/15 * * * *"
 ```
 
-1 回の `takos deploy --group full-stack` で複数 workload を 1 つの Deployment
-にまとめ、同じ group inventory に入れられます。
+1 回の deploy で複数 workload を 1 つの Deployment にまとめ、同じ group
+inventory に入れられます。`api` は digest-pinned image を直接使う service
+です。`jobs` のような worker bundle は manifest だけではなく、`takosumi-git`
+が生成する artifact input、または `source.kind="manifest"` の worker bundle
+artifact input と一緒に送ります。
 
 ## Primitive と group の関係
 
-control plane は worker / service / resource / route / publication / consume
-を Deployment.desired の field として扱います。group はこれらを順序付けて
+control plane は worker / service / resource / route / publication / consume を
+Deployment.desired の field として扱います。group はこれらを順序付けて
 履歴・rollback できる optional scope です。
 
 ```text
