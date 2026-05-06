@@ -8,6 +8,7 @@ dist/
 coverage/
 .wrangler/
 .takos-local/
+.takos-git/
 *.log
 tmp/
 temp/

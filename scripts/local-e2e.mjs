@@ -67,7 +67,7 @@ function composeBaseArgs(project, envFile) {
   ];
 }
 
-async function runDocker(args, options = {}) {
+async function runCommand(commandName, args, options = {}) {
   const {
     check = true,
     env = {},
@@ -75,7 +75,7 @@ async function runDocker(args, options = {}) {
   } = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const command = new Deno.Command('docker', {
+  const command = new Deno.Command(commandName, {
     args,
     env,
     stdout: 'piped',
@@ -88,18 +88,24 @@ async function runDocker(args, options = {}) {
     const stderr = new TextDecoder().decode(output.stderr);
     if (check && output.code !== 0) {
       throw new Error(
-        `docker ${args.join(' ')} failed with ${output.code}\n${stdout}${stderr}`,
+        `${commandName} ${args.join(' ')} failed with ${output.code}\n${stdout}${stderr}`,
       );
     }
     return { code: output.code, stdout, stderr };
   } catch (error) {
     if (error?.name === 'AbortError') {
-      throw new Error(`docker ${args.join(' ')} timed out after ${timeoutMs}ms`);
+      throw new Error(
+        `${commandName} ${args.join(' ')} timed out after ${timeoutMs}ms`,
+      );
     }
     throw error;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function runDocker(args, options = {}) {
+  return await runCommand('docker', args, options);
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 2000) {
@@ -189,6 +195,53 @@ async function runGatewayChecks(ports, secret) {
   );
 }
 
+async function seedGitRepository(hostRoot) {
+  await runCommand('bash', ['git/scripts/seed-dev-git.sh', 'local/demo'], {
+    env: {
+      TAKOS_GIT_REPOSITORY_ROOT: hostRoot,
+      TAKOS_GIT_OWNER_SPACE_ID: 'local',
+      TAKOS_GIT_SEED_FORCE: '1',
+    },
+    timeoutMs: 120_000,
+  });
+  console.log('[local-e2e] seeded takos-git repository local/demo');
+}
+
+async function makeTreeWritableForContainer(path) {
+  await Deno.chmod(path, 0o777);
+  for await (const entry of Deno.readDir(path)) {
+    const entryPath = `${path}/${entry.name}`;
+    if (entry.isDirectory) {
+      await makeTreeWritableForContainer(entryPath);
+    } else if (!entry.isSymlink) {
+      await Deno.chmod(entryPath, 0o666);
+    }
+  }
+}
+
+async function runGitCloneCheck(ports, secret) {
+  const cloneDir = await Deno.makeTempDir({ prefix: 'takos-git-clone-' });
+  const remoteUrl = `http://127.0.0.1:${ports.TAKOS_APP_PORT}/local/demo.git`;
+  try {
+    await runCommand('git', [
+      '-c',
+      `http.extraHeader=x-takos-internal-secret: ${secret}`,
+      '-c',
+      'http.extraHeader=x-takos-account-id: acct_local_e2e',
+      'clone',
+      remoteUrl,
+      cloneDir,
+    ], { timeoutMs: 120_000 });
+    const readme = await Deno.readTextFile(`${cloneDir}/README.md`);
+    if (!readme.includes('Seed repository for local takos-git verification.')) {
+      throw new Error('cloned repository README did not match seed content');
+    }
+    console.log('[local-e2e] git clone through apps/api Smart HTTP ok');
+  } finally {
+    await Deno.remove(cloneDir, { recursive: true });
+  }
+}
+
 async function printDiagnostics(composeArgs, commandEnv) {
   const ps = await runDocker([...composeArgs, 'ps'], {
     check: false,
@@ -213,6 +266,9 @@ async function main() {
     `takos-e2e-${Date.now()}-${Deno.pid}`,
   );
   const envFile = env('TAKOS_LOCAL_ENV_FILE', '.env.local.example');
+  const gitRepositoryHostRoot = await Deno.makeTempDir({
+    prefix: 'takos-git-repositories-',
+  });
   const ports = await selectPorts();
   const secret = env('TAKOS_INTERNAL_SERVICE_SECRET', 'local-dev-secret');
   const commandEnv = {
@@ -222,17 +278,22 @@ async function main() {
     TAKOS_INTERNAL_API_SECRET: env('TAKOS_INTERNAL_API_SECRET', secret),
     TAKOSUMI_INTERNAL_API_SECRET: env('TAKOSUMI_INTERNAL_API_SECRET', secret),
     TAKOS_ALLOW_NO_LLM: env('TAKOS_ALLOW_NO_LLM', '1'),
+    TAKOS_GIT_REPOSITORY_HOST_ROOT: gitRepositoryHostRoot,
   };
   const composeArgs = composeBaseArgs(project, envFile);
   const keepStack = Deno.env.get('TAKOS_LOCAL_E2E_KEEP_STACK') === '1';
   let started = false;
 
   console.log(`[local-e2e] project=${project}`);
+  console.log(`[local-e2e] gitRepositoryHostRoot=${gitRepositoryHostRoot}`);
   console.log(
     `[local-e2e] ports app=${ports.TAKOS_APP_PORT} takosumi=${ports.TAKOSUMI_PORT} agent=${ports.TAKOS_AGENT_PORT} git=${ports.TAKOS_GIT_PORT}`,
   );
 
   try {
+    await seedGitRepository(gitRepositoryHostRoot);
+    await makeTreeWritableForContainer(gitRepositoryHostRoot);
+
     const config = await runDocker([...composeArgs, 'config', '--services'], {
       env: commandEnv,
       timeoutMs: 120_000,
@@ -263,6 +324,7 @@ async function main() {
 
     await waitForHealth(ports);
     await runGatewayChecks(ports, commandEnv.TAKOS_INTERNAL_API_SECRET);
+    await runGitCloneCheck(ports, commandEnv.TAKOS_INTERNAL_API_SECRET);
     console.log('[local-e2e] completed');
   } catch (error) {
     console.error(`[local-e2e] failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -281,8 +343,15 @@ async function main() {
         { check: false, env: commandEnv, timeoutMs: 120_000 },
       );
       console.log('[local-e2e] compose stack cleaned up');
+      await Deno.remove(gitRepositoryHostRoot, { recursive: true });
+      console.log('[local-e2e] git repository seed cleaned up');
     } else if (started) {
       console.log('[local-e2e] keeping compose stack for inspection');
+      console.log(
+        `[local-e2e] keeping git repository seed at ${gitRepositoryHostRoot}`,
+      );
+    } else {
+      await Deno.remove(gitRepositoryHostRoot, { recursive: true });
     }
   }
 }
