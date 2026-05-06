@@ -16,6 +16,9 @@ data:
   {{ with .Values.runtimeConfig.managedResources }}
   TAKOS_MANAGED_RESOURCES_JSON: {{ toJson . | quote }}
   {{ end }}
+  {{ with .Values.runtimeConfig.defaultAppDistributionJson }}
+  TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}
+  {{ end }}
   ADMIN_DOMAIN: {{ .Values.domains.admin | quote }}
   TENANT_BASE_DOMAIN: {{ .Values.domains.tenantBase | quote }}
   TAKOS_APP_INTERNAL_URL: {{ include "takos.appUrl" . | quote }}
