@@ -167,6 +167,18 @@ export default defineConfig({
             link: '/operations/online-db-migrations',
           },
           {
+            text: 'Release Promotion',
+            link: '/operations/release-promotion',
+          },
+          {
+            text: 'Rollback SOP',
+            link: '/operations/rollback-sop',
+          },
+          {
+            text: 'Release Announcement Template',
+            link: '/operations/release-announcement-template',
+          },
+          {
             text: 'Troubleshooting Playbook',
             link: '/operations/troubleshooting',
           },

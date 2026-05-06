@@ -1,7 +1,7 @@
 # Release artifact manifest
 
-`scripts/build-release-manifest.ts` emits a JSON manifest for the current
-`takosumi` checkout without network access.
+`scripts/build-release-manifest.ts` emits a JSON manifest for the current Takos
+product shell checkout without network access.
 
 ## Scope
 
@@ -15,6 +15,7 @@ The manifest captures:
 - AWS/GCP Helm overlay generator drift check command
 - Helm template/client dry-run smoke command and CI-required env overrides
 - Helm cluster install smoke command and CI-required test CRD override
+- release promotion validator command
 - `apps/paas/src/domains/*` domain directories
 - local smoke/e2e script inventory
 
