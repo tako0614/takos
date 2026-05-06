@@ -34,6 +34,7 @@ Useful shell tasks:
 - `deno task local:config`: render the local compose config without starting services.
 - `deno task local:up` / `deno task local:down` / `deno task local:logs`: run the local shell.
 - `deno task local:smoke`: check the four local service health endpoints.
+- `deno task local:e2e`: run the isolated docker compose e2e smoke used by CI.
 - `deno task docs:dev` / `deno task docs:build`: work on the shell docs.
 - `deno task submodules:update`: initialize or refresh nested service checkouts.
 
