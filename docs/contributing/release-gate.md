@@ -34,8 +34,10 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
 The GitHub `release-gate` workflow also sets up Helm v3 and a kind cluster, then
 runs
 `TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:template-smoke`
-before the script gate so chart rendering and client install dry-run regressions
-fail CI while the local safe release-gate script stays credential-free.
+and `TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:install-smoke` before the
+script gate so chart rendering, client install dry-run, and real cluster install
+regressions fail CI while the local safe release-gate script stays
+credential-free.
 
 ## Output
 
