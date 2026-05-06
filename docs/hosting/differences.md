@@ -13,6 +13,8 @@ GCP / Kubernetes は Helm overlay、 selfhosted は docker-compose packaging
 
 このページでの compatible は schema / translation parity を指し、全 provider
 で同じ runtime behavior や resource existence を保証する意味ではありません。
+target ごとの readiness status は
+[Distribution Target Parity](/hosting/target-parity) を参照してください。
 
 ## Current Hosting Surface
 

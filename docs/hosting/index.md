@@ -70,6 +70,8 @@ host など) は各 target page の "target-specific 設定" セクションを
 current hosting surface の比較と current contract に含まれない項目は
 [環境ごとの差異](/hosting/differences) と
 [Not A Current Contract](/hosting/differences#not-a-current-contract) を参照。
+target ごとの GA / beta / smoke-only / unsupported status は
+[Distribution Target Parity](/hosting/target-parity) を正本にします。
 
 ## 多クラウド対応のクイック参照
 
@@ -116,4 +118,5 @@ gate は provider 実環境の proof を要求しません。
 - [Kubernetes](/hosting/kubernetes) --- base Helm chart + k8s provider plugin
 - [Self-hosted](/hosting/self-hosted) --- docker-compose + selfhosted plugin
 - [Multi-cloud](/hosting/multi-cloud) --- 5 target 横断 runbook
+- [Target Parity](/hosting/target-parity) --- target ごとの readiness status
 - [ローカル開発](/hosting/local) --- 開発用 dev runtime

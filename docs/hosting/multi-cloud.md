@@ -19,6 +19,8 @@ Provider proof は opt-in です。provider credentials、cluster、account、ga
 を必要とする proof は operator が明示的に起動し、CI に入れる場合も専用の gate
 として実行します。default docs build / PaaS kernel gate は provider
 実環境の到達性を要求しません。
+target ごとの current readiness は
+[Distribution Target Parity](/hosting/target-parity) に集約します。
 
 ## kernel host target を multi-cloud で選ぶ
 
@@ -756,3 +758,4 @@ env vars:
 - [Deploy](/deploy/) ― deploy manifest author 向け
 - [Rollback](/deploy/rollback) ― rollback semantics
 - [環境ごとの差異](/hosting/differences) ― hosting surface 比較
+- [Distribution Target Parity](/hosting/target-parity) ― target readiness matrix
