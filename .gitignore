@@ -9,6 +9,8 @@ coverage/
 .wrangler/
 .terraform/
 **/.terraform/
+.terraform-plan/
+*.tfplan
 .takos-local/
 .takos-git/
 *.log

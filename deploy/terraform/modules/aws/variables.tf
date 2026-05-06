@@ -76,6 +76,29 @@ variable "dynamo_kv_table_name" {
   default     = "takos-kv"
 }
 
+variable "plan_mode" {
+  description = "Use deterministic provider-free values for CI terraform plan review. Do not use for apply."
+  type        = bool
+  default     = false
+}
+
+variable "aws_account_id" {
+  description = "AWS account id override used only by plan_mode to avoid caller identity lookups."
+  type        = string
+  default     = ""
+}
+
+variable "availability_zones" {
+  description = "Availability zone override used only by plan_mode to avoid AWS API lookups."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.availability_zones) == 0 || length(var.availability_zones) >= 2
+    error_message = "availability_zones must be empty or contain at least two zones."
+  }
+}
+
 variable "ecs_cluster_name" {
   description = "ECS cluster name"
   type        = string

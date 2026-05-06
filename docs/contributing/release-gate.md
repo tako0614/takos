@@ -28,8 +28,10 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
 6. Distribution profile schema and artifact validator: `deno task validate:distributions`
 7. Helm chart validator: `deno task validate:helm`
 8. Helm overlay generator drift check: `deno task helm:check-overlays`
-9. Release manifest build: `scripts/build-release-manifest.ts`
-10. Compose config render: `deno task local:config`
+9. Terraform output to Helm values fixture check:
+   `deno task terraform:helm-values:check`
+10. Release manifest build: `scripts/build-release-manifest.ts`
+11. Compose config render: `deno task local:config`
 
 The GitHub `release-gate` workflow also sets up Helm v3 and a kind cluster, then
 runs
@@ -38,6 +40,11 @@ and `TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:install-smoke` before the
 script gate so chart rendering, client install dry-run, and real cluster install
 regressions fail CI while the local safe release-gate script stays
 credential-free.
+
+GitHub PR/release workflows also set up Terraform 1.9.8 and run
+`deno task terraform:plan-gate`. The plan gate uses committed staging tfvars and
+`terraform_plan_mode = true` to produce AWS/GCP plan summaries without live
+cloud credentials; full plan text is uploaded as a workflow artifact.
 
 ## Output
 

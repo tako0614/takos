@@ -32,6 +32,12 @@ variable "db_password" {
   sensitive   = true
 }
 
+variable "terraform_plan_mode" {
+  description = "Use deterministic provider-free inputs for CI terraform plan review. Do not use for apply."
+  type        = bool
+  default     = false
+}
+
 variable "aws" {
   description = "AWS-specific infrastructure settings."
   type = object({

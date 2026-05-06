@@ -20,7 +20,7 @@ locals {
 resource "aws_s3_bucket" "main" {
   for_each = local.s3_buckets
 
-  bucket = "${var.s3_bucket_prefix}-${each.key}-${var.environment}-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.s3_bucket_prefix}-${each.key}-${var.environment}-${local.aws_account_id}"
 
   tags = merge(var.tags, {
     Name        = "${var.s3_bucket_prefix}-${each.key}-${var.environment}"
