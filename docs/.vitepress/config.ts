@@ -143,6 +143,10 @@ export default defineConfig({
             link: "/operations/incident-response",
           },
           {
+            text: "Backup and Restore Drills",
+            link: "/operations/backup-restore-drills",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },
