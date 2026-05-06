@@ -59,6 +59,10 @@ const gates: GateCommand[] = [
     command: ['deno', 'task', 'validate:observability'],
   },
   {
+    name: 'validate-patch-management',
+    command: ['deno', 'task', 'validate:patch-management'],
+  },
+  {
     name: 'validate-helm',
     command: ['deno', 'task', 'validate:helm'],
   },

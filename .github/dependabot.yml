@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:00"
+      timezone: "Etc/UTC"
+    labels:
+      - "dependencies"
+      - "submodules"
+      - "security"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:15"
+      timezone: "Etc/UTC"
+    labels:
+      - "dependencies"
+      - "ci"
+      - "security"
+    open-pull-requests-limit: 5
