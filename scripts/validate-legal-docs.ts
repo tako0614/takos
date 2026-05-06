@@ -6,6 +6,7 @@ const requiredDocs = [
     expected: [
       'Data Processing Agreement template',
       'Sub-processor list',
+      'Data residency policy',
       'SOC 2 readiness checklist',
     ],
   },
@@ -41,6 +42,24 @@ const requiredDocs = [
     ],
   },
   {
+    path: 'docs/legal/data-residency.md',
+    expected: [
+      'Last reviewed | 2026-05-07',
+      'Residency Profiles',
+      '`global`',
+      '`us`',
+      '`eu`',
+      '`jp`',
+      'Provider-specific Handling',
+      'Operational Requirements',
+      'Enforcement Evidence',
+      'https://developers.cloudflare.com/data-localization/metadata-boundary/',
+      'https://developers.openai.com/api/docs/guides/your-data',
+      'https://d1.awsstatic.com/legal/aws-gdpr/AWS_GDPR_DPA.pdf',
+      'https://cloud.google.com/about/locations',
+    ],
+  },
+  {
     path: 'docs/legal/soc2-readiness.md',
     expected: [
       'Vendor Management',
@@ -59,6 +78,7 @@ validateTextIncludes('docs/.vitepress/config.ts', [
   'link: "/legal/"',
   'link: "/legal/data-processing-agreement"',
   'link: "/legal/subprocessors"',
+  'link: "/legal/data-residency"',
   'link: "/legal/soc2-readiness"',
 ]);
 

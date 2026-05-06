@@ -198,6 +198,10 @@ export default defineConfig({
             link: "/legal/subprocessors",
           },
           {
+            text: "Data Residency",
+            link: "/legal/data-residency",
+          },
+          {
             text: "SOC 2 Readiness",
             link: "/legal/soc2-readiness",
           },
