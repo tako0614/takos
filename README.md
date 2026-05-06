@@ -11,7 +11,7 @@ takos/
   agent/  -> takos-agent
   app/    -> takos-app
   git/    -> takos-git
-  paas/   -> Takos deploy artifacts (helm/terraform/distributions). Kernel itself is external (jsr:@takos/takosumi-kernel)
+  deploy/ -> Takos deploy artifacts (helm/terraform/distributions). Kernel itself is external (jsr:@takos/takosumi-kernel)
   docs/   -> shell-owned product architecture, runbooks, and planning docs
 ```
 
@@ -33,13 +33,15 @@ Useful shell tasks:
 - `deno task check`: strict lightweight shell check for automation.
 - `deno task local:config`: render the local compose config without starting services.
 - `deno task local:up` / `deno task local:down` / `deno task local:logs`: run the local shell.
+- `deno task local:smoke`: check the four local service health endpoints.
 - `deno task docs:dev` / `deno task docs:build`: work on the shell docs.
 - `deno task submodules:update`: initialize or refresh nested service checkouts.
 
 ## Boundary Names
 
 Product-level architecture and planning docs live under `docs/` at this shell level. Product roots may link to those
-plans, but the docs tree is not owned by `paas/` and must not contain product implementation code.
+plans, but the docs tree is not owned by any product implementation root and must not contain product implementation
+code.
 
 Use the split repository boundaries below when adding docs, scripts, imports, or local composition. Do not reintroduce
 pre-split path references such as `takos/apps` or `takos/packages`, path-level legacy references, or stale service names
@@ -47,18 +49,27 @@ such as `control-legacy`, `runtime-legacy`, or `takos-web`. Keep compatibility b
 documented where they are still part of the contract, but avoid using legacy names as current source paths or service
 identities.
 
+### Naming History
+
+Earlier Takos branches used names such as `takos-paas`, `TAKOS_PAAS_*`, `deployment-paas-*`, and `dev:paas` for the
+deploy/runtime layer. The current boundary is Takosumi: use `takosumi`, `TAKOSUMI_*`, and `takosumi-*` resource names
+for current source, CI, local compose, Helm, and operator docs. Mention the old names only in migration or compatibility
+history.
+
 ## Responsibility Split
 
 - `app`: accounts, auth, profiles, billing, OAuth, user settings, user-facing management UI, public/browser/CLI API
   gateway, and product API that is not owned by another Takos service.
-- `paas`: tenant/platform management, tenant and space registry, routing/entitlement context, deploy and runtime
-  lifecycle domains, resource/routing/publication domains, and internal tenant/control API.
+- `deploy`: Takos product distribution profiles, Helm/Terraform modules, distribution manifests, and validators that
+  wrap published packages, images, APIs, and manifests.
+- `takosumi` (external sibling `../takosumi`): tenant/platform management, deploy and runtime lifecycle domains,
+  resource/routing/publication domains, and internal control API.
 - `git`: Git hosting, Git Smart HTTP, repositories/source, refs, object storage, source resolution, and repository API
   contracts.
 - `agent`: agent execution service. It calls PaaS internal control RPC.
 
-Deploy and runtime lifecycle semantics are canonical in `paas` domains/process roles. Service contracts should be
-exported by the owning core service.
+Deploy and runtime lifecycle semantics are canonical in Takosumi domains/process roles. Takos product distribution
+overlays live in `deploy/`. Service contracts should be exported by the owning core service.
 
 Browser and CLI clients talk to `takos-app`. `takos-app` verifies public sessions/tokens and calls internal services
 with signed internal requests carrying actor context. Internal services do not verify browser cookies or public OAuth
