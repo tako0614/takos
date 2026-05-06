@@ -19,7 +19,6 @@ data:
   {{ with .Values.runtimeConfig.defaultAppDistributionJson }}
   TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}
   {{ end }}
-  SUPPORT_LEGACY_FROMWORKFLOW: {{ if hasKey .Values.runtimeConfig "supportLegacyFromWorkflow" }}{{ ternary "true" "false" .Values.runtimeConfig.supportLegacyFromWorkflow | quote }}{{ else }}"true"{{ end }}
   ADMIN_DOMAIN: {{ .Values.domains.admin | quote }}
   TENANT_BASE_DOMAIN: {{ .Values.domains.tenantBase | quote }}
   TAKOS_APP_INTERNAL_URL: {{ include "takos.appUrl" . | quote }}

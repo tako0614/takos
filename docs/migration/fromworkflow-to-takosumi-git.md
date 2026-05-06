@@ -73,18 +73,12 @@ current Takos public deploy API の source kind は次の 2 つです。
 reject されます。error response は `takosumi-git init` / `takosumi-git push` と
 `source.kind="manifest"` artifact input を案内します。
 
-## SUPPORT_LEGACY_FROMWORKFLOW release plan
+## removal status
 
-`SUPPORT_LEGACY_FROMWORKFLOW` は移行 window 用の accept-time guard です。current
-parser は `compute.build` を already retired として reject しますが、raw
-manifest object を受ける route では flag を使って legacy fromWorkflow input
-を明示的に拒否できます。
-
-| release window          | default | operator action                                                | 互換性                               |
-| ----------------------- | ------- | -------------------------------------------------------------- | ------------------------------------ |
-| D.7 complete release    | `true`  | staging / canary では `false` を設定して検証する               | legacy payload は gateway で reject  |
-| next minor release      | `false` | 例外が必要な環境だけ一時的に `true` を設定する                 | `fromWorkflow` 入力は default reject |
-| following minor release | removed | `takosumi-git` / `source.kind="manifest"` へ移行済みであること | flag と legacy accept path を削除    |
+temporary accept-time guard は削除済みです。current parser は `compute.build` を
+retired contract として reject し、raw manifest object を受ける route も legacy
+build metadata を reject します。deploy config / Helm values には互換 toggle
+を置きません。
 
 release note には、Takos は Web/API first、workflow / manifest authoring CLI は
 `takosumi-git`、Takosumi kernel の explicit manifest apply は `takosumi`
