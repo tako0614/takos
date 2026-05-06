@@ -15,6 +15,7 @@ authentication、profile、billing、public API、UI の正本は `takos/app/`
 | --- | --- | --- |
 | Data Processing Agreement template | `/legal/data-processing-agreement` | Draft template; legal review required before signature |
 | Sub-processor list | `/legal/subprocessors` | Published baseline; vendor review evidence is private |
+| Data residency policy | `/legal/data-residency` | Published policy; enforcement evidence required before GA |
 | SOC 2 readiness checklist | `/legal/soc2-readiness` | Readiness artifact; not an audit report |
 
 ## GA Blockers
@@ -22,6 +23,6 @@ authentication、profile、billing、public API、UI の正本は `takos/app/`
 - Privacy Policy and Terms of Service final legal review.
 - Data subject access / export / deletion handler.
 - Cookie consent and lawful-basis documentation.
-- Data residency policy.
+- Data residency enforcement evidence for production spaces.
 - Security disclosure policy with working `security@` intake and PGP key.
 - License inventory and third-party license review.
