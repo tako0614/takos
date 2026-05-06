@@ -1,14 +1,37 @@
 # AWS fail-closed overlay template.
+# Generated from deploy/distributions/aws.json by scripts/generate-helm-overlays.ts.
+# Re-run `deno task helm:generate-overlays` after editing the distribution profile.
 # This file is not a complete production profile by itself: every empty
 # runtimeConfig.plugins entry must be replaced by a trusted, non-reference
 # kernel plugin id supplied by the operator/plugin bundle.
 # Usage: helm install takos . -f values.yaml -f values-aws.yaml
 
+images:
+  takosApp:
+    registry: ghcr.io
+    repository: takos/takos-app
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  takosumi:
+    registry: ghcr.io
+    repository: takos/takosumi
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  takosGit:
+    registry: ghcr.io
+    repository: takos/takos-git
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  takosAgent:
+    registry: ghcr.io
+    repository: takos/takos-agent
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
 runtimeConfig:
   environment: production
-  # Empty plugin ids intentionally fail runtime config validation. Override all
-  # ports with non-reference plugins; do not inject DATABASE_URL/REDIS_URL/S3
-  # backend credentials directly into PaaS control pods.
+  # Empty plugin ids intentionally fail runtime config validation. Override
+  # every plugin id with trusted non-reference plugins.
   plugins:
     auth: ""
     notification: ""

@@ -59,6 +59,10 @@ const gates: GateCommand[] = [
     command: ['deno', 'task', 'validate:helm'],
   },
   {
+    name: 'helm-overlay-generator',
+    command: ['deno', 'task', 'helm:check-overlays'],
+  },
+  {
     name: 'release-manifest',
     command: [
       'deno',
