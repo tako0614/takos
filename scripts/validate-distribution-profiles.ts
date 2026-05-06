@@ -1,10 +1,12 @@
 import { basename, join, normalize, relative, resolve } from 'node:path';
 
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 type JsonRecord = Record<string, unknown>;
 
 const takosRoot = Deno.cwd();
 const ecosystemRoot = resolve(takosRoot, '..');
 const distributionDir = 'deploy/distributions';
+const distributionProfileSchemaPath = 'deploy/distribution-contract/takos-distribution-profile-v1.schema.json';
 const expectedTargets = [
   'aws',
   'cloudflare',
@@ -22,6 +24,7 @@ const providerTaskName = 'live-provisioning-smoke';
 
 const takosDenoConfig = await readJson(join(takosRoot, 'deno.json'));
 const takosumiDenoConfig = await readJson(resolve(takosRoot, '../takosumi/deno.json'));
+const distributionProfileSchema = await readJson(resolve(takosRoot, distributionProfileSchemaPath));
 const manifestFilter = parseManifestFilter(Deno.args);
 const distributionFiles = await distributionManifestFiles(manifestFilter);
 const errors: string[] = [];
@@ -58,6 +61,7 @@ console.log(JSON.stringify(
 async function validateDistribution(path: string): Promise<void> {
   const label = path;
   const profile = await readJson(resolve(takosRoot, path));
+  validateJsonSchema(profile, distributionProfileSchema, label);
   const targetId = stringAt(recordAt(profile, 'target', label), 'id', `${label}.target`);
   const expectedTarget = basename(path, '.json');
   const providerProof = recordAt(profile, 'providerProof', label);
@@ -259,6 +263,115 @@ function validateMetadataCommands(metadata: JsonRecord | null, label: string): v
       mode: 'fixture',
     });
   }
+}
+
+function validateJsonSchema(value: unknown, schema: JsonRecord, label: string): void {
+  const schemaErrors = collectJsonSchemaErrors(value, schema, label);
+  for (const error of schemaErrors) {
+    errors.push(`${error} (${distributionProfileSchemaPath})`);
+  }
+}
+
+function collectJsonSchemaErrors(value: unknown, schema: JsonRecord, label: string): string[] {
+  const localErrors: string[] = [];
+
+  if ('const' in schema && !jsonValuesEqual(value as JsonValue, schema.const as JsonValue)) {
+    localErrors.push(`${label} must equal ${JSON.stringify(schema.const)}`);
+  }
+
+  const enumValues = Array.isArray(schema.enum) ? schema.enum : null;
+  if (enumValues && !enumValues.some((entry) => jsonValuesEqual(value as JsonValue, entry as JsonValue))) {
+    localErrors.push(`${label} must be one of ${enumValues.map((entry) => JSON.stringify(entry)).join(', ')}`);
+  }
+
+  const expectedType = maybeString(schema.type);
+  if (expectedType && !matchesJsonSchemaType(value, expectedType)) {
+    localErrors.push(`${label} must be a ${expectedType}`);
+    return localErrors;
+  }
+
+  if (typeof value === 'string') {
+    const minLength = typeof schema.minLength === 'number' ? schema.minLength : null;
+    if (minLength !== null && value.length < minLength) {
+      localErrors.push(`${label} must have length >= ${minLength}`);
+    }
+    const pattern = maybeString(schema.pattern);
+    if (pattern && !new RegExp(pattern).test(value)) {
+      localErrors.push(`${label} must match ${pattern}`);
+    }
+  }
+
+  if (Array.isArray(value)) {
+    const minItems = typeof schema.minItems === 'number' ? schema.minItems : null;
+    if (minItems !== null && value.length < minItems) {
+      localErrors.push(`${label} must contain at least ${minItems} item(s)`);
+    }
+    const itemSchema = maybeRecord(schema.items);
+    if (itemSchema) {
+      value.forEach((item, index) => {
+        localErrors.push(...collectJsonSchemaErrors(item, itemSchema, `${label}[${index}]`));
+      });
+    }
+  }
+
+  if (isRecord(value)) {
+    const required = stringArray(schema.required);
+    for (const key of required) {
+      if (!(key in value)) {
+        localErrors.push(`${label}.${key} is required`);
+      }
+    }
+
+    const properties = maybeRecord(schema.properties);
+    if (properties) {
+      for (const [key, propertySchema] of Object.entries(properties)) {
+        if (!(key in value)) continue;
+        if (!isRecord(propertySchema)) {
+          localErrors.push(`${label}.${key} schema must be an object`);
+          continue;
+        }
+        localErrors.push(...collectJsonSchemaErrors(value[key], propertySchema, `${label}.${key}`));
+      }
+
+      if (schema.additionalProperties === false) {
+        const allowedKeys = new Set(Object.keys(properties));
+        for (const key of Object.keys(value)) {
+          if (!allowedKeys.has(key)) {
+            localErrors.push(`${label}.${key} is not allowed`);
+          }
+        }
+      }
+    }
+
+    const anyOf = Array.isArray(schema.anyOf) ? schema.anyOf.filter(isRecord) : [];
+    if (anyOf.length > 0) {
+      const matched = anyOf.some((candidate) => collectJsonSchemaErrors(value, candidate, label).length === 0);
+      if (!matched) {
+        localErrors.push(`${label} must match one of the anyOf schema branches`);
+      }
+    }
+  }
+
+  return localErrors;
+}
+
+function matchesJsonSchemaType(value: unknown, expectedType: string): boolean {
+  if (expectedType === 'object') return isRecord(value);
+  if (expectedType === 'array') return Array.isArray(value);
+  if (expectedType === 'string') return typeof value === 'string';
+  if (expectedType === 'number') return typeof value === 'number';
+  if (expectedType === 'integer') return typeof value === 'number' && Number.isInteger(value);
+  if (expectedType === 'boolean') return typeof value === 'boolean';
+  if (expectedType === 'null') return value === null;
+  return false;
+}
+
+function jsonValuesEqual(left: JsonValue, right: JsonValue): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 function parseSimpleShellCommand(

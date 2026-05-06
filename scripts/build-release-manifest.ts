@@ -33,6 +33,7 @@ const manifest = {
   package: await collectPackageManifest(),
   git: await collectGitInfo(),
   validationCommands: commands,
+  distributionContract: await collectDistributionContract(),
   distributions: await collectDistributionManifests(),
   processRoles: await collectProcessRoles(),
   domainDirs: await collectDomainDirs(),
@@ -269,6 +270,29 @@ async function collectDistributionManifests(): Promise<JsonValue> {
     available: true,
     manifests: manifests.sort((a, b) => String(a.targetId).localeCompare(String(b.targetId))),
   };
+}
+
+async function collectDistributionContract(): Promise<JsonValue> {
+  const path = 'deploy/distribution-contract/takos-distribution-profile-v1.schema.json';
+  try {
+    const text = await Deno.readTextFile(path);
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const properties = asRecord(parsed.properties);
+    const apiVersion = asRecord(properties?.apiVersion);
+    const kind = asRecord(properties?.kind);
+    return {
+      available: true,
+      path,
+      digest: await sha256(text),
+      schema: jsonString(parsed.$schema),
+      id: jsonString(parsed.$id),
+      title: jsonString(parsed.title),
+      apiVersion: jsonString(apiVersion?.const),
+      kind: jsonString(kind?.const),
+    };
+  } catch {
+    return { available: false, path };
+  }
 }
 
 function stringArraysEqual(

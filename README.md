@@ -36,7 +36,7 @@ Useful shell tasks:
 - `deno task local:smoke`: check the four local service health endpoints.
 - `deno task local:e2e`: run the isolated docker compose e2e smoke used by CI, including a seeded Smart HTTP git clone through apps/api.
 - `deno task docs:dev` / `deno task docs:build`: work on the shell docs.
-- `deno task validate:distributions`: verify official distribution profile refs, provider proof commands, fixtures, and service smoke metadata.
+- `deno task validate:distributions`: verify official distribution profiles against the schema contract, artifact refs, provider proof commands, fixtures, and service smoke metadata.
 - `deno task submodules:update`: initialize or refresh nested service checkouts.
 
 ## Boundary Names
@@ -62,8 +62,8 @@ history.
 
 - `app`: accounts, auth, profiles, billing, OAuth, user settings, user-facing management UI, public/browser/CLI API
   gateway, and product API that is not owned by another Takos service.
-- `deploy`: Takos product distribution profiles, Helm/Terraform modules, distribution manifests, and validators that
-  wrap published packages, images, APIs, and manifests.
+- `deploy`: Takos product distribution profiles, the distribution schema contract, Helm/Terraform modules, distribution
+  manifests, and validators that wrap published packages, images, APIs, and manifests.
 - `takosumi` (external sibling `../takosumi`): tenant/platform management, deploy and runtime lifecycle domains,
   resource/routing/publication domains, and internal control API.
 - `git`: Git hosting, Git Smart HTTP, repositories/source, refs, object storage, source resolution, and repository API

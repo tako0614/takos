@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://takos.jp/schemas/distribution/takos-distribution-profile-v1.json",
+  "title": "Takos distribution profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "environment",
+    "profile",
+    "providerProfile",
+    "artifacts",
+    "providerProof",
+    "requiredBindings",
+    "target",
+    "routing",
+    "services",
+    "metadata"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "takosumi.com/hosting/v1"
+    },
+    "kind": {
+      "const": "TakosDistribution"
+    },
+    "environment": {
+      "const": "production"
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^@takosumi/plugins/profiles/[a-z][a-z0-9-]*$"
+    },
+    "providerProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle", "profileId", "pluginIds"],
+      "properties": {
+        "bundle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profileId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pluginIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "ref"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "providerProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readOnlySmokeTask",
+        "provisioningSmokeTask",
+        "cleanupTask",
+        "fixturePath",
+        "liveEnvPrefix"
+      ],
+      "properties": {
+        "readOnlySmokeTask": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provisioningSmokeTask": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cleanupTask": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fixturePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "liveEnvPrefix": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^TAKOSUMI_PLUGIN_[A-Z0-9_]+$"
+        }
+      }
+    },
+    "requiredBindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "name"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "required": ["id", "metadata"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["publicBaseUrl", "adminBaseUrl", "wildcardDomain", "dnsProvider"],
+      "properties": {
+        "publicBaseUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adminBaseUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "wildcardDomain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dnsProvider": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["serviceId", "runtime", "hostingTargetId", "internalUrl", "smoke"],
+        "anyOf": [
+          {
+            "required": ["image"]
+          },
+          {
+            "required": ["artifactRef"]
+          }
+        ],
+        "properties": {
+          "serviceId": {
+            "type": "string",
+            "enum": ["takos-agent", "takos-app", "takos-git", "takosumi"]
+          },
+          "runtime": {
+            "type": "string",
+            "enum": ["container", "worker", "kubernetes-deployment", "process"]
+          },
+          "hostingTargetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "image": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artifactRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "internalUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "publicUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "smoke": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["healthPath", "expectedStatus", "expectedJson"],
+            "properties": {
+              "healthPath": {
+                "const": "/health"
+              },
+              "expectedStatus": {
+                "const": 200
+              },
+              "expectedJson": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["service"],
+                "properties": {
+                  "service": {
+                    "type": "string",
+                    "enum": ["takos-agent", "takos-app", "takos-git", "takosumi"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["official", "liveSmokeTask", "providerSmokeTask"],
+      "properties": {
+        "official": {
+          "type": "boolean"
+        },
+        "liveSmokeTask": {
+          "type": "string",
+          "minLength": 1
+        },
+        "providerSmokeTask": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
