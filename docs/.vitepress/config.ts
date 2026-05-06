@@ -151,6 +151,10 @@ export default defineConfig({
             link: "/operations/disaster-recovery",
           },
           {
+            text: "Capacity Planning",
+            link: "/operations/capacity",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },
