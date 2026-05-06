@@ -186,6 +186,18 @@ export default defineConfig({
         text: "Legal",
         items: [
           {
+            text: "Overview",
+            link: "/legal/",
+          },
+          {
+            text: "Data Processing Agreement",
+            link: "/legal/data-processing-agreement",
+          },
+          {
+            text: "Sub-processors",
+            link: "/legal/subprocessors",
+          },
+          {
             text: "SOC 2 Readiness",
             link: "/legal/soc2-readiness",
           },
