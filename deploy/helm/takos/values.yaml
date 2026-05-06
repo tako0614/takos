@@ -48,6 +48,7 @@ runtimeConfig:
   publicRoutesEnabled: false
   allowUnsafeProductionDefaults: false
   managedResources: {}
+  defaultAppDistributionJson: ""
   plugins:
     auth: takos.kernel.reference
     notification: takos.kernel.reference

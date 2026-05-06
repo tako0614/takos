@@ -46,10 +46,16 @@ const globalConfigMapText = await Deno.readTextFile(`${templateRoot}/configmap-g
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  imageRegistry: ""');
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  imagePullSecrets: []');
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  managedResources: {}');
+assertContains(`${chartRoot}/values.yaml`, valuesText, '  defaultAppDistributionJson: ""');
 assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
   'TAKOS_MANAGED_RESOURCES_JSON: {{ toJson . | quote }}',
+);
+assertContains(
+  `${templateRoot}/configmap-global.yaml`,
+  globalConfigMapText,
+  'TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}',
 );
 assertContains(
   `${templateRoot}/_helpers.tpl`,
