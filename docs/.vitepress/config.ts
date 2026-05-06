@@ -86,6 +86,16 @@ export default defineConfig({
         ],
       },
       {
+        text: "Migration",
+        items: [
+          { text: "概要", link: "/migration/" },
+          {
+            text: "fromWorkflow から takosumi-git へ",
+            link: "/migration/fromworkflow-to-takosumi-git",
+          },
+        ],
+      },
+      {
         text: "ホスティング",
         items: [
           { text: "概要", link: "/hosting/" },
