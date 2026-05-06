@@ -7,6 +7,8 @@ node_modules/
 dist/
 coverage/
 .wrangler/
+.terraform/
+**/.terraform/
 .takos-local/
 .takos-git/
 *.log

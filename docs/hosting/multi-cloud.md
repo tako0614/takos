@@ -22,6 +22,28 @@ Provider proof は opt-in です。provider credentials、cluster、account、ga
 target ごとの current readiness は
 [Distribution Target Parity](/hosting/target-parity) に集約します。
 
+## Terraform composition
+
+`takos/deploy/terraform/main.tf` は AWS / GCP managed resource の root
+composition です。`target = "aws"` または `target = "gcp"` を選ぶと、対応する
+module だけを instantiate し、`database_url` / `redis_url` /
+`queue_bindings` / `object_storage_buckets` / `network` /
+`workload_identity` を共通 output として返します。C-3.3 の Helm values bridge
+はこの共通 output vocabulary を入力にします。
+
+production 用 backend を使う場合は
+`deploy/terraform/environments/{aws-prod,gcp-prod}` を root として実行します。
+backend を使わない composition 検証は次の形です:
+
+```bash
+cd takos/deploy/terraform
+terraform init -backend=false
+terraform validate
+terraform plan \
+  -var='target=aws' \
+  -var='db_password=replace-with-operator-secret'
+```
+
 ## kernel host target を multi-cloud で選ぶ
 
 Takos kernel の deploy 正本は `takos-private/distribution.yml` です。
