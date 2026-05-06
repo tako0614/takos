@@ -145,6 +145,14 @@ function validationCommands(): CommandManifest[] {
       command: ['deno', 'task', 'helm:check-overlays'],
     },
     {
+      name: 'helm-template-smoke',
+      command: ['deno', 'task', 'helm:template-smoke'],
+      env: {
+        TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN: '1',
+        TAKOS_HELM_INSTALL_TEST_CRDS: '1',
+      },
+    },
+    {
       name: 'release-gate',
       command: [
         'deno',

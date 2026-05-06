@@ -12,6 +12,7 @@
     "docs:build": "deno task --cwd docs build",
     "helm:generate-overlays": "deno run --config deno.json --allow-read --allow-write=deploy/helm/takos scripts/generate-helm-overlays.ts",
     "helm:check-overlays": "deno run --config deno.json --allow-read scripts/generate-helm-overlays.ts --check",
+    "helm:template-smoke": "deno run --config deno.json --allow-run=helm --allow-read --allow-env=TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN,TAKOS_HELM_INSTALL_TEST_CRDS scripts/helm-template-smoke.ts",
     "validate:helm": "deno run --config deno.json --allow-read scripts/validate-helm-chart.ts",
     "validate:agent-docs": "deno run --config deno.json --allow-read --allow-env=TAKOS_ECOSYSTEM_ROOT scripts/validate-agent-docs.ts",
     "validate:architecture": "deno run --config deno.json --allow-read scripts/validate-architecture-alignment.ts",

@@ -31,6 +31,12 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
 9. Release manifest build: `scripts/build-release-manifest.ts`
 10. Compose config render: `deno task local:config`
 
+The GitHub `release-gate` workflow also sets up Helm v3 and a kind cluster, then
+runs
+`TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:template-smoke`
+before the script gate so chart rendering and client install dry-run regressions
+fail CI while the local safe release-gate script stays credential-free.
+
 ## Output
 
 Progress and child command output are written to stderr. Stdout is reserved for
