@@ -147,6 +147,10 @@ export default defineConfig({
             link: "/operations/backup-restore-drills",
           },
           {
+            text: "Disaster Recovery",
+            link: "/operations/disaster-recovery",
+          },
+          {
             text: "Troubleshooting Playbook",
             link: "/operations/troubleshooting",
           },
