@@ -11,6 +11,10 @@ coverage/
 **/.terraform/
 .terraform-plan/
 *.tfplan
+deploy/terraform/environments/**/terraform.tfvars
+deploy/terraform/environments/**/terraform.tfvars.json
+deploy/terraform/environments/**/*.auto.tfvars
+deploy/terraform/environments/**/*.auto.tfvars.json
 .takos-local/
 .takos-git/
 *.log

@@ -97,6 +97,7 @@ export default defineConfig({
           { text: 'Kubernetes', link: '/hosting/kubernetes' },
           { text: 'セルフホスト', link: '/hosting/self-hosted' },
           { text: 'Multi-cloud', link: '/hosting/multi-cloud' },
+          { text: 'Secret Policy', link: '/hosting/secrets' },
           { text: 'ローカル開発', link: '/hosting/local' },
         ],
       },
