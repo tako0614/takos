@@ -8,6 +8,7 @@ const requiredDocs = [
       'Sub-processor list',
       'Data residency policy',
       'Privacy rights and lawful bases',
+      'Security disclosure policy',
       'License compliance',
       'Third-party dependency inventory',
       'SOC 2 readiness checklist',
@@ -79,6 +80,19 @@ const requiredDocs = [
     ],
   },
   {
+    path: 'docs/legal/security-disclosure.md',
+    expected: [
+      'Last reviewed | 2026-05-07',
+      'security@takos.jp',
+      '/.well-known/security.txt',
+      'Responsible Disclosure Window',
+      'PGP Key Publication',
+      'Safe Harbor',
+      'Out of scope',
+      'takos/app',
+    ],
+  },
+  {
     path: 'docs/legal/license-compliance.md',
     expected: [
       'First-party License Inventory',
@@ -118,14 +132,21 @@ for (const doc of requiredDocs) {
 }
 
 validateTextIncludes('docs/.vitepress/config.ts', [
-  'link: "/legal/"',
-  'link: "/legal/data-processing-agreement"',
-  'link: "/legal/subprocessors"',
-  'link: "/legal/data-residency"',
-  'link: "/legal/privacy-rights"',
-  'link: "/legal/license-compliance"',
-  'link: "/legal/third-party-license-inventory"',
-  'link: "/legal/soc2-readiness"',
+  "link: '/legal/'",
+  "link: '/legal/data-processing-agreement'",
+  "link: '/legal/subprocessors'",
+  "link: '/legal/data-residency'",
+  "link: '/legal/privacy-rights'",
+  "link: '/legal/security-disclosure'",
+  "link: '/legal/license-compliance'",
+  "link: '/legal/third-party-license-inventory'",
+  "link: '/legal/soc2-readiness'",
+]);
+
+validateTextIncludes('app/apps/web/public/.well-known/security.txt', [
+  'Contact: mailto:security@takos.jp',
+  'Policy: https://docs.takos.jp/legal/security-disclosure',
+  'Canonical: https://takos.jp/.well-known/security.txt',
 ]);
 
 if (failures.length > 0) {
