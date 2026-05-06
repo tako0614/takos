@@ -28,9 +28,9 @@ remains
   routing, network, registry, audit, events, publications, and supply-chain.
   They expose type/store/service-level boundaries instead of separate default
   microservices.
-- Process roles are declared in `apps/paas/src/process/roles.ts` as deployment
-  roles for the same product root: `takosumi-api`, `takosumi-worker`,
-  `takosumi-router`, `takosumi-runtime-agent`, and `takosumi-log-worker`.
+- Takosumi internal process roles may exist inside the sibling kernel service,
+  but Takos product deploy artifacts expose the service set as `takos-app`,
+  `takosumi`, `takos-git`, and `takos-agent`.
 - Workers and orchestration helpers exist for apply jobs, outbox dispatch,
   registry sync, repair, runtime vertical slice activation, deploy-to-runtime
   orchestration, event planning, publication planning, change-set planning,
@@ -155,7 +155,7 @@ Additional useful commands:
 ```sh
 cd ../takosumi && deno task check
 cd ../takosumi && deno test --allow-all packages/kernel/src/domains/deploy
-deno run --allow-read scripts/validate-process-roles.ts
+deno task validate:service-set
 deno task local:up
 deno task local:logs
 deno task local:down
@@ -169,8 +169,8 @@ Notes:
   this shell owns local composition and Takos-specific deploy artifacts only.
 - docs tasks currently print that Takos docs moved out of the `takosumi`
   service scope.
-- local Compose and Helm metadata carry the current Takosumi process-role
-  labels/envs.
+- local Compose and Helm metadata carry the current Takos service IDs and
+  internal URL wiring.
 
 ## In-memory vs real boundaries
 
@@ -234,8 +234,8 @@ Real/prod-facing boundaries that exist as code but are not the default wiring:
 - Move real self-host/cloud provider/source/storage/queue/object/KMS/secret
   implementations into kernel plugins, then run plugin-specific release gates
   outside the PaaS kernel release gate.
-- Reconcile local Compose/Helm resource names and command paths with the current
-  PaaS process-role model.
+- Keep local Compose/Helm resource names and command paths aligned with the
+  Takos product service set.
 - Keep expanding acceptance coverage in
   [`acceptance-matrix.md`](./acceptance-matrix.md) until the remaining
   production gaps have route/worker-level regression tests.

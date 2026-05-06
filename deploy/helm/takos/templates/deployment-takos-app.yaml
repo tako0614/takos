@@ -1,21 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "takos.fullname" . }}-takosumi-log-worker
+  name: {{ include "takos.fullname" . }}-takos-app
   labels:
     {{- include "takos.labels" . | nindent 4 }}
-    app.kubernetes.io/component: takosumi-log-worker
+    takos.io/service-id: takos-app
+    app.kubernetes.io/component: takos-app
 spec:
-  replicas: {{ .Values.paasLogWorker.replicaCount }}
+  replicas: {{ .Values.services.takosApp.replicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/component: takosumi-log-worker
+      app.kubernetes.io/component: takos-app
       {{- include "takos.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
         {{- include "takos.labels" . | nindent 8 }}
-        app.kubernetes.io/component: takosumi-log-worker
+        takos.io/service-id: takos-app
+        app.kubernetes.io/component: takos-app
     spec:
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
@@ -24,25 +26,24 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: takosumi-log-worker
-          image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
-          imagePullPolicy: {{ .Values.images.control.pullPolicy }}
-          command: ["deno", "task", "start"]
+        - name: takos-app
+          image: "{{ .Values.images.takosApp.repository }}:{{ .Values.images.takosApp.tag }}"
+          imagePullPolicy: {{ .Values.images.takosApp.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.paasLogWorker.port }}
+              containerPort: {{ .Values.services.takosApp.port }}
               protocol: TCP
           env:
             - name: PORT
-              value: {{ .Values.paasLogWorker.port | quote }}
-            - name: PROXY_BASE_URL
-              value: {{ include "takos.paasLogWorkerUrl" . | quote }}
-            - name: CONTROL_RPC_BASE_URL
-              value: {{ include "takos.paasLogWorkerUrl" . | quote }}
-            - name: TAKOSUMI_RUNTIME_AGENT_URL
-              value: {{ include "takos.paasRuntimeAgentUrl" . | quote }}
-            - name: TAKOS_LOCAL_EXECUTOR_URL
-              value: {{ include "takos.executorUrl" . | quote }}
+              value: {{ .Values.services.takosApp.port | quote }}
+            - name: TAKOS_APP_SERVICE_ID
+              value: "takos-app"
+            - name: TAKOSUMI_INTERNAL_URL
+              value: {{ include "takos.takosumiUrl" . | quote }}
+            - name: TAKOS_GIT_INTERNAL_URL
+              value: {{ include "takos.gitUrl" . | quote }}
+            - name: TAKOS_AGENT_INTERNAL_URL
+              value: {{ include "takos.agentUrl" . | quote }}
           envFrom:
             - configMapRef:
                 name: {{ include "takos.fullname" . }}-global
@@ -55,15 +56,15 @@ spec:
                 optional: true
           livenessProbe:
             httpGet:
-              path: /livez
+              path: {{ .Values.services.takosApp.healthPath | quote }}
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: {{ .Values.services.takosApp.healthPath | quote }}
               port: http
             initialDelaySeconds: 5
             periodSeconds: 5
           resources:
-            {{- toYaml .Values.paasLogWorker.resources | nindent 12 }}
+            {{- toYaml .Values.services.takosApp.resources | nindent 12 }}

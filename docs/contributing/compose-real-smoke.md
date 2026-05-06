@@ -47,7 +47,7 @@ polling defaults to `5000` ms between polls and can be changed with
 ## Latest local result
 
 On 2026-04-28, the real opt-in harness was run locally with
-`TAKOS_RUN_REAL_COMPOSE_SMOKE=1`. The smoke built the PaaS local image, started
-Postgres, Redis, MinIO, PaaS process-role containers, runtime, and
-`takos-agent`, verified Compose health plus all mapped `/health` endpoints, and
-then cleaned up with `docker compose down`.
+`TAKOS_RUN_REAL_COMPOSE_SMOKE=1`. That historical run predates the current
+four-service local shell. The current local service set is `takos-app`,
+`takosumi`, `takos-git`, and `takos-agent`; real Compose evidence should be
+refreshed against that set before treating it as current production proof.

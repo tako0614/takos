@@ -1,17 +1,18 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "takos.fullname" . }}-takosumi-log-worker
+  name: {{ include "takos.fullname" . }}-takos-app
   labels:
     {{- include "takos.labels" . | nindent 4 }}
-    app.kubernetes.io/component: takosumi-log-worker
+    takos.io/service-id: takos-app
+    app.kubernetes.io/component: takos-app
 spec:
   type: ClusterIP
   ports:
-    - port: {{ .Values.paasLogWorker.port }}
+    - port: {{ .Values.services.takosApp.port }}
       targetPort: http
       protocol: TCP
       name: http
   selector:
-    app.kubernetes.io/component: takosumi-log-worker
+    app.kubernetes.io/component: takos-app
     {{- include "takos.selectorLabels" . | nindent 4 }}

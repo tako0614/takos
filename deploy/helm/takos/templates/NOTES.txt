@@ -9,8 +9,8 @@
 {{- if .Values.ingress.enabled }}
    https://{{ .Values.domains.admin }}
 {{- else }}
-   kubectl port-forward svc/{{ $fullname }}-takosumi-api {{ .Values.paasApi.port }}:{{ .Values.paasApi.port }}
-   Then open: http://localhost:{{ .Values.paasApi.port }}
+   kubectl port-forward svc/{{ $fullname }}-takos-app {{ .Values.services.takosApp.port }}:{{ .Values.services.takosApp.port }}
+   Then open: http://localhost:{{ .Values.services.takosApp.port }}
 {{- end }}
 
 2. Tenant Application URL pattern:
@@ -39,6 +39,5 @@
       - secrets.existingSecrets (use an external secrets operator)
       - runtimeConfig.plugins (select operator-registered non-reference plugins)
       - Resource limits and autoscaling settings
-      - Network policies (networkPolicy.enabled: true)
 
 ===========================================================

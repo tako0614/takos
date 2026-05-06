@@ -13,7 +13,7 @@ commands from the `takos` product root unless a document says otherwise.
   API, domains, process roles, adapters, storage, and production-safety checks.
 - [`api-surface.md`](./api-surface.md) — OpenAPI-ish route snapshot owned by
   `apps/paas/src/api/openapi.ts` and its route-source-of-truth boundary.
-- [`deploy-topology-notes.md`](./deploy-topology-notes.md) — process-role naming
+- [`deploy-topology-notes.md`](./deploy-topology-notes.md) — Takos service-set
   alignment for Compose/Helm.
 - [`kernel-plugin-boundary-audit.md`](./kernel-plugin-boundary-audit.md) —
   source-of-truth checklist for keeping docs and implementation aligned around
@@ -29,9 +29,9 @@ commands from the `takos` product root unless a document says otherwise.
   acceptance catalog.
 - [`acceptance-matrix.md`](./acceptance-matrix.md) — acceptance catalog coverage
   matrix with covered, partial, and gap classifications.
-- [`process-role-validation.md`](./process-role-validation.md) documents
-  [`../../paas/scripts/validate-process-roles.ts`](../../paas/scripts/validate-process-roles.ts),
-  the static Compose/Helm role validator.
+- [`service-set-validation.md`](./service-set-validation.md) documents
+  [`../../scripts/validate-service-set.ts`](../../scripts/validate-service-set.ts),
+  the static Helm service-set validator.
 - [`architecture-alignment-validation.md`](./architecture-alignment-validation.md)
   documents
   [`../../paas/scripts/validate-architecture-alignment.ts`](../../paas/scripts/validate-architecture-alignment.ts),

@@ -14,9 +14,9 @@ deno run --no-config --allow-read scripts/self-host-e2e-check.ts
 ```
 
 The script validates that `compose.local.yml` contains the required services,
-local env-file wiring, externally mapped ports, process-role env/labels,
-smoke-safe dependency ordering, Docker socket/network wiring for the local OCI
-orchestrator, and named volumes needed by a single-node self-host smoke.
+local env-file wiring, externally mapped ports, service URL env wiring,
+smoke-safe dependency ordering, and named volumes needed by a single-node
+self-host smoke.
 
 ## Manual Docker plugin smoke
 
@@ -58,8 +58,7 @@ manually from `takos` on a host with Docker Compose available.
 
    TAKOS_LOCAL_ENV_FILE=.env.local \
      docker compose --env-file .env.local -f compose.local.yml logs -f \
-       takosumi-api takosumi-router takosumi-worker \
-       takosumi-runtime-agent takosumi-log-worker takos-agent
+       takos-app takosumi takos-git takos-agent
    ```
 
 6. Run HTTP health checks against the host-mapped ports:
@@ -91,13 +90,12 @@ manually from `takos` on a host with Docker Compose available.
      docker compose --env-file .env.local -f compose.local.yml down -v
    ```
 
-## Expected service roles
+## Expected services
 
-- `takosumi-api`
-- `takosumi-router`
-- `takosumi-worker`
-- `takosumi-runtime-agent`
-- `takosumi-log-worker`
+- `takos-app`
+- `takosumi`
+- `takos-git`
+- `takos-agent`
 
-Process boundaries are asserted through `TAKOSUMI_PROCESS_ROLE` and
-`takos.io/process-role`.
+Service boundaries are asserted through explicit service names and internal URL
+environment variables.

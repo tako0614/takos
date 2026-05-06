@@ -68,50 +68,29 @@ Create the name of the service account to use.
      ================================================================ */}}
 
 {{/*
-Takosumi API internal URL
+Takos app internal URL
 */}}
-{{- define "takos.paasApiUrl" -}}
-{{- printf "http://%s-takosumi-api:%v" (include "takos.fullname" .) (int .Values.paasApi.port) }}
+{{- define "takos.appUrl" -}}
+{{- printf "http://%s-takos-app:%v" (include "takos.fullname" .) (int .Values.services.takosApp.port) }}
 {{- end }}
 
 {{/*
-Takosumi router internal URL
+Takosumi internal URL
 */}}
-{{- define "takos.paasRouterUrl" -}}
-{{- printf "http://%s-takosumi-router:%v" (include "takos.fullname" .) (int .Values.paasRouter.port) }}
+{{- define "takos.takosumiUrl" -}}
+{{- printf "http://%s-takosumi:%v" (include "takos.fullname" .) (int .Values.services.takosumi.port) }}
 {{- end }}
 
 {{/*
-Takosumi runtime-agent internal URL
+Takos Git hosting internal URL
 */}}
-{{- define "takos.paasRuntimeAgentUrl" -}}
-{{- printf "http://%s-takosumi-runtime-agent:%v" (include "takos.fullname" .) (int .Values.paasRuntimeAgent.port) }}
+{{- define "takos.gitUrl" -}}
+{{- printf "http://%s-takos-git:%v" (include "takos.fullname" .) (int .Values.services.takosGit.port) }}
 {{- end }}
 
 {{/*
-Takosumi log-worker internal URL
+Takos agent service internal URL
 */}}
-{{- define "takos.paasLogWorkerUrl" -}}
-{{- printf "http://%s-takosumi-log-worker:%v" (include "takos.fullname" .) (int .Values.paasLogWorker.port) }}
-{{- end }}
-
-{{/*
-Runtime internal URL
-*/}}
-{{- define "takos.runtimeUrl" -}}
-{{- printf "http://%s-runtime:%v" (include "takos.fullname" .) (int .Values.runtime.port) }}
-{{- end }}
-
-{{/*
-Executor internal URL
-*/}}
-{{- define "takos.executorUrl" -}}
-{{- printf "http://%s-executor:%v" (include "takos.fullname" .) (int .Values.executor.port) }}
-{{- end }}
-
-{{/*
-OCI Orchestrator internal URL
-*/}}
-{{- define "takos.ociOrchestratorUrl" -}}
-{{- printf "http://%s-oci-orchestrator:%v" (include "takos.fullname" .) (int .Values.ociOrchestrator.port) }}
+{{- define "takos.agentUrl" -}}
+{{- printf "http://%s-takos-agent:%v" (include "takos.fullname" .) (int .Values.services.takosAgent.port) }}
 {{- end }}

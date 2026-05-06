@@ -1,24 +1,19 @@
 # Deploy topology notes
 
-## Process role alignment done here
+## Service-set alignment done here
 
-- `takosumi` stays a single product root and monolith. The names below are
-  process roles for API, worker, router, runtime-agent, and log-worker
-  execution, not separate default services.
-- Added non-selector metadata for the current PaaS process roles:
-  - `takosumi-api`
-  - `takosumi-worker`
-  - `takosumi-router`
-  - `takosumi-runtime-agent`
-  - `takosumi-log-worker`
-- Compose service names, Helm resource names, selectors, service DNS names,
-  values keys, and command entrypoints should use the current PaaS role names.
+- The Takos product service set is `takos-app`, `takosumi`, `takos-git`, and
+  `takos-agent`.
+- `takos-app` is the public Web/API gateway. Browser and CLI clients should
+  enter through `takos-app`, which calls the owning internal services.
+- `takosumi` remains the generic PaaS kernel service. Its internal process-role
+  layout is not modeled as top-level Takos Helm workloads.
+- Helm resource names, selectors, service DNS names, values keys, and ingress
+  backend wiring should use the Takos service IDs above.
 
 ## Remaining manual work
 
-- Split or add the dedicated `takosumi-log-worker` entrypoint before replacing
-  any remaining generic worker entrypoints.
-- Reconcile code-level task names and local environment variables with the
-  current process-role names.
-- Update operator runbooks for port-forward commands and dashboards keyed by
-  current process-role labels.
+- Keep older Takosumi process-role names only in historical notes or
+  Takosumi-internal implementation docs.
+- Update operator dashboards and port-forward snippets to key off
+  `takos.io/service-id`.

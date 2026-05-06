@@ -47,8 +47,8 @@ const gates: GateCommand[] = [
     command: ['deno', 'task', 'docs:build'],
   },
   {
-    name: 'process-role-validator',
-    command: ['deno', 'task', 'validate:process-roles'],
+    name: 'service-set-validator',
+    command: ['deno', 'task', 'validate:service-set'],
   },
   {
     name: 'validate-distributions',

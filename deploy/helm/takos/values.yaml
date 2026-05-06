@@ -17,16 +17,20 @@ domains:
 ## Container images
 ## -----------------------------------------------------------------
 images:
-  control:
-    repository: takos/control
+  takosApp:
+    repository: ghcr.io/takos/takos-app
     tag: "latest"
     pullPolicy: IfNotPresent
-  runtime:
-    repository: ghcr.io/takos/runtime-service
+  takosumi:
+    repository: ghcr.io/takos/takosumi
     tag: "latest"
     pullPolicy: IfNotPresent
-  executor:
-    repository: takos/executor
+  takosGit:
+    repository: ghcr.io/takos/takos-git
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  takosAgent:
+    repository: ghcr.io/takos/takos-agent
     tag: "latest"
     pullPolicy: IfNotPresent
 
@@ -55,142 +59,56 @@ runtimeConfig:
     runtime-agent: takos.kernel.reference
 
 ## -----------------------------------------------------------------
-## Takosumi process role: takosumi-api.
-## Values key: paasApi (HTTP API).
-## Port defaults are kept aligned with local process checks.
+## Takos service workloads
 ## -----------------------------------------------------------------
-paasApi:
-  replicaCount: 2
-  port: 8787
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: 1
-      memory: 1Gi
+services:
+  takosApp:
+    replicaCount: 2
+    port: 8080
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
 
-## -----------------------------------------------------------------
-## Takosumi process role: takosumi-router.
-## Values key: paasRouter.
-## -----------------------------------------------------------------
-paasRouter:
-  replicaCount: 2
-  port: 8788
-  resources:
-    requests:
-      cpu: 250m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
+  takosumi:
+    replicaCount: 2
+    port: 8080
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 2
+        memory: 2Gi
 
-## -----------------------------------------------------------------
-## Takosumi process role: takosumi-worker.
-## Values key: paasWorker.
-## -----------------------------------------------------------------
-paasWorker:
-  replicaCount: 1
-  pollIntervalMs: 250
-  scheduledIntervalMs: 60000
-  heartbeatTtlMs: 120000
-  cronJob:
-    enabled: false
-    schedule: "*/15 * * * *"
-  resources:
-    requests:
-      cpu: 500m
-      memory: 512Mi
-    limits:
-      cpu: 2
-      memory: 2Gi
+  takosGit:
+    replicaCount: 1
+    port: 8790
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
 
-## -----------------------------------------------------------------
-## Takosumi process role: takosumi-runtime-agent host/controller.
-## Values key: paasRuntimeAgent.
-## -----------------------------------------------------------------
-paasRuntimeAgent:
-  replicaCount: 1
-  port: 8789
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-
-## -----------------------------------------------------------------
-## Takosumi process role: takosumi-log-worker.
-## -----------------------------------------------------------------
-paasLogWorker:
-  replicaCount: 1
-  port: 8790
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-
-## -----------------------------------------------------------------
-## OCI Orchestrator
-## -----------------------------------------------------------------
-ociOrchestrator:
-  replicaCount: 1
-  port: 9002
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-  persistence:
-    enabled: true
-    size: 1Gi
-
-## -----------------------------------------------------------------
-## Takosumi process role: takosumi-runtime-agent workload.
-## Values key: runtime.
-## Keep this at a single replica unless sessions/jobs/workspaces are moved
-## to sticky or external storage; runtime keeps state in memory.
-## -----------------------------------------------------------------
-runtime:
-  replicaCount: 1
-  port: 8080
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: 1
-      memory: 1Gi
-  autoscaling:
-    enabled: false
-    minReplicas: 1
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
-
-## -----------------------------------------------------------------
-## Executor workload.
-## -----------------------------------------------------------------
-executor:
-  replicaCount: 1
-  port: 8080
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
-    limits:
-      cpu: 2
-      memory: 4Gi
-  autoscaling:
-    enabled: true
-    minReplicas: 1
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
+  takosAgent:
+    replicaCount: 1
+    port: 8080
+    healthPath: /health
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2
+        memory: 4Gi
 
 ## -----------------------------------------------------------------
 ## Secrets
@@ -217,7 +135,6 @@ secrets:
   openaiApiKey: ""
   anthropicApiKey: ""
   googleApiKey: ""
-  ociOrchestratorToken: ""
 
 ## -----------------------------------------------------------------
 ## Ingress
@@ -249,16 +166,3 @@ serviceAccount:
 podSecurityContext:
   runAsNonRoot: true
   fsGroup: 1000
-
-## -----------------------------------------------------------------
-## Network Policy
-## Runtime executes user-controlled commands, so egress is restricted by
-## default. Add explicit runtime.extraEgress peers for cluster-specific
-## dependencies such as private Git mirrors or object storage endpoints required
-## by your cluster/CNI.
-## -----------------------------------------------------------------
-networkPolicy:
-  enabled: true
-  runtime:
-    allowDns: true
-    extraEgress: []
