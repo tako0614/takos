@@ -71,18 +71,17 @@ Self-hosted and cloud production behavior, including signed service auth,
 database storage, source snapshots, provider materialization, queue/object
 storage, router config, KMS, secret storage, notifications, observability, and
 runtime agent integration, belongs in operator-provided external plugin bundles.
-The ecosystem checkout contains a separate `takosumi` working tree
-(published as the `@takosumi/plugins` JSR package, an independent product
-called **Takosumi**) with operator profile bundles for self-hosted, Cloudflare,
-AWS, GCP, and Kubernetes. Those
-profiles declare every required kernel port plus `coordination` and provide
-adapter wrappers for Cloudflare D1/R2/Queues/Durable Objects/Workers/Containers,
-AWS RDS/S3/SQS/KMS/Secrets/ECS-style control clients, GCP Cloud
-SQL/GCS/Pub/Sub/KMS/Secret Manager/Cloud Run-style control clients, and
-self-hosted Postgres/object/process/router clients. Provider SDK objects,
-bindings, and credentials still enter through operator-injected clients. They
-are configured through `TAKOS_KERNEL_PLUGIN_CONFIG`, not through stale kernel
-backend selectors.
+The ecosystem checkout contains a separate `takosumi` working tree (published as
+the `@takosumi/plugins` JSR package, an independent product called **Takosumi**)
+with operator profile bundles for self-hosted, Cloudflare, AWS, GCP, and
+Kubernetes. Those profiles declare every required kernel port plus
+`coordination` and provide adapter wrappers for Cloudflare D1/R2/Queues/Durable
+Objects/Workers/Containers, AWS RDS/S3/SQS/KMS/Secrets/ECS-style control
+clients, GCP Cloud SQL/GCS/Pub/Sub/KMS/Secret Manager/Cloud Run-style control
+clients, and self-hosted Postgres/object/process/router clients. Provider SDK
+objects, bindings, and credentials still enter through operator-injected
+clients. They are configured through `TAKOS_KERNEL_PLUGIN_CONFIG`, not through
+stale kernel backend selectors.
 
 When a storage plugin is selected, canonical PaaS stores for core, deploy
 (Deployment / GroupHead), runtime desired/observed state, ProviderObservation
@@ -129,13 +128,12 @@ selectors. They require operator-injected configuration or client references in
 `TAKOS_KERNEL_PLUGIN_CONFIG`; the PaaS kernel does not construct cloud SDK or
 provider network clients by default.
 
-Official integrated distribution manifests live in
-`takos/deploy/distributions`. They are public templates for self-hosted,
-Cloudflare, AWS, GCP, and Kubernetes targets and name the external provider
-profile, required services, health probes, artifacts, and provider proof task.
-`deno task validate:distributions` and the dry-run
-`deno task distribution:smoke --all` are part of the PaaS release gate. Live
-distribution proof is deliberately opt-in
+Official integrated distribution manifests live in `takos/deploy/distributions`.
+They are public templates for self-hosted, Cloudflare, AWS, GCP, and Kubernetes
+targets and name the external provider profile, required services, health
+probes, artifacts, and provider proof task. `deno task validate:distributions`
+and the dry-run `deno task distribution:smoke --all` are part of the PaaS
+release gate. Live distribution proof is deliberately opt-in
 (`deno task distribution:smoke
 --manifest deploy/distributions/<target>.json --live`)
 and requires an operator-deployed target.
@@ -143,14 +141,13 @@ and requires an operator-deployed target.
 The PaaS API can be created through a side-effect-free bootstrap factory, so an
 operator runtime can register trusted plugins and a `KernelPluginClientRegistry`
 before serving traffic. The Takosumi `deploy/cloudflare` scaffold (path:
-`takosumi/deploy/cloudflare`) documents the Worker, D1, R2, Queue,
-Durable Object, and Container binding shape
-for running the PaaS API behind Cloudflare infrastructure, and includes a Deno
-container template for the PaaS API. Operators still need to inject real
-Cloudflare clients and plugin config before serving traffic. Cloudflare
-Containers are on-demand lifecycle infrastructure; strict always-on workloads
-must target an always-on provider plugin such as Kubernetes, Cloud Run, or
-self-hosted process/container infrastructure.
+`takosumi/deploy/cloudflare`) documents the Worker, D1, R2, Queue, Durable
+Object, and Container binding shape for running the PaaS API behind Cloudflare
+infrastructure, and includes a Deno container template for the PaaS API.
+Operators still need to inject real Cloudflare clients and plugin config before
+serving traffic. Cloudflare Containers are on-demand lifecycle infrastructure;
+strict always-on workloads must target an always-on provider plugin such as
+Kubernetes, Cloud Run, or self-hosted process/container infrastructure.
 
 The external plugin root also includes operator bootstrap helpers, a Map-backed
 client registry, Cloudflare Worker binding helpers, and AWS/GCP fetch-based
@@ -180,10 +177,10 @@ staging and production.
 
 ## Deploy shell status {#deploy-shell}
 
-`takos` の PaaS control plane が deploy (Deployment / GroupHead) / runtime
-/ resource / routing / network / registry / audit の canonical semantics を提供
-する。manifest resolution、persistent Deployment history、rollback 等の business logic は
-`takos` に寄せる。現行 PaaS public surface は Deployment-centric API
+`takos` の PaaS control plane が deploy (Deployment / GroupHead) / runtime /
+resource / routing / network / registry / audit の canonical semantics を提供
+する。manifest resolution、persistent Deployment history、rollback 等の business
+logic は `takos` に寄せる。現行 PaaS public surface は Deployment-centric API
 (`POST /api/public/v1/deployments`, `POST /api/public/v1/deployments/:id/apply`,
 `POST /api/public/v1/deployments/:id/approve`,
 `GET /api/public/v1/deployments/:id/observations`,
@@ -203,13 +200,15 @@ staging and production.
 Takos app/API gateway は migration 中で 2 系統が並走している:
 
 - `takos/app/apps/api`: split 後の minimum gateway。`/health`, `/api/spaces`,
-  repository/source resolution, Deployment routes, runtime-facing
+  repository/source resolution, Deployment routes, OAuth public / consent proxy,
+  account/auth/profile/billing compatibility routes, runtime-facing
   `/api/services` / `/api/resources` / `/api/sessions` の forwarding subset
-- `takos/app/apps/control` + `takos/app/packages/control`: account / auth /
-  profile / billing / OAuth を提供する app
+- `takos/app/apps/control` + `takos/app/packages/control`: login / OAuth state /
+  account / profile / billing business logic を保持する compatibility backend
 
-この境界は migration 完了まで維持。public docs は `takos/app/apps/control` 側を
-canonical reference として記述する。
+この境界は migration 完了まで維持。public request の entrypoint は
+`takos/app/apps/api`、未切り出しの handler 実装は `apps/control` compatibility
+backend として記述する。
 
 他章は
 `> 現行 API gateway split status は [API Gateway Split](/current-state#api-gateway-split) を参照`
