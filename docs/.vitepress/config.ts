@@ -171,6 +171,10 @@ export default defineConfig({
             link: '/operations/release-promotion',
           },
           {
+            text: 'Release Artifacts',
+            link: '/operations/release-artifacts',
+          },
+          {
             text: 'Rollback SOP',
             link: '/operations/rollback-sop',
           },

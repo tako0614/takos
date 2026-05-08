@@ -1,0 +1,172 @@
+name: Release Artifacts
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "SemVer used for dry-run Helm packaging on manual runs"
+        required: false
+        default: "0.0.0-dev"
+        type: string
+      publish:
+        description: "Publish OCI images and Helm chart instead of dry-run build only"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: takos-release-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DENO_DIR: ${{ github.workspace }}/.deno-cache
+
+jobs:
+  validate:
+    name: Release gate inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
+
+      - name: Cache Deno deps
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.DENO_DIR }}
+          key: ${{ runner.os }}-deno-takos-release-artifacts-${{ hashFiles('deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-takos-release-artifacts-
+
+      - run: deno install
+      - run: deno task check
+      - run: deno task validate:release-promotion
+      - run: deno task validate:helm
+      - run: deno task helm:check-overlays
+      - run: deno task helm:template-smoke
+
+  oci-images:
+    name: OCI image (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: validate
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: takos-app
+            context: .
+            dockerfile: deploy/docker/takos-app.Dockerfile
+          - image: takos-git
+            context: git
+            dockerfile: git/Dockerfile
+          - image: takos-agent
+            context: agent
+            dockerfile: agent/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name == 'push' || inputs.publish == true
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,prefix=sha-
+
+      - name: Build and publish OCI image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name == 'push' || inputs.publish == true }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  helm-chart:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [validate, oci-images]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.15.4
+
+      - name: Resolve chart version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ inputs.version }}"
+          fi
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid SemVer chart version: ${version}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Package Helm chart
+        run: |
+          set -euo pipefail
+          mkdir -p dist/helm
+          helm package deploy/helm/takos \
+            --version "${{ steps.version.outputs.version }}" \
+            --app-version "${GITHUB_SHA}" \
+            --destination dist/helm
+
+      - name: Login to GHCR for Helm
+        if: github.event_name == 'push' || inputs.publish == true
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ghcr.io \
+              --username "${{ github.actor }}" \
+              --password-stdin
+
+      - name: Publish Helm chart
+        if: github.event_name == 'push' || inputs.publish == true
+        run: helm push dist/helm/takos-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: takos-helm-chart
+          path: dist/helm/*.tgz
+          if-no-files-found: error
