@@ -10,7 +10,7 @@ metadata を持つが、primitive や group は特権化されない。
 - 数式の評価・計算
 - CSV / JSON エクスポート
 - source tree の standalone MCP server で 26 tools を提供
-- `publication.http-endpoint@v1` でスプレッドシート UI を提供
+- app metadata でスプレッドシート UI / MCP / file handler を提供
 - group に所属しなくても動作可能
 
 ## Takos 上での動作
@@ -27,126 +27,81 @@ single worker (web) 構成。
 ```text
 {hostname}
   /                         → built frontend / static asset surface (deployment mount)
-  /api                      → app API, OAuth callback, session routes
-  /api/auth/callback        → Takos OAuth callback
+  /api                      → app API, OIDC callback, session routes
+  /api/auth/callback        → OIDC callback (Takosumi Accounts 経由)。詳細: [OIDC Consumer](/apps/oidc-consumer)
   /mcp                      → Excel MCP server (streamable HTTP)
   /files/:id                → Storage file handler open route
 ```
 
-## Publications
+## App Metadata And Bindings
 
-`outputs.url.routeRef` が参照する `/` route は built frontend / static asset
-surface の mount point を 表し、server entrypoint 自体の root route
-を意味しない。
+launcher / MCP / file handler は kernel manifest の `publications[]` ではなく、
+Takos app catalog / runtime registry の metadata として登録します。workload
+自体は `.takosumi/manifest.yml` の Shape resource で deploy します。
 
 ```yaml
-routes:
-  - id: ui
-    target: web
-    path: /
-  - id: api
-    target: web
-    path: /api
-  - id: mcp
-    target: web
-    path: /mcp
-  - id: file-open
-    target: web
-    path: /files/:id
-
-publications:
-  - name: excel-ui
-    type: publication.http-endpoint@v1
-    display:
-      title: Excel
-    outputs:
-      url:
-        kind: url
-        routeRef: ui
-  - name: excel-mcp
-    type: publication.mcp-server@v1
-    display:
+launcher:
+  name: excel-ui
+  title: Excel
+  url: ${ref:web.url}/
+mcp:
+  endpoints:
+    - name: excel-mcp
       title: Excel MCP
-    outputs:
-      url:
-        kind: url
-        routeRef: mcp
-    auth:
-      bearer:
-        secretRef: MCP_AUTH_TOKEN
-    spec:
       transport: streamable-http
+      url: ${ref:web.url}/mcp
+      auth:
+        kind: bearer
+        tokenRef: mcp-auth-token
+fileHandlers:
   - name: excel-file-handler
-    type: publication.http-endpoint@v1
-    display:
-      title: Excel
-    outputs:
-      url:
-        kind: url
-        routeRef: file-open
-    spec:
-      mimeTypes:
-        - application/vnd.takos.excel+json
-      extensions:
-        - .takossheet
+    title: Excel
+    url: ${ref:web.url}/files/:id
+    mimeTypes:
+      - application/vnd.takos.excel+json
+    extensions:
+      - .takossheet
 ```
 
-`publication.http-endpoint@v1` / `publication.mcp-server@v1` /
-`publication.http-endpoint@v1` の canonical 定義は
-[publication types](/reference/glossary#publication-types) を参照。`publication.mcp-server@v1` entry は agent runtime
-が参照する MCP catalog entry です。
-
-## Takos built-in provider publication
-
-`takos-api` は route / interface publication ではなく、kernel API への access を
-受け取る local consume 名です。実体は `takos.api-key` built-in provider
-publication の consume です。
+OIDC sign-in は `.takosumi/app.yml` の `identity.oidc@v1` AppBinding で宣言する
+([`reference/app-yml-spec.md`](/reference/app-yml-spec) /
+[`reference/binding-catalog.md`](/reference/binding-catalog) を参照)。
 
 ```yaml
-compute:
-  web:
-    consume:
-      - publication: takos.api-key
-        as: takos-api
-        request:
-          scopes:
-            - files:read
-            - files:write
-      - publication: takos.oauth-client
-        as: excel-oauth
-        request:
-          clientName: Takos Excel
-          redirectUris:
-            - /api/auth/callback
-          scopes:
-            - openid
-            - profile
-            - email
+bindings:
+  auth:
+    type: identity.oidc@v1
+    required: true
+    redirectPaths:
+      - /api/auth/callback
+    allowedScopes:
+      - openid
+      - profile
+      - email
 ```
 
-default app manifest / workflow は UI と `/mcp` を同じ worker に含める。MCP
-publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言し、control plane
-が worker-scoped secret env を用意する。実装は `MCP_AUTH_TOKEN` が未設定、かつ
-`MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed する。
-manifest の `routes` は `/`、`/api`、`/mcp`、`/files/:id` を `web` target
-に向ける。`/` を UI 直下として扱うのは deployment 側の責務で、entrypoint
-そのものの責務ではない。`/api` は app session API と OAuth callback を含む。
-manifest は generated secret resource を `APP_SESSION_SECRET` として `web` に bind し、OAuth consume の
-client/issuer/token/userinfo env を `OAUTH_CLIENT_ID`、`OAUTH_CLIENT_SECRET`、
-`OAUTH_ISSUER_URL`、`OAUTH_TOKEN_URL`、`OAUTH_USERINFO_URL` に inject する。
+default app manifest / workflow は UI と `/mcp` を同じ worker に含めます。MCP
+registry entry は bearer token ref を持ち、installer が worker-scoped secret env
+を用意します。実装は `MCP_AUTH_TOKEN` が未設定、かつ
+`MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed します。
+Shape manifest の route surface は `/`、`/api`、`/mcp`、`/files/:id` を `web`
+resource に向けます。`/api` は app session API と OIDC callback を含みます。
+installer は generated secret を `APP_SESSION_SECRET` として materialize し、
+`identity.oidc@v1` AppBinding の client/issuer env を
+`OIDC_CLIENT_ID`、`OIDC_CLIENT_SECRET`、`OIDC_ISSUER_URL`、`OIDC_REDIRECT_URI`
+として inject します。
 
 ## Storage との連携
 
-takos-excel は `takos-api` built-in provider consume から kernel API の endpoint
-/ credential を受け取り、Storage API を呼び出して spreadsheet file を読み書き
-する。Takos managed deploy では consume env として `TAKOS_STORAGE_API_URL` /
-`TAKOS_STORAGE_ACCESS_TOKEN` が inject される。
+takos-excel は app-layer storage grant から Takos Storage API の endpoint /
+credential を受け取り、Storage API を呼び出して spreadsheet file を読み書き
+します。Takos managed deploy では `TAKOS_STORAGE_API_URL` /
+`TAKOS_STORAGE_ACCESS_TOKEN` が materialize されます。
 
-Storage UI から spreadsheet file を開く場合は `publication.http-endpoint@v1`
-publication の `/files/:id` route を使う。新規作成または保存する Takos
-spreadsheet file は `.takossheet` extension と
-`application/vnd.takos.excel+json` MIME type を使う。既存 file を読む場合もこの
-MIME type を canonical contract として扱う。
+Storage UI から spreadsheet file を開く場合は file handler metadata の
+`/files/:id` route を使います。新規作成または保存する Takos spreadsheet file は
+`.takossheet` extension と `application/vnd.takos.excel+json` MIME type
+を使う。既存 file を読む場合もこの MIME type を canonical contract として扱う。
 
 API / UI / MCP request は `space_id` または `spaceId` query parameter を優先し、
 指定がない場合は optional env `TAKOS_SPACE_ID` を default Storage space として
@@ -189,7 +144,7 @@ API / UI / MCP request は `space_id` または `spaceId` query parameter を優
 | ----------- | -------------------------------------- |
 | files:read  | kernel の Storage からファイル読み取り |
 | files:write | kernel の Storage へファイル書き込み   |
-| openid      | Takos OAuth sign-in                    |
+| openid      | Takosumi Accounts OIDC sign-in         |
 | profile     | ユーザープロフィール取得               |
 | email       | メールアドレス取得                     |
 
@@ -198,3 +153,9 @@ API / UI / MCP request は `space_id` または `spaceId` query parameter を優
 takos-excel の spreadsheet storage は kernel の Storage に委譲する。app 自体の
 generated secret resource として `excel-session-secret` を持ち、
 `APP_SESSION_SECRET` に bind して cookie/session signing に使う。
+
+## 参照
+
+- [OIDC Consumer](/apps/oidc-consumer)
+- [Takosumi Accounts](/architecture/takosumi-accounts)
+- [Binding Catalog](/reference/binding-catalog)

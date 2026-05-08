@@ -1,19 +1,53 @@
 # Store
 
-Store は Takos kernel に統合されたカタログ / マーケットプレイス機能です。
-パッケージの公開、install、remote repository import を扱います。
+Store は Takos app layer のカタログ / マーケットプレイス機能です。パッケージの
+公開、install、remote repository import を扱います。takosumi kernel の compute
+manifest apply とは別 layer です。
+
+## App / InstallableApp / AppInstallation
+
+Store 周辺で使う 3 つの概念を区別します:
+
+| 概念                | 役割                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| **App**             | Store / UI 上の **product label**。catalog で表示される顔                                          |
+| **InstallableApp**  | `.takosumi/app.yml` の `kind: InstallableApp` で宣言される、**Git URL から install される 1 単位** |
+| **AppInstallation** | InstallableApp が Takosumi Account の Space に install された **instance** (台帳 record)           |
+
+つまり:
+
+```txt
+App (Store の product label)
+  └─ InstallableApp (.takosumi/app.yml)
+        └─ AppInstallation (Takosumi Account の Space に置かれる instance)
+```
+
+Store は InstallableApp の **catalog** として機能し、ユーザーが install
+ボタンを押すと AppInstallation record が作られます。Store package の install
+contract と AppInstallation の lifecycle は別の concern です。
+
+詳細:
+
+- InstallableApp の manifest (`.takosumi/app.yml`) と install path 全体の正本は
+  [Install Paths](/apps/install-paths) を参照
+- AppInstallation の record shape / lifecycle は
+  [App Installation Ledger](/architecture/app-installation) を参照
+- Installable App Model の全体設計は
+  [Installable App Model](/architecture/installable-app-model) を参照
 
 ## 公開の仕組み
 
-public リポジトリに deploy manifest (`.takos/app.yml` / `.takos/app.yaml`)
-があり、Release を作成すると Store に表示されます。
+public リポジトリに installer-bound manifest (`.takosumi/app.yml`) と、その
+`entry.manifest` が指す kernel-bound manifest (`.takosumi/manifest.yml` など) が
+あり、Release を作成すると Store に表示されます。
 
 Store の deployable 判定は release-backed です。public repository の non-draft /
-non-prerelease release と `.takos/app.yml` / `.takos/app.yaml`
-を基準にカタログ掲載を判定します。release asset
-は添付ファイルとして扱われ、Store の deployable 判定条件では ありません。
-control plane が Git object store (`GIT_OBJECTS`) を読めず `.takos/app.yml` /
-`.takos/app.yaml` を確認できない場合、その release は deployable
+non-prerelease release と `.takosumi/app.yml` を基準にカタログ掲載を判定します。
+`.takosumi/manifest.yml` だけでは owner / binding / permission preview
+を表せない ため、InstallableApp としては扱いません。release asset
+は添付ファイルとして扱われ、 Store の deployable 判定条件ではありません。control
+plane が Git object store (`GIT_OBJECTS`) を読めず `.takosumi/app.yml` と
+`entry.manifest` を確認できない 場合、その release は deployable
 として扱いません。
 
 ## Seed Repositories
@@ -45,8 +79,8 @@ interface SeedRepository {
 
 - package catalog: public な package release を検索する
 - package install: Store package の source を解決して deploy pipeline に渡す
-- remote repository import: Store Network の remote store
-  から repository reference を取り込む
+- remote repository import: Store Network の remote store から repository
+  reference を取り込む
 
 catalog の `deployable-app` は release-backed の deployable package を
 指します。`all` は全 catalog item、`repo` は repository card、`deployable-app`
@@ -177,10 +211,11 @@ GET /api/seed-repositories
 ## group を Store に公開するには
 
 1. リポジトリを public にする
-2. deploy manifest (`.takos/app.yml` / `.takos/app.yaml`) を追加
+2. installer-bound manifest (`.takosumi/app.yml`) と、そこから参照する
+   kernel-bound manifest (`.takosumi/manifest.yml`) を追加
 3. non-draft / non-prerelease Release を作成
 
-control plane が release commit の `.takos/app.yml` / `.takos/app.yaml`
+control plane が release commit の `.takosumi/app.yml` と `entry.manifest`
 を確認できると Store カタログに deployable package として表示されます。
 
 Seed Repository として新規 space 作成時に表示したい場合は `seed-repositories.ts`
@@ -188,70 +223,50 @@ Seed Repository として新規 space 作成時に表示したい場合は `seed
 
 ## ecosystem で自動化されるもの
 
-manifest と deploy を通じて、以下が自動的に関連づけられます:
+InstallableApp manifest と install pipeline
+を通じて、以下が自動的に関連づけられます:
 
 - group identity / service / route / hostname
-- resource binding / OAuth client
-- publication registration (MCP server, file handler, etc.)
+- resource binding / OIDC client (`identity.oidc@v1` AppBinding 経由、 詳細は
+  [Binding Catalog](/reference/binding-catalog))
+- app metadata registration (launcher, MCP server, file handler, etc.)
 
 ## MCP 統合
 
-manifest の `publications` で `ref: publication.mcp-server@v1` を declaration
-する。
+MCP endpoint の workload は Shape manifest の `resources[]` で deploy し、MCP
+server としての discovery metadata は app metadata / MCP registry に登録します。
 
 ```yaml
-routes:
-  - id: mcp
-    expose: { component: web, contract: mcp }
-    via: { ref: route.https@v1, config: { path: /mcp } }
-
-publications:
-  - name: tools
-    ref: publication.mcp-server@v1
-    outputs:
-      url: { from: { route: mcp } }
-    spec:
+mcp:
+  endpoints:
+    - name: tools
       transport: streamable-http
+      url: ${ref:web.url}/mcp
+      auth:
+        kind: bearer
+        tokenRef: mcp-auth-token
 ```
 
-MCP server catalog は deploy manifest の `publications` entry で管理します。
-deploy 後に control plane が catalog entry を保存し、 agent 側が server を
-ロードする。 `publication.mcp-server@v1` の canonical 定義は
-[publication descriptors](/reference/glossary#publication-types) を参照。
-詳細は [MCP Server](/apps/mcp) を参照。 publication の仕組みについては
-[Publication](/architecture/app-publications) を参照。
+詳細は [MCP Server](/apps/mcp) と
+[App Integration Metadata Boundary](/architecture/app-publications) を参照。
 
 ## file handler 統合
 
-manifest の `publications` で `ref: publication.file-handler@v1` を declaration
-する。
+file handler UI の workload は Shape manifest の `resources[]` で deploy し、
+Storage UI 向けの discovery metadata は file handler registry に登録します。
 
 ```yaml
-routes:
-  - id: file-open
-    expose: { component: web, contract: ui }
-    via: { ref: route.https@v1, config: { path: /files/:id } }
-
-publications:
+fileHandlers:
   - name: markdown
-    ref: publication.file-handler@v1
-    outputs:
-      url: { from: { route: file-open } }
-    spec:
-      mimeTypes: [text/markdown]
-      extensions: [.md]
+    title: Markdown
+    url: ${ref:web.url}/files/:id
+    mimeTypes: [text/markdown]
+    extensions: [.md]
 ```
 
-`publication.file-handler@v1` catalog は deploy manifest の `publications`
-entry で管理します。 space storage と deployed UI が loose coupling のまま
-連携できる。 route output は `:id` path segment を必ず含み、 storage catalog
-では `:id` を含まない handler を公開しません。 launch contract は file ID の
-path segment が primary です。 current storage UI は起動時に `space_id` query
-parameter も追加しますが、`file_id` query fallback はありません。
-canonical ref は
-[publication types](/reference/glossary#publication-types) を参照。詳細は
-[File Handlers](/apps/file-handlers) を参照。publication の仕組みについては
-[Publication](/architecture/app-publications) を参照。
+handler URL は `:id` path segment を必ず含みます。Storage UI は起動時に
+`space_id` query parameter も追加しますが、`file_id` query fallback
+はありません。 詳細は [File Handlers](/apps/file-handlers) を参照。
 
 ## 次に読むページ
 
