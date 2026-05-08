@@ -90,6 +90,32 @@ MUST NOT  forbidden for Core conformance
 These fifteen invariants are the load-bearing semantics of Core. Implementations
 MAY surface additional checks but MUST NOT relax any of these.
 
+> **Cross-instance service binding invariants (v1.x, non-binding for v1.0).**
+>
+> The following three invariants define the v1.x cross-instance service binding
+> primitive and are documented here for forward compatibility. They are NOT part
+> of the v1.0 conformance requirements. Takosumi mainline currently implements
+> the consumer-side foundation (manifest validation, anchor fetch, signature
+> verify, descriptor pin metadata, and `service-import` binding identity);
+> provider publish automation, cache refresh / revoke, and durable failure audit
+> remain separate conformance work.
+>
+> 16. **ServiceDescriptor signature verification**: ServiceDescriptor records
+>     fetched from an anchor MUST be signature-verified using the anchor's
+>     pinned `publicKey`. Verification failure MUST reject the apply, and all
+>     verification attempts (success or failure) MUST be audit-appended.
+> 17. **Resolved descriptor immutability**: A `ServiceDescriptor` pinned in
+>     `Deployment.resolution.descriptor_closure` is immutable. Refresh
+>     requires a new `Deployment` (sibling of invariants 3 and 11).
+> 18. **Kernel SHALL NOT operate a service registry**: Resolution from a
+>     service identifier to a `ServiceDescriptor` is delegated to an anchor
+>     (operator-injected via manifest `serviceResolvers[]`). The kernel MUST
+>     NOT hold an internal anchor URL or service catalog.
+>
+> See ecosystem ROADMAP §1.9 and
+> [`../../../architecture/cross-instance-service-binding`](../../architecture/cross-instance-service-binding)
+> for the full design.
+
 > **Vocabulary note.** The legacy authoring nouns `publish` / `consume` are
 > retained as authoring shorthand; the canonical Core vocabulary is **Output**
 > (producer-side typed value), **Binding** (consumer-side explicit injection
