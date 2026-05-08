@@ -1,14 +1,16 @@
 # Deploy System
 
-::: tip Internal implementation
-このページは deploy system の internal 実装を説明する。public contract は
-[manifest spec](/reference/manifest-spec) と [API reference](/reference/api)、
-そして Installable App Model の入口は
-[Installable App Model](./installable-app-model.md) を参照。
-:::
+> **Internal implementation**
+>
+> このページは deploy system の internal 実装を説明する。
+>
+> - public contract: [manifest spec](/reference/manifest-spec) /
+>   [API reference](/reference/api)
+> - Installable App Model の入口:
+>   [Installable App Model](./installable-app-model.md)
 
-Takos の deploy system は **Installable App Model** の登場で、
-"CLI が直接 kernel を叩いて deploy する" 単一 path から、**3 種の deploy path**
+Takos の deploy system は **Installable App Model** の登場で、 "CLI が直接
+kernel を叩いて deploy する" 単一 path から、**3 種の deploy path**
 を持つ多層構造に書き換わりました。本ページは、それぞれの path がどの entity
 を経由し、どの record を更新するかを **正本** として整理し、その下にある
 primitive / Core record 構造 (`takosumi` Core の Deployment /
@@ -16,36 +18,39 @@ ProviderObservation / GroupHead) と provider DAG を引き続き説明します
 
 ## 0. 3 種の deploy path (canonical)
 
-Installable App Model 配下の Takos には、deploy intent の origin が異なる
-**3 種の path** が存在します。どの path も最終的には takosumi kernel の
+Installable App Model 配下の Takos には、deploy intent の origin が異なる **3
+種の path** が存在します。どの path も最終的には takosumi kernel の
 `POST /v1/deployments` (= compute apply) に着地しますが、**Takos / 利用者
 から見える surface は別物** です。
 
-| # | path                          | trigger                                     | 主体                            | 用途                                 |
-| - | ----------------------------- | ------------------------------------------- | ------------------------------- | ------------------------------------ |
-| 1 | **Install path**              | `POST /v1/installations` (新規 install)     | takosumi-git installer pipeline | App を新規に install する            |
-| 2 | **Upgrade path**              | `POST /v1/installations/:id/upgrade`        | 同 installer pipeline (再走)    | source ref / manifest を更新する     |
-| 3 | **GitOps deploy binding**     | Takos が deploy intent repo に `git push`   | Takos → takosumi-git watcher    | Takos が自分の中から deploy する     |
+| # | path                      | trigger                                   | 主体                            | 用途                             |
+| - | ------------------------- | ----------------------------------------- | ------------------------------- | -------------------------------- |
+| 1 | **Install path**          | `POST /v1/installations` (新規 install)   | takosumi-git installer pipeline | App を新規に install する        |
+| 2 | **Upgrade path**          | `POST /v1/installations/:id/upgrade`      | 同 installer pipeline (再走)    | source ref / manifest を更新する |
+| 3 | **GitOps deploy binding** | Takos が deploy intent repo に `git push` | Takos → takosumi-git watcher    | Takos が自分の中から deploy する |
 
-::: warning kernel 直叩きは non-canonical
-旧来の "CLI から直接 kernel に compiled manifest を投げる" 経路は、operator /
-internal debug でのみ使用する non-canonical path として残します。**通常の
-deploy はすべて上記 3 path のいずれかを通る** のが Installable App Model の
-不変条件です。kernel に `.takosumi/app.yml` を直接渡してもいけません
-(kernel は `app.yml` を解釈しない)。
-:::
+> **kernel 直叩きは non-canonical**
+>
+> 旧来の "CLI から直接 kernel に compiled manifest を投げる" 経路は、 operator /
+> internal debug でのみ使用する non-canonical path として残します。
+>
+> - 通常の deploy はすべて上記 3 path のいずれかを通る
+> - kernel に `.takosumi/app.yml` を直接渡してはいけない
+> - kernel は `app.yml` を解釈しない
 
 3 path に共通する不変条件は次のとおりです。
 
-- kernel は `compiled manifest` (= placeholder ゼロの compute manifest) しか
-  受け取らない
+- kernel は `compiled manifest` (= installer-only placeholder を取り除いた
+  compute manifest) しか受け取らない
 - `.takosumi/app.yml` (installer-bound) は **kernel に渡らない**。これは
   installer / preview / binding catalog のための surface
-- `.takosumi/manifest.yml` (kernel-bound) は **compile 後** にのみ kernel が
-  受け取る。`${bindings.*}` / `${secrets.*}` / `${refs.*}` placeholder を
-  含んだ生 manifest を kernel に投げてはいけない (詳細は
-  [.takosumi/app.yml spec](/reference/app-yml-spec) と
-  [Installable App Model § 2 つの manifest](./installable-app-model.md))
+- `.takosumi/manifest.yml` は `workflowRef` や `${artifacts.*}` /
+  `${bindings.*}` / `${secrets.*}` / `${installation.*}` / `${params.*}`
+  を含み得る authoring manifest。kernel に届く前に `workflowRef` と
+  installer-only placeholder は消える。kernel-owned `${ref:...}` /
+  `${secret-ref:...}` と service import placeholder は deploy route が解決する
+  (詳細は [.takosumi/app.yml spec](/reference/app-yml-spec) と
+  [Manifest Reference](/reference/manifest-spec))
 
 ## 1. Install path (新規 install)
 
@@ -71,8 +76,8 @@ new.md §12 の install pipeline を canonical step として固定し、
 7. user approve                   (preview を確認しないと進まない)
 8. workflow sandbox 実行          (build phase に runtime secrets を渡さない)
 9. artifact resolve               (image digest / asset URI を解決)
-10. bindings 注入                 (identity.oidc@v1, database.postgres@v1, ...)
-11. manifest compile              (placeholder を実値に解決、digest を計算)
+10. AppBinding materialize        (identity.oidc@v1, database.postgres@v1, ...)
+11. manifest compile              (workflowRef strip / installer-only placeholder 解決)
 12. kernel deploy                 (POST /v1/deployments で apply)
 13. AppInstallation ready         (status: ready, runtimeBindingId を確定)
 ```
@@ -100,9 +105,9 @@ InstallationEvent ledger だけで完全に再構築できます。詳細な fie
 ## 2. Upgrade path (source ref を更新)
 
 既存 installation の source ref / `.takosumi/app.yml` / `.takosumi/manifest.yml`
-を更新する経路。**install path と同じ pipeline を再走** し、新しい
-compiled manifest digest を作って kernel に apply する点で構造的に install
-path と同一です。
+を更新する経路。**install path と同じ pipeline を再走** し、新しい compiled
+manifest digest を作って kernel に apply する点で構造的に install path
+と同一です。
 
 ```bash
 takosumi upgrade inst_abc --ref v1.2.4
@@ -156,7 +161,9 @@ takosumi kernel
 ### 3.2 Takos が知らなくていい env list
 
 GitOps deploy binding を採用すると、Takos の runtime 依存は次の env のみに
-なります (詳細は [Binding Catalog § deploy-intent.gitops@v1](/reference/binding-catalog) を参照)。
+なります (詳細は
+[Binding Catalog § deploy-intent.gitops@v1](/reference/binding-catalog)
+を参照)。
 
 ```env
 DEPLOY_INTENT_DRIVER=gitops
@@ -198,247 +205,176 @@ Approve?
 3 path に共通する **設計の核** は、`.takosumi/app.yml` と
 `.takosumi/manifest.yml` を厳格に分離することです。
 
-| ファイル                  | 受領者                  | 解釈タイミング              | 内容                                                    |
-| ------------------------- | ----------------------- | --------------------------- | ------------------------------------------------------- |
-| `.takosumi/app.yml`       | takosumi-git installer  | install / upgrade pipeline  | InstallableApp v1 metadata + bindings + permissions     |
-| `.takosumi/manifest.yml`  | takosumi-git → kernel   | compile 時 (kernel 直前)    | compute resource declaration (placeholder 込み)         |
-| compiled manifest         | takosumi kernel         | `POST /v1/deployments`      | placeholder ゼロの素朴な compute manifest               |
+| ファイル                 | 受領者                 | 解釈タイミング             | 内容                                                          |
+| ------------------------ | ---------------------- | -------------------------- | ------------------------------------------------------------- |
+| `.takosumi/app.yml`      | takosumi-git installer | install / upgrade pipeline | InstallableApp v1 metadata + bindings + permissions           |
+| `.takosumi/manifest.yml` | takosumi-git → kernel  | compile 時 (kernel 直前)   | compute resource declaration (workflowRef / placeholder 込み) |
+| compiled manifest        | takosumi kernel        | `POST /v1/deployments`     | installer-only placeholder 解決済み compute manifest          |
 
 - `.takosumi/app.yml` は **kernel に渡してはいけない**。kernel は
   `identity.oidc@v1` のような binding type を **知らない**。
 - `.takosumi/manifest.yml` は `${bindings.*}` / `${secrets.*}` /
-  `${refs.*}` / `${artifacts.*}` / `${installation.*}` / `${params.*}` の
-  placeholder を含み、これも **そのまま kernel に渡してはいけない**。
-- kernel が apply するのは **compiled manifest** で、すべての placeholder が
-  実値に解決済み (image digest / DB URL / OIDC issuer URL / ... が直値) です。
+  `${artifacts.*}` / `${installation.*}` / `${params.*}` と `workflowRef`
+  を含み得ます。これらは **そのまま kernel に渡してはいけない**。
+- kernel が apply するのは **compiled manifest** です。image digest / OIDC
+  client / AppInstallation 値など installer-only の値は解決済みですが、 resource
+  間参照 (`${ref:...}` / `${secret-ref:...}`) と service import placeholder は
+  kernel deploy route の責務として残り得ます。
 
 field 定義は [.takosumi/app.yml spec](/reference/app-yml-spec)、placeholder
 文法と binding 種別は [Binding Catalog](/reference/binding-catalog)、Compiler
 の動きは [Installer Pipeline](./installer-pipeline.md) を参照。
 
-## 5. 共通基盤: Core record と primitive projection
+## 5. 共通基盤: Deployment と Shape resource
 
 3 path のいずれを通っても、kernel に apply された後の Takos deploy system は
-**`takosumi` Core の 3 record + 2 durable record** に集約されます。authoring
-surface (`components` / `routes` / `publications` / `bindings` / `resources`)
-は依然 primitive-first ですが、internal canonical 表現は次のとおりです。
+takosumi kernel の Deployment lifecycle に集約されます。current authoring
+surface は `apiVersion: "1.0"` + `kind: Manifest` + `resources[]` の Shape model
+です。旧 AppSpec の `components` / `routes` / `bindings` / `publications` は
+current manifest ではありません。
 
-- **Deployment** — input (`manifest_snapshot`) → resolution
-  (`descriptor_closure` / `resolved_graph`) → desired (`routes` / `bindings` /
-  `resources` / `runtime_network_policy` / `activation_envelope`) →
-  conditions の 4 layer を 1 record に内包する中核 record
+- **Deployment** — input manifest、resource DAG、provider operation、 conditions
+  / WAL を 1 lifecycle として扱う中核 record
+- **ManifestResource** — `shape` / `name` / `provider` / `spec` を持つ apply
+  単位。例 `worker@v1` / `web-service@v1` / `database-postgres@v1`
 - **ProviderObservation** — provider 側の observed state を separate stream
   として記録 (canonical な真値ではない)
 - **GroupHead** — group ごとの `current_deployment_id` /
-  `previous_deployment_id` pointer
+  `previous_deployment_id` pointer。Installable App Model では AppInstallation
+  側の `compiledManifestDigest` が上位の source pin になる
 
 `ResourceInstance` / `MigrationLedger` のみ Deployment 外の独立 record として
-durable state を持ちます。group に所属しているかどうかで runtime や resource
-provider の扱いは変わりません。
+durable state を持ちます。group に所属しているかどうかで shape / provider の
+apply semantics は変わりません。
 
 > 現行実装の split status は
 > [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
 
-実装上の分かれ方:
+## 6. Manifest format (Shape model)
 
-- **Primitive records** — service、deployment、route、custom domain、resource、
-  publication、binding edge などの authoring/API projection record
-- **Group** — primitive を任意に束ねる state scope。inventory、source metadata、
-  current deployment pointer、reconcile status など group 機能の state を持つ
-- **Manifest / source** — primitive desired declaration の入力。local file、
-  repository ref、catalog package から解決される
-- **Deployment record** — group に所属する deployable primitive の applied state
-  と source metadata を保存する history。repository source 由来は bundled
-  snapshot ではなく source metadata / resolved commit として保存する
-
-Group は runtime backend でも resource provider でもありません。component /
-container / resource はそれぞれ compatibility projection として存在し、group は
-`group_id` と deployment metadata でそれらを同じ inventory / lifecycle scope に
-載せます。 group なし primitive も、group 所属 primitive も、個別 API と runtime
-adapter 上は同じ primitive projection です。
-
-## 6. Manifest format (compute manifest, primitive-first)
-
-`.takosumi/manifest.yml` (旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated alias) は flat YAML の primitive desired declaration です。
-ファイル名には `app` が残るが、意味上は AppSpec / EnvSpec / PolicySpec 入力を
-まとめた compute manifest です。トップレベルは Core 語彙のみ:
+`.takosumi/manifest.yml` は kernel-bound compute manifest です。top-level
+envelope は closed set で、`apiVersion: "1.0"` と `kind: Manifest` が必須です。
 
 ```yaml
-name: my-app
-
-components:
-  web:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takosumi/workflows/deploy.yml
-              job: bundle
-              artifact: web
-              entry: dist/worker.js
-      ui:
-        ref: interface.http@v1
-
-routes:
-  - id: ui
-    expose: { component: web, contract: ui }
-    via:
-      ref: route.https@v1
-      config: { path: / }
-
-bindings:
-  - from:
-      publication: takos.api-key
-      request: { scopes: [files:read] }
-    to:
-      component: web
-      env:
-        TAKOS_API_URL: endpoint
-        TAKOS_TOKEN: apiKey
-
-publications:
-  - name: search
-    ref: publication.mcp-server@v1
-    outputs:
-      url: { from: { route: ui } }
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: my-app
+resources:
+  - shape: worker@v1
+    name: web
+    provider: "@takos/cloudflare-workers"
     spec:
-      transport: streamable-http
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      routes:
+        - my-app.example.com/*
+    workflowRef:
+      file: build.yml
+      job: build-worker
+      artifact: bundle
+      target: spec.artifact.hash
 ```
 
-envelope (`apiVersion` / `kind` / `metadata` / `spec`) は無い。全 field が
-トップレベル。`worker` / `service` / `attached container` / `compute` /
-`triggers` / `consume` といった旧 authoring 語彙は manifest 表面には存在せず、
-全ての具体性は `ref: <descriptor>` と descriptor schema に従う `config:` に
-置かれます。
+`workflowRef` は takosumi-git の authoring extension です。kernel に到達する
+前に artifact hash / URI が `workflowRef.target` に書き込まれ、`workflowRef`
+field は削除されます。
+
+container service と database の例:
+
+```yaml
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: api
+resources:
+  - shape: database-postgres@v1
+    name: db
+    provider: "@takos/aws-rds"
+    spec:
+      version: "16"
+      size: small
+
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/example/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+      env:
+        DATABASE_URL: ${ref:db.connectionString}
+        DB_PASSWORD: ${secret-ref:db.passwordSecretRef}
+```
 
 normative な field 仕様は [manifest spec](/reference/manifest-spec)、Installable
-App Model 上の二段構造は [Installable App Model § 2 つの manifest](./installable-app-model.md)
-を参照。
+App Model 上の二段構造は
+[Installable App Model § 2 つの manifest](./installable-app-model.md) を参照。
 
-## 7. Primitive model
+## 7. Shape model
 
-### Component
+### ManifestResource
 
-`components.<name>` は AppSpec の component declaration。各 component は
-名前付き **contract instance** を `contracts` map で宣言します
-(Core § 5)。 contract instance は `ref: <descriptor>` で identity を持ち、
-descriptor が runtime / artifact / interface 等のロールを定義します。
+`resources[]` の各 entry は `ManifestResource` です。`shape` は portable
+resource contract、`provider` はその shape を実装する provider id、`spec` は
+shape 固有の desired state です。provider が shape を実装していない場合や
+`requires[]` を満たせない場合は reject されます。
 
-worker-style と service-style の区別は manifest にはありません。
-`runtime.js-worker@v1` を ref に持つ component が JS bundle 駆動、
-`runtime.oci-container@v1` を ref に持つ component が長寿命 container
-駆動です。 旧 attached container は **別 component** として宣言し、
-必要なら `depends` で順序関係を declaration します。
+### Resource wiring
 
-component / contract instance は内部では `services` と `deployments` に
-保存されます。 group 所属の有無は record の runtime 形態を変えません。
+resource 間 dependency は `${ref:<resource>.<field>}` /
+`${secret-ref:<resource>.<field>}` で表現します。kernel は参照を DAG edge
+として扱い、cycle を reject し、topological order で apply します。
 
-### Resources
+### Entry points
 
-SQL / object-store / queue / secret などの stateful capability は
-`resources.<name>` で `ref: resource.*@v1` を持つ claim として宣言します。
-Backend / adapter の選択は `provider-selection` policy gate と operator-only
-configuration で解決され、 manifest には provider 名は出ません。
-
-resource access は `bindings[]` での **明示** edge です (Core invariant 4 /
-7)。 `resources.<name>` 自体は env / runtime binding を inject しません。
-
-### Routes
-
-`routes[]` は `expose: { component, contract }` で exposure target を、
-`via: { ref, config }` で listener / match / transport descriptor を
-declaration します (Core § 10)。
+top-level `routes[]` はありません。HTTP / public entrypoint は shape spec または
+`custom-domain@v1` resource で表現します。
 
 ```yaml
-routes:
-  - id: api
-    expose: { component: web, contract: api }
-    via:
-      ref: route.https@v1
-      config:
-        path: /api
-        methods: [GET, POST]
-        timeoutMs: 30000
-```
-
-hostname は routing layer で管理:
-
-- auto hostname: `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}`
-- custom slug: `{slug}.{TENANT_BASE_DOMAIN}`
-- custom domain: 任意 (DNS 検証 + SSL)
-
-公開可能な interface ref は descriptor が `exposureEligible=true` で declare
-した場合のみ。 同じ `path` で HTTP method が重なる route、 1 contract
-instance を複数 path に分ける route は invalid。 publication output は
-`from: { route: <id> }` で `routes[].id` を参照するため、`routes[].id` は
-manifest 内で一意。
-
-queue / schedule / event subscription は `route.queue@v1` /
-`route.schedule@v1` / `route.event@v1` を `via.ref` に指定します。 これらの
-`config.source` は manifest の `resources.<name>` を参照し、 producer 側
-access は別途 `bindings[]` で declaration します。
-
-### Publications / bindings
-
-`publications[]` は primitive が space-level publication catalog に出す
-typed outputs を declarative に宣言します (Core § 10)。 publication は
-injection を含意せず、 consumer は `bindings[].from.publication` で明示的に
-consume します。
-
-```yaml
-publications:
-  - name: tools
-    ref: publication.mcp-server@v1
-    outputs:
-      url: { from: { route: mcp } }
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
     spec:
-      transport: streamable-http
-  - name: docs
-    ref: publication.app-launcher@v1
-    outputs:
-      url: { from: { route: ui } }
-    metadata:
-      display:
-        title: Docs
-        icon: /icons/docs.svg
-        category: office
+      image: ghcr.io/example/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+
+  - shape: custom-domain@v1
+    name: api-domain
+    provider: "@takos/cloudflare-dns"
+    spec:
+      name: api.example.com
+      target: ${ref:api.url}
 ```
 
-`bindings[]` は consumer ↔ source の explicit edge で、 4 source kind
-(`resource` / `publication` / `secret` / `provider-output`) を持ちます
-(Core § 11)。 internal storage は `service_consumes` / runtime binding
-record として保存されます。 manifest で管理する component では、 次回
-apply 時に manifest の内容で binding 設定を置き換えます。
+Worker route patterns are strings in `worker@v1.spec.routes`.
 
-```yaml
-bindings:
-  - from: { resource: app-db }
-    to: { component: web, env: DATABASE_URL }
-    access: database-url
-```
+### Cross-instance services
 
-publication は space-level catalog entry です。 group 所属 publication は
-group inventory から作られた projection ですが、 catalog lookup と consume
-binding は group なし publication と同じ model で扱います。
+external service dependency は `imports[]` と `serviceResolvers[]`
+で表現します。 consumer manifest は service identifier
+(`takosumi.account.auth@v1` など) を 参照し、Accounts hostname を直接 pin
+しません。service descriptor の取得 / signature verify / endpoint
+materialization は kernel deploy route の責務です。
 
-::: info Installable App binding は別レイヤー
-ここで述べる Core `bindings[]` (component ↔ publication / resource / secret
-/ provider-output) と、Installable App Model の `.takosumi/app.yml` の
-`bindings:` (`identity.oidc@v1` / `database.postgres@v1` 等) は **別レイヤー**
-の概念です。後者は installer-bound で、compile 時に前者の `bindings[]` や
-component env に展開されます。詳しくは
+### Installable App binding は別レイヤー
+
+Installable App Model の `.takosumi/app.yml` の `bindings:` (`identity.oidc@v1`
+/ `database.postgres@v1` 等) は installer-bound です。 takosumi-git / Takosumi
+Accounts が AppBinding を承認・materialize し、 `.takosumi/manifest.yml` の
+`${bindings.*}` / `${secrets.*}` に反映してから kernel に渡します。詳しくは
 [Binding Catalog](/reference/binding-catalog) を参照。
-:::
 
 ## 8. CLI / API
 
 CLI は manifest / repository / catalog source から primitive declaration を
-apply する task-oriented surface を提供する。 `takos deploy` /
-`takos install` は group deployment history を更新するため、 group 名を
-明示し、 その group inventory に参加する。
+apply する task-oriented surface を提供する。 `takos deploy` / `takos install`
+は group deployment history を更新するため、 group 名を 明示し、 その group
+inventory に参加する。
 
 ```bash
 takos deploy --space SPACE_ID --group my-app                       # resolve + apply (Heroku-like sugar)
@@ -454,41 +390,43 @@ takos group list --space SPACE_ID                                   # group inve
 takos group show NAME --space SPACE_ID
 ```
 
-::: warning operator / internal context
-上記の `takos deploy` / `takos install` 系 CLI は **operator / internal**
-の context で使うものです。Installable App Model 配下の通常の Takos
-利用者は、以下の path を使ってください。
+> **operator / internal context**
+>
+> 上記の `takos deploy` / `takos install` 系 CLI は **operator / internal** の
+> context で使うものです。Installable App Model 配下の通常の Takos 利用者は、
+> 以下の path を使ってください。
 
 - 一般ユーザー: `Use Takos` ボタン (Install path)
 - 開発者: `takosumi install <git-url>` または
   `takosumi.cloud/install?git=...&ref=...` (Install path)
-- Takos 自体が deploy する場合: GitOps deploy binding (Takos が intent
-  を Git に commit、kernel API を直接叩かない)
-
-詳細は [Install Paths](/apps/install-paths) と
-[deploy CLI ガイド](/deploy/deploy) を参照。
-:::
+- Takos 自体が deploy する場合: GitOps deploy binding (Takos が intent を Git に
+  commit、kernel API を直接叩かない)
+- 詳細: [Install Paths](/apps/install-paths) /
+  [deploy CLI ガイド](/deploy/deploy)
 
 個別 primitive 操作:
 
-- resource: `takos resource` / `takos res` または `/api/resources/*`
-- component / route / custom domain: `/api/services/*`
-- publication: `/api/publications/*`
+- resource / provider output: `takos resource` / `takos res` または
+  `/api/resources/*`
+- deployment / custom domain projection: `/api/deployments/*` /
+  `/api/custom-domains/*`
 
-既存 service / resource を後から group inventory に入れたい場合は
-`PATCH /api/services/:id/group` / `PATCH /api/resources/:id/group` を呼ぶ。
+既存 resource / deployment projection を後から group inventory
+に入れたい場合は、 group inventory API を使う。これは manifest format ではなく
+operator / internal 管理 API の責務です。
 
 ## 9. Group features
 
 Group と primitive projection record の責務は次のように分ける。
 
-- component / contract instance は `services` と `deployments` に保存される
-- route は routing / custom-domain record に保存される
-- publication は `publications`、binding は `service_consumes` / runtime
-  binding record に保存される
-- resource は `resources` に保存される
-- group は `groups` row として inventory / source metadata / current
-  deployment pointer / reconcile status を持つ compatibility projection
+- ManifestResource は shape / provider ごとの deployment operation
+  として保存される
+- worker route / provider domain / `custom-domain@v1` は routing projection に
+  materialize される
+- resource output と binding evidence は output planner / WAL / resource
+  metadata に保存される
+- group は `groups` row として inventory / source metadata / current deployment
+  pointer / reconcile status を持つ compatibility projection
 - deployment history / rollback / uninstall は group inventory に対する
   機能であり、primitive runtime の特別処理ではない
 
@@ -499,108 +437,113 @@ group "my-app":
   group features:
     deploy (resolve + apply) / deployment history / rollback / uninstall
   inventory:
-    component: web
-    route: /
-    publication: files
-    resource: shared-cache
+    resource: web (worker@v1)
+    resource: db (database-postgres@v1)
+    resource: domain (custom-domain@v1)
 
 group なし primitive:
-  component: cron-job
   resource: shared-db
-  route/custom-domain: redirect
+  custom-domain: redirect.example.com
 ```
 
 ## 10. Deploy pipeline (kernel apply の内部)
 
 `takos deploy` / `takos deploy --resolve-only` が public deploy entrypoint。
-group apply の HTTP API path も同じ内部 pipeline を通る。 pipeline は
-Deployment lifecycle (`preview` → `resolved` → `applying` → `applied` /
-`failed` / `rolled-back`) を 1 record で表現する。
+group apply の HTTP API path も同じ内部 pipeline を通る。 pipeline は Deployment
+lifecycle (`preview` → `resolved` → `applying` → `applied` / `failed` /
+`rolled-back`) を 1 record で表現する。
 
 1. **Authoring expansion**
-   - deploy manifest を parse して primitive desired declaration に compile
-   - `components.<>.expand` (composite) や `bindings[].from.secret` などの
-     authoring shorthand は canonical component / contract instance form に
-     展開され、 expansion descriptor digest (`authoring.*@v1`) も
-     descriptor_closure に含める
+   - deploy manifest envelope (`apiVersion: "1.0"` / `kind: Manifest`) を parse
+   - bundled `template` があれば `resources[]` に展開する
+   - kernel 到達時点で `workflowRef` や installer-only placeholder
+     が残っていれば reject する
    - group が指定されている場合は group membership を付与する
 2. **Resolution** (status → `resolved`)
-   - descriptor を resolve して digest pin、
-     `Deployment.resolution.descriptor_closure` と
-     `Deployment.resolution.resolved_graph` (component / projection) を確定
-   - `Deployment.desired.routes` / `.bindings` / `.resources` /
-     `.runtime_network_policy` / `.activation_envelope` を生成
+   - `imports[]` があれば `serviceResolvers[]` の anchor から ServiceDescriptor
+     を取得し、signature / expiry / contract version を検証
+   - `resources[]` の `shape` / `provider` / `requires[]` を catalog と provider
+     registry で検証
+   - `${ref:...}` / `${secret-ref:...}` を resource dependency edge
+     として抽出し、 apply DAG を確定
    - resolution-gate の policy decision を `Deployment.policy_decisions[]`
      に記録
 3. **Diff** (read-set validation)
-   - 現在 GroupHead が指す Deployment.desired と新 Deployment.desired を
-     比較
+   - 現在 GroupHead が指す Deployment desired resources と新 manifest の
+     resources を比較
    - resource creation は resource API 側の責務として扱う
 4. **Workload apply** (status → `applying`)
-   - component / contract instance を topological order で apply、
-     per-component `depends` で順序を制御
-   - 各 provider operation は `Deployment.conditions[]`
-     (scope.kind="operation" / "phase") に append される
+   - ManifestResource を dependency order で provider に apply
+   - 各 provider operation は `Deployment.conditions[]` (scope.kind="operation"
+     / "phase") に append される
 5. **Managed-state sync**
-   - publication catalog を同期
-   - `bindings[]` を validate し、 各 component の env / runtime binding
-     に inject
+   - provider outputs を validate し、`${ref:...}` / `${secret-ref:...}` の
+     consumer resource spec を解決
+   - service import evidence / descriptor digest を resource metadata / WAL に
+     pin
 6. **Routing reconcile**
-   - workload apply と managed-state sync が成功した場合だけ route
-     projection を reconcile (RoutingRecord として materialize)
+   - workload apply と managed-state sync が成功した場合だけ worker routes /
+     custom-domain resources / provider domains を reconcile
 7. **Activation commit** (status → `applied`)
    - `Deployment.desired.activation_envelope` を commit、 GroupHead の
-     `current_deployment_id` を新 Deployment に進め、
-     `previous_deployment_id` に旧 current を保持
-   - group がある場合は group-scoped declaration / observed state /
-     deployment pointer を更新する
+     `current_deployment_id` を新 Deployment に進め、 `previous_deployment_id`
+     に旧 current を保持
+   - group がある場合は group-scoped declaration / observed state / deployment
+     pointer を更新する
 
 ## 11. Rollback
 
 rollback は GroupHead の `current_deployment_id` を `previous_deployment_id`
-(または明示指定された retained Deployment id) に向けて切り替える pointer
-move です。 新 Deployment record は作成されず、 旧 current Deployment は
+(または明示指定された retained Deployment id) に向けて切り替える pointer move
+です。 新 Deployment record は作成されず、 旧 current Deployment は
 `rolled-back` status に遷移します。
 
-- code + config + bindings が戻る (retained
-  `Deployment.input.manifest_snapshot` と
-  `Deployment.resolution.descriptor_closure` を再利用)
+- code + config + bindings が戻る (retained `Deployment.input.manifest_snapshot`
+  と `Deployment.resolution.descriptor_closure` を再利用)
 - DB data は戻らない (forward-only migration、 `MigrationLedger` は逆方向
   に進まない)
 - resource の data / schema は自動巻き戻ししない
 - group なし primitive の個別 rollback は、 その primitive API の contract
   に従う
 
-Installable App Model 配下の **AppInstallation rollback** (`takosumi rollback
-inst_abc --to v1.2.3`) は、これとは別レイヤーで、過去の compiled manifest
-digest を再 apply することで実現されます (詳細は
+Installable App Model 配下の **AppInstallation rollback**
+(`takosumi rollback
+inst_abc --to v1.2.3`) は、これとは別レイヤーで、過去の
+compiled manifest digest を再 apply することで実現されます (詳細は
 [Upgrade / Export](/platform/upgrade-export))。
 
 ## 12. Install / version / source tracking
 
-`takos install` は catalog (Store) で発見した repository を
-`takos deploy URL --ref ...` へ解決する薄い wrapper です。 Store 自体は
-発見と source 解決だけを担当します。
+Installable App Model では source tracking の正本は `.takosumi/app.yml` と
+AppInstallation 行です。Store / catalog は Git URL と immutable ref を解決し、
+takosumi-git installer pipeline に渡します。
 
-repo deploy / install の version は catalog が解決する Git ref / tag が
-基準です。 manifest の `version` field は display 用。
+repo deploy / install の version は catalog が解決する Git ref / tag
+が基準です。 `.takosumi/manifest.yml` に top-level `version` field
+はありません。display version は release tag、catalog metadata、または
+`.takosumi/app.yml` の metadata から導きます。
 
 ```yaml
-name: my-app
-version: "1.2.0" # display 用。Git tag と一致させる慣習
+# .takosumi/app.yml
+apiVersion: app.takosumi.dev/v1
+kind: InstallableApp
+source:
+  git: https://github.com/example/my-app
+  ref: v1.2.0
+  commit: 0123456789abcdef0123456789abcdef01234567
 ```
 
-group がある場合、 source 情報を group metadata と deployment record に
-保存します。
+group がある場合も、source 情報は AppInstallation / deployment metadata
+に保存します。
 
 - `local`: takos deploy で手元から deploy
 - `repo:owner/repo@v1.2.0`:
-  `takos install owner/repo --version v1.2.0 --space SPACE_ID --group NAME`
-  で catalog が解決した repo/ref から deploy
+  `takos install owner/repo --version v1.2.0 --space SPACE_ID --group NAME` で
+  catalog が解決した repo/ref から deploy
 
-Installable App Model における source pin は AppInstallation 行の
-`sourceCommit` / `appManifestDigest` / `compiledManifestDigest` の 3 列で
-表現されます (詳細は [AppInstallation 台帳](./app-installation.md))。
+Installable App Model における source pin は AppInstallation 行の `sourceCommit`
+/ `appManifestDigest` / `compiledManifestDigest` の 3 列で 表現されます (詳細は
+[AppInstallation 台帳](./app-installation.md))。
 
 ## まとめ
 
@@ -613,8 +556,9 @@ Takos deploy system (Installable App Model 整合):
     3. GitOps binding   (Takos → git push          → takosumi-git watcher → kernel apply)
 
   Compiled manifest (kernel に渡る最終形)
-    - placeholder ゼロ
-    - ${bindings.*} / ${secrets.*} / ${refs.*} / ${artifacts.*} は解決済み
+    - workflowRef は strip 済み
+    - ${bindings.*} / ${secrets.*} / ${artifacts.*} / ${installation.*} は解決済み
+    - ${ref:...} / ${secret-ref:...} / ${imports.*} は kernel deploy route が扱う
     - kernel は app.yml を解釈しない
 
   Core records (kernel 内部)
@@ -623,11 +567,10 @@ Takos deploy system (Installable App Model 整合):
     - GroupHead (current / previous deployment pointer)
     - ResourceInstance / MigrationLedger (durable state)
 
-  Primitive projection (authoring surface)
-    - services + deployments (component / contract instance)
-    - resources (sql / object-store / kv / queue / vector / secret / ...)
-    - routes / custom domains
-    - publications / bindings
+  Shape authoring surface
+    - resources[] (worker / web-service / database-postgres / object-store / custom-domain / ...)
+    - imports[] + serviceResolvers[]
+    - template expansion
 
   Optional group scope
     - groups row
@@ -638,11 +581,12 @@ Takos deploy system (Installable App Model 整合):
 
 - [Installable App Model](./installable-app-model.md) — 全体像と 5 entity の
   責務分離
-- [Installer Pipeline](./installer-pipeline.md) — 13 step の install pipeline 詳細
+- [Installer Pipeline](./installer-pipeline.md) — 13 step の install pipeline
+  詳細
 - [AppInstallation 台帳](./app-installation.md) — source pin と status 遷移
 - [.takosumi/app.yml spec](/reference/app-yml-spec) — installer-bound manifest
-- [Binding Catalog](/reference/binding-catalog) — `service.import@v1` を含む
-  7 種の binding type
+- [Binding Catalog](/reference/binding-catalog) — `service.import@v1` を含む 7
+  種の binding type
 - [Install API](/reference/install-api) — `POST /v1/installations` 等
 - [Upgrade / Export](/platform/upgrade-export) — upgrade / rollback / export
 - [deploy CLI ガイド](/deploy/deploy) — operator / internal context での deploy
