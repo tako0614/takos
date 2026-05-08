@@ -1,56 +1,56 @@
-# Component + DB
+# Worker + DB
 
-`resources[]` で SQL resource を claim し、 `bindings[]` で component に
-runtime binding として渡します。
+`worker@v1` と `database-postgres@v1` を同じ `.takosumi/manifest.yml` に置き、
+Worker の `spec.env` から database output を参照する最小例です。
 
 ```yaml
-name: notes-app
-
-components:
-  web:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: bundle
-              artifact: web
-              entry: dist/worker.js
-      ui:
-        ref: interface.http@v1
-
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: notes-app
 resources:
-  notes-db:
-    ref: resource.sql.postgres@v1
-    config:
-      migrations: migrations
-  notes-assets:
-    ref: resource.object-store.s3@v1
+  - shape: database-postgres@v1
+    name: notes-db
+    provider: "@takos/managed-postgres"
+    spec:
+      version: "16"
+      size: small
 
-bindings:
-  - from: { resource: notes-db }
-    to: { component: web, env: DATABASE_URL }
-    access: database-url
-  - from: { resource: notes-assets }
-    to: { component: web, binding: ASSETS }
-    access: object-runtime-binding
-
-routes:
-  - id: web
-    expose: { component: web, contract: ui }
-    via: { ref: route.https@v1, config: { path: / } }
+  - shape: worker@v1
+    name: web
+    provider: "@takos/cloudflare-workers"
+    spec:
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      routes:
+        - notes.example.com/*
+      env:
+        DATABASE_URL: ${ref:notes-db.connectionString}
+        DATABASE_PASSWORD: ${secret-ref:notes-db.passwordSecretRef}
+    workflowRef:
+      file: .takosumi/workflows/deploy.yml
+      job: bundle
+      artifact: web
+      target: spec.artifact.hash
 ```
+
+`workflowRef` は takosumi-git の authoring extension です。workflow が bundle
+digest を作り、`spec.artifact.hash` に書き込まれた後、kernel-bound manifest
+からは `workflowRef` が strip されます。
 
 ポイント:
 
-- `resources[]` で resource claim を declaration し、 backend は
-  `provider-selection` policy gate と operator-only configuration が解決する
-  (manifest には provider 名は出ない)
-- `bindings[]` で **明示** の binding edge を書く。 `to.env` で env、
-  `to.binding` で runtime binding handle として渡る
-- `access:` mode は resource ref が単一 access mode なら省略可、 複数候補を
-  持つ ref では明示が必要 (`resource.sql.postgres@v1` は `database-url` /
-  `migration-admin` / `sql-query-api` を持つので明示)
+- `resources[]` の各 entry は `shape` / `name` / `provider` / `spec` を持つ
+- database credential は raw output ではなく `${secret-ref:...}` で受け取る
+- Worker route は `worker@v1.spec.routes` の provider-interpreted string pattern
+  で表現する
+- top-level `bindings[]` は current manifest surface ではない。resource 間の
+  値渡しは `${ref:...}` / `${secret-ref:...}` を使う
+
+関連:
+
+- [Manifest Reference](/reference/manifest-spec)
+- [環境変数](/deploy/environment)
+- [Simple Worker](/examples/simple-worker)
