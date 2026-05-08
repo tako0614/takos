@@ -6,9 +6,9 @@
 ## このチュートリアルで作るもの
 
 - 1 つの `worker@v1` resource (HTTP "Hello" を返す Worker)
-- 認証は **OIDC consumer** として Takosumi Accounts (または任意の OIDC issuer)
-  を consume する形。app に OAuth provider を組み込む必要はありません
-  ([apps/oidc-consumer](/apps/oidc-consumer))。
+- 認証は **OIDC consumer** として `takosumi.account.auth@v1` で解決される
+  Takosumi Accounts を consume する形。app に OAuth provider を組み込む必要は
+  ありません ([apps/oidc-consumer](/apps/oidc-consumer))。
 - install 完了後の初回 UX は **launch token** で繋ぐので、ユーザーは install
   直後に再度ログインする必要なく chat (= 本 app) が開きます
   ([apps/launch-token](/apps/launch-token))。
