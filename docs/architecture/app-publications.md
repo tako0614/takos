@@ -1,150 +1,122 @@
-# Publication / Binding Contract
+# App Integration Metadata Boundary
 
-Takos の deploy model は publication と resource API / runtime binding を
-分けて扱います。 `publications[]` と `bindings[]` は component / Takos
-built-in provider が参加する情報・capability の交換 protocol です。
+このページは、Installable App Model 後の app-facing integration metadata と
+binding の境界を定義します。current `.takosumi/manifest.yml` は Shape manifest
+であり、top-level `components` / `routes` / `publications` / `bindings` を
+受け付けません。
 
-current manifest schema の `publications[]` は typed outputs を公開する
-catalog であり、 deploy target や SQL / object-store / queue などの
-resource 作成そのものではありません。 Takos API key / OAuth client は
-`publications[]` に書く特別な裏口ではなく、 Takos built-in provider が
-公開する `takos.api-key` / `takos.oauth-client` publication を
-`bindings[].from.publication` する形で扱います。 generic plugin resolver
-でもありません。 publication の `ref` は publication descriptor (canonical
-URI / authoring alias) として保存され、 解釈は descriptor 側 schema と
-platform / app が行います。
+## Current Contract
 
-## 実体モデル
+Takos app が外部へ見せる launcher / MCP / file handler などの metadata は、
+takosumi kernel manifest の primitive ではありません。
 
-publication は space-level catalog entry ですが、 manifest 由来の
-`publications[].name` は group-local です。 実装では `publications` record
-として保存され、 同一 group 内で一意に扱われます。 他 group から参照する
-場合は `<group>/<name>` を使います。 Takos built-in provider は `takos.*`
-namespace です。 manifest から作られた publication は `group_id` と
-`source_type=manifest` を持ち、 route-backed publication では owner
-component も記録します。 Takos built-in provider publication は DB 上の
-publication record ではなく、 `bindings[].from.publication` の request から
-grant state を生成します。
+| 種別                              | 正本                                   | kernel に渡る形                                     |
+| --------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| HTTP workload / ingress           | `.takosumi/manifest.yml` `resources[]` | `worker@v1` / `web-service@v1` / `custom-domain@v1` |
+| App install metadata              | `.takosumi/app.yml`                    | 渡らない                                            |
+| OIDC / DB / blob / launch binding | `.takosumi/app.yml` `bindings:`        | compiled env / secret refs                          |
+| MCP endpoint metadata             | Takos app catalog / runtime registry   | 渡らない                                            |
+| File handler metadata             | Takos app catalog / runtime registry   | 渡らない                                            |
+| Cross-instance service dependency | `.takosumi/manifest.yml` `imports[]`   | `imports[]` + `serviceResolvers[]`                  |
 
-binding は component に属する **明示** edge です。 実装では
-`service_consumes` record (legacy 名) として保存され、 component が source
-(resource / publication / secret / provider-output) を参照します。 manifest
-で管理する component では `bindings[]` が deploy 時に `service_consumes` へ
-同期されます。 個別 component では `/api/services/:id/consumes` で直接管理
-できます。
+kernel は compiled Shape manifest を apply し、resource outputs
+を返します。Takos app / installer layer はその outputs を使って MCP
+registry、file handler catalog、 launcher entry などの app-facing metadata を
+materialize します。
 
-## 原則
+## What Replaced Publications
 
-- publication は space catalog entry
-- route-backed publication は route primitive から作られる projection
-- Takos API / OAuth client は built-in provider publication として binding する
-- publication output は named values
-- env 注入は explicit binding のみ (Core invariant 4)
-- binding は component-level dependency edge
-- deploy core は backend-specific な resource semantics を持たない
-- backend / adapter 名は `provider-selection` policy gate と operator-only
-  configuration に閉じ、 manifest には書かない
+旧 AppSpec では `publications[]` が route-backed catalog
+を表していました。current model では、同じ目的の metadata は owning layer
+に分離します。
 
-## publication
+| 旧用途                          | current の置き場所                                  |
+| ------------------------------- | --------------------------------------------------- |
+| MCP server publication          | app metadata / MCP registry                         |
+| file handler publication        | app metadata / storage file-handler registry        |
+| launcher publication            | app metadata / Store / launcher catalog             |
+| Takos API key publication       | AppGrant / app-local service credential             |
+| OIDC client publication         | `identity.oidc@v1` AppBinding                       |
+| resource credential publication | 使用しない。resource output / secret ref で配線する |
 
-### route-backed publication
+MCP / file handler / launcher metadata は deploy target ではなく discovery
+surface です。workload 自体は `resources[]` にある `worker@v1` や
+`web-service@v1` として deploy し、metadata はその resource output
+を参照します。
 
-route-backed publication は primitive が公開する interface の metadata です。
-manifest managed entry で、 control plane API から直接作る対象では
-ありません。
+## AppBinding
+
+`AppBinding` は account plane の primitive です。`.takosumi/app.yml` の
+`bindings:` で宣言し、Takosumi Accounts / takosumi-git が install pipeline 中に
+provision して compiled manifest に反映します。
 
 ```yaml
-publications:
-  - name: search
-    ref: publication.mcp-server@v1
-    outputs:
-      url: { from: { route: mcp } }
+bindings:
+  auth:
+    type: identity.oidc@v1
+    required: true
+    redirectPaths:
+      - /auth/oidc/callback
+    allowedScopes: [openid, email, profile]
+```
+
+`identity.oidc@v1` は per-AppInstallation の OIDC client を発行します。Takos
+runtime からは `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
+`OIDC_REDIRECT_URI` として見えますが、kernel は OIDC client registry
+を所有しません。
+
+Binding catalog の正本は [Binding Catalog](/reference/binding-catalog) です。
+
+## Shape Manifest
+
+kernel-bound manifest は resource graph だけを扱います。
+
+```yaml
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: docs
+resources:
+  - shape: worker@v1
+    name: web
+    provider: "@takos/cloudflare-workers"
     spec:
-      transport: streamable-http
+      artifact:
+        kind: js-bundle
+        hash: sha256:0123456789abcdef
+      compatibilityDate: "2026-05-09"
+      routes:
+        - docs.example.com/*
 ```
 
-route-backed publication の main output は慣例的に `url` です。 値は
-assigned hostname と output `from: { route: <id> }` が参照する route の
-`path` から生成されます。 route が template の場合は template URL のまま
-consumer に渡ります。 必須 field は `name` / `ref` / `outputs` です。
-公開 publication descriptor 一覧は
-[Official Descriptor Set v1 § Minimum publication descriptors](/takosumi/descriptors/official-descriptor-set-v1#minimum-publication-descriptors)
-を参照。 `spec` は consumer-facing metadata、 `metadata` は authoring metadata
-で、 各 publication descriptor が schema を定義します。
+`workflowRef` や `${bindings.*}` / `${secrets.*}` は installer-side authoring
+extension です。kernel に届く manifest では解決済み、または除去済みである必要が
+あります。
 
-publication output は `from: { route: <id> }` で `routes[].id` を参照します。
-同じ route target/path を複数 publication が公開する manifest は invalid
-です。 endpoint は 1 つの route にまとめます。
+## Legacy Vocabulary
 
-## Takos built-in provider publication
+`publication.mcp-server@v1`、`publication.file-handler@v1`、
+`takos.oauth-client`、top-level `bindings[]` は current kernel-bound manifest の
+contract ではありません。古い docs から migration するときは次の対応に寄せます。
 
-Takos API key / OAuth client は Takos built-in provider が公開する
-publication です。 manifest では `bindings[].from.publication` に
-`takos.api-key` / `takos.oauth-client` を指定します。
+| legacy term                   | replacement                                           |
+| ----------------------------- | ----------------------------------------------------- |
+| `publication.mcp-server@v1`   | MCP registry entry backed by resource output          |
+| `publication.file-handler@v1` | file handler registry entry backed by resource output |
+| `publication.app-launcher@v1` | launcher / Store catalog metadata                     |
+| `takos.oauth-client`          | `identity.oidc@v1` AppBinding                         |
+| `bindings[].from.publication` | AppBinding materialization or explicit resource refs  |
+| `resource.secret@v1`          | installer secret / provider secret ref                |
 
-```yaml
-bindings:
-  - from:
-      publication: takos.api-key
-      request:
-        scopes: [files:read]
-    to:
-      component: api
-      env:
-        TAKOS_API_URL: endpoint
-        TAKOS_TOKEN: apiKey
-```
+## Kernel Non-Responsibilities
 
-`takos.api-key` の outputs は `endpoint` と `apiKey` です。 `request` は
-provider ごとの required / optional field を持ち、 未知の request field は
-invalid です。
+kernel は次を行いません。
 
-Takos built-in provider publications:
+- OAuth / OIDC issuer を提供する
+- OIDC client を発行する
+- billing owner になる
+- app catalog / Store / launcher catalog を所有する
+- MCP registry や file handler registry の意味を解釈する
+- top-level `publications[]` / `bindings[]` を current manifest に受け付ける
 
-- `takos.api-key`
-- `takos.oauth-client`
-
-SQL / object-store / queue などは resource API / runtime binding の対象で
-あり、 publication ref ではありません。
-
-## binding
-
-component は必要な publication / resource だけを `bindings[]` で **明示**
-binding します。
-
-```yaml
-bindings:
-  - from:
-      publication: takos.api-key
-      request:
-        scopes: [files:read]
-    to:
-      component: api
-      env:
-        INTERNAL_TAKOS_API_URL: endpoint
-        INTERNAL_TAKOS_API_KEY: apiKey
-```
-
-明示した output だけが inject 対象です。 default 注入は無く、 全 output を
-渡したい場合も明示します。 SQL / object-store / queue などの resource
-access は `from: { resource: <name> }` で書きます。
-
-binding の env / runtime binding 詳細は
-[Glossary § Binding env injection](/reference/glossary#consume-env-injection)
-を参照。
-
-manifest の `bindings[]` は component の desired edge です。 deploy 時に
-component-level の `service_consumes` record へ同期されます。 manifest 外で
-`/api/services/:id/consumes` を更新した場合、 次の manifest apply では
-manifest の内容に置き換わります。
-
-## kernel の責務
-
-kernel / control-plane が publication / binding で行うのは次だけです。
-
-1. publication catalog を保存する
-2. Takos built-in provider publication の request を解決する
-3. binding ごとに output contract を env / runtime binding handle に変換する
-
-kernel は consumer が要求していない publication を inject しません
-(Core invariant 4)。
+これらは Takosumi Accounts、takosumi-git、または Takos app layer の責務です。

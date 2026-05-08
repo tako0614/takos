@@ -1,39 +1,37 @@
 # CLI
 
-::: warning Boundary note
-Takos product は Web UI / public API を primary surface とします。git /
-workflow / manifest authoring の CLI は `takosumi-git`、Takosumi kernel の
-explicit manifest apply は `takosumi` の責務です。このページは移行期間中に残る
-Takos CLI surface の reference であり、新しい operator bootstrap や app
-authoring の primary UX として増やしません。
-:::
+::: warning Boundary note Takos product は Web UI / public API を primary
+surface とします。git / workflow / manifest authoring の CLI は
+`takosumi-git`、Takosumi kernel の explicit manifest apply は `takosumi`
+の責務です。このページは移行期間中に残る Takos CLI surface の reference
+であり、新しい operator bootstrap や app authoring の primary UX
+として増やしません。 :::
 
-Takos CLI は、認証、manifest の preview / deploy / apply / rollback、 group
-inventory、task-oriented API surface を扱う transitional public surface
-です。Takos Deploy では deploy lifecycle は `Deployment` record に対する 5 つの
-verb (`deploy` / `apply` / `diff` / `approve` / `rollback`) で表現し、
-`takos deploy <manifest>` は default で resolve + apply の sugar
-として動きます。 compute / route / publication の個別 CRUD は public CLI
-では出しません。 resource は `takos resource|res` で個別 CRUD を提供します。
+Takos CLI は、認証、group inventory、task-oriented API surface を扱う
+transitional public surface です。manifest authoring / workflow / git install は
+`takosumi-git`、kernel への explicit manifest apply は `takosumi` CLI
+の責務です。 `takos deploy` は移行期間中の operator / compatibility surface
+として残ります。 compute / route / publication の個別 CRUD は public CLI
+では出しません。resource は `takos resource|res` で個別 CRUD を提供します。
 
 ## deploy model
 
-Takos の CLI は manifest / repository / catalog source を `Deployment` record
-として保存し、`GroupHead` 経由で group に紐づける surface を提供します。group は
-primitive を任意に束ねる state scope で、deployment history、rollback、
-uninstall などの group 機能を持ちます。resource API / runtime binding と publish
-catalog は分けます。`publications` は route/interface metadata の共有に使い、Takos
-API key / OAuth client は built-in provider publication を `consume` します。
-SQL / object-store / queue などの resource API / runtime binding とは分けます。
+Takos の CLI は compatibility path として Deployment record / GroupHead を参照
+できます。Installable App Model の primary path では `.takosumi/app.yml` と
+`.takosumi/manifest.yml` を takosumi-git が compile し、Takosumi Accounts の
+AppInstallation 台帳に source commit / binding / compiled manifest digest を pin
+します。
 
-- **Primitive records** — workload / route / publication / resource / consume
-  edge などの個別 record
+- **Installable app path** — `takosumi-git` / Takosumi Accounts が source
+  fetch、 preview、binding provision、compile、kernel apply を行う
+- **Direct apply path** — operator が compiled Shape manifest を明示して apply
+  する
 - **Group features** — group inventory、deployment
   history、rollback、uninstall、updates
 - **Resource surface** — `takos resource|res` で resource CRUD を扱う
 
-group 所属は primitive が group 機能を使えることを意味します。group なしの
-service / route / publication も同じ primitive model で扱います。
+旧 primitive publication / consume model は current `.takosumi/manifest.yml` の
+contract ではありません。
 
 public task-oriented surface の domain は次の通りです。
 
@@ -56,31 +54,17 @@ public task-oriented surface の domain は次の通りです。
 
 ## deploy entrypoint
 
-`.takos/app.yml` / `.takos/app.yaml` を直接扱うのは `takos deploy` で、ローカル
-manifest からの deploy（primary）と repository URL からの
-deploy（alternative）の両方を扱います。default の `takos deploy <manifest>` は
-**Heroku 風 sugar** で、resolve + apply を 1 step で実行します。non-mutating
-preview は `takos deploy --preview`、persisted resolved Deployment だけ作って
-あとで `takos apply <id>` する場合は `takos deploy --resolve-only` を使います。
-`takos install` は catalog 経由で `takos deploy` を呼ぶ sugar です。public spec
-は backend-neutral で、実行モデルは tenant runtime です。`takos deploy` /
-`takos install` は manifest の `name` を group 名として使います。`--group` は
-override です。
+`takos deploy` は移行期間中の direct deploy surface です。入力は compiled Shape
+manifest、または repository URL です。ローカル authoring manifest に
+`workflowRef` や `${bindings.*}` が残る場合は、先に takosumi-git で compile
+してください。
 
-`takos deploy` はローカル working tree 由来でも repo/ref source 由来でも同じ
-pipeline (`POST /api/public/v1/deployments`) を通り、明示した group inventory へ
-Deployment を作成し、apply 時に GroupHead を進めます。API の source kind
-はローカル manifest では `manifest`、repo/ref では `git_ref` です。CLI / UI の
-表示名として `local` / `repo:owner/repo@ref` を使いますが、これは manifest の
-出どころを示す `Deployment.input.source_kind` / `source_ref` metadata であり、
-lifecycle の差ではありません。
+`takos deploy` は Takos public API の compatibility pipeline
+(`/api/public/v1/deployments`) を通ります。takosumi kernel へ直接 explicit path
+で apply する場合は `takosumi` CLI を使います。
 
-ローカル manifest 経路では、CLI が `runtime.js-worker@v1` config の `source.config` (`artifact.workflow-bundle@v1`) が指す workflow を
-workflow-runner でローカル実行し、生成した build artifact を Deployment の
-manifest snapshot に添えます。repository URL 経路では CLI は repo を fetch
-せず、 `POST /api/public/v1/deployments` に `repository_url + ref/ref_type`
-を渡し、 control plane が repo を解決して `Deployment.input.manifest_snapshot`
-に 固定します。
+Takos CLI は workflow runner ではありません。repository URL 経路では CLI は repo
+を fetch せず、API に repository URL / ref を渡します。
 
 ## Top-level
 
@@ -103,7 +87,7 @@ manifest snapshot に添えます。repository URL 経路では CLI は repo を
 | `takos apply <id>`            | resolved Deployment を `applied` に進める（GroupHead を進める）                           |
 | `takos diff <id>`             | resolved Deployment の expansion + 現在の GroupHead との差分を表示                        |
 | `takos approve <id>`          | resolved Deployment に approval を attach（PolicySpec の require-approval を満たす）      |
-| `takos install`               | `takos deploy` の sugar。catalog で owner/repo を解決                                     |
+| `takos install`               | legacy catalog sugar。Installable App path では takosumi-git / Accounts を使う            |
 | `takos rollback [<group>]`    | GroupHead を `previous_deployment_id` へ flip（group 省略時は manifest の `name` を使う） |
 | `takos uninstall`             | group を terminal uninstall して manifest-managed primitive を削除                        |
 | `takos group ...`             | group inventory / declaration / group 機能の参照と管理                                    |
@@ -124,9 +108,9 @@ takos logout
 
 ## `takos deploy`
 
-`takos deploy` はローカル manifest または repository URL を source として
-`Deployment` を作成し、default では作成と同じ呼び出しで apply まで実行する
-current preferred entrypoint です。canonical な入門と pipeline 解説は
+`takos deploy` はローカル compiled manifest または repository URL を source
+として `Deployment` を作成する compatibility entrypoint です。canonical な
+install path は [Install Paths](/apps/install-paths)、operator direct apply は
 [Deploy](/deploy/deploy) を参照してください。
 
 ```bash
@@ -137,19 +121,19 @@ takos deploy --preview --space SPACE_ID                  # in-memory preview, no
 takos deploy --resolve-only --space SPACE_ID             # persist resolved Deployment only
 ```
 
-| option                     | 説明                                                                             |
-| -------------------------- | -------------------------------------------------------------------------------- |
-| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest         |
-| `--preview`                | in-memory preview（DB に Deployment record を作らない）                          |
-| `--resolve-only`           | resolved Deployment を作って apply は別途 `takos apply <id>` で行う              |
-| `--manifest <path>`        | manifest path。既定は `.takos/app.yml` / `.takos/app.yaml`（ローカル deploy 時） |
-| `--auto-approve`           | 確認プロンプトを省略                                                             |
-| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                         |
-| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）         |
-| `--group <name>`           | manifest の `name` から決まる group 名を override する                           |
-| `--env <name>`             | target env                                                                       |
-| `--space <id>`             | 対象 space ID                                                                    |
-| `--json`                   | JSON 出力                                                                        |
+| option                     | 説明                                                                                                                                                           |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest                                                                                       |
+| `--preview`                | in-memory preview（DB に Deployment record を作らない）                                                                                                        |
+| `--resolve-only`           | resolved Deployment を作って apply は別途 `takos apply <id>` で行う                                                                                            |
+| `--manifest <path>`        | compiled manifest path。既定は `.takosumi/manifest.yml`（ローカル deploy 時、旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated alias、後方互換のため受理） |
+| `--auto-approve`           | 確認プロンプトを省略                                                                                                                                           |
+| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                                                                                                       |
+| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）                                                                                       |
+| `--group <name>`           | manifest の `name` から決まる group 名を override する                                                                                                         |
+| `--env <name>`             | target env                                                                                                                                                     |
+| `--space <id>`             | 対象 space ID                                                                                                                                                  |
+| `--json`                   | JSON 出力                                                                                                                                                      |
 
 `repositoryUrl` と `--manifest` を同時に渡した場合はエラーになります。
 `--preview` と `--resolve-only` の同時指定もエラーです。
@@ -161,12 +145,9 @@ takos deploy --resolve-only --space SPACE_ID             # persist resolved Depl
 Heroku 風 sugar として `mode="resolve"` → `mode="apply"` を 1 step
 で呼び、成功時に GroupHead を新 Deployment に進めます。
 
-ローカル manifest 経路では `artifact.workflow-bundle@v1.config.entry` を
-local artifact collection の入力として CLI が API call 前に確認します。
-`entry` は public manifest schema では optional の local/private build
-metadata ですが、local deploy で worker bundle を収集する場合は必要です。worker
-bundle が見つからない場合や directory 内に複数の JavaScript bundle 候補がある
-場合は `takos deploy --preview` でも `takos deploy` でも失敗します。
+ローカル manifest 経路では、CLI は kernel-bound Shape manifest として validation
+可能な payload だけを送ります。build artifact collection や `workflowRef` 解決は
+takosumi-git 側の責務です。
 
 ローカル deploy と repo deploy はどちらも同じ pipeline
 (`POST
@@ -247,8 +228,9 @@ takos rollback --target-id DEPLOYMENT_ID      # roll back to a specific retained
 
 `takos rollback [<group>]` は GroupHead を `previous_deployment_id`（または
 `--target-id` で指定した retained Deployment）へ atomically swap します。引数を
-省略した場合は working directory の `.takos/app.yml` から `name` を読み、それを
-group として扱います。
+省略した場合は working directory の `.takosumi/manifest.yml` (旧
+`.takos/app.yml` は deprecated alias、後方互換のため受理) から `name` を読み、
+それを group として扱います。
 
 - group row が既に削除されている場合は失敗し、deleted group を再生成しない
 - code + config + publication outputs は戻るが、DB / object-store / key-value
@@ -388,7 +370,8 @@ CLI option では渡しません。control/server 側の環境変数または se
 を使います。
 
 `--group` を指定すると、manifest 由来の group-managed workload は compute 名で
-解決できます。たとえば `.takos/app.yml` の `compute.web` に resource を bind
+解決できます。たとえば `.takosumi/manifest.yml` (旧 `.takos/app.yml` は
+deprecated alias、後方互換のため受理) の `compute.web` に resource を bind
 する場合は `--group <group-name> --worker web` を使います。
 
 ## 個別 record 操作

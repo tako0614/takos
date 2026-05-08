@@ -1,123 +1,99 @@
 # File Handlers
 
-特定の MIME type や拡張子のファイルを handler UI で開けるようにするには
-`publications[]` に `publication.file-handler@v1` ref の publication を
-declaration します。
+File handler は Storage UI から特定 MIME type / extension の file を app で開く
+ための app metadata です。current `.takosumi/manifest.yml` では top-level
+`publications[]` に `publication.file-handler@v1` を書きません。
 
-## 基本
+## Kernel Manifest
+
+handler UI 自体は普通の HTTP workload として deploy します。
 
 ```yaml
-components:
-  web:
-    contracts:
-      runtime: { ref: runtime.js-worker@v1, config: { source: { ... } } }
-      ui: { ref: interface.http@v1 }
-
-routes:
-  - id: file-open
-    expose: { component: web, contract: ui }
-    via: { ref: route.https@v1, config: { path: /files/:id } }
-
-publications:
-  - name: markdown
-    ref: publication.file-handler@v1
-    outputs:
-      url: { from: { route: file-open } }
-    metadata:
-      display:
-        title: Markdown
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: docs-handler
+resources:
+  - shape: worker@v1
+    name: web
+    provider: "@takos/cloudflare-workers"
     spec:
-      mimeTypes: [text/markdown]
-      extensions: [.md]
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      routes:
+        - docs.example.com/files/*
+    workflowRef:
+      file: .takosumi/workflows/deploy.yml
+      job: build
+      artifact: web
+      target: spec.artifact.hash
 ```
 
-ユーザーがファイルを開くと output `url` が参照する route にリダイレクト
-されます。 `:id` は URL encode されたファイル ID に置換されます。 `:id` は
-path segment として **必須** で、 `:id` を含まない `publication.file-handler@v1`
-publication は storage の handler catalog には出ません。 current storage UI
-は起動時に `space_id` query parameter も付けます。 file ID を `file_id`
-query parameter で渡す fallback はありません。
+`workflowRef` は takosumi-git の authoring extension です。kernel に届く
+compiled manifest では artifact digest が concrete になり、`workflowRef`
+は存在しません。
+
+## App Metadata
+
+Storage UI に handler として見せる情報は app metadata / registry entry として
+管理します。metadata は deploy 後の resource output を参照できます。
+
+```yaml
+fileHandlers:
+  - name: markdown
+    title: Markdown
+    url: ${ref:web.url}/files/:id
+    mimeTypes: [text/markdown]
+    extensions: [.md]
+```
+
+`url` の `:id` は URL encode された file ID に置換されます。`:id` は path
+segment として必須です。current storage UI は起動時に `space_id` query parameter
+も付けます。file ID を `file_id` query parameter で渡す fallback はありません。
+
+この metadata は kernel-bound manifest の top-level field ではありません。
+InstallableApp metadata、Takos app catalog、または runtime registration が
+Storage の file handler registry に materialize します。
 
 ## 複数ハンドラー
 
-```yaml
-routes:
-  - id: file-open
-    expose: { component: web, contract: ui }
-    via: { ref: route.https@v1, config: { path: /files/:id } }
-  - id: image-viewer
-    expose: { component: web, contract: ui }
-    via: { ref: route.https@v1, config: { path: /viewer/:id } }
+同じ app は複数 handler を登録できます。
 
-publications:
+```yaml
+fileHandlers:
   - name: markdown
-    ref: publication.file-handler@v1
-    outputs:
-      url: { from: { route: file-open } }
-    metadata:
-      display: { title: Markdown }
-    spec:
-      mimeTypes: [text/markdown]
-      extensions: [.md]
+    title: Markdown
+    url: ${ref:web.url}/files/:id
+    mimeTypes: [text/markdown]
+    extensions: [.md]
   - name: image
-    ref: publication.file-handler@v1
-    outputs:
-      url: { from: { route: image-viewer } }
-    metadata:
-      display: { title: Images }
-    spec:
-      mimeTypes: [image/png, image/jpeg, image/gif]
-      extensions: [.png, .jpg, .jpeg, .gif]
+    title: Images
+    url: ${ref:web.url}/viewer/:id
+    mimeTypes: [image/png, image/jpeg, image/gif]
+    extensions: [.png, .jpg, .jpeg, .gif]
 ```
 
-`publications` に複数の `publication.file-handler@v1` entry を並べれば
-よい。 同一 manifest 内で publication 名は一意である必要があります。
+metadata 内で handler name は app installation 内一意にします。
 
 ## フィールド
 
-`publication.file-handler@v1` の output / metadata / spec schema は次を
-受け付けます。
+| field        | required    | 説明                                            |
+| ------------ | ----------- | ----------------------------------------------- |
+| `name`       | yes         | handler の stable name                          |
+| `title`      | no          | UI 表示名。省略時は `name`                      |
+| `url`        | yes         | handler URL template。`:id` path segment が必須 |
+| `mimeTypes`  | conditional | 対応する MIME type のリスト                     |
+| `extensions` | conditional | 対応するファイル拡張子のリスト                  |
 
-| field             | required    | 説明                                                                       |
-| ----------------- | ----------- | -------------------------------------------------------------------------- |
-| `name`            | yes         | publication 名。 storage UI の handler 表示名にも使われる                  |
-| `ref`             | yes         | `publication.file-handler@v1`                                              |
-| `outputs.url`     | yes         | `from: { route: <id> }` (`:id` path segment が必須)                        |
-| `metadata.display.title` | no   | discovery metadata。 storage API response には含まれるが、 current UI 表示は `name` |
-| `spec.mimeTypes`  | conditional | 対応する MIME type のリスト                                                |
-| `spec.extensions` | conditional | 対応するファイル拡張子のリスト                                             |
+`mimeTypes` と `extensions` は少なくとも一方が必須です。両方を指定することも
+できます。
 
-`spec.mimeTypes` と `spec.extensions` は少なくとも一方が必須です。
-両方を指定することもできます。 storage の file handler discovery は `:id`
-path segment を含む handler だけを返します。 current storage UI はこの
-template URL の `:id` を file ID に置換し、 `space_id` query parameter を
-追加して開きます。 handler 側は path segment の file ID を primary contract
-として扱い、 必要なら `space_id` を補助情報として読めます。
-
-descriptor の normative 定義は
-[Official Descriptor Set v1 § publication.file-handler@v1](/takosumi/descriptors/official-descriptor-set-v1#publicationfile-handlerv1)
-を参照。
-
-## Publication の仕組み
-
-kernel は多くの publication descriptor の意味を解釈しません。
-`publication.file-handler@v1` を理解するのは利用する側 (agent runtime や
-storage UI 等) の役割です。 `publications` は generic plugin resolver
-ではなく、 manifest で宣言した route metadata の catalog です。
-
-他の primitive が file handler を使うには、 その publication を
-`bindings[].from.publication` で consume するか、 既存の storage endpoint
-(`GET /api/spaces/:spaceId/storage/file-handlers`) から参照します。 この
-endpoint は manifest publication catalog を参照して handler を選択します。
-kernel は未参照の publication を自動で space 全体へ inject しません。
-control plane API で `publication.file-handler@v1` route publication を
-直接作る運用は推奨しません。
-
-## Discovery API selection ranking
+## Discovery API Selection Ranking
 
 `GET /api/spaces/:spaceId/storage/file-handlers?mime=...&ext=...` で複数の
-handler が match した場合、 以下の order で sort されます (rank 0 が
-最優先):
+handler が match した場合、以下の order で sort されます。
 
 | rank | 条件                             |
 | ---- | -------------------------------- |
@@ -126,9 +102,21 @@ handler が match した場合、 以下の order で sort されます (rank 0 
 | 2    | extension のみ match (mime 不問) |
 | 3    | filter 無し (no params)          |
 
-同 rank 内では declaration order (DB 登録順、 `created_at ASC`) で tie-break。
+同 rank 内では registry 登録順で tie-break します。
+
+## Legacy Migration
+
+旧 docs の `publication.file-handler@v1` / `publications[]` は current
+kernel-bound manifest では使いません。
+
+| legacy                        | current                                       |
+| ----------------------------- | --------------------------------------------- |
+| `publication.file-handler@v1` | `fileHandlers[]` metadata / registry entry    |
+| `outputs.url.from.route`      | resource output reference (`${ref:web.url}`)  |
+| `bindings[].from.publication` | AppBinding materialization or registry lookup |
 
 ## 次のステップ
 
 - [MCP Server](/apps/mcp) --- MCP Server の公開方法
-- [Deploy Manifest](/deploy/manifest) --- `.takos/app.yml` の全体像
+- [App Integration Metadata Boundary](/architecture/app-publications)
+- [Deploy Manifest](/deploy/manifest) --- `.takosumi/manifest.yml` の全体像
