@@ -1,75 +1,57 @@
-# Component + 子 component (sidecar)
+# Worker + Container
 
-> このページでわかること: JS bundle component と OCI container component を
-> 組み合わせる方法。
+> このページでわかること: request-driven Worker と long-running container を
+> current `resources[]` manifest で組み合わせる方法。
 
-旧 worker + attached container pattern と同じ用途です。 親 component が
-ルーティング、 子 component が重い処理を担当します。
+旧 attached container pattern は、current manifest では `worker@v1` と
+`web-service@v1` の 2 resource として表現します。Worker が edge entrypoint
+を持ち、container は internal service として重い処理を担当します。
 
-新 schema では「attached container」 は別 component として declaration
-します。 `runtime.oci-container@v1` を ref に持つ component を `depends:` で
-親に紐付け、 親から runtime binding 経由で呼び出します。
-
-## deploy manifest
+## Deploy Manifest
 
 ```yaml
-name: processor-service
-
-components:
-  processor-host:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: build-host
-              artifact: processor-host
-              entry: dist/host.js
-      api:
-        ref: interface.http@v1
-      gui:
-        ref: interface.http@v1
-  processor:
-    contracts:
-      runtime:
-        ref: runtime.oci-container@v1
-        config:
-          source:
-            ref: artifact.oci-image@v1
-            config:
-              image: ghcr.io/example/processor-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          port: 8080
-      gateway:
-        ref: interface.http@v1
-    depends: [processor-host]
-
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: processor-service
 resources:
-  api-secret:
-    ref: resource.secret@v1
-    config: { generate: true }
+  - shape: web-service@v1
+    name: processor
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/example/processor-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
 
-bindings:
-  - from: { secret: api-secret }
-    to: { component: processor-host, env: API_SECRET }
-  - from: { secret: api-secret }
-    to: { component: processor, env: API_SECRET }
-
-routes:
-  - id: api
-    expose: { component: processor-host, contract: api }
-    via: { ref: route.https@v1, config: { path: /api } }
-  - id: gui
-    expose: { component: processor-host, contract: gui }
-    via: { ref: route.https@v1, config: { path: /gui } }
+  - shape: worker@v1
+    name: processor-host
+    provider: "@takos/cloudflare-workers"
+    spec:
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      routes:
+        - processor.example.com/api/*
+        - processor.example.com/gui/*
+      env:
+        PROCESSOR_INTERNAL_HOST: ${ref:processor.internalHost}
+        PROCESSOR_INTERNAL_PORT: ${ref:processor.internalPort}
+    workflowRef:
+      file: .takosumi/workflows/deploy.yml
+      job: build-host
+      artifact: processor-host
+      target: spec.artifact.hash
 ```
+
+`workflowRef` は takosumi-git の authoring extension です。kernel に届く
+compiled manifest では `spec.artifact.hash` が concrete digest
+になり、`workflowRef` は 存在しません。
 
 ## ワークフロー
 
 ```yaml
-# .takos/workflows/deploy.yml
+# .takosumi/workflows/deploy.yml
 name: deploy
 jobs:
   build-host:
@@ -104,40 +86,31 @@ CMD ["node", "dist/server.js"]
 ```typescript
 // src/host.ts
 interface Env {
-  PROCESSOR_GATEWAY: Fetcher;        // 子 component の interface.http instance
-  API_SECRET: string;
+  PROCESSOR_INTERNAL_HOST: string;
+  PROCESSOR_INTERNAL_PORT: string;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const auth = request.headers.get("Authorization");
-    if (auth !== `Bearer ${env.API_SECRET}`) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-    return env.PROCESSOR_GATEWAY.fetch(request);
+    const url = new URL(request.url);
+    url.protocol = "http:";
+    url.hostname = env.PROCESSOR_INTERNAL_HOST;
+    url.port = env.PROCESSOR_INTERNAL_PORT;
+    return fetch(url, request);
   },
 };
 ```
 
 ## ポイント
 
-- 子 component は `runtime.oci-container@v1` を ref に持つ独立 component
-  として宣言する (旧 `containers:` 配下ではない)
-- `depends: [processor-host]` で起動順序の hint を declaration
-- 共通 secret は `resource.secret@v1` を作って **親と子の両方** に明示 binding
-- 子 component を外に直接公開する場合は子側の `interface.http@v1`
-  contract instance を route で `expose` する。 親経由でないと届かないわけではない
-
-## runtime descriptor の選び分け
-
-| component の特性                 | runtime ref                     | source ref                     |
-| -------------------------------- | ------------------------------- | ------------------------------ |
-| serverless / request-driven JS    | `runtime.js-worker@v1`          | `artifact.workflow-bundle@v1`  |
-| 常設 container                    | `runtime.oci-container@v1`      | `artifact.oci-image@v1`        |
-
-provider 選択 (Cloudflare Workers / Cloud Run / k8s) は `provider-selection`
-policy gate と operator-only configuration が決定する。 manifest には
-provider 名は出ない。
+- long-running process は `web-service@v1`、edge entrypoint は `worker@v1`
+  として分ける
+- provider は manifest に明示する。operator-only config は provider plugin 側で
+  管理する
+- resource 間の接続は provider output (`internalHost` / `internalPort`) を
+  `${ref:...}` で受け取る
+- top-level `components` / `bindings[]` / `routes[]` は current manifest surface
+  ではない
 
 ## 次のステップ
 
