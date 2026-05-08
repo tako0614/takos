@@ -77,8 +77,11 @@ usage と請求は account 中心です。主要な group:
 - `usageEvents`
 - `usageRollups`
 
-current public billing API は `/api/billing` family です。`/api/billing/usage`
-は current account の usage rollup を返します。
+canonical billing API は Takosumi Accounts の `takosumi.account.billing@v1`
+service role です。consumer は `serviceResolvers[]` / anchor で billing endpoint
+を resolve し、`/v1/billing/usage` で current billing account の usage rollup
+を取得します。Takos の `/api/billing/*` が存在する場合も migration window 中の
+compatibility proxy です。
 
 ## operator が見るべき state
 

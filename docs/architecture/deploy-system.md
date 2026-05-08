@@ -205,11 +205,11 @@ Approve?
 3 path に共通する **設計の核** は、`.takosumi/app.yml` と
 `.takosumi/manifest.yml` を厳格に分離することです。
 
-| ファイル                 | 受領者                 | 解釈タイミング             | 内容                                                          |
-| ------------------------ | ---------------------- | -------------------------- | ------------------------------------------------------------- |
-| `.takosumi/app.yml`      | takosumi-git installer | install / upgrade pipeline | InstallableApp v1 metadata + bindings + permissions           |
-| `.takosumi/manifest.yml` | takosumi-git → kernel  | compile 時 (kernel 直前)   | compute resource declaration (workflowRef / placeholder 込み) |
-| compiled manifest        | takosumi kernel        | `POST /v1/deployments`     | installer-only placeholder 解決済み compute manifest          |
+| ファイル                 | 受領者                 | 解釈タイミング             | 内容                                                             |
+| ------------------------ | ---------------------- | -------------------------- | ---------------------------------------------------------------- |
+| `.takosumi/app.yml`      | takosumi-git installer | install / upgrade pipeline | InstallableApp v1 metadata + bindings + permissions              |
+| `.takosumi/manifest.yml` | takosumi-git compiler  | compile 前                 | compute resource declaration (workflowRef / placeholder 込み)    |
+| compiled manifest        | takosumi kernel        | `POST /v1/deployments`     | workflowRef / installer-only placeholder 解決済み Shape manifest |
 
 - `.takosumi/app.yml` は **kernel に渡してはいけない**。kernel は
   `identity.oidc@v1` のような binding type を **知らない**。
