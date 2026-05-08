@@ -1,149 +1,236 @@
 # 環境変数
 
-Takos の deploy contract で component に渡る env / runtime binding は次の
-3 系統です。
+Takos の runtime env は current `.takosumi/manifest.yml` の `resources[]` にある
+`spec.env` から渡します。kernel-bound manifest の正本 envelope は
+`apiVersion: "1.0"` / `kind: Manifest` / `resources[]` であり、旧 `components` /
+top-level `bindings[]` / `publications[]` AppSpec form は現行 surface
+ではありません。
 
-1. top-level `env`
-2. `components.<name>.env` および `components.<name>.contracts.<>.config.env`
-3. `bindings[]` で resolve された source output
+env の入力元は 3 種類です。
+
+1. author が manifest に直接書く static value
+2. resource output 参照 (`${ref:...}` / `${secret-ref:...}`)
+3. install / service import layer が kernel 到達前または deploy route 内で解決
+   する placeholder (`${bindings.*}` / `${secrets.*}` / `${installation.*}` /
+   `${imports.*}`)
 
 normative な field 定義は
-[マニフェストリファレンス § 5](/reference/manifest-spec#_5-bindings)、
-authoring → canonical 写像は
-[Authoring Guide](/takosumi/guides/authoring-guide) を参照。
+[Manifest Reference](/reference/manifest-spec)、install-time binding の出力は
+[Binding Catalog](/reference/binding-catalog) を参照してください。
 
-## 静的 env
+## Static Env
 
-```yaml
-env:
-  NODE_ENV: production
-
-components:
-  web:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: bundle
-              artifact: web
-              entry: dist/worker.js
-          env:
-            LOG_LEVEL: debug
-```
-
-top-level `env` は全 component に入ります。 `components.<name>.env` と
-`components.<name>.contracts.<>.config.env` はその component (または contract
-instance) のみに入ります。
-
-## bindings で env を受け取る
-
-`bindings[]` は consumer ↔ source の **明示** edge です (Core invariant 4 /
-7)。 publication / resource / secret / provider-output は injection を
-含意せず、 binding で明示しない限り env / runtime binding に渡りません。
-
-env 値の向きは **`{ ENV_NAME: outputName }`** (env 慣例と同じ)。 単一 output
-の resource binding は `env: ENV_NAME` のスカラで十分です。
+`web-service@v1` は `spec.env` で static env を受け取ります。
 
 ```yaml
-bindings:
-  - from:
-      publication: takos.api-key
-      request:
-        scopes: [files:read]
-    to:
-      component: web
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: takos
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/takos/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
       env:
-        TAKOS_API_ENDPOINT: endpoint
-        TAKOS_API_KEY: apiKey
+        NODE_ENV: production
+        LOG_LEVEL: info
 ```
 
-env 名は `[A-Za-z_][A-Za-z0-9_]*` に一致する必要があり、 保存時と注入時に
-uppercase 正規化されます。
+`worker@v1` は provider がサポートする場合に `spec.env` 相当の provider config
+へ materialize されます。route pattern は `worker@v1.spec.routes`、domain は
+`web-service@v1.spec.domains` または `custom-domain@v1` で表現します。
 
-## resource binding
+## Resource Outputs
+
+resource 間の値渡しは resource output 参照で書きます。credential は raw env
+ではなく secret ref を優先します。
+
+```yaml
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: takos
+resources:
+  - shape: database-postgres@v1
+    name: db
+    provider: "@takos/managed-postgres"
+    spec:
+      version: "16"
+      size: small
+
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/takos/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+      env:
+        DATABASE_URL: ${ref:db.connectionString}
+        DATABASE_PASSWORD: ${secret-ref:db.passwordSecretRef}
+```
+
+`${ref:<resource>.<output>}` は non-secret output、`${secret-ref:...}` は secret
+store / provider secret reference として扱います。存在しない resource output を
+参照する manifest は reject されます。
+
+## Install-Time Bindings
+
+`.takosumi/app.yml` の AppBinding は installer-bound
+です。`.takosumi/manifest.yml` 内では `${bindings.*}` / `${secrets.*}` /
+`${installation.*}` を authoring-time placeholder として使えますが、kernel
+に直接届く manifest には残しません。 takosumi-git / Takosumi Accounts が
+concrete value または secret ref に materialize してから `POST /v1/deployments`
+に渡します。
+
+```yaml
+# .takosumi/app.yml
+apiVersion: app.takosumi.dev/v1
+kind: InstallableApp
+bindings:
+  auth:
+    type: identity.oidc@v1
+    redirectPaths:
+      - /auth/oidc/callback
+  data:
+    type: database.postgres@v1
+  blobs:
+    type: object-store.s3-compatible@v1
+  bootstrap:
+    type: install-launch-token@v1
+```
+
+```yaml
+# .takosumi/manifest.yml (authoring)
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: takos
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ${artifacts.api.image}
+      port: 8080
+      scale: { min: 1, max: 3 }
+      env:
+        AUTH_DRIVER: oidc
+        OIDC_ISSUER_URL: ${bindings.auth.issuerUrl}
+        OIDC_CLIENT_ID: ${bindings.auth.clientId}
+        OIDC_CLIENT_SECRET: ${secrets.auth.clientSecret}
+        OIDC_REDIRECT_URI: ${bindings.auth.redirectUri}
+        DATABASE_URL: ${bindings.data.connectionString}
+        BLOB_ENDPOINT: ${bindings.blobs.endpoint}
+        BLOB_BUCKET: ${bindings.blobs.bucket}
+        BLOB_ACCESS_KEY: ${bindings.blobs.accessKey}
+        BLOB_SECRET_KEY: ${secrets.blobs.secretKey}
+        INSTALL_LAUNCH_PUBLIC_KEY: ${bindings.bootstrap.publicKey}
+        INSTALL_LAUNCH_AUDIENCE: ${bindings.bootstrap.audience}
+        TAKOS_INSTALLATION_ID: ${installation.id}
+```
+
+## Cross-Instance Service Env
+
+Takosumi Accounts などの外部 service dependency は AppBinding ではなく
+`.takosumi/manifest.yml` の `imports[]` / `serviceResolvers[]` で表現します。
+consumer manifest は service identifier を参照し、Accounts hostname を直接 pin
+しません。
+
+```yaml
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: takos
+imports:
+  - alias: account-auth
+    service: takosumi.account.auth@v1
+    refreshPolicy:
+      kind: ttl
+      ttl: 300s
+serviceResolvers:
+  - kind: anchor
+    url: https://anchor.example.com/v1/services/
+    publicKey: BASE64_ED25519_PUBLIC_KEY
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/takos/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+      env:
+        AUTH_DRIVER: oidc
+        OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
+```
+
+`imports[]` がある manifest は `serviceResolvers[]` が必須です。kernel は anchor
+から service descriptor を取得し、署名 / version / expiry を検証してから
+`${imports.*}` を materialize します。
+
+## Collision Rule
+
+同一 resource の `spec.env` 内で同じ env 名を複数 source から生成してはいけま
+せん。compile 後に uppercase 正規化した env 名が衝突する場合も invalid です。
 
 ```yaml
 resources:
-  app-db:
-    ref: resource.sql.postgres@v1
-  app-cache:
-    ref: resource.key-value@v1
-
-bindings:
-  - from: { resource: app-db }
-    to: { component: web, env: DATABASE_URL }
-    access: database-url
-  - from: { resource: app-cache }
-    to: { component: web, binding: CACHE }
-    access: kv-runtime-binding
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/takos/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+      env:
+        DATABASE_URL: sqlite://local
+        database_url: ${ref:db.connectionString} # invalid after normalization
 ```
 
-`to.env` は env として、 `to.binding` は runtime binding として渡ります。
-`access:` は resource ref が単一 access mode なら省略可、 複数候補を持つ
-ref では明示が必要です (Core § 11 ambiguous shorthand)。
+## Takos Runtime Env
 
-## collision rule
+Takos は **OIDC consumer** として動きます。Auth / OIDC issuer / billing は
+takosumi kernel ではなく Takosumi Accounts の責務です。kernel は compiled
+manifest apply / resource provisioning / routing projection を扱うだけで、 OAuth
+issuer endpoint を持ちません。
 
-deploy 時に次の collision が validated されます:
+よく使う env:
 
-- 同 component 内で同名 env / binding 名を複数 binding が target にできない
-  (binding target collision、 Core § 11)
-- top-level `env`、 `components.<>.env`、 `bindings[]` の env target が
-  同じ env 名に解決されると invalid (uppercase 正規化後に判定)
+| env                         | 由来例                                                               | 説明                         |
+| --------------------------- | -------------------------------------------------------------------- | ---------------------------- |
+| `AUTH_DRIVER`               | static `oidc`                                                        | OIDC consumer mode           |
+| `OIDC_ISSUER_URL`           | `${imports.account-auth.endpoints.oidc-issuer.url}` or AppBinding    | operator-resolved issuer URL |
+| `OIDC_CLIENT_ID`            | `${bindings.auth.clientId}`                                          | OIDC client id               |
+| `OIDC_CLIENT_SECRET`        | `${secrets.auth.clientSecret}` or `${secret-ref:oidc-client-secret}` | OIDC client secret           |
+| `OIDC_REDIRECT_URI`         | `${bindings.auth.redirectUri}`                                       | callback URL                 |
+| `DATABASE_URL`              | `${bindings.data.connectionString}` or `${ref:db.connectionString}`  | Postgres connection URL      |
+| `BLOB_ENDPOINT`             | `${bindings.blobs.endpoint}`                                         | Object store endpoint        |
+| `BLOB_BUCKET`               | `${bindings.blobs.bucket}`                                           | Object store bucket          |
+| `BLOB_ACCESS_KEY`           | `${bindings.blobs.accessKey}`                                        | Object store access key      |
+| `BLOB_SECRET_KEY`           | `${secrets.blobs.secretKey}`                                         | Object store secret key      |
+| `BASE_URL`                  | `${bindings.domain.url}` or `${ref:api.url}`                         | Takos public origin          |
+| `TAKOS_INSTALLATION_ID`     | `${installation.id}`                                                 | AppInstallation id           |
+| `INSTALL_LAUNCH_PUBLIC_KEY` | `${bindings.bootstrap.publicKey}`                                    | launch token verification    |
+| `INSTALL_LAUNCH_AUDIENCE`   | `${bindings.bootstrap.audience}`                                     | launch token audience        |
+| `DEPLOY_INTENT_DRIVER`      | `${bindings.deploy.driver}`                                          | deploy intent driver         |
+| `DEPLOY_INTENT_REMOTE`      | `${bindings.deploy.remote}`                                          | deploy intent remote         |
+| `DEPLOY_INTENT_TOKEN`       | `${secrets.deploy.token}`                                            | deploy intent token          |
 
-```yaml
-env:
-  DATABASE_URL: sqlite://local
-
-bindings:
-  - from: { resource: app-db }
-    to: { component: web, env: DATABASE_URL }
-    access: database-url
-```
-
-この例は `DATABASE_URL` が衝突するため invalid です。
-
-## 子 component / sidecar の env
-
-子 component (旧 attached container) も同じ `env` / `bindings[]` contract で
-扱います。 `bindings[].to.component` で対象 component を指定するだけです。
-
-```yaml
-components:
-  web:
-    contracts:
-      runtime: { ref: runtime.js-worker@v1, config: { ... } }
-      ui: { ref: interface.http@v1 }
-  sandbox:
-    contracts:
-      runtime:
-        ref: runtime.oci-container@v1
-        config:
-          source:
-            ref: artifact.oci-image@v1
-            config: { image: ghcr.io/org/sandbox@sha256:... }
-          port: 8080
-          env: { HEADLESS: "true" }
-      gateway: { ref: interface.http@v1 }
-    depends: [web]
-```
-
-## よく使う source output
-
-| source                          | output 一覧                                                      |
-| ------------------------------- | ---------------------------------------------------------------- |
-| `route` 由来 publication output | `url`                                                            |
-| `takos.api-key`                 | `endpoint`, `apiKey`                                             |
-| `takos.oauth-client`            | `clientId`, `clientSecret`, `issuer`, `tokenEndpoint`, `userinfoEndpoint` |
-| `resource.sql.postgres@v1`      | (`database-url` access mode で `DATABASE_URL` 形式の URL)        |
-| `resource.key-value@v1`         | (`kv-runtime-binding` access mode で runtime binding handle)     |
-| `resource.secret@v1`            | (`secret-env-binding` access mode で secret value)               |
+`TAKOS_BASE_URL` は `BASE_URL` の compatibility alias として受け取る場合がありま
+す。新規 manifest では `BASE_URL` を使います。
 
 ## 次のステップ
 
 - [マニフェスト](/deploy/manifest) --- author 向け全体ガイド
-- [Manifest Reference](/reference/manifest-spec) --- normative field 定義
+- [Manifest Reference](/reference/manifest-spec) --- kernel-bound manifest
+  の正本
+- [InstallableApp v1 (`.takosumi/app.yml`)](/reference/app-yml-spec) --- binding
+  declaration の正本
+- [Binding Catalog](/reference/binding-catalog) --- binding output / env
+  injection 一覧
+- [OIDC Consumer](/apps/oidc-consumer) --- Takos app 側の OIDC consumer env
