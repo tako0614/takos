@@ -1,37 +1,36 @@
-# サンプル集
+# Examples
 
-Takos の component / publication / binding contract を前提にした最小構成を
-まとめています。
+Current examples should use `.takosumi/app.yml` plus `.takosumi/manifest.yml`
+and the `resources[]` Shape model. Legacy component / route / publication
+examples are being retired as each page is updated.
 
-## サンプル一覧
+## List
 
-### [JS bundle component だけのシンプルな group](/examples/simple-worker)
+### [Simple Worker](/examples/simple-worker)
 
-- component 1 つ (`runtime.js-worker@v1`)
-- route 1 つ
-- publication / built-in provider binding なし
+- `worker@v1` resource
+- `workflowRef.target: spec.artifact.hash`
+- `spec.routes` string patterns
 
-### [Component + DB](/examples/worker-with-db)
+### [Worker + DB](/examples/worker-with-db)
 
-- component 1 つ
-- DB / object-store 接続先を `bindings[]` で env として受け取る
+- worker resource plus database / object-store resources
+- runtime env is materialized from refs and install bindings
 
-### [Component + 子 component (sidecar)](/examples/worker-with-container)
+### [Worker + Container](/examples/worker-with-container)
 
-- 親 component + 子 component (`runtime.oci-container@v1`)
-- publication と子 component を併用
+- worker resource plus `web-service@v1`
+- use `custom-domain@v1` or provider domains for public entrypoints
 
 ### [MCP Server](/examples/mcp-server)
 
-- component 1 つ
-- `publication.mcp-server@v1` publication を公開
-- 他 component / client は explicit `bindings[].from.publication` で使う
+- MCP HTTP endpoint on a route-bearing resource
+- install-time permissions and service imports live in `.takosumi/app.yml`
 
-### [マルチ component 構成](/examples/multi-service)
+### [Multi-service](/examples/multi-service)
 
-- component 2 つ
-- 同じ publication を複数 consumer が共有
-- background job は `interface.schedule@v1` + `route.schedule@v1` で起動
+- multiple Shape resources
+- explicit `${ref:...}` wiring between resources
 
 ## Default Group 構成
 

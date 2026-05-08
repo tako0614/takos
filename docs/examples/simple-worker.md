@@ -1,72 +1,99 @@
-# JS bundle component だけのシンプルな group
+# Simple Worker
 
-> このページでわかること: component 1 つだけの最小構成の書き方。
+> このページでわかること: `worker@v1` resource 1 つだけの最小構成。
 
 この例は
 [Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
-そのままの構成です。
+と同じ current Shape model です。旧 `components` / `routes[]` form
+は使いません。
 
 ## 完成形
 
 ```text
 my-app/
-├── .takos/
+├── .takosumi/
 │   ├── app.yml
+│   ├── manifest.yml
 │   └── workflows/
-│       └── deploy.yml
+│       └── build.yml
 ├── src/
 │   └── index.ts
 └── package.json
 ```
 
-## deploy manifest
+## app.yml
 
 ```yaml
-name: simple-worker
-
-components:
-  web:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: bundle
-              artifact: web
-              entry: dist/worker.js
-      ui:
-        ref: interface.http@v1
-
-routes:
-  - id: web
-    expose: { component: web, contract: ui }
-    via:
-      ref: route.https@v1
-      config: { path: / }
+apiVersion: app.takosumi.dev/v1
+kind: InstallableApp
+metadata:
+  id: example.simple-worker
+  name: Simple Worker
+  description: Minimal worker app
+  publisher: example
+source:
+  git: https://github.com/example/simple-worker
+  ref: v1.0.0
+entry:
+  manifest: .takosumi/manifest.yml
+runtime:
+  modes:
+    - shared-cell
+permissions:
+  requested: []
 ```
 
-## ワークフロー
+## manifest.yml
 
 ```yaml
-# .takos/workflows/deploy.yml
-name: deploy
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: simple-worker
+resources:
+  - shape: worker@v1
+    name: web
+    provider: "@takos/cloudflare-workers"
+    spec:
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      routes:
+        - simple-worker.example.com/*
+    workflowRef:
+      file: build.yml
+      job: build-worker
+      artifact: bundle
+      target: spec.artifact.hash
+```
+
+`workflowRef` は takosumi-git の private extension です。`push` /
+`install apply` が workflow を実行し、`TAKOSUMI_ARTIFACT=<hash>` を
+`spec.artifact.hash` に書き込んでから `workflowRef` を strip します。kernel には
+`workflowRef` は届きません。
+
+## Workflow
+
+```yaml
+version: "0"
 jobs:
-  bundle:
-    runs-on: ubuntu-latest
+  - name: build-worker
     steps:
-      - name: Install dependencies
+      - name: install
         run: npm install
-      - name: Build
+      - name: build
         run: npm run build
-    artifacts:
-      web:
-        path: dist/worker
+      - name: upload
+        run: |
+          # Replace this with the provider uploader. It must print an immutable
+          # bundle hash or URI according to the Artifact URI Contract.
+          echo "TAKOSUMI_ARTIFACT=sha256:0123456789abcdef"
+    artifact:
+      name: bundle
 ```
 
-## Worker のコード
+## Worker code
 
 ```typescript
 // src/index.ts
@@ -89,26 +116,34 @@ export default {
 };
 ```
 
-## デプロイ
+## Dry run
 
 ```bash
-takos deploy --env staging --space SPACE_ID
+takosumi-git push --dry-run
 ```
 
-## ポイント
+Dry-run prints the cleaned manifest. The printed resource should contain
+`spec.artifact.hash: sha256:0123456789abcdef` and no `workflowRef`.
 
-- `name` は display 名であり、 deploy / install 時の既定 group 名にもなる
-- `components.web.contracts.runtime` で component の runtime descriptor
-  (`runtime.js-worker@v1`) を pin
-- `components.web.contracts.ui` で `interface.http@v1` の expose 可能 endpoint を declaration
-- `routes[]` で `expose` (どの component / contract) と `via` (route descriptor) を bind
-- `path: /` でルートパスに公開。 ドメインはシステムが自動付与する
-- component のコードは標準 Fetch API の `fetch` ハンドラ
+## Apply
 
-## 次のステップ
+```bash
+takosumi-git push \
+  --endpoint "$TAKOSUMI_ENDPOINT" \
+  --token "$TAKOSUMI_TOKEN"
+```
 
-- データベースを追加したい →
-  [Component + SQL データベース](/examples/worker-with-db)
-- 子 component を併設したい →
-  [Component + 子 component](/examples/worker-with-container)
-- MCP Server を公開したい → [MCP Server](/examples/mcp-server)
+## Points
+
+- `apiVersion: "1.0"` and `kind: Manifest` are required.
+- `worker@v1` requires `spec.artifact.kind: js-bundle`, `spec.artifact.hash`,
+  and `spec.compatibilityDate`.
+- `spec.routes` is a provider-interpreted string array.
+- `workflowRef.target: spec.artifact.hash` is what makes worker bundles work
+  without abusing `spec.image`.
+
+## Next
+
+- Add data storage: [Worker + DB](/examples/worker-with-db)
+- Add a container service: [Worker + Container](/examples/worker-with-container)
+- Publish an MCP endpoint: [MCP Server](/examples/mcp-server)
