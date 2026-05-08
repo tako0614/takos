@@ -5,9 +5,8 @@ expose する distribution** です。 Takosumi Accounts / billing / AppInstalla
 ledger / dashboard / install UI / anchor を 1 つの distribution として配布し、
 operator が任意の hostname で deploy します。 consumer (Takos product / 第三者
 app / 別 takosumi instance) は **anchor URL を 1 個 pin、 service identifier
-経由で `imports[].service` で外部接続** する ため、 特定 hostname
-(`accounts.takosumi.cloud` 等) への lock-in は無く、 operator が任意の hostname
-で deploy できます。
+経由で `imports[].service` で外部接続** するため、 特定 hostname への lock-in
+は無く、 operator が任意の hostname で deploy できます。
 
 設計全体は
 [cross-instance-service-binding](./cross-instance-service-binding.md)、 service
@@ -183,9 +182,9 @@ services:
 
 operator が deploy 時に各 resource の output URL (operator-chosen hostname) で
 endpoint が resolve され、 anchor (`${ref:platform-anchor.url}`) に
-provider-signed descriptor が publish されます。 hostname は operator の 判断
-(`accounts.takosumi.cloud` / `accounts.example.com` / `accounts.acme.corp`
-など何でも可) で、 service identifier (`takosumi.account.auth@v1`) は不変です。
+provider-signed descriptor が publish されます。 hostname は operator の判断
+(`accounts.example.com` / `accounts.acme.corp` など何でも可) で、 service
+identifier (`takosumi.account.auth@v1`) は不変です。
 
 ## 3. Consumer 側 (Takos product) manifest sample
 
