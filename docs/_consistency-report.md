@@ -14,7 +14,7 @@ Reviewed: 39 files (Wave 1: 12 new, Wave 2: 9 major-rewrite, Wave 3: 18 partial)
 > binding audit で resolved 済。 各 finding section の `Repair` 欄に書かれた
 > 対応は完了し、 `validate:agent-docs` / `validate:architecture` /
 > `docs:build` 全 green。 本 report は historical snapshot として保存され、
-> 現状は all clean。 詳細は ROADMAP §1.9 / 2026-05-09 audit
+> 現状は all clean。 詳細は cross-instance service binding docs / 2026-05-09 audit
 > 履歴を参照。
 
 ## Findings
@@ -90,8 +90,9 @@ serve する** と書いている。これは次の正本記述と直接矛盾:
   を `kernel host (\`{KERNEL_DOMAIN}\`) → kernel API / settings` に
   変更し、`auth` を削除。auth route は Takosumi Accounts (account plane)
   が serve する旨の補足を 1 行追加 (例:
-  "auth (`/oauth/*`) は Takosumi Accounts (`accounts.takosumi.cloud`) が
-  serve するため kernel host の routing 対象外")。
+  "auth (`/oauth/*`) は Takosumi Accounts (`takosumi.account.auth@v1` を
+  anchor resolve した operator hostname) が serve するため kernel host の
+  routing 対象外")。
 - 担当 Wave: W3.B2 (Batch 2.2 大改訂組) の control-plane.md 担当。
 
 ---
@@ -372,8 +373,8 @@ deprecation 注記なしに残っている**。本 plan の Wave 1-3 は `refere
   正本化。外部公開 status は canonical 5 値固定で、`upgrade-export.md` /
   `install-api.md` の中間状態表現と整合。
 - **B-02 fixed**: `architecture/control-plane.md` の routing 表から `auth` を
-  削除し、auth (`/oauth/*`) は Takosumi Accounts (`accounts.takosumi.cloud`)
-  が serve する旨の補足を追加。
+  削除し、auth (`/oauth/*`) は Takosumi Accounts (`takosumi.account.auth@v1`
+  を anchor resolve した operator hostname) が serve する旨の補足を追加。
 - **W-01 fixed**: `architecture/installable-app-model.md` を "Auth と Billing
   を含めません" に揃え、Billing は Takosumi Cloud billing の責務と明記。
 - **W-02 fixed**: `architecture/takosumi-accounts.md` の `/oauth/userinfo` 行に
