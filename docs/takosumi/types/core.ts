@@ -43,7 +43,7 @@ import type {
   CoreResourceAccessPath,
   CoreRouterConfig,
   CoreRuntimeNetworkPolicy,
-} from "../../../paas/packages/paas-contract/src/core-v1.ts";
+} from "../../../takosumi/packages/contract/src/core-v1.ts";
 
 export type {
   CoreAccessModeRef,
@@ -94,7 +94,7 @@ export type {
   IsoTimestamp,
   JsonObject,
   ObjectAddress,
-} from "../../../paas/packages/paas-contract/src/index.ts";
+} from "../../../takosumi/packages/contract/src/index.ts";
 
 export type AppSpec = CoreAppSpec;
 export type EnvSpec = CoreEnvSpec;

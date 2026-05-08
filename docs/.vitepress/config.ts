@@ -18,6 +18,7 @@ export default defineConfig({
     'AIエージェントによるサービスとソフトウェアの民主化基盤 Takos の全体像、アプリ構成、デプロイ、プラットフォーム仕様をまとめた公式 docs',
   cleanUrls: true,
   lastUpdated: enableLastUpdated,
+  srcExclude: ['**/_*.md'],
   themeConfig: {
     siteTitle: 'Takos Docs',
     search: {
@@ -26,6 +27,7 @@ export default defineConfig({
     nav: [
       { text: '概要', link: '/overview/' },
       { text: 'はじめる', link: '/get-started/' },
+      { text: 'Installable App', link: '/architecture/installable-app-model' },
       { text: 'アプリ構成', link: '/apps/' },
       { text: 'デプロイ', link: '/deploy/' },
       { text: 'Operator', link: '/operator/' },
@@ -44,6 +46,16 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Installable App Model',
+        items: [
+          { text: '全体像', link: '/architecture/installable-app-model' },
+          { text: 'Takosumi Accounts', link: '/architecture/takosumi-accounts' },
+          { text: 'AppInstallation 台帳', link: '/architecture/app-installation' },
+          { text: 'Runtime Modes', link: '/architecture/runtime-modes' },
+          { text: 'Installer Pipeline', link: '/architecture/installer-pipeline' },
+        ],
+      },
+      {
         text: 'はじめる',
         items: [
           { text: 'スタートガイド', link: '/get-started/' },
@@ -57,8 +69,10 @@ export default defineConfig({
         text: 'アプリ構成',
         items: [
           { text: '概要', link: '/apps/' },
+          { text: 'Install Paths', link: '/apps/install-paths' },
+          { text: 'OIDC Consumer', link: '/apps/oidc-consumer' },
+          { text: 'Launch Token', link: '/apps/launch-token' },
           { text: 'MCP Server', link: '/apps/mcp' },
-          { text: 'OAuth', link: '/apps/oauth' },
           { text: 'File Handlers', link: '/apps/file-handlers' },
         ],
       },
@@ -66,7 +80,7 @@ export default defineConfig({
         text: 'Operator',
         items: [
           { text: '概要', link: '/operator/' },
-          { text: 'OAuth Setup', link: '/operator/oauth-setup' },
+          { text: 'OIDC Setup', link: '/operator/oidc-setup' },
           { text: 'Bootstrap', link: '/operator/bootstrap' },
         ],
       },
@@ -242,9 +256,9 @@ export default defineConfig({
       {
         text: 'プラットフォーム',
         items: [
-          { text: 'Road to 1.0', link: '/platform/road-to-1.0' },
           { text: 'Space', link: '/platform/spaces' },
           { text: 'Threads and Runs', link: '/platform/threads-and-runs' },
+          { text: 'Upgrade / Export', link: '/platform/upgrade-export' },
           { text: 'Store', link: '/platform/store' },
           { text: '課金', link: '/platform/billing' },
           { text: 'Default Groups', link: '/platform/default-apps' },
@@ -345,6 +359,9 @@ export default defineConfig({
           { text: 'CLI', link: '/reference/cli' },
           { text: 'CLI 認証', link: '/reference/cli-auth' },
           { text: 'API', link: '/reference/api' },
+          { text: 'Install API', link: '/reference/install-api' },
+          { text: '.takosumi/app.yml', link: '/reference/app-yml-spec' },
+          { text: 'Binding Catalog', link: '/reference/binding-catalog' },
           { text: 'Database', link: '/reference/database' },
           { text: 'Manifest Spec', link: '/reference/manifest-spec' },
           { text: 'Component Matrix', link: '/reference/component-matrix' },
