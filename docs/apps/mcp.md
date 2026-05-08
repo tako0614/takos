@@ -1,126 +1,113 @@
 # MCP Server
 
-MCP endpoint を公開するには `publication.mcp-server@v1` ref の publication
-を `publications[]` に declaration します。
+MCP endpoint は current `.takosumi/manifest.yml` では普通の HTTP workload として
+deploy します。kernel-bound manifest は `worker@v1` / `web-service@v1` resource
+と route projection だけを扱い、MCP catalog / client discovery は Takos app /
+installer layer の metadata として扱います。
 
-## 基本
+## Kernel Manifest
 
 ```yaml
-components:
-  web:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: bundle
-              artifact: web
-              entry: dist/worker.js
-          readiness: /mcp
-      mcp:
-        ref: interface.http@v1
-
-routes:
-  - id: mcp
-    expose: { component: web, contract: mcp }
-    via: { ref: route.https@v1, config: { path: /mcp } }
-
-publications:
-  - name: search
-    ref: publication.mcp-server@v1
-    outputs:
-      url: { from: { route: mcp } }
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: my-tools
+resources:
+  - shape: worker@v1
+    name: mcp
+    provider: "@takos/cloudflare-workers"
     spec:
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      routes:
+        - tools.example.com/mcp
+      env:
+        MCP_AUTH_TOKEN: ${secret-ref:mcp-auth-token}
+    workflowRef:
+      file: .takosumi/workflows/deploy.yml
+      job: bundle
+      artifact: mcp
+      target: spec.artifact.hash
+```
+
+`workflowRef` は takosumi-git の authoring extension です。kernel に届く
+compiled manifest では `spec.artifact.hash` が concrete digest
+になり、`workflowRef` は 存在しません。
+
+## App Metadata
+
+Takos app に MCP server として見せる metadata は kernel manifest の top-level
+field ではありません。InstallableApp metadata、Takos app catalog、または runtime
+registration が次のような MCP endpoint descriptor を持ちます。
+
+```yaml
+mcp:
+  endpoints:
+    - name: search
       transport: streamable-http
+      url: ${ref:mcp.url}
+      auth:
+        kind: bearer
+        tokenRef: mcp-auth-token
       description: Search MCP server
 ```
 
-`routes[]` が実際の ingress、 `publications[]` が MCP endpoint を共有する
-typed outputs catalog です。 publication 自体は injection を含意せず
-(Core invariant 4)、 consumer は `bindings[].from.publication` で明示
-consume します。
+`url` は deploy 後の resource output / route output から materialize されます。
+MCP metadata の update / visibility / enable state は Takos app 側の registry
+で扱い、takosumi kernel はこの metadata の意味を解釈しません。
 
-`publication.mcp-server@v1` の output / spec schema は
-[Official Descriptor Set v1 § publication.mcp-server@v1](/takosumi/descriptors/official-descriptor-set-v1#publicationmcp-serverv1)
-を参照。
+## MCP Server Registry
 
-## MCP server registry
+`GET /api/mcp/servers` や `mcp_list_servers` tool は space-scoped な MCP server
+registry を返します。HTTP 呼び出しでは `spaceId` または `space_id` query が
+必要です。
 
-`GET /api/mcp/servers` や `mcp_list_servers` tool は、external registry
-entry だけでなく manifest publication 由来の managed MCP server も返します。
-`/api/mcp/servers*` family は space-scoped で、 HTTP 呼び出しでは `spaceId`
-または `space_id` query が必要です。 manifest publication 由来の server は
-`source_type: publication`、 external entry は `source_type: external`、
-service-backed managed server は `source_type: service`、 bundle deployment
-managed server は `source_type: bundle_deployment` です。
+登録元は次のように分かれます。
 
-`POST /api/mcp/servers` や `mcp_add_server` tool は external MCP server を
-space に登録するための入口です。 deploy された group の route publication
-を manifest 外で作る API ではありません。
+| source kind       | 作り方                                      | 主な用途                                    |
+| ----------------- | ------------------------------------------- | ------------------------------------------- |
+| app metadata      | InstallableApp / Takos app catalog metadata | installed app が公開する managed endpoint   |
+| service           | service 側の managed registration           | service-backed MCP endpoint                 |
+| bundle deployment | bundle deployment 側の managed registration | bundle-backed MCP endpoint                  |
+| external          | `/api/mcp/servers` または `mcp_add_server`  | 外部 HTTPS MCP server を agent tools に追加 |
 
-dynamic MCP tools の実行は space role で gate されます。 owner / admin /
-editor の run だけが MCP server 由来 tool を実行でき、 viewer は一覧や
-metadata 参照に限られます。 さらに `source_type: external` の MCP server 由来
-tool は outbound HTTP を伴うため、 run capability に `egress.http` が必要
-です。 manifest publication / service / bundle deployment 由来の managed
-MCP server は同じ role gate を受けますが、 external MCP 用の `egress.http`
-gate は追加されません。
+`POST /api/mcp/servers` と `mcp_add_server` は external MCP server を space
+に登録 する入口です。deploy 済み workload を MCP endpoint
+として公開する場合は、kernel manifest ではなく app metadata / registry entry
+を更新します。
 
-| source_type       | 作り方                                                                          | 主な用途                                    |
-| ----------------- | ------------------------------------------------------------------------------- | ------------------------------------------- |
-| publication       | deploy manifest の `publications: ref: publication.mcp-server@v1`               | Takos app / group が公開する MCP endpoint   |
-| service           | service / component 側の managed registration                                   | service-backed MCP endpoint                 |
-| bundle_deployment | bundle deployment 側の managed registration                                     | bundle-backed MCP endpoint                  |
-| external          | `/api/mcp/servers` または `mcp_add_server`                                      | 外部 HTTPS MCP server を agent tools に追加 |
+dynamic MCP tools の実行は space role で gate されます。owner / admin / editor
+の run だけが MCP server 由来 tool を実行でき、viewer は一覧や metadata
+参照に限ら れます。external MCP server 由来 tool は outbound HTTP
+を伴うため、run capability に `egress.http` が必要です。managed endpoint は同じ
+role gate を受けますが、 external MCP 用の追加 egress gate は不要です。
 
-managed publication entry の name / URL / enabled state は manifest と
-deploy state が基準です。 `PATCH /api/mcp/servers/:id` は external entry の
-name / enabled を更新できますが、 managed / publication server の name は
-変更できません。 `DELETE /api/mcp/servers/:id` は external entry だけを
-削除します。 managed / publication server を消すには、 元の manifest
-publication を変更して deploy します。 対応する tool は `mcp_update_server`
-と `mcp_remove_server` です。
+## Bearer Auth
 
-## bindings で consume する
-
-publication は自動で space 全体へ注入されません。 必要な component が
-明示的に `bindings[].from.publication` で consume します。
-
-```yaml
-bindings:
-  - from: { publication: search }
-    to: { component: agent, env: SEARCH_MCP_URL }
-```
-
-この例では `agent` component に `SEARCH_MCP_URL` が入ります。
-
-## Bearer auth
-
-MCP client に bearer auth を要求する場合、 secret resource を作って bearer
-header source として binding します。
+MCP client に bearer auth を要求する場合、token は secret ref として workload
+に渡し、metadata 側には token reference だけを置きます。
 
 ```yaml
 resources:
-  search-mcp-token:
-    ref: resource.secret@v1
-    config: { generate: true }
-
-bindings:
-  - from: { secret: search-mcp-token }
-    to: { component: web, env: MCP_AUTH_TOKEN }
+  - shape: worker@v1
+    name: mcp
+    provider: "@takos/cloudflare-workers"
+    spec:
+      artifact: { kind: js-bundle, hash: PLACEHOLDER }
+      compatibilityDate: "2026-05-09"
+      routes:
+        - tools.example.com/mcp
+      env:
+        MCP_AUTH_TOKEN: ${secret-ref:mcp-auth-token}
 ```
 
-publication 側で auth を declarative に宣言する場合は、 `publication.mcp-server@v1`
-descriptor の `spec` schema が定義する `auth` field を使います (descriptor
-側で受け付ける場合のみ)。 client side は publication metadata から token
-source を解決して `Authorization: Bearer ...` を送ります。 worker 側の
-`/mcp` endpoint も同じ token を検証する実装にしておく必要があります。
+worker 側は `Authorization: Bearer ...` を検証します。client side は MCP
+metadata の `auth.tokenRef` から token source を解決します。
 
-## 実 URL
+## Related
 
-`from: { route: <id> }` で参照される route の `path` と assigned hostname
-から output `url` が生成されます。 path template は template URL のまま
-consumer に渡ります。
+- [MCP Server Example](/examples/mcp-server)
+- [App YAML Spec](/reference/app-yml-spec)
+- [Manifest Reference](/reference/manifest-spec)
