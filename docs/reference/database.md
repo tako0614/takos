@@ -2933,3 +2933,110 @@ PaaS で存在した `deploy_plans` / `deploy_activation_records` /
 `resource_binding_set_revisions` の structural columns は deployment migration
 で `deployments` (3 JSONB field) と `group_heads` に折り畳まれ、history は
 preserve されます。
+
+## AppInstallation Ledger (Phase 1.2 NEW)
+
+Installable App Model で導入される **AppInstallation 台帳** の 5 entity。
+Takos の database には置かず、新設 product **takosumi-cloud** (Phase 1.1 NEW、
+Takosumi Accounts plane) で管理されます。Takos 側は OIDC consumer として
+launch token と app-local profile のみを保持し、ownership / billing / source
+pin / runtime mode / capability / audit はすべて以下の 5 entity に anchor され
+ます。
+
+詳細な status 遷移、binding kind 一覧、column 制約は
+[/architecture/app-installation](/architecture/app-installation) と
+[/reference/install-api](/reference/install-api) を canonical reference として
+ください。本節は database 視点で 5 entity の columns 概観を示します。
+
+### TakosumiAccount
+
+契約 / billing 主体の正本 record。AppInstallation を保持する Space の親であり、
+Stripe customer (= Takosumi Cloud billing) と紐づく。
+
+| column            | type        | meaning                                                  |
+| ----------------- | ----------- | -------------------------------------------------------- |
+| `id`              | uuid        | 一意 ID                                                  |
+| `legalOwnerId`    | uuid        | 法的所有者 user ID (Takosumi Accounts subject に紐づく)  |
+| `billingAccountId`| string      | Stripe customer ID (Takosumi Cloud billing)              |
+| `createdAt`       | timestamptz | 作成時刻                                                 |
+
+### Space
+
+Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind を
+持ち、AppInstallation の親 (Takosumi Account → Space → AppInstallation 階層
+の中段)。
+
+| column      | type   | meaning                                       |
+| ----------- | ------ | --------------------------------------------- |
+| `id`        | uuid   | 一意 ID                                       |
+| `accountId` | uuid   | TakosumiAccount.id への FK                     |
+| `kind`      | enum   | `personal` / `team` / `org`                   |
+| `name`      | string | 表示名                                        |
+
+### AppInstallation
+
+所有権の primitive 台帳 record。1 row が 1 install を表す。
+
+- `status`: 5 値 (`installing` / `ready` / `failed` / `suspended` / `exported`)
+- `mode`: 3 runtime mode (`shared-cell` / `dedicated` / `self-hosted`)
+- `appBinding kind` は AppBinding 側で 7 種類 (`service.import@v1` を含む)
+
+| column                   | type        | meaning                                              |
+| ------------------------ | ----------- | ---------------------------------------------------- |
+| `id`                     | uuid        | 一意 ID                                              |
+| `accountId`              | uuid        | TakosumiAccount.id への FK                            |
+| `spaceId`                | uuid        | Space.id への FK                                     |
+| `appId`                  | string      | 例: `takos.chat`                                     |
+| `sourceGitUrl`           | string      | source pin (git URL)                                 |
+| `sourceRef`              | string      | source pin (ref)                                     |
+| `sourceCommit`           | string      | source pin (resolved commit)                         |
+| `appManifestDigest`      | string      | `.takosumi/app.yml` digest                           |
+| `compiledManifestDigest` | string      | takosumi-git が compile した kernel manifest digest   |
+| `mode`                   | enum        | `shared-cell` / `dedicated` / `self-hosted`          |
+| `runtimeBindingId`       | uuid        | RuntimeBinding.id への FK                            |
+| `status`                 | enum        | 5 値 (上記)                                          |
+| `createdBySubject`       | string      | 作成者 Takosumi subject                              |
+| `createdAt` / `updatedAt`| timestamptz |                                                       |
+
+### AppBinding
+
+AppInstallation に紐づく binding 1 record。`service.import@v1` を含む
+7 種類の `kind` を持ち、`configRef` /
+`secretRefs` で実値を参照する (詳細は
+[/reference/binding-catalog](/reference/binding-catalog))。
+
+| column           | type     | meaning                                                           |
+| ---------------- | -------- | ----------------------------------------------------------------- |
+| `id`             | uuid     | 一意 ID                                                           |
+| `installationId` | uuid     | AppInstallation.id への FK                                        |
+| `kind`           | enum     | `identity.oidc@v1` / `database.postgres@v1` / `object-store.s3-compatible@v1` / `domain.http@v1` / `deploy-intent.gitops@v1` / `install-launch-token@v1` / `service.import@v1` |
+| `configRef`      | string   | binding 固有 config の参照                                        |
+| `secretRefs`     | string[] | secret 参照 (kernel が解決)                                       |
+
+### AppGrant
+
+capability grant の 1 record。`capability` (例: `app.profile.write` /
+`deploy.intent.write` / `logs.read.own`) と `scope` を持ち、ユーザーが
+任意のタイミングで `revokedAt` を立てて revoke できる。
+
+| column           | type        | meaning                                |
+| ---------------- | ----------- | -------------------------------------- |
+| `id`             | uuid        | 一意 ID                                |
+| `installationId` | uuid        | AppInstallation.id への FK             |
+| `capability`     | string      | 例: `app.profile.write`                |
+| `scope`          | jsonb       | 範囲制約 (resource / path / time 等)   |
+| `grantedAt`      | timestamptz | 付与時刻                               |
+| `revokedAt`      | timestamptz | revoke 時刻 (NULL なら active)         |
+
+詳細は [/architecture/app-installation](/architecture/app-installation) と
+[/reference/install-api](/reference/install-api) を参照。RuntimeBinding と
+InstallationEvent の column schema は
+[architecture/app-installation §"5 entity の table 設計"](/architecture/app-installation)
+の TypeScript 正本を参照してください。
+
+::: info NEW product
+本台帳は **takosumi-cloud** (Phase 1.1 で新設される sibling product) の DB に
+置かれ、Takos の SQLite / D1 baseline には追加されません。Takos 側は
+launch token / app-local profile (`installationId` / `externalIssuer` /
+`externalSubject` (pairwise) / display name / preferences) のみを保持します。
+:::
