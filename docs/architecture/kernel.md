@@ -191,10 +191,12 @@ Groups (routing layer で hostname 割り当て):
 ```
 
 OAuth / OIDC の login flow は kernel 内ではなく
-[Takosumi Accounts](./takosumi-accounts.md) (`accounts.takosumi.cloud`) で扱われ
-ます。kernel は `/auth/*` 系の OAuth issuer endpoint を
-**持ちません**。Installed Takos は OIDC consumer として Takosumi Accounts に
-redirect し、callback path (`/auth/oidc/callback` 等) のみを受けます。
+[Takosumi Accounts](./takosumi-accounts.md) で扱われます。consumer は
+`takosumi.account.auth@v1` を `serviceResolvers[]` の anchor で resolve し、
+operator-injected issuer endpoint に redirect します。kernel は `/auth/*` 系の
+OAuth issuer endpoint を **持ちません**。Installed Takos は OIDC consumer として
+Takosumi Accounts に redirect し、callback path (`/auth/oidc/callback` 等)
+のみを受けます。
 
 Installed Takos 側で session cookie を発行する場合は host-only とし（`Domain`
 attribute なし）、kernel と group subdomain では cookie を共有しない。
