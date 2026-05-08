@@ -271,7 +271,7 @@ imports:
 serviceResolvers:
   - kind: anchor
     url: https://anchor.example.com/v1/services/
-    publicKey: ${secrets.anchorPublicKey}
+    publicKey: BASE64_ED25519_PUBLIC_KEY
 resources:
   - shape: web-service@v1
     name: api
