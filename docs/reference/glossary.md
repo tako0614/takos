@@ -83,9 +83,11 @@ Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind
 
 ### OIDC consumer
 
-Takos の新しい立場。OAuth provider ではなく、Takosumi Accounts (または self-host
-環境では Keycloak / Authentik / Auth0 等) の OIDC issuer を consume するだけの
-app。 (see new.md §11, [apps/oidc-consumer](/apps/oidc-consumer))
+Takos の新しい立場。OAuth provider ではなく、`takosumi.account.auth@v1`
+で解決される Takosumi Accounts の OIDC issuer を consume するだけの app。
+self-host で Keycloak / Authentik / Auth0 等を使う場合も Takosumi Accounts の
+upstream IdP として broker する。 (see
+[apps/oidc-consumer](/apps/oidc-consumer))
 
 ### Deploy Dashboard
 
