@@ -81,14 +81,14 @@ AppInstallation 単位で OIDC client を Takosumi Accounts に登録し、Takos
 
 provider が `provision` 後に AppBinding として永続化する fields:
 
-| field                     | 説明                                                                                                                                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `issuerUrl`               | example: `https://accounts.takosumi.cloud` (anchor 経由 resolve、 operator-injected hostname、 詳細は [cross-instance service binding](/architecture/cross-instance-service-binding)) |
-| `clientId`                | installation 単位で発行された OIDC client id (例: `takos_inst_abc`)                                                                                                                   |
-| `redirectUris`            | 解決済み absolute URI 配列                                                                                                                                                            |
-| `allowedScopes`           | request の `allowedScopes` を継承                                                                                                                                                     |
-| `subjectMode`             | `"pairwise"` 固定                                                                                                                                                                     |
-| `tokenEndpointAuthMethod` | 認証 method 名                                                                                                                                                                        |
+| field                     | 説明                                                                                                                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issuerUrl`               | operator-injected issuer URL resolved through the `takosumi.account.auth@v1` service identifier and anchor (詳細は [cross-instance service binding](/architecture/cross-instance-service-binding)) |
+| `clientId`                | installation 単位で発行された OIDC client id (例: `takos_inst_abc`)                                                                                                                                |
+| `redirectUris`            | 解決済み absolute URI 配列                                                                                                                                                                         |
+| `allowedScopes`           | request の `allowedScopes` を継承                                                                                                                                                                  |
+| `subjectMode`             | `"pairwise"` 固定                                                                                                                                                                                  |
+| `tokenEndpointAuthMethod` | 認証 method 名                                                                                                                                                                                     |
 
 secret は Vault path として `clientSecretRef` のみ持ち、生 secret は compile
 時に解決される。

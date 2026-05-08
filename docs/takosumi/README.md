@@ -96,5 +96,6 @@ backend 節に置く。
 
 The JSON-LD descriptors included here are implementation seed descriptors. They
 are not Core built-ins. A Takos distribution may ship them as official
-descriptors and must pin their digests in
-`Deployment.resolution.descriptor_closure` when the Deployment is recorded.
+descriptors and must pin their digests in the Shape/provider metadata recorded
+for a Deployment. Compatibility descriptor projections retain the equivalent
+`Deployment.resolution.descriptor_closure`.

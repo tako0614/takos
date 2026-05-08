@@ -7,8 +7,9 @@ Descriptors define meaning. They are dictionaries, not programs.
 ```text
 1. Descriptor identity is a canonical URI.
 2. Authoring aliases are conveniences only.
-3. Descriptor content must be digest-pinned in Deployment.resolution.descriptor_closure.
-4. Descriptor dependencies must be included in the descriptor closure.
+3. Descriptor content must be digest-pinned in the Shape/provider metadata
+   recorded for a Deployment.
+4. Compatibility descriptor projections must retain the full descriptor closure.
 5. Descriptor rules must be declarative.
 6. Provider capability descriptors must not redefine contract semantics.
 ```
@@ -60,4 +61,5 @@ SHOULD warn through a `Deployment.conditions[]` entry.
 
 ## Exposure eligibility
 
-Descriptors that can be targeted by exposures MUST declare exposureEligible=true.
+Descriptors that can be targeted by exposures MUST declare
+exposureEligible=true.
