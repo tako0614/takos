@@ -31,7 +31,7 @@ export default defineConfig({
       { text: 'Operator', link: '/operator/' },
       { text: 'ホスティング', link: '/hosting/' },
       { text: 'プラットフォーム', link: '/platform/' },
-      { text: 'Takosumi Core', link: '/takosumi/' },
+      { text: 'Takosumi Core', link: '/takosumi/README' },
       { text: 'リファレンス', link: '/reference/' },
       { text: 'Contributing', link: '/contributing/' },
       { text: 'サンプル', link: '/examples/' },
@@ -260,7 +260,7 @@ export default defineConfig({
         text: 'Takosumi Core',
         collapsed: true,
         items: [
-          { text: '概要', link: '/takosumi/' },
+          { text: '概要', link: '/takosumi/README' },
           { text: 'Current State (実装状況)', link: '/takosumi/current-state' },
           {
             text: 'Core Contract v1.0',
@@ -377,8 +377,8 @@ export default defineConfig({
             link: '/contributing/architecture-alignment-validation',
           },
           {
-            text: 'Process Role Validation',
-            link: '/contributing/process-role-validation',
+            text: 'Service Set Validation',
+            link: '/contributing/service-set-validation',
           },
           {
             text: 'Kernel Plugin Boundary Audit',
