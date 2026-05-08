@@ -1,29 +1,26 @@
 # Takosumi Accounts
 
 **Takosumi Accounts** は Installable App Model における identity / billing /
-ownership の正本 plane です。 cross-instance service binding 視点では
-**forward 3-level dotted service identifier** `takosumi.account.auth@v1`
-(auth role) と `takosumi.account.billing@v1` (billing role) で参照される
-service set として配布され、 endpoint URL は anchor 経由で resolve される
-operator-injected 値です。 hostname (例 `https://accounts.takosumi.cloud`) は
-anchor URL の 1 example であり、 operator は任意の hostname で takosumi-cloud
-distribution を deploy できます (詳細は
-[cross-instance service binding](./cross-instance-service-binding.md) /
-ecosystem ROADMAP §1.9)。
+ownership の正本 plane です。 cross-instance service binding 視点では **forward
+3-level dotted service identifier** `takosumi.account.auth@v1` (auth role) と
+`takosumi.account.billing@v1` (billing role) で参照される service set
+として配布され、 endpoint URL は anchor 経由で resolve される operator-injected
+値です。 hostname は managed default の example にすぎず、 operator は任意の
+hostname で takosumi-cloud distribution を deploy できます (詳細は
+[cross-instance service binding](./cross-instance-service-binding.md))。
 
-upstream IdP (Google / GitHub / Passkey / Enterprise OIDC) を吸収して
-**stable Takosumi subject** を発行する役割は不変です。 AppInstallation の
-billing owner / contract owner / app installation owner も Takosumi Accounts
-が持ちます。
+upstream IdP (Google / GitHub / Passkey / Enterprise OIDC) を吸収して **stable
+Takosumi subject** を発行する役割は不変です。 AppInstallation の billing owner /
+contract owner / app installation owner も Takosumi Accounts が持ちます。
 
 ここに OAuth/OIDC を置くのは、Takos でも takosumi kernel でもなく、
 **takosumi-cloud の account plane** です。kernel の純粋性 (compute substrate
 のみ) を保ちつつ、Takos からは OAuth provider を完全に廃止できます。
 
-> **Cross-instance service binding**: 以下の OIDC issuer URL 言及は all
-> instance で `https://accounts.takosumi.cloud` を **example** として使う。
+> **Cross-instance service binding**: 以下の OIDC issuer URL 言及では
+> `https://<ACCOUNTS_ISSUER_HOST>` を operator-injected value として使う。
 > consumer manifest からは service identifier `takosumi.account.auth@v1`
-> 経由で参照され、 endpoint URL は anchor から resolve される。kernel 側の
+> 経由で参照され、endpoint URL は anchor から resolve される。kernel 側の
 > consumer resolution foundation は実装済みで、provider publish / cache refresh
 > / revoke は継続 work。詳細は
 > [cross-instance service binding](./cross-instance-service-binding.md)。
@@ -31,7 +28,7 @@ billing owner / contract owner / app installation owner も Takosumi Accounts
 ## このページで依存してよい範囲
 
 - Takosumi Accounts の役割 (identity broker / OIDC issuer / billing owner / app
-  installation owner) と issuer URL
+  installation owner) と issuer endpoint role
 - 公開する OIDC endpoint の一覧
 - upstream IdP との関係 (raw passthrough しない / stable subject を作る)
 - pairwise OIDC subject の derivation 方針と存在理由
@@ -56,9 +53,9 @@ ownership chain を一意に追えるようにするためです。
 
 - **identity broker**: 外部 IdP (Google / GitHub / Passkey / Enterprise OIDC /
   SAML 予定) を upstream として束ね、stable Takosumi subject を発行する
-- **OIDC issuer**: `https://accounts.takosumi.cloud` を issuer として OIDC flow
-  を提供する。Installed Takos / takos-cli / takosumi-cloud dashboard が consume
-  する
+- **OIDC issuer**: service identifier `takosumi.account.auth@v1` の
+  `oidc-issuer` endpoint role として OIDC flow を提供する。Installed Takos /
+  takos-cli / takosumi-cloud dashboard が consume する
 - **billing owner**: 契約主体 / 請求主体。Stripe webhook を処理し、Takosumi
   Account 単位で subscription / usage / invoice を持つ
 - **app installation owner**: AppInstallation 台帳 (AppInstallation / AppBinding
@@ -114,7 +111,7 @@ registration validation, and subject derivation helpers. Persistent passkey /
 upstream IdP / Stripe / AppInstallation storage remain follow-up work.
 
 ```txt
-issuer = https://accounts.takosumi.cloud
+issuer = https://<ACCOUNTS_ISSUER_HOST>
 ```
 
 | endpoint                            | 役割                                                                                   |
@@ -202,7 +199,7 @@ pairwise subject を採用する理由:
 
 ```json
 {
-  "iss": "https://accounts.takosumi.cloud",
+  "iss": "https://<ACCOUNTS_ISSUER_HOST>",
   "aud": "takos_inst_abc",
   "sub": "pairwise_user_xyz",
   "email": "user@example.com",
@@ -240,7 +237,7 @@ Takosumi Accounts は **launch token JWS** を発行します。これは OIDC I
 
 ```json
 {
-  "iss": "https://accounts.takosumi.cloud",
+  "iss": "https://<ACCOUNTS_ISSUER_HOST>",
   "aud": "takos.chat",
   "typ": "takosumi-install-launch",
   "installation_id": "inst_abc",
