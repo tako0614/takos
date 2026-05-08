@@ -56,9 +56,14 @@ deno task distribute:dry-run --confirm production
 # 4. 本番へ apply (wrangler / Helm / compose のいずれかに dispatch される)
 deno task distribute:apply --confirm production
 
-# 5. 初期 admin / tenant / registry trust roots を seed
-cd ../takos
-deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+# 5. Takosumi Accounts seed plan を生成 (identity / billing / AppInstallation owner)
+cd ../takosumi-cloud
+deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+  --issuer https://accounts.example.com \
+  --subject tsub_admin \
+  --client-id takos-admin \
+  --redirect-uri https://admin.takos.example.com/auth/oidc/callback \
+  > accounts-seed-plan.json
 ```
 
 target 固有の prerequisites (Cloudflare account / IAM role / kubeconfig / Docker
@@ -67,8 +72,8 @@ host など) は各 target page の "target-specific 設定" セクションを
 
 secret 値、provider credentials、Terraform live tfvars は `takos-private` が
 正本です。`takos/` 側の Terraform / Helm は non-secret managed resource id と
-Secret 名だけを扱います。詳細は
-[Hosting Secret Policy](/hosting/secrets) を参照してください。
+Secret 名だけを扱います。詳細は [Hosting Secret Policy](/hosting/secrets)
+を参照してください。
 
 ## Backend の差分
 
@@ -106,8 +111,8 @@ target ごとの GA / beta / smoke-only / unsupported status は
 
 Provider proof は operator が明示的に実行する opt-in proof です。CI / release
 gate に入れる場合も、各 provider の credential / cluster / account
-が揃った環境で gate-backed に実行してください。default docs build や PaaS kernel
-gate は provider 実環境の proof を要求しません。
+が揃った環境で gate-backed に実行してください。default docs build や kernel gate
+は provider 実環境の proof を要求しません。
 
 選び方ガイドと credential injection の topology は
 [Multi-cloud](/hosting/multi-cloud#kernel-host-target-を-multi-cloud-で選ぶ) を
@@ -124,5 +129,6 @@ gate は provider 実環境の proof を要求しません。
 - [Self-hosted](/hosting/self-hosted) --- docker-compose + selfhosted plugin
 - [Multi-cloud](/hosting/multi-cloud) --- 5 target 横断 runbook
 - [Target Parity](/hosting/target-parity) --- target ごとの readiness status
-- [Secret Policy](/hosting/secrets) --- Terraform / Helm / takos-private の secret 境界
+- [Secret Policy](/hosting/secrets) --- Terraform / Helm / takos-private の
+  secret 境界
 - [ローカル開発](/hosting/local) --- 開発用 dev runtime

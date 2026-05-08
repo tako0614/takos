@@ -1,15 +1,36 @@
 # Space
 
-Takos の最上位の隔離単位。member、repo、worker、resource、thread、files
-をまとめて管理する。
+**Space は [Takosumi Account](/architecture/takosumi-accounts) の子です。**
+Takos の最上位の隔離単位として、member、repo、worker、resource、thread、files
+をまとめて管理しますが、Space 自体の所有者・契約主体・billing owner は Takosumi
+Account 側にあります。
+
+所有構造:
+
+```txt
+Takosumi Account
+  ├─ personal Space (kind: personal)
+  └─ team Spaces  (kind: team / org)
+        └─ AppInstallation (e.g. takos.chat)
+              └─ Space-scoped resources
+```
+
+つまり `Takosumi Account → Space → AppInstallation` の 3 階層が正本であり、Space
+は AppInstallation の親として機能します。AppInstallation の詳細は
+[App Installation Ledger](/architecture/app-installation) を参照。
 
 ## Space の種類
 
-| kind     | 説明                                   |
-| -------- | -------------------------------------- |
-| `user`   | 個人用 space。ユーザー作成時に自動生成 |
-| `team`   | チーム用 space。複数メンバーで共同利用 |
-| `system` | システム管理用 space                   |
+| kind       | 説明                                                                |
+| ---------- | ------------------------------------------------------------------- |
+| `personal` | 個人用 space。ユーザー作成時に自動生成 (canonical: glossary §Space) |
+| `team`     | チーム用 space。複数メンバーで共同利用                              |
+| `org`      | 組織用 space。複数 team / 大規模 membership 向け                    |
+| `system`   | システム管理用 space                                                |
+
+`personal` は Installable App Model の canonical enum です。移行期間中の Takos
+app API / client code が legacy `user` を返す場合は `personal` に normalize
+して扱い ます。新規 docs / API contract では `user` を増やしません。
 
 Personal space は `GET /api/me/personal-space` で取得。`slug`
 で一意に識別でき、`/api/spaces/me` で personal space を指す shortcut もある。
@@ -46,6 +67,18 @@ Space 内で service が使える capability:
 
 ## 課金との関係
 
-Space のユーザーは billing account
-に紐づき、プランに応じたクォータが適用される。詳しくは [課金](/platform/billing)
-を参照。
+Space は親 Takosumi Account の billing account
+に紐づき、プランに応じたクォータが適用される。請求主体は Takosumi Cloud
+であり、Space 単位の usage は Takosumi Account の invoice line item
+として集計される。詳しくは [課金](/platform/billing) と
+[Takosumi Accounts](/architecture/takosumi-accounts) を参照。
+
+## 関連ドキュメント
+
+- [Takosumi Accounts](/architecture/takosumi-accounts) — Space の親 account
+- [App Installation Ledger](/architecture/app-installation) — Space に install
+  される AppInstallation の正本
+- [Installable App Model](/architecture/installable-app-model) — Takos が Space
+  に install される形
+- [Runtime Modes](/architecture/runtime-modes) — Space ごとの runtime mode
+  (shared-cell / dedicated / self-hosted)

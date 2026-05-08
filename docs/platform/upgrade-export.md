@@ -238,18 +238,18 @@ takosumi-git install https://github.com/takos/takos --ref v1.2.3 \
   --to https://my-takosumi.example.com
 ```
 
-### 4.2 OIDC issuer の差し替え
+### 4.2 OIDC issuer の再解決
 
-self-host 側では、AppInstallation の `identity.oidc@v1` binding の `issuerUrl`
-を任意の OIDC issuer に向けられる。
+self-host 側では、AppInstallation の `identity.oidc@v1` binding は
+`takosumi.account.auth@v1` を self-host Takosumi Accounts に resolve して
+`issuerUrl` を得ます。既存 IdP は Takosumi Accounts の upstream として接続し、
+Takos runtime が AppInstallation ledger を迂回して直接外部 issuer を consume
+する形にはしません。
 
-| issuer の例                                          | 用途                                  |
-| ---------------------------------------------------- | ------------------------------------- |
-| `takosumi.account.auth@v1` から resolve した issuer  | managed / self-host Takosumi Accounts |
-| `https://keycloak.example.com/realms/takos`          | self-host Keycloak                    |
-| `https://authentik.example.com/application/o/takos/` | self-host Authentik                   |
-| `https://example.auth0.com/`                         | Auth0                                 |
-| `https://example.clerk.accounts.dev/`                | Clerk                                 |
+| issuer の例                                         | 用途                                         |
+| --------------------------------------------------- | -------------------------------------------- |
+| `takosumi.account.auth@v1` から resolve した issuer | managed / self-host Takosumi Accounts        |
+| Keycloak / Authentik / Auth0 / Clerk                | Takosumi Accounts の upstream IdP として接続 |
 
 issuer 切替時の制約:
 

@@ -5,12 +5,13 @@ the kernel-only implementation model.
 
 ## Source of truth
 
-- `takos` owns the PaaS kernel: control-plane semantics, domains, API
+- `../takosumi` owns the kernel: control-plane semantics, domains, API
   contracts, signed internal RPC, plan/apply, activation truth, resources,
   routing projections, publications, events, audit, and security policy.
-- `packages/paas-contract/src/plugin.ts` owns the public kernel plugin ABI.
-- `apps/paas/src/plugins/` owns the registry, env module loader, and no-I/O
-  reference plugin.
+- `../takosumi/packages/contract/src/plugin.ts` owns the public kernel plugin
+  ABI.
+- `../takosumi/packages/kernel/src/plugins/` owns the registry, env module
+  loader, and no-I/O reference plugin.
 - Self-host, cloud provider, database, queue, object-storage, KMS, secret
   backend, and runtime host implementations are plugin responsibilities.
 

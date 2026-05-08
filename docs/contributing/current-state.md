@@ -7,20 +7,23 @@ remains
 
 ## Implemented architecture
 
-- `apps/paas/src/index.ts` boots a Hono HTTP app from `apps/paas/src/api` and
-  enables public routes for the standalone entrypoint.
-- `apps/paas/src/api` exposes:
+- `../takosumi/packages/kernel/src/index.ts` boots a Hono HTTP app from
+  `../takosumi/packages/kernel/src/api` and enables kernel routes for the
+  standalone entrypoint.
+- `../takosumi/packages/kernel/src/api` exposes:
   - `GET /health` and `GET /capabilities`.
-  - signed internal service routes for spaces, groups, deploy plans, and deploy
-    applies through `takosumi-contract` path constants.
-  - public standalone routes under `/api/public/v1` for capabilities, spaces,
-    groups, deploy planning, and deploy apply.
-- `packages/paas-contract` contains shared DTOs and signed internal request
-  helpers. Internal auth binds method, path, timestamp, request id, actor
-  context, caller/audience, and body digest.
-- `apps/paas/src/app_context.ts` is the main in-process composition point. It
-  wires in-memory stores, configurable local adapters, core services, deploy
-  plan/apply services, and the runtime materializer.
+  - current kernel deploy route `POST /v1/deployments` for compiled Shape
+    manifest apply.
+  - migration compatibility routes under `/api/public/v1` that belong to Takos
+    product compatibility during the transition and must not be treated as the
+    current kernel public contract.
+  - signed internal service routes through `takosumi-contract` path constants.
+- `../takosumi/packages/contract` contains shared DTOs and signed internal
+  request helpers. Internal auth binds method, path, timestamp, request id,
+  actor context, caller/audience, and body digest.
+- `../takosumi/packages/kernel/src/app_context.ts` is the main in-process
+  composition point. It wires in-memory stores, configurable local adapters,
+  core services, deploy apply services, and the runtime materializer.
 - Runtime config and bootstrap checks now model production safety: unsafe
   production defaults are rejected unless storage, provider, source, secret,
   operator-config, and auth selections are explicit.
@@ -46,11 +49,12 @@ remains
   optional `npm:pg` client adapter.
 - Provider/source/secret/auth/operator-config/queue/object-storage adapters are
   implemented as ports with local defaults. The kernel/plugin ABI is versioned
-  in `packages/paas-contract/src/plugin.ts`, with a typed registry, env module
-  loader, and no-I/O reference plugin in `apps/paas/src/plugins`. Notable local
-  adapters remain available for conformance and compatibility, but real
-  self-host/cloud connectivity is now a plugin responsibility rather than a
-  kernel completion criterion.
+  in `../takosumi/packages/contract/src/plugin.ts`, with a typed registry, env
+  module loader, and no-I/O reference plugin in
+  `../takosumi/packages/kernel/src/plugins`. Notable local adapters remain
+  available for conformance and compatibility, but real self-host/cloud
+  connectivity is now a plugin responsibility rather than a kernel completion
+  criterion.
 
 ## Production-like capabilities now modeled in code
 
@@ -89,7 +93,11 @@ Ran from `/home/tako/Desktop/takos/takos`:
 deno task test:all
 ```
 
-Result on 2026-04-29: `240 passed | 0 failed`.
+Result on 2026-04-29: kernel-only smoke baseline は `240 passed | 0 failed`
+(`cd takos && deno task test:all`)。ecosystem release-gate (17 release gate +
+canonical full suite via `cd takos && deno task release-gate`) は **345 tests
+passed** で freeze 済 (ROADMAP.md Part I §3.1 / §6.2 を canonical value
+とする)。
 
 Covered areas include:
 
@@ -167,8 +175,8 @@ Notes:
   (`cd ../takosumi && deno test --allow-all`).
 - Takosumi kernel local development runs from the sibling `../takosumi` repo;
   this shell owns local composition and Takos-specific deploy artifacts only.
-- docs tasks currently print that Takos docs moved out of the `takosumi`
-  service scope.
+- docs tasks currently print that Takos docs moved out of the `takosumi` service
+  scope.
 - local Compose and Helm metadata carry the current Takos service IDs and
   internal URL wiring.
 
@@ -233,7 +241,7 @@ Real/prod-facing boundaries that exist as code but are not the default wiring:
   canary/shadow traffic.
 - Move real self-host/cloud provider/source/storage/queue/object/KMS/secret
   implementations into kernel plugins, then run plugin-specific release gates
-  outside the PaaS kernel release gate.
+  outside the kernel release gate.
 - Keep local Compose/Helm resource names and command paths aligned with the
   Takos product service set.
 - Keep expanding acceptance coverage in

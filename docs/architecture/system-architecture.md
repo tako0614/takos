@@ -133,10 +133,13 @@ Storage / Store / public API gateway は Takos product 側の service / app feat
 
 Standalone Takosumi distribution は kernel を **compute substrate のみ** として
 独立に動かす形です。Takosumi Accounts (account plane) は kernel と **別
-service** であり、self-host operator は Takosumi Accounts を運用しないか、別 IdP
-(Keycloak / Auth0 / 任意 OIDC issuer) を採用してもよい構成です。kernel と
-Takosumi Accounts は同じ "takosumi" の名を持ちますが、kernel の内側ではなく
-takosumi-cloud product 側に置かれる account plane として独立にデプロイされます。
+service** であり、self-host operator が identity / billing / AppInstallation
+ownership を必要とする場合は Takosumi Accounts を運用します。既存 IdP (Keycloak
+/ Auth0 / 任意 OIDC issuer) は Takosumi Accounts の upstream として broker
+し、Takos runtime が AppInstallation ledger を迂回して直接 consume する 形は
+canonical Installable App Model ではありません。kernel と Takosumi Accounts
+は同じ "takosumi" の名を持ちますが、kernel の内側ではなく takosumi-cloud product
+側に置かれる account plane として独立にデプロイされます。
 
 ```text
 User / Browser / CLI

@@ -50,10 +50,13 @@ Takos (OIDC consumer)
 chat / agent / memory
 ```
 
-Takos は issuer 専用 SDK を使わず、`OIDC_ISSUER_URL` で渡された任意の issuer
-(service identifier `takosumi.account.auth@v1` 経由で resolved、 managed default
-/ Keycloak / Authentik / Auth0 など) に対して同一 binary で 動きます。これが
-Installable App Model の runtime 依存削減のコアです (`new.md` §15, §29)。
+Takos は issuer 専用 SDK を使わず、`OIDC_ISSUER_URL` で渡された standard OIDC
+issuer に対して同一 binary で動きます。Installable App Model ではこの issuer URL
+は service identifier `takosumi.account.auth@v1` から anchor 経由で resolved
+された Takosumi Accounts endpoint です。Keycloak / Authentik / Auth0 などを使う
+場合も、Takosumi Accounts の upstream IdP として broker し、Takos runtime が
+AppInstallation ledger を迂回して直接 consume する形は canonical path ではあり
+ません。これが Installable App Model の runtime 依存削減のコアです。
 
 ### 持たないもの
 
@@ -208,11 +211,12 @@ Installable App Model では、Takos から以下の route が **削除** され
 
 ---
 
-## 6. self-host での issuer 切替
+## 6. self-host での issuer 解決
 
-Takos は `OIDC_ISSUER_URL` で渡された issuer に対して同一 binary で
-動きます。self-host 環境では operator が任意の OIDC issuer を選択可能 です
-(`new.md` §16, §24)。
+Takos は `OIDC_ISSUER_URL` で渡された issuer に対して同一 binary で動きます。
+self-host 環境でも canonical path は Takosumi Accounts を運用し、
+`takosumi.account.auth@v1` から resolved された issuer URL を Takos に渡す形
+です。外部 OIDC は Takosumi Accounts の upstream として接続します。
 
 ```env
 # managed (Use Takos / Install from Git on takosumi-cloud)
@@ -221,14 +225,8 @@ OIDC_CLIENT_ID=takos_inst_abc
 OIDC_CLIENT_SECRET=...
 OIDC_REDIRECT_URI=https://takos-acct123.takosumi.app/auth/oidc/callback
 
-# self-host (Keycloak)
-OIDC_ISSUER_URL=https://keycloak.example.com/realms/takos
-OIDC_CLIENT_ID=takos
-OIDC_CLIENT_SECRET=...
-OIDC_REDIRECT_URI=https://takos.example.com/auth/oidc/callback
-
-# self-host (Authentik)
-OIDC_ISSUER_URL=https://authentik.example.com/application/o/takos/
+# self-host (Takosumi Accounts; Keycloak/Auth0/etc. may be upstream)
+OIDC_ISSUER_URL=https://accounts.example.com
 OIDC_CLIENT_ID=takos
 OIDC_CLIENT_SECRET=...
 OIDC_REDIRECT_URI=https://takos.example.com/auth/oidc/callback

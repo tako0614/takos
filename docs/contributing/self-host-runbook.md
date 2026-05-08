@@ -1,8 +1,8 @@
 # Self-host Distribution Runbook
 
 This runbook covers the current self-host proof path for the current PaaS
-surface. Run local validation from `takos`. Treat live self-host execution
-as operator-owned evidence: the OSS PaaS repo contains public distribution
+surface. Run local validation from `takos`. Treat live self-host execution as
+operator-owned evidence: the OSS PaaS repo contains public distribution
 templates and smoke tooling, while concrete deploy files, secrets, hostnames,
 and provider credentials belong outside this repo.
 
@@ -96,9 +96,49 @@ cd ../takosumi && \
 ```
 
 Use the fixture and environment variables required by Takosumi
-(`@takosumi/plugins`, working tree at `takosumi/`). Keep the live
-output with the release/distribution evidence, separate from the kernel docs
-lint and local release gate.
+(`@takosumi/plugins`, working tree at `takosumi/`). Keep the live output with
+the release/distribution evidence, separate from the kernel docs lint and local
+release gate.
+
+## Takosumi Accounts self-host setup (Phase 1.1+)
+
+Installable App Model (ROADMAP.md Phase 1.1-1.7) 完了以降、self-host operator は
+Takos 単体の deploy に加えて **Takosumi Accounts** (identity / billing plane)
+を立ち上げる必要があります。Takos 自身は OIDC consumer として動作する
+ため、operator は次の構成を用意します:
+
+- 同一 takosumi instance 上で `takosumi-cloud/accounts` を deploy し、
+  `accounts.<your-domain>` を OIDC issuer URL として供給する
+- 既存の外部 OIDC issuer (Keycloak / Authentik / Auth0 / Clerk / Supabase Auth /
+  custom OIDC) を使う場合も、Takosumi Accounts の upstream IdP として broker
+  する。Takos runtime が直接外部 issuer を consume して AppInstallation /
+  billing / launch-token 経路を迂回する構成は canonical self-host path ではない
+
+operator が用意する binding 設定:
+
+- **per-installation OIDC client provisioning**: AppInstallation ごとの OIDC
+  client は AppBinding (`identity.oidc@v1`) として takosumi-git 経由で注入
+  される。手動 provisioning する場合は client_id / client_secret / redirect_uris
+  を AppBinding template に書き込み、Takos runtime env (`OIDC_CLIENT_ID` /
+  `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI`) として resolve する。
+- **launch token JWS signing key**: install 直後の bootstrap
+  (`/_takosumi/launch`) で使う short-lived JWS の signing key は Takosumi
+  Accounts が保持する。Takos には `INSTALL_LAUNCH_PUBLIC_KEY` のみ渡す。
+
+### Launch token JWS signing key rotation runbook
+
+1. Takosumi Accounts 側で新しい signing key pair を生成し、JWKS の active key
+   set に **追加** する (旧 key は verify 用に保持)。
+2. AppInstallation の `INSTALL_LAUNCH_PUBLIC_KEY` を rotated key reference に
+   差し替え、AppBinding を再 publish する (Takos runtime env reload)。
+3. rotation grace window 経過後、旧 key を JWKS active set から外す。
+4. AppInstallation `installation_event` に rotation 完了を記録し、Takosumi
+   Accounts の audit log と一致させる。
+
+self-host でも Takosumi Accounts を運用してください。launch token /
+AppInstallation ledger / billing owner を無効化して Takos の通常 OIDC login
+だけで運用する形は、 Installable App Model の所有権 chain を失うため production
+target ではありません。
 
 ## Expected failures and triage
 
