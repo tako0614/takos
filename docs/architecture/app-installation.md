@@ -281,8 +281,8 @@ exported
 - `ready → failed`: upgrade 適用中の失敗。rollback で `ready` に戻すこともある
 - `ready → suspended`: 課金停止 / policy 違反 / ユーザー操作。runtime は停止
   するが ledger は保持
-- `ready → exported`: `takosumi export` で bundle を作成し、ownership chain を
-  self-host へ持ち出した状態。export 後の installation は read-only
+- `ready → exported`: `takosumi-git export` で bundle を作成し、ownership chain
+  を self-host へ持ち出した状態。export 後の installation は read-only
 - `suspended → ready`: 再開
 - `failed → ready`: 修復後の再 deploy
 

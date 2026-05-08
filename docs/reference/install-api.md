@@ -337,7 +337,7 @@ response header に `Location: /v1/installations/inst_01J...` を付与。
 
 `mode=self-hosted` は **takosumi-cloud では作成しない**。代わりに
 `409 state-conflict` を返し、Problem の `detail` に
-`Use takosumi install <bundle> --to <self-hosted endpoint>` を案内する
+`Use takosumi-git install <bundle> --to <self-hosted endpoint>` を案内する
 ([Upgrade / Export](/platform/upgrade-export#self-host-import) 参照)。
 
 ## 3. `POST /v1/installations/{id}/launch-token` {#launch-token}
