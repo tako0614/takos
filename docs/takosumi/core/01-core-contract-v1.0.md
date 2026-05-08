@@ -1,12 +1,22 @@
 # Takos Deploy Core Contract v1.0
 
-**Status:** v1.0 core contract for Deployment-centric design\
+**Status:** v1.0 compatibility reference for Deployment-centric design\
 **Scope:** Core semantics only\
 **Non-goal:** This document does not specify plugin loading, package managers,
 descriptor registry APIs, billing, concrete JavaScript Worker / container / SQL
 implementations, or concrete cloud provider APIs.
 
-Takos Deploy is a deployment meaning system organized around three records:
+> **Current surface note**
+>
+> The current takosumi kernel public surface is `POST /v1/deployments` over a
+> compiled Shape manifest (`apiVersion: "1.0"`, `kind: Manifest`,
+> `resources[]`). The AppSpec / EnvSpec / PolicySpec, Component, Output,
+> Binding, and descriptor-closure vocabulary in this v1.0 contract is retained
+> as compatibility / internal Core vocabulary. Current user-facing docs and
+> examples MUST use Shape resources (`shape` / `name` / `provider` / `spec`),
+> `imports[]`, and `serviceResolvers[]`.
+
+Takosumi Deploy is a deployment meaning system organized around three records:
 
 ```text
 Deployment            — input + resolution + desired state + status
@@ -16,9 +26,10 @@ GroupHead             — group-scoped pointer to the current Deployment
 
 Core defines no domain kinds. Core does not define `js-worker`, `container`,
 `sql`, `queue`, `mcp-server`, `file-handler`, `Cloudflare`, `Cloud Run`,
-`Docker`, or `Kubernetes`. Concrete meanings are supplied by descriptors.
+`Docker`, or `Kubernetes`. Current manifests express concrete meanings through
+portable Shape contracts and provider ids.
 
-Takos separates **declaration**, **resolution**, and **injection**:
+Legacy Core separates **declaration**, **resolution**, and **injection**:
 
 ```text
 Output         = producer-side typed value declaration
@@ -69,6 +80,12 @@ MUST NOT  forbidden for Core conformance
 
 ## 2. Core invariants
 
+The invariants below describe the legacy descriptor-based Core model. Current
+Shape-manifest implementations preserve the same safety properties by pinning
+shape / provider / service descriptor metadata in resource metadata / WAL; the
+literal `descriptor_closure` and `Deployment.desired.bindings` fields apply only
+to compatibility projections.
+
 ```text
 1.  Core MUST NOT assign built-in meaning to workload, resource, output, or provider names.
 2.  Every concrete meaning used by Deployment.resolution MUST come from descriptor resolutions.
@@ -96,24 +113,24 @@ MAY surface additional checks but MUST NOT relax any of these.
 > primitive and are documented here for forward compatibility. They are NOT part
 > of the v1.0 conformance requirements. Takosumi mainline currently implements
 > the consumer-side foundation (manifest validation, anchor fetch, signature
-> verify, descriptor pin metadata, and `service-import` binding identity);
-> provider publish automation, cache refresh / revoke, and durable failure audit
-> remain separate conformance work.
+> verify, descriptor pin metadata, and `${imports...}` resource spec
+> resolution); provider publish automation, cache refresh / revoke, and durable
+> failure audit remain separate conformance work.
 >
 > 16. **ServiceDescriptor signature verification**: ServiceDescriptor records
 >     fetched from an anchor MUST be signature-verified using the anchor's
 >     pinned `publicKey`. Verification failure MUST reject the apply, and all
 >     verification attempts (success or failure) MUST be audit-appended.
 > 17. **Resolved descriptor immutability**: A `ServiceDescriptor` pinned in
->     `Deployment.resolution.descriptor_closure` is immutable. Refresh
->     requires a new `Deployment` (sibling of invariants 3 and 11).
-> 18. **Kernel SHALL NOT operate a service registry**: Resolution from a
->     service identifier to a `ServiceDescriptor` is delegated to an anchor
->     (operator-injected via manifest `serviceResolvers[]`). The kernel MUST
->     NOT hold an internal anchor URL or service catalog.
+>     resource metadata / WAL is immutable for that Deployment. Refresh requires
+>     a new `Deployment` (sibling of invariants 3 and 11).
+> 18. **Kernel SHALL NOT operate a service registry**: Resolution from a service
+>     identifier to a `ServiceDescriptor` is delegated to an anchor
+>     (operator-injected via manifest `serviceResolvers[]`). The kernel MUST NOT
+>     hold an internal anchor URL or service catalog.
 >
-> See ecosystem ROADMAP §1.9 and
-> [`../../../architecture/cross-instance-service-binding`](../../architecture/cross-instance-service-binding)
+> See
+> [`../../architecture/cross-instance-service-binding`](../../architecture/cross-instance-service-binding)
 > for the full design.
 
 > **Vocabulary note.** The legacy authoring nouns `publish` / `consume` are
@@ -121,8 +138,8 @@ MAY surface additional checks but MUST NOT relax any of these.
 > (producer-side typed value), **Binding** (consumer-side explicit injection
 > request), **BindingResolution** (resolved policy + grant + approval +
 > revision), and **BindingSetRevision** (immutable runtime snapshot).
-> `PublicationContract` is preserved as one class of Output contract, but
-> Core objects are spelled `Output*` / `Binding*`.
+> `PublicationContract` is preserved as one class of Output contract, but Core
+> objects are spelled `Output*` / `Binding*`.
 
 ---
 
@@ -149,35 +166,41 @@ are descriptor-defined.
 
 ---
 
-## 4. AppSpec, EnvSpec, and PolicySpec
+## 4. Manifest input
 
-A Deployment is produced from a manifest snapshot combining AppSpec, EnvSpec,
-and PolicySpec inputs. The combined snapshot is recorded as
-`Deployment.input.manifest_snapshot` and is the immutable input to resolution.
+A Deployment is produced from an immutable manifest snapshot. Current kernel
+input is a compiled Shape manifest:
 
-**AppSpec** declares application meaning (components, named contract instances,
-exposures, Output declarations, component-level Binding declarations, and
-application-level requirements). The legacy `publish` / `consume` authoring
-keys are accepted as shorthand and expand to `outputs` / component-level
-`bindings` during resolution. AppSpec MUST NOT silently encode environment
-provider choices unless a descriptor explicitly marks the configuration as
-application behavior.
+```yaml
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: my-app
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/example/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+```
 
-**EnvSpec** binds application meaning to an environment (provider targets, route
-/ listener / domain / transport security choices, runtime network policy,
-materialization preferences, access path preferences). EnvSpec MUST NOT redefine
-AppSpec meaning.
-
-**PolicySpec** constrains and defaults behavior (allow / deny / require approval
-/ defaults / limits / credential and trust policy). Policy precedence is
-`deny > require-approval > allow`. Approval MUST NOT override deny unless
-PolicySpec explicitly defines break-glass behavior. Policy defaults MAY
-influence resolution choices captured in `Deployment.resolution.resolved_graph`.
+The legacy AppSpec / EnvSpec / PolicySpec split described by older Core docs is
+not the current kernel-bound authoring surface. Install-time policy,
+permissions, and bindings are handled by `.takosumi/app.yml`, Takosumi Accounts,
+and takosumi-git before the compiled manifest is sent to kernel.
 
 ```ts
 type DeploymentInput = {
   manifest_snapshot: string; // canonical bytes / digest reference
-  source_kind: "git" | "registry" | "inline" | "store" | string;
+  source_kind:
+    | "git"
+    | "registry"
+    | "inline"
+    | "store"
+    | "compiled-manifest"
+    | string;
   source_ref?: string; // commit SHA, registry digest, store address
   env?: string; // selected environment label
   group?: string; // requested group (overrides manifest default)
@@ -189,7 +212,11 @@ type DeploymentInput = {
 
 ---
 
-## 5. Components and named contract instances
+## 5. Components and named contract instances (legacy Core vocabulary)
+
+Current Shape manifests use `resources[]` entries with `shape` / `name` /
+`provider` / `spec`. This section documents the legacy Core v1.0 component
+vocabulary for compatibility with older design notes.
 
 A component is a named bundle of contract instances.
 
@@ -447,8 +474,8 @@ resolution MUST be blocked.
 
 `Output` is producer-side typed output. An Output is declared by an Output
 contract (e.g. `publication.mcp-server@v1`, `publication.http-endpoint@v1`,
-`publication.topic@v1`, `builtin:takos.api-key@v1`). Output contract
-descriptors MUST define value type and sensitivity per output field.
+`publication.topic@v1`, `builtin:takos.api-key@v1`). Output contract descriptors
+MUST define value type and sensitivity per output field.
 
 ```ts
 interface CoreOutputDeclaration {
@@ -688,8 +715,8 @@ delete the existing runtime binding. Required consumer action is recorded as
 
 Core default allowed resolution policies are `latest-at-activation` and
 `pinned-version`. `latest-at-invocation` MAY be used only if the runtime
-contract and PolicySpec explicitly permit it. If a referenced
-secret / credential version is revoked, the implementation MUST surface
+contract and PolicySpec explicitly permit it. If a referenced secret /
+credential version is revoked, the implementation MUST surface
 `SecretVersionRevoked` / `SecretResolutionFailed` on the Deployment and MUST
 plan repair or re-resolution explicitly through a new Deployment.
 
@@ -709,14 +736,14 @@ interface CoreBindingSetRevision {
 
 BindingSetRevision is **immutable** once produced. Output changes MUST NOT
 mutate existing BindingSetRevisions; instead a new BindingSetRevision is
-produced for a rebind plan. Changing binding structure (target, source,
-access, injection) requires a new AppRelease — i.e. a new Deployment.
+produced for a rebind plan. Changing binding structure (target, source, access,
+injection) requires a new AppRelease — i.e. a new Deployment.
 
 ### 11.4 Legacy `DeploymentBinding` form
 
 For source-level compatibility, `Deployment.desired.bindings` continues to
-record the structural binding shape. The `source` enum accepts `"output"` as
-the canonical value and `"publication"` as a retained legacy alias:
+record the structural binding shape. The `source` enum accepts `"output"` as the
+canonical value and `"publication"` as a retained legacy alias:
 
 ```ts
 type DeploymentBinding = {
@@ -740,8 +767,8 @@ type DeploymentBinding = {
 
 `Deployment.desired.bindings` is the immutable structural snapshot of
 BindingDeclarations for the Deployment; per-component BindingResolutions and
-BindingSetRevisions are produced during planning and pinned into the
-generated AppRelease.
+BindingSetRevisions are produced during planning and pinned into the generated
+AppRelease.
 
 ### 11.5 Conformance assertions
 
@@ -1019,15 +1046,14 @@ desiredDigest`. Operation kinds
 are stable strings such as `descriptor.resolve`, `component.project`,
 `resource.bind`, `resource.migrate`, `resource.restore`, `binding.create`,
 `binding.resolve`, `binding.rebind`, `runtime.deploy`, `router.prepare`,
-`output.resolve`, `output.rebind`, `output.project`,
-`access-path.materialize`, `activation.commit`, `provider.materialize`,
-`provider.observe`, `repair.plan`. The legacy `publication.resolve` /
-`publication.rebind` operation kinds are retained as aliases of
-`output.resolve` / `output.rebind` for source-level compatibility but new
-implementations MUST emit the `output.*` form. Operation-level state lives
-entirely in `Deployment.conditions[]` with `scope.kind="operation"`. Provider
-materialization failure MUST NOT mutate `Deployment.desired`; repair or rollback
-creates a new Deployment.
+`output.resolve`, `output.rebind`, `output.project`, `access-path.materialize`,
+`activation.commit`, `provider.materialize`, `provider.observe`, `repair.plan`.
+The legacy `publication.resolve` / `publication.rebind` operation kinds are
+retained as aliases of `output.resolve` / `output.rebind` for source-level
+compatibility but new implementations MUST emit the `output.*` form.
+Operation-level state lives entirely in `Deployment.conditions[]` with
+`scope.kind="operation"`. Provider materialization failure MUST NOT mutate
+`Deployment.desired`; repair or rollback creates a new Deployment.
 
 Activation preview MUST verify: exposure target exists and is exposureEligible;
 InterfaceDescriptor is compatible with RouteDescriptor; router
@@ -1129,67 +1155,41 @@ Deployment.
 
 ## 16. CLI surface
 
-Core defines the contract; the canonical CLI surface that exercises it is:
+Core itself does not require a CLI. The current CLI ownership is split:
 
 ```text
-takos deploy <manifest>           default: resolve + apply (Heroku-like sugar)
-takos deploy --preview            in-memory preview, no DB record
-takos deploy --resolve-only       create resolved Deployment, do not apply
-takos apply <deployment-id>       advance a resolved Deployment to applied
-takos diff <deployment-id>        show resolved expansion + diff vs current GroupHead
-takos approve <deployment-id>     attach an approval to a resolved Deployment
-takos rollback [<group>]          flip GroupHead to previous_deployment_id
+takosumi      apply an explicit compiled manifest path to POST /v1/deployments
+takosumi-git  run .takosumi/workflows, materialize workflowRef / placeholders,
+              then submit the compiled manifest to takosumi kernel
 ```
 
-The default `takos deploy <manifest>` MUST be equivalent to:
-
-```text
-1. POST /api/public/v1/deployments with mode="resolve"  -> deployment_id
-2. POST /api/public/v1/deployments/:id/apply
-```
-
-When PolicySpec records a `require-approval` decision in
-`Deployment.policy_decisions[]`, `takos apply` MUST refuse until
-`Deployment.approval` is attached or PolicySpec break-glass is permitted.
+Legacy `takos deploy/apply/diff/approve/rollback` command shapes belong to older
+Takos Deploy docs and MUST NOT be treated as the current takosumi kernel public
+contract.
 
 ---
 
 ## 17. API surface
 
-A single endpoint family covers the lifecycle, all under public v1.
+The current takosumi kernel public API is a single deploy endpoint for compiled
+Shape manifests.
 
 ```text
-POST /api/public/v1/deployments
-  body:     { manifest, mode: "preview"|"resolve"|"apply"|"rollback", target_id?, group?, env? }
-  response: { deployment_id, status, conditions, expansion_summary }
-
-GET  /api/public/v1/deployments/:id
-GET  /api/public/v1/deployments?group=&status=
-GET  /api/public/v1/groups/:group_id/head
-
-POST /api/public/v1/deployments/:id/apply
-POST /api/public/v1/deployments/:id/approve
-POST /api/public/v1/groups/:group_id/rollback
-
-GET  /api/public/v1/deployments/:id/observations
+POST /v1/deployments
+  body:     { manifest }
+  response: { deploymentId, status, conditions, resources?, observations? }
 ```
 
-Mode behavior:
-
-```text
-mode="preview":   synchronous resolution against in-memory state. No record persisted. deployment_id="preview:<digest>".
-mode="resolve":   persist a Deployment with status="resolved". descriptor_closure pinned.
-mode="apply":     resolve (if no target_id) and apply in one call.
-mode="rollback":  operate on group + optional target_id. Atomically flips GroupHead.
-
-apply / approve / rollback endpoints are idempotent with respect to deployment_id and group_id.
-```
+Preview / approve / rollback may be exposed by higher-level products, but they
+are not required kernel endpoints. Rollback is represented by Deployment /
+GroupHead state transitions and can be wrapped by product-specific APIs.
 
 The removed public paths (`/api/public/v1/deploy/plans`,
 `/api/public/v1/deploy/applies`,
 `/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*`,
-`/api/deploy/plans`, `/api/deploy/apply-runs`) are not part of the current
-surface and MUST NOT be reintroduced.
+`/api/deploy/plans`, `/api/deploy/apply-runs`) and the legacy
+`/api/public/v1/deployments/:id/apply` family are not part of the current kernel
+surface and MUST NOT be reintroduced as takosumi kernel public API.
 
 ---
 
