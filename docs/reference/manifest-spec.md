@@ -75,7 +75,7 @@ resources:
         hash: sha256:0123456789abcdef
       compatibilityDate: "2026-05-09"
       routes:
-        - pattern: hello.example.com/*
+        - hello.example.com/*
 ```
 
 Container service の例:
@@ -99,6 +99,7 @@ resources:
     spec:
       image: ghcr.io/example/api@sha256:0123456789abcdef
       port: 8080
+      scale: { min: 1, max: 3 }
       env:
         DATABASE_URL: ${ref:db.connectionString}
 ```
@@ -184,6 +185,7 @@ resources:
     spec:
       image: ghcr.io/example/api@sha256:0123456789abcdef
       port: 8080
+      scale: { min: 1, max: 3 }
       env:
         DATABASE_URL: ${ref:db.connectionString}
         DB_PASSWORD: ${secret-ref:db.passwordSecretRef}
@@ -204,8 +206,10 @@ metadata:
 template:
   template: web-app-on-cloudflare@v1
   inputs:
+    serviceName: web
     image: ghcr.io/example/web@sha256:0123456789abcdef
     port: 8080
+    domain: web.example.com
 resources:
   - shape: object-store@v1
     name: backups
@@ -275,6 +279,7 @@ resources:
     spec:
       image: ghcr.io/takos/api@sha256:0123456789abcdef
       port: 8080
+      scale: { min: 1, max: 3 }
       env:
         AUTH_DRIVER: oidc
         OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
@@ -312,6 +317,7 @@ resources:
     spec:
       image: ghcr.io/takosumi/accounts@sha256:0123456789abcdef
       port: 8080
+      scale: { min: 1, max: 3 }
 ```
 
 ## Validation
