@@ -25,7 +25,8 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
    `scripts/validate-architecture-alignment.ts`
 4. `deno task docs:build`
 5. Service set validator: `deno task validate:service-set`
-6. Distribution profile schema and artifact validator: `deno task validate:distributions`
+6. Distribution profile schema and artifact validator:
+   `deno task validate:distributions`
 7. Observability artifact validator: `deno task validate:observability`
 8. Patch management validator: `deno task validate:patch-management`
 9. Migration safety validator: `deno task validate:migration-safety`
@@ -34,7 +35,7 @@ deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts
 12. Helm chart validator: `deno task validate:helm`
 13. Helm overlay generator drift check: `deno task helm:check-overlays`
 14. Terraform output to Helm values fixture check:
-   `deno task terraform:helm-values:check`
+    `deno task terraform:helm-values:check`
 15. Release manifest build: `scripts/build-release-manifest.ts`
 16. Compose config render: `deno task local:config`
 
@@ -62,3 +63,11 @@ a JSON object containing:
 - command names in execution order
 - pass/fail/skip counts
 - per-gate command name, command argv, exit code, duration, stdout, and stderr
+
+## Phase 1.x Acceptance Gates との関係
+
+本 17 gates は **1.0 Core Release (Part I)** の release readiness を検証します。
+1.x Installable App Model (Phase 1.1-1.7) の acceptance gates は ROADMAP.md Part
+III に列挙され、acceptance-test-backlog.md の P-Phase 1.x.* で詳述されます。
+これらは本 17 gates の **下流** で実施され、Phase 1.x release tag (`v1.X.0`) の
+独立 release-gate として運用されます。

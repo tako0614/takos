@@ -103,7 +103,7 @@ that usually means an internal endpoint or provider mediator that uses
 Cloudflare-injected Worker bindings. Control-plane operations still require
 operator-injected client references in the trusted Cloudflare plugin. In staging
 and production this includes the auth/actor boundary and every required PaaS
-adapter selected for the profile; the PaaS kernel does not construct Cloudflare
+adapter selected for the profile; the kernel does not construct Cloudflare
 SDK/network clients by default.
 
 ## Activation

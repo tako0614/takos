@@ -6,16 +6,17 @@ text-only validation pass for stale terminology and path drift across the
 
 ## Checks
 
-- `takos/README.md` and `takos/docs/contributing/current-state.md` must
-  describe the Takosumi shape as internal domains under `takosumi`,
-  including the deploy/runtime domain wording.
+- `takos/README.md` and `takos/docs/contributing/current-state.md` must describe
+  the Takosumi shape as internal domains under `takosumi`, including the
+  deploy/runtime domain wording.
 - `takos/README.md` and `takos/docs/contributing/**/*.md` must not describe
   `takos-deploy` or `takos-runtime` as stale top-level product roots or default
   top-level service boundaries unless the same paragraph qualifies them as
   internal domains, compatibility, or legacy wording.
-- Required domain directories must exist under `apps/paas/src/domains`: `core`,
-  `deploy`, `runtime`, `resources`, `routing`, `network`, `registry`, `audit`,
-  `events`, `publications`, and `supply-chain`.
+- Required domain directories must exist under
+  `takosumi/packages/kernel/src/domains`: `core`, `deploy`, `runtime`,
+  `resources`, `routing`, `network`, `registry`, `audit`, `events`,
+  `publications`, and `supply-chain`.
 
 ## Command
 

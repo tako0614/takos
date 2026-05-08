@@ -5,6 +5,12 @@ product shell checkout without network access.
 
 ## Scope
 
+本 manifest は **Part I (1.0 Core Release)** の artifact metadata を捕捉します。
+Part II (Phase 1.x) の Installable App Model artifacts (takosumi-cloud /
+Takosumi Accounts JWT signing / AppInstallation ledger / export bundles 等) は
+Phase 1.x release artifact manifest で別途管理予定です
+(acceptance-test-backlog.md 参照)。
+
 The manifest captures:
 
 - root/workspace Deno package metadata from `deno.json` files
@@ -16,7 +22,7 @@ The manifest captures:
 - Helm template/client dry-run smoke command and CI-required env overrides
 - Helm cluster install smoke command and CI-required test CRD override
 - release promotion validator command
-- `apps/paas/src/domains/*` domain directories
+- `takosumi/packages/kernel/src/domains/*` domain directories
 - local smoke/e2e script inventory
 
 ## Usage

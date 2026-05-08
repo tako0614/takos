@@ -69,8 +69,13 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = kubernetes)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos
-deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+cd ../takosumi-cloud
+deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+  --issuer https://accounts.k8s.example.com \
+  --subject tsub_admin \
+  --client-id takos-admin \
+  --redirect-uri https://admin.takos.example.com/auth/oidc/callback \
+  > accounts-seed-plan.json
 ```
 
 `distribute:apply` は `kernel_host.target=kubernetes` を見て内部で
@@ -100,8 +105,8 @@ base chart は次の workload を Kubernetes 上に作ります:
 | `takos-git`   | Deployment + Service | Git Smart HTTP / refs / repository storage        |
 | `takos-agent` | Deployment + Service | agent execution service                           |
 
-admin / tenant ingress はどちらも `takos-app` に向きます。Browser / CLI client は
-`takos-app` を public entrypoint とし、`takos-app` が internal service URL
+admin / tenant ingress はどちらも `takos-app` に向きます。Browser / CLI client
+は `takos-app` を public entrypoint とし、`takos-app` が internal service URL
 (`TAKOSUMI_INTERNAL_URL` / `TAKOS_GIT_INTERNAL_URL` /
 `TAKOS_AGENT_INTERNAL_URL`) で owning service を呼びます。
 
@@ -109,25 +114,25 @@ admin / tenant ingress はどちらも `takos-app` に向きます。Browser / C
 
 主な values:
 
-| value                                      | 説明                                               |
-| ------------------------------------------ | -------------------------------------------------- |
-| `global.imageRegistry`                     | 全 service image registry の operator override     |
-| `global.imagePullSecrets`                  | private registry 用 image pull secrets             |
-| `domains.admin`                            | admin / API host                                   |
-| `domains.tenantBase`                       | tenant app base host                               |
-| `images.takosApp.registry` / `repository` / `tag`   | `takos-app` image                      |
-| `images.takosumi.registry` / `repository` / `tag`   | `takosumi` image                       |
-| `images.takosGit.registry` / `repository` / `tag`   | `takos-git` image                      |
-| `images.takosAgent.registry` / `repository` / `tag` | `takos-agent` image                    |
-| `services.<service>.replicaCount`          | service replica count                              |
-| `services.<service>.port`                  | service container / ClusterIP port                 |
-| `services.<service>.healthPath`            | liveness / readiness HTTP path                     |
-| `services.<service>.resources`             | requests / limits                                  |
-| `runtimeConfig.plugins.*`                  | Takosumi kernel plugin selection                   |
-| `secrets.create`                           | chart が Secret を作るか、既存 Secret を参照するか |
-| `secrets.existingSecrets.*`                | 既存 Secret 名                                     |
-| `ingress.*`                                | admin / tenant ingress                             |
-| `serviceAccount.annotations`               | IRSA / Workload Identity などの annotation         |
+| value                                               | 説明                                               |
+| --------------------------------------------------- | -------------------------------------------------- |
+| `global.imageRegistry`                              | 全 service image registry の operator override     |
+| `global.imagePullSecrets`                           | private registry 用 image pull secrets             |
+| `domains.admin`                                     | admin / API host                                   |
+| `domains.tenantBase`                                | tenant app base host                               |
+| `images.takosApp.registry` / `repository` / `tag`   | `takos-app` image                                  |
+| `images.takosumi.registry` / `repository` / `tag`   | `takosumi` image                                   |
+| `images.takosGit.registry` / `repository` / `tag`   | `takos-git` image                                  |
+| `images.takosAgent.registry` / `repository` / `tag` | `takos-agent` image                                |
+| `services.<service>.replicaCount`                   | service replica count                              |
+| `services.<service>.port`                           | service container / ClusterIP port                 |
+| `services.<service>.healthPath`                     | liveness / readiness HTTP path                     |
+| `services.<service>.resources`                      | requests / limits                                  |
+| `runtimeConfig.plugins.*`                           | Takosumi kernel plugin selection                   |
+| `secrets.create`                                    | chart が Secret を作るか、既存 Secret を参照するか |
+| `secrets.existingSecrets.*`                         | 既存 Secret 名                                     |
+| `ingress.*`                                         | admin / tenant ingress                             |
+| `serviceAccount.annotations`                        | IRSA / Workload Identity などの annotation         |
 
 ### インストール
 
@@ -188,9 +193,9 @@ Sealed Secrets / platform secret manager を使い、`secrets.create: false` と
 ### Workload runtime
 
 この chart は Takos product service set を載せるための chart です。tenant
-workload / deploy runtime の lifecycle は `takosumi` と selected provider
-plugin の ownership であり、chart 側に standalone runtime / executor /
-orchestrator workload は作りません。
+workload / deploy runtime の lifecycle は `takosumi` と selected provider plugin
+の ownership であり、chart 側に standalone runtime / executor / orchestrator
+workload は作りません。
 
 ---
 
@@ -211,9 +216,8 @@ Takosumi (`@takosumi/plugins`) の k8s provider plugin は次の resource lifecy
 | `k8s-deployment`            | Deployment + replicas                                | `src/providers/k8s/deployment.ts`                |
 
 `profiles/cloudflare-kubernetes.example.json` のように
-`clients.provider: "k8s-provider-gateway"` を設定すると、Takosumi kernel が
-k8s API server (kubectl proxy / API gateway) 経由で resource を materialize
-します。
+`clients.provider: "k8s-provider-gateway"` を設定すると、Takosumi kernel が k8s
+API server (kubectl proxy / API gateway) 経由で resource を materialize します。
 
 ### Operator が手動でやること / kernel が plugin 経由でやること
 
@@ -293,7 +297,8 @@ kubectl get secret -n takos-system takos-provider-token -o json \
 ```
 
 profile (`profiles/cloudflare-kubernetes.example.json`) の
-`pluginConfig.operator.takosumi.cloudflare-kubernetes.clusterName` を合わせます。
+`pluginConfig.operator.takosumi.cloudflare-kubernetes.clusterName`
+を合わせます。
 
 #### B. operator-managed gateway URL
 
@@ -379,8 +384,8 @@ operator がやること:
 - Ingress controller deploy (nginx / traefik / Istio Gateway)
 - cert-manager + ClusterIssuer (Let's Encrypt) deploy
 - external-dns + DNS provider credential 設定
-- profile の `pluginConfig.operator.takosumi.cloudflare-kubernetes.routerConfig` に
-  `ingressClass` / `clusterIssuer` / `externalDnsZone` を設定
+- profile の `pluginConfig.operator.takosumi.cloudflare-kubernetes.routerConfig`
+  に `ingressClass` / `clusterIssuer` / `externalDnsZone` を設定
 
 kernel がやること:
 

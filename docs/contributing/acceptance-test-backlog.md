@@ -66,3 +66,36 @@ agents can work independently.
 - Weighted assignments affect HTTP only.
 - Queue/schedule/event defaults resolve through primaryAppReleaseId.
 - Canary step creates a new rollout step Deployment.
+
+## P-Phase 1.x Installable App Model backlog
+
+Installable App Model (ROADMAP.md Part II Phase 1.1-1.7) の identity / installer
+/ consumer / shared-cell / export / GitOps backlog。各 phase の acceptance gate
+として追加する。
+
+- **P-Phase 1.1.1**: Takosumi Accounts OIDC issuer JWT signing rotation
+  (`takosumi.account.auth@v1` で resolve される issuer の signing key rotation
+  で既存 token の verify が rotation window 内は通り、rotation 後は新 key
+  で発行される)
+- **P-Phase 1.1.2**: Pairwise OIDC subject derivation
+  (`sub = pairwise(appId, installationId, takosumiUserId)` の一意性、app 間 user
+  tracking 不能、installation 移動時の subject 切替)
+- **P-Phase 1.2.1**: AppInstallation status state machine (`installing` →
+  `ready` / `failed` / `suspended` / `exported` 遷移、 invalid transition の
+  reject、audit event 出力)
+- **P-Phase 1.3.1**: Install preview permission diff (Git URL + ref → app.yml
+  parse → requested bindings / grants / estimated cost / publisher verification
+  を preview として返す、approve なしで install しない)
+- **P-Phase 1.4.1**: Takos legacy proxy mode termination (legacy `/oauth/*`
+  route の deprecation window 終了後、Takos からの 410 Gone と Takosumi Accounts
+  への redirect)
+- **P-Phase 1.5.1**: Shared-cell namespace isolation (shared runtime に bind
+  された AppInstallation 同士で data namespace / OIDC client / billing / grants
+  が交差しない)
+- **P-Phase 1.6.1**: Export bundle integrity (`takosumi-git export` の bundle が
+  installation.json / source.json / manifest.compiled.yml / data dump / bindings
+  template を持ち、別 takosumi instance への import で同 source commit / digest
+  を再現できる)
+- **P-Phase 1.7.1**: GitOps deploy intent budget guard (Takos が
+  `deploy-intent.gitops@v1` 経由で deploy intent を Git に commit する際、budget
+  を超える resource は user approval なしで apply されない)

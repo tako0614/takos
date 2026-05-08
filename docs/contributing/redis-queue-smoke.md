@@ -2,8 +2,8 @@
 
 ## Purpose
 
-`/scripts/redis-queue-smoke.ts` is a safe-by-default smoke harness for the Takos
-PaaS queue plugin/adapter boundary:
+`/scripts/redis-queue-smoke.ts` is a safe-by-default smoke harness for the
+Takosumi queue storage plugin / adapter boundary:
 
 - `RedisQueueAdapter` is exercised through its injected
   `RedisQueueCommandClient`.
@@ -34,8 +34,8 @@ ack, and post-ack empty lease behavior is visible.
 
 ## Real Redis plugin opt-in
 
-A real Redis smoke path is available for queue plugin/operator validation only
-when both the explicit run flag and a URL are provided:
+A real Redis smoke path is available for Takosumi queue storage plugin
+validation only when both the explicit run flag and a URL are provided:
 
 ```sh
 TAKOS_RUN_REDIS_QUEUE_SMOKE=1 \

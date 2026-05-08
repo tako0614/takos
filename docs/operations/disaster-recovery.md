@@ -10,23 +10,34 @@ Takosumi kernel の logical restore protocol は
 
 ## Targets
 
-| Target | Value | Meaning |
-| --- | --- | --- |
-| RTO | <= 4 hours | SEV-1 DR 宣言から customer-facing critical path が復旧するまで |
-| RPO | <= 15 minutes | 復旧先で許容する committed control-plane data loss window |
-| Detection | <= 5 minutes | production-wide outage を operator が ack するまで |
-| Customer update | <= 15 minutes | SEV-1 宣言後の初回 customer/status update |
+| Target          | Value         | Meaning                                                        |
+| --------------- | ------------- | -------------------------------------------------------------- |
+| RTO             | <= 4 hours    | SEV-1 DR 宣言から customer-facing critical path が復旧するまで |
+| RPO             | <= 15 minutes | 復旧先で許容する committed control-plane data loss window      |
+| Detection       | <= 5 minutes  | production-wide outage を operator が ack するまで             |
+| Customer update | <= 15 minutes | SEV-1 宣言後の初回 customer/status update                      |
 
 RTO / RPO は target です。四半期 DR simulation で実測し、target を満たせない場合
 は release promotion blocker として扱います。
 
 ## DR Modes
 
-| Mode | Use when | Data source | Risk |
-| --- | --- | --- | --- |
-| In-region recovery | isolated service / storage failure | same-region replica / backup | fastest, same-region dependency risk |
+::: warning Terminology 本 runbook で「account」は文脈ごとに以下を区別します:
+
+- **Takosumi Account**: Installable App Model の **identity / billing owner**
+  (account plane)
+- **Cloud account**: 各 cloud provider (AWS account / GCP project) の
+  operator-owned tenancy
+
+DR では両 layer の recovery が必要。Takosumi Account level の data は Takosumi
+Accounts service の DR で、Cloud account level の resource は provider DR で
+restored。 :::
+
+| Mode                  | Use when                                  | Data source                                   | Risk                                             |
+| --------------------- | ----------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
+| In-region recovery    | isolated service / storage failure        | same-region replica / backup                  | fastest, same-region dependency risk             |
 | Cross-region failover | region-wide outage or provider impairment | latest verified cross-region backup / replica | DNS / route propagation and provider parity risk |
-| Provider failover | cloud provider incident | distribution profile for alternate target | highest compatibility and data freshness risk |
+| Provider failover     | cloud provider incident                   | distribution profile for alternate target     | highest compatibility and data freshness risk    |
 
 Default strategy is active-passive cross-region recovery. Active-active is not
 assumed by this plan unless a specific distribution profile documents it.
@@ -41,9 +52,9 @@ Declare DR when one of these is true:
 - security incident requires isolating the primary environment
 - provider outage prevents deploy / auth / git access across the primary region
 
-DR declaration requires incident commander approval. If the incident commander is
-unavailable, primary and secondary on-call can jointly declare DR and record the
-reason in the incident channel.
+DR declaration requires incident commander approval. If the incident commander
+is unavailable, primary and secondary on-call can jointly declare DR and record
+the reason in the incident channel.
 
 ## Pre-flight Checklist
 

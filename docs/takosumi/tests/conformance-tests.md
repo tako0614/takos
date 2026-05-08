@@ -118,7 +118,7 @@ MAY     optional
 - Cloudflare D1, R2, Queues, and Durable Objects MUST be represented through
   explicit access path entries on `Deployment.desired.bindings` when selected.
 - Cloudflare provider plugins MUST fail closed when required operator-injected
-  client references are missing; the PaaS kernel MUST NOT construct Cloudflare
+  client references are missing; the kernel MUST NOT construct Cloudflare
   SDK/network clients by default.
 
 ---
@@ -133,11 +133,14 @@ MAY     optional
 - `ServingConverged` MUST be separate from `ActivationCommitted`.
 - Provider/router convergence failure MUST create `ServingDegraded` or an
   equivalent `Deployment.conditions[]` entry.
-- Cloudflare Containers MUST be treated as on-demand
-  Worker/Durable-Object-backed materialization, not as the always-on provider
+- Provider topology selection (on-demand vs always-on materialization) is an
+  operator-level concern; the kernel remains agnostic about which provider
+  plugin is selected. Conformance MUST verify that each registered provider
+  plugin advertises and honors its own materialization profile (e.g. Cloudflare
+  Containers plugin advertises on-demand Worker/Durable-Object-backed
+  materialization; a Kubernetes plugin advertises always-on long-running
+  container materialization), and MUST NOT hardcode one provider as the
   baseline.
-- Kubernetes or another external always-on provider plugin MUST satisfy
-  long-running container workload conformance.
 
 ---
 

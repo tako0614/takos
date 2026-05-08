@@ -2,7 +2,7 @@
 
 `scripts/docker-provider-smoke.ts` is a safe-by-default smoke entrypoint for the
 local Docker provider plugin materialization path. It validates plugin/adapter
-behavior and is not part of the PaaS kernel release gate.
+behavior and is not part of the kernel release gate.
 
 ## Default dry-run
 

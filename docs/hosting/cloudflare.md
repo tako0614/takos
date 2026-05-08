@@ -58,7 +58,13 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = cloudflare)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos
+cd ../takosumi-cloud
+deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+  --issuer https://accounts.cloudflare.example.com \
+  --subject tsub_admin \
+  --client-id takos-admin \
+  --redirect-uri https://admin.takos.example.com/auth/oidc/callback \
+  > accounts-seed-plan.json
 ```
 
 `distribute:apply` は `kernel_host.target=cloudflare` を見て内部で

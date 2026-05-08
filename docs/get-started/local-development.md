@@ -1,9 +1,9 @@
 # ローカル開発ガイド
 
-::: warning このページは operator 向け `.takos/app.yml` を書きたい **deploy
-manifest author** はこのページを読む必要はありません。`takos login` で managed
-Takos endpoint に認証して `takos deploy --space SPACE_ID --group GROUP_NAME`
-するだけで開発できます。
+::: warning このページは operator 向け `.takosumi/manifest.yml` を書きたい
+**deploy manifest author** はこのページを読む必要はありません。`takos login` で
+managed Takos endpoint に認証して
+`takos deploy --space SPACE_ID --group GROUP_NAME` するだけで開発できます。
 
 このページは **Takos kernel 自体を local に立ち上げる operator** 向けです。 :::
 
@@ -62,7 +62,8 @@ deno task --cwd takos/app/apps/control dev:local:dispatch
 deno task --cwd takos/app/apps/control dev:local:worker
 ```
 
-compose を使わない場合は `takos/app/apps/control/.env.self-host.example` を参考に。
+compose を使わない場合は `takos/app/apps/control/.env.self-host.example`
+を参考に。
 
 ## 既知の差分
 

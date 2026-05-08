@@ -3,13 +3,13 @@
 このページは **Takos kernel を GCP にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
-1. **GCP 単独 hosting (GKE Helm)** ―
-   `takos/deploy/helm/takos/values-gcp.yaml` overlay。Kubernetes ベースで
-   control plane / runtime / executor を運用する path。
+1. **GCP 単独 hosting (GKE Helm)** ― `takos/deploy/helm/takos/values-gcp.yaml`
+   overlay。Kubernetes ベースで control plane / runtime / executor を運用する
+   path。
 2. **GCP provider plugin (Phase 17A2)** ― Cloud Run / Cloud SQL / GCS / Pub/Sub
-   / Cloud KMS / Secret Manager の 6 provider を Takosumi kernel から
-   `provider` 契約として呼び出す path。Cloudflare control plane + GCP tenant
-   runtime (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
+   / Cloud KMS / Secret Manager の 6 provider を Takosumi kernel から `provider`
+   契約として呼び出す path。Cloudflare control plane + GCP tenant runtime
+   (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
    (`profiles/gcp.example.json`) で使う。
 
 ::: warning current contract section 1 (Helm overlay) は Cloud Run へ Takos
@@ -68,8 +68,13 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = gcp)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos
-deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+cd ../takosumi-cloud
+deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+  --issuer https://accounts.gcp.example.com \
+  --subject tsub_admin \
+  --client-id takos-admin \
+  --redirect-uri https://admin.takos.example.com/auth/oidc/callback \
+  > accounts-seed-plan.json
 ```
 
 `distribute:apply` は `kernel_host.target=gcp` を見て内部で
@@ -92,8 +97,8 @@ deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 
 `values-gcp.yaml` は base chart に対して次を設定します:
 
-| 項目            | current value                                                                 |
-| --------------- | ----------------------------------------------------------------------------- |
+| 項目            | current value                                                                  |
+| --------------- | ------------------------------------------------------------------------------ |
 | source          | `deploy/distributions/gcp.json` から `deno task helm:generate-overlays` で生成 |
 | images          | distribution profile の `services[].image` を Helm image values に展開         |
 | domains         | distribution profile の `routing` から admin / tenant base domain を展開       |
@@ -118,8 +123,8 @@ deno task helm:check-overlays
   を作成する運用
 - Takosumi provider plugin が参照する GCP managed-service credentials
 
-Terraform apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic /
-GCS bucket 名は `deno task terraform:helm-values` で generated values に変換し、
+Terraform apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic / GCS
+bucket 名は `deno task terraform:helm-values` で generated values に変換し、
 base overlay の後に重ねます。生成 values は non-secret resource id だけを
 `runtimeConfig.managedResources` へ入れ、secret は `takos-private` / external
 secrets 側に残します。
@@ -165,7 +170,8 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 ### 構成
 
-Takosumi (`@takosumi/plugins`) の GCP provider plugin は 6 provider を提供します:
+Takosumi (`@takosumi/plugins`) の GCP provider plugin は 6 provider
+を提供します:
 
 | provider client               | 用途                          | 参照クラス                            |
 | ----------------------------- | ----------------------------- | ------------------------------------- |

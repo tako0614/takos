@@ -2,10 +2,11 @@
 
 Takosumi plugins provide implementation adapters for kernel I/O ports. They do
 not define Core semantics. Core records — `Deployment` (with its inlined
-`resolution.descriptor_closure`, `resolution.resolved_graph`, `desired.bindings`,
-`desired.routes`, `desired.runtime_network_policy`, `desired.activation_envelope`,
-`policy_decisions[]`, `approval`, `conditions[]`), `ProviderObservation`, and
-`GroupHead` — remain owned by the PaaS kernel.
+`resolution.descriptor_closure`, `resolution.resolved_graph`,
+`desired.bindings`, `desired.routes`, `desired.runtime_network_policy`,
+`desired.activation_envelope`, `policy_decisions[]`, `approval`,
+`conditions[]`), `ProviderObservation`, and `GroupHead` — remain owned by the
+kernel.
 
 ## Required manifest
 
@@ -133,9 +134,9 @@ streams, resources, registry, audit, usage aggregates, and service endpoints.
 
 ## Operator profile bundles
 
-The ecosystem external plugin root (`takosumi/` working tree,
-published as **Takosumi**: JSR `@takosumi/plugins`) provides profile bundle
-implementations for:
+The ecosystem external plugin root (`takosumi/` working tree, published as
+**Takosumi**: JSR `@takosumi/plugins`) provides profile bundle implementations
+for:
 
 ```text
 operator.takosumi.selfhosted
@@ -150,7 +151,7 @@ real adapters or provider clients through `operatorConfig[pluginId].clients` and
 an operator-provided `KernelPluginClientRegistry`. The profile package includes
 adapter wrappers and conformance tests for Cloudflare, AWS, GCP, and self-hosted
 targets, but cloud provider SDK clients, runtime bindings, and control-plane
-credentials remain outside the PaaS kernel.
+credentials remain outside the kernel.
 
 The Cloudflare deployment scaffold runs the PaaS API behind a Worker and
 Cloudflare Container. Cloudflare Containers are on-demand Worker/Durable

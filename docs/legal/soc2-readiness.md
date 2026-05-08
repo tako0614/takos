@@ -10,15 +10,15 @@ claim SOC 2 compliance until a qualified auditor completes the engagement.
 
 Initial SOC 2 readiness scope:
 
-| Area | In scope | Owner |
-| --- | --- | --- |
-| Application security | `takos-app`, `takos-git`, `takos-agent`, Takosumi API boundary | service owners |
-| Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles | operator |
-| Change management | PR review, release gate, staging promotion, rollback | release owner |
-| Incident response | SEV policy, incident runbook, postmortem evidence | on-call owner |
-| Availability | SLOs, capacity planning, backup / restore, DR plan | operations owner |
-| Confidentiality | secret rotation, access control, private deploy boundary | security owner |
-| Processing integrity | deploy audit trail, migration safety, usage / billing integrity | product owner |
+| Area                    | In scope                                                        | Owner            |
+| ----------------------- | --------------------------------------------------------------- | ---------------- |
+| Application security    | `takos-app`, `takos-git`, `takos-agent`, Takosumi API boundary  | service owners   |
+| Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles   | operator         |
+| Change management       | PR review, release gate, staging promotion, rollback            | release owner    |
+| Incident response       | SEV policy, incident runbook, postmortem evidence               | on-call owner    |
+| Availability            | SLOs, capacity planning, backup / restore, DR plan              | operations owner |
+| Confidentiality         | secret rotation, access control, private deploy boundary        | security owner   |
+| Processing integrity    | deploy audit trail, migration safety, usage / billing integrity | product owner    |
 
 Out of scope for the first readiness pass:
 
@@ -29,20 +29,20 @@ Out of scope for the first readiness pass:
 
 ## Trust Services Criteria Mapping
 
-| Criteria | Current evidence target | Gap |
-| --- | --- | --- |
-| CC1 Control environment | owner map, code of conduct, operating policies | formal security ownership roster |
-| CC2 Communication | docs site, incident updates, support channel | customer-facing status page evidence |
-| CC3 Risk assessment | ROADMAP risks, patch management, threat model backlog | recurring risk review log |
-| CC4 Monitoring | release gate, observability stack, security audit workflow | alert review evidence |
-| CC5 Control activities | CI gates, migration safety, branch protection policy | branch protection export |
-| CC6 Logical access | OAuth/PAT verification, internal service signatures | access review cadence |
-| CC7 System operations | on-call, SEV, backup/restore, DR | executed staging drills |
-| CC8 Change management | PR review, release gate, migration gate | production sign-off evidence |
-| CC9 Vendor risk | sub-processor list, DPA draft | vendor review records |
-| A1 Availability | capacity plan, SLOs, backup/restore, DR | sustained SLO reporting |
-| C1 Confidentiality | secret rotation, private deploy boundary, audit redaction | data classification register |
-| PI1 Processing integrity | billing usage rollups, deploy audit, migration safety | reconciliation evidence |
+| Criteria                 | Current evidence target                                    | Gap                                  |
+| ------------------------ | ---------------------------------------------------------- | ------------------------------------ |
+| CC1 Control environment  | owner map, code of conduct, operating policies             | formal security ownership roster     |
+| CC2 Communication        | docs site, incident updates, support channel               | customer-facing status page evidence |
+| CC3 Risk assessment      | ROADMAP risks, patch management, threat model backlog      | recurring risk review log            |
+| CC4 Monitoring           | release gate, observability stack, security audit workflow | alert review evidence                |
+| CC5 Control activities   | CI gates, migration safety, branch protection policy       | branch protection export             |
+| CC6 Logical access       | OAuth/PAT verification, internal service signatures        | access review cadence                |
+| CC7 System operations    | on-call, SEV, backup/restore, DR                           | executed staging drills              |
+| CC8 Change management    | PR review, release gate, migration gate                    | production sign-off evidence         |
+| CC9 Vendor risk          | sub-processor list, DPA draft                              | vendor review records                |
+| A1 Availability          | capacity plan, SLOs, backup/restore, DR                    | sustained SLO reporting              |
+| C1 Confidentiality       | secret rotation, private deploy boundary, audit redaction  | data classification register         |
+| PI1 Processing integrity | billing usage rollups, deploy audit, migration safety      | reconciliation evidence              |
 
 ## Readiness Checklist
 
@@ -53,6 +53,9 @@ Out of scope for the first readiness pass:
 - Service owner map exists for every product root.
 - Policy exception process exists with owner and expiry.
 - Quarterly risk review meeting is scheduled.
+- AppInstallation ledger and Takosumi Account billing model are listed in the
+  data protection owner audit checklist (Installable App Model: identity /
+  billing owner = Takosumi Accounts; AppInstallation台帳 = ownership primitive).
 
 ### Access Control
 
@@ -104,17 +107,17 @@ Out of scope for the first readiness pass:
 
 ## Evidence Register
 
-| Evidence | Public path | Private path |
-| --- | --- | --- |
-| On-call policy | `/operations/oncall` | incident paging config |
-| Incident response | `/operations/incident-response` | incident records |
-| Backup drills | `/operations/backup-restore-drills` | restore logs |
-| DR plan | `/operations/disaster-recovery` | failover run logs |
-| Capacity plan | `/operations/capacity` | traffic reports |
-| Cost monitoring | `/operations/cost-monitoring` | billing reconciliation |
-| Patch management | `/operations/patch-management` | vulnerability exceptions |
-| Migration safety | `/operations/online-db-migrations` | production migration logs |
-| Release gate | `/contributing/release-gate` | CI run artifacts |
+| Evidence          | Public path                         | Private path              |
+| ----------------- | ----------------------------------- | ------------------------- |
+| On-call policy    | `/operations/oncall`                | incident paging config    |
+| Incident response | `/operations/incident-response`     | incident records          |
+| Backup drills     | `/operations/backup-restore-drills` | restore logs              |
+| DR plan           | `/operations/disaster-recovery`     | failover run logs         |
+| Capacity plan     | `/operations/capacity`              | traffic reports           |
+| Cost monitoring   | `/operations/cost-monitoring`       | billing reconciliation    |
+| Patch management  | `/operations/patch-management`      | vulnerability exceptions  |
+| Migration safety  | `/operations/online-db-migrations`  | production migration logs |
+| Release gate      | `/contributing/release-gate`        | CI run artifacts          |
 
 ## Pre-audit Backlog
 

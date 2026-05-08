@@ -11,14 +11,31 @@ operator がその protocol をどの頻度で検証し、どの evidence を残
 
 ## Scope
 
+**Backup/Restore 3 layer**:
+
+1. **Takosumi Account level** (Takosumi Accounts 所有): identity, billing,
+   AppInstallation ledger
+2. **Takos product level** (Takos 所有): app-local profile, chat / memory /
+   files
+3. **Runtime / kernel level** (takosumi 所有): deployment records, compiled
+   manifests, runtime-agent work queue
+
+各 layer は **独立した backup runbook** を持ち、整合性 restore は cross-layer の
+sequencing で行います (account level → product level → kernel level の順)。
+
 対象データ:
 
-- Takos account / auth / profile / billing state
-- Takos Git repositories / refs / object metadata
+- Takos app-local profile / chat / memory / files (Takos product level)
+- Takos Git repositories / refs / object metadata (Takos product level)
 - Takosumi deployment records / WAL / audit chain / provider operation state
-- runtime-agent work queue and terminal projections
+  (runtime / kernel level)
+- runtime-agent work queue and terminal projections (runtime / kernel level)
 - default app metadata required to reattach customer routes
 - secret metadata and encrypted envelopes
+
+Takosumi Account level の identity / billing / AppInstallation ledger は
+Takosumi Accounts service の backup runbook が正本です。本 runbook は Takos
+product level と runtime / kernel level の drill cadence を扱います。
 
 対象外:
 
@@ -31,12 +48,12 @@ Customer-facing export は portability surface であり、operator backup の�
 
 ## Cadence
 
-| Drill | Frequency | Environment | Required evidence | Owner |
-| --- | --- | --- | --- | --- |
-| Staging logical restore | monthly | staging | restore transcript, audit chain verification, smoke result, RTO / RPO sample | platform on-call owner |
-| Production restore simulation | quarterly | production shadow / isolated recovery account | dry-run transcript, latest backup freshness, restore plan review, access check | platform owner + secondary on-call |
-| Backup inventory audit | monthly | staging + production | backup age, chain head, encryption key availability, retention window | storage owner |
-| Emergency restore tabletop | twice per year | staging or meeting room | timeline, decision log, role assignment, runbook gaps | incident commander pool |
+| Drill                         | Frequency      | Environment                                   | Required evidence                                                              | Owner                              |
+| ----------------------------- | -------------- | --------------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------- |
+| Staging logical restore       | monthly        | staging                                       | restore transcript, audit chain verification, smoke result, RTO / RPO sample   | platform on-call owner             |
+| Production restore simulation | quarterly      | production shadow / isolated recovery account | dry-run transcript, latest backup freshness, restore plan review, access check | platform owner + secondary on-call |
+| Backup inventory audit        | monthly        | staging + production                          | backup age, chain head, encryption key availability, retention window          | storage owner                      |
+| Emergency restore tabletop    | twice per year | staging or meeting room                       | timeline, decision log, role assignment, runbook gaps                          | incident commander pool            |
 
 If a monthly staging restore is skipped, the next production release promotion
 requires explicit platform owner approval.
@@ -122,9 +139,9 @@ follow-up actions:
 ```
 
 Takos-operated private environments store evidence in `takos-private` run logs
-or the approved incident / compliance system. Do not commit customer identifiers,
-provider account ids, raw backup object names, or secret partition material to
-public docs.
+or the approved incident / compliance system. Do not commit customer
+identifiers, provider account ids, raw backup object names, or secret partition
+material to public docs.
 
 ## Failure Handling
 
@@ -146,8 +163,8 @@ Escalate to SEV-1 when:
 ## Follow-up Rules
 
 Every failed drill must produce action items with owner and due date. Critical
-backup / key availability issues block production release promotion until
-closed or explicitly waived by platform owner and incident commander pool.
+backup / key availability issues block production release promotion until closed
+or explicitly waived by platform owner and incident commander pool.
 
 Recurring failures require a postmortem using
 [Incident Response](/operations/incident-response), even if no customer impact
