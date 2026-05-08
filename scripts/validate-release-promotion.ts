@@ -2,77 +2,111 @@
 
 const requiredDocs = [
   {
-    path: 'docs/operations/release-promotion.md',
+    path: "docs/operations/release-promotion.md",
     expected: [
-      'dev -> staging -> production',
-      'Takos Web / API',
-      'manual approval',
-      'release artifact manifest',
-      'Branch Protection',
-      'takos-private/',
-      'release announcement',
+      "dev -> staging -> production",
+      "Takos Web / API",
+      "manual approval",
+      "release artifact manifest",
+      "Branch Protection",
+      "Release Artifact Pipelines",
+      "takos-private/",
+      "release announcement",
     ],
   },
   {
-    path: 'docs/operations/rollback-sop.md',
+    path: "docs/operations/release-artifacts.md",
     expected: [
-      'Rollback SOP',
-      'deployment id',
-      'one-click revert',
-      'POST /v1/installations/:id/rollback',
-      'takos-private',
-      'Staging Rehearsal',
+      "Release Artifact Pipelines",
+      "JSR packages",
+      "OCI image",
+      "Helm chart",
+      "semver tags",
+      "takosumi/",
+      "takosumi-git/",
+      "takos-app",
     ],
   },
   {
-    path: 'docs/operations/release-announcement-template.md',
+    path: "docs/operations/rollback-sop.md",
     expected: [
-      'Release Announcement Template',
-      'Breaking Changes',
-      'Migration Guide',
-      'Validation Evidence',
-      'Rollback Plan',
-      'Block release if',
+      "Rollback SOP",
+      "deployment id",
+      "one-click revert",
+      "POST /v1/installations/:id/rollback",
+      "takos-private",
+      "Staging Rehearsal",
+    ],
+  },
+  {
+    path: "docs/operations/release-announcement-template.md",
+    expected: [
+      "Release Announcement Template",
+      "Breaking Changes",
+      "Migration Guide",
+      "Validation Evidence",
+      "Rollback Plan",
+      "Block release if",
     ],
   },
 ];
 
 const requiredTextFiles = [
   {
-    path: 'deno.json',
+    path: "deno.json",
     expected: ['"validate:release-promotion"'],
   },
   {
-    path: 'scripts/release-gate.ts',
-    expected: ['validate-release-promotion', 'validate:release-promotion'],
+    path: "scripts/release-gate.ts",
+    expected: ["validate-release-promotion", "validate:release-promotion"],
   },
   {
-    path: 'scripts/build-release-manifest.ts',
-    expected: ['validate-release-promotion', 'validate:release-promotion'],
+    path: "scripts/build-release-manifest.ts",
+    expected: ["validate-release-promotion", "validate:release-promotion"],
   },
   {
-    path: 'docs/.vitepress/config.ts',
+    path: "docs/.vitepress/config.ts",
     expected: [
       "link: '/operations/release-promotion'",
+      "link: '/operations/release-artifacts'",
       "link: '/operations/rollback-sop'",
       "link: '/operations/release-announcement-template'",
     ],
   },
   {
-    path: 'docs/contributing/release-gate.md',
-    expected: ['Release promotion validator', 'validate:release-promotion'],
+    path: ".github/workflows/release-artifacts.yml",
+    expected: [
+      "Release Artifacts",
+      "ghcr.io/${{ github.repository_owner }}",
+      "docker/build-push-action",
+      "helm package deploy/helm/takos",
+      "helm push",
+      "deno task validate:release-promotion",
+    ],
   },
   {
-    path: '../.github/workflows/ci.yml',
-    expected: ['deno task validate:release-promotion'],
+    path: "deploy/docker/takos-app.Dockerfile",
+    expected: [
+      "apps/api/src/index.ts",
+      "git/packages/git-contract",
+      "PORT=8080",
+    ],
   },
   {
-    path: '../.github/workflows/pr-check.yml',
-    expected: ['deno task validate:release-promotion'],
+    path: "docs/contributing/release-gate.md",
+    expected: ["Release promotion validator", "validate:release-promotion"],
   },
   {
-    path: '../.github/workflows/release-gate.yml',
-    expected: ['deno task validate:release-promotion'],
+    path: "../.github/workflows/ci.yml",
+    expected: ["deno task validate:release-promotion"],
+  },
+  {
+    path: "../.github/workflows/pr-check.yml",
+    expected: ["deno task validate:release-promotion"],
+  },
+  {
+    path: "../.github/workflows/release-gate.yml",
+    expected: ["deno task validate:release-promotion"],
   },
 ];
 
@@ -93,7 +127,10 @@ if (failures.length > 0) {
 
 console.log(`Validated ${requiredDocs.length} release promotion document(s)`);
 
-function validateTextIncludes(path: string, expectedValues: readonly string[]): void {
+function validateTextIncludes(
+  path: string,
+  expectedValues: readonly string[],
+): void {
   if (!exists(path)) {
     failures.push(`missing release promotion artifact: ${path}`);
     return;
