@@ -1,122 +1,133 @@
 # Routes
 
-`routes[]` は AppSpec の exposure ↔ listener / match / transport binding
-declaration です。 各 route は component の `interface.*` 系 contract
-instance を route descriptor が定義する入口に bind します
-([Core § 10](/takosumi/core/01-core-contract-v1.0#_10-interface-exposure-route-router-and-publication))。
+Current `.takosumi/manifest.yml` does not have a top-level `routes[]` field.
+Public entrypoints are declared inside Shape resources:
 
-normative な field 定義は
-[マニフェストリファレンス § 3](/reference/manifest-spec#_3-routes)、
-公開 route descriptor 一覧は
-[Official Descriptor Set v1 § Minimum route descriptors](/takosumi/descriptors/official-descriptor-set-v1#minimum-route-descriptors)
-を参照。
+- `worker@v1` uses `spec.routes: string[]`.
+- `web-service@v1` exposes a service URL and may use `spec.domains: string[]`
+  when the selected provider supports direct domains.
+- `custom-domain@v1` creates a DNS/TLS resource that points at another resource
+  output, usually `${ref:<web-service>.url}` or `${ref:<worker>.url}`.
 
-## 基本
+The normative field list is [Manifest Reference](/reference/manifest-spec). The
+legacy `routes[]` / component-contract route model is not part of the
+kernel-bound manifest.
 
-```yaml
-routes:
-  - id: ui
-    expose: { component: web, contract: ui }
-    via:
-      ref: route.https@v1
-      config: { path: / }
-```
+## Worker Routes
 
-`id` は manifest 内で一意。 publication output から
-`from: { route: <id> }` で参照されます。
-
-## 複数 route
+`worker@v1` accepts route patterns as strings.
 
 ```yaml
-routes:
-  - id: api
-    expose: { component: api, contract: api }
-    via: { ref: route.https@v1, config: { path: /api } }
-  - id: mcp
-    expose: { component: mcp, contract: mcp }
-    via: { ref: route.https@v1, config: { path: /mcp } }
-  - id: dispatch
-    expose: { component: executor-host, contract: gateway }
-    via: { ref: route.https@v1, config: { path: /dispatch } }
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: docs
+resources:
+  - shape: worker@v1
+    name: web
+    provider: "@takos/cloudflare-workers"
+    spec:
+      artifact:
+        kind: js-bundle
+        hash: sha256:0123456789abcdef
+      compatibilityDate: "2026-05-09"
+      routes:
+        - docs.example.com/*
+        - docs.example.com/api/*
 ```
 
-## Protocol 別
+Provider adapters decide how the string patterns map to the target platform. For
+Cloudflare Workers, they are worker route patterns.
 
-route descriptor を切り替えることで protocol を選びます。
+## Web Service Domains
+
+`web-service@v1` is an HTTP service. It always has a `url` output after apply.
+Some providers also support direct `spec.domains`.
 
 ```yaml
-routes:
-  - id: web
-    expose: { component: web, contract: ui }
-    via: { ref: route.https@v1, config: { path: / } }
-  - id: ssh
-    expose: { component: shell, contract: ssh }
-    via: { ref: route.tcp@v1, config: { port: 2222 } }
-  - id: dns
-    expose: { component: resolver, contract: dns }
-    via: { ref: route.udp@v1, config: { port: 5353 } }
-  - id: jobs
-    expose: { component: worker, contract: jobs-handler }
-    via:
-      ref: route.queue@v1
-      config:
-        source: jobs-queue          # resources.<>.name を参照
-        deadLetter: jobs-dlq
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: api
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/example/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+      domains:
+        - api.example.com
 ```
 
-`route.queue@v1` の `source` / `deadLetter` は manifest の `resources.<>.name`
-を参照します (env / binding 名ではない)。 producer 側 access は `bindings[]`
-で別途 declaration します。
+Use direct `spec.domains` only when the provider contract documents support for
+it. For portable custom hostnames, prefer `custom-domain@v1`.
 
-## Validation invariant
+## Custom Domains
 
-- `route.https@v1`: `path` は `/` で始まる必要がある; `methods` 省略時は全
-  HTTP method; 同じ `path` で method が重なる route は invalid; 1 contract
-  instance を複数 path に分ける route は invalid (1 つの route に method を
-  列挙する); CLI と PaaS compiler は HTTP/HTTPS の `target + host + path +
-  methods` 重複を検出する
-- `route.tcp@v1` / `route.udp@v1`: `port` 必須
-- `route.queue@v1` / `route.schedule@v1` / `route.event@v1`: `source` 必須
-  (省略時は `route.id`)
-
-route descriptor が定義する `exposureEligible` を満たす interface contract
-instance のみ `expose` target になります。runtime / artifact contract は
-expose target になりません。
-
-## 子 component を外に出したい場合
-
-子 component (旧 attached container) を外に公開する場合は **子 component
-側に interface contract instance を持たせて route で expose** します。
-親 component を経由させる必要はありません。
+`custom-domain@v1` is the portable DNS/TLS entrypoint shape. It points a public
+hostname at another resource output.
 
 ```yaml
-components:
-  api:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config: { source: { ... } }
-      api:
-        ref: interface.http@v1
-  worker:
-    contracts:
-      runtime:
-        ref: runtime.oci-container@v1
-        config: { source: { ... }, port: 8080 }
-      gateway:
-        ref: interface.http@v1
-    depends: [api]
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: api-with-domain
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/example/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
 
-routes:
-  - id: api
-    expose: { component: api, contract: api }
-    via: { ref: route.https@v1, config: { path: /api } }
-  - id: worker
-    expose: { component: worker, contract: gateway }
-    via: { ref: route.https@v1, config: { path: /worker } }
+  - shape: custom-domain@v1
+    name: api-domain
+    provider: "@takos/cloudflare-dns"
+    spec:
+      name: api.example.com
+      target: ${ref:api.url}
+      certificate:
+        kind: auto
 ```
 
-## 次のステップ
+`custom-domain@v1` outputs `fqdn` and may output provider-specific certificate
+or nameserver evidence. Collision checks and TLS lifecycle are provider
+responsibilities.
 
-- [環境変数](/deploy/environment) --- env / binding の詳細
-- [マニフェストリファレンス](/reference/manifest-spec) --- normative field 定義
+## Redirects
+
+Providers that support the `redirects` capability can materialize redirects as
+part of `custom-domain@v1`.
+
+```yaml
+resources:
+  - shape: custom-domain@v1
+    name: www-redirect
+    provider: "@takos/cloudflare-dns"
+    requires: [redirects]
+    spec:
+      name: www.example.com
+      target: https://example.com
+      redirects:
+        - from: https://www.example.com/*
+          to: https://example.com/*
+          code: 301
+```
+
+## Validation
+
+- top-level `routes[]` is rejected by the manifest envelope validator.
+- `worker@v1.spec.routes` must be an array of non-empty strings.
+- `web-service@v1.spec.scale` is required.
+- `custom-domain@v1.spec.name` and `custom-domain@v1.spec.target` are required.
+- `custom-domain@v1.requires` must be satisfied by the selected provider.
+
+## Next
+
+- [Environment](/deploy/environment) — runtime env and binding placeholders
+- [Manifest Reference](/reference/manifest-spec) — kernel-bound field spec
+- [Binding Catalog](/reference/binding-catalog) — install-time domain and
+  service bindings
