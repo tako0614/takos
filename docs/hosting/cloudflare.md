@@ -391,9 +391,9 @@ crypto を許可できます (production では opt-in を渡しても fail- clo
 ::: danger production / staging では DB at-rest encryption が必須 (Phase 18.3
 M7)
 
-`TAKOS_ENVIRONMENT=production` または `staging` で起動するとき、Takosumi は
-boot 時に `DATABASE_URL` (`TAKOS_DATABASE_URL` / `TAKOS_PRODUCTION_DATABASE_URL`
-/ `TAKOS_STAGING_DATABASE_URL`) を inspect し、at-rest encryption signal を 1
+`TAKOS_ENVIRONMENT=production` または `staging` で起動するとき、Takosumi は boot
+時に `DATABASE_URL` (`TAKOS_DATABASE_URL` / `TAKOS_PRODUCTION_DATABASE_URL` /
+`TAKOS_STAGING_DATABASE_URL`) を inspect し、at-rest encryption signal を 1
 つ以上 含むことを **必須** とします。signal が無い場合は `process exit 1` で
 fail-closed し、unencrypted DB に対して serve しません。
 
@@ -679,40 +679,39 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 認証系:
 
 Installable App Model では Takos は **OIDC consumer** として動きます。OAuth
-client の発行・管理は **Takosumi Accounts**
-(`https://accounts.takosumi.cloud`)
-が installation ごとに行い、`OIDC_CLIENT_SECRET` などの値は
-`identity.oidc@v1` AppBinding 経由で Takos runtime に注入されます。Takos
-worker 側に書かれるのは consumer 側の env だけです。
+client の発行・管理は **Takosumi Accounts** が installation ごとに行い、
+`OIDC_CLIENT_SECRET` などの値は `identity.oidc@v1` AppBinding 経由で Takos
+runtime に注入されます。Takos worker 側に書かれるのは consumer 側の env
+だけです。
 
-| 変数                                                      | 用途                                                                                  |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `OIDC_ISSUER_URL`                                         | OIDC issuer URL。 endpoint URL example: `https://accounts.takosumi.cloud` (service identifier `takosumi.account.auth@v1` + anchor 経由 resolve、 operator-injected hostname) |
-| `OIDC_CLIENT_ID`                                          | Takosumi Accounts が installation 単位に発行する OIDC client id                       |
-| `OIDC_CLIENT_SECRET`                                      | 同 client secret。AppBinding 経由で注入され、Cloudflare には Worker secret として配置 |
-| `OIDC_REDIRECT_URI`                                       | `/auth/oidc/callback` の絶対 URL                                                      |
-| `INSTALL_LAUNCH_PUBLIC_KEY`                               | launch token JWS 検証用の公開鍵 (`/_takosumi/launch`)                                 |
-| `INSTALL_LAUNCH_AUDIENCE`                                 | launch token の audience (appId / installationId に pin される)                       |
-| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` | AI プロバイダ                                                                         |
-| `EXECUTOR_PROXY_SECRET`                                   | executor-host から main `takos` worker への内部 RPC                                   |
+| 変数                                                      | 用途                                                                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `OIDC_ISSUER_URL`                                         | OIDC issuer URL。service identifier `takosumi.account.auth@v1` + anchor 経由で resolve された operator-injected hostname |
+| `OIDC_CLIENT_ID`                                          | Takosumi Accounts が installation 単位に発行する OIDC client id                                                          |
+| `OIDC_CLIENT_SECRET`                                      | 同 client secret。AppBinding 経由で注入され、Cloudflare には Worker secret として配置                                    |
+| `OIDC_REDIRECT_URI`                                       | `/auth/oidc/callback` の絶対 URL                                                                                         |
+| `INSTALL_LAUNCH_PUBLIC_KEY`                               | launch token JWS 検証用の公開鍵 (`/_takosumi/launch`)                                                                    |
+| `INSTALL_LAUNCH_AUDIENCE`                                 | launch token の audience (appId / installationId に pin される)                                                          |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` | AI プロバイダ                                                                                                            |
+| `EXECUTOR_PROXY_SECRET`                                   | executor-host から main `takos` worker への内部 RPC                                                                      |
 
 login flow の Worker route は `/oauth/authorize` ではなく以下の 3 つに
 集約されます。詳細は [OIDC Consumer](/apps/oidc-consumer) を参照してください。
 
-| route                  | 役割                                                                          |
-| ---------------------- | ----------------------------------------------------------------------------- |
-| `/auth/oidc/login`     | OIDC authorization request を `OIDC_ISSUER_URL` へ送り出す                    |
-| `/auth/oidc/callback`  | issuer からの code を交換し、Takos profile (app-local) の session を確立する  |
-| `/_takosumi/launch`    | install 直後の launch token JWS を検証し、初回 owner session を bootstrap する |
+| route                 | 役割                                                                           |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `/auth/oidc/login`    | OIDC authorization request を `OIDC_ISSUER_URL` へ送り出す                     |
+| `/auth/oidc/callback` | issuer からの code を交換し、Takos profile (app-local) の session を確立する   |
+| `/_takosumi/launch`   | install 直後の launch token JWS を検証し、初回 owner session を bootstrap する |
 
-::: tip self-host での issuer 切替
-Takos 自身は OIDC consumer なので、`OIDC_ISSUER_URL` を差し替えるだけで
-managed Takosumi Accounts 以外の issuer に接続できます。
+::: tip self-host での issuer 切替 Takos 自身は OIDC consumer
+なので、`OIDC_ISSUER_URL` を差し替えるだけで managed Takosumi Accounts 以外の
+issuer に接続できます。
 
 ```bash
-# Managed (Takosumi Cloud) — hostname is an example; managed installs resolve
-# the issuer through cross-instance binding / anchor and inject the resulting URL.
-OIDC_ISSUER_URL=https://accounts.takosumi.cloud
+# Managed (Takosumi Cloud) — managed installs resolve the issuer through
+# cross-instance import / anchor and inject the resulting URL.
+OIDC_ISSUER_URL=https://<ACCOUNTS_ISSUER_HOST>
 
 # Self-host (Keycloak) — operator が任意の issuer に切替可能
 OIDC_ISSUER_URL=https://keycloak.example.com/realms/takos
@@ -722,10 +721,9 @@ OIDC_ISSUER_URL=https://authentik.example.com/application/o/takos/
 ```
 
 self-host issuer 側で Takos installation 用の OIDC client を作り、
-`OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` を
-`takos-private` の `.secrets/<env>/` に投入してから
-`secrets:sync:*` で Worker secret に流します。
-:::
+`OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` を `takos-private`
+の `.secrets/<env>/` に投入してから `secrets:sync:*` で Worker secret
+に流します。 :::
 
 ## Cloudflare 固有の機能
 
@@ -932,8 +930,10 @@ profile 設定、runtime-agent placement は [Multi-cloud](/hosting/multi-cloud)
 ## 次に読むページ
 
 - [deploy](/deploy/deploy) --- `takos deploy` の詳細
-- [OIDC Consumer](/apps/oidc-consumer) --- Takos が要求する OIDC env / route の正本
-- [Takosumi Accounts](/architecture/takosumi-accounts) --- OIDC issuer / client 発行の正本
+- [OIDC Consumer](/apps/oidc-consumer) --- Takos が要求する OIDC env / route
+  の正本
+- [Takosumi Accounts](/architecture/takosumi-accounts) --- OIDC issuer / client
+  発行の正本
 - [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [Multi-cloud](/hosting/multi-cloud) --- 4 cloud 横断 runbook
 - [AWS](/hosting/aws) --- AWS にデプロイする場合
