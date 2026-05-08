@@ -4,23 +4,29 @@
 
 ## バリデーションエラー
 
-### `Invalid manifest: name is required`
+### `Invalid manifest: metadata.name is required`
 
-deploy manifest (`.takos/app.yml`) のトップレベルに `name` フィールドがあるか
-確認してください。
+deploy manifest (`.takosumi/manifest.yml`) の `metadata.name` があるか確認して
+ください。current kernel-bound manifest は `apiVersion: "1.0"` +
+`kind: Manifest` + `resources[]` の Shape manifest です。
 
 ```yaml
 # OK
-name: my-app
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: my-app
+resources: []
 
-# NG（name がない、または apiVersion/kind/metadata でラップしている）
+# NG（metadata.name がない）
 ```
 
-### `group is required when the deploy manifest does not provide name`
+### `group is required when the deploy manifest does not provide metadata.name`
 
 `takos deploy` / `takos install` は GroupHead を advance します。通常は manifest
-の `name` が group 名として使われます。このエラーは manifest に `name` がなく、
-かつ `--group` / API body の `group` override もない場合に出ます。
+の `metadata.name` が group 名として使われます。このエラーは manifest に
+`metadata.name` がなく、かつ `--group` / API body の `group` override もない
+場合に出ます。
 
 ```bash
 takos deploy --space SPACE_ID --group my-app
@@ -29,18 +35,29 @@ takos install owner/repo --space SPACE_ID --group my-app
 
 ### `compute.<name>.build is no longer supported by the Takos app manifest parser`
 
-Takos app manifest は workflow / build pipeline を持ちません。service は
-digest-pinned image を `compute.<name>.image` に書きます。
+これは legacy `.takos/app.yml` / old AppSpec parser のエラーです。current
+`.takosumi/manifest.yml` では `compute.<name>` を使わず、`resources[]` に
+`web-service@v1` または `worker@v1` resource を書きます。image-backed service は
+digest-pinned image を `spec.image` に書きます。
 
 ```yaml
-compute:
-  api:
-    image: ghcr.io/acme/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-    port: 8080
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: api
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/acme/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      port: 8080
 ```
 
-worker は manifest 側では `kind: worker` とし、bundle artifact は `takosumi-git`
-が生成して Takos の `source.kind="manifest"` deploy に添えます。
+worker bundle は `worker@v1` の `spec.artifact.hash` に concrete digest を入れ
+ます。authoring manifest では `workflowRef` を併記できますが、`takosumi-git` が
+workflow を実行して `spec.artifact.hash` を埋め、`workflowRef` を strip してから
+kernel に渡します。
 
 ```bash
 takosumi-git init
@@ -63,21 +80,31 @@ takosumi-git push
 は、`esbuild --bundle --outfile=dist/worker.js` のように単一 bundle
 にまとめます。
 
-## publication / capability 解決失敗
+## binding / service import 解決失敗
 
 ### `Error: ... provider publication request ...`
 
-このエラーは `takos.api-key` / `takos.oauth-client` の `request` が足りない、
-または未知 field を含む場合に出ます。SQL / object-store / queue などの resource
-type は publish / consume に入れません。
+このエラーは旧 publication / consume model の互換 surface で出ることがあります。
+current `.takosumi/manifest.yml` では app binding は `.takosumi/app.yml` の
+`bindings:`、cross-instance service dependency は `.takosumi/manifest.yml` の
+`imports[]` / `serviceResolvers[]` で表現します。
 
 - `publication: takos.api-key` なら `request.scopes` があるか確認してください
-- `publication: takos.oauth-client` なら `request.redirectUris` と
-  `request.scopes` があるか確認してください
-- route publication の場合、`publisher` が route の `target`
-  と一致しているか確認してください
-- publish / consume の shape は [Manifest Reference](/reference/manifest-spec)
-  を参照してください
+- OIDC consumer 統合 (`identity.oidc@v1` AppBinding 経由、Takosumi Accounts
+  発行) の設定不足の場合は、`.takosumi/app.yml` の `bindings.auth.redirectPaths`
+  / `allowedScopes` を確認してください。 `redirectUris` 等の解決済み値は
+  [Binding Catalog](/reference/binding-catalog#_1-identity-oidc-v1) の output
+  placeholders に従って compile されます。 install 直後の owner session
+  bootstrap は `/_takosumi/launch?token=...` (one-time launch token JWS、
+  `install-launch-token@v1` binding) であり、通常ログインの `/auth/oidc/login` →
+  `/auth/oidc/callback` (OIDC consumer flow) とは 別経路です。token verify
+  エラーは launch token の鍵 (`INSTALL_LAUNCH_PUBLIC_KEY`) と audience
+  (`INSTALL_LAUNCH_AUDIENCE`) を、ログイン redirect エラーは `OIDC_REDIRECT_URI`
+  と AppBinding の `redirectPaths` を確認してください
+- `imports[]` がある場合は `serviceResolvers[]` の anchor URL と public key
+  が設定されているか確認してください
+- binding / import の shape は [Binding Catalog](/reference/binding-catalog) と
+  [Manifest Reference](/reference/manifest-spec) を参照してください
 
 ## デプロイ失敗
 
@@ -99,13 +126,16 @@ takos diff dep_abc123 --space SPACE_ID
 
 3. よくある原因:
 
-- `consume` が存在しない publication または未知の built-in provider publication
-  を参照している
-- `consume.inject.env` が既存 env と衝突している
+- `imports[]` が未知の service identifier を参照している、または anchor が
+  ServiceDescriptor を返せない
+- `spec.env` / injected env が既存 env と衝突している
 - Worker のコードにシンタックスエラーがある
-- readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない
+- readiness probe (`GET /`、または provider 固有の health check) が 200 を返さ
+  ない
 - `Deployment.conditions[]` に `provider.materialize` の operation 失敗が記録
-  されている (CLI / API の Deployment 詳細から見える)
+  されている (CLI / API の Deployment 詳細から見える)。各 condition の reason /
+  fix hint は
+  [Condition Reason Catalog](/takosumi/tests/condition-reason-catalog) を参照
 
 ### `Error: Authentication failed`
 
@@ -138,10 +168,11 @@ takos deploy --preview --space SPACE_ID
 
 以下の項目が検証されます。
 
-- deploy manifest (`.takos/app.yml`) にトップレベルの `name` があること
-- service compute の `image` が digest-pinned (`@sha256:...`) であること
-- worker compute に対応する worker bundle artifact input があること
-- compute / routes / publication の参照が整合していること
+- deploy manifest (`.takosumi/manifest.yml`) に `metadata.name` があること
+- `web-service@v1` の `spec.image` が digest-pinned (`@sha256:...`) であること
+- `worker@v1` の `spec.artifact.hash` が compile 後に concrete digest になって
+  いること
+- resources / routes / imports / serviceResolvers の参照が整合していること
 - descriptor 解決と Deployment.desired の構造的整合 (resolve gate)
 
 reviewer に渡したい場合は `--resolve-only` で resolved Deployment を作って

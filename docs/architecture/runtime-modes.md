@@ -29,15 +29,15 @@ dedicated / self-hosted へ遷移するときの規律を定める。
 
 ## 1. 3 mode の責務比較
 
-| 項目            | `shared-cell`                                                       | `dedicated`                                                         | `self-hosted`                                                                           |
-| --------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| runtime process | Takos 公式 prebuilt cell に同居                                     | AppInstallation 専用に切り出した dedicated deployment               | 利用者の takosumi に install された deployment                                          |
-| build 待ち      | なし (warm 済み image を bind)                                      | あり (initial materialize 時に build)                               | あり (export bundle / Git clone から install)                                           |
-| OIDC issuer     | service identifier `takosumi.account.auth@v1` (anchor 経由 resolve) | service identifier `takosumi.account.auth@v1` (anchor 経由 resolve) | 任意 (Keycloak / Authentik / Auth0 / 自前、service identifier 経由で operator-injected) |
-| billing         | Takosumi Cloud                                                      | Takosumi Cloud                                                      | 利用者自身 (Takosumi Cloud は関与しない)                                                |
-| data namespace  | installation 専用                                                   | installation 専用 (shared-cell からそのまま継承)                    | export bundle として持ち出し、import 先で再生成                                         |
-| operator        | Takosumi Cloud                                                      | Takosumi Cloud                                                      | 利用者                                                                                  |
-| 主な用途        | instant start / 一般ユーザー                                        | 専用容量・隔離・性能要件                                            | 退出 / 主権 / enterprise                                                                |
+| 項目            | `shared-cell`                                                       | `dedicated`                                                         | `self-hosted`                                                                                         |
+| --------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| runtime process | Takos 公式 prebuilt cell に同居                                     | AppInstallation 専用に切り出した dedicated deployment               | 利用者の takosumi に install された deployment                                                        |
+| build 待ち      | なし (warm 済み image を bind)                                      | あり (initial materialize 時に build)                               | あり (export bundle / Git clone から install)                                                         |
+| OIDC issuer     | service identifier `takosumi.account.auth@v1` (anchor 経由 resolve) | service identifier `takosumi.account.auth@v1` (anchor 経由 resolve) | self-host Takosumi Accounts を `takosumi.account.auth@v1` として anchor resolve。外部 IdP は upstream |
+| billing         | Takosumi Cloud                                                      | Takosumi Cloud                                                      | self-host Takosumi Accounts / operator billing                                                        |
+| data namespace  | installation 専用                                                   | installation 専用 (shared-cell からそのまま継承)                    | export bundle として持ち出し、import 先で再生成                                                       |
+| operator        | Takosumi Cloud                                                      | Takosumi Cloud                                                      | 利用者                                                                                                |
+| 主な用途        | instant start / 一般ユーザー                                        | 専用容量・隔離・性能要件                                            | 退出 / 主権 / enterprise                                                                              |
 
 ## 2. 共有されるもの vs ユーザーごとに分かれるもの
 
@@ -125,13 +125,14 @@ takosumi-git install ./takos-export.tar.zst --to https://my-takosumi.example.com
 
 bundle は `installation.json` (source / digests)、`manifest.compiled.yml`、
 `data/` (postgres dump / blobs / memory / profiles)、`bindings/template.yml`、
-`docs/restore.md` を含む (new.md §24)。import 先では OIDC issuer を自由に
-差し替えてよい:
+`docs/restore.md` を含む。import 先では `serviceResolvers[]` を自前 anchor に
+向け、`takosumi.account.auth@v1` を self-host Takosumi Accounts に resolve
+させる:
 
 ```bash
 takosumi-git install ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
-  --auth-issuer https://keycloak.example.com/realms/takos
+  --service-resolver https://anchor.example.com/v1/services/
 ```
 
 export 後の元 installation は、利用者の選択により `exported` (data 残存 /

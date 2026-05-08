@@ -1,5 +1,11 @@
 # Takosumi System Architecture Implementation Plan
 
+::: warning Historical 1.0 Core Release plan 本ドキュメントは **1.0 Core
+Release** (M0-M4 frozen 2026-04-29) の implementation plan です。Code layout
+表記の `apps/paas/...` は当時の pre-split 名称であり、現行 split 後の path
+とは異なる historical reference と して読んでください。**1.x Installable App
+Model (Phase 1.1-1.7)** の plan は ROADMAP.md Part II を参照してください。 :::
+
 This plan maps the architecture contract in
 `../architecture/system-architecture.md` and the Takos Deploy spec kit in
 `../takosumi/` onto the `takos` product root.
@@ -24,21 +30,21 @@ This plan maps the architecture contract in
 ## Target code layout
 
 ```text
-apps/paas/src/api/                  HTTP API, internal API, standalone host
-apps/paas/src/domains/core/         tenant / space / group / membership / entitlement
-apps/paas/src/domains/deploy/       Deployment / ProviderObservation / GroupHead
-apps/paas/src/domains/runtime/      WorkloadRevision / ProviderMaterialization / observed state
-apps/paas/src/domains/resources/    ResourceInstance / ResourceBinding / MigrationLedger
-apps/paas/src/domains/routing/      route ownership / RouteProjection
-apps/paas/src/domains/network/      RuntimeNetworkPolicy / ServiceGrant / WorkloadIdentity
-apps/paas/src/domains/registry/     package resolution / trust / provider packages
-apps/paas/src/domains/audit/        append-only audit and security events
-apps/paas/src/workers/              apply jobs / materialization / outbox consumers
-apps/paas/src/agents/               runtime agent protocol and work leases
-apps/paas/src/adapters/             kernel reference ports and local adapters
-apps/paas/src/plugins/              kernel plugin ABI registry, loader, reference plugin
-apps/paas/src/shared/               ids / time / errors / common helpers
-packages/paas-contract/src/         public/internal/plugin TypeScript contracts
+takosumi/packages/kernel/src/api/                  HTTP API, internal API, standalone host
+takosumi/packages/kernel/src/domains/core/         tenant / space / group / membership / entitlement
+takosumi/packages/kernel/src/domains/deploy/       Deployment / ProviderObservation / GroupHead
+takosumi/packages/kernel/src/domains/runtime/      WorkloadRevision / ProviderMaterialization / observed state
+takosumi/packages/kernel/src/domains/resources/    ResourceInstance / ResourceBinding / MigrationLedger
+takosumi/packages/kernel/src/domains/routing/      route ownership / RouteProjection
+takosumi/packages/kernel/src/domains/network/      RuntimeNetworkPolicy / ServiceGrant / WorkloadIdentity
+takosumi/packages/kernel/src/domains/registry/     package resolution / trust / provider packages
+takosumi/packages/kernel/src/domains/audit/        append-only audit and security events
+takosumi/packages/kernel/src/workers/              apply jobs / materialization / outbox consumers
+takosumi/packages/kernel/src/agents/               runtime agent protocol and work leases
+takosumi/packages/kernel/src/adapters/             kernel reference ports and local adapters
+takosumi/packages/kernel/src/plugins/              kernel plugin ABI registry, loader, reference plugin
+takosumi/packages/kernel/src/shared/               ids / time / errors / common helpers
+takosumi/packages/contract/src/                    public/internal/plugin TypeScript contracts
 ```
 
 ## Milestones
@@ -75,7 +81,7 @@ Exit criteria:
 
 Implement:
 
-- flat public `.takos/app.yml` manifest model.
+- flat public `.takosumi/manifest.yml` manifest model.
 - compiler from public manifest to internal `AppSpec` / `EnvSpec` /
   `PolicySpec`.
 - immutable `SourceSnapshot` for source adapters.
@@ -153,7 +159,7 @@ Exit criteria:
 - breaking publication changes create dependent plans.
 - deployment-time publication cycles are blocked.
 
-### M7: Standalone PaaS kernel host
+### M7: Standalone kernel host
 
 Implement:
 

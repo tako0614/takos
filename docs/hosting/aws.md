@@ -3,9 +3,9 @@
 このページは **Takos kernel を AWS にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
-1. **AWS 単独 hosting (EKS Helm)** ―
-   `takos/deploy/helm/takos/values-aws.yaml` overlay。Kubernetes ベースで
-   control plane / runtime / executor を運用する 旧来 path。
+1. **AWS 単独 hosting (EKS Helm)** ― `takos/deploy/helm/takos/values-aws.yaml`
+   overlay。Kubernetes ベースで control plane / runtime / executor を運用する
+   旧来 path。
 2. **AWS provider plugin (Phase 17A1)** ― ECS Fargate / RDS / S3 / SQS / KMS /
    Secrets Manager の 6 provider を Takosumi kernel から `provider` 契約として
    呼び出す path。Cloudflare control plane + AWS tenant runtime
@@ -66,8 +66,13 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = aws)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos
-deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+cd ../takosumi-cloud
+deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+  --issuer https://accounts.aws.example.com \
+  --subject tsub_admin \
+  --client-id takos-admin \
+  --redirect-uri https://admin.takos.example.com/auth/oidc/callback \
+  > accounts-seed-plan.json
 ```
 
 `distribute:apply` は `kernel_host.target=aws` を見て内部で
@@ -91,8 +96,8 @@ deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
 
 `values-aws.yaml` は base chart に対して次を設定します:
 
-| 項目            | current value                                                                 |
-| --------------- | ----------------------------------------------------------------------------- |
+| 項目            | current value                                                                  |
+| --------------- | ------------------------------------------------------------------------------ |
 | source          | `deploy/distributions/aws.json` から `deno task helm:generate-overlays` で生成 |
 | images          | distribution profile の `services[].image` を Helm image values に展開         |
 | domains         | distribution profile の `routing` から admin / tenant base domain を展開       |
@@ -161,7 +166,8 @@ certificate ARN を設定します。
 
 ### 構成
 
-Takosumi (`@takosumi/plugins`) の AWS provider plugin は 6 provider を提供します:
+Takosumi (`@takosumi/plugins`) の AWS provider plugin は 6 provider
+を提供します:
 
 | provider client              | 用途                          | 参照クラス                             |
 | ---------------------------- | ----------------------------- | -------------------------------------- |
