@@ -3,24 +3,30 @@
 > このページでわかること: Takos の脆弱性報告受付、responsible disclosure
 > window、safe harbor、PGP key publication の運用境界。
 
-| Field | Value |
-| --- | --- |
-| Last reviewed | 2026-05-07 |
-| Owner | Security owner / Takos app (`takos/app`) |
-| Status | Policy published; `security@takos.jp` delivery evidence and PGP key publication are required before GA |
+| Field         | Value                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| Last reviewed | 2026-05-07                                                                                             |
+| Owner         | Security owner / Takos app (`takos/app`)                                                               |
+| Status        | Policy published; `security@takos.jp` delivery evidence and PGP key publication are required before GA |
 
 ## Scope
 
-Takos の customer-facing security disclosure surface は Takos Web / API を中心に
-定義します。Takosumi は generic PaaS kernel、takosumi-git は workflow / git
-bridge であり、Takos managed service として影響する場合は Takos security
-intake が受け付け、必要に応じて owning product root へ triage します。
+Takos の customer-facing security disclosure surface は Takos Web / API +
+Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi kernel
+は generic PaaS compute-only、takosumi-git は installer / workflow / git bridge
+であり、Takos managed service として影響する場合は Takos security intake
+が受け付け、必要に応じて Takosumi Accounts (identity / billing owner) を含む
+owning product root へ triage します。
 
 In scope:
 
 - Takos Web / API (`takos/app`)
 - Takos Git hosting (`takos/git`)
 - Takos agent service (`takos/agent`)
+- Takosumi Accounts (`takosumi.account.auth@v1` / `takosumi.account.billing@v1`)
+  — identity / billing / AppInstallation owner; OIDC issuer, launch token JWS
+  signing, AppGrant revocation, and pairwise OIDC subject derivation are in
+  scope when Takos managed service is impacted
 - Takos managed deployment artifacts under `takos/deploy/`
 - Takos docs and public service configuration
 - Takos default apps when deployed as part of Takos managed service
@@ -81,19 +87,19 @@ payloads, secrets, and customer data.
 Takos asks reporters to coordinate public disclosure until maintainers have had
 time to triage and remediate the issue.
 
-| Severity | Acknowledgement | Initial triage | Target mitigation |
-| --- | --- | --- | --- |
-| Critical active exploitation or cross-tenant data exposure | 1 business day | 2 business days | immediate containment, public incident process if customer impact is confirmed |
-| Critical | 3 business days | 7 calendar days | 15 calendar days |
-| High | 3 business days | 7 calendar days | 30 calendar days |
-| Medium | 5 business days | 14 calendar days | 60 calendar days |
-| Low / defense-in-depth | 5 business days | 21 calendar days | 90 calendar days or next planned release |
+| Severity                                                   | Acknowledgement | Initial triage   | Target mitigation                                                              |
+| ---------------------------------------------------------- | --------------- | ---------------- | ------------------------------------------------------------------------------ |
+| Critical active exploitation or cross-tenant data exposure | 1 business day  | 2 business days  | immediate containment, public incident process if customer impact is confirmed |
+| Critical                                                   | 3 business days | 7 calendar days  | 15 calendar days                                                               |
+| High                                                       | 3 business days | 7 calendar days  | 30 calendar days                                                               |
+| Medium                                                     | 5 business days | 14 calendar days | 60 calendar days                                                               |
+| Low / defense-in-depth                                     | 5 business days | 21 calendar days | 90 calendar days or next planned release                                       |
 
 The default coordinated disclosure window is 90 calendar days from verified
 report receipt. The security owner may request an extension when remediation
 requires coordinated upstream fixes, customer migration time, or third-party
-vendor action. Reporters may request earlier disclosure when the issue is already
-publicly exploited or the fix is broadly deployed.
+vendor action. Reporters may request earlier disclosure when the issue is
+already publicly exploited or the fix is broadly deployed.
 
 ## Safe Harbor
 
@@ -105,7 +111,8 @@ confirmed. Researchers must:
   possible
 - stop testing and report immediately if they access another user's data
 - avoid degrading service availability or bypassing rate limits at scale
-- avoid persistence, lateral movement, destructive actions, and data modification
+- avoid persistence, lateral movement, destructive actions, and data
+  modification
 - give Takos a reasonable chance to remediate before public disclosure
 
 This safe harbor does not authorize activity against third-party systems,
