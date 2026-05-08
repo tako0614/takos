@@ -17,16 +17,18 @@ Takos CLI は task-oriented です。HTTP verb をそのまま露出するので
 
 ## implementation note
 
-CLI の deploy surface は [Deploy System](/deploy/) の public contract
+CLI の deploy surface は [Deploy System](/deploy/) の compatibility contract
 に従います。repo URL 経路では CLI は repository URL / ref を control plane
-に渡す thin client です。local manifest flow では CLI が deploy manifest
-(`.takos/app.yml` / `.takos/app.yaml`) を読み、必要に応じて build artifact
-を収集して `source.kind = "manifest"` payload として送ります。build artifact
-の収集では workflow-runner が local workflow step を実行します。runtime apply や
-rollback の business logic は control plane に置きます。`repositoryUrl` と
-`--manifest` の同時指定は CLI で拒否します。
+に渡す thin client です。local manifest flow では CLI が compiled Shape manifest
+(`.takosumi/manifest.yml`、旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated
+alias、後方互換のため受理) を読み、`source.kind = "manifest"` payload
+として送ります。build artifact collection / workflow execution / `workflowRef`
+stripping は takosumi-git の責務です。runtime apply や rollback の business
+logic は control plane に置きます。`repositoryUrl` と `--manifest` の 同時指定は
+CLI で拒否します。
 
-> 現行 API gateway split status は [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
+> 現行 API gateway split status は
+> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
 
 ## 認証
 
@@ -47,10 +49,10 @@ takos whoami
 takos logout
 ```
 
-::: tip Device Flow との違い
-[OAuth の Device Authorization Grant](/apps/oauth#device-flow) はサードパーティ
-OAuth client が CLI / IoT クライアント向けに用意するフローです。`takos login`
-自体はブラウザコールバック方式を使い、Device Flow は使いません。 :::
+::: tip Device Flow との違い Device Authorization Grant は CLI / IoT
+クライアント向けに別途用意される flow で、Takosumi Accounts 側の OIDC issuer
+が提供します。`takos login` 自体はブラウザコールバック方式を使い、Device Flow
+は使いません。 :::
 
 ## 認証情報の解決順序
 
@@ -108,17 +110,14 @@ takos endpoint show
 ## task-oriented CLI
 
 Takos CLI では、単純な HTTP verb 直叩きではなく `domain + task` を使います。
-deploy system は authoring/API surface では primitive-first model で、worker /
-service / route / publication / resource を Deployment 内 projection として
-扱います。group は primitive declaration を任意に束ねる compatibility state
-scope で、deployment history / rollback などの group 機能を持ちます。CLI は
-`takos deploy` / `takos apply` / `takos diff` / `takos approve` /
-`takos rollback` を 1st-class でサポートします。個別操作のうち resource は
-`takos resource` / `takos res` でも扱い、compute / route は control-plane HTTP
-API (`/api/services/*`) を使います。`/api/publications/*` は grant 管理 surface
-で、`publication.mcp-server@v1` / `publication.http-endpoint@v1` などの route publication は
-deploy manifest の `publications` で管理します（canonical ref は
-[publication types](/reference/glossary#publication-types) を参照）。
+deploy system は current Shape manifest と legacy compatibility records の
+bridge として動きます。group は compatibility state scope で、deployment history
+/ rollback などの group 機能を持ちます。CLI は `takos deploy` / `takos apply` /
+`takos diff` / `takos approve` / `takos rollback` を 1st-class
+でサポートします。個別操作のうち resource は `takos resource` / `takos res`
+でも扱い、compute / route は control-plane HTTP API (`/api/services/*`)
+を使います。MCP / file handler / launcher discovery は kernel manifest の
+`publications[]` ではなく app metadata / registry の surface です。
 
 ```bash
 takos space list
@@ -145,17 +144,18 @@ stream 対応 domain は追加で `watch` と `follow` を持ちます。
 
 ## deploy CLI
 
-`takos deploy` は Takos の current preferred deploy entrypoint です。positional
-argument を省略するとローカルの `.takos/app.yml` または `.takos/app.yaml` を
-source にし、repository URL を渡すとその repo を source にします。default の
-`takos deploy <manifest>` は **resolve + apply** の Heroku 風 sugar として動き、
-1 回の呼び出しで Deployment 作成と GroupHead 進行まで実行します。
+`takos deploy` は Takos の compatibility deploy entrypoint です。positional
+argument を省略するとローカルの `.takosumi/manifest.yml` (旧 `.takos/app.yml` /
+`.takos/app.yaml` は deprecated alias、後方互換のため受理) を compiled manifest
+source にし、repository URL を渡すとその repo を source に します。default の
+`takos deploy <manifest>` は **resolve + apply** の sugar と して動き、1
+回の呼び出しで Deployment 作成と GroupHead 進行まで実行します。
 
-`takos install owner/repo --version TAG` は catalog item (Store) の
-owner/repo + version/tag を repository URL + Git tag に解決し、
-`source.kind = "git_ref"` / `ref_type = "tag"` として同じ pipeline を呼び出
-します。CLI は repo を clone せず、control plane が repo を fetch して
-manifest を parse します（thin client）。
+`takos install owner/repo --version TAG` は catalog item (Store) の owner/repo +
+version/tag を repository URL + Git tag に解決し、 `source.kind = "git_ref"` /
+`ref_type = "tag"` として同じ pipeline を呼び出 します。CLI は repo を clone
+せず、control plane が repo を fetch して manifest を parse します（thin
+client）。
 
 `takos rollback [<group>] --space SPACE_ID` は GroupHead を
 `previous_deployment_id`（または `--target-id` で指定した retained Deployment）
@@ -176,19 +176,19 @@ takos install OWNER/REPO --space SPACE_ID --version v1.0.0
 takos uninstall GROUP_NAME --space SPACE_ID
 ```
 
-| flag                       | required         | 役割                                                                     |
-| -------------------------- | ---------------- | ------------------------------------------------------------------------ |
-| positional `repositoryUrl` | no               | canonical HTTPS git repository URL（省略時は local manifest）            |
-| `--ref`                    | no               | branch / tag / commit（repo URL 指定時）                                 |
-| `--ref-type`               | no               | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation） |
-| `--manifest`               | no               | local manifest path（既定は `.takos/app.yml` / `.takos/app.yaml`）       |
-| `--preview`                | no               | in-memory preview（Deployment record を作らない）                         |
-| `--resolve-only`           | no               | resolved Deployment を作って apply は別途行う                            |
-| `--group`                  | deploy / install | manifest の `name` 由来の group 名を override                            |
-| `--env`                    | no               | target env                                                               |
-| `--space`                  | no               | target space ID                                                          |
-| `--auto-approve`           | no               | 確認プロンプトを省略                                                     |
-| `--json`                   | no               | JSON 出力                                                                |
+| flag                       | required         | 役割                                                                                                                                    |
+| -------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| positional `repositoryUrl` | no               | canonical HTTPS git repository URL（省略時は local manifest）                                                                           |
+| `--ref`                    | no               | branch / tag / commit（repo URL 指定時）                                                                                                |
+| `--ref-type`               | no               | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）                                                                |
+| `--manifest`               | no               | local manifest path（既定は `.takosumi/manifest.yml`、旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated alias、後方互換のため受理） |
+| `--preview`                | no               | in-memory preview（Deployment record を作らない）                                                                                       |
+| `--resolve-only`           | no               | resolved Deployment を作って apply は別途行う                                                                                           |
+| `--group`                  | deploy / install | manifest の `name` 由来の group 名を override                                                                                           |
+| `--env`                    | no               | target env                                                                                                                              |
+| `--space`                  | no               | target space ID                                                                                                                         |
+| `--auto-approve`           | no               | 確認プロンプトを省略                                                                                                                    |
+| `--json`                   | no               | JSON 出力                                                                                                                               |
 
 `takos deploy --preview --space SPACE_ID` は manifest validation と現在状態
 との差分確認を行います。preview は non-mutating で、Deployment record も
@@ -201,4 +201,4 @@ deploy surface の詳細な options と group 機能の扱いは
 
 - [CLI command reference](/reference/cli)
 - [Deploy System](/deploy/)
-- [OAuth](/apps/oauth)
+- [OIDC Consumer](/apps/oidc-consumer)

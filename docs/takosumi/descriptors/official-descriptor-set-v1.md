@@ -1,4 +1,14 @@
-# Takos Deploy Official Descriptor Set v1.0
+# Takos Deploy Legacy Descriptor Set v1.0
+
+::: warning Legacy AppSpec descriptor set This page documents the retired
+AppSpec descriptor vocabulary. Current kernel-bound `.takosumi/manifest.yml`
+uses Shape resources such as `worker@v1`, `web-service@v1`,
+`database-postgres@v1`, and `custom-domain@v1`.
+
+Do not add workflow / git / build / app catalog semantics to the takosumi kernel
+through this descriptor set. Current authoring rules are in
+[Manifest Reference](/reference/manifest-spec) and
+[Takosumi Manifest Authoring Guide](/takosumi/guides/authoring-guide). :::
 
 This document proposes the initial official descriptor set for a Takos
 distribution. Deployments pin descriptors via
@@ -196,31 +206,31 @@ platform if relevant
 mirrored ref if retained by Takos
 ```
 
-### `artifact.workflow-bundle@v1`
+### Retired: `artifact.workflow-bundle@v1`
 
 ```text
 https://takosumi.com/contracts/artifact/workflow-bundle/v1
 ```
 
-Meaning:
+Historical meaning:
 
 ```text
-An artifact produced by a `.takos/workflows/<file>.yml` build job, identified by workflow path, job, and named artifact, with an `entry` pointing to the bundle entry inside the produced artifact.
+An artifact produced by a workflow build job, identified by workflow path, job,
+and named artifact, with an `entry` pointing to the bundle entry inside the
+produced artifact.
 ```
 
-Required config:
+Current status:
 
 ```text
-workflow         repository-relative path under .takos/workflows/
-job              workflow job name
-artifact         artifact name produced by the job
-entry            repository-relative path inside the artifact (single bundle file or unambiguous .js/.mjs/.cjs entry)
+retired from kernel-bound descriptor vocabulary
+owned by takosumi-git authoring extension
+resolved before POST /v1/deployments
 ```
 
-The compiler resolves the artifact at deploy time and pins the resolved
-artifact digest in `Deployment.resolution.descriptor_closure`. `entry` MUST
-NOT contain `..` traversal or absolute paths. Multiple-bundle module graphs
-that cannot resolve to a single entry MUST be rejected.
+Workflow path validation, job selection, and artifact resolution belong to
+takosumi-git. Kernel-bound manifests receive concrete `spec.artifact.hash` /
+`spec.image` values and MUST NOT contain workflow descriptors.
 
 ---
 
@@ -354,13 +364,13 @@ idempotent consumer rebind expectations
 
 ## Minimum route descriptors
 
-Route descriptors define listener / match / transport semantics for an
-exposure. They are referenced by `routes[].via.ref` in the public manifest
-and are recorded in `Deployment.desired.routes`
+Route descriptors define listener / match / transport semantics for an exposure.
+They are referenced by `routes[].via.ref` in the public manifest and are
+recorded in `Deployment.desired.routes`
 ([Core § 10](../core/01-core-contract-v1.0.md#_10-interface-exposure-route-router-and-publication)).
 
-A route descriptor MUST declare which interface contract refs it can bind
-to. `route.https@v1` binds `interface.http@v1`; `route.queue@v1` binds
+A route descriptor MUST declare which interface contract refs it can bind to.
+`route.https@v1` binds `interface.http@v1`; `route.queue@v1` binds
 `interface.queue@v1`; etc.
 
 ### `route.https@v1`
@@ -446,9 +456,8 @@ maxWaitTimeMs        number
 retryDelaySeconds    number
 ```
 
-The `source` value references a manifest `resources.<name>` entry, NOT an
-env / binding name. Producer-side access is declared separately through
-`bindings[]`.
+The `source` value references a manifest `resources.<name>` entry, NOT an env /
+binding name. Producer-side access is declared separately through `bindings[]`.
 
 ### `route.schedule@v1`
 
@@ -661,8 +670,8 @@ durable-object-runtime-binding
 
 ## Minimum publication descriptors
 
-Each publication descriptor declares its `outputs` schema (output name →
-value type) and, optionally, `metadata` and `spec` schemas. Authors put
+Each publication descriptor declares its `outputs` schema (output name → value
+type) and, optionally, `metadata` and `spec` schemas. Authors put
 descriptor-defined consumer-facing metadata in `spec:` and authoring-time
 metadata in `metadata:`.
 
@@ -680,8 +689,8 @@ endpoint    url
 ```
 
 `metadata` schema: none. `spec` schema: descriptor-defined consumer-facing
-metadata only. This descriptor MUST NOT carry launcher / file-handler
-metadata; use `publication.app-launcher@v1` or `publication.file-handler@v1`.
+metadata only. This descriptor MUST NOT carry launcher / file-handler metadata;
+use `publication.app-launcher@v1` or `publication.file-handler@v1`.
 
 ### `publication.app-launcher@v1`
 
@@ -705,9 +714,9 @@ category       string
 sortOrder      number
 ```
 
-App launcher / app catalog entries MUST use this descriptor. Consumers
-(launcher UI, dashboard) read `metadata.display.*` to render launcher
-entries. The `url` output points at the route URL the launcher should open.
+App launcher / app catalog entries MUST use this descriptor. Consumers (launcher
+UI, dashboard) read `metadata.display.*` to render launcher entries. The `url`
+output points at the route URL the launcher should open.
 
 ### `publication.file-handler@v1`
 
@@ -731,8 +740,8 @@ extensions     string[]
 `metadata.display`: same shape as `publication.app-launcher@v1`'s `display`.
 
 At least one of `spec.mimeTypes` / `spec.extensions` MUST be present. The
-referenced route MAY contain a `:id` segment; the output `url` is delivered
-as a template URL.
+referenced route MAY contain a `:id` segment; the output `url` is delivered as a
+template URL.
 
 ### `publication.mcp-server@v1`
 
@@ -770,11 +779,12 @@ consumer-binding     binding-handle
 
 ---
 
-## Built-in provider publications
+## Retired built-in provider publications
 
-Built-in provider publications are emitted by Takos kernel itself, not by
-group manifests. They are consumed via `bindings[].from.publication` with
-the namespaced name. They MUST NOT appear in `publications[]`.
+Built-in provider publications were part of the retired AppSpec publication /
+binding model. Current kernel-bound Shape manifests do not consume
+`bindings[].from.publication`, and the takosumi kernel does not emit
+Takos-specific publications.
 
 ### `takos.api-key`
 
@@ -791,60 +801,39 @@ endpoint       url
 apiKey         secret
 ```
 
-### `takos.oauth-client`
+Current apps should model Takos API access as an app-layer AppGrant or
+service-local credential materialized by the installer / Takos app layer. Do not
+add `takos.api-key` to current `.takosumi/manifest.yml`.
 
-Required request:
+`takos.api-key` は historical vocabulary です。scope 抽象や revoke / rotate の
+current contract は core descriptor set ではなく
+[Binding Catalog](/reference/binding-catalog) と app-layer grant docs を参照して
+ください。
 
-```text
-redirectUris   string[] (HTTPS absolute or manifest-relative path)
-scopes         string[]
-```
-
-Optional request:
-
-```text
-clientName     string
-metadata       { logoUri?: string, tosUri?: string, policyUri?: string }
-```
-
-Outputs:
-
-```text
-clientId           string
-clientSecret       secret
-issuer             url
-tokenEndpoint      url
-userinfoEndpoint   url
-```
-
-`redirectUris` accepts manifest-relative paths (e.g. `/api/auth/callback`).
-Relative paths resolve to the group's auto hostname at deploy time. Local
-development additionally accepts `localhost`, `127.0.0.1`, `[::1]`, and
-`*.localhost` HTTP URIs.
-
-There is no implicit default-output injection for either built-in
-publication. All consumed outputs MUST be listed in
-`bindings[].to.env: { ENV_NAME: outputName }`.
+OIDC consumer integration の正本仕様は core descriptor set ではなく、 上位 layer
+の [Binding Catalog](/reference/binding-catalog) を参照して ください。本
+descriptor set は compute substrate (kernel) のみを定義し、 ビルトイン OIDC
+client publication は含まれません。
 
 ---
 
 ## Authoring expansion descriptors
 
-Public manifest authoring shorthands are expanded into canonical form
-before resolution finalizes (Core § 5). Each expansion descriptor's digest
-is included in `Deployment.resolution.descriptor_closure`.
+Public manifest authoring shorthands are expanded into canonical form before
+resolution finalizes (Core § 5). Each expansion descriptor's digest is included
+in `Deployment.resolution.descriptor_closure`.
 
-| descriptor                                    | expansion                                                                                |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `authoring.composite-expansion@v1`            | composite descriptor → canonical components / contract instances / resources / bindings  |
-| `authoring.binding-secret-alias@v1`           | `from: { secret: X }` → `from: { resource: X }` (X.ref must be `resource.secret@v1`)     |
-| `authoring.binding-env-default@v1`            | `to: { env: SCALAR }` → `to: { env: { SCALAR: <descriptor-default-output> } }`           |
-| `authoring.binding-access-default@v1`         | `access` omitted, single access mode → `access: <descriptor-default-mode>`               |
-| `authoring.launcher-icon-default@v1`          | `metadata.display.icon` omitted → fallback from route target component icon hint         |
+| descriptor                            | expansion                                                                               |
+| ------------------------------------- | --------------------------------------------------------------------------------------- |
+| `authoring.composite-expansion@v1`    | composite descriptor → canonical components / contract instances / resources / bindings |
+| `authoring.binding-secret-alias@v1`   | `from: { secret: X }` → `from: { resource: X }` (X.ref must be `resource.secret@v1`)    |
+| `authoring.binding-env-default@v1`    | `to: { env: SCALAR }` → `to: { env: { SCALAR: <descriptor-default-output> } }`          |
+| `authoring.binding-access-default@v1` | `access` omitted, single access mode → `access: <descriptor-default-mode>`              |
+| `authoring.launcher-icon-default@v1`  | `metadata.display.icon` omitted → fallback from route target component icon hint        |
 
-Custom authoring shorthands MAY be shipped by adding new
-`authoring.*@v1` descriptors. The compiler MUST refuse to apply a shorthand
-whose expansion descriptor is not pinnable in the closure.
+Custom authoring shorthands MAY be shipped by adding new `authoring.*@v1`
+descriptors. The compiler MUST refuse to apply a shorthand whose expansion
+descriptor is not pinnable in the closure.
 
 ---
 
@@ -936,7 +925,7 @@ components:
         source:
           ref: artifact.workflow-bundle@v1
           config:
-            workflow: .takos/workflows/build.yml
+            workflow: .takosumi/workflows/build.yml
             job: build
             artifact: bundle
 ```
@@ -1014,7 +1003,7 @@ components:
         source:
           ref: artifact.workflow-bundle@v1
           config:
-            workflow: .takos/workflows/build.yml
+            workflow: .takosumi/workflows/build.yml
             job: build
             artifact: bundle
 ```
@@ -1022,16 +1011,16 @@ components:
 ### Authoring rules
 
 A composite reference MUST appear as `components.<name>.expand.ref`. The
-component MUST NOT also declare `contracts:` (the compiler emits the
-canonical contract instances itself). `components.<name>.env` and
+component MUST NOT also declare `contracts:` (the compiler emits the canonical
+contract instances itself). `components.<name>.env` and
 `components.<name>.depends` are preserved through expansion.
 
 Composite-emitted resources, publications, and routes are named
 `<component>-<suffix>` (e.g. `api-db`, `web-edge`, `web-site`). A composite
-expansion MUST NOT clobber a user-declared resource, publication, or route
-of the same name; the compiler refuses to compile in that case.
+expansion MUST NOT clobber a user-declared resource, publication, or route of
+the same name; the compiler refuses to compile in that case.
 
 Composites are intended for the "1 runtime + closely related resource /
-publication / route" pattern. Bundling unrelated multiple publications or
-routes into a single composite is discouraged; write them as canonical
-multiple contract instances and multiple top-level entries instead.
+publication / route" pattern. Bundling unrelated multiple publications or routes
+into a single composite is discouraged; write them as canonical multiple
+contract instances and multiple top-level entries instead.
