@@ -16,9 +16,9 @@ lifecycle を Takosumi Cloud / Takosumi Accounts / takosumi-git の側が
 このページで依存してよい範囲:
 
 - `.takosumi/app.yml` の `bindings.*.type` 値として使える 6 種の identifier
-- 各 binding が compiled manifest 中で参照可能な `${bindings.<name>.*}` /
-  `${secrets.<name>.*}` placeholder
-- 各 binding が compiled manifest に既定で注入する env vars
+- 各 binding が authoring `.takosumi/manifest.yml` の compile 時に参照可能な
+  `${bindings.<name>.*}` / `${secrets.<name>.*}` placeholder
+- 各 binding が compiled manifest に実値として注入する env vars
 - placeholder 解決順序 (canonical, 解決優先度順): `${params.*}` →
   `${installation.*}` → `${artifacts.*}` → `${bindings.*}` → `${secrets.*}` →
   `${env.*}` → kernel-bound references (`${ref:...}` / `${secret-ref:...}` /
@@ -488,7 +488,9 @@ manifest compile 時 (= takosumi-git installer pipeline) に解決される plac
    `${imports...}` は kernel が apply 時に解決
 
 kernel-bound references は compiled manifest にそのまま残るが、それ以外 (1〜5)
-は **compile 時に全消去** される invariant。`${env.*}` は app 自身の dynamic env
+は **compile 時に全消去** される invariant。つまり compiled manifest に
+`${bindings.*}` / `${secrets.*}` / `${artifacts.*}` / `workflowRef`
+は残らない。`${env.*}` は app 自身の dynamic env
 への参照として残置される余地がある。
 
 ### 8.1 名前衝突の禁止
@@ -504,7 +506,7 @@ placeholder は通常通り解決)。
 
 ### 8.3 required vs optional
 
-`request.required: false` の binding が provision されなかった場合、 compiled
+`request.required: false` の binding が provision されなかった場合、 authoring
 manifest 中の `${bindings.<name>.*}` / `${secrets.<name>.*}` / default env
 injection はすべて **空文字列に解決されず compile error** とする。
 
