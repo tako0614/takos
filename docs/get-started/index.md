@@ -50,13 +50,13 @@ https://takosumi.cloud/install
 
 ### 3. Self-host (退出 / 企業 / 主権重視)
 
-`takosumi export` で installation bundle を取り出し、自前の takosumi 環境
+`takosumi-git export` で installation bundle を取り出し、自前の takosumi 環境
 (Keycloak / Authentik / 自前 Postgres / MinIO 等の任意 binding) に import
 する完全退出経路。OIDC issuer も自由に差し替えられます。
 
 ```bash
-takosumi export inst_abc --output takos-export.tar.zst
-takosumi install ./takos-export.tar.zst \
+takosumi-git export inst_abc --output takos-export.tar.zst
+takosumi-git install ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
   --auth-issuer https://keycloak.example.com/realms/takos
 ```

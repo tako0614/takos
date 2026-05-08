@@ -9,9 +9,10 @@ dedicated / self-hosted へ遷移するときの規律を定める。
 ::: info このページで依存してよい範囲 / してはいけない範囲
 
 - 依存してよい: `mode` 列 (`shared-cell` / `dedicated` / `self-hosted`)、
-  RuntimeBinding が runtime host を抽象化していること、`takosumi materialize` /
-  `takosumi export` が mode 切替の正面 entry point であること、URL
-  (`takos.jp/chat` 等) は mode に依らず保たれること。
+  RuntimeBinding が runtime host
+  を抽象化していること、`takosumi-git materialize` / `takosumi-git export` が
+  mode 切替の正面 entry point であること、URL (`takos.jp/chat` 等) は mode
+  に依らず保たれること。
 - 依存してはいけない: 各 mode の物理 implementation 詳細 (cell の k8s namespace
   命名、shared runtime の image tag、materialize の中間 cutover
   algorithm)。これらは [installer pipeline](/architecture/installer-pipeline) と
@@ -66,13 +67,14 @@ new.md §10.1 の分割表を canonical として採用する。
 
 ## 3. shared-cell から dedicated への materialize 流れ
 
-`takosumi materialize` は、既存 AppInstallation を破壊せず物理形だけ差し替える
-操作として定義されている。AppInstallation 行 (`id` / `appId` / `sourceCommit` /
-`appManifestDigest` / `compiledManifestDigest` / `runtimeBindingId`) は同じ ID
-を keep し、`mode` 列と `runtimeBindingId` 参照先だけが変わる。
+`takosumi-git materialize` は、既存 AppInstallation
+を破壊せず物理形だけ差し替える 操作として定義されている。AppInstallation 行
+(`id` / `appId` / `sourceCommit` / `appManifestDigest` /
+`compiledManifestDigest` / `runtimeBindingId`) は同じ ID を keep し、`mode` 列と
+`runtimeBindingId` 参照先だけが変わる。
 
 ```bash
-takosumi materialize inst_abc --mode dedicated
+takosumi-git materialize inst_abc --mode dedicated
 ```
 
 API では同等に:
@@ -113,12 +115,12 @@ materialize で **変わるもの**:
 ## 4. self-hosted への export
 
 `self-hosted` は「Takosumi Cloud から完全退出して、利用者自身の takosumi
-インスタンスで動かす」mode。`takosumi export` で installation bundle を
-取り出し、`takosumi install` で別の takosumi にインポートする。
+インスタンスで動かす」mode。`takosumi-git export` で installation bundle を
+取り出し、`takosumi-git install` で別の takosumi にインポートする。
 
 ```bash
-takosumi export inst_abc --output takos-export.tar.zst
-takosumi install ./takos-export.tar.zst --to https://my-takosumi.example.com
+takosumi-git export inst_abc --output takos-export.tar.zst
+takosumi-git install ./takos-export.tar.zst --to https://my-takosumi.example.com
 ```
 
 bundle は `installation.json` (source / digests)、`manifest.compiled.yml`、
@@ -127,7 +129,7 @@ bundle は `installation.json` (source / digests)、`manifest.compiled.yml`、
 差し替えてよい:
 
 ```bash
-takosumi install ./takos-export.tar.zst \
+takosumi-git install ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
   --auth-issuer https://keycloak.example.com/realms/takos
 ```
