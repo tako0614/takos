@@ -23,10 +23,9 @@ build / git push 連携は Takos app や Takos CLI では実行しません。
 rg -n 'fromWorkflow|source\.kind\s*=\s*"inline"|source\.kind="inline"' .
 ```
 
-`compute.*.build` は Takos app manifest parser では current contract
-ではありません。worker は explicit `kind: worker` とし、bundle artifact は
-upstream で解決します。image-backed service は digest-pinned image
-を指定します。
+`compute.*.build` は current `.takosumi/manifest.yml` contract ではありません。
+旧 manifest は top-level `compute` / `routes` を持つ形として検出し、現行の
+`apiVersion: "1.0"` + `kind: Manifest` + `resources[]` Shape model に移します。
 
 ```yaml
 name: my-app
@@ -50,17 +49,43 @@ routes:
 3. `.takosumi/workflows/*.yml` に build workflow を置く。
 4. worker compute は `workflowRef` で build workflow の artifact output
    を参照する。
-5. `takosumi-git push` で workflow 実行、artifact 解決、Takos への manifest
-   deploy を行う。
+5. `takosumi-git push` で workflow 実行、artifact 解決、`workflowRef` strip、
+   takosumi kernel への manifest deploy を行う。
+
+移行後の最小形:
+
+```yaml
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: my-app
+resources:
+  - shape: worker@v1
+    name: web
+    provider: "@takos/cloudflare-workers"
+    spec:
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      routes:
+        - my-app.example.com/*
+    workflowRef:
+      file: build.yml
+      job: build-worker
+      artifact: bundle
+      target: spec.artifact.hash
+```
 
 ```bash
 takosumi-git init
 takosumi-git push
 ```
 
-`takosumi-git` が生成した artifact input は Takos の `source.kind="manifest"`
-deploy に渡されます。API caller が直接渡す場合も、 worker bundle は
-`source.kind="manifest"` の artifact input として渡してください。
+`takosumi-git` が生成した artifact digest は `workflowRef.target` に書き込まれ、
+kernel には `workflowRef` を含まない compiled manifest だけが届きます。API
+caller が直接 deploy する場合も、worker bundle は `worker@v1.spec.artifact.hash`
+として渡してください。
 
 ## API 互換性
 

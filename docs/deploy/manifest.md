@@ -144,9 +144,10 @@ Worker route patterns are strings in `worker@v1.spec.routes`. See
 
 OIDC, database allocation, object storage allocation, domain binding, launch
 token, and service import requests are declared in `.takosumi/app.yml`.
-`takosumi-git` / Takosumi Accounts materialize the approved binding values into
-the compiled kernel-bound manifest. `service.import@v1` bindings are merged into
-top-level `imports[]` before deploy.
+`service.import@v1` bindings are merged into top-level `imports[]` before
+deploy. Other AppBinding placeholders (`${bindings.*}` / `${secrets.*}`) are
+authoring-time values: they must be materialized by the installer / Accounts
+integration before the manifest is posted to the kernel.
 
 ```yaml
 # .takosumi/app.yml (excerpt)
@@ -160,13 +161,16 @@ bindings:
       - /auth/oidc/callback
   account-auth:
     type: service.import@v1
+    required: true
     service: takosumi.account.auth@v1
     endpointRoles:
       - oidc-issuer
 ```
 
+The authoring manifest can reference the approved bindings:
+
 ```yaml
-# .takosumi/manifest.yml
+# .takosumi/manifest.yml (authoring)
 apiVersion: "1.0"
 kind: Manifest
 metadata:
@@ -194,6 +198,38 @@ resources:
         OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
         OIDC_CLIENT_ID: ${bindings.auth.clientId}
         OIDC_CLIENT_SECRET: ${secrets.auth.clientSecret}
+```
+
+The compiled manifest sent to the kernel must contain concrete values for the
+AppBinding placeholders. Raw `${bindings.*}` / `${secrets.*}` placeholders must
+not reach the kernel:
+
+```yaml
+# compiled manifest excerpt
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: takos
+imports:
+  - alias: account-auth
+    service: takosumi.account.auth@v1
+serviceResolvers:
+  - kind: anchor
+    url: https://anchor.example.com/v1/services/
+    publicKey: BASE64_ED25519_PUBLIC_KEY
+resources:
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: ghcr.io/takos/api@sha256:0123456789abcdef
+      port: 8080
+      scale: { min: 1, max: 3 }
+      env:
+        AUTH_DRIVER: oidc
+        OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
+        OIDC_CLIENT_ID: takos_inst_abc
+        OIDC_CLIENT_SECRET: resolved-client-secret
 ```
 
 When `imports[]` is present, the kernel requires `serviceResolvers[]`. Operators
