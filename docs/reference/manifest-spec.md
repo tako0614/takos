@@ -334,7 +334,7 @@ resources:
 - `imports[]` があるのに `serviceResolvers[]` が無い
 - service identifier が forward 3-level dotted form ではない
 - `${ref:...}` / `${secret-ref:...}` が存在しない resource output を参照する
-- service import placeholder が standalone placeholder ではない
+- service import placeholder が `${imports.<alias>...}` form ではない
 
 validation order は takosumi kernel の
 [Core Contract v1.0](/takosumi/core/01-core-contract-v1.0) に従います。
@@ -352,10 +352,10 @@ validation order は takosumi kernel の
 
 旧 AppSpec の `bindings[]` section は current kernel-bound manifest ではありま
 せん。install-time binding は `.takosumi/app.yml` の `identity.oidc@v1` /
-`database.postgres@v1` / `object-store.s3-compatible@v1` / `service.import@v1`
-などで宣言し、takosumi-git / Takosumi Accounts が runtime env や secret refs に
-materialize します。kernel 内の resource 間配線は `${ref:...}` /
-`${secret-ref:...}`、cross-instance service は `imports[]` を使います。
+`database.postgres@v1` / `object-store.s3-compatible@v1` など 6 種で宣言し、
+takosumi-git / Takosumi Accounts が runtime env や secret refs に materialize
+します。kernel 内の resource 間配線は `${ref:...}` / `${secret-ref:...}`、
+cross-instance service は `imports[]` / `serviceResolvers[]` を使います。
 
 ## Legacy environment merge anchor {#_7-1-merge-rules}
 
@@ -402,8 +402,8 @@ resources:
 
 - [App YAML Spec](/reference/app-yml-spec) — install metadata / AppBinding /
   permissions
-- [Binding Catalog](/reference/binding-catalog) — `identity.oidc@v1` /
-  `service.import@v1`
+- [Binding Catalog](/reference/binding-catalog) — 6 種の installer-bound
+  AppBinding catalog
 - [Service Identifier Spec](/reference/service-identifier-spec) — forward
   3-level service identifier
 - [Core Contract v1.0](/takosumi/core/01-core-contract-v1.0) — kernel-side

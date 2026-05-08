@@ -143,11 +143,12 @@ Worker route patterns are strings in `worker@v1.spec.routes`. See
 ## Install Bindings
 
 OIDC, database allocation, object storage allocation, domain binding, launch
-token, and service import requests are declared in `.takosumi/app.yml`.
-`service.import@v1` bindings are merged into top-level `imports[]` before
-deploy. Other AppBinding placeholders (`${bindings.*}` / `${secrets.*}`) are
-authoring-time values: they must be materialized by the installer / Accounts
-integration before the manifest is posted to the kernel.
+token, and deploy intent requests are declared in `.takosumi/app.yml`.
+Cross-instance service dependencies are declared in the kernel-bound
+`.takosumi/manifest.yml` with top-level `imports[]` / `serviceResolvers[]`.
+AppBinding placeholders (`${bindings.*}` / `${secrets.*}`) are authoring-time
+values: they must be materialized by the installer / Accounts integration before
+the manifest is posted to the kernel.
 
 ```yaml
 # .takosumi/app.yml (excerpt)
@@ -159,15 +160,9 @@ bindings:
     required: true
     redirectPaths:
       - /auth/oidc/callback
-  account-auth:
-    type: service.import@v1
-    required: true
-    service: takosumi.account.auth@v1
-    endpointRoles:
-      - oidc-issuer
 ```
 
-The authoring manifest can reference the approved bindings:
+The authoring manifest can reference approved bindings and service imports:
 
 ```yaml
 # .takosumi/manifest.yml (authoring)

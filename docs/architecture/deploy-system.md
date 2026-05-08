@@ -585,8 +585,8 @@ Takos deploy system (Installable App Model 整合):
   詳細
 - [AppInstallation 台帳](./app-installation.md) — source pin と status 遷移
 - [.takosumi/app.yml spec](/reference/app-yml-spec) — installer-bound manifest
-- [Binding Catalog](/reference/binding-catalog) — `service.import@v1` を含む 7
-  種の binding type
+- [Binding Catalog](/reference/binding-catalog) — 6 種の installer-bound
+  AppBinding type
 - [Install API](/reference/install-api) — `POST /v1/installations` 等
 - [Upgrade / Export](/platform/upgrade-export) — upgrade / rollback / export
 - [deploy CLI ガイド](/deploy/deploy) — operator / internal context での deploy
