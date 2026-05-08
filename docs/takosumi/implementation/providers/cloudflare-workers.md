@@ -235,11 +235,11 @@ Cloudflare-injected runtime bindings are the preferred component access path for
 D1, R2, Queues, and Durable Objects. Control-plane operations such as script
 upload, D1 migration, R2 bucket provisioning, queue provisioning, and Durable
 Object namespace setup require operator-injected client references in the
-trusted Cloudflare plugin configuration. The PaaS kernel must not construct
+trusted Cloudflare plugin configuration. The kernel must not construct
 Cloudflare SDK/network clients by default, and the Cloudflare plugin must fail
 closed when a required operator client reference is missing. In staging and
 production the required client set includes the request actor/auth adapters as
-well as provider, storage, runtime-agent, and the other selected PaaS ports.
+well as provider, storage, runtime-agent, and the other selected kernel ports.
 
 ## Runtime network policy
 

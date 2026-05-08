@@ -6,7 +6,7 @@
   `takos-agent`.
 - `takos-app` is the public Web/API gateway. Browser and CLI clients should
   enter through `takos-app`, which calls the owning internal services.
-- `takosumi` remains the generic PaaS kernel service. Its internal process-role
+- `takosumi` remains the generic kernel service. Its internal process-role
   layout is not modeled as top-level Takos Helm workloads.
 - Helm resource names, selectors, service DNS names, values keys, and ingress
   backend wiring should use the Takos service IDs above.

@@ -1,7 +1,8 @@
 # Legal: Data Processing Agreement Template
 
 > このページでわかること: Takos の customer DPA template、processing scope、
-> security measures、sub-processor approval flow、GA 前の legal review blockers。
+> security measures、sub-processor approval flow、GA 前の legal review
+> blockers。
 
 This document is a template for a future customer Data Processing Agreement
 (DPA). It is not legal advice, not a signed agreement, and must be reviewed by
@@ -9,13 +10,13 @@ counsel before Takos offers it for signature.
 
 ## Status
 
-| Field | Value |
-| --- | --- |
-| Owner | Data protection owner |
-| Last reviewed | 2026-05-07 |
-| Scope | Takos Web / API, Takos Git hosting, Takos agent execution, and Takos-managed deploy/runtime operations |
-| Current status | Draft template published for GA readiness |
-| Signature status | Not signable until legal review and E-11.2 data subject request handlers are complete |
+| Field            | Value                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------ |
+| Owner            | Data protection owner                                                                                  |
+| Last reviewed    | 2026-05-07                                                                                             |
+| Scope            | Takos Web / API, Takos Git hosting, Takos agent execution, and Takos-managed deploy/runtime operations |
+| Current status   | Draft template published for GA readiness                                                              |
+| Signature status | Not signable until legal review and E-11.2 data subject request handlers are complete                  |
 
 ## Regulatory Baseline
 
@@ -33,22 +34,39 @@ Official source links are listed at the end of this page.
 
 ## 1. Parties and Roles
 
-`Customer` means the organization or person that subscribes to Takos.
+`Customer` means the **Takosumi Account holder** named in the signed order form
+or master agreement. The Takosumi Account holder is the legal counter-party for
+contract, billing, and DPA signature purposes, and is fixed for the life of the
+DPA.
+
+`AppInstallation owner` means the operational owner of a specific Takos
+AppInstallation under that Takosumi Account (per Space). The AppInstallation
+owner acts as Customer's **delegated agent** for app-local configuration and
+data subject request handling, but is not itself the DPA signatory.
+
 `Takos` means the Takos service operator identified in the signed order form or
 master agreement.
+
+Legal continuity rule: AppInstallation export, dedicated materialization, or
+re-binding may move the AppInstallation owner role within the Customer's scope,
+but the **DPA Customer remains the Takosumi Account holder**. Transferring the
+DPA Customer to a different Takosumi Account (e.g., AppInstallation export to a
+separate takosumi instance owned by a different account) requires a separate
+contract assignment, not an AppInstallation lifecycle event.
 
 For Customer Personal Data processed through Takos spaces, repositories,
 deployments, agent runs, support requests, and customer-managed applications:
 
-| Party | Default role |
-| --- | --- |
-| Customer | Controller, or processor where Customer processes data for its own end customer |
-| Takos | Processor, or sub-processor where Customer is a processor |
+| Party                              | Default role                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Customer (Takosumi Account holder) | Controller, or processor where Customer processes data for its own end customer                                     |
+| AppInstallation owner              | Customer's delegated agent for app-local processing decisions; does not change Customer's controller/processor role |
+| Takos                              | Processor, or sub-processor where Customer is a processor                                                           |
 
-Takos may act as an independent controller for account administration,
-security, billing, fraud prevention, service analytics, and legal compliance.
-Those controller activities belong in the Privacy Policy and Terms of Service,
-not this DPA template.
+Takos may act as an independent controller for account administration, security,
+billing, fraud prevention, service analytics, and legal compliance. Those
+controller activities belong in the Privacy Policy and Terms of Service, not
+this DPA template.
 
 ## 2. Customer Instructions
 
@@ -66,21 +84,21 @@ data protection law, unless legally prohibited.
 
 ## 3. Details of Processing
 
-| Item | Description |
-| --- | --- |
-| Subject matter | Providing Takos Web / API accounts, spaces, source and repository services, deploy orchestration, agent execution, billing usage, support, and security operations |
-| Duration | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence |
-| Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata |
-| Frequency | Continuous while Customer uses Takos |
-| Data subjects | Customer admins, members, collaborators, application end users, support contacts, and people whose data Customer submits to Takos |
+| Item               | Description                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Subject matter     | Providing Takos Web / API accounts, spaces, source and repository services, deploy orchestration, agent execution, billing usage, support, and security operations |
+| Duration           | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence               |
+| Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata           |
+| Frequency          | Continuous while Customer uses Takos                                                                                                                               |
+| Data subjects      | Customer admins, members, collaborators, application end users, support contacts, and people whose data Customer submits to Takos                                  |
 
 ## 4. Personal Data Categories
 
 Takos may process the following categories where Customer uses the relevant
 feature:
 
-- account identity data: name, email address, avatar, OAuth provider subject,
-  authentication metadata
+- account identity data: name, email address, avatar, pairwise OIDC subject
+  (per-installation, issued by Takosumi Accounts), authentication metadata
 - workspace and access data: organization, space, role, membership, invitation,
   API token, session, and audit metadata
 - repository and deployment data: repository metadata, commit metadata, source
@@ -125,18 +143,18 @@ agreement.
 Takos must maintain technical and organizational measures appropriate to the
 risk of processing, including:
 
-| Control area | Baseline measure |
-| --- | --- |
-| Access control | Named user access, least privilege, service-owner review, break-glass logging |
-| Authentication | OAuth / session controls, API token verification, internal service signatures |
-| Encryption | TLS in transit; managed storage encryption or equivalent at rest |
-| Secrets | Secrets managed through `takos-private` / operator secret stores; no secrets in OSS source paths |
-| Change management | PR review, release gate, migration safety gate, patch management gate |
-| Logging | Request correlation, audit logs, redaction of secrets and sensitive values |
-| Backups | Backup / restore cadence and retention documented in operations runbooks |
-| Incident response | SEV policy, incident response runbook, customer notification process |
-| Vulnerability management | Dependency update policy, Trivy scan, severity-based remediation SLA |
-| Data deletion | Account / space deletion workflow and retention exceptions documented before GA |
+| Control area             | Baseline measure                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| Access control           | Named user access, least privilege, service-owner review, break-glass logging                    |
+| Authentication           | OAuth / session controls, API token verification, internal service signatures                    |
+| Encryption               | TLS in transit; managed storage encryption or equivalent at rest                                 |
+| Secrets                  | Secrets managed through `takos-private` / operator secret stores; no secrets in OSS source paths |
+| Change management        | PR review, release gate, migration safety gate, patch management gate                            |
+| Logging                  | Request correlation, audit logs, redaction of secrets and sensitive values                       |
+| Backups                  | Backup / restore cadence and retention documented in operations runbooks                         |
+| Incident response        | SEV policy, incident response runbook, customer notification process                             |
+| Vulnerability management | Dependency update policy, Trivy scan, severity-based remediation SLA                             |
+| Data deletion            | Account / space deletion workflow and retention exceptions documented before GA                  |
 
 ## 7. Data Subject Requests
 
@@ -186,9 +204,9 @@ official provider transfer documentation where available.
 
 Takos must make reasonable compliance information available to Customer,
 including public policies, security summaries, and relevant audit evidence.
-Customer audit requests must be scoped, confidential, no more than once per
-year unless required after a verified breach, and must not expose other
-customers' data or Takos trade secrets.
+Customer audit requests must be scoped, confidential, no more than once per year
+unless required after a verified breach, and must not expose other customers'
+data or Takos trade secrets.
 
 ## 12. CCPA / CPRA Service Provider Terms
 
@@ -209,16 +227,16 @@ Takos must:
 
 ## Annex I: Processing Details
 
-| Field | Template value |
-| --- | --- |
-| Data exporter | Customer |
-| Data importer | Takos |
-| Processing purpose | Providing Takos Web / API, deploy, Git hosting, agent execution, billing usage, support, and security operations |
-| Categories of data subjects | Customer users, Customer collaborators, Customer application users, support contacts |
-| Categories of personal data | Identity, access, repository, deployment, agent, application, billing, telemetry, support, and security data |
-| Sensitive data | Not intended unless separately agreed |
-| Transfer frequency | Continuous while Customer uses Takos |
-| Retention | Agreement term plus documented retention exceptions |
+| Field                       | Template value                                                                                                   |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Data exporter               | Customer                                                                                                         |
+| Data importer               | Takos                                                                                                            |
+| Processing purpose          | Providing Takos Web / API, deploy, Git hosting, agent execution, billing usage, support, and security operations |
+| Categories of data subjects | Customer users, Customer collaborators, Customer application users, support contacts                             |
+| Categories of personal data | Identity, access, repository, deployment, agent, application, billing, telemetry, support, and security data     |
+| Sensitive data              | Not intended unless separately agreed                                                                            |
+| Transfer frequency          | Continuous while Customer uses Takos                                                                             |
+| Retention                   | Agreement term plus documented retention exceptions                                                              |
 
 ## Annex II: Technical and Organizational Measures
 
@@ -237,8 +255,10 @@ contract structure.
 
 - GDPR Regulation (EU) 2016/679, including Article 28:
   <https://eur-lex.europa.eu/eli/reg/2016/679/oj>
-- CCPA / CPRA regulations, Section 7051: <https://cppa.ca.gov/regulations/pdf/cppa_regs.pdf>
-- Cloudflare sub-processors: <https://www.cloudflare.com/gdpr/subprocessors/cloudflare-services/>
+- CCPA / CPRA regulations, Section 7051:
+  <https://cppa.ca.gov/regulations/pdf/cppa_regs.pdf>
+- Cloudflare sub-processors:
+  <https://www.cloudflare.com/gdpr/subprocessors/cloudflare-services/>
 - Stripe DPA: <https://stripe.com/legal/dpa>
 - OpenAI DPA: <https://openai.com/policies/data-processing-addendum/>
 - AWS DPA: <https://d1.awsstatic.com/legal/aws-gdpr/aws-gdpr-dpa-online.pdf>

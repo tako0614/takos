@@ -1,7 +1,7 @@
 # Self-host compose plugin smoke plan
 
 This plan covers the single-node self-host smoke for `compose.local.yml`. It is
-an operator/plugin proof, not a PaaS kernel release criterion. The fast check is
+an operator/plugin proof, not a kernel release criterion. The fast check is
 dependency-free and does not start Docker; the manual smoke below is the real
 Docker/Compose path for a host distribution.
 

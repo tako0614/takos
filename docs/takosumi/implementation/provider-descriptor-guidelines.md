@@ -210,7 +210,7 @@ Cloudflare provider plugins must rely on Cloudflare-injected runtime bindings
 inside Workers and operator-injected control-plane client references for
 deployment, migration, and observation operations. They must fail closed when
 the operator has not supplied the required client references. Descriptor text
-must not suggest that the PaaS kernel constructs Cloudflare SDK/network clients.
+must not suggest that the kernel constructs Cloudflare SDK/network clients.
 
 ## 7. Provider descriptor JSON-LD pattern
 

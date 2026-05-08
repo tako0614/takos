@@ -203,7 +203,7 @@ It is selected per kernel I/O port through `TAKOS_*_PLUGIN` or
 `TAKOS_KERNEL_PLUGIN_SELECTIONS` and configured through
 `TAKOS_KERNEL_PLUGIN_CONFIG`. That config stores per-plugin client references
 under `pluginConfig[pluginId].clients`; the actual clients are injected by the
-operator-owned `KernelPluginClientRegistry`, not constructed by the PaaS kernel.
+operator-owned `KernelPluginClientRegistry`, not constructed by the kernel.
 Production and staging must select trusted external plugins for required ports
 and cannot select reference/noop plugins.
 
@@ -346,7 +346,7 @@ compatibility testing
 ```text
 Core spec: no plugin requirement.
 Implementation: support explicit provider ports and trusted external plugin selection first.
-Architecture: keep provider code outside the PaaS kernel.
+Architecture: keep provider code outside the kernel.
 Production: only verified or operator-trusted providers.
 Local/conformance mode: allow reference adapters by policy.
 ```
@@ -695,7 +695,7 @@ Use this implementation direction:
 
 ```text
 Build Takos Deploy as descriptor-driven and provider-interface-driven.
-Keep the PaaS kernel reference-only and register self-hosted/provider implementations as external plugins.
+Keep the kernel reference-only and register self-hosted/provider implementations as external plugins.
 Design provider implementations so they can be loaded through the trusted plugin path.
 Do not make dynamic plugins required for the core system.
 ```

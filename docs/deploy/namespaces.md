@@ -5,7 +5,8 @@
 
 dispatch namespace は tracked reference Workers backend で tenant worker
 を論理分離するための backend detail。Takos の public spec では manifest
-に書く対象ではなく、operator が Cloudflare 側で準備する実行基盤の一部として扱う。
+に書く対象ではなく、operator が Cloudflare
+側で準備する実行基盤の一部として扱う。
 
 ## 何に使うか
 
@@ -18,7 +19,7 @@ tracked reference Workers backend では worker workload が dispatch namespace
 public CLI の `takos deploy` / `takos install` には `--namespace` option
 はない。
 
-- deploy manifest author は `.takos/app.yml` と `--group` を意識する
+- deploy manifest author は `.takosumi/manifest.yml` と `--group` を意識する
 - operator は Cloudflare 側で dispatch namespace を作成し、control-plane
   環境変数に接続する
 

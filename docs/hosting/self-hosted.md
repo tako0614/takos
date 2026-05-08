@@ -82,8 +82,13 @@ deno task generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = selfhosted)
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
-cd ../takos
-deno task --cwd apps/paas bootstrap:initial -- --admin-email=admin@takos.jp
+cd ../takosumi-cloud
+deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+  --issuer https://accounts.selfhosted.example.com \
+  --subject tsub_admin \
+  --client-id takos-admin \
+  --redirect-uri https://admin.takos.example.com/auth/oidc/callback \
+  > accounts-seed-plan.json
 ```
 
 `distribute:apply` は `kernel_host.target=selfhosted` を見て内部で

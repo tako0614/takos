@@ -1,41 +1,43 @@
 # Operations: Patch Management
 
 > このページでわかること: Takos operated environments の container base image、
-> OS-level CVE、runtime dependency update、例外処理、週次自動 scan / update path。
+> OS-level CVE、runtime dependency update、例外処理、週次自動 scan / update
+> path。
 
-この runbook は Phase E GA readiness の patch management 正本です。Takos は
-基本 Web/API surface として運用し、CLI は primary customer UX として扱いませ
-ん。CLI / manifest workflows から発生する更新は `takosumi` /
-`takosumi-git` の owning repo で扱い、Takos product shell は app / git /
-agent / deploy artifact の patch gate を所有します。
+この runbook は Takos managed installation GA readiness (Phase 1.x in ROADMAP.md
+Part II) の patch management 正本です。Takos は 基本 Web/API surface
+として運用し、CLI は primary customer UX として扱いませ ん。CLI / manifest
+workflows から発生する更新は `takosumi` / `takosumi-git` の owning repo
+で扱い、Takos product shell は app / git / agent / deploy artifact の patch gate
+を所有します。
 
 ## Scope
 
-| Area | Owner | Automatic path |
-| --- | --- | --- |
-| Takos shell submodule pointers | `takos/` | `.github/dependabot.yml` `gitsubmodule` updates |
-| GitHub Actions versions | each owning repo | Dependabot `github-actions` updates |
-| Takos app container base image | `takos/app` | Dependabot `docker` for `/apps/control` |
-| Takos Git container base image | `takos/git` | Dependabot `docker` for `/` |
-| Takos agent container base image | `takos/agent` | Dependabot `docker` for `/` |
-| Takos agent Rust deps | `takos/agent` | Dependabot `cargo` for `/` |
-| Deno dependencies | each Deno repo | `deno outdated --update` during patch window |
-| OS package CVEs | owning Dockerfile repo | weekly Trivy filesystem scan + image rebuild |
+| Area                             | Owner                  | Automatic path                                  |
+| -------------------------------- | ---------------------- | ----------------------------------------------- |
+| Takos shell submodule pointers   | `takos/`               | `.github/dependabot.yml` `gitsubmodule` updates |
+| GitHub Actions versions          | each owning repo       | Dependabot `github-actions` updates             |
+| Takos app container base image   | `takos/app`            | Dependabot `docker` for `/apps/control`         |
+| Takos Git container base image   | `takos/git`            | Dependabot `docker` for `/`                     |
+| Takos agent container base image | `takos/agent`          | Dependabot `docker` for `/`                     |
+| Takos agent Rust deps            | `takos/agent`          | Dependabot `cargo` for `/`                      |
+| Deno dependencies                | each Deno repo         | `deno outdated --update` during patch window    |
+| OS package CVEs                  | owning Dockerfile repo | weekly Trivy filesystem scan + image rebuild    |
 
-`takos-private/` owns private deploy credentials and environment-specific
-secret rotation. This public policy references private run logs only by
-boundary, never by secret name or provider account id.
+`takos-private/` owns private deploy credentials and environment-specific secret
+rotation. This public policy references private run logs only by boundary, never
+by secret name or provider account id.
 
 ## Base Image Rules
 
-- Dockerfiles must not use `latest`, untagged images, or Deno / Rust
-  major-only tags such as `denoland/deno:2`.
+- Dockerfiles must not use `latest`, untagged images, or Deno / Rust major-only
+  tags such as `denoland/deno:2`.
 - Language runtime images must use a minor / patch tag, for example
   `denoland/deno:2.7.10` or `rust:1.94-bookworm`.
 - Distro suite tags such as `debian:bookworm-slim` are allowed only when the
   image is rebuilt weekly and Trivy scan evidence is green.
-- Production image references in deploy manifests must be immutable digest
-  refs after build / promotion.
+- Production image references in deploy manifests must be immutable digest refs
+  after build / promotion.
 - Dockerfile package installs must use `--no-install-recommends` for Debian
   based images or `--no-cache` for Alpine based images.
 
@@ -77,8 +79,8 @@ deno task lint
 deno task fmt:check
 ```
 
-If a Deno repo does not define all tasks, run the closest local equivalents
-from that repo's `AGENTS.md`.
+If a Deno repo does not define all tasks, run the closest local equivalents from
+that repo's `AGENTS.md`.
 
 ## Patch Window
 
@@ -89,22 +91,22 @@ Default weekly patch window:
 
 Emergency patch window:
 
-- Open immediately for actively exploited CVEs, known secret exposure, or
-  public remote code execution in an internet-facing service.
+- Open immediately for actively exploited CVEs, known secret exposure, or public
+  remote code execution in an internet-facing service.
 - Freeze unrelated deploys while the emergency patch is being validated.
 
 ## Severity SLA
 
-| Severity | Target | Required action |
-| --- | --- | --- |
-| Critical exploited / internet-facing RCE | 24h | emergency patch, staging proof, production promotion |
-| Critical not known exploited | 72h | patch PR, rebuild image, production promotion |
-| High | 7 days | normal patch window |
-| Medium | 30 days | next planned dependency refresh |
-| Low | best effort | batch with routine updates |
+| Severity                                 | Target      | Required action                                      |
+| ---------------------------------------- | ----------- | ---------------------------------------------------- |
+| Critical exploited / internet-facing RCE | 24h         | emergency patch, staging proof, production promotion |
+| Critical not known exploited             | 72h         | patch PR, rebuild image, production promotion        |
+| High                                     | 7 days      | normal patch window                                  |
+| Medium                                   | 30 days     | next planned dependency refresh                      |
+| Low                                      | best effort | batch with routine updates                           |
 
-If a CVE is not exploitable because the affected package is absent at runtime
-or the vulnerable path is unreachable, record a time-boxed exception.
+If a CVE is not exploitable because the affected package is absent at runtime or
+the vulnerable path is unreachable, record a time-boxed exception.
 
 ## Exception Record
 
