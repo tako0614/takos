@@ -1,76 +1,79 @@
-# マルチ component 構成
+# Multi-Service 構成
 
-複数 component と `interface.schedule@v1` + `route.schedule@v1` による
-背景 job 起動の例です。
+API service、background worker、Postgres を 1 つの current
+`.takosumi/manifest.yml` にまとめる例です。kernel-bound manifest は compute /
+resource desired state だけを持ち、cron / workflow runner は takosumi-git 側で
+扱います。
 
 ```yaml
-name: full-stack-app
-
-components:
-  api:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: build-api
-              artifact: api
-              entry: dist/api.js
-      api:
-        ref: interface.http@v1
-  jobs:
-    contracts:
-      runtime:
-        ref: runtime.js-worker@v1
-        config:
-          source:
-            ref: artifact.workflow-bundle@v1
-            config:
-              workflow: .takos/workflows/deploy.yml
-              job: build-jobs
-              artifact: jobs
-              entry: dist/jobs.js
-      tick:
-        ref: interface.schedule@v1
-    depends: [api]
-
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: full-stack-app
 resources:
-  app-db:
-    ref: resource.sql.postgres@v1
-  app-uploads:
-    ref: resource.object-store.s3@v1
+  - shape: database-postgres@v1
+    name: app-db
+    provider: "@takos/managed-postgres"
+    spec:
+      version: "16"
+      size: small
 
-bindings:
-  - from: { resource: app-db }
-    to: { component: api, env: DATABASE_URL }
-    access: database-url
-  - from: { resource: app-db }
-    to: { component: jobs, env: DATABASE_URL }
-    access: database-url
-  - from: { resource: app-uploads }
-    to: { component: api, binding: UPLOADS }
-    access: object-runtime-binding
+  - shape: web-service@v1
+    name: api
+    provider: "@takos/aws-fargate"
+    spec:
+      image: PLACEHOLDER
+      port: 8080
+      scale: { min: 1, max: 4 }
+      domains:
+        - api.example.com
+      env:
+        DATABASE_URL: ${ref:app-db.connectionString}
+        DATABASE_PASSWORD: ${secret-ref:app-db.passwordSecretRef}
+    workflowRef:
+      file: .takosumi/workflows/deploy.yml
+      job: build-api
+      artifact: api-image
+      target: spec.image
 
-routes:
-  - id: api
-    expose: { component: api, contract: api }
-    via: { ref: route.https@v1, config: { path: / } }
-  - id: jobs-tick
-    expose: { component: jobs, contract: tick }
-    via:
-      ref: route.schedule@v1
-      config: { cron: "*/10 * * * *" }
+  - shape: worker@v1
+    name: jobs
+    provider: "@takos/cloudflare-workers"
+    spec:
+      artifact:
+        kind: js-bundle
+        hash: PLACEHOLDER
+      compatibilityDate: "2026-05-09"
+      env:
+        DATABASE_URL: ${ref:app-db.connectionString}
+        DATABASE_PASSWORD: ${secret-ref:app-db.passwordSecretRef}
+    workflowRef:
+      file: .takosumi/workflows/deploy.yml
+      job: build-jobs
+      artifact: jobs-bundle
+      target: spec.artifact.hash
 ```
+
+`workflowRef` は takosumi-git が処理する authoring extension です。kernel に届く
+manifest では `api.spec.image` と `jobs.spec.artifact.hash` が concrete digest
+になり、`workflowRef` は削除されます。
+
+background job を cron で起動したい場合、schedule は kernel manifest ではなく
+takosumi-git の workflow / event layer、または provider plugin の上位設定として
+扱います。takosumi kernel は workflow / cron / scheduler surface を持ちません。
 
 ポイント:
 
-- 同じ resource を複数 component に渡したい場合は `bindings[]` に複数
-  entry を書く。 各 entry は target component と env / binding 名を独立に
-  指定する
-- background job は `interface.schedule@v1` contract instance を component
-  に持たせ、 `route.schedule@v1` を `via.ref` にした route で起動する
-  (旧 `triggers.schedules` は廃止)
-- `depends` は同一 manifest の component 名による起動順序の hint
+- 複数 workload は `resources[]` に複数 resource として並べる
+- shared database は `${ref:app-db.connectionString}` と
+  `${secret-ref:app-db.passwordSecretRef}` で各 workload に渡す
+- HTTP domain は `web-service@v1.spec.domains` か `custom-domain@v1` resource
+  で表現する
+- top-level `components` / `bindings[]` / schedule route は current manifest
+  surface ではない
+
+関連:
+
+- [Manifest Reference](/reference/manifest-spec)
+- [環境変数](/deploy/environment)
+- [Worker + DB](/examples/worker-with-db)
