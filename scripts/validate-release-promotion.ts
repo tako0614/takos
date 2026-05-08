@@ -19,7 +19,7 @@ const requiredDocs = [
       'Rollback SOP',
       'deployment id',
       'one-click revert',
-      '/api/public/v1/groups/:groupId/rollback',
+      'POST /v1/installations/:id/rollback',
       'takos-private',
       'Staging Rehearsal',
     ],

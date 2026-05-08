@@ -3,11 +3,11 @@
 > このページでわかること: production-impacting release の rollback 判断、
 > deployment-id ベース rollback、one-click revert、staging rehearsal 証跡。
 
-| Field | Value |
-| --- | --- |
-| Last reviewed | 2026-05-07 |
-| Owner | Release owner / on-call owner |
-| Scope | Takos managed service rollback |
+| Field         | Value                          |
+| ------------- | ------------------------------ |
+| Last reviewed | 2026-05-07                     |
+| Owner         | Release owner / on-call owner  |
+| Scope         | Takos managed service rollback |
 
 ## When to Roll Back
 
@@ -39,14 +39,14 @@ than a small reviewed fix. Record the reviewer, risk, and fallback path.
 
 ## Rollback Paths
 
-| Surface | Primary rollback | Evidence |
-| --- | --- | --- |
-| Takos Web / API on Cloudflare | `takos-private` service deploy to previous version / worker version rollback | Cloudflare version id, route, smoke URL |
-| Takos Helm distribution | re-apply previous generated values and image digests | Helm release revision, values artifact |
-| Takos Terraform distribution | revert infra commit and run plan/apply through operator gate | Terraform plan summary, state backup |
-| Takosumi deployment group | `/api/public/v1/groups/:groupId/rollback` or deployment `mode: "rollback"` | group id, previous deployment id |
-| GitHub source release | one-click revert PR or revert commit | revert PR URL, commit SHA |
-| DB migration | expand/backfill rollback note or restore plan from migration safety doc | migration id, backup / forward-repair plan |
+| Surface                                          | Primary rollback                                                                                                                                                                                                                                                                                                                               | Evidence                                                                                               |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Takos Web / API on Cloudflare                    | `takos-private` service deploy to previous version / worker version rollback                                                                                                                                                                                                                                                                   | Cloudflare version id, route, smoke URL                                                                |
+| Takos Helm distribution                          | re-apply previous generated values and image digests                                                                                                                                                                                                                                                                                           | Helm release revision, values artifact                                                                 |
+| Takos Terraform distribution                     | revert infra commit and run plan/apply through operator gate                                                                                                                                                                                                                                                                                   | Terraform plan summary, state backup                                                                   |
+| AppInstallation rollback (Installable App Model) | `takosumi-git rollback inst_<id> --to <ref>` または `POST /v1/installations/:id/rollback` で AppInstallation を前 commit / 前 `compiledManifestDigest` に戻す。`status` は canonical 5 値 (`installing` / `ready` / `failed` / `suspended` / `exported`) を遷移し、rollback 中は一時的に `installing`、完了で `ready` (失敗時 `failed`) になる | installationId, previous sourceCommit, previous compiledManifestDigest, InstallationEvent (`rollback`) |
+| GitHub source release                            | one-click revert PR or revert commit                                                                                                                                                                                                                                                                                                           | revert PR URL, commit SHA                                                                              |
+| DB migration                                     | expand/backfill rollback note or restore plan from migration safety doc                                                                                                                                                                                                                                                                        | migration id, backup / forward-repair plan                                                             |
 
 The rollback command must target an explicit deployment id, version id, image
 digest, tag, or commit SHA. Do not rely on mutable tags such as `latest`.
@@ -74,8 +74,8 @@ Rollback is not complete until:
 
 ## Staging Rehearsal
 
-Phase E GA readiness requires one staging rollback rehearsal. The evidence must
-include:
+Takos managed installation GA readiness (Phase 1.x in ROADMAP.md Part II)
+requires one staging rollback rehearsal. The evidence must include:
 
 - staging release candidate commit SHA
 - previous healthy deployment id

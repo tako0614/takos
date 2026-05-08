@@ -26,26 +26,25 @@ optional policy / approval), `ProviderObservation` (observed-side stream), and
 `GroupHead` (group-scoped pointer). The contract types are exported from
 `takosumi-contract` (`Deployment`, `ProviderObservation`, `GroupHead`).
 
-`DeploymentService` (`apps/paas/src/domains/deploy/deployment_service.ts`) is
-the canonical entry point. It resolves public manifests into
-`Deployment.resolution` (`descriptor_closure` + `resolved_graph`),
-`Deployment.desired` (routes, bindings, resources, runtime network policy,
-activation envelope), and resolution-time policy decisions. `mode="preview"` is
-non-mutating; `mode="resolve"` persists the resolved Deployment.
-`applyDeployment` runs preflight validators, approval gates, provider operation
-planning, provider operation conditions, rollback for provider operations that
-started before a failure, and atomic GroupHead advancement. `rollbackGroup` is a
-GroupHead pointer move against retained history and does not create a new
-Deployment. `ProviderObservation` is stored and listed separately from canonical
-desired state.
+`DeploymentService`
+(`takosumi/packages/kernel/src/domains/deploy/deployment_service.ts`) is the
+canonical entry point. It resolves public manifests into `Deployment.resolution`
+(`descriptor_closure` + `resolved_graph`), `Deployment.desired` (routes,
+bindings, resources, runtime network policy, activation envelope), and
+resolution-time policy decisions. `mode="preview"` is non-mutating;
+`mode="resolve"` persists the resolved Deployment. `applyDeployment` runs
+preflight validators, approval gates, provider operation planning, provider
+operation conditions, rollback for provider operations that started before a
+failure, and atomic GroupHead advancement. `rollbackGroup` is a GroupHead
+pointer move against retained history and does not create a new Deployment.
+`ProviderObservation` is stored and listed separately from canonical desired
+state.
 
-The public HTTP surface is mounted under `/api/public/v1/deployments`,
-`/api/public/v1/deployments/:deploymentId/apply`,
-`/api/public/v1/deployments/:deploymentId/approve`,
-`/api/public/v1/deployments/:deploymentId/observations`,
-`/api/public/v1/groups/:groupId/head`, and
-`/api/public/v1/groups/:groupId/rollback`. Removed public plan/apply/snapshot
-paths are absent from the PaaS OpenAPI route inventory.
+The current kernel public HTTP surface is `POST /v1/deployments` with a compiled
+Shape manifest payload. The older `/api/public/v1/deployments` family belongs to
+Takos product compatibility routing during migration and is not the takosumi
+kernel public contract. Removed public plan/apply/snapshot paths are absent from
+the kernel route inventory.
 
 The kernel does not make cloud provider APIs canonical. Cloudflare, AWS, GCP,
 Kubernetes, Neon, R2, S3, and similar systems remain provider targets described
@@ -125,7 +124,7 @@ self-hosted, Cloudflare, AWS, GCP, Kubernetes, Neon, R2, or S3 implementation is
 registered by default. Provider descriptors and capability profiles document how
 external bundles should integrate those targets through `TAKOS_*_PLUGIN`
 selectors. They require operator-injected configuration or client references in
-`TAKOS_KERNEL_PLUGIN_CONFIG`; the PaaS kernel does not construct cloud SDK or
+`TAKOS_KERNEL_PLUGIN_CONFIG`; the kernel does not construct cloud SDK or
 provider network clients by default.
 
 Official integrated distribution manifests live in `takos/deploy/distributions`.
@@ -179,19 +178,15 @@ staging and production.
 
 ## Deploy shell status {#deploy-shell}
 
-`takos` の PaaS control plane が deploy (Deployment / GroupHead) / runtime /
-resource / routing / network / registry / audit の canonical semantics を提供
-する。manifest resolution、persistent Deployment history、rollback 等の business
-logic は `takos` に寄せる。現行 PaaS public surface は Deployment-centric API
-(`POST /api/public/v1/deployments`, `POST /api/public/v1/deployments/:id/apply`,
-`POST /api/public/v1/deployments/:id/approve`,
-`GET /api/public/v1/deployments/:id/observations`,
-`POST /api/public/v1/groups/:group_id/rollback`,
-`GET /api/public/v1/groups/:group_id/head`) である。削除済み public
+`takosumi` kernel が compiled manifest apply / routing projection / resource
+provisioning / provider reconciliation の canonical semantics を提供する。kernel
+public surface は `POST /v1/deployments`
+のみであり、`/api/public/v1/deployments` family は Takos product compatibility
+API として migration window 中に残る。 削除済み public
 `/api/public/v1/deploy/plans` / `/api/public/v1/deploy/applies` /
 `group-deployment-snapshots` path と app-side `/api/deploy/plans` /
-`/api/deploy/apply-runs` は PaaS route inventory から外れている。Core contract §
-17 は current API を参照。
+`/api/deploy/apply-runs` は route inventory から外れている。 Core contract § 17
+は current kernel API を参照。
 
 他章は
 `> 現行実装の split status は [Current Implementation Note](/current-state#deploy-shell) を参照`
