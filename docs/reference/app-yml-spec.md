@@ -12,7 +12,7 @@ manifest) との関係を確定します。
 
 - top-level field と nested field の存在 / 必須性 / 型 (§2〜§3)
 - `apiVersion` / `kind` の固定 literal (§1)
-- `bindings.<name>.type` の closed enum 7 種 (`service.import@v1` を含む、§3.5)
+- `bindings.<name>.type` の closed enum 6 種 (§3.5)
 - `permissions.requested` の closed enum 5 種 (§3.7)
 - `app.yml` が **kernel に渡らない** という不変条件 (§5)
 - `app.yml` (installer-bound) と `manifest.yml` (kernel-bound) の関係 (§5)
@@ -190,13 +190,13 @@ bindings:
 `bindings` は **map**。key は app 内で binding を参照する logical name (例:
 `auth`)、value は binding 宣言 object です。
 
-| field                           | 必須        | 制約                                                                                                     |
-| ------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------- |
-| `bindings.<name>`               | (map entry) | 1〜32 entry。key は `^[a-z]([a-z0-9-]{0,30}[a-z0-9])?$`                                                  |
-| `bindings.<name>.type`          | ✅          | 下記 closed enum 7 種のいずれか                                                                          |
-| `bindings.<name>.required`      | conditional | `true` で provision 必須。`false` で provider 不在でも install 続行。`service.import@v1` は省略時 `true` |
-| `bindings.<name>.redirectPaths` | optional    | `identity.oidc@v1` 専用。`/` 始まり path 配列、1〜10 要素                                                |
-| binding-specific 任意 field     | optional    | 各 binding type の追加 field は Binding Catalog 章で個別定義                                             |
+| field                           | 必須        | 制約                                                                |
+| ------------------------------- | ----------- | ------------------------------------------------------------------- |
+| `bindings.<name>`               | (map entry) | 1〜32 entry。key は `^[a-z]([a-z0-9-]{0,30}[a-z0-9])?$`             |
+| `bindings.<name>.type`          | ✅          | 下記 closed enum 6 種のいずれか                                     |
+| `bindings.<name>.required`      | conditional | `true` で provision 必須。`false` で provider 不在でも install 続行 |
+| `bindings.<name>.redirectPaths` | optional    | `identity.oidc@v1` 専用。`/` 始まり path 配列、1〜10 要素           |
+| binding-specific 任意 field     | optional    | 各 binding type の追加 field は Binding Catalog 章で個別定義        |
 
 #### binding type の closed enum (v1)
 
@@ -207,11 +207,16 @@ object-store.s3-compatible@v1
 domain.http@v1
 deploy-intent.gitops@v1
 install-launch-token@v1
-service.import@v1
 ```
 
-8 種目以降を追加するときは Binding Catalog の lockstep 拡張を要します (任意 type
+7 種目以降を追加するときは Binding Catalog の lockstep 拡張を要します (任意 type
 の発明は不可)。
+
+Cross-instance service dependency は AppBinding type ではなく、
+`.takosumi/manifest.yml` の `imports[]` / `serviceResolvers[]` で宣言します。
+詳細は
+[Manifest spec § Cross-instance imports](/reference/manifest-spec#cross-instance-imports)
+を参照してください。
 
 `bindings.<name>` の `<name>` は、`entry.manifest` (= `.takosumi/manifest.yml`)
 内の `${bindings.<name>.<key>}` / `${secrets.<name>.<key>}` 参照と 紐づきます
@@ -427,15 +432,15 @@ permissions:
 Installable App Model では Takos repo の `.takosumi/` 配下に **2 種類**
 の宣言が並びます。読み手と placeholder の有無で役割を厳密に分けます。
 
-| 観点         | `.takosumi/app.yml`                          | `.takosumi/manifest.yml`                                 |
-| ------------ | -------------------------------------------- | -------------------------------------------------------- |
-| `apiVersion` | `app.takosumi.dev/v1`                        | `"1.0"` (kernel envelope)                                |
-| `kind`       | `InstallableApp`                             | `Manifest` (required)                                    |
-| 読み手       | takosumi-git (installer)                     | takosumi kernel                                          |
-| placeholder  | なし (純粋 metadata)                         | あり (`${bindings.*}` / `${secrets.*}` / `${refs.*}` 等) |
-| compile      | そのまま **kernel に渡らない**               | placeholder 解決後 kernel に渡る                         |
-| 保存         | `appManifestDigest` (SHA256)                 | `compiledManifestDigest` (SHA256)                        |
-| 役割         | install UI / binding / permission / metadata | compute resource declaration                             |
+| 観点         | `.takosumi/app.yml`                          | `.takosumi/manifest.yml`                                                    |
+| ------------ | -------------------------------------------- | --------------------------------------------------------------------------- |
+| `apiVersion` | `app.takosumi.dev/v1`                        | `"1.0"` (kernel envelope)                                                   |
+| `kind`       | `InstallableApp`                             | `Manifest` (required)                                                       |
+| 読み手       | takosumi-git (installer)                     | takosumi kernel                                                             |
+| placeholder  | なし (純粋 metadata)                         | あり (`${bindings.*}` / `${secrets.*}` / `${ref:...}` / `${imports...}` 等) |
+| compile      | そのまま **kernel に渡らない**               | placeholder 解決後 kernel に渡る                                            |
+| 保存         | `appManifestDigest` (SHA256)                 | `compiledManifestDigest` (SHA256)                                           |
+| 役割         | install UI / binding / permission / metadata | compute resource declaration                                                |
 
 ### kernel に渡らない不変条件
 
