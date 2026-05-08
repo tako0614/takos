@@ -1,10 +1,29 @@
 # Takos System Architecture - Final
 
+::: tip 上位 canonical reference
+本ページは Takos service set の repository boundary を扱う。Takos が **Git URL から
+Takosumi Account に install される app** であるという最終モデル
+(Installable App Model) は
+[Installable App Model](./installable-app-model.md) を canonical reference と
+する。本ページの service set / responsibility / communication 記述は、その
+モデルの 5 entity (Takosumi Accounts / takosumi kernel / takosumi-cloud /
+takosumi-git / Takos) 責務分離と整合する。
+:::
+
+::: info Cross-instance service binding
+本ページで `accounts.takosumi.cloud` 等 hostname を service endpoint として
+言及する箇所は hostname-based default ではなく example です。現在は
+**service identifier** (`takosumi.account.auth@v1` 等の forward 3-level dotted
+format) + `serviceResolvers[]` (anchor) 経由で resolve され、 hostname は
+operator-injected 値になります。 詳細は
+[cross-instance service binding](./cross-instance-service-binding.md)。
+:::
+
 このドキュメントは Takos 全体の構成、各 repository / service / domain の責務、相互関係、通信方式、authority、standalone / integrated / distributed topology を 1 枚で読めるようにまとめた architecture map です。
 
 これは `takosumi` だけの設計書ではありません。Takos 全体の architecture map です。
 
-Takos は、AI agent が software を作り、配布し、運用し、ユーザーや tenant に届けるための AI-native PaaS software です。
+Takos は、AI agent が software を作り、配布し、運用し、ユーザーや tenant に届けるための AI-native PaaS software です。Takos 自身は **Git URL から Takosumi Account に install される app** であり、OAuth provider は Takos でも takosumi kernel でもなく [Takosumi Accounts](./takosumi-accounts.md) (account plane) に置かれます。
 
 最終方針:
 
@@ -41,43 +60,84 @@ Takos-native semantics:
 
 ### 1.1 Full Takos distribution
 
+Full Takos distribution の正本図は new.md §33 の Installable App Model 図に揃えます。
+User の install action から Installed Takos の chat 表示までは、Takosumi Accounts
+(account plane) → takosumi-git (installer) → takosumi kernel (compute) → Installed
+Takos (OIDC consumer) の経路を辿ります。
+
+`Installed Takos` = **takos-app runtime のみ** (OIDC consumer / chat / agent /
+memory / app-local profile / files / public API gateway) です。`takos-git` (Takos
+Git hosting service) と `takos-agent` (agent execution service) は Installed
+Takos に bundle される構成要素ではなく、Takos service set における **sibling
+services** として隣に並びます (Installable App Model の Takos 自身は `takos.chat`
+= takos-app)。
+
 ```text
-User / Browser / CLI
+User
+  │  Install Takos
+  ▼
+takosumi.cloud/install?git=...&ref=v1.2.3
   │
   ▼
-takos-app
-  public API gateway / auth / account / billing / OAuth / product UI shell
-  │ signed internal RPC
+Takosumi Accounts
+  account / billing / OAuth-OIDC issuer / upstream IdP broker / app installation owner
+  │  AppInstallation create / OIDC client provision / launch token sign
   ▼
-takosumi
-  PaaS control plane
-  tenant / space / entitlement / deploy / runtime / resource / routing / network / registry / audit
-  │
-  ├── takos-git
-  │     source truth / repositories / refs / objects / source resolution
-  │
-  ├── takos-agent
-  │     agent execution service, backed by takos-agent-engine
-  │
-  ├── runtime agents
-  │     docker hosts / GPU hosts / edge hosts / other runtime hosts
-  │
-  ├── provider targets
-  │     Cloudflare / Cloud Run / Kubernetes / Docker host / AWS / GCP / external providers
-  │
-  └── audit / observability / registry / provider APIs
+takosumi-git
+  Git URL fetch / .takosumi/app.yml parse / workflow run / binding injection /
+  manifest compile / kernel deploy bridge
+  │  POST /v1/deployments (compiled manifest only)
+  ▼
+takosumi kernel
+  pure compute substrate / manifest apply only / provider DAG / outputs resolver
+  │  no OAuth / no billing / no account / no workflow
+  ▼
+Installed Takos  ──  sibling services (separate AppInstallations / services)
+  takos-app              ├── takos-git    (Git hosting service, sibling)
+  OIDC consumer          ├── takos-agent  (agent execution service, sibling,
+  chat / agent /         │                  backed by takos-agent-engine)
+  memory / app-local     ├── runtime agents      (docker / GPU / edge hosts)
+  profile / files /      └── provider targets    (Cloudflare / Cloud Run /
+  public API gateway                              Kubernetes / AWS / GCP)
+  optional GitOps deploy
+  binding to takosumi kernel
 ```
 
+`takos-app` は **OAuth provider ではなく OIDC consumer** です。account / billing /
+OAuth issuer / consent screen / Stripe といった identity & billing 機能は
+`takos-app` には残らず、すべて Takosumi Accounts (account plane) に集約されます。
+takos-app が持つのは chat / agent / memory / app-local profile / files / public
+API gateway であり、ユーザーのログインは Takosumi Accounts OIDC を `AUTH_DRIVER=oidc`
+として consume します。`takos-git` / `takos-agent` は `takos-app` に bundle されず、
+それぞれ独立した service として横並びに配置されます。所有権と source pin は
+AppInstallation 台帳 ([AppInstallation](./app-installation.md)) で表現されます。
+
+kernel features (Agent / Chat, Git, Storage, Store, Deploy, Routing, Resources)
+は kernel が常時提供する compute-only feature であり、`Auth` と `Billing` は
+kernel features に **含めない** (identity / billing は Takosumi Accounts の
+責務)。正本は [Kernel](./kernel.md) を参照。
+
+詳細は [Installable App Model](./installable-app-model.md) /
+[Takosumi Accounts](./takosumi-accounts.md) /
+[Installer Pipeline](./installer-pipeline.md) /
+[Runtime Modes](./runtime-modes.md) を参照。
+
 ### 1.2 Standalone Takosumi distribution
+
+Standalone Takosumi distribution は kernel を **compute substrate のみ** として
+独立に動かす形です。Takosumi Accounts (account plane) は kernel と **別 service**
+であり、self-host operator は Takosumi Accounts を運用しないか、別 IdP
+(Keycloak / Auth0 / 任意 OIDC issuer) を採用してもよい構成です。kernel と
+Takosumi Accounts は同じ "takosumi" の名を持ちますが、kernel の内側ではなく
+takosumi-cloud product 側に置かれる account plane として独立にデプロイされます。
 
 ```text
 User / Browser / CLI
   │ HTTPS
   ▼
-takosumi
-  standalone PaaS control plane
-  public API / UI / local or OIDC auth
-  deploy / runtime / resources / routing / network / registry / audit
+takosumi  (kernel = compute substrate のみ)
+  manifest apply engine / provider DAG / outputs resolver
+  no OAuth / no billing / no account / no workflow
   │
   ├── source connectors
   │     GitHub / GitLab / Gitea / raw Git / local upload / tarball
@@ -91,6 +151,20 @@ takosumi
   ├── local or remote registry
   │
   └── local or remote audit / observability sink
+
+(別 service)
+Takosumi Accounts          : managed deployment では accounts.takosumi.cloud。
+                             self-host では別 IdP に差し替え可
+takosumi-git               : 上位 sibling product。Git URL installer / workflow
+                             runner / manifest compiler。standalone でも optional
+                             に挟める
+```
+
+invariant:
+
+```text
+takosumi kernel   : OAuth なし / billing なし / account なし
+Takosumi Accounts : OAuth / OIDC / billing あり (別 service として deploy)
 ```
 
 ### 1.3 Distributed topology
@@ -132,12 +206,19 @@ Target service set:
 
 | service | product root | responsibility |
 |---|---|---|
-| `takos-app` | `takos/app` | public API gateway, auth, account, billing, OAuth, product UI shell |
-| `takosumi` | `takos` | standalone-capable PaaS control plane and Full Takos internal PaaS component |
-| `takos-git` | `takos/git` | Git hosting, repository object storage, source truth, source resolution |
+| `takos-app` | `takos/app` | OIDC consumer + chat / agent / memory / app-local profile / files / public API gateway. **OAuth provider ではない。account / billing / OAuth issuer / Stripe は持たない** (それらは Takosumi Accounts 側) |
+| `Takosumi Accounts` | takosumi-cloud account plane (`accounts.takosumi.cloud`) | OAuth / OIDC issuer, identity broker (Google / GitHub / Passkey / Enterprise OIDC), billing owner, AppInstallation 台帳 (app installation owner)。詳細は [Takosumi Accounts](./takosumi-accounts.md) と [AppInstallation 台帳](./app-installation.md) |
+| `takosumi` | `takosumi` | takosumi kernel = compute substrate / manifest deploy engine。`POST /v1/deployments` のみ公開。OAuth / billing / account / workflow / cron は持たない |
+| `takosumi-git` | `takosumi-git` | 上位 sibling product。Git URL installer / workflow runner / manifest compiler。`takosumi-git` is generic; Takos はその一 client |
+| `takos-git` | `takos/git` | Takos product 内側の Git hosting service。repository object storage, source truth, source resolution。`takosumi-git` (workflow / git bridge) とは別物 |
 | `takos-agent` | `takos/agent` | agent execution service |
 | `takos-cli` | `takos-cli` | user/operator CLI |
 | `takos-private` | `takos-private` | private operator config, secrets, production/staging deploy config |
+
+新サービスである **Takosumi Accounts** と **AppInstallation 台帳** の責務は次の
+独立章 ([§2A Takosumi Accounts (account plane)](#_2a-takosumi-accounts-account-plane))
+を参照。kernel features に **Auth と Billing は含めません** (詳細は
+[Kernel](./kernel.md))。
 
 Standalone deploy and runtime services are not target top-level product roots. They are internal domains of
 `takosumi`.
@@ -165,6 +246,56 @@ user-created apps
 ```
 
 They deploy through the same PaaS / deploy / runtime / tenant context model as user apps.
+
+---
+
+## 2A. Takosumi Accounts (account plane)
+
+**Takosumi Accounts** は takosumi-cloud product の account plane として運用する
+独立 service です。kernel と同じ "takosumi" の名を持ちますが、kernel の内側では
+ありません。
+
+```text
+issuer URL : https://accounts.takosumi.cloud
+役割       : identity broker / OIDC issuer / billing owner / app installation owner
+別 service : takosumi kernel と分離して deploy / 運用される
+```
+
+Takosumi Accounts が持つもの:
+
+```text
+- account / login / passkey / upstream OAuth login
+- OIDC provider (issuer = accounts.takosumi.cloud)
+- billing account (Stripe webhook 処理 / subscription / usage / invoice)
+- AppInstallation 台帳 (AppInstallation / AppBinding / AppGrant /
+  RuntimeBinding / InstallationEvent)
+```
+
+Takosumi Accounts が持たないもの:
+
+```text
+- compute apply / provider DAG / outputs resolver (kernel の責務)
+- workflow / build pipeline / .takosumi/app.yml の解釈 (takosumi-git の責務)
+- chat / agent / memory (Takos の責務)
+```
+
+詳細は [Takosumi Accounts](./takosumi-accounts.md) /
+[AppInstallation 台帳](./app-installation.md) /
+[Installable App Model](./installable-app-model.md) を参照。
+
+### 2A.1 service set 表現の正本
+
+ecosystem の service set は次のように表現します。
+
+```text
+takos-app / takosumi / takos-git / takos-agent
+  + Takosumi Accounts (takosumi-cloud account plane)
+  + takosumi-git    (上位 sibling product。installer / workflow runner)
+```
+
+`takos-app` は Installable App Model 上 **OIDC consumer** に再定義されており、
+account / billing / OAuth issuer は Takosumi Accounts に集約されます。kernel
+features の正本記述は [Kernel](./kernel.md) を参照。
 
 ---
 
@@ -203,14 +334,23 @@ audit projection and security events through audit domain
 ### 3.2 takosumi does not own
 
 ```text
-Full Takos public account/profile/billing shell when integrated
+account / login / passkey / upstream OAuth (Takosumi Accounts owns)
+OAuth / OIDC issuer / consent screen (Takosumi Accounts owns)
+billing / Stripe / subscription / invoice (Takosumi Accounts owns)
+AppInstallation 台帳 / AppBinding / AppGrant (Takosumi Accounts owns)
+workflow / build pipeline / .takosumi/app.yml interpretation (takosumi-git owns)
 Git object truth when integrated with takos-git
 agent model/tool execution when integrated with takos-agent
+chat / memory / app-local profile (Installed Takos owns)
 provider cloud truth
 observed provider state as canonical truth
 tenant workload code semantics
 operator secrets in plaintext
 ```
+
+Installable App Model 下では、kernel features に **Auth と Billing は含まれません**。
+identity / billing は Takosumi Accounts (account plane) の責務です。詳細は
+[Kernel](./kernel.md) を参照。
 
 ### 3.3 takosumi modes
 
@@ -1191,7 +1331,11 @@ bootstrap/recovery config
 
 | data / object | owner |
 |---|---|
-| account, profile, auth session, OAuth | `takos-app` |
+| Takosumi Account, login, passkey, upstream IdP linkage | `Takosumi Accounts` |
+| OAuth / OIDC issuer state, consent, OIDC client registration | `Takosumi Accounts` |
+| billing account, Stripe subscription, invoice, usage aggregate | `Takosumi Accounts` |
+| AppInstallation / AppBinding / AppGrant / RuntimeBinding / InstallationEvent | `Takosumi Accounts` |
+| Installed Takos の app-local profile, chat thread, memory, files | `takos-app` (OIDC consumer) |
 | tenant, space, group, membership, entitlement | `paas-core` |
 | route ownership / domain ownership | `paas-routing` |
 | repository, ref, object, source truth | `takos-git` or SourcePort provider |
