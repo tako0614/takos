@@ -43,13 +43,14 @@ access token を指定する。
 - expiry: **7 日 fixed**
   (`Max-Age=604800`、自動延長なし。期限切れ時は再ログインが必要) :::
 
-::: tip Publication tokens
+::: tip Runtime bindings
 
 deploy/app runtime から Takos API や Takos-managed resource を使う場合は、
-manifest の `publications + compute.<name>.consume` か `/api/publications` /
-`/api/services/:id/consumes` を使います。Deployment lifecycle は JWT deploy
-credential を public contract としては使いません。manifest の public contract
-では `storage:` は使わず、resource は control-plane の API で管理します。 :::
+Installable App Model の AppBinding catalog と Product API を使います。旧
+`publications + compute.<name>.consume` manifest model は current Shape manifest
+の public contract ではありません。Deployment lifecycle は JWT deploy credential
+を public contract としては使いません。manifest の public contract では
+`storage:` は使わず、resource は owning control-plane API で管理します。 :::
 
 ## エラーレスポンスの共通形式
 
@@ -829,13 +830,12 @@ registry と repository import の管理 surface。kernel
 | PUT    | `/api/publications/:name`   | publication 作成・更新           |
 | DELETE | `/api/publications/:name`   | Takos grant/API publication 削除 |
 
-manifest の `publications` と `compute.<name>.consume` は publication / consume
-の public contract です。この API は publication catalog と Takos publisher
-publication を管理する control-plane surface。route publication は
-manifest-managed entry、Takos publisher publication はこの API
-からも管理できる。`PUT` / `DELETE` は `publisher: "takos"` の grant/API
-publication 用で、route publication は manifest の `publications` を変更して
-deploy する。storage-side auto-injection は retired。
+この API は legacy publication catalog と Takos publisher publication を管理する
+compatibility surface です。current `.takosumi/manifest.yml` では top-level
+`publications[]` と `compute.<name>.consume` は使わず、installer-bound binding
+は [Binding Catalog](/reference/binding-catalog)、cross-instance dependency は
+`imports[]` / `serviceResolvers[]` で表現します。storage-side auto-injection は
+retired。
 
 `GET /api/publications/resolve?ref=<name-or-group/name>&consumerGroupId=<id>` は
 group-local publication 名と `<group>/<name>` 形式の cross-group ref
@@ -1834,13 +1834,13 @@ space lifecycle event の SSE 配信。
 
 ## deployments
 
-Takos Deploy の Deployment lifecycle endpoint family です。`Deployment` record
-は preview / resolve / apply / rollback の 4 mode
-を持ち、`POST
-/api/public/v1/deployments` 1 endpoint と関連 sub-endpoint
-で全ライフサイクル
-を扱います（[Core contract v1.0 § 17](/takosumi/core/01-core-contract-v1.0)）。
-削除済みの `/api/public/v1/deploy/plans` / `/api/public/v1/deploy/applies` /
+Takos Deploy compatibility API の Deployment lifecycle endpoint family です。
+`Deployment` record は preview / resolve / apply / rollback の 4 mode
+を持ち、`POST /api/public/v1/deployments` 1 endpoint と関連 sub-endpoint
+で全ライフサイクルを扱います。takosumi kernel の public contract は compiled
+Shape manifest を受け取る `POST /v1/deployments` だけです
+（[Core contract v1.0 § 17](/takosumi/core/01-core-contract-v1.0)）。 削除済みの
+`/api/public/v1/deploy/plans` / `/api/public/v1/deploy/applies` /
 `/api/public/v1/spaces/:spaceId/group-deployment-snapshots/*` などは current で
 削除されました（breaking change）。`/api/deploy/*` も Deployment endpoint family
 に統合されています。`group` は任意で、 省略時は manifest の `name` を group
@@ -1895,14 +1895,21 @@ artifact input として渡します。
   "group": "my-app",
   "env": "staging",
   "manifest": {
-    "name": "my-app",
-    "compute": {
-      "web": {
-        "image": "ghcr.io/acme/web@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "port": 8080
+    "apiVersion": "1.0",
+    "kind": "Manifest",
+    "metadata": { "name": "my-app" },
+    "resources": [
+      {
+        "shape": "web-service@v1",
+        "name": "web",
+        "provider": "@takos/self-hosted-process",
+        "spec": {
+          "image": "ghcr.io/acme/web@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "port": 8080,
+          "scale": { "min": 1, "max": 2 }
+        }
       }
-    },
-    "routes": [{ "id": "web", "target": "web", "path": "/" }]
+    ]
   }
 }
 ```
@@ -1933,8 +1940,8 @@ mode 別の挙動:
   "expansion_summary": {
     "components": 1,
     "bindings": 0,
-    "routes": 1,
-    "resources": 0
+    "routes": 0,
+    "resources": 1
   }
 }
 ```
@@ -2055,7 +2062,8 @@ bundled snapshot ではなく source metadata / resolved commit を
   が所有 (Takosumi Account 単位の Stripe customer)
 - Takos plan は Takosumi Cloud invoice の line item として扱われます
 - 新規 integration では使用せず、Takosumi Accounts の billing API を参照して
-  ください
+  ください (`takosumi.account.billing@v1` service identifier を anchor から
+  resolve)
 
 以下の `/api/billing/*` family は legacy 互換のため残されますが、Installable App
 Model 配下の app は billing owner にならず、Takosumi Account の billing account
