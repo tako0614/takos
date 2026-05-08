@@ -106,9 +106,14 @@ Takosumi 専用 SDK を必要としません。
 
 Current implementation note: the Phase 1.1 scaffold lives in sibling repo path
 `../takosumi-cloud/docs/accounts-service.md` and currently provides OIDC
-discovery, JWKS, dev/test authorization-code flow, PKCE checks, in-memory client
-registration validation, and subject derivation helpers. Persistent passkey /
-upstream IdP / Stripe / AppInstallation storage remain follow-up work.
+discovery, JWKS, dev/test authorization-code flow, PKCE checks, UserInfo,
+refresh-token, revoke, and introspection routes, in-memory OIDC client
+registration validation, subject derivation helpers, passkey/WebAuthn helpers
+and HTTP routes, Google/GitHub upstream OAuth routes, Stripe checkout/webhook
+helpers, AppInstallation ledger HTTP routes, launch token JWS issuance, and a
+server-rendered installation dashboard. Production persistence hardening,
+browser-side passkey UI, full attestation verification, Stripe dashboard views,
+Takos legacy adapter, and full Takos OIDC consumer e2e remain follow-up work.
 
 ```txt
 issuer = https://<ACCOUNTS_ISSUER_HOST>
