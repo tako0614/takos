@@ -4,23 +4,23 @@
 として説明できるか」をまとめます。
 
 Takos の public spec は backend-neutral です。runtime model は tenant runtime
-です。Cloudflare は tracked reference Workers backend ですが、PaaS Core の canonical
-provider ではありません。local / self-host / k8s は同じ manifest schema と
-translation surface を共有します。AWS / GCP は current docs では Helm overlay
-のみです。backend / adapter の選択は operator-only configuration と PaaS plugin
-config であり、deploy manifest には書きません。
+です。Cloudflare は tracked reference Workers backend ですが、PaaS Core の
+canonical provider ではありません。local / self-host / k8s は同じ manifest
+schema と translation surface を共有します。AWS / GCP は current docs では Helm
+overlay のみです。backend / adapter の選択は operator-only configuration と PaaS
+plugin config であり、deploy manifest には書きません。
 
 ## Support matrix
 
-| surface                                | status      | primary config                                                                                         | notes                                                                              |
-| -------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| Cloudflare Workers + container adapter | `stable`    | tracked reference Workers backend templates                                                            | current primary deploy surface                                                     |
-| Local Docker Compose                   | `stable`    | `.env.local.example`, `compose.local.yml`                                                              | local backend / 開発・smoke 用                                                     |
-| takos-private server stack             | `supported` | `takos-private/.env.server.example`, `takos-private/compose.server.yml`, `agent/Dockerfile`           | local backend の private composition                                               |
+| surface                                | status      | primary config                                                                                                    | notes                                                                              |
+| -------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Cloudflare Workers + container adapter | `stable`    | tracked reference Workers backend templates                                                                       | current primary deploy surface                                                     |
+| Local Docker Compose                   | `stable`    | `.env.local.example`, `compose.local.yml`                                                                         | local backend / 開発・smoke 用                                                     |
+| takos-private server stack             | `supported` | `takos-private/.env.server.example`, `takos-private/compose.server.yml`, `agent/Dockerfile`                       | local backend の private composition                                               |
 | Local-platform manual process          | `supported` | `takos/app/apps/control/.env.self-host.example` / `takos/app/apps/control/.env.self-host` + `dev:local:*` scripts | local backend の manual 起動                                                       |
-| Helm / Kubernetes self-host packaging  | `supported` | Helm chart                                                                                             | k8s backend packaging                                                              |
-| Generic OCI orchestrator               | `supported` | `OCI_ORCHESTRATOR_*`, `TAKOS_LOCAL_*`                                                                  | tenant image workload adapter integration                                          |
-| ECS / Cloud Run / k8s image adapters   | `supported` | custom operator wiring + OCI-backed backend integration                                                | tenant image workload adapters。ECS / Cloud Run は kernel hosting surface ではない |
+| Helm / Kubernetes self-host packaging  | `supported` | Helm chart                                                                                                        | k8s backend packaging                                                              |
+| Generic OCI orchestrator               | `supported` | `OCI_ORCHESTRATOR_*`, `TAKOS_LOCAL_*`                                                                             | tenant image workload adapter integration                                          |
+| ECS / Cloud Run / k8s image adapters   | `supported` | custom operator wiring + OCI-backed backend integration                                                           | tenant image workload adapters。ECS / Cloud Run は kernel hosting surface ではない |
 
 Resource layer は backend-neutral public kind を維持し、各 backend では
 backend-specific backing service または Takos-managed runtime
@@ -31,19 +31,19 @@ existence や behavior parity ではありません。詳細は
 
 ## Tracked templates
 
-| file                                  | purpose                                        |
-| ------------------------------------- | ---------------------------------------------- |
-| `.env.local.example`                  | compose/local stack                            |
-| `takos/app/apps/control/.env.example`           | control service の baseline env template       |
-| `takos/app/apps/control/.env.self-host.example` | control local-platform manual process template |
-| `takos-private/.env.server.example`             | takos-private server stack template            |
-| `takos-private/compose.server.yml`              | takos-private server compose                   |
-| `agent/Dockerfile`                              | Rust executor container                        |
-| `takos-private/apps/executor`                   | legacy TypeScript executor fallback            |
-| `takos/app/apps/control/SECRETS.md`             | Cloudflare / self-host secret inventory        |
-| `takos/app/apps/control/wrangler*.toml`         | tracked reference Workers backend deploy template |
+| file                                            | purpose                                                 |
+| ----------------------------------------------- | ------------------------------------------------------- |
+| `.env.local.example`                            | compose/local stack                                     |
+| `takos/app/apps/control/.env.example`           | control service の baseline env template                |
+| `takos/app/apps/control/.env.self-host.example` | control local-platform manual process template          |
+| `takos-private/.env.server.example`             | takos-private server stack template                     |
+| `takos-private/compose.server.yml`              | takos-private server compose                            |
+| `agent/Dockerfile`                              | Rust executor container                                 |
+| `takos-private/apps/executor`                   | legacy TypeScript executor fallback                     |
+| `takos/app/apps/control/SECRETS.md`             | Cloudflare / self-host secret inventory                 |
+| `takos/app/apps/control/wrangler*.toml`         | tracked reference Workers backend deploy template       |
 | `takos/app/apps/control/.secrets/<env>`         | tracked reference Workers backend runtime secret 管理元 |
-| `takos/deploy/helm/takos/`                      | self-host Helm chart                           |
+| `takos/deploy/helm/takos/`                      | self-host Helm chart                                    |
 
 ## current env groups
 
@@ -52,8 +52,8 @@ existence や behavior parity ではありません。詳細は
 主に次を使います。
 
 - OSS local stack: `.env.local.example` / `.env.local`
-- local-platform manual process: `takos/app/apps/control/.env.self-host.example` /
-  `takos/app/apps/control/.env.self-host`
+- local-platform manual process: `takos/app/apps/control/.env.self-host.example`
+  / `takos/app/apps/control/.env.self-host`
 - takos-private server stack: `takos-private/.env.server.example` /
   `takos-private/compose.server.yml`
 - `TAKOS_LOCAL_*`
@@ -88,3 +88,38 @@ existence や behavior parity ではありません。詳細は
 cloudflare を tracked reference Workers backend とし、local/self-host/k8s は同じ
 manifest schema / translation surface を実装する supported surfaces として
 運用します。AWS / GCP は Helm overlay の範囲だけを current contract とします。
+
+## Runtime mode 互換性
+
+Takos は [Installable App Model](/architecture/installable-app-model) に従い、3
+種類の runtime mode をサポートします。各 mode の互換性は次の通り:
+
+| runtime mode  | status      | billing 主体       | OIDC issuer resolution                        | data 隔離                  | 想定ユーザー                 |
+| ------------- | ----------- | ------------------ | --------------------------------------------- | -------------------------- | ---------------------------- |
+| `shared-cell` | `stable`    | Takosumi Cloud     | `takosumi.account.auth@v1` service identifier | per-installation namespace | 一般ユーザー (instant UX)    |
+| `dedicated`   | `supported` | Takosumi Cloud     | `takosumi.account.auth@v1` service identifier | dedicated deployment       | 重い workload / 専有要件     |
+| `self-hosted` | `supported` | self-host operator | operator 選択 (Keycloak / Auth0 等)           | full isolation             | 退出 / enterprise / 主権重視 |
+
+- shared-cell と dedicated は同じ Takosumi Account に紐づき、**Takosumi Cloud が
+  billing 主体**として invoice を発行します
+- self-hosted は export 後に operator が own infrastructure で運用するため、
+  **billing は self-host 側の責任**であり Takosumi Cloud は opts out します
+- どの mode でも Takos 本体の binary は同じで、binding (OIDC / DB / Object Store
+  / Git) の provider のみが変わります
+
+shared-cell ↔ dedicated の物理化、dedicated → self-hosted の export については
+[Upgrade と Export](/platform/upgrade-export) を参照。
+
+## Billing 互換性
+
+| 観点                  | 採用                                                                     |
+| --------------------- | ------------------------------------------------------------------------ |
+| Invoice issuer        | **Takosumi Cloud** (managed mode), self-host operator (self-hosted mode) |
+| Contract owner        | Takosumi Account                                                         |
+| Line item product     | `takos.chat` ほか installable app id                                     |
+| Plan のスコープ       | Takos plan (Free / Plus / PayG) は Takosumi Cloud invoice 内の line item |
+| Stripe Billing Portal | temporary measure (Takosumi Accounts billing portal に統合予定)          |
+
+Takos service 単独で billing を完結させる構成は **deprecated** です。billing
+view / API はすべて Takosumi Cloud 経由を canonical とします。詳細は
+[課金](/platform/billing) を参照。

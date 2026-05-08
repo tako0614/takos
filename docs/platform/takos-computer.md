@@ -26,6 +26,7 @@ single worker (`web`) と attached container (`sandbox`) の構成。
 {hostname}
   /mcp                         → published MCP endpoint for agents
   /gui                         → dashboard / computer UI
+  /gui/api/auth/callback       → OIDC callback (Takosumi Accounts 経由)。詳細: [OIDC Consumer](/apps/oidc-consumer)
   /healthz                     → liveness health check
   /health                      → health alias
   /readyz                      → readiness check
@@ -36,119 +37,118 @@ single worker (`web`) と attached container (`sandbox`) の構成。
   /icons/computer.svg          → launcher icon
 ```
 
-## Publications
+## App Metadata And Grants
 
 ```yaml
-routes:
-  - id: gui
-    target: web
-    path: /gui
-  - id: mcp
-    target: web
-    path: /mcp
-  - id: healthz
-    target: web
-    path: /healthz
-  - id: health
-    target: web
-    path: /health
-  - id: readyz
-    target: web
-    path: /readyz
-  - id: create
-    target: web
-    path: /create
-  - id: icon
-    target: web
-    path: /icons/computer.svg
-  - id: session
-    target: web
-    path: /session
-  - id: session-mcp
-    target: web
-    path: /session/:id/mcp
-  - id: gui-session-mcp
-    target: web
-    path: /gui/api/sandbox-session/:id/mcp
-
-publications:
-  - name: computer-ui
-    type: publication.http-endpoint@v1
-    display:
-      title: Computer
-    outputs:
-      url:
-        kind: url
-        routeRef: gui
-  - name: computer-mcp
-    type: publication.mcp-server@v1
-    auth:
-      bearer:
-        secretRef: PUBLISHED_MCP_AUTH_TOKEN
-    outputs:
-      url:
-        kind: url
-        routeRef: mcp
-    spec:
+launcher:
+  name: computer-ui
+  title: Computer
+  url: ${ref:web.url}/gui
+mcp:
+  endpoints:
+    - name: computer-mcp
       transport: streamable-http
-compute:
-  web:
-    consume:
-      - publication: takos.api-key
-        as: takos-computer-api
-        request:
-          scopes:
-            - spaces:read
-            - files:read
-            - files:write
-            - memories:read
-            - memories:write
-            - threads:read
-            - threads:write
-            - runs:read
-            - runs:write
-            - agents:execute
-            - repos:read
-            - repos:write
-            - mcp:invoke
-            - events:subscribe
+      url: ${ref:web.url}/mcp
+      auth:
+        kind: bearer
+        tokenRef: published-mcp-auth-token
+grants:
+  requested:
+    - spaces:read
+    - files:read
+    - files:write
+    - memories:read
+    - memories:write
+    - threads:read
+    - threads:write
+    - runs:read
+    - runs:write
+    - agents:execute
+    - repos:read
+    - repos:write
+    - mcp:invoke
+    - events:subscribe
 ```
 
-`publication.http-endpoint@v1` / `publication.mcp-server@v1` の canonical 定義は
-[publication types](/reference/glossary#publication-types) を参照。`/mcp` は `computer_shell_exec`
-/ `computer_file_read` / `computer_file_write` などの `computer_*` tools
-を公開し、必要に応じて sandbox session を作成して `/session/:id/mcp` に proxy
-します。`takos-computer-api` は route publication ではなく、kernel API への
-access を受け取る local consume 名です。
+launcher / MCP endpoint は kernel manifest の `publications[]` ではなく Takos
+app catalog / MCP registry の metadata です。`/mcp` は `computer_shell_exec` /
+`computer_file_read` / `computer_file_write` などの `computer_*` tools
+を公開し、 必要に応じて sandbox session を作成して `/session/:id/mcp` に proxy
+します。 Takos API access は app-layer grant から materialize されます。
 
-published MCP endpoint の auth は `auth.bearer.secretRef:
-PUBLISHED_MCP_AUTH_TOKEN` が canonical contract です。Takos managed deploy では
-この publication secret が生成され、agent-facing `/mcp` bearer token として使われる。
-direct Wrangler deploy など legacy / compatibility 経路では
-`PUBLISHED_MCP_AUTH_TOKEN` が未設定のときに `SANDBOX_HOST_AUTH_TOKEN` を
-published `/mcp` auth token として fallback 利用できる。これは互換用であり、
-managed deploy では `PUBLISHED_MCP_AUTH_TOKEN`、host admin/session route 用の
-`SANDBOX_HOST_AUTH_TOKEN`、worker-to-container 用の `MCP_AUTH_TOKEN` を分ける。
+published MCP endpoint の auth は `PUBLISHED_MCP_AUTH_TOKEN` が canonical
+runtime credential です。これは **MCP integration の internal credential** で
+あり、agent (= MCP client) が `/mcp` を呼ぶときの machine-to-machine bearer
+token として機能します。end-user (人間ユーザー) の 認証は `identity.oidc@v1`
+AppBinding (Takosumi Accounts) 経由の OIDC consumer flow で別 layer
+として処理し、`PUBLISHED_MCP_AUTH_TOKEN` は OIDC consumer flow
+には関与しません。
 
-published MCP tools は session 引数として snake_case と camelCase の両方を受け付ける。
-`session_id` / `sessionId`、`space_id` / `spaceId`、`user_id` / `userId` の
-request 値がある場合はそれを使う。省略時は agent-facing default session として
+Takos managed deploy ではこの registry secret が生成され、agent-facing `/mcp`
+bearer token として使われる。direct Wrangler deploy など legacy / compatibility
+経路では `PUBLISHED_MCP_AUTH_TOKEN` が未設定のときに `SANDBOX_HOST_AUTH_TOKEN`
+を published `/mcp` auth token として fallback 利用
+できる。これは互換用であり、managed deploy では `PUBLISHED_MCP_AUTH_TOKEN`、
+host admin/session route 用の `SANDBOX_HOST_AUTH_TOKEN`、worker-to-container
+用の `MCP_AUTH_TOKEN` を分ける。これら 3 token はすべて MCP / sandbox host
+内部の machine credential であり、Takos itself の **end-user 認証は OIDC
+consumer 経由** (`identity.oidc@v1` AppBinding) として明確に分離される。 旧
+OAuth provider 文脈で発行されていた token はこの分離後 legacy 扱いとし、 新規
+deploy では `identity.oidc@v1` AppBinding に統一する。
+
+## Bindings
+
+takos-computer は他の default apps と同様に **OIDC consumer** であり、 end-user
+sign-in を service identifier `takosumi.account.auth@v1` で解決される Takosumi
+Accounts に委譲する。 `.takosumi/app.yml` で `identity.oidc@v1` AppBinding を
+declare し、installer (takosumi-git) が installation 単位の OIDC client を
+Takosumi Accounts に 登録、`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
+`OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` を runtime に inject する (詳細:
+[OIDC Consumer](/apps/oidc-consumer) /
+[binding-catalog](/reference/binding-catalog#_1-identity-oidc-v1))。
+
+```yaml
+bindings:
+  auth:
+    type: identity.oidc@v1
+    required: true
+    redirectPaths:
+      - /gui/api/auth/callback
+    allowedScopes:
+      - openid
+      - email
+      - profile
+    subjectMode: pairwise
+```
+
+OIDC callback path は `/gui/api/auth/callback` を使い、 dashboard / computer UI
+の app session を発行する。 takos-computer 自身は OAuth provider を持たず、 OIDC
+issuer は常に AppBinding 経由で外部 (Takosumi Accounts または self-host operator
+が選択した issuer) から提供される。 MCP publication 用の bearer token
+(`PUBLISHED_MCP_AUTH_TOKEN` / `SANDBOX_HOST_AUTH_TOKEN` / `MCP_AUTH_TOKEN`) は
+OIDC consumer 層とは独立した machine-to-machine credential
+であり、ここで宣言する `identity.oidc@v1` binding には影響しない。
+
+published MCP tools は session 引数として snake_case と camelCase
+の両方を受け付ける。 `session_id` / `sessionId`、`space_id` /
+`spaceId`、`user_id` / `userId` の request 値がある場合はそれを使う。省略時は
+agent-facing default session として
 `session_id=agent-default`、`space_id=published-mcp`、`user_id=takos-agent`
 を使う。session 作成時の `space_id` / `spaceId` は container env
 `TAKOS_SPACE_ID` に反映され、sandbox 内の Takos API / CLI 操作が対象 space を
 判断する fallback context になる。既に起動済みで stopped ではない同一 session
-がある場合は既存 session state の space が維持され、後続 request の
-`space_id` / `spaceId` では上書きしない。
+がある場合は既存 session state の space が維持され、後続 request の `space_id` /
+`spaceId` では上書きしない。
 
 ## Runtime
 
-manifest は `.takos/workflows/deploy.yml` の `build-sandbox-host` job から
+manifest は `.takosumi/workflows/deploy.yml` の `build-sandbox-host` job から
 worker bundle を生成し、`apps/sandbox/Dockerfile` を attached container として
-宣言する。tracked reference Workers backend では container class `SandboxSessionContainer` を
-`SANDBOX_CONTAINER` binding として worker に渡す。 `compute.web.readiness` は
-`/readyz` を参照し、container health check は `/healthz` を参照する。worker
-route は `/healthz`、`/health`、`/readyz` と launcher icon の
-`/icons/computer.svg` も公開する。
+宣言する。tracked reference Workers backend では container class
+`SandboxSessionContainer` を `SANDBOX_CONTAINER` binding として worker に渡す。
+`compute.web.readiness` は `/readyz` を参照し、container health check は
+`/healthz` を参照する。worker route は `/healthz`、`/health`、`/readyz` と
+launcher icon の `/icons/computer.svg` も公開する。
 
 ## Resources
 

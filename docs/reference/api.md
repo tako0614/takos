@@ -1,23 +1,27 @@
 # API リファレンス
 
-<!-- docs:api-families seed-repositories,explore,public-stores,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,publications,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,events,pull-requests,deployments,groups,billing,auth,oauth -->
+<!-- docs:api-families seed-repositories,explore,public-stores,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,publications,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,events,pull-requests,deployments,groups,billing,auth -->
 
 ::: tip Coverage このページは Takos の **public HTTP contract**
 をまとめたリファレンスです。default distribution に含まれる kernel API と
 first-party app API を含みます。implementation-only な内部 endpoint
 は明示しない限りここでは扱いません。 :::
 
+Takos の OAuth provider 機能は Installable App Model で廃止されました。OIDC は
+[Takosumi Accounts](/architecture/takosumi-accounts) を参照、OIDC consumer
+設定は [/apps/oidc-consumer](/apps/oidc-consumer) を参照。
+
 > 現行 API gateway split status は
 > [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
 
 ## 認証
 
-| mode             | 使い方                              | 用途             |
-| ---------------- | ----------------------------------- | ---------------- |
-| Session cookie   | browser から `Cookie`               | SPA / console    |
-| PAT              | `Authorization: Bearer tak_pat_...` | CLI / automation |
-| OAuth bearer     | `Authorization: Bearer tak_oat_...` | third-party apps |
-| Internal binding | service binding + internal headers  | worker 間通信    |
+| mode             | 使い方                                      | 用途             |
+| ---------------- | ------------------------------------------- | ---------------- |
+| Session cookie   | browser から `Cookie`                       | SPA / console    |
+| PAT              | `Authorization: Bearer tak_pat_...`         | CLI / automation |
+| OIDC bearer      | `Authorization: Bearer <oidc-access-token>` | third-party apps |
+| Internal binding | service binding + internal headers          | worker 間通信    |
 
 PAT は `/api/me/personal-access-tokens` で管理します。
 
@@ -27,8 +31,8 @@ PAT は `/api/me/personal-access-tokens` で管理します。
 Authorization: Bearer <access_token>
 ```
 
-`<access_token>` には PAT（`tak_pat_...`）か OAuth
-トークン（`tak_oat_...`）を指定する。
+`<access_token>` には PAT（`tak_pat_...`）か resolved OIDC issuer が発行した
+access token を指定する。
 
 ::: tip Session cookie 仕様
 
@@ -82,34 +86,24 @@ credential を public contract としては使いません。manifest の public
 | `SERVICE_UNAVAILABLE`      | 503         | サービスが一時的に利用不可                     |
 | `GATEWAY_TIMEOUT`          | 504         | 上流サービスがタイムアウト                     |
 
-::: tip OAuth endpoints `/oauth/*` と consent UI 用の `/api/oauth/*` endpoints
-は RFC 6749/6750 準拠または consent UI 用の flat JSON error/status を使用します
-(`{ error: "invalid_token", error_description: "..." }` や
-`{ status: "error", title, message }`)。これは仕様上意図的に common envelope
-と異なります。 :::
-
 ## Rate limit
 
 主要な敏感系 endpoint には sliding window の rate limit が適用される (1 分
 window):
 
-| カテゴリ             | 上限 (req/min) | 適用対象                                                         |
-| -------------------- | -------------- | ---------------------------------------------------------------- |
-| `auth`               | 100            | 認証エンドポイント (login / verify)                              |
-| `sensitive`          | 100            | batch operations (storage bulk-delete / bulk-move / bulk-rename) |
-| `oauth.token`        | 20             | OAuth `/token` endpoint                                          |
-| `oauth.authorize`    | 30             | OAuth `/authorize` endpoint                                      |
-| `oauth.revoke`       | 10             | OAuth `/revoke` endpoint                                         |
-| `oauth.register`     | 10             | Dynamic Client Registration                                      |
-| `oauth.deviceCode`   | 10             | Device Authorization Grant `/device/code`                        |
-| `oauth.deviceVerify` | 60             | Device verification UI                                           |
+| カテゴリ    | 上限 (req/min) | 適用対象                                                         |
+| ----------- | -------------- | ---------------------------------------------------------------- |
+| `auth`      | 100            | 認証エンドポイント (login / verify)                              |
+| `sensitive` | 100            | batch operations (storage bulk-delete / bulk-move / bulk-rename) |
 
 レート制限到達時は HTTP `429` を返し、`error.code: "RATE_LIMITED"` +
 `error.details.retryAfter` (秒)。response header に `X-RateLimit-Limit`,
 `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After` を付与する。
 
 deploy 系 / billing meter 系の usage 制限は plan gate で別途 enforce される
-([billing](/platform/billing) 参照)。
+([billing](/platform/billing) 参照、Installable App Model では billing owner は
+[Takosumi Accounts](/architecture/takosumi-accounts) = Takosumi Cloud billing
+で、Takos plan は Takosumi Account の invoice の line item になる)。
 
 ## Idempotency
 
@@ -150,14 +144,13 @@ GET /api/resources?limit=20&offset=0
 | [`public-share`](#public-share)           | mixed    | thread share の read / access grant         |
 | [`mcp`](#mcp)                             | mixed    | MCP OAuth callback と MCP server 管理       |
 | [`billing` (webhook)](#billing)           | none     | Stripe webhook                              |
-| [`oauth` (consent)](#oauth-consent)       | session  | consent UI 用 API                           |
 
 ### Authenticated families
 
 | family                                            | purpose                                                              |
 | ------------------------------------------------- | -------------------------------------------------------------------- |
 | [`setup`](#setup)                                 | 初期セットアップ状態                                                 |
-| [`me`](#me)                                       | current user / settings / PAT / OAuth client                         |
+| [`me`](#me)                                       | current user / settings / PAT                                        |
 | [`spaces`](#spaces)                               | space 基本 CRUD / model / export                                     |
 | [`spaces.members`](#spaces-members)               | space メンバー管理                                                   |
 | [`spaces.repositories`](#spaces-repositories)     | space 内 repo 初期化                                                 |
@@ -193,11 +186,9 @@ GET /api/resources?limit=20&offset=0
 
 ### Non-API routes
 
-| family                            | purpose                                                                 |
-| --------------------------------- | ----------------------------------------------------------------------- |
-| [`smart-http`](#smart-http)       | Git Smart HTTP (clone / push)                                           |
-| [`well-known`](#well-known)       | OAuth / OIDC discovery                                                  |
-| [`oauth` (server)](#oauth-server) | OAuth 2.0 authorize / device / token / introspect / register / userinfo |
+| family                      | purpose                       |
+| --------------------------- | ----------------------------- |
+| [`smart-http`](#smart-http) | Git Smart HTTP (clone / push) |
 
 ---
 
@@ -446,36 +437,6 @@ MCP (Model Context Protocol) サーバー管理。
 `PATCH /api/me/password` は `{ "new_password": "..." }` を受け取ります。既に
 パスワードが設定されている場合は
 `{ "current_password": "...", "new_password": "..." }` が必要です。
-
-### OAuth consents
-
-| method | path                               | description        |
-| ------ | ---------------------------------- | ------------------ |
-| GET    | `/api/me/oauth/consents`           | 同意済みアプリ一覧 |
-| DELETE | `/api/me/oauth/consents/:clientId` | 同意取り消し       |
-| GET    | `/api/me/oauth/audit-logs`         | OAuth 操作ログ     |
-
-### OAuth clients
-
-| method | path                              | description          |
-| ------ | --------------------------------- | -------------------- |
-| GET    | `/api/me/oauth/clients`           | 所有クライアント一覧 |
-| POST   | `/api/me/oauth/clients`           | クライアント作成     |
-| PATCH  | `/api/me/oauth/clients/:clientId` | クライアント更新     |
-| DELETE | `/api/me/oauth/clients/:clientId` | クライアント削除     |
-
-#### `POST /api/me/oauth/clients`
-
-リクエスト:
-
-```json
-{
-  "client_name": "My App",
-  "redirect_uris": ["https://example.com/callback"],
-  "client_uri": "https://example.com",
-  "logo_uri": "https://example.com/logo.png"
-}
-```
 
 ### Personal Access Tokens
 
@@ -2087,7 +2048,20 @@ bundled snapshot ではなく source metadata / resolved commit を
 
 ## billing
 
-課金・使用量・サブスクリプション管理。
+::: warning Legacy Takos の billing は Installable App Model で
+**廃止**されました。
+
+- Takosumi Cloud billing は [Takosumi Accounts](/architecture/takosumi-accounts)
+  が所有 (Takosumi Account 単位の Stripe customer)
+- Takos plan は Takosumi Cloud invoice の line item として扱われます
+- 新規 integration では使用せず、Takosumi Accounts の billing API を参照して
+  ください
+
+以下の `/api/billing/*` family は legacy 互換のため残されますが、Installable App
+Model 配下の app は billing owner にならず、Takosumi Account の billing account
+に紐づきます。 :::
+
+課金・使用量・サブスクリプション管理 (legacy)。
 
 > 現行 API gateway split status は
 > [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照 (billing
@@ -2134,28 +2108,6 @@ bundled snapshot ではなく source metadata / resolved commit を
 
 ---
 
-## oauth-consent
-
-OAuth 同意 UI 用 API。
-
-> 現行 API gateway split status は
-> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照
-> (`/api/oauth/*` は apps/api で受け、migration window 中は control
-> compatibility backend へ proxy)
-
-この family は browser session cookie を前提にした SPA 用 API です。エラーは
-common envelope ではなく、OAuth/consent UI 用の flat JSON (`error` /
-`error_description` または `status: "error"`) で返します。
-
-| method | path                            | description                |
-| ------ | ------------------------------- | -------------------------- |
-| GET    | `/api/oauth/authorize/context`  | 認可コンテキスト取得       |
-| POST   | `/api/oauth/authorize/decision` | 同意決定（approve / deny） |
-| GET    | `/api/oauth/device/context`     | デバイスフローコンテキスト |
-| POST   | `/api/oauth/device/decision`    | デバイスフロー決定         |
-
----
-
 ## Non-API routes
 
 ### smart-http
@@ -2175,78 +2127,61 @@ Basic（PAT）または匿名（公開リポジトリの読み取り）。
 git clone https://your-takos.example/git/tako/my-app.git
 ```
 
-### well-known
+### 認証 discovery
 
-OAuth / OIDC ディスカバリーエンドポイント。
-
-`grant_types_supported` は `authorization_code`, `refresh_token`,
-`client_credentials`, device code grant を公開します。
-
-| method | path                                      | description                                        |
-| ------ | ----------------------------------------- | -------------------------------------------------- |
-| GET    | `/.well-known/oauth-authorization-server` | OAuth 2.0 Authorization Server Metadata (RFC 8414) |
-| GET    | `/.well-known/jwks.json`                  | JSON Web Key Set                                   |
-| GET    | `/.well-known/openid-configuration`       | OpenID Connect Discovery                           |
-
-### oauth-server
-
-OAuth 2.0 サーバーエンドポイント。詳しいフローは
-[OAuth ドキュメント](/apps/oauth) を参照してください。
-
-canonical path は `/api/public/v1/oauth/*` です。既存 OAuth client と browser
-flow の互換性のため、legacy `/oauth/*` も同じ handler に到達します。どちらも
-apps/api で受け、migration window 中は control compatibility backend へ proxy
-されます。
-
-| method | path                                      | description                                                                                  |
-| ------ | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| GET    | `/api/public/v1/oauth/authorize`          | 認可ページの表示 (Authorization Code Flow)                                                   |
-| POST   | `/api/public/v1/oauth/authorize`          | 認可フォーム送信                                                                             |
-| GET    | `/api/public/v1/oauth/device`             | Device Authorization UI                                                                      |
-| POST   | `/api/public/v1/oauth/device`             | Device Authorization UI の同意 / 拒否フォーム送信                                            |
-| POST   | `/api/public/v1/oauth/device/code`        | Device Authorization Grant の device_code 発行 (RFC 8628)                                    |
-| POST   | `/api/public/v1/oauth/token`              | トークンエンドポイント（authorization_code, refresh_token, client_credentials, device_code） |
-| POST   | `/api/public/v1/oauth/introspect`         | トークンイントロスペクション                                                                 |
-| POST   | `/api/public/v1/oauth/revoke`             | トークン失効                                                                                 |
-| GET    | `/api/public/v1/oauth/userinfo`           | OpenID Connect UserInfo                                                                      |
-| POST   | `/api/public/v1/oauth/register`           | 動的クライアント登録                                                                         |
-| GET    | `/api/public/v1/oauth/register/:clientId` | クライアント登録情報取得                                                                     |
-| PUT    | `/api/public/v1/oauth/register/:clientId` | クライアント登録情報更新                                                                     |
-| DELETE | `/api/public/v1/oauth/register/:clientId` | クライアント登録削除                                                                         |
-| GET    | `/oauth/authorize`                        | 認可ページの表示 (Authorization Code Flow)                                                   |
-| POST   | `/oauth/authorize`                        | 認可フォーム送信                                                                             |
-| GET    | `/oauth/device`                           | Device Authorization UI                                                                      |
-| POST   | `/oauth/device`                           | Device Authorization UI の同意 / 拒否フォーム送信                                            |
-| POST   | `/oauth/device/code`                      | Device Authorization Grant の device_code 発行 (RFC 8628)                                    |
-| POST   | `/oauth/token`                            | トークンエンドポイント（authorization_code, refresh_token, client_credentials, device_code） |
-| POST   | `/oauth/introspect`                       | トークンイントロスペクション                                                                 |
-| POST   | `/oauth/revoke`                           | トークン失効                                                                                 |
-| GET    | `/oauth/userinfo`                         | OpenID Connect UserInfo                                                                      |
-| POST   | `/oauth/register`                         | 動的クライアント登録                                                                         |
-| GET    | `/oauth/register/:clientId`               | クライアント登録情報取得                                                                     |
-| PUT    | `/oauth/register/:clientId`               | クライアント登録情報更新                                                                     |
-| DELETE | `/oauth/register/:clientId`               | クライアント登録削除                                                                         |
-
-::: tip Audience claim validation OAuth access token (`tak_oat_...`) の `aud`
-claim は issuance 時に **`client_id`** を埋め込みます。validation 側 (introspect
-/ API auth middleware) は `client_id` を audience として検証する。 :::
+OIDC issuer の discovery は [Takosumi Accounts](/architecture/takosumi-accounts)
+を参照。managed mode では service identifier `takosumi.account.auth@v1` を
+resolver / anchor で解決します。
 
 ### auth (server-side)
 
-サーバーサイド認証フロー。
+::: warning Legacy Takos の `/auth/login`, `/auth/password`, `/auth/cli` は
+Installable App Model で **廃止**されました。
+
+- 認証は [Takosumi Accounts OIDC issuer](/architecture/takosumi-accounts) に集約
+- Takos は [OIDC consumer](/apps/oidc-consumer) として `/auth/oidc/login` +
+  `/auth/oidc/callback` のみ提供
+- 以下の endpoint table は legacy 互換のため残されています :::
+
+サーバーサイド認証フロー (legacy)。
 
 `/auth/*` は apps/api で受け、migration window 中は control compatibility
 backend へ proxy されます。
 
-| method | path                         | description                           |
-| ------ | ---------------------------- | ------------------------------------- |
-| GET    | `/auth/login`                | Google OAuth フロー開始               |
-| POST   | `/auth/password`             | username/password ログイン            |
-| GET    | `/auth/cli`                  | CLI 認証エンドポイント                |
-| GET    | `/auth/external/session`     | 外部サービス用セッション確認          |
-| GET    | `/auth/external/callback`    | 外部認証コールバック（flow-internal） |
-| GET    | `/auth/link/google`          | Google アカウントリンク開始           |
-| GET    | `/auth/link/google/callback` | Google リンクコールバック             |
+| method | path                         | description                 |
+| ------ | ---------------------------- | --------------------------- |
+| GET    | `/auth/login`                | Google OAuth フロー開始     |
+| POST   | `/auth/password`             | username/password ログイン  |
+| GET    | `/auth/cli`                  | CLI 認証エンドポイント      |
+| GET    | `/auth/link/google`          | Google アカウントリンク開始 |
+| GET    | `/auth/link/google/callback` | Google リンクコールバック   |
+
+---
+
+## install (Installable App Model)
+
+Installable App Model における Git URL install / launch / materialize / export
+の REST surface。Takosumi Accounts (= takosumi-cloud account plane) が owner と
+なり、Takos は OIDC consumer として `/_takosumi/launch` で launch token を検証
+するだけです。endpoint family の正本仕様は
+[/reference/install-api](/reference/install-api) を参照。
+
+| method | path                                  | description                                       |
+| ------ | ------------------------------------- | ------------------------------------------------- |
+| POST   | `/v1/install/preview`                 | install preview (permission / cost / source 確認) |
+| POST   | `/v1/installations`                   | AppInstallation 作成                              |
+| POST   | `/v1/installations/{id}/launch-token` | one-time launch token JWS 発行                    |
+| POST   | `/v1/installations/{id}/materialize`  | shared-cell から dedicated runtime へ物化         |
+| POST   | `/v1/installations/{id}/export`       | self-host bundle export                           |
+
+関連:
+
+- [AppInstallation 台帳](/architecture/app-installation) (5 entity の責務分離)
+- [Runtime Modes](/architecture/runtime-modes) (shared-cell / dedicated /
+  self-hosted)
+- [Launch Token](/apps/launch-token) (one-time bootstrap JWS)
+- [Install Paths](/apps/install-paths) (Use Takos / Install from Git /
+  Self-host)
 
 ---
 
