@@ -741,9 +741,10 @@ append し、同 operation の in-flight lock を閉じる。
 > `GET /v1/installations/{id}/exports/{opId}` は completed operation を返す。
 > `GET /v1/installations/{id}/exports/{opId}/download` は completed operation の
 > `downloadUrl` へ expiry check 後に redirect する。 export bundle codec /
-> import planner は `takosumi.accounts.installation-export-bundle@v1`
-> として実装済みです。 tar.zst 生成 worker は後続実装で行う。JSON bundle import
-> API と `takosumi-git import <bundle.json|bundle.tar.zst>` は実装済みです。
+> import planner と metadata-only tar.zst archive writer は
+> `takosumi.accounts.installation-export-bundle@v1` として実装済みです。 export
+> HTTP worker / data dump worker は後続実装で行う。JSON bundle import API と
+> `takosumi-git import <bundle.json|bundle.tar.zst>` は実装済みです。
 
 ### 5.1 Request
 
@@ -900,8 +901,8 @@ revoked grant を除外したうえで、`POST /v1/installations` と同じ crea
 > payload を AppInstallation create request に変換するところまで実装済みです。
 > `takosumi-git import <bundle>` も同 endpoint を呼ぶ current CLI bridge
 > として実装済みです。本節の `requestedImports[]` を含む preview / install API
-> の full materialization flow と tar.zst export writer / data dump restore
-> は継続 work です。設計の正本は
+> の full materialization flow と export HTTP worker / data dump restore は継続
+> work です。設計の正本は
 > [architecture/cross-instance-service-binding](/architecture/cross-instance-service-binding)、
 > manifest schema は
 > [reference/manifest-spec § 14](/reference/manifest-spec#cross-instance-imports)
