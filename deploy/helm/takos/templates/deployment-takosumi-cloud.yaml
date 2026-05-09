@@ -25,6 +25,28 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if and .Values.accounts.persistence.enabled .Values.accounts.persistence.runMigrations }}
+      initContainers:
+        - name: takosumi-cloud-migrate
+          image: "{{ include "takos.image" (dict "root" . "image" .Values.images.takosumiCloud) }}"
+          imagePullPolicy: {{ .Values.images.takosumiCloud.pullPolicy }}
+          command:
+            - run
+            - --allow-net
+            - --allow-env=TAKOSUMI_ACCOUNTS_DATABASE_URL
+            - --allow-read=packages/accounts-service/migrations
+            - packages/cli/src/main.ts
+            - accounts
+            - migrate
+          env:
+            - name: TAKOSUMI_ACCOUNTS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "takos.accountsDatabaseSecretName" . | quote }}
+                  key: {{ .Values.accounts.persistence.databaseUrlSecretKey | quote }}
+          resources:
+            {{- toYaml .Values.services.takosumiCloud.resources | nindent 12 }}
+      {{- end }}
       containers:
         - name: takosumi-cloud
           image: "{{ include "takos.image" (dict "root" . "image" .Values.images.takosumiCloud) }}"
@@ -32,6 +54,7 @@ spec:
           command:
             - run
             - --allow-net
+            - --allow-env=TAKOSUMI_ACCOUNTS_DATABASE_URL
             - packages/cli/src/main.ts
             - accounts
             - serve
@@ -56,6 +79,13 @@ spec:
               value: {{ .Values.services.takosumiCloud.port | quote }}
             - name: TAKOSUMI_CLOUD_SERVICE_ID
               value: "takosumi-cloud"
+            {{- if .Values.accounts.persistence.enabled }}
+            - name: TAKOSUMI_ACCOUNTS_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "takos.accountsDatabaseSecretName" . | quote }}
+                  key: {{ .Values.accounts.persistence.databaseUrlSecretKey | quote }}
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "takos.fullname" . }}-global

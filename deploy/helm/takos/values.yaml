@@ -154,6 +154,7 @@ secrets:
   encryptionKey: ""
   executorProxySecret: ""
   internalApiSecret: ""
+  accountsDatabaseUrl: ""
   googleClientId: ""
   googleClientSecret: ""
   oidcClientSecret: ""
@@ -169,6 +170,11 @@ accounts:
   subject: "tsub_takos_admin"
   clientId: "takos-private-production"
   redirectUri: ""
+  persistence:
+    enabled: false
+    runMigrations: false
+    databaseUrlSecretName: ""
+    databaseUrlSecretKey: "TAKOSUMI_ACCOUNTS_DATABASE_URL"
 
 ## -----------------------------------------------------------------
 ## Ingress

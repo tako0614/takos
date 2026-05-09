@@ -83,6 +83,16 @@ assertContains(
   await Deno.readTextFile(`${templateRoot}/_helpers.tpl`),
   'define "takos.image"',
 );
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '  persistence:',
+);
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '    databaseUrlSecretKey: "TAKOSUMI_ACCOUNTS_DATABASE_URL"',
+);
 
 assertExactTemplateSet(
   'Deployment',
@@ -159,6 +169,18 @@ for (const file of templateFiles.sort()) {
     errors.push(`${file} must not use dev:local commands`);
   }
   assertNoStaleWorkloadSurface(file, text);
+}
+
+{
+  const path = `${templateRoot}/deployment-takosumi-cloud.yaml`;
+  const text = await Deno.readTextFile(path);
+  assertContains(path, text, 'initContainers:');
+  assertContains(path, text, '- accounts');
+  assertContains(path, text, '- migrate');
+  assertContains(path, text, '--allow-read=packages/accounts-service/migrations');
+  assertContains(path, text, '--allow-env=TAKOSUMI_ACCOUNTS_DATABASE_URL');
+  assertContains(path, text, 'TAKOSUMI_ACCOUNTS_DATABASE_URL');
+  assertContains(path, text, 'takos.accountsDatabaseSecretName');
 }
 
 for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
