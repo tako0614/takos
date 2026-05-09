@@ -125,9 +125,10 @@ binding 側で扱い、Takos product / API gateway 本体の Cloudflare resource
 R2 / KV / Dispatch / Queues / Vectorize など）は operator
 が事前に作成・設定します。
 
-route publication と Takos built-in provider publication consume は deploy 時に
-catalog / grant state へ同期されますが、operator が管理する Cloudflare resource
-の作成とは別の扱いです。
+route publication は互換 catalog state へ同期されますが、operator が管理する
+Cloudflare resource の作成とは別の扱いです。Takos built-in provider publication
+consume (`takos.api-key`) は retired で、current app credential は Takosumi
+Accounts の AppGrant/AppBinding から materialize します。
 
 ### D1 Database
 

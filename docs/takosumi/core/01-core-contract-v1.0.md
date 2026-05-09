@@ -474,8 +474,9 @@ resolution MUST be blocked.
 
 `Output` is producer-side typed output. An Output is declared by an Output
 contract (e.g. `publication.mcp-server@v1`, `publication.http-endpoint@v1`,
-`publication.topic@v1`, `builtin:takos.api-key@v1`). Output contract descriptors
-MUST define value type and sensitivity per output field.
+`publication.topic@v1`; historical retired descriptors such as
+`builtin:takos.api-key@v1` are compatibility vocabulary only). Output contract
+descriptors MUST define value type and sensitivity per output field.
 
 ```ts
 interface CoreOutputDeclaration {
@@ -671,12 +672,12 @@ MUST emit `RawCredentialInjectionDenied`:
 components:
   web:
     bindings:
-      TAKOS_API_ENDPOINT:
-        from: { output: builtin:takos.api-key@v1, field: endpoint }
-        inject: { mode: env, target: TAKOS_API_ENDPOINT }
-      TAKOS_API_KEY:
-        from: { output: builtin:takos.api-key@v1, field: apiKey }
-        inject: { mode: secret-ref, target: TAKOS_API_KEY }
+      SERVICE_ENDPOINT:
+        from: { output: output:service-provider/api, field: endpoint }
+        inject: { mode: env, target: SERVICE_ENDPOINT }
+      SERVICE_TOKEN:
+        from: { output: output:service-provider/api, field: token }
+        inject: { mode: secret-ref, target: SERVICE_TOKEN }
 ```
 
 ### 11.2 BindingResolution

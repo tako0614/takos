@@ -163,7 +163,7 @@ GET /api/resources?limit=20&offset=0
 | [`shortcuts`](#shortcuts)                         | shortcut と group 管理                                               |
 | [`services`](#services)                           | service CRUD / settings / deployments                                |
 | [`custom-domains`](#custom-domains)               | custom domain verify / SSL refresh                                   |
-| [`resources`](#resources)                         | resource CRUD / access / tokens / D1 / R2                            |
+| [`resources`](#resources)                         | resource CRUD / access / connection / D1 / R2                        |
 | [`publications`](#publications)                   | publication catalog / Takos publisher publication                    |
 | [`apps`](#apps)                                   | space-installed app inventory / list / get / key                     |
 | [`threads`](#threads)                             | thread / message / share / export                                    |
@@ -789,7 +789,7 @@ registry と repository import の管理 surface。kernel
 | GET    | `/api/publications/kinds`   | publication kind 一覧            |
 | GET    | `/api/publications/resolve` | publication ref 解決             |
 | GET    | `/api/publications/:name`   | publication 詳細取得             |
-| PUT    | `/api/publications/:name`   | publication 作成・更新           |
+| PUT    | `/api/publications/:name`   | retired Takos API publication    |
 | DELETE | `/api/publications/:name`   | Takos grant/API publication 削除 |
 
 この API は legacy publication catalog と Takos publisher publication を管理する
@@ -805,14 +805,15 @@ group-local publication 名と `<group>/<name>` 形式の cross-group ref
 
 #### `PUT /api/publications/:name`
 
-リクエスト:
+Takos API key publication 作成は retired です。`410 Gone` を返します。 current
+app credential は Takosumi Accounts の AppGrant/AppBinding で materialize
+してください。
 
 ```json
 {
-  "publisher": "takos",
-  "type": "api-key",
-  "spec": {
-    "scopes": ["files:read"]
+  "error": {
+    "code": "GONE",
+    "message": "Takos app-local managed tokens are retired; use AppGrant/AppBinding credentials from Takosumi Accounts."
   }
 }
 ```
@@ -983,12 +984,12 @@ canonical 名を使います。
 
 | method | path                                           | description          |
 | ------ | ---------------------------------------------- | -------------------- |
-| GET    | `/api/resources/:id/tokens`                    | アクセストークン一覧 |
-| GET    | `/api/resources/by-name/:name/tokens`          | 名前でトークン一覧   |
-| POST   | `/api/resources/:id/tokens`                    | トークン作成         |
-| POST   | `/api/resources/by-name/:name/tokens`          | 名前でトークン作成   |
-| DELETE | `/api/resources/:id/tokens/:tokenId`           | トークン削除         |
-| DELETE | `/api/resources/by-name/:name/tokens/:tokenId` | 名前でトークン削除   |
+| GET    | `/api/resources/:id/tokens`                    | retired (`410 Gone`) |
+| GET    | `/api/resources/by-name/:name/tokens`          | retired (`410 Gone`) |
+| POST   | `/api/resources/:id/tokens`                    | retired (`410 Gone`) |
+| POST   | `/api/resources/by-name/:name/tokens`          | retired (`410 Gone`) |
+| DELETE | `/api/resources/:id/tokens/:tokenId`           | retired (`410 Gone`) |
+| DELETE | `/api/resources/by-name/:name/tokens/:tokenId` | retired (`410 Gone`) |
 | GET    | `/api/resources/:id/connection`                | 接続情報取得         |
 | GET    | `/api/resources/by-name/:name/connection`      | 名前で接続情報取得   |
 
