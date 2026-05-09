@@ -1088,18 +1088,6 @@ CREATE TABLE runs (
 );
 
 -- CreateTable
-CREATE TABLE service_tokens (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "service_name" TEXT,
-    "token_hash" TEXT NOT NULL,
-    "permissions" TEXT,
-    "expires_at" DATETIME,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "account_id" TEXT,
-    CONSTRAINT "service_tokens_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE SET NULL ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE session_files (
     "id" TEXT NOT NULL PRIMARY KEY,
     "session_id" TEXT NOT NULL,
@@ -2222,12 +2210,6 @@ CREATE INDEX "runs_account_id_idx" ON "runs"("account_id");
 
 -- CreateIndex
 CREATE INDEX "runs_account_id_created_at_idx" ON "runs"("account_id", "created_at");
-
--- CreateIndex
-CREATE UNIQUE INDEX "service_tokens_token_hash_key" ON "service_tokens"("token_hash");
-
--- CreateIndex
-CREATE INDEX "service_tokens_token_hash_idx" ON "service_tokens"("token_hash");
 
 -- CreateIndex
 CREATE INDEX "session_files_session_id_idx" ON "session_files"("session_id");
