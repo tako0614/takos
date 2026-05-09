@@ -788,7 +788,7 @@ registry と repository import の管理 surface。kernel
 | GET    | `/api/publications/kinds`   | publication kind 一覧            |
 | GET    | `/api/publications/resolve` | publication ref 解決             |
 | GET    | `/api/publications/:name`   | publication 詳細取得             |
-| PUT    | `/api/publications/:name`   | retired Takos API publication    |
+| PUT    | `/api/publications/:name`   | not exposed (`404`)              |
 | DELETE | `/api/publications/:name`   | Takos grant/API publication 削除 |
 
 この API は legacy publication catalog と Takos publisher publication を管理する
@@ -804,18 +804,9 @@ group-local publication 名と `<group>/<name>` 形式の cross-group ref
 
 #### `PUT /api/publications/:name`
 
-Takos API key publication 作成は retired です。`410 Gone` を返します。 current
-app credential は Takosumi Accounts の AppGrant/AppBinding で materialize
-してください。
-
-```json
-{
-  "error": {
-    "code": "GONE",
-    "message": "Takos app-local managed tokens are retired; use AppGrant/AppBinding credentials from Takosumi Accounts."
-  }
-}
-```
+Takos API key publication 作成 route は公開しません。current app credential は
+Takosumi Accounts の AppGrant/AppBinding で materialize してください。
+`PUT /api/publications/:name` は not exposed (`404`) です。
 
 ### Consumes
 
