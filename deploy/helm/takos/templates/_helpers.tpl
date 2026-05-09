@@ -124,6 +124,13 @@ Takos OIDC redirect URI registered with Takosumi Accounts
 {{- end }}
 
 {{/*
+Secret containing the Takosumi Accounts Postgres connection URL.
+*/}}
+{{- define "takos.accountsDatabaseSecretName" -}}
+{{- default (.Values.secrets.existingSecrets.platform | default (printf "%s-platform" (include "takos.fullname" .))) .Values.accounts.persistence.databaseUrlSecretName }}
+{{- end }}
+
+{{/*
 Takos Git hosting internal URL
 */}}
 {{- define "takos.gitUrl" -}}
