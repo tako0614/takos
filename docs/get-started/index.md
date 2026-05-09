@@ -56,8 +56,11 @@ https://takosumi.cloud/install
 
 ```bash
 takosumi-git export inst_abc --output takos-export.tar.zst
-takosumi-git install ./takos-export.tar.zst \
+takosumi-git import ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
+  --account-id acct_self_host \
+  --space-id space_self_host \
+  --subject tsub_owner \
   --auth-issuer https://keycloak.example.com/realms/takos
 ```
 

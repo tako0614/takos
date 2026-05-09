@@ -123,19 +123,25 @@ materialize で **変わるもの**:
 
 ```bash
 takosumi-git export inst_abc --output takos-export.tar.zst
-takosumi-git install ./takos-export.tar.zst --to https://my-takosumi.example.com
+takosumi-git import ./takos-export.tar.zst \
+  --to https://my-takosumi.example.com \
+  --account-id acct_self_host \
+  --space-id space_self_host \
+  --subject tsub_owner
 ```
 
-bundle は `installation.json` (source / digests)、`manifest.compiled.yml`、
-`data/` (postgres dump / blobs / memory / profiles)、`bindings/template.yml`、
-`docs/restore.md` を含む。import 先では `serviceResolvers[]` を自前 anchor に
-向け、`takosumi.account.auth@v1` を self-host Takosumi Accounts に resolve
-させる:
+bundle は import API payload の `bundle.json`、`installation.json` (source /
+digests)、`manifest.compiled.yml`、`data/` (postgres dump / blobs / memory /
+profiles)、`bindings/template.yml`、`docs/restore.md` を含む。import 先では
+`serviceResolvers[]` を自前 anchor に向け、`takosumi.account.auth@v1` を
+self-host Takosumi Accounts に resolve させる:
 
 ```bash
-takosumi-git install ./takos-export.tar.zst \
+takosumi-git import ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
-  --service-resolver https://anchor.example.com/v1/services
+  --account-id acct_self_host \
+  --space-id space_self_host \
+  --subject tsub_owner
 ```
 
 export 後の元 installation は、利用者の選択により canonical `exported` (data
