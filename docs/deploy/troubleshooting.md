@@ -89,7 +89,9 @@ current `.takosumi/manifest.yml` では app binding は `.takosumi/app.yml` の
 `bindings:`、cross-instance service dependency は `.takosumi/manifest.yml` の
 `imports[]` / `serviceResolvers[]` で表現します。
 
-- `publication: takos.api-key` なら `request.scopes` があるか確認してください
+- `publication: takos.api-key` は retired です。Takos API access は Takosumi
+  Accounts の AppGrant/AppBinding credential として installer 側で materialize
+  してください
 - OIDC consumer 統合 (`identity.oidc@v1` AppBinding 経由、Takosumi Accounts
   発行) の設定不足の場合は、`.takosumi/app.yml` の `bindings.auth.redirectPaths`
   / `allowedScopes` を確認してください。 `redirectUris` 等の解決済み値は

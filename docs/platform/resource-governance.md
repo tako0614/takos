@@ -9,10 +9,10 @@ Takos は次の面を別々に管理します。
 
 - resource 自体の CRUD
 - space/service/worker への access grant
-- connection token の発行
+- connection info の参照
 - common env / binding link
 - runtime setting / limit
-- usage metering と billing gate
+- app-local usage metering と Accounts billing 連携
 
 ## current control points
 
@@ -22,7 +22,7 @@ Takos は次の面を別々に管理します。
 
 - resource CRUD
 - access grant (`/access`)
-- token / connection info (`/tokens`, `/connection`)
+- retired token routes (`/tokens`) と connection info (`/connection`)
 - sql introspection / query / export (backend example: D1)
 - object-store object list / stats / delete (backend example: R2)
 - bind / unbind
@@ -67,15 +67,14 @@ agent 系は特に次を併用します。
 - weekly runtime limit
 - token input billing gate
 
-## billing data model
+## usage / billing data model
 
-usage と請求は account 中心です。主要な group:
+Takos app は app-local usage を記録し、請求主体は Takosumi Accounts
+(`takosumi.account.billing@v1`) に置きます。Takos app 側の current table は
+主に次です。
 
-- `billingAccounts`
-- `billingPlans`
-- `billingTransactions`
-- `usageEvents`
-- `usageRollups`
+- `app_usage_events`
+- `app_usage_rollups`
 
 canonical billing API は Takosumi Accounts の `takosumi.account.billing@v1`
 service role です。consumer は `serviceResolvers[]` / anchor で billing endpoint
@@ -86,7 +85,7 @@ gateway では `410 Gone` を返します。
 ## operator が見るべき state
 
 - resource inventory
-- access grants / tokens
+- access grants / AppBinding credentials
 - common env drift
 - service / worker runtime settings
 - usage rollup

@@ -801,9 +801,9 @@ endpoint       url
 apiKey         secret
 ```
 
-Current apps should model Takos API access as an app-layer AppGrant or
-service-local credential materialized by the installer / Takos app layer. Do not
-add `takos.api-key` to current `.takosumi/manifest.yml`.
+Current apps should model Takos API access as a Takosumi Accounts
+AppGrant/AppBinding credential materialized by the installer. Do not add
+`takos.api-key` to current `.takosumi/manifest.yml`.
 
 `takos.api-key` は historical vocabulary です。scope 抽象や revoke / rotate の
 current contract は core descriptor set ではなく

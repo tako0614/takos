@@ -162,5 +162,5 @@ launcher icon の `/icons/computer.svg` も公開する。
 
 takos-computer は sandbox automation と agent integration のため、office 系
 default apps より広い Takos API scopes を要求する。default set に含まれても
-scope は manifest の built-in provider consume request と operator policy に
-従って通常通り管理される。
+scope は Takosumi Accounts の AppGrant/AppBinding と operator policy に従って
+管理される。旧 `takos.api-key` built-in provider consume は retired。
