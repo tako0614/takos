@@ -68,14 +68,15 @@ existence や behavior parity ではありません。詳細は
 
 - `ADMIN_DOMAIN`
 - `TENANT_BASE_DOMAIN`
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+- `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
+  `OIDC_REDIRECT_URI`
 - `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY`
 - `CF_ACCOUNT_ID`
 - `CF_ZONE_ID`
 - `WFP_DISPATCH_NAMESPACE`
 - `CONTROL_RPC_BASE_URL`
 - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY`
-- `STRIPE_*`
+- Takosumi Accounts billing service import
 
 ## Runtime topology by surface
 
@@ -98,7 +99,7 @@ Takos は [Installable App Model](/architecture/installable-app-model) に従い
 | ------------- | ----------- | ------------------ | --------------------------------------------- | -------------------------- | ---------------------------- |
 | `shared-cell` | `stable`    | Takosumi Cloud     | `takosumi.account.auth@v1` service identifier | per-installation namespace | 一般ユーザー (instant UX)    |
 | `dedicated`   | `supported` | Takosumi Cloud     | `takosumi.account.auth@v1` service identifier | dedicated deployment       | 重い workload / 専有要件     |
-| `self-hosted` | `supported` | self-host operator | operator 選択 (Keycloak / Auth0 等)           | full isolation             | 退出 / enterprise / 主権重視 |
+| `self-hosted` | `supported` | self-host operator | self-host Takosumi Accounts issuer            | full isolation             | 退出 / enterprise / 主権重視 |
 
 - shared-cell と dedicated は同じ Takosumi Account に紐づき、**Takosumi Cloud が
   billing 主体**として invoice を発行します

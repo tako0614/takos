@@ -144,7 +144,7 @@ GET /api/resources?limit=20&offset=0
 | [`profiles`](#profiles)                   | optional | 公開 profile / repo view / follow / block   |
 | [`public-share`](#public-share)           | mixed    | thread share の read / access grant         |
 | [`mcp`](#mcp)                             | mixed    | MCP OAuth callback と MCP server 管理       |
-| [`billing` (webhook)](#billing)           | none     | Stripe webhook                              |
+| [`billing` (retired)](#billing)           | none     | retired Takos billing webhook (`410 Gone`)  |
 
 ### Authenticated families
 
@@ -182,7 +182,7 @@ GET /api/resources?limit=20&offset=0
 | [`events`](#events)                               | group lifecycle event の SSE 配信                                    |
 | [`deployments`](#deployments)                     | Deployment lifecycle: preview / resolve / apply / approve / rollback |
 | [`groups`](#groups)                               | group 管理 / GroupHead / inventory                                   |
-| [`billing`](#billing)                             | billing / usage / invoices                                           |
+| [`billing` (retired)](#billing)                   | retired billing API (`410 Gone`; use Takosumi Accounts billing)      |
 | [`auth`](#auth)                                   | authenticated auth/profile actions                                   |
 
 ### Non-API routes
