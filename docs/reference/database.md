@@ -842,20 +842,6 @@ CREATE TABLE notifications (
 );
 
 -- CreateTable
-CREATE TABLE personal_access_tokens (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "account_id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "token_hash" TEXT NOT NULL,
-    "token_prefix" TEXT NOT NULL,
-    "scopes" TEXT NOT NULL DEFAULT '*',
-    "expires_at" DATETIME,
-    "last_used_at" DATETIME,
-    "created_at" DATETIME NOT NULL,
-    CONSTRAINT "personal_access_tokens_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE pr_comments (
     "id" TEXT NOT NULL PRIMARY KEY,
     "pr_id" TEXT NOT NULL,
@@ -2051,15 +2037,6 @@ CREATE INDEX "notifications_recipient_account_id_created_at_idx" ON "notificatio
 
 -- CreateIndex
 CREATE INDEX "notifications_account_id_idx" ON "notifications"("account_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "personal_access_tokens_token_hash_key" ON "personal_access_tokens"("token_hash");
-
--- CreateIndex
-CREATE INDEX "personal_access_tokens_token_hash_idx" ON "personal_access_tokens"("token_hash");
-
--- CreateIndex
-CREATE INDEX "personal_access_tokens_account_id_idx" ON "personal_access_tokens"("account_id");
 
 -- CreateIndex
 CREATE INDEX "pr_comments_pr_id_idx" ON "pr_comments"("pr_id");

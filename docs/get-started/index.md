@@ -78,7 +78,7 @@ takosumi-git install ./takos-export.tar.zst \
 > (Use Takos / Install from Git / Self-host) のうち
 > [Use Takos](/apps/install-paths) に従ってください。一般ユーザーのログインは
 > Takosumi Accounts OIDC (`/auth/oidc/login` → callback) で完結し、PAT 発行は
-> Takosumi Account の 設定 UI で行います。
+> Takosumi Accounts の設定 UI / API で行います。
 
 ### 1. Takos Web に入る (operator)
 
@@ -96,8 +96,8 @@ operator として未ログインなら `/auth/oidc/login` から Takosumi Accou
 
 ### 2. API token を発行する (operator)
 
-operator account の `account settings → Personal Access Tokens` tab で PAT
-を発行します。automation には Web UI で発行した `tak_pat_...` を使います。
+Takosumi Accounts の `account settings → Personal Access Tokens` tab で PAT
+を発行します。automation には Accounts で発行した `takpat_...` を使います。
 (installation に紐づく自動化を行いたい場合は、PAT ではなく
 [Install API](/reference/install-api) の AppGrant 経由で credential を発行
 してください。)

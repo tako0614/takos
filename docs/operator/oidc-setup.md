@@ -162,5 +162,5 @@ Accounts 側の `redirectUris` と一致していることを確認します。
   側の責務 (OIDC issuer / billing / app installation owner)
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が consumer として 要求する
   env / route / claim
-- [/operator/bootstrap](/operator/bootstrap) — OIDC login 完了後の PAT 発行と
-  AppInstallation 連携
+- [/operator/bootstrap](/operator/bootstrap) — OIDC login 完了後の Accounts
+  bearer と AppInstallation 連携
