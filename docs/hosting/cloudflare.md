@@ -242,7 +242,9 @@ enabled = true
 [vars]
 ADMIN_DOMAIN = "admin.example.com"
 TENANT_BASE_DOMAIN = "app.example.com"
-GOOGLE_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com"
+OIDC_ISSUER_URL = "https://accounts.example.com"
+OIDC_CLIENT_ID = "takos-installation-client"
+OIDC_REDIRECT_URI = "https://admin.example.com/auth/oidc/callback"
 AUTH_PUBLIC_BASE_URL = "https://admin.example.com"
 AUTH_ALLOWED_REDIRECT_DOMAINS = "app.example.com"
 ROUTING_DO_PHASE = "4"
@@ -459,7 +461,7 @@ deno run --allow-read --allow-write --allow-env \
 ```
 
 生成後は次節の `secrets:sync:*` で Cloudflare Worker secret として upload
-します。 `GOOGLE_CLIENT_SECRET` などの third-party API key は別途
+します。 `OIDC_CLIENT_SECRET` や AI provider key などは別途
 `.secrets/<env>/<NAME>` に手で配置するか `deno task secrets put ...`
 で投入します。
 
@@ -483,8 +485,8 @@ deno task secrets:sync:staging
 deno task secrets:sync:production
 
 # 単発更新
-deno task secrets put GOOGLE_CLIENT_SECRET --env staging
-deno task secrets put GOOGLE_CLIENT_SECRET --env production
+deno task secrets put OIDC_CLIENT_SECRET --env staging
+deno task secrets put OIDC_CLIENT_SECRET --env production
 ```
 
 ### staging 環境
@@ -834,7 +836,7 @@ deploy 完了後、operator は **auth / 3rd party integration smoke**
 
 | # | check                      | dry-run                                    | --real                                                                  |
 | - | -------------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
-| 1 | Google OAuth client config | secrets ファイル shape 検証                | 上記 + Google discovery endpoint 接続性確認                             |
+| 1 | OIDC client config         | secrets ファイル shape 検証                | 上記 + Takosumi Accounts discovery endpoint 接続性確認                  |
 | 2 | takos login flow           | apiUrl + callback + state machine validate | apiUrl 健全性 probe（実際の `takos login` は operator が手動で実行）    |
 | 3 | PAT 発行                   | `tak_pat_*` regex 自己テスト               | `/api/me/personal-access-tokens` で PAT 発行 → cleanup（DELETE）        |
 | 4 | agent run（OpenAI 互換）   | `OPENAI_API_KEY` 存在 + stub payload 検証  | `/api/v1/chat/completions` または OpenAI 直接で minimal completion 1 本 |
@@ -857,9 +859,12 @@ deno task auth:smoke:dry-run -- --env=production
 
 実環境に対する live smoke。実行前に以下を済ませてください:
 
-1. `takos-private/apps/control/.secrets/<env>/` に `GOOGLE_CLIENT_ID` /
-   `GOOGLE_CLIENT_SECRET` / `OPENAI_API_KEY` を配置（Phase 11B の
+1. Takosumi Accounts で Takos installation 用の OIDC client を発行し、
+   `takos-private/apps/control/.secrets/<env>/` に `OIDC_CLIENT_SECRET` /
+   `OPENAI_API_KEY` を配置（Phase 11B の
    `generate:keys:*` で作る platform secret に追加する形）
+   `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` は
+   `wrangler.toml` の env vars または secret sync 対象に設定する
 2. operator 端末で `takos login --api-url=<staging url>` を実行し、session token
    を `~/.config/takos/credentials` から取得して `TAKOS_SESSION_TOKEN`
    環境変数に export （PAT 発行 check と agent run check で必要）
