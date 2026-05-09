@@ -104,10 +104,11 @@ Installable App Model (ROADMAP.md Part II Phase 1.1-1.7) の identity / installe
   materialize` / `takosumi-git export` が Takosumi Accounts
   operation を idempotent に request する部分と、Accounts JSON bundle import API
   が別 issuer への OIDC rewrite を行う部分、`takosumi-git import <bundle.json>`
-  が同 API を呼ぶ部分は covered)。残りは export bundle integrity
-  (`takosumi-git export` の tar.zst bundle が installation.json / source.json /
-  manifest.compiled.yml / data dump / bindings template を持ち、別 takosumi
-  instance への tar.zst import で同 source commit / digest を再現できる)。
+  が同 API を呼ぶ部分、completed export download redirect は covered)。残りは
+  export bundle integrity (`takosumi-git export` の tar.zst bundle が
+  installation.json / source.json / manifest.compiled.yml / data dump / bindings
+  template を持ち、別 takosumi instance への tar.zst import で同 source commit /
+  digest を再現できる)。
 - **P-Phase 1.7.1**: GitOps deploy intent budget guard (Takos が
   `deploy-intent.gitops@v1` 経由で deploy intent を Git に commit する際、budget
   を超える resource は user approval なしで apply されない)

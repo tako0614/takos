@@ -739,10 +739,11 @@ append し、同 operation の in-flight lock を閉じる。
 > `PATCH /v1/installations/{id}/status` で `status=exported` と `operationId`
 > を渡すと `installation.exported` event を append し、
 > `GET /v1/installations/{id}/exports/{opId}` は completed operation を返す。
-> export bundle codec / import planner は
-> `takosumi.accounts.installation-export-bundle@v1` として実装済みです。 tar.zst
-> 生成 worker と download endpoint は後続実装で行う。JSON bundle import API と
-> `takosumi-git import <bundle.json>` は実装済みです。
+> `GET /v1/installations/{id}/exports/{opId}/download` は completed operation の
+> `downloadUrl` へ expiry check 後に redirect する。 export bundle codec /
+> import planner は `takosumi.accounts.installation-export-bundle@v1`
+> として実装済みです。 tar.zst 生成 worker は後続実装で行う。JSON bundle import
+> API と `takosumi-git import <bundle.json>` は実装済みです。
 
 ### 5.1 Request
 
@@ -788,7 +789,9 @@ Idempotency-Key: <uuid>      # required
 
 完了通知は event list / poll で `installation.exported` event を受け取り、
 `GET /v1/installations/{id}/exports/{opId}` から signed download URL
-を取得する。
+を取得する。`GET /v1/installations/{id}/exports/{opId}/download` は completed
+operation の `downloadUrl` が未期限切れなら `302` で redirect する。未完了なら
+`409 export_not_ready`、期限切れなら `410 export_download_expired` を返す。
 
 Current Accounts service では export worker / operator が完了時に
 `PATCH /v1/installations/{id}/status` へ以下を渡す:

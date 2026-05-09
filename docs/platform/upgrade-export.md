@@ -212,8 +212,9 @@ Accounts 内部の typed payload kind は
 `takosumi.accounts.installation-export-bundle@v1`。現時点で実装済みなのは、
 installation/source/bindings/grants/OIDC metadata からこの payload を組み立てる
 codec と、別 Takosumi Accounts issuer へ import する create request planner
-です。tar.zst writer / signed download / import API/CLI はこの payload contract
-の後続 worker として実装する。
+です。Accounts export operation の signed download redirect endpoint、JSON
+import API、JSON import CLI も実装済みです。tar.zst writer/parser と data dump
+worker はこの payload contract の後続 worker として実装する。
 
 ### 3.3 Encryption
 
