@@ -37,8 +37,8 @@ my-app/
 ```
 
 `workflows/*.yml` は takosumi-git の workflow runner に渡される build job
-定義で、`.takosumi/manifest.yml` から `${artifacts.<job>.<key>}` 形式で build
-出力を参照します
+定義です。current manifest では `workflowRef.target` に build 出力を書き込み、
+`workflowRef` は kernel 到達前に strip されます
 ([reference/manifest-spec § Compile-time placeholders](/reference/manifest-spec#compile-time-placeholders))。
 
 ## 各ファイルの役割
@@ -79,8 +79,8 @@ resources:
       env:
         AUTH_DRIVER: oidc
         OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
-        OIDC_CLIENT_ID: ${bindings.auth.clientId}
-        OIDC_CLIENT_SECRET: ${secrets.auth.clientSecret}
+        OIDC_CLIENT_ID: takos_inst_abc
+        OIDC_CLIENT_SECRET: resolved-client-secret
     workflowRef:
       file: .takosumi/workflows/build-web.yml
       job: build
@@ -96,8 +96,9 @@ resources:
 
 install UI / permission preview / AppBinding request の正本です。OIDC client、
 database、object store、launch token などの install-time binding はここで宣言
-し、takosumi-git / Takosumi Accounts が `.takosumi/manifest.yml` の
-`${bindings.*}` / `${secrets.*}` を materialize します。
+します。current `takosumi-git` は `.takosumi/manifest.yml` に unresolved
+`${bindings.*}` / `${secrets.*}` が残っている場合、kernel request の前に compile
+error にします。
 
 ```yaml
 apiVersion: app.takosumi.dev/v1
@@ -121,11 +122,11 @@ bindings:
 `workflowRef` は届きません。
 
 stateful resource は `.takosumi/manifest.yml` の `resources[]` で claim
-します。runtime env は resource output (`${ref:...}` / `${secret-ref:...}`)、
-AppBinding placeholder (`${bindings.*}` / `${secrets.*}`)、または service import
-placeholder (`${imports.*}`) から materialize します。詳細は
-[環境変数](/deploy/environment) と
-[Binding Catalog](/reference/binding-catalog#_1-identity-oidc-v1) を参照。
+します。runtime env は static value、resource output (`${ref:...}` /
+`${secret-ref:...}`)、または service import placeholder (`${imports.*}`) から
+materialize します。installer-only placeholder (`${bindings.*}` / `${secrets.*}`
+など) は compiled manifest に残せません。詳細は [環境変数](/deploy/environment)
+と [Binding Catalog](/reference/binding-catalog#_1-identity-oidc-v1) を参照。
 
 ## 制約
 

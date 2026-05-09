@@ -95,14 +95,16 @@ current `.takosumi/manifest.yml` では app binding は `.takosumi/app.yml` の
 - OIDC consumer 統合 (`identity.oidc@v1` AppBinding 経由、Takosumi Accounts
   発行) の設定不足の場合は、`.takosumi/app.yml` の `bindings.auth.redirectPaths`
   / `allowedScopes` を確認してください。 `redirectUris` 等の解決済み値は
-  [Binding Catalog](/reference/binding-catalog#_1-identity-oidc-v1) の output
-  placeholders に従って compile されます。 install 直後の owner session
-  bootstrap は `/_takosumi/launch?token=...` (one-time launch token JWS、
-  `install-launch-token@v1` binding) であり、通常ログインの `/auth/oidc/login` →
-  `/auth/oidc/callback` (OIDC consumer flow) とは 別経路です。token verify
-  エラーは launch token の鍵 (`INSTALL_LAUNCH_PUBLIC_KEY`) と audience
-  (`INSTALL_LAUNCH_AUDIENCE`) を、ログイン redirect エラーは `OIDC_REDIRECT_URI`
-  と AppBinding の `redirectPaths` を確認してください
+  [Binding Catalog](/reference/binding-catalog#_1-identity-oidc-v1) の
+  materializer contract に従います。unresolved `${bindings.*}` / `${secrets.*}`
+  は current takosumi-git で compile error になります。 install 直後の owner
+  session bootstrap は `/_takosumi/launch?token=...` (one-time launch token
+  JWS、 `install-launch-token@v1` binding) であり、通常ログインの
+  `/auth/oidc/login` → `/auth/oidc/callback` (OIDC consumer flow) とは
+  別経路です。token verify エラーは launch token の鍵
+  (`INSTALL_LAUNCH_PUBLIC_KEY`) と audience (`INSTALL_LAUNCH_AUDIENCE`)
+  を、ログイン redirect エラーは `OIDC_REDIRECT_URI` と AppBinding の
+  `redirectPaths` を確認してください
 - `imports[]` がある場合は `serviceResolvers[]` の anchor URL と public key
   が設定されているか確認してください
 - binding / import の shape は [Binding Catalog](/reference/binding-catalog) と

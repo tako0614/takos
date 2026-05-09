@@ -146,9 +146,11 @@ OIDC, database allocation, object storage allocation, domain binding, launch
 token, and deploy intent requests are declared in `.takosumi/app.yml`.
 Cross-instance service dependencies are declared in the kernel-bound
 `.takosumi/manifest.yml` with top-level `imports[]` / `serviceResolvers[]`.
-AppBinding placeholders (`${bindings.*}` / `${secrets.*}`) are authoring-time
-values: they must be materialized by the installer / Accounts integration before
-the manifest is posted to the kernel.
+AppBinding placeholders (`${bindings.*}` / `${secrets.*}`) are reserved
+authoring-time syntax: they must be materialized by the installer / Accounts
+integration before the manifest is posted to the kernel. Current `takosumi-git`
+does not silently substitute unresolved values; it rejects the compile before
+Accounts / kernel requests if installer-only placeholders remain.
 
 ```yaml
 # .takosumi/app.yml (excerpt)
@@ -162,10 +164,11 @@ bindings:
       - /auth/oidc/callback
 ```
 
-The authoring manifest can reference approved bindings and service imports:
+The manifest sent through current `takosumi-git` may retain service imports, but
+installer-bound values must already be concrete values or concrete secret refs:
 
 ```yaml
-# .takosumi/manifest.yml (authoring)
+# .takosumi/manifest.yml (compiled / kernel-bound excerpt)
 apiVersion: "1.0"
 kind: Manifest
 metadata:
@@ -191,13 +194,13 @@ resources:
       env:
         AUTH_DRIVER: oidc
         OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
-        OIDC_CLIENT_ID: ${bindings.auth.clientId}
-        OIDC_CLIENT_SECRET: ${secrets.auth.clientSecret}
+        OIDC_CLIENT_ID: takos_inst_abc
+        OIDC_CLIENT_SECRET: resolved-client-secret
 ```
 
-The compiled manifest sent to the kernel must contain concrete values for the
-AppBinding placeholders. Raw `${bindings.*}` / `${secrets.*}` placeholders must
-not reach the kernel:
+The compiled manifest sent to the kernel must contain concrete values or
+kernel-resolvable refs for AppBinding material. Raw `${bindings.*}` /
+`${secrets.*}` placeholders must not reach the kernel:
 
 ```yaml
 # compiled manifest excerpt

@@ -148,9 +148,10 @@ bindings:
     allowedScopes: [openid, email, profile]
 ```
 
-installer は AppBinding を provision し、compiled manifest の `env` や secret
-refs に materialize します。詳細は [Binding Catalog](/reference/binding-catalog)
-を参照してください。
+AppBinding は installer / account plane の provisioning plan に入ります。current
+takosumi-git は unresolved `${bindings.*}` / `${secrets.*}` を compiled manifest
+に残さず、kernel request の前に compile error にします。詳細は
+[Binding Catalog](/reference/binding-catalog) を参照してください。
 
 ## Cross-Instance Imports
 

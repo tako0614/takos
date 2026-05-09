@@ -155,7 +155,8 @@ hostname を書く箇所はありません。 hostname dependency は anchor URL
      - CrossInstanceShare record を in-memory resolution evidence として作る
 6. resource spec の `${imports.<alias>.endpoints.<role>.<field>}` を解決する
 7. `${bindings.*}` / `${secrets.*}` など installer-only placeholder は kernel
-   到達前に takosumi-git / Takosumi Accounts 側で materialize する
+   到達前に materialize 済みでなければならない。current takosumi-git は未解決なら
+   compile error にする
 ```
 
 ### 4. kernel-pure を維持する境界

@@ -101,10 +101,10 @@ resources:
       env:
         AUTH_DRIVER: oidc
         OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
-        OIDC_CLIENT_ID: ${bindings.auth.clientId}
-        OIDC_CLIENT_SECRET: ${secrets.auth.clientSecret}
-        OIDC_REDIRECT_URI: ${bindings.auth.redirectUri}
-        TAKOS_INSTALLATION_ID: ${installation.id}
+        OIDC_CLIENT_ID: takos_inst_abc
+        OIDC_CLIENT_SECRET: resolved-client-secret
+        OIDC_REDIRECT_URI: https://my-first-group.example.com/auth/oidc/callback
+        TAKOS_INSTALLATION_ID: inst_abc
     workflowRef:
       file: .takosumi/workflows/deploy.yml
       job: bundle
@@ -215,8 +215,9 @@ Deployment record を作り、`takos diff <id>` / `takos apply <id>`
 で確認・適用を分離できます。
 
 ::: tip `.takosumi/manifest.yml` には `apiVersion: "1.0"` と `kind: Manifest`
-が必須です。`workflowRef` や `${bindings.*}` は authoring-time extension
-なので、kernel-bound manifest に到達する前に materialize / strip されます。 :::
+が必須です。`workflowRef` は kernel-bound manifest に到達する前に strip
+されます。current `takosumi-git` は unresolved `${bindings.*}` / `${secrets.*}`
+を compile error にします。 :::
 
 ## 次のステップ
 

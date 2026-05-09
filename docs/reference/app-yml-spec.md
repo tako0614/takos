@@ -225,9 +225,10 @@ Cross-instance service dependency は AppBinding type ではなく、
 [Manifest spec § Cross-instance imports](/reference/manifest-spec#cross-instance-imports)
 を参照してください。
 
-`bindings.<name>` の `<name>` は、`entry.manifest` (= `.takosumi/manifest.yml`)
-内の `${bindings.<name>.<key>}` / `${secrets.<name>.<key>}` 参照と 紐づきます
-(`new.md` §6)。
+`bindings.<name>` の `<name>` は、account-plane materializer が提供する
+`${bindings.<name>.<key>}` / `${secrets.<name>.<key>}` reserved vocabulary と
+紐づきます。current takosumi-git に unresolved placeholder を渡すと compile
+error です (`new.md` §6)。
 
 ### 3.5.1 `serviceImports[]`
 
@@ -507,7 +508,7 @@ Installable App Model では Takos repo の `.takosumi/` 配下に **2 種類**
 | `kind`       | `InstallableApp`                                              | `Manifest` (required)                                                                                    |
 | 読み手       | takosumi-git (installer)                                      | takosumi-git compiler。kernel は compiled payload だけを読む                                             |
 | placeholder  | なし (純粋 metadata)                                          | authoring 時のみあり (`${bindings.*}` / `${secrets.*}` / `${ref:...}` / `${imports...}` 等)              |
-| compile      | そのまま **kernel に渡らない**                                | `${bindings.*}` / `${secrets.*}` / `${artifacts.*}` / `workflowRef` を除去してから kernel に渡る         |
+| compile      | そのまま **kernel に渡らない**                                | installer-only placeholder は未解決なら compile error。`workflowRef` を除去してから kernel に渡る        |
 | 保存         | `appManifestDigest` (SHA256)                                  | `compiledManifestDigest` (SHA256)                                                                        |
 | 役割         | install UI / binding / service import / permission / metadata | compute resource declaration。kernel-bound references (`${ref:...}` / `${secret-ref:...}` 等) は残り得る |
 
@@ -534,8 +535,8 @@ manifest のみで、`apiVersion: "app.takosumi.dev/v1"` を **知りません**
 7. workflow を sandbox で実行
 8. artifact URI / image digest 解決
 9. AppInstallation ledger entry 作成
-10. binding 注入 (Takosumi Accounts に問い合わせ)
-11. manifest compile (placeholder → 実値)
+10. binding provisioning plan / service import merge
+11. manifest compile (installer-only placeholder は未解決なら失敗)
 12. kernel に POST /v1/deployments        ← Compiled manifest のみ
 13. ledger を ready に
 ```

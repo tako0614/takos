@@ -214,17 +214,20 @@ Vercel account        = login / billing あり
 `.takosumi/` には役割が異なる 2 つの manifest
 が並びます。**絶対に混同しません**。
 
-| ファイル                 | 用途                                                 | 受領者                   | 解釈タイミング             |
-| ------------------------ | ---------------------------------------------------- | ------------------------ | -------------------------- |
-| `.takosumi/app.yml`      | install 用 metadata + binding 宣言 + permission 宣言 | takosumi-git (installer) | install pipeline 起動時    |
-| `.takosumi/manifest.yml` | compute resource 宣言 (placeholder 込み)             | takosumi-git → kernel    | compile 後 kernel が apply |
+| ファイル                 | 用途                                                          | 受領者                   | 解釈タイミング             |
+| ------------------------ | ------------------------------------------------------------- | ------------------------ | -------------------------- |
+| `.takosumi/app.yml`      | install 用 metadata + binding 宣言 + permission 宣言          | takosumi-git (installer) | install pipeline 起動時    |
+| `.takosumi/manifest.yml` | compute resource 宣言 (installer-only placeholder を含み得る) | takosumi-git → kernel    | compile 後 kernel が apply |
 
 - `app.yml` は **kernel に渡してはいけない**。kernel は `identity.oidc@v1` の
   ような binding type を知りません。
 - `manifest.yml` には `${bindings.*}` / `${secrets.*}` / `${refs.*.outputs.*}` /
-  `${artifacts.*}` / `${installation.*}` / `${params.*}` の placeholder
-  が含まれます。これも **そのまま kernel に 渡してはいけない**。
-- kernel に渡るのは **Compiled manifest** (= placeholder を解決した最終形)。
+  `${artifacts.*}` / `${installation.*}` / `${params.*}` の installer-only
+  placeholder が含まれ得ます。これも **そのまま kernel に 渡してはいけない**。
+- kernel に渡るのは **Compiled manifest** だけです。current `takosumi-git` は
+  installer-only placeholder が未解決なら Accounts / kernel request の前に
+  compile error にします。`${imports.*}` / `${ref:...}` / `${secret-ref:...}` の
+  kernel-bound references は残り得ます。
 
 field 定義は [app.yml spec](/reference/app-yml-spec)、placeholder 文法と binding
 catalog は [Binding Catalog](/reference/binding-catalog) を参照。

@@ -90,8 +90,8 @@ resources:
 ```
 
 `workflowRef` や `${bindings.*}` / `${secrets.*}` は installer-side authoring
-extension です。kernel に届く manifest では解決済み、または除去済みである必要が
-あります。
+extension です。kernel に届く manifest では `workflowRef` は除去済み、
+installer-only placeholder は未解決なら compile error である必要があります。
 
 ## Legacy Vocabulary
 

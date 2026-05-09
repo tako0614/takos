@@ -259,9 +259,9 @@ billing などの external service は compiled manifest の `imports[]` /
 `serviceResolvers[]` と `${imports...}` reference で解決します。
 
 `configRef` / `secretRefs` は実値を直接持たず、Takosumi Accounts の secret store
-/ config store を参照します。kernel に渡る最終 manifest では env として
-解決済み値が注入されます (詳細は
-[Binding Catalog](/reference/binding-catalog))。
+/ config store を参照します。kernel に渡る最終 manifest では unresolved
+installer-only placeholder を残せません。current takosumi-git は残っていれば
+compile error にします (詳細は [Binding Catalog](/reference/binding-catalog))。
 
 ### AppGrant
 
@@ -376,13 +376,13 @@ exported
 ### Transitional substates (in-flight phases)
 
 外部公開 status は上記の **5 値** (`installing` / `ready` / `failed` /
-`suspended` / `exported`) に固定です。現在の ledger record には別の
-`substate` column はありません。`installing` 中や `ready` から他遷移を駆動する
+`suspended` / `exported`) に固定です。現在の ledger record には別の `substate`
+column はありません。`installing` 中や `ready` から他遷移を駆動する
 間に存在する短命な in-flight phase は、`status` を増やさず、operation metadata
 または InstallationEvent payload として記録します。これは
 [Install API](/reference/install-api) の `409 state-conflict` 判定と
-[Upgrade / Export](/platform/upgrade-export) の lifecycle 図と一致する内部
-phase です。
+[Upgrade / Export](/platform/upgrade-export) の lifecycle 図と一致する内部 phase
+です。
 
 | substate               | parent status | 概要                                                         |
 | ---------------------- | ------------- | ------------------------------------------------------------ |
