@@ -374,14 +374,16 @@ Installable App Model 下では、kernel features に **Auth と Billing
 ```text
 Integrated mode:
   takosumi is an internal component of Full Takos.
-  takos-app owns public auth and API gateway.
+  Takosumi Accounts owns public identity, OAuth/OIDC issuer, AppInstallation, and billing.
+  takos-app owns OIDC consumer sessions and API gateway.
   takos-git owns source truth.
   takos-agent owns agent execution.
   takos-private owns operator config and secrets.
 
 Standalone mode:
   takosumi is independently bootable.
-  It includes public API, UI shell, auth adapter, source connectors, deploy/runtime/resource/routing/registry/audit domains, and provider adapters.
+  It includes public deploy API, source connectors, deploy/runtime/resource/routing/registry/audit domains, and provider adapters.
+  Identity and billing attach through explicit external account-plane/service adapters, not kernel-owned OAuth or payment state.
 ```
 
 Invariant:
@@ -586,17 +588,17 @@ disabled agent adapter:
 
 ### 6.1 Main ports
 
-| port                  | integrated adapter          | standalone adapter                                 |
-| --------------------- | --------------------------- | -------------------------------------------------- |
-| AuthPort              | `takos-app`                 | local / OIDC / GitHub OAuth                        |
-| SourcePort            | `takos-git`                 | GitHub / GitLab / raw Git / local upload / tarball |
-| AgentPort             | `takos-agent`               | disabled / local / external                        |
-| BillingPort           | `takos-app` billing         | noop / license                                     |
-| EntitlementPolicyPort | `takosumi` / product policy | local entitlement policy                           |
-| SecretStorePort       | platform secret resolver    | local encrypted store / secret manager             |
-| ProviderRegistryPort  | platform registry           | bundled / local / remote registry                  |
-| OperatorConfigPort    | `takos-private`             | local config / env / secret manager                |
-| AuditSinkPort         | platform audit              | local / remote audit sink                          |
+| port                  | integrated adapter                              | standalone adapter                                 |
+| --------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| AuthPort              | Takosumi Accounts OIDC via host session adapter | external OIDC / service principal adapter          |
+| SourcePort            | `takos-git`                                     | GitHub / GitLab / raw Git / local upload / tarball |
+| AgentPort             | `takos-agent`                                   | disabled / local / external                        |
+| BillingPort           | Takosumi Accounts billing                       | noop / license / external account plane            |
+| EntitlementPolicyPort | `takosumi` / product policy                     | local entitlement policy                           |
+| SecretStorePort       | platform secret resolver                        | local encrypted store / secret manager             |
+| ProviderRegistryPort  | platform registry                               | bundled / local / remote registry                  |
+| OperatorConfigPort    | `takos-private`                                 | local config / env / secret manager                |
+| AuditSinkPort         | platform audit                                  | local / remote audit sink                          |
 
 ### 6.2 ActorContext
 
@@ -606,7 +608,7 @@ Host mode changes auth adapter, not the shape of identity seen by the PaaS core.
 interface ActorContext {
   actorId: string;
   actorType: "user" | "service" | "agent";
-  identityProvider: "takos-app" | "local" | "oidc" | "github" | "service";
+  identityProvider: "takosumi-accounts" | "oidc" | "github" | "service";
   tenantId?: string;
   spaceId?: string;
   roles: string[];
@@ -658,8 +660,8 @@ EntitlementPolicyPort:
   effective allowed capabilities and limits
 ```
 
-Standalone mode may use `BillingPort = noop`, but still must have
-EntitlementPolicy.
+Standalone mode may use `BillingPort = noop` or an external account plane, but
+still must have EntitlementPolicy.
 
 ---
 
