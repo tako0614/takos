@@ -22,7 +22,7 @@ Takos は次の面を別々に管理します。
 
 - resource CRUD
 - access grant (`/access`)
-- retired token routes (`/tokens`) と connection info (`/connection`)
+- connection info (`/connection`)
 - sql introspection / query / export (backend example: D1)
 - object-store object list / stats / delete (backend example: R2)
 - bind / unbind
