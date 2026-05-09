@@ -163,7 +163,6 @@ GET /api/resources?limit=20&offset=0
 | [`services`](#services)                           | service CRUD / settings / deployments                                |
 | [`custom-domains`](#custom-domains)               | custom domain verify / SSL refresh                                   |
 | [`resources`](#resources)                         | resource CRUD / access / connection / D1 / R2                        |
-| [`publications`](#publications)                   | publication catalog / Takos publisher publication                    |
 | [`apps`](#apps)                                   | space-installed app inventory / list / get / key                     |
 | [`threads`](#threads)                             | thread / message / share / export                                    |
 | [`runs`](#runs)                                   | run 実行・event stream・artifact                                     |
@@ -784,29 +783,22 @@ registry と repository import の管理 surface。kernel
 
 | method | path                        | description                      |
 | ------ | --------------------------- | -------------------------------- |
-| GET    | `/api/publications`         | publication 一覧取得             |
-| GET    | `/api/publications/kinds`   | publication kind 一覧            |
-| GET    | `/api/publications/resolve` | publication ref 解決             |
-| GET    | `/api/publications/:name`   | publication 詳細取得             |
+| GET    | `/api/publications`         | not exposed (`404`)              |
+| GET    | `/api/publications/kinds`   | not exposed (`404`)              |
+| GET    | `/api/publications/resolve` | not exposed (`404`)              |
+| GET    | `/api/publications/:name`   | not exposed (`404`)              |
 | PUT    | `/api/publications/:name`   | not exposed (`404`)              |
-| DELETE | `/api/publications/:name`   | Takos grant/API publication 削除 |
+| DELETE | `/api/publications/:name`   | not exposed (`404`)              |
 
-この API は legacy publication catalog と Takos publisher publication を管理する
-compatibility surface です。current `.takosumi/manifest.yml` では top-level
+Takos app は legacy publication catalog と Takos publisher publication の public
+HTTP API を公開しません。current `.takosumi/manifest.yml` では top-level
 `publications[]` と `compute.<name>.consume` は使わず、installer-bound binding
 は [Binding Catalog](/reference/binding-catalog)、cross-instance dependency は
 `imports[]` / `serviceResolvers[]` で表現します。storage-side auto-injection は
 retired。
 
-`GET /api/publications/resolve?ref=<name-or-group/name>&consumerGroupId=<id>` は
-group-local publication 名と `<group>/<name>` 形式の cross-group ref
-を解決します。`consumerGroupId` は local name 解決に使う任意 query です。
-
-#### `PUT /api/publications/:name`
-
-Takos API key publication 作成 route は公開しません。current app credential は
+Takos API key publication 作成 route も公開しません。current app credential は
 Takosumi Accounts の AppGrant/AppBinding で materialize してください。
-`PUT /api/publications/:name` は not exposed (`404`) です。
 
 ### Consumes
 
