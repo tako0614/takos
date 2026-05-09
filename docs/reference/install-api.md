@@ -657,8 +657,10 @@ state は canonical `ready` → transitional `materializing` → canonical `read
 
 > Current implementation: Accounts は request を受理し、
 > `installation.export-requested` event を ledger に記録して 202 を返す。
-> `GET /v1/installations/{id}/exports/{opId}` は pending operation を返すが、
-> signed download URL / export bundle 生成は後続 worker 実装で行う。
+> `PATCH /v1/installations/{id}/status` で `status=exported` と `operationId`
+> を渡すと `installation.exported` event を append し、
+> `GET /v1/installations/{id}/exports/{opId}` は completed operation を返す。
+> export bundle 生成 worker は後続実装で行う。
 
 ### 5.1 Request
 
@@ -705,6 +707,23 @@ Idempotency-Key: <uuid>      # required
 完了通知は event list / poll で `installation.exported` event を受け取り、
 `GET /v1/installations/{id}/exports/{opId}` から signed download URL
 を取得する。
+
+Current Accounts service では export worker / operator が完了時に
+`PATCH /v1/installations/{id}/status` へ以下を渡す:
+
+```json
+{
+  "status": "exported",
+  "reason": "bundle ready",
+  "operationId": "op_01J...",
+  "downloadUrl": "https://...",
+  "downloadExpiresAt": "2026-05-10T00:00:00.000Z"
+}
+```
+
+同 patch は既存互換の `installation.status_changed` に加え、
+`installation.exported` event を append する。`GET /exports/{opId}` はこの event
+を読んで `status: "exported"` と download metadata を返す。
 
 ### 5.3 主なステータス
 
