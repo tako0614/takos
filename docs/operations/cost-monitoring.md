@@ -31,14 +31,15 @@ billing line item は AppInstallation 単位で計上、Space で集計、Takosu
 対象は Takos-operated production / staging environments の AppInstallation /
 Space-attributed cost です。
 
-| Surface                         | Owner                   | Cost source                              |
-| ------------------------------- | ----------------------- | ---------------------------------------- |
-| `takos-app` Web/API and billing | Takos product           | billing `usage_events` / `usage_rollups` |
-| `takos-git` Smart HTTP          | Takos product           | request / storage / transfer exporter    |
-| `takos-agent` execution         | Takos product           | `exec_seconds`, queue, model/tool meters |
-| Takosumi deploy lifecycle       | Takosumi kernel signals | Space-scoped usage + provider bill join  |
-| Default apps                    | owning app repo         | route / storage / runtime usage exporter |
-| Cloud provider infrastructure   | operator distribution   | AWS / GCP / Cloudflare billing export    |
+| Surface                       | Owner                   | Cost source                                        |
+| ----------------------------- | ----------------------- | -------------------------------------------------- |
+| `takos-app` Web/API metering  | Takos product           | app-local `app_usage_events` / `app_usage_rollups` |
+| Takos billing reconciliation  | Takosumi Accounts/Cloud | private billing ledger + app usage rollup join     |
+| `takos-git` Smart HTTP        | Takos product           | request / storage / transfer exporter              |
+| `takos-agent` execution       | Takos product           | `exec_seconds`, queue, model/tool meters           |
+| Takosumi deploy lifecycle     | Takosumi kernel signals | Space-scoped usage + provider bill join            |
+| Default apps                  | owning app repo         | route / storage / runtime usage exporter           |
+| Cloud provider infrastructure | operator distribution   | AWS / GCP / Cloudflare billing export              |
 
 Invoices, payment processor reconciliation, and secret-bearing cloud billing
 credentials stay in `takos-private/`. This public doc defines the observable
@@ -47,13 +48,14 @@ metric contract and the dashboard artifact only.
 ## Metric Contract
 
 The dashboard expects Prometheus-compatible counters produced by the managed
-billing / cloud-cost ETL. Counters are cumulative and stored in cents.
+billing, app-usage, and cloud-cost ETL. Counters are cumulative; cost metrics
+are stored in cents and usage metrics keep their native units.
 
-| Metric                                 | Required labels                                | Source                                                           |
-| -------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
-| `takos_cloud_spend_cents_total`        | `space_id`, `provider`, `service`, `region`    | cloud provider bill export joined to Space attribution           |
-| `takos_billing_usage_cost_cents_total` | `space_id`, `billing_account_id`, `meter_type` | Takos app `usage_events.cost_cents` / `usage_rollups.cost_cents` |
-| `takos_billing_usage_units_total`      | `space_id`, `billing_account_id`, `meter_type` | Takos app `usage_events.units` / `usage_rollups.units`           |
+| Metric                                 | Required labels                              | Source                                                         |
+| -------------------------------------- | -------------------------------------------- | -------------------------------------------------------------- |
+| `takos_cloud_spend_cents_total`        | `space_id`, `provider`, `service`, `region`  | cloud provider bill export joined to Space attribution         |
+| `takos_billing_usage_cost_cents_total` | `space_id`, `account_id`, `meter_type`       | Takosumi Accounts/Cloud billing ledger reconciliation          |
+| `takos_app_usage_units_total`          | `space_id`, `owner_account_id`, `meter_type` | Takos app `app_usage_events.units` / `app_usage_rollups.units` |
 
 Optional attribution labels:
 
@@ -74,7 +76,7 @@ Cost attribution uses this order:
    equivalent on the cloud resource.
 2. Takosumi Space attribution labels: `takosumi_cost_center`,
    `takosumi_project_code`, `takosumi_customer_segment`.
-3. Takos app billing account / Space mapping.
+3. Takos app `owner_account_id` / Space usage mapping.
 4. Fallback to `space_id=""` with provider, service, region, and invoice line
    metadata preserved in the private billing pipeline.
 
@@ -114,8 +116,9 @@ Monthly close:
 
 - Compare `sum(increase(takos_cloud_spend_cents_total[30d]))` with provider
   invoice totals in `takos-private/`.
-- Compare `sum(increase(takos_billing_usage_cost_cents_total[30d]))` with Takos
-  app `usage_rollups.cost_cents` for the same period.
+- Compare `sum(increase(takos_app_usage_units_total[30d]))` with Takos app
+  `app_usage_rollups.units` for the same period, then compare priced billing
+  output against the Takosumi Accounts/Cloud ledger.
 - Record the reconciliation result in the private finance / operations log.
 - File a follow-up if provider invoice delta exceeds 1% or billing usage delta
   exceeds 0.5%.
@@ -132,10 +135,10 @@ Monthly close:
 
 ## Privacy and Access
 
-Dashboards must use opaque `space_id` and `billing_account_id` labels. Do not
-export customer email, company name, payment processor customer id, invoice id,
-or support ticket id as metric labels. Private billing systems may resolve IDs
-to customer records, but Grafana dashboards stay operator-facing and
+Dashboards must use opaque `space_id`, `owner_account_id`, and Account labels.
+Do not export customer email, company name, payment processor customer id,
+invoice id, or support ticket id as metric labels. Private billing systems may
+resolve IDs to customer records, but Grafana dashboards stay operator-facing and
 identifier-only.
 
 ## Validation
