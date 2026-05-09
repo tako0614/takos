@@ -41,7 +41,7 @@ export / materialize / upgrade / rollback / revoke / suspend / uninstall
 
 ```txt
 TakosumiAccount (acct_123)
-   │  legalOwnerId / billingAccountId
+   │  legalOwnerSubject / billingAccountId
    ▼
 Space (space_personal | space_team_acme | ...)
    │  accountId / kind: personal | team | org
@@ -61,40 +61,45 @@ Space / membership 側は [Spaces](/platform/spaces) を参照。
 
 ## ledger record の table 設計
 
-TypeScript で表現した正本 schema です (出典: `new.md` §7)。実装上は Takosumi
-Accounts の DB に置かれます。
+TypeScript で表現した正本 schema です。実装上は
+`takosumi-cloud/packages/accounts-service/src/ledger.ts` と Postgres
+`installation_v1` schema が source of truth で、Takosumi Accounts の DB に
+置かれます。
 
 ```ts
-type TakosumiAccount = {
-  id: string;
-  legalOwnerId: string;
-  billingAccountId: string;
-  createdAt: string;
+type LedgerAccountRecord = {
+  accountId: string;
+  legalOwnerSubject: `tsub_${string}`;
+  billingAccountId?: string;
+  createdAt: number;
+  updatedAt: number;
 };
 
-type Space = {
-  id: string;
+type SpaceRecord = {
+  spaceId: string;
   accountId: string;
   kind: "personal" | "team" | "org";
-  name: string;
+  displayName?: string;
+  createdAt: number;
+  updatedAt: number;
 };
 
-type AppInstallation = {
-  id: string;
+type AppInstallationRecord = {
+  installationId: string;
   accountId: string;
   spaceId: string;
 
-  appId: "takos.chat";
+  appId: string;
   sourceGitUrl: string;
   sourceRef: string;
   sourceCommit: string;
 
   appManifestDigest: string;
-  compiledManifestDigest: string;
+  compiledManifestDigest?: string;
   serviceImports?: AppInstallationServiceImport[];
 
   mode: "shared-cell" | "dedicated" | "self-hosted";
-  runtimeBindingId: string;
+  runtimeBindingId?: string;
 
   status:
     | "installing"
@@ -103,9 +108,9 @@ type AppInstallation = {
     | "suspended"
     | "exported";
 
-  createdBySubject: string;
-  createdAt: string;
-  updatedAt: string;
+  createdBySubject: `tsub_${string}`;
+  createdAt: number;
+  updatedAt: number;
 };
 
 type AppInstallationServiceImport = {
@@ -116,13 +121,24 @@ type AppInstallationServiceImport = {
   refreshPolicy?: Record<string, unknown>;
 };
 
-// 外部公開 status (REST / UI / event payload で使う canonical 5 値) は上記の
-// `status` field のみ。transitional substate (in-flight phase の内部表現) は
-// 下記 §"Transitional substates" を参照。
-
-type AppBinding = {
-  id: string;
+type RuntimeBindingRecord = {
+  runtimeBindingId: string;
   installationId: string;
+  mode: "shared-cell" | "dedicated" | "self-hosted";
+  targetType: "shared-cell" | "dedicated" | "self-hosted";
+  targetId: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+// 外部公開 status (REST / UI / event payload で使う canonical 5 値) は
+// AppInstallationRecord.status のみ。in-flight phase は event payload や
+// operation metadata として扱い、status enum には追加しない。
+
+type AppBindingRecord = {
+  bindingId: string;
+  installationId: string;
+  name: string;
   kind:
     | "identity.oidc@v1"
     | "database.postgres@v1"
@@ -133,15 +149,49 @@ type AppBinding = {
 
   configRef: string;
   secretRefs: string[];
+  createdAt: number;
+  updatedAt: number;
 };
 
-type AppGrant = {
-  id: string;
+type AppGrantCapability =
+  | "app.profile.write"
+  | "app.memory.write"
+  | "deploy.intent.write"
+  | "logs.read.own"
+  | "billing.usage.report"
+  | "spaces:read"
+  | "spaces:write"
+  | "files:read"
+  | "files:write"
+  | "memories:read"
+  | "memories:write"
+  | "threads:read"
+  | "threads:write"
+  | "runs:read"
+  | "runs:write"
+  | "agents:execute"
+  | "repos:read"
+  | "repos:write"
+  | "mcp:invoke"
+  | "events:subscribe";
+
+type AppGrantRecord = {
+  grantId: string;
   installationId: string;
-  capability: string;
+  capability: AppGrantCapability;
   scope: Record<string, unknown>;
-  createdAt: string;
-  revokedAt?: string;
+  grantedAt: number;
+  revokedAt?: number;
+};
+
+type InstallationEventRecord = {
+  eventId: string;
+  installationId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  previousEventHash?: string;
+  eventHash: `sha256:${string}`;
+  createdAt: number;
 };
 ```
 
@@ -218,7 +268,7 @@ billing などの external service は compiled manifest の `imports[]` /
 AppInstallation に対する capability grant の 1 record。**ユーザーが任意の
 タイミングで revoke 可能** であることが ownership 強度の鍵です。
 
-代表例:
+`capability` は v1 closed catalog です。任意 string は受け付けません。
 
 ```txt
 app.profile.write       Takos profile を更新する権限
@@ -226,12 +276,21 @@ app.memory.write        agent memory 領域への書き込み
 deploy.intent.write     deploy-intent.gitops binding を介した deploy 発行
 logs.read.own           installation 自身の logs を読む
 billing.usage.report    使用量を Takosumi Accounts に報告
+spaces:read/write       Space metadata の読み取り / 更新
+files:read/write        Takos file resource の読み取り / 更新
+memories:read/write     memory resource の読み取り / 更新
+threads:read/write      thread resource の読み取り / 更新
+runs:read/write         run resource の読み取り / 更新
+agents:execute          agent 実行
+repos:read/write        repository resource の読み取り / 更新
+mcp:invoke              MCP tool invocation
+events:subscribe        event stream subscription
 ```
 
 revoke 経路:
 
 ```txt
-takosumi grants inst_abc revoke deploy.intent.write
+takosumi-cloud installations grants revoke inst_abc grant_deploy
    ↓
 AppGrant ledger: revokedAt set
    ↓
@@ -254,13 +313,9 @@ AppInstallation lifecycle の append-only audit ledger。代表 event:
 
 ```txt
 installation.created
-workflow-started / workflow-failed / workflow-succeeded
-deployed / ready / failed
-launched
-materialize-requested / materialize-applied
-upgrade-applied / rollback-applied
-exported / deleted
-binding.rotated
+installation.status_changed
+installation.launch_token_issued / installation.launch_token_consumed
+oidc_client.registered / oidc_client.rotated
 grant.granted / grant.revoked
 ```
 
@@ -283,8 +338,8 @@ workflow / apply         workflow / apply
 succeeded                failed
     │                    │
     ▼                    ▼
-  ready ◀──── upgrade ──── failed
-    │                    ▲
+  ready ───── upgrade ───▶ failed
+    │                    │
     │ suspend            │  (resolved by retry / fix)
     ▼                    │
 suspended ───── resume ──┘
@@ -304,25 +359,30 @@ exported
   ([Installer Pipeline](./installer-pipeline.md))
 - `installing → failed`: workflow sandbox 失敗 / kernel apply 失敗 / binding
   provision 失敗。InstallationEvent に原因を記録
-- `ready → failed`: upgrade 適用中の失敗。rollback で `ready` に戻すこともある
+- `ready → failed`: upgrade / runtime operation 適用中の失敗
+- `failed → installing`: retry / rollback / repair を再実行
 - `ready → suspended`: 課金停止 / policy 違反 / ユーザー操作。runtime は停止
   するが ledger は保持
 - `ready → exported`: `takosumi-git export` で bundle を作成し、ownership chain
   を self-host へ持ち出した状態。export 後の installation は read-only
 - `suspended → ready`: 再開
-- `failed → ready`: 修復後の再 deploy
+- `installing → suspended`: install 中の operator/user stop
+- `suspended → failed`: resume / repair 不能な停止状態
+- `failed → exported` / `suspended → exported`: failure / suspension 後に export
+  bundle を作り self-host に退避
 
 各遷移は InstallationEvent に append-only 記録されます。
 
 ### Transitional substates (in-flight phases)
 
 外部公開 status は上記の **5 値** (`installing` / `ready` / `failed` /
-`suspended` / `exported`) に固定です。実装上、`installing` 中や `ready` から
-他遷移を駆動する間に存在する短命な in-flight phase は、`status` を昇格させず
-**transitional substate** として表現し、InstallationEvent に記録します。 これは
-[Install API](/reference/install-api) の `409 state-conflict` 判定 と
-[Upgrade / Export](/platform/upgrade-export) の lifecycle 図と一致する 内部
-substate です。
+`suspended` / `exported`) に固定です。現在の ledger record には別の
+`substate` column はありません。`installing` 中や `ready` から他遷移を駆動する
+間に存在する短命な in-flight phase は、`status` を増やさず、operation metadata
+または InstallationEvent payload として記録します。これは
+[Install API](/reference/install-api) の `409 state-conflict` 判定と
+[Upgrade / Export](/platform/upgrade-export) の lifecycle 図と一致する内部
+phase です。
 
 | substate               | parent status | 概要                                                         |
 | ---------------------- | ------------- | ------------------------------------------------------------ |
@@ -339,7 +399,7 @@ substate です。
 出さず、必ず canonical 5 値のいずれかへ map します。例えば `materializing` 中の
 `GET /v1/installations/{id}` は `status: "installing"` を返し、進行は
 InstallationEvent (`installation.materialize-requested` 等) と
-`/v1/installations/{id}/events` の SSE で観測します。
+`/v1/installations/{id}/events` の event list で観測します。
 
 ## ユーザーに見せる Settings 画面
 
