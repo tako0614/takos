@@ -40,9 +40,10 @@ operator docs では Web UI / public API を Takos product の primary surface
 
 1. [OIDC Setup](/operator/oidc-setup) で admin domain、Takosumi Accounts
    issuer、OIDC callback、secret 経路、および `OIDC_*` env を固定する
-2. [Bootstrap](/operator/bootstrap) で初回 operator account を作り、Web UI から
-   PAT を発行し、Takosumi Accounts 経由の OIDC client を設定する
-3. [API Reference](/reference/api) で PAT / setup API の詳細を確認する
+2. [Bootstrap](/operator/bootstrap) で初回 operator account を作り、Takosumi
+   Accounts bearer と OIDC client を設定する
+3. [API Reference](/reference/api) で Accounts bearer / setup API
+   の詳細を確認する
 
 新モデルの周辺は次を参照してください。
 
@@ -56,7 +57,8 @@ operator docs では Web UI / public API を Takos product の primary surface
 ## 原則
 
 - operator の初回操作は Web UI を使う
-- automation は Web で発行した PAT を secret store に保存して使う
+- automation は Takosumi Accounts で発行した bearer を secret store
+  に保存して使う
 - deploy 設定や secret の本番操作は `takos-private/` を正本にする
 - application の git / workflow / manifest authoring CLI は `takosumi-git`
   に寄せる

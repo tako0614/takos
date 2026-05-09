@@ -164,10 +164,27 @@ function validateTextIncludes(path: string, expectedValues: readonly string[]): 
 
   const text = Deno.readTextFileSync(path);
   for (const expected of expectedValues) {
-    if (!text.includes(expected)) {
+    if (!includesExpected(text, expected)) {
       failures.push(`${path}: expected to contain '${expected}'`);
     }
   }
+}
+
+function includesExpected(text: string, expected: string): boolean {
+  if (text.includes(expected)) return true;
+
+  const lastReviewedPrefix = 'Last reviewed | ';
+  if (expected.startsWith(lastReviewedPrefix)) {
+    const date = escapeRegex(expected.slice(lastReviewedPrefix.length));
+    return new RegExp(`\\|\\s*Last reviewed\\s*\\|\\s*${date}\\s*\\|`)
+      .test(text);
+  }
+
+  return false;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function exists(path: string): boolean {

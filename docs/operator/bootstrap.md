@@ -1,8 +1,8 @@
 # Bootstrap
 
-fresh operator が Takos を立ち上げ、最初の PAT を取得するための Web-first
-runbook です。Takos product は基本的に Web で操作し、CLI を primary bootstrap
-経路にしません。
+fresh operator が Takos を立ち上げ、Takosumi Accounts bearer を接続するための
+Web-first runbook です。Takos product は基本的に Web で操作し、CLI を primary
+bootstrap 経路にしません。
 
 Installable App Model における Takos は **OIDC consumer** として bootstrap
 します。issuer は service identifier `takosumi.account.auth@v1` で参照される
@@ -73,43 +73,39 @@ profile 用の username を保存します。ログイン用 credential は Tako
 Web 画面で username を決めて `continue` します。完了後、Takos Web の main app
 に入れることを確認します。
 
-## 3. PAT を Web UI で発行する
+## 3. Takosumi Accounts bearer を用意する
 
-automation や API smoke に使う PAT は Web UI から発行します。
+automation や API smoke に使う long-lived credential は Takosumi Accounts
+で発行します。Takos app の `/api/me/personal-access-tokens` は retired で、
+token secret / hash / revocation registry を Takos app には保存しません。
 
-1. Takos Web の account settings を開く
-2. Personal Access Tokens を開く
+1. Takosumi Accounts の account settings を開く
+2. Personal Access Tokens または CLI/device flow を開く
 3. token 名を入力する
-4. access level を選ぶ
-5. 生成された `tak_pat_...` を secret store に保存する
+4. 必要な scope / access level を選ぶ (`/api/me` smoke だけなら `profile`)
+5. 生成された `takpat_...` または OIDC access token を secret store に保存する
 
-PAT の access level は bucket です。
+Takos API の route family ごとの必要 scope は
+[`API Reference`](/reference/api#認証) を参照します。token value は作成時に
+一度だけ表示されます。再表示できないため、発行直後に operator secret store
+へ移してください。
 
-| bucket  | 用途                                          |
-| ------- | --------------------------------------------- |
-| `read`  | 読み取り API / smoke check                    |
-| `write` | deploy automation / repository automation     |
-| `admin` | 管理操作。短い TTL と厳格な secret 管理が必要 |
+## 4. Accounts bearer で API smoke を行う
 
-token value は作成時に一度だけ表示されます。再表示できないため、発行直後に
-operator secret store へ移してください。
-
-## 4. PAT で API smoke を行う
-
-保存した PAT で `/api/me` を確認します。
+保存した Accounts bearer で `/api/me` を確認します。
 
 ```bash
 curl -fsS \
-  -H "Authorization: Bearer $TAKOS_PAT" \
+  -H "Authorization: Bearer $TAKOS_ACCOUNTS_TOKEN" \
   https://<ADMIN_DOMAIN>/api/me
 ```
 
-レスポンスに setup 済み user が返れば、browser session と PAT
-の基本経路は動いています。
+レスポンスに setup 済み user が返れば、browser session と Accounts bearer の
+consumer 経路は動いています。
 
 ## 5. Automation へ渡す
 
-PAT は operator が管理する secret store に保存し、必要な automation
+Accounts bearer は operator が管理する secret store に保存し、必要な automation
 にだけ渡します。
 
 - local shell や CI に直書きしない

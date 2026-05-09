@@ -34,22 +34,23 @@ CLI で拒否します。
 
 ### `takos login`
 
-Installable App Model では CLI の long-lived credential は **Takos PAT** か
-Takosumi Accounts の device / OIDC flow で得た bearer token を使います。Takos
-本体の legacy `/auth/cli` browser callback は retired route であり、新規
-operator / client は依存しないでください。
+Installable App Model では CLI の long-lived credential は **Takosumi Accounts
+PAT** か Takosumi Accounts の device / OIDC flow で得た bearer token
+を使います。Takos 本体の legacy `/auth/cli` browser callback は retired route
+であり、新規 operator / client は依存しないでください。
 
 `takos login --api-url <url>` は legacy 互換 command として残っていますが、
 current Takos deployment では `/auth/cli` が `410 Gone` を返します。現行運用
 では次のどちらかを使います。
 
-1. Takos web UI で PAT を発行し、`TAKOS_TOKEN` と `TAKOS_API_URL` を設定する
-2. Takosumi Accounts が提供する CLI/device flow で token を取得し、同じ
-   bearer token として CLI に渡す
+1. Takosumi Accounts の account settings で PAT を発行し、`TAKOS_TOKEN` と
+   `TAKOS_API_URL` を設定する
+2. Takosumi Accounts が提供する CLI/device flow で token を取得し、同じ bearer
+   token として CLI に渡す
 
 ```bash
 export TAKOS_API_URL=https://takos.example.com
-export TAKOS_TOKEN=tak_pat_...
+export TAKOS_TOKEN=takpat_...
 takos whoami
 ```
 

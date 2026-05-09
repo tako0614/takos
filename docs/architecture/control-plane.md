@@ -102,9 +102,9 @@ class は本ページ末尾の collapsible 節を参照。
 operator workstation の Takos CLI から runtime-service の CLI-proxy endpoint
 (`/cli-proxy/*`) に到達する flow:
 
-1. CLI が PAT 付きで kernel API に HTTPS POST する
-2. kernel main process が PAT を `tak_pat_*` prefix + DB lookup で検証し session
-   を引く
+1. CLI が Takosumi Accounts bearer 付きで kernel API に HTTPS POST する
+2. kernel main process が Accounts bearer を issuer / introspection 経由で検証し
+   session を引く
 3. kernel から runtime host process に internal binding で渡す
 4. runtime host process が `/forward/cli-proxy/*` を container 内 loopback で
    呼ぶ
@@ -689,8 +689,7 @@ takos (main worker)
 実 git/repo 処理
 ```
 
-- ① → ②: kernel 側で PAT を検証 (`tak_pat_*` prefix + DB lookup) したうえで
-  session を引く
+- ① → ②: kernel 側で Takosumi Accounts bearer を検証したうえで session を引く
 - ②: container mode では (3) のように service binding 経由で runtime-host を
   呼ぶ。これは worker bundle / runtime-service host 経路であり、container
   workload の materialization そのものではない。通常の direct HTTP mode では
