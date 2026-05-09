@@ -146,7 +146,6 @@ GET /api/resources?limit=20&offset=0
 | [`profiles`](#profiles)                   | optional | 公開 profile / repo view / follow / block   |
 | [`public-share`](#public-share)           | mixed    | thread share の read / access grant         |
 | [`mcp`](#mcp)                             | mixed    | MCP OAuth callback と MCP server 管理       |
-| [`billing` (retired)](#billing)           | none     | retired Takos billing webhook (`410 Gone`)  |
 
 ### Authenticated families
 
@@ -184,7 +183,7 @@ GET /api/resources?limit=20&offset=0
 | [`events`](#events)                               | group lifecycle event の SSE 配信                                    |
 | [`deployments`](#deployments)                     | Deployment lifecycle: preview / resolve / apply / approve / rollback |
 | [`groups`](#groups)                               | group 管理 / GroupHead / inventory                                   |
-| [`billing` (retired)](#billing)                   | retired billing API (`410 Gone`; use Takosumi Accounts billing)      |
+| [`billing` (not exposed)](#billing)               | Takos billing API is not mounted; use Takosumi Accounts billing      |
 | [`auth`](#auth)                                   | authenticated auth/profile actions                                   |
 
 ### Non-API routes
@@ -2028,24 +2027,25 @@ bundled snapshot ではなく source metadata / resolved commit を
   ください (`takosumi.account.billing@v1` service identifier を anchor から
   resolve)
 
-Takos apps/api gateway の `/api/billing/*` family は Phase 1.4 で閉じられ、
-`410 Gone` を返します。Installable App Model 配下の app は billing owner に
-ならず、Takosumi Account の billing account に紐づきます。 :::
+Takos apps/api gateway の `/api/billing/*` family は Phase 1.4 で削除され、
+通常の未定義 route と同じ `404 Not Found` になります。Installable App Model
+配下の app は billing owner にならず、Takosumi Account の billing account に
+紐づきます。 :::
 
 課金・使用量・サブスクリプション管理は Takosumi Accounts の
 `takosumi.account.billing@v1` service identifier を anchor で resolve して
 呼びます。
 
-| method | path             | description          |
-| ------ | ---------------- | -------------------- |
-| any    | `/api/billing`   | retired (`410 Gone`) |
-| any    | `/api/billing/*` | retired (`410 Gone`) |
+| method | path             | description         |
+| ------ | ---------------- | ------------------- |
+| any    | `/api/billing`   | not exposed (`404`) |
+| any    | `/api/billing/*` | not exposed (`404`) |
 
 ### Webhook
 
-| method | path                   | auth             | description          |
-| ------ | ---------------------- | ---------------- | -------------------- |
-| POST   | `/api/billing/webhook` | Stripe signature | retired (`410 Gone`) |
+| method | path                   | auth | description         |
+| ------ | ---------------------- | ---- | ------------------- |
+| POST   | `/api/billing/webhook` | none | not exposed (`404`) |
 
 ---
 

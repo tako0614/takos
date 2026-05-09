@@ -80,7 +80,7 @@ canonical billing API は Takosumi Accounts の `takosumi.account.billing@v1`
 service role です。consumer は `serviceResolvers[]` / anchor で billing endpoint
 を resolve し、`/v1/billing/usage` で current billing account の usage rollup
 を取得します。Takos の `/api/billing/*` は current API ではなく、apps/api
-gateway では `410 Gone` を返します。
+gateway では通常の未定義 route と同じ `404 Not Found` になります。
 
 ## operator が見るべき state
 
