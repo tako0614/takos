@@ -62,7 +62,9 @@ token 検証:
 Phase 1.6 design endpoint では `Idempotency-Key` header を使い、24 時間内に 同
 key + 同 body で再送した場合は同じ response を返す想定です。現行の
 contract-backed AppInstallation endpoint は idempotency ledger をまだ公開して
-いないため、重複作成は `installation_already_exists` で扱います。
+いないため、重複作成は `installation_already_exists` で扱います。 `materialize`
+/ `export` request endpoint は requested event に request digest を保存し、同じ
+key で別 body が来た場合は `409 idempotency_key_conflict` を 返します。
 
 | endpoint                                   | Idempotency-Key                 |
 | ------------------------------------------ | ------------------------------- |
