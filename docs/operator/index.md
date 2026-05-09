@@ -38,9 +38,8 @@ operator docs では Web UI / public API を Takos product の primary surface
 
 ## 読む順番
 
-1. [OIDC Setup](/operator/oidc-setup) で admin domain、Google OAuth (operator
-   login) の callback、secret 経路、および Takosumi Accounts 連携用の `OIDC_*`
-   env を固定する
+1. [OIDC Setup](/operator/oidc-setup) で admin domain、Takosumi Accounts
+   issuer、OIDC callback、secret 経路、および `OIDC_*` env を固定する
 2. [Bootstrap](/operator/bootstrap) で初回 operator account を作り、Web UI から
    PAT を発行し、Takosumi Accounts 経由の OIDC client を設定する
 3. [API Reference](/reference/api) で PAT / setup API の詳細を確認する
