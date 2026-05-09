@@ -276,7 +276,7 @@ imports:
       ttl: 300s
 serviceResolvers:
   - kind: anchor
-    url: https://anchor.example.com/v1/services/
+    url: https://anchor.example.com/v1/services
     publicKey: BASE64_ED25519_PUBLIC_KEY
 resources:
   - shape: web-service@v1
@@ -310,10 +310,13 @@ services:
     endpoints:
       - role: oidc-issuer
         url: ${ref:account-auth.url}
-        path: /
+        path: /.well-known/openid-configuration
+      - role: install-launch
+        url: ${ref:account-auth.url}
+        path: /v1/installations/{installationId}/launch-token
     publish:
       anchors:
-        - https://anchor.example.com/v1/services/
+        - https://anchor.example.com/v1/services
       signing:
         privateKeyRef: provider-signing-key-ref
 resources:

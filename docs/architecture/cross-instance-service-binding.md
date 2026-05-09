@@ -85,22 +85,24 @@ services:
     endpoints: # operator URL で deploy 時 resolve
       - role: oidc-issuer
         url: ${ref:account-auth.url}
-        path: /
+        path: /.well-known/openid-configuration
       - role: install-launch
         url: ${ref:account-auth.url}
-        path: /v1/install/launch
+        path: /v1/installations/{installationId}/launch-token
     metadata:
       pairwiseSubjectMode: true
     publish:
       anchors:
-        - https://anchor.example.com/v1/services/
+        - https://anchor.example.com/v1/services
       signing:
         privateKeyRef: provider-signing-key
 ```
 
 provider が deploy 時に `${ref:<resource>.url}` で endpoint URL を
 operator-chosen hostname で resolve し、 anchor service に **provider-signed
-`ServiceDescriptor`** を publish します。
+`ServiceDescriptor`** を publish します。 Takosumi Cloud Accounts の auth
+descriptor はこの 2 role に加えて `authorize` / `token` / `jwks` / `userinfo` /
+`revoke` / `introspect` を export します。
 
 ### 2. Consumer 側 (例: Takos / 別 takosumi instance / 第三者 app)
 
@@ -113,7 +115,7 @@ namespace: my-takos
 
 serviceResolvers: # consumer は anchor を pin (1 hostname のみ)
   - kind: anchor
-    url: https://my-anchor.example.com/v1/services/
+    url: https://my-anchor.example.com/v1/services
     publicKey: BASE64_ED25519_PUBLIC_KEY
 
 imports:
