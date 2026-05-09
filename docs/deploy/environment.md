@@ -10,9 +10,12 @@ env の入力元は 3 種類です。
 
 1. author が manifest に直接書く static value
 2. resource output 参照 (`${ref:...}` / `${secret-ref:...}`)
-3. install / service import layer が kernel 到達前または deploy route 内で解決
-   する placeholder (`${bindings.*}` / `${secrets.*}` / `${installation.*}` /
-   `${imports.*}`)
+3. service import layer が deploy route 内で解決する `${imports.*}`
+
+`${bindings.*}` / `${secrets.*}` / `${installation.*}` / `${params.*}` /
+`${artifacts.*}` / legacy `${refs.*}` は installer-only placeholder です。
+current `takosumi-git` compiler は、これらが unresolved のまま残る manifest を
+Accounts / kernel request の前に reject します。
 
 normative な field 定義は
 [Manifest Reference](/reference/manifest-spec)、install-time binding の出力は
@@ -80,12 +83,12 @@ store / provider secret reference として扱います。存在しない resour
 
 ## Install-Time Bindings
 
-`.takosumi/app.yml` の AppBinding は installer-bound
-です。`.takosumi/manifest.yml` 内では `${bindings.*}` / `${secrets.*}` /
-`${installation.*}` を authoring-time placeholder として使えますが、kernel
-に直接届く manifest には残しません。 takosumi-git / Takosumi Accounts が
-concrete value または secret ref に materialize してから `POST /v1/deployments`
-に渡します。
+`.takosumi/app.yml` の AppBinding は installer-bound です。binding catalog の
+`${bindings.*}` / `${secrets.*}` / `${installation.*}` syntax は authoring-time
+reserved syntax ですが、current `takosumi-git` compiler は unresolved
+placeholder を materialize したふりで kernel に渡しません。binding materializer
+が concrete value または secret ref を提供した compiled manifest だけが
+`POST /v1/deployments` に進めます。
 
 ```yaml
 # .takosumi/app.yml
@@ -105,7 +108,7 @@ bindings:
 ```
 
 ```yaml
-# .takosumi/manifest.yml (authoring)
+# compiled manifest excerpt after binding materialization
 apiVersion: "1.0"
 kind: Manifest
 metadata:
@@ -115,23 +118,23 @@ resources:
     name: api
     provider: "@takos/aws-fargate"
     spec:
-      image: ${artifacts.api.image}
+      image: ghcr.io/takos/api@sha256:0123456789abcdef
       port: 8080
       scale: { min: 1, max: 3 }
       env:
         AUTH_DRIVER: oidc
-        OIDC_ISSUER_URL: ${bindings.auth.issuerUrl}
-        OIDC_CLIENT_ID: ${bindings.auth.clientId}
-        OIDC_CLIENT_SECRET: ${secrets.auth.clientSecret}
-        OIDC_REDIRECT_URI: ${bindings.auth.redirectUri}
-        DATABASE_URL: ${bindings.data.connectionString}
-        BLOB_ENDPOINT: ${bindings.blobs.endpoint}
-        BLOB_BUCKET: ${bindings.blobs.bucket}
-        BLOB_ACCESS_KEY: ${bindings.blobs.accessKey}
-        BLOB_SECRET_KEY: ${secrets.blobs.secretKey}
-        INSTALL_LAUNCH_PUBLIC_KEY: ${bindings.bootstrap.publicKey}
-        INSTALL_LAUNCH_AUDIENCE: ${bindings.bootstrap.audience}
-        TAKOS_INSTALLATION_ID: ${installation.id}
+        OIDC_ISSUER_URL: https://accounts.example.com
+        OIDC_CLIENT_ID: takos_inst_abc
+        OIDC_CLIENT_SECRET: resolved-client-secret
+        OIDC_REDIRECT_URI: https://takos.example.com/auth/oidc/callback
+        DATABASE_URL: postgres://takos:password@db.example.com:5432/takos
+        BLOB_ENDPOINT: https://objects.example.com
+        BLOB_BUCKET: takos-inst-abc
+        BLOB_ACCESS_KEY: takos-inst-abc
+        BLOB_SECRET_KEY: resolved-blob-secret
+        INSTALL_LAUNCH_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----..."
+        INSTALL_LAUNCH_AUDIENCE: inst_abc
+        TAKOS_INSTALLATION_ID: inst_abc
 ```
 
 ## Cross-Instance Service Env
@@ -201,25 +204,25 @@ issuer endpoint を持ちません。
 
 よく使う env:
 
-| env                         | 由来例                                                               | 説明                         |
-| --------------------------- | -------------------------------------------------------------------- | ---------------------------- |
-| `AUTH_DRIVER`               | static `oidc`                                                        | OIDC consumer mode           |
-| `OIDC_ISSUER_URL`           | `${imports.account-auth.endpoints.oidc-issuer.url}` or AppBinding    | operator-resolved issuer URL |
-| `OIDC_CLIENT_ID`            | `${bindings.auth.clientId}`                                          | OIDC client id               |
-| `OIDC_CLIENT_SECRET`        | `${secrets.auth.clientSecret}` or `${secret-ref:oidc-client-secret}` | OIDC client secret           |
-| `OIDC_REDIRECT_URI`         | `${bindings.auth.redirectUri}`                                       | callback URL                 |
-| `DATABASE_URL`              | `${bindings.data.connectionString}` or `${ref:db.connectionString}`  | Postgres connection URL      |
-| `BLOB_ENDPOINT`             | `${bindings.blobs.endpoint}`                                         | Object store endpoint        |
-| `BLOB_BUCKET`               | `${bindings.blobs.bucket}`                                           | Object store bucket          |
-| `BLOB_ACCESS_KEY`           | `${bindings.blobs.accessKey}`                                        | Object store access key      |
-| `BLOB_SECRET_KEY`           | `${secrets.blobs.secretKey}`                                         | Object store secret key      |
-| `BASE_URL`                  | `${bindings.domain.url}` or `${ref:api.url}`                         | Takos public origin          |
-| `TAKOS_INSTALLATION_ID`     | `${installation.id}`                                                 | AppInstallation id           |
-| `INSTALL_LAUNCH_PUBLIC_KEY` | `${bindings.bootstrap.publicKey}`                                    | launch token verification    |
-| `INSTALL_LAUNCH_AUDIENCE`   | `${bindings.bootstrap.audience}`                                     | launch token audience        |
-| `DEPLOY_INTENT_DRIVER`      | `${bindings.deploy.driver}`                                          | deploy intent driver         |
-| `DEPLOY_INTENT_REMOTE`      | `${bindings.deploy.remote}`                                          | deploy intent remote         |
-| `DEPLOY_INTENT_TOKEN`       | `${secrets.deploy.token}`                                            | deploy intent token          |
+| env                         | 由来例                                                             | 説明                         |
+| --------------------------- | ------------------------------------------------------------------ | ---------------------------- |
+| `AUTH_DRIVER`               | static `oidc`                                                      | OIDC consumer mode           |
+| `OIDC_ISSUER_URL`           | `${imports.account-auth.endpoints.oidc-issuer.url}` or AppBinding  | operator-resolved issuer URL |
+| `OIDC_CLIENT_ID`            | materialized AppBinding value                                      | OIDC client id               |
+| `OIDC_CLIENT_SECRET`        | `${secret-ref:oidc-client-secret}` or materialized secret ref      | OIDC client secret           |
+| `OIDC_REDIRECT_URI`         | materialized AppBinding value                                      | callback URL                 |
+| `DATABASE_URL`              | `${ref:db.connectionString}` / `${secret-ref:db.connectionString}` | Postgres connection URL      |
+| `BLOB_ENDPOINT`             | materialized object-store value                                    | Object store endpoint        |
+| `BLOB_BUCKET`               | materialized object-store value                                    | Object store bucket          |
+| `BLOB_ACCESS_KEY`           | materialized object-store value                                    | Object store access key      |
+| `BLOB_SECRET_KEY`           | materialized secret ref                                            | Object store secret key      |
+| `BASE_URL`                  | concrete URL or `${ref:api.url}`                                   | Takos public origin          |
+| `TAKOS_INSTALLATION_ID`     | concrete AppInstallation id                                        | AppInstallation id           |
+| `INSTALL_LAUNCH_PUBLIC_KEY` | materialized launch-token public key                               | launch token verification    |
+| `INSTALL_LAUNCH_AUDIENCE`   | materialized launch-token audience                                 | launch token audience        |
+| `DEPLOY_INTENT_DRIVER`      | concrete `gitops`                                                  | deploy intent driver         |
+| `DEPLOY_INTENT_REMOTE`      | materialized deploy remote                                         | deploy intent remote         |
+| `DEPLOY_INTENT_TOKEN`       | materialized secret ref                                            | deploy intent token          |
 
 `TAKOS_BASE_URL` は `BASE_URL` の compatibility alias として受け取る場合がありま
 す。新規 manifest では `BASE_URL` を使います。

@@ -1,7 +1,7 @@
 # Binding Catalog
 
-> **Canonical authority**: 本ページの **§8 Placeholder 解決順序** が manifest
-> compile 時の placeholder resolution order の正本です。
+> **Canonical authority**: 本ページの **§8 Placeholder 解決順序** が
+> installer-only placeholder contract の正本です。
 > [reference/manifest-spec § 13](/reference/manifest-spec#compile-time-placeholders)
 > は本 §8 への cross-ref であり、order
 > を変更する場合は本ページを先に更新します。
@@ -16,13 +16,24 @@ lifecycle を Takosumi Cloud / Takosumi Accounts / takosumi-git の側が
 このページで依存してよい範囲:
 
 - `.takosumi/app.yml` の `bindings.*.type` 値として使える 6 種の identifier
-- 各 binding が authoring `.takosumi/manifest.yml` の compile 時に参照可能な
-  `${bindings.<name>.*}` / `${secrets.<name>.*}` placeholder
-- 各 binding が compiled manifest に実値として注入する env vars
+- 各 binding materializer が authoring `.takosumi/manifest.yml` の compile 前に
+  提供できる `${bindings.<name>.*}` / `${secrets.<name>.*}` reserved placeholder
+  vocabulary
+- 各 binding が compiled manifest に実値として提供する env vars
 - placeholder 解決順序 (canonical, 解決優先度順): `${params.*}` →
   `${installation.*}` → `${artifacts.*}` → `${bindings.*}` → `${secrets.*}` →
   `${env.*}` → kernel-bound references (`${ref:...}` / `${secret-ref:...}` /
   `${imports...}`)
+
+Current `takosumi-git` compiler enforces the boundary conservatively: if
+`${params.*}`, `${installation.*}`, `${artifacts.*}`, `${bindings.*}`,
+`${secrets.*}`, or legacy `${refs.*}` remains unresolved after service-import
+compilation, the command fails before Accounts / kernel requests. `${imports.*}`
+may remain because the kernel public deploy route resolves it.
+
+The output placeholder tables and "Default env injection" snippets below are the
+account-plane materializer contract. They are not a promise that the standalone
+compiler will invent values when no materializer supplied them.
 
 このページで依存してはいけない範囲:
 
@@ -30,8 +41,8 @@ lifecycle を Takosumi Cloud / Takosumi Accounts / takosumi-git の側が
   種類や物理 DB cluster 構成は private。本 catalog は **interface のみ**を
   contract 化する。
 - Takosumi kernel 内部の resource shape (`database-postgres@v1` 等): kernel に
-  渡る最終 manifest はすでに binding placeholder が解決済みで、kernel は binding
-  を **知らない**。
+  渡る最終 manifest は unresolved binding placeholder を含まず、kernel は
+  binding を **知らない**。
 - Takosumi Accounts の OIDC issuer 内部実装: `identity.oidc@v1` は consumer
   視点の interface のみを定義する (issuer 側 contract は
   [Takosumi Accounts](/architecture/takosumi-accounts) 参照)。
@@ -475,23 +486,24 @@ resources:
 
 ## 8. Placeholder 解決順序
 
-manifest compile 時 (= takosumi-git installer pipeline) に解決される placeholder
-の優先順位:
+installer / account-plane materializer が manifest compile 前に解決する
+placeholder の優先順位:
 
 1. `${params.*}` — install API の `params` 引数
 2. `${installation.*}` — `id` / `accountId` / `spaceId` / `baseUrl`
 3. `${artifacts.*}` — workflow run の output (image digest 等)
 4. `${bindings.<name>.*}` — 本 catalog の Output placeholders
 5. `${secrets.<name>.*}` — Vault 解決
-6. `${env.*}` — runtime 起動時の env (compile 時には残置)
+6. `${env.*}` — operator-owned manifest generation input。kernel resolver
+   ではない
 7. kernel-bound references — `${ref:...}` / `${secret-ref:...}` /
    `${imports...}` は kernel が apply 時に解決
 
-kernel-bound references は compiled manifest にそのまま残るが、それ以外 (1〜5)
-は **compile 時に全消去** される invariant。つまり compiled manifest に
-`${bindings.*}` / `${secrets.*}` / `${artifacts.*}` / `workflowRef`
-は残らない。`${env.*}` は app 自身の dynamic env
-への参照として残置される余地がある。
+kernel-bound references は compiled manifest にそのまま残るが、それ以外 (1〜5 と
+legacy `${refs.*}`) は **compiled manifest に残らない** invariant。 current
+`takosumi-git` は unresolved installer-only placeholder を解決したふりで
+渡さず、compile error にする。`${env.*}` は kernel resolver ではないため、
+使う場合は operator-owned manifest generation で concrete value にする。
 
 ### 8.1 名前衝突の禁止
 
@@ -515,9 +527,10 @@ env を分岐定義するか、別 manifest variant を持つ。
 
 ## 9. 参照される manifest snippet
 
-[`.takosumi/app.yml`](/reference/app-yml-spec) の `bindings:` 節と
-[`.takosumi/manifest.yml`](/deploy/manifest) の placeholder 参照は次のように
-対応する。
+[`.takosumi/app.yml`](/reference/app-yml-spec) の `bindings:` 節と reserved
+placeholder vocabulary は次のように対応する。current `takosumi-git`
+に未解決のまま渡すと compile error になるため、下の manifest snippet は
+account-plane materializer の入力 contract を示す。
 
 ```yaml
 # .takosumi/app.yml (installer-bound)

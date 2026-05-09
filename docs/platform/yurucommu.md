@@ -66,8 +66,9 @@ bindings:
       - profile
 ```
 
-manifest 側では public origin を domain binding / resource output から `APP_URL`
-に materialize します。
+manifest 側では public origin を concrete URL または kernel-owned resource
+output から `APP_URL` に materialize します。current takosumi-git に unresolved
+`${bindings.*}` を渡すと compile error です。
 
 ```yaml
 resources:
@@ -79,7 +80,7 @@ resources:
       port: 8080
       scale: { min: 1, max: 3 }
       env:
-        APP_URL: ${bindings.domain.url}
+        APP_URL: ${ref:web.url}
 ```
 
 ## Resources

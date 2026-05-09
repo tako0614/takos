@@ -144,8 +144,8 @@ top-level `components` / `routes` / `bindings` / `publications` / `environments`
 / `policy` を持つ旧 AppSpec は current manifest ではありません。resource 間
 dependency は `${ref:<resource>.<field>}` / `${secret-ref:<resource>.<field>}`
 で表現します。installer-only placeholder (`${bindings.*}` / `${secrets.*}` /
-`${artifacts.*}` 等) と `workflowRef` は takosumi-git が kernel に渡す前に
-materialize / strip します。
+`${artifacts.*}` 等) は current takosumi-git が未解決なら compile error にし、
+`workflowRef` は kernel に渡す前に strip します。
 
 normative な field 仕様は [manifest spec](/reference/manifest-spec) を参照。
 
@@ -301,10 +301,9 @@ registry を持ちません。
 
 Installable App Model の `.takosumi/app.yml` の `bindings:` (`identity.oidc@v1`
 / `database.postgres@v1` / `object-store.s3-compatible@v1` 等) は
-installer-bound です。Takosumi Accounts / takosumi-git が AppBinding を承認・
-materialize し、`.takosumi/manifest.yml` の `${bindings.*}` / `${secrets.*}` に
-反映してから kernel に渡します。OIDC client は `identity.oidc@v1` AppBinding
-経由で installation 単位に発行されます
+installer-bound です。current takosumi-git は unresolved `${bindings.*}` /
+`${secrets.*}` を kernel に渡さず、compile error にします。OIDC client は
+`identity.oidc@v1` AppBinding 経由で installation 単位に発行されます
 ([binding-catalog](/reference/binding-catalog#_1-identity-oidc-v1) 参照)。
 
 Takos API access は Takos product API / AppGrant の責務です。kernel は
