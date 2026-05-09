@@ -221,9 +221,10 @@ Accounts 内部の typed payload kind は
 installation/source/bindings/grants/OIDC metadata からこの payload を組み立てる
 codec と、別 Takosumi Accounts issuer へ import する create request planner
 です。Accounts export operation の signed download redirect endpoint、JSON
-import API、JSON/tar.zst import CLI、metadata-only tar.zst archive writer
-も実装済み です。HTTP export worker への接続、compiled manifest 実体、data dump
-worker は この payload contract の後続 worker として実装する。
+import API、JSON/tar.zst import CLI、metadata-only tar.zst archive writer、
+configured export worker hook も実装済みです。compiled manifest 実体、data dump
+worker、age encryption、object-store upload はこの payload contract の後続
+worker として実装する。
 
 ### 3.3 Encryption
 
