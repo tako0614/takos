@@ -2936,16 +2936,17 @@ preserve されます。
 
 ## AppInstallation Ledger (Phase 1.2 NEW)
 
-Installable App Model で導入される **AppInstallation 台帳** の 5 entity。 Takos
-の database には置かず、新設 product **takosumi-cloud** (Phase 1.1 NEW、
-Takosumi Accounts plane) で管理されます。Takos 側は OIDC consumer として launch
-token と app-local profile のみを保持し、ownership / billing / source pin /
-runtime mode / capability / audit はすべて以下の 5 entity に anchor され ます。
+Installable App Model で導入される **AppInstallation 台帳** の ledger record
+set。Takos の database には置かず、新設 product **takosumi-cloud** (Phase 1.1
+NEW、Takosumi Accounts plane) で管理されます。Takos 側は OIDC consumer として
+launch token と app-local profile のみを保持し、ownership / billing / source pin
+/ service import approval / runtime mode / capability / audit はすべて以下の
+ledger record に anchor されます。
 
 詳細な status 遷移、binding kind 一覧、column 制約は
 [/architecture/app-installation](/architecture/app-installation) と
 [/reference/install-api](/reference/install-api) を canonical reference として
-ください。本節は database 視点で 5 entity の columns 概観を示します。
+ください。本節は database 視点で主要 columns の概観を示します。
 
 ### TakosumiAccount
 
@@ -2978,26 +2979,43 @@ Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind 
 
 - `status`: 5 値 (`installing` / `ready` / `failed` / `suspended` / `exported`)
 - `mode`: 3 runtime mode (`shared-cell` / `dedicated` / `self-hosted`)
+- `serviceImports`: `.takosumi/app.yml` top-level `serviceImports[]` に由来する
+  external service request metadata。AppBinding ではない
 - `appBinding kind` は AppBinding 側で 6 種類。cross-instance service dependency
   は AppBinding ではなく `.takosumi/manifest.yml` の `imports[]` /
   `serviceResolvers[]` で表現する
 
-| column                    | type        | meaning                                             |
-| ------------------------- | ----------- | --------------------------------------------------- |
-| `id`                      | uuid        | 一意 ID                                             |
-| `accountId`               | uuid        | TakosumiAccount.id への FK                          |
-| `spaceId`                 | uuid        | Space.id への FK                                    |
-| `appId`                   | string      | 例: `takos.chat`                                    |
-| `sourceGitUrl`            | string      | source pin (git URL)                                |
-| `sourceRef`               | string      | source pin (ref)                                    |
-| `sourceCommit`            | string      | source pin (resolved commit)                        |
-| `appManifestDigest`       | string      | `.takosumi/app.yml` digest                          |
-| `compiledManifestDigest`  | string      | takosumi-git が compile した kernel manifest digest |
-| `mode`                    | enum        | `shared-cell` / `dedicated` / `self-hosted`         |
-| `runtimeBindingId`        | uuid        | RuntimeBinding.id への FK                           |
-| `status`                  | enum        | 5 値 (上記)                                         |
-| `createdBySubject`        | string      | 作成者 Takosumi subject                             |
-| `createdAt` / `updatedAt` | timestamptz |                                                     |
+| column                    | type        | meaning                                                  |
+| ------------------------- | ----------- | -------------------------------------------------------- |
+| `id`                      | uuid        | 一意 ID                                                  |
+| `accountId`               | uuid        | TakosumiAccount.id への FK                               |
+| `spaceId`                 | uuid        | Space.id への FK                                         |
+| `appId`                   | string      | 例: `takos.chat`                                         |
+| `sourceGitUrl`            | string      | source pin (git URL)                                     |
+| `sourceRef`               | string      | source pin (ref)                                         |
+| `sourceCommit`            | string      | source pin (resolved commit)                             |
+| `appManifestDigest`       | string      | `.takosumi/app.yml` digest                               |
+| `compiledManifestDigest`  | string      | takosumi-git が compile した kernel manifest digest      |
+| `serviceImports`          | jsonb       | `service_imports_json`。approved service import metadata |
+| `mode`                    | enum        | `shared-cell` / `dedicated` / `self-hosted`              |
+| `runtimeBindingId`        | uuid        | RuntimeBinding.id への FK                                |
+| `status`                  | enum        | 5 値 (上記)                                              |
+| `createdBySubject`        | string      | 作成者 Takosumi subject                                  |
+| `createdAt` / `updatedAt` | timestamptz |                                                          |
+
+### AppInstallation serviceImports metadata
+
+AppInstallation に埋め込まれる JSONB metadata。AppBinding table ではなく、
+manifest-level `imports[]` と installer approval evidence を接続するための
+record set です。
+
+| field           | type     | meaning                                                 |
+| --------------- | -------- | ------------------------------------------------------- |
+| `binding`       | string   | ledger / preview 用の logical name                      |
+| `alias`         | string   | compiled manifest `imports[].alias`                     |
+| `service`       | string   | `takosumi.account.auth@v1` などの service identifier    |
+| `endpointRoles` | string[] | `oidc-issuer` / `install-launch` など要求 endpoint role |
+| `refreshPolicy` | jsonb    | optional。manifest `imports[].refreshPolicy` と同形     |
 
 ### AppBinding
 
@@ -3033,7 +3051,7 @@ capability grant の 1 record。`capability` (例: `app.profile.write` /
 詳細は [/architecture/app-installation](/architecture/app-installation) と
 [/reference/install-api](/reference/install-api) を参照。RuntimeBinding と
 InstallationEvent の column schema は
-[architecture/app-installation §"5 entity の table 設計"](/architecture/app-installation)
+[architecture/app-installation §"ledger record の table 設計"](/architecture/app-installation)
 の TypeScript 正本を参照してください。
 
 ::: info NEW product 本台帳は **takosumi-cloud** (Phase 1.1 で新設される sibling

@@ -3,18 +3,19 @@
 **AppInstallation 台帳**は Installable App Model における **所有権の primitive**
 です。OAuth だけでは「この installation の owner は誰か / 誰に請求するか / 誰が
 revoke できるか / 何を export できるか」は決まりません。これらは すべて
-AppInstallation 台帳 (AppInstallation / AppBinding / AppGrant / RuntimeBinding /
-InstallationEvent) に anchor され、Takosumi Accounts が 正本として保持します。
+AppInstallation 台帳 (AppInstallation / AppInstallation.serviceImports /
+AppBinding / AppGrant / RuntimeBinding / InstallationEvent) に anchor され、
+Takosumi Accounts が 正本として保持します。
 
-ここで定義する 5 entity が ownership / source pin / runtime mode / capability /
-audit のすべての semantics を担います。export / materialize / upgrade / rollback
-/ revoke / suspend / uninstall は、すべてこの台帳の record 操作と
-して表現されます。
+ここで定義する ledger record set が ownership / source pin / external service
+request / runtime mode / capability / audit のすべての semantics を担います。
+export / materialize / upgrade / rollback / revoke / suspend / uninstall
+は、すべて この台帳の record 操作として表現されます。
 
 ## このページで依存してよい範囲
 
-- AppInstallation / AppBinding / AppGrant / RuntimeBinding / InstallationEvent
-  の table 設計と status 遷移
+- AppInstallation / AppInstallation.serviceImports / AppBinding / AppGrant /
+  RuntimeBinding / InstallationEvent の table 設計と status 遷移
 - AppInstallation が「Takosumi Account → Space → AppInstallation」階層の末端
   にいること
 - ユーザーに見せる Settings 画面の構造
@@ -49,15 +50,16 @@ AppInstallation (inst_abc, appId: takos.chat)
    │  source pin (git URL + ref + commit + manifest digest)
    │  runtime mode (shared-cell | dedicated | self-hosted)
    │  RuntimeBinding (cell pointer など)
-   ├─▶ AppBinding[]   (identity.oidc / database.postgres / ...)
-   ├─▶ AppGrant[]     (capability + scope, revokable)
-   └─▶ InstallationEvent[]   (append-only audit)
+   ├─▶ serviceImports[]  (external service request metadata; AppBinding ではない)
+   ├─▶ AppBinding[]      (identity.oidc / database.postgres / ...)
+   ├─▶ AppGrant[]        (capability + scope, revokable)
+   └─▶ InstallationEvent[]      (append-only audit)
 ```
 
 詳細は [Installable App Model](./installable-app-model.md) の責務分離節と、
 Space / membership 側は [Spaces](/platform/spaces) を参照。
 
-## 5 entity の table 設計
+## ledger record の table 設計
 
 TypeScript で表現した正本 schema です (出典: `new.md` §7)。実装上は Takosumi
 Accounts の DB に置かれます。
@@ -89,6 +91,7 @@ type AppInstallation = {
 
   appManifestDigest: string;
   compiledManifestDigest: string;
+  serviceImports?: AppInstallationServiceImport[];
 
   mode: "shared-cell" | "dedicated" | "self-hosted";
   runtimeBindingId: string;
@@ -103,6 +106,14 @@ type AppInstallation = {
   createdBySubject: string;
   createdAt: string;
   updatedAt: string;
+};
+
+type AppInstallationServiceImport = {
+  binding: string;
+  alias: string;
+  service: string;
+  endpointRoles: string[];
+  refreshPolicy?: Record<string, unknown>;
 };
 
 // 外部公開 status (REST / UI / event payload で使う canonical 5 値) は上記の
@@ -163,7 +174,22 @@ install されたインスタンス」です。次の不変条件をすべての
   を保存する。これにより install したものを後から完全に説明可能
 - `mode` の変更 (例: shared-cell → dedicated) は `runtimeBindingId` の差し替え
   として表現する。AppInstallation id は同じまま
+- `serviceImports` は `.takosumi/app.yml` の top-level `serviceImports[]` と
+  compiled manifest の `imports[]` approval metadata を保存する。AppBinding kind
+  は増やさない
 - `accountId` / `spaceId` は移動可能だが、必ず InstallationEvent に記録する
+
+### AppInstallation.serviceImports
+
+external service dependency の approval metadata。実装では
+`app_installations.service_imports_json` に保存される AppInstallation 内の JSON
+record set で、AppBinding ではありません。
+
+各 entry は `binding` / `alias` / `service` / `endpointRoles[]` /
+`refreshPolicy` を持ち、`takosumi-git` が `.takosumi/app.yml` から preview と
+compiled manifest `imports[]` へ反映します。同じ alias の manifest import がある
+場合は、service identifier と refresh policy が一致しなければ install
+を拒否します。
 
 ### AppBinding
 
@@ -369,6 +395,7 @@ Actions:
 - `Auth`: AppBinding (`identity.oidc@v1`)
 - `Grants`: AppGrant (revokedAt = null のもの)
 - `Manifest`: AppInstallation.appManifestDigest / compiledManifestDigest
+- `Service imports`: AppInstallation.serviceImports
 - `Actions`: Install API ([Install API](/reference/install-api)) を呼び出す
 
 説明可能な魔法は、だいたい工学です。
@@ -388,7 +415,7 @@ Actions:
 
 ## 次に読むページ
 
-- [Installable App Model](./installable-app-model.md) — 全体像と 5 entity
+- [Installable App Model](./installable-app-model.md) — 全体像と product / layer
   責務分離
 - [Takosumi Accounts](./takosumi-accounts.md) — 台帳の正本を保持する account
   plane

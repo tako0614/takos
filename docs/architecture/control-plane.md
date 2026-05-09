@@ -177,12 +177,12 @@ schema は kernel ではなく Takosumi Accounts (account plane) が所有する
 
 account plane が所有する schema (本ページ対象外):
 
-| schema group         | owner             | responsibility                                                               |
-| -------------------- | ----------------- | ---------------------------------------------------------------------------- |
-| Accounts             | Takosumi Accounts | Takosumi Account, login, passkey, upstream IdP linkage                       |
-| OAuth / OIDC         | Takosumi Accounts | OIDC issuer state, OIDC client registration, consent, token, pairwise sub    |
-| Billing              | Takosumi Accounts | billing account, Stripe subscription, invoice, usage aggregate               |
-| AppInstallation 台帳 | Takosumi Accounts | AppInstallation / AppBinding / AppGrant / RuntimeBinding / InstallationEvent |
+| schema group         | owner             | responsibility                                                                                         |
+| -------------------- | ----------------- | ------------------------------------------------------------------------------------------------------ |
+| Accounts             | Takosumi Accounts | Takosumi Account, login, passkey, upstream IdP linkage                                                 |
+| OAuth / OIDC         | Takosumi Accounts | OIDC issuer state, OIDC client registration, consent, token, pairwise sub                              |
+| Billing              | Takosumi Accounts | billing account, Stripe subscription, invoice, usage aggregate                                         |
+| AppInstallation 台帳 | Takosumi Accounts | AppInstallation / serviceImports metadata / AppBinding / AppGrant / RuntimeBinding / InstallationEvent |
 
 ## Deploy pipeline
 
