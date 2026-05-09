@@ -1406,6 +1406,34 @@ CREATE TABLE usage_rollups (
 );
 
 -- CreateTable
+CREATE TABLE app_usage_events (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "idempotency_key" TEXT,
+    "owner_account_id" TEXT NOT NULL,
+    "scope_type" TEXT NOT NULL DEFAULT 'space',
+    "space_id" TEXT,
+    "meter_type" TEXT NOT NULL,
+    "units" REAL NOT NULL,
+    "reference_id" TEXT,
+    "reference_type" TEXT,
+    "metadata" TEXT NOT NULL DEFAULT '{}',
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE app_usage_rollups (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "owner_account_id" TEXT NOT NULL,
+    "scope_type" TEXT NOT NULL,
+    "scope_id" TEXT NOT NULL,
+    "space_id" TEXT,
+    "meter_type" TEXT NOT NULL,
+    "period_start" TEXT NOT NULL,
+    "units" REAL NOT NULL DEFAULT 0,
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
 CREATE TABLE worker_bindings (
     "id" TEXT NOT NULL PRIMARY KEY,
     "worker_id" TEXT NOT NULL,
@@ -2518,6 +2546,39 @@ CREATE INDEX "usage_rollups_account_id_idx" ON "usage_rollups"("account_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "usage_rollups_billing_account_id_scope_type_account_id_meter_type_period_start_key" ON "usage_rollups"("billing_account_id", "scope_type", "account_id", "meter_type", "period_start");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "idx_app_usage_events_idempotency_key" ON "app_usage_events"("idempotency_key");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_events_owner_account_id" ON "app_usage_events"("owner_account_id");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_events_space_id" ON "app_usage_events"("space_id");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_events_meter_type" ON "app_usage_events"("meter_type");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_events_reference_id" ON "app_usage_events"("reference_id");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_events_created_at" ON "app_usage_events"("created_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "idx_app_usage_rollups_scope" ON "app_usage_rollups"("owner_account_id", "scope_type", "scope_id", "meter_type", "period_start");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_rollups_owner_account_id" ON "app_usage_rollups"("owner_account_id");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_rollups_space_id" ON "app_usage_rollups"("space_id");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_rollups_meter_type" ON "app_usage_rollups"("meter_type");
+
+-- CreateIndex
+CREATE INDEX "idx_app_usage_rollups_period_start" ON "app_usage_rollups"("period_start");
 
 -- CreateIndex
 CREATE INDEX "worker_bindings_worker_id_idx" ON "worker_bindings"("worker_id");
