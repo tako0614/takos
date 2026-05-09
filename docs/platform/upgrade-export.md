@@ -208,6 +208,13 @@ takos-export/
 `data/` の内容は export request の `scope.data` で制御される (`postgres` /
 `blobs` / `memory` / `profiles`)。
 
+Accounts 内部の typed payload kind は
+`takosumi.accounts.installation-export-bundle@v1`。現時点で実装済みなのは、
+installation/source/bindings/grants/OIDC metadata からこの payload を組み立てる
+codec と、別 Takosumi Accounts issuer へ import する create request planner
+です。tar.zst writer / signed download / import API/CLI はこの payload contract
+の後続 worker として実装する。
+
 ### 3.3 Encryption
 
 bundle は default で **age 暗号化**される (`POST /export` の
@@ -230,6 +237,9 @@ takosumi-git install ./takos-export.tar.zst \
 `--to` は **self-host 側の Takosumi Accounts (= account plane)** の base URL。
 `--auth-issuer` は AppInstallation の `identity.oidc@v1` binding の `issuerUrl`
 を上書きする。省略時は self-host 側 Takosumi Accounts が default issuer になる。
+import planner は bundle 内の source issuer を target issuer に置換し、revoked
+grant を import request から除外する。secret material は移さず、self-host 側で
+再発行する。
 
 bundle ではなく Git URL から直接 install する経路も同等にサポートされる:
 

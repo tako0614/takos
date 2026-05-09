@@ -739,7 +739,9 @@ append し、同 operation の in-flight lock を閉じる。
 > `PATCH /v1/installations/{id}/status` で `status=exported` と `operationId`
 > を渡すと `installation.exported` event を append し、
 > `GET /v1/installations/{id}/exports/{opId}` は completed operation を返す。
-> export bundle 生成 worker は後続実装で行う。
+> export bundle codec / import planner は
+> `takosumi.accounts.installation-export-bundle@v1` として実装済みです。 tar.zst
+> 生成 worker、download endpoint、import API/CLI は後続実装で行う。
 
 ### 5.1 Request
 
@@ -811,7 +813,29 @@ completion / failure patch は必ず matching `installation.export-requested` ev
 `operationId`、`reason` を渡すと `installation.export-failed` event を append
 し、 `GET /exports/{opId}` は `status: "failed"` と error metadata を返す。
 
-### 5.3 主なステータス
+### 5.3 Export bundle codec
+
+Accounts の bundle payload kind は
+`takosumi.accounts.installation-export-bundle@v1` です。codec は次を保持する:
+
+- installation metadata (`installationId`, `accountId`, `spaceId`, `appId`,
+  `mode`, `status`)
+- source commit / ref / app manifest digest / compiled manifest digest
+- service imports
+- runtime binding ref
+- OIDC client metadata
+- AppBinding templates (config refs と secret ref names。secret 実値は含めない)
+- active / revoked AppGrant metadata
+- event hash refs
+
+import planner は `{ bundle, targetIssuer, targetAccountId, targetSpaceId }`
+を受け取り、`POST /v1/installations` に渡せる create request を生成する。
+`identity.oidc@v1` の issuer は target issuer に置換され、revoked grant は
+import request から除外される。これにより別 Takosumi Accounts instance /
+self-host issuer へ移すときに、source Accounts issuer が OIDC materialization
+output に残らない。
+
+### 5.4 主なステータス
 
 | code      | 条件                                                                                                                                             |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -821,7 +845,7 @@ completion / failure patch は必ず matching `installation.export-requested` ev
 | 404 / 410 | 既出                                                                                                                                             |
 | 409       | `state_conflict` (canonical status が `installing` のとき、または operation metadata が in-flight phase を示すとき。詳細は [§0.5](#status-enum)) |
 
-## 5.4 Cross-instance import flow
+## 5.5 Cross-instance import flow
 
 > **Implementation status**: kernel-bound manifest の `imports[]` /
 > `serviceResolvers[]` validation、anchor fetch、signature verify、descriptor
