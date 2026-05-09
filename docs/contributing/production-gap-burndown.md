@@ -49,10 +49,6 @@ Unless the command starts with `cd ../takosumi`, run proof commands from
   as operator-owned evidence attached to the distribution target.
 - RepairPlan rematerialization and rollback-with-migration resource semantics
   remain backlog unless covered by a concrete test in a later turn.
-- Resource feature planning still needs tests for required provider features,
-  pgvector/native feature realization, and cross-contract rename safety.
-- Canary side-effect safety still needs tests for queue DataContract policy,
-  candidate-scoped egress, shadow traffic side-effect guards, and DB semantic
-  write approvals.
-- Managed projection health and ChangeSetPlan partial-failure semantics remain
-  acceptance gaps.
+- Canary side-effect safety still needs tests for queue DataContract policy and
+  hard-fail shadow traffic side-effect semantics.
+- ChangeSetPlan partial-failure semantics remain an acceptance gap.
