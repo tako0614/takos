@@ -289,6 +289,11 @@ Content-Type: application/json
     "name": "auth",
     "kind": "identity.oidc@v1",
     "configRef": "config://inst_01J/auth",
+    "declaration": {
+      "type": "identity.oidc@v1",
+      "required": true,
+      "redirectPaths": ["/auth/oidc/callback"]
+    },
     "secretRefs": ["secret://inst_01J/auth/client-secret"]
   }],
   "grants": [{
@@ -309,7 +314,11 @@ Content-Type: application/json
 `source.url`) / `source.ref` / `source.commit` / `source.appManifestDigest` /
 `mode` / `createdBySubject`。`installationId` は 省略時に `inst_<uuid>`
 が採番される。`source.compiledManifestDigest` / `runtimeBinding` / `bindings` /
-`grants` / `serviceImports` / `oidcClients` は optional。
+`grants` / `serviceImports` / `oidcClients` は
+optional。`bindings[].declaration` は takosumi-git が `.takosumi/app.yml`
+の承認済み binding declaration を添付する field で、Accounts provider
+materializer はこの値を使って provider-owned `configRef` / `secretRefs` と
+one-shot `binding_env` を返す。
 
 `confirm.previewId` / `permissionDigest` gate は current service では未実装で、
 Phase 1.6 design の permission diff gate で扱う。
@@ -372,6 +381,13 @@ Phase 1.6 design の permission diff gate で扱う。
     "updated_at": "2026-05-07T08:30:00.000Z"
   },
   "oidc_client": null,
+  "binding_env": {
+    "DATABASE_URL": "postgres://...",
+    "BLOB_ENDPOINT": "https://objects.example.test",
+    "BLOB_BUCKET": "inst-01j",
+    "BLOB_ACCESS_KEY": "access-key",
+    "BLOB_SECRET_KEY": "secret-key"
+  },
   "tracking": {
     "events_url": "/v1/installations/inst_01J.../events"
   }
@@ -380,7 +396,11 @@ Phase 1.6 design の permission diff gate で扱う。
 
 response header に `Location: /v1/installations/inst_01J...` を付与。
 `oidcClients` request を含む場合は `oidc_client` と `oidc_client_secret` が
-追加される。
+追加される。provider-backed AppBinding が materialize された場合は `binding_env`
+が追加され、takosumi-git が kernel deploy request の runtime env に
+注入する。`binding_env` は create response の one-shot material であり、
+`GET /v1/installations/{id}` などの inspect response には raw secret value を
+含めない。
 
 ### 2.3 主なステータス
 
