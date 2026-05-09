@@ -36,8 +36,8 @@ CLI で拒否します。
 
 Installable App Model では CLI の long-lived credential は **Takosumi Accounts
 PAT** か Takosumi Accounts の device / OIDC flow で得た bearer token
-を使います。Takos 本体の legacy `/auth/cli` browser callback は retired route
-であり、新規 operator / client は依存しないでください。
+を使います。Takos 本体の legacy `/auth/cli` browser callback は削除済みであり、
+新規 operator / client は依存しないでください。
 
 `takos login --api-url <url>` は legacy 互換 command として残っていますが、
 current Takos deployment では `/auth/cli` は公開されず `404` です。現行運用では
