@@ -223,8 +223,10 @@ codec と、別 Takosumi Accounts issuer へ import する create request planne
 です。Accounts export operation の signed download redirect endpoint、JSON
 import API、JSON/tar.zst import CLI、metadata-only tar.zst archive writer、
 configured export worker hook、dev/local metadata export worker CLI config
-も実装済みです。compiled manifest 実体、data dump worker、age encryption、
-object-store upload はこの payload contract の後続 worker として実装する。
+に加え、completed export response の `downloadUrl` を
+`takosumi-git export --output` で保存する経路も実装済みです。compiled manifest
+実体、data dump worker、age encryption、object-store upload はこの payload
+contract の後続 worker として実装する。
 
 ### 3.3 Encryption
 
