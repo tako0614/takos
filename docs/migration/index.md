@@ -18,8 +18,9 @@ Phase 1.1-1.7 (ROADMAP.md Part II) で Installable App Model に移行します:
 - Phase 1.1 で Takosumi Accounts service を新設、takos-app から identity /
   billing (OAuth issuer / Stripe / consent / device code 等) を抽出
 - Phase 1.2 で AppInstallation ledger を Takosumi Accounts に新設
-- Phase 1.3 で takosumi-git に `.takosumi/app.yml` parser / install preview /
-  Git URL installer を実装
+- Phase 1.3 の takosumi-git `.takosumi/app.yml` parser / install preview / Git
+  URL installer は実装済み。migration path はこの installer 経由で
+  AppInstallation 作成と kernel deploy を行う
 - Phase 1.4 で Takos を OIDC consumer 化し、`/oauth/*` 系を削除
 - Phase 1.5 で shared-cell runtime mode、Phase 1.6 で dedicated / self-hosted
   への materialize / export を実装

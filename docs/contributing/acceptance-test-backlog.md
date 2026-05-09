@@ -83,9 +83,12 @@ Installable App Model (ROADMAP.md Part II Phase 1.1-1.7) の identity / installe
 - **P-Phase 1.2.1**: AppInstallation status state machine (`installing` →
   `ready` / `failed` / `suspended` / `exported` 遷移、 invalid transition の
   reject、audit event 出力)
-- **P-Phase 1.3.1**: Install preview permission diff (Git URL + ref → app.yml
-  parse → requested bindings / grants / estimated cost / publisher verification
-  を preview として返す、approve なしで install しない)
+- **P-Phase 1.3.1 (covered)**: Install preview permission diff (Git URL + ref →
+  app.yml parse → requested bindings / grants / estimated cost / publisher
+  verification を preview として返す、approve なしで install しない)。
+  `takosumi-git/packages/cli/src/install_test.ts` と
+  `takosumi-git/packages/cli/src/serve_test.ts` で Git URL preview / commit pin
+  / non-mutating serve preview を固定済み。
 - **P-Phase 1.4.1**: Takos legacy proxy mode termination (legacy `/oauth/*`
   route の deprecation window 終了後、Takos の OAuth provider / billing /
   publication API / legacy auth alias は public route として公開しない)。
