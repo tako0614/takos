@@ -2184,7 +2184,8 @@ Installable App Model における Git URL install / launch / materialize / expo
 
 関連:
 
-- [AppInstallation 台帳](/architecture/app-installation) (5 entity の責務分離)
+- [AppInstallation 台帳](/architecture/app-installation) (ownership ledger
+  record)
 - [Runtime Modes](/architecture/runtime-modes) (shared-cell / dedicated /
   self-hosted)
 - [Launch Token](/apps/launch-token) (one-time bootstrap JWS)

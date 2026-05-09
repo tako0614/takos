@@ -5,8 +5,8 @@ boundary を扱う。Takos が **Git URL から Takosumi Account に install さ
 app** であるという最終モデル (Installable App Model) は
 [Installable App Model](./installable-app-model.md) を canonical reference と
 する。本ページの service set / responsibility / communication 記述は、その
-モデルの 5 entity (Takosumi Accounts / takosumi kernel / takosumi-cloud /
-takosumi-git / Takos) 責務分離と整合する。 :::
+モデルの 5 product / layer (Takosumi Accounts / takosumi kernel / takosumi-cloud
+/ takosumi-git / Takos) 責務分離と整合する。 :::
 
 ::: info Cross-instance service binding 本ページで Accounts hostname を service
 endpoint として言及する箇所は hostname-based default ではなく example
@@ -1363,33 +1363,33 @@ bootstrap/recovery config
 
 ## 21. Data ownership across Takos
 
-| data / object                                                                                 | owner                                                     |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Takosumi Account, login, passkey, upstream IdP linkage                                        | `Takosumi Accounts`                                       |
-| OAuth / OIDC issuer state, consent, OIDC client registration                                  | `Takosumi Accounts`                                       |
-| billing account, Stripe subscription, invoice, usage aggregate                                | `Takosumi Accounts`                                       |
-| AppInstallation / AppBinding / AppGrant / RuntimeBinding / InstallationEvent                  | `Takosumi Accounts`                                       |
-| Installed Takos の app-local profile, chat thread, memory, files                              | `takos-app` (OIDC consumer)                               |
-| tenant, space, group, membership, entitlement                                                 | `paas-core`                                               |
-| route ownership / domain ownership                                                            | `paas-routing`                                            |
-| repository, ref, object, source truth                                                         | `takos-git` or SourcePort provider                        |
-| SourceSnapshot metadata                                                                       | `paas-deploy` with SourcePort origin                      |
-| Deployment (input / resolution / desired / status / conditions / policy_decisions / approval) | `paas-deploy`                                             |
-| GroupHead (current_deployment_id / previous_deployment_id)                                    | `paas-deploy`                                             |
-| Deployment.desired.runtime_network_policy                                                     | `paas-network` + `paas-deploy` (Deployment.desired field) |
-| WorkloadRevision                                                                              | `paas-runtime`                                            |
-| Deployment.conditions[] (provider operation 進捗 / 観測フィードバック)                        | `paas-deploy` (apply 側) / `paas-runtime` (observe 側)    |
-| ProviderObservation, health, logs                                                             | `paas-runtime`                                            |
-| ResourceInstance, Deployment.desired.bindings projection                                      | `paas-resources`                                          |
-| MigrationLedger                                                                               | `paas-resources`                                          |
-| ProviderPackage, ResourceContractPackage, DataContractPackage                                 | `paas-registry`                                           |
-| PackageResolution                                                                             | `paas-registry` + `paas-deploy` read set                  |
-| ServiceEndpoint / Trust / Grant                                                               | `paas-core` / `paas-registry` depending on kind           |
-| RuntimeAgentRegistration / WorkLease                                                          | `paas-agents`                                             |
-| Agent run execution state                                                                     | `takos-agent`                                             |
-| Agent engine library                                                                          | `takos-agent-engine`                                      |
-| private operator config and secrets                                                           | `takos-private` or OperatorConfigPort                     |
-| unified audit projection                                                                      | `paas-audit`                                              |
+| data / object                                                                                          | owner                                                     |
+| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Takosumi Account, login, passkey, upstream IdP linkage                                                 | `Takosumi Accounts`                                       |
+| OAuth / OIDC issuer state, consent, OIDC client registration                                           | `Takosumi Accounts`                                       |
+| billing account, Stripe subscription, invoice, usage aggregate                                         | `Takosumi Accounts`                                       |
+| AppInstallation / serviceImports metadata / AppBinding / AppGrant / RuntimeBinding / InstallationEvent | `Takosumi Accounts`                                       |
+| Installed Takos の app-local profile, chat thread, memory, files                                       | `takos-app` (OIDC consumer)                               |
+| tenant, space, group, membership, entitlement                                                          | `paas-core`                                               |
+| route ownership / domain ownership                                                                     | `paas-routing`                                            |
+| repository, ref, object, source truth                                                                  | `takos-git` or SourcePort provider                        |
+| SourceSnapshot metadata                                                                                | `paas-deploy` with SourcePort origin                      |
+| Deployment (input / resolution / desired / status / conditions / policy_decisions / approval)          | `paas-deploy`                                             |
+| GroupHead (current_deployment_id / previous_deployment_id)                                             | `paas-deploy`                                             |
+| Deployment.desired.runtime_network_policy                                                              | `paas-network` + `paas-deploy` (Deployment.desired field) |
+| WorkloadRevision                                                                                       | `paas-runtime`                                            |
+| Deployment.conditions[] (provider operation 進捗 / 観測フィードバック)                                 | `paas-deploy` (apply 側) / `paas-runtime` (observe 側)    |
+| ProviderObservation, health, logs                                                                      | `paas-runtime`                                            |
+| ResourceInstance, Deployment.desired.bindings projection                                               | `paas-resources`                                          |
+| MigrationLedger                                                                                        | `paas-resources`                                          |
+| ProviderPackage, ResourceContractPackage, DataContractPackage                                          | `paas-registry`                                           |
+| PackageResolution                                                                                      | `paas-registry` + `paas-deploy` read set                  |
+| ServiceEndpoint / Trust / Grant                                                                        | `paas-core` / `paas-registry` depending on kind           |
+| RuntimeAgentRegistration / WorkLease                                                                   | `paas-agents`                                             |
+| Agent run execution state                                                                              | `takos-agent`                                             |
+| Agent engine library                                                                                   | `takos-agent-engine`                                      |
+| private operator config and secrets                                                                    | `takos-private` or OperatorConfigPort                     |
+| unified audit projection                                                                               | `paas-audit`                                              |
 
 ---
 

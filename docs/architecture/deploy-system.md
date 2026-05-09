@@ -579,7 +579,7 @@ Takos deploy system (Installable App Model 整合):
 
 ## 次に読むページ
 
-- [Installable App Model](./installable-app-model.md) — 全体像と 5 entity の
+- [Installable App Model](./installable-app-model.md) — 全体像と product / layer
   責務分離
 - [Installer Pipeline](./installer-pipeline.md) — 13 step の install pipeline
   詳細
