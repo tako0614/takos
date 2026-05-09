@@ -204,6 +204,10 @@ Installable App Model では、Takos から以下の route が **削除** され
 | `/oauth/device`           | Takosumi Accounts の `/oauth/device/code` に集約                                       |
 | `/oauth/clients`          | Takosumi Accounts の OIDC client registry に集約。client は AppInstallation ごとに発行 |
 | `/auth/external` (legacy) | `/auth/oidc/login` + `/auth/oidc/callback` の 2 route に分離                           |
+| `/auth/login` (legacy)    | 削除。login entrypoint は `/auth/oidc/login`                                           |
+| `/auth/password`          | 削除。password / passkey / upstream IdP は Takosumi Accounts 側で処理                  |
+| `/auth/cli`               | 削除。CLI credential 発行は Takosumi Accounts 側で処理                                 |
+| `/auth/link/google`       | 削除。identity linking は Takosumi Accounts 側で処理                                   |
 
 これらの route は Takos 自身からは取り除かれ、Takosumi Accounts に
 集約されます。第三者 client が Takos を OAuth issuer として参照していた
