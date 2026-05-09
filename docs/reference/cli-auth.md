@@ -40,8 +40,8 @@ PAT** か Takosumi Accounts の device / OIDC flow で得た bearer token
 であり、新規 operator / client は依存しないでください。
 
 `takos login --api-url <url>` は legacy 互換 command として残っていますが、
-current Takos deployment では `/auth/cli` が `410 Gone` を返します。現行運用
-では次のどちらかを使います。
+current Takos deployment では `/auth/cli` は公開されず `404` です。現行運用では
+次のどちらかを使います。
 
 1. Takosumi Accounts の account settings で PAT を発行し、`TAKOS_TOKEN` と
    `TAKOS_API_URL` を設定する

@@ -378,8 +378,8 @@ kernel が **持たない** 領域は次の正本で扱われる:
   Takosumi Account に install される app" であることの全体モデル。本ページの
   上位 canonical reference。
 - [Takosumi Accounts](./takosumi-accounts.md) — OAuth / OIDC issuer / billing /
-  upstream IdP broker。`/oauth/*` / `/auth/login` / consent screen はこちらが
-  正本。
+  upstream IdP broker。OAuth provider / consent screen / upstream IdP login の
+  正本。Takos の `/auth/login` は公開 route ではない。
 - [AppInstallation 台帳](./app-installation.md) — 所有権の primitive。
   AppInstallation / serviceImports metadata / AppBinding / AppGrant /
   RuntimeBinding / InstallationEvent。

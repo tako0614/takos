@@ -52,11 +52,11 @@ https://<ADMIN_DOMAIN>/
 ```
 
 未ログインなら `/auth/oidc/login` へ進み、Takosumi Accounts の resolved OIDC
-issuer で認証します。`/auth/login` は migration window 中の互換 alias として
-`/auth/oidc/login` へ redirect されます。Google / GitHub / passkey / enterprise
-OIDC などの upstream IdP は Takosumi Accounts 側の broker 設定で扱い、Takos は
-`/auth/oidc/login` + `/auth/oidc/callback` だけを consumer として受けます
-([/apps/oidc-consumer](/apps/oidc-consumer))。
+issuer で認証します。Takos は `/auth/oidc/login` + `/auth/oidc/callback` だけを
+consumer として受けます。Google / GitHub / passkey / enterprise OIDC などの
+upstream IdP は Takosumi Accounts 側の broker 設定で扱います。`/auth/login`
+は公開 route ではありません。詳しくは [OIDC Consumer](/apps/oidc-consumer)
+を参照してください。
 
 ## 2. 初回 setup を完了する
 

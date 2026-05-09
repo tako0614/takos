@@ -90,9 +90,8 @@ https://<ADMIN_DOMAIN>/
 ```
 
 operator として未ログインなら `/auth/oidc/login` から Takosumi Accounts OIDC
-に進みます。`/auth/login` は migration window 中の互換 alias です。
-一般ユーザーは [apps/install-paths](/apps/install-paths) の Use Takos
-経路を参照してください。
+に進みます。`/auth/login` は公開 route ではありません。一般ユーザーは
+[apps/install-paths](/apps/install-paths) の Use Takos 経路を参照してください。
 
 ### 2. API token を発行する (operator)
 
