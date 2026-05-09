@@ -275,6 +275,12 @@ import 完了後、以下が動作することを確認する:
 
 ## 5. lifecycle 全体図
 
+図中の `upgrading` / `rolling-back` / `materializing` / `exporting` /
+`uninstalling` は public `installation.status` ではなく、operation metadata と
+InstallationEvent payload 上の transitional phase hint です。外部公開 status は
+canonical 5 値 (`installing` / `ready` / `failed` / `suspended` / `exported`)
+に固定されます。
+
 ```txt
 install ──► ready ──┬─► upgrading ──► ready (新 ref)
                     │       │

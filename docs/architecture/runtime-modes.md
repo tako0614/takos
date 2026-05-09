@@ -89,11 +89,14 @@ Content-Type: application/json
 }
 ```
 
-操作中の遷移は、AppInstallation status が `ready → materializing → ready` を辿る
+外部公開される AppInstallation `status` は canonical 5 値のまま固定される
 (詳細は [AppInstallation 台帳](/architecture/app-installation)
-§state)。`materializing` 中も既存 shared-cell 上の Takos は受付を続け、cutover
-完了後に RuntimeBinding を atomic に差し替える。失敗時は shared-cell に戻す
-(rollback 後 `failed` に落ちる場合あり)。
+§state)。materialize の進行は `installation.materialize_requested` /
+`installation.materialize_succeeded` / `installation.materialize_failed` などの
+InstallationEvent と operation metadata に記録し、`materializing` は独立した
+public status ではない。進行中も既存 shared-cell 上の Takos は受付を続け、
+cutover 完了後に RuntimeBinding を atomic に差し替える。失敗時は shared-cell に戻す
+(重大失敗時のみ canonical `failed` に落ちる)。
 
 materialize で **保たれるもの**:
 
@@ -135,9 +138,10 @@ takosumi-git install ./takos-export.tar.zst \
   --service-resolver https://anchor.example.com/v1/services/
 ```
 
-export 後の元 installation は、利用者の選択により `exported` (data 残存 /
-runtime 維持) または `uninstalling` (data 廃棄) を選べる。これも AppInstallation
-state machine の遷移として処理される。
+export 後の元 installation は、利用者の選択により canonical `exported`
+(data 残存 / runtime 維持) か、uninstall operation による退役を選べる。
+`uninstalling` は operation metadata / event payload 上の phase hint であり、
+public status enum ではない。
 
 ## 5. URL の連続性
 
@@ -160,8 +164,8 @@ OIDC redirect を再設定する自然な遷移として扱う。
 
 - [Installable App Model 全体像](/architecture/installable-app-model) 3 mode が
   AppInstallation の `mode` 列としてどう座っているか。
-- [AppInstallation 台帳](/architecture/app-installation) `materializing` /
-  `exporting` を含む status 遷移と event ledger。
+- [AppInstallation 台帳](/architecture/app-installation) canonical 5 status と、
+  `materializing` / `exporting` などの transitional phase hint。
 - [Installer Pipeline](/architecture/installer-pipeline) `shared-cell` で "build
   待ちなし" を実現する prebuilt cell の起源。
 - [Upgrade / Export](/platform/upgrade-export) 運用者向けの upgrade / rollback /

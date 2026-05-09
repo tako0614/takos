@@ -17,6 +17,25 @@ const APP_GRANT_CATALOG_DOCS = [
   'docs/architecture/app-installation.md',
   'docs/reference/database.md',
 ];
+const APP_INSTALLATION_STATUS_DOCS = [
+  'docs/architecture/runtime-modes.md',
+  'docs/reference/install-api.md',
+  'docs/platform/upgrade-export.md',
+];
+const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
+  {
+    pattern: /AppInstallation status [^\n]*`ready\s*→\s*materializing\s*→\s*ready`/i,
+    message: 'materializing must be documented as an operation phase, not as a public AppInstallation status.',
+  },
+  {
+    pattern: /state は canonical `ready`\s*→\s*transitional `materializing`\s*→\s*canonical `ready`/i,
+    message: 'Materialize docs must keep public status canonical and describe materializing as operation metadata.',
+  },
+  {
+    pattern: /`uninstalling` \(data 廃棄\) を選べる/i,
+    message: 'uninstalling must be documented as an operation phase, not as a selectable public status.',
+  },
+];
 const REQUIRED_DOMAIN_DIRS = [
   'core',
   'deploy',
@@ -281,6 +300,28 @@ async function validateAppGrantCatalogDocs(
   }
 }
 
+async function validateAppInstallationStatusDocs(
+  failures: CheckFailure[],
+): Promise<void> {
+  for (const path of APP_INSTALLATION_STATUS_DOCS) {
+    const text = await readText(path, failures);
+    if (!text.includes('canonical 5')) {
+      failures.push({
+        path,
+        message: 'Expected AppInstallation status docs to explicitly mention the canonical 5 public statuses.',
+      });
+    }
+    for (const rule of FORBIDDEN_PUBLIC_STATUS_PATTERNS) {
+      const match = rule.pattern.exec(text);
+      if (!match || match.index === undefined) continue;
+      failures.push({
+        path: `${path}:${lineNumberAt(text, match.index)}`,
+        message: rule.message,
+      });
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const failures: CheckFailure[] = [];
 
@@ -306,6 +347,7 @@ async function main(): Promise<void> {
 
   await validateDomainDirs(failures);
   await validateAppGrantCatalogDocs(failures);
+  await validateAppInstallationStatusDocs(failures);
 
   if (failures.length > 0) {
     console.error('Architecture alignment validation failed:');
@@ -319,6 +361,7 @@ async function main(): Promise<void> {
   console.log(`Checked ${markdownFiles.length} README/plan markdown files.`);
   console.log(`Verified ${REQUIRED_DOMAIN_DIRS.length} domain directories.`);
   console.log(`Verified AppGrant catalog docs in ${APP_GRANT_CATALOG_DOCS.length} files.`);
+  console.log(`Verified AppInstallation status docs in ${APP_INSTALLATION_STATUS_DOCS.length} files.`);
 }
 
 if (import.meta.main) {

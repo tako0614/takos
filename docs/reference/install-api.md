@@ -635,10 +635,11 @@ Idempotency-Key: <uuid>      # required
 }
 ```
 
-state は canonical `ready` → transitional `materializing` → canonical `ready`
-(mode=dedicated) の遷移を辿る ([§0.5](#status-enum))。失敗時は
-`installation.materialize-failed` event を発火し、canonical status は `ready`
-(mode 維持) に rollback (重大失敗時は `failed`)。
+public status は canonical `ready` のまま維持し、materialize の進行は
+transitional `materializing` phase hint と InstallationEvent で追跡する
+([§0.5](#status-enum))。成功時は canonical `ready` + `mode=dedicated` に
+なり、失敗時は `installation.materialize-failed` event を発火して canonical
+status は `ready` (mode 維持) に rollback する。重大失敗時のみ `failed` に落ちる。
 
 Current Accounts service では materialize worker / operator が完了時に
 `PATCH /v1/installations/{id}/status` へ以下を渡す:
