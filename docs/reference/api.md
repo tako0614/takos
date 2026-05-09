@@ -979,18 +979,15 @@ canonical 名を使います。
 | DELETE | `/api/resources/:id/bind/:serviceId`           | バインディング削除         |
 | DELETE | `/api/resources/by-name/:name/bind/:serviceId` | 名前でバインディング削除   |
 
-### Tokens
+### Connection
 
-| method | path                                           | description          |
-| ------ | ---------------------------------------------- | -------------------- |
-| GET    | `/api/resources/:id/tokens`                    | retired (`410 Gone`) |
-| GET    | `/api/resources/by-name/:name/tokens`          | retired (`410 Gone`) |
-| POST   | `/api/resources/:id/tokens`                    | retired (`410 Gone`) |
-| POST   | `/api/resources/by-name/:name/tokens`          | retired (`410 Gone`) |
-| DELETE | `/api/resources/:id/tokens/:tokenId`           | retired (`410 Gone`) |
-| DELETE | `/api/resources/by-name/:name/tokens/:tokenId` | retired (`410 Gone`) |
-| GET    | `/api/resources/:id/connection`                | 接続情報取得         |
-| GET    | `/api/resources/by-name/:name/connection`      | 名前で接続情報取得   |
+Resource-local token routes are not exposed. Resource credentials are issued as
+AppGrant/AppBinding credentials by Takosumi Accounts.
+
+| method | path                                      | description        |
+| ------ | ----------------------------------------- | ------------------ |
+| GET    | `/api/resources/:id/connection`           | 接続情報取得       |
+| GET    | `/api/resources/by-name/:name/connection` | 名前で接続情報取得 |
 
 ### Secrets
 
