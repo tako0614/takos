@@ -265,10 +265,19 @@ record が参照する artifact provenance。
 
 所有権の primitive 台帳。`accountId` (Takosumi Account) / `spaceId` / `appId` /
 source (git URL + ref + commit) / `appManifestDigest` / `compiledManifestDigest`
-/ `mode` (shared-cell / dedicated / self-hosted) / `runtimeBindingId` / `status`
-を持つ。Takos の installation owner を表現する record。 (see new.md §7,
+/ `serviceImports` / `mode` (shared-cell / dedicated / self-hosted) /
+`runtimeBindingId` / `status` を持つ。Takos の installation owner を表現する
+record。 (see new.md §7,
 [architecture/app-installation](/architecture/app-installation),
 [reference/install-api](/reference/install-api))
+
+### AppInstallation.serviceImports
+
+AppInstallation に保存される external service dependency の approval metadata。
+`.takosumi/app.yml` top-level `serviceImports[]` と compiled manifest
+`imports[]` を接続する。AppBinding kind ではない。 (see
+[architecture/app-installation](/architecture/app-installation),
+[reference/app-yml-spec](/reference/app-yml-spec))
 
 ### AppBinding
 

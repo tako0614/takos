@@ -249,8 +249,9 @@ after anchor resolution:
 | `${imports.<alias>.metadata.<key>}`        | descriptor metadata value   |
 | `${imports.<alias>.serviceId}`             | resolved service identifier |
 
-`bindings.` prefix is accepted for service import placeholders as a
-compatibility alias, but current manifests should use `imports.`.
+`${bindings.*}` is reserved for AppBinding materialization and must be compiled
+out before the kernel sees the manifest. Service import placeholders must use
+the `${imports.*}` family.
 
 ## Cross-instance imports {#cross-instance-imports}
 

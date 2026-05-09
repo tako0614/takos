@@ -282,8 +282,8 @@ Takosumi Accounts が持つもの:
 - account / login / passkey / upstream OAuth login
 - OIDC provider (issuer URL は anchor が返す operator-injected value)
 - billing account (Stripe webhook 処理 / subscription / usage / invoice)
-- AppInstallation 台帳 (AppInstallation / AppBinding / AppGrant /
-  RuntimeBinding / InstallationEvent)
+- AppInstallation 台帳 (AppInstallation / serviceImports metadata / AppBinding /
+  AppGrant / RuntimeBinding / InstallationEvent)
 ```
 
 Takosumi Accounts が持たないもの:
@@ -354,7 +354,7 @@ audit projection and security events through audit domain
 account / login / passkey / upstream OAuth (Takosumi Accounts owns)
 OAuth / OIDC issuer / consent screen (Takosumi Accounts owns)
 billing / Stripe / subscription / invoice (Takosumi Accounts owns)
-AppInstallation 台帳 / AppBinding / AppGrant (Takosumi Accounts owns)
+AppInstallation 台帳 / serviceImports metadata / AppBinding / AppGrant (Takosumi Accounts owns)
 workflow / build pipeline / .takosumi/app.yml interpretation (takosumi-git owns)
 Git object truth when integrated with takos-git
 agent model/tool execution when integrated with takos-agent
