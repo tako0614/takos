@@ -59,54 +59,51 @@ token 検証:
 
 ### 0.3 Idempotency-Key
 
-すべての state-mutating endpoint で `Idempotency-Key` header を受け付ける。 24
-時間内に同 key + 同 body で再送した場合は同じ response を返す。body が
-異なる場合は `409 idempotency-key-conflict`。
+Phase 1.6 design endpoint では `Idempotency-Key` header を使い、24 時間内に
+同 key + 同 body で再送した場合は同じ response を返す想定です。現行の
+contract-backed AppInstallation endpoint は idempotency ledger をまだ公開して
+いないため、重複作成は `installation_already_exists` で扱います。
 
 | endpoint                                   | Idempotency-Key |
 | ------------------------------------------ | --------------- |
 | `POST /v1/install/preview`                 | optional        |
-| `POST /v1/installations`                   | **required**    |
+| `POST /v1/installations`                   | not enforced    |
 | `POST /v1/installations/{id}/launch-token` | optional        |
 | `POST /v1/installations/{id}/materialize`  | **required** (Phase 1.6 design) |
 | `POST /v1/installations/{id}/export`       | **required** (Phase 1.6 design) |
 
-### 0.4 Error response (Problem Details)
+### 0.4 Error response
 
-すべてのエラーは RFC 7807 + RFC 9457 互換 (`application/problem+json`):
+現行 Takosumi Accounts service は JSON error object を返します。
 
 ```json
 {
-  "type": "https://errors.takosumi.cloud/<slug>",
-  "title": "Human readable summary",
-  "status": 400,
-  "detail": "Concrete description of what failed.",
-  "instance": "/v1/installations",
-  "code": "<machine slug, == last segment of type>",
-  "requestId": "req_01J...",
-  "errors": [{ "field": "spec.spaceId", "message": "Required" }],
-  "retryAfter": 30
+  "error": "invalid_request",
+  "error_description": "Optional concrete description"
 }
 ```
 
-主要 error code:
+`error` は snake_case の machine code、`error_description` は optional です。
+Phase 1.6 design endpoint の長時間 operation では追加 metadata を返す可能性が
+ありますが、現行 contract-backed endpoint はこの shape に揃えます。
 
-| status | code                          | 用途                                                   |
+主要 error:
+
+| status | error                         | 用途                                                   |
 | ------ | ----------------------------- | ------------------------------------------------------ |
-| 400    | `validation-failed`           | request body / query が schema に合わない              |
-| 400    | `mutable-ref-rejected`        | `ref=main` 等の mutable git ref                        |
-| 401    | `unauthenticated`             | bearer なし / 検証失敗                                 |
-| 403    | `forbidden`                   | role / scope 不足                                      |
-| 403    | `grant-required`              | 必要な AppGrant が無い (= revoke 済)                   |
-| 404    | `installation-not-found`      | id 不在 / 別 account のもの                            |
-| 409    | `idempotency-key-conflict`    | 同 key 別 body                                         |
-| 409    | `state-conflict`              | 状態遷移不能 (例: `installing` 中の launch-token 要求) |
-| 410    | `installation-deleted`        | uninstall 済み id (30 日 retention 中の参照)           |
-| 422    | `manifest-compile-failed`     | takosumi-git の manifest compile エラー                |
-| 422    | `permission-preview-required` | upgrade で permission diff があるのに `confirm` 未指定 |
-| 422    | `cost-cap-exceeded`           | preview の `maxMonthlyWithoutApproval` 超過 + ack 無し |
-| 429    | `rate-limit-exceeded`         | rate limit 超過 (`Retry-After` header 同梱)            |
-| 502    | `dependency-failure`          | takosumi-git / Stripe / DNS 等の依存失敗               |
+| 400    | `invalid_request`             | request body / query が schema に合わない              |
+| 400    | `invalid_bindings`            | requested AppBinding declaration が catalog に合わない |
+| 400    | `invalid_grants`              | requested AppGrant 配列が object/array shape 不正      |
+| 404    | `installation_not_found`      | id 不在                                                |
+| 404    | `grant_not_found`             | grant id 不在                                          |
+| 404    | `oidc_client_not_found`       | per-installation OIDC client 不在                      |
+| 409    | `installation_already_exists` | 同じ installation id が既に存在                        |
+| 409    | `space_account_mismatch`      | account と space の対応が不正                          |
+| 409    | `state_conflict`              | 状態遷移不能 (例: `installing` 中の launch-token 要求) |
+| 409    | `launch_token_replayed`       | launch token jti が既に消費済み                        |
+| 422    | `invalid_grant_capability`    | grant capability が v1 catalog 外                      |
+| 503    | `install_preview_not_configured` | install preview proxy 未設定                        |
+| 503    | `launch_tokens_not_configured`   | launch token issuer 未設定                          |
 
 ### 0.5 AppInstallation Status Enum {#status-enum}
 
@@ -141,7 +138,7 @@ InstallationEvent payload の phase hint** であり、独立した安定 status
 | `migrating`     | `ready` (data migration 完了) または `failed`      | resource migration ledger ([Glossary](/reference/glossary#migrationledger)) |
 | `pending`       | `installing` (queue 滞留)                          | rate-limit / queue backpressure                                             |
 
-`state-conflict` (§0.4) は canonical 5 値と、operation metadata に残る
+`state_conflict` (§0.4) は canonical 5 値と、operation metadata に残る
 in-flight phase を合わせて要求 operation の組合せ違反を返す。
 
 ## 1. `POST /v1/install/preview`
@@ -244,11 +241,10 @@ Content-Type: application/json
 | code | 条件                                         |
 | ---- | -------------------------------------------- |
 | 200  | 成功                                         |
-| 400  | `validation-failed` / `mutable-ref-rejected` |
-| 401  | `unauthenticated`                            |
-| 403  | `forbidden`                                  |
-| 422  | `manifest-compile-failed`                    |
-| 429  | `rate-limit-exceeded`                        |
+| 400  | `invalid_json` / `invalid_install_preview_request` |
+| 401  | `invalid_signature`                          |
+| 422  | `invalid_installable_app`                    |
+| 429  | `rate_limited`                               |
 | 502  | git fetch / DNS verify 失敗                  |
 
 ## 2. `POST /v1/installations`
@@ -284,9 +280,9 @@ Content-Type: application/json
 }
 ```
 
-`confirm.previewId` は直前の preview を anchor する。10 分以上前の previewId は
-`422`。`confirm.permissionDigest` が preview と一致しない場合は
-`422 permission-preview-required`。
+`confirm.previewId` は直前の preview を anchor する。10 分以上前の previewId や
+`confirm.permissionDigest` mismatch は current service では未実装で、Phase 1.6
+design の permission diff gate で扱う。
 
 ### 2.2 Response (202)
 
@@ -328,17 +324,14 @@ response header に `Location: /v1/installations/inst_01J...` を付与。
 | code | 条件                                                                            |
 | ---- | ------------------------------------------------------------------------------- |
 | 202  | 受理 (非同期で installer pipeline 起動)                                         |
-| 400  | `validation-failed`                                                             |
-| 401  | `unauthenticated`                                                               |
-| 403  | `forbidden` (要 admin role / `takosumi.install` scope)                          |
-| 409  | `idempotency-key-conflict` / `state-conflict`                                   |
-| 422  | `permission-preview-required` / `cost-cap-exceeded` / `manifest-compile-failed` |
-| 429  | `rate-limit-exceeded`                                                           |
+| 400  | `invalid_request` / `invalid_bindings` / `invalid_service_imports` / `invalid_grants` / `invalid_oidc_clients` |
+| 409  | `installation_already_exists` / `space_account_mismatch`                        |
+| 422  | `invalid_grant_capability`                                                      |
 
 ### 2.4 self-host install
 
 `mode=self-hosted` は **takosumi-cloud では作成しない**。代わりに
-`409 state-conflict` を返し、Problem の `detail` に
+`409 state_conflict` を返し、`error_description` に
 `Use takosumi-git install <bundle> --to <self-hosted endpoint>` を案内する
 ([Upgrade / Export](/platform/upgrade-export#self-host-import) 参照)。
 
@@ -390,9 +383,10 @@ token は `typ: takosumi-install-launch+jwt`。one-time (server 側で `jti`
 | code            | 条件                                                                                                                                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 200             | 成功                                                                                                                                                                                                    |
-| 400             | `validation-failed` / `redirectUri` 不一致                                                                                                                                                              |
-| 401 / 403 / 404 | 既出                                                                                                                                                                                                    |
-| 409             | `state-conflict` (canonical status が `installing` / `failed` / `suspended` / `exported` のとき、または operation metadata が in-flight phase を示すとき発行不可。launch-token は status=`ready` 専用) |
+| 400             | `invalid_request` / redirect URI 不一致                                                                                                                                                                 |
+| 404             | `installation_not_found`                                                                                                                                                                                |
+| 409             | `state_conflict` (canonical status が `installing` / `failed` / `suspended` / `exported` のとき、または operation metadata が in-flight phase を示すとき発行不可。launch-token は status=`ready` 専用) |
+| 503             | `launch_tokens_not_configured`                                                                                                                                                                          |
 
 ## 4. `POST /v1/installations/{id}/materialize` (Phase 1.6 design)
 
@@ -456,11 +450,11 @@ state は canonical `ready` → transitional `materializing` → canonical `read
 | code      | 条件                                                                                                                                                                                                       |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 202       | 受理                                                                                                                                                                                                       |
-| 400 / 422 | `validation-failed` / `cost-cap-exceeded`                                                                                                                                                                  |
+| 400 / 422 | `invalid_request` / `cost_cap_exceeded`                                                                                                                                                                    |
 | 403       | `forbidden` (要 `owner` role)                                                                                                                                                                              |
 | 404 / 410 | 既出                                                                                                                                                                                                       |
-| 409       | `state-conflict` (mode が既に dedicated / canonical status が `ready` 以外、または transitional substate (`materializing` / `upgrading` / `rolling-back` / `uninstalling`) のとき) / `installation-locked` |
-| 502       | `dependency-failure` (kernel deploy 経路失敗)                                                                                                                                                              |
+| 409       | `state_conflict` (mode が既に dedicated / canonical status が `ready` 以外、または operation metadata が in-flight phase を示すとき) / `installation_locked`                                              |
+| 502       | `dependency_failure` (kernel deploy 経路失敗)                                                                                                                                                              |
 
 ## 5. `POST /v1/installations/{id}/export` (Phase 1.6 design)
 
@@ -519,10 +513,10 @@ Idempotency-Key: <uuid>      # required
 | code      | 条件                                                                                                                                                                          |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 202       | 受理                                                                                                                                                                          |
-| 400 / 422 | `validation-failed` / scope 不正                                                                                                                                              |
+| 400 / 422 | `invalid_request` / scope 不正                                                                                                                                               |
 | 403       | role / grant                                                                                                                                                                  |
 | 404 / 410 | 既出                                                                                                                                                                          |
-| 409       | `state-conflict` (canonical status が `installing` のとき、または transitional substate (`materializing` / `uninstalling` / `exporting`) のとき。詳細は [§0.5](#status-enum)) |
+| 409       | `state_conflict` (canonical status が `installing` のとき、または operation metadata が in-flight phase を示すとき。詳細は [§0.5](#status-enum)) |
 
 ## 5.4 Cross-instance import flow
 
@@ -600,7 +594,7 @@ manifest を生成し、kernel `POST /v1/deployments` に渡す。kernel は app
 6. resource spec の `${imports.<alias>.endpoints.<role>.url}` placeholder を
    resolve
 
-failure modes は `409 state-conflict` または `422 ...-resolution-failed` で
+failure modes は `409 state_conflict` または `422 ..._resolution_failed` で
 返される。
 
 ### Refresh / Revoke
