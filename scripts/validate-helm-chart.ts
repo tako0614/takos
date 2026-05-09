@@ -1,40 +1,47 @@
-const chartRoot = "deploy/helm/takos";
+const chartRoot = 'deploy/helm/takos';
 const templateRoot = `${chartRoot}/templates`;
 
 const expectedServices = [
   {
-    id: "takos-app",
-    deploymentFile: "deployment-takos-app.yaml",
-    serviceFile: "service-takos-app.yaml",
-    imageKey: "takosApp",
-    valuesKey: "takosApp",
+    id: 'takos-app',
+    deploymentFile: 'deployment-takos-app.yaml',
+    serviceFile: 'service-takos-app.yaml',
+    imageKey: 'takosApp',
+    valuesKey: 'takosApp',
   },
   {
-    id: "takosumi",
-    deploymentFile: "deployment-takosumi.yaml",
-    serviceFile: "service-takosumi.yaml",
-    imageKey: "takosumi",
-    valuesKey: "takosumi",
+    id: 'takosumi',
+    deploymentFile: 'deployment-takosumi.yaml',
+    serviceFile: 'service-takosumi.yaml',
+    imageKey: 'takosumi',
+    valuesKey: 'takosumi',
   },
   {
-    id: "takos-git",
-    deploymentFile: "deployment-takos-git.yaml",
-    serviceFile: "service-takos-git.yaml",
-    imageKey: "takosGit",
-    valuesKey: "takosGit",
+    id: 'takosumi-cloud',
+    deploymentFile: 'deployment-takosumi-cloud.yaml',
+    serviceFile: 'service-takosumi-cloud.yaml',
+    imageKey: 'takosumiCloud',
+    valuesKey: 'takosumiCloud',
   },
   {
-    id: "takos-agent",
-    deploymentFile: "deployment-takos-agent.yaml",
-    serviceFile: "service-takos-agent.yaml",
-    imageKey: "takosAgent",
-    valuesKey: "takosAgent",
+    id: 'takos-git',
+    deploymentFile: 'deployment-takos-git.yaml',
+    serviceFile: 'service-takos-git.yaml',
+    imageKey: 'takosGit',
+    valuesKey: 'takosGit',
+  },
+  {
+    id: 'takos-agent',
+    deploymentFile: 'deployment-takos-agent.yaml',
+    serviceFile: 'service-takos-agent.yaml',
+    imageKey: 'takosAgent',
+    valuesKey: 'takosAgent',
   },
 ] as const;
 
 const templateFiles: string[] = [];
 for await (const entry of Deno.readDir(templateRoot)) {
-  if (entry.isFile && entry.name.endsWith(".yaml")) {
+  if (entry.isFile && entry.name.endsWith('.yaml')) {
     templateFiles.push(`${templateRoot}/${entry.name}`);
   }
 }
@@ -49,12 +56,12 @@ assertContains(`${chartRoot}/values.yaml`, valuesText, '  imageRegistry: ""');
 assertContains(
   `${chartRoot}/values.yaml`,
   valuesText,
-  "  imagePullSecrets: []",
+  '  imagePullSecrets: []',
 );
 assertContains(
   `${chartRoot}/values.yaml`,
   valuesText,
-  "  managedResources: {}",
+  '  managedResources: {}',
 );
 assertContains(
   `${chartRoot}/values.yaml`,
@@ -64,12 +71,12 @@ assertContains(
 assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
-  "TAKOS_MANAGED_RESOURCES_JSON: {{ toJson . | quote }}",
+  'TAKOS_MANAGED_RESOURCES_JSON: {{ toJson . | quote }}',
 );
 assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
-  "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}",
+  'TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}',
 );
 assertContains(
   `${templateRoot}/_helpers.tpl`,
@@ -78,15 +85,13 @@ assertContains(
 );
 
 assertExactTemplateSet(
-  "Deployment",
-  templateFiles.filter((file) => file.includes("/deployment-")),
-  expectedServices.map((service) =>
-    `${templateRoot}/${service.deploymentFile}`
-  ),
+  'Deployment',
+  templateFiles.filter((file) => file.includes('/deployment-')),
+  expectedServices.map((service) => `${templateRoot}/${service.deploymentFile}`),
 );
 assertExactTemplateSet(
-  "Service",
-  templateFiles.filter((file) => file.includes("/service-")),
+  'Service',
+  templateFiles.filter((file) => file.includes('/service-')),
   expectedServices.map((service) => `${templateRoot}/${service.serviceFile}`),
 );
 
@@ -115,7 +120,7 @@ for (const service of expectedServices) {
   assertContains(
     deploymentPath,
     deploymentText,
-    "{{- with .Values.global.imagePullSecrets }}",
+    '{{- with .Values.global.imagePullSecrets }}',
   );
   assertContains(
     deploymentPath,
@@ -140,26 +145,26 @@ for (const service of expectedServices) {
     `port: {{ .Values.services.${service.valuesKey}.port }}`,
   );
 
-  assertValuesKey("images", service.imageKey);
-  assertImageSubkey(service.imageKey, "registry");
-  assertImageSubkey(service.imageKey, "repository");
-  assertImageSubkey(service.imageKey, "tag");
-  assertImageSubkey(service.imageKey, "pullPolicy");
-  assertValuesKey("services", service.valuesKey);
+  assertValuesKey('images', service.imageKey);
+  assertImageSubkey(service.imageKey, 'registry');
+  assertImageSubkey(service.imageKey, 'repository');
+  assertImageSubkey(service.imageKey, 'tag');
+  assertImageSubkey(service.imageKey, 'pullPolicy');
+  assertValuesKey('services', service.valuesKey);
 }
 
 for (const file of templateFiles.sort()) {
   const text = await Deno.readTextFile(file);
-  if (text.includes("dev:local:")) {
+  if (text.includes('dev:local:')) {
     errors.push(`${file} must not use dev:local commands`);
   }
   assertNoStaleWorkloadSurface(file, text);
 }
 
-for (const overlay of ["values-aws.yaml", "values-gcp.yaml"]) {
+for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
   const path = `${chartRoot}/${overlay}`;
   const text = await Deno.readTextFile(path);
-  if (!text.includes("environment: production")) {
+  if (!text.includes('environment: production')) {
     errors.push(`${path} must set production environment`);
   }
   if (!text.includes('auth: ""') || !text.includes('runtime-agent: ""')) {
@@ -176,7 +181,7 @@ for (const overlay of ["values-aws.yaml", "values-gcp.yaml"]) {
   assertNoStaleWorkloadSurface(path, text);
 }
 
-for (const ingress of ["ingress-admin.yaml", "ingress-tenant.yaml"]) {
+for (const ingress of ['ingress-admin.yaml', 'ingress-tenant.yaml']) {
   const path = `${templateRoot}/${ingress}`;
   const text = await Deno.readTextFile(path);
   assertContains(
@@ -188,7 +193,7 @@ for (const ingress of ["ingress-admin.yaml", "ingress-tenant.yaml"]) {
 }
 
 if (errors.length > 0) {
-  console.error("Helm chart validation failed:");
+  console.error('Helm chart validation failed:');
   for (const error of errors) console.error(`- ${error}`);
   Deno.exit(1);
 }
@@ -198,7 +203,7 @@ console.log(
     ok: true,
     checkedTemplates: templateFiles.length,
     checkedServiceSet: expectedServices.map((service) => service.id),
-    checkedOverlays: ["values-aws.yaml", "values-gcp.yaml"],
+    checkedOverlays: ['values-aws.yaml', 'values-gcp.yaml'],
   }),
 );
 
@@ -211,18 +216,16 @@ function assertExactTemplateSet(
   const expected = expectedFiles.toSorted();
   if (actual.length !== expected.length) {
     errors.push(
-      `${kind} template set must be exactly ${
-        expected.map(basename).join(", ")
-      }, got ${actual.map(basename).join(", ")}`,
+      `${kind} template set must be exactly ${expected.map(basename).join(', ')}, got ${
+        actual.map(basename).join(', ')
+      }`,
     );
     return;
   }
   for (const [index, expectedPath] of expected.entries()) {
     if (actual[index] !== expectedPath) {
       errors.push(
-        `${kind} template set must include ${basename(expectedPath)}, got ${
-          basename(actual[index])
-        }`,
+        `${kind} template set must include ${basename(expectedPath)}, got ${basename(actual[index])}`,
       );
     }
   }
@@ -233,7 +236,7 @@ async function readTextIfExists(path: string): Promise<string> {
     return await Deno.readTextFile(path);
   } catch {
     errors.push(`missing required Helm template ${path}`);
-    return "";
+    return '';
   }
 }
 
@@ -243,8 +246,8 @@ function assertContains(path: string, text: string, expected: string): void {
   }
 }
 
-function assertValuesKey(section: "images" | "services", key: string): void {
-  const pattern = new RegExp(`^${section}:\\n(?:[\\s\\S]*?\\n)?  ${key}:`, "m");
+function assertValuesKey(section: 'images' | 'services', key: string): void {
+  const pattern = new RegExp(`^${section}:\\n(?:[\\s\\S]*?\\n)?  ${key}:`, 'm');
   if (!pattern.test(valuesText)) {
     errors.push(`${chartRoot}/values.yaml must define ${section}.${key}`);
   }
@@ -253,7 +256,7 @@ function assertValuesKey(section: "images" | "services", key: string): void {
 function assertImageSubkey(imageKey: string, subkey: string): void {
   const pattern = new RegExp(
     `^  ${imageKey}:\\n(?:    [^\\n]+\\n)*    ${subkey}:`,
-    "m",
+    'm',
   );
   if (!pattern.test(valuesText)) {
     errors.push(
@@ -264,13 +267,13 @@ function assertImageSubkey(imageKey: string, subkey: string): void {
 
 function assertNoStaleWorkloadSurface(path: string, text: string): void {
   const stalePatterns: Array<[RegExp, string]> = [
-    [/takos\.io\/process-role/, "takos.io/process-role"],
-    [/TAKOSUMI_PROCESS_ROLE/, "TAKOSUMI_PROCESS_ROLE"],
-    [/\bpaas(Api|Router|Worker|RuntimeAgent|LogWorker)\b/, "paas* values keys"],
-    [/\bociOrchestrator\b/, "ociOrchestrator values key"],
+    [/takos\.io\/process-role/, 'takos.io/process-role'],
+    [/TAKOSUMI_PROCESS_ROLE/, 'TAKOSUMI_PROCESS_ROLE'],
+    [/\bpaas(Api|Router|Worker|RuntimeAgent|LogWorker)\b/, 'paas* values keys'],
+    [/\bociOrchestrator\b/, 'ociOrchestrator values key'],
     [
       /takosumi-(api|router|worker|runtime-agent|log-worker)/,
-      "old takosumi role resource name",
+      'old takosumi role resource name',
     ],
   ];
 
@@ -282,5 +285,5 @@ function assertNoStaleWorkloadSurface(path: string, text: string): void {
 }
 
 function basename(path: string): string {
-  return path.split("/").at(-1) ?? path;
+  return path.split('/').at(-1) ?? path;
 }

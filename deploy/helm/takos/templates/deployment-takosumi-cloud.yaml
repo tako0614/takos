@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "takos.fullname" . }}-takosumi-cloud
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    takos.io/service-id: takosumi-cloud
+    app.kubernetes.io/component: takosumi-cloud
+spec:
+  replicas: {{ .Values.services.takosumiCloud.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: takosumi-cloud
+      {{- include "takos.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "takos.labels" . | nindent 8 }}
+        takos.io/service-id: takosumi-cloud
+        app.kubernetes.io/component: takosumi-cloud
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: takosumi-cloud
+          image: "{{ include "takos.image" (dict "root" . "image" .Values.images.takosumiCloud) }}"
+          imagePullPolicy: {{ .Values.images.takosumiCloud.pullPolicy }}
+          command:
+            - run
+            - --allow-net
+            - packages/cli/src/main.ts
+            - accounts
+            - serve
+            - --hostname
+            - 0.0.0.0
+            - --port
+            - {{ .Values.services.takosumiCloud.port | quote }}
+            - --issuer
+            - {{ include "takos.accountsIssuer" . | quote }}
+            - --subject
+            - {{ .Values.accounts.subject | quote }}
+            - --client-id
+            - {{ .Values.accounts.clientId | quote }}
+            - --redirect-uri
+            - {{ include "takos.oidcRedirectUri" . | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.services.takosumiCloud.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.services.takosumiCloud.port | quote }}
+            - name: TAKOSUMI_CLOUD_SERVICE_ID
+              value: "takosumi-cloud"
+          envFrom:
+            - configMapRef:
+                name: {{ include "takos.fullname" . }}-global
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.platform | default (printf "%s-platform" (include "takos.fullname" .)) }}
+            - secretRef:
+                name: {{ .Values.secrets.existingSecrets.auth | default (printf "%s-auth" (include "takos.fullname" .)) }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.services.takosumiCloud.healthPath | quote }}
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.services.takosumiCloud.healthPath | quote }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.services.takosumiCloud.resources | nindent 12 }}

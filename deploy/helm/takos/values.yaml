@@ -12,6 +12,7 @@ global:
 domains:
   admin: "admin.takos.example.com"
   tenantBase: "app.takos.example.com"
+  accounts: "accounts.takos.example.com"
 
 ## -----------------------------------------------------------------
 ## Container images
@@ -25,6 +26,11 @@ images:
   takosumi:
     registry: ghcr.io
     repository: takos/takosumi
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  takosumiCloud:
+    registry: ghcr.io
+    repository: takos/takosumi-cloud-accounts
     tag: "latest"
     pullPolicy: IfNotPresent
   takosGit:
@@ -92,6 +98,18 @@ services:
         cpu: 2
         memory: 2Gi
 
+  takosumiCloud:
+    replicaCount: 1
+    port: 8787
+    healthPath: /healthz
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+
   takosGit:
     replicaCount: 1
     port: 8790
@@ -138,9 +156,19 @@ secrets:
   internalApiSecret: ""
   googleClientId: ""
   googleClientSecret: ""
+  oidcClientSecret: ""
   openaiApiKey: ""
   anthropicApiKey: ""
   googleApiKey: ""
+
+## -----------------------------------------------------------------
+## Takosumi Accounts bootstrap
+## -----------------------------------------------------------------
+accounts:
+  issuer: ""
+  subject: "tsub_takos_admin"
+  clientId: "takos-private-production"
+  redirectUri: ""
 
 ## -----------------------------------------------------------------
 ## Ingress

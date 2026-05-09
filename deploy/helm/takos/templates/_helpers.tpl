@@ -103,6 +103,27 @@ Takosumi internal URL
 {{- end }}
 
 {{/*
+Takosumi Accounts internal URL
+*/}}
+{{- define "takos.accountsUrl" -}}
+{{- printf "http://%s-takosumi-cloud:%v" (include "takos.fullname" .) (int .Values.services.takosumiCloud.port) }}
+{{- end }}
+
+{{/*
+Takosumi Accounts public issuer URL
+*/}}
+{{- define "takos.accountsIssuer" -}}
+{{- default (printf "https://%s" .Values.domains.accounts) .Values.accounts.issuer }}
+{{- end }}
+
+{{/*
+Takos OIDC redirect URI registered with Takosumi Accounts
+*/}}
+{{- define "takos.oidcRedirectUri" -}}
+{{- default (printf "https://%s/auth/oidc/callback" .Values.domains.admin) .Values.accounts.redirectUri }}
+{{- end }}
+
+{{/*
 Takos Git hosting internal URL
 */}}
 {{- define "takos.gitUrl" -}}

@@ -23,6 +23,12 @@ data:
   TENANT_BASE_DOMAIN: {{ .Values.domains.tenantBase | quote }}
   TAKOS_APP_INTERNAL_URL: {{ include "takos.appUrl" . | quote }}
   TAKOSUMI_INTERNAL_URL: {{ include "takos.takosumiUrl" . | quote }}
+  TAKOSUMI_ACCOUNTS_INTERNAL_URL: {{ include "takos.accountsUrl" . | quote }}
+  TAKOSUMI_ACCOUNTS_ISSUER: {{ include "takos.accountsIssuer" . | quote }}
   TAKOS_GIT_INTERNAL_URL: {{ include "takos.gitUrl" . | quote }}
   TAKOS_AGENT_INTERNAL_URL: {{ include "takos.agentUrl" . | quote }}
+  OIDC_ISSUER_URL: {{ include "takos.accountsIssuer" . | quote }}
+  OIDC_DISCOVERY_URL: {{ include "takos.accountsUrl" . | quote }}
+  OIDC_CLIENT_ID: {{ .Values.accounts.clientId | quote }}
+  OIDC_REDIRECT_URI: {{ include "takos.oidcRedirectUri" . | quote }}
   NODE_ENV: {{ .Values.runtimeConfig.environment | default "local" | quote }}

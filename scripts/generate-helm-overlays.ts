@@ -4,6 +4,7 @@ type DistributionManifest = {
   };
   routing?: {
     adminBaseUrl?: string;
+    accountsBaseUrl?: string;
     wildcardDomain?: string;
   };
   services?: Array<{
@@ -40,6 +41,7 @@ const targets: OverlayTarget[] = [
 const serviceValueKeys: Record<string, string> = {
   'takos-app': 'takosApp',
   takosumi: 'takosumi',
+  'takosumi-cloud': 'takosumiCloud',
   'takos-git': 'takosGit',
   'takos-agent': 'takosAgent',
 };
@@ -124,6 +126,7 @@ function generateOverlay(
   manifest: DistributionManifest,
 ): string {
   const adminDomain = hostname(manifest.routing?.adminBaseUrl);
+  const accountsDomain = hostname(manifest.routing?.accountsBaseUrl);
   const tenantBase = tenantBaseDomain(manifest.routing?.wildcardDomain);
   const images = collectImages(target, manifest);
   const provider = providerConfig(target.targetId);
@@ -155,6 +158,7 @@ function generateOverlay(
     'domains:',
     `  admin: ${quote(adminDomain)}`,
     `  tenantBase: ${quote(tenantBase)}`,
+    `  accounts: ${quote(accountsDomain)}`,
     '',
     '# Empty values keep the chart default secret names derived from the Helm release:',
     '# <release>-platform, <release>-auth, <release>-llm. Set a field only when an',
@@ -189,6 +193,8 @@ function generateOverlay(
     '        memory: 2Gi',
     '  takosumi:',
     '    replicaCount: 3',
+    '  takosumiCloud:',
+    '    replicaCount: 2',
     '  takosGit:',
     '    replicaCount: 2',
     '  takosAgent:',
