@@ -239,7 +239,10 @@ takosumi-git install ./takos-export.tar.zst \
 を上書きする。省略時は self-host 側 Takosumi Accounts が default issuer になる。
 import planner は bundle 内の source issuer を target issuer に置換し、revoked
 grant を import request から除外する。secret material は移さず、self-host 側で
-再発行する。
+再発行する。Accounts API では `POST /v1/installations/import` が JSON bundle
+payload を受け取り、target Accounts instance の AppInstallation として登録する。
+tar.zst parser と `takosumi-git install ./takos-export.tar.zst` の CLI
+接続は後続実装。
 
 bundle ではなく Git URL から直接 install する経路も同等にサポートされる:
 
