@@ -257,78 +257,6 @@ CREATE TABLE auth_sessions (
 );
 
 -- CreateTable
-CREATE TABLE billing_accounts (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "account_id" TEXT NOT NULL,
-    "plan_id" TEXT NOT NULL,
-    "balance_cents" INTEGER NOT NULL DEFAULT 0,
-    "status" TEXT NOT NULL DEFAULT 'active',
-    "stripe_customer_id" TEXT,
-    "stripe_subscription_id" TEXT,
-    "subscription_started_at" TEXT,
-    "subscription_period_end" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "billing_accounts_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "billing_plans" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT "billing_accounts_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE billing_plan_features (
-    "plan_id" TEXT NOT NULL,
-    "feature_key" TEXT NOT NULL,
-    "enabled" INTEGER NOT NULL DEFAULT 0,
-
-    PRIMARY KEY ("plan_id", "feature_key"),
-    CONSTRAINT "billing_plan_features_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "billing_plans" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE billing_plan_quotas (
-    "plan_id" TEXT NOT NULL,
-    "quota_key" TEXT NOT NULL,
-    "limit_value" INTEGER NOT NULL,
-
-    PRIMARY KEY ("plan_id", "quota_key"),
-    CONSTRAINT "billing_plan_quotas_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "billing_plans" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE billing_plan_rates (
-    "plan_id" TEXT NOT NULL,
-    "meter_type" TEXT NOT NULL,
-    "rate_cents" INTEGER NOT NULL,
-
-    PRIMARY KEY ("plan_id", "meter_type"),
-    CONSTRAINT "billing_plan_rates_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "billing_plans" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE billing_plans (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "name" TEXT NOT NULL,
-    "display_name" TEXT NOT NULL,
-    "description" TEXT,
-    "is_default" INTEGER NOT NULL DEFAULT 0,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- CreateTable
-CREATE TABLE billing_transactions (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "billing_account_id" TEXT NOT NULL,
-    "type" TEXT NOT NULL,
-    "amount_cents" INTEGER NOT NULL,
-    "balance_after_cents" INTEGER NOT NULL,
-    "description" TEXT,
-    "reference_id" TEXT,
-    "metadata" TEXT NOT NULL DEFAULT '{}',
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "billing_transactions_billing_account_id_fkey" FOREIGN KEY ("billing_account_id") REFERENCES "billing_accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE blobs (
     "account_id" TEXT NOT NULL,
     "hash" TEXT NOT NULL,
@@ -1373,39 +1301,6 @@ CREATE TABLE ui_extensions (
 );
 
 -- CreateTable
-CREATE TABLE usage_events (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "idempotency_key" TEXT,
-    "billing_account_id" TEXT NOT NULL,
-    "scope_type" TEXT NOT NULL DEFAULT 'space',
-    "account_id" TEXT,
-    "meter_type" TEXT NOT NULL,
-    "units" REAL NOT NULL,
-    "cost_cents" INTEGER NOT NULL DEFAULT 0,
-    "reference_id" TEXT,
-    "reference_type" TEXT,
-    "metadata" TEXT NOT NULL DEFAULT '{}',
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "usage_events_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "usage_events_billing_account_id_fkey" FOREIGN KEY ("billing_account_id") REFERENCES "billing_accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE usage_rollups (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "billing_account_id" TEXT NOT NULL,
-    "scope_type" TEXT NOT NULL,
-    "account_id" TEXT,
-    "meter_type" TEXT NOT NULL,
-    "period_start" TEXT NOT NULL,
-    "units" REAL NOT NULL DEFAULT 0,
-    "cost_cents" INTEGER NOT NULL DEFAULT 0,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "usage_rollups_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-    CONSTRAINT "usage_rollups_billing_account_id_fkey" FOREIGN KEY ("billing_account_id") REFERENCES "billing_accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE app_usage_events (
     "id" TEXT NOT NULL PRIMARY KEY,
     "idempotency_key" TEXT,
@@ -1811,42 +1706,6 @@ CREATE INDEX "auth_sessions_expires_at_idx" ON "auth_sessions"("expires_at");
 
 -- CreateIndex
 CREATE INDEX "auth_sessions_account_id_idx" ON "auth_sessions"("account_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "billing_accounts_account_id_key" ON "billing_accounts"("account_id");
-
--- CreateIndex
-CREATE INDEX "billing_accounts_stripe_customer_id_idx" ON "billing_accounts"("stripe_customer_id");
-
--- CreateIndex
-CREATE INDEX "billing_accounts_status_idx" ON "billing_accounts"("status");
-
--- CreateIndex
-CREATE INDEX "billing_accounts_plan_id_idx" ON "billing_accounts"("plan_id");
-
--- CreateIndex
-CREATE INDEX "billing_accounts_account_id_idx" ON "billing_accounts"("account_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "billing_plans_name_key" ON "billing_plans"("name");
-
--- CreateIndex
-CREATE INDEX "billing_plans_name_idx" ON "billing_plans"("name");
-
--- CreateIndex
-CREATE INDEX "billing_plans_is_default_idx" ON "billing_plans"("is_default");
-
--- CreateIndex
-CREATE INDEX "billing_transactions_type_idx" ON "billing_transactions"("type");
-
--- CreateIndex
-CREATE INDEX "billing_transactions_reference_id_idx" ON "billing_transactions"("reference_id");
-
--- CreateIndex
-CREATE INDEX "billing_transactions_created_at_idx" ON "billing_transactions"("created_at");
-
--- CreateIndex
-CREATE INDEX "billing_transactions_billing_account_id_idx" ON "billing_transactions"("billing_account_id");
 
 -- CreateIndex
 CREATE INDEX "blobs_refcount_idx" ON "blobs"("refcount");
@@ -2516,36 +2375,6 @@ CREATE INDEX "ui_extensions_account_id_idx" ON "ui_extensions"("account_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "ui_extensions_account_id_path_key" ON "ui_extensions"("account_id", "path");
-
--- CreateIndex
-CREATE UNIQUE INDEX "idx_usage_events_idempotency_key" ON "usage_events"("idempotency_key");
-
--- CreateIndex
-CREATE INDEX "usage_events_reference_id_idx" ON "usage_events"("reference_id");
-
--- CreateIndex
-CREATE INDEX "usage_events_meter_type_idx" ON "usage_events"("meter_type");
-
--- CreateIndex
-CREATE INDEX "usage_events_created_at_idx" ON "usage_events"("created_at");
-
--- CreateIndex
-CREATE INDEX "usage_events_billing_account_id_idx" ON "usage_events"("billing_account_id");
-
--- CreateIndex
-CREATE INDEX "usage_events_account_id_idx" ON "usage_events"("account_id");
-
--- CreateIndex
-CREATE INDEX "usage_rollups_period_start_idx" ON "usage_rollups"("period_start");
-
--- CreateIndex
-CREATE INDEX "usage_rollups_billing_account_id_idx" ON "usage_rollups"("billing_account_id");
-
--- CreateIndex
-CREATE INDEX "usage_rollups_account_id_idx" ON "usage_rollups"("account_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "usage_rollups_billing_account_id_scope_type_account_id_meter_type_period_start_key" ON "usage_rollups"("billing_account_id", "scope_type", "account_id", "meter_type", "period_start");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "idx_app_usage_events_idempotency_key" ON "app_usage_events"("idempotency_key");
