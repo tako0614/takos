@@ -2094,26 +2094,18 @@ resolver / anchor で解決します。
 
 ### auth (server-side)
 
-::: warning Legacy Takos の `/auth/login`, `/auth/password`, `/auth/cli` は
-Installable App Model で **廃止**されました。
+認証は [Takosumi Accounts OIDC issuer](/architecture/takosumi-accounts) に集約
+されます。Takos は [OIDC consumer](/apps/oidc-consumer) として
+`/auth/oidc/login` + `/auth/oidc/callback` のみ提供します。
 
-- 認証は [Takosumi Accounts OIDC issuer](/architecture/takosumi-accounts) に集約
-- Takos は [OIDC consumer](/apps/oidc-consumer) として `/auth/oidc/login` +
-  `/auth/oidc/callback` のみ提供
-- 以下の endpoint table は legacy 互換のため残されています :::
+| method | path                  | description                      |
+| ------ | --------------------- | -------------------------------- |
+| GET    | `/auth/oidc/login`    | Takosumi Accounts OIDC login     |
+| GET    | `/auth/oidc/callback` | OIDC authorization code callback |
+| POST   | `/auth/logout`        | app-local browser session logout |
 
-サーバーサイド認証フロー (legacy)。
-
-`/auth/*` は apps/api で受け、migration window 中は control compatibility
-backend へ proxy されます。
-
-| method | path                         | description                          |
-| ------ | ---------------------------- | ------------------------------------ |
-| GET    | `/auth/login`                | `/auth/oidc/login` への互換 redirect |
-| POST   | `/auth/password`             | retired (`410 Gone`)                 |
-| GET    | `/auth/cli`                  | retired (`410 Gone`)                 |
-| GET    | `/auth/link/google`          | retired (`410 Gone`)                 |
-| GET    | `/auth/link/google/callback` | retired (`410 Gone`)                 |
+`/auth/login`、`/auth/password`、`/auth/cli`、`/auth/link/google` は公開 route
+ではありません。
 
 ---
 
