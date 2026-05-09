@@ -583,8 +583,10 @@ namespace / OIDC binding / domain を引き継ぐ。
 
 > Current implementation: Accounts は request を受理し、
 > `installation.materialize-requested` event を ledger に記録して 202 を返す。
-> dedicated runtime 作成、cutover、mode/status 更新、succeeded/failed completion
-> event は後続 worker 実装で行う。
+> dedicated runtime 作成 / cutover は後続 worker 実装で行う。worker は完了時に
+> `PATCH /v1/installations/{id}/status` へ `status=ready`、
+> `mode=dedicated`、`operationId`、`runtimeBinding` を渡し、
+> `installation.materialize-succeeded` event を append する。
 
 ### 4.1 Request
 
@@ -637,6 +639,28 @@ state は canonical `ready` → transitional `materializing` → canonical `read
 (mode=dedicated) の遷移を辿る ([§0.5](#status-enum))。失敗時は
 `installation.materialize-failed` event を発火し、canonical status は `ready`
 (mode 維持) に rollback (重大失敗時は `failed`)。
+
+Current Accounts service では materialize worker / operator が完了時に
+`PATCH /v1/installations/{id}/status` へ以下を渡す:
+
+```json
+{
+  "status": "ready",
+  "mode": "dedicated",
+  "operationId": "op_01J...",
+  "reason": "dedicated runtime ready",
+  "runtimeBinding": {
+    "runtimeBindingId": "rtb_01J...",
+    "targetType": "dedicated",
+    "targetId": "tokyo-dedicated-01"
+  }
+}
+```
+
+同 patch は AppInstallation の `mode` / `runtimeBindingId` を更新し、
+`installation.materialize-succeeded` event を append する。matching
+`installation.materialize-requested` event がない場合、または同 operation が既に
+closed の場合は `409` を返す。
 
 ### 4.3 主なステータス
 
