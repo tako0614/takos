@@ -2065,36 +2065,24 @@ bundled snapshot ではなく source metadata / resolved commit を
   ください (`takosumi.account.billing@v1` service identifier を anchor から
   resolve)
 
-以下の `/api/billing/*` family は legacy 互換のため残されますが、Installable App
-Model 配下の app は billing owner にならず、Takosumi Account の billing account
-に紐づきます。 :::
+Takos apps/api gateway の `/api/billing/*` family は Phase 1.4 で閉じられ、
+`410 Gone` を返します。Installable App Model 配下の app は billing owner に
+ならず、Takosumi Account の billing account に紐づきます。 :::
 
-課金・使用量・サブスクリプション管理 (legacy)。
+課金・使用量・サブスクリプション管理は Takosumi Accounts の
+`takosumi.account.billing@v1` service identifier を anchor で resolve して
+呼びます。
 
-> 現行 API gateway split status は
-> [API Gateway Split](/takosumi/current-state#api-gateway-split) を参照 (billing
-> public entrypoint は apps/api、handler 実装は migration window 中 control
-> compatibility backend)
-
-`GET /api/billing` は payment processor 非依存の `has_payment_account` を返し、
-既存 Stripe client 互換のため `has_stripe_customer` も同じ値で返します。
-
-| method | path                             | description                               |
-| ------ | -------------------------------- | ----------------------------------------- |
-| GET    | `/api/billing`                   | 課金情報取得                              |
-| GET    | `/api/billing/usage`             | billing account 全体の当月使用量          |
-| POST   | `/api/billing/subscribe`         | サブスクリプション開始（Stripe Checkout） |
-| POST   | `/api/billing/credits/checkout`  | クレジットトップアップ（Stripe Checkout） |
-| POST   | `/api/billing/portal`            | Stripe カスタマーポータルセッション作成   |
-| GET    | `/api/billing/invoices`          | 請求書一覧                                |
-| GET    | `/api/billing/invoices/:id/pdf`  | 請求書 PDF                                |
-| POST   | `/api/billing/invoices/:id/send` | 請求書メール送信                          |
+| method | path             | description          |
+| ------ | ---------------- | -------------------- |
+| any    | `/api/billing`   | retired (`410 Gone`) |
+| any    | `/api/billing/*` | retired (`410 Gone`) |
 
 ### Webhook
 
-| method | path                   | auth             | description               |
-| ------ | ---------------------- | ---------------- | ------------------------- |
-| POST   | `/api/billing/webhook` | Stripe signature | Stripe webhook ハンドラー |
+| method | path                   | auth             | description          |
+| ------ | ---------------------- | ---------------- | -------------------- |
+| POST   | `/api/billing/webhook` | Stripe signature | retired (`410 Gone`) |
 
 ---
 
