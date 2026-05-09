@@ -514,7 +514,10 @@ legacy `${refs.*}`) は **compiled manifest に残らない** invariant。 curre
 
 各 binding の Default env injection は、manifest 中の compute resource が `env:`
 を **明示しなかった** key にのみ適用される。明示時はそのまま採用 (compile 時
-placeholder は通常通り解決)。
+placeholder は通常通り解決)。Accounts provider materializer が返す one-shot
+`binding_env` は takosumi-git が kernel deploy request を送る直前に適用し、
+AppInstallation ledger には raw secret value ではなく `configRef` / `secretRefs`
+だけを保存する。
 
 ### 8.3 required vs optional
 
