@@ -746,8 +746,9 @@ append し、同 operation の in-flight lock を閉じる。
 > configured export worker hook も実装済みで、Accounts は worker に canonical
 > bundle を渡して operation を `exported` / `failed` に閉じられる。
 > `takosumi-cloud accounts serve` の dev/local metadata export worker config
-> も実装済みです。 data dump worker / age encryption / object-store upload
-> は後続実装で行う。JSON bundle import API と
+> と、completed response の `downloadUrl` を `takosumi-git export --output`
+> で保存する経路も実装済みです。 data dump worker / age encryption /
+> object-store upload は後続実装で行う。JSON bundle import API と
 > `takosumi-git import <bundle.json|bundle.tar.zst>` は実装済みです。
 
 ### 5.1 Request
