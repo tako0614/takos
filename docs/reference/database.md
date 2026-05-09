@@ -665,26 +665,6 @@ CREATE TABLE lg_writes (
 );
 
 -- CreateTable
-CREATE TABLE managed_takos_tokens (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "account_id" TEXT NOT NULL,
-    "worker_id" TEXT NOT NULL,
-    "env_name" TEXT NOT NULL,
-    "subject_account_id" TEXT NOT NULL,
-    "subject_mode" TEXT NOT NULL,
-    "scopes_json" TEXT NOT NULL,
-    "token_hash" TEXT NOT NULL,
-    "token_prefix" TEXT NOT NULL,
-    "token_encrypted" TEXT NOT NULL,
-    "last_used_at" DATETIME,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "managed_takos_tokens_subject_account_id_fkey" FOREIGN KEY ("subject_account_id") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "managed_takos_tokens_worker_id_account_id_fkey" FOREIGN KEY ("worker_id", "account_id") REFERENCES "workers" ("id", "account_id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "managed_takos_tokens_account_id_fkey" FOREIGN KEY ("account_id") REFERENCES "accounts" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE mcp_oauth_pending (
     "id" TEXT NOT NULL PRIMARY KEY,
     "account_id" TEXT NOT NULL,
@@ -1880,21 +1860,6 @@ CREATE UNIQUE INDEX "idx_auth_identities_provider_sub" ON "auth_identities"("pro
 
 -- CreateIndex
 CREATE INDEX "idx_auth_identities_user_id" ON "auth_identities"("user_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "managed_takos_tokens_token_hash_key" ON "managed_takos_tokens"("token_hash");
-
--- CreateIndex
-CREATE INDEX "managed_takos_tokens_worker_id_idx" ON "managed_takos_tokens"("worker_id");
-
--- CreateIndex
-CREATE INDEX "managed_takos_tokens_subject_account_id_idx" ON "managed_takos_tokens"("subject_account_id");
-
--- CreateIndex
-CREATE INDEX "managed_takos_tokens_account_id_env_name_idx" ON "managed_takos_tokens"("account_id", "env_name");
-
--- CreateIndex
-CREATE UNIQUE INDEX "managed_takos_tokens_worker_id_env_name_key" ON "managed_takos_tokens"("worker_id", "env_name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "mcp_oauth_pending_state_key" ON "mcp_oauth_pending"("state");
