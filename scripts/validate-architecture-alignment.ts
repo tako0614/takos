@@ -8,9 +8,15 @@ const TAKOSUMI_DOCS_ROOT = 'docs/takosumi';
 const CURRENT_STATE_PATH = `${TAKOSUMI_DOCS_ROOT}/current-state.md`;
 const CHECKLIST_PATH = `${TAKOSUMI_DOCS_ROOT}/10-v1.0-implementation-checklist.md`;
 const DOMAIN_ROOT = '../takosumi/packages/kernel/src/domains';
+const TAKOSUMI_CLOUD_ACCOUNTS_CONTRACT = '../takosumi-cloud/packages/accounts-contract/src/mod.ts';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
 const REQUIRED_KERNEL_PLUGIN_DOCS = [CURRENT_STATE_PATH, CHECKLIST_PATH];
+const APP_GRANT_CATALOG_DOCS = [
+  'docs/reference/app-yml-spec.md',
+  'docs/architecture/app-installation.md',
+  'docs/reference/database.md',
+];
 const REQUIRED_DOMAIN_DIRS = [
   'core',
   'deploy',
@@ -133,6 +139,25 @@ function hasAny(text: string, terms: string[]): boolean {
   return terms.some((term) => lowerText.includes(term));
 }
 
+function extractStringArrayConst(
+  path: string,
+  text: string,
+  constName: string,
+  failures: CheckFailure[],
+): string[] {
+  const match = new RegExp(
+    `export\\s+const\\s+${constName}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s+as\\s+const`,
+  ).exec(text);
+  if (!match) {
+    failures.push({
+      path,
+      message: `Unable to find exported const array ${constName}.`,
+    });
+    return [];
+  }
+  return [...match[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]);
+}
+
 function validateInternalDomainMentions(
   path: string,
   text: string,
@@ -232,6 +257,30 @@ async function validateDomainDirs(failures: CheckFailure[]): Promise<void> {
   }
 }
 
+async function validateAppGrantCatalogDocs(
+  failures: CheckFailure[],
+): Promise<void> {
+  const contract = await readText(TAKOSUMI_CLOUD_ACCOUNTS_CONTRACT, failures);
+  const capabilities = extractStringArrayConst(
+    TAKOSUMI_CLOUD_ACCOUNTS_CONTRACT,
+    contract,
+    'TAKOSUMI_APP_GRANT_CAPABILITIES',
+    failures,
+  );
+  if (capabilities.length === 0) return;
+
+  for (const path of APP_GRANT_CATALOG_DOCS) {
+    const text = await readText(path, failures);
+    const missing = capabilities.filter((capability) => !text.includes(capability));
+    if (missing.length > 0) {
+      failures.push({
+        path,
+        message: `Missing AppGrant capability catalog entries: ${missing.join(', ')}`,
+      });
+    }
+  }
+}
+
 async function main(): Promise<void> {
   const failures: CheckFailure[] = [];
 
@@ -256,6 +305,7 @@ async function main(): Promise<void> {
   }
 
   await validateDomainDirs(failures);
+  await validateAppGrantCatalogDocs(failures);
 
   if (failures.length > 0) {
     console.error('Architecture alignment validation failed:');
@@ -268,6 +318,7 @@ async function main(): Promise<void> {
   console.log('Architecture alignment validation passed.');
   console.log(`Checked ${markdownFiles.length} README/plan markdown files.`);
   console.log(`Verified ${REQUIRED_DOMAIN_DIRS.length} domain directories.`);
+  console.log(`Verified AppGrant catalog docs in ${APP_GRANT_CATALOG_DOCS.length} files.`);
 }
 
 if (import.meta.main) {

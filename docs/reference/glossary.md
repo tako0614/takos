@@ -292,7 +292,10 @@ AppInstallation に紐づく binding 1 record。`identity.oidc@v1` /
 AppInstallation に対する capability grant の 1 record。`capability` (例:
 `app.profile.write` / `deploy.intent.write` / `logs.read.own` / `files:read` /
 `agents:execute`) と `scope` を持ち、ユーザーが任意の タイミングで `revoke`
-可能。 (see new.md §7)
+可能。capability は `.takosumi/app.yml` の
+`permissions.requested` と同じ v1 closed catalog に限定される。
+(see [reference/app-yml-spec](/reference/app-yml-spec#_3-7-permissions),
+[architecture/app-installation](/architecture/app-installation))
 
 ### RuntimeBinding
 

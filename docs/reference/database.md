@@ -2501,17 +2501,18 @@ ledger record に anchor されます。
 [/reference/install-api](/reference/install-api) を canonical reference として
 ください。本節は database 視点で主要 columns の概観を示します。
 
-### TakosumiAccount
+### LedgerAccountRecord
 
 契約 / billing 主体の正本 record。AppInstallation を保持する Space の親であり、
 Stripe customer (= Takosumi Cloud billing) と紐づく。
 
-| column             | type        | meaning                                                 |
-| ------------------ | ----------- | ------------------------------------------------------- |
-| `id`               | uuid        | 一意 ID                                                 |
-| `legalOwnerId`     | uuid        | 法的所有者 user ID (Takosumi Accounts subject に紐づく) |
-| `billingAccountId` | string      | Stripe customer ID (Takosumi Cloud billing)             |
-| `createdAt`        | timestamptz | 作成時刻                                                |
+| column              | type        | meaning                                    |
+| ------------------- | ----------- | ------------------------------------------ |
+| `accountId`         | text        | 一意 ID                                    |
+| `legalOwnerSubject` | text        | 法的所有者 Takosumi subject (`tsub_*`)     |
+| `billingAccountId`  | text        | billing owner reference (optional)         |
+| `createdAt`         | timestamptz | 作成時刻                                   |
+| `updatedAt`         | timestamptz | 更新時刻                                   |
 
 ### Space
 
@@ -2519,12 +2520,14 @@ Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind 
 持ち、AppInstallation の親 (Takosumi Account → Space → AppInstallation 階層
 の中段)。
 
-| column      | type   | meaning                     |
-| ----------- | ------ | --------------------------- |
-| `id`        | uuid   | 一意 ID                     |
-| `accountId` | uuid   | TakosumiAccount.id への FK  |
-| `kind`      | enum   | `personal` / `team` / `org` |
-| `name`      | string | 表示名                      |
+| column        | type        | meaning                     |
+| ------------- | ----------- | --------------------------- |
+| `spaceId`     | text        | 一意 ID                     |
+| `accountId`   | text        | LedgerAccountRecord への FK |
+| `kind`        | enum        | `personal` / `team` / `org` |
+| `displayName` | text        | 表示名 (optional)           |
+| `createdAt`   | timestamptz | 作成時刻                    |
+| `updatedAt`   | timestamptz | 更新時刻                    |
 
 ### AppInstallation
 
@@ -2540,18 +2543,18 @@ Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind 
 
 | column                    | type        | meaning                                                  |
 | ------------------------- | ----------- | -------------------------------------------------------- |
-| `id`                      | uuid        | 一意 ID                                                  |
-| `accountId`               | uuid        | TakosumiAccount.id への FK                               |
-| `spaceId`                 | uuid        | Space.id への FK                                         |
+| `installationId`          | text        | 一意 ID                                                  |
+| `accountId`               | text        | LedgerAccountRecord への FK                              |
+| `spaceId`                 | text        | Space への FK                                            |
 | `appId`                   | string      | 例: `takos.chat`                                         |
 | `sourceGitUrl`            | string      | source pin (git URL)                                     |
 | `sourceRef`               | string      | source pin (ref)                                         |
 | `sourceCommit`            | string      | source pin (resolved commit)                             |
 | `appManifestDigest`       | string      | `.takosumi/app.yml` digest                               |
-| `compiledManifestDigest`  | string      | takosumi-git が compile した kernel manifest digest      |
+| `compiledManifestDigest`  | string      | takosumi-git が compile した kernel manifest digest (optional) |
 | `serviceImports`          | jsonb       | `service_imports_json`。approved service import metadata |
 | `mode`                    | enum        | `shared-cell` / `dedicated` / `self-hosted`              |
-| `runtimeBindingId`        | uuid        | RuntimeBinding.id への FK                                |
+| `runtimeBindingId`        | text        | RuntimeBindingRecord への FK (optional)                  |
 | `status`                  | enum        | 5 値 (上記)                                              |
 | `createdBySubject`        | string      | 作成者 Takosumi subject                                  |
 | `createdAt` / `updatedAt` | timestamptz |                                                          |
@@ -2580,27 +2583,55 @@ service dependency は AppBinding ではなく manifest の `imports[]` /
 
 | column           | type     | meaning                                                                                                                                                  |
 | ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | uuid     | 一意 ID                                                                                                                                                  |
-| `installationId` | uuid     | AppInstallation.id への FK                                                                                                                               |
+| `bindingId`      | text     | 一意 ID                                                                                                                                                  |
+| `installationId` | text     | AppInstallationRecord への FK                                                                                                                            |
+| `name`           | text     | logical binding name (`auth`, `db` など)                                                                                                                 |
 | `kind`           | enum     | `identity.oidc@v1` / `database.postgres@v1` / `object-store.s3-compatible@v1` / `domain.http@v1` / `deploy-intent.gitops@v1` / `install-launch-token@v1` |
 | `configRef`      | string   | binding 固有 config の参照                                                                                                                               |
 | `secretRefs`     | string[] | secret 参照 (kernel が解決)                                                                                                                              |
+| `createdAt`      | timestamptz | 作成時刻                                                                                                                                               |
+| `updatedAt`      | timestamptz | 更新時刻                                                                                                                                               |
 
 ### AppGrant
 
 capability grant の 1 record。`capability` (例: `app.profile.write` /
 `deploy.intent.write` / `logs.read.own` / `files:read` / `agents:execute`) と
 `scope` を持ち、ユーザーが任意のタイミングで `revokedAt` を立てて revoke
-できる。
+できる。`capability` は v1 closed catalog で、任意 string は受け付けない。
 
 | column           | type        | meaning                                |
 | ---------------- | ----------- | -------------------------------------- |
-| `id`             | uuid        | 一意 ID                                |
-| `installationId` | uuid        | AppInstallation.id への FK             |
-| `capability`     | string      | 例: `app.profile.write` / `files:read` |
+| `grantId`        | text        | 一意 ID                                |
+| `installationId` | text        | AppInstallationRecord への FK          |
+| `capability`     | enum/text   | v1 closed catalog の capability        |
 | `scope`          | jsonb       | 範囲制約 (resource / path / time 等)   |
 | `grantedAt`      | timestamptz | 付与時刻                               |
 | `revokedAt`      | timestamptz | revoke 時刻 (NULL なら active)         |
+
+v1 closed catalog:
+
+```txt
+app.profile.write
+app.memory.write
+deploy.intent.write
+logs.read.own
+billing.usage.report
+spaces:read
+spaces:write
+files:read
+files:write
+memories:read
+memories:write
+threads:read
+threads:write
+runs:read
+runs:write
+agents:execute
+repos:read
+repos:write
+mcp:invoke
+events:subscribe
+```
 
 詳細は [/architecture/app-installation](/architecture/app-installation) と
 [/reference/install-api](/reference/install-api) を参照。RuntimeBinding と

@@ -5,7 +5,9 @@ Installable App Model の installation lifecycle を駆動する **Takosumi Acco
 
 このページで依存してよい範囲:
 
-- 5 つの公開 endpoint の HTTP method / path / request body / response shape
+- Takosumi Accounts service が実装済みの install preview / AppInstallation /
+  launch-token endpoint の HTTP method / path / request body / response shape
+- Phase 1.6 design と明記された materialize / export endpoint の予定 wire shape
 - 認証 (Takosumi Accounts session = OIDC bearer / PAT)
 - error response の HTTP status と code 形式
 - API path prefix: `/v1`。managed default の base URL は例であり、operator
@@ -66,8 +68,8 @@ token 検証:
 | `POST /v1/install/preview`                 | optional        |
 | `POST /v1/installations`                   | **required**    |
 | `POST /v1/installations/{id}/launch-token` | optional        |
-| `POST /v1/installations/{id}/materialize`  | **required**    |
-| `POST /v1/installations/{id}/export`       | **required**    |
+| `POST /v1/installations/{id}/materialize`  | **required** (Phase 1.6 design) |
+| `POST /v1/installations/{id}/export`       | **required** (Phase 1.6 design) |
 
 ### 0.4 Error response (Problem Details)
 
@@ -123,10 +125,10 @@ token 検証:
 
 #### Transitional substate
 
-実装は `ready` / `failed` 等への遷移途中で transitional substate を expose
-することがある。これらは **canonical 5 値の transition phase** であり、
-独立した安定 status ではない。長期保存・client-side state machine は canonical 5
-値で組み、transitional substate は in-flight phase hint として 読むこと。
+実装済みの ledger record は `substate` field を持たず、外部公開 status は
+canonical 5 値のみです。transitional substate は **operation metadata /
+InstallationEvent payload の phase hint** であり、独立した安定 status では
+ありません。長期保存・client-side state machine は canonical 5 値で組むこと。
 
 | substate        | 親 status (遷移先候補)                             | 出現する operation                                                          |
 | --------------- | -------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -139,8 +141,8 @@ token 検証:
 | `migrating`     | `ready` (data migration 完了) または `failed`      | resource migration ledger ([Glossary](/reference/glossary#migrationledger)) |
 | `pending`       | `installing` (queue 滞留)                          | rate-limit / queue backpressure                                             |
 
-`state-conflict` (§0.4) は **canonical 5 値および transitional substate
-両方を含む** 現在 status と要求 operation の組合せ違反を返す。
+`state-conflict` (§0.4) は canonical 5 値と、operation metadata に残る
+in-flight phase を合わせて要求 operation の組合せ違反を返す。
 
 ## 1. `POST /v1/install/preview`
 
@@ -253,7 +255,7 @@ Content-Type: application/json
 
 新規 AppInstallation を作成し、takosumi-git に install pipeline を起動する。
 **non-blocking**: response は `status=installing` で返り、進捗は
-`GET /v1/installations/{id}/events` で stream する。
+`GET /v1/installations/{id}/events` の event list で確認する。
 
 ### 2.1 Request
 
@@ -390,9 +392,9 @@ token は `typ: takosumi-install-launch+jwt`。one-time (server 側で `jti`
 | 200             | 成功                                                                                                                                                                                                    |
 | 400             | `validation-failed` / `redirectUri` 不一致                                                                                                                                                              |
 | 401 / 403 / 404 | 既出                                                                                                                                                                                                    |
-| 409             | `state-conflict` (canonical status が `installing` / `failed` / `suspended` / `exported` のとき、または transitional substate (例: `uninstalling`) のとき発行不可。launch-token は status=`ready` 専用) |
+| 409             | `state-conflict` (canonical status が `installing` / `failed` / `suspended` / `exported` のとき、または operation metadata が in-flight phase を示すとき発行不可。launch-token は status=`ready` 専用) |
 
-## 4. `POST /v1/installations/{id}/materialize`
+## 4. `POST /v1/installations/{id}/materialize` (Phase 1.6 design)
 
 `shared-cell → dedicated` 昇格。同一 source commit / app manifest digest / data
 namespace / OIDC binding / domain を引き継ぐ。
@@ -460,7 +462,7 @@ state は canonical `ready` → transitional `materializing` → canonical `read
 | 409       | `state-conflict` (mode が既に dedicated / canonical status が `ready` 以外、または transitional substate (`materializing` / `upgrading` / `rolling-back` / `uninstalling`) のとき) / `installation-locked` |
 | 502       | `dependency-failure` (kernel deploy 経路失敗)                                                                                                                                                              |
 
-## 5. `POST /v1/installations/{id}/export`
+## 5. `POST /v1/installations/{id}/export` (Phase 1.6 design)
 
 [Export bundle](/platform/upgrade-export#export-bundle) を非同期に生成する。
 生成完了後、署名付き short-lived URL を返す (download は別 endpoint
@@ -508,7 +510,7 @@ Idempotency-Key: <uuid>      # required
 }
 ```
 
-完了通知は SSE / poll で `installation.exported` event を受け取り、
+完了通知は event list / poll で `installation.exported` event を受け取り、
 `GET /v1/installations/{id}/exports/{opId}` から signed download URL
 を取得する。
 
