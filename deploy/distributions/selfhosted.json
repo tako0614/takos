@@ -45,6 +45,7 @@
   "routing": {
     "publicBaseUrl": "https://takos.example.internal",
     "adminBaseUrl": "https://admin.takos.example.internal",
+    "accountsBaseUrl": "https://accounts.takos.example.internal",
     "wildcardDomain": "*.app.takos.example.internal",
     "dnsProvider": "external"
   },
@@ -142,6 +143,21 @@
         "expectedStatus": 200,
         "expectedJson": {
           "service": "takosumi"
+        }
+      }
+    },
+    {
+      "serviceId": "takosumi-cloud",
+      "runtime": "process",
+      "hostingTargetId": "selfhosted",
+      "image": "ghcr.io/takos/takosumi-cloud-accounts:latest",
+      "internalUrl": "http://takosumi-cloud:8787",
+      "publicUrl": "https://accounts.takos.example.internal",
+      "smoke": {
+        "healthPath": "/healthz",
+        "expectedStatus": 200,
+        "expectedJson": {
+          "service": "takosumi-cloud"
         }
       }
     },

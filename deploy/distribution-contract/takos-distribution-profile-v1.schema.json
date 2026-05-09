@@ -147,13 +147,17 @@
     "routing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["publicBaseUrl", "adminBaseUrl", "wildcardDomain", "dnsProvider"],
+      "required": ["publicBaseUrl", "adminBaseUrl", "accountsBaseUrl", "wildcardDomain", "dnsProvider"],
       "properties": {
         "publicBaseUrl": {
           "type": "string",
           "minLength": 1
         },
         "adminBaseUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accountsBaseUrl": {
           "type": "string",
           "minLength": 1
         },
@@ -289,7 +293,7 @@
         "properties": {
           "serviceId": {
             "type": "string",
-            "enum": ["takos-agent", "takos-app", "takos-git", "takosumi"]
+            "enum": ["takos-agent", "takos-app", "takos-git", "takosumi", "takosumi-cloud"]
           },
           "runtime": {
             "type": "string",
@@ -321,7 +325,7 @@
             "required": ["healthPath", "expectedStatus", "expectedJson"],
             "properties": {
               "healthPath": {
-                "const": "/health"
+                "enum": ["/health", "/healthz"]
               },
               "expectedStatus": {
                 "const": 200
@@ -333,7 +337,7 @@
                 "properties": {
                   "service": {
                     "type": "string",
-                    "enum": ["takos-agent", "takos-app", "takos-git", "takosumi"]
+                    "enum": ["takos-agent", "takos-app", "takos-git", "takosumi", "takosumi-cloud"]
                   }
                 }
               }

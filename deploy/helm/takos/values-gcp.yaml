@@ -17,6 +17,11 @@ images:
     repository: takos/takosumi
     tag: "latest"
     pullPolicy: IfNotPresent
+  takosumiCloud:
+    registry: ghcr.io
+    repository: takos/takosumi-cloud-accounts
+    tag: "latest"
+    pullPolicy: IfNotPresent
   takosGit:
     registry: ghcr.io
     repository: takos/takos-git
@@ -55,6 +60,7 @@ runtimeConfig:
 domains:
   admin: "admin.takos.example.com"
   tenantBase: "app.takos.example.com"
+  accounts: "accounts.takos.example.com"
 
 # Empty values keep the chart default secret names derived from the Helm release:
 # <release>-platform, <release>-auth, <release>-llm. Set a field only when an
@@ -93,6 +99,8 @@ services:
         memory: 2Gi
   takosumi:
     replicaCount: 3
+  takosumiCloud:
+    replicaCount: 2
   takosGit:
     replicaCount: 2
   takosAgent:

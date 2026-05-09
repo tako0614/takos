@@ -19,6 +19,7 @@ const expectedServices = [
   'takos-app',
   'takos-git',
   'takosumi',
+  'takosumi-cloud',
 ] as const;
 type ExpectedTargetId = typeof expectedTargets[number];
 type ExpectedServiceId = typeof expectedServices[number];
@@ -98,6 +99,13 @@ const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, E
       artifactField: 'artifactRef',
       artifact: 'worker:takosumi',
       internalUrl: 'https://takosumi.internal.takos.example',
+    },
+    'takosumi-cloud': {
+      runtime: 'container',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takosumi-cloud-accounts:latest',
+      internalUrl: 'https://takosumi-cloud.internal.takos.example',
+      publicUrl: 'https://accounts.takos.example.com',
     },
     'takos-git': {
       runtime: 'container',
@@ -248,6 +256,13 @@ function kubernetesLikeServiceSpecs(
       artifact: 'ghcr.io/takos/takosumi:latest',
       internalUrl: 'http://takosumi.takos-system.svc.cluster.local:8080',
     },
+    'takosumi-cloud': {
+      runtime,
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takosumi-cloud-accounts:latest',
+      internalUrl: 'http://takosumi-cloud.takos-system.svc.cluster.local:8787',
+      publicUrl: 'https://accounts.takos.example.com',
+    },
     'takos-git': {
       runtime,
       artifactField: 'image',
@@ -277,6 +292,13 @@ function processServiceSpecs(): Record<ExpectedServiceId, ExpectedServiceSpec> {
       artifactField: 'image',
       artifact: 'ghcr.io/takos/takosumi:latest',
       internalUrl: 'http://takosumi:8080',
+    },
+    'takosumi-cloud': {
+      runtime: 'process',
+      artifactField: 'image',
+      artifact: 'ghcr.io/takos/takosumi-cloud-accounts:latest',
+      internalUrl: 'http://takosumi-cloud:8787',
+      publicUrl: 'https://accounts.takos.example.internal',
     },
     'takos-git': {
       runtime: 'process',
@@ -453,9 +475,10 @@ function validateServices(services: readonly unknown[], label: string, targetId:
     }
 
     const smoke = recordAt(record, 'smoke', `${label}.services[${index}]`);
+    const expectedHealthPath = serviceId === 'takosumi-cloud' ? '/healthz' : '/health';
     expectString(
       stringAt(smoke, 'healthPath', `${label}.services[${index}].smoke`),
-      '/health',
+      expectedHealthPath,
       `${label}.services[${index}].smoke.healthPath`,
     );
     const status = smoke.expectedStatus;

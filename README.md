@@ -46,8 +46,8 @@ Useful shell tasks:
   context for the base/AWS/GCP chart values.
 - `deno task validate:distributions`: verify official distribution profiles against the schema contract, artifact refs,
   target-specific bindings, service specs, provider proof commands, fixtures, and service smoke metadata.
-- `deno task validate:service-set`: verify the Helm chart exposes only `takos-app`, `takosumi`, `takos-git`, and
-  `takos-agent`, with operator-overridable images.
+- `deno task validate:service-set`: verify the Helm chart exposes only `takos-app`, `takosumi`, `takosumi-cloud`,
+  `takos-git`, and `takos-agent`, with operator-overridable images.
 - `deno task submodules:update`: initialize or refresh nested service checkouts.
 
 ## Boundary Names
@@ -108,9 +108,9 @@ The planned remote repositories are:
 deno task local:up
 ```
 
-The local compose entrypoint should expose the core service set: `takos-app`, `takos-git`, `takosumi`, and
-`takos-agent`. Do not add standalone deploy or runtime services to this shell compose file; those lifecycles are local
-process roles and domains of `takosumi`.
+The local compose entrypoint should expose the core service set: `takos-app`, `takos-git`, `takosumi`, `takosumi-cloud`,
+and `takos-agent`. Do not add standalone deploy or runtime services to this shell compose file; those lifecycles are
+local process roles and domains of `takosumi`.
 
 See also:
 

@@ -1,0 +1,36 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "takos.fullname" . }}-accounts
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.ingress.tls.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer | quote }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.domains.accounts | quote }}
+      secretName: {{ .Values.ingress.tls.secretName | default "takos-accounts-tls" }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.domains.accounts | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "takos.fullname" . }}-takosumi-cloud
+                port:
+                  number: {{ .Values.services.takosumiCloud.port }}
+{{- end }}
