@@ -6,110 +6,89 @@ Model における Takos は **OIDC consumer** で、issuer は Takosumi Account
 anchor から resolve される operator-injected value です (詳細は
 [cross-instance service binding](/architecture/cross-instance-service-binding))。
 
-::: warning 2 layer auth boundary Takos の identity 設定は **役割の異なる 2
-layer** に分かれます。operator が
-触る範囲と「触ってはいけない範囲」を最初に固定してください。
-
-- **Layer 1 — Operator login (admin Web 入口)**: operator が Takos admin Web に
-  ログインするための upstream IdP。Google OAuth (またはそれと同等の operator
-  IdP) を使い、`GOOGLE_CLIENT_*` を operator が直接 provision する。**operator
-  の責務範囲**。
-- **Layer 2 — AppInstallation OIDC client (end-user identity)**: end user が
-  Takos 本体にログインする時に使う OIDC client。**Takosumi Accounts が
-  per-AppInstallation で発行・rotation し、AppBinding (`identity.oidc@v1`)
-  経由で Takos runtime に env 注入される**。operator は OIDC client
-  自体を発行・登録 しない (self-host mode で別 issuer を使う場合のみ、その
-  issuer 側で登録)。
-
-`OIDC_CLIENT_*` を operator が「Takosumi Accounts
-に新規登録する」作業はありません。 operator が触るのは **Layer 1 の
-`GOOGLE_CLIENT_*` の provision** と、 **Layer 2 の env を AppBinding
-経由で受け取って配信する取り込み** だけです。 :::
+::: warning account-plane boundary Takos は OAuth/OIDC issuer や upstream IdP
+broker を持ちません。operator が 確認するのは Takosumi Accounts で発行された
+per-AppInstallation OIDC client が AppBinding (`identity.oidc@v1`) 経由で Takos
+runtime に materialize されていることです。Google / GitHub / passkey /
+enterprise OIDC などの upstream IdP は Takosumi Accounts 側で扱います。 :::
 
 このページで設定するもの:
 
-- **Layer 1 — Operator login** (Google OAuth): Takos admin Web に operator が
-  ログインするための upstream IdP。admin domain への入口として維持されます
-- **Layer 2 — Takosumi Accounts 連携** (OIDC consumer): Takos 本体が end user の
-  ログインを受けるための OIDC client 設定。`OIDC_*` env は AppBinding 経由で
-  注入され、operator は手動 provision しません
+- **Takosumi Accounts 連携** (OIDC consumer): Takos admin Web と end user
+  surface が同じ OIDC client 設定でログインを受ける。`OIDC_*` env は AppBinding
+  経由で注入され、operator は手動 provision しません
+- **legacy compatibility**: `/auth/login` や external service handoff は
+  migration window 中の互換 path。新規導線は `/auth/oidc/login` です
 
-operator は最初に Layer 1 (operator login) を成立させ、Layer 2 の
-AppInstallation OIDC client は Takosumi Accounts 側で発行される形に揃えて
-ください。`takos-private/` 側の本番・staging deploy / secret 操作の実値は
-そちらを正本にします。
+operator は AppInstallation OIDC client が Takosumi Accounts 側で発行される
+形に揃えてください。`takos-private/` 側の本番・staging deploy / secret
+操作の実値はそちらを正本にします。
 
 ## Required Values
 
-`apps/control` の現在の Web/auth route は次の env を参照します。 `scope`
-列は前述の **2 layer auth boundary** を踏襲し、`provisioned by` 列で **operator
-が手で値を作るのか / AppBinding 経由で勝手に降ってくるのか** を 明示します。
+`apps/control` の現在の Web/auth route は次の env を参照します。`provisioned
+by`
+列で **operator が手で値を作るのか / AppBinding 経由で降ってくるのか**
+を明示します。
 
-| key                             | secret  | scope                                | provisioned by                                                                                                                        | 用途                                                                                                                                                                                                                                                         |
-| ------------------------------- | ------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ADMIN_DOMAIN`                  | no      | both                                 | operator (DNS / domain 設計)                                                                                                          | Takos admin Web の host。例: `admin.example.com`                                                                                                                                                                                                             |
-| `TENANT_BASE_DOMAIN`            | no      | both                                 | operator (DNS / domain 設計)                                                                                                          | tenant app の base domain。例: `app.example.com`                                                                                                                                                                                                             |
-| `AUTH_PUBLIC_BASE_URL`          | no      | Layer 1 (operator login)             | operator                                                                                                                              | external auth page が home link として使う public origin                                                                                                                                                                                                     |
-| `AUTH_ALLOWED_REDIRECT_DOMAINS` | no      | Layer 1 (operator login)             | operator                                                                                                                              | operator login の external service handoff (legacy compat path) が許可する redirect host の allowlist。Takosumi Accounts 経由の現代モデルでは新規利用は推奨されず、end user の OIDC redirect は `OIDC_REDIRECT_URI` (`/auth/oidc/callback`) のみで完結します |
-| `GOOGLE_CLIENT_ID`              | no      | **Layer 1 (operator login)**         | **operator** が Google Cloud Console で OAuth client を作成して取得                                                                   | Google OAuth client ID (operator login の正規 upstream)                                                                                                                                                                                                      |
-| `GOOGLE_CLIENT_SECRET`          | yes     | **Layer 1 (operator login)**         | **operator** が Google Cloud Console で OAuth client を作成して取得                                                                   | Google OAuth client secret                                                                                                                                                                                                                                   |
-| `OIDC_ISSUER_URL`               | no      | **Layer 2 (Takos runtime consumer)** | operator-injected (cross-instance import `${imports.account-auth.endpoints.oidc-issuer.url}` 経由 anchor resolve)                     | Takos が OIDC consumer として参照する issuer                                                                                                                                                                                                                 |
-| `OIDC_CLIENT_ID`                | no      | **Layer 2 (Takos runtime consumer)** | **Takosumi Accounts (managed)** / self-host issuer。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | AppInstallation 用 OIDC client id                                                                                                                                                                                                                            |
-| `OIDC_CLIENT_SECRET`            | yes     | **Layer 2 (Takos runtime consumer)** | **Takosumi Accounts (managed)** / self-host issuer。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | confidential client secret                                                                                                                                                                                                                                   |
-| `OIDC_REDIRECT_URI`             | no      | **Layer 2 (Takos runtime consumer)** | AppInstallation の domain 確定後、Takosumi Accounts が AppBinding 経由で降らせる (self-host: operator が手で固定)                     | `<base>/auth/oidc/callback` の絶対 URL                                                                                                                                                                                                                       |
-| `SESSION_DO`                    | binding | both                                 | platform binding (Cloudflare Worker / Helm)                                                                                           | browser session store                                                                                                                                                                                                                                        |
-| `DB`                            | binding | both                                 | platform binding (Cloudflare Worker / Helm)                                                                                           | account / session / OIDC state persistence                                                                                                                                                                                                                   |
+| key                             | secret  | scope                 | provisioned by                                                                                                                        | 用途                                                                                                                                                                    |
+| ------------------------------- | ------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ADMIN_DOMAIN`                  | no      | Takos runtime         | operator (DNS / domain 設計)                                                                                                          | Takos admin Web の host。例: `admin.example.com`                                                                                                                        |
+| `TENANT_BASE_DOMAIN`            | no      | Takos runtime         | operator (DNS / domain 設計)                                                                                                          | tenant app の base domain。例: `app.example.com`                                                                                                                        |
+| `AUTH_PUBLIC_BASE_URL`          | no      | legacy compatibility  | operator                                                                                                                              | external auth page が home link として使う public origin。新規 OIDC login では必須ではありません                                                                        |
+| `AUTH_ALLOWED_REDIRECT_DOMAINS` | no      | legacy compatibility  | operator                                                                                                                              | external service handoff (legacy compat path) が許可する redirect host の allowlist。新規 OIDC redirect は `OIDC_REDIRECT_URI` (`/auth/oidc/callback`) のみで完結します |
+| `OIDC_ISSUER_URL`               | no      | OIDC consumer         | operator-injected (cross-instance import `${imports.account-auth.endpoints.oidc-issuer.url}` 経由 anchor resolve)                     | Takos が OIDC consumer として参照する issuer                                                                                                                            |
+| `OIDC_CLIENT_ID`                | no      | OIDC consumer         | **Takosumi Accounts (managed)** / self-host issuer。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | AppInstallation 用 OIDC client id                                                                                                                                       |
+| `OIDC_CLIENT_SECRET`            | yes     | OIDC consumer         | **Takosumi Accounts (managed)** / self-host issuer。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | confidential client secret                                                                                                                                              |
+| `OIDC_REDIRECT_URI`             | no      | OIDC consumer         | AppInstallation の domain 確定後、Takosumi Accounts が AppBinding 経由で降らせる (self-host: operator が手で固定)                     | `<base>/auth/oidc/callback` の絶対 URL                                                                                                                                  |
+| `SESSION_DO`                    | binding | Takos runtime         | platform binding (Cloudflare Worker / Helm)                                                                                           | browser session store                                                                                                                                                   |
+| `DB`                            | binding | app-local persistence | platform binding (Cloudflare Worker / Helm)                                                                                           | app-local profile / session / OIDC state persistence                                                                                                                    |
 
 Cloudflare Workers profile では non-secret は `wrangler.toml` の `[vars]`、
 secret は `wrangler secret put` で入れます。本番・staging の実値は
 `takos-private/` 側の deploy / secret 管理を正本にしてください。
 
-## Operator login (Google OAuth)
+## Login Route
 
-Takos admin Web の operator login は Google OAuth を upstream IdP として
-使います。Installable App Model でも operator が admin Web へ入る入口は
-変えません。
+Takos admin Web の login は `/auth/oidc/login` から Takosumi Accounts へ
+redirect します。operator も end user も、Takos runtime から見ると同じ OIDC
+consumer flow です。
 
-Google OAuth client の redirect URI は admin domain に対して固定です。
+OIDC client の redirect URI は AppInstallation domain に対して固定です。
 
 ```text
-https://<ADMIN_DOMAIN>/auth/callback
+https://<TENANT_HOST>/auth/oidc/callback
 ```
 
-外部 service login handoff (legacy compat) を使う既存 tenant では、同じ Google
-OAuth client に次の redirect URI も登録します。新規 tenant は Takosumi Accounts
-経由の `/auth/oidc/callback` のみを使うため、この legacy path の登録は不要です。
+`/auth/login` は migration window 中の互換 alias として `/auth/oidc/login` へ
+redirect されます。旧 external service login handoff を使う既存 tenant
+では、互換 path の public origin / redirect allowlist も残せます。新規 tenant は
+Takosumi Accounts 経由の `/auth/oidc/callback` のみを使います。
 
 ```text
 https://<ADMIN_DOMAIN>/auth/external/callback   # legacy compat
 ```
 
-`GOOGLE_CLIENT_ID` は non-secret var、`GOOGLE_CLIENT_SECRET` は secret
-です。Cloudflare profile の例:
-
-```bash
-wrangler secret put GOOGLE_CLIENT_SECRET --config apps/control/wrangler.toml
-```
-
-`ADMIN_DOMAIN` と redirect URI の host は一致させます。staging と production で
-domain が違う場合は、Google OAuth client も分けるか、両方の redirect URI
-を明示登録してください。
+Takos runtime には Google OAuth client secret を配りません。Google / GitHub /
+passkey / enterprise OIDC などの upstream IdP credential は Takosumi Accounts
+側で管理します。
 
 ### Public Origins
 
-`AUTH_PUBLIC_BASE_URL` は login HTML が Takos admin へ戻すための public origin
-です。通常は `https://<ADMIN_DOMAIN>` にします。
+`AUTH_PUBLIC_BASE_URL` は legacy login HTML が Takos admin へ戻すための public
+origin です。新規 OIDC flow では `OIDC_REDIRECT_URI` が canonical redirect
+になります。
 
 ```env
 ADMIN_DOMAIN=admin.example.com
 AUTH_PUBLIC_BASE_URL=https://admin.example.com
 ```
 
-`AUTH_ALLOWED_REDIRECT_DOMAINS` は operator login の external service token
-handoff (legacy compat path) で許可する redirect host の allowlist
-です。Takosumi Accounts が broker する新モデルでは end user の OIDC redirect は
-`OIDC_REDIRECT_URI` (`/auth/oidc/callback`) のみで完結し、 この allowlist
-は新規利用が推奨されません。既存 tenant の互換のために 残しています。
+`AUTH_ALLOWED_REDIRECT_DOMAINS` は external service token handoff (legacy compat
+path) で許可する redirect host の allowlist です。Takosumi Accounts が broker
+する新モデルでは OIDC redirect は `OIDC_REDIRECT_URI` (`/auth/oidc/callback`)
+のみで完結し、この allowlist は新規利用しません。 既存 tenant
+の互換のために残しています。
 
 ```env
 AUTH_ALLOWED_REDIRECT_DOMAINS=app.example.com,docs.example.com
@@ -159,7 +138,7 @@ tenant app が OAuth client を必要とする場合、新モデルでは AppIns
 
 ## Smoke Checks
 
-operator login の動作確認は admin domain に対して行います。
+OIDC consumer の動作確認は admin / tenant domain に対して行います。
 
 ```bash
 curl -fsS https://<ADMIN_DOMAIN>/health
@@ -167,8 +146,10 @@ curl -fsS https://<ADMIN_DOMAIN>/health
 
 browser での確認:
 
-1. `https://<ADMIN_DOMAIN>/auth/login` が Google OAuth へ redirect する
-2. Google callback が `https://<ADMIN_DOMAIN>/auth/callback` へ戻る
+1. `https://<ADMIN_DOMAIN>/auth/oidc/login` が Takosumi Accounts へ redirect
+   する
+2. Takosumi Accounts callback が `https://<TENANT_HOST>/auth/oidc/callback`
+   へ戻る
 3. 初回ユーザーが `/setup` に進む
 4. setup 完了後に Takos Web の main app が表示される
 
@@ -181,5 +162,5 @@ Accounts 側の `redirectUris` と一致していることを確認します。
   側の責務 (OIDC issuer / billing / app installation owner)
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が consumer として 要求する
   env / route / claim
-- [/operator/bootstrap](/operator/bootstrap) — operator login 完了後の PAT
-  発行と AppInstallation 連携
+- [/operator/bootstrap](/operator/bootstrap) — OIDC login 完了後の PAT 発行と
+  AppInstallation 連携

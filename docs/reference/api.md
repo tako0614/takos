@@ -2144,13 +2144,13 @@ Installable App Model で **廃止**されました。
 `/auth/*` は apps/api で受け、migration window 中は control compatibility
 backend へ proxy されます。
 
-| method | path                         | description                 |
-| ------ | ---------------------------- | --------------------------- |
-| GET    | `/auth/login`                | Google OAuth フロー開始     |
-| POST   | `/auth/password`             | username/password ログイン  |
-| GET    | `/auth/cli`                  | CLI 認証エンドポイント      |
-| GET    | `/auth/link/google`          | Google アカウントリンク開始 |
-| GET    | `/auth/link/google/callback` | Google リンクコールバック   |
+| method | path                         | description                          |
+| ------ | ---------------------------- | ------------------------------------ |
+| GET    | `/auth/login`                | `/auth/oidc/login` への互換 redirect |
+| POST   | `/auth/password`             | username/password ログイン           |
+| GET    | `/auth/cli`                  | CLI 認証エンドポイント               |
+| GET    | `/auth/link/google`          | Google アカウントリンク開始          |
+| GET    | `/auth/link/google/callback` | Google リンクコールバック            |
 
 ---
 
