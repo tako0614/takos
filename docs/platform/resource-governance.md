@@ -80,8 +80,8 @@ usage と請求は account 中心です。主要な group:
 canonical billing API は Takosumi Accounts の `takosumi.account.billing@v1`
 service role です。consumer は `serviceResolvers[]` / anchor で billing endpoint
 を resolve し、`/v1/billing/usage` で current billing account の usage rollup
-を取得します。Takos の `/api/billing/*` が存在する場合も migration window 中の
-compatibility proxy です。
+を取得します。Takos の `/api/billing/*` は current API ではなく、apps/api
+gateway では `410 Gone` を返します。
 
 ## operator が見るべき state
 

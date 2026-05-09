@@ -143,9 +143,9 @@ role です。consumer は `serviceResolvers[]` / anchor で endpoint を resolv
 し、operator-injected endpoint URL に対して billing request を送ります。
 
 以下の例では resolved endpoint を `$ACCOUNTS_BILLING_ENDPOINT`
-と表記します。migration window 中に Takos 側の `/api/billing/*` path
-が残る場合も、それは Takos product compatibility proxy であり、invoice 主体・
-payment method・subscription・usage rollup の owner ではありません。
+と表記します。Takos 側の `/api/billing/*` path は Phase 1.4 で閉じられ、
+`410 Gone` を返します。invoice 主体・payment method・subscription・usage rollup
+の owner は常に Takosumi Accounts です。
 
 ### Plus にアップグレード
 
@@ -398,9 +398,8 @@ Takosumi Accounts billing webhook で処理される Stripe event
 | `/v1/billing/invoices/:id/send` | POST     | 請求書メール送信                                                       |
 | `/v1/billing/webhook`           | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                            |
 
-Takos の `/api/billing/*` は、存在する場合でも上記 Accounts API への
-compatibility proxy です。新規 client / docs / AppInstallation flow は
-`takosumi.account.billing@v1` を resolve して使います。
+Takos の `/api/billing/*` は current API ではありません。新規 client / docs /
+AppInstallation flow は `takosumi.account.billing@v1` を resolve して使います。
 
 ### 使用量取得の例
 
