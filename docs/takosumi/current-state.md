@@ -197,15 +197,19 @@ API として migration window 中に残る。 削除済み public
 Takos app/API gateway は migration 中で 2 系統が並走している:
 
 - `takos/app/apps/api`: split 後の minimum gateway。`/health`, `/api/spaces`,
-  repository/source resolution, Deployment routes, OAuth public / consent proxy,
-  account/auth/profile/billing compatibility routes, runtime-facing
-  `/api/services` / `/api/resources` / `/api/sessions` の forwarding subset
+  repository/source resolution, Deployment routes, retired OAuth provider /
+  billing compatibility responses, account/auth/profile compatibility routes,
+  runtime-facing `/api/services` / `/api/resources` / `/api/sessions` の
+  forwarding subset
 - `takos/app/apps/control` + `takos/app/packages/control`: login / OAuth state /
-  account / profile / billing business logic を保持する compatibility backend
+  account / profile / billing business logic を保持する legacy compatibility
+  backend
 
 この境界は migration 完了まで維持。public request の entrypoint は
 `takos/app/apps/api`、未切り出しの handler 実装は `apps/control` compatibility
-backend として記述する。
+backend として記述する。target design では Takos OAuth provider と Takos billing
+owner path は retired とし、identity / billing / AppInstallation owner plane は
+Takosumi Accounts に集約する。
 
 他章は
 `> 現行 API gateway split status は [API Gateway Split](/current-state#api-gateway-split) を参照`
