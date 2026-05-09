@@ -34,25 +34,28 @@ CLI で拒否します。
 
 ### `takos login`
 
-`takos login` はブラウザコールバック方式で認証します。
-`takos login --api-url <url>` で接続先 API を明示できます。未指定時は既定の
-endpoint 設定を使います。
+Installable App Model では CLI の long-lived credential は **Takos PAT** か
+Takosumi Accounts の device / OIDC flow で得た bearer token を使います。Takos
+本体の legacy `/auth/cli` browser callback は retired route であり、新規
+operator / client は依存しないでください。
 
-1. CLI がローカルの一時 HTTP サーバーを起動する
-2. ブラウザで `{apiUrl}/auth/cli?callback=...&state=...` を開く
-3. ユーザーがブラウザ上で認証を完了する
-4. コールバックでトークンを受け取り、ローカル設定へ保存する
+`takos login --api-url <url>` は legacy 互換 command として残っていますが、
+current Takos deployment では `/auth/cli` が `410 Gone` を返します。現行運用
+では次のどちらかを使います。
+
+1. Takos web UI で PAT を発行し、`TAKOS_TOKEN` と `TAKOS_API_URL` を設定する
+2. Takosumi Accounts が提供する CLI/device flow で token を取得し、同じ
+   bearer token として CLI に渡す
 
 ```bash
-takos login
+export TAKOS_API_URL=https://takos.example.com
+export TAKOS_TOKEN=tak_pat_...
 takos whoami
-takos logout
 ```
 
-::: tip Device Flow との違い Device Authorization Grant は CLI / IoT
-クライアント向けに別途用意される flow で、Takosumi Accounts 側の OIDC issuer
-が提供します。`takos login` 自体はブラウザコールバック方式を使い、Device Flow
-は使いません。 :::
+::: tip Device Flow の owner Device Authorization Grant は Takos 本体ではなく
+Takosumi Accounts 側の OIDC issuer が提供します。Takos CLI は取得済み bearer
+token を API request に載せる client です。 :::
 
 ## 認証情報の解決順序
 
