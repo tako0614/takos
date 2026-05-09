@@ -2589,17 +2589,18 @@ service dependency は AppBinding ではなく manifest の `imports[]` /
 ### AppGrant
 
 capability grant の 1 record。`capability` (例: `app.profile.write` /
-`deploy.intent.write` / `logs.read.own`) と `scope` を持ち、ユーザーが
-任意のタイミングで `revokedAt` を立てて revoke できる。
+`deploy.intent.write` / `logs.read.own` / `files:read` / `agents:execute`) と
+`scope` を持ち、ユーザーが任意のタイミングで `revokedAt` を立てて revoke
+できる。
 
-| column           | type        | meaning                              |
-| ---------------- | ----------- | ------------------------------------ |
-| `id`             | uuid        | 一意 ID                              |
-| `installationId` | uuid        | AppInstallation.id への FK           |
-| `capability`     | string      | 例: `app.profile.write`              |
-| `scope`          | jsonb       | 範囲制約 (resource / path / time 等) |
-| `grantedAt`      | timestamptz | 付与時刻                             |
-| `revokedAt`      | timestamptz | revoke 時刻 (NULL なら active)       |
+| column           | type        | meaning                                |
+| ---------------- | ----------- | -------------------------------------- |
+| `id`             | uuid        | 一意 ID                                |
+| `installationId` | uuid        | AppInstallation.id への FK             |
+| `capability`     | string      | 例: `app.profile.write` / `files:read` |
+| `scope`          | jsonb       | 範囲制約 (resource / path / time 等)   |
+| `grantedAt`      | timestamptz | 付与時刻                               |
+| `revokedAt`      | timestamptz | revoke 時刻 (NULL なら active)         |
 
 詳細は [/architecture/app-installation](/architecture/app-installation) と
 [/reference/install-api](/reference/install-api) を参照。RuntimeBinding と

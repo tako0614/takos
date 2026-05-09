@@ -14,7 +14,7 @@ compile 後に kernel-bound payload になる) との関係を確定します。
 - `apiVersion` / `kind` の固定 literal (§1)
 - `bindings.<name>.type` の closed enum 6 種 (§3.5)
 - `serviceImports[]` の installer approval metadata (§3.5.1)
-- `permissions.requested` の closed enum 5 種 (§3.7)
+- `permissions.requested` の closed enum 20 種 (§3.7)
 - `app.yml` が **kernel に渡らない** という不変条件 (§5)
 - `app.yml` (installer-bound) と `manifest.yml` (kernel-bound) の関係 (§5)
 
@@ -302,9 +302,9 @@ permissions:
     - logs.read.own
 ```
 
-| field                   | 必須 | 制約                                                                         |
-| ----------------------- | ---- | ---------------------------------------------------------------------------- |
-| `permissions.requested` | ✅   | string array、0〜32 要素。各値は下記 closed enum (5 種) のいずれか。重複禁止 |
+| field                   | 必須 | 制約                                                                          |
+| ----------------------- | ---- | ----------------------------------------------------------------------------- |
+| `permissions.requested` | ✅   | string array、0〜32 要素。各値は下記 closed enum (20 種) のいずれか。重複禁止 |
 
 #### closed enum (v1)
 
@@ -314,12 +314,31 @@ app.memory.write
 deploy.intent.write
 logs.read.own
 billing.usage.report
+spaces:read
+spaces:write
+files:read
+files:write
+memories:read
+memories:write
+threads:read
+threads:write
+runs:read
+runs:write
+agents:execute
+repos:read
+repos:write
+mcp:invoke
+events:subscribe
 ```
 
 - Install preview で **必ず一覧表示** されます (`new.md` §13, §22.5)
 - install 完了時に AppInstallation に対して各 capability の AppGrant が
   発行されます。user は post-install に AppGrant を revoke 可能です
   ([/architecture/app-installation](/architecture/app-installation))
+- `openid` / `profile` / `email` などの OIDC scope は
+  `identity.oidc@v1.allowedScopes` で宣言し、`permissions.requested` には
+  入れません。`files:*` / `threads:*` などの Takos resource scopes は AppGrant
+  としてここに宣言します。
 
 ### 3.8 `upgrade` (optional)
 
