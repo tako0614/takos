@@ -630,6 +630,45 @@ Idempotency-Key: <uuid>      # required
   "installationId": "inst_01J...",
   "fromMode": "shared-cell",
   "toMode": "dedicated",
+  "preserveDigest": "sha256:...",
+  "preserve": {
+    "source": {
+      "gitUrl": "https://github.com/example/app",
+      "ref": "v1.2.3",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "appManifestDigest": "sha256:...",
+      "compiledManifestDigest": "sha256:..."
+    },
+    "dataNamespace": "shared-cell://tokyo-cell-01/namespaces/inst_01J...",
+    "runtimeBinding": {
+      "id": "rtb_01J...",
+      "mode": "shared-cell",
+      "targetType": "shared-cell",
+      "targetId": "shared-cell://tokyo-cell-01/namespaces/inst_01J..."
+    },
+    "oidcClient": {
+      "clientId": "toc_01J...",
+      "serviceId": "takosumi.account.auth@v1",
+      "issuerUrl": "https://accounts.example.test",
+      "redirectUris": ["https://app.example.test/auth/oidc/callback"],
+      "allowedScopes": ["openid", "profile"],
+      "subjectMode": "pairwise",
+      "tokenEndpointAuthMethod": "client_secret_post"
+    },
+    "bindings": [{
+      "name": "auth",
+      "kind": "identity.oidc@v1",
+      "configRef": "takosumi-accounts://installations/inst_01J.../bindings/auth/oidc-client/toc_01J...",
+      "secretRefs": [
+        "takosumi-accounts://installations/inst_01J.../bindings/auth/secrets/client-secret"
+      ]
+    }, {
+      "name": "domain",
+      "kind": "domain.http@v1",
+      "configRef": "takosumi-git://installable-app/example/bindings/domain",
+      "secretRefs": []
+    }]
+  },
   "etaSeconds": 600,
   "trackingUrl": "/v1/installations/inst_01J.../events?types=installation.materialize-requested,installation.materialize-succeeded,installation.materialize-failed"
 }
@@ -650,6 +689,7 @@ Current Accounts service では materialize worker / operator が完了時に
   "status": "ready",
   "mode": "dedicated",
   "operationId": "op_01J...",
+  "preserveDigest": "sha256:...",
   "reason": "dedicated runtime ready",
   "runtimeBinding": {
     "runtimeBindingId": "rtb_01J...",
@@ -659,11 +699,19 @@ Current Accounts service では materialize worker / operator が完了時に
 }
 ```
 
+`preserve` は materialize request 時点の source commit / manifest digest /
+shared data namespace / OIDC client / preserved AppBinding refs
+(`identity.oidc@v1`, `database.postgres@v1`, `object-store.s3-compatible@v1`,
+`domain.http@v1`) の snapshot です。 Accounts は snapshot digest を
+`installation.materialize-requested` event に保存 し、completion patch には同じ
+`preserveDigest` を要求する。これにより dedicated worker は materialize 対象の
+namespace / OIDC / domain refs を取り違えたまま 完了できない。
+
 同 patch は AppInstallation の `mode` / `runtimeBindingId` を更新し、
 `installation.materialize-succeeded` event を append する。`operationId` 付き
 completion / failure patch は必ず matching `installation.materialize-requested`
-event を要求し、matching request がない場合、または同 operation が既に closed
-の場合は `409` を返す。
+event を要求し、matching request がない場合、`preserveDigest` が一致しない
+場合、または同 operation が既に closed の場合は `409` を返す。
 
 失敗時は `PATCH /status` に `status=failed`、`operation=materialize`、
 `operationId`、`reason` を渡すと `installation.materialize-failed` event を
