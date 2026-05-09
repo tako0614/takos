@@ -143,9 +143,9 @@ role です。consumer は `serviceResolvers[]` / anchor で endpoint を resolv
 し、operator-injected endpoint URL に対して billing request を送ります。
 
 以下の例では resolved endpoint を `$ACCOUNTS_BILLING_ENDPOINT`
-と表記します。Takos 側の `/api/billing/*` path は Phase 1.4 で閉じられ、
-`410 Gone` を返します。invoice 主体・payment method・subscription・usage rollup
-の owner は常に Takosumi Accounts です。
+と表記します。Takos 側の `/api/billing/*` path は Phase 1.4 で削除され、
+通常の未定義 route と同じ `404 Not Found` になります。invoice 主体・payment
+method・subscription・usage rollup の owner は常に Takosumi Accounts です。
 
 ### Plus にアップグレード
 
