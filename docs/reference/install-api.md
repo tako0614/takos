@@ -742,9 +742,12 @@ append し、同 operation の in-flight lock を閉じる。
 > `GET /v1/installations/{id}/exports/{opId}/download` は completed operation の
 > `downloadUrl` へ expiry check 後に redirect する。 export bundle codec /
 > import planner と metadata-only tar.zst archive writer は
-> `takosumi.accounts.installation-export-bundle@v1` として実装済みです。 export
-> HTTP worker / data dump worker は後続実装で行う。JSON bundle import API と
-> `takosumi-git import <bundle.json|bundle.tar.zst>` は実装済みです。
+> `takosumi.accounts.installation-export-bundle@v1` として実装済みです。
+> configured export worker hook も実装済みで、Accounts は worker に canonical
+> bundle を渡して operation を `exported` / `failed` に閉じられる。 data dump
+> worker / age encryption / object-store upload は後続実装で行う。JSON bundle
+> import API と `takosumi-git import <bundle.json|bundle.tar.zst>`
+> は実装済みです。
 
 ### 5.1 Request
 
@@ -794,8 +797,12 @@ Idempotency-Key: <uuid>      # required
 operation の `downloadUrl` が未期限切れなら `302` で redirect する。未完了なら
 `409 export_not_ready`、期限切れなら `410 export_download_expired` を返す。
 
-Current Accounts service では export worker / operator が完了時に
-`PATCH /v1/installations/{id}/status` へ以下を渡す:
+Current Accounts service では `createAccountsHandler({ exportWorker })`
+が設定されている 場合、`POST /export` は Accounts ledger から canonical bundle
+を収集して worker に渡し、worker の `downloadUrl` を使って
+`installation.exported` event を append する。外部 export worker / operator
+が完了時に `PATCH /v1/installations/{id}/status`
+へ以下を渡す経路も引き続きサポートする:
 
 ```json
 {
