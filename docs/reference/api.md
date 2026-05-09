@@ -429,13 +429,13 @@ MCP (Model Context Protocol) サーバー管理。
 { "username": "new-name" }
 ```
 
-### Personal Access Tokens (retired)
+### Personal Access Tokens
 
-| method | path                                 | description          |
-| ------ | ------------------------------------ | -------------------- |
-| GET    | `/api/me/personal-access-tokens`     | retired (`410 Gone`) |
-| POST   | `/api/me/personal-access-tokens`     | retired (`410 Gone`) |
-| DELETE | `/api/me/personal-access-tokens/:id` | retired (`410 Gone`) |
+| method | path                                 | description         |
+| ------ | ------------------------------------ | ------------------- |
+| GET    | `/api/me/personal-access-tokens`     | not exposed (`404`) |
+| POST   | `/api/me/personal-access-tokens`     | not exposed (`404`) |
+| DELETE | `/api/me/personal-access-tokens/:id` | not exposed (`404`) |
 
 PAT 管理は Takosumi Accounts の account settings / API が正本です。Takos app は
 token secret / hash / revocation registry を持たず、受け取った Accounts bearer
