@@ -845,12 +845,57 @@ output に残らない。
 | 404 / 410 | 既出                                                                                                                                             |
 | 409       | `state_conflict` (canonical status が `installing` のとき、または operation metadata が in-flight phase を示すとき。詳細は [§0.5](#status-enum)) |
 
-## 5.5 Cross-instance import flow
+## 5.5 `POST /v1/installations/import`
+
+export bundle を target Accounts instance の AppInstallation create request に
+変換し、そのまま import する endpoint。tar.zst upload/parser は後続実装で、現
+endpoint は `takosumi.accounts.installation-export-bundle@v1` JSON payload
+を受け取る。
+
+```http
+POST /v1/installations/import HTTP/1.1
+Authorization: Bearer <token>
+
+{
+  "bundle": {
+    "kind": "takosumi.accounts.installation-export-bundle@v1",
+    "version": "v1",
+    "installation": { "...": "..." },
+    "source": { "...": "..." },
+    "bindings": [],
+    "grants": []
+  },
+  "targetIssuer": "https://accounts.self-host.example",
+  "targetAccountId": "acct_self_host",
+  "targetSpaceId": "space_self_host",
+  "targetInstallationId": "inst_imported",
+  "createdBySubject": "tsub_owner"
+}
+```
+
+| field                  | required | 説明                                                               |
+| ---------------------- | -------- | ------------------------------------------------------------------ |
+| `bundle`               | yes      | `takosumi.accounts.installation-export-bundle@v1` JSON payload     |
+| `targetIssuer`         | no       | import 後の OIDC issuer。省略時は request を受けた Accounts issuer |
+| `targetAccountId`      | yes      | import 先 account (`accountId` alias も可)                         |
+| `targetSpaceId`        | yes      | import 先 space (`spaceId` alias も可)                             |
+| `targetInstallationId` | no       | import 先 installation id (`installationId` alias も可)            |
+| `createdBySubject`     | yes      | import 操作者 (`subject` alias も可)                               |
+| `mode`                 | no       | `self-hosted` default。`dedicated` も許可                          |
+
+Accounts は import planner を通して OIDC issuer を target issuer に rewrite し、
+revoked grant を除外したうえで、`POST /v1/installations` と同じ create pipeline
+を実行する。成功時は通常の AppInstallation envelope に `import_plan` を加えて
+`202` を返し、`installation.import-planned` event を append する。
+
+## 5.6 Cross-instance import flow
 
 > **Implementation status**: kernel-bound manifest の `imports[]` /
 > `serviceResolvers[]` validation、anchor fetch、signature verify、descriptor
-> digest pinning は実装済みです。本節の `requestedImports[]` を含む preview /
-> install API の full materialization flow は継続 work です。設計の正本は
+> digest pinning は実装済みです。`POST /v1/installations/import` は JSON bundle
+> payload を AppInstallation create request に変換するところまで実装済みです。
+> 本節の `requestedImports[]` を含む preview / install API の full
+> materialization flow と tar.zst import CLI は継続 work です。設計の正本は
 > [architecture/cross-instance-service-binding](/architecture/cross-instance-service-binding)、
 > manifest schema は
 > [reference/manifest-spec § 14](/reference/manifest-spec#cross-instance-imports)
