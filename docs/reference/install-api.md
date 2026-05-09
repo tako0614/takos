@@ -579,6 +579,11 @@ append された `event` を加えて返す。
 `shared-cell → dedicated` 昇格。同一 source commit / app manifest digest / data
 namespace / OIDC binding / domain を引き継ぐ。
 
+> Current implementation: Accounts は request を受理し、
+> `installation.materialize-requested` event を ledger に記録して 202 を返す。
+> dedicated runtime 作成、cutover、mode/status 更新、succeeded/failed completion
+> event は後続 worker 実装で行う。
+
 ### 4.1 Request
 
 ```http
@@ -622,7 +627,7 @@ Idempotency-Key: <uuid>      # required
   "fromMode": "shared-cell",
   "toMode": "dedicated",
   "etaSeconds": 600,
-  "trackingUrl": "/v1/installations/inst_01J.../events?types=installation.materialize-requested,installation.materialize-succeeded"
+  "trackingUrl": "/v1/installations/inst_01J.../events?types=installation.materialize-requested,installation.materialize-succeeded,installation.materialize-failed"
 }
 ```
 
@@ -647,6 +652,11 @@ state は canonical `ready` → transitional `materializing` → canonical `read
 [Export bundle](/platform/upgrade-export#export-bundle) を非同期に生成する。
 生成完了後、署名付き short-lived URL を返す (download は別 endpoint
 `GET /v1/installations/{id}/exports/{opId}` で 24h 有効)。
+
+> Current implementation: Accounts は request を受理し、
+> `installation.export-requested` event を ledger に記録して 202 を返す。
+> `GET /v1/installations/{id}/exports/{opId}` は pending operation を返すが、
+> signed download URL / export bundle 生成は後続 worker 実装で行う。
 
 ### 5.1 Request
 
@@ -684,7 +694,7 @@ Idempotency-Key: <uuid>      # required
 {
   "operationId": "op_01J...",
   "status": "preparing",
-  "trackingUrl": "/v1/installations/inst_01J.../events?types=installation.exported",
+  "trackingUrl": "/v1/installations/inst_01J.../events?types=installation.export-requested,installation.exported,installation.export-failed",
   "downloadUrl": null,
   "downloadExpiresAt": null
 }
