@@ -662,6 +662,10 @@ Current Accounts service では materialize worker / operator が完了時に
 `installation.materialize-requested` event がない場合、または同 operation が既に
 closed の場合は `409` を返す。
 
+失敗時は `PATCH /status` に `status=failed`、`operation=materialize`、
+`operationId`、`reason` を渡すと `installation.materialize-failed` event を
+append し、同 operation の in-flight lock を閉じる。
+
 ### 4.3 主なステータス
 
 | code      | 条件                                                                                                                                                         |
@@ -748,6 +752,10 @@ Current Accounts service では export worker / operator が完了時に
 同 patch は既存互換の `installation.status_changed` に加え、
 `installation.exported` event を append する。`GET /exports/{opId}` はこの event
 を読んで `status: "exported"` と download metadata を返す。
+
+失敗時は `PATCH /status` に `status=failed`、`operation=export`、
+`operationId`、`reason` を渡すと `installation.export-failed` event を append
+し、 `GET /exports/{opId}` は `status: "failed"` と error metadata を返す。
 
 ### 5.3 主なステータス
 
