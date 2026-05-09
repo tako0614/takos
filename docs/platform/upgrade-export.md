@@ -241,8 +241,18 @@ import planner は bundle 内の source issuer を target issuer に置換し、
 grant を import request から除外する。secret material は移さず、self-host 側で
 再発行する。Accounts API では `POST /v1/installations/import` が JSON bundle
 payload を受け取り、target Accounts instance の AppInstallation として登録する。
-tar.zst parser と `takosumi-git install ./takos-export.tar.zst` の CLI
-接続は後続実装。
+current CLI bridge として `takosumi-git import ./takos-export.bundle.json` は
+この JSON payload を同 endpoint に送る。tar.zst parser と
+`takosumi-git install ./takos-export.tar.zst` の direct CLI 接続は後続実装。
+
+```bash
+takosumi-git import ./takos-export.bundle.json \
+  --to https://my-takosumi.example.com \
+  --account-id acct_self_host \
+  --space-id space_self_host \
+  --subject tsub_owner \
+  --auth-issuer https://keycloak.example.com/realms/takos
+```
 
 bundle ではなく Git URL から直接 install する経路も同等にサポートされる:
 
