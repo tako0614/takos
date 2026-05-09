@@ -201,9 +201,10 @@ Takos app/API gateway は migration 中で 2 系統が並走している:
   billing compatibility responses, account/auth/profile compatibility routes,
   runtime-facing `/api/services` / `/api/resources` / `/api/sessions` の
   forwarding subset
-- `takos/app/apps/control` + `takos/app/packages/control`: login / OAuth state /
-  account / profile / billing business logic を保持する legacy compatibility
-  backend
+- `takos/app/apps/control` + `takos/app/packages/control`: login / account /
+  profile compatibility backend。旧 OAuth provider / billing route は direct
+  access でも retired guard が先に 410 を返す。関連 service / schema code は
+  cleanup 待ちの legacy residue
 
 この境界は migration 完了まで維持。public request の entrypoint は
 `takos/app/apps/api`、未切り出しの handler 実装は `apps/control` compatibility
