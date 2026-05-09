@@ -1,12 +1,14 @@
 # Default App Distribution
 
-Takos の default app distribution は、新規 space に preinstall する app
-候補の初期セットです。`takos-apps/` 配下と `yurucommu/` の product/reference
-repos は default app の参照元であり、fallback distribution
-の直接管理元ではありません。Takos product distribution としての正本は
-`deploy/distributions/*.json` の `defaultApps` で、runtime ではこの profile
-から生成された `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON` または DB/operator override
-を解決します。
+Takos の default app distribution は、managed install / self-host bootstrap
+で提示する app 候補の初期セットです。canonical install は Takosumi Accounts /
+Cloud の AppInstallation API と `takosumi-git` installer pipeline を通り、
+compiled manifest は Takosumi kernel の `POST /v1/deployments` に投下されます。
+
+`takos-apps/` 配下と `yurucommu/` の product/reference repos は default app
+の参照元です。Takos app repo 側にも repository source を使う旧 preinstall queue
+は残っていますが、これは legacy / self-host compatibility であり、
+`TAKOS_DEFAULT_APPS_PREINSTALL=true` の明示 opt-in がない限り動きません。
 
 > **重要**: Agent / Chat / Git / Storage / Store は kernel 機能であり、default
 > app distribution には含まれない。これらは kernel に常設され uninstall 不可。
@@ -75,44 +77,26 @@ Storage への endpoint / token は app-layer grant から `TAKOS_STORAGE_API_UR
 
 ## 動作原理
 
-各 entry は repository source から InstallableApp metadata と Shape manifest を
-解決し、必要に応じて group inventory に所属させる。compute は `worker@v1` /
-`web-service@v1` resource として materialize される。
+canonical path では、各 entry は InstallableApp として解決されます。
 
-- 新規 space の bootstrap で default app preinstall job を
-  `default_app_preinstall_jobs` に作成し、space 作成自体は default app deploy
-  の成功/失敗に依存しない
-- preinstall job の作成時点では repository refs / operator overrides
-  を固定しない。 job 処理時に現在の distribution を解決し、deploy queue に group
-  deploy job を enqueue する
-- deploy queue に投入した preinstall 対象は
-  `default_app_preinstall_jobs.distribution_json` に cache として保存する。
-  これにより queued のまま残っている job は最新 distribution を拾い、
-  `deployment_queued` 後の job は古い queue message と混ざらない
-- deploy queue enqueue に失敗した場合は preinstall job が retry
-  され、既に作成済みの matching group に対して queue job を再送する
-- queue worker が `.takosumi/manifest.yml` を解決し、通常の deploy pipeline
-  と同じ経路で `ready` または `degraded` へ進める
-- preinstall された primitive / group は deploy / group surfaces で確認する。
-  current Apps page は Store から追加した apps が並ぶ installed apps inventory
-  の入口であり、default distribution 管理そのものではありません
-- `DEPLOY_QUEUE` binding がない環境では deploy job は enqueue されず、group の
-  `deployJobStatus` は `pending_queue` になる（queue が後から用意される
-  前提の保留状態）
-- operator は control code 側の repository refs、env の JSON array、または
-  `default_app_distribution_config` / `default_app_distribution_entries` DB
-  table で default set を変更できる
-- `TAKOS_DEFAULT_APPS_PREINSTALL=false` の場合、bootstrap は default app group
-  も deploy job も作成しない
+- Takosumi Accounts / Cloud が AppInstallation owner / binding / consent /
+  billing attribution を持つ
+- `takosumi-git install apply` が source ref を commit / manifest digest に pin
+  し、AppInstallation ledger に記録する
+- `takosumi-git` が `.takosumi/manifest.yml` と workflow artifact を解決し、
+  Takosumi kernel へ explicit manifest を投下する
+- preinstall された app は AppInstallation / Store / launcher surfaces
+  で確認し、Takos app-local group inventory は互換表示に限る
 - default set に含まれても primitive や group 自体は特権化されない
 
-default app を git push だけで随時更新できる運用にする場合は、distribution entry
-を `refType: "branch"` とし、`ref` に `master` / `main` などの追跡 branch
-を指定する。 各 space の installed app は update / redeploy 時にその branch
-の最新 commit を解決する。 `refType: "tag"` は staging や production を特定
-release に固定したい場合に使う。 install / preinstall 時に default app の
-bundled snapshot は作らず、repository URL / ref / 解決済み commit / manifest
-metadata を deployment record に保存する。
+Takos app repo の旧 preinstall queue は compatibility path です。
+`TAKOS_DEFAULT_APPS_PREINSTALL=true` の場合だけ、新規 space 作成時に
+`default_app_preinstall_jobs` を作成し、現在の distribution を repository URL /
+ref / refType として `group_deployment_snapshot` queue job に渡します。この path
+は `.takosumi/` workflow の正本ではなく、source/workflow/git deploy の current
+ownership は `takosumi-git` 側にあります。`DEPLOY_QUEUE` binding がない環境では
+legacy job は `pending_queue` になり、queue
+が後から用意される前提で保留されます。
 
 default app は通常の app installation / group として扱われるため、次の責務は app
 側で実装します。
@@ -138,24 +122,24 @@ launcher / MCP / file handler metadata を sidebar + iframe 統合や agent cata
 
 ## Operator overrides
 
-default app distribution は operator configuration で差し替えられます。これは
-space bootstrap 時に作る group scope と deploy queue job の入力であり、default
-app を特権化しません。backend / env の指定も operator-only
-で、`.takosumi/manifest.yml` の public manifest に provider / backend
-を書く仕組みではありません。
+legacy preinstall compatibility を使う場合、default app distribution は operator
+configuration で差し替えられます。これは space bootstrap 時に作る旧
+`group_deployment_snapshot` queue job の入力であり、default app を特権化
+しません。backend / env の指定も operator-only で、`.takosumi/manifest.yml` の
+public manifest に provider / backend を書く仕組みではありません。
 
 Product distribution profile は `defaultApps.entries` に既定の repository ref を
 持ち、`defaultApps.environmentOverrides.<local|staging|production>.preinstall`
-で環境ごとの preinstall 対象を選べます。Takos-operated deploy では
+で環境ごとの legacy preinstall 対象を選べます。Takos-operated deploy では
 `takos-private` の deploy wrapper が profile と環境名から
-`TAKOS_DEFAULT_APP_DISTRIBUTION_JSON` を生成します。runtime env var は伝送形式で
-あり、5 apps の正本リストを手で wrangler / Helm values に複製しません。
+`TAKOS_DEFAULT_APP_DISTRIBUTION_JSON` を生成できますが、Takos app 側の
+preinstall 実行は `TAKOS_DEFAULT_APPS_PREINSTALL=true` を明示した場合だけです。
 
 | env                                          | 説明                                                                                                                                                                                                                    |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TAKOS_DEFAULT_APPS_PREINSTALL`              | `false` / `0` / `no` / `off` の場合、default app group と deploy job を作らない                                                                                                                                         |
-| `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON`        | distribution 全体を JSON array で置き換える                                                                                                                                                                             |
-| `TAKOS_DEFAULT_APP_REPOSITORIES_JSON`        | repository list を JSON array で渡す。`repositoryUrl` または `url` を受け付け、`name` 省略時は repo URL から推定する                                                                                                    |
+| `TAKOS_DEFAULT_APPS_PREINSTALL`              | legacy preinstall queue の opt-in。既定は disabled。`true` / `1` / `yes` / `on` の場合だけ default app group deploy job を作る                                                                                          |
+| `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON`        | legacy distribution 全体を JSON array で置き換える                                                                                                                                                                      |
+| `TAKOS_DEFAULT_APP_REPOSITORIES_JSON`        | legacy repository list を JSON array で渡す。`repositoryUrl` または `url` を受け付け、`name` 省略時は repo URL から推定する                                                                                             |
 | `TAKOS_DEFAULT_APP_REF`                      | fallback distribution 全体の ref override。省略時、builtin fallback は各 entry の既定 ref、JSON entry は `main`                                                                                                         |
 | `TAKOS_DEFAULT_APP_REF_TYPE`                 | `branch` / `tag` / `commit`。未知値は validation error になる                                                                                                                                                           |
 | `TAKOS_DEFAULT_APP_BACKEND`                  | app/deploy queue compatibility job に渡す operator-only backend label。`cloudflare` / `local` / `aws` / `gcp` / `k8s`。kernel の provider/plugin 選択は `TAKOS_KERNEL_PLUGIN_CONFIG` と external plugin bundle 側で行う |
@@ -224,10 +208,10 @@ entry の validation error は fallback せず、preinstall job を
 `blocked_by_config` として backoff retry に回す。operator が DB distribution
 を保存した場合は、`blocked_by_config` の job を即時 retry 対象へ戻す。
 
-`TAKOS_DEFAULT_APPS_PREINSTALL=false` は explicit kill switch であり、env entry
-に `preinstall: true` が入っていても preinstall を止める。既存の queued job
-は削除せず `paused_by_operator` にして backoff するため、operator が再度 true
-に戻すと cron で再開できます。
+`TAKOS_DEFAULT_APPS_PREINSTALL` は explicit opt-in です。未設定または `false`
+の場合、env entry に `preinstall: true` が入っていても legacy preinstall は
+止まる。既存の queued job は削除せず `paused_by_operator` にして backoff
+するため、operator が `true` に戻すと cron で再開できます。
 
 DB から解決した distribution は DB binding ごとの isolate-local L1 cache
 に短時間保存される。DB 保存処理で repository list を保存した場合は cache
@@ -237,19 +221,20 @@ validate し、duplicate name / duplicate repository URL もここで reject す
 repository URL の duplicate 判定は scheme / host と `.git` suffix / trailing
 slash を正規化するが、path の大文字小文字は保持する。
 
-preinstall job は `queued` → `in_progress` → `deployment_queued` を経て、deploy
-queue 側で expected group の deployment record 適用が確認されたときに
-`completed` になる。deploy が失敗または DLQ に入った場合は `failed` になる。
-`blocked_by_config` と `paused_by_operator` は backoff 後に再 scan される。
-`in_progress` の lease が古くなった job は cron で再 claim される。 `queued` /
-`blocked_by_config` / `paused_by_operator` / stale `in_progress` の job
-は処理時に現在の distribution を解決し直す。 `deployment_queued` のまま watchdog
-時間を超えた job も再 scan され、expected group が未適用なら保存済み
-`distribution_json` から queue job を再送する。 deploy queue 側の完了/失敗通知は
-`expected_group_ids_json` と `distribution_json` に一致する message だけ
-preinstall job に反映するため、古い queue message や operator 変更前の message
-で新しい job を完了/失敗にしない。 同名の既存 group が distribution entry
-と異なる source を指す場合は silent skip せず conflict として failed にする。
+legacy preinstall job は `queued` → `in_progress` → `deployment_queued`
+を経て、deploy queue 側で expected group の deployment record
+適用が確認されたときに `completed` になる。deploy が失敗または DLQ
+に入った場合は `failed` になる。 `blocked_by_config` と `paused_by_operator` は
+backoff 後に再 scan される。 `in_progress` の lease が古くなった job は cron
+で再 claim される。 `queued` / `blocked_by_config` / `paused_by_operator` /
+stale `in_progress` の job は処理時に現在の distribution を解決し直す。
+`deployment_queued` のまま watchdog 時間を超えた job も再 scan され、expected
+group が未適用なら保存済み `distribution_json` から queue job を再送する。
+deploy queue 側の完了/失敗通知は `expected_group_ids_json` と
+`distribution_json` に一致する message だけ preinstall job に反映するため、古い
+queue message や operator 変更前の message で新しい job を完了/失敗にしない。
+同名の既存 group が distribution entry と異なる source を指す場合は silent skip
+せず conflict として failed にする。
 
 ## Admin API boundary
 
