@@ -602,7 +602,7 @@ record。 `serviceId` / `toDeploymentId` / `resolvedDescriptor` / `resolvedAt` /
 ### EndpointRoleResolved
 
 `ServiceDescriptor.endpoints[]` の各要素。 `role` (例 `oidc-issuer` /
-`install-launch` / `billing-webhook`) / `url` (operator-injected) / `path`
+`install-launch` / `stripe-webhook`) / `url` (operator-injected) / `path`
 を持つ。 consumer manifest の resource spec で
 `${imports.<alias>.endpoints.<role>.url}` として参照される。
 

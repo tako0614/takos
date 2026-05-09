@@ -95,8 +95,8 @@ Content-Type: application/json
 `installation.materialize_succeeded` / `installation.materialize_failed` などの
 InstallationEvent と operation metadata に記録し、`materializing` は独立した
 public status ではない。進行中も既存 shared-cell 上の Takos は受付を続け、
-cutover 完了後に RuntimeBinding を atomic に差し替える。失敗時は shared-cell に戻す
-(重大失敗時のみ canonical `failed` に落ちる)。
+cutover 完了後に RuntimeBinding を atomic に差し替える。失敗時は shared-cell
+に戻す (重大失敗時のみ canonical `failed` に落ちる)。
 
 materialize で **保たれるもの**:
 
@@ -135,13 +135,13 @@ bundle は `installation.json` (source / digests)、`manifest.compiled.yml`、
 ```bash
 takosumi-git install ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
-  --service-resolver https://anchor.example.com/v1/services/
+  --service-resolver https://anchor.example.com/v1/services
 ```
 
-export 後の元 installation は、利用者の選択により canonical `exported`
-(data 残存 / runtime 維持) か、uninstall operation による退役を選べる。
-`uninstalling` は operation metadata / event payload 上の phase hint であり、
-public status enum ではない。
+export 後の元 installation は、利用者の選択により canonical `exported` (data
+残存 / runtime 維持) か、uninstall operation による退役を選べる。 `uninstalling`
+は operation metadata / event payload 上の phase hint であり、 public status
+enum ではない。
 
 ## 5. URL の連続性
 

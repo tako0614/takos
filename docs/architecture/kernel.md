@@ -277,7 +277,7 @@ imports:
       ttl: 300s
 serviceResolvers:
   - kind: anchor
-    url: https://anchor.example.com/v1/services/
+    url: https://anchor.example.com/v1/services
     publicKey: BASE64_ED25519_PUBLIC_KEY
 resources:
   - shape: web-service@v1

@@ -105,9 +105,9 @@ type ServiceDescriptor = {
 };
 
 type EndpointRoleResolved = {
-  role: string; // 例: "oidc-issuer" / "install-launch" / "billing-webhook"
+  role: string; // 例: "oidc-issuer" / "install-launch" / "stripe-webhook"
   url: string; // operator が deploy 時に injected
-  path: string; // 例: "/" / "/v1/install/launch"
+  path: string; // 例: "/.well-known/openid-configuration" / "/v1/installations/{installationId}/launch-token"
 };
 ```
 
