@@ -222,9 +222,9 @@ installation/source/bindings/grants/OIDC metadata からこの payload を組み
 codec と、別 Takosumi Accounts issuer へ import する create request planner
 です。Accounts export operation の signed download redirect endpoint、JSON
 import API、JSON/tar.zst import CLI、metadata-only tar.zst archive writer、
-configured export worker hook も実装済みです。compiled manifest 実体、data dump
-worker、age encryption、object-store upload はこの payload contract の後続
-worker として実装する。
+configured export worker hook、dev/local metadata export worker CLI config
+も実装済みです。compiled manifest 実体、data dump worker、age encryption、
+object-store upload はこの payload contract の後続 worker として実装する。
 
 ### 3.3 Encryption
 
