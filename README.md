@@ -71,8 +71,9 @@ history.
 
 ## Responsibility Split
 
-- `app`: accounts, auth, profiles, billing, OAuth, user settings, user-facing management UI, public/browser/CLI API
-  gateway, and product API that is not owned by another Takos service.
+- `app`: Takos-facing OIDC consumer sessions, app-local profiles/settings, user-facing management UI, public/browser/CLI
+  API gateway, and product API that is not owned by another Takos service. Takosumi Accounts (`../takosumi-cloud`) owns
+  identity, billing, OAuth/OIDC issuer behavior, client registry, consent/device flow, and AppInstallation ownership.
 - `deploy`: Takos product distribution profiles, the distribution schema contract, Helm/Terraform modules, distribution
   manifests, and validators that wrap published packages, images, APIs, and manifests.
 - `takosumi` (external sibling `../takosumi`): tenant/platform management, deploy and runtime lifecycle domains,
