@@ -75,9 +75,10 @@ takosumi kernel
   ⚠ identity / billing / OAuth / workflow / cron は持たない
 
 takosumi-cloud
-  = managed PaaS dashboard
-  = install UI / domain mgmt / usage UI
-  ⚠ OIDC issue / billing 実装本体は持たない (Accounts に委譲)
+  = managed PaaS product
+  = Takosumi Accounts plane owner
+  = dashboard / install UI / domain mgmt / usage UI
+  ⚠ dashboard / install UI は issuer・billing behavior を Accounts plane に委譲
 
 takosumi-git
   = Git URL installer
