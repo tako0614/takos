@@ -744,10 +744,11 @@ append し、同 operation の in-flight lock を閉じる。
 > import planner と metadata-only tar.zst archive writer は
 > `takosumi.accounts.installation-export-bundle@v1` として実装済みです。
 > configured export worker hook も実装済みで、Accounts は worker に canonical
-> bundle を渡して operation を `exported` / `failed` に閉じられる。 data dump
-> worker / age encryption / object-store upload は後続実装で行う。JSON bundle
-> import API と `takosumi-git import <bundle.json|bundle.tar.zst>`
-> は実装済みです。
+> bundle を渡して operation を `exported` / `failed` に閉じられる。
+> `takosumi-cloud accounts serve` の dev/local metadata export worker config
+> も実装済みです。 data dump worker / age encryption / object-store upload
+> は後続実装で行う。JSON bundle import API と
+> `takosumi-git import <bundle.json|bundle.tar.zst>` は実装済みです。
 
 ### 5.1 Request
 
