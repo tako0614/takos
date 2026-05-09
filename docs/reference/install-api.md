@@ -398,15 +398,43 @@ response header に `Location: /v1/installations/inst_01J...` を付与。
 `Use takosumi-git install <bundle> --to <self-hosted endpoint>` を案内する
 ([Upgrade / Export](/platform/upgrade-export#self-host-import) 参照)。
 
-## 3. `POST /v1/installations/{id}/launch-token` {#launch-token}
+## 3. `GET/POST /v1/installations/{id}/launch-token` {#launch-token}
 
-[launch token JWS](/apps/launch-token) を 1 つ発行する。install 直後の 1-shot
-自動 sign-in、または re-launch 用。
+`GET` は [launch token JWS](/apps/launch-token) を検証するための public config
+を返す。`POST` は launch token JWS を 1 つ発行する。install 直後の 1-shot 自動
+sign-in、または re-launch 用。
 
 > JWS の payload / claim / 検証手順は [Launch Token](/apps/launch-token)
 > ページが正本。本 endpoint はその発行 API。両ページを併せて読むこと。
 
-### 3.1 Request
+### 3.1 Verification config (GET)
+
+```http
+GET /v1/installations/inst_01J.../launch-token HTTP/1.1
+Authorization: Bearer <token>
+```
+
+```json
+{
+  "issuer": "https://accounts.example.test",
+  "audience": "takos.chat",
+  "algorithm": "RS256",
+  "kid": "launch-key-2026-05",
+  "jwks": { "keys": [{ "kty": "RSA", "kid": "launch-key-2026-05" }] },
+  "public_key": "{\"keys\":[...]}",
+  "env": {
+    "INSTALL_LAUNCH_PUBLIC_KEY": "{\"keys\":[...]}",
+    "INSTALL_LAUNCH_AUDIENCE": "takos.chat",
+    "INSTALL_LAUNCH_ISSUER": "https://accounts.example.test"
+  }
+}
+```
+
+`public_key` / `env.INSTALL_LAUNCH_PUBLIC_KEY` は launch-token 専用 JWKS JSON。
+OIDC `/oauth/jwks` とは別 key channel です。private signing key は Accounts
+外へ出ません。
+
+### 3.2 Issue request (POST)
 
 ```http
 POST /v1/installations/inst_01J.../launch-token HTTP/1.1
@@ -426,7 +454,7 @@ Idempotency-Key: <uuid>      # optional
 | `ttlSeconds`  | int (10..300, default 120)         | 5 分上限                                                                            |
 | `redirectUri` | URI                                | OidcClientBinding の `redirectUris` か `/_takosumi/launch` のいずれかと完全一致必須 |
 
-### 3.2 Response (200)
+### 3.3 Issue response (200)
 
 ```json
 {
@@ -441,7 +469,7 @@ Idempotency-Key: <uuid>      # optional
 token は `typ: takosumi-install-launch+jwt`。one-time (server 側で `jti`
 消費)。詳細は [Launch Token](/apps/launch-token) を参照。
 
-### 3.3 主なステータス
+### 3.4 主なステータス
 
 | code | 条件                                                                                                                                                                                                   |
 | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -227,8 +227,10 @@ malformed_claims     : 必須 claim 欠落 / 型不一致
 | `INSTALL_LAUNCH_AUDIENCE`   | ✅ (launch UX を使う場合) | `appId` (例: `takos.chat`)。`aud` claim の一致確認に使う           |
 | `INSTALL_LAUNCH_ISSUER`     | ✅ (launch UX を使う場合) | 期待 `iss`。OIDC `OIDC_ISSUER_URL` と値は同じでも、env は別管理    |
 
-これらの env は AppInstallation の `install-launch-token@v1` AppBinding が
-compile 時に注入します。OIDC `/oauth/jwks` 経由で pubkey を取得しま **せん** —
+Takosumi Accounts は AppInstallation 作成時に `install-launch-token@v1`
+AppBinding を Accounts-owned config ref へ materialize し、
+`GET /v1/installations/{id}/launch-token` でこれらの env にそのまま注入できる
+public config を返します。OIDC `/oauth/jwks` 経由で pubkey を取得しま **せん** —
 channel を物理的に分離することで key confusion 攻撃を防ぎます (§2 の non-overlap
 原則)。
 
