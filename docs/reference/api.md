@@ -2101,6 +2101,7 @@ Installable App Model における Git URL install / launch / materialize / expo
 | ------ | ------------------------------------- | ------------------------------------------------- |
 | POST   | `/v1/install/preview`                 | install preview (permission / cost / source 確認) |
 | POST   | `/v1/installations`                   | AppInstallation 作成                              |
+| GET    | `/v1/installations/{id}/launch-token` | launch token public verification config           |
 | POST   | `/v1/installations/{id}/launch-token` | one-time launch token JWS 発行                    |
 | POST   | `/v1/installations/{id}/materialize`  | shared-cell から dedicated runtime へ物化         |
 | POST   | `/v1/installations/{id}/export`       | self-host bundle export                           |

@@ -402,8 +402,9 @@ install 完了直後の自動 sign-in 用 [launch token JWS](/apps/launch-token)
 | field                | 説明                                             |
 | -------------------- | ------------------------------------------------ |
 | `audience`           | JWS aud claim。通常は `appId` (例: `takos.chat`) |
-| `publicKey`          | PEM-encoded Ed25519 (or RSA) public key          |
-| `algorithm`          | `EdDSA` または `RS256`                           |
+| `issuer`             | launch token issuer URL                          |
+| `publicKey`          | JWKS JSON (または export bundle の PEM pubkey)   |
+| `algorithm`          | 現行 Accounts issuer は `RS256`                  |
 | `kid`                | key id                                           |
 | `consumePath`        | request の `consumePath` を継承                  |
 | `maxLifetimeSeconds` | 上限 lifetime                                    |
@@ -412,30 +413,29 @@ token 発行側の **private key は本 binding には含めない** (Takosumi A
 内部に保持)。secret schema は **空** (本 binding は public key と audience の
 みを扱う)。
 
+現行 Takosumi Accounts は `POST /v1/installations` 時にこの binding を
+`takosumi-accounts://.../launch-token/<kid>` config ref へ materialize し、
+`GET /v1/installations/{id}/launch-token` で `INSTALL_LAUNCH_*` にそのまま
+注入できる public config を返す。
+
 ### 6.3 Output placeholders
 
-| placeholder                      | 値                    |
-| -------------------------------- | --------------------- |
-| `${bindings.<name>.publicKey}`   | PEM 公開鍵            |
-| `${bindings.<name>.audience}`    | aud 値                |
-| `${bindings.<name>.algorithm}`   | `EdDSA` / `RS256`     |
-| `${bindings.<name>.kid}`         | key id                |
-| `${bindings.<name>.consumePath}` | consume endpoint path |
+| placeholder                      | 値                     |
+| -------------------------------- | ---------------------- |
+| `${bindings.<name>.publicKey}`   | JWKS JSON / PEM pubkey |
+| `${bindings.<name>.audience}`    | aud 値                 |
+| `${bindings.<name>.issuer}`      | issuer URL             |
+| `${bindings.<name>.algorithm}`   | `EdDSA` / `RS256`      |
+| `${bindings.<name>.kid}`         | key id                 |
+| `${bindings.<name>.consumePath}` | consume endpoint path  |
 
 ### 6.4 Default env injection
 
 ```env
 INSTALL_LAUNCH_PUBLIC_KEY = ${bindings.<name>.publicKey}
 INSTALL_LAUNCH_AUDIENCE   = ${bindings.<name>.audience}
+INSTALL_LAUNCH_ISSUER     = ${bindings.<name>.issuer}
 ```
-
-> Note: app 側 verifier は
-> [`INSTALL_LAUNCH_ISSUER`](/apps/launch-token#検証用-environment) も要求する
-> ([Launch Token](/apps/launch-token) §6 参照)。本 binding は現状 `issuer` を
-> Provisioned config として expose しないため、`INSTALL_LAUNCH_ISSUER` は
-> manifest 中で `OIDC_ISSUER_URL` と同じ値、または期待する Takosumi Accounts
-> issuer を **手動で env config** する。将来 binding に `issuer` field が追加
-> されたら default injection に組み込む。
 
 ### 6.5 例
 
