@@ -290,8 +290,9 @@ AppInstallation に紐づく binding 1 record。`identity.oidc@v1` /
 ### AppGrant
 
 AppInstallation に対する capability grant の 1 record。`capability` (例:
-`app.profile.write` / `deploy.intent.write` / `logs.read.own`) と `scope` を
-持ち、ユーザーが任意のタイミングで `revoke` 可能。 (see new.md §7)
+`app.profile.write` / `deploy.intent.write` / `logs.read.own` / `files:read` /
+`agents:execute`) と `scope` を持ち、ユーザーが任意の タイミングで `revoke`
+可能。 (see new.md §7)
 
 ### RuntimeBinding
 
