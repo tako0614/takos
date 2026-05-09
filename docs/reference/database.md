@@ -235,16 +235,6 @@ CREATE TABLE artifacts (
 );
 
 -- CreateTable
-CREATE TABLE auth_services (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "name" TEXT NOT NULL,
-    "domain" TEXT NOT NULL,
-    "api_key_hash" TEXT NOT NULL,
-    "allowed_redirect_uris" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- CreateTable
 CREATE TABLE auth_sessions (
     "id" TEXT NOT NULL PRIMARY KEY,
     "account_id" TEXT NOT NULL,
@@ -1671,15 +1661,6 @@ CREATE INDEX "artifacts_file_id_idx" ON "artifacts"("file_id");
 
 -- CreateIndex
 CREATE INDEX "artifacts_account_id_idx" ON "artifacts"("account_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "auth_services_domain_key" ON "auth_services"("domain");
-
--- CreateIndex
-CREATE INDEX "auth_services_domain_idx" ON "auth_services"("domain");
-
--- CreateIndex
-CREATE INDEX "auth_services_api_key_hash_idx" ON "auth_services"("api_key_hash");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "auth_sessions_token_hash_key" ON "auth_sessions"("token_hash");
