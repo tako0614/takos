@@ -99,10 +99,13 @@ Installable App Model (ROADMAP.md Part II Phase 1.1-1.7) の identity / installe
 - **P-Phase 1.5.1**: Shared-cell namespace isolation (shared runtime に bind
   された AppInstallation 同士で data namespace / OIDC client / billing / grants
   が交差しない)
-- **P-Phase 1.6.1**: Export bundle integrity (`takosumi-git export` の bundle が
-  installation.json / source.json / manifest.compiled.yml / data dump / bindings
-  template を持ち、別 takosumi instance への import で同 source commit / digest
-  を再現できる)
+- **P-Phase 1.6.1 (partial)**: Materialize/export lifecycle
+  (`takosumi-git
+  materialize` / `takosumi-git export` が Takosumi Accounts
+  operation を idempotent に request する部分は covered)。残りは export bundle
+  integrity (`takosumi-git export` の bundle が installation.json / source.json
+  / manifest.compiled.yml / data dump / bindings template を持ち、別 takosumi
+  instance への import で同 source commit / digest を再現できる)。
 - **P-Phase 1.7.1**: GitOps deploy intent budget guard (Takos が
   `deploy-intent.gitops@v1` 経由で deploy intent を Git に commit する際、budget
   を超える resource は user approval なしで apply されない)
