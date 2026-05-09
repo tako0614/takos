@@ -658,9 +658,10 @@ Current Accounts service では materialize worker / operator が完了時に
 ```
 
 同 patch は AppInstallation の `mode` / `runtimeBindingId` を更新し、
-`installation.materialize-succeeded` event を append する。matching
-`installation.materialize-requested` event がない場合、または同 operation が既に
-closed の場合は `409` を返す。
+`installation.materialize-succeeded` event を append する。`operationId` 付き
+completion / failure patch は必ず matching `installation.materialize-requested`
+event を要求し、matching request がない場合、または同 operation が既に closed
+の場合は `409` を返す。
 
 失敗時は `PATCH /status` に `status=failed`、`operation=materialize`、
 `operationId`、`reason` を渡すと `installation.materialize-failed` event を
@@ -751,7 +752,10 @@ Current Accounts service では export worker / operator が完了時に
 
 同 patch は既存互換の `installation.status_changed` に加え、
 `installation.exported` event を append する。`GET /exports/{opId}` はこの event
-を読んで `status: "exported"` と download metadata を返す。
+を読んで `status: "exported"` と download metadata を返す。 `operationId` 付き
+completion / failure patch は必ず matching `installation.export-requested` event
+を要求し、matching request がない場合または同 operation が既に closed の場合は
+`409` を返す。
 
 失敗時は `PATCH /status` に `status=failed`、`operation=export`、
 `operationId`、`reason` を渡すと `installation.export-failed` event を append
