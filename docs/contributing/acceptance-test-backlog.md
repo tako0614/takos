@@ -89,8 +89,9 @@ Installable App Model (ROADMAP.md Part II Phase 1.1-1.7) の identity / installe
 - **P-Phase 1.4.1**: Takos legacy proxy mode termination (legacy `/oauth/*`
   route の deprecation window 終了後、Takos からの 410 Gone と Takosumi Accounts
   への redirect)。apps/api gateway の OAuth provider / billing proxy termination
-  と apps/web の旧 OAuth provider / billing UI 撤去は実装済み。残りは
-  apps/control の direct OAuth provider / billing handler を閉じること。
+  と apps/web の旧 OAuth provider / billing UI 撤去、apps/control direct OAuth
+  provider / billing route guard は実装済み。残りは dead code / schema /
+  contract cleanup。
 - **P-Phase 1.5.1**: Shared-cell namespace isolation (shared runtime に bind
   された AppInstallation 同士で data namespace / OIDC client / billing / grants
   が交差しない)
