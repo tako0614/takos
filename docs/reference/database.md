@@ -1017,21 +1017,6 @@ CREATE TABLE resource_access (
 );
 
 -- CreateTable
-CREATE TABLE resource_access_tokens (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "resource_id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "token_hash" TEXT NOT NULL,
-    "token_prefix" TEXT NOT NULL,
-    "permission" TEXT NOT NULL DEFAULT 'read',
-    "expires_at" DATETIME,
-    "last_used_at" DATETIME,
-    "created_by" TEXT NOT NULL,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "resource_access_tokens_resource_id_fkey" FOREIGN KEY ("resource_id") REFERENCES "resources" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE resources (
     "id" TEXT NOT NULL PRIMARY KEY,
     "owner_account_id" TEXT NOT NULL,
@@ -2141,15 +2126,6 @@ CREATE INDEX "resource_access_account_id_idx" ON "resource_access"("account_id")
 
 -- CreateIndex
 CREATE UNIQUE INDEX "resource_access_resource_id_account_id_key" ON "resource_access"("resource_id", "account_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "resource_access_tokens_token_hash_key" ON "resource_access_tokens"("token_hash");
-
--- CreateIndex
-CREATE INDEX "resource_access_tokens_token_hash_idx" ON "resource_access_tokens"("token_hash");
-
--- CreateIndex
-CREATE INDEX "resource_access_tokens_resource_id_idx" ON "resource_access_tokens"("resource_id");
 
 -- CreateIndex
 CREATE INDEX "resources_type_idx" ON "resources"("type");
