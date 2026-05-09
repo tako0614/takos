@@ -213,8 +213,10 @@ private stack の `takos-private/compose.server.yml` は MinIO を host `9000` /
 | `JWT_PUBLIC_KEY`                | JWT 検証用公開鍵                                                               |
 | `ENCRYPTION_KEY`                | データ暗号化キー（Base64 エンコード済み 32 バイト）                            |
 | `TAKOS_SECRET_STORE_PASSPHRASE` | secret store at-rest 暗号化 passphrase (production / staging で **必須**)      |
-| `GOOGLE_CLIENT_ID`              | Google OAuth クライアント ID                                                   |
-| `GOOGLE_CLIENT_SECRET`          | Google OAuth クライアントシークレット                                          |
+| `OIDC_ISSUER_URL`               | Takosumi Accounts issuer URL                                                   |
+| `OIDC_CLIENT_ID`                | Takosumi Accounts が installation 単位に発行する OIDC client id                |
+| `OIDC_CLIENT_SECRET`            | 同 OIDC client secret                                                          |
+| `OIDC_REDIRECT_URI`             | `/auth/oidc/callback` の絶対 URL                                                |
 | `EXECUTOR_PROXY_SECRET`         | executor-host から control-web への内部 RPC secret                             |
 
 ::: danger production / staging では secret-store encryption key が必須

@@ -2148,9 +2148,9 @@ backend へ proxy されます。
 | ------ | ---------------------------- | ------------------------------------ |
 | GET    | `/auth/login`                | `/auth/oidc/login` への互換 redirect |
 | POST   | `/auth/password`             | username/password ログイン           |
-| GET    | `/auth/cli`                  | CLI 認証エンドポイント               |
-| GET    | `/auth/link/google`          | Google アカウントリンク開始          |
-| GET    | `/auth/link/google/callback` | Google リンクコールバック            |
+| GET    | `/auth/cli`                  | retired (`410 Gone`)                 |
+| GET    | `/auth/link/google`          | retired (`410 Gone`)                 |
+| GET    | `/auth/link/google/callback` | retired (`410 Gone`)                 |
 
 ---
 
