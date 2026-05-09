@@ -301,8 +301,9 @@ Takos UI で「deploy 機能が無効になりました」表示
 
 ### RuntimeBinding (補助 record)
 
-AppInstallation を物理 runtime に bind する pointer。shared-cell では Cell
-identifier (`tokyo-cell-03` 等)、dedicated では deployment id、self-hosted では
+AppInstallation を物理 runtime に bind する pointer。shared-cell では
+per-installation namespace URI (`shared-cell://tokyo-cell-03/namespaces/inst_...`
+等)、dedicated では deployment id、self-hosted では
 operator-owned takosumi instance を指します。AppInstallation の `mode` 変更は
 RuntimeBinding の差し替えとして実現されます (詳細は
 [Runtime Modes](./runtime-modes.md))。
@@ -424,7 +425,7 @@ Source:
 Runtime:
   mode: shared-cell
   region: Tokyo
-  runtime binding: tokyo-cell-03
+  runtime binding: shared-cell://tokyo-cell-03/namespaces/inst_abc
 
 Auth:
   service: takosumi.account.auth@v1   # service identifier

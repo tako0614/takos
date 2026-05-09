@@ -284,7 +284,7 @@ Content-Type: application/json
   "runtimeBinding": {
     "runtimeBindingId": "rtb_01J...",
     "targetType": "shared-cell",
-    "targetId": "tokyo-cell-01"
+    "targetId": "shared-cell://tokyo-cell-01/namespaces/inst_01J..."
   },
   "bindings": [{
     "bindingId": "bind_auth",
@@ -378,7 +378,7 @@ Phase 1.6 design の permission diff gate で扱う。
     "installation_id": "inst_01J...",
     "mode": "shared-cell",
     "target_type": "shared-cell",
-    "target_id": "tokyo-cell-01",
+    "target_id": "shared-cell://tokyo-cell-01/namespaces/inst_01J...",
     "created_at": "2026-05-07T08:30:00.000Z",
     "updated_at": "2026-05-07T08:30:00.000Z"
   },
