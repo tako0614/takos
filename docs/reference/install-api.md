@@ -249,8 +249,10 @@ Content-Type: application/json
 
 ## 2. `POST /v1/installations`
 
-新規 AppInstallation を作成し、takosumi-git に install pipeline を起動する。
-**non-blocking**: response は `status=installing` で返り、進捗は
+新規 AppInstallation ledger record を作成する。現行 Takosumi Accounts service
+では、Git fetch / manifest compile / kernel apply はこの endpoint 内では行わず、
+takosumi-git install pipeline または install preview proxy が解決済み source
+metadata を渡す。response は `status=installing` で返り、進捗は
 `GET /v1/installations/{id}/events` の event list で確認する。
 
 ### 2.1 Request
@@ -258,31 +260,58 @@ Content-Type: application/json
 ```http
 POST /v1/installations HTTP/1.1
 Authorization: Bearer <token>
-Idempotency-Key: <uuid>      # required
 Content-Type: application/json
 
 {
-  "spec": {
-    "source": {
-      "type": "git",
-      "url": "https://github.com/takos/takos",
-      "ref": "v1.2.3"
-    },
-    "spaceId": "space_personal",
-    "mode": "shared-cell",
-    "params": { "domain": "auto" }
+  "installationId": "inst_01J...",
+  "accountId": "acct_123",
+  "spaceId": "space_personal",
+  "spaceKind": "personal",
+  "appId": "takos.chat",
+  "source": {
+    "gitUrl": "https://github.com/takos/takos",
+    "ref": "v1.2.3",
+    "commit": "7f3c9f5b...",
+    "appManifestDigest": "sha256:app",
+    "compiledManifestDigest": "sha256:compiled"
   },
-  "confirm": {
-    "previewId": "prev_01J...",
-    "permissionDigest": "sha256:...",
-    "costAck": false
-  }
+  "mode": "shared-cell",
+  "createdBySubject": "tsub_owner",
+  "runtimeBinding": {
+    "runtimeBindingId": "rtb_01J...",
+    "targetType": "shared-cell",
+    "targetId": "tokyo-cell-01"
+  },
+  "bindings": [{
+    "bindingId": "bind_auth",
+    "name": "auth",
+    "kind": "identity.oidc@v1",
+    "configRef": "config://inst_01J/auth",
+    "secretRefs": ["secret://inst_01J/auth/client-secret"]
+  }],
+  "grants": [{
+    "grantId": "grant_logs",
+    "capability": "logs.read.own",
+    "scope": {}
+  }],
+  "serviceImports": [{
+    "binding": "account-auth",
+    "alias": "account-auth",
+    "service": "takosumi.account.auth@v1",
+    "endpointRoles": ["oidc-issuer", "install-launch"]
+  }]
 }
 ```
 
-`confirm.previewId` は直前の preview を anchor する。10 分以上前の previewId や
-`confirm.permissionDigest` mismatch は current service では未実装で、Phase 1.6
-design の permission diff gate で扱う。
+必須 field は `accountId` / `spaceId` / `appId` /
+`source.gitUrl` (または `source.url`) / `source.ref` / `source.commit` /
+`source.appManifestDigest` / `mode` / `createdBySubject`。`installationId` は
+省略時に `inst_<uuid>` が採番される。`source.compiledManifestDigest` /
+`runtimeBinding` / `bindings` / `grants` / `serviceImports` / `oidcClients` は
+optional。
+
+`confirm.previewId` / `permissionDigest` gate は current service では未実装で、
+Phase 1.6 design の permission diff gate で扱う。
 
 ### 2.2 Response (202)
 
@@ -290,34 +319,67 @@ design の permission diff gate で扱う。
 {
   "installation": {
     "id": "inst_01J...",
-    "accountId": "acct_123",
-    "spaceId": "space_personal",
-    "appId": "takos.chat",
+    "account_id": "acct_123",
+    "space_id": "space_personal",
+    "app_id": "takos.chat",
     "source": {
       "type": "git",
       "url": "https://github.com/takos/takos",
       "ref": "v1.2.3",
       "commit": "7f3c9f5b..."
     },
-    "appManifestDigest": "sha256:...",
-    "compiledManifestDigest": null,
+    "app_manifest_digest": "sha256:app",
+    "compiled_manifest_digest": "sha256:compiled",
+    "service_imports": [{
+      "binding": "account-auth",
+      "alias": "account-auth",
+      "service": "takosumi.account.auth@v1",
+      "endpointRoles": ["oidc-issuer", "install-launch"]
+    }],
     "mode": "shared-cell",
-    "runtimeBinding": null,
+    "runtime_binding_id": "rtb_01J...",
     "status": "installing",
-    "createdBySubject": "user_abc",
-    "createdAt": "2026-05-07T08:30:00Z",
-    "updatedAt": "2026-05-07T08:30:00Z"
+    "created_by_subject": "tsub_owner",
+    "created_at": "2026-05-07T08:30:00.000Z",
+    "updated_at": "2026-05-07T08:30:00.000Z"
   },
+  "bindings": [{
+    "id": "bind_auth",
+    "installation_id": "inst_01J...",
+    "name": "auth",
+    "kind": "identity.oidc@v1",
+    "config_ref": "config://inst_01J/auth",
+    "secret_refs": ["secret://inst_01J/auth/client-secret"],
+    "created_at": "2026-05-07T08:30:00.000Z",
+    "updated_at": "2026-05-07T08:30:00.000Z"
+  }],
+  "grants": [{
+    "id": "grant_logs",
+    "installation_id": "inst_01J...",
+    "capability": "logs.read.own",
+    "scope": {},
+    "granted_at": "2026-05-07T08:30:00.000Z",
+    "revoked_at": null
+  }],
+  "runtime_binding": {
+    "id": "rtb_01J...",
+    "installation_id": "inst_01J...",
+    "mode": "shared-cell",
+    "target_type": "shared-cell",
+    "target_id": "tokyo-cell-01",
+    "created_at": "2026-05-07T08:30:00.000Z",
+    "updated_at": "2026-05-07T08:30:00.000Z"
+  },
+  "oidc_client": null,
   "tracking": {
-    "eventsUrl": "/v1/installations/inst_01J.../events",
-    "etaSeconds": 90
+    "events_url": "/v1/installations/inst_01J.../events"
   }
 }
 ```
 
 response header に `Location: /v1/installations/inst_01J...` を付与。
-`compiledManifestDigest` / `runtimeBinding` は `installation.deployed` event
-後に埋まる。
+`oidcClients` request を含む場合は `oidc_client` と `oidc_client_secret` が
+追加される。
 
 ### 2.3 主なステータス
 
