@@ -428,17 +428,6 @@ MCP (Model Context Protocol) サーバー管理。
 { "username": "new-name" }
 ```
 
-### Password credentials
-
-| method | path               | description           |
-| ------ | ------------------ | --------------------- |
-| GET    | `/api/me/password` | パスワード設定有無    |
-| PATCH  | `/api/me/password` | パスワード設定 / 変更 |
-
-`PATCH /api/me/password` は `{ "new_password": "..." }` を受け取ります。既に
-パスワードが設定されている場合は
-`{ "current_password": "...", "new_password": "..." }` が必要です。
-
 ### Personal Access Tokens
 
 | method | path                                 | description |
@@ -2147,7 +2136,7 @@ backend へ proxy されます。
 | method | path                         | description                          |
 | ------ | ---------------------------- | ------------------------------------ |
 | GET    | `/auth/login`                | `/auth/oidc/login` への互換 redirect |
-| POST   | `/auth/password`             | username/password ログイン           |
+| POST   | `/auth/password`             | retired (`410 Gone`)                 |
 | GET    | `/auth/cli`                  | retired (`410 Gone`)                 |
 | GET    | `/auth/link/google`          | retired (`410 Gone`)                 |
 | GET    | `/auth/link/google/callback` | retired (`410 Gone`)                 |

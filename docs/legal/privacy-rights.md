@@ -60,7 +60,6 @@ secret は返しません。
 | Personal access tokens | token prefix、scope、expiry、last used metadata のみ。token hash / plaintext は返さない                              |
 | OAuth tokens           | token type、client、scope、revocation、expiry metadata のみ。token hash は返さない                                   |
 | Auth identities        | provider、provider subject、email snapshot、linked / last login metadata を返す。refresh token ciphertext は返さない |
-| Password credentials   | `has_password` boolean のみ。password hash は返さない                                                                |
 | Billing                | processor name、customer / subscription id、plan、status、period metadata を返す。card number は Takos に保存しない  |
 
 ## Lawful Bases
