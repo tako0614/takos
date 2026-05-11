@@ -80,10 +80,10 @@ automation や API smoke に使う long-lived credential は Takosumi Accounts
 token secret / hash / revocation registry を Takos app には保存しません。
 
 1. Takosumi Accounts の account settings を開く
-2. Personal Access Tokens または CLI/device flow を開く
+2. Personal Access Tokens を開く
 3. token 名を入力する
 4. 必要な scope / access level を選ぶ (`/api/me` smoke だけなら `profile`)
-5. 生成された `takpat_...` または OIDC access token を secret store に保存する
+5. 生成された `takpat_...` を secret store に保存する
 
 Takos API の route family ごとの必要 scope は
 [`API Reference`](/reference/api#認証) を参照します。token value は作成時に
