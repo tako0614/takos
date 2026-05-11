@@ -113,16 +113,16 @@ function validationCommands(): CommandManifest[] {
   return [
     { name: 'check', command: ['deno', 'task', 'check'] },
     {
-      name: 'validate-agent-docs',
-      command: ['deno', 'task', 'validate:agent-docs'],
+      name: 'lint:agent-docs',
+      command: ['deno', 'task', 'lint:agent-docs'],
     },
     {
       name: 'validate-architecture',
       command: ['deno', 'task', 'validate:architecture'],
     },
     {
-      name: 'docs:build',
-      command: ['deno', 'task', 'docs:build'],
+      name: 'lint:docs',
+      command: ['deno', 'task', 'lint:docs'],
     },
     {
       name: 'service-set-validator',
@@ -208,7 +208,7 @@ function assertRequiredValidationCommands(
 ) {
   const byName = new Map(commands.map((command) => [command.name, command]));
   const required: Record<string, readonly string[]> = {
-    'validate-agent-docs': ['deno', 'task', 'validate:agent-docs'],
+    'lint:agent-docs': ['deno', 'task', 'lint:agent-docs'],
     'validate-architecture': ['deno', 'task', 'validate:architecture'],
     'validate-distributions': ['deno', 'task', 'validate:distributions'],
     'service-set-validator': ['deno', 'task', 'validate:service-set'],
@@ -224,7 +224,7 @@ function assertRequiredValidationCommands(
     ],
     'helm-template-smoke': ['deno', 'task', 'helm:template-smoke'],
     'helm-install-smoke': ['deno', 'task', 'helm:install-smoke'],
-    'docs:build': ['deno', 'task', 'docs:build'],
+    'lint:docs': ['deno', 'task', 'lint:docs'],
   };
   const errors: string[] = [];
 

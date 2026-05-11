@@ -185,7 +185,7 @@ Convert the takosumi kernel acceptance surface into tests grouped by:
 
 ```bash
 deno task check
-deno task test:all
+cd ../takosumi && deno task test
 deno lint
 deno fmt --check
 ```

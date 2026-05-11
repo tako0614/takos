@@ -35,16 +35,16 @@ const gates: GateCommand[] = [
     command: ['deno', 'task', 'check'],
   },
   {
-    name: 'validate-agent-docs',
-    command: ['deno', 'task', 'validate:agent-docs'],
+    name: 'lint:agent-docs',
+    command: ['deno', 'task', 'lint:agent-docs'],
   },
   {
     name: 'validate-architecture',
     command: ['deno', 'task', 'validate:architecture'],
   },
   {
-    name: 'docs:build',
-    command: ['deno', 'task', 'docs:build'],
+    name: 'lint:docs',
+    command: ['deno', 'task', 'lint:docs'],
   },
   {
     name: 'service-set-validator',

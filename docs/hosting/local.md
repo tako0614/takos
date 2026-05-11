@@ -43,14 +43,13 @@ docker compose --env-file .env.local -p takos-local -f compose.local.yml up --bu
 
 ```bash
 deno task local:smoke              # 全体の疎通確認
-deno task local:proxyless-smoke    # CF 固有 path の逆流チェック
+deno task local:e2e                # isolated compose e2e + Smart HTTP git clone
 ```
 
-### `deno task local:proxyless-smoke` とは
+### `deno task local:e2e` とは
 
-tracked reference Workers backend
-固有のルーティングパスがローカル環境で意図せず「逆流」しないかを確認するテスト。セルフホスト環境で
-Cloudflare 依存のルーティングが紛れ込んでいないかを検証する。
+isolated compose project を起動し、health checks、apps/api 経由の Smart HTTP git clone、主要 service の疎通を確認する
+CI 用 smoke です。
 
 ## 主要サービス
 
