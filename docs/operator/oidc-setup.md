@@ -58,7 +58,7 @@ https://<TENANT_HOST>/auth/oidc/callback
 
 `/auth/login`、`/auth/password`、`/auth/cli`、`/auth/external/*`、`/auth/link/google`
 は公開 route ではありません。新規・既存 tenant とも Takosumi Accounts 経由の
-`/auth/oidc/login` / `/auth/oidc/callback` のみを使います。
+`/auth/oidc/login` / `/auth/oidc/callback` / `/auth/logout` のみを使います。
 
 Takos runtime には Google OAuth client secret を配りません。Google / GitHub /
 passkey / enterprise OIDC などの upstream IdP credential は Takosumi Accounts

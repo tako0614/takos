@@ -52,8 +52,8 @@ https://<ADMIN_DOMAIN>/
 ```
 
 未ログインなら `/auth/oidc/login` へ進み、Takosumi Accounts の resolved OIDC
-issuer で認証します。Takos は `/auth/oidc/login` + `/auth/oidc/callback` だけを
-consumer として受けます。Google / GitHub / passkey / enterprise OIDC などの
+issuer で認証します。Takos は `/auth/oidc/login` / `/auth/oidc/callback` /
+`/auth/logout` の 3 route だけを consumer として受けます。Google / GitHub / passkey / enterprise OIDC などの
 upstream IdP は Takosumi Accounts 側の broker 設定で扱います。`/auth/login`
 は公開 route ではありません。詳しくは [OIDC Consumer](/apps/oidc-consumer)
 を参照してください。
