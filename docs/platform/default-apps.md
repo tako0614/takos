@@ -23,7 +23,7 @@ bundled app distribution の初期セットは以下の 5 つ（Agent / Chat / G
 | [takos-excel](/platform/takos-excel)       | `v0.1.2` tag | スプレッドシート                      | launcher / MCP endpoint / file handler / storage grant          |
 | [takos-slide](/platform/takos-slide)       | `v0.1.2` tag | プレゼンテーション                    | launcher / MCP endpoint / file handler / storage grant          |
 | [takos-computer](/platform/takos-computer) | `v2.1.2` tag | sandbox computer / browser automation | launcher / MCP endpoint / sandbox web-service / Takos API grant |
-| [yurucommu](/platform/yurucommu)           | `v1.2.3` tag | ActivityPub / community social        | launcher / `identity.oidc@v1` / DB / object-store / queue       |
+| [yurucommu](/platform/yurucommu)           | `v1.2.4` tag | ActivityPub / community social        | launcher / `identity.oidc@v1` / DB / object-store / queue       |
 
 bundled app の launcher / MCP / file handler entry は kernel manifest の `publications[]` ではなく、Takos app catalog /
 runtime registry の metadata です。 workload 自体は `.takosumi/manifest.yml` の Shape resources で deploy します。
