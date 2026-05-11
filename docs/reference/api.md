@@ -2009,8 +2009,8 @@ OIDC issuer の discovery は
 
 認証は
 [Takosumi Accounts OIDC issuer](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-に集約 されます。Takos は [OIDC consumer](/apps/oidc-consumer) として `/auth/oidc/login` + `/auth/oidc/callback`
-のみ提供します。
+に集約 されます。Takos は [OIDC consumer](/apps/oidc-consumer) として `/auth/oidc/login`、`/auth/oidc/callback`、
+`/auth/logout` の 3 route だけを提供します。
 
 | method | path                  | description                      |
 | ------ | --------------------- | -------------------------------- |
