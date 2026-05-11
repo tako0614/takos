@@ -162,7 +162,7 @@ const expectedDefaultAppEntries: readonly ExpectedDefaultAppEntry[] = [
     name: 'yurucommu',
     title: 'Yurucommu',
     repositoryUrl: 'https://github.com/tako0614/yurucommu.git',
-    ref: 'v1.2.3',
+    ref: 'v1.2.4',
     refType: 'tag',
     preinstall: true,
   },
