@@ -633,8 +633,6 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 | `OCI_ORCHESTRATOR_TOKEN`                       | OCI deployment adapter / orchestrator 認証トークン（任意）            |
 | `ROUTING_DO_PHASE`                             | RoutingDO rollout phase。詳細は下記 [Routing phases](#routing-phases) |
 | `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` | プラットフォーム署名鍵                                                |
-| `BILLING_PROCESSOR`                            | payment integration の選択。default は `stripe`                       |
-| `STRIPE_*`                                     | Stripe 決済連携 (`BILLING_PROCESSOR=stripe` 時のみ有効)               |
 
 認証系:
 
