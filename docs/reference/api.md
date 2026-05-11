@@ -1,6 +1,6 @@
 # API リファレンス
 
-<!-- docs:api-families seed-repositories,explore,public-stores,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,publications,apps,threads,runs,search,index,memories,skills,sessions,git,repos,agent-tasks,notifications,events,pull-requests,deployments,groups,billing,auth -->
+<!-- docs:api-families seed-repositories,explore,public-stores,profiles,public-share,mcp,setup,me,spaces,shortcuts,services,custom-domains,resources,publications,apps,threads,runs,search,index,memories,skills,sessions,git,repositories,repos-compat,agent-tasks,notifications,events,pull-requests,deployments,groups,billing,auth -->
 
 ::: tip Coverage このページは Takos product / compatibility gateway / bundled first-party app の **public HTTP
 contract** をまとめたリファレンスです。takosumi kernel の正本 API は takosumi 側 docs にあり、このページの deploy 記述は
@@ -167,7 +167,8 @@ GET /api/resources?limit=20&offset=0
 | [`skills`](#skills)                               | skill catalog / custom skill                                         |
 | [`sessions`](#sessions)                           | session lifecycle / heartbeat                                        |
 | [`git`](#git)                                     | space-scoped git 操作                                                |
-| [`repos`](#repos)                                 | repo CRUD / tree / blob / branches / commits / stars / forks         |
+| [`repositories`](#repositories)                   | canonical repo gateway / source browsing / pull requests             |
+| [`repos.compat`](#repos-compatibility)            | legacy `/api/repos/*` compatibility routes not yet migrated          |
 | [`repos.actions`](#repos-actions)                 | workflow runs / secrets / artifacts                                  |
 | [`repos.releases`](#repos-releases)               | release CRUD                                                         |
 | [`pull-requests`](#pull-requests)                 | PR / review / merge                                                  |
@@ -1360,21 +1361,27 @@ Space File Sync セッションのライフサイクル管理。
 
 ---
 
-## repos
+## repositories
 
-リポジトリの CRUD・Git 操作・ワークフロー管理。
+リポジトリの canonical public gateway。`apps/api` が user / edge credential を検証し、`takos-git-contract`
+の capability で署名した internal request を `takos-git` へ転送します。新しい browser / CLI の repository read と PR
+flow はこの `/api/repositories` family を使います。
 
-### 基本 CRUD
+`/api/repos/*` はまだ移行していない stars / forks / releases / actions / import / branch write 等の互換 route です。新しい
+read path や PR state path を `/api/repos` に追加しないでください。
 
-| method | path                         | description                    |
-| ------ | ---------------------------- | ------------------------------ |
-| GET    | `/api/spaces/:spaceId/repos` | ワークスペース内リポジトリ一覧 |
-| POST   | `/api/spaces/:spaceId/repos` | リポジトリ作成                 |
-| GET    | `/api/repos/:repoId`         | リポジトリ詳細                 |
-| PATCH  | `/api/repos/:repoId`         | リポジトリ設定更新             |
-| DELETE | `/api/repos/:repoId`         | リポジトリ削除                 |
+### Repository metadata / source resolution
 
-#### `GET /api/spaces/:spaceId/repos`
+| method | path                             | description                                             |
+| ------ | -------------------------------- | ------------------------------------------------------- |
+| GET    | `/api/repositories?spaceId=...`  | repository summary 一覧                                 |
+| GET    | `/api/repositories/:repoId`      | repository metadata と refs                             |
+| POST   | `/api/source/resolve`            | `{ repositoryId, sourceRef, spaceId? }` を commit に解決 |
+| POST   | `/api/spaces/:spaceId/repos`     | space 内リポジトリ作成 _(compatibility create route)_   |
+| PATCH  | `/api/repos/:repoId`             | リポジトリ設定更新 _(compatibility)_                    |
+| DELETE | `/api/repos/:repoId`             | リポジトリ削除 _(compatibility)_                        |
+
+#### `GET /api/repositories?spaceId=space_abc123`
 
 ```json
 {
@@ -1382,11 +1389,50 @@ Space File Sync セッションのライフサイクル管理。
     {
       "id": "repo_abc123",
       "name": "my-app",
-      "default_branch": "main"
+      "defaultBranch": "main"
     }
   ]
 }
 ```
+
+### Refs / Branches / Tags
+
+| method | path                                | description        |
+| ------ | ----------------------------------- | ------------------ |
+| GET    | `/api/repositories/:repoId/refs`    | ref 一覧           |
+| GET    | `/api/repositories/:repoId/branches` | branch ref 一覧    |
+| GET    | `/api/repositories/:repoId/tags`    | tag ref 一覧       |
+
+branch 作成・削除・default branch 更新は当面 compatibility route です。
+
+| method | path                                              | description            |
+| ------ | ------------------------------------------------- | ---------------------- |
+| POST   | `/api/repos/:repoId/branches`                     | ブランチ作成           |
+| DELETE | `/api/repos/:repoId/branches/:branchName`         | ブランチ削除           |
+| POST   | `/api/repos/:repoId/branches/:branchName/default` | デフォルトブランチ設定 |
+
+### Commits
+
+| method | path                                                                            | description    |
+| ------ | ------------------------------------------------------------------------------- | -------------- |
+| GET    | `/api/repositories/:repoId/commits?ref=<ref>&limit=<n>&offset=<n>&path=<path>`  | コミット一覧   |
+| GET    | `/api/repositories/:repoId/commits/:commitSha?ref=<ref>`                       | コミット詳細   |
+
+`offset` は `git log --skip=<n>` に対応します。invalid value は zero に clamp され、`path` を付けると path-scoped log
+になります。
+
+### Tree / Blob / Compare
+
+| method | path                                                            | description                  |
+| ------ | --------------------------------------------------------------- | ---------------------------- |
+| GET    | `/api/repositories/:repoId/tree?ref=<ref>&path=<path>`          | ディレクトリツリー取得       |
+| GET    | `/api/repositories/:repoId/blob?ref=<ref>&path=<path>`          | ファイル内容取得             |
+| GET    | `/api/repositories/:repoId/compare?base=<ref>&head=<ref>`       | ref 間 compare / changed file |
+
+## repos compatibility
+
+`/api/repos/*` は control compatibility app に残る route family です。canonical Git object read と PR state は
+[`repositories`](#repositories) / [`pull-requests`](#pull-requests) を使います。
 
 ### Stars / Forks
 
@@ -1397,33 +1443,6 @@ Space File Sync セッションのライフサイクル管理。
 | GET    | `/api/repos/:repoId/star` | star 状態確認           |
 | GET    | `/api/repos/starred`      | star 済みリポジトリ一覧 |
 | POST   | `/api/repos/:repoId/fork` | リポジトリ fork         |
-
-### Branches
-
-| method | path                                              | description            |
-| ------ | ------------------------------------------------- | ---------------------- |
-| GET    | `/api/repos/:repoId/branches`                     | ブランチ一覧           |
-| POST   | `/api/repos/:repoId/branches`                     | ブランチ作成           |
-| DELETE | `/api/repos/:repoId/branches/:branchName`         | ブランチ削除           |
-| POST   | `/api/repos/:repoId/branches/:branchName/default` | デフォルトブランチ設定 |
-
-### Commits
-
-| method | path                         | description                                    |
-| ------ | ---------------------------- | ---------------------------------------------- |
-| GET    | `/api/repos/:repoId/commits` | コミット一覧（ページネーション・フィルタ対応） |
-
-### Git tree / blob
-
-| method | path                                    | description                  |
-| ------ | --------------------------------------- | ---------------------------- |
-| GET    | `/api/repos/:repoId/tree/:ref`          | ルートディレクトリツリー取得 |
-| GET    | `/api/repos/:repoId/tree/:ref/*`        | サブディレクトリツリー取得   |
-| GET    | `/api/repos/:repoId/blob/:ref`          | ルートファイル内容取得       |
-| GET    | `/api/repos/:repoId/blob/:ref/*`        | ファイル内容取得             |
-| GET    | `/api/repos/:repoId/log`                | コミットログ                 |
-| GET    | `/api/repos/:repoId/log/:ref`           | ref 指定コミットログ         |
-| GET    | `/api/repos/:repoId/log/:ref/:path{.+}` | パス指定コミットログ         |
 
 ### Search / Diff / Blame
 
@@ -1615,46 +1634,62 @@ masking は実装済みです。GitHub Actions と完全互換ではない field
 
 ## pull-requests
 
-プルリクエストの作成・レビュー・マージ。
+プルリクエストの canonical public gateway。PR metadata / comments / reviews / diff / merge は
+`/api/repositories/:repoId/pull-requests` family を使い、`apps/api` が `takos-git` へ署名付きで転送します。
+AI review は同じ namespace で公開されますが、実体は Takos product の agent behavior なので control compatibility app
+へ転送されます。
 
 ### PR CRUD
 
-| method | path                                       | description             |
-| ------ | ------------------------------------------ | ----------------------- |
-| GET    | `/api/repos/:repoId/pulls`                 | PR 一覧（フィルタ対応） |
-| POST   | `/api/repos/:repoId/pulls`                 | PR 作成                 |
-| GET    | `/api/repos/:repoId/pulls/:prNumber`       | PR 詳細                 |
-| PATCH  | `/api/repos/:repoId/pulls/:prNumber`       | PR 更新                 |
-| POST   | `/api/repos/:repoId/pulls/:prNumber/close` | PR クローズ             |
-| GET    | `/api/repos/:repoId/pulls/:prNumber/diff`  | PR diff 取得            |
+| method | path                                                       | description             |
+| ------ | ---------------------------------------------------------- | ----------------------- |
+| GET    | `/api/repositories/:repoId/pull-requests`                  | PR 一覧（status filter） |
+| POST   | `/api/repositories/:repoId/pull-requests`                  | PR 作成                 |
+| GET    | `/api/repositories/:repoId/pull-requests/:prNumber`        | PR 詳細                 |
+| PATCH  | `/api/repositories/:repoId/pull-requests/:prNumber`        | PR 更新 / close         |
+| GET    | `/api/repositories/:repoId/pull-requests/:prNumber/diff`   | hunked PR diff 取得     |
 
 `status` field の値: `open` (default) / `closed` / `merged`。state transitions: `open → closed` または
-`open → merged`。`merged` は merge endpoint (`/merge`) 経由でのみ設定される。
+`open → merged`。close は `PATCH` body `{ "status": "closed" }`、`merged` は merge endpoint (`/merge`) 経由でのみ
+設定される。
 
 ### Comments
 
-| method | path                                          | description  |
-| ------ | --------------------------------------------- | ------------ |
-| GET    | `/api/repos/:repoId/pulls/:prNumber/comments` | コメント一覧 |
-| POST   | `/api/repos/:repoId/pulls/:prNumber/comments` | コメント追加 |
+| method | path                                                                | description  |
+| ------ | ------------------------------------------------------------------- | ------------ |
+| GET    | `/api/repositories/:repoId/pull-requests/:prNumber/comments`        | コメント一覧 |
+| POST   | `/api/repositories/:repoId/pull-requests/:prNumber/comments`        | コメント追加 |
+
+`GET comments` は `takos-git` の PR detail response から `comments` を抽出して返します。`POST comments` は
+`takos-git` の comment append contract に転送します。
 
 ### Reviews
 
-| method | path                                           | description     |
-| ------ | ---------------------------------------------- | --------------- |
-| GET    | `/api/repos/:repoId/pulls/:prNumber/reviews`   | レビュー一覧    |
-| POST   | `/api/repos/:repoId/pulls/:prNumber/reviews`   | レビュー投稿    |
-| POST   | `/api/repos/:repoId/pulls/:prNumber/ai-review` | AI レビュー実行 |
+| method | path                                                                 | description     |
+| ------ | -------------------------------------------------------------------- | --------------- |
+| GET    | `/api/repositories/:repoId/pull-requests/:prNumber/reviews`          | レビュー一覧    |
+| POST   | `/api/repositories/:repoId/pull-requests/:prNumber/reviews`          | レビュー投稿    |
+| POST   | `/api/repositories/:repoId/pull-requests/:prNumber/ai-review`        | AI レビュー実行 |
+
+`GET reviews` は `takos-git` の PR detail response から `reviews` を抽出して返します。
 
 ### Merge
 
-| method | path                                           | description                          |
-| ------ | ---------------------------------------------- | ------------------------------------ |
-| GET    | `/api/repos/:repoId/pulls/:prNumber/conflicts` | コンフリクト確認                     |
-| POST   | `/api/repos/:repoId/pulls/:prNumber/resolve`   | コンフリクト解決                     |
-| POST   | `/api/repos/:repoId/pulls/:prNumber/merge`     | PR マージ（merge / squash / rebase） |
+| method | path                                                              | description           |
+| ------ | ----------------------------------------------------------------- | --------------------- |
+| POST   | `/api/repositories/:repoId/pull-requests/:prNumber/merge`         | PR fast-forward merge |
 
-`/resolve` / `/merge` の失敗レスポンスは共通エラー形式 `{ "error": { "code": "...", "message": "..." } }` を返す。
+current canonical merge は `ff-only` です。失敗レスポンスは共通エラー形式
+`{ "error": { "code": "...", "message": "..." } }` を返す。
+
+### Legacy conflict helpers
+
+コンフリクト確認・解決 helper はまだ control compatibility route に残ります。新しい PR state / discussion flow の正本ではありません。
+
+| method | path                                           | description                      |
+| ------ | ---------------------------------------------- | -------------------------------- |
+| GET    | `/api/repos/:repoId/pulls/:prNumber/conflicts` | コンフリクト確認 _(compatibility)_ |
+| POST   | `/api/repos/:repoId/pulls/:prNumber/resolve`   | コンフリクト解決 _(compatibility)_ |
 
 ---
 
@@ -2121,7 +2156,7 @@ curl -N \
 
 ```bash
 curl -H "Authorization: Bearer takpat_..." \
-  https://your-takos.example/api/repos/repo_123/blob/main/src/index.ts
+  "https://your-takos.example/api/repositories/repo_123/blob?ref=main&path=src/index.ts"
 ```
 
 ### PR を作成
@@ -2130,8 +2165,8 @@ curl -H "Authorization: Bearer takpat_..." \
 curl -X POST \
   -H "Authorization: Bearer takpat_..." \
   -H "Content-Type: application/json" \
-  -d '{"title":"Fix bug","head":"fix/bug","base":"main"}' \
-  https://your-takos.example/api/repos/repo_123/pulls
+  -d '{"title":"Fix bug","headBranch":"fix/bug","baseBranch":"main"}' \
+  https://your-takos.example/api/repositories/repo_123/pull-requests
 ```
 
 ### サービスをデプロイ
