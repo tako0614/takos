@@ -37,15 +37,15 @@ CLI で拒否します。
 
 Installable App Model では CLI の long-lived credential は **Takosumi Accounts
 PAT** か Takosumi Accounts の device / OIDC flow で得た bearer token
-を使います。Takos 本体の legacy `/auth/cli` browser callback は削除済みであり、
-新規 operator / client は依存しないでください。
+を使います。Takos 本体の legacy `/auth/cli` browser callback と CLI 側の
+browser login 実装は削除済みであり、新規 operator / client は依存できません。
 
 `takos login --api-url <url> --token <token>` は Takosumi Accounts で発行した
 PAT (`takpat_...`) または Accounts OIDC/device flow で得た bearer token を
 `~/.takos/config.json` に保存します。 current Takos deployment では `/auth/cli`
-は公開されず `404` なので、ブラウザ callback は既定では使いません。
-`--legacy-browser` は互換 deployment が旧 `/auth/cli`
-をまだ公開している場合だけの 明示 opt-in です。
+は公開されず `404` で、Takos CLI にも browser callback mode はありません。
+session bearer から PAT を作る場合は `takos login --create-pat` が Takosumi
+Accounts `POST /v1/account/tokens` を呼びます。
 
 現行運用では次のどちらかを使います。
 
@@ -82,7 +82,6 @@ CLI は次の順序で認証情報を解決します。
 | `TAKOS_CONFIG_DIR`       | local config dir の上書き       |
 | `TAKOS_TIMEOUT_MS`       | CLI timeout の共通上書き        |
 | `TAKOS_API_TIMEOUT_MS`   | API request timeout の上書き    |
-| `TAKOS_LOGIN_TIMEOUT_MS` | login callback timeout の上書き |
 
 `TAKOS_SESSION_ID` がある場合は `TAKOS_TOKEN` より優先されます。
 
