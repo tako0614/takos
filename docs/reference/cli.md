@@ -389,7 +389,7 @@ takos discover list /explore/repos
 | `shortcut`           | `/api/shortcuts`                         |
 | `notification`       | `/api/notifications`                     |
 | `public-share`       | `/api/public/thread-shares`              |
-| `auth`               | `/api/auth/*` と `/api/me/oauth/*`       |
+| `auth`               | `/api/auth/*` と `/api/me`               |
 | `discover`           | `/api` 配下の discovery/search endpoints |
 
 service 系 (`/api/services`) の CRUD / custom domains / deployment status は current HTTP API surface
