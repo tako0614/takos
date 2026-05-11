@@ -56,8 +56,8 @@ OIDC client の redirect URI は AppInstallation domain に対して固定です
 https://<TENANT_HOST>/auth/oidc/callback
 ```
 
-`/auth/login`、`/auth/password`、`/auth/cli`、`/auth/external/*` は公開 route
-ではありません。新規・既存 tenant とも Takosumi Accounts 経由の
+`/auth/login`、`/auth/password`、`/auth/cli`、`/auth/external/*`、`/auth/link/google`
+は公開 route ではありません。新規・既存 tenant とも Takosumi Accounts 経由の
 `/auth/oidc/login` / `/auth/oidc/callback` のみを使います。
 
 Takos runtime には Google OAuth client secret を配りません。Google / GitHub /
