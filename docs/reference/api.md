@@ -244,7 +244,7 @@ default distribution に含まれる first-party catalog app の公開 discover 
 | GET    | `/api/explore/packages/:username/:repoName/latest`   | 最新バージョン              |
 | GET    | `/api/explore/packages/:username/:repoName/versions` | 全バージョン一覧            |
 | GET    | `/api/explore/packages/by-repo/:repoId/reviews`      | パッケージレビュー一覧      |
-| POST   | `/api/explore/packages/by-repo/:repoId/reviews`      | レビュー投稿 _(deprecated)_ |
+| POST   | `/api/explore/packages/by-repo/:repoId/reviews`      | not exposed (`404`)         |
 
 ### Users
 
