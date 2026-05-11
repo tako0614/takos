@@ -2018,7 +2018,7 @@ OIDC issuer の discovery は
 | GET    | `/auth/oidc/callback` | OIDC authorization code callback |
 | POST   | `/auth/logout`        | app-local browser session logout |
 
-`/auth/login`、`/auth/password`、`/auth/cli`、`/auth/link/google` は公開 route ではありません。
+`/auth/login`、`/auth/password`、`/auth/cli`、`/auth/external/*`、`/auth/link/google` は公開 route ではありません。
 
 ---
 
