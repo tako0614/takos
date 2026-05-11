@@ -154,8 +154,6 @@ CREATE TABLE accounts (
     "trust_tier" TEXT NOT NULL DEFAULT 'new',
     "setup_completed" INTEGER NOT NULL DEFAULT 0,
     "default_repository_id" TEXT,
-    "google_sub" TEXT,
-    "takos_auth_id" TEXT,
     "ai_model" TEXT DEFAULT 'gpt-5-mini',
     "model_backend" TEXT DEFAULT 'openai',
     "owner_account_id" TEXT,
@@ -1547,22 +1545,13 @@ CREATE UNIQUE INDEX "accounts_slug_key" ON "accounts"("slug");
 CREATE UNIQUE INDEX "accounts_email_key" ON "accounts"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "accounts_google_sub_key" ON "accounts"("google_sub");
-
--- CreateIndex
 CREATE INDEX "accounts_type_idx" ON "accounts"("type");
-
--- CreateIndex
-CREATE INDEX "accounts_takos_auth_id_idx" ON "accounts"("takos_auth_id");
 
 -- CreateIndex
 CREATE INDEX "accounts_slug_idx" ON "accounts"("slug");
 
 -- CreateIndex
 CREATE INDEX "accounts_owner_account_id_idx" ON "accounts"("owner_account_id");
-
--- CreateIndex
-CREATE INDEX "accounts_google_sub_idx" ON "accounts"("google_sub");
 
 -- CreateIndex
 CREATE INDEX "accounts_email_idx" ON "accounts"("email");
