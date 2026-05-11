@@ -18,7 +18,7 @@ tenant runtime の local backend を動かせる。
 ## セットアップ
 
 ```bash
-deno task build:all
+deno task doctor
 cp .env.local.example .env.local
 ```
 
@@ -56,34 +56,18 @@ Cloudflare 依存のルーティングが紛れ込んでいないかを検証す
 
 | サービス           | ポート            | 役割                                          |
 | ------------------ | ----------------- | --------------------------------------------- |
-| `control-web`      | `8787`            | Web / API worker                              |
-| `control-dispatch` | `8788`            | テナント dispatch                             |
-| `control-worker`   | -                 | バックグラウンド worker                       |
-| `runtime-host`     | `8789`            | runtime-service host / compatibility endpoint |
-| `runtime`          | `8081`            | `takos-runtime-service` container             |
-| `executor-host`    | `8790`            | エージェント executor の control-plane host   |
-| `takos-agent`      | `8082`            | エージェント executor container               |
-| `oci-orchestrator` | `9002`            | コンテナライフサイクル管理                    |
-| `postgres`         | `15432`           | PostgreSQL（D1 互換）                         |
-| `redis`            | `16379`           | Redis（queue / durable runtime の backing）   |
-| `minio`            | `19000` / `19001` | MinIO（R2 互換）                              |
+| `takos-app`        | `8787`            | OIDC consumer / Web UI / public API gateway   |
+| `takosumi`         | `8788`            | generic manifest deploy engine                |
+| `takos-agent`      | `8789`            | agent execution service                       |
+| `takos-git`        | `8790`            | Git hosting service                           |
+| `postgres`         | `15432`           | PostgreSQL                                    |
+| `redis`            | `16379`           | Redis（queue/cache backing）                  |
 
-`runtime-host` / `executor-host` は `TAKOS_LOCAL_RUNTIME_URL` /
-`TAKOS_LOCAL_EXECUTOR_URL` で backing container に forward する。OSS local stack
-の既定値は `.env.local.example` を使う。
-
-runtime-service JWT は `PLATFORM_PRIVATE_KEY` で署名し、`JWT_PUBLIC_KEY` で検証
-する。local stack では runtime container も同じ env file を読むため、
-`JWT_PUBLIC_KEY` には `PLATFORM_PUBLIC_KEY` と同じ公開鍵を設定する。Cloudflare
-Container 構成では runtime-host が `PLATFORM_PUBLIC_KEY` を container env の
-`JWT_PUBLIC_KEY` として渡す。
-
-local での user-defined group workload 実行は tenant runtime compatibility path
-で行い、内部では `control-dispatch` から Workers-compatible local adapter が
-`worker-bundle` を materialize する。`runtime` container は sandbox shell /
-workflow job / git / CLI proxy 用の `takos-runtime-service` であり、任意の user
-app container ではない。image-backed Service / Attached Container は
-`oci-orchestrator` が扱う。
+local での user-defined group workload 実行は Takosumi kernel の manifest
+deploy engine と provider/runtime-agent connector 経由で扱います。workflow build
+や `workflowRef` 解決は `takosumi-git`、Git hosting は `takos-git`、agent 実行は
+`takos-agent` の責務です。旧 `control-dispatch` / `runtime-host` /
+`takos-runtime-service` を current service id として扱いません。
 
 private server stack の基準は `takos-private/`
 で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、
@@ -92,49 +76,24 @@ private server stack の基準は `takos-private/`
 
 ### ローカル service target override
 
-通常は `compose.local.yml` / `.env.local.example` の既定値を使う。個別の host
-service だけを外部プロセスへ逃がす場合は、local dispatch resolver の escape
-hatch として次を使える。
+通常は `compose.local.yml` / `.env.local.example` の既定値を使う。個別の owning
+service だけを外部プロセスへ逃がす場合は、compose env の internal URL を明示する。
 
 | 変数                                | 用途                                                        |
 | ----------------------------------- | ----------------------------------------------------------- |
-| `TAKOS_LOCAL_DISPATCH_TARGETS_JSON` | infra service target の URL map。tenant worker は上書き不可 |
-| `TAKOS_LOCAL_RUNTIME_URL`           | `runtime-host` service target の shorthand                  |
-| `TAKOS_LOCAL_EXECUTOR_URL`          | `executor-host` service target の shorthand                 |
-| `TAKOS_LOCAL_EGRESS_URL`            | `takos-egress` service target の shorthand                  |
-| `TAKOS_RUNTIME_HOST_URL`            | `runtime-host` service target の alias                      |
-| `TAKOS_EXECUTOR_HOST_URL`           | `executor-host` service target の alias                     |
-| `TAKOS_EGRESS_URL`                  | `takos-egress` service target の fallback shorthand         |
+| `TAKOSUMI_INTERNAL_URL`             | takos-app から Takosumi kernel への internal URL            |
+| `TAKOS_GIT_INTERNAL_URL`            | takos-app から Takos Git hosting への internal URL          |
+| `TAKOS_AGENT_INTERNAL_URL`          | takos-app から Takos agent service への internal URL        |
 
 ```bash
-TAKOS_LOCAL_DISPATCH_TARGETS_JSON='{"runtime-host":"http://127.0.0.1:8789"}'
+TAKOSUMI_INTERNAL_URL=http://127.0.0.1:8788
 ```
 
 ## 個別起動
 
-compose を使わずに個別にサービスを起動する場合。事前に PostgreSQL / Redis /
-MinIO が起動している前提。
-
-### Control Plane サービス
-
-```bash
-cd takos/app/apps/control && deno task dev:local:web       # Web / API サーバー
-cd takos/app/apps/control && deno task dev:local:dispatch  # テナントリクエストの dispatch
-cd takos/app/apps/control && deno task dev:local:worker    # バックグラウンドジョブ処理
-```
-
-### Host サービス
-
-```bash
-cd takos/app/apps/control && deno task dev:local:runtime-host   # runtime-service host
-cd takos/app/apps/control && deno task dev:local:executor-host  # エージェント executor host
-```
-
-### OCI Orchestrator
-
-```bash
-cd takos/app/apps/control && deno task dev:local:oci-orchestrator  # コンテナ管理
-```
+compose を使わずに個別にサービスを起動する場合は、各 owning repository の
+AGENTS.md / README に従います。Takos product shell docs では旧
+`control-*` / `runtime-host` process role を current service として扱いません。
 
 private server stack を構成する場合は `takos-private/.env.server.example` と
 `takos-private/compose.server.yml` を参考に環境変数を設定する。
@@ -242,8 +201,7 @@ cd takos/app/apps/control && deno task db:migrate
   Workers backend と完全同一ではない
 - backend-specific な queue consumer / scheduler / workflow semantics
   は再現しきれない。queue binding の basic delivery は動かせるが、
-  `triggers.queues` の deploy は `workers-dispatch` backend 必須で、local
-  `runtime-host` では fail-fast する
+  backend-specific trigger behavior は target runtime connector の制限に従う
 - vectorize binding には PostgreSQL + pgvector が必要（`PGVECTOR_ENABLED=true`）
 - Durable Object binding は persistent local runtime で利用できるが、tracked
   reference Workers backend と byte-for-byte 同一ではない

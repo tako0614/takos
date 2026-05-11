@@ -1,8 +1,7 @@
 # Store
 
-Store は Takos app layer のカタログ / マーケットプレイス機能です。パッケージの
-公開、install、remote repository import を扱います。takosumi kernel の compute
-manifest apply とは別 layer です。
+Store は Takos app layer のカタログ / マーケットプレイス機能です。パッケージの 公開、install、remote repository import
+を扱います。takosumi kernel の compute manifest apply とは別 layer です。
 
 ## App / InstallableApp / AppInstallation
 
@@ -22,42 +21,38 @@ App (Store の product label)
         └─ AppInstallation (Takosumi Account の Space に置かれる instance)
 ```
 
-Store は InstallableApp の **catalog** として機能し、ユーザーが install
-ボタンを押すと AppInstallation record が作られます。Store package の install
-contract と AppInstallation の lifecycle は別の concern です。
+Store は InstallableApp の **catalog** として機能し、ユーザーが install ボタンを押すと AppInstallation record
+が作られます。Store package の install contract と AppInstallation の lifecycle は別の concern です。
 
 詳細:
 
-- InstallableApp の manifest (`.takosumi/app.yml`) と install path 全体の正本は
-  [Install Paths](/apps/install-paths) を参照
+- InstallableApp の manifest (`.takosumi/app.yml`) と install path 全体の正本は [Install Paths](/apps/install-paths)
+  を参照
 - AppInstallation の record shape / lifecycle は
-  [App Installation Ledger](/architecture/app-installation) を参照
+  [App Installation Ledger](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md)
+  を参照
 - Installable App Model の全体設計は
-  [Installable App Model](/architecture/installable-app-model) を参照
+  [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
+  を参照
 
 ## 公開の仕組み
 
-public リポジトリに installer-bound manifest (`.takosumi/app.yml`) と、その
-`entry.manifest` が指す kernel-bound manifest (`.takosumi/manifest.yml` など) が
-あり、Release を作成すると Store に表示されます。
+public リポジトリに installer-bound manifest (`.takosumi/app.yml`) と、その `entry.manifest` が指す authoring compute
+manifest (`.takosumi/manifest.yml` など) があり、Release を作成すると Store に表示されます。
 
-Store の deployable 判定は release-backed です。public repository の non-draft /
-non-prerelease release と `.takosumi/app.yml` を基準にカタログ掲載を判定します。
-`.takosumi/manifest.yml` だけでは owner / binding / permission preview
-を表せない ため、InstallableApp としては扱いません。release asset
-は添付ファイルとして扱われ、 Store の deployable 判定条件ではありません。control
-plane が Git object store (`GIT_OBJECTS`) を読めず `.takosumi/app.yml` と
-`entry.manifest` を確認できない 場合、その release は deployable
-として扱いません。
+Store の deployable 判定は release-backed です。public repository の non-draft / non-prerelease release と
+`.takosumi/app.yml` を基準にカタログ掲載を判定します。 `.takosumi/manifest.yml` だけでは owner / binding / permission
+preview を表せない ため、InstallableApp としては扱いません。release asset は添付ファイルとして扱われ、 Store の
+deployable 判定条件ではありません。control plane が Git object store (`GIT_OBJECTS`) を読めず `.takosumi/app.yml` と
+`entry.manifest` を確認できない 場合、その release は deployable として扱いません。
 
 ## Seed Repositories
 
-Seed Repository は Store カタログとは別の bootstrap 補助です。space 作成時に
-operator-defined repository 候補を表示するための任意機能であり、Store package /
-app-label contract の必須要件ではありません。
+Seed Repository は Store カタログとは別の bootstrap 補助です。space 作成時に operator-defined repository
+候補を表示するための任意機能であり、Store package / app-label contract の必須要件ではありません。
 
-Takos Agent は kernel / agent runtime に含まれるため、Store package や Seed
-Repository として扱いません。
+Takos Agent は Takos product core / `takos-agent` service の機能であり、 InstallableApp ではありません。そのため Store
+package や Seed Repository として 扱いません。
 
 ### Seed Repositories の型定義
 
@@ -79,21 +74,17 @@ interface SeedRepository {
 
 - package catalog: public な package release を検索する
 - package install: Store package の source を解決して deploy pipeline に渡す
-- remote repository import: Store Network の remote store から repository
-  reference を取り込む
+- remote repository import: Store Network の remote store から repository reference を取り込む
 
-catalog の `deployable-app` は release-backed の deployable package を
-指します。`all` は全 catalog item、`repo` は repository card、`deployable-app`
-は release から deploy 可能な package を返します。
+catalog の `deployable-app` は release-backed の deployable package を 指します。`all` は全 catalog item、`repo` は
+repository card、`deployable-app` は release から deploy 可能な package を返します。
 
-`install` という語は package install にだけ使います。remote store
-からの取り込みは `import repository` と呼びます。
+`install` という語は package install にだけ使います。remote store からの取り込みは `import repository` と呼びます。
 
 ## Store API
 
-以下の `/api/explore/*` や `/api/seed-repositories` は current implementation の
-public surface です。Store で表示される `app` は product label であり、deploy
-model を説明するときは primitive / group を使います。これらの route
+以下の `/api/explore/*` や `/api/seed-repositories` は current implementation の public surface です。Store で表示される
+`app` は product label であり、deploy model を説明するときは primitive / group を使います。これらの route
 形状そのものを不変 contract とみなすわけではありません。
 
 ### カタログ取得
@@ -121,9 +112,8 @@ GET /api/explore/catalog?sort=trending&limit=20
 curl "https://takos.example.com/api/explore/catalog?tags=docs,notes&limit=10"
 ```
 
-`space_id` を付けた場合、レスポンスの `installation.deployment_id` は current
-group の `GroupHead.current_deployment_id` を指す Deployment record の ID
-です。legacy `bundle_deployments` ID や旧 `group_deployment_snapshot_id`
+`space_id` を付けた場合、レスポンスの `installation.deployment_id` は current group の `GroupHead.current_deployment_id`
+を指す Deployment record の ID です。legacy `bundle_deployments` ID や旧 `group_deployment_snapshot_id`
 はここに入りません。
 
 ### パッケージ検索
@@ -144,9 +134,8 @@ GET /api/explore/packages/suggest?q=tak&limit=10
 GET /api/explore/packages/{username}/{repoName}/latest
 ```
 
-`takos install` はこのレスポンスの
-`package.repository_url`、`package.release.tag`、`package.version` を使って
-deploy source を解決します。
+`takos install` はこのレスポンスの `package.repository_url`、`package.release.tag`、`package.version` を使って deploy
+source を解決します。
 
 レスポンス例:
 
@@ -169,9 +158,8 @@ deploy source を解決します。
 GET /api/explore/packages/{username}/{repoName}/versions
 ```
 
-`takos install --version <value>` はこのレスポンスの `version` または `tag`
-を照合し、選ばれた要素の `repository_url`、`tag`、`version` を deploy source
-として使います。
+`takos install --version <value>` はこのレスポンスの `version` または `tag` を照合し、選ばれた要素の
+`repository_url`、`tag`、`version` を deploy source として使います。
 
 レスポンス例:
 
@@ -211,30 +199,28 @@ GET /api/seed-repositories
 ## group を Store に公開するには
 
 1. リポジトリを public にする
-2. installer-bound manifest (`.takosumi/app.yml`) と、そこから参照する
-   kernel-bound manifest (`.takosumi/manifest.yml`) を追加
+2. installer-bound manifest (`.takosumi/app.yml`) と、そこから参照する authoring compute manifest
+   (`.takosumi/manifest.yml`) を追加
 3. non-draft / non-prerelease Release を作成
 
-control plane が release commit の `.takosumi/app.yml` と `entry.manifest`
-を確認できると Store カタログに deployable package として表示されます。
+control plane が release commit の `.takosumi/app.yml` と `entry.manifest` を確認できると Store カタログに deployable
+package として表示されます。
 
-Seed Repository として新規 space 作成時に表示したい場合は `seed-repositories.ts`
-に追加します。
+Seed Repository として新規 space 作成時に表示したい場合は `seed-repositories.ts` に追加します。
 
 ## ecosystem で自動化されるもの
 
-InstallableApp manifest と install pipeline
-を通じて、以下が自動的に関連づけられます:
+InstallableApp manifest と install pipeline を通じて、以下が自動的に関連づけられます:
 
 - group identity / service / route / hostname
 - resource binding / OIDC client (`identity.oidc@v1` AppBinding 経由、 詳細は
-  [Binding Catalog](/reference/binding-catalog))
+  [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md))
 - app metadata registration (launcher, MCP server, file handler, etc.)
 
 ## MCP 統合
 
-MCP endpoint の workload は Shape manifest の `resources[]` で deploy し、MCP
-server としての discovery metadata は app metadata / MCP registry に登録します。
+MCP endpoint の workload は Shape manifest の `resources[]` で deploy し、MCP server としての discovery metadata は app
+metadata / MCP registry に登録します。
 
 ```yaml
 mcp:
@@ -247,13 +233,12 @@ mcp:
         tokenRef: mcp-auth-token
 ```
 
-詳細は [MCP Server](/apps/mcp) と
-[App Integration Metadata Boundary](/architecture/app-publications) を参照。
+詳細は [MCP Server](/apps/mcp) と [App Integration Metadata Boundary](/architecture/app-publications) を参照。
 
 ## file handler 統合
 
-file handler UI の workload は Shape manifest の `resources[]` で deploy し、
-Storage UI 向けの discovery metadata は file handler registry に登録します。
+file handler UI の workload は Shape manifest の `resources[]` で deploy し、 Storage UI 向けの discovery metadata は
+file handler registry に登録します。
 
 ```yaml
 fileHandlers:
@@ -264,12 +249,11 @@ fileHandlers:
     extensions: [.md]
 ```
 
-handler URL は `:id` path segment を必ず含みます。Storage UI は起動時に
-`space_id` query parameter も追加しますが、`file_id` query fallback
-はありません。 詳細は [File Handlers](/apps/file-handlers) を参照。
+handler URL は `:id` path segment を必ず含みます。Storage UI は起動時に `space_id` query parameter
+も追加しますが、`file_id` query fallback はありません。 詳細は [File Handlers](/apps/file-handlers) を参照。
 
 ## 次に読むページ
 
 - [Deploy Manifest の書き方](/deploy/manifest)
-- [マニフェストリファレンス](/reference/manifest-spec)
+- [マニフェストリファレンス](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
 - [Repository / Catalog デプロイ](/deploy/store-deploy)

@@ -1,7 +1,7 @@
 # Resource Governance
 
-Takos の resource governance は、**resource CRUD + access control + runtime
-settings + billing gates** の組み合わせで成立しています。
+Takos の resource governance は、**resource CRUD + access control + runtime settings + billing gates**
+の組み合わせで成立しています。
 
 ## 管理対象
 
@@ -41,8 +41,7 @@ state は次に分かれています。
 
 ### runtime settings
 
-service / worker ごとに runtime setting, limit, flag を持てます。operator
-が調整する主な対象は次です。
+service / worker ごとに runtime setting, limit, flag を持てます。operator が調整する主な対象は次です。
 
 - hostname / route
 - common env links
@@ -51,8 +50,7 @@ service / worker ごとに runtime setting, limit, flag を持てます。operat
 
 ## billing gate
 
-current implementation では request path ごとに billing/plan gate
-をかけています。
+current implementation では request path ごとに billing/plan gate をかけています。
 
 | gate                            | path family                                                        |
 | ------------------------------- | ------------------------------------------------------------------ |
@@ -69,18 +67,16 @@ agent 系は特に次を併用します。
 
 ## usage / billing data model
 
-Takos app は app-local usage を記録し、請求主体は Takosumi Accounts
-(`takosumi.account.billing@v1`) に置きます。Takos app 側の current table は
-主に次です。
+Takos app は app-local usage を記録し、請求主体は Takosumi Accounts (`operator.billing.default`) に置きます。Takos app
+側の current table は 主に次です。
 
 - `app_usage_events`
 - `app_usage_rollups`
 
-canonical billing API は Takosumi Accounts の `takosumi.account.billing@v1`
-service role です。consumer は `serviceResolvers[]` / anchor で billing endpoint
-を resolve し、`/v1/billing/usage` で current billing account の usage rollup
-を取得します。Takos の `/api/billing/*` は current API ではなく、apps/api
-gateway では通常の未定義 route と同じ `404 Not Found` になります。
+canonical billing API は Takosumi Accounts の `operator.billing.default` BillingPort です。consumer は account API
+が返す billing endpoint に request を送り、`/v1/billing/usage` で current billing account の usage rollup
+を取得します。Takos の `/api/billing/*` と `/api/internal/v1/billing/*` は current API ではなく、apps/api gateway では
+retired compatibility response として `410 Gone` を返します。
 
 ## operator が見るべき state
 
@@ -91,6 +87,5 @@ gateway では通常の未定義 route と同じ `404 Not Found` になります
 - usage rollup
 - billing status
 
-詳しい public path は [API リファレンス](/reference/api)
-を参照してください。billing の詳細は [Billing](/platform/billing)
-を参照してください。
+詳しい public path は [API リファレンス](/reference/api) を参照してください。billing の詳細は
+[Billing](/platform/billing) を参照してください。

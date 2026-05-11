@@ -1,26 +1,47 @@
-# AGENTS.md
+# AGENTS.md — takos (Takos product shell)
 
-This repository is the Takos product shell.
+`takos` は **Takos product shell** で、 nested submodule (`app/` / `git/` / `agent/`) と shell-owned distribution
+artifacts (Helm / Terraform / distribution manifests / validator) を集約する。 Takos product 全体の identity は次:
 
-- Treat `../takosumi/` as the repo root for Takosumi kernel/control-plane work.
-- Treat `docs/contributing/` as shell-owned Takos planning docs (formerly `plan/`). Product roots may reference it, but
-  must not move product implementation code into it.
-- Treat `app/` as the repo root for user-facing Takos app/API gateway work.
-- Treat `git/` as the repo root for Takos Git hosting work.
-- Treat `deploy/` as the shell-owned Takos product distribution root for Helm, Terraform, distribution manifests, and
-  validator scripts that wrap published packages/images/APIs.
-- Treat `agent/` as the repo root for agent execution service work.
-- Do not add product implementation code or workspace configuration to this shell repo.
-- Do not reintroduce standalone deploy or runtime services in shell compose/env files; those lifecycles are owned by
-  `../takosumi/`.
-- `takos-agent-engine/` is a Rust library, not a Takos service. It is owned by the ecosystem root checkout and must stay
-  outside all service repos.
-- Do not add generic `common` packages. Shared behavior must be service-local unless it is a named domain library with a
-  clear owner.
-- Deploy configuration and secrets are owned by `../takos-private`; do not perform production or staging deploys from
-  this shell, and do not add private deploy entrypoints that import OSS source paths directly.
+> **Takos is a self-hostable AI-first chat & agent platform** with core features `chat / agent / memory / space`, and
+> bundled apps (`takos-docs / takos-slide / takos-excel / takos-computer / yurucommu`) that auto-install when a new
+> space is created. Takos runs on the Takosumi platform (`takosumi` kernel + Takosumi Accounts + optional `takosumi-git`
+> helper) but is not part of Takosumi — it is the unique top consumer above it.
 
-Layer rules:
+「Takos OS」 / 「Takos installable app」 等の言い換えはこの identity に統一する。
+
+## 責務
+
+### 持つ
+
+- nested submodule の集約 (`app/`、 `git/`、 `agent/`)
+- shell-owned distribution artifacts (`deploy/distributions/`、 `deploy/helm/`、 `deploy/terraform/`)
+- shell-owned planning docs (`docs/contributing/`、 旧 `plan/`)
+- product validator scripts (release-gate / validate:helm / validate:distributions 等)
+
+### 持たない
+
+- product implementation code (各 nested submodule の責務)
+- workspace 設定の集約 (各 nested submodule が独立)
+- standalone deploy / runtime service (`../takosumi/` の lifecycle ownership)
+- production / staging deploy 実行 (`../takos-private/` の責務)
+- generic `common` package (service-local helper のみ許可)
+
+## 隣接 product との contract
+
+- **Upstream platform**: `../takosumi/` (kernel)、 `../takosumi-cloud/` (Accounts)
+- **Sibling helper**: `../takosumi-git/` (optional installer)
+- **Downstream**: `../takos-private/` (deployment artifact 消費)、 bundled apps (`../takos-apps/*`、 `../yurucommu/`、
+  `../road-to-me/`)
+- **Internal**: `app/` (user-facing)、 `git/` (Git hosting)、 `agent/` (agent execution)
+
+## Substitutability
+
+- **Takos product 自体**: Takosumi platform を premise にした unique top consumer。 代替実装なし。
+- **Takosumi platform への依存**: kernel / Accounts / takosumi-git は各々 substitutable (詳細は
+  [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §「Layering Principle: Substitutability」)。
+
+## Layer rules
 
 - `app/` may depend on service contracts only, not on implementation packages.
 - `git/` must not import `app/` implementation.
@@ -30,17 +51,37 @@ Layer rules:
 - Provider plugins must depend on Takosumi plugin contracts/SDK (`jsr:@takos/takosumi-plugins`), not on kernel
   implementation paths.
 - The PaaS kernel implementation lives in the standalone Takosumi repository (`../takosumi/`,
-  `jsr:@takos/takosumi-kernel`). `deploy/` here only carries Takos-specific deploy artifacts (Helm chart, Terraform,
-  distribution manifests) that wrap the upstream kernel.
-- The official provider bundle is **Takosumi** (`@takosumi/plugins`, in-tree at `../takosumi/`). Treat it as an
-  independent product: distribution manifests reference it by JSR package name and `operator.takosumi.*` plugin ids, not
-  by the legacy `@takos-plugins` / `operator.takos.*` names.
-- Hosting target ids are now an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`.
-  Adding Azure / Fly.io / OCI etc. is a Takosumi profile + registry-call change, not a contract schema change.
+  `jsr:@takos/takosumi-kernel`). `deploy/` here only carries Takos-specific deploy artifacts that wrap the upstream
+  kernel.
+- The official provider bundle is **Takosumi** (`@takosumi/plugins`, in-tree at `../takosumi/`).
+- Hosting target ids are an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`.
 
-Naming history:
+## Workflow
 
-- `takos-paas`, `TAKOS_PAAS_*`, `deployment-paas-*`, and `dev:paas` are pre-split names. Current source paths, service
-  ids, Helm resources, env vars, CI tasks, and docs should use `takosumi` / `TAKOSUMI_*` for the kernel/runtime-agent
-  boundary. Historical migration notes may mention the old names only when explicitly describing compatibility or
-  migration history.
+```bash
+cd takos
+deno task doctor
+deno task local:up        # local stack
+deno task local:e2e
+deno task validate:helm
+deno task validate:distributions
+deno task validate:agent-docs
+deno task validate:architecture
+deno task release-gate
+deno task docs:build      # VitePress
+deno task docs:deploy     # Cloudflare Pages
+```
+
+## Naming history
+
+`takos-paas`、 `TAKOS_PAAS_*`、 `deployment-paas-*`、 `dev:paas` は pre-split 名。 current source path / service id /
+Helm resource / env var / CI task / docs は `takosumi` / `TAKOSUMI_*` を使う。 historical migration notes でのみ
+言及可能 (compatibility / migration history を explicit に説明する場合)。
+
+## 関連 docs
+
+- [`README.md`](README.md) — Takos product shell の overview
+- [`docs/`](docs/) — Takos product 専用 VitePress site (docs.takos.jp)
+- [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — ecosystem layering 原則
+- [`../AGENTS.md`](../AGENTS.md) — ecosystem AI 作業ルール
+- [`../ROADMAP.md`](../ROADMAP.md) — Phase 1.x active plan

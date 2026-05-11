@@ -1,24 +1,29 @@
 # Deploy Manifest (`.takosumi/manifest.yml`)
 
-Takos / Takosumi の installable app repository は、`.takosumi/` に 2 つの
-manifest を置きます。
+Takos bundled apps / third-party Takosumi installable app repository
+は、`.takosumi/` に 2 つの manifest を置きます。
 
-| file                     | owner                            | role                                                                                                             |
-| ------------------------ | -------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `.takosumi/app.yml`      | takosumi-git / Takosumi Accounts | install metadata、binding、permission、publisher、upgrade policy                                                 |
-| `.takosumi/manifest.yml` | takosumi-git / takosumi kernel   | authoring manifest。compile 後は compute resources、template、cross-instance service import だけが kernel に届く |
+| file                     | owner                            | role                                                                        |
+| ------------------------ | -------------------------------- | --------------------------------------------------------------------------- |
+| `.takosumi/app.yml`      | takosumi-git / Takosumi Accounts | install metadata、binding、permission、publisher、upgrade policy            |
+| `.takosumi/manifest.yml` | takosumi-git compiler            | authoring manifest。compile 後は closed Shape manifest だけが kernel に届く |
 
 このページは `.takosumi/manifest.yml` の authoring guide です。正確な field
-定義は [Manifest Reference](/reference/manifest-spec)、installer metadata は
-[App YAML Spec](/reference/app-yml-spec) を参照してください。
+定義は
+[Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)、installer
+metadata は
+[App YAML Spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
+を参照してください。
 
 ## 基本原則
 
 - `apiVersion: "1.0"` と `kind: Manifest` は必須。
-- kernel-bound manifest の top-level は closed envelope。
+- compiled manifest の top-level は closed envelope。
 - runtime-bearing unit は `resources[]` の Shape resource として書く。
 - workflow / build / Git convention は kernel ではなく `takosumi-git` が扱う。
 - install-time binding (`identity.oidc@v1` など) は `.takosumi/app.yml` に書く。
+- OIDC / billing / dashboard / deploy API は namespace export と account API で
+  扱い、kernel manifest には書かない。
 - kernel に届く compiled manifest から `workflowRef` と installer-only
   placeholder は消えている必要がある。
 - 旧 `components` / `routes[]` / `bindings[]` / `publications[]` AppSpec form は
@@ -144,13 +149,12 @@ Worker route patterns are strings in `worker@v1.spec.routes`. See
 
 OIDC, database allocation, object storage allocation, domain binding, launch
 token, and deploy intent requests are declared in `.takosumi/app.yml`.
-Cross-instance service dependencies are declared in the kernel-bound
-`.takosumi/manifest.yml` with top-level `imports[]` / `serviceResolvers[]`.
 AppBinding placeholders (`${bindings.*}` / `${secrets.*}`) are reserved
 authoring-time syntax: they must be materialized by the installer / Accounts
-integration before the manifest is posted to the kernel. Current `takosumi-git`
-does not silently substitute unresolved values; it rejects the compile before
-Accounts / kernel requests if installer-only placeholders remain.
+integration before the manifest is posted to the kernel. Current
+`takosumi-git install apply` resolves supported values after AppInstallation
+creation; if installer-only placeholders remain after deploy request build, it
+fails before the kernel request.
 
 ```yaml
 # .takosumi/app.yml (excerpt)
@@ -164,25 +168,21 @@ bindings:
       - /auth/oidc/callback
 ```
 
-The manifest sent through current `takosumi-git` may retain service imports, but
-installer-bound values must already be concrete values or concrete secret refs:
+Operator-owned capabilities are resolved outside the kernel manifest. For
+example, Takosumi Accounts exposes OIDC through `operator.identity.oidc` and
+billing through `operator.billing.default`; takosumi-git / Accounts materialize
+the resulting OIDC client, launch token, and billing/reporting grants before the
+compiled manifest is submitted.
+
+The manifest sent to the kernel must contain concrete values, provider secret
+refs, or kernel resource refs only:
 
 ```yaml
-# .takosumi/manifest.yml (compiled / kernel-bound excerpt)
+# compiled manifest (kernel input excerpt)
 apiVersion: "1.0"
 kind: Manifest
 metadata:
   name: takos
-imports:
-  - alias: account-auth
-    service: takosumi.account.auth@v1
-    refreshPolicy:
-      kind: ttl
-      ttl: 300s
-serviceResolvers:
-  - kind: anchor
-    url: https://anchor.example.com/v1/services/
-    publicKey: BASE64_ED25519_PUBLIC_KEY
 resources:
   - shape: web-service@v1
     name: api
@@ -193,48 +193,15 @@ resources:
       scale: { min: 1, max: 3 }
       env:
         AUTH_DRIVER: oidc
-        OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
+        OIDC_ISSUER_URL: https://accounts.example.com
         OIDC_CLIENT_ID: takos_inst_abc
         OIDC_CLIENT_SECRET: resolved-client-secret
+        OIDC_REDIRECT_URI: https://takos.example.com/auth/oidc/callback
 ```
 
-The compiled manifest sent to the kernel must contain concrete values or
-kernel-resolvable refs for AppBinding material. Raw `${bindings.*}` /
-`${secrets.*}` placeholders must not reach the kernel:
-
-```yaml
-# compiled manifest excerpt
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: takos
-imports:
-  - alias: account-auth
-    service: takosumi.account.auth@v1
-serviceResolvers:
-  - kind: anchor
-    url: https://anchor.example.com/v1/services/
-    publicKey: BASE64_ED25519_PUBLIC_KEY
-resources:
-  - shape: web-service@v1
-    name: api
-    provider: "@takos/aws-fargate"
-    spec:
-      image: ghcr.io/takos/api@sha256:0123456789abcdef
-      port: 8080
-      scale: { min: 1, max: 3 }
-      env:
-        AUTH_DRIVER: oidc
-        OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
-        OIDC_CLIENT_ID: takos_inst_abc
-        OIDC_CLIENT_SECRET: resolved-client-secret
-```
-
-When `imports[]` is present, the kernel requires `serviceResolvers[]`. Operators
-can either commit the resolver pin in the manifest or inject it with
-`--service-resolver-url` and `--service-resolver-public-key` in
-`takosumi-git push` / `install apply`. Consumer manifests refer to service
-identifiers, not hard-coded Accounts hostnames.
+Raw `${bindings.*}` / `${secrets.*}` / `${imports.*}` placeholders must not
+reach the kernel. `services[]`, `imports[]`, and `serviceResolvers[]` are
+removed fields and will be rejected by current manifest validation.
 
 ## Templates
 
@@ -255,7 +222,7 @@ template:
     domain: web.example.com
 ```
 
-Use `template.template: <id>@<version>` in remote/kernel-bound manifests.
+Use `template.template: <id>@<version>` in authoring and compiled manifests.
 `template.ref` is legacy compatibility only.
 
 ## Apply Flow
@@ -266,9 +233,7 @@ Local authoring usually goes through takosumi-git:
 takosumi-git push --dry-run
 takosumi-git push \
   --endpoint "$TAKOSUMI_ENDPOINT" \
-  --token "$TAKOSUMI_TOKEN" \
-  --service-resolver-url "$TAKOSUMI_SERVICE_RESOLVER_URL" \
-  --service-resolver-public-key "$TAKOSUMI_SERVICE_RESOLVER_PUBLIC_KEY"
+  --token "$TAKOSUMI_TOKEN"
 ```
 
 For installable apps:
@@ -284,21 +249,22 @@ takosumi-git install apply \
   --source-commit "$SOURCE_COMMIT" \
   --runtime-base-url "$RUNTIME_BASE_URL" \
   --endpoint "$TAKOSUMI_ENDPOINT" \
-  --deploy-token "$TAKOSUMI_DEPLOY_TOKEN" \
-  --service-resolver-url "$TAKOSUMI_SERVICE_RESOLVER_URL" \
-  --service-resolver-public-key "$TAKOSUMI_SERVICE_RESOLVER_PUBLIC_KEY"
+  --deploy-token "$TAKOSUMI_DEPLOY_TOKEN"
 ```
 
-`preview` is non-mutating. `apply` creates/updates the AppInstallation ledger,
-materializes OIDC clients and service imports, optionally deploys to the kernel,
-and updates installation status.
+`preview` is non-mutating. `apply` calls Takosumi Accounts to create/update the
+AppInstallation ledger, materialize OIDC clients, launch tokens, AppBindings,
+and AppGrants, then the installer deploys the compiled manifest to the kernel
+and reports completion back to Accounts so Accounts owns the installation status
+transition.
 
 ## Legacy Note
 
 The old guide documented a descriptor AppSpec with top-level `components`,
 `routes`, `bindings`, `publications`, `environments`, and `policy`. That is not
-the current kernel-bound `.takosumi/manifest.yml` contract. Historical migration
-notes may mention it, but new manifests should not use it.
+the current `.takosumi/manifest.yml` authoring contract or compiled manifest
+contract. Historical migration notes may mention it, but new manifests should
+not use it.
 
 Rejected legacy form:
 
@@ -334,8 +300,8 @@ resources:
 
 ## Next
 
-- [Manifest Reference](/reference/manifest-spec)
-- [App YAML Spec](/reference/app-yml-spec)
-- [Binding Catalog](/reference/binding-catalog)
+- [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
+- [App YAML Spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
+- [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
 - [Routes](/deploy/routes)
 - [Simple Worker](/examples/simple-worker)

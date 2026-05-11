@@ -29,10 +29,10 @@ license strings where available.
 | `takos/agent/Cargo.lock`              |  Rust crates |          n/a |            n/a |
 | `takos-agent-engine/Cargo.lock`       |  Rust crates |          n/a |            n/a |
 
-`takos/app/deno.lock` is canonical for the Takos installable app package per its
-`.takosumi/app.yml` entry point; the `takos/` shell repo itself does not ship a
-top-level `deno.lock`, and the ecosystem root CI must not require one unless the
-shell starts installing dependencies directly.
+`takos/app/deno.lock` is canonical for the Takos app/API package; the `takos/`
+shell repo itself does not ship a top-level `deno.lock`, and the ecosystem root
+CI must not require one unless the shell starts installing dependencies
+directly.
 
 ## Observed npm License Families
 

@@ -1,7 +1,7 @@
 # Database Reference
 
-Takos control plane の canonical SQLite / D1 baseline schema です。このページは
-baseline SQL から同期し、DB contract test で照合します。
+Takos control plane の canonical SQLite / D1 baseline schema です。このページは baseline SQL から同期し、DB contract
+test で照合します。
 
 ```sql
 -- CreateTable
@@ -2401,15 +2401,12 @@ CREATE UNIQUE INDEX "workflows_repo_id_path_key" ON "workflows"("repo_id", "path
 
 ## takosumi Core schema (Deployment-centric)
 
-`takosumi` の Deploy では、Core record は `deployments` /
-`provider_observations` / `group_heads` の 3 つに圧縮されます。Phase 2 migration
-(`takosumi/packages/kernel/db/migrations/20260430000010_unify_to_deployments.sql`)
-は v2 の `deploy_plans` / `deploy_activation_records` /
-`deploy_operation_records` / `deploy_group_activation_pointers` を `deployments`
-に collapse し、`resource_binding_set_revisions` の structural side は
-`deployments.desired.bindings` field に内包します。`resource_migration_ledger`
-は forward-only history record として独立に維持されます。完全な spec は
-[Core contract v1.0 § 13–§ 18](/takosumi/core/01-core-contract-v1.0)。
+`takosumi` の Deploy では、Core record は `deployments` / `provider_observations` / `group_heads` の 3
+つに圧縮されます。Phase 2 migration (`takosumi/packages/kernel/db/migrations/20260430000010_unify_to_deployments.sql`)
+は v2 の `deploy_plans` / `deploy_activation_records` / `deploy_operation_records` / `deploy_group_activation_pointers`
+を `deployments` に collapse し、`resource_binding_set_revisions` の structural side は `deployments.desired.bindings`
+field に内包します。`resource_migration_ledger` は forward-only history record として独立に維持されます。完全な spec は
+[Core contract v1.0 § 13–§ 18](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)。
 
 ```sql
 -- current baseline: Deployment / ProviderObservation / GroupHead
@@ -2474,51 +2471,45 @@ CREATE INDEX "group_heads_current_idx"
 
 ### Migration notes
 
-`takos` Core schema は SQLite / D1 baseline からは独立した PostgreSQL backend
-として配布されます。control plane の SQLite / D1 baseline（このページ 冒頭の
-schema）は Takos app gateway / Git hosting / billing / sessions など の primary
-store であり、`deployments` テーブル名は **app/gateway worker deployment
-record** 用に予約されています（PaaS Core の Deployment record
-ではない）。両者の混同を避けるため、PaaS Core 配下の table は
-`takosumi/packages/kernel/db/migrations/` の独立 migration として管理されます。
-v2 PaaS で存在した `deploy_plans` / `deploy_activation_records` /
-`deploy_operation_records` / `deploy_group_activation_pointers` /
-`resource_binding_set_revisions` の structural columns は deployment migration
-で `deployments` (3 JSONB field) と `group_heads` に折り畳まれ、history は
-preserve されます。
+`takos` Core schema は SQLite / D1 baseline からは独立した PostgreSQL backend として配布されます。control plane の
+SQLite / D1 baseline（このページ 冒頭の schema）は Takos app gateway / Git hosting / billing / sessions など の primary
+store であり、`deployments` テーブル名は **app/gateway worker deployment record** 用に予約されています（PaaS Core の
+Deployment record ではない）。両者の混同を避けるため、PaaS Core 配下の table は
+`takosumi/packages/kernel/db/migrations/` の独立 migration として管理されます。 v2 PaaS で存在した `deploy_plans` /
+`deploy_activation_records` / `deploy_operation_records` / `deploy_group_activation_pointers` /
+`resource_binding_set_revisions` の structural columns は deployment migration で `deployments` (3 JSONB field) と
+`group_heads` に折り畳まれ、history は preserve されます。
 
 ## AppInstallation Ledger (Phase 1.2 NEW)
 
-Installable App Model で導入される **AppInstallation 台帳** の ledger record
-set。Takos の database には置かず、新設 product **takosumi-cloud** (Phase 1.1
-NEW、Takosumi Accounts plane) で管理されます。Takos 側は OIDC consumer として
-launch token と app-local profile のみを保持し、ownership / billing / source pin
-/ service import approval / runtime mode / capability / audit はすべて以下の
-ledger record に anchor されます。
+Installable App Model で導入される **AppInstallation 台帳** の ledger record set。Takos の database には置かず、新設
+product **takosumi-cloud** (Phase 1.1 NEW、Takosumi Accounts plane) で管理されます。Takos 側は OIDC consumer として
+launch token と app-local profile のみを保持し、ownership / billing / source pin / runtime mode / capability / audit
+はすべて以下の ledger record に anchor されます。
 
 詳細な status 遷移、binding kind 一覧、column 制約は
-[/architecture/app-installation](/architecture/app-installation) と
-[/reference/install-api](/reference/install-api) を canonical reference として
-ください。本節は database 視点で主要 columns の概観を示します。
+[https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md)
+と
+[https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md)
+を canonical reference として ください。本節は database 視点で主要 columns の概観を示します。
 
 ### LedgerAccountRecord
 
-契約 / billing 主体の正本 record。AppInstallation を保持する Space の親であり、
-Stripe customer (= Takosumi Cloud billing) と紐づく。
+契約 / billing 主体の正本 record。AppInstallation を保持する Space の親であり、 operator BillingPort の customer record
+と紐づく。
 
-| column              | type        | meaning                                    |
-| ------------------- | ----------- | ------------------------------------------ |
-| `accountId`         | text        | 一意 ID                                    |
-| `legalOwnerSubject` | text        | 法的所有者 Takosumi subject (`tsub_*`)     |
-| `billingAccountId`  | text        | billing owner reference (optional)         |
-| `createdAt`         | timestamptz | 作成時刻                                   |
-| `updatedAt`         | timestamptz | 更新時刻                                   |
+| column              | type        | meaning                                |
+| ------------------- | ----------- | -------------------------------------- |
+| `accountId`         | text        | 一意 ID                                |
+| `legalOwnerSubject` | text        | 法的所有者 Takosumi subject (`tsub_*`) |
+| `billingAccountId`  | text        | billing owner reference (optional)     |
+| `createdAt`         | timestamptz | 作成時刻                               |
+| `updatedAt`         | timestamptz | 更新時刻                               |
 
 ### Space
 
-Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind を
-持ち、AppInstallation の親 (Takosumi Account → Space → AppInstallation 階層
-の中段)。
+Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind を 持ち、AppInstallation の親 (Takosumi
+Account → Space → AppInstallation 階層 の中段)。
 
 | column        | type        | meaning                     |
 | ------------- | ----------- | --------------------------- |
@@ -2535,78 +2526,57 @@ Takosumi Account 配下の install scope。`personal` / `team` / `org` の kind 
 
 - `status`: 5 値 (`installing` / `ready` / `failed` / `suspended` / `exported`)
 - `mode`: 3 runtime mode (`shared-cell` / `dedicated` / `self-hosted`)
-- `serviceImports`: `.takosumi/app.yml` top-level `serviceImports[]` に由来する
-  external service request metadata。AppBinding ではない
-- `appBinding kind` は AppBinding 側で 6 種類。cross-instance service dependency
-  は AppBinding ではなく `.takosumi/manifest.yml` の `imports[]` /
-  `serviceResolvers[]` で表現する
+- `appBinding kind` は AppBinding 側で 6 種類。operator / account plane dependency は namespace export と account API /
+  OIDC discovery / BillingPort で表現する
 
-| column                    | type        | meaning                                                  |
-| ------------------------- | ----------- | -------------------------------------------------------- |
-| `installationId`          | text        | 一意 ID                                                  |
-| `accountId`               | text        | LedgerAccountRecord への FK                              |
-| `spaceId`                 | text        | Space への FK                                            |
-| `appId`                   | string      | 例: `takos.chat`                                         |
-| `sourceGitUrl`            | string      | source pin (git URL)                                     |
-| `sourceRef`               | string      | source pin (ref)                                         |
-| `sourceCommit`            | string      | source pin (resolved commit)                             |
-| `appManifestDigest`       | string      | `.takosumi/app.yml` digest                               |
+| column                    | type        | meaning                                                        |
+| ------------------------- | ----------- | -------------------------------------------------------------- |
+| `installationId`          | text        | 一意 ID                                                        |
+| `accountId`               | text        | LedgerAccountRecord への FK                                    |
+| `spaceId`                 | text        | Space への FK                                                  |
+| `appId`                   | string      | 例: `example.notes`                                            |
+| `sourceGitUrl`            | string      | source pin (git URL)                                           |
+| `sourceRef`               | string      | source pin (ref)                                               |
+| `sourceCommit`            | string      | source pin (resolved commit)                                   |
+| `appManifestDigest`       | string      | `.takosumi/app.yml` digest                                     |
 | `compiledManifestDigest`  | string      | takosumi-git が compile した kernel manifest digest (optional) |
-| `serviceImports`          | jsonb       | `service_imports_json`。approved service import metadata |
-| `mode`                    | enum        | `shared-cell` / `dedicated` / `self-hosted`              |
-| `runtimeBindingId`        | text        | RuntimeBindingRecord への FK (optional)                  |
-| `status`                  | enum        | 5 値 (上記)                                              |
-| `createdBySubject`        | string      | 作成者 Takosumi subject                                  |
-| `createdAt` / `updatedAt` | timestamptz |                                                          |
-
-### AppInstallation serviceImports metadata
-
-AppInstallation に埋め込まれる JSONB metadata。AppBinding table ではなく、
-manifest-level `imports[]` と installer approval evidence を接続するための
-record set です。
-
-| field           | type     | meaning                                                 |
-| --------------- | -------- | ------------------------------------------------------- |
-| `binding`       | string   | ledger / preview 用の logical name                      |
-| `alias`         | string   | compiled manifest `imports[].alias`                     |
-| `service`       | string   | `takosumi.account.auth@v1` などの service identifier    |
-| `endpointRoles` | string[] | `oidc-issuer` / `install-launch` など要求 endpoint role |
-| `refreshPolicy` | jsonb    | optional。manifest `imports[].refreshPolicy` と同形     |
+| `mode`                    | enum        | `shared-cell` / `dedicated` / `self-hosted`                    |
+| `runtimeBindingId`        | text        | RuntimeBindingRecord への FK (optional)                        |
+| `status`                  | enum        | 5 値 (上記)                                                    |
+| `createdBySubject`        | string      | 作成者 Takosumi subject                                        |
+| `createdAt` / `updatedAt` | timestamptz |                                                                |
 
 ### AppBinding
 
-AppInstallation に紐づく binding 1 record。6 種類の `kind` を持ち、 `configRef`
-/ `secretRefs` で実値を参照する (詳細は
-[/reference/binding-catalog](/reference/binding-catalog))。Cross-instance
-service dependency は AppBinding ではなく manifest の `imports[]` /
-`serviceResolvers[]` が正本です。
+AppInstallation に紐づく binding 1 record。6 種類の `kind` を持ち、 `configRef` / `secretRefs` で実値を参照する (詳細は
+[https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md))。OIDC
+/ billing などの operator-owned dependency は namespace export と account API 側が正本です。
 
-| column           | type     | meaning                                                                                                                                                  |
-| ---------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bindingId`      | text     | 一意 ID                                                                                                                                                  |
-| `installationId` | text     | AppInstallationRecord への FK                                                                                                                            |
-| `name`           | text     | logical binding name (`auth`, `db` など)                                                                                                                 |
-| `kind`           | enum     | `identity.oidc@v1` / `database.postgres@v1` / `object-store.s3-compatible@v1` / `domain.http@v1` / `deploy-intent.gitops@v1` / `install-launch-token@v1` |
-| `configRef`      | string   | binding 固有 config の参照                                                                                                                               |
-| `secretRefs`     | string[] | secret 参照 (kernel が解決)                                                                                                                              |
-| `createdAt`      | timestamptz | 作成時刻                                                                                                                                               |
-| `updatedAt`      | timestamptz | 更新時刻                                                                                                                                               |
+| column           | type        | meaning                                                                                                                                                  |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bindingId`      | text        | 一意 ID                                                                                                                                                  |
+| `installationId` | text        | AppInstallationRecord への FK                                                                                                                            |
+| `name`           | text        | logical binding name (`auth`, `db` など)                                                                                                                 |
+| `kind`           | enum        | `identity.oidc@v1` / `database.postgres@v1` / `object-store.s3-compatible@v1` / `domain.http@v1` / `deploy-intent.gitops@v1` / `install-launch-token@v1` |
+| `configRef`      | string      | binding 固有 config の参照                                                                                                                               |
+| `secretRefs`     | string[]    | secret 参照 (kernel が解決)                                                                                                                              |
+| `createdAt`      | timestamptz | 作成時刻                                                                                                                                                 |
+| `updatedAt`      | timestamptz | 更新時刻                                                                                                                                                 |
 
 ### AppGrant
 
-capability grant の 1 record。`capability` (例: `app.profile.write` /
-`deploy.intent.write` / `logs.read.own` / `files:read` / `agents:execute`) と
-`scope` を持ち、ユーザーが任意のタイミングで `revokedAt` を立てて revoke
+capability grant の 1 record。`capability` (例: `app.profile.write` / `deploy.intent.write` / `logs.read.own` /
+`files:read` / `agents:execute`) と `scope` を持ち、ユーザーが任意のタイミングで `revokedAt` を立てて revoke
 できる。`capability` は v1 closed catalog で、任意 string は受け付けない。
 
-| column           | type        | meaning                                |
-| ---------------- | ----------- | -------------------------------------- |
-| `grantId`        | text        | 一意 ID                                |
-| `installationId` | text        | AppInstallationRecord への FK          |
-| `capability`     | enum/text   | v1 closed catalog の capability        |
-| `scope`          | jsonb       | 範囲制約 (resource / path / time 等)   |
-| `grantedAt`      | timestamptz | 付与時刻                               |
-| `revokedAt`      | timestamptz | revoke 時刻 (NULL なら active)         |
+| column           | type        | meaning                              |
+| ---------------- | ----------- | ------------------------------------ |
+| `grantId`        | text        | 一意 ID                              |
+| `installationId` | text        | AppInstallationRecord への FK        |
+| `capability`     | enum/text   | v1 closed catalog の capability      |
+| `scope`          | jsonb       | 範囲制約 (resource / path / time 等) |
+| `grantedAt`      | timestamptz | 付与時刻                             |
+| `revokedAt`      | timestamptz | revoke 時刻 (NULL なら active)       |
 
 v1 closed catalog:
 
@@ -2633,14 +2603,14 @@ mcp:invoke
 events:subscribe
 ```
 
-詳細は [/architecture/app-installation](/architecture/app-installation) と
-[/reference/install-api](/reference/install-api) を参照。RuntimeBinding と
-InstallationEvent の column schema は
-[architecture/app-installation §"ledger record の table 設計"](/architecture/app-installation)
+詳細は
+[https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md)
+と
+[https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md)
+を参照。RuntimeBinding と InstallationEvent の column schema は
+[architecture/app-installation §"ledger record の table 設計"](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md)
 の TypeScript 正本を参照してください。
 
-::: info NEW product 本台帳は **takosumi-cloud** (Phase 1.1 で新設される sibling
-product) の DB に 置かれ、Takos の SQLite / D1 baseline
-には追加されません。Takos 側は launch token / app-local profile
-(`installationId` / `externalIssuer` / `externalSubject` (pairwise) / display
-name / preferences) のみを保持します。 :::
+::: info NEW product 本台帳は **takosumi-cloud** (Phase 1.1 で新設される sibling product) の DB に 置かれ、Takos の
+SQLite / D1 baseline には追加されません。Takos 側は launch token / app-local profile (`installationId` /
+`externalIssuer` / `externalSubject` (pairwise) / display name / preferences) のみを保持します。 :::

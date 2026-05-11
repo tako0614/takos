@@ -23,13 +23,13 @@ In scope:
 - Takos Web / API (`takos/app`)
 - Takos Git hosting (`takos/git`)
 - Takos agent service (`takos/agent`)
-- Takosumi Accounts (`takosumi.account.auth@v1` / `takosumi.account.billing@v1`)
+- Takosumi Accounts (`operator.identity.oidc` / `operator.billing.default`)
   — identity / billing / AppInstallation owner; OIDC issuer, launch token JWS
   signing, AppGrant revocation, and pairwise OIDC subject derivation are in
   scope when Takos managed service is impacted
 - Takos managed deployment artifacts under `takos/deploy/`
 - Takos docs and public service configuration
-- Takos default apps when deployed as part of Takos managed service
+- Takos bundled apps when deployed as part of Takos managed service
 
 Out of scope:
 

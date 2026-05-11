@@ -1,11 +1,12 @@
 # Hosting
 
-このセクションは **Takos kernel をホストする operator** 向けです。Takos 上で
+このセクションは **Takosumi kernel をホストする operator** 向けです。Takos 上で
 **group を deploy する開発者** は [Deploy](/deploy/) を参照してください。
 
-Takos kernel は **5 つの kernel host target** を持ちます。operator は
-`takos-private/distribution.yml` の `kernel_host.target` を 1 つ選び、共通の
-`deno task distribute:apply` を実行すると、target 固有の backend (wrangler /
+Takosumi kernel は **5 つの kernel host target** を持ちます。Takos product
+distribution artifact の正本は `takos/deploy/` にあり、operator は
+`takos-private/distribution.yml` を private instance config として使って
+`kernel_host.target` を 1 つ選び、共通の `deno task distribute:apply` を実行すると、target 固有の backend (wrangler /
 Helm / docker-compose) に dispatch されます。Cloudflare は tracked reference
 Workers backend、AWS / GCP / Kubernetes は Helm packaging、 selfhosted は
 docker-compose packaging として扱います。
@@ -14,8 +15,8 @@ docker-compose packaging として扱います。
 
 | 読者                                      | 読むページ                           |
 | ----------------------------------------- | ------------------------------------ |
-| Takos kernel を managed (takos.jp) で使う | このセクションは不要                 |
-| Takos kernel を自分でホストする operator  | このセクション全体                   |
+| Takosumi kernel を managed (takos.jp) で使う | このセクションは不要                 |
+| Takosumi kernel を自分でホストする operator  | このセクション全体                   |
 | Takos 上で group を作る developer         | [Deploy](/deploy/) と [Apps](/apps/) |
 
 ## 5 つの kernel host target

@@ -1,6 +1,6 @@
 # GCP
 
-このページは **Takos kernel を GCP にホストする operator** 向けです。
+このページは **Takosumi kernel を GCP にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **GCP 単独 hosting (GKE Helm)** ― `takos/deploy/helm/takos/values-gcp.yaml`
@@ -22,8 +22,9 @@ target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してく
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos kernel の deploy は target に関わらず `takos-private/distribution.yml`
-を正本とします。GCP GKE を kernel host に選ぶには:
+Takos product distribution artifact の正本は `takos/deploy/` にあり、
+`takos-private/distribution.yml` は private operator が target を選ぶ instance
+config です。GCP GKE を kernel host に選ぶには:
 
 ```yaml
 # takos-private/distribution.yml
@@ -85,7 +86,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 | 状況                                                                    | 推奨 path          |
 | ----------------------------------------------------------------------- | ------------------ |
-| Takos kernel 全体を GCP の k8s に置く                                   | section 1 (Helm)   |
+| Takosumi kernel 全体を GCP の k8s に置く                                   | section 1 (Helm)   |
 | Cloudflare で kernel を動かしつつ tenant runtime / DB を GCP に置きたい | section 2 (plugin) |
 | GCP のみで tenant runtime + control-plane provider を組む               | section 2 + Helm   |
 
@@ -390,7 +391,7 @@ kernel がやること:
 
 ## chart contract に含まれないもの (section 1)
 
-- Cloud Run への Takos kernel direct deploy
+- Cloud Run への Takosumi kernel direct deploy
 - Cloud Run は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - Firestore / Pub/Sub / Secret Manager を app resource backend として自動

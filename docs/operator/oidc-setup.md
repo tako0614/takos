@@ -2,9 +2,9 @@
 
 このページは operator 視点で Takos の identity 設定を扱います。Installable App
 Model における Takos は **OIDC consumer** で、issuer は Takosumi Accounts
-(service identifier `takosumi.account.auth@v1`) に集約されます。 endpoint URL は
-anchor から resolve される operator-injected value です (詳細は
-[cross-instance service binding](/architecture/cross-instance-service-binding))。
+(`operator.identity.oidc` namespace export / OIDC discovery) に集約されます。
+endpoint URL は operator-selected value です (詳細は
+[namespace export binding](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/cross-instance-service-binding.md))。
 
 ::: warning account-plane boundary Takos は OAuth/OIDC issuer や upstream IdP
 broker を持ちません。operator が 確認するのは Takosumi Accounts で発行された
@@ -33,9 +33,9 @@ by`
 | -------------------- | ------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | `ADMIN_DOMAIN`       | no      | Takos runtime         | operator (DNS / domain 設計)                                                                                                          | Takos admin Web の host。例: `admin.example.com`     |
 | `TENANT_BASE_DOMAIN` | no      | Takos runtime         | operator (DNS / domain 設計)                                                                                                          | tenant app の base domain。例: `app.example.com`     |
-| `OIDC_ISSUER_URL`    | no      | OIDC consumer         | operator-injected (cross-instance import `${imports.account-auth.endpoints.oidc-issuer.url}` 経由 anchor resolve)                     | Takos が OIDC consumer として参照する issuer         |
-| `OIDC_CLIENT_ID`     | no      | OIDC consumer         | **Takosumi Accounts (managed)** / self-host issuer。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | AppInstallation 用 OIDC client id                    |
-| `OIDC_CLIENT_SECRET` | yes     | OIDC consumer         | **Takosumi Accounts (managed)** / self-host issuer。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | confidential client secret                           |
+| `OIDC_ISSUER_URL`    | no      | OIDC consumer         | operator-selected issuer from `operator.identity.oidc` / OIDC discovery                                                                | Takos が OIDC consumer として参照する issuer         |
+| `OIDC_CLIENT_ID`     | no      | OIDC consumer         | **Takosumi Accounts (managed / self-host)**。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | AppInstallation 用 OIDC client id                    |
+| `OIDC_CLIENT_SECRET` | yes     | OIDC consumer         | **Takosumi Accounts (managed / self-host)**。AppBinding (`identity.oidc@v1`) で env 注入され、operator は手で provision しない | confidential client secret                           |
 | `OIDC_REDIRECT_URI`  | no      | OIDC consumer         | AppInstallation の domain 確定後、Takosumi Accounts が AppBinding 経由で降らせる (self-host: operator が手で固定)                     | `<base>/auth/oidc/callback` の絶対 URL               |
 | `SESSION_DO`         | binding | Takos runtime         | platform binding (Cloudflare Worker / Helm)                                                                                           | browser session store                                |
 | `DB`                 | binding | app-local persistence | platform binding (Cloudflare Worker / Helm)                                                                                           | app-local profile / session / OIDC state persistence |
@@ -102,15 +102,15 @@ OIDC_REDIRECT_URI=https://<TENANT_HOST>/auth/oidc/callback
   Cloudflare profile では `wrangler secret put OIDC_CLIENT_SECRET` で配信 します
   (rotation 手順は [Hosting Secret Policy](/hosting/secrets) 参照)
 
-self-host で Takosumi Accounts を使わない場合は、Layer 2 の OIDC issuer を
-operator が選んだ issuer (Keycloak / Authentik / Auth0 等) に差し替えます。
-このとき `OIDC_CLIENT_*` の registration は **その self-host issuer 側**で
-行い、`OIDC_ISSUER_URL` を切り替えれば Takos 側は同一 binary で動きます
+self-host では、Layer 2 の OIDC issuer は import 先の Takosumi Accounts です。
+Keycloak / Authentik / Auth0 等は Accounts の upstream IdP として接続します。
+`OIDC_CLIENT_*` の registration は **その self-host Accounts 側**で行い、
+`OIDC_ISSUER_URL` も Accounts issuer を指します。Takos 側は同一 binary で動きます
 ([/apps/oidc-consumer](/apps/oidc-consumer) §6 参照)。
 
 tenant app が OAuth client を必要とする場合、新モデルでは AppInstallation の
 `identity.oidc@v1` AppBinding が OIDC client を発行します
-([/reference/binding-catalog](/reference/binding-catalog) 参照)。
+([https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md) 参照)。
 
 ## Smoke Checks
 
@@ -134,7 +134,7 @@ Accounts 側の `redirectUris` と一致していることを確認します。
 
 ## 次に読むページ
 
-- [/architecture/takosumi-accounts](/architecture/takosumi-accounts) — issuer
+- [https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md) — issuer
   側の責務 (OIDC issuer / billing / app installation owner)
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が consumer として 要求する
   env / route / claim

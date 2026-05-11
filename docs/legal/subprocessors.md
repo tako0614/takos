@@ -22,8 +22,8 @@ store.
 > **Internal processor boundary note.** Within the Takos ecosystem itself,
 > **Takosumi kernel** is treated as a compute-only processor that materializes
 > manifests and never holds identity, billing, or customer account state.
-> **Takosumi Accounts** (`takosumi.account.auth@v1` /
-> `takosumi.account.billing@v1`) is the separate identity / billing processor
+> **Takosumi Accounts** (`operator.identity.oidc` /
+> `operator.billing.default`) is the separate identity / billing processor
 > that owns OIDC issuance, AppInstallation ownership, and Takosumi Cloud
 > billing. External sub-processors below are referenced by both planes only when
 > the relevant feature is enabled.

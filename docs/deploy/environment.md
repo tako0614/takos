@@ -1,7 +1,7 @@
 # 環境変数
 
 Takos の runtime env は current `.takosumi/manifest.yml` の `resources[]` にある
-`spec.env` から渡します。kernel-bound manifest の正本 envelope は
+`spec.env` から渡します。kernel に届く compiled manifest の正本 envelope は
 `apiVersion: "1.0"` / `kind: Manifest` / `resources[]` であり、旧 `components` /
 top-level `bindings[]` / `publications[]` AppSpec form は現行 surface
 ではありません。
@@ -10,16 +10,20 @@ env の入力元は 3 種類です。
 
 1. author が manifest に直接書く static value
 2. resource output 参照 (`${ref:...}` / `${secret-ref:...}`)
-3. service import layer が deploy route 内で解決する `${imports.*}`
+3. installer / account plane が materialize した concrete value または secret
+   ref
 
 `${bindings.*}` / `${secrets.*}` / `${installation.*}` / `${params.*}` /
-`${artifacts.*}` / legacy `${refs.*}` は installer-only placeholder です。
-current `takosumi-git` compiler は、これらが unresolved のまま残る manifest を
-Accounts / kernel request の前に reject します。
+`${artifacts.*}` / `${imports.*}` / legacy `${refs.*}` は installer-only または
+removed placeholder です。 current `takosumi-git install apply` は Accounts
+materialization 後の deploy request build でも unresolved のまま残る manifest を
+kernel request の前に reject します。
 
 normative な field 定義は
-[Manifest Reference](/reference/manifest-spec)、install-time binding の出力は
-[Binding Catalog](/reference/binding-catalog) を参照してください。
+[Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)、install-time
+binding の出力は
+[Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
+を参照してください。
 
 ## Static Env
 
@@ -133,48 +137,17 @@ resources:
         BLOB_ACCESS_KEY: takos-inst-abc
         BLOB_SECRET_KEY: resolved-blob-secret
         INSTALL_LAUNCH_PUBLIC_KEY: "-----BEGIN PUBLIC KEY-----..."
-        INSTALL_LAUNCH_AUDIENCE: inst_abc
+        INSTALL_LAUNCH_AUDIENCE: takos.docs
         TAKOS_INSTALLATION_ID: inst_abc
 ```
 
-## Cross-Instance Service Env
+## Namespace Export Env
 
-Takosumi Accounts などの外部 service dependency は AppBinding ではなく
-`.takosumi/manifest.yml` の `imports[]` / `serviceResolvers[]` で表現します。
-consumer manifest は service identifier を参照し、Accounts hostname を直接 pin
-しません。
-
-```yaml
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: takos
-imports:
-  - alias: account-auth
-    service: takosumi.account.auth@v1
-    refreshPolicy:
-      kind: ttl
-      ttl: 300s
-serviceResolvers:
-  - kind: anchor
-    url: https://anchor.example.com/v1/services/
-    publicKey: BASE64_ED25519_PUBLIC_KEY
-resources:
-  - shape: web-service@v1
-    name: api
-    provider: "@takos/aws-fargate"
-    spec:
-      image: ghcr.io/takos/api@sha256:0123456789abcdef
-      port: 8080
-      scale: { min: 1, max: 3 }
-      env:
-        AUTH_DRIVER: oidc
-        OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
-```
-
-`imports[]` がある manifest は `serviceResolvers[]` が必須です。kernel は anchor
-から service descriptor を取得し、署名 / version / expiry を検証してから
-`${imports.*}` を materialize します。
+Takosumi Accounts などの operator-owned dependency は namespace export と
+account API / OIDC discovery / BillingPort で扱います。`operator.identity.oidc`
+から materialize された issuer URL や OIDC client は、compiled manifest では
+concrete env または secret ref として表れます。kernel は `imports[]` /
+`serviceResolvers[]` / signed `ServiceDescriptor` を解決しません。
 
 ## Collision Rule
 
@@ -207,7 +180,7 @@ issuer endpoint を持ちません。
 | env                         | 由来例                                                             | 説明                         |
 | --------------------------- | ------------------------------------------------------------------ | ---------------------------- |
 | `AUTH_DRIVER`               | static `oidc`                                                      | OIDC consumer mode           |
-| `OIDC_ISSUER_URL`           | `${imports.account-auth.endpoints.oidc-issuer.url}` or AppBinding  | operator-resolved issuer URL |
+| `OIDC_ISSUER_URL`           | AppBinding / namespace export materialization                      | operator-resolved issuer URL |
 | `OIDC_CLIENT_ID`            | materialized AppBinding value                                      | OIDC client id               |
 | `OIDC_CLIENT_SECRET`        | `${secret-ref:oidc-client-secret}` or materialized secret ref      | OIDC client secret           |
 | `OIDC_REDIRECT_URI`         | materialized AppBinding value                                      | callback URL                 |
@@ -230,10 +203,10 @@ issuer endpoint を持ちません。
 ## 次のステップ
 
 - [マニフェスト](/deploy/manifest) --- author 向け全体ガイド
-- [Manifest Reference](/reference/manifest-spec) --- kernel-bound manifest
-  の正本
-- [InstallableApp v1 (`.takosumi/app.yml`)](/reference/app-yml-spec) --- binding
-  declaration の正本
-- [Binding Catalog](/reference/binding-catalog) --- binding output / env
-  injection 一覧
+- [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
+  --- compiled manifest の正本
+- [InstallableApp v1 (`.takosumi/app.yml`)](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
+  --- binding declaration の正本
+- [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
+  --- binding output / env injection 一覧
 - [OIDC Consumer](/apps/oidc-consumer) --- Takos app 側の OIDC consumer env

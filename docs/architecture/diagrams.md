@@ -3,7 +3,7 @@
 > このページでわかること: Takos エコシステムの主要な component / sequence /
 > state 関係を mermaid 図で俯瞰する。文字情報は
 > [System Architecture](./system-architecture.md) と
-> [Core Contract v1.0](/takosumi/core/01-core-contract-v1.0) を正本とし、本
+> [Core Contract v1.0](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) を正本とし、本
 > ページはその図示版として位置付ける。
 
 ## ねらい
@@ -14,7 +14,7 @@
 
 ## Component Diagram
 
-Takos kernel (`takosumi`) を中心に、user / AI agent から provider 実体まで
+Takosumi kernel (`takosumi`) を中心に、user / AI agent から provider 実体まで
 の主要 component を表す。 `takos-app` は public API gateway として user request
 を kernel に橋渡しする。 provider plugin bundle は kernel の lookup で動的に
 読み込まれ、Cloudflare / AWS / GCP / Kubernetes / Self-hosted 各 target に
@@ -62,47 +62,37 @@ graph TB
 
 ## Sequence Diagram: resolveDeployment
 
-`takos deploy --plan` 実行時の参照系シーケンス。 composite resolver が
-descriptor closure を展開し、binding resolver が secret / publication
-references を解決して、policy gate を通過した resolved graph が
-`Deployment` 行に書き込まれる。
+kernel direct deploy の参照系シーケンス。takosumi-git を使う場合は、この前段で
+`.takosumi/manifest.yml` の `workflowRef` / installer placeholder が解決され、
+kernel には compiled Shape manifest だけが届く。
 
 ```mermaid
 sequenceDiagram
   participant User
-  participant CLI as takos-cli
-  participant App as takos-app
+  participant Installer as takosumi-git / CI
+  participant CLI as takosumi CLI
   participant K as Kernel<br/>(takosumi)
-  participant CR as Composite Resolver
-  participant DC as Descriptor Closure
-  participant BR as Binding Resolver
   participant PG as Policy Gate
   participant DS as DeploymentService
   participant DB as Deployment Store
 
-  User->>CLI: takos deploy --plan
-  CLI->>App: POST /v1/deployments:plan
-  App->>K: resolveDeployment(input)
-  K->>CR: expand composite descriptors
-  CR->>DC: load descriptor closure (pinned digest)
-  DC-->>CR: descriptor graph
-  CR-->>K: resolved descriptors
-  K->>BR: resolve bindings (secrets, publications)
-  BR-->>K: binding artifacts
+  User->>Installer: install / push / CI compile
+  Installer-->>CLI: compiled Shape manifest
+  CLI->>K: POST /v1/deployments (mode=plan)
+  K->>K: validate resources[] / refs / provider decision
   K->>PG: evaluate policies (boundary, approval)
   PG-->>K: PolicyDecision
   K->>DS: persist Deployment(preview/resolved)
   DS->>DB: INSERT Deployment row
   DB-->>DS: ok
   DS-->>K: Deployment id
-  K-->>App: Deployment + conditions[]
-  App-->>CLI: 200 OK Deployment
+  K-->>CLI: Deployment + conditions[]
   CLI-->>User: plan output
 ```
 
 resolve 段階では provider への副作用はない。失敗時は `conditions[].reason`
-として `DescriptorChanged` / `BindingResolutionFailed` /
-`PolicyDenied` などが付き、Deployment は `preview` のまま保留される。
+として validation / policy / provider resolution の理由が付き、Deployment は
+`preview` のまま保留される。
 
 ## Sequence Diagram: applyDeployment
 
@@ -148,7 +138,7 @@ sequenceDiagram
 ## State Machine: Deployment Lifecycle
 
 Deployment 行が取りうる主要 state とその遷移。 condition reason との対応は
-[Condition Reason Catalog](/takosumi/tests/condition-reason-catalog) を参照。
+[Condition Reason Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/status-output.md) を参照。
 
 ```mermaid
 stateDiagram-v2
@@ -183,13 +173,13 @@ state 遷移の補足:
 
 - [System Architecture](./system-architecture.md) — service / repository
   boundary の正本
-- [Deploy System](./deploy-system.md) — primitive と group 機能の deploy
+- [Deploy System](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/deploy-system.md) — primitive と group 機能の deploy
   pipeline
-- [Core Contract v1.0](/takosumi/core/01-core-contract-v1.0) — Deployment /
+- [Core Contract v1.0](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) — Deployment /
   ProviderObservation など Core 定義
-- [Condition Reason Catalog](/takosumi/tests/condition-reason-catalog) —
+- [Condition Reason Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/status-output.md) —
   `Deployment.conditions[].reason` の正本
-- [Operations: Troubleshooting](/operations/troubleshooting) — 実運用での
+- [Operations: Troubleshooting](https://github.com/tako0614/takos-private/blob/master/docs/operations/troubleshooting.md) — 実運用での
   failure 対応
 - [Performance Baseline](/performance/baseline) — kernel resolve / apply の
   baseline 値

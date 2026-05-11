@@ -1,38 +1,33 @@
 # Takos System Architecture - Final
 
-::: tip 上位 canonical reference 本ページは Takos service set の repository
-boundary を扱う。Takos が **Git URL から Takosumi Account に install される
-app** であるという最終モデル (Installable App Model) は
-[Installable App Model](./installable-app-model.md) を canonical reference と
-する。本ページの service set / responsibility / communication 記述は、その
-モデルの 5 product / layer (Takosumi Accounts / takosumi kernel / takosumi-cloud
-/ takosumi-git / Takos) 責務分離と整合する。 :::
+::: tip 上位 canonical reference 本ページは Takos service set の repository boundary を扱う。Takos は self-hostable な
+AI-first chat & agent platform であり、 Takosumi の unique top consumer です。Takos は Takosumi platform の一部でも、
+通常の third-party InstallableApp でもありません。Git URL install / `.takosumi/` convention のモデルは、Takos の bundled
+apps と third-party apps の install path として
+[Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
+を参照する。 :::
 
-::: info Cross-instance service binding 本ページで Accounts hostname を service
-endpoint として言及する箇所は hostname-based default ではなく example
-です。現在は **service identifier** (`takosumi.account.auth@v1` 等の forward
-3-level dotted format) + `serviceResolvers[]` (anchor) 経由で resolve され、
-hostname は operator-injected 値になります。 詳細は
-[cross-instance service binding](./cross-instance-service-binding.md)。 :::
+::: info Namespace export binding 本ページで Accounts hostname を endpoint として 言及する箇所は hostname-based default
+ではなく example です。現在は `operator.identity.oidc` / `operator.billing.default` などの namespace export と account
+API / OIDC discovery / BillingPort で参照し、hostname は operator-selected 値になります。 詳細は
+[namespace export binding](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/cross-instance-service-binding.md)。
+:::
 
-このドキュメントは Takos 全体の構成、各 repository / service / domain
-の責務、相互関係、通信方式、authority、standalone / integrated / distributed
-topology を 1 枚で読めるようにまとめた architecture map です。
+このドキュメントは Takos 全体の構成、各 repository / service / domain の責務、相互関係、通信方式、authority、standalone
+/ integrated / distributed topology を 1 枚で読めるようにまとめた architecture map です。
 
-これは `takosumi` だけの設計書ではありません。Takos 全体の architecture map
-です。
+これは `takosumi` だけの設計書ではありません。Takos 全体の architecture map です。
 
-Takos は、AI agent が software を作り、配布し、運用し、ユーザーや tenant
-に届けるための AI-native PaaS software です。Takos 自身は **Git URL から
-Takosumi Account に install される app** であり、OAuth provider は Takos でも
-takosumi kernel でもなく [Takosumi Accounts](./takosumi-accounts.md) (account
-plane) に置かれます。
+Takos は、chat / agent / memory / space を core 機能として持つ AI-first chat & agent platform です。Takos は Takosumi
+上で動く unique top consumer であり、 OAuth provider は Takos でも takosumi kernel でもなく
+[Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
+(account plane) に置かれます。
 
 最終方針:
 
 ```text
-takosumi は Takos の構成要素として残す。
-takosumi は standalone PaaS としても単体起動できる。
+Takos は Takosumi を substrate として consume する。
+takosumi は standalone PaaS kernel として単体起動できる。
 takosumi から deploy/runtime/registry/audit を別 service としてさらに分けない。
 takosumi 内部は domain module と process role で分ける。
 ```
@@ -46,8 +41,7 @@ Different adapters.
 No default microservice split inside takosumi.
 ```
 
-`takosumi` standalone は UX としては Coolify-like PaaS ですが、内部意味論は
-Takos-native です。
+`takosumi` standalone は UX としては Coolify-like PaaS ですが、内部意味論は Takos-native です。
 
 ```text
 Coolify-like UX:
@@ -64,23 +58,20 @@ Takos-native semantics:
 
 ### 1.1 Full Takos distribution
 
-Full Takos distribution の正本図は new.md §33 の Installable App Model
-図に揃えます。 User の install action から Installed Takos の chat
-表示までは、Takosumi Accounts (account plane) → takosumi-git (installer) →
-takosumi kernel (compute) → Installed Takos (OIDC consumer) の経路を辿ります。
+Full Takos distribution の正本図は 本書 / ROADMAP の Installable App Model 図に揃えます。 User の Use Takos / app
+install action から Takos app runtime または installed bundled app 表示までは、Takosumi Accounts (account plane) →
+takosumi-git (installer) → takosumi kernel (compute) → Takos app runtime / installed bundled app の経路を辿ります。
 
-`Installed Takos` = **takos-app runtime のみ** (OIDC consumer / chat / agent /
-memory / app-local profile / files / public API gateway) です。`takos-git`
-(Takos Git hosting service) と `takos-agent` (agent execution service) は
-Installed Takos に bundle される構成要素ではなく、Takos service set における
-**sibling services** として隣に並びます (Installable App Model の Takos 自身は
-`takos.chat` = takos-app)。
+Takos product runtime = **takos-app runtime** (OIDC consumer / chat / agent / memory / app-local profile / files /
+public API gateway) です。`takos-git` (Takos Git hosting service) と `takos-agent` (agent execution service) は
+takos-app に bundle される構成要素ではなく、Takos service set における **sibling services** として隣に並びます。Takos
+product 自身は unique top consumer であり、通常の InstallableApp ではありません。
 
 ```text
 User
-  │  Install Takos
+  │  Use Takos / Install App
   ▼
-takosumi.cloud/install?git=...&ref=v1.2.3
+operator install UI (managed example: takosumi.cloud/install?git=...&ref=v1.2.3)
   │
   ▼
 Takosumi Accounts
@@ -96,7 +87,7 @@ takosumi kernel
   pure compute substrate / manifest apply only / provider DAG / outputs resolver
   │  no OAuth / no billing / no account / no workflow
   ▼
-Installed Takos  ──  sibling services (separate AppInstallations / services)
+Takos app runtime  ──  sibling services (separate AppInstallations / services)
   takos-app              ├── takos-git    (Git hosting service, sibling)
   OIDC consumer          ├── takos-agent  (agent execution service, sibling,
   chat / agent /         │                  backed by takos-agent-engine)
@@ -107,39 +98,35 @@ Installed Takos  ──  sibling services (separate AppInstallations / services)
   binding to takosumi kernel
 ```
 
-`takos-app` は **OAuth provider ではなく OIDC consumer** です。account / billing
-/ OAuth issuer / consent screen / Stripe といった identity & billing 機能は
-`takos-app` には残らず、すべて Takosumi Accounts (account plane)
-に集約されます。 takos-app が持つのは chat / agent / memory / app-local profile
-/ files / public API gateway であり、ユーザーのログインは Takosumi Accounts OIDC
-を `AUTH_DRIVER=oidc` として consume します。`takos-git` / `takos-agent` は
-`takos-app` に bundle されず、 それぞれ独立した service
-として横並びに配置されます。所有権と source pin は AppInstallation 台帳
-([AppInstallation](./app-installation.md)) で表現されます。
+`takos-app` は **OAuth provider ではなく OIDC consumer** です。account / billing / OAuth issuer / consent screen /
+Stripe といった identity & billing 機能は `takos-app` には残らず、すべて Takosumi Accounts (account plane)
+に集約されます。 takos-app が持つのは chat / agent / memory / app-local profile / files / public API gateway
+であり、ユーザーのログインは Takosumi Accounts OIDC を `AUTH_DRIVER=oidc` として consume します。`takos-git` /
+`takos-agent` は `takos-app` に bundle されず、 それぞれ独立した service として横並びに配置されます。所有権と source pin
+は AppInstallation 台帳
+([AppInstallation](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md))
+で表現されます。
 
-takosumi kernel が持つのは compute manifest apply / routing projection /
-resource provisioning / provider reconciliation です。Agent / Chat / Git /
-Storage / Store / public API gateway は Takos product 側の service / app feature
-であり、kernel features ではありません。`Auth` と `Billing` も kernel に
-**含めない** (identity / billing は Takosumi Accounts の責務)。正本は
-[Kernel](./kernel.md) を参照。
+takosumi kernel が持つのは compute manifest apply / routing projection / resource provisioning / provider reconciliation
+です。Agent / Chat / Git / Storage / Store / public API gateway は Takos product 側の service / app feature
+であり、kernel features ではありません。`Auth` と `Billing` も kernel に **含めない** (identity / billing は Takosumi
+Accounts の責務)。正本は
+[Kernel](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/kernel.md) を参照。
 
-詳細は [Installable App Model](./installable-app-model.md) /
-[Takosumi Accounts](./takosumi-accounts.md) /
-[Installer Pipeline](./installer-pipeline.md) /
-[Runtime Modes](./runtime-modes.md) を参照。
+詳細は
+[Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
+/ [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md) /
+[Installer Pipeline](https://github.com/tako0614/takosumi-git/blob/master/docs/architecture/installer-pipeline.md) /
+[Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md) を参照。
 
 ### 1.2 Standalone Takosumi distribution
 
-Standalone Takosumi distribution は kernel を **compute substrate のみ** として
-独立に動かす形です。Takosumi Accounts (account plane) は kernel と **別
-service** であり、self-host operator が identity / billing / AppInstallation
-ownership を必要とする場合は Takosumi Accounts を運用します。既存 IdP (Keycloak
-/ Auth0 / 任意 OIDC issuer) は Takosumi Accounts の upstream として broker
-し、Takos runtime が AppInstallation ledger を迂回して直接 consume する 形は
-canonical Installable App Model ではありません。kernel と Takosumi Accounts
-は同じ "takosumi" の名を持ちますが、kernel の内側ではなく takosumi-cloud product
-側に置かれる account plane として独立にデプロイされます。
+Standalone Takosumi distribution は kernel を **compute substrate のみ** として 独立に動かす形です。Takosumi Accounts
+(account plane) は kernel と **別 service** であり、self-host operator が identity / billing / AppInstallation ownership
+を必要とする場合は Takosumi Accounts を運用します。既存 IdP (Keycloak / Auth0 / 任意 OIDC issuer) は Takosumi Accounts
+の upstream として broker し、Takos runtime が AppInstallation ledger を迂回して直接 consume する 形は canonical
+Installable App Model ではありません。kernel と Takosumi Accounts は同じ "takosumi" の名を持ちますが、kernel
+の内側ではなく takosumi-cloud product 側に置かれる account plane として独立にデプロイされます。
 
 ```text
 User / Browser / CLI
@@ -163,8 +150,8 @@ takosumi  (kernel = compute substrate のみ)
   └── local or remote audit / observability sink
 
 (別 service)
-Takosumi Accounts          : service identifier takosumi.account.auth@v1。
-                             endpoint URL は anchor が返す operator-injected 値
+Takosumi Accounts          : namespace export operator.identity.oidc。
+                             endpoint URL は OIDC discovery が返す operator-selected 値
 takosumi-git               : 上位 sibling product。Git URL installer / workflow
                              runner / manifest compiler。standalone でも optional
                              に挟める
@@ -201,8 +188,7 @@ Object storage / DB / audit sink:
   remote support infrastructure
 ```
 
-Distributed topology is allowed, but canonical writes use a primary
-control-plane authority.
+Distributed topology is allowed, but canonical writes use a primary control-plane authority.
 
 ```text
 Distributed dependencies are allowed.
@@ -215,31 +201,29 @@ Distributed canonical writers are not assumed.
 
 Target service set:
 
-| service             | product root                                                                              | responsibility                                                                                                                                                                                                                                        |
-| ------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `takos-app`         | `takos/app`                                                                               | OIDC consumer + chat / agent / memory / app-local profile / files / public API gateway. **OAuth provider ではない。account / billing / OAuth issuer / Stripe は持たない** (それらは Takosumi Accounts 側)                                             |
-| `Takosumi Accounts` | takosumi-cloud account plane (`takosumi.account.auth@v1` / `takosumi.account.billing@v1`) | OAuth / OIDC issuer, identity broker (Google / GitHub / Passkey / Enterprise OIDC), billing owner, AppInstallation 台帳 (app installation owner)。詳細は [Takosumi Accounts](./takosumi-accounts.md) と [AppInstallation 台帳](./app-installation.md) |
-| `takosumi`          | `takosumi`                                                                                | takosumi kernel = compute substrate / manifest deploy engine。`POST /v1/deployments` のみ公開。OAuth / billing / account / workflow / cron は持たない                                                                                                 |
-| `takosumi-git`      | `takosumi-git`                                                                            | 上位 sibling product。Git URL installer / workflow runner / manifest compiler。`takosumi-git` is generic; Takos はその一 client                                                                                                                       |
-| `takos-git`         | `takos/git`                                                                               | Takos product 内側の Git hosting service。repository object storage, source truth, source resolution。`takosumi-git` (workflow / git bridge) とは別物                                                                                                 |
-| `takos-agent`       | `takos/agent`                                                                             | agent execution service                                                                                                                                                                                                                               |
-| `takos-cli`         | `takos-cli`                                                                               | user/operator CLI                                                                                                                                                                                                                                     |
-| `takos-private`     | `takos-private`                                                                           | private operator config, secrets, production/staging deploy config                                                                                                                                                                                    |
+| service             | product root                                                                         | responsibility                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `takos-app`         | `takos/app`                                                                          | OIDC consumer + chat / agent / memory / app-local profile / files / public API gateway. **OAuth provider ではない。account / billing / OAuth issuer / Stripe は持たない** (それらは Takosumi Accounts 側)                                                                                                                                                                                        |
+| `Takosumi Accounts` | takosumi-cloud account plane (`operator.identity.oidc` / `operator.billing.default`) | OAuth / OIDC issuer, identity broker (Google / GitHub / Passkey / Enterprise OIDC), billing owner, AppInstallation 台帳 (app installation owner)。詳細は [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md) と [AppInstallation 台帳](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md) |
+| `takosumi`          | `takosumi`                                                                           | takosumi kernel = compute substrate / manifest deploy engine。`POST /v1/deployments` のみ公開。OAuth / billing / account / workflow / cron は持たない                                                                                                                                                                                                                                            |
+| `takosumi-git`      | `takosumi-git`                                                                       | 上位 sibling product。Git URL installer / workflow runner / manifest compiler。`takosumi-git` is generic; Takos はその一 client                                                                                                                                                                                                                                                                  |
+| `takos-git`         | `takos/git`                                                                          | Takos product 内側の Git hosting service。repository object storage, source truth, source resolution。`takosumi-git` (workflow / git bridge) とは別物                                                                                                                                                                                                                                            |
+| `takos-agent`       | `takos/agent`                                                                        | agent execution service                                                                                                                                                                                                                                                                                                                                                                          |
+| `takos-cli`         | `takos-cli`                                                                          | user/operator CLI                                                                                                                                                                                                                                                                                                                                                                                |
+| `takos-private`     | `takos-private`                                                                      | private operator config, secrets, production/staging deploy config                                                                                                                                                                                                                                                                                                                               |
 
-新サービスである **Takosumi Accounts** と **AppInstallation 台帳** の責務は次の
-独立章
-([§2A Takosumi Accounts (account plane)](#_2a-takosumi-accounts-account-plane))
-を参照。kernel features に **Auth と Billing は含めません** (詳細は
-[Kernel](./kernel.md))。
+新サービスである **Takosumi Accounts** と **AppInstallation 台帳** の責務は次の 独立章
+([§2A Takosumi Accounts (account plane)](#_2a-takosumi-accounts-account-plane)) を参照。kernel features に **Auth と
+Billing は含めません** (詳細は
+[Kernel](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/kernel.md))。
 
-Standalone deploy and runtime services are not target top-level product roots.
-They are internal domains of `takosumi`.
+Standalone deploy and runtime services are not target top-level product roots. They are internal domains of `takosumi`.
 
 > 現行実装の split status は
-> [Current Implementation Note](/takosumi/current-state#deploy-shell) を参照
+> [Current Implementation Note](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/index.md#deploy-shell)
+> を参照
 
-Their semantics remain. Their standalone service boundary is removed unless
-future scale requires extraction.
+Their semantics remain. Their standalone service boundary is removed unless future scale requires extraction.
 
 ```text
 Service boundary can be merged.
@@ -259,30 +243,28 @@ yurucommu
 user-created apps
 ```
 
-They deploy through the same PaaS / deploy / runtime / tenant context model as
-user apps.
+They deploy through the same PaaS / deploy / runtime / tenant context model as user apps.
 
 ---
 
 ## 2A. Takosumi Accounts (account plane)
 
-**Takosumi Accounts** は takosumi-cloud product の account plane として運用する
-独立 service です。kernel と同じ "takosumi" の名を持ちますが、kernel の内側では
-ありません。
+**Takosumi Accounts** は takosumi-cloud product の account plane として運用する 独立 service です。kernel と同じ
+"takosumi" の名を持ちますが、kernel の内側では ありません。
 
 ```text
-service id : takosumi.account.auth@v1 / takosumi.account.billing@v1
-役割       : identity broker / OIDC issuer / billing owner / app installation owner
-別 service : takosumi kernel と分離して deploy / 運用される
+namespace export : operator.identity.oidc / operator.billing.default
+役割             : identity broker / OIDC issuer / billing owner / app installation owner
+別 service       : takosumi kernel と分離して deploy / 運用される
 ```
 
 Takosumi Accounts が持つもの:
 
 ```text
 - account / login / passkey / upstream OAuth login
-- OIDC provider (issuer URL は anchor が返す operator-injected value)
+- OIDC provider (issuer URL は OIDC discovery が返す operator-selected value)
 - billing account (Stripe webhook 処理 / subscription / usage / invoice)
-- AppInstallation 台帳 (AppInstallation / serviceImports metadata / AppBinding /
+- AppInstallation 台帳 (AppInstallation / AppBinding /
   AppGrant / RuntimeBinding / InstallationEvent)
 ```
 
@@ -294,9 +276,11 @@ Takosumi Accounts が持たないもの:
 - chat / agent / memory (Takos の責務)
 ```
 
-詳細は [Takosumi Accounts](./takosumi-accounts.md) /
-[AppInstallation 台帳](./app-installation.md) /
-[Installable App Model](./installable-app-model.md) を参照。
+詳細は
+[Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md) /
+[AppInstallation 台帳](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md) /
+[Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
+を参照。
 
 ### 2A.1 service set 表現の正本
 
@@ -308,9 +292,9 @@ takos-app / takosumi / takos-git / takos-agent
   + takosumi-git    (上位 sibling product。installer / workflow runner)
 ```
 
-`takos-app` は Installable App Model 上 **OIDC consumer** に再定義されており、
-account / billing / OAuth issuer は Takosumi Accounts に集約されます。kernel
-features の正本記述は [Kernel](./kernel.md) を参照。
+`takos-app` は Installable App Model 上 **OIDC consumer** に再定義されており、 account / billing / OAuth issuer は
+Takosumi Accounts に集約されます。kernel features の正本記述は
+[Kernel](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/kernel.md) を参照。
 
 ---
 
@@ -318,8 +302,7 @@ features の正本記述は [Kernel](./kernel.md) を参照。
 
 `takosumi` is the Takosumi control plane.
 
-It owns platform context and coordinates
-deploy/runtime/resource/routing/registry/audit domains.
+It owns platform context and coordinates deploy/runtime/resource/routing/registry/audit domains.
 
 It is both:
 
@@ -328,8 +311,7 @@ It is both:
 2. a standalone-capable PaaS product
 ```
 
-Integrated and standalone modes run the same PaaS core. They differ by host and
-adapters.
+Integrated and standalone modes run the same PaaS core. They differ by host and adapters.
 
 ### 3.1 takosumi does own
 
@@ -354,20 +336,20 @@ audit projection and security events through audit domain
 account / login / passkey / upstream OAuth (Takosumi Accounts owns)
 OAuth / OIDC issuer / consent screen (Takosumi Accounts owns)
 billing / Stripe / subscription / invoice (Takosumi Accounts owns)
-AppInstallation 台帳 / serviceImports metadata / AppBinding / AppGrant (Takosumi Accounts owns)
+AppInstallation 台帳 / AppBinding / AppGrant (Takosumi Accounts owns)
 workflow / build pipeline / .takosumi/app.yml interpretation (takosumi-git owns)
 Git object truth when integrated with takos-git
 agent model/tool execution when integrated with takos-agent
-chat / memory / app-local profile (Installed Takos owns)
+chat / memory / app-local profile (Takos app runtime owns)
 provider cloud truth
 observed provider state as canonical truth
 tenant workload code semantics
 operator secrets in plaintext
 ```
 
-Installable App Model 下では、kernel features に **Auth と Billing
-は含まれません**。 identity / billing は Takosumi Accounts (account plane)
-の責務です。詳細は [Kernel](./kernel.md) を参照。
+Installable App Model 下では、kernel features に **Auth と Billing は含まれません**。 identity / billing は Takosumi
+Accounts (account plane) の責務です。詳細は
+[Kernel](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/kernel.md) を参照。
 
 ### 3.3 takosumi modes
 
@@ -397,8 +379,7 @@ Host mode is selected by adapters.
 
 ## 4. takosumi implementation architecture
 
-`takosumi` remains one product root. It is not split into many default
-microservices.
+`takosumi` remains one product root. It is not split into many default microservices.
 
 It may run multiple process roles, but its domain model stays in one product.
 
@@ -510,8 +491,7 @@ Service split is a scale/operation decision, not a semantic requirement.
 
 ## 5. Authority and consistency model
 
-Takos supports distributed dependencies and remote agents, but canonical writes
-use a primary control-plane authority.
+Takos supports distributed dependencies and remote agents, but canonical writes use a primary control-plane authority.
 
 ### 5.1 Strong consistency required
 
@@ -607,8 +587,8 @@ Host mode changes auth adapter, not the shape of identity seen by the PaaS core.
 ```ts
 interface ActorContext {
   actorId: string;
-  actorType: "user" | "service" | "agent";
-  identityProvider: "takosumi-accounts" | "oidc" | "github" | "service";
+  actorType: 'user' | 'service' | 'agent';
+  identityProvider: 'takosumi-accounts' | 'oidc' | 'github' | 'service';
   tenantId?: string;
   spaceId?: string;
   roles: string[];
@@ -630,7 +610,7 @@ SourcePort output is immutable.
 
 ```ts
 interface SourceSnapshot {
-  sourceKind: "git" | "local-upload" | "tarball" | "catalog";
+  sourceKind: 'git' | 'local-upload' | 'tarball' | 'catalog';
   originalRef?: string;
   resolvedCommit?: string;
   contentDigest: string;
@@ -660,103 +640,30 @@ EntitlementPolicyPort:
   effective allowed capabilities and limits
 ```
 
-Standalone mode may use `BillingPort = noop` or an external account plane, but
-still must have EntitlementPolicy.
+Standalone mode may use `BillingPort = noop` or an external account plane, but still must have EntitlementPolicy.
 
 ---
 
-## 7. Distributed topology and service endpoints
+## 7. Distributed topology and namespace exports
 
-A dependency may be attached as:
+Takos product code does not own a platform service registry. Cross-product
+dependencies are represented through explicit ports, operator-selected URLs,
+OIDC discovery, BillingPort, runtime-agent control RPC, and namespace exports.
 
-```text
-embedded:
-  same process
-
-local-service:
-  same host, different process
-
-remote-service:
-  different server or cloud
-
-external-api:
-  external SaaS/API
-
-pull-agent:
-  runtime agent pulls work from control plane
-```
-
-### 7.1 ServiceEndpointRegistry
-
-ServiceEndpointRegistry records where something is.
-
-```ts
-interface ServiceEndpoint {
-  name: string;
-  kind:
-    | "auth"
-    | "source"
-    | "agent"
-    | "registry"
-    | "runtime-agent"
-    | "provider-executor"
-    | "audit"
-    | "notification"
-    | "operator-config";
-  mode:
-    | "embedded"
-    | "local-service"
-    | "remote-service"
-    | "external-api"
-    | "pull-agent";
-  endpoint?: string;
-  audience?: string;
-  trustBundleRef?: string;
-  healthCheck?: string;
-  healthStatus?: "available" | "degraded" | "offline" | "unknown";
-  region?: string;
-  dataResidency?: string[];
-}
-```
-
-### 7.2 ServiceTrustRecord
-
-ServiceTrustRecord records whether a service identity is trusted.
-
-```ts
-interface ServiceTrustRecord {
-  serviceName: string;
-  identityDigest: string;
-  trustState: "trusted" | "pending" | "revoked";
-  verifiedAt: string;
-}
-```
-
-### 7.3 ServiceGrant
-
-ServiceGrant records what a trusted service may do.
-
-```ts
-interface ServiceGrant {
-  caller: string;
-  target: string;
-  actions: string[];
-  scope?: unknown;
-}
-```
-
-Do not mix:
+Current v1 allows consumer dependency on operator-owned namespace exports only:
 
 ```text
-ServiceEndpoint:
-  where is it?
-
-ServiceTrustRecord:
-  do we trust it?
-
-ServiceGrant:
-  what may it do?
+operator.identity.oidc
+operator.billing.default
+operator.dashboard.web
+operator.platform.deploy
 ```
+
+Removed active surfaces: `ServiceEndpointRegistry`, provider-signed
+`ServiceDescriptor`, `services[]`, `imports[]`, `serviceResolvers[]`, and
+`CrossInstanceShare`. Historical code paths or migration notes may still mention
+them, but new Takos product docs should use namespace exports / AppBinding /
+AppGrant / account API vocabulary.
 
 ---
 
@@ -809,8 +716,7 @@ signature
 
 ### 8.2 DomainEvent and transactional outbox
 
-Domain state transition and DomainEvent emission must be atomic through outbox
-or equivalent.
+Domain state transition and DomainEvent emission must be atomic through outbox or equivalent.
 
 ```ts
 interface DomainEvent {
@@ -841,19 +747,19 @@ Consumer failure must not roll back the original domain state transition.
 Example:
 
 ```text
-paas-deploy advances Deployment to applied and advances GroupHead
+takosumi deploy domain advances Deployment to applied and advances GroupHead
   -> deploy.DeploymentApplied
-  -> paas-runtime materializes desired state
-  -> paas-routing refreshes route projection
-  -> paas-audit records activation event
+  -> takosumi runtime domain materializes desired state
+  -> takosumi route projection refreshes route state
+  -> takosumi audit domain records activation event
 ```
 
 ---
 
 ## 9. Runtime agents
 
-Runtime agents allow `takosumi` to materialize workloads on remote hosts, Docker
-hosts, GPU hosts, edge hosts, or private networks.
+Runtime agents allow `takosumi` to materialize workloads on remote hosts, Docker hosts, GPU hosts, edge hosts, or
+private networks.
 
 Default communication should be pull-based.
 
@@ -879,12 +785,12 @@ interface RuntimeAgentRegistration {
   hostKeyDigest?: string;
   enrollmentTokenId?: string;
   trustState:
-    | "pending"
-    | "active"
-    | "degraded"
-    | "draining"
-    | "offline"
-    | "revoked";
+    | 'pending'
+    | 'active'
+    | 'degraded'
+    | 'draining'
+    | 'offline'
+    | 'revoked';
   lastHeartbeatAt: string;
 }
 ```
@@ -928,15 +834,14 @@ interface RuntimePlacementDecision {
 
 ## 10. ProviderPackage execution
 
-ProviderPackage execution is powerful because it uses provider credentials to
-touch real infrastructure.
+ProviderPackage execution is powerful because it uses provider credentials to touch real infrastructure.
 
 ```ts
 interface ProviderExecutionPolicy {
-  packageTrustLevel: "official" | "verified" | "local" | "untrusted";
-  networkPolicy: "provider-api-only" | "restricted" | "operator-defined";
-  credentialScope: "provider-target-only";
-  filesystem: "ephemeral";
+  packageTrustLevel: 'official' | 'verified' | 'local' | 'untrusted';
+  networkPolicy: 'provider-api-only' | 'restricted' | 'operator-defined';
+  credentialScope: 'provider-target-only';
+  filesystem: 'ephemeral';
   auditRequired: true;
 }
 ```
@@ -956,8 +861,7 @@ Untrusted packages cannot advance a Deployment to applied or materialize provide
 
 ## 11. Runtime and tenant workload isolation
 
-Standalone mode may run the control plane and tenant workloads on the same host.
-They must still be isolated.
+Standalone mode may run the control plane and tenant workloads on the same host. They must still be isolated.
 
 Runtime zones:
 
@@ -991,7 +895,7 @@ host filesystem by default
 
 ## 12. Registry and package trust
 
-`paas-registry` owns:
+`takosumi` kernel registry domain owns:
 
 ```text
 ProviderPackage
@@ -1019,8 +923,7 @@ deploy:apply
 runtime:materialize
 ```
 
-The person who can trust a ProviderPackage should not automatically be the
-person who can deploy it to production.
+The person who can trust a ProviderPackage should not automatically be the person who can deploy it to production.
 
 ### 12.2 Registry sync
 
@@ -1104,8 +1007,7 @@ operator config
 10. operator confirms exit from recovery mode
 ```
 
-Recovery mode should not immediately run provider repair until operator
-confirms.
+Recovery mode should not immediately run provider repair until operator confirms.
 
 ---
 
@@ -1246,8 +1148,7 @@ observability:
     traces: 7d
 ```
 
-Agent run logs may contain user data and tool output. They must not be treated
-as normal system logs.
+Agent run logs may contain user data and tool output. They must not be treated as normal system logs.
 
 ---
 
@@ -1284,9 +1185,8 @@ routing:
 
 ## 18. RouteProjection
 
-RouteProjection lets routers detect stale routing state. It is the runtime
-materialization of the route fragment of `Deployment.desired` for the
-GroupHead's current Deployment.
+RouteProjection lets routers detect stale routing state. It is the runtime materialization of the route fragment of
+`Deployment.desired` for the GroupHead's current Deployment.
 
 ```ts
 interface RouteProjection {
@@ -1298,9 +1198,8 @@ interface RouteProjection {
 }
 ```
 
-Router reads RouteProjection (derived from `Deployment.desired.routes` +
-`activation_envelope`) and the GroupHead pointer. Router must not mutate
-canonical ownership, GroupHead, or `Deployment.desired`.
+Router reads RouteProjection (derived from `Deployment.desired.routes` + `activation_envelope`) and the GroupHead
+pointer. Router must not mutate canonical ownership, GroupHead, or `Deployment.desired`.
 
 ---
 
@@ -1339,8 +1238,7 @@ AgentPort output:
 
 ## 20. OperatorConfigPort
 
-Full Takos uses `takos-private`. Standalone uses local config, env, Kubernetes
-Secret, or secret manager.
+Full Takos uses `takos-private`. Standalone uses local config, env, Kubernetes Secret, or secret manager.
 
 ```text
 Integrated:
@@ -1365,33 +1263,33 @@ bootstrap/recovery config
 
 ## 21. Data ownership across Takos
 
-| data / object                                                                                          | owner                                                     |
-| ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| Takosumi Account, login, passkey, upstream IdP linkage                                                 | `Takosumi Accounts`                                       |
-| OAuth / OIDC issuer state, consent, OIDC client registration                                           | `Takosumi Accounts`                                       |
-| billing account, Stripe subscription, invoice, usage aggregate                                         | `Takosumi Accounts`                                       |
-| AppInstallation / serviceImports metadata / AppBinding / AppGrant / RuntimeBinding / InstallationEvent | `Takosumi Accounts`                                       |
-| Installed Takos の app-local profile, chat thread, memory, files                                       | `takos-app` (OIDC consumer)                               |
-| tenant, space, group, membership, entitlement                                                          | `paas-core`                                               |
-| route ownership / domain ownership                                                                     | `paas-routing`                                            |
-| repository, ref, object, source truth                                                                  | `takos-git` or SourcePort provider                        |
-| SourceSnapshot metadata                                                                                | `paas-deploy` with SourcePort origin                      |
-| Deployment (input / resolution / desired / status / conditions / policy_decisions / approval)          | `paas-deploy`                                             |
-| GroupHead (current_deployment_id / previous_deployment_id)                                             | `paas-deploy`                                             |
-| Deployment.desired.runtime_network_policy                                                              | `paas-network` + `paas-deploy` (Deployment.desired field) |
-| WorkloadRevision                                                                                       | `paas-runtime`                                            |
-| Deployment.conditions[] (provider operation 進捗 / 観測フィードバック)                                 | `paas-deploy` (apply 側) / `paas-runtime` (observe 側)    |
-| ProviderObservation, health, logs                                                                      | `paas-runtime`                                            |
-| ResourceInstance, Deployment.desired.bindings projection                                               | `paas-resources`                                          |
-| MigrationLedger                                                                                        | `paas-resources`                                          |
-| ProviderPackage, ResourceContractPackage, DataContractPackage                                          | `paas-registry`                                           |
-| PackageResolution                                                                                      | `paas-registry` + `paas-deploy` read set                  |
-| ServiceEndpoint / Trust / Grant                                                                        | `paas-core` / `paas-registry` depending on kind           |
-| RuntimeAgentRegistration / WorkLease                                                                   | `paas-agents`                                             |
-| Agent run execution state                                                                              | `takos-agent`                                             |
-| Agent engine library                                                                                   | `takos-agent-engine`                                      |
-| private operator config and secrets                                                                    | `takos-private` or OperatorConfigPort                     |
-| unified audit projection                                                                               | `paas-audit`                                              |
+| data / object                                                                                 | owner                                                     |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Takosumi Account, login, passkey, upstream IdP linkage                                        | `Takosumi Accounts`                                       |
+| OAuth / OIDC issuer state, consent, OIDC client registration                                  | `Takosumi Accounts`                                       |
+| billing account, Stripe subscription, invoice, usage aggregate                                | `Takosumi Accounts`                                       |
+| AppInstallation / AppBinding / AppGrant / RuntimeBinding / InstallationEvent                  | `Takosumi Accounts`                                       |
+| Takos app runtime の app-local profile, chat thread, memory, files                            | `takos-app` (OIDC consumer)                               |
+| Takos Space / membership / app-local entitlement                                              | `takos-app`; Takosumi Space context is kernel deploy context |
+| route ownership / domain ownership                                                            | `takosumi` kernel route projection + provider plugin evidence |
+| repository, ref, object, source truth                                                         | `takos-git` or SourcePort provider                        |
+| SourceSnapshot metadata                                                                       | `takosumi` kernel deploy evidence with SourcePort origin  |
+| Deployment (input / resolution / desired / status / conditions / policy_decisions / approval) | `takosumi` kernel                                        |
+| GroupHead (current_deployment_id / previous_deployment_id)                                    | `takosumi` kernel                                        |
+| Deployment.desired.runtime_network_policy                                                     | `takosumi` kernel security/deploy domains                 |
+| WorkloadRevision                                                                              | `takosumi` kernel runtime domain                          |
+| Deployment.conditions[] (provider operation 進捗 / 観測フィードバック)                        | `takosumi` kernel deploy/runtime evidence                 |
+| ProviderObservation, health, logs                                                             | `takosumi` kernel runtime observation stream              |
+| ResourceInstance, Deployment.desired.bindings projection                                      | `takosumi` kernel resources domain                        |
+| MigrationLedger                                                                               | `takosumi` kernel resources domain                        |
+| ProviderPackage, ResourceContractPackage, DataContractPackage                                 | `takosumi` kernel registry domain                         |
+| PackageResolution                                                                             | `takosumi` kernel registry + deploy read set              |
+| Namespace export grant / AppGrant                                                             | namespace exports + Takosumi Accounts AppGrant            |
+| RuntimeAgentRegistration / WorkLease                                                          | `takosumi` kernel runtime-agent control                   |
+| Agent run execution state                                                                     | `takos-agent`                                             |
+| Agent engine library                                                                          | `takos-agent-engine`                                      |
+| private operator config and secrets                                                           | `takos-private` or OperatorConfigPort                     |
+| unified audit projection                                                                      | `takosumi` kernel audit domain + Takosumi Accounts events |
 
 ---
 
@@ -1410,8 +1308,7 @@ Standalone PaaS API:
   local auth / provider admin / standalone settings
 ```
 
-CLI should use server capabilities and API version matrix rather than URL
-guessing.
+CLI should use server capabilities and API version matrix rather than URL guessing.
 
 ---
 
@@ -1422,7 +1319,7 @@ Use one Condition model for domain health/status.
 ```ts
 interface Condition {
   type: string;
-  status: "True" | "False" | "Unknown";
+  status: 'True' | 'False' | 'Unknown';
   reason: string;
   message?: string;
   observedGeneration?: number;
@@ -1469,61 +1366,44 @@ observability plane:
   logs / metrics / traces / audit
 ```
 
-These planes may share product root, but they must not share authority
-implicitly.
+These planes may share product root, but they must not share authority implicitly.
 
 ---
 
 ## 25. Design invariants
 
 1. This is Takos-wide architecture, not only takosumi architecture.
-2. `takosumi` is both a Takos component and standalone-capable PaaS control
-   plane.
-3. `takosumi` is one product root by default. It is not split into many default
-   microservices.
-4. Integrated, standalone, and distributed modes use the same PaaS core
-   semantics.
-5. Differences between modes are host adapters, topology, and process shape, not
-   core object semantics.
-6. Deploy and runtime lifecycles are internal domains of `takosumi`, not
-   semantic concepts to erase.
-7. `takos-app`, `takos-git`, and `takos-agent` remain separate in Full Takos
-   distribution.
-8. `takosumi` product root may contain multiple process roles, but the PaaS core
-   remains the same.
-9. Service split inside `takosumi` is a scale/operation decision, not a semantic
-   requirement.
+2. `takosumi` is both a Takos component and standalone-capable PaaS control plane.
+3. `takosumi` is one product root by default. It is not split into many default microservices.
+4. Integrated, standalone, and distributed modes use the same PaaS core semantics.
+5. Differences between modes are host adapters, topology, and process shape, not core object semantics.
+6. Deploy and runtime lifecycles are internal domains of `takosumi`, not semantic concepts to erase.
+7. `takos-app`, `takos-git`, and `takos-agent` remain separate in Full Takos distribution.
+8. `takosumi` product root may contain multiple process roles, but the PaaS core remains the same.
+9. Service split inside `takosumi` is a scale/operation decision, not a semantic requirement.
 10. `takosumi` core must not depend on physical co-location.
-11. Dependencies are reached through ports, adapters, ServiceEndpointRegistry,
-    ProviderTargets, RuntimeAgents, or external APIs.
+11. Dependencies are reached through ports, adapters, namespace exports, ProviderTargets, RuntimeAgents, or external
+    APIs.
 12. Canonical writes use primary control-plane authority.
-13. Strongly consistent writes include ownership, Deployment status transitions,
-    GroupHead.current_deployment_id, ResourceMigrationLock, package trust, and
-    credential binding.
+13. Strongly consistent writes include ownership, Deployment status transitions, GroupHead.current_deployment_id,
+    ResourceMigrationLock, package trust, and credential binding.
 14. Private network does not imply trust.
-15. Remote internal calls require signed RPC, mTLS, or equivalent service
-    identity.
-16. ServiceEndpoint, ServiceTrustRecord, and ServiceGrant are separate concepts.
-17. Domain state transition and DomainEvent emission must be atomic through
-    outbox or equivalent.
+15. Remote internal calls require signed RPC, mTLS, or equivalent service identity.
+16. AppGrant, namespace export grants, runtime-agent trust, and provider package trust are separate concepts.
+17. Domain state transition and DomainEvent emission must be atomic through outbox or equivalent.
 18. DomainEvent consumers must be idempotent.
-19. Runtime agents must enroll, heartbeat, lease work, report results, drain,
-    and be revokable.
+19. Runtime agents must enroll, heartbeat, lease work, report results, drain, and be revokable.
 20. ProviderPackage execution is sandboxed and credential-scoped.
-21. Tenant workloads must not access control-plane DB, provider credentials,
-    operator secrets, internal signing keys, or control-plane private endpoints.
+21. Tenant workloads must not access control-plane DB, provider credentials, operator secrets, internal signing keys, or
+    control-plane private endpoints.
 22. Standalone mode still uses Tenant / Space / Group.
 23. SourcePort adapters must return immutable SourceSnapshot values.
-24. Agent output and source connector output are untrusted until validated
-    through source/build/Deployment resolution/policy.
-25. Control-plane restore and ControlPlaneMigration are operator operations, not
-    tenant app operations.
-26. Registry trust/revocation behavior must be defined for online, manual, and
-    offline sync modes.
+24. Agent output and source connector output are untrusted until validated through source/build/Deployment
+    resolution/policy.
+25. Control-plane restore and ControlPlaneMigration are operator operations, not tenant app operations.
+26. Registry trust/revocation behavior must be defined for online, manual, and offline sync modes.
 27. Self-update is operator operation unless explicitly enabled by policy.
-28. Router reads route projections (derived from Deployment.desired) and the
-    GroupHead pointer but must not mutate canonical ownership,
-    Deployment.desired, or GroupHead.
-29. No distributed transaction is assumed across providers, clouds, agents, or
-    services.
+28. Router reads route projections (derived from Deployment.desired) and the GroupHead pointer but must not mutate
+    canonical ownership, Deployment.desired, or GroupHead.
+29. No distributed transaction is assumed across providers, clouds, agents, or services.
 30. Provider state is observed and materialized, never canonical Takos state.

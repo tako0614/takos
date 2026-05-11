@@ -273,13 +273,17 @@ function checkForbiddenSurface() {
 
 function checkDocs() {
   const requiredDocs = [
-    'docs/architecture/service-topology.md',
-    'docs/get-started/local-shell.md',
-    'docs/reference/component-matrix.md',
+    { path: 'docs/architecture/service-topology.md' },
+    { path: 'docs/get-started/local-shell.md' },
+    {
+      path: '../docs/reference/component-matrix.md',
+      label: 'ecosystem docs/reference/component-matrix.md',
+    },
   ];
   for (const doc of requiredDocs) {
-    if (existsSync(join(root, doc))) pass(`doc ${doc}`);
-    else fail(`doc ${doc}`, 'missing');
+    const label = doc.label ?? doc.path;
+    if (existsSync(join(root, doc.path))) pass(`doc ${label}`);
+    else fail(`doc ${label}`, 'missing');
   }
 }
 

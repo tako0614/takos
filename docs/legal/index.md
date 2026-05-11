@@ -3,7 +3,7 @@
 > このページでわかること: Takos の公開前 legal / compliance artifacts と、 GA
 > 前に署名・法務 review が必要な境界。
 
-Takos は Installable App Model 上の app として提供される product であり、
+Takos は Takosumi の unique top consumer として提供される product であり、
 **契約・billing・identity の正本は Takosumi Account (Takosumi Accounts service)
 が所有**します。Takos 自身は OIDC consumer + app-local profile を提供し、 public
 API / UI の運用境界は `takos/app/` に置かれますが、account / authentication /

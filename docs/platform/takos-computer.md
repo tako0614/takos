@@ -1,6 +1,6 @@
 # takos-computer
 
-Browser automation と sandbox computer を提供する default app。default app
+Browser automation と sandbox computer を提供する bundled app。bundled app
 distribution metadata を持つが、primitive や group は特権化されない。
 
 ## 役割
@@ -98,14 +98,14 @@ deploy では `identity.oidc@v1` AppBinding に統一する。
 
 ## Bindings
 
-takos-computer は他の default apps と同様に **OIDC consumer** であり、 end-user
-sign-in を service identifier `takosumi.account.auth@v1` で解決される Takosumi
+takos-computer は他の bundled apps と同様に **OIDC consumer** であり、 end-user
+sign-in を `operator.identity.oidc` namespace export で解決される Takosumi
 Accounts に委譲する。 `.takosumi/app.yml` で `identity.oidc@v1` AppBinding を
 declare し、installer (takosumi-git) が installation 単位の OIDC client を
 Takosumi Accounts に 登録、`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
 `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` を runtime に inject する (詳細:
 [OIDC Consumer](/apps/oidc-consumer) /
-[binding-catalog](/reference/binding-catalog#_1-identity-oidc-v1))。
+[binding-catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md#_1-identity-oidc-v1))。
 
 ```yaml
 bindings:
@@ -123,8 +123,9 @@ bindings:
 
 OIDC callback path は `/gui/api/auth/callback` を使い、 dashboard / computer UI
 の app session を発行する。 takos-computer 自身は OAuth provider を持たず、 OIDC
-issuer は常に AppBinding 経由で外部 (Takosumi Accounts または self-host operator
-が選択した issuer) から提供される。 MCP publication 用の bearer token
+issuer は常に `identity.oidc@v1` AppBinding 経由で Takosumi Accounts から提供
+される。self-host operator が Keycloak / Authentik 等を使う場合も、それらは
+Takosumi Accounts の upstream IdP として接続する。 MCP publication 用の bearer token
 (`PUBLISHED_MCP_AUTH_TOKEN` / `SANDBOX_HOST_AUTH_TOKEN` / `MCP_AUTH_TOKEN`) は
 OIDC consumer 層とは独立した machine-to-machine credential
 であり、ここで宣言する `identity.oidc@v1` binding には影響しない。
@@ -161,6 +162,6 @@ launcher icon の `/icons/computer.svg` も公開する。
 ## Scopes
 
 takos-computer は sandbox automation と agent integration のため、office 系
-default apps より広い Takos API scopes を要求する。default set に含まれても
+bundled apps より広い Takos API scopes を要求する。default set に含まれても
 scope は Takosumi Accounts の AppGrant/AppBinding と operator policy に従って
 管理される。旧 `takos.api-key` built-in provider consume は retired。

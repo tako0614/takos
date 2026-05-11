@@ -1,10 +1,10 @@
 # Legal: SOC 2 Readiness Checklist
 
-> このページでわかること: Takos の SOC 2 readiness scope、control owners、
-> evidence targets、post-GA audit preparation backlog。
+> このページでわかること: Takos の SOC 2 readiness scope、control owners、 evidence targets、post-GA audit preparation
+> backlog。
 
-This checklist is a readiness artifact, not an audit report. Takos does not
-claim SOC 2 compliance until a qualified auditor completes the engagement.
+This checklist is a readiness artifact, not an audit report. Takos does not claim SOC 2 compliance until a qualified
+auditor completes the engagement.
 
 ## Scope
 
@@ -53,9 +53,8 @@ Out of scope for the first readiness pass:
 - Service owner map exists for every product root.
 - Policy exception process exists with owner and expiry.
 - Quarterly risk review meeting is scheduled.
-- AppInstallation ledger and Takosumi Account billing model are listed in the
-  data protection owner audit checklist (Installable App Model: identity /
-  billing owner = Takosumi Accounts; AppInstallation台帳 = ownership primitive).
+- AppInstallation ledger and Takosumi Account billing model are listed in the data protection owner audit checklist
+  (Installable App Model: identity / billing owner = Takosumi Accounts; AppInstallation台帳 = ownership primitive).
 
 ### Access Control
 
@@ -107,25 +106,24 @@ Out of scope for the first readiness pass:
 
 ## Evidence Register
 
-| Evidence          | Public path                         | Private path              |
-| ----------------- | ----------------------------------- | ------------------------- |
-| On-call policy    | `/operations/oncall`                | incident paging config    |
-| Incident response | `/operations/incident-response`     | incident records          |
-| Backup drills     | `/operations/backup-restore-drills` | restore logs              |
-| DR plan           | `/operations/disaster-recovery`     | failover run logs         |
-| Capacity plan     | `/operations/capacity`              | traffic reports           |
-| Cost monitoring   | `/operations/cost-monitoring`       | billing reconciliation    |
-| Patch management  | `/operations/patch-management`      | vulnerability exceptions  |
-| Migration safety  | `/operations/online-db-migrations`  | production migration logs |
-| Release gate      | `/contributing/release-gate`        | CI run artifacts          |
+| Evidence          | Owning docs                                                                                                                                                | Private evidence          |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| On-call policy    | [`takos-private/docs/operations/oncall.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/oncall.md)                               | incident paging config    |
+| Incident response | [`takos-private/docs/operations/incident-response.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/incident-response.md)         | incident records          |
+| Backup drills     | [`takos-private/docs/operations/backup-restore-drills.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/backup-restore-drills.md) | restore logs              |
+| DR plan           | [`takos-private/docs/operations/disaster-recovery.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/disaster-recovery.md)         | failover run logs         |
+| Capacity plan     | [`takos-private/docs/operations/capacity.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/capacity.md)                           | traffic reports           |
+| Cost monitoring   | [`takos-private/docs/operations/cost-monitoring.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/cost-monitoring.md)             | billing reconciliation    |
+| Patch management  | [`takos-private/docs/operations/patch-management.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/patch-management.md)           | vulnerability exceptions  |
+| Migration safety  | [`takos-private/docs/operations/online-db-migrations.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/online-db-migrations.md)   | production migration logs |
+| Release gate      | [`docs/quality/release-gate.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/quality/release-gate.md)                                     | CI run artifacts          |
 
 ## Pre-audit Backlog
 
 - Publish final Privacy Policy, Terms, DPA, and sub-processor list.
 - Implement data subject access / export / deletion request handlers.
 - Publish data residency policy.
-- Publish security disclosure policy with working `security@` inbox and PGP
-  public key.
+- Publish security disclosure policy with working `security@` inbox and PGP public key.
 - Export branch protection / required review settings for each repo.
 - Run one SEV-1 staging simulation and attach evidence.
 - Run one rollback SOP staging rehearsal and attach evidence.

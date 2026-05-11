@@ -1,26 +1,25 @@
 # Multi-Service 構成
 
-API service、background worker、Postgres を 1 つの current
-`.takosumi/manifest.yml` にまとめる例です。kernel-bound manifest は compute /
-resource desired state だけを持ち、cron / workflow runner は takosumi-git 側で
-扱います。
+API service、background worker、Postgres を 1 つの current `.takosumi/manifest.yml` authoring manifest
+にまとめる例です。kernel に届く compiled manifest は compute / resource desired state だけを持ち、cron / workflow runner
+は takosumi-git 側で扱います。
 
 ```yaml
-apiVersion: "1.0"
+apiVersion: '1.0'
 kind: Manifest
 metadata:
   name: full-stack-app
 resources:
   - shape: database-postgres@v1
     name: app-db
-    provider: "@takos/managed-postgres"
+    provider: '@takos/managed-postgres'
     spec:
-      version: "16"
+      version: '16'
       size: small
 
   - shape: web-service@v1
     name: api
-    provider: "@takos/aws-fargate"
+    provider: '@takos/aws-fargate'
     spec:
       image: PLACEHOLDER
       port: 8080
@@ -38,12 +37,12 @@ resources:
 
   - shape: worker@v1
     name: jobs
-    provider: "@takos/cloudflare-workers"
+    provider: '@takos/cloudflare-workers'
     spec:
       artifact:
         kind: js-bundle
         hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
+      compatibilityDate: '2026-05-09'
       env:
         DATABASE_URL: ${ref:app-db.connectionString}
         DATABASE_PASSWORD: ${secret-ref:app-db.passwordSecretRef}
@@ -54,26 +53,22 @@ resources:
       target: spec.artifact.hash
 ```
 
-`workflowRef` は takosumi-git が処理する authoring extension です。kernel に届く
-manifest では `api.spec.image` と `jobs.spec.artifact.hash` が concrete digest
-になり、`workflowRef` は削除されます。
+`workflowRef` は takosumi-git が処理する authoring extension です。kernel に届く manifest では `api.spec.image` と
+`jobs.spec.artifact.hash` が concrete digest になり、`workflowRef` は削除されます。
 
-background job を cron で起動したい場合、schedule は kernel manifest ではなく
-takosumi-git の workflow / event layer、または provider plugin の上位設定として
-扱います。takosumi kernel は workflow / cron / scheduler surface を持ちません。
+background job を cron で起動したい場合、schedule は kernel manifest ではなく takosumi-git の workflow / event
+layer、または provider plugin の上位設定として 扱います。takosumi kernel は workflow / cron / scheduler surface
+を持ちません。
 
 ポイント:
 
 - 複数 workload は `resources[]` に複数 resource として並べる
-- shared database は `${ref:app-db.connectionString}` と
-  `${secret-ref:app-db.passwordSecretRef}` で各 workload に渡す
-- HTTP domain は `web-service@v1.spec.domains` か `custom-domain@v1` resource
-  で表現する
-- top-level `components` / `bindings[]` / schedule route は current manifest
-  surface ではない
+- shared database は `${ref:app-db.connectionString}` と `${secret-ref:app-db.passwordSecretRef}` で各 workload に渡す
+- HTTP domain は `web-service@v1.spec.domains` か `custom-domain@v1` resource で表現する
+- top-level `components` / `bindings[]` / schedule route は current manifest surface ではない
 
 関連:
 
-- [Manifest Reference](/reference/manifest-spec)
+- [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
 - [環境変数](/deploy/environment)
 - [Worker + DB](/examples/worker-with-db)

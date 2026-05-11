@@ -4,27 +4,33 @@ type CheckFailure = {
 };
 
 const README_PATH = 'README.md';
-const TAKOSUMI_DOCS_ROOT = 'docs/takosumi';
-const CURRENT_STATE_PATH = `${TAKOSUMI_DOCS_ROOT}/current-state.md`;
-const CHECKLIST_PATH = `${TAKOSUMI_DOCS_ROOT}/10-v1.0-implementation-checklist.md`;
+const CURRENT_STATE_PATH = 'docs/contributing/current-state.md';
+const KERNEL_ARCHITECTURE_PATH = '../takosumi/docs/reference/architecture/kernel.md';
 const DOMAIN_ROOT = '../takosumi/packages/kernel/src/domains';
 const TAKOSUMI_CLOUD_ACCOUNTS_CONTRACT = '../takosumi-cloud/packages/accounts-contract/src/mod.ts';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
-const REQUIRED_KERNEL_PLUGIN_DOCS = [CURRENT_STATE_PATH, CHECKLIST_PATH];
+const REQUIRED_KERNEL_PLUGIN_DOCS = [CURRENT_STATE_PATH];
+const ARCHITECTURE_ALIGNMENT_DOCS = [
+  README_PATH,
+  CURRENT_STATE_PATH,
+  KERNEL_ARCHITECTURE_PATH,
+  '../takosumi/docs/reference/architecture/operator-boundaries.md',
+  '../takosumi/docs/reference/architecture/workflow-extension-design.md',
+];
 const APP_GRANT_CATALOG_DOCS = [
-  'docs/reference/app-yml-spec.md',
-  'docs/architecture/app-installation.md',
+  '../takosumi-git/docs/reference/app-yml-spec.md',
+  '../docs/platform/app-installation.md',
   'docs/reference/database.md',
 ];
 const APP_INSTALLATION_STATUS_DOCS = [
-  'docs/architecture/runtime-modes.md',
-  'docs/reference/install-api.md',
+  '../docs/platform/runtime-modes.md',
+  '../docs/reference/install-api.md',
   'docs/platform/upgrade-export.md',
 ];
 const RUNTIME_BINDING_TARGET_DOCS = [
-  'docs/architecture/app-installation.md',
-  'docs/reference/install-api.md',
+  '../docs/platform/app-installation.md',
+  '../docs/reference/install-api.md',
 ];
 const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
   {
@@ -139,24 +145,6 @@ async function readText(
     });
     return '';
   }
-}
-
-async function collectMarkdownFiles(root: string): Promise<string[]> {
-  const files: string[] = [];
-
-  async function walk(directory: string): Promise<void> {
-    for await (const entry of Deno.readDir(directory)) {
-      const entryPath = `${directory}/${entry.name}`;
-      if (entry.isDirectory) {
-        await walk(entryPath);
-      } else if (entry.isFile && entry.name.endsWith('.md')) {
-        files.push(entryPath);
-      }
-    }
-  }
-
-  await walk(root);
-  return files.sort();
 }
 
 function paragraphAt(text: string, index: number): string {
@@ -376,10 +364,7 @@ async function main(): Promise<void> {
     validateKernelPluginBoundaryMentions(path, text, failures);
   }
 
-  const markdownFiles = [
-    README_PATH,
-    ...await collectMarkdownFiles(TAKOSUMI_DOCS_ROOT),
-  ];
+  const markdownFiles = ARCHITECTURE_ALIGNMENT_DOCS;
   for (const path of markdownFiles) {
     const text = await readText(path, failures);
     validateStaleProductRootDrift(path, text, failures);
@@ -400,7 +385,7 @@ async function main(): Promise<void> {
   }
 
   console.log('Architecture alignment validation passed.');
-  console.log(`Checked ${markdownFiles.length} README/plan markdown files.`);
+  console.log(`Checked ${markdownFiles.length} architecture alignment markdown files.`);
   console.log(`Verified ${REQUIRED_DOMAIN_DIRS.length} domain directories.`);
   console.log(`Verified AppGrant catalog docs in ${APP_GRANT_CATALOG_DOCS.length} files.`);
   console.log(`Verified AppInstallation status docs in ${APP_INSTALLATION_STATUS_DOCS.length} files.`);
