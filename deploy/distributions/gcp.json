@@ -6,7 +6,9 @@
   "providerProfile": {
     "bundle": "@takosumi/plugins",
     "profileId": "operator.takosumi.gcp",
-    "pluginIds": ["operator.takosumi.gcp"]
+    "pluginIds": [
+      "operator.takosumi.gcp"
+    ]
   },
   "artifacts": [
     {
@@ -61,40 +63,40 @@
         "name": "takos-docs",
         "title": "Docs",
         "repositoryUrl": "https://github.com/tako0614/takos-docs.git",
-        "ref": "master",
-        "refType": "branch",
+        "ref": "v0.1.1",
+        "refType": "tag",
         "preinstall": true
       },
       {
         "name": "takos-excel",
         "title": "Excel",
         "repositoryUrl": "https://github.com/tako0614/takos-excel.git",
-        "ref": "master",
-        "refType": "branch",
+        "ref": "v0.1.1",
+        "refType": "tag",
         "preinstall": true
       },
       {
         "name": "takos-slide",
         "title": "Slide",
         "repositoryUrl": "https://github.com/tako0614/takos-slide.git",
-        "ref": "master",
-        "refType": "branch",
+        "ref": "v0.1.1",
+        "refType": "tag",
         "preinstall": true
       },
       {
         "name": "takos-computer",
         "title": "Computer",
         "repositoryUrl": "https://github.com/tako0614/takos-computer.git",
-        "ref": "master",
-        "refType": "branch",
+        "ref": "v2.1.1",
+        "refType": "tag",
         "preinstall": true
       },
       {
         "name": "yurucommu",
         "title": "Yurucommu",
         "repositoryUrl": "https://github.com/tako0614/yurucommu.git",
-        "ref": "master",
-        "refType": "branch",
+        "ref": "v1.2.2",
+        "refType": "tag",
         "preinstall": true
       }
     ],
