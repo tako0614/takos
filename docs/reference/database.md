@@ -209,7 +209,6 @@ CREATE TABLE apps (
     "description" TEXT,
     "icon" TEXT,
     "app_type" TEXT NOT NULL,
-    "takos_client_key" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "apps_worker_id_fkey" FOREIGN KEY ("worker_id") REFERENCES "workers" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
