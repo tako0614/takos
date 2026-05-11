@@ -1,27 +1,25 @@
 # MCP Server
 
-MCP Server を `worker@v1` resource として公開する最小構成です。current
-kernel-bound manifest では top-level `publications[]` を使いません。MCP endpoint
-の catalog / install UI / client discovery は Takos app 側の metadata と
-AppInstallation layer で扱い、kernel manifest は HTTP entrypoint を materialize
-するだけです。
+MCP Server を `worker@v1` resource として公開する最小構成です。current compiled Shape manifest では top-level
+`publications[]` を使いません。MCP endpoint の catalog / install UI / client discovery は Takos app 側の metadata と
+AppInstallation layer で扱い、kernel manifest は HTTP entrypoint を materialize するだけです。
 
 ## Deploy Manifest
 
 ```yaml
-apiVersion: "1.0"
+apiVersion: '1.0'
 kind: Manifest
 metadata:
   name: my-tools
 resources:
   - shape: worker@v1
     name: mcp
-    provider: "@takos/cloudflare-workers"
+    provider: '@takos/cloudflare-workers'
     spec:
       artifact:
         kind: js-bundle
         hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
+      compatibilityDate: '2026-05-09'
       routes:
         - tools.example.com/mcp
       env:
@@ -33,19 +31,18 @@ resources:
       target: spec.artifact.hash
 ```
 
-`workflowRef` は takosumi-git の authoring extension です。kernel に届く
-compiled manifest では `spec.artifact.hash` が concrete digest
-になり、`workflowRef` は存在しません。
+`workflowRef` は takosumi-git の authoring extension です。kernel に届く compiled manifest では `spec.artifact.hash` が
+concrete digest になり、`workflowRef` は存在しません。
 
 ## Worker のコード
 
 ```typescript
 const TOOLS = [
   {
-    name: "get_current_time",
-    description: "現在の UTC 時刻を返す",
+    name: 'get_current_time',
+    description: '現在の UTC 時刻を返す',
     inputSchema: {
-      type: "object" as const,
+      type: 'object' as const,
       properties: {},
     },
   },
@@ -57,14 +54,14 @@ export default {
     env: { MCP_AUTH_TOKEN?: string },
   ): Promise<Response> {
     if (env.MCP_AUTH_TOKEN) {
-      const auth = request.headers.get("Authorization");
+      const auth = request.headers.get('Authorization');
       if (auth !== `Bearer ${env.MCP_AUTH_TOKEN}`) {
-        return Response.json({ error: "Unauthorized" }, { status: 401 });
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
       }
     }
 
-    if (request.method !== "POST") {
-      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    if (request.method !== 'POST') {
+      return Response.json({ error: 'Method not allowed' }, { status: 405 });
     }
 
     const body = await request.json() as {
@@ -73,27 +70,27 @@ export default {
     };
 
     switch (body.method) {
-      case "initialize":
+      case 'initialize':
         return Response.json({
-          jsonrpc: "2.0",
+          jsonrpc: '2.0',
           id: body.id,
           result: {
-            protocolVersion: "2025-03-26",
+            protocolVersion: '2025-03-26',
             capabilities: { tools: {} },
-            serverInfo: { name: "my-tools", version: "0.1.0" },
+            serverInfo: { name: 'my-tools', version: '0.1.0' },
           },
         });
-      case "tools/list":
+      case 'tools/list':
         return Response.json({
-          jsonrpc: "2.0",
+          jsonrpc: '2.0',
           id: body.id,
           result: { tools: TOOLS },
         });
       default:
         return Response.json({
-          jsonrpc: "2.0",
+          jsonrpc: '2.0',
           id: body.id,
-          error: { code: -32601, message: "Method not found" },
+          error: { code: -32601, message: 'Method not found' },
         });
     }
   },
@@ -102,8 +99,8 @@ export default {
 
 ## Catalog / Client Discovery
 
-Takos app に MCP endpoint として見せる場合、kernel manifest ではなく app
-metadata / install metadata 側で次の情報を登録します。
+Takos app に MCP endpoint として見せる場合、kernel manifest ではなく app metadata / install metadata
+側で次の情報を登録します。
 
 ```yaml
 mcp:
@@ -116,8 +113,8 @@ mcp:
         tokenRef: mcp-auth-token
 ```
 
-この metadata は Takos app / installer が読む layer であり、takosumi kernel の
-closed manifest top-level field ではありません。
+この metadata は Takos app / installer が読む layer であり、takosumi kernel の closed manifest top-level field
+ではありません。
 
 ## ローカルテスト
 
@@ -128,6 +125,6 @@ npx wrangler dev dist/worker/index.js
 
 関連:
 
-- [Manifest Reference](/reference/manifest-spec)
-- [App YAML Spec](/reference/app-yml-spec)
+- [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
+- [App YAML Spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
 - [MCP App Surface](/apps/mcp)

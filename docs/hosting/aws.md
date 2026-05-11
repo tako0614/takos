@@ -1,6 +1,6 @@
 # AWS
 
-このページは **Takos kernel を AWS にホストする operator** 向けです。
+このページは **Takosumi kernel を AWS にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **AWS 単独 hosting (EKS Helm)** ― `takos/deploy/helm/takos/values-aws.yaml`
@@ -13,7 +13,7 @@
    (`profiles/aws.example.json`) で使う。
 
 ::: warning current contract section 1 (Helm overlay) は ECS / Fargate への
-Takos kernel direct deploy、DynamoDB を control-plane storage として 使う
+Takosumi kernel direct deploy、DynamoDB を control-plane storage として 使う
 matrix、Terraform / CDK overlay を含みません。 section 2 (provider plugin) は
 Phase 17A1 で追加された 6 provider の materialization 契約までです。 :::
 
@@ -22,8 +22,9 @@ target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してく
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos kernel の deploy は target に関わらず `takos-private/distribution.yml`
-を正本とします。AWS EKS を kernel host に選ぶには:
+Takos product distribution artifact の正本は `takos/deploy/` にあり、
+`takos-private/distribution.yml` は private operator が target を選ぶ instance
+config です。AWS EKS を kernel host に選ぶには:
 
 ```yaml
 # takos-private/distribution.yml
@@ -83,7 +84,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 | 状況                                                                    | 推奨 path           |
 | ----------------------------------------------------------------------- | ------------------- |
-| Takos kernel 全体を AWS の k8s に置く                                   | section 1 (Helm)    |
+| Takosumi kernel 全体を AWS の k8s に置く                                   | section 1 (Helm)    |
 | Cloudflare で kernel を動かしつつ tenant runtime / DB を AWS に置きたい | section 2 (plugin)  |
 | AWS のみで tenant runtime + control-plane provider を組む               | section 2 + Helm    |
 | 開発・検証で provider 動作確認だけしたい                                | section 2 + dry-run |
@@ -289,7 +290,7 @@ provider plugin への credential 経路は 2 通りあります:
 
 #### A. Cloudflare Worker secret (Cloudflare control + AWS tenant の場合)
 
-Cloudflare 上の Takos kernel から AWS provider plugin を呼ぶ場合、Worker secret
+Cloudflare 上の Takosumi kernel から AWS provider plugin を呼ぶ場合、Worker secret
 として AWS credentials を inject します:
 
 ```bash
@@ -446,7 +447,7 @@ kernel がやること:
 
 ## chart contract に含まれないもの (section 1)
 
-- ECS / Fargate への Takos kernel direct deploy
+- ECS / Fargate への Takosumi kernel direct deploy
 - ECS は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - DynamoDB / SQS / Secrets Manager を app resource backend として自動

@@ -1,27 +1,26 @@
 # File Handlers
 
-File handler は Storage UI から特定 MIME type / extension の file を app で開く
-ための app metadata です。current `.takosumi/manifest.yml` では top-level
-`publications[]` に `publication.file-handler@v1` を書きません。
+File handler は Storage UI から特定 MIME type / extension の file を app で開く ための app metadata です。current
+`.takosumi/manifest.yml` では top-level `publications[]` に `publication.file-handler@v1` を書きません。
 
 ## Kernel Manifest
 
 handler UI 自体は普通の HTTP workload として deploy します。
 
 ```yaml
-apiVersion: "1.0"
+apiVersion: '1.0'
 kind: Manifest
 metadata:
   name: docs-handler
 resources:
   - shape: worker@v1
     name: web
-    provider: "@takos/cloudflare-workers"
+    provider: '@takos/cloudflare-workers'
     spec:
       artifact:
         kind: js-bundle
         hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
+      compatibilityDate: '2026-05-09'
       routes:
         - docs.example.com/files/*
     workflowRef:
@@ -31,14 +30,13 @@ resources:
       target: spec.artifact.hash
 ```
 
-`workflowRef` は takosumi-git の authoring extension です。kernel に届く
-compiled manifest では artifact digest が concrete になり、`workflowRef`
-は存在しません。
+`workflowRef` は takosumi-git の authoring extension です。kernel に届く compiled manifest では artifact digest が
+concrete になり、`workflowRef` は存在しません。
 
 ## App Metadata
 
-Storage UI に handler として見せる情報は app metadata / registry entry として
-管理します。metadata は deploy 後の resource output を参照できます。
+Storage UI に handler として見せる情報は app metadata / registry entry として 管理します。metadata は deploy 後の
+resource output を参照できます。
 
 ```yaml
 fileHandlers:
@@ -49,13 +47,11 @@ fileHandlers:
     extensions: [.md]
 ```
 
-`url` の `:id` は URL encode された file ID に置換されます。`:id` は path
-segment として必須です。current storage UI は起動時に `space_id` query parameter
-も付けます。file ID を `file_id` query parameter で渡す fallback はありません。
+`url` の `:id` は URL encode された file ID に置換されます。`:id` は path segment として必須です。current storage UI
+は起動時に `space_id` query parameter も付けます。file ID を `file_id` query parameter で渡す fallback はありません。
 
-この metadata は kernel-bound manifest の top-level field ではありません。
-InstallableApp metadata、Takos app catalog、または runtime registration が
-Storage の file handler registry に materialize します。
+この metadata は compiled Shape manifest の top-level field ではありません。 InstallableApp metadata、Takos app
+catalog、または runtime registration が Storage の file handler registry に materialize します。
 
 ## 複数ハンドラー
 
@@ -87,13 +83,12 @@ metadata 内で handler name は app installation 内一意にします。
 | `mimeTypes`  | conditional | 対応する MIME type のリスト                     |
 | `extensions` | conditional | 対応するファイル拡張子のリスト                  |
 
-`mimeTypes` と `extensions` は少なくとも一方が必須です。両方を指定することも
-できます。
+`mimeTypes` と `extensions` は少なくとも一方が必須です。両方を指定することも できます。
 
 ## Discovery API Selection Ranking
 
-`GET /api/spaces/:spaceId/storage/file-handlers?mime=...&ext=...` で複数の
-handler が match した場合、以下の order で sort されます。
+`GET /api/spaces/:spaceId/storage/file-handlers?mime=...&ext=...` で複数の handler が match した場合、以下の order で
+sort されます。
 
 | rank | 条件                             |
 | ---- | -------------------------------- |
@@ -106,8 +101,7 @@ handler が match した場合、以下の order で sort されます。
 
 ## Legacy Migration
 
-旧 docs の `publication.file-handler@v1` / `publications[]` は current
-kernel-bound manifest では使いません。
+旧 docs の `publication.file-handler@v1` / `publications[]` は current compiled Shape manifest では使いません。
 
 | legacy                        | current                                       |
 | ----------------------------- | --------------------------------------------- |

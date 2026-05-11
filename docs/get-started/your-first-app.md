@@ -6,26 +6,29 @@
 ## このチュートリアルで作るもの
 
 - 1 つの `worker@v1` resource (HTTP "Hello" を返す Worker)
-- 認証は **OIDC consumer** として `takosumi.account.auth@v1` で解決される
-  Takosumi Accounts を consume する形。app に OAuth provider を組み込む必要は
-  ありません ([apps/oidc-consumer](/apps/oidc-consumer))。
+- 認証は **OIDC consumer** として `operator.identity.oidc` namespace export /
+  OIDC discovery で得られる Takosumi Accounts issuer を consume する形。app に
+  OAuth provider を組み込む必要はありません
+  ([apps/oidc-consumer](/apps/oidc-consumer))。
 - install 完了後の初回 UX は **launch token** で繋ぐので、ユーザーは install
   直後に再度ログインする必要なく chat (= 本 app) が開きます
-  ([apps/launch-token](/apps/launch-token))。
+  ([apps/launch-token](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md))。
 
 ```text
 [Install] → AppInstallation 作成 → OIDC client binding 発行
-        → launch token 発行 → /_takosumi/launch で owner session 作成
+        → launch token 発行 → /_takosumi/launch local verify
+        → Accounts consume endpoint で jti 消費 → owner session 作成
         → そのまま app が開く
 ```
 
 ## 前提
 
 - `takos-cli` がインストール済み（[Get Started](/get-started/) 参照）
-- `takos login` でログイン済み
+- Takosumi Accounts PAT / bearer token を `takos login --token` または
+  `TAKOS_TOKEN` で設定済み
 
-Takos endpoint に `takos login` で認証していれば、追加の operator backend
-設定は不要です。Takos kernel をセルフホストする operator 向けの設定は
+Takos endpoint に Takosumi Accounts bearer で認証していれば、追加の operator
+backend 設定は不要です。Takosumi kernel をセルフホストする operator 向けの設定は
 [Hosting](/hosting/) を参照してください。
 
 ## 1. プロジェクトを作る
@@ -64,7 +67,7 @@ export default {
 
 env はすべて install 時に compile された `.takosumi/manifest.yml` から
 注入されます (placeholder の正本は
-[reference/manifest-spec § Compile-time placeholders](/reference/manifest-spec#compile-time-placeholders))。
+[reference/manifest-spec § Compile-time placeholders](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md#compile-time-placeholders))。
 app コードからは Takosumi 専用 SDK を使わず、標準的な OIDC client library で
 `OIDC_ISSUER_URL` を consume するだけにします。
 
@@ -80,13 +83,6 @@ apiVersion: "1.0"
 kind: Manifest
 metadata:
   name: my-first-group
-imports:
-  - alias: account-auth
-    service: takosumi.account.auth@v1
-serviceResolvers:
-  - kind: anchor
-    url: https://anchor.example.com/v1/services/
-    publicKey: BASE64_ED25519_PUBLIC_KEY
 resources:
   - shape: worker@v1
     name: web
@@ -100,7 +96,7 @@ resources:
         - my-first-group.example.com/*
       env:
         AUTH_DRIVER: oidc
-        OIDC_ISSUER_URL: ${imports.account-auth.endpoints.oidc-issuer.url}
+        OIDC_ISSUER_URL: https://accounts.example.com
         OIDC_CLIENT_ID: takos_inst_abc
         OIDC_CLIENT_SECRET: resolved-client-secret
         OIDC_REDIRECT_URI: https://my-first-group.example.com/auth/oidc/callback
@@ -182,11 +178,13 @@ npm run build
 
 このチュートリアル app は OAuth provider を **持ちません**。代わりに、
 
-- 通常ログイン: `/auth/oidc/login` → Takosumi Accounts (または self-host 時は
-  Keycloak / Authentik 等) へ redirect → `/auth/oidc/callback` で session を作る
+- 通常ログイン: `/auth/oidc/login` → Takosumi Accounts へ redirect →
+  `/auth/oidc/callback` で session を作る。self-host 時も Takosumi Accounts を
+  issuer とし、Keycloak / Authentik 等は upstream IdP として接続する
   ([apps/oidc-consumer](/apps/oidc-consumer))。
-- 初回 install 直後だけは launch token で owner session を作る:
-  `/_takosumi/launch?token=...` ([apps/launch-token](/apps/launch-token))。
+- 初回 install 直後だけは launch token を local verify し、Accounts consume
+  成功後に owner session を作る: `/_takosumi/launch?token=...`
+  ([apps/launch-token](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md))。
 
 OIDC client (clientId / clientSecret / redirectUri) は `.takosumi/app.yml` の
 `bindings.auth` で `identity.oidc@v1` として宣言し、AppInstallation ごとに
@@ -197,16 +195,17 @@ Takosumi Accounts が払い出します。app コード側では `OIDC_ISSUER_UR
 ## 7. デプロイ
 
 ```bash
-takos login
+takos login --api-url https://takos.example.com --token "$TAKOSUMI_ACCOUNTS_PAT"
 takos deploy --env staging --space SPACE_ID
 ```
 
-::: tip CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や
-`--api-token` を渡す必要はありません。 :::
+::: tip CLI は Takosumi Accounts の bearer token を保存して Takos API
+に送ります。`takos login --token` 後は `--account-id` や `--api-token`
+を渡す必要はありません。 :::
 
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
-が出れば成功。`takos deploy` は default で resolve + apply を 1 step で実行する
-Heroku 風 sugar です。
+が出れば成功。`takos deploy` は migration window 中の compatibility surface
+で、default では resolve + apply を 1 step で実行する sugar です。
 
 manifest の整合性だけ先に確認したい場合:
 `takos deploy --preview --space SPACE_ID` (in-memory preview)。 reviewer
@@ -215,16 +214,17 @@ Deployment record を作り、`takos diff <id>` / `takos apply <id>`
 で確認・適用を分離できます。
 
 ::: tip `.takosumi/manifest.yml` には `apiVersion: "1.0"` と `kind: Manifest`
-が必須です。`workflowRef` は kernel-bound manifest に到達する前に strip
-されます。current `takosumi-git` は unresolved `${bindings.*}` / `${secrets.*}`
-を compile error にします。 :::
+が必須です。`workflowRef` は compiled manifest に到達する前に strip
+されます。current `takosumi-git` は Accounts materialization 後も unresolved
+`${bindings.*}` / `${secrets.*}` が残る場合、kernel request 前に失敗します。 :::
 
 ## 次のステップ
 
-- [Installable App Model](/architecture/installable-app-model) -- app が
-  AppInstallation として install される仕組み
+- [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
+  -- app が AppInstallation として install される仕組み
 - [apps/oidc-consumer](/apps/oidc-consumer) -- OIDC consumer 化の正本
-- [apps/launch-token](/apps/launch-token) -- install 直後の owner session 生成
+- [apps/launch-token](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)
+  -- install 直後の owner session 生成
 - [Takos 全体像](/overview/) -- platform の基本単位を確認する
 - [プロジェクト構成](/get-started/project-structure) -- `.takosumi/`
   ディレクトリの全体像

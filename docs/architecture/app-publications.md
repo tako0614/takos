@@ -17,7 +17,7 @@ takosumi kernel manifest の primitive ではありません。
 | OIDC / DB / blob / launch binding | `.takosumi/app.yml` `bindings:`        | compiled env / secret refs                          |
 | MCP endpoint metadata             | Takos app catalog / runtime registry   | 渡らない                                            |
 | File handler metadata             | Takos app catalog / runtime registry   | 渡らない                                            |
-| Cross-instance service dependency | `.takosumi/manifest.yml` `imports[]`   | `imports[]` + `serviceResolvers[]`                  |
+| Operator/account-plane dependency | namespace export + account API         | 渡らない                                            |
 
 kernel は compiled Shape manifest を apply し、resource outputs
 を返します。Takos app / installer layer はその outputs を使って MCP
@@ -65,11 +65,13 @@ runtime からは `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
 `OIDC_REDIRECT_URI` として見えますが、kernel は OIDC client registry
 を所有しません。
 
-Binding catalog の正本は [Binding Catalog](/reference/binding-catalog) です。
+Binding catalog の正本は
+[Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
+です。
 
 ## Shape Manifest
 
-kernel-bound manifest は resource graph だけを扱います。
+compiled Shape manifest は resource graph だけを扱います。
 
 ```yaml
 apiVersion: "1.0"
@@ -91,13 +93,15 @@ resources:
 
 `workflowRef` や `${bindings.*}` / `${secrets.*}` は installer-side authoring
 extension です。kernel に届く manifest では `workflowRef` は除去済み、
-installer-only placeholder は未解決なら compile error である必要があります。
+installer-only placeholder は Accounts materialization 後の deploy request build
+でも未解決なら kernel request 前に失敗する必要があります。
 
 ## Legacy Vocabulary
 
 `publication.mcp-server@v1`、`publication.file-handler@v1`、
-`takos.oauth-client`、top-level `bindings[]` は current kernel-bound manifest の
-contract ではありません。古い docs から migration するときは次の対応に寄せます。
+`takos.oauth-client`、top-level `bindings[]` は current compiled Shape manifest
+の contract ではありません。古い docs から migration
+するときは次の対応に寄せます。
 
 | legacy term                   | replacement                                           |
 | ----------------------------- | ----------------------------------------------------- |

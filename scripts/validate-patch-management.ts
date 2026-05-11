@@ -3,7 +3,7 @@
 const requiredFiles = [
   '.github/dependabot.yml',
   '.github/workflows/patch-management.yml',
-  'docs/operations/patch-management.md',
+  '../takos-private/docs/operations/patch-management.md',
   'app/.github/dependabot.yml',
   'git/.github/dependabot.yml',
   'agent/.github/dependabot.yml',
@@ -30,7 +30,7 @@ validateTextIncludes('.github/workflows/patch-management.yml', [
   'deno task validate:patch-management',
   'HIGH,CRITICAL',
 ]);
-validateTextIncludes('docs/operations/patch-management.md', [
+validateTextIncludes('../takos-private/docs/operations/patch-management.md', [
   'deno task validate:patch-management',
   'deno outdated --update --lockfile-only',
   'Trivy',

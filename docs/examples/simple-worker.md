@@ -3,7 +3,7 @@
 > このページでわかること: `worker@v1` resource 1 つだけの最小構成。
 
 この例は
-[Canonical minimal manifest](/reference/manifest-spec#canonical-minimal-manifest)
+[Canonical minimal manifest](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md#canonical-minimal-manifest)
 と同じ current Shape model です。旧 `components` / `routes[]` form
 は使いません。
 

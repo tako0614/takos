@@ -1,23 +1,23 @@
 # リファレンス
 
-Takos を使ってサービスとソフトウェアを構成・配備するときに参照する、CLI / API /
-deploy manifest / 用語集の章。takosumi kernel の deploy lifecycle は compiled
-Shape manifest を受け取る `POST /v1/deployments` と Deployment record で表現され
-ます。Takos product API は別 surface として扱います。
+この章は Takos product の public surface を置く場所です。platform 全体の用語や takosumi kernel の manifest
+仕様は、ここではなく owning docs を参照します。
 
-このセクションには Takos docs の **canonical な参照点**が 2 つ含まれます:
+## Takos reference
 
-- **[Manifest Spec](/reference/manifest-spec)** — deploy manifest の SoT。Shape
-  manifest の canonical minimal yaml と全 field 定義の正本
-- **[Glossary](/reference/glossary)** — 用語集の SoT。Core meta-objects
-  (Deployment / ProviderObservation / GroupHead)、ManifestResource、AppBinding、
-  cross-instance imports、Workers backend implementation note を集約
+| 確認したいこと                | ページ                          |
+| ----------------------------- | ------------------------------- |
+| Takos CLI                     | [CLI](/reference/cli)           |
+| CLI 認証                      | [CLI Auth](/reference/cli-auth) |
+| Takos public API              | [API](/reference/api)           |
+| Takos app / product DB schema | [Database](/reference/database) |
 
-| 確認したいこと                                            | ページ                                    |
-| --------------------------------------------------------- | ----------------------------------------- |
-| CLI コマンド (deploy / apply / diff / approve / rollback) | [CLI](/reference/cli)                     |
-| CLI 認証モデル                                            | [CLI / Auth model](/reference/cli-auth)   |
-| API family と Deployment endpoint                         | [API](/reference/api)                     |
-| control plane の DB schema (PaaS Core 含む)               | [Database](/reference/database)           |
-| deploy manifest の全フィールド                            | [Manifest Spec](/reference/manifest-spec) |
-| 用語の意味 (Core record / manifest contract)              | [用語集](/reference/glossary)             |
+## External reference
+
+| 確認したいこと                            | 正本                                                                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `.takosumi/manifest.yml` / Shape manifest | [takosumi manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)             |
+| `.takosumi/app.yml`                       | [takosumi-git app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)       |
+| AppBinding / binding kind                 | [ecosystem binding catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md) |
+| AppInstallation API                       | [ecosystem install API](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md)         |
+| 共有用語                                  | [ecosystem glossary](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/glossary.md)               |

@@ -12,7 +12,7 @@ takos/
   app/    -> takos-app
   git/    -> takos-git
   deploy/ -> Takos deploy artifacts (helm/terraform/distributions). Kernel itself is external (jsr:@takos/takosumi-kernel)
-  docs/   -> shell-owned product architecture, runbooks, and planning docs
+  docs/   -> Takos product docs and shell-local contributor notes
 ```
 
 `takos-agent-engine` is a Rust library, not a Takos service. It remains an independent checkout at the ecosystem root
@@ -52,9 +52,9 @@ Useful shell tasks:
 
 ## Boundary Names
 
-Product-level architecture and planning docs live under `docs/` at this shell level. Product roots may link to those
-plans, but the docs tree is not owned by any product implementation root and must not contain product implementation
-code.
+Takos product docs live under `docs/` at this shell level. Cross-product specs live in the ecosystem root `../docs/`,
+kernel docs live in `../takosumi/docs/`, account-plane docs live in `../takosumi-cloud/docs/`, installer/workflow docs
+live in `../takosumi-git/docs/`, and private operations runbooks live in `../takos-private/docs/`.
 
 Use the split repository boundaries below when adding docs, scripts, imports, or local composition. Do not reintroduce
 pre-split path references such as `takos/apps` or `takos/packages`, path-level legacy references, or stale service names

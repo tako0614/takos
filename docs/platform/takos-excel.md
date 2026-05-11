@@ -1,6 +1,6 @@
 # takos-excel
 
-Google Sheets alternative のスプレッドシートエディタ。default app distribution
+Google Sheets alternative のスプレッドシートエディタ。bundled app distribution
 metadata を持つが、primitive や group は特権化されない。
 
 ## 役割
@@ -64,8 +64,8 @@ fileHandlers:
 ```
 
 OIDC sign-in は `.takosumi/app.yml` の `identity.oidc@v1` AppBinding で宣言する
-([`reference/app-yml-spec.md`](/reference/app-yml-spec) /
-[`reference/binding-catalog.md`](/reference/binding-catalog) を参照)。
+([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md) /
+[`reference/binding-catalog.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md) を参照)。
 
 ```yaml
 bindings:
@@ -80,7 +80,7 @@ bindings:
       - email
 ```
 
-default app manifest / workflow は UI と `/mcp` を同じ worker に含めます。MCP
+bundled app manifest / workflow は UI と `/mcp` を同じ worker に含めます。MCP
 registry entry は bearer token ref を持ち、installer が worker-scoped secret env
 を用意します。実装は `MCP_AUTH_TOKEN` が未設定、かつ
 `MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed します。
@@ -157,5 +157,5 @@ generated secret resource として `excel-session-secret` を持ち、
 ## 参照
 
 - [OIDC Consumer](/apps/oidc-consumer)
-- [Takosumi Accounts](/architecture/takosumi-accounts)
-- [Binding Catalog](/reference/binding-catalog)
+- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
+- [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)

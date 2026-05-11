@@ -1,29 +1,29 @@
 # Worker + DB
 
-`worker@v1` と `database-postgres@v1` を同じ `.takosumi/manifest.yml` に置き、
-Worker の `spec.env` から database output を参照する最小例です。
+`worker@v1` と `database-postgres@v1` を同じ `.takosumi/manifest.yml` に置き、 Worker の `spec.env` から database output
+を参照する最小例です。
 
 ```yaml
-apiVersion: "1.0"
+apiVersion: '1.0'
 kind: Manifest
 metadata:
   name: notes-app
 resources:
   - shape: database-postgres@v1
     name: notes-db
-    provider: "@takos/managed-postgres"
+    provider: '@takos/managed-postgres'
     spec:
-      version: "16"
+      version: '16'
       size: small
 
   - shape: worker@v1
     name: web
-    provider: "@takos/cloudflare-workers"
+    provider: '@takos/cloudflare-workers'
     spec:
       artifact:
         kind: js-bundle
         hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
+      compatibilityDate: '2026-05-09'
       routes:
         - notes.example.com/*
       env:
@@ -36,21 +36,19 @@ resources:
       target: spec.artifact.hash
 ```
 
-`workflowRef` は takosumi-git の authoring extension です。workflow が bundle
-digest を作り、`spec.artifact.hash` に書き込まれた後、kernel-bound manifest
-からは `workflowRef` が strip されます。
+`workflowRef` は takosumi-git の authoring extension です。workflow が bundle digest を作り、`spec.artifact.hash`
+に書き込まれた後、compiled manifest からは `workflowRef` が strip されます。
 
 ポイント:
 
 - `resources[]` の各 entry は `shape` / `name` / `provider` / `spec` を持つ
 - database credential は raw output ではなく `${secret-ref:...}` で受け取る
-- Worker route は `worker@v1.spec.routes` の provider-interpreted string pattern
-  で表現する
-- top-level `bindings[]` は current manifest surface ではない。resource 間の
-  値渡しは `${ref:...}` / `${secret-ref:...}` を使う
+- Worker route は `worker@v1.spec.routes` の provider-interpreted string pattern で表現する
+- top-level `bindings[]` は current manifest surface ではない。resource 間の 値渡しは `${ref:...}` / `${secret-ref:...}`
+  を使う
 
 関連:
 
-- [Manifest Reference](/reference/manifest-spec)
+- [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
 - [環境変数](/deploy/environment)
 - [Simple Worker](/examples/simple-worker)

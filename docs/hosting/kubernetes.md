@@ -1,6 +1,6 @@
 # Kubernetes
 
-このページは **Takos kernel を Kubernetes にホストする operator**
+このページは **Takosumi kernel を Kubernetes にホストする operator**
 向けです。カバー範囲は 2 通りです:
 
 1. **base Helm chart で kernel hosting** ― `takos/deploy/helm/takos` chart
@@ -25,8 +25,9 @@ contract に含まれない項目は
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos kernel の deploy は target に関わらず `takos-private/distribution.yml`
-を正本とします。汎用 Kubernetes を kernel host に選ぶには:
+Takos product distribution artifact の正本は `takos/deploy/` にあり、
+`takos-private/distribution.yml` は private operator が target を選ぶ instance
+config です。汎用 Kubernetes を kernel host に選ぶには:
 
 ```yaml
 # takos-private/distribution.yml
@@ -86,7 +87,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 | 状況                                                                | 推奨 path             |
 | ------------------------------------------------------------------- | --------------------- |
-| 自分の k8s クラスタに Takos kernel 全体を置きたい                   | section 1 (Helm)      |
+| 自分の k8s クラスタに Takosumi kernel 全体を置きたい                   | section 1 (Helm)      |
 | Cloudflare で kernel を動かしつつ tenant workload を k8s に置きたい | section 2 (plugin)    |
 | k8s 上で kernel + tenant workload を組む                            | section 1 + section 2 |
 

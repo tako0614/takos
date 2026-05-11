@@ -18,7 +18,7 @@ export default defineConfig({
     'AIエージェントによるサービスとソフトウェアの民主化基盤 Takos の全体像、アプリ構成、デプロイ、プラットフォーム仕様をまとめた公式 docs',
   cleanUrls: true,
   lastUpdated: enableLastUpdated,
-  srcExclude: ['**/_*.md'],
+  srcExclude: ['**/_*.md', 'contributing/**'],
   themeConfig: {
     siteTitle: 'Takos Docs',
     search: {
@@ -27,15 +27,12 @@ export default defineConfig({
     nav: [
       { text: '概要', link: '/overview/' },
       { text: 'はじめる', link: '/get-started/' },
-      { text: 'Installable App', link: '/architecture/installable-app-model' },
       { text: 'アプリ構成', link: '/apps/' },
       { text: 'デプロイ', link: '/deploy/' },
       { text: 'Operator', link: '/operator/' },
       { text: 'ホスティング', link: '/hosting/' },
       { text: 'プラットフォーム', link: '/platform/' },
-      { text: 'Takosumi Core', link: '/takosumi/README' },
       { text: 'リファレンス', link: '/reference/' },
-      { text: 'Contributing', link: '/contributing/' },
       { text: 'サンプル', link: '/examples/' },
     ],
     sidebar: [
@@ -43,16 +40,6 @@ export default defineConfig({
         text: '概要',
         items: [
           { text: 'Takos 全体像', link: '/overview/' },
-        ],
-      },
-      {
-        text: 'Installable App Model',
-        items: [
-          { text: '全体像', link: '/architecture/installable-app-model' },
-          { text: 'Takosumi Accounts', link: '/architecture/takosumi-accounts' },
-          { text: 'AppInstallation 台帳', link: '/architecture/app-installation' },
-          { text: 'Runtime Modes', link: '/architecture/runtime-modes' },
-          { text: 'Installer Pipeline', link: '/architecture/installer-pipeline' },
         ],
       },
       {
@@ -71,7 +58,6 @@ export default defineConfig({
           { text: '概要', link: '/apps/' },
           { text: 'Install Paths', link: '/apps/install-paths' },
           { text: 'OIDC Consumer', link: '/apps/oidc-consumer' },
-          { text: 'Launch Token', link: '/apps/launch-token' },
           { text: 'MCP Server', link: '/apps/mcp' },
           { text: 'File Handlers', link: '/apps/file-handlers' },
         ],
@@ -134,76 +120,9 @@ export default defineConfig({
             link: '/architecture/system-architecture',
           },
           { text: 'Service Topology', link: '/architecture/service-topology' },
-          { text: 'Kernel', link: '/architecture/kernel' },
-          { text: 'Deploy System', link: '/architecture/deploy-system' },
           { text: 'App Publications', link: '/architecture/app-publications' },
-          { text: 'Control Plane', link: '/architecture/control-plane' },
-          { text: 'Tenant Runtime', link: '/architecture/tenant-runtime' },
-          { text: 'Container Hosts', link: '/architecture/container-hosts' },
           { text: 'Runtime Service', link: '/architecture/runtime-service' },
           { text: 'Diagrams', link: '/architecture/diagrams' },
-          { text: '互換性と制限', link: '/architecture/compatibility' },
-        ],
-      },
-      {
-        text: 'Operations',
-        items: [
-          {
-            text: 'On-call and SEV Policy',
-            link: '/operations/oncall',
-          },
-          {
-            text: 'Incident Response',
-            link: '/operations/incident-response',
-          },
-          {
-            text: 'Backup and Restore Drills',
-            link: '/operations/backup-restore-drills',
-          },
-          {
-            text: 'Disaster Recovery',
-            link: '/operations/disaster-recovery',
-          },
-          {
-            text: 'Capacity Planning',
-            link: '/operations/capacity',
-          },
-          {
-            text: 'Cost Monitoring',
-            link: '/operations/cost-monitoring',
-          },
-          {
-            text: 'Patch Management',
-            link: '/operations/patch-management',
-          },
-          {
-            text: 'Online DB Migrations',
-            link: '/operations/online-db-migrations',
-          },
-          {
-            text: 'Release Promotion',
-            link: '/operations/release-promotion',
-          },
-          {
-            text: 'Release Artifacts',
-            link: '/operations/release-artifacts',
-          },
-          {
-            text: 'Rollback SOP',
-            link: '/operations/rollback-sop',
-          },
-          {
-            text: 'Release Announcement Template',
-            link: '/operations/release-announcement-template',
-          },
-          {
-            text: 'Troubleshooting Playbook',
-            link: '/operations/troubleshooting',
-          },
-          {
-            text: 'Secret Rotation',
-            link: '/operations/secret-rotation',
-          },
         ],
       },
       {
@@ -261,7 +180,7 @@ export default defineConfig({
           { text: 'Upgrade / Export', link: '/platform/upgrade-export' },
           { text: 'Store', link: '/platform/store' },
           { text: '課金', link: '/platform/billing' },
-          { text: 'Default Groups', link: '/platform/default-apps' },
+          { text: 'Bundled Apps', link: '/platform/default-apps' },
           { text: '互換性', link: '/platform/compatibility' },
           {
             text: 'Resource Governance',
@@ -275,190 +194,12 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Takosumi Core',
-        collapsed: true,
-        items: [
-          { text: '概要', link: '/takosumi/README' },
-          { text: 'Current State (実装状況)', link: '/takosumi/current-state' },
-          {
-            text: 'Core Contract v1.0',
-            link: '/takosumi/core/01-core-contract-v1.0',
-          },
-          {
-            text: 'v1.0 Implementation Checklist',
-            link: '/takosumi/10-v1.0-implementation-checklist',
-          },
-          {
-            text: 'Authoring Guides',
-            items: [
-              {
-                text: 'Authoring Guide',
-                link: '/takosumi/guides/authoring-guide',
-              },
-              {
-                text: 'Descriptor Authoring',
-                link: '/takosumi/guides/descriptor-authoring-guide',
-              },
-              {
-                text: 'Plugin Authoring',
-                link: '/takosumi/guides/plugin-authoring-guide',
-              },
-            ],
-          },
-          {
-            text: 'Implementation',
-            items: [
-              {
-                text: 'Implementation Strategy',
-                link: '/takosumi/implementation/implementation-strategy',
-              },
-              {
-                text: 'Cloudflare Containers Strategy',
-                link: '/takosumi/implementation/cloudflare-containers-strategy',
-              },
-              {
-                text: 'Provider Descriptor Catalog',
-                link: '/takosumi/implementation/provider-descriptor-catalog',
-              },
-              {
-                text: 'Provider Descriptor Guidelines',
-                link: '/takosumi/implementation/provider-descriptor-guidelines',
-              },
-              {
-                text: 'Cloudflare Containers Provider',
-                link: '/takosumi/implementation/providers/cloudflare-containers',
-              },
-              {
-                text: 'Cloudflare Workers Provider',
-                link: '/takosumi/implementation/providers/cloudflare-workers',
-              },
-            ],
-          },
-          {
-            text: 'Official Descriptor Set v1',
-            link: '/takosumi/descriptors/official-descriptor-set-v1',
-          },
-          {
-            text: 'Tests',
-            items: [
-              {
-                text: 'Conformance Tests',
-                link: '/takosumi/tests/conformance-tests',
-              },
-              {
-                text: 'Condition Reason Catalog',
-                link: '/takosumi/tests/condition-reason-catalog',
-              },
-            ],
-          },
-        ],
-      },
-      {
         text: 'リファレンス',
         items: [
           { text: 'CLI', link: '/reference/cli' },
           { text: 'CLI 認証', link: '/reference/cli-auth' },
           { text: 'API', link: '/reference/api' },
-          { text: 'Install API', link: '/reference/install-api' },
-          { text: '.takosumi/app.yml', link: '/reference/app-yml-spec' },
-          { text: 'Binding Catalog', link: '/reference/binding-catalog' },
           { text: 'Database', link: '/reference/database' },
-          { text: 'Manifest Spec', link: '/reference/manifest-spec' },
-          { text: 'Component Matrix', link: '/reference/component-matrix' },
-          { text: '用語集', link: '/reference/glossary' },
-        ],
-      },
-      {
-        text: 'Performance',
-        items: [
-          { text: 'Baseline Metrics', link: '/performance/baseline' },
-        ],
-      },
-      {
-        text: 'Contributing',
-        collapsed: true,
-        items: [
-          { text: '概要', link: '/contributing/' },
-          { text: 'Current State', link: '/contributing/current-state' },
-          {
-            text: 'Acceptance Matrix',
-            link: '/contributing/acceptance-matrix',
-          },
-          {
-            text: 'Acceptance Test Backlog',
-            link: '/contributing/acceptance-test-backlog',
-          },
-          { text: 'API Surface', link: '/contributing/api-surface' },
-          {
-            text: 'System Architecture Plan',
-            link: '/contributing/system-architecture-implementation-plan',
-          },
-          {
-            text: 'Architecture Alignment',
-            link: '/contributing/architecture-alignment-validation',
-          },
-          {
-            text: 'Service Set Validation',
-            link: '/contributing/service-set-validation',
-          },
-          {
-            text: 'Kernel Plugin Boundary Audit',
-            link: '/contributing/kernel-plugin-boundary-audit',
-          },
-          {
-            text: 'Deploy Topology Notes',
-            link: '/contributing/deploy-topology-notes',
-          },
-          {
-            text: 'Production Gap Burndown',
-            link: '/contributing/production-gap-burndown',
-          },
-          { text: 'Release Gate', link: '/contributing/release-gate' },
-          { text: 'CI Release Gate', link: '/contributing/ci-release-gate' },
-          {
-            text: 'Release Artifact Manifest',
-            link: '/contributing/release-artifact-manifest',
-          },
-          {
-            text: 'Real Backend E2E Plan',
-            link: '/contributing/real-backend-e2e-plan',
-          },
-          { text: 'Self-host E2E', link: '/contributing/self-host-e2e' },
-          {
-            text: 'Self-host Runbook',
-            link: '/contributing/self-host-runbook',
-          },
-          { text: 'Smoke', link: '/contributing/smoke' },
-          { text: 'Compose Smoke', link: '/contributing/compose-smoke' },
-          {
-            text: 'Compose Real Smoke',
-            link: '/contributing/compose-real-smoke',
-          },
-          {
-            text: 'Docker Provider Smoke',
-            link: '/contributing/docker-provider-smoke',
-          },
-          { text: 'Git Source Smoke', link: '/contributing/git-source-smoke' },
-          {
-            text: 'Postgres Storage Smoke',
-            link: '/contributing/postgres-storage-smoke',
-          },
-          {
-            text: 'Redis Queue Smoke',
-            link: '/contributing/redis-queue-smoke',
-          },
-          {
-            text: 'Object Storage Smoke',
-            link: '/contributing/object-storage-smoke',
-          },
-          {
-            text: 'Router Config Smoke',
-            link: '/contributing/router-config-smoke',
-          },
-          {
-            text: 'Runtime Agent API Smoke',
-            link: '/contributing/runtime-agent-api-smoke',
-          },
         ],
       },
       {

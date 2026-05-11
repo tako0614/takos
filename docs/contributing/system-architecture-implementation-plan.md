@@ -1,30 +1,24 @@
 # Takosumi System Architecture Implementation Plan
 
-::: warning Historical 1.0 Core Release plan 本ドキュメントは **1.0 Core
-Release** (M0-M4 frozen 2026-04-29) の implementation plan です。Code layout
-表記の `apps/paas/...` は当時の pre-split 名称であり、現行 split 後の path
-とは異なる historical reference と して読んでください。**1.x Installable App
-Model (Phase 1.1-1.7)** の plan は ROADMAP.md Part II を参照してください。 :::
+::: warning Historical 1.0 Core Release plan 本ドキュメントは **1.0 Core Release** (M0-M4 frozen 2026-04-29) の
+implementation plan です。Code layout 表記の `apps/paas/...` は当時の pre-split 名称であり、現行 split 後の path
+とは異なる historical reference と して読んでください。**1.x Installable App Model (Phase 1.1-1.7)** の plan は
+ROADMAP.md Part II を参照してください。 :::
 
-This plan maps the architecture contract in
-`../architecture/system-architecture.md` and the Takos Deploy spec kit in
+This plan maps the architecture contract in `../architecture/system-architecture.md` and the Takos Deploy spec kit in
 `../takosumi/` onto the `takos` product root.
 
 ## Ground rules
 
-- `takosumi` remains one product root. Domain boundaries are modules, not
-  default microservices.
-- Integrated and standalone modes share the same PaaS core semantics.
-  Differences are plugins, adapters, process roles, and topology.
-- `takos-deploy` and `takos-runtime` are implemented as `domains/deploy` and
-  `domains/runtime` inside `takosumi`.
-- Canonical writes stay in the primary control plane. Provider/runtime observed
-  state is never canonical.
-- Every domain exposes commands, queries, events, ports, and a store interface;
-  other domains must not import a domain store directly.
-- Self-host, cloud provider, database, queue, object-storage, KMS, and secret
-  backend implementations are outside the kernel. The kernel owns the plugin ABI
-  and reference no-I/O adapters; real connectivity is loaded through
+- `takosumi` remains one product root. Domain boundaries are modules, not default microservices.
+- Integrated and standalone modes share the same PaaS core semantics. Differences are plugins, adapters, process roles,
+  and topology.
+- `takos-deploy` and `takos-runtime` are implemented as `domains/deploy` and `domains/runtime` inside `takosumi`.
+- Canonical writes stay in the primary control plane. Provider/runtime observed state is never canonical.
+- Every domain exposes commands, queries, events, ports, and a store interface; other domains must not import a domain
+  store directly.
+- Self-host, cloud provider, database, queue, object-storage, KMS, and secret backend implementations are outside the
+  kernel. The kernel owns the plugin ABI and reference no-I/O adapters; real connectivity is loaded through
   operator-selected plugins.
 
 ## Target code layout
@@ -63,8 +57,7 @@ Exit criteria:
 Implement:
 
 - `ActorContext` normalized across integrated and standalone modes.
-- signed internal RPC bound to method, path, timestamp, request id, actor
-  context, and body digest.
+- signed internal RPC bound to method, path, timestamp, request id, actor context, and body digest.
 - Space and Group command/query services.
 - membership, role, and entitlement placeholders at mutation boundaries.
 - memory stores and storage ports behind the storage driver boundary.
@@ -82,8 +75,7 @@ Exit criteria:
 Implement:
 
 - flat public `.takosumi/manifest.yml` manifest model.
-- compiler from public manifest to internal `AppSpec` / `EnvSpec` /
-  `PolicySpec`.
+- compiler from public manifest to internal `AppSpec` / `EnvSpec` / `PolicySpec`.
 - immutable `SourceSnapshot` for source adapters.
 - non-mutating Deployment resolution with read set.
 - Deployment apply state machine.
@@ -108,8 +100,7 @@ Implement the kernel semantics first:
 
 Exit criteria:
 
-- provider plugins can record materialization without changing canonical
-  activation truth.
+- provider plugins can record materialization without changing canonical activation truth.
 - route projection is created.
 - provider drift changes observed state only, not canonical activation.
 
@@ -118,8 +109,7 @@ Exit criteria:
 Implement:
 
 - `ResourceInstance`, `ResourceBinding`, `BindingSetRevision`.
-- runtime secret injection separated from provider credentials and build
-  secrets.
+- runtime secret injection separated from provider credentials and build secrets.
 - `RuntimeNetworkPolicy` selectors with assignment awareness.
 - `ServiceGrant` and `WorkloadIdentity` checks.
 
@@ -134,7 +124,7 @@ Exit criteria:
 Implement:
 
 - bundled registry and package resolution from ref to digest.
-- resource/data/publication/provider package descriptors.
+- resource/data/provider package descriptors and app-output registry evidence.
 - trust records, revocation, conformance tiers.
 - provider support and satisfaction reports.
 
@@ -144,20 +134,20 @@ Exit criteria:
 - revoked packages block new plans.
 - existing affected groups become degraded rather than silently mutated.
 
-### M6: Publications/events/dependencies
+### M6: App outputs/events/dependencies
 
 Implement:
 
-- explicit publication consume bindings.
-- publication projection and withdrawal/rebind policies.
+- explicit app-output consume bindings.
+- app metadata / route projection and withdrawal/rebind policies.
 - event subscriptions that resolve through `primaryAppReleaseId` by default.
 - `ChangeSetPlan` for dependent groups.
 
 Exit criteria:
 
 - outputs are never injected automatically.
-- breaking publication changes create dependent plans.
-- deployment-time publication cycles are blocked.
+- breaking app-output changes create dependent plans.
+- deployment-time output cycles are blocked.
 
 ### M7: Standalone kernel host
 
@@ -171,13 +161,12 @@ Implement:
 Exit criteria:
 
 - `takosumi` boots without `takos-app`.
-- space/group/deploy/rollback/uninstall work through the API with injected
-  reference or operator plugins.
+- space/group/deploy/rollback/uninstall work through the API with injected reference or operator plugins.
 - same core services are used in integrated mode.
 
 ### M8: Acceptance test hardening
 
-Convert `../takosumi/tests/conformance-tests.md` into tests grouped by:
+Convert the takosumi kernel acceptance surface into tests grouped by:
 
 - plan/apply
 - activation
@@ -186,7 +175,7 @@ Convert `../takosumi/tests/conformance-tests.md` into tests grouped by:
 - migration/restore
 - canary side effects
 - events
-- publications/dependencies
+- app outputs/dependencies
 - runtime security
 - direct deploy
 - GC/retention

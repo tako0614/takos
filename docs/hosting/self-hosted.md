@@ -1,49 +1,36 @@
 # セルフホスト
 
-このページは **Takos kernel
-をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
+このページは **Takosumi kernel をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
 
 Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
 
-::: danger このページのサンプルはローカル開発向けデフォルトを含みます
-このページに掲載されている
-`compose.local.yml`、`.env.local.example`、`takos-dev-secret` などはすべて
-**ローカル開発を前提としたデフォルト**
+::: danger このページのサンプルはローカル開発向けデフォルトを含みます このページに掲載されている
+`compose.local.yml`、`.env.local.example`、`takos-dev-secret` などはすべて **ローカル開発を前提としたデフォルト**
 です。本番環境にそのまま流用しないでください。本番運用では下記のすべてを満たす必要があります:
 
 - `.env.local` ではなく `.env.production` を作成し、独自の値で全項目を埋める
-- `S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` / `JWT_PUBLIC_KEY` /
-  `ENCRYPTION_KEY` / `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` /
-  `EXECUTOR_PROXY_SECRET` / `TAKOS_INTERNAL_API_SECRET` を含む secret を
-  **絶対に `takos-dev-secret` のままにしない**。32 byte
-  以上のランダム値を生成して差し替える
-- `compose.local.yml` ではなく `takos-private/compose.server.yml`
-  を使う。private server stack を起動する場合は
-  `takos-private/.env.server.example` を元に `takos-private/.env.server`
-  を作成し、`takos-private` で `deno task server:up` を実行する
-- backing services (PostgreSQL / Redis / オブジェクトストレージ)
-  はホスト上の単独 container ではなく managed service もしくは production-grade
-  な構成に置き換える
-- 公開ドメインは `*.localhost` ではなく実ドメインに変更し、TLS 終端 /
-  リバースプロキシを前段に置く
-- platform secret (`PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` /
-  `ENCRYPTION_KEY` / `EXECUTOR_PROXY_SECRET` / `TAKOS_INTERNAL_API_SECRET`) は
-  鍵ローテーション計画と一緒に管理する
+- `S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` / `JWT_PUBLIC_KEY` / `ENCRYPTION_KEY` / `PLATFORM_PRIVATE_KEY` /
+  `PLATFORM_PUBLIC_KEY` / `EXECUTOR_PROXY_SECRET` / `TAKOS_INTERNAL_API_SECRET` を含む secret を **絶対に
+  `takos-dev-secret` のままにしない**。32 byte 以上のランダム値を生成して差し替える
+- `compose.local.yml` ではなく `takos-private/compose.server.yml` を使う。private server stack を起動する場合は
+  `takos-private/.env.server.example` を元に `takos-private/.env.server` を作成し、`takos-private` で
+  `deno task server:up` を実行する
+- backing services (PostgreSQL / Redis / オブジェクトストレージ) はホスト上の単独 container ではなく managed service
+  もしくは production-grade な構成に置き換える
+- 公開ドメインは `*.localhost` ではなく実ドメインに変更し、TLS 終端 / リバースプロキシを前段に置く
+- platform secret (`PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` / `ENCRYPTION_KEY` / `EXECUTOR_PROXY_SECRET` /
+  `TAKOS_INTERNAL_API_SECRET`) は 鍵ローテーション計画と一緒に管理する
 
-詳細な production checklist は [Kubernetes](/hosting/kubernetes) と各
-cloud-specific ページを参照してください。 :::
+詳細な production checklist は [Kubernetes](/hosting/kubernetes) と各 cloud-specific ページを参照してください。 :::
 
-セルフホストは検証専用ではありません。PostgreSQL / Redis / S3-compatible object
-storage / TLS / secret management を production-grade backing services
-に置き換えた構成は production packaging として扱えます。current contract
-に含まれない項目は
-[Not A Current Contract](/hosting/differences#not-a-current-contract)
-を参照してください。
+セルフホストは検証専用ではありません。PostgreSQL / Redis / S3-compatible object storage / TLS / secret management を
+production-grade backing services に置き換えた構成は production packaging として扱えます。current contract
+に含まれない項目は [Not A Current Contract](/hosting/differences#not-a-current-contract) を参照してください。
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos kernel の deploy は target に関わらず `takos-private/distribution.yml`
-を正本とします。Self-hosted (docker-compose) を kernel host に選ぶには:
+Takos product distribution artifact の正本は `takos/deploy/` にあり、 `takos-private/distribution.yml` は private
+operator が target を選ぶ instance config です。Self-hosted (docker-compose) を kernel host に選ぶには:
 
 ```yaml
 # takos-private/distribution.yml
@@ -66,14 +53,12 @@ Self-hosted (docker-compose) target に固有の prerequisites:
 - Let's Encrypt / 内部 CA で発行した cert (operator 管理)
 - 公開ドメインは `*.localhost` ではなく実ドメインに変更
 
-詳細な env / compose 設定は [セットアップ](#セットアップ) と
-[サービス構成](#サービス構成) を参照。
+詳細な env / compose 設定は [セットアップ](#セットアップ) と [サービス構成](#サービス構成) を参照。
 
 ## deploy 実行
 
-5 target 共通の quick runbook です。target ごとの差は `distribution.yml` の
-`kernel_host.target` だけで、`distribute:apply` が target 固有 backend (wrangler
-/ Helm / docker-compose) に dispatch します:
+5 target 共通の quick runbook です。target ごとの差は `distribution.yml` の `kernel_host.target`
+だけで、`distribute:apply` が target 固有 backend (wrangler / Helm / docker-compose) に dispatch します:
 
 ```bash
 # 共通手順 (5 target で同じ)
@@ -91,8 +76,8 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
   > accounts-seed-plan.json
 ```
 
-`distribute:apply` は `kernel_host.target=selfhosted` を見て内部で
-`docker compose -f compose.server.yml up -d` を呼び出します。
+`distribute:apply` は `kernel_host.target=selfhosted` を見て内部で `docker compose -f compose.server.yml up -d`
+を呼び出します。
 
 ## 必要なもの
 
@@ -111,11 +96,9 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 cp .env.local.example .env.local
 ```
 
-private server stack を使う場合は `takos-private/.env.server.example` を元に
-`takos-private/.env.server` を作成し、`PLATFORM_PRIVATE_KEY` /
-`PLATFORM_PUBLIC_KEY` / `JWT_PUBLIC_KEY` / `ENCRYPTION_KEY` /
-`S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` などのすべての secret を
-`takos-dev-secret` のようなプレースホルダから差し替えてください:
+private server stack を使う場合は `takos-private/.env.server.example` を元に `takos-private/.env.server`
+を作成し、`PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` / `JWT_PUBLIC_KEY` / `ENCRYPTION_KEY` / `S3_SECRET_ACCESS_KEY`
+/ `MINIO_ROOT_PASSWORD` などのすべての secret を `takos-dev-secret` のようなプレースホルダから差し替えてください:
 
 ```bash
 cd takos-private
@@ -123,17 +106,15 @@ cp .env.server.example .env.server
 # .env.server を編集し、secret 系をすべて本番用の値に置き換える
 ```
 
-`takos-private/compose.server.yml` で起動する場合は `takos-private` の Deno task
-を使ってください:
+`takos-private/compose.server.yml` で起動する場合は `takos-private` の Deno task を使ってください:
 
 ```bash
 cd takos-private
 deno task server:up
 ```
 
-この stack の定義は `takos-private/compose.server.yml`
-にあります。`takos-private/.env.server.example` を元に private server stack
-の値を揃えてください。
+この stack の定義は `takos-private/compose.server.yml` にあります。`takos-private/.env.server.example` を元に private
+server stack の値を揃えてください。
 
 ### 2. 環境変数の全リスト
 
@@ -150,10 +131,9 @@ deno task server:up
 | `TAKOS_RUNTIME_PORT`          | `8081`            | Runtime のホスト側公開ポート（container `8080` に map）  |
 | `TAKOS_EXECUTOR_PORT`         | `8082`            | Executor のホスト側公開ポート（container `8080` に map） |
 
-`takos-private/compose.server.yml` では `TAKOS_ADMIN_DOMAIN` /
-`TAKOS_TENANT_BASE_DOMAIN` を 受け取り、control プロセスには `ADMIN_DOMAIN` /
-`TENANT_BASE_DOMAIN` として渡す。compose を使わずに起動する場合は `ADMIN_DOMAIN`
-/ `TENANT_BASE_DOMAIN` を直接設定する。
+`takos-private/compose.server.yml` では `TAKOS_ADMIN_DOMAIN` / `TAKOS_TENANT_BASE_DOMAIN` を 受け取り、control
+プロセスには `ADMIN_DOMAIN` / `TENANT_BASE_DOMAIN` として渡す。compose を使わずに起動する場合は `ADMIN_DOMAIN` /
+`TENANT_BASE_DOMAIN` を直接設定する。
 
 #### インフラ接続
 
@@ -162,17 +142,15 @@ deno task server:up
 | `DATABASE_URL` | `postgresql://takos:takos@postgres:5432/takos` | PostgreSQL 接続 URL |
 | `REDIS_URL`    | `redis://redis:6379`                           | Redis 接続 URL      |
 
-private stack の `takos-private/compose.server.yml` は PostgreSQL を host
-`5432`、Redis を host `6379` に公開します。OSS local stack の
-`TAKOS_POSTGRES_PORT` / `TAKOS_REDIS_PORT` override とは別の運用面です。
+private stack の `takos-private/compose.server.yml` は PostgreSQL を host `5432`、Redis を host `6379` に公開します。OSS
+local stack の `TAKOS_POSTGRES_PORT` / `TAKOS_REDIS_PORT` override とは別の運用面です。
 
 #### オブジェクトストレージ（control plane 用）
 
-control の Node resolver は `AWS_S3_*` 系が設定されていれば S3/MinIO
-を使います。現在の `takos-private/.env.server.example` は minimal private stack
-として `TAKOS_LOCAL_DATA_DIR` を設定し、control-plane の bucket は local
-persistent storage に落とします。control-plane も MinIO / S3 に向ける場合だけ、
-以下の `AWS_S3_*` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` を追加します。
+control の Node resolver は `AWS_S3_*` 系が設定されていれば S3/MinIO を使います。現在の
+`takos-private/.env.server.example` は minimal private stack として `TAKOS_LOCAL_DATA_DIR` を設定し、control-plane の
+bucket は local persistent storage に落とします。control-plane も MinIO / S3 に向ける場合だけ、 以下の `AWS_S3_*` /
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` を追加します。
 
 | 変数                           | 例                            | 用途                              |
 | ------------------------------ | ----------------------------- | --------------------------------- |
@@ -200,9 +178,8 @@ runtime-service は `S3_*` 系を読みます。
 | `MINIO_ROOT_USER`      | `takos`                       | MinIO 管理ユーザー     |
 | `MINIO_ROOT_PASSWORD`  | `takos-dev-secret`            | MinIO 管理パスワード   |
 
-private stack の `takos-private/compose.server.yml` は MinIO を host `9000` /
-`9001` に固定公開します。OSS local stack の `TAKOS_MINIO_PORT` /
-`TAKOS_MINIO_CONSOLE_PORT` override とは別の運用面です。
+private stack の `takos-private/compose.server.yml` は MinIO を host `9000` / `9001` に固定公開します。OSS local stack
+の `TAKOS_MINIO_PORT` / `TAKOS_MINIO_CONSOLE_PORT` override とは別の運用面です。
 
 #### 認証・暗号化
 
@@ -216,20 +193,17 @@ private stack の `takos-private/compose.server.yml` は MinIO を host `9000` /
 | `OIDC_ISSUER_URL`               | Takosumi Accounts issuer URL                                                   |
 | `OIDC_CLIENT_ID`                | Takosumi Accounts が installation 単位に発行する OIDC client id                |
 | `OIDC_CLIENT_SECRET`            | 同 OIDC client secret                                                          |
-| `OIDC_REDIRECT_URI`             | `/auth/oidc/callback` の絶対 URL                                                |
-| `EXECUTOR_PROXY_SECRET`         | executor-host から control-web への内部 RPC secret                             |
+| `OIDC_REDIRECT_URI`             | `/auth/oidc/callback` の絶対 URL                                               |
+| `TAKOS_INTERNAL_API_SECRET`     | trusted edge / internal API bridge secret                                      |
 
-::: danger production / staging では secret-store encryption key が必須
-`TAKOS_ENVIRONMENT=production` または `staging` で takosumi を起動するとき、
-`TAKOS_SECRET_STORE_PASSPHRASE` / `TAKOS_SECRET_STORE_KEY` /
-`TAKOS_SECRET_ENCRYPTION_KEY` / `ENCRYPTION_KEY` のいずれか 1 つは **必須** で、
-未設定だと boot 時に fail-closed (`process exit 1`) します。これにより
-`PlaceholderSecretBoundaryCrypto` (base64 のみで暗号化されない) への暗黙の
-フォールバックを防ぎ、DB に **平文で secret が保存される事故** を遮断します。
+::: danger production / staging では secret-store encryption key が必須 `TAKOS_ENVIRONMENT=production` または `staging`
+で takosumi を起動するとき、 `TAKOS_SECRET_STORE_PASSPHRASE` / `TAKOS_SECRET_STORE_KEY` / `TAKOS_SECRET_ENCRYPTION_KEY`
+/ `ENCRYPTION_KEY` のいずれか 1 つは **必須** で、 未設定だと boot 時に fail-closed (`process exit 1`)
+します。これにより `PlaceholderSecretBoundaryCrypto` (base64 のみで暗号化されない) への暗黙の フォールバックを防ぎ、DB
+に **平文で secret が保存される事故** を遮断します。
 
-ローカル開発で encryption key を意図的に省略したい場合は、明示的に
-`TAKOS_ALLOW_PLAINTEXT_SECRETS=1` を設定してください (production / staging は
-opt-in を渡しても fail-closed のままです)。 :::
+ローカル開発で encryption key を意図的に省略したい場合は、明示的に `TAKOS_ALLOW_PLAINTEXT_SECRETS=1` を設定してください
+(production / staging は opt-in を渡しても fail-closed のままです)。 :::
 
 #### AI プロバイダ
 
@@ -269,8 +243,7 @@ opt-in を渡しても fail-closed のままです)。 :::
 
 ### 3. compose を使わない場合
 
-`takos-private/.env.server.example` と `takos-private/compose.server.yml`
-を参考にする。
+`takos-private/.env.server.example` と `takos-private/compose.server.yml` を参考にする。
 
 ```bash
 cp takos-private/.env.server.example takos-private/.env.server
@@ -304,7 +277,7 @@ docker compose --env-file .env.server -f compose.server.yml up --build -d
 services:
   postgres:
     image: postgres:16-alpine
-    ports: ["5432:5432"]
+    ports: ['5432:5432']
 ```
 
 - **イメージ**: `postgres:16-alpine`
@@ -319,7 +292,7 @@ services:
 services:
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ['6379:6379']
 ```
 
 - **イメージ**: `redis:7-alpine`
@@ -328,8 +301,7 @@ services:
 - **ヘルスチェック**: `redis-cli ping`（10 秒間隔）
 - **用途**: queue / coordination backend
 
-hostname routing 用の KV namespace は Redis ではなく、専用の persistent KV
-resolver で解決されます。
+hostname routing 用の KV namespace は Redis ではなく、専用の persistent KV resolver で解決されます。
 
 #### MinIO
 
@@ -339,8 +311,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address :9001
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - '9000:9000'
+      - '9001:9001'
 ```
 
 - **イメージ**: `minio/minio:latest`
@@ -351,105 +323,18 @@ services:
 
 `minio-init` サービスが起動後に `mc mb` でバケットを自動作成する。
 
-### Control Plane サービス
+### Takos product services
 
-#### Control Web
+| Service       | 役割                                                |
+| ------------- | --------------------------------------------------- |
+| `takos-app`   | OIDC consumer / Web UI / public API gateway         |
+| `takosumi`    | generic manifest deploy engine                      |
+| `takos-git`   | Git Smart HTTP / refs / objects / source resolution |
+| `takos-agent` | Takos agent execution service                       |
 
-- **コマンド**: `cd takos/app/apps/control && deno task dev:local:web`
-- **ポート**: `TAKOS_CONTROL_WEB_PORT`（デフォルト `8787`）
-- **役割**: API サーバー。Cloudflare の Worker に相当するメインサービス
-- **依存**: `minio-init` 完了後に起動
-
-#### Control Dispatch
-
-- **コマンド**: `cd takos/app/apps/control && deno task dev:local:dispatch`
-- **ポート**: `TAKOS_CONTROL_DISPATCH_PORT`（デフォルト `8788`）
-- **役割**: テナントへのリクエストルーティング。Cloudflare Dispatch Namespace
-  の代替
-- **依存**: `control-web` が healthy になってから起動
-
-#### Control Worker
-
-- **コマンド**: `cd takos/app/apps/control && deno task dev:local:worker`
-- **ポート**: なし（バックグラウンドジョブ処理）
-- **役割**: Run 実行、Queue 処理、Scheduled ジョブなどのバックグラウンド処理
-- **依存**: `control-web` + `runtime-host` + `executor-host` +
-  `oci-orchestrator`
-- **ヘルスチェック**: ハートビートファイルの更新時刻で判定
-
-### Runtime & Executor サービス
-
-#### Runtime Host
-
-- **コマンド**: `cd takos/app/apps/control && deno task dev:local:runtime-host`
-- **ポート**: `TAKOS_RUNTIME_HOST_PORT`（デフォルト `8789`）
-- **役割**: runtime-service container への host / forward。backend-specific
-  runtime の Worker `worker-bundle` backend 名としても `runtime-host` を使う
-
-#### Runtime
-
-- **イメージ**: `ghcr.io/takos/runtime-service:latest` からビルド
-- **ポート**: `TAKOS_RUNTIME_PORT`（デフォルト `8081`）→ コンテナポート `8080`
-- **役割**: sandbox shell / workflow job / git / CLI proxy 用の
-  `takos-runtime-service` container
-
-#### Executor Host
-
-> **Note**: executor-host は control-plane 側の host service で、executor
-> container に forward します。デフォルトセットアップでは kernel
-> と一緒にデプロイされます。
-
-- **コマンド**: `cd takos/app/apps/control && deno task dev:local:executor-host`
-- **ポート**: `TAKOS_EXECUTOR_HOST_PORT`（デフォルト `8790`）
-- **役割**: エージェント実行の host プロセス
-
-#### Executor
-
-- **イメージ**: private server stack / OSS local stack とも
-  `takos/agent/Dockerfile` から `takos-agent` container をビルド
-- **ポート**: `TAKOS_EXECUTOR_PORT`（デフォルト `8082`）→ コンテナポート `8080`
-- **役割**: エージェント実行コンテナ
-- **構成**: `takos/agent/` が PaaS-owned `/api/internal/v1/agent-control/*`
-  client / remote tools / skill prompt bridge
-  を提供する。`takos-private/apps/executor` は開発用 TypeScript executor
-  として残す
-
-この executor container は private server stack でも `takos-agent` container
-を使います。Takos は platform 全体を単一の runtime に寄せず、agent loop を
-executor container に分離し、control plane は space state と remote tool
-実体を保持します。
-
-### OCI Orchestrator
-
-- **コマンド**:
-  `cd takos/app/apps/control && deno task dev:local:oci-orchestrator`
-- **ポート**: `TAKOS_OCI_ORCHESTRATOR_PORT`（デフォルト `9002`）
-- **役割**: backend-specific な container runtime。worker-attached / Service
-  container workload の実行面で、既定では Docker を使う。`k8s` / `cloud-run` /
-  `ecs` は OCI orchestrator 経由の tenant image workload adapter であり、 Takos
-  kernel hosting target ではない
-- **特殊設定**: Docker fallback を使う場合は `/var/run/docker.sock`
-  をマウントしてホストの Docker を操作
-- **ネットワーク**: `default` + `takos-containers`（コンテナ間通信用）
-
-OCI orchestrator 経由の backend-specific runtime を使う場合の追加 env:
-
-- image-backed workloads: `OCI_ORCHESTRATOR_URL` 必須、必要に応じて
-  `OCI_ORCHESTRATOR_TOKEN`
-- `k8s`: `K8S_NAMESPACE`
-  - `K8S_DEPLOYMENT_NAME` / `K8S_IMAGE_REGISTRY` は `K8S_NAMESPACE` がある場合の
-    追加設定で、単独では k8s backend を有効化しない
-- `cloud-run`: `GCP_PROJECT_ID`, `GCP_CLOUD_RUN_REGION` or `GCP_REGION`,
-  `GCP_CLOUD_RUN_SERVICE_ID`, `GCP_CLOUD_RUN_SERVICE_ACCOUNT`,
-  `GCP_CLOUD_RUN_INGRESS`, `GCP_CLOUD_RUN_ALLOW_UNAUTHENTICATED`,
-  `GCP_CLOUD_RUN_BASE_URL`, `GCP_CLOUD_RUN_DELETE_ON_REMOVE`,
-  `GCP_ARTIFACT_REGISTRY_REPO`
-- `ecs`: `AWS_ECS_CLUSTER_ARN`, `AWS_ECS_TASK_DEFINITION_FAMILY`,
-  `AWS_ECS_SERVICE_ARN` or `AWS_ECS_SERVICE_NAME`, `AWS_ECS_CONTAINER_NAME`,
-  `AWS_ECS_REGION` or `AWS_REGION`, `AWS_ECS_SUBNET_IDS`,
-  `AWS_ECS_SECURITY_GROUP_IDS`, `AWS_ECS_ASSIGN_PUBLIC_IP`,
-  `AWS_ECS_LAUNCH_TYPE`, `AWS_ECS_DESIRED_COUNT`, `AWS_ECS_BASE_URL`,
-  `AWS_ECS_HEALTH_URL`, `AWS_ECR_REPOSITORY_URI`
+workflow build / `workflowRef` 解決は `takosumi-git`、AppInstallation / OIDC / billing は self-host operator の Takosumi
+Accounts (`takosumi-cloud`) が担当します。旧 `control-*` / `runtime-host` / `takos-runtime-service` は current service
+id として扱いません。
 
 ### ネットワーク構成
 
@@ -508,10 +393,8 @@ PGVECTOR_ENABLED=true
 
 ## 初回マイグレーション
 
-PostgreSQL backend は control service 起動時に
-`takos/app/apps/control/db/migrations` を self-host migration runner で自動適用
-する。Wrangler の local D1 backend を単体で使う場合だけ、同じ migration source
-に対して次を実行する:
+PostgreSQL backend は control service 起動時に `takos/app/apps/control/db/migrations` を self-host migration runner
+で自動適用 する。Wrangler の local D1 backend を単体で使う場合だけ、同じ migration source に対して次を実行する:
 
 ```bash
 cd takos/app/apps/control && deno task db:migrate
@@ -544,9 +427,8 @@ k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes)
 
 ## selfhosted provider plugin (Phase 17A3)
 
-bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
-`provider` 契約として呼び出したい場合は **selfhosted provider plugin** を
-使います。`profiles/selfhosted.example.json` で
+bare metal / Docker Compose / VM 上の resource を Takosumi kernel から `provider` 契約として呼び出したい場合は
+**selfhosted provider plugin** を 使います。`profiles/selfhosted.example.json` で
 `clients.provider: "local-container-provider"` を選ぶ構成です。
 
 ### 構成
@@ -578,8 +460,7 @@ bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
 
 ### runtime-agent on bare metal
 
-selfhosted provider plugin と一緒に runtime-agent を bare metal に置く例
-(systemd):
+selfhosted provider plugin と一緒に runtime-agent を bare metal に置く例 (systemd):
 
 ```ini
 # /etc/systemd/system/takos-runtime-agent.service
@@ -615,20 +496,17 @@ S3_SECRET_ACCESS_KEY=...
 DOCKER_SOCKET_PATH=/var/run/docker.sock
 ```
 
-agent は kernel に enroll → heartbeat → lease pull → psql / docker / file ops
-を実行 → 結果を report します。Docker socket access は Docker group
-経由で許可します。
+agent は kernel に enroll → heartbeat → lease pull → psql / docker / file ops を実行 → 結果を report します。Docker
+socket access は Docker group 経由で許可します。
 
 ### routing layer (selfhosted) の設定
 
-`selfhosted-router-config` provider client は Caddy / nginx の config file を
-materialize します。operator がやること:
+`selfhosted-router-config` provider client は Caddy / nginx の config file を materialize します。operator がやること:
 
 - Caddy or nginx を install / systemd service として常駐
 - TLS cert (Let's Encrypt + certbot) を自動更新する仕組みを設定
-- profile の `pluginConfig.operator.takosumi.selfhosted.routerConfig` に
-  `configPath` (例: `/etc/caddy/Caddyfile.d/takos.conf`) と `reloadCommand` (例:
-  `systemctl reload caddy`) を設定
+- profile の `pluginConfig.operator.takosumi.selfhosted.routerConfig` に `configPath` (例:
+  `/etc/caddy/Caddyfile.d/takos.conf`) と `reloadCommand` (例: `systemctl reload caddy`) を設定
 
 kernel がやること:
 
@@ -636,8 +514,7 @@ kernel がやること:
 - TLS site directive 同期 (Let's Encrypt はそれ自体が renew する)
 - drift 検出 (config file の actual content vs desired)
 
-詳細な runbook と credential injection の topology は
-[Multi-cloud](/hosting/multi-cloud) を参照してください。
+詳細な runbook と credential injection の topology は [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
 ## 次に読むページ
 

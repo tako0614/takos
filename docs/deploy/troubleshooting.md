@@ -7,7 +7,7 @@
 ### `Invalid manifest: metadata.name is required`
 
 deploy manifest (`.takosumi/manifest.yml`) の `metadata.name` があるか確認して
-ください。current kernel-bound manifest は `apiVersion: "1.0"` +
+ください。kernel に届く compiled manifest は `apiVersion: "1.0"` +
 `kind: Manifest` + `resources[]` の Shape manifest です。
 
 ```yaml
@@ -23,10 +23,10 @@ resources: []
 
 ### `group is required when the deploy manifest does not provide metadata.name`
 
-`takos deploy` / `takos install` は GroupHead を advance します。通常は manifest
-の `metadata.name` が group 名として使われます。このエラーは manifest に
-`metadata.name` がなく、かつ `--group` / API body の `group` override もない
-場合に出ます。
+Takos compatibility deploy surface (`takos deploy` / legacy `takos install`) は
+GroupHead を advance します。通常は manifest の `metadata.name` が group
+名として使われます。このエラーは manifest に `metadata.name` がなく、かつ
+`--group` / API body の `group` override もない 場合に出ます。
 
 ```bash
 takos deploy --space SPACE_ID --group my-app
@@ -80,14 +80,15 @@ takosumi-git push
 は、`esbuild --bundle --outfile=dist/worker.js` のように単一 bundle
 にまとめます。
 
-## binding / service import 解決失敗
+## binding / namespace export 解決失敗
 
 ### `Error: ... provider publication request ...`
 
 このエラーは旧 publication / consume model の互換 surface で出ることがあります。
 current `.takosumi/manifest.yml` では app binding は `.takosumi/app.yml` の
-`bindings:`、cross-instance service dependency は `.takosumi/manifest.yml` の
-`imports[]` / `serviceResolvers[]` で表現します。
+`bindings:`、operator-owned dependency は namespace export と account API / OIDC
+discovery / BillingPort で表現します。compiled manifest には `imports[]` /
+`serviceResolvers[]` を書きません。
 
 - `publication: takos.api-key` は retired です。Takos API access は Takosumi
   Accounts の AppGrant/AppBinding credential として installer 側で materialize
@@ -95,20 +96,23 @@ current `.takosumi/manifest.yml` では app binding は `.takosumi/app.yml` の
 - OIDC consumer 統合 (`identity.oidc@v1` AppBinding 経由、Takosumi Accounts
   発行) の設定不足の場合は、`.takosumi/app.yml` の `bindings.auth.redirectPaths`
   / `allowedScopes` を確認してください。 `redirectUris` 等の解決済み値は
-  [Binding Catalog](/reference/binding-catalog#_1-identity-oidc-v1) の
-  materializer contract に従います。unresolved `${bindings.*}` / `${secrets.*}`
-  は current takosumi-git で compile error になります。 install 直後の owner
-  session bootstrap は `/_takosumi/launch?token=...` (one-time launch token
-  JWS、 `install-launch-token@v1` binding) であり、通常ログインの
-  `/auth/oidc/login` → `/auth/oidc/callback` (OIDC consumer flow) とは
-  別経路です。token verify エラーは launch token の鍵
-  (`INSTALL_LAUNCH_PUBLIC_KEY`) と audience (`INSTALL_LAUNCH_AUDIENCE`)
-  を、ログイン redirect エラーは `OIDC_REDIRECT_URI` と AppBinding の
-  `redirectPaths` を確認してください
-- `imports[]` がある場合は `serviceResolvers[]` の anchor URL と public key
-  が設定されているか確認してください
-- binding / import の shape は [Binding Catalog](/reference/binding-catalog) と
-  [Manifest Reference](/reference/manifest-spec) を参照してください
+  [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md#_1-identity-oidc-v1)
+  の materializer contract に従います。unresolved `${bindings.*}` /
+  `${secrets.*}` は current takosumi-git の Accounts materialization
+  後も残る場合、kernel request 前に失敗します。 install 直後の owner session
+  bootstrap は `/_takosumi/launch?token=...` (one-time launch token JWS、
+  `install-launch-token@v1` binding) であり、通常ログインの `/auth/oidc/login` →
+  `/auth/oidc/callback` (OIDC consumer flow) とは 別経路です。token verify
+  エラーは launch token の鍵 (`INSTALL_LAUNCH_PUBLIC_KEY`) と audience
+  (`INSTALL_LAUNCH_AUDIENCE`) を、ログイン redirect エラーは `OIDC_REDIRECT_URI`
+  と AppBinding の `redirectPaths` を確認してください
+- `operator.identity.oidc` / `operator.billing.default` のような namespace
+  export が対象 Space に grant されているか確認してください
+- binding / manifest の shape は
+  [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
+  と
+  [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
+  を参照してください
 
 ## デプロイ失敗
 
@@ -130,8 +134,8 @@ takos diff dep_abc123 --space SPACE_ID
 
 3. よくある原因:
 
-- `imports[]` が未知の service identifier を参照している、または anchor が
-  ServiceDescriptor を返せない
+- compiled manifest に removed field (`imports[]` / `serviceResolvers[]`) や
+  removed placeholder (`${imports.*}`) が残っている
 - `spec.env` / injected env が既存 env と衝突している
 - Worker のコードにシンタックスエラーがある
 - readiness probe (`GET /`、または provider 固有の health check) が 200 を返さ
@@ -139,13 +143,14 @@ takos diff dep_abc123 --space SPACE_ID
 - `Deployment.conditions[]` に `provider.materialize` の operation 失敗が記録
   されている (CLI / API の Deployment 詳細から見える)。各 condition の reason /
   fix hint は
-  [Condition Reason Catalog](/takosumi/tests/condition-reason-catalog) を参照
+  [Condition Reason Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/status-output.md)
+  を参照
 
 ### `Error: Authentication failed`
 
 ```bash
 takos whoami
-takos login
+takos login --api-url https://takos.example.com --token "$TAKOSUMI_ACCOUNTS_PAT"
 takos endpoint show
 ```
 
@@ -176,7 +181,8 @@ takos deploy --preview --space SPACE_ID
 - `web-service@v1` の `spec.image` が digest-pinned (`@sha256:...`) であること
 - `worker@v1` の `spec.artifact.hash` が compile 後に concrete digest になって
   いること
-- resources / routes / imports / serviceResolvers の参照が整合していること
+- resources / routes / env / namespace export materialization
+  の参照が整合していること
 - descriptor 解決と Deployment.desired の構造的整合 (resolve gate)
 
 reviewer に渡したい場合は `--resolve-only` で resolved Deployment を作って
