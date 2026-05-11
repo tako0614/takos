@@ -158,7 +158,7 @@ chmod 600 .takos-session
 | 変数               | 用途                         |
 | ------------------ | ---------------------------- |
 | `TAKOS_SESSION_ID` | セッション ID                |
-| `TAKOS_TOKEN`      | PAT（Personal Access Token） |
+| `TAKOS_TOKEN`      | Takosumi Accounts PAT / OIDC bearer |
 | `TAKOS_SPACE_ID`   | デフォルトの space ID        |
 | `TAKOS_API_URL`    | API エンドポイント URL       |
 

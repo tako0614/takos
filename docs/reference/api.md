@@ -146,7 +146,7 @@ GET /api/resources?limit=20&offset=0
 | family                                            | purpose                                                              |
 | ------------------------------------------------- | -------------------------------------------------------------------- |
 | [`setup`](#setup)                                 | 初期セットアップ状態                                                 |
-| [`me`](#me)                                       | current user / settings / PAT                                        |
+| [`me`](#me)                                       | current user / settings                                              |
 | [`spaces`](#spaces)                               | space 基本 CRUD / model / export                                     |
 | [`spaces.members`](#spaces-members)               | space メンバー管理                                                   |
 | [`spaces.repositories`](#spaces-repositories)     | space 内 repo 初期化                                                 |

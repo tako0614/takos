@@ -1,7 +1,8 @@
 # Operator
 
 Takos operator 向けの運用入口です。Takos product は Web UI / public API を primary surface
-とし、初回セットアップ、operator login、PAT、課金、catalog 管理は Takos app から扱います。
+とし、初回セットアップと catalog 管理を扱います。operator login、PAT、課金の正本は
+Takosumi Accounts です。
 
 Installable App Model 移行後、identity / billing / OIDC issuer の正本は **Takosumi Accounts** です。Takos は
 `operator.identity.oidc` namespace export / OIDC discovery で得た issuer を consume し、 特定 hostname を contract
@@ -19,7 +20,7 @@ CLI を primary UX にしません。manifest deploy engine や git/workflow bri
 
 `takos/app` の目標境界は次の通りです。
 
-- `apps/api`: browser / API-facing gateway。trusted edge actor headers、 browser session、PAT、Takosumi Accounts 発行の
+- `apps/api`: browser / API-facing gateway。trusted edge actor headers、 browser session、Takosumi Accounts bearer /
   OIDC token を検証し、Takos product API / UI を serve する。OAuth issuer / account / billing の正本 entrypoint ではない
 - `apps/control`: migration window 中だけ残る legacy compatibility backend。 既存 login / OAuth state / account 実装は
   Takosumi Accounts へ抽出移管する。 billing route は Takos 側では retired compatibility guard (`410 Gone`)
