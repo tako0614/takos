@@ -101,19 +101,20 @@ entrypoint です。canonical な install path は [Install Paths](/apps/install
 [Deploy](/deploy/deploy) を参照してください。
 
 ```bash
-takos deploy --space SPACE_ID                            # local manifest, resolve+apply
-takos deploy --env staging --space SPACE_ID              # with environment
-takos deploy https://github.com/... --space SPACE_ID     # from repo URL, resolve+apply
-takos deploy --preview --space SPACE_ID                  # in-memory preview, no record
-takos deploy --resolve-only --space SPACE_ID             # persist resolved Deployment only
+takos deploy --manifest .takosumi/manifest.yml --space SPACE_ID                           # local manifest, resolve+apply
+takos deploy --manifest .takosumi/manifest.yml --env staging --space SPACE_ID             # with environment
+takos deploy https://github.com/... --legacy-repo-source --space SPACE_ID                 # legacy repo URL, resolve+apply
+takos deploy --manifest .takosumi/manifest.yml --preview --space SPACE_ID                 # in-memory preview, no record
+takos deploy --manifest .takosumi/manifest.yml --resolve-only --space SPACE_ID            # persist resolved Deployment only
 ```
 
 | option                     | 説明                                                                                                                                                                                                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest                                                                                                                                                                               |
+| positional `repositoryUrl` | (optional) legacy canonical HTTPS git repository URL。指定時は `--legacy-repo-source` が必須。省略時は `--manifest <path>` が必須                                                                                                                      |
 | `--preview`                | in-memory preview（DB に Deployment record を作らない）                                                                                                                                                                                                |
 | `--resolve-only`           | resolved Deployment を作って apply は別途 `takos apply <id>` で行う                                                                                                                                                                                    |
-| `--manifest <path>`        | manifest path。Takos compatibility surface の legacy default は `.takosumi/manifest.yml`。kernel direct deploy では `takosumi deploy <compiled-shape-manifest>` のように explicit compiled Shape manifest を渡す。unresolved `workflowRef` / placeholder は拒否される（旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated alias） |
+| `--manifest <path>`        | local deploy manifest path。local deploy では必須。kernel direct deploy では `takosumi deploy <compiled-shape-manifest>` のように explicit compiled Shape manifest を渡す。unresolved `workflowRef` / placeholder は拒否される（旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated alias） |
+| `--legacy-repo-source`     | repository URL source compatibility path を明示的に使う                                                                                                                                                                                              |
 | `--auto-approve`           | 確認プロンプトを省略                                                                                                                                                                                                                                   |
 | `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                                                                                                                                                                                               |
 | `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）                                                                                                                                                                               |

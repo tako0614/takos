@@ -152,14 +152,15 @@ stream 対応 domain は追加で `watch` と `follow` を持ちます。
 
 ## deploy CLI
 
-`takos deploy` は Takos の compatibility deploy entrypoint です。positional
-argument を省略するとローカルの `.takosumi/manifest.yml` (旧 `.takos/app.yml` /
-`.takos/app.yaml` は deprecated alias、後方互換のため受理) を manifest source
-にします。この compatibility surface では kernel-compatible compiled Shape
-manifest が必要で、unresolved `workflowRef` / placeholder
-は拒否されます。repository URL を渡すとその repo を source に します。default の
-`takos deploy <manifest>` は **resolve + apply** の sugar と して動き、1
-回の呼び出しで Deployment 作成と GroupHead 進行まで実行します。
+`takos deploy` は Takos の compatibility deploy entrypoint です。local deploy
+では `--manifest <path>` が必須です。positional argument を省略して
+`.takosumi/manifest.yml` を自動探索する legacy default はありません。この
+compatibility surface では kernel-compatible compiled Shape manifest が必要で、
+unresolved `workflowRef` / placeholder は拒否されます。repository URL 経路は
+legacy compatibility sugar で、明示的に `--legacy-repo-source` を付けた場合だけ
+その repo を source にします。default の `takos deploy` は **resolve + apply**
+の sugar として動き、1 回の呼び出しで Deployment 作成と GroupHead 進行まで
+実行します。
 
 `takos install owner/repo --version TAG` は AppInstallation canonical path では
 なく、catalog item (Store) の owner/repo + version/tag を repository URL + Git
@@ -174,11 +175,11 @@ client）。
 deleted group を再生成しません。
 
 ```bash
-takos deploy --space SPACE_ID                                                   # local manifest, resolve+apply
-takos deploy --env staging --space SPACE_ID                                     # local manifest with env
-takos deploy https://github.com/acme/my-app.git --ref main --space SPACE_ID     # repo URL
-takos deploy --preview --space SPACE_ID                                         # in-memory preview
-takos deploy --resolve-only --space SPACE_ID                                    # persist resolved Deployment only
+takos deploy --manifest .takosumi/manifest.yml --space SPACE_ID                                                   # local manifest, resolve+apply
+takos deploy --manifest .takosumi/manifest.yml --env staging --space SPACE_ID                                     # local manifest with env
+takos deploy https://github.com/acme/my-app.git --legacy-repo-source --ref main --space SPACE_ID                  # legacy repo URL
+takos deploy --manifest .takosumi/manifest.yml --preview --space SPACE_ID                                         # in-memory preview
+takos deploy --manifest .takosumi/manifest.yml --resolve-only --space SPACE_ID                                    # persist resolved Deployment only
 takos apply DEPLOYMENT_ID --space SPACE_ID                                      # apply a resolved Deployment
 takos diff DEPLOYMENT_ID --space SPACE_ID                                       # show expansion + diff vs GroupHead
 takos approve DEPLOYMENT_ID --space SPACE_ID                                    # attach approval (if required)
@@ -189,10 +190,11 @@ takos uninstall GROUP_NAME --space SPACE_ID
 
 | flag                       | required         | 役割                                                                                                                                                                  |
 | -------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| positional `repositoryUrl` | no               | canonical HTTPS git repository URL（省略時は local manifest）                                                                                                         |
+| positional `repositoryUrl` | no               | legacy canonical HTTPS git repository URL（指定時は `--legacy-repo-source` が必須。省略時は `--manifest <path>` が必須）                                               |
 | `--ref`                    | no               | branch / tag / commit（repo URL 指定時）                                                                                                                              |
 | `--ref-type`               | no               | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）                                                                                              |
-| `--manifest`               | no               | local manifest path（既定は `.takosumi/manifest.yml`、kernel-compatible compiled Shape manifest が必要。旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated alias） |
+| `--manifest`               | local deploy     | local manifest path（local deploy では必須。kernel-compatible compiled Shape manifest が必要。旧 `.takos/app.yml` / `.takos/app.yaml` は deprecated alias）           |
+| `--legacy-repo-source`     | repo URL deploy  | legacy repository source compatibility path を明示的に使う                                                                                                            |
 | `--preview`                | no               | in-memory preview（Deployment record を作らない）                                                                                                                     |
 | `--resolve-only`           | no               | resolved Deployment を作って apply は別途行う                                                                                                                         |
 | `--group`                  | deploy / install | manifest の `name` 由来の group 名を override                                                                                                                         |
@@ -201,9 +203,10 @@ takos uninstall GROUP_NAME --space SPACE_ID
 | `--auto-approve`           | no               | 確認プロンプトを省略                                                                                                                                                  |
 | `--json`                   | no               | JSON 出力                                                                                                                                                             |
 
-`takos deploy --preview --space SPACE_ID` は manifest validation と現在状態
-との差分確認を行います。preview は non-mutating で、Deployment record も
-作りません（`deployment_id` は `preview:<digest>` として返される）。
+`takos deploy --manifest .takosumi/manifest.yml --preview --space SPACE_ID`
+は manifest validation と現在状態との差分確認を行います。preview は
+non-mutating で、Deployment record も作りません（`deployment_id` は
+`preview:<digest>` として返される）。
 
 deploy surface の詳細な options と group 機能の扱いは
 [CLI command reference](/reference/cli) を参照してください。
