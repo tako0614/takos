@@ -57,7 +57,7 @@
         "name": "takos-docs",
         "title": "Docs",
         "repositoryUrl": "https://github.com/tako0614/takos-docs.git",
-        "ref": "v0.1.1",
+        "ref": "v0.1.2",
         "refType": "tag",
         "preinstall": true
       },
@@ -65,7 +65,7 @@
         "name": "takos-excel",
         "title": "Excel",
         "repositoryUrl": "https://github.com/tako0614/takos-excel.git",
-        "ref": "v0.1.1",
+        "ref": "v0.1.2",
         "refType": "tag",
         "preinstall": true
       },
@@ -73,7 +73,7 @@
         "name": "takos-slide",
         "title": "Slide",
         "repositoryUrl": "https://github.com/tako0614/takos-slide.git",
-        "ref": "v0.1.1",
+        "ref": "v0.1.2",
         "refType": "tag",
         "preinstall": true
       },
@@ -81,7 +81,7 @@
         "name": "takos-computer",
         "title": "Computer",
         "repositoryUrl": "https://github.com/tako0614/takos-computer.git",
-        "ref": "v2.1.1",
+        "ref": "v2.1.2",
         "refType": "tag",
         "preinstall": true
       },
@@ -89,7 +89,7 @@
         "name": "yurucommu",
         "title": "Yurucommu",
         "repositoryUrl": "https://github.com/tako0614/yurucommu.git",
-        "ref": "v1.2.2",
+        "ref": "v1.2.3",
         "refType": "tag",
         "preinstall": true
       }

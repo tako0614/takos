@@ -19,11 +19,11 @@ bundled app distribution の初期セットは以下の 5 つ（Agent / Chat / G
 
 | group                                      | 既定 ref     | 役割                                  | app metadata / bindings                                         |
 | ------------------------------------------ | ------------ | ------------------------------------- | --------------------------------------------------------------- |
-| [takos-docs](/platform/takos-docs)         | `v0.1.1` tag | リッチテキストエディタ                | launcher / MCP endpoint / file handler / storage grant          |
-| [takos-excel](/platform/takos-excel)       | `v0.1.1` tag | スプレッドシート                      | launcher / MCP endpoint / file handler / storage grant          |
-| [takos-slide](/platform/takos-slide)       | `v0.1.1` tag | プレゼンテーション                    | launcher / MCP endpoint / file handler / storage grant          |
-| [takos-computer](/platform/takos-computer) | `v2.1.1` tag | sandbox computer / browser automation | launcher / MCP endpoint / sandbox web-service / Takos API grant |
-| [yurucommu](/platform/yurucommu)           | `v1.2.2` tag | ActivityPub / community social        | launcher / `identity.oidc@v1` / DB / object-store / queue       |
+| [takos-docs](/platform/takos-docs)         | `v0.1.2` tag | リッチテキストエディタ                | launcher / MCP endpoint / file handler / storage grant          |
+| [takos-excel](/platform/takos-excel)       | `v0.1.2` tag | スプレッドシート                      | launcher / MCP endpoint / file handler / storage grant          |
+| [takos-slide](/platform/takos-slide)       | `v0.1.2` tag | プレゼンテーション                    | launcher / MCP endpoint / file handler / storage grant          |
+| [takos-computer](/platform/takos-computer) | `v2.1.2` tag | sandbox computer / browser automation | launcher / MCP endpoint / sandbox web-service / Takos API grant |
+| [yurucommu](/platform/yurucommu)           | `v1.2.3` tag | ActivityPub / community social        | launcher / `identity.oidc@v1` / DB / object-store / queue       |
 
 bundled app の launcher / MCP / file handler entry は kernel manifest の `publications[]` ではなく、Takos app catalog /
 runtime registry の metadata です。 workload 自体は `.takosumi/manifest.yml` の Shape resources で deploy します。
@@ -135,7 +135,7 @@ Product distribution profile は `defaultApps.entries` に既定の repository r
     "name": "takos-docs",
     "title": "Docs",
     "repositoryUrl": "https://github.com/example/takos-docs.git",
-    "ref": "v0.1.1",
+    "ref": "v0.1.2",
     "refType": "tag",
     "preinstall": true,
     "backendName": "cloudflare",
