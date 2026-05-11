@@ -65,10 +65,10 @@ deno task local:up        # local stack
 deno task local:e2e
 deno task validate:helm
 deno task validate:distributions
-deno task validate:agent-docs
+deno task lint:agent-docs
 deno task validate:architecture
 deno task release-gate
-deno task docs:build      # VitePress
+deno task lint:docs       # VitePress build gate
 deno task docs:deploy     # Cloudflare Pages
 ```
 

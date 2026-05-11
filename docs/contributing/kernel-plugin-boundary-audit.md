@@ -40,5 +40,5 @@ the kernel-only implementation model.
 - Reclassified real backend and self-host docs as plugin-backed operator proofs.
 - Added validation checks for README/current-state/system-plan plugin boundary
   wording.
-- Current kernel validation baseline: `deno task test:all` passes with
+- Current kernel validation baseline: `cd ../takosumi && deno task test` passes with
   `240 passed | 0 failed`.

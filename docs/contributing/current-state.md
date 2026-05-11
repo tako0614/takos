@@ -69,11 +69,12 @@ rather than prescriptive; the forward plan remains
 Ran from `/home/tako/Desktop/takos/takos`:
 
 ```sh
-deno task test:all
+deno task check
+cd ../takosumi && deno task test
 ```
 
 Result on 2026-04-29: kernel-only smoke baseline は `240 passed | 0 failed`
-(`cd takos && deno task test:all`)。ecosystem release-gate (17 release gate + canonical full suite via
+(`cd ../takosumi && deno task test`)。ecosystem release-gate (17 release gate + canonical full suite via
 `cd takos && deno task release-gate`) は **345 tests passed** で freeze 済 (ROADMAP.md Part I §3.1 / §6.2 を canonical
 value とする)。
 
@@ -121,7 +122,9 @@ Primary local verification commands from the root `deno.json`:
 
 ```sh
 deno task check
-deno task test:all
+deno task lint:agent-docs
+deno task lint:docs
+deno task release-gate
 deno lint
 deno fmt --check
 deno fmt
@@ -143,7 +146,7 @@ Notes:
 - Takosumi full test execution is owned by the sibling kernel repo (`cd ../takosumi && deno test --allow-all`).
 - Takosumi kernel local development runs from the sibling `../takosumi` repo; this shell owns local composition and
   Takos-specific deploy artifacts only.
-- docs tasks currently print that Takos docs moved out of the `takosumi` service scope.
+- docs gates are `lint:docs`, `lint:agent-docs`, `docs:build`, and `docs:deploy` in `takos/deno.json`.
 - local Compose and Helm metadata carry the current Takos service IDs and internal URL wiring.
 
 ## In-memory vs real boundaries

@@ -36,7 +36,9 @@ Useful shell tasks:
 - `deno task local:smoke`: check the four local service health endpoints.
 - `deno task local:e2e`: run the isolated docker compose e2e smoke used by CI, including a seeded Smart HTTP git clone
   through apps/api.
-- `deno task docs:dev` / `deno task docs:build`: work on the shell docs.
+- `deno task docs:dev`: run the shell docs dev server.
+- `deno task lint:docs` / `deno task lint:agent-docs`: run docs and agent-doc gates.
+- `deno task docs:build` / `deno task docs:deploy`: build or deploy the shell docs.
 - `deno task helm:generate-overlays` / `deno task helm:check-overlays`: generate or verify AWS/GCP Helm overlays from
   distribution profiles.
 - `deno task helm:template-smoke`: run Helm v3 template smoke for the base/AWS/GCP chart values. Set
@@ -108,9 +110,9 @@ The planned remote repositories are:
 deno task local:up
 ```
 
-The local compose entrypoint should expose the core service set: `takos-app`, `takos-git`, `takosumi`, `takosumi-cloud`,
-and `takos-agent`. Do not add standalone deploy or runtime services to this shell compose file; those lifecycles are
-local process roles and domains of `takosumi`.
+The local compose entrypoint should expose the local shell service set: `takos-app`, `takos-git`, `takosumi`, and
+`takos-agent`, plus Postgres/Redis support services. Do not add standalone deploy or runtime services to this shell
+compose file; those lifecycles are local process roles and domains of `takosumi`.
 
 See also:
 

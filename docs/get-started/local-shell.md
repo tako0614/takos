@@ -57,6 +57,6 @@ changes still happen inside each product root.
 Use each submodule for product-specific checks:
 
 - `cd app && deno task ...`
-- `cd paas && deno task ...`
+- `cd ../takosumi && deno task ...`
 - `cd git && deno task ...`
 - `cd agent && cargo ...`
