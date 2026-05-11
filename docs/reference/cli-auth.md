@@ -36,12 +36,12 @@ CLI で拒否します。
 ### `takos login`
 
 Installable App Model では CLI の long-lived credential は **Takosumi Accounts
-PAT** か Takosumi Accounts の device / OIDC flow で得た bearer token
+PAT** か Takosumi Accounts の OIDC flow で得た bearer token
 を使います。Takos 本体の legacy `/auth/cli` browser callback と CLI 側の
 browser login 実装は削除済みであり、新規 operator / client は依存できません。
 
 `takos login --api-url <url> --token <token>` は Takosumi Accounts で発行した
-PAT (`takpat_...`) または Accounts OIDC/device flow で得た bearer token を
+PAT (`takpat_...`) または Accounts OIDC flow で得た bearer token を
 `~/.takos/config.json` に保存します。 current Takos deployment では `/auth/cli`
 は公開されず `404` で、Takos CLI にも browser callback mode はありません。
 session bearer から PAT を作る場合は `takos login --create-pat` が Takosumi
@@ -51,7 +51,7 @@ Accounts `POST /v1/account/tokens` を呼びます。
 
 1. Takosumi Accounts の account settings で PAT を発行し、`takos login --token`
    で保存する
-2. Takosumi Accounts が提供する CLI/device flow で token を取得し、同じ bearer
+2. Takosumi Accounts が提供する OIDC flow で token を取得し、同じ bearer
    token として `takos login --token` または `TAKOS_TOKEN` で渡す
 
 ```bash
@@ -59,9 +59,9 @@ takos login --api-url https://takos.example.com --token takpat_...
 takos whoami
 ```
 
-::: tip Device Flow の owner Device Authorization Grant は Takos 本体ではなく
-Takosumi Accounts 側の OIDC issuer が提供します。Takos CLI は取得済み bearer
-token を API request に載せる client です。 :::
+::: tip Device Flow の扱い Device Authorization Grant は current Accounts
+contract の route ではありません。Takos CLI は取得済み bearer token を API
+request に載せる client です。 :::
 
 ## 認証情報の解決順序
 

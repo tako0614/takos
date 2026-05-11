@@ -531,7 +531,7 @@ registry trust roots: <count>
 ```
 
 この bootstrap は Takos app-local PAT を発行しません。CLI / automation 用の long-lived credential は
-Takosumi Accounts の account settings / API で発行した `takpat_...`、または Accounts OIDC/device flow で得た
+Takosumi Accounts の account settings / API で発行した `takpat_...`、または Accounts OIDC flow で得た
 bearer token を使い、安全な場所 (1Password 等の operator secret store) に保管してください。
 
 ### Staging integration test

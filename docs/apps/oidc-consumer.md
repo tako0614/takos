@@ -63,10 +63,11 @@ Installable App Model の runtime 依存削減のコアです。
 
 - root account / contract owner / billing owner
 - OAuth client registry
-- consent screen / device code flow
+- authorization UX / account credential issuance
 - `/.well-known/openid-configuration` の発行
 
-すべて Takosumi Accounts に集約されます。詳細は
+OAuth issuer / account credential ownership は Takosumi Accounts
+に集約されます。詳細は
 [`/architecture/takosumi-accounts`](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
 を 参照してください。
 
@@ -197,22 +198,23 @@ canonical です。
 Installable App Model では、Takos から以下の route が **削除** されます
 (本書および ROADMAP / AGENTS.md)。
 
-| 旧 route                  | 削除後の移行先                                                                         |
-| ------------------------- | -------------------------------------------------------------------------------------- |
-| `/oauth/authorize`        | resolved issuer の `/oauth/authorize` に集約                                           |
-| `/oauth/token`            | Takosumi Accounts の `/oauth/token` に集約                                             |
-| `/oauth/consent`          | Takosumi Accounts の consent UI に集約                                                 |
-| `/oauth/device`           | Takosumi Accounts の `/oauth/device/code` に集約                                       |
-| `/oauth/clients`          | Takosumi Accounts の OIDC client registry に集約。client は AppInstallation ごとに発行 |
-| `/auth/external` (legacy) | `/auth/oidc/login` + `/auth/oidc/callback` の 2 route に分離                           |
-| `/auth/login` (legacy)    | 削除。login entrypoint は `/auth/oidc/login`                                           |
-| `/auth/password`          | 削除。password / passkey / upstream IdP は Takosumi Accounts 側で処理                  |
-| `/auth/cli`               | 削除。CLI credential 発行は Takosumi Accounts 側で処理                                 |
-| `/auth/link/google`       | 削除。identity linking は Takosumi Accounts 側で処理                                   |
+| 旧 route                  | 削除後の移行先                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `/oauth/authorize`        | resolved issuer の `/oauth/authorize` に集約                                       |
+| `/oauth/token`            | Takosumi Accounts の `/oauth/token` に集約                                         |
+| `/oauth/consent`          | 削除。authorization UX は resolved issuer の `/oauth/authorize` 側に集約           |
+| `/oauth/device`           | 削除。current Accounts contract は device-code endpoint を公開しない               |
+| `/oauth/clients`          | 削除。client は AppInstallation ごとの `/v1/installations/{id}/oidc-client` で発行 |
+| `/auth/external` (legacy) | `/auth/oidc/login` + `/auth/oidc/callback` の 2 route に分離                       |
+| `/auth/login` (legacy)    | 削除。login entrypoint は `/auth/oidc/login`                                       |
+| `/auth/password`          | 削除。password / passkey / upstream IdP は Takosumi Accounts 側で処理              |
+| `/auth/cli`               | 削除。CLI credential 発行は Takosumi Accounts 側で処理                             |
+| `/auth/link/google`       | 削除。identity linking は Takosumi Accounts 側で処理                               |
 
-これらの route は Takos 自身からは取り除かれ、Takosumi Accounts に
-集約されます。第三者 client が Takos を OAuth issuer として参照していた
-場合は、Takosumi Accounts の OIDC client として登録し直す必要があります。
+これらの route は Takos 自身からは取り除かれます。標準 OIDC endpoint と
+AppInstallation-owned client 発行は Takosumi Accounts に集約されます。第三者
+client が Takos を OAuth issuer として参照していた場合は、Takosumi Accounts の
+OIDC client として登録し直す必要があります。
 
 ---
 
