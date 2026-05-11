@@ -1001,12 +1001,15 @@ first-party app inventory / metadata surface。current implementation では roo
 | GET    | `/api/apps`                | app 一覧               |
 | GET    | `/api/apps/:id`            | app 詳細               |
 | PATCH  | `/api/apps/:id`            | app metadata 更新      |
-| POST   | `/api/apps/:id/client-key` | app 用 client key 生成 |
+| POST   | `/api/apps/:id/client-key` | retired (`410`)        |
 | DELETE | `/api/apps/:id`            | app 削除               |
 
 レスポンスは現在の space scope にインストール済みの app row inventory です。 `app_type` は row に保存された分類を public
 response 用に正規化した値で、 `platform` または `custom` を返します。current implementation は別個の authoritative
 platform catalog を合成せず、space header が付いている場合は その space scope に解決された app 一覧を返します。
+
+App-local client key 発行は retired です。current app credential は Takosumi Accounts の AppGrant/AppBinding で
+materialize します。
 
 ---
 
