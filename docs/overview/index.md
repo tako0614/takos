@@ -77,7 +77,8 @@ Takos Docs では、次の 3 層を分けて読みます。
 
 ### Takos を始めたい人
 
-- `Use Takos` ボタン (managed shared-cell) で Takosumi Account / Space を作る
+- operator Accounts の `/start?takos_url=...` に向く `Use Takos` ボタン (managed shared-cell) で Takosumi Account /
+  Space を作る
 - 新規 Space 作成時に bundled apps が auto-install される
 - launch token で chat に直行する
 - 詳細は [Install paths](/apps/install-paths) と
