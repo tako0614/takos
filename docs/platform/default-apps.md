@@ -12,7 +12,7 @@ API と `takosumi-git` installer pipeline を通ります。
 | [takos-excel](/platform/takos-excel) | `v0.1.2` tag | スプレッドシート | launcher / MCP / file handler / storage grant |
 | [takos-slide](/platform/takos-slide) | `v0.1.2` tag | プレゼンテーション | launcher / MCP / file handler / storage grant |
 | [takos-computer](/platform/takos-computer) | `v2.1.2` tag | browser automation / sandbox computer | launcher / MCP / sandbox runtime / Takos API grant |
-| [yurucommu](/platform/yurucommu) | `v1.2.4` tag | ActivityPub / community social | `identity.oidc@v1` / DB / object-store / queue |
+| [yurucommu](/platform/yurucommu) | `v1.2.6` tag | ActivityPub / community social | `identity.oidc@v1` / DB / object-store / queue |
 
 Agent、Chat、Git、Storage、Store は Takos product の core feature であり、
 bundled app distribution には含めません。
