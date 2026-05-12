@@ -51,6 +51,9 @@ const valuesText = await Deno.readTextFile(`${chartRoot}/values.yaml`);
 const globalConfigMapText = await Deno.readTextFile(
   `${templateRoot}/configmap-global.yaml`,
 );
+const platformSecretText = await Deno.readTextFile(
+  `${templateRoot}/secret-platform.yaml`,
+);
 
 assertContains(`${chartRoot}/values.yaml`, valuesText, '  imageRegistry: ""');
 assertContains(
@@ -68,6 +71,42 @@ assertContains(
   valuesText,
   '  defaultAppDistributionJson: ""',
 );
+assertContains(`${chartRoot}/values.yaml`, valuesText, '  defaultApps:');
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '    preinstallEnabled: false',
+);
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '    installApplyUrl: ""',
+);
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '    installAccountId: ""',
+);
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '    installSubject: ""',
+);
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '    installMode: ""',
+);
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '    installRuntimeBaseUrl: ""',
+);
+assertContains(
+  `${chartRoot}/values.yaml`,
+  valuesText,
+  '  defaultAppInstallApplyToken: ""',
+);
 assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
@@ -77,6 +116,31 @@ assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
   'TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}',
+);
+assertContains(
+  `${templateRoot}/configmap-global.yaml`,
+  globalConfigMapText,
+  'TAKOS_DEFAULT_APPS_PREINSTALL: {{ ternary "true" "false" (.preinstallEnabled | default false) | quote }}',
+);
+for (
+  const envName of [
+    'TAKOS_DEFAULT_APP_INSTALL_APPLY_URL',
+    'TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID',
+    'TAKOS_DEFAULT_APP_INSTALL_SUBJECT',
+    'TAKOS_DEFAULT_APP_INSTALL_MODE',
+    'TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL',
+  ]
+) {
+  assertContains(
+    `${templateRoot}/configmap-global.yaml`,
+    globalConfigMapText,
+    `${envName}: {{ . | quote }}`,
+  );
+}
+assertContains(
+  `${templateRoot}/secret-platform.yaml`,
+  platformSecretText,
+  'TAKOS_DEFAULT_APP_INSTALL_APPLY_TOKEN: {{ .Values.secrets.defaultAppInstallApplyToken | b64enc | quote }}',
 );
 assertContains(
   `${templateRoot}/_helpers.tpl`,
