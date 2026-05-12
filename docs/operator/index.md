@@ -30,12 +30,15 @@ workflow / git bridge を CLI で扱う場合は `takosumi` / `takosumi-git` 側
 
 1. [OIDC Setup](/operator/oidc-setup) で admin domain、Takosumi Accounts issuer、OIDC callback、secret 経路、および
    `OIDC_*` env を固定する
-2. [Bootstrap](/operator/bootstrap) で初回 operator account を作り、Takosumi Accounts bearer と OIDC client を設定する
-3. [API Reference](/reference/api) で Accounts bearer / setup API の詳細を確認する
+2. [Account Migration](/operator/account-migration) で旧 Takos local account を Takosumi Account / OIDC consumer
+   モデルへ寄せる
+3. [Bootstrap](/operator/bootstrap) で初回 operator account を作り、Takosumi Accounts bearer と OIDC client を設定する
+4. [API Reference](/reference/api) で Accounts bearer / setup API の詳細を確認する
 
 新モデルの周辺は次を参照してください。
 
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が OIDC consumer として要求する env / route / claim
+- [/operator/account-migration](/operator/account-migration) — legacy Takos user を Takosumi Account へ移行する手順
 - [https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   — OAuth/OIDC issuer / billing / app installation owner の正本
 - [https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)

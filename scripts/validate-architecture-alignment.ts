@@ -31,6 +31,15 @@ const RUNTIME_BINDING_TARGET_DOCS = [
   '../takosumi-cloud/docs/architecture/app-installation.md',
   '../takosumi-cloud/docs/accounts-service.md',
 ];
+const ACCOUNT_MIGRATION_DOC_PATH = 'docs/operator/account-migration.md';
+const ACCOUNT_MIGRATION_REQUIRED_TERMS = [
+  'auth_identities',
+  'provider_sub = <issuer>#<sub>',
+  'email_verified = true',
+  'identity.oidc@v1',
+  'personal_access_tokens',
+  'dedicated tenant AppInstallation migration runbook',
+];
 const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
   {
     pattern: /AppInstallation status [^\n]*`ready\s*→\s*materializing\s*→\s*ready`/i,
@@ -350,6 +359,27 @@ async function validateRuntimeBindingTargetDocs(
   }
 }
 
+async function validateAccountMigrationDocs(
+  failures: CheckFailure[],
+): Promise<void> {
+  const text = await readText(ACCOUNT_MIGRATION_DOC_PATH, failures);
+  for (const term of ACCOUNT_MIGRATION_REQUIRED_TERMS) {
+    if (text.includes(term)) continue;
+    failures.push({
+      path: ACCOUNT_MIGRATION_DOC_PATH,
+      message: `Expected account migration docs to include "${term}".`,
+    });
+  }
+
+  const sidebar = await readText('docs/.vitepress/config.ts', failures);
+  if (!sidebar.includes('/operator/account-migration')) {
+    failures.push({
+      path: 'docs/.vitepress/config.ts',
+      message: 'Expected Operator sidebar to link account migration docs.',
+    });
+  }
+}
+
 async function main(): Promise<void> {
   const failures: CheckFailure[] = [];
 
@@ -374,6 +404,7 @@ async function main(): Promise<void> {
   await validateAppGrantCatalogDocs(failures);
   await validateAppInstallationStatusDocs(failures);
   await validateRuntimeBindingTargetDocs(failures);
+  await validateAccountMigrationDocs(failures);
 
   if (failures.length > 0) {
     console.error('Architecture alignment validation failed:');
@@ -384,11 +415,20 @@ async function main(): Promise<void> {
   }
 
   console.log('Architecture alignment validation passed.');
-  console.log(`Checked ${markdownFiles.length} architecture alignment markdown files.`);
+  console.log(
+    `Checked ${markdownFiles.length} architecture alignment markdown files.`,
+  );
   console.log(`Verified ${REQUIRED_DOMAIN_DIRS.length} domain directories.`);
-  console.log(`Verified AppGrant catalog docs in ${APP_GRANT_CATALOG_DOCS.length} files.`);
-  console.log(`Verified AppInstallation status docs in ${APP_INSTALLATION_STATUS_DOCS.length} files.`);
-  console.log(`Verified RuntimeBinding target docs in ${RUNTIME_BINDING_TARGET_DOCS.length} files.`);
+  console.log(
+    `Verified AppGrant catalog docs in ${APP_GRANT_CATALOG_DOCS.length} files.`,
+  );
+  console.log(
+    `Verified AppInstallation status docs in ${APP_INSTALLATION_STATUS_DOCS.length} files.`,
+  );
+  console.log(
+    `Verified RuntimeBinding target docs in ${RUNTIME_BINDING_TARGET_DOCS.length} files.`,
+  );
+  console.log('Verified account migration docs.');
 }
 
 if (import.meta.main) {

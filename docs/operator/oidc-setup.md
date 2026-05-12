@@ -144,6 +144,8 @@ Accounts 側の `redirectUris` と一致していることを確認します。
 
 ## 次に読むページ
 
+- [/operator/account-migration](/operator/account-migration) — legacy Takos user を Takosumi Account / OIDC consumer
+  model へ寄せる移行条件
 - [https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   — issuer 側の責務 (OIDC issuer / billing / app installation owner)
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が consumer として 要求する

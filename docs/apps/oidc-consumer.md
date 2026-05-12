@@ -24,6 +24,8 @@ value です (詳細は
   [`/architecture/takosumi-accounts`](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   と Takosumi Accounts 側の正本を参照する。本ページは consumer 視点に閉じる
 - pairwise subject の derivation 関数本体 — Takosumi Accounts 側の責務
+- legacy Takos user の account migration 手順 —
+  [/operator/account-migration](/operator/account-migration) を参照
 - launch token の payload / 検証 —
   [https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)
   を参照
