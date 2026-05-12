@@ -275,15 +275,21 @@ function checkDocs() {
   const requiredDocs = [
     { path: 'docs/architecture/service-topology.md' },
     { path: 'docs/get-started/local-shell.md' },
-    {
-      path: '../docs/reference/component-matrix.md',
-      label: 'ecosystem docs/reference/component-matrix.md',
-    },
   ];
   for (const doc of requiredDocs) {
     const label = doc.label ?? doc.path;
     if (existsSync(join(root, doc.path))) pass(`doc ${label}`);
     else fail(`doc ${label}`, 'missing');
+  }
+
+  const ecosystemComponentMatrix = join(root, '../docs/reference/component-matrix.md');
+  if (existsSync(ecosystemComponentMatrix)) {
+    pass('doc ecosystem docs/reference/component-matrix.md');
+  } else {
+    warn(
+      'doc ecosystem docs/reference/component-matrix.md',
+      'not present in standalone takos checkout',
+    );
   }
 }
 

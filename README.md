@@ -118,4 +118,4 @@ See also:
 
 - [Service Topology](docs/architecture/service-topology.md)
 - [Local Shell Runbook](docs/get-started/local-shell.md)
-- [Component Matrix](../docs/reference/component-matrix.md)
+- [Component Matrix](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/component-matrix.md)
