@@ -211,8 +211,13 @@ installation/source/bindings/grants/OIDC metadata からこの payload を組み
 import する create request planner です。Accounts export operation の signed download redirect endpoint、JSON import
 API、JSON/tar.zst import CLI、metadata-only tar.zst archive writer、 configured export worker adapter、dev/local
 metadata export worker CLI config に加え、completed export response の `downloadUrl` を `takosumi-git export --output`
-で保存する経路も実装済みです。compiled manifest 実体、data dump worker、age encryption、object-store upload はこの
-payload contract の後続 worker として実装する。
+で保存する経路も実装済みです。archive writer は configured provider から compiled manifest と deterministic data files
+を受け取り、age wrapped archive と injectable object-store uploader による signed download URL も扱えます。
+
+Phase 1.6 時点の残りは、product/provider ごとの production live dump / restore adapter と Keycloak など upstream IdP
+を実際に接続した外部環境 smoke です。AppInstallation 台帳上の `shared-cell` → `dedicated` materialize → export
+operation → 別 Accounts instance への `self-hosted` import は
+`takosumi-cloud/packages/accounts-service/src/mod_test.ts` の lifecycle e2e で covered です。
 
 ### 3.3 Encryption
 
@@ -240,7 +245,8 @@ source issuer を target issuer に置換し、revoked grant を import request 
 は移さず、self-host 側で 再発行する。Accounts API では `POST /v1/installations/import` が JSON bundle payload
 を受け取り、target Accounts instance の AppInstallation として登録する。 current CLI bridge として
 `takosumi-git import ./takos-export.tar.zst` は archive 内の `takos-export/bundle.json` を同 endpoint に送る。tar.zst
-writer と full data dump restore は後続実装。
+writer、age wrapped tar.zst import、`--restore-data` による configured data restorer への data entries 受け渡しは実装済み。
+ただし production provider ごとの full live dump / restore は provider adapter の責務として追加実装する。
 
 ```bash
 takosumi-git import ./takos-export.bundle.json \
