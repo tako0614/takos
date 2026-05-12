@@ -4,10 +4,10 @@ Takos は **Takosumi PaaS の上で動作する self-hostable な product**。 A
 Git / chat / spaces / memory / tools を駆使した **AI エージェントによる
 ソフトウェアの民主化 (democratization of software through AI agents)** を core
 concept とする。 Takosumi kernel は generic PaaS kernel、 operator account plane
-(managed example: takosumi-cloud の Takosumi Accounts) は account / billing /
-AppInstallation ledger、 takosumi-git は Git URL install と manifest compile を
-担当します。 Takos は Takosumi 上の 1 product であり、 architecture 上の特権
-layer ではありません。
+(reference implementation: takosumi-cloud の Takosumi Accounts) は account /
+billing / AppInstallation ledger、 takosumi-git は Git URL install と manifest
+compile を担当します。 Takos は Takosumi 上の 1 product であり、 architecture
+上の特権 layer ではありません。
 
 ## Service set
 
@@ -17,15 +17,15 @@ layer ではありません。
 | `takos-git`       | `takos/git/`      | Git Smart HTTP、repositories、refs、object storage            |
 | `takos-agent`     | `takos/agent/`    | agent execution service                                       |
 | `takosumi`        | `takosumi/`       | manifest deploy engine                                        |
-| Takosumi Accounts | `takosumi-cloud/` | OIDC issuer、billing owner、AppInstallation ledger            |
+| Takosumi Accounts | `takosumi-cloud/` | operator account plane reference implementation               |
 | `takosumi-git`    | `takosumi-git/`   | Git URL install、workflow、artifact resolve、manifest compile |
 
 `takos-agent-engine` は service ではなく library です。
 
 ## Ownership boundaries
 
-- identity / OIDC issuer / billing / AppInstallation ownership は Takosumi
-  Accounts が持つ
+- identity / OIDC issuer / billing / AppInstallation ownership は operator
+  account plane が持つ (reference implementation: Takosumi Accounts)
 - deploy / runtime lifecycle は Takosumi kernel が持つ
 - Git URL install、`.takosumi/` project convention、workflow は takosumi-git
   が持つ
