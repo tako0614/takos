@@ -60,15 +60,15 @@ const requiredDocs = [
   {
     path: '../takos-private/docs/operations/migration-window-evidence.md',
     expected: [
-      'Migration Window Evidence',
-      'Removal Scope',
+      'No-User Clean-Cut Evidence',
+      'Cleanup Scope',
       'Takos-owned OAuth/OIDC issuer endpoints',
       'Takos app public/proxy direct deploy routes',
       'does **not** include takosumi kernel',
       'POST /v1/deployments',
       'Required Evidence',
       'Completion Rule',
-      'public announcement evidence',
+      'actual public no-user clean-cut evidence',
     ],
   },
   {
@@ -82,10 +82,10 @@ const requiredDocs = [
       'Hosted GitHub runs',
       'Release Gate',
       'CI',
-      'takos-ecosystem release/sign-off evidence',
-      'Takos release/tag sequence',
+      'single public Takos release',
+      'no-user clean cut',
       'migration-window-evidence.md',
-      'Keep the ROADMAP at `95/96`',
+      'Keep the ROADMAP at `96/96`',
     ],
   },
 ];
