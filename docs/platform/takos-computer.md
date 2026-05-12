@@ -84,12 +84,12 @@ AppBinding (Takosumi Accounts) 経由の OIDC consumer flow で別 layer
 として処理し、`PUBLISHED_MCP_AUTH_TOKEN` は OIDC consumer flow
 には関与しません。
 
-Takos managed deploy ではこの registry secret が生成され、agent-facing `/mcp`
-bearer token として使われる。`PUBLISHED_MCP_AUTH_TOKEN`、host admin/session
-route 用の `SANDBOX_HOST_AUTH_TOKEN`、worker-to-container 用の `MCP_AUTH_TOKEN`
-は分けて扱う。これら 3 token はすべて MCP / sandbox host 内部の machine
-credential であり、Takos itself の **end-user 認証は OIDC consumer 経由**
-(`identity.oidc@v1` AppBinding) として明確に分離される。
+managed Takos installation ではこの registry secret が生成され、agent-facing
+`/mcp` bearer token として使われる。`PUBLISHED_MCP_AUTH_TOKEN`、host
+admin/session route 用の `SANDBOX_HOST_AUTH_TOKEN`、worker-to-container 用の
+`MCP_AUTH_TOKEN` は分けて扱う。これら 3 token はすべて MCP / sandbox host 内部の
+machine credential であり、Takos itself の **end-user 認証は OIDC consumer
+経由** (`identity.oidc@v1` AppBinding) として明確に分離される。
 
 ## Bindings
 
@@ -120,9 +120,9 @@ OIDC callback path は `/gui/api/auth/callback` を使い、 dashboard / compute
 の app session を発行する。 takos-computer 自身は OAuth provider を持たず、 OIDC
 issuer は常に `identity.oidc@v1` AppBinding 経由で Takosumi Accounts から提供
 される。self-host operator が Keycloak / Authentik 等を使う場合も、それらは
-Takosumi Accounts の upstream IdP として接続する。 MCP publication 用の bearer token
-(`PUBLISHED_MCP_AUTH_TOKEN` / `SANDBOX_HOST_AUTH_TOKEN` / `MCP_AUTH_TOKEN`) は
-OIDC consumer 層とは独立した machine-to-machine credential
+Takosumi Accounts の upstream IdP として接続する。 MCP publication 用の bearer
+token (`PUBLISHED_MCP_AUTH_TOKEN` / `SANDBOX_HOST_AUTH_TOKEN` /
+`MCP_AUTH_TOKEN`) は OIDC consumer 層とは独立した machine-to-machine credential
 であり、ここで宣言する `identity.oidc@v1` binding には影響しない。
 
 published MCP tools は session 引数として snake_case と camelCase

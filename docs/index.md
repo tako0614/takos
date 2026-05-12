@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Takos
   text: AI エージェントによるソフトウェアの民主化
-  tagline: Takosumi PaaS の上で動作する self-hostable な product。 AI agents / Git / chat / spaces / memory / tools を駆使した software の democratization を core concept とする
+  tagline: Takosumi PaaS の上で動作する self-hostable な AI-first chat & agent platform。chat / agent / memory / space を core 機能として持つ
   actions:
     - theme: brand
       text: Use Takos
@@ -19,7 +19,7 @@ hero:
 features:
   - icon: 📦
     title: Installable App Model
-    details: "Takos が bundled / third-party app を install するときの ownership model。OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する。install path (Use Takos / Install from Git / Self-host) と runtime mode (shared-cell / dedicated / self-hosted) の組み合わせで bundled / third-party apps を扱う"
+    details: "Takosumi Accounts が ownership を持つ install model。Takos は consumer product として bundled / third-party app を扱い、OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する"
     link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md
   - icon: 🧭
     title: Takos 全体像

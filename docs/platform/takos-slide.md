@@ -63,8 +63,10 @@ fileHandlers:
 ```
 
 OIDC sign-in は `.takosumi/app.yml` の `identity.oidc@v1` AppBinding で宣言する
-([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md) /
-[`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md) を参照)。
+([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
+/
+[`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
+を参照)。
 
 ```yaml
 bindings:
@@ -94,7 +96,7 @@ installer は generated secret を `APP_SESSION_SECRET` として materialize �
 
 takos-slide は app-layer storage grant から Takos Storage API の endpoint /
 credential を受け取り、Storage API を呼び出して presentation file を読み書き
-します。Takos managed deploy では `TAKOS_STORAGE_API_URL` /
+します。managed Takos installation では `TAKOS_STORAGE_API_URL` /
 `TAKOS_STORAGE_ACCESS_TOKEN` が materialize されます。
 
 Storage UI から presentation file を開く場合は file handler metadata の

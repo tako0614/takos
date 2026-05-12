@@ -1,6 +1,7 @@
-# プラットフォーム
+# Takos Product Concepts
 
-この章は Takos product の利用者が見る platform concepts をまとめます。Takosumi kernel や Takosumi Accounts
+この章は Takos product の利用者が見る Takos/Takosumi concepts
+をまとめます。Takosumi kernel や Takosumi Accounts
 の内部仕様はここでは扱いません。
 
 ## Takos 側の概念
