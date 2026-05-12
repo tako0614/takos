@@ -1,22 +1,22 @@
 # AGENTS.md — takos (Takos product shell)
 
 `takos` は **Takos product shell** で、 nested submodule (`app/` / `git/` / `agent/`) と shell-owned distribution
-artifacts (Helm / Terraform / distribution manifests / validator) を集約する。Takos / Takosumi の identity と vocabulary
+artifacts (Helm / Terraform / distribution manifests / validator) を集約する。Takosumi / Takos の identity と vocabulary
 は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
 
 > **Takos is a self-hostable product running on Takosumi PaaS, with _democratization of software through AI agents_ as
-> its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps
-> (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation
-> as a user-facing convenience.** **Takosumi** is a generic PaaS for JSON-LD Shape manifests, resource graphs, output
-> wiring, and provider materialization across arbitrary infrastructure; it is not Takos-specific. `takosumi-cloud` is a
+> its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps (`takos-docs`
+> / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation as a
+> user-facing convenience.** **Takosumi** is a generic PaaS for JSON-LD Shape manifests, resource graphs, output wiring,
+> and provider materialization across arbitrary infrastructure; it is not Takos-specific. `takosumi-cloud` is a
 > replaceable operator distribution / deployment, not a privileged Takosumi layer.
 
 Takos の constituent (AI agents / Git / memory / spaces / tools) と「ソフトウェアの民主化」 core concept の formal
 definition は [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) §0 を参照。
 
-曖昧 / 旧 wording (「unique top consumer」 / 「Takos は通常の InstallableApp ではない」 だけの表現等) を増やさず、
-root docs の vocabulary に統一する。
+曖昧 / 旧 wording (「unique top consumer」 / 「Takos は通常の InstallableApp ではない」 だけの表現等) を増やさず、 root
+docs の vocabulary に統一する。
 
 ## 責務
 

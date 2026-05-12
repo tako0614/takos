@@ -1,6 +1,6 @@
 # ローカル開発ガイド
 
-このページは **Takos product service set を local に立ち上げる operator / contributor** 向けです。
+このページは **Takos product services と Takosumi substrate を含む local stack を立ち上げる operator / contributor** 向けです。
 
 Docker Compose ベースのローカル開発環境。
 
@@ -40,6 +40,8 @@ deno task local:e2e
 ```
 
 ## 主要サービス
+
+`takos-app` / `takos-agent` / `takos-git` が Takos product services、`takosumi` が substrate service です。
 
 | service       | role                                                    |
 | ------------- | ------------------------------------------------------- |

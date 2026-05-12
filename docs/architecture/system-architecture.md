@@ -9,7 +9,11 @@ billing / AppInstallation ledger、 takosumi-git は Git URL install と manifes
 compile を担当します。 Takos は Takosumi 上の 1 product であり、 architecture
 上の特権 layer ではありません。
 
-## Service set
+## Product Services And Substrate
+
+Takos product services are `takos-app` / `takos-git` / `takos-agent`. The
+Takosumi rows below are the substrate / account-plane / installer products used
+by the local and production stack; they are not Takos product services.
 
 | service           | owner path        | role                                                          |
 | ----------------- | ----------------- | ------------------------------------------------------------- |

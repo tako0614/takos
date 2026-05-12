@@ -19,7 +19,7 @@ store.
 | Related DPA          | `/legal/data-processing-agreement`                                                                                                                   |
 | Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                 |
 
-> **Internal processor boundary note.** Within the Takos ecosystem itself,
+> **Internal processor boundary note.** Within the Takosumi / Takos ecosystem itself,
 > **Takosumi kernel** is treated as the JSON-LD Shape manifest / resource graph /
 > provider materialization processor and never holds identity, billing, or
 > customer account state.
