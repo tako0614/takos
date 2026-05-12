@@ -66,7 +66,7 @@ const requiredDocs = [
   {
     path: 'docs/legal/privacy-rights.md',
     expected: [
-      'Last reviewed | 2026-05-07',
+      'Last reviewed | 2026-05-12',
       'Data Subject Rights Handler',
       '/api/me/privacy/access',
       '/api/me/privacy/export',
