@@ -44,7 +44,7 @@ Takosumi Accounts /start
   ↓
 Takosumi Account / Space 作成
   ↓
-Takos product launch token JWS 発行
+Takos product opaque launch token 発行
   ↓
 Takos /_takosumi/launch に遷移
   ↓

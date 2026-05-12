@@ -43,11 +43,13 @@ binding 宣言、workflow artifact output、install params を確認してくだ
 - materialized `OIDC_REDIRECT_URI` が app の callback と一致するか確認する
 - Accounts 側の client registration と issuer URL を確認する
 
-### launch token が検証できない
+### launch token が redeem できない
 
-- `INSTALL_LAUNCH_PUBLIC_KEY` が install 時に materialize されているか確認する
-- `INSTALL_LAUNCH_AUDIENCE` が app 側の期待値と一致するか確認する
-- `/_takosumi/launch` が one-time token を consume しているか確認する
+- `ACCOUNTS_BASE_URL` が install 時に materialize されているか確認する
+- `INSTALL_LAUNCH_INSTALLATION_ID` が AppInstallation id と一致するか確認する
+- `INSTALL_LAUNCH_REDIRECT_URI` が Accounts 発行時に bind した URL と完全一致するか確認する (mismatch は 409)
+- `/_takosumi/launch` の handler が `${ACCOUNTS_BASE_URL}/v1/installations/${INSTALL_LAUNCH_INSTALLATION_ID}/launch-token/consume` を TLS で叩いているか確認する
+- token が one-time (used flag) で消費されたか、 期限切れ (5 分 hard cap) を超えていないか確認する
 
 ## Direct deploy
 
