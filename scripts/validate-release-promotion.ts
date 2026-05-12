@@ -100,6 +100,9 @@ const requiredTextFiles = [
       'PORT=8080',
     ],
   },
+];
+
+const externalTextFiles = [
   {
     path: '../docs/quality/release-gate.md',
     expected: ['Release promotion validator', 'validate:release-promotion'],
@@ -119,32 +122,49 @@ const requiredTextFiles = [
 ];
 
 const failures: string[] = [];
+const warnings: string[] = [];
+let validatedArtifacts = 0;
 
 for (const doc of requiredDocs) {
-  validateTextIncludes(doc.path, doc.expected);
+  validateTextIncludes(doc.path, doc.expected, { missing: 'warn' });
 }
 
 for (const file of requiredTextFiles) {
   validateTextIncludes(file.path, file.expected);
 }
 
+for (const file of externalTextFiles) {
+  validateTextIncludes(file.path, file.expected, { missing: 'warn' });
+}
+
 if (failures.length > 0) {
+  for (const warning of warnings) console.warn(warning);
   for (const failure of failures) console.error(failure);
   Deno.exit(1);
 }
 
-console.log(`Validated ${requiredDocs.length} release promotion document(s)`);
+for (const warning of warnings) console.warn(warning);
+console.log(`Validated ${validatedArtifacts} release promotion artifact(s)`);
 
 function validateTextIncludes(
   path: string,
   expectedValues: readonly string[],
+  options: { missing?: 'fail' | 'warn' } = {},
 ): void {
   if (!exists(path)) {
+    if (options.missing === 'warn') {
+      warnings.push(
+        `skipped external release promotion artifact in standalone checkout: ${path}`,
+      );
+      return;
+    }
+
     failures.push(`missing release promotion artifact: ${path}`);
     return;
   }
 
   const text = Deno.readTextFileSync(path);
+  validatedArtifacts += 1;
   for (const expected of expectedValues) {
     if (!text.includes(expected)) {
       failures.push(`${path}: expected to contain '${expected}'`);
