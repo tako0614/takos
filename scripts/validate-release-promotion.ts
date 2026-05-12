@@ -86,7 +86,7 @@ const requiredDocs = [
       'takos-ecosystem release/sign-off evidence',
       'Takos release/tag sequence',
       'migration-window-evidence.md',
-      'Keep the ROADMAP at `88/90`',
+      'Keep the ROADMAP at `94/96`',
     ],
   },
 ];
