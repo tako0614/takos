@@ -2,12 +2,12 @@
 
 const retiredRouteTests = [
   'public v3 deployment create rejects unmanaged direct deploy when GitOps is configured',
-  'public v3 deployment create rejects legacy inline workflow deploys',
+  'public v3 deployment create rejects retired inline workflow deploys',
   'public v3 deployment follow-up routes are retired',
   'public v3 deployment list route is retired',
-  'legacy group deployment snapshot routes are not exposed by app API',
+  'retired group deployment snapshot routes are not exposed by app API',
   'canonical group deployment mutation routes are retired',
-  'legacy deploy routes are not exposed by app API',
+  'retired deploy routes are not exposed by app API',
   'retired OAuth provider routes return 404 without proxying',
   'retired billing routes return 410 and are not proxied',
 ];
@@ -40,7 +40,7 @@ await assertNoGitGrepMatches('app', retiredAffordancePattern, [
 await assertNoGitGrepMatches('agent', retiredAffordancePattern, ['.']);
 
 console.log(
-  `Legacy removal evidence validated: apps/api route tests passed with ${retiredRouteTests.length} named retired-route evidence tests present and direct deploy affordance scan is clean.`,
+  `Retired-route removal evidence validated: apps/api route tests passed with ${retiredRouteTests.length} named retired-route evidence tests present and direct deploy affordance scan is clean.`,
 );
 
 async function run(

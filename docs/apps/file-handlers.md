@@ -1,7 +1,8 @@
 # File Handlers
 
-File handler は Storage UI から特定 MIME type / extension の file を app で開く ための app metadata です。current
-`.takosumi/manifest.yml` では top-level `publications[]` に `publication.file-handler@v1` を書きません。
+> このページでわかること: ファイルタイプに応じてアプリで開く仕組み。
+
+File handler はストレージ UI からファイルを対応アプリで開くための仕組みです。
 
 ## Kernel Manifest
 

@@ -1,7 +1,8 @@
 # Worker + DB
 
-`worker@v1` と `database-postgres@v1` を同じ `.takosumi/manifest.yml` に置き、 Worker の `spec.env` から database output
-を参照する最小例です。
+> このページでわかること: Worker と PostgreSQL を組み合わせたサンプル。
+
+`worker@v1` と `database-postgres@v1` を同じマニフェストに置き、Worker から DB を参照する構成です。
 
 ```yaml
 apiVersion: '1.0'

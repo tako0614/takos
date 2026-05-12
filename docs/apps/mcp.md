@@ -1,8 +1,9 @@
 # MCP Server
 
-MCP endpoint は current `.takosumi/manifest.yml` では普通の HTTP workload として deploy します。compiled Shape manifest
-は `worker@v1` / `web-service@v1` resource と route projection だけを扱い、MCP catalog / client discovery は Takos app /
-installer layer の metadata として扱います。
+> このページでわかること: Takos に MCP ツールを公開するアプリの作り方。
+
+MCP エンドポイントは通常の HTTP ワークロードとしてデプロイします。
+MCP カタログとクライアントディスカバリは Takos のアプリレイヤーで管理されます。
 
 ## Kernel Manifest
 

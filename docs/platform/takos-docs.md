@@ -1,7 +1,8 @@
 # takos-docs
 
-Google Docs 代替のリッチテキストドキュメントエディタ。bundled app distribution
-metadata を持つが、primitive や group は特権化されない。
+> このページでわかること: バンドルアプリ takos-docs の概要。
+
+Google Docs のようなリッチテキストドキュメントエディタです。
 
 ## 役割
 

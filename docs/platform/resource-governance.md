@@ -1,7 +1,9 @@
-# Resource Governance
+# リソースガバナンス
 
-Takos の resource governance は、**resource CRUD + access control + runtime settings + billing gates**
-の組み合わせで成立しています。
+> このページでわかること: Takos のリソース管理・アクセス制御・課金連携の仕組み。
+
+リソースガバナンスは、リソースの CRUD、アクセス制御、ランタイム設定、課金ゲートの
+組み合わせで構成されています。
 
 ## 管理対象
 

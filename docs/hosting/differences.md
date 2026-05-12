@@ -1,7 +1,6 @@
 # 環境ごとの差異
 
-このページは **current docs contract として公開している hosting surface**
-を比較します。provider-neutral resource materialization matrix ではありません。
+> このページでわかること: Cloudflare / AWS / GCP / Kubernetes / セルフホストの対応状況の比較。
 
 Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。
 

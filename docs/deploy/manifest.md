@@ -1,6 +1,8 @@
-# Deploy Manifest (`.takosumi/manifest.yml`)
+# デプロイマニフェスト (`.takosumi/manifest.yml`)
 
-Takos bundled apps / third-party apps は `.takosumi/` に 2 つの manifest を置きます。
+> このページでわかること: `.takosumi/manifest.yml` の書き方と各フィールドの意味。
+
+`.takosumi/` には 2 つのマニフェストがあります。
 
 | file | owner | role |
 | --- | --- | --- |

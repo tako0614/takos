@@ -1,10 +1,8 @@
-# Takos Product Concepts
+# Takos の概念
 
-この章は Takos product の利用者が見る Takos/Takosumi concepts
-をまとめます。Takosumi kernel や Takosumi Accounts
-の内部仕様はここでは扱いません。
+> このページでわかること: Takos の利用者として知っておくべき概念の一覧。
 
-## Takos 側の概念
+## 基本概念
 
 | 概念                                      | 説明                                                                            |
 | ----------------------------------------- | ------------------------------------------------------------------------------- |
@@ -15,7 +13,7 @@
 | [Billing](./billing.md)                   | Takos から見える billing UX と Takosumi Accounts への接続。                     |
 | [Upgrade / Export](./upgrade-export.md)   | install 済み app の upgrade / rollback / self-host export。                     |
 
-## bundled app
+## バンドルアプリ
 
 - [takos-docs](./takos-docs.md)
 - [takos-slide](./takos-slide.md)
@@ -23,7 +21,7 @@
 - [takos-computer](./takos-computer.md)
 - [yurucommu](./yurucommu.md)
 
-## 外部仕様
+## 関連
 
 | 内容                                                    | 正本                                                                                             |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |

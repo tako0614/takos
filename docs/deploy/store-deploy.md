@@ -1,8 +1,9 @@
-# Git / Store install
+# Git / Store からのインストール
 
-Store は install 可能な Git repository を発見する surface です。install の所有権、
-approval、billing、binding、launch token は operator account plane の
-AppInstallation ledger が持ちます (reference impl: Takosumi Accounts)。
+> このページでわかること: Store や Git URL からアプリをインストールする手順。
+
+Store はインストール可能な Git リポジトリを見つけるための画面です。
+インストールの所有権、承認、課金、バインディングは Takosumi Accounts が管理します。
 
 ## 基本
 

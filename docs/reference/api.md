@@ -1,7 +1,6 @@
 # API リファレンス
 
-このページは Takos product の public HTTP surface をまとめます。Takosumi kernel
-API、AppInstallation API、Accounts API はそれぞれの owning product docs を参照します。
+> このページでわかること: Takos の HTTP API エンドポイント一覧。
 
 ## Auth
 

@@ -1,5 +1,7 @@
 # Takosumi System Architecture Implementation Plan
 
+> このページでわかること: 1.0 Core Release 当時のアーキテクチャ実装計画 (Historical)。
+
 ::: warning Historical 1.0 Core Release plan 本ドキュメントは **1.0 Core Release** (M0-M4 frozen 2026-04-29) の
 implementation plan です。Code layout 表記の `apps/paas/...` は当時の pre-split 名称であり、現行 split 後の path
 とは異なる historical reference と して読んでください。**1.x Installable App Model (Phase 1.1-1.7)** の plan は

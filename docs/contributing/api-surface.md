@@ -1,5 +1,7 @@
 # Takosumi API surface
 
+> このページでわかること: Takosumi kernel の公開 API エンドポイント一覧。
+
 `../takosumi/packages/kernel/src/api/openapi.ts` owns a dependency-free
 OpenAPI-ish JSON snapshot for the Takosumi mounted route surface. The current
 kernel public contract is `POST /v1/deployments`; older `/api/public/v1/*` paths

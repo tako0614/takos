@@ -1,5 +1,7 @@
 # Compose opt-in smoke script
 
+> このページでわかること: ローカル Docker Compose スタックの smoke テスト手順。
+
 `scripts/compose-smoke.ts` is a safe-by-default smoke entrypoint for the local
 `compose.local.yml` stack.
 

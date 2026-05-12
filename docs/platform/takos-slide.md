@@ -1,7 +1,8 @@
 # takos-slide
 
-Google Slides alternative のプレゼンテーションエディタ。bundled app distribution
-metadata を持つが、primitive や group は特権化されない。
+> このページでわかること: バンドルアプリ takos-slide の概要。
+
+Google Slides のようなプレゼンテーションエディタです。
 
 ## 役割
 

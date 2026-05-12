@@ -1,5 +1,7 @@
 # Takosumi Current State
 
+> このページでわかること: Takosumi の現在の実装状態のスナップショット。
+
 This snapshot summarizes the implementation currently present in this product root. It is intentionally descriptive
 rather than prescriptive; the forward plan remains
 [`system-architecture-implementation-plan.md`](./system-architecture-implementation-plan.md).

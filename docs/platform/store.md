@@ -1,8 +1,9 @@
 # Store
 
-Store は Takos app layer のカタログ / マーケットプレイス機能です。パッケージの
-公開、install、remote repository import を扱います。takosumi kernel の compute
-manifest apply とは別 layer です。
+> このページでわかること: アプリを探してインストールするための Store の仕組み。
+
+Store は Takos のアプリカタログです。アプリの公開、インストール、
+リモートリポジトリからのインポートを扱います。
 
 ## App / InstallableApp / AppInstallation
 

@@ -1,8 +1,8 @@
 # Store Network
 
-Store Network は Takos instance 間で Store と repository 参照を共有するための
-公開 JSON API です。protocol は REST v1 で、remote store は
-`slug@domain` または `https://domain/api/public/stores/:slug` として参照する。
+> このページでわかること: 複数の Takos インスタンス間でアプリカタログを共有する仕組み。
+
+Store Network は Takos インスタンス間で Store とリポジトリ参照を共有するための公開 API です。
 
 ## 目的
 

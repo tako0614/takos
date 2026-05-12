@@ -1,5 +1,7 @@
 # GCP
 
+> このページでわかること: Takosumi kernel を GCP (GKE / Cloud Run) にホストする方法。
+
 このページは **Takosumi kernel を GCP にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 

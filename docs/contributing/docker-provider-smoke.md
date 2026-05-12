@@ -1,5 +1,7 @@
 # Docker provider plugin smoke script
 
+> このページでわかること: Docker provider プラグインの smoke テスト手順。
+
 `scripts/docker-provider-smoke.ts` is a safe-by-default smoke entrypoint for the
 local Docker provider plugin materialization path. It validates plugin/adapter
 behavior and is not part of the kernel release gate.

@@ -1,5 +1,7 @@
 # Runtime agent API smoke script
 
+> このページでわかること: Runtime agent API の smoke テスト。
+
 `scripts/runtime-agent-api-smoke.ts` is a no-external-server smoke entrypoint
 for runtime agent API wiring.
 

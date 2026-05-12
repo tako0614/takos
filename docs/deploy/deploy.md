@@ -1,7 +1,9 @@
-# Direct manifest deploy
+# マニフェスト直接デプロイ
 
-通常の app install は [Git / Store install](/deploy/store-deploy) を使います。
-このページは operator が compiled Shape manifest を直接 apply する場合の説明です。
+> このページでわかること: コンパイル済みマニフェストを kernel に直接送る方法。
+
+通常は [Git / Store install](/deploy/store-deploy) を使います。
+このページはオペレーターがマニフェストを直接 apply する場合の説明です。
 
 ## 位置づけ
 

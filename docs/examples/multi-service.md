@@ -1,8 +1,6 @@
 # Multi-Service 構成
 
-API service、background worker、Postgres を 1 つの current `.takosumi/manifest.yml` authoring manifest
-にまとめる例です。kernel に届く compiled manifest は compute / resource desired state だけを持ち、cron / workflow runner
-は takosumi-git 側で扱います。
+> このページでわかること: API + バックグラウンド Worker + DB を 1 つのマニフェストにまとめるサンプル。
 
 ```yaml
 apiVersion: '1.0'

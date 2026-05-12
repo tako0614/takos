@@ -1,6 +1,6 @@
-# Routes
+# ルーティング
 
-Public entrypoints are declared inside Shape resources.
+> このページでわかること: Shape リソースで公開エンドポイントを宣言する方法。
 
 - `worker@v1` uses `spec.routes: string[]`.
 - `web-service@v1` exposes a service URL and may use `spec.domains: string[]`

@@ -1,21 +1,15 @@
 # 課金
 
-**Billed by the operator account plane / BillingPort.**
+> このページでわかること: Takos の課金の仕組みとユーザーから見える表示。
 
-Takos の課金主体は **その instance の operator account plane / BillingPort**
-であり、managed example では Takosumi Cloud がその operator distribution
-です。Takos plan (Free / Plus / Pay As You Go) は operator invoice の中の line
-item の 1 つとして扱われます。契約 / billing owner / payment method は
-[Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-に紐づきます。Takos 自体は billing owner ではなく、Takos product usage を
-operator BillingPort に報告します。 bundled / third-party apps の usage は
-AppInstallation id に紐づく line item として扱われます。 `Use Takos` では
-Accounts が product-managed launch installation row を作る場合がありますが、
-これは `source.gitUrl: takos-product://managed/takos` で operator-managed Takos
-runtime と launch token を bind するための row であり、通常の Git URL
-InstallableApp / app billing row ではありません。
+Takos の課金はオペレーターの account plane (BillingPort) が担当します。
+Takos プラン (Free / Plus / Pay As You Go) はオペレーターの請求書に含まれる形で課金されます。
 
-ユーザーから見える表示はこうなります:
+- 契約・支払い方法は [Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md) に紐づく
+- Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort に報告する立場
+- アプリの利用量は AppInstallation 単位で計上
+
+ユーザーから見える表示:
 
 ```txt
 Takos Plus

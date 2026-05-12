@@ -46,15 +46,15 @@ const forbiddenSurfacePatterns = [
     pattern: /\btakos-runtime\b/g,
   },
   {
-    name: 'legacy deploy env',
+    name: 'retired deploy env',
     pattern: /\bTAKOS_DEPLOY_[A-Z0-9_]*\b/g,
   },
   {
-    name: 'legacy control internal URL env',
+    name: 'retired control internal URL env',
     pattern: /\bTAKOS_CONTROL_INTERNAL_URL\b/g,
   },
   {
-    name: 'legacy runtime internal URL env',
+    name: 'retired runtime internal URL env',
     pattern: /\bTAKOS_RUNTIME_INTERNAL_URL\b/g,
   },
   {

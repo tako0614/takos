@@ -1,5 +1,7 @@
 # 環境変数
 
+> このページでわかること: マニフェストの `spec.env` で環境変数を渡す 3 つの方法と Takos 固有の env 一覧。
+
 runtime env は compiled manifest の `resources[].spec.env` から渡します。
 
 env の入力元は 3 種類です。

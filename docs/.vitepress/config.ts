@@ -67,7 +67,7 @@ export default defineConfig({
         items: [
           { text: '概要', link: '/operator/' },
           { text: 'OIDC Setup', link: '/operator/oidc-setup' },
-          { text: 'Account Migration', link: '/operator/account-migration' },
+          { text: 'Account Model', link: '/operator/account-model' },
           { text: 'Bootstrap', link: '/operator/bootstrap' },
         ],
       },

@@ -1,7 +1,6 @@
-# Database Ownership
+# データベース所有権
 
-This page records which product owns each persistent data area. Detailed table
-schemas live with the owning product and migration code.
+> このページでわかること: どのプロダクトがどのデータを所有しているか。
 
 ## Ownership
 

@@ -1,6 +1,6 @@
 # トラブルシューティング
 
-Installable App Model と direct manifest deploy でよく見るエラーの確認先です。
+> このページでわかること: デプロイ時によくあるエラーとその対処法。
 
 ## Manifest validation
 

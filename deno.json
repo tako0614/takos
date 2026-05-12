@@ -28,7 +28,7 @@
     "validate:observability": "deno run --config deno.json --allow-read scripts/validate-observability-artifacts.ts",
     "validate:patch-management": "deno run --config deno.json --allow-read scripts/validate-patch-management.ts",
     "validate:migration-safety": "deno task --cwd app validate:migration-safety",
-    "validate:legacy-removal": "deno run --config deno.json --allow-read --allow-run=deno,git scripts/validate-legacy-removal-evidence.ts",
+    "validate:retired-route-removal": "deno run --config deno.json --allow-read --allow-run=deno,git scripts/validate-retired-route-evidence.ts",
     "validate:legal-docs": "deno run --config deno.json --allow-read scripts/validate-legal-docs.ts",
     "validate:release-promotion": "deno run --config deno.json --allow-read scripts/validate-release-promotion.ts",
     "validate:service-set": "deno run --config deno.json --allow-read scripts/validate-service-set.ts",

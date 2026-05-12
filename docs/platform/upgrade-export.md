@@ -1,7 +1,6 @@
-# Upgrade / Rollback / Export
+# アップグレード / ロールバック / エクスポート
 
-Installable App Model における AppInstallation の **lifecycle 後半** — upgrade / rollback / export bundle / self-host
-import — を扱うページです。
+> このページでわかること: インストール済みアプリの更新、巻き戻し、別環境への移行方法。
 
 ## 1. Upgrade
 

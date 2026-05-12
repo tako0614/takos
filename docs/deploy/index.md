@@ -1,9 +1,10 @@
 # デプロイ
 
-Takos のアプリ配布は **Installable App Model** を入口にします。Git URL と ref を
-指定して AppInstallation を作り、`takosumi-git` が `.takosumi/app.yml` と
-`.takosumi/manifest.yml` を読み、compile 済み Shape manifest を Takosumi kernel
-の `POST /v1/deployments` に渡します。
+> このページでわかること: Takos にアプリをデプロイする方法の全体像。
+
+アプリのデプロイは Git URL と ref を指定して始めます。`takosumi-git` が
+`.takosumi/app.yml` と `.takosumi/manifest.yml` を読み、コンパイル済みマニフェストを
+Takosumi kernel に渡します。
 
 ## 使う入口
 

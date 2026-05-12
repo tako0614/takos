@@ -1,7 +1,8 @@
 # ローカル開発
 
-Docker Compose ベースのローカル開発環境。Cloudflare アカウントなしで Takos
-tenant runtime の local backend を動かせる。
+> このページでわかること: Docker Compose で Takos のローカル開発環境を立ち上げる方法。
+
+Cloudflare アカウントなしでローカルに Takos を動かせます。
 
 ::: info これは production deploy target ではありません ローカル開発は
 `distribution.yml` の `kernel_host.target` には含めません (5 target =

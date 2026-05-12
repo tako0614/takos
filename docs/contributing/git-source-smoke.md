@@ -1,5 +1,7 @@
 # Git source smoke
 
+> このページでわかること: Git source アダプターの smoke テスト。
+
 Safe-by-default smoke coverage for source adapters lives in
 `scripts/git-source-smoke.ts`.
 

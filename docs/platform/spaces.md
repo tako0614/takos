@@ -1,24 +1,19 @@
 # Space
 
-**Space は
-[Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-の子です。** Takos
-の最上位の隔離単位として、member、repo、worker、resource、thread、files
-をまとめて管理しますが、Space 自体の所有者・契約主体・billing owner は Takosumi
-Account 側にあります。
+> このページでわかること: Space の役割と種類。
 
-所有構造:
+Space は Takosumi Account の下に作る作業領域です。メンバー、リポジトリ、アプリ、スレッド、
+ファイルをまとめて管理します。
 
 ```txt
 Takosumi Account
-  ├─ personal Space (kind: personal)
-  └─ team Spaces  (kind: team / org)
-        └─ AppInstallation (e.g. example.notes)
-              └─ Space-scoped resources
+  ├─ personal Space
+  └─ team / org Space
+        └─ AppInstallation (例: example.notes)
 ```
 
-つまり `Takosumi Account → Space → AppInstallation` の 3 階層が正本であり、Space
-は AppInstallation の親として機能します。AppInstallation の詳細は
+`Account → Space → AppInstallation` の 3 階層になっています。
+AppInstallation の詳細は
 [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md)
 を参照。
 

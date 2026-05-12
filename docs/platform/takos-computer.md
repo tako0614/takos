@@ -1,7 +1,8 @@
 # takos-computer
 
-Browser automation と sandbox computer を提供する bundled app。bundled app
-distribution metadata を持つが、primitive や group は特権化されない。
+> このページでわかること: バンドルアプリ takos-computer の概要。
+
+ブラウザ自動操作とサンドボックスコンピューターを提供するアプリです。
 
 ## 役割
 

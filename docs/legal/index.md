@@ -1,18 +1,9 @@
-# Legal
+# 法務・コンプライアンス
 
-> このページでわかること: Takos の公開前 legal / compliance artifacts と、 GA
-> 前に署名・法務 review が必要な境界。
+> このページでわかること: Takos の法務関連ドキュメントの一覧と、GA 前に必要な対応。
 
-Takos は Takosumi PaaS の上で動作する self-hostable な AI-first chat & agent
-platform であり、 `chat / agent / memory / space` を core 機能として持つ。
-**契約・billing・identity の ownership は operator が運用する account plane
-(managed example: takosumi-cloud の Takosumi Accounts service) が 所有**
-します。 Takos 自身は OIDC consumer + app-local profile を提供し、 public API /
-UI の運用境界は `takos/app/` に置かれますが、 account / authentication /
-contract / billing は operator account plane に集約されます。 Takosumi kernel は
-JSON-LD Shape manifest / resource graph / provider materialization に専念し、
-takosumi-git は installer / workflow / git bridge であり、 Takos の
-customer-facing legal surface は Takos Web / API + Takosumi Accounts の identity
+契約・課金・アイデンティティはオペレーターの account plane (Takosumi Accounts) が所有します。
+Takos 自体はアプリ内プロフィールと OIDC consumer 機能を提供します。
 / billing 境界を組み合わせて定義します。
 
 ## Published Artifacts

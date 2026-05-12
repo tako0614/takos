@@ -1,5 +1,7 @@
 # Multi-cloud
 
+> このページでわかること: 複数クラウドにまたがる Takosumi kernel の運用方法。
+
 このページは **Takosumi kernel を複数 cloud にまたがって運用する operator**
 向けの cross-cloud runbook です。 (provider plugin / runtime-agent / routing
 layer / 21 ignored test re-enable) の完了を前提とし、Cloudflare / AWS / GCP /
