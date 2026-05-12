@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Takos
-  text: AI-first chat & agent platform
-  tagline: self-hostable chat / agent / memory / space platform
+  text: AI エージェントによるソフトウェアの民主化
+  tagline: Takosumi PaaS の上で動作する self-hostable な product。 AI agents / Git / chat / spaces / memory / tools を駆使した software の democratization を core concept とする
   actions:
     - theme: brand
       text: Use Takos

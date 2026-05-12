@@ -1,10 +1,10 @@
 # Legal: SOC 2 Readiness Checklist
 
-> このページでわかること: Takos の SOC 2 readiness scope、control owners、 evidence targets、post-GA audit preparation
-> backlog。
+> このページでわかること: Takos の SOC 2 readiness scope、control owners、
+> evidence targets、post-GA audit preparation backlog。
 
-This checklist is a readiness artifact, not an audit report. Takos does not claim SOC 2 compliance until a qualified
-auditor completes the engagement.
+This checklist is a readiness artifact, not an audit report. Takos does not
+claim SOC 2 compliance until a qualified auditor completes the engagement.
 
 ## Scope
 
@@ -53,8 +53,11 @@ Out of scope for the first readiness pass:
 - Service owner map exists for every product root.
 - Policy exception process exists with owner and expiry.
 - Quarterly risk review meeting is scheduled.
-- AppInstallation ledger and Takosumi Account billing model are listed in the data protection owner audit checklist
-  (Installable App Model: identity / billing owner = Takosumi Accounts; AppInstallation台帳 = ownership primitive).
+- AppInstallation ledger and Takosumi Account billing model are listed in the
+  data protection owner audit checklist (Installable App Model: identity /
+  billing owner = the operator-selected account plane, managed example:
+  takosumi-cloud の Takosumi Accounts; AppInstallation 台帳 = ownership
+  primitive).
 
 ### Access Control
 
@@ -123,7 +126,8 @@ Out of scope for the first readiness pass:
 - Publish final Privacy Policy, Terms, DPA, and sub-processor list.
 - Implement data subject access / export / deletion request handlers.
 - Publish data residency policy.
-- Publish security disclosure policy with working `security@` inbox and PGP public key.
+- Publish security disclosure policy with working `security@` inbox and PGP
+  public key.
 - Export branch protection / required review settings for each repo.
 - Run one SEV-1 staging simulation and attach evidence.
 - Run one rollback SOP staging rehearsal and attach evidence.

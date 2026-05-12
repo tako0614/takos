@@ -2,12 +2,16 @@
 
 > このページでわかること: Takos が何をする product で、どの経路で始められるか。
 
-Takos は self-hostable な AI-first chat & agent platform。 OAuth provider は
-operator account plane (`operator.identity.oidc` namespace export / OIDC
-discovery で得る operator endpoint) に集約され、 takosumi kernel は JSON-LD
-Shape manifest / resource graph / provider materialization に専念し、 Takos は
-OIDC consumer として動きます。 Takos product 自身は通常の InstallableApp
-ではありません。
+Takos は **Takosumi PaaS の上で動作する self-hostable な product**。 AI agents /
+Git / chat / spaces / memory / tools を駆使した **AI エージェントによる
+ソフトウェアの民主化 (democratization of software through AI agents)** を core
+concept とする (詳細は
+[ecosystem design-principles §0](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/design-principles.md))。
+OAuth provider は operator が運用する account plane (`operator.identity.oidc`
+namespace export / OIDC discovery で得る operator-configured endpoint) に集約
+され、 takosumi kernel は JSON-LD Shape manifest / resource graph / provider
+materialization に専念し、 Takos は OIDC consumer として動く。 Takos は Takosumi
+上の 1 product であり、 architecture 上の特権 layer ではない。
 
 ## 3 つの始め方
 

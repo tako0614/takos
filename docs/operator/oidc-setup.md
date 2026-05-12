@@ -1,9 +1,12 @@
 # OIDC Setup
 
 このページは operator 視点で Takos の identity 設定を扱います。Installable App
-Model における Takos は **OIDC consumer** で、issuer は Takosumi Accounts
-(`operator.identity.oidc` namespace export / OIDC discovery) に集約されます。
-endpoint URL は operator-selected value です (詳細は
+Model における Takos は **OIDC consumer** で、issuer は operator が選んだ
+account plane (`operator.identity.oidc` namespace export / OIDC discovery で得る
+operator-configured endpoint) に集約されます。 managed example は Takosumi
+Accounts (takosumi-cloud) ですが、 contract-compatible な別 operator
+distribution に置き換え可能です。 endpoint URL は operator-selected value です
+(詳細は
 [namespace export binding](https://github.com/tako0614/takosumi/blob/master/docs/reference/namespace-exports.md))。
 
 ::: warning account-plane boundary Takos は OAuth/OIDC issuer や upstream IdP
@@ -144,8 +147,8 @@ Accounts 側の `redirectUris` と一致していることを確認します。
 
 ## 次に読むページ
 
-- [/operator/account-migration](/operator/account-migration) — legacy Takos user を Takosumi Account / OIDC consumer
-  model へ寄せる移行条件
+- [/operator/account-migration](/operator/account-migration) — legacy Takos user
+  を Takosumi Account / OIDC consumer model へ寄せる移行条件
 - [https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   — issuer 側の責務 (OIDC issuer / billing / app installation owner)
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が consumer として 要求する
