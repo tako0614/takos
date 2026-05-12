@@ -12,5 +12,20 @@
     "build": "deno run -A --node-modules-dir=auto npm:vitepress build",
     "preview": "deno run -A --node-modules-dir=auto npm:vitepress preview",
     "deploy": "deno run -A --node-modules-dir=auto npm:wrangler pages deploy .vitepress/dist --project-name takos-docs"
+  },
+  "fmt": {
+    "exclude": [
+      "**/*.md",
+      ".vitepress/cache/",
+      ".vitepress/dist/",
+      "node_modules/"
+    ]
+  },
+  "lint": {
+    "exclude": [
+      ".vitepress/cache/",
+      ".vitepress/dist/",
+      "node_modules/"
+    ]
   }
 }
