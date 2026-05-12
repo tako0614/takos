@@ -37,8 +37,9 @@ features:
 
 ## Use Takos / Install Apps
 
-Takos を使い始める場合は `Use Takos` で Takosumi Account / Space を作ります。bundled / third-party app を配布する
-場合は、operator-selected install UI に Git URL を渡す install link を使います。下は managed example です。
+Takos を使い始める場合は、operator Accounts の `/start?takos_url=...` に向く `Use Takos` で Takosumi Account /
+Space を作ります。bundled / third-party app を配布する場合は、operator-selected install UI に Git URL を渡す install
+link を使います。下は managed example です。
 
 ```html
 <a
