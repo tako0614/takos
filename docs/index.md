@@ -19,16 +19,8 @@ hero:
 features:
   - icon: 📦
     title: Installable App Model
-    details: 'Takos が bundled / third-party app を install するときの ownership model。OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する'
+    details: 'Takos が bundled / third-party app を install するときの ownership model。OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する。install path (Use Takos / Install from Git / Self-host) と runtime mode (shared-cell / dedicated / self-hosted) の組み合わせで bundled / third-party apps を扱う'
     link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md
-  - icon: 🛣️
-    title: 3 つの install path
-    details: 'Use Takos (instant managed) / Install from Git (app install transparency) / Self-host (退出) の 3 経路。AppInstallation は bundled / third-party apps の所有権を表す'
-    link: /apps/install-paths
-  - icon: ⚡
-    title: 3 つの runtime mode
-    details: 'shared-cell で instant chat、dedicated に materialize、self-hosted で完全退出。所有権は AppInstallation に固定したまま runtime だけ差し替える'
-    link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md
   - icon: 🧭
     title: Takos 全体像
     details: 'Takosumi Account → Space → AppInstallation の階層と、Takos software creation features (agents, Git, memory, spaces, tools) の関係を整理する'
