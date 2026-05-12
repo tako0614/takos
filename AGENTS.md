@@ -47,8 +47,8 @@ Takos の constituent (AI agents / Git / memory / spaces / tools) は marketing 
 
 ## Substitutability
 
-- **Takos product 自体**: AI-first chat & agent product。 層ではなく Takosumi の architectural special case
-  (platform owner / bundled app coordinator)。
+- **Takos product 自体**: AI-first chat & agent product。 層ではなく Takosumi の architectural special case (platform
+  owner / bundled app coordinator)。
 - **Takosumi への依存**: kernel / operator account plane / takosumi-git は各々 substitutable (詳細は
   [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §「Layering Principle: Substitutability」)。
 
