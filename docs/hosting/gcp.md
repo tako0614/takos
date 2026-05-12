@@ -6,18 +6,20 @@
 1. **GCP 単独 hosting (GKE Helm)** ― `takos/deploy/helm/takos/values-gcp.yaml`
    overlay。Kubernetes ベースで control plane / runtime / executor を運用する
    path。
-2. **GCP provider plugin** ― Cloud Run / Cloud SQL / GCS / Pub/Sub
-   / Cloud KMS / Secret Manager の 6 provider を Takosumi kernel から `provider`
+2. **GCP provider plugin** ― Cloud Run / Cloud SQL / GCS / Pub/Sub / Cloud KMS /
+   Secret Manager の 6 provider を Takosumi kernel から `provider`
    契約として呼び出す path。Cloudflare control plane + GCP tenant runtime
    (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
    (`profiles/gcp.example.json`) で使う。
 
-::: warning current contract section 1 (Helm overlay) は Cloud Run へ Takos
+::: warning current contract section 1 (Helm overlay) は Cloud Run へ Takosumi
 kernel を直接デプロイする手順、Firestore を control-plane storage として 使う
-matrix、Terraform overlay を含みません。section 2 (provider plugin) は 6 provider の materialization 契約までです。 :::
+matrix、Terraform overlay を含みません。section 2 (provider plugin) は 6
+provider の materialization 契約までです。 :::
 
-Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
-target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
+Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/)
+を参照してください。 5 target 横断 runbook は
+[Multi-cloud](/hosting/multi-cloud) を参照してください。
 
 ## 統合 distribution からこの target を選ぶ
 
@@ -85,7 +87,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 | 状況                                                                    | 推奨 path          |
 | ----------------------------------------------------------------------- | ------------------ |
-| Takosumi kernel 全体を GCP の k8s に置く                                   | section 1 (Helm)   |
+| Takosumi kernel 全体を GCP の k8s に置く                                | section 1 (Helm)   |
 | Cloudflare で kernel を動かしつつ tenant runtime / DB を GCP に置きたい | section 2 (plugin) |
 | GCP のみで tenant runtime + control-plane provider を組む               | section 2 + Helm   |
 
@@ -292,7 +294,7 @@ Cloudflare Worker から GCP API を直接呼べない場合 (request size / aut
 `GCP_WORKLOAD_IDENTITY_AUDIENCE` を設定するだけで済み、long-lived service
 account JSON を持たずに済みます。
 
-### runtime-agent  を GCP に置く
+### runtime-agent を GCP に置く
 
 #### Cloud Run
 
@@ -360,7 +362,7 @@ spec:
 agent は kernel に enroll → heartbeat → lease pull → Cloud Run / Cloud SQL / GCS
 / Pub/Sub / KMS / Secret ops を実行 → 結果を report します。
 
-### GCP LB routing  の DNS 設定
+### GCP LB routing の DNS 設定
 
 `gcp-load-balancer-router` provider client は次を materialize します:
 

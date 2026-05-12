@@ -28,20 +28,22 @@ In scope:
   identity / billing / AppInstallation owner; OIDC issuer, opaque launch token
   redeem, AppGrant revocation, and pairwise OIDC subject derivation are in scope
   when Takos managed service is impacted
-- Takos managed deployment artifacts under `takos/deploy/`
+- managed Takos deployment artifacts under `takos/deploy/`
 - Takos docs and public service configuration
 - Takos bundled apps when deployed as part of Takos managed service
 
 Out of scope:
 
-- customer-owned applications deployed on Takos unless the issue affects Takos
-  platform isolation, authentication, billing, or managed infrastructure
+- customer-owned applications installed or deployed on the operator's Takosumi
+  instance unless the issue affects Takosumi platform isolation, Takos product
+  service isolation, authentication, billing, or managed infrastructure
 - social engineering, phishing, physical attacks, spam, or denial-of-service
   load testing
 - destructive tests, persistence, malware, credential harvesting, or data
   exfiltration beyond the minimum needed to prove impact
-- vulnerabilities in third-party services that do not expose Takos customer data
-  or Takos control-plane integrity
+- vulnerabilities in third-party services that do not expose Takos customer
+  data, Takosumi kernel/operator account-plane integrity, or Takos product
+  service integrity
 
 ## Contact
 

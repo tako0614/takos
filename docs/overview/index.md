@@ -1,9 +1,9 @@
 # Takos 全体像
 
-Takos は **Takosumi PaaS の上で動作する self-hostable な product**。 AI agents /
-Git / chat / spaces / memory / tools を駆使した **AI エージェントによる
-ソフトウェアの民主化 (democratization of software through AI agents)** を core
-concept とする。 Takosumi 上で動く 1 product であり、 architecture 上の特権
+Takos は **Takosumi PaaS の上で動作する self-hostable な AI-first chat & agent
+platform**。`chat / agent / memory / space` を core 機能として持ち、Takos
+distribution の bundled apps は新規 Space 作成時に auto-install される。Takos は
+Takosumi の unique top consumer であり、Takosumi の一部や architecture 上の 特権
 layer ではない。 OAuth provider / 契約主体 / billing owner は operator
 が運用する account plane が持ち、 Takos は OIDC consumer として動く。 OIDC
 issuer の hostname は operator が選ぶ (managed example は
@@ -44,7 +44,7 @@ group / resource / route が積まれます。
   inventory、snapshot、rollback、uninstall などの group 機能を使える
 - **Workload** (Worker / Service / Attached): deployable unit。内部では
   `services` と Deployment record の `desired` field に保存される
-- **Resource**: control-plane managed backing capability (sql / object-store /
+- **Resource**: Takosumi-kernel managed backing capability (sql / object-store /
   kv / queue / ...)。内部では `resources` に保存され、group 所属の有無で CRUD /
   binding の扱いは変わらない
 - **Route**: hostname / path → workload のマッピング

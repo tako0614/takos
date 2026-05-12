@@ -125,7 +125,8 @@ stateful resource は `.takosumi/manifest.yml` の `resources[]` で claim
 します。runtime env は static value、resource output (`${ref:...}` /
 `${secret-ref:...}`)、または installer / account plane が materialize した
 concrete value / secret ref から渡します。installer-only placeholder
-(`${bindings.*}` / `${secrets.*}` など) は compiled manifest に残せません。詳細は [環境変数](/deploy/environment) と
+(`${bindings.*}` / `${secrets.*}` など) は compiled manifest
+に残せません。詳細は [環境変数](/deploy/environment) と
 [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md#_1-identity-oidc-v1)
 を参照。
 
@@ -146,5 +147,5 @@ concrete value / secret ref から渡します。installer-only placeholder
   -- `.takosumi/app.yml` の正本仕様
 - [reference/manifest-spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
   -- `.takosumi/manifest.yml` の正本仕様
-- [Takos 全体像](/overview/) -- platform と用語を先に整理する
+- [Takos 全体像](/overview/) -- Takos/Takosumi の用語を先に整理する
 - [Deploy 構成](/apps/) -- deploy manifest と周辺 public surface を確認する

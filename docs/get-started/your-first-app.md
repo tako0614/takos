@@ -225,7 +225,7 @@ launch token 経路が使えるようになります。operator が compiled man
 - [apps/oidc-consumer](/apps/oidc-consumer) -- OIDC consumer 化の正本
 - [apps/launch-token](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)
   -- install 直後の owner session 生成
-- [Takos 全体像](/overview/) -- platform の基本単位を確認する
+- [Takos 全体像](/overview/) -- Takos/Takosumi の基本単位を確認する
 - [プロジェクト構成](/get-started/project-structure) -- `.takosumi/`
   ディレクトリの全体像
 - [Worker + Database](/examples/worker-with-db) -- D1 を追加する
