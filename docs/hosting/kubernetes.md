@@ -1,5 +1,7 @@
 # Kubernetes
 
+> このページでわかること: Takosumi kernel を Kubernetes (Helm chart) にホストする方法。
+
 このページは **Takosumi kernel を Kubernetes にホストする operator**
 向けです。カバー範囲は 2 通りです:
 

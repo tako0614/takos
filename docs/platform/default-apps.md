@@ -1,9 +1,9 @@
-# Bundled App Distribution
+# バンドルアプリ
 
-Takos の bundled app distribution は、新規 Space 作成時に提示または自動 install
-する app 候補の初期セットです。install は operator account plane の
-AppInstallation API (reference impl: Takosumi Accounts) と `takosumi-git`
-installer pipeline を通ります。
+> このページでわかること: 新しい Space に自動インストールされるアプリの一覧と仕組み。
+
+バンドルアプリは、新しい Space を作成したときに自動的にインストールされるアプリです。
+通常のアプリと同じ仕組み (AppInstallation) で管理されるため、不要ならアンインストールできます。
 
 ## 一覧
 

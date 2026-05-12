@@ -1,8 +1,9 @@
 # yurucommu
 
-yurucommu は self-hosted ActivityPub / community social app。Takos では default
-app distribution の一部として扱い、新規 space に preinstall できる通常の group
-として deploy する。
+> このページでわかること: バンドルアプリ yurucommu の概要。
+
+yurucommu はセルフホスト型の ActivityPub / コミュニティソーシャルアプリです。
+新しい Space を作ると自動インストールされます。
 
 ## 役割
 

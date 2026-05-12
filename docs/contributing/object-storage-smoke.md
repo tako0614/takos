@@ -1,5 +1,7 @@
 # Object Storage Smoke
 
+> このページでわかること: Object storage プラグインの smoke テスト。
+
 `scripts/object-storage-smoke.ts` validates the object-storage plugin/adapter
 surface without requiring object-storage infrastructure by default.
 

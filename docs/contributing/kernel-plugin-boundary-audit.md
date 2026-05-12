@@ -1,5 +1,7 @@
 # Kernel / Plugin Boundary Audit
 
+> このページでわかること: Kernel と Plugin の境界に関するドキュメント整合性チェックリスト。
+
 This document is the working checklist for keeping Takosumi docs aligned with
 the kernel-only implementation model.
 

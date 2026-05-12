@@ -1,31 +1,16 @@
 # アーキテクチャ
 
-この章は Takos product の構造を説明します。Takosumi kernel、Takosumi Accounts、
-takosumi-git の詳細仕様は、それぞれの repository docs を正本にします。
+> このページでわかること: Takos の内部構造とサービス間の関係。
 
-## まず読むページ
+## ページ一覧
 
-- [System Architecture](./system-architecture.md) — Takos product と sibling
-  product の境界。
-- [Service Topology](./service-topology.md) — Takos app / git / agent / bundled
-  apps の関係。
-- [App Publications](./app-publications.md) — Takos app metadata と deploy
-  manifest の境界。
-- [Runtime / Agent](./runtime-service.md) — runtime execution と agent service
-  の分担。
-- [Diagrams](./diagrams.md) — 図で全体像を確認するページ。
+- [システムアーキテクチャ](./system-architecture.md) — サービスの境界と役割分担
+- [サービストポロジー](./service-topology.md) — ローカル環境のサービス構成とポート
+- [アプリメタデータ](./app-publications.md) — アプリ情報とデプロイマニフェストの境界
+- [ランタイム / エージェント](./runtime-service.md) — エージェント実行の仕組み
+- [図](./diagrams.md) — 図で全体像を確認
 
-## この章で扱うこと
-
-- Takos product が提供する user-facing feature: AI agents / Git / memory /
-  spaces / tools / chat / Store。
-- Takos product services: `takos-app` / `takos-git` / `takos-agent`。
-- bundled app の扱い: takos-docs / takos-slide / takos-excel / takos-computer /
-  yurucommu。
-- Takos product が Takosumi surfaces を consume する点: OIDC
-  consumer、AppBinding、deploy intent/status。
-
-## この章で扱わないこと
+## 関連ドキュメント
 
 | 内容                                                    | 正本                                                                                    |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |

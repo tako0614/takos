@@ -2,28 +2,20 @@
 
 Takos product shell and local entrypoint.
 
-> **Takos is a self-hostable product running on Takosumi PaaS, with _democratization of software through AI agents_ as
-> its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps (`takos-docs`
-> / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation as a
-> user-facing convenience.** Canonical worldview / vocabulary lives in
-> [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) and
-> [`../docs/reference/glossary.md`](../docs/reference/glossary.md).
+Takos はセルフホスト可能な AI-first chat & agent プロダクトです。AI エージェントとの会話を通じて
+ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。Takosumi PaaS の上で動作します。
 
-This repository is intentionally a shell: product implementation lives in nested service repositories, while this repo
-owns the local service composition, boundary checks, component matrix, and product-level docs. It should feel like the
-front door for Takos, not a place to put shared implementation packages.
+バンドルアプリ (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) は 新しい Space
+作成時に自動インストールされます。
 
 ```text
 takos/
-  agent/  -> takos-agent
-  app/    -> takos-app
-  git/    -> takos-git
-  deploy/ -> Takos deploy artifacts (helm/terraform/distributions). Kernel itself is external (jsr:@takos/takosumi-kernel)
-  docs/   -> Takos product docs and shell-local contributor notes
+  agent/  -> takos-agent (エージェント実行)
+  app/    -> takos-app (ユーザー向け UI / API ゲートウェイ)
+  git/    -> takos-git (Git ホスティング)
+  deploy/ -> デプロイ用アーティファクト (Helm / Terraform / distribution)
+  docs/   -> プロダクトドキュメント (VitePress site → docs.takos.jp)
 ```
-
-`takos-agent-engine` is a Rust library, not a Takos service. It remains an independent checkout at the ecosystem root
-and is not vendored into any service repo.
 
 ## Quick Start
 
@@ -34,95 +26,54 @@ deno task local:config
 deno task local:up
 ```
 
-Useful shell tasks:
+## よく使うコマンド
 
-- `deno task doctor`: human-readable tool, submodule, compose, and boundary diagnostics.
-- `deno task check`: strict lightweight shell check for automation.
-- `deno task local:config`: render the local compose config without starting services.
-- `deno task local:up` / `deno task local:down` / `deno task local:logs`: run the local shell.
-- `deno task local:smoke`: check the four local service health endpoints.
-- `deno task local:e2e`: run the isolated docker compose e2e smoke used by CI, including a seeded Smart HTTP git clone
-  through apps/api.
-- `deno task docs:dev`: run the shell docs dev server.
-- `deno task lint:docs` / `deno task lint:agent-docs`: run docs and agent-doc gates.
-- `deno task docs:build` / `deno task docs:deploy`: build or deploy the shell docs.
-- `deno task helm:generate-overlays` / `deno task helm:check-overlays`: generate or verify AWS/GCP Helm overlays from
-  distribution profiles.
-- `deno task helm:template-smoke`: run Helm v3 template smoke for the base/AWS/GCP chart values. Set
-  `TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1` in a kubeconfig-backed environment to require client install dry-run cases too.
-  CI also sets `TAKOS_HELM_INSTALL_TEST_CRDS=1` so kind can validate the GCP ManagedCertificate resource.
-- `deno task helm:install-smoke`: run a real Helm install/status/manifest/uninstall smoke against the current Kubernetes
-  context for the base/AWS/GCP chart values.
-- `deno task validate:distributions`: verify official distribution profiles against the schema contract, artifact refs,
-  target-specific bindings, service specs, provider proof commands, fixtures, and service smoke metadata.
-- `deno task validate:service-set`: verify the Helm chart exposes only `takos-app`, `takosumi`, `takosumi-cloud`,
-  `takos-git`, and `takos-agent`, with operator-overridable images.
-- `deno task submodules:update`: initialize or refresh nested service checkouts.
+| コマンド                           | 説明                                     |
+| ---------------------------------- | ---------------------------------------- |
+| `deno task doctor`                 | ツール・サブモジュール・compose の診断   |
+| `deno task check`                  | 軽量な自動チェック                       |
+| `deno task local:up` / `down`      | ローカル compose の起動 / 停止           |
+| `deno task local:logs`             | ローカルサービスのログ                   |
+| `deno task local:smoke`            | ローカルサービスのヘルスチェック         |
+| `deno task local:e2e`              | docker compose による E2E スモークテスト |
+| `deno task docs:dev`               | ドキュメントの開発サーバー起動           |
+| `deno task docs:build` / `deploy`  | ドキュメントのビルド / デプロイ          |
+| `deno task lint:docs`              | ドキュメントの lint                      |
+| `deno task validate:distributions` | ディストリビューションの検証             |
+| `deno task validate:service-set`   | Helm chart のサービスセット検証          |
+| `deno task helm:template-smoke`    | Helm テンプレートのスモークテスト        |
 
-## Boundary Names
+## サービス構成
 
-Takos product docs live under `docs/` at this shell level. Cross-product specs live in the ecosystem root `../docs/`,
-kernel docs live in `../takosumi/docs/`, account-plane docs live in `../takosumi-cloud/docs/`, installer/workflow docs
-live in `../takosumi-git/docs/`, and private operations runbooks live in `../takos-private/docs/`.
+| サービス      | 責務                                                                |
+| ------------- | ------------------------------------------------------------------- |
+| `takos-app`   | UI、API ゲートウェイ、OIDC consumer セッション                      |
+| `takos-git`   | Git ホスティング (Smart HTTP、リポジトリ、refs、オブジェクトストア) |
+| `takos-agent` | エージェント実行                                                    |
 
-Use the split repository boundaries below when adding docs, scripts, imports, or local composition. Do not reintroduce
-pre-split path references such as `takos/apps` or `takos/packages`, path-level legacy references, or stale service names
-such as `control-legacy`, `runtime-legacy`, or `takos-web`. Keep compatibility behavior and legacy data migrations
-documented where they are still part of the contract, but avoid using legacy names as current source paths or service
-identities.
+ログインや課金は Takosumi Accounts (operator account plane) が担当し、 デプロイエンジンは Takosumi kernel
+(`../takosumi`) が担当します。
 
-### Naming History
-
-Earlier Takos branches used names such as `takos-paas`, `TAKOS_PAAS_*`, `deployment-paas-*`, and `dev:paas` for the
-deploy/runtime layer. The current boundary is Takosumi: use `takosumi`, `TAKOSUMI_*`, and `takosumi-*` resource names
-for current source, CI, local compose, Helm, and operator docs. Mention the old names only in migration or compatibility
-history.
-
-## Responsibility Split
-
-- `app`: Takos-facing OIDC consumer sessions, app-local profiles/settings, user-facing management UI, public/browser/CLI
-  API gateway, and product API that is not owned by another Takos service. The operator account plane (reference
-  implementation: Takosumi Accounts in `../takosumi-cloud`) owns identity, billing, OAuth/OIDC issuer behavior, client
-  registry, consent/device flow, and AppInstallation ownership.
-- `deploy`: Takos product distribution profiles, the distribution schema contract, Helm/Terraform modules, distribution
-  manifests, and validators that wrap published packages, images, APIs, and manifests.
-- `takosumi` (external sibling `../takosumi`): generic manifest deploy engine, deploy/runtime lifecycle semantics,
-  resource/routing/publication domains, and internal control API.
-- `git`: Git hosting, Git Smart HTTP, repositories/source, refs, object storage, source resolution, and repository API
-  contracts.
-- `agent`: agent execution service. It calls PaaS internal control RPC.
-
-Deploy and runtime lifecycle semantics are canonical in Takosumi domains and public/internal control APIs. Takos product
-distribution overlays live in `deploy/`. Service contracts should be exported by the owning core service.
-
-Browser and CLI clients talk to `takos-app`. `takos-app` verifies public sessions/tokens and calls internal services
-with signed internal requests carrying actor context. Internal services do not verify browser cookies or public OAuth
-tokens directly.
-
-## Local Checkout
-
-```sh
-git submodule update --init --recursive
-```
-
-The planned remote repositories are:
-
-- `https://github.com/tako0614/takosumi.git`
-- `https://github.com/tako0614/takos-git.git`
-- `https://github.com/tako0614/takos-app.git`
-- `https://github.com/tako0614/takos-agent.git`
-
-## Local Compose
+## ローカル compose
 
 ```sh
 deno task local:up
 ```
 
-The local compose entrypoint should expose the local shell service set: `takos-app`, `takos-git`, `takosumi`, and
-`takos-agent`, plus Postgres/Redis support services. Do not add standalone deploy or runtime services to this shell
-compose file; those lifecycles are local process roles and domains of `takosumi`.
+`takos-app`、`takos-git`、`takosumi`、`takos-agent` と、Postgres / Redis の サポートサービスが起動します。
 
-See also:
+## ドキュメントの場所
+
+| 内容                  | 場所                                  |
+| --------------------- | ------------------------------------- |
+| Takos プロダクト docs | `docs/` (このリポジトリ内、VitePress) |
+| プラットフォーム仕様  | `../docs/` (ecosystem root)           |
+| Takosumi kernel docs  | `../takosumi/docs/`                   |
+| Accounts / 課金 docs  | `../takosumi-cloud/docs/`             |
+| Git installer docs    | `../takosumi-git/docs/`               |
+| 運用 runbook          | `../takos-private/docs/`              |
+
+## 関連
 
 - [Service Topology](docs/architecture/service-topology.md)
 - [Local Shell Runbook](docs/get-started/local-shell.md)

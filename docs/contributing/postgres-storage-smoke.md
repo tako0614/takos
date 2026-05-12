@@ -1,5 +1,7 @@
 # Postgres storage smoke
 
+> このページでわかること: Postgres storage プラグインの smoke テスト。
+
 ## Purpose
 
 `/scripts/postgres-storage-smoke.ts` is a safe-by-default smoke check for the

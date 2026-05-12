@@ -1,13 +1,9 @@
-# Takos System Architecture
+# システムアーキテクチャ
 
-Takos は **Takosumi PaaS の上で動作する self-hostable な product**。 AI agents /
-Git / chat / spaces / memory / tools を駆使した **AI エージェントによる
-ソフトウェアの民主化 (democratization of software through AI agents)** を core
-concept とする。 Takosumi kernel は generic PaaS kernel、 operator account plane
-(reference implementation: takosumi-cloud の Takosumi Accounts) は account /
-billing / AppInstallation ledger、 takosumi-git は Git URL install と manifest
-compile を担当します。 Takos は Takosumi 上の 1 product であり、 architecture
-上の特権 layer ではありません。
+> このページでわかること: Takos を構成するサービスとその役割分担。
+
+Takos は Takosumi PaaS の上で動作するセルフホスト型プロダクトです。
+AI エージェントと会話してソフトウェアを作る「ソフトウェアの民主化」を目指しています。
 
 ## Product Services And Substrate
 

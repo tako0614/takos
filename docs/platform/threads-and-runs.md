@@ -1,27 +1,20 @@
 # Thread / Run / Artifact
 
-Agent / Chat は Takos product core の機能です。Thread/Run は Takos app / agent
-service が提供する product-level execution model であり、takosumi kernel の
-manifest deploy engine には含めません。Thread で対話コンテキストを 管理し、Run
-で実行します。
+> このページでわかること: AI エージェントとの対話を管理する Thread / Run / Artifact モデル。
 
-> Agent / Chat は Takos product feature です。takosumi kernel は compiled Shape
-> manifest の deploy / lifecycle evidence を扱い、chat / agent / memory / space
-> の product semantics は持ちません。
+## 概要
 
-実行ループ本体は `takos-agent` runtime container が担う。Takos app / agent
-service は Thread/Run の lifecycle、queue、DB、billing、auth、space
-state、remote tool backend を管理し、`takos-agent` は agent-control RPC から run
-context を受け取って prompt construction、managed/custom skill selection、local
-tool bridge、model runner wiring を実行する。canonical agent-control RPC surface
-は Takosumi-owned `/api/internal/v1/agent-control/*`。
+Thread は対話のコンテキスト、Run は 1 回のエージェント実行、Artifact は実行結果です。
+これらは Takos のコア機能であり、チャットとエージェント実行の基本モデルを構成します。
 
-`run-bootstrap` の必須 context は `spaceId` である。AppInstallation /
-shared-cell 経由で作られた run は、`runs.input` に入った `installationId` と
-`runtimeNamespace` を bootstrap に含められる。`takos-agent` は Accounts ledger /
-RuntimeBinding / billing を所有せず、この context を消費して local memory store
-を AppInstallation 単位に隔離する。`installationId` が無い run は space 単位の
-従来 namespace を使う。
+## 実行の仕組み
+
+- **Takos app / agent service** が Thread / Run のライフサイクル、キュー、DB、認証、Space の状態を管理
+- **`takos-agent`** (runtime container) が実際のプロンプト構築、スキル選択、ツール実行を担当
+- agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携
+
+Run の起動には `spaceId` が必須です。AppInstallation 経由の Run では `installationId` と
+`runtimeNamespace` が追加され、メモリストアがインストール単位で隔離されます。
 
 managed skills は Takos app/API gateway から渡された catalog
 が優先される。control payload に managed skill が無い場合だけ、`takos-agent`

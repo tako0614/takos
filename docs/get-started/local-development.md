@@ -1,10 +1,10 @@
 # ローカル開発ガイド
 
-このページは **Takos product services と Takosumi substrate を含む local stack を立ち上げる operator / contributor** 向けです。
+> このページでわかること: Takos のローカル開発環境をセットアップして起動する方法。
 
-Docker Compose ベースのローカル開発環境。
+Docker Compose を使って、Takos の全サービスをローカルで動かします。
 
-## 前提
+## 必要なもの
 
 - Deno 2.x
 - Docker (current stable)
@@ -20,44 +20,51 @@ cp .env.local.example .env.local
 ## 起動・停止
 
 ```bash
+# 起動
 docker compose --env-file .env.local -f compose.local.yml up --build
+
+# ログを見る
 docker compose --env-file .env.local -f compose.local.yml logs -f
+
+# 停止
 docker compose --env-file .env.local -f compose.local.yml down
 ```
 
-バックグラウンドで起動したい場合:
+バックグラウンドで起動したい場合は `-d` を付けます:
 
 ```bash
 docker compose --env-file .env.local -f compose.local.yml up --build -d
 ```
 
-## スモークテスト
+## 動作確認
 
 ```bash
-deno task doctor
-deno task local:config
-deno task local:e2e
+deno task doctor       # ツールとサブモジュールの診断
+deno task local:config # compose 設定のレンダリング確認
+deno task local:e2e    # E2E スモークテスト
 ```
 
-## 主要サービス
+## ローカルで起動するサービス
 
-`takos-app` / `takos-agent` / `takos-git` が Takos product services、`takosumi` が substrate service です。
+| サービス      | 役割                                    |
+| ------------- | --------------------------------------- |
+| `takos-app`   | Web UI / API ゲートウェイ               |
+| `takos-git`   | Git ホスティング (Smart HTTP)           |
+| `takos-agent` | エージェント実行                        |
+| `takosumi`    | デプロイエンジン                        |
+| `postgres`    | データベース                            |
+| `redis`       | キュー / キャッシュ                     |
 
-| service       | role                                                    |
-| ------------- | ------------------------------------------------------- |
-| `takos-app`   | OIDC consumer / Web UI / public API gateway             |
-| `takosumi`    | generic manifest deploy engine (`POST /v1/deployments`) |
-| `takos-agent` | Takos agent execution service                           |
-| `takos-git`   | Takos Git hosting service (Smart HTTP / refs / objects) |
-| `postgres`    | local persistence for app / Takosumi / Git              |
-| `redis`       | local queue/cache backing                               |
+## 個別のサービスを起動する
 
-## 個別起動
+compose を使わず個別に起動したい場合は、各サービスのリポジトリの README を参照してください。
 
-個別 process を直接立ち上げる場合は、各 owning repository (`app/`、`git/`、 `agent/`、`../takosumi/`) の AGENTS.md と
-README に従ってください。product shell では compose による current service set を正本にします。
+- `app/` — Takos アプリ
+- `git/` — Git ホスティング
+- `agent/` — エージェント
+- `../takosumi/` — デプロイエンジン
 
-## 既知の差分
+## 注意
 
-local runtime は production target と同一ではありません。provider 固有の挙動は
-対象 hosting guide と Takosumi provider docs を確認してください。
+ローカル環境は本番環境と完全に同一ではありません。プロバイダー固有の挙動については
+[ホスティングガイド](/hosting/) を確認してください。

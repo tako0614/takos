@@ -1,7 +1,6 @@
-# Examples
+# サンプル集
 
-Examples use `.takosumi/app.yml` plus `.takosumi/manifest.yml` and the
-`resources[]` Shape model.
+> このページでわかること: `.takosumi/` を使ったアプリのサンプル一覧。コピーして使えます。
 
 ## List
 

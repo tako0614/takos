@@ -1,33 +1,19 @@
-# Operator
+# オペレーター向けガイド
 
-Takos operator 向けの運用入口です。Takos product は Web UI / public API を
-primary surface とし、初回セットアップと catalog 管理を扱います。operator
-login、PAT、課金は operator が運用する account plane (managed example: Takosumi
-Accounts) が owner です。
+> このページでわかること: Takos をオペレーターとして運用するときの全体像。
 
-identity / billing / OIDC issuer は **operator が選んだ account plane**
-が担います。 takosumi-cloud の Takosumi Accounts は managed reference の例で、
-contract-compatible な 別 operator distribution に置き換え可能です
-(`operator.identity.oidc` namespace export / OIDC discovery で得る
-operator-configured endpoint を使う)。 Takos は OIDC consumer として 動き、 特定
-hostname を contract にしません。 operator はこの境界を意識し、 Takos 自身を
-OAuth provider として運用しない構成に揃えてください。
+Takos の認証・課金・アカウント管理は、オペレーターが運用する account plane
+(リファレンス: Takosumi Accounts) が担当します。Takos 自体は OIDC consumer
+として動くだけで、自前の認証サーバーは持ちません。
 
-- 新モデル全体像:
-  [https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-- Takos 側 (OIDC consumer) の env / route:
-  [/apps/oidc-consumer](/apps/oidc-consumer)
+- [Takosumi Accounts のアーキテクチャ](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
+- [Takos 側の OIDC 設定](/apps/oidc-consumer)
 
-CLI を primary UX にしません。manifest deploy engine や git/workflow bridge
-を直接扱う場合の CLI は `takosumi` / `takosumi-git` の責務です。
+## Takos app の構成
 
-## 現在の app 境界
+`takos/app` は以下の構成です。
 
-`takos/app` の目標境界は次の通りです。
-
-- `apps/api`: browser / API-facing gateway。trusted edge actor headers、 browser
-  session、Takosumi Accounts bearer / OIDC token を検証し、Takos product API /
-  UI を serve する。OAuth issuer / account / billing の正本 entrypoint ではない
+- `apps/api`: ブラウザ・API 向けゲートウェイ。セッション管理と Takos product API を提供
 - `apps/control`: product-owned internal control backend。account / billing /
   OIDC issuer は持たない
 
@@ -39,8 +25,8 @@ operator docs では Web UI / public API を Takos product の primary surface
 
 1. [OIDC Setup](/operator/oidc-setup) で admin domain、Takosumi Accounts
    issuer、OIDC callback、secret 経路、および `OIDC_*` env を固定する
-2. [Account Migration](/operator/account-migration) で旧 Takos local account を
-   Takosumi Account / OIDC consumer モデルへ寄せる
+2. [Account Model](/operator/account-model) で Takos app-local profile と
+   Takosumi Account / OIDC consumer モデルの境界を確認する
 3. [Bootstrap](/operator/bootstrap) で初回 operator account を作り、Takosumi
    Accounts bearer と OIDC client を設定する
 4. [API Reference](/reference/api) で Accounts bearer / setup API
@@ -50,8 +36,8 @@ operator docs では Web UI / public API を Takos product の primary surface
 
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が OIDC consumer
   として要求する env / route / claim
-- [/operator/account-migration](/operator/account-migration) — legacy Takos user
-  を Takosumi Account へ移行する手順
+- [/operator/account-model](/operator/account-model) — Takos app-local profile
+  と Takosumi Account / OIDC consumer model の境界
 - [https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   — OAuth/OIDC issuer / billing / app installation owner の正本
 - [https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)

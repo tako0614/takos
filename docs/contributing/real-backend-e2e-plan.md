@@ -1,5 +1,7 @@
 # Plugin-backed infrastructure readiness runbook
 
+> このページでわかること: プラグイン基盤の readiness チェック手順。
+
 `scripts/real-backend-readiness.ts` is a no-start readiness gate for deciding
 which plugin-backed infrastructure smoke checks can run from `takos`. These
 checks are operator proofs for plugin/local adapter wiring. They are not PaaS

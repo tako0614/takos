@@ -1,8 +1,9 @@
 # CLI
 
-Takos CLI は Takos product の user / workspace task を扱う thin client です。
-manifest authoring、workflow、Git URL install は `takosumi-git`、kernel direct
-deploy は `takosumi` CLI を使います。
+> このページでわかること: Takos CLI のコマンドと認証方法。
+
+Takos CLI は Space やリポジトリの操作を行うクライアントです。
+マニフェスト作成は `takosumi-git`、直接デプロイは `takosumi` CLI を使います。
 
 ## 認証
 

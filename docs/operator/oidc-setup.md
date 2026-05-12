@@ -1,29 +1,20 @@
-# OIDC Setup
+# OIDC 設定
 
-このページは operator 視点で Takos の identity 設定を扱います。Installable App
-Model における Takos は **OIDC consumer** で、issuer は operator が選んだ
-account plane (`operator.identity.oidc` namespace export / OIDC discovery で得る
-operator-configured endpoint) に集約されます。 managed example は Takosumi
-Accounts (takosumi-cloud) ですが、 contract-compatible な別 operator
-distribution に置き換え可能です。 endpoint URL は operator-selected value です
-(詳細は
-[namespace export binding](https://github.com/tako0614/takosumi/blob/master/docs/reference/namespace-exports.md))。
+> このページでわかること: Takos の認証 (OIDC) をオペレーターとして設定する方法。
 
-::: warning account-plane boundary Takos は OAuth/OIDC issuer や upstream IdP
-broker を持ちません。operator が 確認するのは Takosumi Accounts で発行された
-per-AppInstallation OIDC client が AppBinding (`identity.oidc@v1`) 経由で Takos
-runtime に materialize されていることです。Google / GitHub / passkey /
-enterprise OIDC などの upstream IdP は Takosumi Accounts 側で扱います。 :::
+Takos は自前の認証サーバーを持たず、Takosumi Accounts が発行する OIDC クライアントを使います。
+`OIDC_*` 環境変数は AppBinding 経由で自動注入されるため、手動で設定する必要はありません。
+
+::: warning 認証の境界
+Takos は OIDC consumer です。Google / GitHub / passkey などの外部 IdP は
+Takosumi Accounts 側で upstream として接続してください。
+:::
 
 このページで設定するもの:
 
-- **Takosumi Accounts 連携** (OIDC consumer): Takos admin Web と end user
-  surface が同じ OIDC client 設定でログインを受ける。`OIDC_*` env は AppBinding
-  経由で注入され、operator は手動 provision しません
+- **Takosumi Accounts 連携**: 管理画面とユーザー画面が同じ OIDC クライアントでログインを受ける
 
-operator は AppInstallation OIDC client が Takosumi Accounts 側で発行される
-形に揃えてください。`takos-private/` 側の本番・staging deploy / secret
-操作の実値はそちらを正本にします。
+本番・staging の実値は `takos-private/` を参照してください。
 
 ## Required Values
 
@@ -147,8 +138,8 @@ Accounts 側の `redirectUris` と一致していることを確認します。
 
 ## 次に読むページ
 
-- [/operator/account-migration](/operator/account-migration) — legacy Takos user
-  を Takosumi Account / OIDC consumer model へ寄せる移行条件
+- [/operator/account-model](/operator/account-model) — Takos app-local profile
+  と Takosumi Account / OIDC consumer model の境界
 - [https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   — issuer 側の責務 (OIDC issuer / billing / app installation owner)
 - [/apps/oidc-consumer](/apps/oidc-consumer) — Takos が consumer として 要求する

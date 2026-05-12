@@ -1,7 +1,8 @@
-# Performance Baseline Metrics
+# パフォーマンスベースライン
 
-Takosumi deploy lifecycle の in-process performance baseline。`takos/scripts/load-test/` の Deno スクリプトと
-`k6-load-test.js` を用いて計測した結果をまとめる。
+> このページでわかること: Takosumi のデプロイ処理のベンチマーク結果。
+
+`takos/scripts/load-test/` のスクリプトで計測したインプロセスのパフォーマンスベースラインです。
 
 ## 計測環境
 

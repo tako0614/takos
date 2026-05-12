@@ -1,7 +1,9 @@
 # Dispatch Namespace
 
-Dispatch namespace は Cloudflare Workers backend が tenant worker を論理分離する
-ための operator-side detail です。portable manifest に書く値ではありません。
+> このページでわかること: Cloudflare Workers 環境での Worker 分離の仕組み (オペレーター向け)。
+
+Dispatch namespace は Cloudflare Workers backend が Worker を論理分離するための仕組みです。
+マニフェストには書きません。
 
 ## 役割
 

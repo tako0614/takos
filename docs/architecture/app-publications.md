@@ -1,6 +1,6 @@
-# App Integration Metadata Boundary
+# アプリメタデータの境界
 
-Takos app-facing metadata and kernel Shape resources are separate surfaces.
+> このページでわかること: アプリのメタデータと kernel の Shape リソースの境界。
 
 ## Current Contract
 

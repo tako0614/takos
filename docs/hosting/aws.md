@@ -1,5 +1,7 @@
 # AWS
 
+> このページでわかること: Takosumi kernel を AWS (EKS / Fargate) にホストする方法。
+
 このページは **Takosumi kernel を AWS にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 

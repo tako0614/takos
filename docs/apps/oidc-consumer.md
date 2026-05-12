@@ -1,12 +1,9 @@
 # OIDC Consumer
 
-Installable App Model における Takos の identity 立場を整理し、Takos が **OIDC
-consumer** として要求する environment / route / claim を確定する
-ページです。OAuth provider としての Takos は廃止され、issuer は Takosumi
-Accounts (`operator.identity.oidc` namespace export / OIDC discovery
-で参照される account plane) に集約されます。endpoint URL は operator-selected
-value です (詳細は
-[namespace export binding](https://github.com/tako0614/takosumi/blob/master/docs/reference/namespace-exports.md))。
+> このページでわかること: Takos が OIDC consumer として必要とする環境変数とルート。
+
+Takos は自前の認証サーバーを持たず、Takosumi Accounts を OIDC issuer として利用します。
+このページでは、Takos アプリが動作するために必要な OIDC 関連の設定を説明します。
 
 ## このページで依存してよい範囲 / してはいけない範囲
 
@@ -24,8 +21,8 @@ value です (詳細は
   [`/architecture/takosumi-accounts`](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   と Takosumi Accounts 側の正本を参照する。本ページは consumer 視点に閉じる
 - pairwise subject の derivation 関数本体 — Takosumi Accounts 側の責務
-- legacy Takos user の account migration 手順 —
-  [/operator/account-migration](/operator/account-migration) を参照
+- Takos app-local profile と Accounts subject の境界 —
+  [/operator/account-model](/operator/account-model) を参照
 - launch token の payload / 検証 —
   [https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)
   を参照

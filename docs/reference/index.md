@@ -1,7 +1,6 @@
 # リファレンス
 
-この章は Takos product の public surface を置く場所です。platform 全体の用語や takosumi kernel の manifest
-仕様は、ここではなく owning docs を参照します。
+> このページでわかること: Takos の CLI、API、データベースなど技術リファレンスの目次。
 
 ## Takos reference
 

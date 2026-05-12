@@ -1,8 +1,9 @@
-# CLI / Auth model
+# CLI 認証
 
-Takos CLI は取得済み bearer token を Takos API request に載せる client です。
-long-lived credential は Takosumi Accounts の PAT または OIDC flow で得た bearer
-token を使います。
+> このページでわかること: Takos CLI の認証方法とトークン管理。
+
+Takos CLI は bearer token を使って API にアクセスします。
+トークンは Takosumi Accounts の PAT または OIDC フローで取得します。
 
 ## login
 

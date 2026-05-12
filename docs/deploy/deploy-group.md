@@ -1,8 +1,9 @@
 # Deployment Group
 
-Deployment group は複数の Shape resources を 1 つの lifecycle として扱う scope
-です。GroupHead は current Deployment pointer を持ち、rollback はこの pointer
-を retained Deployment に切り替える操作として実装されます。
+> このページでわかること: 複数リソースを 1 つのライフサイクルでまとめて管理する仕組み。
+
+Deployment group は複数の Shape resources を 1 つのグループとして扱います。
+ロールバックは GroupHead のポインターを過去の Deployment に戻す操作です。
 
 ## AppInstallation との関係
 

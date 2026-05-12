@@ -1,62 +1,63 @@
 # Local Shell Runbook
 
-This runbook starts the Takos product shell from a fresh checkout.
+> このページでわかること: クローンしたばかりの状態から Takos のローカルシェルを起動するまでの手順。
 
-## 1. Initialize Submodules
+## 1. サブモジュールを初期化
 
 ```sh
 git submodule update --init --recursive
 ```
 
-or:
+または:
 
 ```sh
 deno task submodules:update
 ```
 
-## 2. Run Doctor
+## 2. 環境を診断
 
 ```sh
 deno task doctor
 ```
 
-Use strict mode for automation:
+必要なツール、サブモジュールの状態、compose のサービスセット、ポート、
+内部 URL 環境変数などを確認します。
+
+CI やスクリプトから使う場合は strict モードで:
 
 ```sh
 deno task check
 ```
 
-Doctor verifies required tools, submodule initialization, the local compose service set, expected ports, internal URL
-environment, and forbidden shell-level deploy/runtime service names or stale split-era internal URL aliases.
-
-## 3. Inspect Compose
+## 3. compose 設定を確認
 
 ```sh
 deno task local:config
 ```
 
-By default this reads `.env.local.example`. Override with:
+デフォルトでは `.env.local.example` を読みます。別の env ファイルを使う場合:
 
 ```sh
 TAKOS_LOCAL_ENV_FILE=.env.local deno task local:config
 ```
 
-## 4. Start and Stop
+## 4. 起動と停止
 
 ```sh
-deno task local:up
-deno task local:logs
-deno task local:down
+deno task local:up     # 起動
+deno task local:logs   # ログ表示
+deno task local:down   # 停止
 ```
 
-The shell starts `takos-app`, `takosumi`, `takos-git`, `takos-agent`, Postgres, and Redis. Product implementation
-changes still happen inside each product root.
+`takos-app`、`takosumi`、`takos-git`、`takos-agent`、Postgres、Redis が起動します。
 
-## Product Root Commands
+## 各プロダクトのコマンド
 
-Use each submodule for product-specific checks:
+プロダクト固有のチェックは各リポジトリから実行します:
 
-- `cd app && deno task ...`
-- `cd ../takosumi && deno task ...`
-- `cd git && deno task ...`
-- `cd agent && cargo ...`
+```sh
+cd app && deno task ...           # Takos アプリ
+cd ../takosumi && deno task ...   # Takosumi カーネル
+cd git && deno task ...           # Git ホスティング
+cd agent && cargo ...             # エージェント (Rust)
+```

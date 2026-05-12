@@ -1,5 +1,7 @@
 # Router config smoke script
 
+> このページでわかること: Router 設定の smoke テスト。
+
 `scripts/router-config-smoke.ts` is a no-external-services smoke entrypoint for
 router config rendering and adapter persistence.
 

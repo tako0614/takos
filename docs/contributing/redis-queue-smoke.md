@@ -1,5 +1,7 @@
 # Redis queue smoke
 
+> このページでわかること: Redis queue プラグインの smoke テスト。
+
 ## Purpose
 
 `/scripts/redis-queue-smoke.ts` is a safe-by-default smoke harness for the

@@ -1,7 +1,8 @@
 # takos-excel
 
-Google Sheets alternative のスプレッドシートエディタ。bundled app distribution
-metadata を持つが、primitive や group は特権化されない。
+> このページでわかること: バンドルアプリ takos-excel の概要。
+
+Google Sheets のようなスプレッドシートエディタです。
 
 ## 役割
 

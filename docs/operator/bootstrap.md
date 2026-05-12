@@ -1,15 +1,10 @@
-# Bootstrap
+# 初回セットアップ
 
-fresh operator が Takos を立ち上げ、 operator account plane (managed example:
-takosumi-cloud の Takosumi Accounts) の bearer を接続するための Web-first
-runbook です。Takos product は基本的に Web で操作し、CLI を primary bootstrap
-経路に しません。
+> このページでわかること: Takos を新規に立ち上げるための手順 (Web ベース)。
 
-Installable App Model における Takos は **OIDC consumer** として bootstrap
-します。issuer は `operator.identity.oidc` namespace export / OIDC discovery
-で参照される operator-configured account plane endpoint に集約され、fresh
-operator は AppInstallation 用に materialized された `OIDC_*` env を Takos に
-注入します。
+Takos は Takosumi Accounts の OIDC consumer として起動します。
+初回セットアップでは、Takosumi Accounts で発行された OIDC クライアント情報を
+Takos に接続します。
 
 ## Prerequisites
 

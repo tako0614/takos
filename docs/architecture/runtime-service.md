@@ -1,7 +1,9 @@
-# Runtime / Agent
+# ランタイム / エージェント
 
-Takos runtime execution is split between the Takos agent service, Takosumi
-kernel, provider plugins, and runtime-agent implementations.
+> このページでわかること: エージェント実行とランタイムの責務分担。
+
+Takos のランタイム実行は、エージェントサービス、kernel、プロバイダープラグイン、
+runtime-agent の 4 つのコンポーネントに分かれています。
 
 ## Responsibilities
 

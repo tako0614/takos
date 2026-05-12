@@ -1,16 +1,13 @@
-# Hosting
+# ホスティング
 
-このセクションは **Takosumi kernel をホストする operator** 向けです。Takosumi
-上で **group を deploy する開発者** は [Deploy](/deploy/) を参照してください。
+> このページでわかること: Takosumi kernel を自分のサーバーにホストする方法。
 
-Takosumi kernel は **5 つの kernel host target** を持ちます。Takos product
-distribution artifact の正本は `takos/deploy/` にあり、operator は
-`takos-private/distribution.yml` を private instance config として使って
-`kernel_host.target` を 1 つ選び、共通の `deno task distribute:apply`
-を実行すると、target 固有の backend (wrangler / Helm / docker-compose) に
-dispatch されます。Cloudflare は tracked reference Workers backend、AWS / GCP /
-Kubernetes は Helm packaging、 selfhosted は docker-compose packaging
-として扱います。
+このセクションは Takosumi kernel をセルフホストするオペレーター向けです。
+アプリをデプロイする開発者は [Deploy](/deploy/) を参照してください。
+
+Takosumi kernel は 5 つのホスティング先に対応しています。
+`takos-private/distribution.yml` でターゲットを選び、`deno task distribute:apply` を実行すると
+対応するバックエンド (wrangler / Helm / docker-compose) にディスパッチされます。
 
 ## 想定読者
 

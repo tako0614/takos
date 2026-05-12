@@ -1,5 +1,7 @@
 # Real Docker Compose smoke harness
 
+> このページでわかること: 実 Docker Compose スタックの opt-in smoke テスト。
+
 `scripts/compose-real-smoke.ts` is an opt-in harness for validating the real
 local `compose.local.yml` stack. It is safe by default: without
 `TAKOS_RUN_REAL_COMPOSE_SMOKE=1`, it prints a skipped summary and exits `0`

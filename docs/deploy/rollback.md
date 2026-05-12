@@ -1,7 +1,8 @@
 # ロールバック
 
-rollback は利用者視点では AppInstallation の version を戻す操作、kernel 視点では
-GroupHead を retained Deployment に切り替える操作です。
+> このページでわかること: インストール済みアプリを以前のバージョンに戻す方法。
+
+ロールバックは AppInstallation のバージョンを戻す操作です。
 
 ## AppInstallation rollback
 

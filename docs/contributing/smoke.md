@@ -1,5 +1,7 @@
 # PaaS in-process smoke script
 
+> このページでわかること: サーバー不要の PaaS マニフェスト smoke テストの実行方法。
+
 `./scripts/paas-smoke.ts` is a no-server, no-Docker smoke check for the Takos
 PaaS manifest lifecycle.
 

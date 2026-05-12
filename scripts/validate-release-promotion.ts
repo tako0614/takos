@@ -49,16 +49,16 @@ const requiredDocs = [
     expected: [
       'Release Announcement Template',
       'Breaking Changes',
-      'Legacy API removal scope',
-      'Migration Guide',
+      'Removed Takos-owned surfaces',
+      'Account model docs',
       'Validation Evidence',
-      'Migration window evidence',
+      'No-user clean-cut evidence',
       'Rollback Plan',
       'Block release if',
     ],
   },
   {
-    path: '../takos-private/docs/operations/migration-window-evidence.md',
+    path: '../takos-private/docs/operations/no-user-clean-cut-evidence.md',
     expected: [
       'No-User Clean-Cut Evidence',
       'Cleanup Scope',
@@ -76,7 +76,7 @@ const requiredDocs = [
     expected: [
       'ROADMAP 1.x Release Readiness',
       'release gate 17/17 green',
-      'community announcement + migration window',
+      'community announcement + no-user clean cut',
       'CI-equivalent Command Evidence',
       'GitHub-hosted CI success is not a completion requirement',
       'Hosted GitHub runs',
@@ -84,7 +84,7 @@ const requiredDocs = [
       'CI',
       'single public Takos release',
       'no-user clean cut',
-      'migration-window-evidence.md',
+      'no-user-clean-cut-evidence.md',
       'Keep the ROADMAP at `96/96`',
     ],
   },

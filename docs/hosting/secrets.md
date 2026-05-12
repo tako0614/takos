@@ -1,8 +1,6 @@
-# Hosting Secret Policy
+# シークレット管理ポリシー
 
-このページは AWS / GCP / Kubernetes / self-hosted を含む hosting target で、
-Terraform / Helm / `takos-private` の secret 境界を固定する operator 向け policy
-です。
+> このページでわかること: 各ホスティング環境でのシークレット管理のルール。
 
 Takos product shell (`takos/`) は distribution profile、Terraform composition、
 Helm chart、non-secret managed resource id を持ちます。実 environment の secret

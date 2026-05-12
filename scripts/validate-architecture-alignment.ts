@@ -31,14 +31,14 @@ const RUNTIME_BINDING_TARGET_DOCS = [
   '../takosumi-cloud/docs/architecture/app-installation.md',
   '../takosumi-cloud/docs/accounts-service.md',
 ];
-const ACCOUNT_MIGRATION_DOC_PATH = 'docs/operator/account-migration.md';
-const ACCOUNT_MIGRATION_REQUIRED_TERMS = [
+const ACCOUNT_MODEL_DOC_PATH = 'docs/operator/account-model.md';
+const ACCOUNT_MODEL_REQUIRED_TERMS = [
   'auth_identities',
   'provider_sub = <issuer>#<sub>',
   'email_verified = true',
   'identity.oidc@v1',
   'personal_access_tokens',
-  'dedicated tenant AppInstallation migration runbook',
+  'dedicated runtime adoption runbook',
 ];
 const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
   {
@@ -359,23 +359,23 @@ async function validateRuntimeBindingTargetDocs(
   }
 }
 
-async function validateAccountMigrationDocs(
+async function validateAccountModelDocs(
   failures: CheckFailure[],
 ): Promise<void> {
-  const text = await readText(ACCOUNT_MIGRATION_DOC_PATH, failures);
-  for (const term of ACCOUNT_MIGRATION_REQUIRED_TERMS) {
+  const text = await readText(ACCOUNT_MODEL_DOC_PATH, failures);
+  for (const term of ACCOUNT_MODEL_REQUIRED_TERMS) {
     if (text.includes(term)) continue;
     failures.push({
-      path: ACCOUNT_MIGRATION_DOC_PATH,
-      message: `Expected account migration docs to include "${term}".`,
+      path: ACCOUNT_MODEL_DOC_PATH,
+      message: `Expected account model docs to include "${term}".`,
     });
   }
 
   const sidebar = await readText('docs/.vitepress/config.ts', failures);
-  if (!sidebar.includes('/operator/account-migration')) {
+  if (!sidebar.includes('/operator/account-model')) {
     failures.push({
       path: 'docs/.vitepress/config.ts',
-      message: 'Expected Operator sidebar to link account migration docs.',
+      message: 'Expected Operator sidebar to link account model docs.',
     });
   }
 }
@@ -404,7 +404,7 @@ async function main(): Promise<void> {
   await validateAppGrantCatalogDocs(failures);
   await validateAppInstallationStatusDocs(failures);
   await validateRuntimeBindingTargetDocs(failures);
-  await validateAccountMigrationDocs(failures);
+  await validateAccountModelDocs(failures);
 
   if (failures.length > 0) {
     console.error('Architecture alignment validation failed:');
@@ -428,7 +428,7 @@ async function main(): Promise<void> {
   console.log(
     `Verified RuntimeBinding target docs in ${RUNTIME_BINDING_TARGET_DOCS.length} files.`,
   );
-  console.log('Verified account migration docs.');
+  console.log('Verified account model docs.');
 }
 
 if (import.meta.main) {

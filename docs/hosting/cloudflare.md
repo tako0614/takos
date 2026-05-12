@@ -1,5 +1,7 @@
 # Cloudflare
 
+> このページでわかること: Takos を Cloudflare Workers / Containers でホストする構成と設定。
+
 このページは **Takos product / API gateway を Cloudflare Workers
 にホストする方法**を説明します。takos オペレーター向けです。Cloudflare Workers /
 Containers / D1 / R2 / KV / Queues を組み合わせた構成は **tracked reference

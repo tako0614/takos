@@ -1,13 +1,12 @@
-# Install Paths
+# インストール方法
 
-Takos は users / app developers / operators 向けに **3 種類の entry path** を
-提供する。一般ユーザーが instant に始める `Use Takos`、bundled / third-party app
-を Git URL から透明に install する `Install from Git`、そして Takos product
-distribution と app export bundle を自前環境に持ち込む `Self-host`。Takos は
-Takosumi 上で動く self-hostable な AI-first chat & agent product であり、
-`chat / agent / memory / space` を core 機能として持つ。 本ページは、どの path
-をどんな読者が選ぶか、各 path の流れ、README や
-ランディングページに置くボタン例、そして既存の "はじめる" 章への導線をまとめる。
+> このページでわかること: Takos を使い始める 3 つの方法と、それぞれの対象読者。
+
+Takos には 3 つの始め方があります:
+
+- **Use Takos** — 一般ユーザー向け。すぐに使い始められる
+- **Install from Git** — アプリ開発者向け。Git URL からアプリをインストール
+- **Self-host** — オペレーター向け。自分のサーバーで Takos を運用
 
 ::: info このページで依存してよい範囲 / してはいけない範囲
 

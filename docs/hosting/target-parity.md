@@ -1,9 +1,6 @@
-# Distribution Target Parity
+# ディストリビューションターゲットの対応状況
 
-このページは `takos/deploy/distributions/*.json` で管理する Takos product
-distribution target の current readiness を明示します。ここでの status は
-operator-facing deploy artifact の完成度であり、Takosumi 上で動く tenant app の
-manifest behavior とは別です。
+> このページでわかること: 各ホスティング環境への Takos デプロイの完成度。
 
 ## Status Definitions
 

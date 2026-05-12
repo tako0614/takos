@@ -4,75 +4,50 @@ layout: home
 hero:
   name: Takos
   text: AI エージェントによるソフトウェアの民主化
-  tagline: Takosumi PaaS の上で動作する self-hostable な AI-first chat & agent product。chat / agent / memory / space を core 機能として持つ
+  tagline: AI と会話してソフトウェアを作る。自分のサーバーで、自分のデータで。
   actions:
     - theme: brand
-      text: Use Takos
-      link: /apps/install-paths
-    - theme: alt
-      text: Installable App Model を読む
-      link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md
+      text: はじめる
+      link: /get-started/
     - theme: alt
       text: Takos の全体像
       link: /overview/
+    - theme: alt
+      text: Use Takos
+      link: /apps/install-paths
 
 features:
-  - icon: 📦
-    title: Installable App Model
-    details: "Takosumi Accounts が ownership を持つ install model。Takos は consumer product として bundled / third-party app を扱い、OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する"
-    link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md
-  - icon: 🧭
-    title: Takos 全体像
-    details: "Takosumi Account → Space → AppInstallation の階層と、Takos core features (chat, agent, memory, space) の関係を整理する"
+  - icon: 💬
+    title: AI チャット & エージェント
+    details: "AI エージェントと会話しながらソフトウェアを作成・編集。Git に自動コミットされるので、すべての変更が追跡可能"
     link: /overview/
-  - icon: 🧩
-    title: Deploy 構成
-    details: "`.takosumi/app.yml` (installer-bound) と `.takosumi/manifest.yml` (takosumi-git authoring input)、compiled manifest、binding catalog、install API を確認する"
-    link: /apps/
+  - icon: 📦
+    title: アプリをかんたんインストール
+    details: "Git URL を指定するだけでアプリをインストール。バンドルアプリ (docs, slide, excel, computer) は Space 作成時に自動で使える"
+    link: /apps/install-paths
+  - icon: 🏠
+    title: セルフホスト対応
+    details: "自分のサーバーにデプロイして完全にコントロール。データもアイデンティティも自分のもの"
+    link: /hosting/
   - icon: 📚
     title: リファレンス
-    details: "app.yml spec / binding catalog / install API / manifest spec / 用語集を参照する"
+    details: "API、CLI、マニフェスト仕様、用語集など"
     link: /reference/
 ---
 
-## Use Takos / Install Apps
+## ドキュメントの読み方
 
-Takos を使い始める場合は、operator Accounts の `/start?takos_url=...` に向く
-`Use Takos` で Takosumi Account / Space を作ります。bundled / third-party app
-を配布する場合は、operator-selected install UI に Git URL を渡す install link
-を使います。下は managed example です。
+このサイトは Takos プロダクトのドキュメントです。
 
-```html
-<a
-  href="https://takosumi.cloud/install?git=https://github.com/example/my-app&ref=v1.2.3"
->
-  Install App
-</a>
-```
-
-README に貼る場合:
-
-```md
-[![Install App](https://takosumi.cloud/badges/install-app.svg)](https://takosumi.cloud/install?git=https://github.com/example/my-app&ref=v1.2.3)
-```
-
-`ref` は tag か commit に pin します (`ref=main` / `ref=latest` は禁止)。詳細は
-[Install paths](/apps/install-paths) を参照。
-
-## Docs map
-
-このサイトは Takos product の docs です。platform 全体の仕様は別 repository の
-docs を参照します。
-
-| 目的                                       | 読む場所                                                                           |
-| ------------------------------------------ | ---------------------------------------------------------------------------------- |
-| Takos が何を提供するか                     | [概要](/overview/)                                                                 |
-| install / Git URL / self-host の入口       | [Install paths](/apps/install-paths)                                               |
-| Takos product の構造                       | [Architecture](/architecture/)                                                     |
-| deploy manifest の Takos 向け authoring    | [Deploy](/deploy/)                                                                 |
-| bundled apps / Store label / OIDC consumer | [Apps](/apps/)                                                                     |
-| Takos API / CLI                            | [Reference](/reference/)                                                           |
-| cross-product model                        | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs)     |
-| kernel manifest / Shape / deploy API       | [takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)             |
-| account / billing / launch token           | [takosumi-cloud docs](https://github.com/tako0614/takosumi-cloud/tree/master/docs) |
-| `.takosumi/` project convention            | [takosumi-git docs](https://github.com/tako0614/takosumi-git/tree/master/docs)     |
+| 目的                                     | 読む場所                                                                           |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| Takos で何ができるか                     | [全体像](/overview/)                                                               |
+| 使い始める                               | [はじめる](/get-started/)                                                          |
+| アプリのインストール方法                 | [Install paths](/apps/install-paths)                                               |
+| デプロイの設定                           | [Deploy](/deploy/)                                                                 |
+| ホスティングと運用                       | [Hosting](/hosting/)                                                               |
+| API・CLI リファレンス                    | [Reference](/reference/)                                                           |
+| プラットフォーム全体の仕様               | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs)     |
+| Takosumi カーネルの仕様                  | [takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)             |
+| Accounts・課金・ログイン                 | [takosumi-cloud docs](https://github.com/tako0614/takosumi-cloud/tree/master/docs) |
+| `.takosumi/` プロジェクト規約            | [takosumi-git docs](https://github.com/tako0614/takosumi-git/tree/master/docs)     |
