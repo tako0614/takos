@@ -4,9 +4,11 @@ Takos は users / app developers / operators 向けに **3 種類の entry path*
 提供する。一般ユーザーが instant に始める `Use Takos`、bundled / third-party app
 を Git URL から透明に install する `Install from Git`、そして Takos product
 distribution と app export bundle を自前環境に持ち込む `Self-host`。Takos
-product 自身は AI-first chat & agent platform であり、通常の InstallableApp
-ではない。 本ページは、どの path をどんな読者が選ぶか、各 path の流れ、README や
-ランディングページに置くボタン例、そして既存の "はじめる" 章への導線をまとめる。
+product は Takosumi 上で動く 1 self-hostable product であり、 AI agents / Git /
+chat / spaces / memory / tools を駆使した software の democratization を core
+concept と する。 本ページは、どの path をどんな読者が選ぶか、各 path
+の流れ、README や ランディングページに置くボタン例、そして既存の "はじめる"
+章への導線をまとめる。
 
 ::: info このページで依存してよい範囲 / してはいけない範囲
 
@@ -62,8 +64,11 @@ chat 開始
 裏側では:
 
 - Takos product は product-managed shared-cell runtime に接続される
-- Takos product 自身は通常の Git URL InstallableApp として記録されず、Accounts
-  ledger では `source.gitUrl: takos-product://managed/takos` になる
+- Takos product 自身も AppInstallation ledger に登録される。 distribution
+  boundary を表すため、 source は Git URL ではなく
+  `source.gitUrl:
+  takos-product://managed/takos` として記録される (lifecycle /
+  record 構造は他の installation と同等で、 architectural 特権ではない)
 - bundled apps の AppInstallation が必要に応じて `mode: shared-cell` で作られる
 - OIDC client binding が `operator.identity.oidc` namespace export で解決される
   Takosumi Accounts に作成される
