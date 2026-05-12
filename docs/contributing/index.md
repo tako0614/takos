@@ -1,9 +1,9 @@
 # Implementation Plan Index
 
-This directory is the Takos shell-owned planning index for Takosumi kernel and Takos distribution implementation work.
-It lives in the `takos` product root so the product shell can reference sibling-repo boundaries without making the
-kernel own Takos product docs. Run Takos product gates from the `takos` product root; run kernel proof commands from
-sibling `../takosumi` when a document says so.
+This directory is a Takos shell-local index for Takos distribution work and sibling Takosumi kernel proof docs. It lives
+in the `takos` product root so the product shell can reference sibling-repo boundaries without making either Takos docs
+or the kernel own the other product's planning. Run Takos product gates from the `takos` product root; run kernel proof
+commands from sibling `../takosumi` when a document says so.
 
 ## Architecture
 

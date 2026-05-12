@@ -13,7 +13,7 @@ contracts must reference the exact residency profile, provider set, and exceptio
 | -------------- | ------------------------------------------------------------------------------------------------------ |
 | Owner          | Data protection owner                                                                                  |
 | Last reviewed  | 2026-05-07                                                                                             |
-| Scope          | Takos Web / API, Takos Git hosting, Takos agent execution, Takos-managed deploy/runtime operations     |
+| Scope          | Takos Web / API, Takos Git hosting, Takos agent execution, Takosumi/operator-managed deploy/runtime operations used by Takos spaces |
 | Current status | Policy published for GA readiness                                                                      |
 | GA requirement | Production spaces must record residency profile, primary region, provider set, and approved exceptions |
 
