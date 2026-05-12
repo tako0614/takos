@@ -47,10 +47,26 @@ const requiredDocs = [
     expected: [
       'Release Announcement Template',
       'Breaking Changes',
+      'Legacy API removal scope',
       'Migration Guide',
       'Validation Evidence',
+      'Migration window evidence',
       'Rollback Plan',
       'Block release if',
+    ],
+  },
+  {
+    path: '../takos-private/docs/operations/migration-window-evidence.md',
+    expected: [
+      'Migration Window Evidence',
+      'Removal Scope',
+      'Takos-owned OAuth/OIDC issuer endpoints',
+      'Takos app public/proxy direct deploy routes',
+      'does **not** include takosumi kernel',
+      'POST /v1/deployments',
+      'Required Evidence',
+      'Completion Rule',
+      'public announcement evidence',
     ],
   },
 ];
