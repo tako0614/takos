@@ -12,6 +12,8 @@ const requiredDocs = [
       'Release Artifact Pipelines',
       'takos-private/',
       'release announcement',
+      'deno task audit:roadmap-release-readiness',
+      'ROADMAP 1.x blockers',
     ],
   },
   {
@@ -81,6 +83,8 @@ const requiredDocs = [
       'Release Gate',
       'CI',
       'same release candidate',
+      'takos-ecosystem release/sign-off evidence',
+      'Takos release/tag sequence',
       'migration-window-evidence.md',
       'Keep the ROADMAP at `88/90`',
     ],
