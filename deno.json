@@ -49,6 +49,15 @@
     ]
   },
   "lint": {
+    "exclude": [
+      "app/",
+      "agent/",
+      "git/",
+      "node_modules/",
+      "docs/.vitepress/cache/",
+      "docs/.vitepress/dist/",
+      ".terraform-plan/"
+    ],
     "rules": {
       "tags": ["recommended"],
       "include": ["no-eval"]
