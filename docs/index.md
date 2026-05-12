@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Takos
-  text: AI software creation product
-  tagline: self-hostable AI software creation product
+  text: AI-first chat & agent platform
+  tagline: self-hostable chat / agent / memory / space platform
   actions:
     - theme: brand
       text: Use Takos
@@ -19,27 +19,28 @@ hero:
 features:
   - icon: 📦
     title: Installable App Model
-    details: 'Takos が bundled / third-party app を install するときの ownership model。OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する。install path (Use Takos / Install from Git / Self-host) と runtime mode (shared-cell / dedicated / self-hosted) の組み合わせで bundled / third-party apps を扱う'
+    details: "Takos が bundled / third-party app を install するときの ownership model。OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する。install path (Use Takos / Install from Git / Self-host) と runtime mode (shared-cell / dedicated / self-hosted) の組み合わせで bundled / third-party apps を扱う"
     link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md
   - icon: 🧭
     title: Takos 全体像
-    details: 'Takosumi Account → Space → AppInstallation の階層と、Takos software creation features (agents, Git, memory, spaces, tools) の関係を整理する'
+    details: "Takosumi Account → Space → AppInstallation の階層と、Takos core features (chat, agent, memory, space) の関係を整理する"
     link: /overview/
   - icon: 🧩
     title: Deploy 構成
-    details: '`.takosumi/app.yml` (installer-bound) と `.takosumi/manifest.yml` (takosumi-git authoring input)、compiled manifest、binding catalog、install API を確認する'
+    details: "`.takosumi/app.yml` (installer-bound) と `.takosumi/manifest.yml` (takosumi-git authoring input)、compiled manifest、binding catalog、install API を確認する"
     link: /apps/
   - icon: 📚
     title: リファレンス
-    details: 'app.yml spec / binding catalog / install API / manifest spec / 用語集を参照する'
+    details: "app.yml spec / binding catalog / install API / manifest spec / 用語集を参照する"
     link: /reference/
 ---
 
 ## Use Takos / Install Apps
 
-Takos を使い始める場合は、operator Accounts の `/start?takos_url=...` に向く `Use Takos` で Takosumi Account /
-Space を作ります。bundled / third-party app を配布する場合は、operator-selected install UI に Git URL を渡す install
-link を使います。下は managed example です。
+Takos を使い始める場合は、operator Accounts の `/start?takos_url=...` に向く
+`Use Takos` で Takosumi Account / Space を作ります。bundled / third-party app
+を配布する場合は、operator-selected install UI に Git URL を渡す install link
+を使います。下は managed example です。
 
 ```html
 <a
@@ -55,12 +56,13 @@ README に貼る場合:
 [![Install App](https://takosumi.cloud/badges/install-app.svg)](https://takosumi.cloud/install?git=https://github.com/example/my-app&ref=v1.2.3)
 ```
 
-`ref` は tag か commit に pin します (`ref=main` / `ref=latest` は禁止)。詳細は [Install paths](/apps/install-paths)
-を参照。
+`ref` は tag か commit に pin します (`ref=main` / `ref=latest` は禁止)。詳細は
+[Install paths](/apps/install-paths) を参照。
 
 ## Docs map
 
-このサイトは Takos product の docs です。platform 全体の仕様は別 repository の docs を参照します。
+このサイトは Takos product の docs です。platform 全体の仕様は別 repository の
+docs を参照します。
 
 | 目的                                       | 読む場所                                                                           |
 | ------------------------------------------ | ---------------------------------------------------------------------------------- |

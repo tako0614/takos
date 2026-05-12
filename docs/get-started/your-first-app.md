@@ -16,8 +16,8 @@
 
 ```text
 [Install] → AppInstallation 作成 → OIDC client binding 発行
-        → launch token 発行 → /_takosumi/launch local verify
-        → Accounts consume endpoint で jti 消費 → owner session 作成
+        → opaque launch token 発行 → /_takosumi/launch
+        → Accounts /consume endpoint で one-time redeem → owner session 作成
         → そのまま app が開く
 ```
 
