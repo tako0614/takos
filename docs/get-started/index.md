@@ -21,7 +21,7 @@ Accounts consume 経由でそのまま chat が開きます。
 - 所有権: あなたの Takosumi Account / Space。bundled apps は AppInstallation として記録される
 
 ```text
-takos.jp → [Use Takos] → Takosumi Account 作成 → 即 chat
+operator Accounts /start?takos_url=... → [Use Takos] → Takosumi Account / Space 作成 → 即 chat
 ```
 
 詳しくは [apps/install-paths § Use Takos](/apps/install-paths) を参照。

@@ -9,8 +9,8 @@ distribution と app export bundle を自前環境に持ち込む `Self-host`。
 ::: info このページで依存してよい範囲 / してはいけない範囲
 
 - 依存してよい: 3 path の name (`Use Takos` / `Install from Git` / `Self-host`) と target audience
-  の対応、operator-selected install UI URL (managed example: `takosumi.cloud/install?...`) の形、`ref` は tag / commit
-  に pin する規律、ボタン HTML の正本形。
+  の対応、operator-selected Accounts URL (例: `/start?takos_url=...`) と install UI URL
+  (managed example: `takosumi.cloud/install?...`) の形、`ref` は tag / commit に pin する規律、ボタン HTML の正本形。
 - 依存してはいけない: 各 path の internal binding default 値、 shared-cell 上の cell 配置、self-host 先の OIDC issuer
   の選定基準。 これらは
   [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md) と
@@ -23,7 +23,7 @@ distribution と app export bundle を自前環境に持ち込む `Self-host`。
 
 | path               | target user                       | runtime mode                     | install 入口                                                                 | UX                                      |
 | ------------------ | --------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------- |
-| `Use Takos`        | 一般ユーザー / 試したい人         | `shared-cell`                    | takos.jp の `Use Takos` ボタン                                               | Takosumi Account / Space 作成 → 即 chat |
+| `Use Takos`        | 一般ユーザー / 試したい人         | `shared-cell`                    | operator Accounts の `/start?takos_url=...` ボタン                           | Takosumi Account / Space 作成 → 即 chat |
 | `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (managed example: `takosumi.cloud/install?...`) | app preview 確認 → build → deploy       |
 | `Self-host`        | 退出 / 企業 / 主権重視            | `self-hosted`                    | operator deploy + app export/import                                          | 自前 takosumi で運用                    |
 
@@ -38,22 +38,26 @@ distribution と app export bundle を自前環境に持ち込む `Self-host`。
 ### 2.1 流れ
 
 ```txt
-takos.jp
+Takos landing / operator site
   ↓ Use Takos
-Takosumi Account 作成 / login
+Takosumi Accounts /start
+  ↓
+Takosumi Account / Space 作成
+  ↓
+Takos product launch token JWS 発行
+  ↓
+Takos /_takosumi/launch に遷移
   ↓
 Space 作成 + bundled apps auto-install
-  ↓
-launch token JWS 発行
-  ↓
-takos.jp/chat (or takos-acct123.takosumi.app) に即遷移
   ↓
 chat 開始
 ```
 
 裏側では:
 
-- Takos product は shared-cell runtime に接続される
+- Takos product は product-managed shared-cell runtime に接続される
+- Takos product 自身は通常の Git URL InstallableApp として記録されず、Accounts ledger では
+  `source.gitUrl: takos-product://managed/takos` になる
 - bundled apps の AppInstallation が必要に応じて `mode: shared-cell` で作られる
 - OIDC client binding が `operator.identity.oidc` namespace export で解決される Takosumi Accounts に作成される
 - per-installation data namespace が確保される
@@ -62,12 +66,13 @@ chat 開始
 ### 2.2 ボタン例
 
 ```html
-<a href="https://takos.jp/start">
+<a href="https://accounts.example.com/start?takos_url=https%3A%2F%2Ftakos.example.com">
   Use Takos
 </a>
 ```
 
-`takos.jp` の hero ボタンや、ブログの「今すぐ試す」CTA に置く。
+`accounts.example.com` は operator が選ぶ Takosumi Accounts host、`takos.example.com` は launch 先の Takos host
+の例。特定の `accounts.takosumi.cloud` hostname に依存しない。
 
 ### 2.3 後から乗り換えられる
 
