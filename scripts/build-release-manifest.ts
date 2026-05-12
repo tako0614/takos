@@ -22,17 +22,70 @@ type CommandManifest = {
   env?: Record<string, string>;
 };
 
+type BuildReleaseManifestOptions = {
+  output: string | null;
+  imageDigestDir: string;
+  requireImageDigests: boolean;
+};
+
+type GitInfo = {
+  available: boolean;
+  branch?: string | null;
+  commit?: string | null;
+  shortCommit?: string | null;
+  describe?: string | null;
+  dirty?: boolean | null;
+};
+
+type OfficialImage = {
+  name: string;
+  context: string;
+  dockerfile: string;
+};
+
+type ImageDigestRecord = {
+  name?: string;
+  image?: string;
+  digest?: string;
+  digestRef?: string;
+  tags?: string[];
+  commit?: string;
+  workflowRun?: string;
+  sbom?: boolean;
+  provenance?: boolean;
+};
+
+const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
+  {
+    name: 'takos-app',
+    context: '.',
+    dockerfile: 'deploy/docker/takos-app.Dockerfile',
+  },
+  {
+    name: 'takos-git',
+    context: 'git',
+    dockerfile: 'git/Dockerfile',
+  },
+  {
+    name: 'takos-agent',
+    context: 'agent',
+    dockerfile: 'agent/Dockerfile',
+  },
+];
+
 const root = Deno.cwd();
-const outputArg = parseOutputArg(Deno.args);
+const options = parseArgs(Deno.args);
 const commands = validationCommands();
 assertRequiredValidationCommands(commands);
+const gitInfo = await collectGitInfo();
 
 const manifest = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   package: await collectPackageManifest(),
-  git: await collectGitInfo(),
+  git: gitInfo,
   validationCommands: commands,
+  officialImages: await collectOfficialImages(gitInfo, options),
   distributionContract: await collectDistributionContract(),
   distributions: await collectDistributionManifests(),
   serviceSet: await collectServiceSet(),
@@ -41,22 +94,48 @@ const manifest = {
 };
 
 const json = `${JSON.stringify(manifest, null, 2)}\n`;
-if (outputArg) {
-  await Deno.writeTextFile(outputArg, json);
+if (options.output) {
+  await Deno.writeTextFile(options.output, json);
 } else {
   console.log(json.trimEnd());
 }
 
-function parseOutputArg(args: string[]): string | null {
-  if (args.length === 0) return null;
-  const [flag, value, ...rest] = args;
-  if (flag !== '--output' || !value || rest.length > 0) {
-    console.error(
-      'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>]',
-    );
-    Deno.exit(2);
+function parseArgs(args: string[]): BuildReleaseManifestOptions {
+  const options: BuildReleaseManifestOptions = {
+    output: null,
+    imageDigestDir: 'dist/image-digests',
+    requireImageDigests: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const flag = args[index];
+    if (flag === '--output') {
+      const value = args[++index];
+      if (!value) usage();
+      options.output = value;
+      continue;
+    }
+    if (flag === '--image-digest-dir') {
+      const value = args[++index];
+      if (!value) usage();
+      options.imageDigestDir = value;
+      continue;
+    }
+    if (flag === '--require-image-digests') {
+      options.requireImageDigests = true;
+      continue;
+    }
+    usage();
   }
-  return value;
+
+  return options;
+}
+
+function usage(): never {
+  console.error(
+    'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--require-image-digests]',
+  );
+  Deno.exit(2);
 }
 
 async function collectPackageManifest(): Promise<JsonValue> {
@@ -88,7 +167,7 @@ async function collectPackageManifest(): Promise<JsonValue> {
   };
 }
 
-async function collectGitInfo(): Promise<JsonValue> {
+async function collectGitInfo(): Promise<GitInfo> {
   const commit = await git(['rev-parse', 'HEAD']);
   const shortCommit = await git(['rev-parse', '--short', 'HEAD']);
   const branch = await git(['branch', '--show-current']);
@@ -107,6 +186,142 @@ async function collectGitInfo(): Promise<JsonValue> {
     describe: emptyToNull(describe),
     dirty: status === null ? null : status.length > 0,
   };
+}
+
+async function collectOfficialImages(
+  gitInfo: GitInfo,
+  options: BuildReleaseManifestOptions,
+): Promise<JsonValue> {
+  const owner = await collectGitHubOwner();
+  const digestRecords = await collectImageDigestRecords(options.imageDigestDir);
+  const errors: string[] = [];
+  const images = OFFICIAL_TAKOS_IMAGES.map((image) => {
+    const repository = `ghcr.io/${owner}/${image.name}`;
+    const record = digestRecords.get(image.name);
+    const digest = record?.record.digest ?? null;
+    const digestRef = digest ? `${repository}@${digest}` : null;
+
+    if (!record) {
+      errors.push(`${image.name}: missing image digest metadata`);
+    } else {
+      validateImageDigestRecord(
+        image.name,
+        repository,
+        record.record,
+        gitInfo,
+        errors,
+      );
+    }
+
+    return {
+      ...image,
+      repository,
+      commitPin: gitInfo.commit ?? null,
+      tagPolicy: ['semver', `sha-${gitInfo.shortCommit ?? '<commit>'}`],
+      digest,
+      digestRef,
+      tags: record?.record.tags ?? [],
+      sbom: {
+        required: true,
+        attached: record?.record.sbom ?? null,
+      },
+      provenance: {
+        required: true,
+        attached: record?.record.provenance ?? null,
+      },
+      evidence: record
+        ? {
+          path: record.path,
+          expectedPath: null,
+          workflowRun: record.record.workflowRun ?? null,
+        }
+        : {
+          path: null,
+          expectedPath: `${options.imageDigestDir}/${image.name}.json`,
+          workflowRun: null,
+        },
+    };
+  });
+
+  if (options.requireImageDigests && errors.length > 0) {
+    console.error('Release manifest image digest validation failed:');
+    for (const error of errors) console.error(`- ${error}`);
+    Deno.exit(1);
+  }
+
+  return {
+    required: OFFICIAL_TAKOS_IMAGES.map((image) => image.name),
+    imageDigestDir: options.imageDigestDir,
+    requireImageDigests: options.requireImageDigests,
+    complete: errors.length === 0,
+    errors,
+    images,
+  };
+}
+
+async function collectImageDigestRecords(
+  dir: string,
+): Promise<Map<string, { path: string; record: ImageDigestRecord }>> {
+  const records = new Map<string, { path: string; record: ImageDigestRecord }>();
+
+  try {
+    for await (const entry of Deno.readDir(dir)) {
+      if (!entry.isFile || !entry.name.endsWith('.json')) continue;
+      const path = `${dir}/${entry.name}`;
+      const parsed = await readJson<ImageDigestRecord>(path);
+      const name = parsed.name ?? entry.name.replace(/\.json$/, '');
+      records.set(name, { path, record: parsed });
+    }
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return records;
+    throw error;
+  }
+
+  return records;
+}
+
+function validateImageDigestRecord(
+  name: string,
+  repository: string,
+  record: ImageDigestRecord,
+  gitInfo: GitInfo,
+  errors: string[],
+): void {
+  if (record.image !== repository) {
+    errors.push(`${name}: image must be ${repository}`);
+  }
+  if (!record.digest || !/^sha256:[a-f0-9]{64}$/.test(record.digest)) {
+    errors.push(`${name}: digest must be a sha256 image digest`);
+  }
+  if (record.digestRef !== `${repository}@${record.digest}`) {
+    errors.push(`${name}: digestRef must pin ${repository}@${record.digest}`);
+  }
+  if (!Array.isArray(record.tags) || record.tags.length === 0) {
+    errors.push(`${name}: tags must include semver and sha-* references`);
+  }
+  if (gitInfo.commit && record.commit !== gitInfo.commit) {
+    errors.push(`${name}: commit must match ${gitInfo.commit}`);
+  }
+  if (record.sbom !== true) {
+    errors.push(`${name}: SBOM attestation must be recorded`);
+  }
+  if (record.provenance !== true) {
+    errors.push(`${name}: provenance attestation must be recorded`);
+  }
+}
+
+async function collectGitHubOwner(): Promise<string> {
+  const remote = await git(['config', '--get', 'remote.origin.url']);
+  return parseGitHubOwner(remote) ?? '<owner>';
+}
+
+function parseGitHubOwner(remote: string | null): string | null {
+  if (!remote) return null;
+  const httpsMatch = /^https:\/\/github\.com\/([^/]+)\//.exec(remote);
+  if (httpsMatch) return httpsMatch[1];
+  const sshMatch = /^git@github\.com:([^/]+)\//.exec(remote);
+  if (sshMatch) return sshMatch[1];
+  return null;
 }
 
 function validationCommands(): CommandManifest[] {
