@@ -64,6 +64,15 @@ Takos runtime には Google OAuth client secret を配りません。Google / Gi
 passkey / enterprise OIDC などの upstream IdP credential は Takosumi Accounts
 側で管理します。
 
+Keycloak / Authentik / Auth0 などを使う場合も、Takos runtime へそれらの issuer
+URL を直接設定しません。Takosumi Accounts の upstream OIDC provider
+として登録し、Takos runtime は引き続き Accounts issuer だけを `OIDC_ISSUER_URL`
+として consume します。dev/test runner では `takosumi-cloud accounts serve` に
+`--oidc-provider-id`、`--oidc-issuer`、
+`--oidc-authorization-endpoint`、`--oidc-token-endpoint`、
+`--oidc-userinfo-endpoint`、`--oidc-client-id`、`--oidc-redirect-uri` を渡して
+Keycloak-style upstream OIDC を有効化できます。
+
 ### Public Origins
 
 Takos runtime 側で必要な public origin は `ADMIN_DOMAIN` と `OIDC_REDIRECT_URI`
