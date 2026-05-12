@@ -5,11 +5,12 @@ artifacts (Helm / Terraform / distribution manifests / validator) を集約す�
 は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
 
-> **Takos** is a self-hostable AI software creation product. It combines AI agents, Git, memory, spaces, and tools so
-> people can create, manage, and share software with AI agents. Bundled apps (`takos-docs / takos-slide / takos-excel /
-> takos-computer / yurucommu`) auto-install when a new space is created. Takos runs on **Takosumi**, a generic PaaS for
-> JSON-LD Shape manifests, resource graphs, output wiring, and provider materialization across arbitrary infrastructure.
-> `takosumi-cloud` is a replaceable operator distribution / deployment, not a privileged Takosumi layer.
+> **Takos** is a self-hostable AI-first chat & agent platform with `chat / agent / memory / space` as core functions.
+> Bundled apps (`takos-docs / takos-slide / takos-excel / takos-computer / yurucommu`) auto-install when a new space is
+> created. Takos runs on **Takosumi**, a generic PaaS for JSON-LD Shape manifests, resource graphs, output wiring, and
+> provider materialization across arbitrary infrastructure. Takos is the unique top consumer of Takosumi, not part of
+> Takosumi and not a normal InstallableApp. `takosumi-cloud` is a replaceable operator distribution / deployment, not a
+> privileged Takosumi layer.
 
 旧来の言い換えを増やさず、root docs の vocabulary に統一する。
 
@@ -40,7 +41,7 @@ artifacts (Helm / Terraform / distribution manifests / validator) を集約す�
 
 ## Substitutability
 
-- **Takos product 自体**: AI software creation product。層ではなく product。
+- **Takos product 自体**: AI-first chat & agent platform。層ではなく unique top consumer。
 - **Takosumi への依存**: kernel / operator account plane / takosumi-git は各々 substitutable (詳細は
   [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §「Layering Principle: Substitutability」)。
 
