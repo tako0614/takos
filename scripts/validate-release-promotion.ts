@@ -69,6 +69,22 @@ const requiredDocs = [
       'public announcement evidence',
     ],
   },
+  {
+    path: '../takos-private/docs/operations/roadmap-1x-release-readiness.md',
+    expected: [
+      'ROADMAP 1.x Release Readiness',
+      'release gate 17/17 green',
+      'community announcement + migration window',
+      'GitHub Actions',
+      'account billing',
+      'spending-limit state',
+      'Release Gate',
+      'CI',
+      'same release candidate',
+      'migration-window-evidence.md',
+      'Keep the ROADMAP at `88/90`',
+    ],
+  },
 ];
 
 const requiredTextFiles = [
