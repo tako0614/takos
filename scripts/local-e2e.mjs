@@ -23,7 +23,7 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function findAvailablePort(usedPorts) {
+function findAvailablePort(usedPorts) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const listener = Deno.listen({ hostname: '127.0.0.1', port: 0 });
     const port = listener.addr.port;

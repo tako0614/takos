@@ -7,8 +7,8 @@
  *   await buildContainer({ entryPoint: 'src/index.ts', name: 'takos-executor', ... });
  */
 
-import { build } from "esbuild";
-import { resolve } from "path";
+import { build } from 'esbuild';
+import { resolve } from 'path';
 
 /**
  * @param {object} opts
@@ -23,8 +23,8 @@ export async function buildContainer(opts) {
   const {
     appDir,
     name,
-    entryPoint = "src/index.ts",
-    outfile = "dist/index.js",
+    entryPoint = 'src/index.ts',
+    outfile = 'dist/index.js',
     alias = {},
     external = [],
   } = opts;
@@ -32,9 +32,9 @@ export async function buildContainer(opts) {
   await build({
     entryPoints: [resolve(appDir, entryPoint)],
     bundle: true,
-    platform: "node",
-    target: "node20",
-    format: "esm",
+    platform: 'node',
+    target: 'node20',
+    format: 'esm',
     outfile: resolve(appDir, outfile),
     banner: {
       js:
@@ -42,14 +42,14 @@ export async function buildContainer(opts) {
     },
     alias,
     loader: {
-      ".md": "text",
+      '.md': 'text',
     },
     external: [
-      "hono",
-      "@hono/node-server",
+      'hono',
+      '@hono/node-server',
       ...external,
     ],
-    logLevel: "info",
+    logLevel: 'info',
   });
 
   console.log(`Build complete (${name}): ${outfile}`);

@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import process from 'node:process';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
 const checkMode = process.argv.includes('--check');
@@ -177,7 +178,7 @@ function serviceNamesFromComposeText(text) {
       continue;
     }
     if (inServices && /^[a-zA-Z0-9_-]+:\s*$/.test(line)) break;
-    const match = inServices ? line.match(/^  ([a-zA-Z0-9_-]+):\s*$/) : undefined;
+    const match = inServices ? line.match(/^ {2}([a-zA-Z0-9_-]+):\s*$/) : undefined;
     if (match) names.push(match[1]);
   }
   return names;

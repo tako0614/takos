@@ -1,24 +1,24 @@
-import { existsSync, readdirSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
+const repoRoot = path.resolve(scriptDir, '..');
 
 const SCAN_ROOTS = [
-  "apps",
-  "packages",
-  "scripts",
+  'apps',
+  'packages',
+  'scripts',
 ].map((relativePath) => path.join(repoRoot, relativePath));
 
 const SKIP_DIRS = new Set([
-  ".git",
-  ".pnpm-store",
-  "node_modules",
+  '.git',
+  '.pnpm-store',
+  'node_modules',
 ]);
 
 function toRepoRelative(targetPath) {
-  return path.relative(repoRoot, targetPath).split(path.sep).join("/");
+  return path.relative(repoRoot, targetPath).split(path.sep).join('/');
 }
 
 function collectPackageLocks(startDir) {
@@ -48,7 +48,7 @@ function collectPackageLocks(startDir) {
         }
 
         // git サブモジュールのディレクトリは除外する（.git はディレクトリではなくファイルとして存在するため）
-        if (existsSync(path.join(fullPath, ".git"))) {
+        if (existsSync(path.join(fullPath, '.git'))) {
           continue;
         }
 
@@ -56,7 +56,7 @@ function collectPackageLocks(startDir) {
         continue;
       }
 
-      if (entry.isFile() && entry.name === "package-lock.json") {
+      if (entry.isFile() && entry.name === 'package-lock.json') {
         violations.push(toRepoRelative(fullPath));
       }
     }
@@ -67,9 +67,9 @@ function collectPackageLocks(startDir) {
 
 const violations = new Set();
 
-const rootLockfile = path.join(repoRoot, "package-lock.json");
+const rootLockfile = path.join(repoRoot, 'package-lock.json');
 if (existsSync(rootLockfile)) {
-  violations.add("package-lock.json");
+  violations.add('package-lock.json');
 }
 
 for (const scanRoot of SCAN_ROOTS) {
@@ -83,12 +83,12 @@ const sortedViolations = [...violations].sort();
 if (sortedViolations.length > 0) {
   console.error(
     [
-      "package-lock.json is not allowed under pnpm-managed roots.",
-      "Remove:",
+      'package-lock.json is not allowed under pnpm-managed roots.',
+      'Remove:',
       ...sortedViolations.map((filePath) => ` - ${filePath}`),
-    ].join("\n"),
+    ].join('\n'),
   );
   Deno.exit(1);
 }
 
-console.log("No package-lock.json files found under pnpm-managed roots.");
+console.log('No package-lock.json files found under pnpm-managed roots.');
