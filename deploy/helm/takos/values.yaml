@@ -55,6 +55,13 @@ runtimeConfig:
   allowUnsafeProductionDefaults: false
   managedResources: {}
   defaultAppDistributionJson: ""
+  defaultApps:
+    preinstallEnabled: false
+    installApplyUrl: ""
+    installAccountId: ""
+    installSubject: ""
+    installMode: ""
+    installRuntimeBaseUrl: ""
   plugins:
     auth: takos.kernel.reference
     notification: takos.kernel.reference
@@ -155,6 +162,7 @@ secrets:
   executorProxySecret: ""
   internalApiSecret: ""
   accountsDatabaseUrl: ""
+  defaultAppInstallApplyToken: ""
   googleClientId: ""
   googleClientSecret: ""
   oidcClientSecret: ""

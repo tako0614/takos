@@ -19,6 +19,24 @@ data:
   {{ with .Values.runtimeConfig.defaultAppDistributionJson }}
   TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: {{ . | quote }}
   {{ end }}
+  {{ with .Values.runtimeConfig.defaultApps }}
+  TAKOS_DEFAULT_APPS_PREINSTALL: {{ ternary "true" "false" (.preinstallEnabled | default false) | quote }}
+  {{ with .installApplyUrl }}
+  TAKOS_DEFAULT_APP_INSTALL_APPLY_URL: {{ . | quote }}
+  {{ end }}
+  {{ with .installAccountId }}
+  TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID: {{ . | quote }}
+  {{ end }}
+  {{ with .installSubject }}
+  TAKOS_DEFAULT_APP_INSTALL_SUBJECT: {{ . | quote }}
+  {{ end }}
+  {{ with .installMode }}
+  TAKOS_DEFAULT_APP_INSTALL_MODE: {{ . | quote }}
+  {{ end }}
+  {{ with .installRuntimeBaseUrl }}
+  TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL: {{ . | quote }}
+  {{ end }}
+  {{ end }}
   ADMIN_DOMAIN: {{ .Values.domains.admin | quote }}
   TENANT_BASE_DOMAIN: {{ .Values.domains.tenantBase | quote }}
   TAKOS_APP_INTERNAL_URL: {{ include "takos.appUrl" . | quote }}
