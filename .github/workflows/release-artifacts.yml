@@ -65,6 +65,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      attestations: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -103,6 +105,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build and publish OCI image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
@@ -110,6 +113,50 @@ jobs:
           push: ${{ github.event_name == 'push' || inputs.publish == true }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Record image digest metadata
+        if: github.event_name == 'push' || inputs.publish == true
+        shell: bash
+        env:
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Invalid image digest for ${{ matrix.image }}: ${IMAGE_DIGEST}" >&2
+            exit 1
+          fi
+          mkdir -p dist/image-digests
+          tags_json="$(printf '%s\n' "${IMAGE_TAGS}" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+          jq -n \
+            --arg name "${{ matrix.image }}" \
+            --arg image "${IMAGE_NAME}" \
+            --arg digest "${IMAGE_DIGEST}" \
+            --arg digestRef "${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --arg commit "${GITHUB_SHA}" \
+            --arg workflowRun "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --argjson tags "${tags_json}" \
+            '{
+              name: $name,
+              image: $image,
+              digest: $digest,
+              digestRef: $digestRef,
+              tags: $tags,
+              commit: $commit,
+              workflowRun: $workflowRun,
+              sbom: true,
+              provenance: true
+            }' > "dist/image-digests/${{ matrix.image }}.json"
+
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' || inputs.publish == true
+        with:
+          name: takos-image-digest-${{ matrix.image }}
+          path: dist/image-digests/${{ matrix.image }}.json
+          if-no-files-found: error
 
   helm-chart:
     name: Helm chart
@@ -169,4 +216,45 @@ jobs:
         with:
           name: takos-helm-chart
           path: dist/helm/*.tgz
+          if-no-files-found: error
+
+  release-manifest:
+    name: Release manifest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate, oci-images, helm-chart]
+    if: github.event_name == 'push' || inputs.publish == true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: takos-image-digest-*
+          path: dist/image-digests
+          merge-multiple: true
+
+      - name: Build release manifest
+        run: |
+          deno run \
+            --config deno.json \
+            --allow-read \
+            --allow-run=git \
+            --allow-write=dist/release-manifest.json \
+            scripts/build-release-manifest.ts \
+            --image-digest-dir dist/image-digests \
+            --require-image-digests \
+            --output dist/release-manifest.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: takos-release-manifest
+          path: dist/release-manifest.json
           if-no-files-found: error
