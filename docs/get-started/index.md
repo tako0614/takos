@@ -167,7 +167,8 @@ takosumi-git push \
 ```
 
 `takosumi-git` は workflow を実行して artifact URI を確定し、Takosumi kernel の `POST /v1/deployments` に manifest
-を渡します。Takos product は Web UI と public API で multi-tenant / OAuth / billing / catalog を扱う層です。
+を渡します。Takos product は Web UI / public API / app catalog を扱い、identity / OIDC issuer / billing は operator
+account plane (Takosumi Accounts) に委ねます。
 
 ## Takosumi Account を作る (簡略手順)
 
