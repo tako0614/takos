@@ -13,7 +13,8 @@
 
 Takos の customer-facing security disclosure surface は Takos Web / API +
 Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi kernel
-は generic PaaS の JSON-LD Shape manifest / resource graph / provider materialization surface、takosumi-git は installer / workflow / git bridge
+は generic PaaS の JSON-LD Shape manifest / resource graph / provider
+materialization surface、takosumi-git は installer / workflow / git bridge
 であり、Takos managed service として影響する場合は Takos security intake
 が受け付け、必要に応じて Takosumi Accounts (identity / billing owner) を含む
 owning product root へ triage します。
@@ -23,10 +24,10 @@ In scope:
 - Takos Web / API (`takos/app`)
 - Takos Git hosting (`takos/git`)
 - Takos agent service (`takos/agent`)
-- Takosumi Accounts (`operator.identity.oidc` / `operator.billing.default`)
-  — identity / billing / AppInstallation owner; OIDC issuer, launch token JWS
-  signing, AppGrant revocation, and pairwise OIDC subject derivation are in
-  scope when Takos managed service is impacted
+- Takosumi Accounts (`operator.identity.oidc` / `operator.billing.default`) —
+  identity / billing / AppInstallation owner; OIDC issuer, opaque launch token
+  redeem, AppGrant revocation, and pairwise OIDC subject derivation are in scope
+  when Takos managed service is impacted
 - Takos managed deployment artifacts under `takos/deploy/`
 - Takos docs and public service configuration
 - Takos bundled apps when deployed as part of Takos managed service

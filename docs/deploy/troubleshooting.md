@@ -31,9 +31,9 @@ binding 宣言、workflow artifact output、install params を確認してくだ
 
 ### artifact digest がない
 
-`worker@v1` は `spec.artifact.hash` に concrete digest が必要です。workflow output
-から digest を materialize する場合は `workflowRef.target` が正しい field を指して
-いるか確認します。
+`worker@v1` は `spec.artifact.hash` に concrete digest が必要です。workflow
+output から digest を materialize する場合は `workflowRef.target` が正しい field
+を指して いるか確認します。
 
 ## Binding / Accounts
 
@@ -47,9 +47,13 @@ binding 宣言、workflow artifact output、install params を確認してくだ
 
 - `ACCOUNTS_BASE_URL` が install 時に materialize されているか確認する
 - `INSTALL_LAUNCH_INSTALLATION_ID` が AppInstallation id と一致するか確認する
-- `INSTALL_LAUNCH_REDIRECT_URI` が Accounts 発行時に bind した URL と完全一致するか確認する (mismatch は 409)
-- `/_takosumi/launch` の handler が `${ACCOUNTS_BASE_URL}/v1/installations/${INSTALL_LAUNCH_INSTALLATION_ID}/launch-token/consume` を TLS で叩いているか確認する
-- token が one-time (used flag) で消費されたか、 期限切れ (5 分 hard cap) を超えていないか確認する
+- `INSTALL_LAUNCH_REDIRECT_URI` が Accounts 発行時に bind した URL
+  と完全一致するか確認する (mismatch は 409)
+- `/_takosumi/launch` の handler が
+  `${ACCOUNTS_BASE_URL}/v1/installations/${INSTALL_LAUNCH_INSTALLATION_ID}/launch-token/consume`
+  を TLS で叩いているか確認する
+- token が one-time (used flag) で消費されたか、 期限切れ (5 分 hard cap)
+  を超えていないか確認する
 
 ## Direct deploy
 
@@ -63,7 +67,8 @@ takosumi deploy ./compiled-manifest.yml --remote "$TAKOSUMI_ENDPOINT"
 takosumi status my-app --remote "$TAKOSUMI_ENDPOINT"
 ```
 
-Provider operation の失敗は Takosumi kernel の status output / conditions を確認します。
+Provider operation の失敗は Takosumi kernel の status output / conditions
+を確認します。
 
 ## Auth
 
@@ -73,7 +78,8 @@ takos login --api-url https://takos.example.com --token "$TAKOSUMI_ACCOUNTS_PAT"
 takos endpoint show
 ```
 
-Takos CLI の auth は [CLI / Auth model](/reference/cli-auth) を参照してください。
+Takos CLI の auth は [CLI / Auth model](/reference/cli-auth)
+を参照してください。
 
 ## Next
 
