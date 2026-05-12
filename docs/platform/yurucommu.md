@@ -52,7 +52,7 @@ inject する。redirect URI は `/auth/oidc/callback`、scope は `openid` / `e
 `.takosumi/app.yml` の bindings 宣言例
 ([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
 /
-[`reference/binding-catalog.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
+[`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
 を参照)。
 
 ```yaml

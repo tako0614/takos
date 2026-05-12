@@ -133,8 +133,8 @@ end user 向けの OIDC issuer は Takosumi Accounts に置きます。fresh ope
 
 ## CLI Boundary
 
-Takos bootstrap の primary path は Web UI です。`takos login` / `takos deploy`
-のような Takos product CLI を fresh operator の正本導線として増やしません。
+Takos bootstrap の primary path は Web UI です。Takos product CLI を fresh
+operator の正本導線として増やしません。
 
 application manifest / workflow / git bridge は `takosumi-git`、kernel の
 explicit manifest apply は `takosumi` が扱います。Takos product は Web UI と

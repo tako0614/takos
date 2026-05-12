@@ -20,11 +20,12 @@ store.
 | Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                 |
 
 > **Internal processor boundary note.** Within the Takos ecosystem itself,
-> **Takosumi kernel** is treated as a compute-only processor that materializes
-> manifests and never holds identity, billing, or customer account state.
+> **Takosumi kernel** is treated as the JSON-LD Shape manifest / resource graph /
+> provider materialization processor and never holds identity, billing, or
+> customer account state.
 > **Takosumi Accounts** (`operator.identity.oidc` /
 > `operator.billing.default`) is the separate identity / billing processor
-> that owns OIDC issuance, AppInstallation ownership, and Takosumi Cloud
+> that owns OIDC issuance, AppInstallation ownership, and operator BillingPort
 > billing. External sub-processors below are referenced by both planes only when
 > the relevant feature is enabled.
 

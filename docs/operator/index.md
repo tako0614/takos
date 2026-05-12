@@ -4,7 +4,7 @@ Takos operator 向けの運用入口です。Takos product は Web UI / public A
 とし、初回セットアップと catalog 管理を扱います。operator login、PAT、課金の正本は
 Takosumi Accounts です。
 
-Installable App Model 移行後、identity / billing / OIDC issuer の正本は **Takosumi Accounts** です。Takos は
+identity / billing / OIDC issuer の正本は **Takosumi Accounts** です。Takos は
 `operator.identity.oidc` namespace export / OIDC discovery で得た issuer を consume し、 特定 hostname を contract
 にしません。 operator はこの境界を意識し、Takos 自身を OAuth provider として運用しない構成に揃えてください。
 
@@ -13,8 +13,7 @@ Installable App Model 移行後、identity / billing / OIDC issuer の正本は 
 - Takos 側 (OIDC consumer) の env / route: [/apps/oidc-consumer](/apps/oidc-consumer)
 
 CLI を primary UX にしません。manifest deploy engine や git/workflow bridge を直接扱う場合の CLI は `takosumi` /
-`takosumi-git` の責務です。Takos product 側の CLI は互換・補助用途に限定し、新しい operator bootstrap
-導線として増やさないでください。
+`takosumi-git` の責務です。
 
 ## 現在の app 境界
 
@@ -22,9 +21,7 @@ CLI を primary UX にしません。manifest deploy engine や git/workflow bri
 
 - `apps/api`: browser / API-facing gateway。trusted edge actor headers、 browser session、Takosumi Accounts bearer /
   OIDC token を検証し、Takos product API / UI を serve する。OAuth issuer / account / billing の正本 entrypoint ではない
-- `apps/control`: migration window 中だけ残る legacy compatibility backend。 既存 login / OAuth state / account 実装は
-  Takosumi Accounts へ抽出移管する。 billing route は Takos 側では retired compatibility guard (`410 Gone`)
-  以上に拡張しない
+- `apps/control`: product-owned internal control backend。account / billing / OIDC issuer は持たない
 
 operator docs では Web UI / public API を Takos product の primary surface として扱います。manifest deploy engine や
 workflow / git bridge を CLI で扱う場合は `takosumi` / `takosumi-git` 側の責務です。

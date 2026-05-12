@@ -20,17 +20,16 @@ const ARCHITECTURE_ALIGNMENT_DOCS = [
 ];
 const APP_GRANT_CATALOG_DOCS = [
   '../takosumi-git/docs/reference/app-yml-spec.md',
-  '../docs/platform/app-installation.md',
-  'docs/reference/database.md',
+  '../takosumi-cloud/docs/architecture/app-installation.md',
 ];
 const APP_INSTALLATION_STATUS_DOCS = [
   '../docs/platform/runtime-modes.md',
-  '../docs/reference/install-api.md',
+  '../takosumi-cloud/docs/architecture/app-installation.md',
   'docs/platform/upgrade-export.md',
 ];
 const RUNTIME_BINDING_TARGET_DOCS = [
-  '../docs/platform/app-installation.md',
-  '../docs/reference/install-api.md',
+  '../takosumi-cloud/docs/architecture/app-installation.md',
+  '../takosumi-cloud/docs/accounts-service.md',
 ];
 const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
   {

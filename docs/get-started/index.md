@@ -1,11 +1,11 @@
 # はじめる
 
-> このページでわかること: Takos が何をするプラットフォームで、どの経路で 始められるか。
+> このページでわかること: Takos が何をする product で、どの経路で始められるか。
 
-Takos は self-hostable な AI-first chat & agent platform です。Takos product 自身は Takosumi の unique top consumer
-であり、通常の InstallableApp では ありません。OAuth provider は Takosumi Accounts (`operator.identity.oidc` namespace
-export / OIDC discovery で得る operator endpoint) に集約され、takosumi kernel は compute-only を保ち、Takos は OIDC
-consumer として動きます。
+Takos は self-hostable AI software creation product。 OAuth provider は operator account plane
+(`operator.identity.oidc` namespace export / OIDC discovery で得る operator endpoint) に集約され、 takosumi kernel は
+JSON-LD Shape manifest / resource graph / provider materialization に専念し、 Takos は OIDC consumer として動きます。
+Takos product 自身は通常の InstallableApp ではありません。
 
 ## 3 つの始め方
 
@@ -95,7 +95,7 @@ operator として未ログインなら `/auth/oidc/login` から Takosumi Accou
 
 Takosumi Accounts の `account settings → Personal Access Tokens` tab で PAT を発行します。automation には Accounts
 で発行した `takpat_...` を使います。 (installation に紐づく自動化を行いたい場合は、PAT ではなく
-[Install API](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md) の AppGrant 経由で
+[Install API](https://github.com/tako0614/takosumi-cloud/blob/master/docs/accounts-service.md) の AppGrant 経由で
 credential を発行 してください。)
 
 ```bash

@@ -8,9 +8,9 @@
 
 | Service                   |    Port | Owner                | Responsibility                                                                                                                                                                                                                                    |
 | ------------------------- | ------: | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `takos-app`               |  `8787` | `app/`               | OIDC consumer、app-local profile、public/browser/CLI API gateway。legacy OAuth provider / local billing / publication catalog API は公開しない                                                                                                    |
+| `takos-app`               |  `8787` | `app/`               | OIDC consumer、app-local profile、public/browser/CLI API gateway                                                                                                                                                                                  |
 | `takosumi kernel`         |  `8788` | `../takosumi/`       | compute substrate / manifest deploy engine。compiled Shape manifest apply、routing projection、resource provisioning、provider reconciliation を担当。install pipeline / account / billing は別 sibling (takosumi-git / Takosumi Accounts) に分離 |
-| `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | Takosumi Accounts account plane。OIDC issuer / identity broker / billing owner / AppInstallation owner。local compose wiring は Phase 1.1 follow-up                                                                                               |
+| `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | Takosumi Accounts account plane。OIDC issuer / identity broker / billing owner / AppInstallation owner                                                                                                                                            |
 | `takos-agent`             |  `8789` | `agent/`             | agent execution service。Takos product の agent workload を実行し、必要な runtime coordination だけ kernel control ports と接続する                                                                                                               |
 | `takos-git`               |  `8790` | `git/`               | Git hosting、Smart HTTP、refs、objects、source resolution                                                                                                                                                                                         |
 | `postgres`                | `15432` | shell compose        | local persistence for app、Takosumi、Git                                                                                                                                                                                                          |
@@ -27,9 +27,8 @@
 - `takos-agent` executes agent workloads for Takos product features. It may use
   kernel-owned runtime control ports only for deployed compute coordination and
   can read Git internal endpoints when needed.
-- `takos-app` may remain a backend or compatibility bridge for app-owned data,
-  but it does not own account / billing / OIDC issuer / AppInstallation
-  semantics.
+- `takos-app` may store app-owned data, but it does not own account / billing /
+  OIDC issuer / AppInstallation semantics.
 - Local service discovery falls back to `TAKOSUMI_INTERNAL_URL`,
   `TAKOS_GIT_INTERNAL_URL`, and `TAKOS_AGENT_INTERNAL_URL`.
 - Internal services share `TAKOS_INTERNAL_SERVICE_SECRET` only in local compose;

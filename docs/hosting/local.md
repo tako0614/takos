@@ -65,8 +65,7 @@ CI 用 smoke です。
 local での user-defined group workload 実行は Takosumi kernel の manifest
 deploy engine と provider/runtime-agent connector 経由で扱います。workflow build
 や `workflowRef` 解決は `takosumi-git`、Git hosting は `takos-git`、agent 実行は
-`takos-agent` の責務です。旧 `control-dispatch` / `runtime-host` /
-`takos-runtime-service` を current service id として扱いません。
+`takos-agent` の責務です。
 
 private server stack の基準は `takos-private/`
 で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、
@@ -91,8 +90,7 @@ TAKOSUMI_INTERNAL_URL=http://127.0.0.1:8788
 ## 個別起動
 
 compose を使わずに個別にサービスを起動する場合は、各 owning repository の
-AGENTS.md / README に従います。Takos product shell docs では旧
-`control-*` / `runtime-host` process role を current service として扱いません。
+AGENTS.md / README に従います。
 
 private server stack を構成する場合は `takos-private/.env.server.example` と
 `takos-private/compose.server.yml` を参考に環境変数を設定する。
@@ -108,7 +106,7 @@ PGVECTOR_ENABLED=true
 
 | 値               | 動作                                               |
 | ---------------- | -------------------------------------------------- |
-| `true`           | pgvector を使った Vectorize 互換モードが有効になる |
+| `true`           | pgvector を使った semantic search mode が有効になる |
 | 未設定 / `false` | vectorize binding を使う Worker の起動時にエラー   |
 
 前提として PostgreSQL に pgvector 拡張がインストールされている必要がある:
@@ -204,7 +202,7 @@ cd takos/app/apps/control && deno task db:migrate
 - vectorize binding には PostgreSQL + pgvector が必要（`PGVECTOR_ENABLED=true`）
 - Durable Object binding は persistent local runtime で利用できるが、tracked
   reference Workers backend と byte-for-byte 同一ではない
-- Dispatch Namespace は提供されず、tenant runtime compatibility path を使う
+- Dispatch Namespace は提供されず、tenant runtime path を使う
 
 詳しくは [環境ごとの差異](/hosting/differences) を参照。
 

@@ -13,7 +13,7 @@
 
 Takos の customer-facing security disclosure surface は Takos Web / API +
 Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi kernel
-は generic PaaS compute-only、takosumi-git は installer / workflow / git bridge
+は generic PaaS の JSON-LD Shape manifest / resource graph / provider materialization surface、takosumi-git は installer / workflow / git bridge
 であり、Takos managed service として影響する場合は Takos security intake
 が受け付け、必要に応じて Takosumi Accounts (identity / billing owner) を含む
 owning product root へ triage します。

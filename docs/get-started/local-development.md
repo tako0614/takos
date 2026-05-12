@@ -1,10 +1,6 @@
 # ローカル開発ガイド
 
-::: warning このページは operator 向け `.takosumi/manifest.yml` を書きたい **deploy manifest author**
-はこのページを読む必要はありません。migration window 中の Takos compatibility surface を使う場合は `takos login` で
-managed Takos endpoint に認証して `takos deploy --space SPACE_ID --group GROUP_NAME` します。
-
-このページは **Takosumi kernel 自体を local に立ち上げる operator** 向けです。 :::
+このページは **Takos product service set を local に立ち上げる operator / contributor** 向けです。
 
 Docker Compose ベースのローカル開発環境。
 
@@ -61,5 +57,5 @@ README に従ってください。product shell では compose による current
 
 ## 既知の差分
 
-local runtime は Workers-compatible を目指すが完全一致ではない。詳しくは
-[互換性と制限](https://github.com/tako0614/takosumi/blob/master/docs/reference/compatibility.md) を参照。
+local runtime は production target と同一ではありません。provider 固有の挙動は
+対象 hosting guide と Takosumi provider docs を確認してください。

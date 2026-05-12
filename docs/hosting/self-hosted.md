@@ -238,7 +238,7 @@ private stack の `takos-private/compose.server.yml` は MinIO を host `9000` /
 
 | 変数               | 用途                                                                    |
 | ------------------ | ----------------------------------------------------------------------- |
-| `PGVECTOR_ENABLED` | `true` にすると pgvector を使った Vectorize 互換が有効になる            |
+| `PGVECTOR_ENABLED` | `true` にすると pgvector を使った semantic search が有効になる          |
 | `POSTGRES_URL`     | pgvector が入った PostgreSQL の接続 URL（`DATABASE_URL` と同じでも OK） |
 
 ### 3. compose を使わない場合
@@ -319,7 +319,7 @@ services:
 - **ホストポート**: API `9000` / コンソール `9001`
 - **ボリューム**: `takos-private-minio`（永続化）
 - **コンソール**: `http://localhost:9001` でブラウザから操作可能
-- **用途**: Cloudflare R2 の互換レイヤー
+- **用途**: S3-compatible object store
 
 `minio-init` サービスが起動後に `mc mb` でバケットを自動作成する。
 
@@ -333,8 +333,7 @@ services:
 | `takos-agent` | Takos agent execution service                       |
 
 workflow build / `workflowRef` 解決は `takosumi-git`、AppInstallation / OIDC / billing は self-host operator の Takosumi
-Accounts (`takosumi-cloud`) が担当します。旧 `control-*` / `runtime-host` / `takos-runtime-service` は current service
-id として扱いません。
+Accounts (`takosumi-cloud`) が担当します。
 
 ### ネットワーク構成
 
@@ -354,7 +353,7 @@ id として扱いません。
 
 ## PostgreSQL + pgvector のセットアップ
 
-セマンティック検索（Vectorize 互換）を使うには pgvector が必要。
+セマンティック検索を使うには pgvector が必要。
 
 ### pgvector 拡張のインストール
 
@@ -425,7 +424,7 @@ deno task server:smoke
 
 k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes) を参照。
 
-## selfhosted provider plugin (Phase 17A3)
+## selfhosted provider plugin
 
 bare metal / Docker Compose / VM 上の resource を Takosumi kernel から `provider` 契約として呼び出したい場合は
 **selfhosted provider plugin** を 使います。`profiles/selfhosted.example.json` で

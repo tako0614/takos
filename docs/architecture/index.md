@@ -8,12 +8,12 @@ repository docs を正本にします。
 - [System Architecture](./system-architecture.md) — Takos product と sibling product の境界。
 - [Service Topology](./service-topology.md) — Takos app / git / agent / bundled apps の関係。
 - [App Publications](./app-publications.md) — Takos app metadata と deploy manifest の境界。
-- [Runtime Service](./runtime-service.md) — Takos runtime service の役割。
+- [Runtime / Agent](./runtime-service.md) — runtime execution と agent service の分担。
 - [Diagrams](./diagrams.md) — 図で全体像を確認するページ。
 
 ## この章で扱うこと
 
-- Takos product が提供する user-facing feature: chat / agent / memory / space / Git / Store。
+- Takos product が提供する user-facing feature: AI agents / Git / memory / spaces / tools / chat / Store。
 - Takos service set: `takos-app` / `takos-git` / `takos-agent`。
 - bundled app の扱い: takos-docs / takos-slide / takos-excel / takos-computer / yurucommu。
 - Takos が external platform surface と接続する点: OIDC consumer、AppBinding、compiled manifest deploy。

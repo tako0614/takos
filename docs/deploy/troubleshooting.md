@@ -1,152 +1,69 @@
 # トラブルシューティング
 
-> このページでわかること: Deployment 時のよくあるエラーと対処法。
+Installable App Model と direct manifest deploy でよく見るエラーの確認先です。
 
-## バリデーションエラー
+## Manifest validation
 
-### `Invalid manifest: metadata.name is required`
+### `metadata.name is required`
 
-deploy manifest (`.takosumi/manifest.yml`) の `metadata.name` があるか確認して
-ください。kernel に届く compiled manifest は `apiVersion: "1.0"` +
-`kind: Manifest` + `resources[]` の Shape manifest です。
+compiled manifest には `metadata.name` が必要です。
 
 ```yaml
-# OK
 apiVersion: "1.0"
 kind: Manifest
 metadata:
   name: my-app
 resources: []
-
-# NG（metadata.name がない）
 ```
 
-### `group is required when the deploy manifest does not provide metadata.name`
+### unresolved placeholder
 
-Takos compatibility deploy surface (`takos deploy` / legacy `takos install`) は
-GroupHead を advance します。通常は manifest の `metadata.name` が group
-名として使われます。このエラーは manifest に `metadata.name` がなく、かつ
-`--group` / API body の `group` override もない 場合に出ます。
+kernel request 前に `workflowRef` と installer-only placeholder は解決されている
+必要があります。
 
 ```bash
-takos deploy --space SPACE_ID --group my-app
-takos install owner/repo --space SPACE_ID --group my-app
+takosumi-git install preview --cwd . --json
+takosumi-git install apply --cwd . ...
 ```
 
-### `compute.<name>.build is no longer supported by the Takos app manifest parser`
+`takosumi-git` の compile 後も placeholder が残る場合は、`.takosumi/app.yml` の
+binding 宣言、workflow artifact output、install params を確認してください。
 
-これは legacy `.takos/app.yml` / old AppSpec parser のエラーです。current
-`.takosumi/manifest.yml` では `compute.<name>` を使わず、`resources[]` に
-`web-service@v1` または `worker@v1` resource を書きます。image-backed service は
-digest-pinned image を `spec.image` に書きます。
+### artifact digest がない
 
-```yaml
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: api
-resources:
-  - shape: web-service@v1
-    name: api
-    provider: "@takos/aws-fargate"
-    spec:
-      image: ghcr.io/acme/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      port: 8080
-```
+`worker@v1` は `spec.artifact.hash` に concrete digest が必要です。workflow output
+から digest を materialize する場合は `workflowRef.target` が正しい field を指して
+いるか確認します。
 
-worker bundle は `worker@v1` の `spec.artifact.hash` に concrete digest を入れ
-ます。authoring manifest では `workflowRef` を併記できますが、`takosumi-git` が
-workflow を実行して `spec.artifact.hash` を埋め、`workflowRef` を strip してから
-kernel に渡します。
+## Binding / Accounts
+
+### OIDC redirect が失敗する
+
+- `.takosumi/app.yml` の `bindings.auth.redirectPaths` を確認する
+- materialized `OIDC_REDIRECT_URI` が app の callback と一致するか確認する
+- Accounts 側の client registration と issuer URL を確認する
+
+### launch token が検証できない
+
+- `INSTALL_LAUNCH_PUBLIC_KEY` が install 時に materialize されているか確認する
+- `INSTALL_LAUNCH_AUDIENCE` が app 側の期待値と一致するか確認する
+- `/_takosumi/launch` が one-time token を consume しているか確認する
+
+## Direct deploy
+
+direct deploy では AppInstallation ledger を経由しないため、binding 自動注入や
+permission preview はありません。operator は compiled manifest と secrets を
+自分で用意します。
 
 ```bash
-takosumi-git init
-takosumi-git push
+takosumi plan ./compiled-manifest.yml --remote "$TAKOSUMI_ENDPOINT"
+takosumi deploy ./compiled-manifest.yml --remote "$TAKOSUMI_ENDPOINT"
+takosumi status my-app --remote "$TAKOSUMI_ENDPOINT"
 ```
 
-### `Worker compute (...) requires worker bundle artifacts`
+Provider operation の失敗は Takosumi kernel の status output / conditions を確認します。
 
-`source.kind="git_ref"` の Takos repo deploy は legacy workflow build metadata
-を解決しません。worker を含む app は `takosumi-git` 経由で build / artifact
-解決を済ませるか、API caller が `source.kind="manifest"` の `artifacts` に
-`worker_bundle` file を添えてください。image-backed service だけの manifest
-であれば git_ref deploy でもそのまま resolve できます。
-
-### `Manifest artifact ... contains multiple JavaScript bundle candidates`
-
-`source.kind="manifest"` の worker bundle artifact input は、単一 bundle file
-か、`.js` / `.mjs` / `.cjs` が 1 つだけに定まる files entry にしてください。
-複数 file に分かれる build output
-は、`esbuild --bundle --outfile=dist/worker.js` のように単一 bundle
-にまとめます。
-
-## binding / namespace export 解決失敗
-
-### `Error: ... provider publication request ...`
-
-このエラーは旧 publication / consume model の互換 surface で出ることがあります。
-current `.takosumi/manifest.yml` では app binding は `.takosumi/app.yml` の
-`bindings:`、operator-owned dependency は namespace export と account API / OIDC
-discovery / BillingPort で表現します。compiled manifest には `imports[]` /
-`serviceResolvers[]` を書きません。
-
-- `publication: takos.api-key` は retired です。Takos API access は Takosumi
-  Accounts の AppGrant/AppBinding credential として installer 側で materialize
-  してください
-- OIDC consumer 統合 (`identity.oidc@v1` AppBinding 経由、Takosumi Accounts
-  発行) の設定不足の場合は、`.takosumi/app.yml` の `bindings.auth.redirectPaths`
-  / `allowedScopes` を確認してください。 `redirectUris` 等の解決済み値は
-  [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md#_1-identity-oidc-v1)
-  の materializer contract に従います。unresolved `${bindings.*}` /
-  `${secrets.*}` は current takosumi-git の Accounts materialization
-  後も残る場合、kernel request 前に失敗します。 install 直後の owner session
-  bootstrap は `/_takosumi/launch?token=...` (one-time launch token JWS、
-  `install-launch-token@v1` binding) であり、通常ログインの `/auth/oidc/login` →
-  `/auth/oidc/callback` (OIDC consumer flow) とは 別経路です。token verify
-  エラーは launch token の鍵 (`INSTALL_LAUNCH_PUBLIC_KEY`) と audience
-  (`INSTALL_LAUNCH_AUDIENCE`) を、ログイン redirect エラーは `OIDC_REDIRECT_URI`
-  と AppBinding の `redirectPaths` を確認してください
-- `operator.identity.oidc` / `operator.billing.default` のような namespace
-  export が対象 Space に grant されているか確認してください
-- binding / manifest の shape は
-  [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
-  と
-  [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
-  を参照してください
-
-## デプロイ失敗
-
-### `Error: Worker deploy failed`
-
-1. まず in-memory preview で manifest だけ検証します。
-
-```bash
-takos deploy --preview --space SPACE_ID
-```
-
-2. reviewer flow で resolved Deployment を確認したい場合は `--resolve-only`
-   を使い、`takos diff <id>` で expansion / GroupHead diff を見ます。
-
-```bash
-takos deploy --resolve-only --space SPACE_ID
-takos diff dep_abc123 --space SPACE_ID
-```
-
-3. よくある原因:
-
-- compiled manifest に removed field (`imports[]` / `serviceResolvers[]`) や
-  removed placeholder (`${imports.*}`) が残っている
-- `spec.env` / injected env が既存 env と衝突している
-- Worker のコードにシンタックスエラーがある
-- readiness probe (`GET /`、または provider 固有の health check) が 200 を返さ
-  ない
-- `Deployment.conditions[]` に `provider.materialize` の operation 失敗が記録
-  されている (CLI / API の Deployment 詳細から見える)。各 condition の reason /
-  fix hint は
-  [Condition Reason Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/status-output.md)
-  を参照
-
-### `Error: Authentication failed`
+## Auth
 
 ```bash
 takos whoami
@@ -154,52 +71,10 @@ takos login --api-url https://takos.example.com --token "$TAKOSUMI_ACCOUNTS_PAT"
 takos endpoint show
 ```
 
-## Approval 待ちの Deployment
+Takos CLI の auth は [CLI / Auth model](/reference/cli-auth) を参照してください。
 
-PolicySpec が `require-approval` decision を出した resolved Deployment は
-`takos apply` で「approval required」エラーになります。次のいずれかで approval
-を添付してから apply します。
+## Next
 
-```bash
-takos approve dep_abc123 --space SPACE_ID
-takos apply dep_abc123 --space SPACE_ID
-```
-
-`Deployment.policy_decisions[]` で policy decision id を確認できます。
-
-## デプロイ前の検証
-
-deploy 前に manifest だけ検証したい場合:
-
-```bash
-takos deploy --preview --space SPACE_ID
-```
-
-以下の項目が検証されます。
-
-- deploy manifest (`.takosumi/manifest.yml`) に `metadata.name` があること
-- `web-service@v1` の `spec.image` が digest-pinned (`@sha256:...`) であること
-- `worker@v1` の `spec.artifact.hash` が compile 後に concrete digest になって
-  いること
-- resources / routes / env / namespace export materialization
-  の参照が整合していること
-- descriptor 解決と Deployment.desired の構造的整合 (resolve gate)
-
-reviewer に渡したい場合は `--resolve-only` で resolved Deployment を作って
-`takos diff <id>` を共有してください。
-
-## それでも解決しない場合
-
-1. `takos deploy --preview --space SPACE_ID` で manifest の解釈結果を確認
-2. `takos deploy --resolve-only --space SPACE_ID` で resolved Deployment
-   を作り、 `takos diff <id>` で expansion + GroupHead 差分を確認
-3. `takos deploy status --space SPACE_ID` で Deployment service 側の状態を確認
-4. `takos group show GROUP_NAME --space SPACE_ID` で group inventory と
-   GroupHead を確認
-5. backend 固有の問題は operator-only の [Hosting docs](/hosting/) を参照
-
-## 次のステップ
-
-- [deploy](/deploy/deploy) --- `takos deploy` の詳細
-- [ロールバック](/deploy/rollback) --- rollback の手順
-- [CLI コマンド](/reference/cli) --- CLI の全コマンド
+- [Git / Store install](/deploy/store-deploy)
+- [Direct manifest deploy](/deploy/deploy)
+- [ロールバック](/deploy/rollback)

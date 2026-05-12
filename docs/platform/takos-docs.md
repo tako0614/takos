@@ -65,7 +65,7 @@ fileHandlers:
 
 OIDC sign-in は `.takosumi/app.yml` の `identity.oidc@v1` AppBinding
 で宣言します ([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md) /
-[`reference/binding-catalog.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md) を参照)。
+[`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md) を参照)。
 
 ```yaml
 bindings:
@@ -134,4 +134,4 @@ generated secret resource として `docs-session-secret` を持ち、
 
 - [OIDC Consumer](/apps/oidc-consumer)
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-- [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)
+- [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)

@@ -1,7 +1,6 @@
-# Performance Baseline Metrics (Phase 20C)
+# Performance Baseline Metrics
 
-Takosumi deploy lifecycle の in-process performance baseline。Phase 20C
-で計測。`takos/scripts/load-test/` の Deno スクリプトと
+Takosumi deploy lifecycle の in-process performance baseline。`takos/scripts/load-test/` の Deno スクリプトと
 `k6-load-test.js` を用いて計測した結果をまとめる。
 
 ## 計測環境
@@ -18,7 +17,7 @@ Takosumi deploy lifecycle の in-process performance baseline。Phase 20C
 `scripts/load-test/kernel-api-bench-results.json` に raw data
 を出力する。再実行で値は微変動する。
 
-## ターゲット値 (Phase 20C SLO)
+## ターゲット値
 
 | 指標                                               | ターゲット      | 備考                                    |
 | -------------------------------------------------- | --------------- | --------------------------------------- |
@@ -118,7 +117,7 @@ in-process baseline + 業務想定 throughput から導いた scaling 指針。
 | kernel concurrent applyDeployment | 20 / instance           | provider RPC 待ちが支配、IO bound                         |
 | DB connection pool (Postgres)     | 20-50 / kernel instance | per-deployment 1 transaction + outbox dispatch          |
 | Outbox dispatch worker            | 4-8 / instance          | downstream DLQ replication が IO bound                   |
-| Provider adapter retry budget     | 3 retries / op          | Phase 17A retry policy と整合                             |
+| Provider adapter retry budget     | 3 retries / op          | provider retry policy と整合                              |
 
 ## k6 load test (real env、operator 用)
 
@@ -168,7 +167,7 @@ deno task load-test:kernel-api-bench   # HTTP API 単体
 real env (k6) は operator が cluster-scoped credentials で実行。Takos
 core repo に値を commit しない。
 
-## Phase 20C 判定サマリ
+## 判定サマリ
 
 | Acceptance criterion                          | 結果       |
 | --------------------------------------------- | ---------- |
