@@ -2,6 +2,12 @@
 
 Takos product shell and local entrypoint.
 
+> **Takos is a self-hostable AI-first chat & agent product running on the Takosumi PaaS, shipping bundled apps
+> (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) as core distribution components and
+> acting as Takosumi's architectural special case (platform owner / bundled app coordinator).** Canonical worldview /
+> vocabulary lives in [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) and
+> [`../docs/reference/glossary.md`](../docs/reference/glossary.md).
+
 This repository is intentionally a shell: product implementation lives in nested service repositories, while this repo
 owns the local service composition, boundary checks, component matrix, and product-level docs. It should feel like the
 front door for Takos, not a place to put shared implementation packages.
