@@ -3,16 +3,16 @@ name: Release Artifacts
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
-        description: "SemVer used for dry-run Helm packaging on manual runs"
+        description: 'SemVer used for dry-run Helm packaging on manual runs'
         required: false
-        default: "0.0.0-dev"
+        default: '0.0.0-dev'
         type: string
       publish:
-        description: "Publish OCI images and Helm chart instead of dry-run build only"
+        description: 'Publish OCI images and Helm chart instead of dry-run build only'
         required: false
         default: false
         type: boolean
@@ -23,6 +23,7 @@ concurrency:
 
 env:
   DENO_DIR: ${{ github.workspace }}/.deno-cache
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   validate:

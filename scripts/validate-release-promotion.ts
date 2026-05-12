@@ -122,6 +122,7 @@ const requiredTextFiles = [
       'helm package deploy/helm/takos',
       'helm push',
       'deno task validate:release-promotion',
+      'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24',
     ],
   },
   {
