@@ -2,7 +2,7 @@ name: Patch Management
 
 on:
   schedule:
-    - cron: "24 4 * * 2"
+    - cron: '24 4 * * 2'
   workflow_dispatch:
 
 permissions:
@@ -12,6 +12,9 @@ permissions:
 concurrency:
   group: patch-management-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   validate-policy:
@@ -36,10 +39,10 @@ jobs:
           submodules: recursive
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          scanners: "vuln,misconfig"
-          severity: "HIGH,CRITICAL"
+          scan-type: 'fs'
+          scan-ref: '.'
+          scanners: 'vuln,misconfig'
+          severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
-          exit-code: "1"
-          format: "table"
+          exit-code: '1'
+          format: 'table'
