@@ -182,8 +182,8 @@ npm run build
   `/auth/oidc/callback` で session を作る。self-host 時も Takosumi Accounts を
   issuer とし、Keycloak / Authentik 等は upstream IdP として接続する
   ([apps/oidc-consumer](/apps/oidc-consumer))。
-- 初回 install 直後だけは launch token を local verify し、Accounts consume
-  成功後に owner session を作る: `/_takosumi/launch?token=...`
+- 初回 install 直後だけは opaque launch token を Accounts `/consume` で redeem
+  し、 成功後に owner session を作る: `/_takosumi/launch?launch_token=...`
   ([apps/launch-token](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md))。
 
 OIDC client (clientId / clientSecret / redirectUri) は `.takosumi/app.yml` の

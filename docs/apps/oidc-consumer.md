@@ -102,29 +102,30 @@ self-host では operator が手で env を設定します (§6 参照)。
 
 ### 関連 env (補助)
 
-| env                         | 必須     | 用途                                                                                                                                                                                              |
-| --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BASE_URL`                  | ✅       | Takos public URL。`OIDC_REDIRECT_URI` の base 部分と一致させる                                                                                                                                    |
-| `TAKOS_INSTALLATION_ID`     | ✅       | この installation の id。app-local profile の FK に使う                                                                                                                                           |
-| `ACCOUNTS_BASE_URL`                | optional | Takosumi Accounts service の base URL。`/_takosumi/launch` で受けた opaque token を `/consume` (TLS + digest pin) で redeem する relying party context (詳細 → [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)) |
-| `INSTALL_LAUNCH_INSTALLATION_ID`   | optional | redeem 要求の AppInstallation id (`inst_xxx`)                                                                                                                                                     |
-| `INSTALL_LAUNCH_REDIRECT_URI`      | optional | Accounts が token 発行時に bind した redirect URI。redeem 時に完全一致比較                                                                                                                        |
-| `INSTALL_LAUNCH_CONSUME_PATH`      | optional | app 側の consume handler path (default `/_takosumi/launch`)                                                                                                                                       |
+| env                              | 必須     | 用途                                                                                                                                                                                                                                                                                 |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BASE_URL`                       | ✅       | Takos public URL。`OIDC_REDIRECT_URI` の base 部分と一致させる                                                                                                                                                                                                                       |
+| `TAKOS_INSTALLATION_ID`          | ✅       | この installation の id。app-local profile の FK に使う                                                                                                                                                                                                                              |
+| `ACCOUNTS_BASE_URL`              | optional | Takosumi Accounts service の base URL。`/_takosumi/launch` で受けた opaque token を `/consume` (TLS + digest pin) で redeem する relying party context (詳細 → [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)) |
+| `INSTALL_LAUNCH_INSTALLATION_ID` | optional | redeem 要求の AppInstallation id (`inst_xxx`)                                                                                                                                                                                                                                        |
+| `INSTALL_LAUNCH_REDIRECT_URI`    | optional | Accounts が token 発行時に bind した redirect URI。redeem 時に完全一致比較                                                                                                                                                                                                           |
+| `INSTALL_LAUNCH_CONSUME_PATH`    | optional | app 側の consume handler path (default `/_takosumi/launch`)                                                                                                                                                                                                                          |
 
-::: warning Legacy JWS env (v0 で deprecated) `INSTALL_LAUNCH_PUBLIC_KEY` / `INSTALL_LAUNCH_AUDIENCE` /
-`INSTALL_LAUNCH_ISSUER` は JWS-based launch token を local verify する旧 model の env で、v0 で deprecated
-されています。新規 deploy では設定不要です。 :::
+::: warning Retired launch-token env `INSTALL_LAUNCH_PUBLIC_KEY` /
+`INSTALL_LAUNCH_AUDIENCE` / `INSTALL_LAUNCH_ISSUER` は JWS-based launch token を
+local verify する旧 model の env です。current spec では設定せず、opaque token +
+Accounts `/consume` を使います。 :::
 
 ## 関連 env (補助、本ページでは詳述しない)
 
 OIDC consumer 統合に直接関係する env は上記だが、Takos runtime はその他の env
 も要求する。詳細は別ページを参照。
 
-| Env 種類                                                             | 参照先                                                                                                                                 |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Database (`DATABASE_URL`) / Object Store (`OBJECT_STORE_*`) / Domain | [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)                           |
-| Installation identifier (`TAKOS_INSTALLATION_ID`, `BASE_URL`)        | [Environment 変数](/deploy/environment)                                                                                                |
-| GitOps Deploy (`DEPLOY_INTENT_*`)                                    | [Binding Catalog § deploy-intent.gitops@v1](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md) |
+| Env 種類                                                             | 参照先                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Database (`DATABASE_URL`) / Object Store (`OBJECT_STORE_*`) / Domain | [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)                                                                                                                                                                           |
+| Installation identifier (`TAKOS_INSTALLATION_ID`, `BASE_URL`)        | [Environment 変数](/deploy/environment)                                                                                                                                                                                                                                             |
+| GitOps Deploy (`DEPLOY_INTENT_*`)                                    | [Binding Catalog § deploy-intent.gitops@v1](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)                                                                                                                                                 |
 | Launch Token (`ACCOUNTS_BASE_URL` / `INSTALL_LAUNCH_*`)              | [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md) / [Binding Catalog § install-launch-token@v1](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md#6-install-launch-tokenv1) |
 
 OIDC consumer page は OIDC scope に専念し、これら他 env
@@ -202,10 +203,11 @@ canonical です。
 
 ## 5. OIDC endpoints
 
-Takos は OIDC consumer として `/auth/oidc/login` と `/auth/oidc/callback` を持ちます。
-標準 OIDC endpoint と AppInstallation-owned client 発行は Takosumi Accounts に集約されます。第三者
-client が Takos を OAuth issuer として参照していた場合は、Takosumi Accounts の
-OIDC client として登録し直す必要があります。
+Takos は OIDC consumer として `/auth/oidc/login` と `/auth/oidc/callback`
+を持ちます。 標準 OIDC endpoint と AppInstallation-owned client 発行は Takosumi
+Accounts に集約されます。第三者 client が Takos を OAuth issuer
+として参照していた場合は、Takosumi Accounts の OIDC client
+として登録し直す必要があります。
 
 ---
 
