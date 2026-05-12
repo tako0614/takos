@@ -1,10 +1,14 @@
 # Service Topology
 
-`takos` は product shell です。実装は `app/`、`git/`、`agent/` の各 submodule
-と、 sibling repository の `../takosumi/` が持ち、この shell
-はローカル起動、境界検証、全体 docs を持ちます。
+`takos` は product shell です。Takos product の実装は `app/`、`git/`、`agent/`
+の各 submodule が持ちます。sibling repository の `../takosumi/`、
+`../takosumi-cloud/`、`../takosumi-git/` は Takosumi substrate / account plane /
+installer として local stack に参加しますが、Takos product service ではありません。
+この shell はローカル起動、境界検証、全体 docs を持ちます。
 
 ## Local Services
+
+上 3 つが Takos product services、残りの Takosumi 系 service は substrate 側です。
 
 | Service                   |    Port | Owner                | Responsibility                                                                                                                                                                                                                                    |
 | ------------------------- | ------: | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -1,6 +1,6 @@
 # Legal: License Compliance
 
-> このページでわかること: Takos ecosystem の first-party license inventory、
+> このページでわかること: Takosumi / Takos ecosystem の first-party license inventory、
 > REUSE / SPDX baseline、third-party license inventory の更新ルール。
 
 This page is a compliance artifact for GA readiness. It documents the

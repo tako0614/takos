@@ -1,6 +1,6 @@
 # Legal: Third-party Dependency Inventory
 
-> このページでわかること: Takos ecosystem の third-party dependency inventory
+> このページでわかること: Takosumi / Takos ecosystem の third-party dependency inventory
 > source、observed license families、review-required packages。
 
 This inventory is generated from committed lockfiles plus local package metadata

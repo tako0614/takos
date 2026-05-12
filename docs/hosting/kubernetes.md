@@ -193,10 +193,9 @@ Sealed Secrets / platform secret manager を使い、`secrets.create: false` と
 
 ### Workload runtime
 
-この chart は Takos product service set を載せるための chart です。tenant
-workload / deploy runtime の lifecycle は `takosumi` と selected provider plugin
-の ownership であり、chart 側に standalone runtime / executor / orchestrator
-workload は作りません。
+この chart は Takos product services と Takosumi substrate を同じ runtime stack に載せるための chart です。tenant
+workload / deploy runtime の lifecycle は `takosumi` と selected provider plugin の ownership であり、chart 側に
+standalone runtime / executor / orchestrator workload は作りません。
 
 ---
 

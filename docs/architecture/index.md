@@ -14,7 +14,7 @@ repository docs を正本にします。
 ## この章で扱うこと
 
 - Takos product が提供する user-facing feature: AI agents / Git / memory / spaces / tools / chat / Store。
-- Takos service set: `takos-app` / `takos-git` / `takos-agent`。
+- Takos product services: `takos-app` / `takos-git` / `takos-agent`。
 - bundled app の扱い: takos-docs / takos-slide / takos-excel / takos-computer / yurucommu。
 - Takos が external platform surface と接続する点: OIDC consumer、AppBinding、compiled manifest deploy。
 

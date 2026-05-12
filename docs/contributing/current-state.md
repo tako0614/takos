@@ -195,7 +195,8 @@ Real/prod-facing boundaries that exist as code but are not the default wiring:
   canary/shadow traffic.
 - Move real self-host/cloud provider/source/storage/queue/object/KMS/secret implementations into kernel plugins, then
   run plugin-specific release gates outside the kernel release gate.
-- Keep local Compose/Helm resource names and command paths aligned with the Takos product service set.
+- Keep local Compose/Helm resource names and command paths aligned with the Takos product services plus Takosumi
+  substrate stack.
 - Keep expanding acceptance coverage in
   [`acceptance-matrix.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/quality/acceptance-matrix.md)
   until the remaining production gaps have route/worker-level regression tests.
