@@ -3,9 +3,9 @@
 Takos product shell and local entrypoint.
 
 > **Takos is a self-hostable product running on Takosumi PaaS, with _democratization of software through AI agents_ as
-> its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps
-> (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation
-> as a user-facing convenience.** Canonical worldview / vocabulary lives in
+> its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps (`takos-docs`
+> / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation as a
+> user-facing convenience.** Canonical worldview / vocabulary lives in
 > [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) and
 > [`../docs/reference/glossary.md`](../docs/reference/glossary.md).
 
@@ -81,11 +81,12 @@ history.
 ## Responsibility Split
 
 - `app`: Takos-facing OIDC consumer sessions, app-local profiles/settings, user-facing management UI, public/browser/CLI
-  API gateway, and product API that is not owned by another Takos service. Takosumi Accounts (`../takosumi-cloud`) owns
-  identity, billing, OAuth/OIDC issuer behavior, client registry, consent/device flow, and AppInstallation ownership.
+  API gateway, and product API that is not owned by another Takos service. The operator account plane (reference
+  implementation: Takosumi Accounts in `../takosumi-cloud`) owns identity, billing, OAuth/OIDC issuer behavior, client
+  registry, consent/device flow, and AppInstallation ownership.
 - `deploy`: Takos product distribution profiles, the distribution schema contract, Helm/Terraform modules, distribution
   manifests, and validators that wrap published packages, images, APIs, and manifests.
-- `takosumi` (external sibling `../takosumi`): tenant/platform management, deploy and runtime lifecycle domains,
+- `takosumi` (external sibling `../takosumi`): generic manifest deploy engine, deploy/runtime lifecycle semantics,
   resource/routing/publication domains, and internal control API.
 - `git`: Git hosting, Git Smart HTTP, repositories/source, refs, object storage, source resolution, and repository API
   contracts.

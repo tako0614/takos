@@ -11,7 +11,7 @@ metadata を持つが、primitive や group は特権化されない。
 - kernel の Storage 機能に依存（files:read / files:write）
 - group に所属しなくても動作可能
 
-## Takos 上での動作
+## Takosumi 上での動作
 
 hostname は routing layer が割り当てる。
 

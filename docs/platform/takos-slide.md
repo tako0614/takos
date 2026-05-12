@@ -12,7 +12,7 @@ metadata を持つが、primitive や group は特権化されない。
 - app metadata でプレゼンテーション UI / MCP / file handler を提供
 - group に所属しなくても動作可能
 
-## Takos 上での動作
+## Takosumi 上での動作
 
 hostname は routing layer が割り当てる。
 

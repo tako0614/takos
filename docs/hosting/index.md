@@ -1,6 +1,6 @@
 # Hosting
 
-このセクションは **Takosumi kernel をホストする operator** 向けです。Takos 上で
+このセクションは **Takosumi kernel をホストする operator** 向けです。Takosumi 上で
 **group を deploy する開発者** は [Deploy](/deploy/) を参照してください。
 
 Takosumi kernel は **5 つの kernel host target** を持ちます。Takos product
@@ -17,7 +17,7 @@ docker-compose packaging として扱います。
 | ----------------------------------------- | ------------------------------------ |
 | Takosumi kernel を managed (takos.jp) で使う | このセクションは不要                 |
 | Takosumi kernel を自分でホストする operator  | このセクション全体                   |
-| Takos 上で group を作る developer         | [Deploy](/deploy/) と [Apps](/apps/) |
+| Takosumi 上で app/group を作る developer | [Deploy](/deploy/) と [Apps](/apps/) |
 
 ## 5 つの kernel host target
 
@@ -57,7 +57,7 @@ deno task distribute:dry-run --confirm production
 # 4. 本番へ apply (wrangler / Helm / compose のいずれかに dispatch される)
 deno task distribute:apply --confirm production
 
-# 5. Takosumi Accounts seed plan を生成 (identity / billing / AppInstallation owner)
+# 5. Operator account-plane seed plan を生成 (identity / billing / AppInstallation owner)
 cd ../takosumi-cloud
 deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.example.com \

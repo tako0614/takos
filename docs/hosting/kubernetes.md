@@ -11,7 +11,7 @@
    (`composite.cf-control-k8s-tenant@v1`) や k8s 単独 profile
    (`profiles/cloudflare-kubernetes.example.json`) で使う。
 
-Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
+Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
 target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
 ::: warning current contract このページは Helm chart と k8s

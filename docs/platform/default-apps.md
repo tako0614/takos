@@ -1,8 +1,9 @@
 # Bundled App Distribution
 
 Takos の bundled app distribution は、新規 Space 作成時に提示または自動 install
-する app 候補の初期セットです。install は Takosumi Accounts の AppInstallation
-API と `takosumi-git` installer pipeline を通ります。
+する app 候補の初期セットです。install は operator account plane の
+AppInstallation API (reference impl: Takosumi Accounts) と `takosumi-git`
+installer pipeline を通ります。
 
 ## 一覧
 

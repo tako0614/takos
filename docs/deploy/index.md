@@ -9,7 +9,7 @@ Takos のアプリ配布は **Installable App Model** を入口にします。Gi
 
 | 目的 | 入口 | 所有者 |
 | --- | --- | --- |
-| bundled / third-party app を install する | `POST /v1/installations` または install UI | Takosumi Accounts |
+| bundled / third-party app を install する | `POST /v1/installations` または install UI | operator account plane (reference impl: Takosumi Accounts) |
 | Git URL から manifest を compile する | `takosumi-git install <git-url> --ref <tag>` | takosumi-git |
 | operator が compiled manifest を直接 apply する | `takosumi deploy <manifest>` | Takosumi kernel |
 

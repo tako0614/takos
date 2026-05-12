@@ -106,7 +106,7 @@ Takos Docs では、次の 3 層を分けて読みます。
 ### materialize したい人
 
 - shared-cell で運用していた AppInstallation を専用 runtime に物理化したい人
-- Takosumi Accounts の AppInstallation API / UI から source commit / data
+- operator account plane の AppInstallation API / UI から source commit / data
   namespace / OIDC binding / domain を保ったまま遷移
 - 詳細は
   [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
