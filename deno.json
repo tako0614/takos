@@ -44,8 +44,25 @@
     "singleQuote": true,
     "semiColons": true,
     "exclude": [
+      "app/",
+      "agent/",
+      "git/",
+      "node_modules/",
+      "CLA.md",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      ".github/",
+      "docs/**/*.md",
+      "docs/.vitepress/cache/",
+      "docs/.vitepress/dist/",
+      ".terraform-plan/",
+      "deploy/distribution-contract/",
       "deploy/helm/takos/templates",
-      "docs/**/*.md"
+      "deploy/helm/takos/Chart.yaml",
+      "deploy/helm/takos/values.yaml",
+      "deploy/helm/takos/values-aws.yaml",
+      "deploy/helm/takos/values-gcp.yaml",
+      "deploy/terraform/testdata/helm-values/"
     ]
   },
   "lint": {
