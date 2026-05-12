@@ -1,11 +1,11 @@
 # 課金
 
-**Billed by the operator's Takosumi Accounts / BillingPort.**
+**Billed by the operator account plane / BillingPort.**
 
-Takos の課金主体は **その instance の Takosumi Accounts / BillingPort**
-であり、managed default では Takosumi Cloud が その operator です。Takos plan
-(Free / Plus / Pay As You Go) は operator invoice の中の line item の 1
-つとして扱われます。契約 / billing owner / payment method は
+Takos の課金主体は **その instance の operator account plane / BillingPort**
+であり、managed example では Takosumi Cloud がその operator distribution
+です。Takos plan (Free / Plus / Pay As You Go) は operator invoice の中の line
+item の 1 つとして扱われます。契約 / billing owner / payment method は
 [Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
 に紐づきます。Takos 自体は billing owner ではなく、Takos product usage を
 operator BillingPort に報告します。 bundled / third-party apps の usage は
@@ -27,9 +27,9 @@ Billed by <operator>
 | 見た目             | 実体                                         |
 | ------------------ | -------------------------------------------- |
 | Product name       | Takos Plus                                   |
-| Contract owner     | Takosumi Account / operator BillingPort      |
+| Contract owner     | operator account plane / BillingPort         |
 | Product usage      | Takos plan / Takos product usage             |
-| Invoice issuer     | operator (managed default は Takosumi Cloud) |
+| Invoice issuer     | operator (managed example は Takosumi Cloud) |
 | Billing line items | Takos plan + compute / storage / model usage |
 
 > 現行 API gateway split status は
@@ -45,9 +45,9 @@ Billed by <operator>
 | **Pay As You Go** | `plan_payg` | プリペイド残高     | クレジットを購入して残高から消費             |
 
 プランはユーザーの課金アカウント単位で 1 つ。current takosumi-cloud Accounts
-(currently-deployed example) では Takosumi Accounts の Stripe checkout endpoint
-から subscription / payment checkout session を作成し、Stripe webhook で billing
-state を更新します。
+(currently-deployed operator distribution example) では Takosumi Accounts の
+Stripe checkout endpoint から subscription / payment checkout session を作成し、
+Stripe webhook で billing state を更新します。
 
 ::: info Billing portal / invoice API Billing portal、invoice list、usage read
 API は BillingPort の future expansion です。current reference Accounts HTTP
