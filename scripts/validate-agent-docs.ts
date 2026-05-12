@@ -1,18 +1,19 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import path from "node:path";
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 
 function resolveRepoRoot(): string {
-  const configured = Deno.env.get("TAKOS_ECOSYSTEM_ROOT");
+  const configured = Deno.env.get('TAKOS_ECOSYSTEM_ROOT');
   const candidates = [
     configured,
     process.cwd(),
-    path.resolve(process.cwd(), ".."),
-    path.resolve(process.cwd(), "../.."),
+    path.resolve(process.cwd(), '..'),
+    path.resolve(process.cwd(), '../..'),
   ].filter((candidate): candidate is string => Boolean(candidate));
 
   for (const candidate of candidates) {
-    const agentsPath = path.join(candidate, "AGENTS.md");
-    const claudePath = path.join(candidate, "CLAUDE.md");
+    const agentsPath = path.join(candidate, 'AGENTS.md');
+    const claudePath = path.join(candidate, 'CLAUDE.md');
     if (
       existsSync(agentsPath) && statSync(agentsPath).isFile() &&
       existsSync(claudePath) && statSync(claudePath).isFile()
@@ -25,18 +26,18 @@ function resolveRepoRoot(): string {
 
 function main(): void {
   const root = resolveRepoRoot();
-  const agentsPath = path.resolve(root, "AGENTS.md");
-  const claudePath = path.resolve(root, "CLAUDE.md");
+  const agentsPath = path.resolve(root, 'AGENTS.md');
+  const claudePath = path.resolve(root, 'CLAUDE.md');
 
   const errors: string[] = [];
   const warnings: string[] = [];
 
   if (!existsSync(agentsPath)) {
-    errors.push("AGENTS.md is missing.");
+    errors.push('AGENTS.md is missing.');
   }
 
   if (!existsSync(claudePath)) {
-    errors.push("CLAUDE.md is missing.");
+    errors.push('CLAUDE.md is missing.');
   }
 
   if (errors.length > 0) {
@@ -46,11 +47,11 @@ function main(): void {
     Deno.exit(1);
   }
 
-  const agents = readFileSync(agentsPath, "utf8");
-  const claude = readFileSync(claudePath, "utf8");
+  const agents = readFileSync(agentsPath, 'utf8');
+  const claude = readFileSync(claudePath, 'utf8');
 
-  if (!claude.includes("AGENTS.md")) {
-    errors.push("CLAUDE.md must explicitly reference AGENTS.md.");
+  if (!claude.includes('AGENTS.md')) {
+    errors.push('CLAUDE.md must explicitly reference AGENTS.md.');
   }
 
   const claudeLines = claude.split(/\r?\n/).length;
@@ -64,7 +65,7 @@ function main(): void {
     );
   }
 
-  if (!agents.includes("ドキュメント駆動開発")) {
+  if (!agents.includes('ドキュメント駆動開発')) {
     warnings.push(
       "AGENTS.md does not explicitly contain 'ドキュメント駆動開発'.",
     );
@@ -81,7 +82,7 @@ function main(): void {
     Deno.exit(1);
   }
 
-  console.log("agent docs validation passed.");
+  console.log('agent docs validation passed.');
 }
 
 main();
