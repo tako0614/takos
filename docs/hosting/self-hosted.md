@@ -2,7 +2,7 @@
 
 このページは **Takosumi kernel をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
 
-Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
+Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。
 
 ::: danger このページのサンプルはローカル開発向けデフォルトを含みます このページに掲載されている
 `compose.local.yml`、`.env.local.example`、`takos-dev-secret` などはすべて **ローカル開発を前提としたデフォルト**

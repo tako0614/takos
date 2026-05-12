@@ -1,8 +1,8 @@
 # Git / Store install
 
 Store は install 可能な Git repository を発見する surface です。install の所有権、
-approval、billing、binding、launch token は Takosumi Accounts の AppInstallation
-ledger が持ちます。
+approval、billing、binding、launch token は operator account plane の
+AppInstallation ledger が持ちます (reference impl: Takosumi Accounts)。
 
 ## 基本
 
@@ -31,8 +31,8 @@ User
 - install preview へ進むための source metadata を渡す
 
 Store は deploy 実行主体ではありません。compile と artifact 解決は
-`takosumi-git`、ownership と approval は Takosumi Accounts、runtime apply は
-Takosumi kernel が担当します。
+`takosumi-git`、ownership と approval は operator account plane (reference impl:
+Takosumi Accounts)、runtime apply は Takosumi kernel が担当します。
 
 ## Install preview
 

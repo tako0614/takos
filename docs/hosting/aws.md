@@ -16,7 +16,7 @@ Takosumi kernel direct deploy、DynamoDB を control-plane storage として 使
 matrix、Terraform / CDK overlay を含みません。 section 2 (provider plugin) は
 6 provider の materialization 契約までです。 :::
 
-Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
+Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
 target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
 ## 統合 distribution からこの target を選ぶ

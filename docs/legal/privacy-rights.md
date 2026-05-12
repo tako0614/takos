@@ -12,11 +12,12 @@
 ## Scope
 
 Takos の app-local profile (chat / memory / preferences) は `takos/app` が 所有します。一方で **Takosumi Account の
-identity-level privacy (OIDC subject / authentication / billing identity) は Takosumi Accounts が所有**します。 Takosumi
+identity-level privacy (OIDC subject / authentication / billing identity) は operator account plane が所有**します。
+Takosumi
 kernel は generic PaaS の JSON-LD Shape manifest / resource graph / provider materialization surface、takosumi-git は
 installer / workflow / git bridge であり、Takos の個人データ access
 / export / deletion handler は Takos Web / API の app-local boundary を扱い、identity-level の data subject request は
-Takosumi Accounts へ forward します。
+operator account plane へ forward します。
 
 ## Data Subject Rights Handler
 
@@ -34,9 +35,9 @@ retention window に従って削除・匿名化します。
 
 > **Usage / billing metadata の正本分担**: Export API が返す usage metadata は **Takos app-local の
 > `app_usage_events` / `app_usage_rollups` mirror** に限定されます。Takosumi Account level の billing account /
-> Stripe customer / subscription / invoice の **正本は Takosumi Accounts / operator BillingPort** が所有しており、
+> Stripe customer / subscription / invoice の **正本は operator account plane / BillingPort** が所有しており、
 > これらに対する SAR (access / export / deletion / rectification) は **operator 側の DPA / privacy-rights handler**
-> が受け付けます。Takos は受領後 **5 営業日以内** に Takosumi Accounts へ forward し、forward 完了を data subject
+> が受け付けます。Takos は受領後 **5 営業日以内** に operator account plane へ forward し、forward 完了を data subject
 > に通知する SLA を負います。
 
 **Region 制約**: Export API は AppInstallation の **residency profile** を尊重し、 profile が定める primary region

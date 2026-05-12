@@ -3,7 +3,7 @@
 このページは **current docs contract として公開している hosting surface**
 を比較します。provider-neutral resource materialization matrix ではありません。
 
-Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
+Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。
 
 `distribution.yml` の `kernel_host.target` で 1 つを選ぶ canonical target は
 `cloudflare` / `aws` / `gcp` / `kubernetes` / `selfhosted` です。Cloudflare は

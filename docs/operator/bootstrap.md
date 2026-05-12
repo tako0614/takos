@@ -141,4 +141,5 @@ operator の正本導線として増やしません。
 
 application manifest / workflow / git bridge は `takosumi-git`、kernel の
 explicit manifest apply は `takosumi` が扱います。Takos product は Web UI と
-public API から multi-tenant / OAuth / billing / catalog を操作する層です。
+public API から space / catalog / app-local product API を扱い、OAuth / billing は
+operator account plane の OIDC / BillingPort を consume します。

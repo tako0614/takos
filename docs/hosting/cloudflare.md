@@ -6,7 +6,7 @@ Workers backend** で、backend-neutral public spec の参照実装です。PaaS
 ではありません。本ページは Cloudflare 関連詳細の canonical hosting guide で、`architecture/` 章では同じ詳細を
 collapsible 節に降格しています。
 
-Takos 上で app を install する方法は [Deploy](/deploy/) を参照してください。
+Takos product から Takosumi 上に app を install する方法は [Deploy](/deploy/) を参照してください。
 
 ::: info OSS テンプレートと private 運用 以下の `wrangler.toml` / bucket / queue / worker 名は OSS
 テンプレート例です。Takos 本体を private で運用する場合は `takos-private/` を管理元とします。秘密値は
@@ -475,7 +475,7 @@ cd takos-private/apps/control
 deno task deploy:production
 ```
 
-::: info app install とは別です ここでの deploy は Takos product / API gateway 自体の deploy です。Takos 上で動く
+::: info app install とは別です ここでの deploy は Takos product / API gateway 自体の deploy です。Takosumi 上で動く
 app の install / direct deploy は [Deploy](/deploy/) を参照してください。 :::
 
 ### 初期セットアップ
