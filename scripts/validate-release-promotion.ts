@@ -112,6 +112,11 @@ const requiredTextFiles = [
     path: '.github/workflows/release-artifacts.yml',
     expected: [
       'Release Artifacts',
+      'actions/checkout@v6',
+      'actions/cache@v5',
+      'actions/upload-artifact@v7',
+      'actions/download-artifact@v8',
+      'azure/setup-helm@v5',
       'ghcr.io/${{ github.repository_owner }}',
       'docker/build-push-action',
       'sbom: true',

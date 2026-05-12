@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -39,12 +39,12 @@ jobs:
         with:
           deno-version: v2.x
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v3.15.4
 
       - name: Cache Deno deps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.DENO_DIR }}
           key: ${{ runner.os }}-deno-takos-release-artifacts-${{ hashFiles('deno.lock') }}
@@ -82,7 +82,7 @@ jobs:
             context: agent
             dockerfile: agent/Dockerfile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -152,7 +152,7 @@ jobs:
               provenance: true
             }' > "dist/image-digests/${{ matrix.image }}.json"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name == 'push' || inputs.publish == true
         with:
           name: takos-image-digest-${{ matrix.image }}
@@ -168,11 +168,11 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: v3.15.4
 
@@ -213,7 +213,7 @@ jobs:
         if: github.event_name == 'push' || inputs.publish == true
         run: helm push dist/helm/takos-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: takos-helm-chart
           path: dist/helm/*.tgz
@@ -228,7 +228,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -236,7 +236,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: takos-image-digest-*
           path: dist/image-digests
@@ -254,7 +254,7 @@ jobs:
             --require-image-digests \
             --output dist/release-manifest.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: takos-release-manifest
           path: dist/release-manifest.json
