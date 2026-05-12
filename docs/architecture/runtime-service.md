@@ -1,17 +1,21 @@
-# Runtime Compatibility Notes
+# Runtime / Agent
 
-This page is kept for legacy links. `takos-runtime-service` is not a current
-Takos product service.
+Takos runtime execution is split between the Takos agent service, Takosumi
+kernel, provider plugins, and runtime-agent implementations.
 
-Current ownership is split by substitutability:
+## Responsibilities
 
-- workflow files, `workflowRef`, artifact build, and manifest compile are owned
-  by `takosumi-git`
-- Git Smart HTTP / refs / objects are owned by `takos/git`
-- agent execution is owned by `takos/agent`
-- deploy / runtime lifecycle semantics are owned by the generic `takosumi`
-  kernel and its runtime-agent connector model
+| component | role |
+| --- | --- |
+| `takos-agent` | agent run execution and product-specific agent behavior |
+| Takosumi kernel | deployment lifecycle, plan/apply/status, provider operation orchestration |
+| provider plugin | target-specific resource materialization |
+| runtime-agent | workload host lifecycle and implementation RPC |
 
-The current local service set is `takos-app`, `takosumi`, `takos-git`,
-`takos-agent`, `postgres`, and `redis`. See
-[Service Topology](./service-topology.md) for the active architecture.
+Takos product code should call exported contracts owned by the service that owns
+the wire shape. Cross-service types are not copied into generic common packages.
+
+## Local execution
+
+Local development uses the service set in [Local Development](/get-started/local-development).
+Production hosting choices are covered in [Hosting](/hosting/).

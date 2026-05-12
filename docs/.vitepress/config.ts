@@ -86,16 +86,6 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Migration',
-        items: [
-          { text: '概要', link: '/migration/' },
-          {
-            text: 'fromWorkflow から takosumi-git へ',
-            link: '/migration/fromworkflow-to-takosumi-git',
-          },
-        ],
-      },
-      {
         text: 'ホスティング',
         items: [
           { text: '概要', link: '/hosting/' },
@@ -121,7 +111,7 @@ export default defineConfig({
           },
           { text: 'Service Topology', link: '/architecture/service-topology' },
           { text: 'App Publications', link: '/architecture/app-publications' },
-          { text: 'Runtime Service', link: '/architecture/runtime-service' },
+          { text: 'Runtime / Agent', link: '/architecture/runtime-service' },
           { text: 'Diagrams', link: '/architecture/diagrams' },
         ],
       },
@@ -181,7 +171,6 @@ export default defineConfig({
           { text: 'Store', link: '/platform/store' },
           { text: '課金', link: '/platform/billing' },
           { text: 'Bundled Apps', link: '/platform/default-apps' },
-          { text: '互換性', link: '/platform/compatibility' },
           {
             text: 'Resource Governance',
             link: '/platform/resource-governance',
@@ -199,7 +188,7 @@ export default defineConfig({
           { text: 'CLI', link: '/reference/cli' },
           { text: 'CLI 認証', link: '/reference/cli-auth' },
           { text: 'API', link: '/reference/api' },
-          { text: 'Database', link: '/reference/database' },
+          { text: 'Database Ownership', link: '/reference/database' },
         ],
       },
       {

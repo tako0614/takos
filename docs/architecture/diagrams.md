@@ -103,7 +103,7 @@ provider plugin の `materialize` は冪等であることを契約とし、kern
 ```mermaid
 sequenceDiagram
   participant User
-  participant CLI as takos-cli
+  participant CLI as takosumi CLI
   participant K as Kernel
   participant DS as DeploymentService
   participant DB as Deployment Store
@@ -111,7 +111,7 @@ sequenceDiagram
   participant Cloud as Cloudflare / AWS / GCP / K8s
   participant Obs as ProviderObservation
 
-  User->>CLI: takos deploy --apply
+  User->>CLI: takosumi deploy <manifest>
   CLI->>K: applyDeployment(deploymentId)
   K->>DS: load Deployment(resolved)
   DS->>DB: SELECT

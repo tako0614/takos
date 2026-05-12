@@ -4,9 +4,8 @@
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **AWS 単独 hosting (EKS Helm)** ― `takos/deploy/helm/takos/values-aws.yaml`
-   overlay。Kubernetes ベースで control plane / runtime / executor を運用する
-   旧来 path。
-2. **AWS provider plugin (Phase 17A1)** ― ECS Fargate / RDS / S3 / SQS / KMS /
+   overlay。Kubernetes ベースで control plane / runtime / executor を運用する path。
+2. **AWS provider plugin** ― ECS Fargate / RDS / S3 / SQS / KMS /
    Secrets Manager の 6 provider を Takosumi kernel から `provider` 契約として
    呼び出す path。Cloudflare control plane + AWS tenant runtime
    (`composite.cf-control-aws-tenant@v1`) や AWS 単独 profile
@@ -15,7 +14,7 @@
 ::: warning current contract section 1 (Helm overlay) は ECS / Fargate への
 Takosumi kernel direct deploy、DynamoDB を control-plane storage として 使う
 matrix、Terraform / CDK overlay を含みません。 section 2 (provider plugin) は
-Phase 17A1 で追加された 6 provider の materialization 契約までです。 :::
+6 provider の materialization 契約までです。 :::
 
 Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
 target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
@@ -100,7 +99,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 | 項目            | current value                                                                  |
 | --------------- | ------------------------------------------------------------------------------ |
 | source          | `deploy/distributions/aws.json` から `deno task helm:generate-overlays` で生成 |
-| images          | distribution profile の `services[].image` を Helm image values に展開         |
+| images          | distribution profile の service image entries を Helm image values に展開      |
 | domains         | distribution profile の `routing` から admin / tenant base domain を展開       |
 | runtime config  | `runtimeConfig.environment=production`、plugin id は fail-closed empty         |
 | ingress         | ALB ingress class と ALB annotation を使う                                     |
@@ -163,7 +162,7 @@ certificate ARN を設定します。
 
 ---
 
-## Section 2: AWS provider plugin (Phase 17A1)
+## Section 2: AWS provider plugin
 
 ### 構成
 
@@ -327,7 +326,7 @@ provider plugin は SDK を直接 import せず、operator が用意する HTTP 
 gateway URL を使うと Cloudflare Worker から AWS SDK を直接呼べない制約を
 迂回できます。gateway 自体は operator が EC2 / Fargate に配置します。
 
-### runtime-agent (Phase 17B) を AWS に置く
+### runtime-agent  を AWS に置く
 
 Cloudflare 上の kernel が直接 AWS resource を触るのではなく、AWS 側に
 runtime-agent を常駐させて work lease を pull する方式です。
@@ -418,7 +417,7 @@ agent は kernel に enroll → heartbeat → lease pull → ECS / RDS / S3 / SQ
 / Secrets ops を実行 → 結果を report します。詳細は
 [Multi-cloud](/hosting/multi-cloud#runtime-agent-placement) を参照。
 
-### ALB routing (Phase 17C) の DNS 設定
+### ALB routing  の DNS 設定
 
 `aws-alb-route53-router` provider client は次を materialize します:
 

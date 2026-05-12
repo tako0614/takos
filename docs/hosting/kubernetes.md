@@ -5,7 +5,7 @@
 
 1. **base Helm chart で kernel hosting** ― `takos/deploy/helm/takos` chart
    を直接使う、または AWS / GCP overlay と組み合わせる path。
-2. **k8s provider plugin (Phase 17A3)** ― namespace / Deployment / Service /
+2. **k8s provider plugin** ― namespace / Deployment / Service /
    Ingress / Secret / ConfigMap を Takosumi kernel から `provider` 契約
    として呼び出す path。Cloudflare control plane + k8s tenant runtime
    (`composite.cf-control-k8s-tenant@v1`) や k8s 単独 profile
@@ -14,7 +14,7 @@
 Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
 target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
-::: warning current contract このページは Helm chart と Phase 17A3 の k8s
+::: warning current contract このページは Helm chart と k8s
 provider plugin が表現している contract だけを説明します。任意の cloud-managed
 service への自動 provisioning matrix は current contract ではありません。 :::
 
@@ -200,7 +200,7 @@ workload は作りません。
 
 ---
 
-## Section 2: k8s provider plugin (Phase 17A3)
+## Section 2: k8s provider plugin
 
 ### 構成
 
@@ -319,7 +319,7 @@ k8s API server が internet-facing でない場合、bastion host に kubectl pr
 }
 ```
 
-### runtime-agent (Phase 17B) を k8s に置く
+### runtime-agent  を k8s に置く
 
 ```yaml
 apiVersion: apps/v1
@@ -370,7 +370,7 @@ Service / Ingress / Secret / ConfigMap ops を実行 → 結果を report しま
 in-cluster mode で実行すると ServiceAccount projected token を自動 mount
 できます (`/var/run/secrets/kubernetes.io/serviceaccount/token`)。
 
-### Ingress routing (Phase 17C) の DNS 設定
+### Ingress routing  の DNS 設定
 
 `k8s-ingress-router` provider client は次を materialize します:
 

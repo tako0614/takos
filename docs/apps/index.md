@@ -23,8 +23,8 @@ Takos では "app" という言葉が 2 つの意味で出ます。
 | 内容                   | 正本                                                                                                                        |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Installable App Model  | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)   |
-| AppInstallation ledger | [ecosystem AppInstallation docs](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md) |
+| AppInstallation ledger | [ecosystem AppInstallation docs](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md) |
 | `.takosumi/app.yml`    | [takosumi-git app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)            |
-| binding kinds          | [ecosystem binding catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md)      |
+| binding kinds          | [ecosystem binding catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)      |
 | launch token           | [takosumi-cloud launch token docs](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)        |
 | kernel manifest        | [takosumi manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)                  |

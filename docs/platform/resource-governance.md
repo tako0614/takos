@@ -73,10 +73,8 @@ Takos app は app-local usage を記録し、請求主体は Takosumi Accounts (
 - `app_usage_events`
 - `app_usage_rollups`
 
-canonical billing owner は Takosumi Accounts の `operator.billing.default` BillingPort です。current reference Accounts
-HTTP surface は Stripe checkout / webhook に限定され、usage read API は future BillingPort expansion です。Takos の
-`/api/billing/*` と `/api/internal/v1/billing/*` は current API ではなく、apps/api gateway では retired compatibility
-response として `410 Gone` を返します。
+billing owner は Takosumi Accounts の `operator.billing.default` BillingPort です。Takos app は usage event
+を記録し、billing API の正本は Accounts 側に置きます。
 
 ## operator が見るべき state
 

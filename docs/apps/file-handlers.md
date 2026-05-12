@@ -47,8 +47,8 @@ fileHandlers:
     extensions: [.md]
 ```
 
-`url` の `:id` は URL encode された file ID に置換されます。`:id` は path segment として必須です。current storage UI
-は起動時に `space_id` query parameter も付けます。file ID を `file_id` query parameter で渡す fallback はありません。
+`url` の `:id` は URL encode された file ID に置換されます。`:id` は path segment として必須です。storage UI
+は起動時に `space_id` query parameter も付けます。
 
 この metadata は compiled Shape manifest の top-level field ではありません。 InstallableApp metadata、Takos app
 catalog、または runtime registration が Storage の file handler registry に materialize します。
@@ -98,16 +98,6 @@ sort されます。
 | 3    | filter 無し (no params)          |
 
 同 rank 内では registry 登録順で tie-break します。
-
-## Legacy Migration
-
-旧 docs の `publication.file-handler@v1` / `publications[]` は current compiled Shape manifest では使いません。
-
-| legacy                        | current                                       |
-| ----------------------------- | --------------------------------------------- |
-| `publication.file-handler@v1` | `fileHandlers[]` metadata / registry entry    |
-| `outputs.url.from.route`      | resource output reference (`${ref:web.url}`)  |
-| `bindings[].from.publication` | AppBinding materialization or registry lookup |
 
 ## 次のステップ
 

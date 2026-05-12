@@ -3,7 +3,7 @@
 このページは `takos/deploy/distributions/*.json` で管理する Takos product
 distribution target の current readiness を明示します。ここでの status は
 operator-facing deploy artifact の完成度であり、Takos 上で動く tenant app の
-manifest compatibility とは別です。
+manifest behavior とは別です。
 
 ## Status Definitions
 
@@ -22,7 +22,7 @@ cluster、account、public URL を必要とする proof は operator-owned evide
 
 | target         | status       | current proof                                                                                   | promotion gate                                                                                                            |
 | -------------- | ------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `cloudflare`   | `beta`       | schema validation, artifact refs, provider fixture proof command, dry-run service smoke          | takos-private Phase 19 wrangler split, staging deploy proof, `distribution:smoke --live`, provider live proof             |
+| `cloudflare`   | `beta`       | schema validation, artifact refs, provider fixture proof command, dry-run service smoke          | takos-private wrangler split, staging deploy proof, `distribution:smoke --live`, provider live proof             |
 | `aws`          | `smoke-only` | schema validation, Terraform/Helm refs, credential-free staging plan gate, provider fixture proof command, dry-run service smoke | `helm template` with `values-aws.yaml`, provider live proof, service live smoke |
 | `gcp`          | `smoke-only` | schema validation, Terraform/Helm refs, credential-free staging plan gate, provider fixture proof command, dry-run service smoke | `helm template` with `values-gcp.yaml`, provider live proof, service live smoke |
 | `kubernetes`   | `smoke-only` | schema validation, Helm chart ref, provider fixture proof command, dry-run service smoke         | `helm template`, kind/k3d install smoke, provider live proof, service live smoke                                          |

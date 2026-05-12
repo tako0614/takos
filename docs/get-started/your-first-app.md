@@ -1,6 +1,6 @@
-# はじめての group
+# はじめての app
 
-シンプルな Worker group を作って staging にデプロイし、Takos
+シンプルな Worker app を作って install preview まで進め、Takos
 の基本的な流れを一通り触る。所要時間 10 分。
 
 ## このチュートリアルで作るもの
@@ -192,26 +192,26 @@ Takosumi Accounts が払い出します。app コード側では `OIDC_ISSUER_UR
 `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` env
 を読むだけです。
 
-## 7. デプロイ
+## 7. Install preview / apply
 
 ```bash
-takos login --api-url https://takos.example.com --token "$TAKOSUMI_ACCOUNTS_PAT"
-takos deploy --env staging --space SPACE_ID
+takosumi-git install preview --cwd . --json
+takosumi-git install apply \
+  --cwd . \
+  --accounts-url "$TAKOSUMI_ACCOUNTS_URL" \
+  --account-id "$TAKOSUMI_ACCOUNT_ID" \
+  --space-id "$TAKOSUMI_SPACE_ID" \
+  --subject "$TAKOSUMI_SUBJECT" \
+  --source-commit "$(git rev-parse HEAD)" \
+  --runtime-base-url "$RUNTIME_BASE_URL" \
+  --endpoint "$TAKOSUMI_ENDPOINT" \
+  --deploy-token "$TAKOSUMI_DEPLOY_TOKEN"
 ```
 
-::: tip CLI は Takosumi Accounts の bearer token を保存して Takos API
-に送ります。`takos login --token` 後は `--account-id` や `--api-token`
-を渡す必要はありません。 :::
-
-デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
-が出れば成功。`takos deploy` は migration window 中の compatibility surface
-で、default では resolve + apply を 1 step で実行する sugar です。
-
-manifest の整合性だけ先に確認したい場合:
-`takos deploy --preview --space SPACE_ID` (in-memory preview)。 reviewer
-に渡したい場合は `takos deploy --resolve-only --space SPACE_ID` で resolved
-Deployment record を作り、`takos diff <id>` / `takos apply <id>`
-で確認・適用を分離できます。
+install apply が成功すると AppInstallation が `ready` になり、runtime URL と
+launch token 経路が使えるようになります。operator が compiled manifest だけを
+検証したい場合は `takosumi plan ./compiled-manifest.yml` と
+`takosumi deploy ./compiled-manifest.yml` を使います。
 
 ::: tip `.takosumi/manifest.yml` には `apiVersion: "1.0"` と `kind: Manifest`
 が必須です。`workflowRef` は compiled manifest に到達する前に strip

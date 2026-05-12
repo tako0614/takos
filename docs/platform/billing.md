@@ -329,6 +329,6 @@ Takos の `/api/billing/*` は current API ではありません。新規 client
   契約主体 / billing owner / OIDC issuer の正本
 - [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
   — Takos app installation と billing の関係
-- [App Installation Ledger](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md) —
+- [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md) —
   installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize / export 時の billing 移行

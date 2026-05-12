@@ -1,93 +1,47 @@
 # デプロイ
 
-Takos の deploy compatibility surface は **Deployment-centric** です。compiled Shape manifest は 1 つの Deployment
-record として resolve され、その Deployment が apply されると GroupHead が新しい Deployment を指します。current payload
-は `resources[]` の Shape declarations が中心で、MCP / file handler / launcher などの app metadata は Takos app catalog
-/ installer layer の surface です。group は Deployment を順序付ける compatibility state scope です。
+Takos のアプリ配布は **Installable App Model** を入口にします。Git URL と ref を
+指定して AppInstallation を作り、`takosumi-git` が `.takosumi/app.yml` と
+`.takosumi/manifest.yml` を読み、compile 済み Shape manifest を Takosumi kernel
+の `POST /v1/deployments` に渡します。
 
-> 現行実装の split status は
-> [Current Implementation Note](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/index.md#deploy-shell)
-> を参照
+## 使う入口
 
-::: warning Boundary note Takos product の primary surface は Web UI / public API です。git / workflow / manifest
-authoring の CLI は `takosumi-git`、kernel への explicit manifest apply は `takosumi` が担当します。この章に残る
-`takos deploy` 系の記述は 移行期間中の Takos CLI surface の説明であり、新しい primary UX として拡張しません。 :::
+| 目的 | 入口 | 所有者 |
+| --- | --- | --- |
+| bundled / third-party app を install する | `POST /v1/installations` または install UI | Takosumi Accounts |
+| Git URL から manifest を compile する | `takosumi-git install <git-url> --ref <tag>` | takosumi-git |
+| operator が compiled manifest を直接 apply する | `takosumi deploy <manifest>` | Takosumi kernel |
 
-- **Deployment** — manifest snapshot + descriptor closure + desired state を 1 record として保持する core
-  record。`preview` → `resolved` → `applying` → `applied` (もしくは `failed` / `rolled-back`) という state machine
-  を持つ
-- **GroupHead** — group ごとの current Deployment pointer。rollback は GroupHead を previous Deployment に切り替える
-  pointer move
-- **ProviderObservation** — provider 側の observed state stream。Deployment.desired に対する eventual consistency
-  観測点であり、canonical state ではない
-- **Manifest** — Deployment の input。current compiled Shape manifest は `resources[]` を書く。 author 向け 全体ガイドは
-  [マニフェスト](/deploy/manifest)
+Takos product は Web UI / public API / bundled app lifecycle を提供します。Git fetch、
+workflow、artifact 解決、manifest compile は `takosumi-git`、kernel への direct
+apply は `takosumi` CLI の責務です。
 
-group は便利な scope ですが、特権的な runtime ではありません。group を持たない primitive declaration も同じ Deployment
-lifecycle を通ります。group に所属すると、 その primitive を含む Deployment が GroupHead 経由で履歴・rollback
-の対象になります。
+## デプロイの流れ
 
-## 現在使うコマンド
+1. app author は `.takosumi/app.yml` に install metadata、binding、permission を書く
+2. `.takosumi/manifest.yml` に compute / storage / route などの Shape resource を書く
+3. install preview で source、grant、binding、cost、runtime mode を確認する
+4. user approval 後に `takosumi-git` が build / artifact resolve / manifest compile を行う
+5. Accounts が AppInstallation ledger に source commit と manifest digest を pin する
+6. compiled manifest が Takosumi kernel に apply される
 
-### deploy operations
+## 2 つの manifest
 
-| コマンド                        | 用途                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------- |
-| `takos deploy`                  | `--manifest <path>` の local manifest または `--legacy-repo-source` 付き repository URL から resolve + apply |
-| `takos deploy --preview`        | in-memory preview。Deployment record は持続化しない                                         |
-| `takos deploy --resolve-only`   | resolved Deployment record だけ作って apply は保留する                                      |
-| `takos apply <deployment-id>`   | resolved Deployment を apply に進める                                                       |
-| `takos diff <deployment-id>`    | resolved Deployment の expansion / 現在 GroupHead との diff を表示                          |
-| `takos approve <deployment-id>` | `require-approval` policy decision に approval を添付する                                   |
-| `takos rollback [<group>]`      | group の GroupHead を previous Deployment に切り替える                                      |
-| `takos install`                 | legacy sugar。catalog で owner/repo を解決して同じ compatibility Deployment pipeline を呼ぶ |
-| `takos uninstall`               | group に所属する manifest-managed primitive を削除し、group scope を閉じる                  |
-| `takos group ...`               | group inventory / GroupHead 状態の管理                                                      |
-| `takos resource ...`            | resource primitive の個別管理                                                               |
+| ファイル / payload | 読む主体 | 役割 |
+| --- | --- | --- |
+| `.takosumi/app.yml` | takosumi-git / Takosumi Accounts | InstallableApp metadata、binding、grant、permission preview |
+| `.takosumi/manifest.yml` | takosumi-git compiler | authoring 用 Shape manifest。placeholder や `workflowRef` は compile 前だけ許可 |
+| compiled manifest | Takosumi kernel | `resources[]` の closed Shape declarations |
 
-### primitive operations
-
-legacy component / route / publication / resource / binding は Takos compatibility Deployment.desired の field
-として記録されます。 resource は `takos resource` / `takos res` で個別操作できます。legacy component / route /
-publication の個別 CRUD は control plane の HTTP API で扱います。current launcher / MCP / file handler metadata は app
-catalog / runtime registry の surface であり、kernel manifest の publications ではありません。
-
-この compatibility surface の `takos deploy` は manifest や repository を入力として、Deployment record の作成と apply を
-1 step で行う sugar です。reviewer flow が必要な場合は `takos deploy --resolve-only` で Deployment record
-だけ作り、`takos diff` / `takos approve` / `takos apply` で確認・承認・適用を分離できます。
-
-## クイックスタート
-
-```bash
-takos deploy --env staging --space SPACE_ID
-```
-
-3 行サマリ:
-
-1. Takos compatibility CLI が `.takosumi/manifest.yml` を扱う場合でも、その project-layout / authoring convention は
-   takosumi-git の所有です。kernel に渡るのは compiled Shape manifest だけです。旧 `.takos/app.yml` / `.takos/app.yaml`
-   は後方互換 alias であり、新規 project の正本ではありません。`.takosumi/app.yml` (installer-bound、InstallableApp
-   宣言) はこれとは別概念です
-   ([`.takosumi/app.yml` Spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md))
-2. `--preview` で持続化しない preview、`--resolve-only` で apply 待ち、 `--group NAME` で group 名を override
-3. 詳細な lifecycle と option 一覧は [`takos deploy` の compatibility 入門](/deploy/deploy) を参照
-
-::: tip Manifest 二段構造 Installable App Model では deploy manifest を 2 種に分けます:
-
-- compiled manifest (kernel input Shape manifest): 詳細は
-  [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
-- `.takosumi/manifest.yml` (takosumi-git-owned authoring compute manifest): `workflowRef` など installer-only extension
-  は kernel 到達前に解決・除去される
-- `.takosumi/app.yml` (installer-bound, Installable App declaration): 詳細は
-  [`.takosumi/app.yml` Spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
-
-`takos deploy` compatibility path は compiled Shape manifest を Takosumi kernel apply pipeline に渡します。installer
-pipeline (Git URL install) は `.takosumi/app.yml` を起点に `.takosumi/manifest.yml` を compile します。 :::
+kernel に渡るのは compiled manifest だけです。install 用 binding や permission は
+Accounts と takosumi-git の install pipeline で解決されます。
 
 ## 関連ページ
 
-- [deploy コマンド](/deploy/deploy) - `takos deploy` / `takos apply` / `takos diff` / `takos approve` の詳細
-- [Repository / Catalog デプロイ](/deploy/store-deploy) - local / repo / catalog からの Deployment
-- [Deploy Group](/deploy/deploy-group) - group / GroupHead と inventory
+- [Git / Store install](/deploy/store-deploy)
+- [Direct manifest deploy](/deploy/deploy)
+- [マニフェスト](/deploy/manifest)
+- [環境変数](/deploy/environment)
 - [ロールバック](/deploy/rollback)
 - [トラブルシューティング](/deploy/troubleshooting)

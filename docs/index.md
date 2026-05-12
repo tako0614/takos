@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Takos
-  text: AI-first chat & agent platform
-  tagline: chat / agent / memory / space を core に持ち、Takosumi を consuming substrate として使う unique top consumer
+  text: AI software creation product
+  tagline: self-hostable AI software creation product
   actions:
     - theme: brand
       text: Use Takos
@@ -19,7 +19,7 @@ hero:
 features:
   - icon: 📦
     title: Installable App Model
-    details: 'Takos が bundled / third-party app を install するときの ownership model。OAuth provider は Takosumi Accounts に集約し、takosumi kernel は deploy engine に専念する'
+    details: 'Takos が bundled / third-party app を install するときの ownership model。OAuth provider は operator account plane に集約し、takosumi kernel は deploy engine に専念する'
     link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md
   - icon: 🛣️
     title: 3 つの install path
@@ -31,7 +31,7 @@ features:
     link: https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md
   - icon: 🧭
     title: Takos 全体像
-    details: 'Takosumi Account → Space → AppInstallation の階層と、Takos platform features (Agent/Chat, Git, Storage, Store) の関係を整理する'
+    details: 'Takosumi Account → Space → AppInstallation の階層と、Takos software creation features (agents, Git, memory, spaces, tools) の関係を整理する'
     link: /overview/
   - icon: 🧩
     title: Deploy 構成

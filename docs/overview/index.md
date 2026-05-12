@@ -1,26 +1,14 @@
 # Takos 全体像
 
-Takos は self-hostable な AI-first chat & agent platform です。Takos product 自身は Takosumi の unique top consumer
-であり、通常の InstallableApp では ありません。OAuth provider / 契約主体 / billing owner は Takosumi Accounts account
-plane が持ち、Takos は OIDC consumer として動きます。プロダクト UI は kernel に埋め込むのではなく、Takos product surface
-として提供します。Store / UI では bundled / third-party app を product label として app と表示する場合があります。
+Takos は self-hostable AI software creation product。 Takos product 自身は通常の InstallableApp ではなく、 OAuth provider /
+契約主体 / billing owner は operator account plane が持ち、 Takos は OIDC consumer として動きます。 プロダクト UI は
+kernel に埋め込むのではなく Takos product surface として提供し、 Store / UI では bundled / third-party app を product
+label として app と表示する場合があります。 (identity の正本は
+[ecosystem design-principles](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/design-principles.md)
+参照)
 
 このページは、`.takosumi/app.yml` / `.takosumi/manifest.yml` や CLI の詳細に入る前に、「Takos
 をどの単位で理解すればよいか」を揃える入口です。
-
-## このページで依存してよい範囲
-
-- Takos の全体像
-- Takosumi Account / Space / AppInstallation の階層
-- 3 install path / 3 runtime mode のサマリ
-- docs の読み順
-- public 用語と internal 用語の大まかな対応
-
-## このページで依存してはいけない範囲
-
-- backend 固有の lower-level route
-- internal table 名
-- 個別 API / CLI / manifest の詳細契約
 
 ## Takos が扱う基本単位
 
@@ -49,10 +37,9 @@ boundary、その下に 従来の primitive / group / resource / route が積ま
   `publications[]` ではなく Takos app catalog / runtime registry の surface として扱う
 - **Namespace export**: operator / account plane / billing などの dependency は `operator.identity.oidc` /
   `operator.billing.default` のような Space-visible namespace export と explicit grant / account API で扱う。kernel
-  manifest の `imports[]` では表現しない
-- **App** (legacy product label): Store / UI 上の product label。Installable App Model では `.takosumi/app.yml` の
-  `kind: InstallableApp` を canonical metadata 単位として扱い、その parser / workflow / manifest compile は
-  `takosumi-git` が所有する
+  manifest には書かない
+- **App**: Store / UI 上の product label。Installable App Model では `.takosumi/app.yml` の
+  `kind: InstallableApp` を metadata 単位として扱い、その parser / workflow / manifest compile は `takosumi-git` が所有する
 
 ## 3 install path
 
@@ -118,7 +105,7 @@ Takos Docs では、次の 3 層を分けて読みます。
 - workflow / artifact 解決は `takosumi-git` が担当し、kernel には `workflowRef` と installer-only placeholder を除いた
   compiled manifest だけを `POST /v1/deployments` で渡す
 - operator / debug の direct apply だけ `takosumi` CLI の explicit manifest path を使う
-- legacy `takos deploy` / `takos install` は compatibility surface としてのみ扱う
+- operator / debug の direct apply は `takosumi` CLI の explicit manifest path を使う
 
 ### space を運用したい人
 
@@ -139,7 +126,7 @@ Takos Docs では、次の 3 層を分けて読みます。
 - Installable App Model の正本は
   [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
 - 所有権 ledger は
-  [AppInstallation](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md)
+  [AppInstallation](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md)
 - OAuth / OIDC issuer の置き場所は
   [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
 - Takos が OIDC consumer になる立場は [OIDC consumer](/apps/oidc-consumer)

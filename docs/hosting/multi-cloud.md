@@ -1,7 +1,6 @@
 # Multi-cloud
 
-このページは **Takosumi kernel を複数 cloud にまたがって運用する operator** 向けの cross-cloud runbook です。Phase 17
-(provider plugin / runtime-agent / routing layer / 21 ignored test re-enable) の完了を前提とし、Cloudflare / AWS / GCP /
+このページは **Takosumi kernel を複数 cloud にまたがって運用する operator** 向けの cross-cloud runbook です。 (provider plugin / runtime-agent / routing layer / 21 ignored test re-enable) の完了を前提とし、Cloudflare / AWS / GCP /
 Kubernetes / self-hosted の境界を一望します。
 
 target-specific な手順は次の per-target docs を参照してください。本ページは **5 target 横断の意思決定** と **境界に出る
@@ -83,7 +82,7 @@ distribution:
 ```
 
 `distribute:apply` は `kernel_host.target` 1 つだけを deploy 対象として dispatch し (このとき他 target 用の Helm /
-compose は触らない)、 `tenant_runtime.targets` は **Takos compatibility deploy path が選択できる候補セット** として
+compose は触らない)、 `tenant_runtime.targets` は **tenant runtime target が選択できる候補セット** として
 kernel に登録されます。
 
 ### 代表的な multi-cloud 組み合わせ例
@@ -147,7 +146,7 @@ operator が選ぶのは:
 
 ## composite descriptor の使い方
 
-Phase 13 で導入した composite descriptor は **runtime + resource + publication
+composite descriptor は **runtime + resource + publication
 
 - route の組** を 1 つの authoring alias として manifest に書けるようにします。 canonical な 4 個
   (`takosumi/src/profiles/composite/mod.ts`) を operator が deploy manifest 上で参照します。
@@ -361,7 +360,7 @@ kernel が plugin 経由でやること:
 
 ## drift detection / rollback の cross-cloud semantics
 
-Phase 17C で実装した routing observation と Phase 17A の各 provider plugin は **drift 検出と rollback** を
+provider routing observation と provider plugins は **drift 検出と rollback** を
 `Deployment.observation` レコードに統一して emit します。
 
 ### drift 検出
@@ -464,14 +463,14 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 # 10. 動作確認
 takos login --api-url=https://admin.takos.example.com --token "$TAKOSUMI_ACCOUNTS_PAT"
-# migration window 中の Takos compatibility deploy smoke
-takos deploy --env production --space SPACE_ID --group my-app
+# direct manifest deploy smoke
+takosumi deploy ./compiled-manifest.yml --remote ""
 curl https://my-app.app.takos.example.com  # AWS ALB 経由で ECS Fargate に到達
 ```
 
 GCP / k8s / selfhosted も同様の流れです (target-specific docs を参照)。
 
-## secret partition と rotation runbook (Phase 18.2 H14 + H15)
+## secret partition と rotation runbook
 
 multi-cloud 構成では **1 つの cloud key が漏れた場合に他 cloud に影響しない** ことが境界条件になります。Takosumi kernel
 の secret store は cloud partition ごとに **独立した encryption key** を保持し、AES-GCM の AAD に partition ラベルを
@@ -558,7 +557,7 @@ export default {
 ## Audit retention policy (PCI-DSS / HIPAA / SOX)
 
 Takosumi kernel は `audit_events` table を tamper-evident 化するために SHA-256 hash chain で append-only
-運用しています。Phase 18.3 / M9 では regulated workload (PCI-DSS / HIPAA / SOX) 向けに retention policy を formalize
+運用しています。regulated workload (PCI-DSS / HIPAA / SOX) 向けに retention policy を formalize
 しました:
 
 ### policy 構成
@@ -654,7 +653,7 @@ export default {
 (Cloudflare scheduled event は `[triggers] crons = ["15 3 * * *"]` を audit retention 専用 worker
 に設定。secret-rotation maintenance と分離することで失敗 isolation を得る)
 
-### Provider observation retention (Phase 18.3 / M3)
+### Provider observation retention
 
 `provider_observations` / `runtime_provider_observations` table は `ObservationRetentionService`
 (`takosumi/packages/kernel/src/services/observation-retention/service.ts`) で daily GC します:
@@ -672,7 +671,7 @@ current deployment (`group_heads.current_deployment_id`) に紐づく observatio
 ループに入ります。`onReport` callback で `{archivedDeploy, archivedRuntime, deletedDeploy, deletedRuntime}` の metric を
 emit すると dashboards で観測できます。
 
-## DB at-rest encryption の enforce (Phase 18.3 M7)
+## DB at-rest encryption の enforce
 
 Takosumi は production / staging boot で **DB connection の at-rest encryption flag** を強制チェックします。recognised
 signals は次のとおりです:
@@ -698,7 +697,7 @@ cloud 別の推奨設定:
 local / dev で encryption の無い DB を使う場合は `TAKOS_ALLOW_UNENCRYPTED_DB=1` で明示 opt-in が必要です (production /
 staging では opt-in 無効、boot 時に `process exit 1` で fail-closed)。
 
-## audit-replication external sink (Phase 18.3 M5)
+## audit-replication external sink
 
 audit_events table の SHA-256 hash chain は app 層で計算されますが、DBA が DB 上で chain を再計算しながら row
 を改竄するシナリオでは **off-DB の immutable replica** が canonical な tamper evidence になります。Takosumi は

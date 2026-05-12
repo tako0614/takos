@@ -1,8 +1,7 @@
 # Examples
 
-Current examples should use `.takosumi/app.yml` plus `.takosumi/manifest.yml`
-and the `resources[]` Shape model. Legacy component / route / publication
-examples are being retired as each page is updated.
+Examples use `.takosumi/app.yml` plus `.takosumi/manifest.yml` and the
+`resources[]` Shape model.
 
 ## List
 

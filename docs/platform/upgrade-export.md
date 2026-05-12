@@ -3,23 +3,6 @@
 Installable App Model における AppInstallation の **lifecycle 後半** — upgrade / rollback / export bundle / self-host
 import — を扱うページです。
 
-このページで依存してよい範囲:
-
-- `takosumi-git upgrade` / `takosumi-git rollback` / `takosumi-git export` / `takosumi-git install` (bundle 経由) の CLI
-  surface
-- export bundle の `takos-export/` directory tree (W-09 で正本化される public layout)
-- self-host import 時に切り替え可能な OIDC issuer の前提条件
-
-このページで依存してはいけない範囲:
-
-- takosumi-cloud 内部の rollout engine 詳細: `materialize` の cutover strategy などは
-  [Install API](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md#post-v1installationsidmaterialize)
-  の wire 仕様のみが contract。
-- export bundle 内の **secret 実値**: 本 bundle は `templates-only` を default とし、secret material は self-host
-  側で再発行する前提。
-- takosumi kernel API: 本ページの operation はすべて Takosumi Accounts / takosumi-git 経由で kernel に到達する。app は
-  kernel を直接触らない。
-
 ## 1. Upgrade
 
 AppInstallation の `sourceRef` を新しい ref に進める操作。同じ source git URL 配下の新しい tag / commit を pin
@@ -29,12 +12,6 @@ AppInstallation の `sourceRef` を新しい ref に進める操作。同じ sou
 
 ```bash
 takosumi-git upgrade inst_abc --ref v1.2.4
-```
-
-`takos-cli` 経由でも同等:
-
-```bash
-takos installation upgrade inst_abc --ref v1.2.4
 ```
 
 `--ref` には **immutable な tag または commit SHA** を指定する。`main` 等の mutable ref は `400 mutable-ref-rejected`
@@ -78,7 +55,7 @@ Estimated cost change:
 ```
 
 permission diff が **add** を含む場合は、UI が
-[Install preview](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md#post-v1installpreview)
+[Install preview](https://github.com/tako0614/takosumi-cloud/blob/master/docs/accounts-service.md#post-v1installpreview)
 と同等の permission gate を再度通すことを要求する (新 `permissionDigest` の ack 必須)。
 
 ### 1.4 channel policy
@@ -145,7 +122,7 @@ takosumi-git export inst_abc --output takos-export.tar.zst
 ```
 
 Install API 経由なら
-[`POST /v1/installations/{id}/export`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md#_5-post-v1-installations-id-export)。
+[`POST /v1/installations/{id}/export`](https://github.com/tako0614/takosumi-cloud/blob/master/docs/accounts-service.md#_5-post-v1-installations-id-export)。
 
 ### 3.2 Bundle 構造 {#export-bundle}
 
@@ -316,17 +293,17 @@ install ──► ready ──┬─► upgrading ──► ready (新 ref)
 ```
 
 各遷移は
-[`InstallationEvent`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md) として
+[`InstallationEvent`](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md) として
 append-only に記録される。
 
 ## 次に読むページ
 
-- [Install API](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/install-api.md) — upgrade /
+- [Install API](https://github.com/tako0614/takosumi-cloud/blob/master/docs/accounts-service.md) — upgrade /
   rollback / export を駆動 する REST endpoint
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md) —
   `materialize` で遷移する shared-cell / dedicated / self-hosted の比較
-- [AppInstallation 台帳](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/app-installation.md) —
+- [AppInstallation 台帳](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md) —
   過去世代を保存する record と event ledger
-- [Binding Catalog](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/binding-catalog.md) — 各
+- [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md) — 各
   binding の export 時の 扱い (template / secret 除外)
 - [Install paths](/apps/install-paths) — 3 path のうち self-host への遷移
