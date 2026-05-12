@@ -1,45 +1,58 @@
 # Takos 全体像
 
-Takos は self-hostable AI software creation product。 Takos product 自身は通常の InstallableApp ではなく、 OAuth provider /
-契約主体 / billing owner は operator account plane が持ち、 Takos は OIDC consumer として動きます。 プロダクト UI は
-kernel に埋め込むのではなく Takos product surface として提供し、 Store / UI では bundled / third-party app を product
-label として app と表示する場合があります。 (identity の正本は
+Takos は self-hostable な AI-first chat & agent platform。 Takos product
+自身は通常の InstallableApp ではなく、 OAuth provider / 契約主体 / billing owner
+は operator account plane が持ち、 Takos は OIDC consumer として動きます。
+プロダクト UI は kernel に埋め込むのではなく Takos product surface
+として提供し、 Store / UI では bundled / third-party app を product label として
+app と表示する場合があります。 (identity の正本は
 [ecosystem design-principles](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/design-principles.md)
 参照)
 
-このページは、`.takosumi/app.yml` / `.takosumi/manifest.yml` や CLI の詳細に入る前に、「Takos
-をどの単位で理解すればよいか」を揃える入口です。
+このページは、`.takosumi/app.yml` / `.takosumi/manifest.yml` や CLI
+の詳細に入る前に、「Takos をどの単位で理解すればよいか」を揃える入口です。
 
 ## Takos が扱う基本単位
 
-Installable App Model では、所有権は次の階層で表現されます。 **Takosumi Account → Space → AppInstallation** が install
-boundary、その下に 従来の primitive / group / resource / route が積まれます。
+Installable App Model では、所有権は次の階層で表現されます。 **Takosumi Account
+→ Space → AppInstallation** が install boundary、その下に 従来の primitive /
+group / resource / route が積まれます。
 
-- **Takosumi Account**: 契約・billing・identity owner。OIDC issuer は `operator.identity.oidc` namespace export / OIDC
-  discovery から得る operator-selected endpoint として扱う
-- **Space**: Takosumi Account 配下の install scope (`personal` / `team` / `org`)。AppInstallation の親
-- **AppInstallation**: bundled / third-party app が install された 1 record。source commit / app manifest digest /
-  runtime mode / binding / grant を保持する 所有権の primitive
-- **AppBinding**: AppInstallation に紐づく binding (OIDC / Postgres / object-store / domain / GitOps deploy intent /
-  launch token)
-- **AppGrant**: AppInstallation に対する capability grant。ユーザーが任意の タイミングで revoke 可能
-- **RuntimeBinding**: AppInstallation を shared-cell / dedicated runtime に bind する record
-- **Shape resource**: `worker@v1` / `web-service@v1` / `database-postgres@v1` / `custom-domain@v1` などの kernel Shape
-  resource。 AppInstallation の `compiledManifestDigest` 経由で takosumi kernel に投下される
-- **Group**: primitive を任意に束ねる state scope。所属 primitive は inventory、snapshot、rollback、uninstall などの
-  group 機能を使える
-- **Workload** (Worker / Service / Attached): deployable unit。内部では `services` と Deployment record の `desired`
-  field に保存される
-- **Resource**: control-plane managed backing capability (sql / object-store / kv / queue / ...)。内部では `resources`
-  に保存され、group 所属の有無で CRUD / binding の扱いは変わらない
+- **Takosumi Account**: 契約・billing・identity owner。OIDC issuer は
+  `operator.identity.oidc` namespace export / OIDC discovery から得る
+  operator-selected endpoint として扱う
+- **Space**: Takosumi Account 配下の install scope (`personal` / `team` /
+  `org`)。AppInstallation の親
+- **AppInstallation**: bundled / third-party app が install された 1
+  record。source commit / app manifest digest / runtime mode / binding / grant
+  を保持する 所有権の primitive
+- **AppBinding**: AppInstallation に紐づく binding (OIDC / Postgres /
+  object-store / domain / GitOps deploy intent / launch token)
+- **AppGrant**: AppInstallation に対する capability grant。ユーザーが任意の
+  タイミングで revoke 可能
+- **RuntimeBinding**: AppInstallation を shared-cell / dedicated runtime に bind
+  する record
+- **Shape resource**: `worker@v1` / `web-service@v1` / `database-postgres@v1` /
+  `custom-domain@v1` などの kernel Shape resource。 AppInstallation の
+  `compiledManifestDigest` 経由で takosumi kernel に投下される
+- **Group**: primitive を任意に束ねる state scope。所属 primitive は
+  inventory、snapshot、rollback、uninstall などの group 機能を使える
+- **Workload** (Worker / Service / Attached): deployable unit。内部では
+  `services` と Deployment record の `desired` field に保存される
+- **Resource**: control-plane managed backing capability (sql / object-store /
+  kv / queue / ...)。内部では `resources` に保存され、group 所属の有無で CRUD /
+  binding の扱いは変わらない
 - **Route**: hostname / path → workload のマッピング
-- **App metadata**: launcher / MCP / file handler などの app catalog metadata。 compiled Shape manifest の
-  `publications[]` ではなく Takos app catalog / runtime registry の surface として扱う
-- **Namespace export**: operator / account plane / billing などの dependency は `operator.identity.oidc` /
-  `operator.billing.default` のような Space-visible namespace export と explicit grant / account API で扱う。kernel
-  manifest には書かない
-- **App**: Store / UI 上の product label。Installable App Model では `.takosumi/app.yml` の
-  `kind: InstallableApp` を metadata 単位として扱い、その parser / workflow / manifest compile は `takosumi-git` が所有する
+- **App metadata**: launcher / MCP / file handler などの app catalog metadata。
+  compiled Shape manifest の `publications[]` ではなく Takos app catalog /
+  runtime registry の surface として扱う
+- **Namespace export**: operator / account plane / billing などの dependency は
+  `operator.identity.oidc` / `operator.billing.default` のような Space-visible
+  namespace export と explicit grant / account API で扱う。kernel manifest
+  には書かない
+- **App**: Store / UI 上の product label。Installable App Model では
+  `.takosumi/app.yml` の `kind: InstallableApp` を metadata 単位として扱い、その
+  parser / workflow / manifest compile は `takosumi-git` が所有する
 
 ## 3 install path
 
@@ -60,7 +73,8 @@ boundary、その下に 従来の primitive / group / resource / route が積ま
 | self-hosted | installation bundle を取り出し、別 takosumi に import した完全退出状態                                                |
 
 所有権は AppInstallation に固定したまま、runtime だけ差し替えます。詳細は
-[Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md) を参照。
+[Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
+を参照。
 
 ## public と internal の読み分け
 
@@ -77,8 +91,8 @@ Takos Docs では、次の 3 層を分けて読みます。
 
 ### Takos を始めたい人
 
-- operator Accounts の `/start?takos_url=...` に向く `Use Takos` ボタン (managed shared-cell) で Takosumi Account /
-  Space を作る
+- operator Accounts の `/start?takos_url=...` に向く `Use Takos` ボタン (managed
+  shared-cell) で Takosumi Account / Space を作る
 - 新規 Space 作成時に bundled apps が auto-install される
 - launch token で chat に直行する
 - 詳細は [Install paths](/apps/install-paths) と
@@ -87,31 +101,38 @@ Takos Docs では、次の 3 層を分けて読みます。
 ### materialize したい人
 
 - shared-cell で運用していた AppInstallation を専用 runtime に物理化したい人
-- Takosumi Accounts の AppInstallation API / UI から source commit / data namespace / OIDC binding / domain
-  を保ったまま遷移
-- 詳細は [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
+- Takosumi Accounts の AppInstallation API / UI から source commit / data
+  namespace / OIDC binding / domain を保ったまま遷移
+- 詳細は
+  [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
 
 ### self-host したい人
 
 - 退出 / 主権 / 企業要件で完全自前運用したい人
-- Takos product distribution は `takos/deploy/` と operator runbook に従って deploy し、AppInstallation export bundle
-  は自前 Takosumi instance に import する
-- OIDC issuer は import 先の Takosumi Accounts。Keycloak / Authentik / Auth0 等は upstream IdP として接続可能
+- Takos product distribution は `takos/deploy/` と operator runbook に従って
+  deploy し、AppInstallation export bundle は自前 Takosumi instance に import
+  する
+- OIDC issuer は import 先の Takosumi Accounts。Keycloak / Authentik / Auth0
+  等は upstream IdP として接続可能
 - 詳細は [Upgrade / Export](/platform/upgrade-export)
 
 ### primitive を配備したい人
 
 - deploy manifest (`.takosumi/manifest.yml`) を書く
 - workflow artifact を用意する (`.takosumi/workflows/*.yml`)
-- workflow / artifact 解決は `takosumi-git` が担当し、kernel には `workflowRef` と installer-only placeholder を除いた
-  compiled manifest だけを `POST /v1/deployments` で渡す
-- operator / debug の direct apply だけ `takosumi` CLI の explicit manifest path を使う
-- operator / debug の direct apply は `takosumi` CLI の explicit manifest path を使う
+- workflow / artifact 解決は `takosumi-git` が担当し、kernel には `workflowRef`
+  と installer-only placeholder を除いた compiled manifest だけを
+  `POST /v1/deployments` で渡す
+- operator / debug の direct apply だけ `takosumi` CLI の explicit manifest path
+  を使う
+- operator / debug の direct apply は `takosumi` CLI の explicit manifest path
+  を使う
 
 ### space を運用したい人
 
 - deploy dashboard から resources / deploys / installed groups を見る
-- bundled app distribution の product root と installed groups を見分けて install / uninstall / replace する
+- bundled app distribution の product root と installed groups を見分けて
+  install / uninstall / replace する
 
 ### operator
 
@@ -131,11 +152,14 @@ Takos Docs では、次の 3 層を分けて読みます。
 - OAuth / OIDC issuer の置き場所は
   [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
 - Takos が OIDC consumer になる立場は [OIDC consumer](/apps/oidc-consumer)
-- Takos の product boundary と service set の正本は [System Architecture](/architecture/system-architecture)
+- Takos の product boundary と service set の正本は
+  [System Architecture](/architecture/system-architecture)
 - kernel 概念と service split の関係は [アーキテクチャ](/architecture/) と
   [Kernel](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/kernel.md)
-- primitive の deploy/runtime contract は [Deploy 構成](/apps/) と [デプロイ](/deploy/)
-- 用語の canonical ref は [用語集](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/glossary.md)
+- primitive の deploy/runtime contract は [Deploy 構成](/apps/) と
+  [デプロイ](/deploy/)
+- 用語の canonical ref は
+  [用語集](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/glossary.md)
 - CLI / API は [リファレンス](/reference/)
 - 実装ステータスと split shell の現状は
   [takosumi Current State](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/index.md)

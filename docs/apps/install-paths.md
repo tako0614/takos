@@ -4,7 +4,7 @@ Takos は users / app developers / operators 向けに **3 種類の entry path*
 提供する。一般ユーザーが instant に始める `Use Takos`、bundled / third-party app
 を Git URL から透明に install する `Install from Git`、そして Takos product
 distribution と app export bundle を自前環境に持ち込む `Self-host`。Takos
-product 自身は AI software creation product であり、通常の InstallableApp
+product 自身は AI-first chat & agent platform であり、通常の InstallableApp
 ではない。 本ページは、どの path をどんな読者が選ぶか、各 path の流れ、README や
 ランディングページに置くボタン例、そして既存の "はじめる" 章への導線をまとめる。
 
