@@ -14,7 +14,7 @@ counsel before Takos offers it for signature.
 | ---------------- | ------------------------------------------------------------------------------------------------------ |
 | Owner            | Data protection owner                                                                                  |
 | Last reviewed    | 2026-05-07                                                                                             |
-| Scope            | Takos Web / API, Takos Git hosting, Takos agent execution, and Takos-managed deploy/runtime operations |
+| Scope            | Takos Web / API, Takos Git hosting, Takos agent execution, and Takosumi/operator-managed deploy/runtime operations used by Takos spaces |
 | Current status   | Draft template published for GA readiness                                                              |
 | Signature status | Not signable until legal review and E-11.2 data subject request handlers are complete                  |
 
@@ -63,10 +63,12 @@ deployments, agent runs, support requests, and customer-managed applications:
 | AppInstallation owner              | Customer's delegated agent for app-local processing decisions; does not change Customer's controller/processor role |
 | Takos                              | Processor, or sub-processor where Customer is a processor                                                           |
 
-Takos may act as an independent controller for account administration, security,
-billing, fraud prevention, service analytics, and legal compliance. Those
-controller activities belong in the Privacy Policy and Terms of Service, not
-this DPA template.
+The Takos service operator or operator account-plane provider may act as an
+independent controller for account administration, security, billing, fraud
+prevention, service analytics, and legal compliance. Those controller activities
+belong in the Privacy Policy and Terms of Service, not this DPA template. This
+does not make the Takos product the OIDC issuer, billing owner, or
+AppInstallation ledger owner.
 
 ## 2. Customer Instructions
 
@@ -86,7 +88,7 @@ data protection law, unless legally prohibited.
 
 | Item               | Description                                                                                                                                                        |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Subject matter     | Providing Takos Web / API accounts, spaces, source and repository services, deploy orchestration, agent execution, billing usage, support, and security operations |
+| Subject matter     | Providing Takos Web / API access, spaces, source and repository services, Takosumi-backed deploy orchestration, agent execution, operator account-plane billing usage, support, and security operations |
 | Duration           | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence               |
 | Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata           |
 | Frequency          | Continuous while Customer uses Takos                                                                                                                               |
@@ -231,7 +233,7 @@ Takos must:
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | Data exporter               | Customer                                                                                                         |
 | Data importer               | Takos                                                                                                            |
-| Processing purpose          | Providing Takos Web / API, deploy, Git hosting, agent execution, billing usage, support, and security operations |
+| Processing purpose          | Providing Takos Web / API, Takosumi-backed deploy/runtime operation, Git hosting, agent execution, operator account-plane billing usage, support, and security operations |
 | Categories of data subjects | Customer users, Customer collaborators, Customer application users, support contacts                             |
 | Categories of personal data | Identity, access, repository, deployment, agent, application, billing, telemetry, support, and security data     |
 | Sensitive data              | Not intended unless separately agreed                                                                            |

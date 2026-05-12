@@ -15,7 +15,7 @@ store.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Owner                | Data protection owner                                                                                                                                |
 | Last reviewed        | 2026-05-07                                                                                                                                           |
-| Applies to           | Takos Web / API, Takosumi Accounts (identity / billing processor), Takos-managed deploy/runtime operations, Takos Git hosting, Takos agent execution |
+| Applies to           | Takos Web / API, Takosumi Accounts (identity / billing processor), Takosumi/operator-managed deploy/runtime operations used by Takos spaces, Takos Git hosting, Takos agent execution |
 | Related DPA          | `/legal/data-processing-agreement`                                                                                                                   |
 | Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                 |
 
