@@ -72,10 +72,6 @@ type BillingLineItem = {
 bundled / third-party app usage は `installationId` と app id を別 metadata
 に持つ line item として並列に積み上がります。
 
-::: info Historical import only 過去の private ledger import で `plan_pro` /
-`plan_enterprise` を見つけた場合だけ 内部的に `plan_payg`
-に正規化します。current public plan id としては使いません。 :::
-
 ### プランの課金モード
 
 各プランには課金モード（`BillingMode`）が紐づいています:

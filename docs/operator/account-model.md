@@ -49,10 +49,13 @@ Takosumi Accounts です。
 
 ## Dedicated Runtime Adoption
 
-既に動いている dedicated runtime を Accounts-owned `AppInstallation` として
-記録する場合は、AppInstallation `mode: dedicated`、explicit `RuntimeBinding`、
-source pin、binding、grant、launch token bootstrap をまとめて作成します。
-private operator 手順は
+この項目は internal operator evidence / adoption 用であり、public user の carry-over
+手順ではありません。current public install は最初から AppInstallation 経由で作成します。
+
+operator が既に動いている dedicated runtime を Accounts-owned `AppInstallation`
+として記録する場合は、AppInstallation `mode: dedicated`、explicit
+`RuntimeBinding`、source pin、binding、grant、launch token bootstrap をまとめて
+作成します。private operator 手順は
 [dedicated runtime adoption runbook](https://github.com/tako0614/takos-private/blob/main/docs/operations/dedicated-runtime-appinstallation-adoption.md)
 を参照してください。
 
