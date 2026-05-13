@@ -5,6 +5,12 @@
 このスナップショットは、本プロダクトルートに存在する実装の要約です。前向きの計画は ecosystem root の
 [`ROADMAP.md`](https://github.com/tako0614/takos-ecosystem/blob/master/ROADMAP.md) を参照してください。
 
+::: info Current audit boundary
+2026-05-14 audit では、Takos 1.x local / CI-equivalent exit criteria は完了扱いです。このページの kernel
+baseline は historical freeze evidence を含みます。public managed offering としての launch readiness は
+`ROADMAP.md §3.5` の live operator evidence / staged rehearsal が揃うまで別 gate です。
+:::
+
 ## 実装アーキテクチャ
 
 - `../takosumi/packages/kernel/src/index.ts` が `../takosumi/packages/kernel/src/api` から Hono HTTP アプリを起動し、standalone エントリポイントで kernel route を有効化します。
@@ -45,7 +51,11 @@ deno task check
 cd ../takosumi && deno task test
 ```
 
-2026-04-29 時点の結果: kernel-only smoke ベースラインは `240 passed | 0 failed` (`cd ../takosumi && deno task test`)。ecosystem release-gate (17 release gate + canonical full suite via `cd takos && deno task release-gate`) は **345 tests passed** で freeze 済 (ROADMAP.md Part I §3.1 / §6.2 を canonical value とする)。
+Latest local evidence は ecosystem root の `deno task check:all` と `deno task check:roadmap-release-readiness`
+で確認します。2026-04-29 の kernel-only smoke ベースラインは historical freeze evidence です:
+`240 passed | 0 failed` (`cd ../takosumi && deno task test`)。ecosystem release-gate (17 release gate + canonical
+full suite via `cd takos && deno task release-gate`) は **345 tests passed** で freeze 済 (ROADMAP.md Part I §3.1 /
+§6.2 を canonical value とする)。
 
 カバー範囲。
 
@@ -124,7 +134,10 @@ default の runtime はローカル / in-memory です。
 - env operator config は raw 値を露出せずに secret 参照を読めますが、本番 secret 管理は adapter 境界の作業であり、default context にデプロイ済みの secret backend は含まれません。
 - 署名付き internal service 認証、workload identity、service grant、network policy チェックは service レベルの enforcement として存在。全 mutation 境界にまたがる runtime identity の発行 / enforcement は本番統合作業として残ります。
 
-## 残りの具体ステップ
+## Live / provider hardening backlog
+
+以下は Takos 1.x local exit の未完条件ではなく、provider-specific live proof や managed offering evidence
+として扱う hardening backlog です。
 
 - HTTP / runtime エントリポイントを明示的な本番 storage 選択・migration 実行・health / readiness チェックに接続し、in-memory app state default をやめる。
 - workload identity 発行、`ServiceGrant` lookup、entitlement チェック、mutation 境界 policy をすべての internal route / worker パスに接続する (現在は service レベルの認可 slice のみ)。
