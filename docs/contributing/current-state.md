@@ -52,10 +52,9 @@ cd ../takosumi && deno task test
 ```
 
 Latest local evidence は ecosystem root の `deno task check:all` と `deno task check:roadmap-release-readiness`
-で確認します。2026-04-29 の kernel-only smoke ベースラインは historical freeze evidence です:
-`240 passed | 0 failed` (`cd ../takosumi && deno task test`)。ecosystem release-gate (17 release gate + canonical
-full suite via `cd takos && deno task release-gate`) は **345 tests passed** で freeze 済 (ROADMAP.md Part I §3.1 /
-§6.2 を canonical value とする)。
+で確認します。2026-04-29 の kernel-only smoke ベースラインは historical freeze evidence であり、現在の test count
+は `cd ../takosumi && deno task test` を再実行して確認します。ecosystem release-gate は `cd takos && deno task release-gate`
+を正本コマンドとし、固定の test 件数はこの current-state page では pin しません。
 
 カバー範囲。
 
@@ -82,7 +81,7 @@ safe-by-default smoke スクリプトは 2026-04-28 docs refresh 時点の状態
 | Postgres storage / migration | Pass                                        | `TAKOS_RUN_POSTGRES_SMOKE=1` と `DATABASE_URL` で実行可能                                                                    | dry-run は 15 テーブル / 6 migration / SQL プレビューと fake `SqlClient` トランザクションパスを DB 接続なしで報告。                                                                                           |
 | Redis queue                  | Pass                                        | `TAKOS_RUN_REDIS_QUEUE_SMOKE=1` と Redis URL で実行可能                                                                      | dry-run は注入された command client 越しに `RedisQueueAdapter` の enqueue / lease / ack / 空 lease を Redis 接続なしで検証。                                                                                  |
 | S3 互換 object storage       | Pass                                        | `TAKOS_RUN_OBJECT_STORAGE_SMOKE=1` と `TAKOS_OBJECT_STORAGE_SMOKE_REAL_ENDPOINT=1` および endpoint 認証で実行可能             | dry-run は memory object storage の put / head / get / list / delete と、S3 PUT / HEAD / GET / LIST / DELETE のリクエスト署名を fetch / network なしで検証。                                                  |
-| Docker Compose ローカル      | Safe dry-run pass / real harness local pass | Real モードは `TAKOS_RUN_REAL_COMPOSE_SMOKE=1`、Docker Compose、`.env.local`、空きポート、ローカルイメージビルドが必要        | 2026-04-28 の real 実行で Postgres / Redis / MinIO / PaaS プロセスロール / runtime / `takos-agent` を起動し、health endpoint を確認し、cleanup を実行。default release gate には含めません。                  |
+| Docker Compose ローカル      | Safe dry-run pass / real harness local pass | Real モードは `TAKOS_RUN_REAL_COMPOSE_SMOKE=1`、Docker Compose、`.env.local`、空きポート、ローカルイメージビルドが必要        | 2026-04-28 の real 実行で Postgres / Redis / MinIO / Takosumi substrate process / runtime / `takos-agent` を起動し、health endpoint を確認し、cleanup を実行。default release gate には含めません。             |
 
 ## 実行可能コマンド
 
