@@ -16,10 +16,23 @@ type DenoConfig = {
   tasks?: Record<string, string>;
 };
 
+type CargoPackageConfig = {
+  name?: string;
+  version?: string;
+  publish?: boolean | string[];
+  license?: string;
+};
+
 type CommandManifest = {
   name: string;
   command: string[];
   env?: Record<string, string>;
+};
+
+type ReleaseComponentConfig = {
+  id: string;
+  path: string;
+  kind: 'deno' | 'cargo';
 };
 
 type BuildReleaseManifestOptions = {
@@ -90,6 +103,13 @@ const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
   },
 ];
 
+const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [
+  { id: 'takos-shell', path: 'deno.json', kind: 'deno' },
+  { id: 'takos-app', path: 'app/deno.json', kind: 'deno' },
+  { id: 'takos-git', path: 'git/deno.json', kind: 'deno' },
+  { id: 'takos-agent', path: 'agent/Cargo.toml', kind: 'cargo' },
+];
+
 const root = Deno.cwd();
 const options = parseArgs(Deno.args);
 const commands = validationCommands();
@@ -102,6 +122,7 @@ const manifest = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   package: await collectPackageManifest(),
+  releaseComponents: await collectReleaseComponents(),
   git: gitInfo,
   submodules,
   validationCommands: commands,
@@ -189,6 +210,41 @@ async function collectPackageManifest(): Promise<JsonValue> {
     tasks: Object.keys(rootConfig.tasks ?? {}).sort(),
     workspace,
     packages,
+  };
+}
+
+async function collectReleaseComponents(): Promise<JsonValue> {
+  const components = [];
+  for (const component of RELEASE_COMPONENT_CONFIGS) {
+    if (component.kind === 'deno') {
+      const config = await readJson<DenoConfig>(component.path);
+      components.push({
+        id: component.id,
+        kind: component.kind,
+        config: component.path,
+        name: config.name ?? null,
+        version: config.version ?? null,
+        workspaceCount: config.workspace?.length ?? 0,
+        taskCount: Object.keys(config.tasks ?? {}).length,
+      });
+      continue;
+    }
+
+    const cargoPackage = await readCargoPackage(component.path);
+    components.push({
+      id: component.id,
+      kind: component.kind,
+      config: component.path,
+      name: cargoPackage.name ?? null,
+      version: cargoPackage.version ?? null,
+      publish: cargoPackage.publish ?? null,
+      license: cargoPackage.license ?? null,
+    });
+  }
+
+  return {
+    configs: RELEASE_COMPONENT_CONFIGS.map((component) => component.path),
+    components,
   };
 }
 
@@ -810,6 +866,57 @@ async function git(args: string[]): Promise<string | null> {
 
 async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await Deno.readTextFile(path)) as T;
+}
+
+async function readCargoPackage(path: string): Promise<CargoPackageConfig> {
+  const text = await Deno.readTextFile(path);
+  const packageSection = cargoSection(text, 'package');
+  return {
+    name: cargoString(packageSection.name),
+    version: cargoString(packageSection.version),
+    publish: cargoBoolean(packageSection.publish) ?? cargoStringArray(packageSection.publish),
+    license: cargoString(packageSection.license),
+  };
+}
+
+function cargoSection(text: string, sectionName: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  let inSection = false;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.replace(/\s+#.*$/, '').trim();
+    if (!line) continue;
+    const heading = /^\[([^\]]+)\]$/.exec(line);
+    if (heading) {
+      inSection = heading[1] === sectionName;
+      continue;
+    }
+    if (!inSection) continue;
+    const assignment = /^([A-Za-z0-9_-]+)\s*=\s*(.+)$/.exec(line);
+    if (!assignment) continue;
+    values[assignment[1]] = assignment[2].trim();
+  }
+  return values;
+}
+
+function cargoString(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const match = /^"([^"]*)"$/.exec(value);
+  return match?.[1];
+}
+
+function cargoBoolean(value: string | undefined): boolean | undefined {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+function cargoStringArray(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const match = /^\[(.*)\]$/.exec(value);
+  if (!match) return undefined;
+  return match[1].split(',')
+    .map((item) => cargoString(item.trim()))
+    .filter((item): item is string => item !== undefined);
 }
 
 async function readTextIfExists(path: string): Promise<string | null> {
