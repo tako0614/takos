@@ -37,6 +37,7 @@
     "validate:process-roles": "deno task validate:service-set",
     "distribution:smoke": "deno run --config deno.json --allow-read --allow-env --allow-net scripts/distribution-smoke.ts",
     "release-gate": "deno run --config deno.json --allow-read --allow-run scripts/release-gate.ts",
+    "release-manifest:check-clean": "deno run --config deno.json --allow-read --allow-run=git scripts/build-release-manifest.ts --require-clean-git",
     "submodules:update": "git submodule update --init --recursive"
   },
   "nodeModulesDir": "auto",

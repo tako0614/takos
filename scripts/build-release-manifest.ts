@@ -26,6 +26,7 @@ type BuildReleaseManifestOptions = {
   output: string | null;
   imageDigestDir: string;
   requireImageDigests: boolean;
+  requireCleanGit: boolean;
 };
 
 type GitInfo = {
@@ -43,6 +44,14 @@ type SubmodulePointer = {
   state: 'recorded' | 'uninitialized' | 'checkout-differs' | 'conflict' | 'unknown';
   prefix: string;
   description: string | null;
+};
+
+type SubmoduleSummary = {
+  available: boolean;
+  clean?: boolean;
+  count?: number;
+  states?: Record<string, number>;
+  pointers: SubmodulePointer[];
 };
 
 type OfficialImage = {
@@ -86,13 +95,15 @@ const options = parseArgs(Deno.args);
 const commands = validationCommands();
 assertRequiredValidationCommands(commands);
 const gitInfo = await collectGitInfo();
+const submodules = await collectSubmodulePointers();
+assertCleanGitState(gitInfo, submodules, options);
 
 const manifest = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   package: await collectPackageManifest(),
   git: gitInfo,
-  submodules: await collectSubmodulePointers(),
+  submodules,
   validationCommands: commands,
   officialImages: await collectOfficialImages(gitInfo, options),
   distributionContract: await collectDistributionContract(),
@@ -114,6 +125,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
     output: null,
     imageDigestDir: 'dist/image-digests',
     requireImageDigests: false,
+    requireCleanGit: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -134,6 +146,10 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
       options.requireImageDigests = true;
       continue;
     }
+    if (flag === '--require-clean-git') {
+      options.requireCleanGit = true;
+      continue;
+    }
     usage();
   }
 
@@ -142,7 +158,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
 function usage(): never {
   console.error(
-    'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--require-image-digests]',
+    'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--require-image-digests] [--require-clean-git]',
   );
   Deno.exit(2);
 }
@@ -197,7 +213,7 @@ async function collectGitInfo(): Promise<GitInfo> {
   };
 }
 
-async function collectSubmodulePointers(): Promise<JsonValue> {
+async function collectSubmodulePointers(): Promise<SubmoduleSummary> {
   const status = await git(['submodule', 'status', '--recursive']);
   if (status === null) {
     return { available: false, pointers: [] };
@@ -219,6 +235,38 @@ async function collectSubmodulePointers(): Promise<JsonValue> {
     states,
     pointers,
   };
+}
+
+function assertCleanGitState(
+  gitInfo: GitInfo,
+  submodules: SubmoduleSummary,
+  options: BuildReleaseManifestOptions,
+): void {
+  if (!options.requireCleanGit) return;
+
+  const errors: string[] = [];
+  if (!gitInfo.available) {
+    errors.push('git metadata must be available');
+  } else if (gitInfo.dirty !== false) {
+    errors.push('git working tree must be clean');
+  }
+
+  if (!submodules.available) {
+    errors.push('submodule status must be available');
+  } else if (submodules.clean !== true) {
+    const dirtySubmodules = submodules.pointers
+      .filter((pointer) => pointer.state !== 'recorded')
+      .map((pointer) => `${pointer.path}:${pointer.state}`);
+    errors.push(
+      `submodules must match recorded commits${dirtySubmodules.length > 0 ? ` (${dirtySubmodules.join(', ')})` : ''}`,
+    );
+  }
+
+  if (errors.length === 0) return;
+
+  console.error('Release manifest clean git validation failed:');
+  for (const error of errors) console.error(`- ${error}`);
+  Deno.exit(1);
 }
 
 function parseSubmoduleStatusLine(line: string): SubmodulePointer {
