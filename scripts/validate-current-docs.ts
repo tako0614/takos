@@ -59,6 +59,9 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
     'docs/get-started/index.md',
     'docs/overview/index.md',
     'docs/operator/account-model.md',
+    'docs/deploy/rollback.md',
+    'docs/hosting/index.md',
+    'docs/hosting/cloudflare.md',
   ];
   const errors: string[] = [];
   for (const path of files) {
@@ -82,6 +85,9 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
         'データや設定を保ったまま dedicated runtime に materialize',
         '既存のアプリをエクスポートして持ち出すこともできます',
         'Export は「data を移植し',
+        'runtime を戻します',
+        'Takosumi kernel は 5 つのホスティング先に対応しています',
+        'operator が残すのは初回 admin login のみ',
       ]
     ) {
       if (text.includes(forbidden)) {
@@ -102,7 +108,33 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
       errors.push(`docs/platform/upgrade-export.md: missing current revision boundary '${required}'`);
     }
   }
+  const rollback = await Deno.readTextFile('docs/deploy/rollback.md');
+  if (
+    !rollback.includes(
+      'provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません',
+    )
+  ) {
+    errors.push('docs/deploy/rollback.md: missing current rollback data boundary');
+  }
+  const hostingIndex = await Deno.readTextFile('docs/hosting/index.md');
+  if (
+    !includesRequiredText(
+      hostingIndex,
+      'target ごとの production parity は operator evidence で確認する必要があります',
+    )
+  ) {
+    errors.push('docs/hosting/index.md: missing target parity evidence boundary');
+  }
+  const cloudflareHosting = await Deno.readTextFile('docs/hosting/cloudflare.md');
+  if (!cloudflareHosting.includes('launch-readiness evidence / operator approval / staged rehearsal')) {
+    errors.push('docs/hosting/cloudflare.md: missing public managed offering readiness boundary');
+  }
   return errors;
+}
+
+function includesRequiredText(text: string, required: string): boolean {
+  return text.includes(required) ||
+    text.replace(/\s+/g, ' ').includes(required.replace(/\s+/g, ' '));
 }
 
 async function exists(path: string): Promise<boolean> {
