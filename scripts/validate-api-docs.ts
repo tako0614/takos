@@ -43,7 +43,7 @@ const forbiddenText = [
   '`/api/me/personal-access-tokens',
   'group-deployment',
   'group_deployment',
-  'takos-paas',
+  `takos-${'paas'}`,
   'apps/paas',
 ] as const;
 

@@ -5,7 +5,6 @@
 ## アーキテクチャ
 
 - [`current-state.md`](./current-state.md) — kernel API・ドメイン・プロセス役割・adapter・storage・production-safety チェックの実装スナップショット。
-- [`system-architecture-implementation-plan.md`](./system-architecture-implementation-plan.md) — 2026-04-29 時点の historical 1.0 Core Release plan。current plan ではなく、読み物としてのみ扱う。
 - [`api-surface.md`](./api-surface.md) — `takosumi/packages/kernel/src/api/openapi.ts` が source of truth として保持する OpenAPI 風の route 一覧。
 - [`deploy-topology-notes.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/deploy-topology-notes.md) — Compose / Helm 向けの Takos サービス構成メモ。
 - [`kernel-plugin-boundary-audit.md`](./kernel-plugin-boundary-audit.md) — kernel と plugin-backed infrastructure の境界を docs / 実装間で揃えるためのチェックリスト。
