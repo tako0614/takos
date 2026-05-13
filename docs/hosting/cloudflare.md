@@ -453,7 +453,7 @@ deno run --allow-read --allow-write --allow-env \
 production の `PLATFORM_PRIVATE_KEY` を rotate する場合は事前に
 rotation runbook に対象 runtime、token TTL、rollback point、verification
 command を記録してください。current runtime が参照しない公開鍵 secret や
-互換目的の追加 secret は作成しないでください。 :::
+追加 secret は作成しないでください。 :::
 
 ### Secrets の設定
 

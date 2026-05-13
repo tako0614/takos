@@ -102,7 +102,7 @@ managed / self-host いずれも次の順序で進めます:
 3. `cd takos-private/apps/control && deno task secrets:sync:<env>` で Worker
    secret / k8s Secret を同期する (単発更新は
    `deno task secrets put OIDC_CLIENT_SECRET --env <env>`)
-4. 旧 secret を rotation owner 側で revoke する
+4. rotated-out secret を rotation owner 側で revoke する
 
 managed mode では 1 と 2 の間に Takosumi Accounts が AppBinding
 (`identity.oidc@v1` / `install-launch-token@v1`) を更新し、`takos-private`

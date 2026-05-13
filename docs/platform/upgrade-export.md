@@ -1,7 +1,7 @@
 # アップグレード / ロールバック / エクスポート
 
 > このページでわかること:
-> インストール済みアプリの更新、巻き戻し、別環境への移行方法。
+> インストール済みアプリの更新、巻き戻し、dedicated materialize、export / import の扱い。
 
 ## 1. Upgrade
 
@@ -23,7 +23,7 @@ mutable ref は `400 mutable-ref-rejected` で拒否される。
 ```txt
 1. new ref fetch       (takosumi-git が source repo から指定 ref を pin)
 2. app.yml parse       (.takosumi/app.yml を parse し metadata / bindings 抽出)
-3. manifest diff       (旧 compiledManifestDigest と新 manifest の diff)
+3. manifest diff       (current compiledManifestDigest と new manifest の diff)
 4. permission diff     (requestedGrants / requestedBindings の add/remove)
 5. migration plan      (database schema migration / bucket re-provision 等)
 6. approve             (UI / CLI で permissionDigest と costAck を ack)
@@ -31,7 +31,7 @@ mutable ref は `400 mutable-ref-rejected` で拒否される。
 ```
 
 `apply` 段階で失敗した場合は `installation.upgrade-failed` event が発火し、
-status は `ready` (旧 ref のまま) に rollback される。
+status は `ready` (previous ref のまま) に rollback される。
 
 ### 1.3 UI 例
 
@@ -113,7 +113,7 @@ pointer の swap" として表現される。
 - `database.postgres@v1` extension の追加は forward-only (rollback 後も
   extension は残る)
 - `object-store.s3-compatible@v1` の `encryption.mode` 変更は再 provision を
-  伴うため rollback 不能 (新 bucket を作って migrate するため)
+  伴うため rollback 不能 (new bucket へ data を再配置するため)
 - `domain.http@v1` の `hostname` 変更も rollback 不能
 
 これらの制限は upgrade 前の preview に warning として表示される。
@@ -308,15 +308,15 @@ canonical 5 public statuses (`installing` / `ready` / `failed` / `suspended` /
 `exported`) に固定されます。
 
 ```txt
-install ──► ready ──┬─► upgrading ──► ready (新 ref)
+install ──► ready ──┬─► upgrading ──► ready (new ref)
                     │       │
-                    │       └► upgrade-failed → ready (旧 ref)
+                    │       └► upgrade-failed → ready (previous ref)
                     │
-                    ├─► rolling-back ──► ready (旧 ref)
+                    ├─► rolling-back ──► ready (previous ref)
                     │
                     ├─► materializing ──► ready (mode=dedicated)
                     │       │
-                    │       └► materialize-failed → ready (旧 mode)
+                    │       └► materialize-failed → ready (previous mode)
                     │
                     ├─► exporting ──► exported
                     │
