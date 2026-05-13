@@ -16,18 +16,16 @@
 Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
 target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
-::: warning current contract このページは Helm chart と k8s
-provider plugin が表現している contract だけを説明します。任意の cloud-managed
-service への自動 provisioning matrix は current contract ではありません。 :::
+::: tip 対象範囲
+本ページは Helm chart と k8s provider plugin が提供する範囲を扱います。
+:::
 
-AWS / GCP 向けの current docs はこの chart の Helm overlay です。current
-contract に含まれない項目は
-[Not A Current Contract](/hosting/differences#not-a-current-contract)
-を参照してください。
+AWS / GCP 向けは同じ chart の Helm overlay として提供します。target ごとの
+対応状況は [環境ごとの差異](/hosting/differences) を参照してください。
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos product distribution artifact の正本は `takos/deploy/` にあり、
+Takos product distribution artifact は `takos/deploy/` にあり、
 `takos-private/distribution.yml` は private operator が target を選ぶ instance
 config です。汎用 Kubernetes を kernel host に選ぶには:
 

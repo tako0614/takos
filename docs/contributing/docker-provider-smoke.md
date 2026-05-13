@@ -2,25 +2,21 @@
 
 > このページでわかること: Docker provider プラグインの smoke テスト手順。
 
-`scripts/docker-provider-smoke.ts` is a safe-by-default smoke entrypoint for the
-local Docker provider plugin materialization path. It validates plugin/adapter
-behavior and is not part of the kernel release gate.
+`scripts/docker-provider-smoke.ts` はローカル Docker provider plugin の materialization パス用の safe-by-default smoke エントリポイントです。plugin / adapter 挙動の検証用であり、kernel release gate には含まれません。
 
 ## Default dry-run
 
-Run without Docker access:
+Docker アクセスなしで実行します。
 
 ```sh
 deno run --config deno.json --allow-env=TAKOS_RUN_DOCKER_SMOKE scripts/docker-provider-smoke.ts
 ```
 
-Default behavior does not instantiate `DenoCommandDockerRunner`, does not
-require Docker, and uses `LocalDockerProviderMaterializer` with its dry-run
-runner. The script prints the generated Docker commands and operation statuses.
+`DenoCommandDockerRunner` を生成せず、Docker も不要で、`LocalDockerProviderMaterializer` の dry-run runner を使います。生成された Docker コマンドと operation status が出力されます。
 
-## Opt-in Docker execution
+## Opt-in Docker 実行
 
-To execute real Docker commands, opt in explicitly and grant run permission:
+実 Docker コマンドを実行するには、明示的に opt-in して run permission を付与します。
 
 ```sh
 TAKOS_RUN_DOCKER_SMOKE=1 deno run \
@@ -30,12 +26,9 @@ TAKOS_RUN_DOCKER_SMOKE=1 deno run \
   scripts/docker-provider-smoke.ts
 ```
 
-Only when `TAKOS_RUN_DOCKER_SMOKE=1` is set does the script inject
-`DenoCommandDockerRunner` into `LocalDockerProviderMaterializer`. The smoke uses
-a unique network/group suffix and prints cleanup hints for the created container
-and network.
+`TAKOS_RUN_DOCKER_SMOKE=1` の場合のみ、`LocalDockerProviderMaterializer` に `DenoCommandDockerRunner` を注入します。一意な network / group suffix を使い、作成された container / network のクリーンアップ手順が出力されます。
 
-Expected real commands include:
+実行される実コマンド例。
 
 - `docker network create takos-docker-smoke-<timestamp>`
 - `docker image pull busybox:latest`

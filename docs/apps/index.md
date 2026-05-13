@@ -20,7 +20,7 @@ Takos では "app" という言葉が 2 つの意味で出ます。
 
 ## 関連する外部仕様
 
-| 内容                   | 正本                                                                                                                        |
+| 内容                   | 詳細ドキュメント                                                                                                            |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Installable App Model  | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)   |
 | AppInstallation ledger | [ecosystem AppInstallation docs](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md) |

@@ -2,11 +2,15 @@
 
 > このページでわかること: Takos の課金の仕組みとユーザーから見える表示。
 
-Takos の課金はオペレーターの account plane (BillingPort) が担当します。
-Takos プラン (Free / Plus / Pay As You Go) はオペレーターの請求書に含まれる形で課金されます。
+Takos の課金はオペレーターの account plane (BillingPort) が担当します。 Takos
+プラン (Free / Plus / Pay As You Go)
+はオペレーターの請求書に含まれる形で課金されます。
 
-- 契約・支払い方法は [Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md) に紐づく
-- Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort に報告する立場
+- 契約・支払い方法は
+  [Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
+  に紐づく
+- Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort
+  に報告する立場
 - アプリの利用量は AppInstallation 単位で計上
 
 ユーザーから見える表示:
@@ -27,10 +31,6 @@ Billed by <operator>
 | Invoice issuer     | operator (managed example は Takosumi Cloud) |
 | Billing line items | Takos plan + compute / storage / model usage |
 
-> 現行 API gateway split status は
-> [API Gateway Split](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/index.md#api-gateway-split)
-> を参照
-
 ## プラン
 
 | プラン            | ID          | 課金モデル         | 説明                                         |
@@ -39,15 +39,14 @@ Billed by <operator>
 | **Plus**          | `plan_plus` | サブスクリプション | 個人向け有料プラン。Stripe Checkout で契約   |
 | **Pay As You Go** | `plan_payg` | プリペイド残高     | クレジットを購入して残高から消費             |
 
-プランはユーザーの課金アカウント単位で 1 つ。current takosumi-cloud Accounts
-(currently-deployed operator distribution example) では Takosumi Accounts の
-Stripe checkout endpoint から subscription / payment checkout session を作成し、
-Stripe webhook で billing state を更新します。
+プランは課金アカウントごとに 1 つです。takosumi-cloud Accounts では Takosumi
+Accounts の Stripe checkout endpoint からサブスクリプション / 支払い checkout
+session を作成し、Stripe webhook で billing 状態を更新します。
 
 ::: info Billing portal / invoice API Billing portal、invoice list、usage read
-API は BillingPort の future expansion です。current reference Accounts HTTP
-surface は `/v1/billing/stripe/checkout` と `/v1/billing/stripe/webhook`
-のみを公開します。 :::
+API は将来の拡張予定です。 現在の Accounts HTTP surface は
+`/v1/billing/stripe/checkout` と `/v1/billing/stripe/webhook` のみを公開します。
+:::
 
 ## Billing line item の構造
 
@@ -73,8 +72,9 @@ type BillingLineItem = {
 bundled / third-party app usage は `installationId` と app id を別 metadata
 に持つ line item として並列に積み上がります。
 
-::: info レガシープラン 過去に存在した `plan_pro` と `plan_enterprise`
-は内部的に `plan_payg` にマッピングされます。 :::
+::: info Historical import only 過去の private ledger import で `plan_pro` /
+`plan_enterprise` を見つけた場合だけ 内部的に `plan_payg`
+に正規化します。current public plan id としては使いません。 :::
 
 ### プランの課金モード
 
@@ -137,17 +137,14 @@ bundled / third-party app usage は `installationId` と app id を別 metadata
 
 ## 使い方
 
-### API ownership
+### API の所在
 
-billing API の正本は operator account plane の `operator.billing.default`
-namespace export / BillingPort です。consumer は account API が返す
-operator-selected endpoint URL に対して billing request を送ります。
+請求 API はオペレーターの account plane が提供します。consumer は account API
+で返される endpoint URL に対して billing request を送ります。
 
-以下の例では resolved endpoint を `$ACCOUNTS_BILLING_ENDPOINT`
-と表記します。Takos 側の `/api/billing/*` と `/api/internal/v1/billing/*` path
-は current build では retired route として `410 Gone` を返し、Takosumi Accounts
-billing surface への移行を示します。 invoice 主体・payment
-method・subscription・usage rollup の owner は常に Takosumi Accounts です。
+以下の例では解決済みの endpoint を `$ACCOUNTS_BILLING_ENDPOINT` と表記します。
+invoice・支払い方法・サブスクリプション・使用量集計はすべて Takosumi Accounts
+が所有します。
 
 ### Plus にアップグレード
 
@@ -202,11 +199,11 @@ curl -X POST "$ACCOUNTS_BILLING_ENDPOINT/v1/billing/stripe/checkout" \
 
 ## Topup Packs
 
-current takosumi-cloud Accounts (currently-deployed example) は top-up pack
-catalog の public `GET` endpoint を公開しません。operator dashboard / install UI
-が top-up SKU を見せる場合は、operator 側の catalog config から Stripe `priceId`
-を選び、 `/v1/billing/stripe/checkout` に `mode: "payment"` と metadata
-(`purchase_kind: "pro_topup"` など) を渡します。
+takosumi-cloud Accounts は top-up pack catalog の public `GET` endpoint を
+公開していません。オペレーターの dashboard / install UI で top-up SKU を表示
+する場合は、operator 側の catalog config から Stripe の `priceId` を選び、
+`/v1/billing/stripe/checkout` に `mode: "payment"` と metadata (例:
+`purchase_kind: "pro_topup"`) を渡してください。
 
 ::: warning Plus ユーザーは Topup 不可 Plus
 サブスクリプションがアクティブな状態で PayG クレジットを購入しようとすると
@@ -331,29 +328,26 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 ## API 一覧
 
 current `takosumi-cloud` Accounts reference implementation の billing HTTP
-surface は次の 2 route です。
+surface は、Stripe checkout / webhook と AppInstallation scoped usage report
+ingest です。
 
-| エンドポイント                | メソッド | 説明                                        |
-| ----------------------------- | -------- | ------------------------------------------- |
-| `/v1/billing/stripe/checkout` | POST     | Stripe Checkout session 作成                |
-| `/v1/billing/stripe/webhook`  | POST     | Stripe Webhook（認証不要・Stripe 署名検証） |
+| エンドポイント                                      | メソッド | 説明                                                                                         |
+| --------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `/v1/billing/stripe/checkout`                       | POST     | Stripe Checkout session 作成                                                                 |
+| `/v1/billing/stripe/webhook`                        | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                  |
+| `/v1/installations/{id}/billing/usage-reports`      | POST     | AppInstallation OIDC access token + `billing.usage.report` AppGrant で保護された使用量 report |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。
 
-Takos の `/api/billing/*` は current API ではありません。新規 client / docs /
-AppInstallation flow は `operator.billing.default` / BillingPort を使います。
-
-`/v1/billing`, `/v1/billing/usage`, `/v1/billing/portal`,
-`/v1/billing/invoices*`, `/v1/billing/subscribe`,
-`/v1/billing/credits/checkout`, `/v1/billing/webhook` は current takosumi-cloud
-Accounts (currently-deployed example) では 公開されていません。usage
-read、portal、invoice download は future BillingPort API として扱います。
+請求は Takosumi Accounts の BillingPort を使います。使用量の ingest と entitlement
+projection は Accounts reference implementation にあり、customer portal / invoice
+download の公開 UI は managed offering launch overlay の運用 hardening として扱います。
 
 ## 関連ドキュメント
 
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-  — 契約主体 / billing owner / OIDC issuer の正本
+  — 契約主体 / billing owner / OIDC issuer の詳細
 - [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
   — Takos app installation と billing の関係
 - [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md)

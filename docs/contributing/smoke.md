@@ -1,23 +1,21 @@
-# PaaS in-process smoke script
+# Takosumi Kernel In-Process Smoke Script
 
-> このページでわかること: サーバー不要の PaaS マニフェスト smoke テストの実行方法。
+> このページでわかること: サーバー不要の Takosumi manifest deploy lifecycle smoke テストの実行方法。
 
-`./scripts/paas-smoke.ts` is a no-server, no-Docker smoke check for the Takos
-PaaS manifest lifecycle.
+`./scripts/paas-smoke.ts` は Takosumi manifest deploy lifecycle を、サーバーや Docker を起動せずに検証する smoke チェックです。
 
-It exercises the current app/service modules in-process:
+in-process で次を実行します。
 
-- registers the public route handlers against a tiny local route harness;
-- creates a space and app group through the public handlers;
-- plans and applies a simple manifest with the deploy services;
-- runs the noop runtime vertical slice from the resulting activation;
-- prints a JSON summary suitable for CLI/HTTP smoke inspection.
+- public route handler を小さな local route harness に登録する。
+- public handler 経由で space と app group を作成する。
+- deploy service を使ってシンプルな manifest を plan / apply する。
+- 結果として得られる activation から noop runtime vertical slice を実行する。
+- CLI / HTTP smoke の確認に使える JSON サマリを出力する。
 
-Default command:
+実行コマンド。
 
 ```sh
 deno run --no-config --allow-read --allow-env scripts/paas-smoke.ts
 ```
 
-The script intentionally avoids starting servers, Docker, and external services
-by default.
+default ではサーバー・Docker・外部サービスを起動しません。

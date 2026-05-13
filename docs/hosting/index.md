@@ -70,17 +70,16 @@ host など) は各 target page の "target-specific 設定" セクションを
 参照してください。
 
 secret 値、provider credentials、Terraform live tfvars は `takos-private` が
-正本です。`takos/` 側の Terraform / Helm は non-secret managed resource id と
+が管理します。`takos/` 側の Terraform / Helm は non-secret managed resource id と
 Secret 名だけを扱います。詳細は [Hosting Secret Policy](/hosting/secrets)
 を参照してください。
 
 ## Backend の差分
 
-current hosting surface の比較と current contract に含まれない項目は
-[環境ごとの差異](/hosting/differences) と
-[Not A Current Contract](/hosting/differences#not-a-current-contract) を参照。
-target ごとの GA / beta / smoke-only / unsupported status は
-[Distribution Target Parity](/hosting/target-parity) を正本にします。
+ホスティング先ごとの比較と扱わない項目の一覧は
+[環境ごとの差異](/hosting/differences) を参照してください。target ごとの
+GA / beta / smoke-only / unsupported ステータスは
+[Distribution Target Parity](/hosting/target-parity) を参照してください。
 
 ## 多クラウド対応のクイック参照
 

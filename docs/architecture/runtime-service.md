@@ -5,19 +5,20 @@
 Takos のランタイム実行は、エージェントサービス、kernel、プロバイダープラグイン、
 runtime-agent の 4 つのコンポーネントに分かれています。
 
-## Responsibilities
+## 各コンポーネントの役割
 
-| component | role |
-| --- | --- |
-| `takos-agent` | agent run execution and product-specific agent behavior |
-| Takosumi kernel | deployment lifecycle, plan/apply/status, provider operation orchestration |
-| provider plugin | target-specific resource materialization |
-| runtime-agent | workload host lifecycle and implementation RPC |
+| コンポーネント   | 役割                                                       |
+| ---------------- | ---------------------------------------------------------- |
+| `takos-agent`    | エージェントの実行と Takos 固有の挙動                       |
+| Takosumi kernel  | デプロイのライフサイクル、plan/apply/status、provider 調整 |
+| provider plugin  | ターゲット別のリソース materialize                          |
+| runtime-agent    | ワークロードホストのライフサイクルと実装 RPC                |
 
-Takos product code should call exported contracts owned by the service that owns
-the wire shape. Cross-service types are not copied into generic common packages.
+Takos のコードは、wire shape を所有するサービスの contract を経由して呼び出します。
+サービス間で型を generic な共通パッケージに複製しません。
 
-## Local execution
+## ローカル実行
 
-Local development uses the service set in [Local Development](/get-started/local-development).
-Production hosting choices are covered in [Hosting](/hosting/).
+ローカル開発のサービス構成は
+[ローカル開発ガイド](/get-started/local-development) を参照してください。
+本番のホスティング設計は [ホスティング](/hosting/) を参照してください。

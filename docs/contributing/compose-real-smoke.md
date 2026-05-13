@@ -2,12 +2,9 @@
 
 > このページでわかること: 実 Docker Compose スタックの opt-in smoke テスト。
 
-`scripts/compose-real-smoke.ts` is an opt-in harness for validating the real
-local `compose.local.yml` stack. It is safe by default: without
-`TAKOS_RUN_REAL_COMPOSE_SMOKE=1`, it prints a skipped summary and exits `0`
-without invoking Docker, rendering compose config, or starting containers.
+`scripts/compose-real-smoke.ts` は、ローカル `compose.local.yml` スタックを実機で検証するための opt-in ハーネスです。`TAKOS_RUN_REAL_COMPOSE_SMOKE=1` が無い場合は skip サマリを出力して `0` で終了し、Docker / compose config 生成 / コンテナ起動を一切行いません。
 
-## Default safe mode
+## Default safe モード
 
 ```sh
 deno run \
@@ -16,9 +13,9 @@ deno run \
   scripts/compose-real-smoke.ts
 ```
 
-Expected default result: skipped/safe summary, exit `0`.
+期待結果: skip / safe サマリと exit `0`。
 
-## Opt-in real mode
+## Opt-in real モード
 
 ```sh
 TAKOS_RUN_REAL_COMPOSE_SMOKE=1 deno run \
@@ -30,26 +27,17 @@ TAKOS_RUN_REAL_COMPOSE_SMOKE=1 deno run \
   scripts/compose-real-smoke.ts
 ```
 
-The harness uses a generated compose project name and:
+ハーネスは生成した compose project 名を使い、次の手順を実行します。
 
-1. checks Docker daemon and `docker compose` availability;
-2. renders `docker compose config`;
-3. prefers `docker compose up --build --wait` when supported;
-4. falls back to `docker compose up --build -d` plus
-   `docker compose ps --format json` health polling;
-5. verifies compose service state/health and localhost `/health` endpoints; and
-6. runs `docker compose down --remove-orphans --timeout 10` in cleanup.
+1. Docker daemon と `docker compose` の利用可否をチェック。
+2. `docker compose config` をレンダリング。
+3. 利用可能なら `docker compose up --build --wait` を優先。
+4. fallback として `docker compose up --build -d` + `docker compose ps --format json` で health polling。
+5. compose service の state / health と localhost `/health` を検証。
+6. cleanup で `docker compose down --remove-orphans --timeout 10` を実行。
 
-Set `TAKOS_KEEP_COMPOSE_SMOKE=1` with real mode to leave the compose project
-running for inspection. The default overall command timeout is `600000` ms and
-can be changed with `TAKOS_REAL_COMPOSE_SMOKE_TIMEOUT_MS`. Fallback health
-polling defaults to `5000` ms between polls and can be changed with
-`TAKOS_REAL_COMPOSE_SMOKE_POLL_INTERVAL_MS`.
+`TAKOS_KEEP_COMPOSE_SMOKE=1` を real モードと組み合わせると、検査用に compose project を残せます。コマンド全体の timeout は default `600000` ms (`TAKOS_REAL_COMPOSE_SMOKE_TIMEOUT_MS` で変更可)、fallback health polling 間隔は default `5000` ms (`TAKOS_REAL_COMPOSE_SMOKE_POLL_INTERVAL_MS` で変更可) です。
 
-## Latest local result
+## ローカル実行記録
 
-On 2026-04-28, the real opt-in harness was run locally with
-`TAKOS_RUN_REAL_COMPOSE_SMOKE=1`. That historical run predates the current
-four-service local shell. The current local service set is `takos-app`,
-`takosumi`, `takos-git`, and `takos-agent`; real Compose evidence should be
-refreshed against that set before treating it as current production proof.
+2026-04-28 に `TAKOS_RUN_REAL_COMPOSE_SMOKE=1` で opt-in 実行を行いました。ローカルの service set は `takos-app` / `takosumi` / `takos-git` / `takos-agent` の 4 つで、本番証拠として扱う前にこの set に対する evidence を更新する必要があります。

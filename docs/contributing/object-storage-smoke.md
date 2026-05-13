@@ -2,8 +2,7 @@
 
 > このページでわかること: Object storage プラグインの smoke テスト。
 
-`scripts/object-storage-smoke.ts` validates the object-storage plugin/adapter
-surface without requiring object-storage infrastructure by default.
+`scripts/object-storage-smoke.ts` は object-storage plugin / adapter 表面を、object-storage インフラ無しに検証します。
 
 ## Safe default
 
@@ -13,20 +12,16 @@ deno run --config deno.json \
   scripts/object-storage-smoke.ts
 ```
 
-The default path is intentionally no-network and does not require S3
-credentials. It validates:
+default は no-network で S3 資格情報不要です。検証内容。
 
-- `MemoryObjectStorage` put/head/get/list/delete with SHA-256 digest checking.
-- `S3DryRunObjectStorageClient` request construction for
-  PUT/HEAD/GET/LIST/DELETE with deterministic SigV4 request signing.
+- `MemoryObjectStorage` の put / head / get / list / delete (SHA-256 digest チェック付き)。
+- `S3DryRunObjectStorageClient` による PUT / HEAD / GET / LIST / DELETE 要求の組み立てと、決定論的な SigV4 署名。
 
-If `TAKOS_RUN_OBJECT_STORAGE_SMOKE=1` is set without the second real-endpoint
-flag, the script stays in dry-run mode and prints a safety warning.
+`TAKOS_RUN_OBJECT_STORAGE_SMOKE=1` のみで real-endpoint フラグが無い場合、スクリプトは dry-run のまま安全警告を表示します。
 
-## Real S3-compatible endpoint plugin opt-in
+## 実 S3 互換エンドポイントの opt-in
 
-Real endpoint access is for object-storage plugin/operator validation and
-requires both explicit flags plus endpoint, bucket, and credentials:
+実エンドポイントへのアクセスは object-storage plugin / operator 検証用で、両方のフラグに加えて endpoint・bucket・認証情報が必要です。
 
 ```sh
 TAKOS_RUN_OBJECT_STORAGE_SMOKE=1 \
@@ -41,22 +36,14 @@ deno run --config deno.json \
   scripts/object-storage-smoke.ts
 ```
 
-The real path writes one unique object under `TAKOS_OBJECT_STORAGE_SMOKE_PREFIX`
-(default `takos-smoke`), then signs and runs PUT, HEAD, GET, LIST, and DELETE
-requests. Secrets are never printed.
+real パスでは `TAKOS_OBJECT_STORAGE_SMOKE_PREFIX` (default `takos-smoke`) 配下に一意なオブジェクトを 1 件作成し、署名付きで PUT / HEAD / GET / LIST / DELETE を実行します。秘密情報は出力しません。
 
-Supported env aliases for real endpoint mode:
+real モードで利用可能な env エイリアス。
 
-- Endpoint: `TAKOS_OBJECT_STORAGE_SMOKE_ENDPOINT`, `S3_ENDPOINT`,
-  `AWS_S3_ENDPOINT`
-- Bucket: `TAKOS_OBJECT_STORAGE_SMOKE_BUCKET`, `S3_BUCKET`,
-  `AWS_S3_TENANT_SOURCE_BUCKET`, `AWS_S3_BUCKET`
-- Region: `TAKOS_OBJECT_STORAGE_SMOKE_REGION`, `S3_REGION`, `AWS_REGION`,
-  `AWS_DEFAULT_REGION` (defaults to `us-east-1`)
-- Access key: `TAKOS_OBJECT_STORAGE_SMOKE_ACCESS_KEY_ID`, `S3_ACCESS_KEY_ID`,
-  `AWS_ACCESS_KEY_ID`
-- Secret key: `TAKOS_OBJECT_STORAGE_SMOKE_SECRET_ACCESS_KEY`,
-  `S3_SECRET_ACCESS_KEY`, `AWS_SECRET_ACCESS_KEY`
-- Session token: `TAKOS_OBJECT_STORAGE_SMOKE_SESSION_TOKEN`, `AWS_SESSION_TOKEN`
-- Path style: `TAKOS_OBJECT_STORAGE_SMOKE_FORCE_PATH_STYLE` (default `1`; set
-  `0` for virtual-hosted style)
+- Endpoint: `TAKOS_OBJECT_STORAGE_SMOKE_ENDPOINT` / `S3_ENDPOINT` / `AWS_S3_ENDPOINT`
+- Bucket: `TAKOS_OBJECT_STORAGE_SMOKE_BUCKET` / `S3_BUCKET` / `AWS_S3_TENANT_SOURCE_BUCKET` / `AWS_S3_BUCKET`
+- Region: `TAKOS_OBJECT_STORAGE_SMOKE_REGION` / `S3_REGION` / `AWS_REGION` / `AWS_DEFAULT_REGION` (default は `us-east-1`)
+- Access key: `TAKOS_OBJECT_STORAGE_SMOKE_ACCESS_KEY_ID` / `S3_ACCESS_KEY_ID` / `AWS_ACCESS_KEY_ID`
+- Secret key: `TAKOS_OBJECT_STORAGE_SMOKE_SECRET_ACCESS_KEY` / `S3_SECRET_ACCESS_KEY` / `AWS_SECRET_ACCESS_KEY`
+- Session token: `TAKOS_OBJECT_STORAGE_SMOKE_SESSION_TOKEN` / `AWS_SESSION_TOKEN`
+- Path style: `TAKOS_OBJECT_STORAGE_SMOKE_FORCE_PATH_STYLE` (default `1`、virtual-hosted の場合は `0`)

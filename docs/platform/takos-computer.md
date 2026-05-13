@@ -71,37 +71,38 @@ grants:
     - events:subscribe
 ```
 
-launcher / MCP endpoint は kernel manifest の `publications[]` ではなく Takos
-app catalog / MCP registry の metadata です。`/mcp` は `computer_shell_exec` /
-`computer_file_read` / `computer_file_write` などの `computer_*` tools
-を公開し、 必要に応じて sandbox session を作成して `/session/:id/mcp` に proxy
-します。 Takos API access は app-layer grant から materialize されます。
+launcher / MCP endpoint は kernel manifest ではなく Takos の app catalog /
+MCP registry が管理する metadata です。`/mcp` は `computer_shell_exec` /
+`computer_file_read` / `computer_file_write` などの `computer_*` tool を
+公開し、必要に応じて sandbox session を作って `/session/:id/mcp` に proxy
+します。Takos API へのアクセスは app-layer の grant から materialize されます。
 
-published MCP endpoint の auth は `PUBLISHED_MCP_AUTH_TOKEN` が canonical
-runtime credential です。これは **MCP integration の internal credential** で
-あり、agent (= MCP client) が `/mcp` を呼ぶときの machine-to-machine bearer
-token として機能します。end-user (人間ユーザー) の 認証は `identity.oidc@v1`
-AppBinding (Takosumi Accounts) 経由の OIDC consumer flow で別 layer
-として処理し、`PUBLISHED_MCP_AUTH_TOKEN` は OIDC consumer flow
-には関与しません。
+published MCP endpoint の認証には `PUBLISHED_MCP_AUTH_TOKEN` を使います。これは
+agent (= MCP client) が `/mcp` を呼ぶときの machine-to-machine bearer token で、
+**エンドユーザー認証とは別の layer** です。エンドユーザーの sign-in は
+`identity.oidc@v1` AppBinding (Takosumi Accounts) 経由の OIDC consumer flow で
+処理します。
 
-managed Takos installation ではこの registry secret が生成され、agent-facing
-`/mcp` bearer token として使われる。`PUBLISHED_MCP_AUTH_TOKEN`、host
-admin/session route 用の `SANDBOX_HOST_AUTH_TOKEN`、worker-to-container 用の
-`MCP_AUTH_TOKEN` は分けて扱う。これら 3 token はすべて MCP / sandbox host 内部の
-machine credential であり、Takos itself の **end-user 認証は OIDC consumer
-経由** (`identity.oidc@v1` AppBinding) として明確に分離される。
+managed Takos installation では `PUBLISHED_MCP_AUTH_TOKEN` を自動生成します。
+他に以下の 2 つの machine token も内部で使い、それぞれ用途が異なります:
+
+- `SANDBOX_HOST_AUTH_TOKEN` — host admin / session route 用
+- `MCP_AUTH_TOKEN` — worker と container の間の認証用
+
+これら 3 つはすべて MCP / sandbox host 内部の machine credential であり、
+ユーザー認証 (OIDC consumer 経由) とは完全に分離されています。
 
 ## Bindings
 
-takos-computer は他の bundled apps と同様に **OIDC consumer** であり、 end-user
-sign-in を `operator.identity.oidc` namespace export で解決される Takosumi
-Accounts に委譲する。 `.takosumi/app.yml` で `identity.oidc@v1` AppBinding を
-declare し、installer (takosumi-git) が installation 単位の OIDC client を
-Takosumi Accounts に 登録、`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
-`OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` を runtime に inject する (詳細:
-[OIDC Consumer](/apps/oidc-consumer) /
-[binding-catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md#_1-identity-oidc-v1))。
+takos-computer は他のバンドルアプリと同じく **OIDC consumer** です。エンド
+ユーザーの sign-in は Takosumi Accounts に委譲します。
+
+`.takosumi/app.yml` に `identity.oidc@v1` AppBinding を宣言すると、installer
+(takosumi-git) が installation ごとの OIDC client を Takosumi Accounts に登録し、
+`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI`
+を runtime に渡します。詳細は [OIDC Consumer](/apps/oidc-consumer) と
+[Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md#_1-identity-oidc-v1)
+を参照してください。
 
 ```yaml
 bindings:
@@ -117,35 +118,35 @@ bindings:
     subjectMode: pairwise
 ```
 
-OIDC callback path は `/gui/api/auth/callback` を使い、 dashboard / computer UI
-の app session を発行する。 takos-computer 自身は OAuth provider を持たず、 OIDC
-issuer は常に `identity.oidc@v1` AppBinding 経由で Takosumi Accounts から提供
-される。self-host operator が Keycloak / Authentik 等を使う場合も、それらは
-Takosumi Accounts の upstream IdP として接続する。 MCP publication 用の bearer
-token (`PUBLISHED_MCP_AUTH_TOKEN` / `SANDBOX_HOST_AUTH_TOKEN` /
+OIDC callback path は `/gui/api/auth/callback` を使います。takos-computer 自身は
+OAuth provider にならず、OIDC issuer は常に Takosumi Accounts です。セルフホスト
+オペレーターが Keycloak / Authentik 等を使う場合も、それらは Takosumi Accounts
+の upstream IdP として接続します。
+
+MCP の bearer token (`PUBLISHED_MCP_AUTH_TOKEN` / `SANDBOX_HOST_AUTH_TOKEN` /
 `MCP_AUTH_TOKEN`) は OIDC consumer 層とは独立した machine-to-machine credential
-であり、ここで宣言する `identity.oidc@v1` binding には影響しない。
+で、`identity.oidc@v1` binding には影響しません。
 
-published MCP tools は session 引数として snake_case と camelCase
-の両方を受け付ける。 `session_id` / `sessionId`、`space_id` /
-`spaceId`、`user_id` / `userId` の request 値がある場合はそれを使う。省略時は
-agent-facing default session として
-`session_id=agent-default`、`space_id=published-mcp`、`user_id=takos-agent`
-を使う。session 作成時の `space_id` / `spaceId` は container env
-`TAKOS_SPACE_ID` に反映され、sandbox 内の Takos API / CLI 操作が対象 space を
-判断する fallback context になる。既に起動済みで stopped ではない同一 session
-がある場合は既存 session state の space が維持され、後続 request の `space_id` /
-`spaceId` では上書きしない。
+published MCP tools は session 引数として snake_case と camelCase の両方を
+受け付けます。`session_id` / `sessionId`、`space_id` / `spaceId`、`user_id` /
+`userId` のリクエスト値があればそれを使い、省略時はデフォルト session
+(`session_id=agent-default`、`space_id=published-mcp`、`user_id=takos-agent`)
+を使います。
 
-## Runtime
+session 作成時の `space_id` / `spaceId` は container env `TAKOS_SPACE_ID` に
+反映され、sandbox 内の Takos API / CLI が参照する space になります。すでに同じ
+session が動いている場合は、既存 session の space が維持され、後続リクエストの
+`space_id` / `spaceId` で上書きされません。
+
+## ランタイム
 
 manifest は `.takosumi/workflows/deploy.yml` の `build-sandbox-host` job から
 worker bundle を生成し、`apps/sandbox/Dockerfile` を attached container として
-宣言する。tracked reference Workers backend では container class
-`SandboxSessionContainer` を `SANDBOX_CONTAINER` binding として worker に渡す。
-`compute.web.readiness` は `/readyz` を参照し、container health check は
-`/healthz` を参照する。worker route は `/healthz`、`/health`、`/readyz` と
-launcher icon の `/icons/computer.svg` も公開する。
+宣言します。Cloudflare Workers backend では container class
+`SandboxSessionContainer` を `SANDBOX_CONTAINER` binding として worker に渡します。
+readiness は `/readyz`、container health check は `/healthz` を参照します。
+worker route は `/healthz` / `/health` / `/readyz` とランチャーアイコン
+`/icons/computer.svg` も公開します。
 
 ## Resources
 
@@ -155,9 +156,8 @@ launcher icon の `/icons/computer.svg` も公開する。
 | `sandbox-host-token` | worker / sandbox host 間の generated secret |
 | `sandbox-mcp-token`  | sandbox MCP proxy 用 generated secret       |
 
-## Scopes
+## スコープ
 
-takos-computer は sandbox automation と agent integration のため、office 系
-bundled apps より広い Takos API scopes を要求する。default set に含まれても
-scope は Takosumi Accounts の AppGrant/AppBinding と operator policy に従って
-管理される。旧 `takos.api-key` built-in provider consume は retired。
+takos-computer は sandbox automation と agent 統合のため、office 系バンドル
+アプリよりも広い Takos API scope を要求します。scope は Takosumi Accounts の
+AppGrant / AppBinding と operator policy に従って管理されます。

@@ -9,18 +9,17 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
 
 ## 実行の仕組み
 
-- **Takos app / agent service** が Thread / Run のライフサイクル、キュー、DB、認証、Space の状態を管理
-- **`takos-agent`** (runtime container) が実際のプロンプト構築、スキル選択、ツール実行を担当
-- agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携
+- **Takos app / agent service** が Thread / Run のライフサイクル、キュー、DB、認証、Space の状態を管理します
+- **`takos-agent`** (ランタイムコンテナ) が実際のプロンプト構築、スキル選択、ツール実行を担当します
+- agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携します
 
 Run の起動には `spaceId` が必須です。AppInstallation 経由の Run では `installationId` と
 `runtimeNamespace` が追加され、メモリストアがインストール単位で隔離されます。
 
-managed skills は Takos app/API gateway から渡された catalog
-が優先される。control payload に managed skill が無い場合だけ、`takos-agent`
-内の localized fallback catalog を使う。custom skills は Takos app layer
-の永続化データを source とし、 同じ skill id / name がある場合は managed skill
-が先に解決される。
+managed skill は Takos app / API gateway から渡されたカタログが優先されます。
+control payload に managed skill が無い場合だけ、`takos-agent` 内のローカル
+フォールバックカタログを使います。custom skill は Takos app 層の永続化データを
+ソースとし、同じ skill id / name がある場合は managed skill が先に解決されます。
 
 ## Thread
 
@@ -46,7 +45,7 @@ managed skills は Takos app/API gateway から渡された catalog
 
 Thread 上で発生する 1 回の実行。
 
-### Run state machine
+### Run のステートマシン
 
 ```text
 pending (生成直後) → queued (実行待ち) → running → completed
@@ -54,11 +53,9 @@ pending (生成直後) → queued (実行待ち) → running → completed
                        → cancelled
 ```
 
-`pending` と `queued`
-はどちらも実行前の待機状態だが、意味は同一ではない。`pending` は run
-が作られた直後の生成待ち状態、`queued`
-は実行キューに載った待機状態として扱う。実装では両方を別の status
-として扱うため、一覧や `RunStatus` の読み取りでも `pending` を落とさないこと。
+`pending` と `queued` はどちらも実行前の待機状態ですが、意味は同じではありません。
+`pending` は run が作られた直後の生成待ち、`queued` は実行キューに載った待機状態として扱います。
+両者は実装上も別ステータスなので、一覧や `RunStatus` を読むときに `pending` を落とさないでください。
 
 ### 主要フィールド
 
@@ -83,13 +80,13 @@ takos run follow RUN_ID --transport ws
 
 ## Artifact
 
-Run の結果物。`code` / `config` / `doc` / `patch` / `report` / `other` の type
-を持ち、space storage 上のファイルにリンクできる。
+Run の結果物です。`code` / `config` / `doc` / `patch` / `report` / `other` のタイプを持ち、
+space ストレージ上のファイルにリンクできます。
 
 ## Memory / Reminder
 
-- **Memory** -- agent の記憶単位。`episode` / `semantic` / `procedural` の型
-- **Reminder** -- `time` / `condition` / `context` の trigger 型
+- **Memory** — agent の記憶単位。`episode` / `semantic` / `procedural` の型を持ちます
+- **Reminder** — `time` / `condition` / `context` のトリガー型を持ちます
 
 ```bash
 takos context list /spaces/SPACE_ID/memories

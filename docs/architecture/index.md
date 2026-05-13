@@ -12,7 +12,7 @@
 
 ## 関連ドキュメント
 
-| 内容                                                    | 正本                                                                                    |
+| 内容                                                    | 詳細ドキュメント                                                                        |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Installable App Model / AppInstallation / runtime modes | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
 | Takosumi Accounts / billing / OIDC issuer               | [takosumi-cloud docs](https://github.com/tako0614/takosumi-cloud/tree/master/docs)      |

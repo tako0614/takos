@@ -3,8 +3,7 @@
 > このページでわかること: Takos エコシステムの主要な component / sequence /
 > state 関係を mermaid 図で俯瞰する。文字情報は
 > [System Architecture](./system-architecture.md) と
-> [Core Contract v1.0](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) を正本とし、本
-> ページはその図示版として位置付ける。
+> [Core Contract v1.0](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) を元にした図示版。
 
 ## ねらい
 
@@ -172,13 +171,13 @@ state 遷移の補足:
 ## 関連ドキュメント
 
 - [System Architecture](./system-architecture.md) — service / repository
-  boundary の正本
+  boundary の詳細
 - [Deploy System](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/deploy-system.md) — primitive と group 機能の deploy
   pipeline
 - [Core Contract v1.0](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) — Deployment /
   ProviderObservation など Core 定義
 - [Condition Reason Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/status-output.md) —
-  `Deployment.conditions[].reason` の正本
+  `Deployment.conditions[].reason` の一覧
 - [Operations: Troubleshooting](https://github.com/tako0614/takos-private/blob/master/docs/operations/troubleshooting.md) — 実運用での
   failure 対応
 - [Performance Baseline](/performance/baseline) — kernel resolve / apply の

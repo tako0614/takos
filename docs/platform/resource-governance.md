@@ -9,83 +9,84 @@
 
 Takos は次の面を別々に管理します。
 
-- resource 自体の CRUD
-- space/service/worker への access grant
-- connection info の参照
+- リソース自体の CRUD
+- space / service / worker への access grant
+- 接続情報の参照
 - common env / binding link
-- runtime setting / limit
-- app-local usage metering と Accounts billing 連携
+- ランタイム設定 / リミット
+- app-local の usage 計測と Accounts billing 連携
 
-## current control points
+## コントロールポイント
 
-### resources
+### リソース
 
-`/api/resources` family が resource 基準です。
+`/api/resources` がリソース操作の基点です。
 
-- resource CRUD
+- リソースの CRUD
 - access grant (`/access`)
-- connection info (`/connection`)
-- sql introspection / query / export (backend example: D1)
-- object-store object list / stats / delete (backend example: R2)
+- 接続情報 (`/connection`)
+- SQL の introspection / query / export (例: D1 バックエンド)
+- オブジェクトストアの一覧 / stats / 削除 (例: R2 バックエンド)
 - bind / unbind
 
 ### common env と bindings
 
-state は次に分かれています。
+状態は次のように分かれています。
 
-- space-level common env
-- service common env links
-- worker common env links
-- service bindings
-- worker bindings
+- space レベルの common env
+- service の common env link
+- worker の common env link
+- service の bindings
+- worker の bindings
 
-これにより「resource を持つこと」と「どこへ注入するか」を分離しています。
+「リソースを持つこと」と「どこへ注入するか」を分離するための構造です。
 
-### runtime settings
+### ランタイム設定
 
-service / worker ごとに runtime setting, limit, flag を持てます。operator が調整する主な対象は次です。
+service / worker ごとにランタイム設定・リミット・フラグを持てます。
+operator が調整する主な対象は次のとおりです。
 
-- hostname / route
-- common env links
-- resource bindings
-- runtime flags / settings / limits
+- ホスト名 / ルート
+- common env link
+- リソース binding
+- ランタイムフラグ / 設定 / リミット
 
-## billing gate
+## billing ゲート
 
-current implementation では request path ごとに billing/plan gate をかけています。
+リクエストパスごとに billing / plan ゲートをかけています。
 
-| gate                            | path family                                                        |
-| ------------------------------- | ------------------------------------------------------------------ |
-| vector search                   | `/api/spaces/:spaceId/search*`                                     |
-| embeddings / index              | `/api/spaces/:spaceId/index*`                                      |
-| sessions exec time              | `/api/sessions*`                                                   |
-| service / WFP usage             | `/api/services*`                                                   |
-| agent runtime + token preflight | `/api/spaces/:spaceId/threads*`, `/api/runs*`, `/api/agent-tasks*` |
+| ゲート                           | パス                                                                 |
+| -------------------------------- | -------------------------------------------------------------------- |
+| ベクトル検索                     | `/api/spaces/:spaceId/search*`                                       |
+| Embeddings / index               | `/api/spaces/:spaceId/index*`                                        |
+| セッション実行時間               | `/api/sessions*`                                                     |
+| Service / WFP の usage           | `/api/services*`                                                     |
+| Agent ランタイム + token preflight | `/api/spaces/:spaceId/threads*`, `/api/runs*`, `/api/agent-tasks*`  |
 
-agent 系は特に次を併用します。
+agent 系では次の制限も併用します。
 
-- weekly runtime limit
-- token input billing gate
+- 週次のランタイムリミット
+- 入力トークンの billing ゲート
 
-## usage / billing data model
+## Usage / billing データモデル
 
-Takos app は app-local usage を記録し、請求主体は Takosumi Accounts (`operator.billing.default`) に置きます。Takos app
-側の current table は 主に次です。
+Takos app は app-local の usage を記録し、課金主体は Takosumi Accounts
+(`operator.billing.default`) に置きます。Takos app 側の主なテーブルは次のとおりです。
 
 - `app_usage_events`
 - `app_usage_rollups`
 
-billing owner は Takosumi Accounts の `operator.billing.default` BillingPort です。Takos app は usage event
-を記録し、billing API の正本は Accounts 側に置きます。
+billing の所有者は Takosumi Accounts の `operator.billing.default` BillingPort です。
+Takos app は usage イベントを記録し、billing API は Accounts 側が提供します。
 
-## operator が見るべき state
+## operator が確認すべき状態
 
-- resource inventory
-- access grants / AppBinding credentials
-- common env drift
-- service / worker runtime settings
+- リソースインベントリ
+- access grant / AppBinding の credential
+- common env のドリフト
+- service / worker のランタイム設定
 - usage rollup
-- billing status
+- billing ステータス
 
-詳しい public path は [API リファレンス](/reference/api) を参照してください。billing の詳細は
+公開 API パスの詳細は [API リファレンス](/reference/api) を、billing の詳細は
 [Billing](/platform/billing) を参照してください。

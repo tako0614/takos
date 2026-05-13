@@ -85,8 +85,8 @@ deno task docs:deploy     # Cloudflare Pages
 ## Naming history
 
 `takos-paas`、 `TAKOS_PAAS_*`、 `deployment-paas-*`、 `dev:paas` は pre-split 名。 current source path / service id /
-Helm resource / env var / CI task / docs は `takosumi` / `TAKOSUMI_*` を使う。 historical migration notes でのみ
-言及可能 (compatibility / migration history を explicit に説明する場合)。
+Helm resource / env var / CI task / docs は `takosumi` / `TAKOSUMI_*` を使う。これらの旧名は naming history として この
+section でのみ言及し、current docs に old-name carry-over instructions として再導入しない。
 
 ## 関連 docs
 

@@ -2,33 +2,27 @@
 
 > このページでわかること: Postgres storage プラグインの smoke テスト。
 
-## Purpose
+## 目的
 
-`/scripts/postgres-storage-smoke.ts` is a safe-by-default smoke check for the
-Takosumi storage plugin/adapter boundary:
+`/scripts/postgres-storage-smoke.ts` は Takosumi storage plugin / adapter 境界の safe-by-default smoke です。
 
-- `PostgresStorageDriver` can be constructed with a `SqlClient`.
-- `StorageMigrationRunner` can compute a dry-run plan over the bundled Postgres
-  storage migrations.
-- The script prints the migration catalog, SQL previews, and SQL observed by a
-  dry-run `SqlClient` without opening a database connection.
+- `PostgresStorageDriver` を `SqlClient` で生成できる。
+- `StorageMigrationRunner` が、同梱の Postgres storage migration に対する dry-run plan を計算できる。
+- migration カタログ、SQL プレビュー、および dry-run `SqlClient` が観測する SQL を、DB 接続なしに出力。
 
-## Default behavior
+## Default 挙動
 
-Run from `takos`:
+`takos` で実行します。
 
 ```sh
 deno run --config deno.json --allow-env scripts/postgres-storage-smoke.ts
 ```
 
-The default mode never connects to Postgres. It uses an in-process fake
-`SqlClient`, reports all migrations as pending, and performs a read-only driver
-transaction against the fake client so the storage SQL path is visible.
+default は Postgres に接続しません。in-process の fake `SqlClient` を使い、全 migration を pending として報告し、fake client に対して driver の read-only transaction を流して storage SQL パスを可視化します。
 
-## Real database plugin opt-in
+## 実 DB plugin の opt-in
 
-A real smoke path is available for storage plugin/operator validation behind
-both of these conditions:
+storage plugin / operator 検証用の real smoke は次の両方が必要です。
 
 ```sh
 TAKOS_RUN_POSTGRES_SMOKE=1 DATABASE_URL=postgresql://... \
@@ -38,7 +32,4 @@ TAKOS_RUN_POSTGRES_SMOKE=1 DATABASE_URL=postgresql://... \
     scripts/postgres-storage-smoke.ts
 ```
 
-In opt-in mode the smoke creates an optional `npm:pg`-backed `SqlClient`,
-applies the bundled storage migrations, and performs a read-only transaction
-through `PostgresStorageDriver`. The default dry-run path remains
-dependency-free and does not open network connections.
+opt-in モードでは optional な `npm:pg` ベースの `SqlClient` を生成し、同梱の storage migration を適用し、`PostgresStorageDriver` 経由で read-only transaction を実行します。default の dry-run パスは依存ゼロでネットワーク接続を行いません。

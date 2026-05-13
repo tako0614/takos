@@ -36,25 +36,22 @@ compiled artifact を使います。takosumi-git が workflow / binding placehol
 解決し、必要な resource refs と OIDC client env を workload に materialize
 します。
 
-## Consumes
+## バインディング
 
-yurucommu は `identity.oidc@v1` AppBinding を declare し、
-`operator.identity.oidc` namespace export / OIDC discovery で得る Takosumi
-Accounts を OIDC issuer として consume する。 installer (takosumi-git) が
-installation 単位の OIDC client を Takosumi Accounts に登録し、`OIDC_ISSUER_URL`
-/ `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` を runtime に
-inject する。redirect URI は `/auth/oidc/callback`、scope は `openid` / `email`
-/ `profile` を要求する。
+yurucommu は `identity.oidc@v1` AppBinding を宣言し、Takosumi Accounts を OIDC
+issuer として使います。installer (takosumi-git) が installation ごとの OIDC
+client を Takosumi Accounts に登録し、`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
+`OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` を runtime に渡します。redirect URI
+は `/auth/oidc/callback`、要求する scope は `openid` / `email` / `profile` です。
 
-同じ worker は自身の `yurucommu-ui` publication も consume し、`outputs.url` を
-`APP_URL` に inject する。ActivityPub actor URL、callback URL、self reference
-など app が自分の public origin を必要とする処理はこの `APP_URL` を使う。
+同じ worker は自身の `yurucommu-ui` publication を consume し、`outputs.url` を
+`APP_URL` として受け取ります。ActivityPub actor URL や callback URL など、自分の
+public origin が必要な処理はこの `APP_URL` を使います。
 
-`.takosumi/app.yml` の bindings 宣言例
-([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
-/
-[`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
-を参照)。
+`.takosumi/app.yml` の bindings 宣言例 (詳細は
+[app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
+と [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
+を参照):
 
 ```yaml
 bindings:
@@ -87,16 +84,16 @@ resources:
         APP_URL: ${ref:web.url}
 ```
 
-## Resources
+## リソース
 
-bundled app set に含まれても特権 app にはならない。yurucommu は以下を自前の app
-resources として持つ。
+バンドルアプリ集合に含まれても特権アプリにはなりません。yurucommu は次の
+アプリリソースを持ちます:
 
-- `sql`: app database と migrations
-- `object-store`: media storage
-- `key-value`: app KV
-- `queue`: ActivityPub delivery queue と DLQ
-- `secret`: generated encryption key
+- `sql` — アプリ DB と migrations
+- `object-store` — メディアストレージ
+- `key-value` — アプリ KV
+- `queue` — ActivityPub delivery queue と DLQ
+- `secret` — 生成される暗号化鍵
 
-このため、Docs / Excel / Slide より preinstall 時の resource footprint
-は大きい。
+そのため、Docs / Excel / Slide よりも preinstall 時のリソース消費が大きく
+なります。

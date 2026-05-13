@@ -2,26 +2,19 @@
 
 > このページでわかること: Redis queue プラグインの smoke テスト。
 
-## Purpose
+## 目的
 
-`/scripts/redis-queue-smoke.ts` is a safe-by-default smoke harness for the
-Takosumi queue storage plugin / adapter boundary:
+`/scripts/redis-queue-smoke.ts` は Takosumi queue storage plugin / adapter 境界の safe-by-default smoke ハーネスです。
 
-- `RedisQueueAdapter` is exercised through its injected
-  `RedisQueueCommandClient`.
-- The default path uses an in-process dry-run command client and never opens a
-  Redis connection.
-- The optional real Redis path verifies a single
-  `enqueue -> lease -> ack ->
-  empty lease` flow with an isolated smoke key
-  prefix and cleanup.
+- `RedisQueueAdapter` を注入された `RedisQueueCommandClient` 越しに動かす。
+- default パスは in-process の dry-run command client を使い、Redis 接続を行わない。
+- 任意の real Redis パスは、隔離された smoke key prefix とクリーンアップ付きで `enqueue -> lease -> ack -> 空 lease` の流れを 1 サイクル検証する。
 
-This harness is scoped to the queue adapter only. It does not touch S3,
-object-storage, MinIO, or storage migration code.
+このハーネスは queue adapter のみを対象とし、S3 / object-storage / MinIO / storage migration には触れません。
 
-## Default behavior
+## Default 挙動
 
-Run from `takos`:
+`takos` で実行します。
 
 ```sh
 deno run --config deno.json \
@@ -29,15 +22,11 @@ deno run --config deno.json \
   scripts/redis-queue-smoke.ts
 ```
 
-The default mode does not connect to Redis, even if `REDIS_URL` is present. It
-uses a fake command client behind `RedisQueueAdapter`, prints the abstract queue
-commands observed by that client, and exits successfully when enqueue, lease,
-ack, and post-ack empty lease behavior is visible.
+default は `REDIS_URL` があっても Redis に接続しません。`RedisQueueAdapter` の背後で fake command client を使い、観測された抽象 queue コマンドを出力し、enqueue / lease / ack / post-ack の空 lease 挙動が確認できれば成功で終了します。
 
-## Real Redis plugin opt-in
+## 実 Redis plugin の opt-in
 
-A real Redis smoke path is available for Takosumi queue storage plugin
-validation only when both the explicit run flag and a URL are provided:
+Takosumi queue storage plugin 検証用の real Redis smoke は、明示的な run flag と URL の両方が揃ったときのみ動きます。
 
 ```sh
 TAKOS_RUN_REDIS_QUEUE_SMOKE=1 \
@@ -48,8 +37,4 @@ TAKOS_REDIS_QUEUE_SMOKE_URL=redis://localhost:6379 \
     scripts/redis-queue-smoke.ts
 ```
 
-`REDIS_URL` is accepted as a fallback URL for local environments, but the script
-still requires `TAKOS_RUN_REDIS_QUEUE_SMOKE=1` before any network connection is
-attempted. The real path uses a minimal RESP client local to the smoke script,
-creates keys under a unique `takos:queue:smoke:*` prefix, and deletes those keys
-before exit.
+`REDIS_URL` はローカル環境向けの fallback URL として受け付けますが、`TAKOS_RUN_REDIS_QUEUE_SMOKE=1` が無ければネットワーク接続は行いません。real パスは smoke 専用の最小 RESP client を使い、一意な `takos:queue:smoke:*` prefix で key を作成し、終了前に削除します。

@@ -2,42 +2,38 @@
 
 > このページでわかること: 複数クラウドにまたがる Takosumi kernel の運用方法。
 
-このページは **Takosumi kernel を複数 cloud にまたがって運用する operator**
-向けの cross-cloud runbook です。 (provider plugin / runtime-agent / routing
-layer / 21 ignored test re-enable) の完了を前提とし、Cloudflare / AWS / GCP /
-Kubernetes / self-hosted の境界を一望します。
+このページは **Takosumi kernel を複数クラウドにまたがって運用する operator** 向けの
+cross-cloud ランブックです。Cloudflare / AWS / GCP / Kubernetes / self-hosted を横断して、
+境界条件と意思決定をまとめます。
 
-target-specific な手順は次の per-target docs を参照してください。本ページは **5
-target 横断の意思決定** と **境界に出る instruction** を整理します:
+ターゲット固有の手順は per-target ドキュメントを参照してください。
+本ページは **5 ターゲット横断の意思決定** と **境界をまたぐ手順** を整理します。
 
-- [Cloudflare](/hosting/cloudflare) ― Cloudflare Workers backend
-- [AWS](/hosting/aws) ― EKS Helm overlay + AWS provider plugin
-- [GCP](/hosting/gcp) ― GKE Helm overlay + GCP provider plugin
-- [Kubernetes](/hosting/kubernetes) ― base Helm chart + k8s provider plugin
-- [Self-hosted](/hosting/self-hosted) ― docker-compose + selfhosted provider
-  plugin
+- [Cloudflare](/hosting/cloudflare) — Cloudflare Workers バックエンド
+- [AWS](/hosting/aws) — EKS Helm overlay + AWS provider プラグイン
+- [GCP](/hosting/gcp) — GKE Helm overlay + GCP provider プラグイン
+- [Kubernetes](/hosting/kubernetes) — ベース Helm チャート + k8s provider プラグイン
+- [Self-hosted](/hosting/self-hosted) — docker-compose + selfhosted provider プラグイン
 
-Provider proof は opt-in です。provider credentials、cluster、account、gateway
-を必要とする proof は operator が明示的に起動し、CI に入れる場合も専用の gate
-として実行します。default docs build / kernel gate は provider
-実環境の到達性を要求しません。 target ごとの current readiness は
-[Distribution Target Parity](/hosting/target-parity) に集約します。
+provider の証跡 (proof) は opt-in です。credentials / cluster / account / gateway を
+必要とする検証は operator が明示的に起動し、CI に組み込む場合も専用ゲートとして
+実行します。デフォルトのドキュメントビルドと kernel ゲートは、provider 実環境への
+到達性を要求しません。ターゲットごとの現状は
+[Distribution Target Parity](/hosting/target-parity) に集約しています。
 
-## Terraform composition
+## Terraform 構成
 
-`takos/deploy/terraform/main.tf` は AWS / GCP managed resource の root
-composition です。`target = "aws"` または `target = "gcp"` を選ぶと、対応する
-module だけを instantiate し、`database_endpoint` / `database_url` / `redis_url`
-/ `queue_bindings` / `object_storage_buckets` / `network` / `workload_identity`
-を共通 output として返します。Helm values bridge は `database_endpoint` と
-non-secret managed resource id だけを入力にし、 sensitive な `database_url` は
-Helm values へ書き出しません。
+`takos/deploy/terraform/main.tf` が AWS / GCP のマネージドリソースのルート構成です。
+`target = "aws"` または `target = "gcp"` を選ぶと対応モジュールだけが instantiate され、
+`database_endpoint` / `database_url` / `redis_url` / `queue_bindings` /
+`object_storage_buckets` / `network` / `workload_identity` が共通の output として返ります。
+Helm values への橋渡しは `database_endpoint` と非機密のマネージドリソース ID だけを
+入力にし、機密性のある `database_url` は Helm values に書き出しません。
 
-environment backend を使う場合は
-`deploy/terraform/environments/{aws-prod,aws-staging,gcp-prod,gcp-staging}` を
-root として実行します。各 env dir には `terraform.tfvars.example` があり、実
-secret 値は `takos-private` から operator が注入します。backend を使わない
-composition 検証は secret を使わない範囲に限定します:
+環境バックエンドを使う場合は `deploy/terraform/environments/{aws-prod,aws-staging,gcp-prod,gcp-staging}`
+をルートとして実行します。各 env dir には `terraform.tfvars.example` があり、実際の
+シークレット値は `takos-private` から operator が注入します。バックエンドを使わない構成検証は
+secret を使わない範囲に限定します。
 
 ```bash
 cd takos/deploy/terraform
@@ -45,8 +41,7 @@ terraform init -backend=false
 terraform validate
 ```
 
-Terraform apply 後は `terraform output -json` から Helm overlay values
-を生成します:
+Terraform apply 後は `terraform output -json` から Helm overlay の values を生成します。
 
 ```bash
 cd takos
@@ -56,34 +51,30 @@ deno task terraform:helm-values \
   --output deploy/helm/takos/values-aws-staging.generated.yaml
 ```
 
-生成された values は `runtimeConfig.managedResources` として DB endpoint / Redis
-URL / queue bindings / object storage bucket 名 / network / workload identity
-を渡し、chart は `TAKOS_MANAGED_RESOURCES_JSON` として 各 service
-に配布します。credentials や secret material は `takos-private` / external
-secrets から注入します。
+生成された values は `runtimeConfig.managedResources` として DB endpoint / Redis URL /
+queue bindings / object storage バケット名 / ネットワーク / workload identity を渡し、
+chart は `TAKOS_MANAGED_RESOURCES_JSON` として各サービスに配布します。
+credentials や secret は `takos-private` または external secrets から注入します。
 
-PR / release CI は Terraform 1.9.8 で credential-free の staging plan gate も
-実行します:
+PR / release CI は Terraform 1.9.8 で credential 不要の staging plan ゲートも実行します。
 
 ```bash
 cd takos
 deno task terraform:plan-gate
 ```
 
-この gate は `deploy/terraform/plan/{aws-staging,gcp-staging}.tfvars` と
+このゲートは `deploy/terraform/plan/{aws-staging,gcp-staging}.tfvars` と
 `terraform_plan_mode = true` を使い、`terraform plan -refresh=false` の結果を
-`.terraform-plan/summary.md` と full plan text artifact に出します。実環境 state
-backend / live credentials を使う plan は operator が `takos-private`
-側で実行します。 secret 境界の詳細は [Hosting Secret Policy](/hosting/secrets)
-を参照してください。
+`.terraform-plan/summary.md` とフル plan のテキスト artifact に書き出します。
+実環境の state backend / live credentials を使う plan は operator が `takos-private` 側で
+実行します。secret 境界の詳細は [Hosting Secret Policy](/hosting/secrets) を参照してください。
 
-## kernel host target を multi-cloud で選ぶ
+## マルチクラウドで kernel host target を選ぶ
 
-Takos product distribution artifact の正本は `takos/deploy/` にあり、
-`takos-private/distribution.yml` は private operator の instance config です。
-multi-cloud 構成では **kernel host target を 1 つ** 選び、**tenant runtime
-target を別 (または複数)** にすることで、kernel と tenant workload を 別 cloud
-に分離できます:
+Takos プロダクトのディストリビューション artifact は `takos/deploy/` にあり、
+`takos-private/distribution.yml` は private operator のインスタンス設定です。
+マルチクラウド構成では **kernel host target を 1 つ選び**、**tenant runtime target を
+別 (または複数) にする** ことで、kernel と tenant workload を別クラウドに分離できます。
 
 ```yaml
 # takos-private/distribution.yml
@@ -99,10 +90,9 @@ distribution:
       - gcp # data-residency が GCP な tenants
 ```
 
-`distribute:apply` は `kernel_host.target` 1 つだけを deploy 対象として dispatch
-し (このとき他 target 用の Helm / compose は触らない)、 `tenant_runtime.targets`
-は **tenant runtime target が選択できる候補セット** として kernel
-に登録されます。
+`distribute:apply` は `kernel_host.target` 1 つだけをデプロイ対象として dispatch します
+(他ターゲット用の Helm / compose は触りません)。`tenant_runtime.targets` は
+**tenant runtime target の候補セット** として kernel に登録されます。
 
 ### 代表的な multi-cloud 組み合わせ例
 
@@ -132,10 +122,9 @@ distribution:
   workload を別 cloud に置く構成も可能。data residency と compliance
   境界に応じて kernel host と tenant runtime を別 cloud に分離する。
 
-## Multi-cloud topology の前提
+## マルチクラウドトポロジーの前提
 
-Takosumi kernel は **kernel と provider plugin** に分かれた two-layer
-architecture です:
+Takosumi kernel は **kernel と provider plugin** に分かれた 2 層アーキテクチャです。
 
 ```
                +-------------------+
@@ -158,65 +147,70 @@ architecture です:
 +-----------+      +-----------+      +-----------+
 ```
 
-operator が選ぶのは:
+operator が選ぶのは次の 4 点で、それぞれ独立に組み合わせられます。
 
 1. **kernel 自体をどこに置くか** (Cloudflare / EKS / GKE / k8s / bare metal)
-2. **どの cloud の resource を materialize するか** (provider plugin の選択)
-3. **routing layer をどの cloud に置くか** (CF dispatch / AWS ALB / GCP LB / k8s
-   Ingress / Caddy)
-4. **runtime-agent をどこに常駐させるか** (kernel と同じ cloud か別 cloud か)
-
-この 4 つは独立に組み合わせられます。
+2. **どのクラウドのリソースを materialize するか** (provider プラグインの選択)
+3. **routing 層をどのクラウドに置くか** (CF dispatch / AWS ALB / GCP LB / k8s Ingress / Caddy)
+4. **runtime-agent をどこに常駐させるか** (kernel と同じクラウドか別クラウドか)
 
 ## composite descriptor の使い方
 
-composite descriptor は **runtime + resource + publication
+composite descriptor は **runtime + resource + publication + route** をひとつの
+オーサリングエイリアスとして manifest に書けるようにします。標準で 4 種類
+(`takosumi/packages/kernel/src/domains/deploy/descriptors/composites/*.jsonld`) を
+Takosumi descriptor catalog に持ちます。authoring alias は `takosumi-git` /
+installer compiler が compiled manifest に展開してから kernel `POST /v1/deployments`
+へ渡します。
 
-- route の組** を 1 つの authoring alias として manifest に書けるようにします。
-  canonical な 4 個 (`takosumi/src/profiles/composite/mod.ts`) を operator が
-  deploy manifest 上で参照します。
+| エイリアス                              | 構成                                                  |
+| --------------------------------------- | ----------------------------------------------------- |
+| `composite.serverless-with-postgres@v1` | runtime.js-worker + resource.sql.postgres             |
+| `composite.web-app-with-cdn@v1`         | runtime.js-worker + resource.object-store.s3 + CDN    |
+| `composite.cf-control-aws-tenant@v1`    | runtime.oci-container + AWS tenant routing            |
+| `composite.cf-control-gcp-tenant@v1`    | runtime.oci-container + GCP tenant routing            |
 
-| alias                                   | 構成                                               |
-| --------------------------------------- | -------------------------------------------------- |
-| `composite.serverless-with-postgres@v1` | runtime.js-worker + resource.sql.postgres          |
-| `composite.web-app-with-cdn@v1`         | runtime.js-worker + resource.object-store.s3 + CDN |
-| `composite.cf-control-aws-tenant@v1`    | runtime.oci-container + AWS tenant routing         |
-| `composite.cf-control-gcp-tenant@v1`    | runtime.oci-container + GCP tenant routing         |
-
-deploy manifest 例:
+authoring alias の展開後に kernel が受け取る compiled manifest の例:
 
 ```yaml
-# takos.yaml
-apiVersion: takos/v1
-kind: Group
-spec:
-  components:
-    - name: api
-      type: composite.serverless-with-postgres@v1
+apiVersion: "1.0"
+kind: Manifest
+metadata:
+  name: api-with-db
+resources:
+  - shape: database-postgres@v1
+    name: db
+    spec:
+      version: "16"
+      size: small
+  - shape: web-service@v1
+    name: api
+    spec:
+      image: ghcr.io/example/api@sha256:0123456789abcdef
+      port: 8080
       env:
-        LOG_LEVEL: info
+        DATABASE_URL: ${ref:db.connectionString}
 ```
 
-compiler が `runtime.js-worker@v1` の component 1 個と
-`resource.sql.postgres@v1` resource (binding env `DATABASE_URL`) 1 個に展開し、
-canonical descriptor digest を `Deployment.resolution.descriptor_closure` に pin
-します。展開結果の materialization は profile の provider-selection policy gate
-が決めます。
+compiler は `composite.serverless-with-postgres@v1` を runtime component と
+Postgres resource に展開し、展開後の descriptor digest を Deployment の descriptor
+closure に pin します。
+展開結果の materialization は profile の provider-selection ポリシーゲートが決定します。
 
-::: tip provider-agnostic 原則 composite descriptor は **shape を fix する**
-だけで、 provider materialization は profile が決めます。同じ manifest を
-Cloudflare profile に当てれば Workers + Hyperdrive Postgres、AWS profile
-に当てれば Lambda + RDS Postgres に展開されます (provider-selection policy
-が決定)。 :::
+::: tip provider-agnostic の原則
+composite descriptor は **形 (shape) を固定** するだけで、provider の materialization は
+profile が決定します。同じ manifest を Cloudflare profile に当てれば
+Workers + Hyperdrive Postgres、AWS profile に当てれば Lambda + RDS Postgres に展開されます。
+:::
 
-## provider plugin profile の選び方
+## provider plugin プロファイルの選び方
 
-`distribution.yml` の `kernel_host.target` / `tenant_runtime.targets` は deploy
-入口を切り替える top-level switch です。kernel が tenant request の
-materialization に使う **provider plugin profile** は、その下で profile JSON
-(`takosumi/profiles/*.example.json`) に展開され、
-`pluginConfig.operator.takos.<profile>.clients.*` で各 PaaS plugin slot を どの
-provider client に向けるかを宣言します。
+`distribution.yml` の `kernel_host.target` / `tenant_runtime.targets` は、
+デプロイ入口を切り替えるトップレベルのスイッチです。kernel が tenant request の
+materialization に使う **provider プラグインプロファイル** は distribution profile /
+Helm values / operator config に展開され、
+`pluginConfig.operator.takosumi.<profile>.clients.*` で各 Takosumi provider client
+をどの substrate に向けるかを宣言します。
 
 | profile                              | kernel                | tenant runtime     | tenant routing                | tenant DB                |
 | ------------------------------------ | --------------------- | ------------------ | ----------------------------- | ------------------------ |
@@ -229,17 +223,16 @@ provider client に向けるかを宣言します。
 | `selfhosted.example.json`            | bare metal / Docker   | local container    | Caddy / nginx                 | local Postgres           |
 
 profile の選び方は前節
-[kernel host target を multi-cloud で選ぶ](#kernel-host-target-を-multi-cloud-で選ぶ)
-の組み合わせ表に従い、`distribution.yml` の組み合わせと整合する profile
-を選択してください。
+[マルチクラウドで kernel host target を選ぶ](#マルチクラウドで-kernel-host-target-を選ぶ)
+の組み合わせ表に従い、`distribution.yml` の構成と整合する profile を選んでください。
 
-## credential injection の topology
+## クレデンシャル注入のトポロジー
 
-provider plugin への credential 経路は profile 構成によって 3 形態あります:
+provider plugin への credential 経路は、profile 構成により 3 形態あります。
 
-### 形態 A: Cloudflare Worker secret (kernel が CF にある場合)
+### 形態 A: Cloudflare Worker の secret (kernel が CF にある場合)
 
-最もシンプル。Cloudflare Worker runtime の secret として inject:
+最もシンプルな形態です。Cloudflare Worker ランタイムの secret として注入します。
 
 ```bash
 cd takos-private/apps/control
@@ -258,15 +251,14 @@ kubectl get secret -n takos-system takos-provider-token -o json \
   | deno task secrets put K8S_API_CA_CERT --env production
 ```
 
-provider plugin が SDK 互換 client を構築し、Cloudflare の egress 制限内で
-materialize します。Worker の CPU 時間制限 (50ms / 30s) で収まる ops のみ
-直接呼び、長尺 ops は runtime-agent に handoff します
-(`src/runtime-agent/handoff.ts`)。
+provider プラグインが SDK 互換クライアントを構築し、Cloudflare の egress 制限内で
+materialize します。Worker の CPU 時間制限 (50 ms / 30 s) に収まる操作だけ直接呼び、
+長尺の操作は runtime-agent に handoff します (`src/runtime-agent/handoff.ts`)。
 
-### 形態 B: operator-managed gateway URL
+### 形態 B: operator 管理のゲートウェイ URL
 
-Cloudflare Worker から AWS / GCP / k8s API を直接呼べない場合 (request size /
-mTLS / VPC-only API endpoint) は operator が gateway を立てます:
+Cloudflare Worker から AWS / GCP / k8s API を直接呼べない場合 (リクエストサイズ、
+mTLS、VPC-only API エンドポイント等) は、operator がゲートウェイを立てます。
 
 ```jsonc
 {
@@ -280,20 +272,20 @@ mTLS / VPC-only API endpoint) は operator が gateway を立てます:
 }
 ```
 
-gateway 自体の hosting topology:
+ゲートウェイ自体のホスティング先:
 
-| gateway 配置場所              | 利点                      | 欠点                         |
-| ----------------------------- | ------------------------- | ---------------------------- |
-| EC2 / GCE / VM                | 単純、fix IP              | operator の ops 負担         |
-| Cloud Run / Fargate           | autoscale                 | cold start, autoscale tuning |
-| k8s Deployment                | 既存 cluster で運用一元化 | k8s が必要                   |
-| Cloudflare Worker (別 Worker) | edge コロケーション       | egress 制限は同じ            |
+| 配置先                        | 利点                       | 欠点                              |
+| ----------------------------- | -------------------------- | --------------------------------- |
+| EC2 / GCE / VM                | シンプル、固定 IP          | operator の運用負担               |
+| Cloud Run / Fargate           | オートスケール             | cold start、autoscale チューニング |
+| k8s Deployment                | 既存クラスタで運用一元化   | k8s が必要                        |
+| Cloudflare Worker (別 Worker) | エッジコロケーション       | egress 制限は同じ                 |
 
-### 形態 C: runtime-agent (推奨 production)
+### 形態 C: runtime-agent (本番推奨)
 
-provider plugin が **kernel から resource を直接 materialize する代わりに**、
-runtime-agent process が kernel から work lease を pull して、provider 操作を
-**agent の存在する cloud 内** で実行します:
+provider プラグインが **kernel から直接リソースを materialize する代わりに**、
+runtime-agent プロセスが kernel から work lease を pull し、provider 操作を
+**agent が動作するクラウド内** で実行します。
 
 ```
 kernel (CF) -- 1. enqueue work --> work queue (kernel state)
@@ -306,30 +298,30 @@ agent (AWS EC2) -- 4. report result --> kernel
 
 利点:
 
-- AWS / GCP credentials が **agent process だけ** に inject され、Cloudflare
-  Worker secret には乗らない (blast radius 縮小)
-- VPC 内 endpoint (RDS / Cloud SQL Private IP) に直接アクセスできる
-- 長尺 ops (RDS create 5 分など) も timeout なしで実行可能
+- AWS / GCP の credentials が **agent プロセスだけ** に注入され、Cloudflare Worker の secret に
+  乗らない (漏えい時の影響範囲を縮小)
+- VPC 内のエンドポイント (RDS / Cloud SQL Private IP) に直接アクセスできる
+- 長尺の操作 (RDS create 5 分等) も timeout なしで実行可能
 
 欠点:
 
-- agent host の運用 (systemd / patches / restart) が operator 責任
+- agent ホストの運用 (systemd / パッチ / 再起動) は operator の責任
 
-## runtime-agent の placement
+## runtime-agent の配置
 
-agent は kernel に enroll → heartbeat → lease pull → 実行 → report
-というループです。配置の決め方:
+agent は kernel への enroll → heartbeat → lease pull → 実行 → report のループで動作します。
+配置の目安は次のとおりです。
 
-| 構成                                     | agent 推奨配置                             |
-| ---------------------------------------- | ------------------------------------------ |
-| Cloudflare control + AWS tenant          | AWS EC2 (t3.small) または ECS Fargate      |
-| Cloudflare control + GCP tenant          | GCP Cloud Run (min instances=1) or GKE pod |
-| Cloudflare control + k8s tenant          | k8s pod (in-cluster ServiceAccount)        |
-| Cloudflare control + selfhosted resource | bare metal systemd                         |
-| AWS/GCP only                             | 同じ cloud 内 (kernel と同じ pod)          |
-| Selfhosted                               | bare metal systemd                         |
+| 構成                                       | agent 推奨配置                                  |
+| ------------------------------------------ | ----------------------------------------------- |
+| Cloudflare control + AWS tenant            | AWS EC2 (t3.small) または ECS Fargate           |
+| Cloudflare control + GCP tenant            | GCP Cloud Run (min instances=1) または GKE pod  |
+| Cloudflare control + k8s tenant            | k8s pod (in-cluster ServiceAccount)             |
+| Cloudflare control + self-hosted リソース  | bare metal の systemd                           |
+| AWS / GCP のみ                             | 同じクラウド内 (kernel と同じ pod)              |
+| Self-hosted                                | bare metal の systemd                           |
 
-agent process の最小構成:
+agent プロセスの最小構成:
 
 ```ts
 // runtime-agent.ts
@@ -356,103 +348,106 @@ const loop = new RuntimeAgentLoop({
 await loop.run();
 ```
 
-各 cloud-specific docs に systemd / Cloud Run / k8s Deployment の YAML
-サンプルがあります:
+各クラウド固有のドキュメントに、systemd / Cloud Run / k8s Deployment の YAML サンプルがあります。
 
 - [AWS](/hosting/aws#runtime-agent-phase-17b-を-aws-に置く)
 - [GCP](/hosting/gcp#runtime-agent-phase-17b-を-gcp-に置く)
 - [Kubernetes](/hosting/kubernetes#runtime-agent-phase-17b-を-k8s-に置く)
 - [Self-hosted](/hosting/self-hosted#runtime-agent-on-bare-metal)
 
-### lease semantics
+### lease のセマンティクス
 
-- agent は `idleBackoffMs` (default 1000) でポーリング
-- lease TTL (default 60s) を超えると kernel が再 enqueue
-- agent が長尺 ops を実行中は `reportProgress({ extendUntil })` で延長
+- agent は `idleBackoffMs` (デフォルト 1000) でポーリング
+- lease TTL (デフォルト 60 秒) を超えると kernel が再 enqueue
+- agent が長尺操作を実行中は `reportProgress({ extendUntil })` で延長
 - `failed` で `retry: true` を返すと kernel が再 enqueue (max retry まで)
 - `failed` で `retry: false` を返すと dead-letter
 
-## routing layer の選択
+## ルーティング層の選択
 
-routing は kernel が tenant request を tenant workload に届ける layer です。
-profile ごとに異なります:
+ルーティングは、kernel が tenant のリクエストを tenant ワークロードに届ける層です。
+profile ごとに次のように異なります。
 
-| profile                 | routing primary           | DNS            | cert                      |
-| ----------------------- | ------------------------- | -------------- | ------------------------- |
-| `cloudflare`            | dispatch namespace        | Cloudflare DNS | universal SSL             |
-| `cloudflare-aws`        | dispatch + AWS ALB        | Route53        | ACM cert                  |
-| `cloudflare-gcp`        | dispatch + GCP HTTP(S) LB | Cloud DNS      | Google-managed cert       |
-| `cloudflare-kubernetes` | dispatch + k8s Ingress    | external-dns   | cert-manager (Let's Enc.) |
-| `aws`                   | ALB + Route53             | Route53        | ACM cert                  |
-| `gcp`                   | HTTP(S) LB + Cloud DNS    | Cloud DNS      | Google-managed cert       |
-| `selfhosted`            | Caddy / nginx             | external       | Let's Encrypt + certbot   |
+| profile                 | ルーティング             | DNS            | 証明書                       |
+| ----------------------- | ------------------------ | -------------- | ---------------------------- |
+| `cloudflare`            | dispatch namespace       | Cloudflare DNS | universal SSL                |
+| `cloudflare-aws`        | dispatch + AWS ALB       | Route53        | ACM cert                     |
+| `cloudflare-gcp`        | dispatch + GCP HTTP(S) LB | Cloud DNS     | Google-managed cert          |
+| `cloudflare-kubernetes` | dispatch + k8s Ingress   | external-dns   | cert-manager (Let's Encrypt) |
+| `aws`                   | ALB + Route53            | Route53        | ACM cert                     |
+| `gcp`                   | HTTP(S) LB + Cloud DNS   | Cloud DNS      | Google-managed cert          |
+| `selfhosted`            | Caddy / nginx            | 外部           | Let's Encrypt + certbot      |
 
-operator が手動でやること (cross-cloud 共通):
+operator が手動で行う作業 (クラウド共通):
 
-1. DNS zone の作成と委任 (`takos.example.com` の NS を cloud DNS に向ける)
-2. wildcard cert の発行 (`*.app.takos.example.com`) または DNS-01 challenge 設定
-3. routing layer (ALB / HTTP(S) LB / Ingress) を operator が事前 install
-4. profile の `routerConfig` セクションに ARN / zone ID / Ingress class を 注入
+1. DNS ゾーンの作成と委任 (`takos.example.com` の NS をクラウド DNS に向ける)
+2. ワイルドカード証明書の発行 (`*.app.takos.example.com`)、または DNS-01 チャレンジの設定
+3. ルーティング層 (ALB / HTTP(S) LB / Ingress) を operator が事前にインストール
+4. profile の `routerConfig` セクションに ARN / zone ID / Ingress class を注入
 
-kernel が plugin 経由でやること:
+kernel がプラグイン経由で行う作業:
 
-- per-tenant route block / target group / URL map / Ingress rule の同期
-- DNS A / ALIAS / CNAME record の create / update / delete (DNS provider plugin)
-- drift 検出 (actual route state vs desired)
+- tenant 単位の route block / target group / URL map / Ingress rule の同期
+- DNS の A / ALIAS / CNAME レコードの作成・更新・削除 (DNS provider プラグイン)
+- ドリフト検出 (実 route 状態と望ましい状態の比較)
 
-## drift detection / rollback の cross-cloud semantics
+## クラウド横断のドリフト検出とロールバック
 
-provider routing observation と provider plugins は **drift 検出と rollback** を
+provider のルーティング観測と provider プラグインは、**ドリフト検出とロールバック** を
 `Deployment.observation` レコードに統一して emit します。
 
-### drift 検出
+### ドリフト検出
 
-| 検出される drift                                  | 検出元 provider client     | 検出方法                          |
-| ------------------------------------------------- | -------------------------- | --------------------------------- |
-| ECS service desired count が manifest と異なる    | `aws-control-plane`        | DescribeServices polling          |
-| ALB target group の target が抜けている           | `aws-alb-route53-router`   | DescribeTargetHealth polling      |
-| Cloud Run revision の traffic split が想定外      | `gcp-control-plane`        | services.get polling              |
-| URL map の hostRule が手動編集されている          | `gcp-load-balancer-router` | urlMaps.get polling               |
-| k8s Deployment の replicas が manual scale された | `k8s-deployment`           | watch event                       |
-| Ingress の TLS Secret が cert-manager 外で変更    | `k8s-ingress-router`       | watch event + cert-manager status |
-| Caddyfile が外から書き換えられた                  | `selfhosted-router-config` | file hash polling                 |
+| 検出されるドリフト                                | 検出元 provider client     | 検出方法                              |
+| ------------------------------------------------- | -------------------------- | ------------------------------------- |
+| ECS service の desired count が manifest と異なる | `aws-control-plane`        | DescribeServices ポーリング           |
+| ALB target group の target が抜けている           | `aws-alb-route53-router`   | DescribeTargetHealth ポーリング       |
+| Cloud Run revision の traffic split が想定外      | `gcp-control-plane`        | services.get ポーリング               |
+| URL map の hostRule が手動で書き換えられた        | `gcp-load-balancer-router` | urlMaps.get ポーリング                |
+| k8s Deployment の replicas が手動スケールされた   | `k8s-deployment`           | watch イベント                        |
+| Ingress の TLS Secret が cert-manager 外で変更    | `k8s-ingress-router`       | watch イベント + cert-manager status  |
+| Caddyfile が外から書き換えられた                  | `selfhosted-router-config` | ファイルハッシュのポーリング          |
 
-cross-cloud の drift は kernel の `provider_observations` テーブルに統一形式
-で書き込まれます。観測周期は default 60s で、profile の
-`pluginConfig.*.observationIntervalMs` で調整できます。
+クラウド横断のドリフトは kernel の `provider_observations` テーブルに統一形式で
+書き込まれます。観測周期はデフォルト 60 秒で、profile の `pluginConfig.*.observationIntervalMs`
+で調整できます。
 
-### rollback semantics
+### ロールバックのセマンティクス
 
-`takos rollback --group <name>` を実行すると:
+AppInstallation の rollback は `takosumi-git rollback <installation-id> --to <ref>`
+で preview / permission review / apply を通して実行します。kernel 側の rollback は
+retained Deployment / ResolutionSnapshot を使う activation lifecycle の operation
+であり、Takos product shell の standalone deploy command として扱いません。
 
-1. kernel は **previous Deployment の `descriptor_closure` を retain
-   している前提** で resolved_graph を復元
-2. 各 provider plugin に「previous state に戻せ」work を enqueue
-3. agent / plugin が cloud-specific な rollback ops を実行:
-   - **AWS**: ECS service `desiredCount` を previous task definition revision
-     に戻す
-   - **GCP**: Cloud Run service の traffic split を previous revision に戻す
-   - **k8s**: Deployment の `spec.replicas` / image tag を previous に戻す
-   - **selfhosted**: Caddyfile / docker-compose を previous version に書き戻す
-4. routing record (Route53 / Cloud DNS / Ingress) も previous state に戻す
-5. group head ref を previous Deployment に切替
+kernel rollback では次の処理が走ります。
 
-cross-cloud で rollback する場合の制約:
+1. kernel が **前回 Deployment の `descriptor_closure` を保持している前提** で
+   resolved_graph を復元
+2. 各 provider プラグインに「前回の状態に戻せ」という work を enqueue
+3. agent / プラグインがクラウド固有のロールバック操作を実行:
+   - **AWS**: ECS service の `desiredCount` を前回の task definition リビジョンに戻す
+   - **GCP**: Cloud Run service の traffic split を前回のリビジョンに戻す
+   - **k8s**: Deployment の `spec.replicas` / image tag を前回の値に戻す
+   - **selfhosted**: Caddyfile / docker-compose を前回バージョンに書き戻す
+4. routing レコード (Route53 / Cloud DNS / Ingress) も前回の状態に戻す
+5. GroupHead pointer を前回 Deployment に切り替え
 
-- **DB schema migration が forward-only な resource は rollback できない** (例:
-  column drop)。manifest 側で migration を separate component に切り出し、
-  rollback policy を `destructive: false` に設定する
-- **DNS TTL の伝播は cloud 依存**: Route53 / Cloud DNS は 30s-300s で伝播、
-  Cloudflare DNS は数秒。マルチ cloud rollback では最大 TTL を考慮する
-- **ACM / Google-managed cert の renewal は rollback 対象外**: cert resource は
-  kernel が直接 manage しない (operator pre-issued)
+クラウド横断のロールバックに関する制約:
 
-詳細な rollback semantics は [Rollback](/deploy/rollback) を参照。
+- **DB スキーママイグレーションが forward-only なリソースはロールバック不可** (例: カラム削除)。
+  manifest 側で migration を別コンポーネントに切り出し、rollback policy を
+  `destructive: false` に設定してください
+- **DNS TTL の伝播はクラウド依存**: Route53 / Cloud DNS は 30 ~ 300 秒、Cloudflare DNS は
+  数秒で伝播します。マルチクラウドのロールバックでは最大 TTL を考慮してください
+- **ACM / Google-managed cert の更新はロールバック対象外**: cert リソースは kernel が
+  直接管理しません (operator が事前発行)
 
-## end-to-end runbook (Cloudflare control + AWS tenant)
+ロールバックの詳細は [Rollback](/deploy/rollback) を参照してください。
 
-実例として **Cloudflare で kernel を動かしつつ tenant runtime / DB を AWS
-に置く** 構成の e2e runbook を示します。
+## エンドツーエンドのランブック (Cloudflare control + AWS tenant)
+
+実例として **Cloudflare で kernel を動かしつつ、tenant ランタイムと DB を AWS に置く**
+構成のエンドツーエンドのランブックを示します。
 
 ```bash
 # 1. distribution.yml を編集
@@ -515,19 +510,19 @@ takosumi deploy ./compiled-manifest.yml --remote ""
 curl https://my-app.app.takos.example.com  # AWS ALB 経由で ECS Fargate に到達
 ```
 
-GCP / k8s / selfhosted も同様の流れです (target-specific docs を参照)。
+GCP / k8s / selfhosted も同様の流れです (各ターゲット固有のドキュメントを参照)。
 
-## secret partition と rotation runbook
+## シークレットパーティションとローテーションのランブック
 
-multi-cloud 構成では **1 つの cloud key が漏れた場合に他 cloud に影響しない**
-ことが境界条件になります。Takosumi kernel の secret store は cloud partition
-ごとに **独立した encryption key** を保持し、AES-GCM の AAD に partition
-ラベルを bind することで cross-partition open を fail させます。
+マルチクラウド構成では **1 つのクラウドの鍵が漏えいしても他のクラウドに影響しない**
+ことが境界条件になります。Takosumi kernel のシークレットストアはクラウドパーティション
+ごとに **独立した暗号鍵** を保持し、AES-GCM の AAD にパーティションラベルを bind することで
+パーティションをまたいだ open を失敗させます。
 
-### per-cloud key 発行 (H14)
+### per-cloud 鍵の発行 (H14)
 
-operator は `generate-platform-keys` を `--per-cloud` 付きで実行して per-cloud
-encryption key を発行します:
+operator は `generate-platform-keys` を `--per-cloud` 付きで実行し、per-cloud の
+暗号鍵を発行します。
 
 ```bash
 cd takos-private
@@ -535,61 +530,58 @@ deno run --allow-read --allow-write --allow-env \
   scripts/generate-platform-keys.ts --env=production --per-cloud
 ```
 
-これにより `ENCRYPTION_KEY_CLOUDFLARE` / `ENCRYPTION_KEY_AWS` /
-`ENCRYPTION_KEY_GCP` / `ENCRYPTION_KEY_K8S` / `ENCRYPTION_KEY_SELFHOSTED` の 5
-ファイルが追加で出力されます。kernel boot 時には:
+これにより `ENCRYPTION_KEY_CLOUDFLARE` / `ENCRYPTION_KEY_AWS` / `ENCRYPTION_KEY_GCP` /
+`ENCRYPTION_KEY_K8S` / `ENCRYPTION_KEY_SELFHOSTED` の 5 ファイルが追加で出力されます。
+kernel 起動時には次のように解決されます。
 
-| env key                                                                  | partition    |
-| ------------------------------------------------------------------------ | ------------ |
-| `TAKOS_SECRET_STORE_PASSPHRASE` (or fallback)                            | `global`     |
-| `TAKOS_SECRET_STORE_PASSPHRASE_AWS` / `ENCRYPTION_KEY_AWS`               | `aws`        |
-| `TAKOS_SECRET_STORE_PASSPHRASE_GCP` / `ENCRYPTION_KEY_GCP`               | `gcp`        |
-| `TAKOS_SECRET_STORE_PASSPHRASE_CLOUDFLARE` / `ENCRYPTION_KEY_CLOUDFLARE` | `cloudflare` |
-| `TAKOS_SECRET_STORE_PASSPHRASE_K8S` / `ENCRYPTION_KEY_K8S`               | `k8s`        |
-| `TAKOS_SECRET_STORE_PASSPHRASE_SELFHOSTED` / `ENCRYPTION_KEY_SELFHOSTED` | `selfhosted` |
+| 環境変数                                                                 | パーティション |
+| ------------------------------------------------------------------------ | -------------- |
+| `TAKOS_SECRET_STORE_PASSPHRASE` (またはフォールバック)                   | `global`       |
+| `TAKOS_SECRET_STORE_PASSPHRASE_AWS` / `ENCRYPTION_KEY_AWS`               | `aws`          |
+| `TAKOS_SECRET_STORE_PASSPHRASE_GCP` / `ENCRYPTION_KEY_GCP`               | `gcp`          |
+| `TAKOS_SECRET_STORE_PASSPHRASE_CLOUDFLARE` / `ENCRYPTION_KEY_CLOUDFLARE` | `cloudflare`   |
+| `TAKOS_SECRET_STORE_PASSPHRASE_K8S` / `ENCRYPTION_KEY_K8S`               | `k8s`          |
+| `TAKOS_SECRET_STORE_PASSPHRASE_SELFHOSTED` / `ENCRYPTION_KEY_SELFHOSTED` | `selfhosted`   |
 
-unset の partition は `global` key を partition label と HKDF-style に 混合した
-derived passphrase で sealed されます。production では override を
-明示する運用が推奨です。
+未設定のパーティションは、`global` 鍵をパーティションラベルと HKDF 風に混合した
+derived passphrase でシールされます。本番では明示的に override する運用を推奨します。
 
-### compromise 時の incident response
+### 漏えい時のインシデント対応
 
-| 漏洩した key              | 影響範囲                   | 対応                                            |
-| ------------------------- | -------------------------- | ----------------------------------------------- |
-| `ENCRYPTION_KEY_AWS`      | aws partition のみ         | AWS partition の secret を rotate               |
-| `ENCRYPTION_KEY_GCP`      | gcp partition のみ         | GCP partition の secret を rotate               |
-| `ENCRYPTION_KEY` (global) | derive 元の partition 全て | 全 partition rotation + per-cloud override 切替 |
+| 漏えいした鍵              | 影響範囲                       | 対応                                                |
+| ------------------------- | ------------------------------ | --------------------------------------------------- |
+| `ENCRYPTION_KEY_AWS`      | aws パーティションのみ         | AWS パーティションのシークレットをローテーション    |
+| `ENCRYPTION_KEY_GCP`      | gcp パーティションのみ         | GCP パーティションのシークレットをローテーション    |
+| `ENCRYPTION_KEY` (global) | 派生元のパーティション全て     | 全パーティションのローテーション + per-cloud override 切替 |
 
-cross-partition leak が発生しないことは
-`MultiCloudSecretBoundaryCrypto: aws key compromise does not unlock other
-partitions`
-test で property-style に保証されています。
+クロスパーティションへの漏えいが起きないことは、
+`MultiCloudSecretBoundaryCrypto: aws key compromise does not unlock other partitions`
+のテストでプロパティ風に保証されています。
 
-### rotation policy + version GC (H15)
+### ローテーションポリシーとバージョン GC (H15)
 
-各 secret に `rotation_policy: { intervalDays, gracePeriodDays }` を付与
-すると、background job (`SecretRotationService.checkRotation`) が:
+各シークレットに `rotation_policy: { intervalDays, gracePeriodDays }` を付与すると、
+バックグラウンドジョブ (`SecretRotationService.checkRotation`) が次のように動きます。
 
-1. `intervalDays` 経過で `state=due` に遷移し、operator notification 用 audit
-   event (`secret.rotation.notice`, severity=warning) を emit
-2. `intervalDays + gracePeriodDays` 経過で `state=expired` (severity=critical)
-3. `withGc=true` で実行すると同時に version GC を走らせ、`latest 5` +
-   `last accessed within 90d` 以外の version を削除 (削除分は
-   `secret.version.gc` audit event に記録)
+1. `intervalDays` 経過で `state=due` に遷移し、operator 通知用の audit イベント
+   (`secret.rotation.notice`, severity=warning) を emit
+2. `intervalDays + gracePeriodDays` 経過で `state=expired` (severity=critical) に遷移
+3. `withGc=true` で実行すると同時にバージョン GC を走らせ、`latest 5` または
+   `last accessed within 90d` 以外のバージョンを削除 (削除分は `secret.version.gc`
+   audit イベントに記録)
 
-operator が手動で rotate する場合は CLI を使います:
+operator が手動でローテーションする場合は CLI を使います。
 
 ```bash
 takos rotate-secret AWS_SECRET_ACCESS_KEY \
   --cloud-partition aws --reason "scheduled rotation"
 ```
 
-CLI は `SecretRotationService.rotateSecret` を経由し、新しい version を write
-しつつ `secret.rotation.executed` audit event (actor + reason 付き)
-を残します。previous version は version GC まで retain されるため、 直前
-rollback には支障ありません。
+CLI は `SecretRotationService.rotateSecret` を経由し、新しいバージョンを書き込みつつ
+`secret.rotation.executed` の audit イベント (actor と reason 付き) を残します。
+前バージョンはバージョン GC まで保持されるので、直前へのロールバックも問題ありません。
 
-### operator maintenance job 例 (Cloudflare scheduled event)
+### operator メンテナンスジョブの例 (Cloudflare scheduled event)
 
 ```ts
 export default {
@@ -605,53 +597,51 @@ export default {
 };
 ```
 
-(scheduled event は wrangler.toml の `[triggers] crons = ["0 3 * * *"]` で daily
-03:00 UTC)
+(scheduled event は wrangler.toml の `[triggers] crons = ["0 3 * * *"]` で毎日 03:00 UTC)
 
-## Audit retention policy (PCI-DSS / HIPAA / SOX)
+## 監査ログのリテンションポリシー (PCI-DSS / HIPAA / SOX)
 
-Takosumi kernel は `audit_events` table を tamper-evident 化するために SHA-256
-hash chain で append-only 運用しています。regulated workload (PCI-DSS / HIPAA /
-SOX) 向けに retention policy を formalize しました:
+Takosumi kernel は `audit_events` テーブルを tamper-evident にするため、SHA-256 の
+ハッシュチェーンで append-only 運用しています。regulated なワークロード
+(PCI-DSS / HIPAA / SOX) 向けにリテンションポリシーを正式化しています。
 
-### policy 構成
+### ポリシー構成
 
 `AuditRetentionPolicy`
-(`takosumi/packages/kernel/src/services/audit-replication/policy.ts`) は
-env-aware に解決されます:
+(`takosumi/packages/kernel/src/services/audit-replication/policy.ts`) は環境変数で
+解決されます。
 
-| env                                | 役割                                                  | 例                |
+| 環境変数                            | 役割                                                  | 例                |
 | ---------------------------------- | ----------------------------------------------------- | ----------------- |
 | `TAKOS_AUDIT_RETENTION_REGIME`     | `default` / `pci-dss` / `hipaa` / `sox` / `regulated` | `hipaa`           |
-| `TAKOS_AUDIT_RETENTION_DAYS`       | retention 上書き (days)                               | `2555` (= 7y SOX) |
-| `TAKOS_AUDIT_DELETE_AFTER_ARCHIVE` | replicate 確認後に primary store から delete する     | `false` (default) |
-| `TAKOS_AUDIT_ARCHIVE_GRACE_DAYS`   | archive と delete の grace window (days)              | `30` (default)    |
+| `TAKOS_AUDIT_RETENTION_DAYS`       | リテンションの上書き (日数)                            | `2555` (= 7 年、SOX 想定) |
+| `TAKOS_AUDIT_DELETE_AFTER_ARCHIVE` | レプリケーション確認後に primary store から削除する     | `false` (デフォルト) |
+| `TAKOS_AUDIT_ARCHIVE_GRACE_DAYS`   | アーカイブと削除の grace window (日数)                  | `30` (デフォルト) |
 
-regulated band (`pci-dss` / `hipaa` / `sox` / `regulated`) を選ぶと
-`regulatedDays = 2555 (7y)` が default になります。`default` regime は
-`defaultDays = 365 (1y)`。`TAKOS_AUDIT_RETENTION_DAYS` を明示すると band を
-override できますが、PCI-DSS の 1y minimum / HIPAA の 6y minimum / SOX の 7y
-minimum を operator 自身で確認する必要があります。
+regulated バンド (`pci-dss` / `hipaa` / `sox` / `regulated`) を選ぶと
+`regulatedDays = 2555 (7 年)` がデフォルトになります。`default` 体制では
+`defaultDays = 365 (1 年)` です。`TAKOS_AUDIT_RETENTION_DAYS` を明示すればバンドを
+上書きできますが、PCI-DSS の 1 年 / HIPAA の 6 年 / SOX の 7 年といった最低保持期間は
+operator 側で確認してください。
 
-### archive vs delete
+### archive と delete
 
-`audit_events` は **append-only** が default です:
+`audit_events` は **append-only** がデフォルトです。
 
-1. retention cutoff (`now - retentionDays`) より古い row は `archived = true` に
-   flag
-2. `deleteAfterArchive = false` (default): archived row はそのまま残る (full
-   hash chain は永続的に検証可能)
-3. `deleteAfterArchive = true` を opt-in した場合のみ、`now - retentionDays
-   - archiveGracePeriodDays` より古い archived row が delete される。これは
-     downstream replication (Sumo / Datadog / S3) を canonical store と
-     みなす運用で、grace 内に replication 失敗を検知できる前提
+1. リテンションカットオフ (`now - retentionDays`) より古いレコードは `archived = true` をフラグ
+2. `deleteAfterArchive = false` (デフォルト): アーカイブされた行はそのまま残ります
+   (フルハッシュチェーンは永続的に検証可能)
+3. `deleteAfterArchive = true` を opt-in した場合のみ、`now - retentionDays - archiveGracePeriodDays`
+   より古いアーカイブ済み行が削除されます。これはダウンストリームのレプリケーション
+   (Sumo / Datadog / S3) を主たる保管先とする運用が前提で、grace 期間中に
+   レプリケーション失敗を検知できる必要があります。
 
-### external replication sink
+### 外部レプリケーション sink
 
-`AuditReplicationSink` interface
-(`takosumi/packages/kernel/src/services/audit-replication/sink.ts`)
-を実装すると、 `SqlObservabilitySink.appendAudit` 後に各 sink へ chained audit
-record を fan-out できます:
+`AuditReplicationSink` インターフェース
+(`takosumi/packages/kernel/src/services/audit-replication/sink.ts`) を実装すると、
+`SqlObservabilitySink.appendAudit` 後に各 sink へチェーン化された audit レコードを
+ファンアウトできます。
 
 ```ts
 import {
@@ -676,25 +666,23 @@ const sink = new SqlObservabilitySink({
 });
 ```
 
-Sink は **append-only / idempotent-by-event-id** が contract です。 downstream
-system (Sumo / Datadog / S3 Object Lock / Splunk / SIEM) で 独立した retention
-を持たせると、in-region DB が compromise されても canonical compliance store
-として機能します。
+Sink の契約は **append-only かつイベント ID による冪等** です。下流のシステム
+(Sumo / Datadog / S3 Object Lock / Splunk / SIEM) で独立したリテンションを持たせると、
+リージョン内 DB が侵害された場合でも、コンプライアンス向けの独立した記録先として機能します。
 
-`InMemoryAuditReplicationSink` は test / local development 用の reference
-実装で、`replicate(record)` の dedupe / batch 動作を模倣します。
+`InMemoryAuditReplicationSink` はテスト・ローカル開発用のリファレンス実装で、
+`replicate(record)` の dedupe / バッチ動作を模倣します。
 
-immutable WORM-grade replication (S3 Object Lock COMPLIANCE mode) は
-`AuditExternalReplicationSink` (`external_log.ts`) を使います。これは boot-time
-に primary chain と external replica を `(sequence, hash)` 単位で 照合し、DB
-改ざん検出に使うための separate 階層です。
+WORM 相当のイミュータブルレプリケーション (S3 Object Lock COMPLIANCE モード) は
+`AuditExternalReplicationSink` (`external_log.ts`) を使います。これは起動時に
+プライマリチェーンと外部レプリカを `(sequence, hash)` 単位で照合し、DB 改ざんを
+検出するための独立した階層です。
 
-### retention runbook
+### リテンションのランブック
 
-operator maintenance GC は `SqlObservabilitySink.applyRetentionPolicy` を daily
-で 呼びます。`TAKOS_AUDIT_RETENTION_DAYS` (or `retentionPolicy`) が設定されて
-いれば boot 時にも一度走ります (`takosumi/packages/kernel/src/index.ts` の
-`maybeApplyAuditRetention`)。
+operator のメンテナンス GC は `SqlObservabilitySink.applyRetentionPolicy` を毎日呼びます。
+`TAKOS_AUDIT_RETENTION_DAYS` (または `retentionPolicy`) が設定されていれば、起動時にも
+一度実行されます (`takosumi/packages/kernel/src/index.ts` の `maybeApplyAuditRetention`)。
 
 ```ts
 // example: regulated env (HIPAA) の scheduled maintenance
@@ -715,112 +703,108 @@ export default {
 };
 ```
 
-(Cloudflare scheduled event は `[triggers] crons = ["15 3 * * *"]` を audit
-retention 専用 worker に設定。secret-rotation maintenance と分離することで失敗
-isolation を得る)
+(Cloudflare の scheduled event は `[triggers] crons = ["15 3 * * *"]` を audit retention
+専用 worker に設定。secret-rotation メンテナンスと分離することで、失敗の影響を切り離します)
 
-### Provider observation retention
+### provider observation のリテンション
 
-`provider_observations` / `runtime_provider_observations` table は
+`provider_observations` / `runtime_provider_observations` テーブルは
 `ObservationRetentionService`
 (`takosumi/packages/kernel/src/services/observation-retention/service.ts`) で
-daily GC します:
+日次 GC を行います。
 
-| 段階     | window           | 動作                           |
-| -------- | ---------------- | ------------------------------ |
-| recent   | `now - 30d` 以内 | live (drift query 即時応答)    |
-| archived | `30d - 90d`      | `archived = true` に flag 切替 |
-| deleted  | `90d` 超過       | DELETE (cold-line export 必要) |
+| 段階     | window           | 動作                                |
+| -------- | ---------------- | ----------------------------------- |
+| recent   | `now - 30d` 以内 | live (ドリフトクエリに即時応答)     |
+| archived | `30d - 90d`      | `archived = true` に切り替え        |
+| deleted  | `90d` 超過       | DELETE (cold-line export が必要)    |
 
-current deployment (`group_heads.current_deployment_id`) に紐づく observation は
-age に関係なく archive 対象外です。drift detection の 正確性を保つため、head
-に対する live snapshot は常に保持されます。
+現行 deployment (`group_heads.current_deployment_id`) に紐づく observation は、
+経過時間にかかわらず archive 対象外です。ドリフト検出の正確性を保つため、
+head に対する live スナップショットは常に保持されます。
 
-`startObservationRetentionJob({ service, intervalMs: 24*60*60*1000 })` を boot
-path から呼ぶと daily の GC ループに入ります。`onReport` callback で
-`{archivedDeploy, archivedRuntime, deletedDeploy, deletedRuntime}` の metric を
-emit すると dashboards で観測できます。
+`startObservationRetentionJob({ service, intervalMs: 24*60*60*1000 })` を boot path から
+呼ぶと、日次の GC ループに入ります。`onReport` コールバックから
+`{archivedDeploy, archivedRuntime, deletedDeploy, deletedRuntime}` のメトリクスを emit すれば、
+ダッシュボードで観測できます。
 
-## DB at-rest encryption の enforce
+## DB at-rest 暗号化の強制
 
-Takosumi は production / staging boot で **DB connection の at-rest encryption
-flag** を強制チェックします。recognised signals は次のとおりです:
+Takosumi は production / staging 起動時に **DB 接続の at-rest 暗号化フラグ** を強制チェックします。
+認識されるシグナルは次のとおりです。
 
-| backend             | recognised signal                                                   |
-| ------------------- | ------------------------------------------------------------------- |
-| Postgres            | `?sslmode=require` / `verify-ca` / `verify-full` または `?ssl=true` |
-| Cloudflare D1       | `d1://...` URL (provider 側で常に encrypted at rest)                |
-| SQLCipher           | `sqlcipher://...`                                                   |
-| encrypted SQLite    | `sqlite://path?key=...` (PRAGMA key 経由)                           |
-| 汎用 override flag  | `?encrypted=true` を URL に付与                                     |
-| postgres TLS scheme | `postgres+tls://` / `postgresql+tls://`                             |
+| バックエンド        | 認識されるシグナル                                                       |
+| ------------------- | ----------------------------------------------------------------------- |
+| Postgres            | `?sslmode=require` / `verify-ca` / `verify-full` または `?ssl=true`     |
+| Cloudflare D1       | `d1://...` URL (provider 側で常に at-rest 暗号化)                       |
+| SQLCipher           | `sqlcipher://...`                                                       |
+| encrypted SQLite    | `sqlite://path?key=...` (PRAGMA key 経由)                               |
+| 汎用 override フラグ | `?encrypted=true` を URL に付与                                         |
+| postgres TLS scheme | `postgres+tls://` / `postgresql+tls://`                                 |
 
-cloud 別の推奨設定:
+クラウド別の推奨設定:
 
 - **Cloudflare D1**: `d1://<binding-name>` を `DATABASE_URL` に設定するだけで OK
-- **AWS RDS / Aurora**: `?sslmode=require` を URL に追加し、CA bundle を信頼する
+- **AWS RDS / Aurora**: URL に `?sslmode=require` を追加し、CA bundle を信頼
 - **GCP Cloud SQL**: Cloud SQL Auth Proxy + `?sslmode=verify-ca` で CA を pin
-- **Kubernetes (self-managed Postgres)**: cert-manager で issue した cert を
-  `sslmode=verify-full` で接続。pgcrypto / TDE / encrypted PV を operator が選択
-- **Self-hosted**: SQLCipher、または LUKS 等で disk encryption を operator が
-  enforce
+- **Kubernetes (自管理 Postgres)**: cert-manager で発行した証明書を `sslmode=verify-full` で接続。
+  pgcrypto / TDE / 暗号化 PV は operator が選択
+- **Self-hosted**: SQLCipher、または LUKS 等のディスク暗号化を operator が強制
 
-local / dev で encryption の無い DB を使う場合は `TAKOS_ALLOW_UNENCRYPTED_DB=1`
-で明示 opt-in が必要です (production / staging では opt-in 無効、boot 時に
+ローカル / 開発環境で暗号化のない DB を使う場合は `TAKOS_ALLOW_UNENCRYPTED_DB=1` で
+明示的に opt-in が必要です (production / staging では opt-in 不可で、起動時に
 `process exit 1` で fail-closed)。
 
-## audit-replication external sink
+## audit-replication の外部 sink
 
-audit_events table の SHA-256 hash chain は app 層で計算されますが、DBA が DB
-上で chain を再計算しながら row を改竄するシナリオでは **off-DB の immutable
-replica** が canonical な tamper evidence になります。Takosumi は production /
-staging boot で `AuditExternalReplicationSink` を必須化します:
+`audit_events` テーブルの SHA-256 ハッシュチェーンはアプリ層で計算されますが、
+DBA が DB 上でチェーンを再計算しながらレコードを改ざんするシナリオでは、
+**DB 外のイミュータブルレプリカ** が独立した改ざん検知の記録先になります。
+Takosumi は production / staging 起動時に `AuditExternalReplicationSink` を必須化します。
 
 | `TAKOS_AUDIT_REPLICATION_KIND` | 実装                            | 用途                              |
 | ------------------------------ | ------------------------------- | --------------------------------- |
 | `s3`                           | `S3ImmutableLogReplicationSink` | 本番。S3 versioning + Object Lock |
-| `stdout`                       | `StdoutReplicationSink`         | test / smoke。append-only stdout  |
+| `stdout`                       | `StdoutReplicationSink`         | テスト / smoke。append-only stdout |
 
 S3 sink は `<prefix>/<10-digit-zero-padded-sequence>-<hash[:16]>.json` の key で
-1 event = 1 object として upload し、Object Lock retention を
-`TAKOS_AUDIT_REPLICATION_S3_RETENTION_DAYS` (default 2555 = 7y, COMPLIANCE mode)
-で固定します。`s3:BypassGovernanceRetention` を持たない IAM principal
-で運用すれば DBA が compromise された場合でも replica は触れません。
+1 イベント = 1 オブジェクトとしてアップロードし、Object Lock のリテンションを
+`TAKOS_AUDIT_REPLICATION_S3_RETENTION_DAYS` (デフォルト 2555 = 7 年、COMPLIANCE モード) で
+固定します。`s3:BypassGovernanceRetention` を持たない IAM プリンシパルで運用すれば、
+DBA が侵害された場合でもレプリカには触れません。
 
-cloud 別の推奨組み合わせ:
+クラウド別の推奨組み合わせ:
 
-| kernel cloud      | recommended replica target                                 |
-| ----------------- | ---------------------------------------------------------- |
-| Cloudflare        | AWS S3 (cross-cloud immutable archive) または R2 + lock    |
-| AWS               | S3 + Object Lock COMPLIANCE                                |
-| GCP               | GCS Bucket Lock 経由の S3 互換 layer または cross-cloud S3 |
-| Kubernetes / self | MinIO with Object Lock または off-cluster S3               |
+| kernel が動くクラウド | 推奨レプリカ先                                                 |
+| --------------------- | -------------------------------------------------------------- |
+| Cloudflare            | AWS S3 (クロスクラウドのイミュータブルアーカイブ) または R2 + lock |
+| AWS                   | S3 + Object Lock COMPLIANCE                                    |
+| GCP                   | GCS Bucket Lock 経由の S3 互換層、またはクロスクラウドの S3    |
+| Kubernetes / self     | Object Lock 付きの MinIO、または off-cluster の S3             |
 
-boot 時には `verifyAuditReplicationConsistency` が SQL chain と external chain
-を `(sequence, hash)` で照合し、divergence (DB 削除 / hash mismatch) を検出
-した場合 production / staging では fail-closed します。catch-up 状態 (primary が
-external より進んでいる場合) は OK として扱われ、定期 GC ジョブが lag を
-解消します。
+起動時には `verifyAuditReplicationConsistency` が SQL チェーンと外部チェーンを
+`(sequence, hash)` で照合し、divergence (DB 削除 / ハッシュ不一致) を検出した場合
+production / staging では fail-closed します。catch-up 状態 (プライマリが外部より進んでいる場合)
+は OK として扱われ、定期 GC ジョブが lag を解消します。
 
-env vars:
+環境変数:
 
-| key                                         | 用途                                                            |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| `TAKOS_AUDIT_REPLICATION_KIND`              | `s3` / `stdout`                                                 |
-| `TAKOS_AUDIT_REPLICATION_S3_BUCKET`         | S3 bucket name (s3 sink 必須)                                   |
-| `TAKOS_AUDIT_REPLICATION_S3_PREFIX`         | object key prefix (default `audit-replication`)                 |
-| `TAKOS_AUDIT_REPLICATION_S3_RETENTION_MODE` | `COMPLIANCE` (default) / `GOVERNANCE`                           |
-| `TAKOS_AUDIT_REPLICATION_S3_RETENTION_DAYS` | retain-until-date を boot 時刻 + N 日で設定 (default 2555 = 7y) |
+| キー                                         | 用途                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------- |
+| `TAKOS_AUDIT_REPLICATION_KIND`              | `s3` / `stdout`                                                     |
+| `TAKOS_AUDIT_REPLICATION_S3_BUCKET`         | S3 バケット名 (s3 sink 必須)                                        |
+| `TAKOS_AUDIT_REPLICATION_S3_PREFIX`         | オブジェクトキーの prefix (デフォルト `audit-replication`)          |
+| `TAKOS_AUDIT_REPLICATION_S3_RETENTION_MODE` | `COMPLIANCE` (デフォルト) / `GOVERNANCE`                            |
+| `TAKOS_AUDIT_REPLICATION_S3_RETENTION_DAYS` | retain-until-date を起動時刻 + N 日に設定 (デフォルト 2555 = 7 年)  |
 
 ## 関連ドキュメント
 
-- [Cloudflare](/hosting/cloudflare) ― tracked reference Workers backend
-- [AWS](/hosting/aws) ― AWS provider plugin と Helm overlay
-- [GCP](/hosting/gcp) ― GCP provider plugin と Helm overlay
-- [Kubernetes](/hosting/kubernetes) ― k8s provider plugin と base Helm chart
-- [Self-hosted](/hosting/self-hosted) ― selfhosted provider plugin と bare metal
-  runbook
-- [Deploy](/deploy/) ― deploy manifest author 向け
-- [Rollback](/deploy/rollback) ― rollback semantics
-- [環境ごとの差異](/hosting/differences) ― hosting surface 比較
-- [Distribution Target Parity](/hosting/target-parity) ― target readiness matrix
+- [Cloudflare](/hosting/cloudflare) — Cloudflare Workers バックエンド
+- [AWS](/hosting/aws) — AWS provider プラグインと Helm overlay
+- [GCP](/hosting/gcp) — GCP provider プラグインと Helm overlay
+- [Kubernetes](/hosting/kubernetes) — k8s provider プラグインとベース Helm チャート
+- [Self-hosted](/hosting/self-hosted) — selfhosted provider プラグインと bare metal ランブック
+- [Deploy](/deploy/) — デプロイ manifest の作成者向け
+- [Rollback](/deploy/rollback) — ロールバックのセマンティクス
+- [環境ごとの差異](/hosting/differences) — ホスティング表面の比較
+- [Distribution Target Parity](/hosting/target-parity) — ターゲット別の現状マトリクス

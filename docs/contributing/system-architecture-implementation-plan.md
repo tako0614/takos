@@ -2,28 +2,22 @@
 
 > このページでわかること: 1.0 Core Release 当時のアーキテクチャ実装計画 (Historical)。
 
-::: warning Historical 1.0 Core Release plan 本ドキュメントは **1.0 Core Release** (M0-M4 frozen 2026-04-29) の
-implementation plan です。Code layout 表記の `apps/paas/...` は当時の pre-split 名称であり、現行 split 後の path
-とは異なる historical reference と して読んでください。**1.x Installable App Model (Phase 1.1-1.7)** の plan は
-ROADMAP.md Part II を参照してください。 :::
+::: warning Historical 1.0 Core Release plan
+本ドキュメントは **1.0 Core Release** (M0-M4 frozen 2026-04-29) の implementation plan です。コードレイアウト表記の `apps/paas/...` は当時の pre-split 名称であり、split 後のパスとは異なる historical reference として読んでください。**1.x Installable App Model (Phase 1.1-1.7)** の plan は ROADMAP.md Part II を参照してください。
+:::
 
-This plan maps the architecture contract in `../architecture/system-architecture.md` and the Takos Deploy spec kit in
-`../takosumi/` onto the `takos` product root.
+このプランは、`../architecture/system-architecture.md` のアーキテクチャ contract と `../takosumi/` の Takos Deploy spec kit を `takos` プロダクトルートにマップしたものです。
 
 ## Ground rules
 
-- `takosumi` remains one product root. Domain boundaries are modules, not default microservices.
-- Integrated and standalone modes share the same PaaS core semantics. Differences are plugins, adapters, process roles,
-  and topology.
-- `takos-deploy` and `takos-runtime` are implemented as `domains/deploy` and `domains/runtime` inside `takosumi`.
-- Canonical writes stay in the primary control plane. Provider/runtime observed state is never canonical.
-- Every domain exposes commands, queries, events, ports, and a store interface; other domains must not import a domain
-  store directly.
-- Self-host, cloud provider, database, queue, object-storage, KMS, and secret backend implementations are outside the
-  kernel. The kernel owns the plugin ABI and reference no-I/O adapters; real connectivity is loaded through
-  operator-selected plugins.
+- `takosumi` は単一プロダクトルートを維持。ドメイン境界はモジュールであり、default microservice ではない。
+- Integrated モードと standalone モードは同じ PaaS コアセマンティクスを共有。差異は plugin・adapter・プロセスロール・トポロジー。
+- `takos-deploy` と `takos-runtime` は `takosumi` 内部の `domains/deploy` と `domains/runtime` として実装。
+- canonical な write は primary コントロールプレーンに留まる。provider / runtime の observed state は canonical にはならない。
+- 各ドメインは command / query / event / port / store interface を公開する。他ドメインがあるドメインの store を直接 import してはいけない。
+- self-host、cloud provider、DB、queue、object-storage、KMS、secret backend の実装は kernel の外。kernel は plugin ABI と reference な no-I/O adapter のみを所有し、実接続はオペレータ選択 plugin 経由で読み込まれる。
 
-## Target code layout
+## ターゲットのコードレイアウト
 
 ```text
 takosumi/packages/kernel/src/api/                  HTTP API, internal API, standalone host
@@ -43,147 +37,147 @@ takosumi/packages/kernel/src/shared/               ids / time / errors / common 
 takosumi/packages/contract/src/                    public/internal/plugin TypeScript contracts
 ```
 
-## Milestones
+## マイルストーン
 
-### M0: Contract freeze and initial domains
+### M0: Contract freeze と初期ドメイン
 
-Exit criteria:
+Exit criteria。
 
-- Architecture-to-code map exists.
-- Contract package exports the core Takosumi vocabulary.
-- App package has domain boundaries for core and deploy.
-- `deno task check` passes.
+- アーキテクチャ→コードのマップが存在する。
+- contract パッケージが Takosumi の基本語彙を export している。
+- app パッケージが core / deploy のドメイン境界を持つ。
+- `deno task check` が通る。
 
-### M1: Core domain
+### M1: Core ドメイン
 
-Implement:
+実装内容。
 
-- `ActorContext` normalized across integrated and standalone modes.
-- signed internal RPC bound to method, path, timestamp, request id, actor context, and body digest.
-- Space and Group command/query services.
-- membership, role, and entitlement placeholders at mutation boundaries.
-- memory stores and storage ports behind the storage driver boundary.
-- domain event / outbox interface.
+- integrated / standalone 両モードで正規化された `ActorContext`。
+- method・path・timestamp・request id・actor コンテキスト・body digest に紐付く署名付き internal RPC。
+- Space / Group の command / query サービス。
+- mutation 境界での membership / role / entitlement プレースホルダ。
+- storage driver 境界の裏に置く memory store と storage port。
+- ドメイン event / outbox インターフェース。
 
-Exit criteria:
+Exit criteria。
 
-- health endpoint works.
-- signed internal space/group APIs work.
-- space/group creation produces stable summaries and domain events.
-- unauthorized/malformed internal calls are rejected.
+- health エンドポイントが動く。
+- 署名付き internal space / group API が動く。
+- space / group 作成が安定したサマリとドメインイベントを生成する。
+- 不正 / malformed な internal 呼び出しが reject される。
 
 ### M2: Deploy kernel vertical slice
 
-Implement:
+実装内容。
 
-- flat public `.takosumi/manifest.yml` manifest model.
-- compiler from public manifest to internal `AppSpec` / `EnvSpec` / `PolicySpec`.
-- immutable `SourceSnapshot` for source adapters.
-- non-mutating Deployment resolution with read set.
-- Deployment apply state machine.
-- immutable applied `Deployment` state.
-- strongly consistent `GroupHead` advancement in store boundary.
+- フラットな公開 `.takosumi/manifest.yml` マニフェストモデル。
+- 公開 manifest から内部 `AppSpec` / `EnvSpec` / `PolicySpec` へのコンパイラ。
+- source adapter 用の immutable な `SourceSnapshot`。
+- read set 付きの non-mutating な Deployment 解決。
+- Deployment apply 状態機械。
+- apply 後の immutable な `Deployment` state。
+- store 境界における強整合な `GroupHead` 進行。
 
-Exit criteria:
+Exit criteria。
 
-- resolve-only deploy creates no activation or workload materialization.
-- apply records desired activation state and advances `GroupHead`.
-- provider/materialization failure cannot mutate the applied `Deployment`.
+- resolve-only deploy が activation / workload materialization を作らない。
+- apply が desired activation state を記録し、`GroupHead` を進める。
+- provider / materialization の失敗が、apply 済み `Deployment` を mutation できない。
 
-### M3: Runtime/routing kernel vertical slice
+### M3: Runtime / routing kernel vertical slice
 
-Implement the kernel semantics first:
+まず kernel セマンティクスを実装。
 
-- `RuntimeHostCapability` and provider materialization port.
-- `ProviderMaterialization` records target/package/object/status.
-- observed state ingestion and readiness conditions.
-- `RouteProjection` derived from activation and route ownership.
-- status split: desired / serving / dependencies / security.
+- `RuntimeHostCapability` と provider materialization port。
+- target / package / object / status を記録する `ProviderMaterialization`。
+- observed state の取り込みと readiness condition。
+- activation と route ownership から導出される `RouteProjection`。
+- desired / serving / dependencies / security に分割された status。
 
-Exit criteria:
+Exit criteria。
 
-- provider plugins can record materialization without changing canonical activation truth.
-- route projection is created.
-- provider drift changes observed state only, not canonical activation.
+- provider plugin が canonical な activation truth を変えずに materialization を記録できる。
+- route projection が生成される。
+- provider drift が canonical activation ではなく observed state のみを変える。
 
-### M4: Resources/network/secrets
+### M4: Resources / network / secrets
 
-Implement:
+実装内容。
 
-- `ResourceInstance`, `ResourceBinding`, `BindingSetRevision`.
-- runtime secret injection separated from provider credentials and build secrets.
-- `RuntimeNetworkPolicy` selectors with assignment awareness.
-- `ServiceGrant` and `WorkloadIdentity` checks.
+- `ResourceInstance` / `ResourceBinding` / `BindingSetRevision`。
+- provider credential / build secret と分離された runtime secret injection。
+- assignment 意識付きの `RuntimeNetworkPolicy` セレクタ。
+- `ServiceGrant` と `WorkloadIdentity` のチェック。
 
-Exit criteria:
+Exit criteria。
 
-- resource create/bind works.
-- rollback does not roll back durable resource state.
-- provider credentials are unavailable to workloads.
+- resource create / bind が動く。
+- rollback が durable な resource state を巻き戻さない。
+- provider credential が workload からアクセスできない。
 
-### M5: Registry/provider packages/trust
+### M5: Registry / provider packages / trust
 
-Implement:
+実装内容。
 
-- bundled registry and package resolution from ref to digest.
-- resource/data/provider package descriptors and app-output registry evidence.
-- trust records, revocation, conformance tiers.
-- provider support and satisfaction reports.
+- 同梱の registry と ref→digest の package resolution。
+- resource / data / provider package descriptor と app-output registry evidence。
+- trust 記録、revocation、conformance tier。
+- provider support と充足度レポート。
 
-Exit criteria:
+Exit criteria。
 
-- package refs resolve to digests.
-- revoked packages block new plans.
-- existing affected groups become degraded rather than silently mutated.
+- package ref が digest に解決される。
+- revoke された package が新規 plan をブロックする。
+- 影響を受ける既存 group は silent な mutate ではなく degraded になる。
 
-### M6: App outputs/events/dependencies
+### M6: App outputs / events / dependencies
 
-Implement:
+実装内容。
 
-- explicit app-output consume bindings.
-- app metadata / route projection and withdrawal/rebind policies.
-- event subscriptions that resolve through `primaryAppReleaseId` by default.
-- `ChangeSetPlan` for dependent groups.
+- 明示的な app-output consume binding。
+- app metadata / route projection と withdraw / rebind ポリシー。
+- default で `primaryAppReleaseId` を介して解決される event subscription。
+- 依存先 group 向けの `ChangeSetPlan`。
 
-Exit criteria:
+Exit criteria。
 
-- outputs are never injected automatically.
-- breaking app-output changes create dependent plans.
-- deployment-time output cycles are blocked.
+- output が自動注入されない。
+- breaking な app-output 変更が依存先 plan を生成する。
+- デプロイ時の output サイクルがブロックされる。
 
 ### M7: Standalone kernel host
 
-Implement:
+実装内容。
 
-- standalone API process using the same kernel services as integrated mode.
-- operator-only plugin selection and module loading.
-- reference no-I/O plugin for conformance and local development.
-- production safety guards that reject unselected external boundaries.
+- integrated モードと同じ kernel サービスを使う standalone API プロセス。
+- operator 限定の plugin 選択とモジュールロード。
+- conformance / ローカル開発向けの reference no-I/O plugin。
+- 未選択の外部境界を reject する production safety ガード。
 
-Exit criteria:
+Exit criteria。
 
-- `takosumi` boots without `takos-app`.
-- space/group/deploy/rollback/uninstall work through the API with injected reference or operator plugins.
-- same core services are used in integrated mode.
+- `takosumi` が `takos-app` 無しで起動できる。
+- 注入された reference または operator plugin で space / group / deploy / rollback / uninstall が API 経由で動く。
+- integrated モードと同じコアサービスが使われる。
 
-### M8: Acceptance test hardening
+### M8: Acceptance test の堅牢化
 
-Convert the takosumi kernel acceptance surface into tests grouped by:
+takosumi kernel の acceptance 範囲をテスト群に変換。グループ化軸。
 
-- plan/apply
+- plan / apply
 - activation
 - provider materialization
-- resource contracts
-- migration/restore
-- canary side effects
-- events
-- app outputs/dependencies
-- runtime security
+- resource contract
+- migration / restore
+- canary 副作用
+- event
+- app output / 依存
+- runtime セキュリティ
 - direct deploy
-- GC/retention
-- security/supply chain
+- GC / retention
+- セキュリティ / supply chain
 
-## Verification
+## 検証
 
 ```bash
 deno task check

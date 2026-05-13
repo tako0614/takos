@@ -195,17 +195,17 @@ cd takos/app/apps/control && deno task db:migrate
 
 ## ローカル環境の制限
 
-- backend-neutral deploy spec を local backend 上で実現するが、tracked reference
-  Workers backend と完全同一ではない
-- backend-specific な queue consumer / scheduler / workflow semantics
-  は再現しきれない。queue binding の basic delivery は動かせるが、
-  backend-specific trigger behavior は target runtime connector の制限に従う
-- vectorize binding には PostgreSQL + pgvector が必要（`PGVECTOR_ENABLED=true`）
-- Durable Object binding は persistent local runtime で利用できるが、tracked
-  reference Workers backend と byte-for-byte 同一ではない
-- Dispatch Namespace は提供されず、tenant runtime path を使う
+- backend に依存しないデプロイ仕様をローカル backend 上で再現しますが、
+  tracked reference の Workers backend と完全同一ではありません
+- backend 固有の queue consumer / scheduler / workflow セマンティクスは完全には再現できません。
+  queue binding の基本配信は動作しますが、backend 固有のトリガー動作は
+  ターゲットの runtime connector の制約に従います
+- vectorize binding には PostgreSQL + pgvector が必要です (`PGVECTOR_ENABLED=true`)
+- Durable Object binding は永続的なローカルランタイムで利用できますが、
+  tracked reference の Workers backend と byte-for-byte 一致するものではありません
+- Dispatch Namespace は提供されず、tenant runtime path を使用します
 
-詳しくは [環境ごとの差異](/hosting/differences) を参照。
+詳細は [環境ごとの差異](/hosting/differences) を参照してください。
 
 ## 次に読むページ
 

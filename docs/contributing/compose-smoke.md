@@ -2,12 +2,11 @@
 
 > このページでわかること: ローカル Docker Compose スタックの smoke テスト手順。
 
-`scripts/compose-smoke.ts` is a safe-by-default smoke entrypoint for the local
-`compose.local.yml` stack.
+`scripts/compose-smoke.ts` はローカル `compose.local.yml` スタック向けの safe-by-default smoke エントリポイントです。
 
 ## Default dry-run
 
-Run the checklist without invoking Docker:
+Docker を起動せずチェックリストのみ実行します。
 
 ```sh
 deno run \
@@ -17,17 +16,13 @@ deno run \
   scripts/compose-smoke.ts
 ```
 
-Default behavior checks that required services, role labels, healthchecks,
-volumes, networks, docker-socket wiring, and non-defaulted compose environment
-variables are present. It does **not** run `docker` or `docker compose` unless
-`TAKOS_RUN_COMPOSE_SMOKE=1` is set.
+必要なサービス、role ラベル、healthcheck、volume、network、docker-socket 配線、default 未指定の compose 環境変数の存在を検証します。`TAKOS_RUN_COMPOSE_SMOKE=1` が無ければ `docker` / `docker compose` は呼び出しません。
 
-Use another env file with `TAKOS_LOCAL_ENV_FILE=path/to/file`; update the
-`--allow-read` permission to include that file.
+別の env ファイルを使う場合は `TAKOS_LOCAL_ENV_FILE=path/to/file` を指定し、`--allow-read` にもそのパスを追加します。
 
-## Opt-in compose execution
+## Opt-in compose 実行
 
-To run the local stack smoke, opt in explicitly and grant `docker` execution:
+ローカルスタック smoke を実機実行するには、明示的に opt-in して `docker` 実行を許可します。
 
 ```sh
 TAKOS_RUN_COMPOSE_SMOKE=1 deno run \
@@ -38,14 +33,12 @@ TAKOS_RUN_COMPOSE_SMOKE=1 deno run \
   scripts/compose-smoke.ts
 ```
 
-When enabled, the script uses `Deno.Command` with a minimal explicit environment
-and a generated compose project name. It runs:
+有効化すると、生成した compose project 名と最小限の明示的 env で `Deno.Command` を使い、次を順に実行します。
 
 1. `docker compose config`
 2. `docker compose up --build -d`
 3. `docker compose ps`
 4. `docker compose logs --no-color --tail 200`
-5. `docker compose down --remove-orphans --timeout 10` in `finally`
+5. `finally` で `docker compose down --remove-orphans --timeout 10`
 
-Each command has a timeout safeguard. The default timeout is 300000 ms; override
-it with `TAKOS_COMPOSE_SMOKE_TIMEOUT_MS=<milliseconds>`.
+各コマンドには timeout が掛かります。default は 300000 ms で、`TAKOS_COMPOSE_SMOKE_TIMEOUT_MS=<milliseconds>` で上書きできます。

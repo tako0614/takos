@@ -29,29 +29,29 @@ takos endpoint use https://custom.example.com
 takos endpoint show
 ```
 
-## Task domains
+## タスクドメイン
 
-Takos CLI は HTTP verb をそのまま露出せず、domain + task を前面に出します。
+Takos CLI は HTTP メソッドをそのまま露出せず、ドメイン + タスクを前面に出します。
 
-| domain | 用途 |
+| ドメイン | 用途 |
 | --- | --- |
-| `me` | 現在のユーザー / account 情報 |
+| `me` | 現在のユーザー / アカウント情報 |
 | `space` | space の一覧・作成・選択 |
 | `thread` | thread 操作 |
 | `run` | agent run の作成・追跡 |
 | `task` | agent task の作成・状態確認 |
-| `repo` | Takos Git repository 操作 |
-| `app` | installed app の参照・起動 |
-| `git` | Takos Git helper |
-| `capability` / `cap` | space capability の参照 |
-| `context` / `ctx` | agent context 操作 |
-| `shortcut` | shortcut 管理 |
-| `notification` | notification 管理 |
-| `public-share` | public share 管理 |
-| `auth` | auth helper |
+| `repo` | Takos Git リポジトリ操作 |
+| `app` | インストール済みアプリの参照・起動 |
+| `git` | Takos Git ヘルパー |
+| `capability` / `cap` | space の capability 参照 |
+| `context` / `ctx` | agent コンテキスト操作 |
+| `shortcut` | ショートカット管理 |
+| `notification` | 通知管理 |
+| `public-share` | パブリックシェア管理 |
+| `auth` | 認証ヘルパー |
 | `discover` | discovery surface |
 
-## 共通 verbs
+## 共通の verb
 
 | verb | HTTP method | 役割 |
 | --- | --- | --- |
@@ -64,9 +64,9 @@ Takos CLI は HTTP verb をそのまま露出せず、domain + task を前面に
 | `probe` | HEAD | 存在確認 |
 | `describe` | OPTIONS | 利用可能な操作の確認 |
 
-stream 対応 domain は `watch` と `follow` を持ちます。
+ストリーム対応のドメインは `watch` と `follow` を持ちます。
 
-## Examples
+## サンプル
 
 ```bash
 takos space list
@@ -76,19 +76,19 @@ takos app list --space SPACE_ID
 takos notification list
 ```
 
-## App install / deploy の CLI
+## アプリインストール / デプロイ用の CLI
 
 | 目的 | CLI |
 | --- | --- |
-| Git URL から app を install する | `takosumi-git install <git-url> --ref <tag>` |
-| app を upgrade する | `takosumi-git upgrade <installation-id> --ref <tag>` |
-| compiled manifest を direct apply する | `takosumi deploy <manifest>` |
+| Git URL からアプリをインストールする | `takosumi-git install <git-url> --ref <tag>` |
+| アプリを upgrade する | `takosumi-git upgrade <installation-id> --ref <tag>` |
+| コンパイル済み manifest を直接 apply する | `takosumi deploy <manifest>` |
 
-Takos CLI は app install pipeline や kernel apply pipeline の実行主体ではありません。
-Takos product の API を操作する client として扱います。
+Takos CLI はアプリインストールや kernel apply パイプラインの実行主体ではなく、
+Takos プロダクトの API を操作するクライアントとして使います。
 
 ## 次に読むページ
 
-- [CLI / Auth model](/reference/cli-auth)
+- [CLI 認証](/reference/cli-auth)
 - [Git / Store install](/deploy/store-deploy)
-- [Direct manifest deploy](/deploy/deploy)
+- [Manifest を直接デプロイ](/deploy/deploy)
