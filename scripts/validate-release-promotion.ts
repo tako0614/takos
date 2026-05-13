@@ -93,7 +93,7 @@ const requiredDocs = [
 const requiredTextFiles = [
   {
     path: 'deno.json',
-    expected: ['"validate:release-promotion"'],
+    expected: ['"validate:release-promotion"', '"release-manifest:check-clean"'],
   },
   {
     path: 'scripts/release-gate.ts',
@@ -107,6 +107,7 @@ const requiredTextFiles = [
       'officialImages',
       'submodules',
       'collectSubmodulePointers',
+      '--require-clean-git',
       '--require-image-digests',
       'digestRef',
       'provenance',
