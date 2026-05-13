@@ -13,17 +13,18 @@
    (`composite.cf-control-aws-tenant@v1`) や AWS 単独 profile
    (`profiles/aws.example.json`) で使う。
 
-::: warning current contract section 1 (Helm overlay) は ECS / Fargate への
-Takosumi kernel direct deploy、DynamoDB を control-plane storage として 使う
-matrix、Terraform / CDK overlay を含みません。 section 2 (provider plugin) は
-6 provider の materialization 契約までです。 :::
+::: tip 対象範囲
+section 1 (Helm overlay) は ECS / Fargate への kernel 直接 deploy、DynamoDB を
+control-plane storage として使う構成、Terraform / CDK overlay を扱いません。
+section 2 (provider plugin) は 6 provider の materialization までを扱います。
+:::
 
 Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
 target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos product distribution artifact の正本は `takos/deploy/` にあり、
+Takos product distribution artifact は `takos/deploy/` にあり、
 `takos-private/distribution.yml` は private operator が target を選ぶ instance
 config です。AWS EKS を kernel host に選ぶには:
 

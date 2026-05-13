@@ -20,13 +20,13 @@ Takos に接続します。
 - trusted edge / internal service secret は public internet へ露出していない
 
 `takos/` shell から本番・staging deploy を直接進めません。deploy 設定と secret
-操作は `takos-private/` を正本にしてください。
+操作は `takos-private/` で管理してください。
 
-## Env table (current model)
+## Env テーブル
 
 operator が bootstrap 時に確認する env は次の通りです。Takos 自身は OAuth
-provider を立ち上げず、Takosumi Accounts に登録した OIDC client の情報を
-注入するだけで OIDC consumer として動きます。
+provider を持たず、Takosumi Accounts に登録した OIDC client の情報を注入する
+だけで OIDC consumer として動きます。
 
 | key                     | secret  | scope             | 用途                                                                                           |
 | ----------------------- | ------- | ----------------- | ---------------------------------------------------------------------------------------------- |
@@ -73,8 +73,7 @@ Web 画面で username を決めて `continue` します。完了後、Takos Web
 ## 3. Takosumi Accounts bearer を用意する
 
 automation や API smoke に使う long-lived credential は Takosumi Accounts
-で発行します。Takos app の `/api/me/personal-access-tokens` は retired で、
-token secret / hash / revocation registry を Takos app には保存しません。
+で発行します。
 
 1. Takosumi Accounts の account settings を開く
 2. Personal Access Tokens を開く
@@ -125,14 +124,14 @@ end user 向けの OIDC issuer は Takosumi Accounts に置きます。fresh ope
 3. Takos runtime に env として注入する。具体的な secret store / runtime の
    wiring (Cloudflare Workers profile の `wrangler.toml` `[vars]` /
    `wrangler secret put` 等) は **bootstrap runbook の scope 外** であり、
-   `takos-private/` の deploy pipeline と secret 管理を正本にしてください
+   `takos-private/` の deploy pipeline と secret 管理を参照してください
 4. `<TENANT_HOST>/auth/oidc/login` にアクセスして Takosumi Accounts へ redirect
    されること、callback で session が作られることを確認する
 
 ## CLI Boundary
 
 Takos bootstrap の primary path は Web UI です。Takos product CLI を fresh
-operator の正本導線として増やしません。
+operator の主要導線として増やしません。
 
 application manifest / workflow / git bridge は `takosumi-git`、kernel の
 explicit manifest apply は `takosumi` が扱います。Takos product は Web UI と

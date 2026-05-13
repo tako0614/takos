@@ -3,12 +3,11 @@
 > このページでわかること: Takos を Cloudflare Workers / Containers でホストする構成と設定。
 
 このページは **Takos product / API gateway を Cloudflare Workers
-にホストする方法**を説明します。takos オペレーター向けです。Cloudflare Workers /
-Containers / D1 / R2 / KV / Queues を組み合わせた構成は **tracked reference
-Workers backend** で、backend-neutral public spec の参照実装です。PaaS Core の
-canonical provider ではありません。本ページは Cloudflare 関連詳細の canonical
-hosting guide で、`architecture/` 章では同じ詳細を collapsible
-節に降格しています。
+にホストする方法**を説明します。Takos オペレーター向けです。Cloudflare Workers /
+Containers / D1 / R2 / KV / Queues を組み合わせた構成は backend-neutral な
+public spec の参照実装であり、PaaS Core の標準プロバイダではありません。
+Cloudflare に関する詳細はこのページで扱い、`architecture/` 章では
+collapsible 節に簡略版を置きます。
 
 Takos product から Takosumi 上に app を install する方法は [Deploy](/deploy/)
 を参照してください。
@@ -21,7 +20,7 @@ Takos product から Takosumi 上に app を install する方法は [Deploy](/d
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos product distribution artifact の正本は `takos/deploy/` にあり、
+Takos product distribution artifact は `takos/deploy/` にあり、
 `takos-private/distribution.yml` は private operator の instance config
 です。このページの target を選ぶには `kernel_host.target` を `cloudflare`
 に設定するだけです:
@@ -404,7 +403,7 @@ opt-in を渡しても fail-closed のままです)。 :::
 
 audit_events table の hash chain は app 層で計算されますが、DBA が直接 table
 を改竄できる脅威モデルでは、**off-DB の immutable replication sink** が 独立した
-tamper evidence の正本となります。Takosumi は production / staging boot で
+tamper evidence の独立した記録先となります。Takosumi は production / staging boot で
 `TAKOS_AUDIT_REPLICATION_KIND` を要求します:
 
 - `TAKOS_AUDIT_REPLICATION_KIND=s3` ― S3 versioning + Object Lock (COMPLIANCE /
@@ -452,7 +451,9 @@ deno run --allow-read --allow-write --allow-env \
 ::: warning 鍵の取り扱い `.secrets/<env>/` は `.gitignore` で git から除外
 されています。生成した PEM / 32 byte secret を絶対に commit しないでください。
 production の `PLATFORM_PRIVATE_KEY` を rotate する場合は事前に
-`PLATFORM_PUBLIC_KEY` を併記運用する移行手順が必要です。 :::
+rotation runbook に対象 runtime、token TTL、rollback point、verification
+command を記録してください。current runtime が参照しない公開鍵 secret や
+互換目的の追加 secret は作成しないでください。 :::
 
 ### Secrets の設定
 
@@ -899,7 +900,7 @@ takosumi-git install https://github.com/acme/my-app --ref v1.2.3
 takos
 自体を別のクラウドで動かす場合は、オペレーターがそのクラウド用のインフラを構築して
 takos の設定を変更する。詳しくは [環境ごとの差異](/hosting/differences) と
-[Not A Current Contract](/hosting/differences#not-a-current-contract) を参照。
+[本ドキュメントの範囲外](/hosting/differences#本ドキュメントの範囲外) を参照。
 
 ## multi-cloud に拡張する
 
@@ -925,9 +926,9 @@ profile 設定、runtime-agent placement は [Multi-cloud](/hosting/multi-cloud)
 
 - [Deploy](/deploy/) --- install / direct deploy の整理
 - [OIDC Consumer](/apps/oidc-consumer) --- Takos が要求する OIDC env / route
-  の正本
+  の詳細
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-  --- OIDC issuer / client 発行の正本
+  --- OIDC issuer / client 発行の詳細
 - [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [Multi-cloud](/hosting/multi-cloud) --- 4 cloud 横断 runbook
 - [AWS](/hosting/aws) --- AWS にデプロイする場合

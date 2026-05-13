@@ -8,20 +8,9 @@ Takos には 3 つの始め方があります:
 - **Install from Git** — アプリ開発者向け。Git URL からアプリをインストール
 - **Self-host** — オペレーター向け。自分のサーバーで Takos を運用
 
-::: info このページで依存してよい範囲 / してはいけない範囲
-
-- 依存してよい: 3 path の name (`Use Takos` / `Install from Git` / `Self-host`)
-  と target audience の対応、operator-selected Accounts URL (例:
-  `/start?takos_url=...`) と install UI URL (managed example:
-  `takosumi.cloud/install?...`) の形、`ref` は tag / commit に pin
-  する規律、ボタン HTML の正本形。
-- 依存してはいけない: 各 path の internal binding default 値、 shared-cell 上の
-  cell 配置、self-host 先の OIDC issuer の選定基準。 これらは
-  [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
-  と
-  [Installer Pipeline](https://github.com/tako0614/takosumi-git/blob/master/docs/architecture/installer-pipeline.md)、及び利用者の
-  運用方針に従う。
-
+::: tip 関連ページ
+Runtime mode の詳細は [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)、
+インストールの内部処理は [Installer Pipeline](https://github.com/tako0614/takosumi-git/blob/master/docs/architecture/installer-pipeline.md) を参照してください。
 :::
 
 ## 1. 3 path 一覧
@@ -61,16 +50,11 @@ chat 開始
 
 裏側では:
 
-- Takos product は product-managed shared-cell runtime に接続される
-- Accounts は必要に応じて product-managed launch installation row を作る。
-  `source.gitUrl: takos-product://managed/takos` は operator-managed prebuilt
-  Takos runtime の source pin であり、通常の Git URL InstallableApp ではなく
-  `takosumi-git install` apply も通らない
-- bundled apps の AppInstallation が必要に応じて `mode: shared-cell` で作られる
-- OIDC client binding が `operator.identity.oidc` namespace export で解決される
-  Takosumi Accounts に作成される
-- per-installation data namespace が確保される
-- billing は Takosumi Account に紐づく Takos plan として line item 化
+- Takos 本体は operator が運用する共有 runtime に接続されます
+- Takosumi Accounts に launch installation 行が作られ、OIDC client が払い出されます
+- バンドルアプリの AppInstallation が `mode: shared-cell` で作成されます
+- インストールごとに専用のデータ領域が確保されます
+- 課金は Takosumi Account の Takos プランに line item として記録されます
 
 ### 2.2 ボタン例
 

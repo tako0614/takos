@@ -73,7 +73,7 @@ item として集計される。 詳しくは [課金](/platform/billing) と
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   — Space の親 account
 - [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md)
-  — Space に install される AppInstallation の正本
+  — Space に install される AppInstallation の管理台帳
 - [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
   — Takos が Space に install される形
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)

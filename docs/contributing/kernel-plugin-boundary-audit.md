@@ -2,45 +2,31 @@
 
 > このページでわかること: Kernel と Plugin の境界に関するドキュメント整合性チェックリスト。
 
-This document is the working checklist for keeping Takosumi docs aligned with
-the kernel-only implementation model.
+Takosumi のドキュメントを kernel-only 実装モデルと整合させるためのチェックリストです。
 
 ## Source of truth
 
-- `../takosumi` owns the kernel: control-plane semantics, domains, API
-  contracts, signed internal RPC, plan/apply, activation truth, resources,
-  routing projections, publications, events, audit, and security policy.
-- `../takosumi/packages/contract/src/plugin.ts` owns the public kernel plugin
-  ABI.
-- `../takosumi/packages/kernel/src/plugins/` owns the registry, env module
-  loader, and no-I/O reference plugin.
-- Self-host, cloud provider, database, queue, object-storage, KMS, secret
-  backend, and runtime host implementations are plugin responsibilities.
+- `../takosumi` が kernel を所有: コントロールプレーンのセマンティクス、ドメイン、API contract、署名付き internal RPC、plan / apply、activation truth、resource、routing projection、publication、event、audit、security policy。
+- `../takosumi/packages/contract/src/plugin.ts` が公開 kernel plugin ABI を所有。
+- `../takosumi/packages/kernel/src/plugins/` が registry・env module loader・no-I/O reference plugin を所有。
+- self-host、cloud provider、database、queue、object-storage、KMS、secret backend、runtime host の実装は plugin 側の責務。
 
-## Current allowed in-kernel implementations
+## kernel 内に置いてよい実装
 
-- In-memory/noop/reference adapters for conformance and local tests.
-- Legacy local adapters and dry-run smoke scripts, as long as docs describe them
-  as adapter/plugin conformance paths rather than kernel production wiring.
-- Operator-only runtime config selectors that can choose `plugin` and fail fast
-  when a selected plugin ID is not registered.
+- conformance / ローカルテスト用の in-memory / noop / reference adapter。
+- ローカル adapter と dry-run smoke スクリプト。ただし docs では「adapter / plugin conformance パス」として扱い、kernel 本番配線として書かない。
+- operator 専用の runtime config セレクタ。`plugin` を選択でき、未登録 plugin ID なら fail fast する。
 
-## Drift patterns to reject
+## NG パターン
 
-- Describing Docker, Cloudflare, Postgres, Redis, S3, KMS, or secret backends as
-  required kernel completion work.
-- Treating self-host or cloud deploy proofs as part of the kernel release gate.
-- Adding provider/backend/plugin selection to the public manifest or public
-  deploy API.
-- Reintroducing `takos-deploy` or `takos-runtime` as default top-level service
-  boundaries instead of PaaS internal domains.
+- Docker、Cloudflare、Postgres、Redis、S3、KMS、secret backend を「kernel の完了に必要な作業」として記述すること。
+- self-host / cloud deploy proof を kernel release gate に含めること。
+- provider / backend / plugin の選択を public manifest や public deploy API に露出させること。
+- `takos-deploy` / `takos-runtime` を PaaS internal domain ではなく default の top-level service 境界として書くこと。
 
-## 2026-04-29 audit result
+## 2026-04-29 audit 結果
 
-- Updated the architecture milestone doc so runtime/routing completion is a
-  kernel port/projection slice, not a local Docker milestone.
-- Reclassified real backend and self-host docs as plugin-backed operator proofs.
-- Added validation checks for README/current-state/system-plan plugin boundary
-  wording.
-- Current kernel validation baseline: `cd ../takosumi && deno task test` passes with
-  `240 passed | 0 failed`.
+- runtime / routing 完了はローカル Docker のマイルストーンではなく、kernel の port / projection slice として記述するよう更新。
+- 実バックエンドと self-host docs は plugin-backed operator proof として再分類。
+- README / current-state / system-plan の plugin boundary 表現に validation チェックを追加。
+- kernel 検証ベースライン: `cd ../takosumi && deno task test` が `240 passed | 0 failed` で通過。

@@ -5,51 +5,44 @@
 Takos の実装は `app/` (Web/API)、`git/` (Git ホスティング)、`agent/` (エージェント) の
 3 サブモジュールに分かれています。ローカル環境ではこれに加えて Takosumi 系のサービスも起動します。
 
-## Local Services
+## ローカルサービス一覧
 
-上 3 つが Takos product services、残りの Takosumi 系 service は substrate 側です。
+上 3 つが Takos product のサービス、残りの Takosumi 系は substrate 側です。
 
-| Service                   |    Port | Owner                | Responsibility                                                                                                                                                                                                                                    |
-| ------------------------- | ------: | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `takos-app`               |  `8787` | `app/`               | OIDC consumer、app-local profile、public/browser/CLI API gateway                                                                                                                                                                                  |
-| `takosumi kernel`         |  `8788` | `../takosumi/`       | compute substrate / manifest deploy engine。compiled Shape manifest apply、routing projection、resource provisioning、provider reconciliation を担当。install pipeline / account / billing は別 sibling (takosumi-git / Takosumi Accounts) に分離 |
-| `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | Operator account plane reference implementation。OIDC issuer / identity broker / BillingPort / AppInstallation ledger                                                                                                                            |
-| `takos-agent`             |  `8789` | `agent/`             | agent execution service。Takos product の agent workload を実行し、必要な runtime coordination だけ kernel control ports と接続する                                                                                                               |
-| `takos-git`               |  `8790` | `git/`               | Git hosting、Smart HTTP、refs、objects、source resolution                                                                                                                                                                                         |
-| `postgres`                | `15432` | shell compose        | local persistence for app、Takosumi、Git                                                                                                                                                                                                          |
-| `redis`                   | `16379` | shell compose        | local queue/cache backing for Takosumi                                                                                                                                                                                                            |
+| サービス                  |  ポート | 配置先               | 役割                                                                                            |
+| ------------------------- | ------: | -------------------- | ----------------------------------------------------------------------------------------------- |
+| `takos-app`               |  `8787` | `app/`               | OIDC consumer、app-local profile、Web/CLI API ゲートウェイ                                       |
+| `takosumi kernel`         |  `8788` | `../takosumi/`       | manifest deploy エンジン。compiled Shape manifest の apply / routing / resource provisioning    |
+| `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / AppInstallation |
+| `takos-agent`             |  `8789` | `agent/`             | エージェント実行サービス                                                                          |
+| `takos-git`               |  `8790` | `git/`               | Git ホスティング、Smart HTTP、refs、objects                                                      |
+| `postgres`                | `15432` | shell compose        | app / Takosumi / Git のローカル永続化                                                            |
+| `redis`                   | `16379` | shell compose        | Takosumi の queue / cache                                                                         |
 
-## Internal Calls
+## サービス間の呼び出し
 
-- Browser and CLI traffic enters through `takos-app`.
-- `takos-app` calls `takosumi` and `takos-git` with the canonical
-  `takosumi-contract/internal-rpc` envelope, actor context, caller/audience, and
-  route capabilities.
-- Git Smart HTTP is public at `takos-app`; `takos-git` only accepts signed
-  internal Smart HTTP requests.
-- `takos-agent` executes agent workloads for Takos product features. It may use
-  kernel-owned runtime control ports only for deployed compute coordination and
-  can read Git internal endpoints when needed.
-- `takos-app` may store app-owned data, but it does not own account / billing /
-  OIDC issuer / AppInstallation semantics.
-- Local service discovery falls back to `TAKOSUMI_INTERNAL_URL`,
-  `TAKOS_GIT_INTERNAL_URL`, and `TAKOS_AGENT_INTERNAL_URL`.
-- Internal services share `TAKOS_INTERNAL_SERVICE_SECRET` only in local compose;
-  the app trusted-proxy edge also gets `TAKOS_INTERNAL_API_SECRET`, and Takosumi
-  receives the same value as `TAKOSUMI_INTERNAL_API_SECRET`.
+- ブラウザと CLI のトラフィックは `takos-app` から入ります
+- `takos-app` は `takosumi` / `takos-git` を signed internal RPC 経由で呼び出します
+- Git Smart HTTP の公開エンドポイントは `takos-app`。`takos-git` は signed な
+  internal リクエストのみを受け付けます
+- `takos-agent` は Takos の agent workload を実行し、必要なときに kernel の
+  runtime control ports と通信します
+- `takos-app` は app 固有のデータを保存しますが、account / 課金 / OIDC issuer /
+  AppInstallation のオーナーシップは持ちません
+- ローカルでのサービスディスカバリは `TAKOSUMI_INTERNAL_URL`、
+  `TAKOS_GIT_INTERNAL_URL`、`TAKOS_AGENT_INTERNAL_URL` を fallback として使います
+- `TAKOS_INTERNAL_SERVICE_SECRET` はローカル compose だけで共有されます。app の
+  trusted-proxy edge は `TAKOS_INTERNAL_API_SECRET`、Takosumi は
+  `TAKOSUMI_INTERNAL_API_SECRET` として同じ値を受け取ります
 
-## Boundary Rules
+## 責務の境界
 
-- Deploy / runtime lifecycle ownership is split across three sibling products:
-  - **Install pipeline / `.takosumi/app.yml` parser / workflow runner / manifest
-    compile** → `takosumi-git` (sibling product, repo-level installer)
-  - **Compiled manifest apply / plan / destroy / routing projection / resource
-    provisioning / provider reconciliation** → `takosumi kernel` (sibling at
-    `../takosumi/`)
-  - **Account / billing / OIDC issuer / AppInstallation ledger** → Takosumi
-    Accounts (`takosumi-cloud` account plane)
-- Shell compose must not introduce standalone deploy or runtime services.
-- `takos-private` owns production and staging deploy configuration; this shell
-  only models local composition.
-- Shared behavior must remain service-local unless it becomes a named domain
-  library with a clear owner.
+- デプロイと runtime lifecycle のオーナーシップは 3 つの sibling product に分かれます:
+  - **インストールパイプライン / `.takosumi/app.yml` parse / workflow / manifest compile** → `takosumi-git`
+  - **compiled manifest の apply / plan / destroy / routing / resource provisioning** → `takosumi kernel`
+  - **account / 課金 / OIDC issuer / AppInstallation 台帳** → Takosumi Accounts
+- shell compose にスタンドアロンの deploy/runtime サービスを足さないでください
+- 本番・staging の deploy 設定は `takos-private` が管理します。この shell は
+  ローカル合成のみを扱います
+- 共有が必要な処理は、明確なオーナーを持つドメインライブラリにする場合を除き、
+  サービスローカルに留めてください

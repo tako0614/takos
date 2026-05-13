@@ -2,57 +2,50 @@
 
 > このページでわかること: セルフホスト構成の E2E smoke テスト計画。
 
-This plan covers the single-node self-host smoke for `compose.local.yml`. It is
-an operator/plugin proof, not a kernel release criterion. The fast check is
-dependency-free and does not start Docker; the manual smoke below is the real
-Docker/Compose path for a host distribution.
+`compose.local.yml` の single-node self-host smoke を扱います。operator / plugin proof であり、kernel release 基準ではありません。fast チェックは依存ゼロで Docker を起動せず、下記の manual smoke が host distribution 向けの実 Docker / Compose パスです。
 
-## Static checklist
+## 静的チェックリスト
 
-Run from `takos`:
+`takos` で実行します。
 
 ```sh
 deno run --no-config --allow-read scripts/self-host-e2e-check.ts
 ```
 
-The script validates that `compose.local.yml` contains the required services,
-local env-file wiring, externally mapped ports, service URL env wiring,
-smoke-safe dependency ordering, and named volumes needed by a single-node
-self-host smoke.
+`compose.local.yml` が、必要なサービス・local env-file 配線・外部 port マッピング・service URL 環境変数・smoke で安全な依存順序・single-node self-host smoke に必要な named volume を含むかを検証します。
 
-## Manual Docker plugin smoke
+## 手動 Docker plugin smoke
 
-Do not run these commands from automation unless explicitly requested. Run them
-manually from `takos` on a host with Docker Compose available.
+明示的に要求された場合以外は自動実行しないでください。Docker Compose が使えるホストの `takos` ディレクトリで手動実行します。
 
-1. Prepare an env file and replace placeholder secrets/keys as needed:
+1. env ファイルを準備し、placeholder の秘密情報や key を必要に応じて差し替えます。
 
    ```sh
    cp .env.self-host .env.local
    $EDITOR .env.local
    ```
 
-2. Re-run the static checklist against the compose file:
+2. compose ファイルに対して静的チェックを再実行します。
 
    ```sh
    deno run --no-config --allow-read scripts/self-host-e2e-check.ts
    ```
 
-3. Ask Compose to render the configuration before starting containers:
+3. コンテナ起動前に Compose で設定をレンダリングします。
 
    ```sh
    TAKOS_LOCAL_ENV_FILE=.env.local \
      docker compose --env-file .env.local -f compose.local.yml config
    ```
 
-4. Build and start the single-node stack:
+4. single-node スタックをビルドして起動します。
 
    ```sh
    TAKOS_LOCAL_ENV_FILE=.env.local \
      docker compose --env-file .env.local -f compose.local.yml up --build -d
    ```
 
-5. Watch service health and logs until the stack is healthy:
+5. ヘルスとログを監視し、スタックが正常になるまで待ちます。
 
    ```sh
    TAKOS_LOCAL_ENV_FILE=.env.local \
@@ -63,14 +56,14 @@ manually from `takos` on a host with Docker Compose available.
        takos-app takosumi takos-git takos-agent
    ```
 
-6. Run HTTP health checks against the host-mapped ports:
+6. host にマッピングされた port に対して HTTP ヘルスチェックを実行します。
 
    ```sh
    TAKOS_LOCAL_ENV_FILE=.env.local \
      deno run --allow-read --allow-env --allow-net scripts/local-smoke.mjs
    ```
 
-7. Optional direct endpoint checks:
+7. 必要に応じてエンドポイントに直接 curl します。
 
    ```sh
    curl -fsS http://127.0.0.1:8787/health
@@ -81,7 +74,7 @@ manually from `takos` on a host with Docker Compose available.
    curl -fsS http://127.0.0.1:8082/health
    ```
 
-8. Tear down when done. Add `-v` only if you want to delete smoke data:
+8. 終わったら停止します。smoke データを削除したい場合のみ `-v` を付けます。
 
    ```sh
    TAKOS_LOCAL_ENV_FILE=.env.local \
@@ -92,12 +85,11 @@ manually from `takos` on a host with Docker Compose available.
      docker compose --env-file .env.local -f compose.local.yml down -v
    ```
 
-## Expected services
+## 想定サービス
 
 - `takos-app`
 - `takosumi`
 - `takos-git`
 - `takos-agent`
 
-Service boundaries are asserted through explicit service names and internal URL
-environment variables.
+サービス境界は、明示的なサービス名と internal URL 環境変数で表現します。

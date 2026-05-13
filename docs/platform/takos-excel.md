@@ -83,32 +83,33 @@ bindings:
       - email
 ```
 
-bundled app manifest / workflow は UI と `/mcp` を同じ worker に含めます。MCP
-registry entry は bearer token ref を持ち、installer が worker-scoped secret env
-を用意します。実装は `MCP_AUTH_TOKEN` が未設定、かつ
-`MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed します。
-Shape manifest の route surface は `/`、`/api`、`/mcp`、`/files/:id` を `web`
-resource に向けます。`/api` は app session API と OIDC callback を含みます。
-installer は generated secret を `APP_SESSION_SECRET` として materialize し、
-`identity.oidc@v1` AppBinding の client/issuer env を
-`OIDC_CLIENT_ID`、`OIDC_CLIENT_SECRET`、`OIDC_ISSUER_URL`、`OIDC_REDIRECT_URI`
-として inject します。
+UI と `/mcp` は同じ worker にまとめて配置します。MCP registry には bearer
+token ref が付き、installer が worker scope の secret env を用意します。
+`MCP_AUTH_TOKEN` が未設定で `MCP_ALLOW_UNAUTHENTICATED=true` も指定されていない
+場合は fail-closed (アクセス拒否) になります。
+
+Shape manifest の route は `/`、`/api`、`/mcp`、`/files/:id` を `web` resource
+に向けます (`/api` には app session API と OIDC callback が含まれます)。
+installer は次の env を runtime に渡します:
+
+- `APP_SESSION_SECRET` — 自動生成される署名鍵
+- `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_ISSUER_URL` / `OIDC_REDIRECT_URI`
+  — `identity.oidc@v1` AppBinding から渡される OIDC client 情報
 
 ## Storage との連携
 
-takos-excel は app-layer storage grant から Takos Storage API の endpoint /
-credential を受け取り、Storage API を呼び出して spreadsheet file を読み書き
-します。managed Takos installation では `TAKOS_STORAGE_API_URL` /
-`TAKOS_STORAGE_ACCESS_TOKEN` が materialize されます。
+takos-excel は app-layer storage grant から Takos Storage API の endpoint と
+credential を受け取り、Storage API を呼び出してスプレッドシートファイルを
+読み書きします。managed Takos installation では `TAKOS_STORAGE_API_URL` と
+`TAKOS_STORAGE_ACCESS_TOKEN` が自動的に渡されます。
 
-Storage UI から spreadsheet file を開く場合は file handler metadata の
-`/files/:id` route を使います。新規作成または保存する Takos spreadsheet file は
-`.takossheet` extension と `application/vnd.takos.excel+json` MIME type
-を使う。既存 file を読む場合もこの MIME type を canonical contract として扱う。
+Storage UI からスプレッドシートファイルを開くときは、file handler metadata
+の `/files/:id` route を使います。新規作成・保存するファイルは `.takossheet`
+拡張子と `application/vnd.takos.excel+json` MIME type を使います。
 
-API / UI / MCP request は `space_id` または `spaceId` query parameter を優先し、
-指定がない場合は optional env `TAKOS_SPACE_ID` を default Storage space として
-使う。どちらもない request は `space_id is required` として失敗する。
+API / UI / MCP リクエストは `space_id` または `spaceId` query parameter を
+優先します。指定がなければ env `TAKOS_SPACE_ID` をデフォルト Storage space
+として使い、どちらもない場合は `space_id is required` エラーになります。
 
 ## MCP tools
 
@@ -151,11 +152,11 @@ API / UI / MCP request は `space_id` または `spaceId` query parameter を優
 | profile     | ユーザープロフィール取得               |
 | email       | メールアドレス取得                     |
 
-## Resources
+## リソース
 
-takos-excel の spreadsheet storage は kernel の Storage に委譲する。app 自体の
-generated secret resource として `excel-session-secret` を持ち、
-`APP_SESSION_SECRET` に bind して cookie/session signing に使う。
+スプレッドシートのストレージは kernel Storage に委譲します。アプリ自身が持つ
+リソースは `excel-session-secret` 1 つだけで、`APP_SESSION_SECRET` に bind
+して cookie / session 署名に使います。
 
 ## 参照
 

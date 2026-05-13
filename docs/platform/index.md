@@ -23,7 +23,7 @@
 
 ## 関連
 
-| 内容                                                    | 正本                                                                                             |
+| 内容                                                    | 詳細ドキュメント                                                                                 |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Installable App Model / AppInstallation / runtime modes | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
 | kernel deploy / Shape resources                         | [takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)                           |

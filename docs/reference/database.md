@@ -2,27 +2,27 @@
 
 > このページでわかること: どのプロダクトがどのデータを所有しているか。
 
-## Ownership
+## 所有関係
 
-| data area | owner | notes |
-| --- | --- | --- |
-| account identity | Takosumi Accounts | user, organization, OIDC subject, account profile |
-| billing | Takosumi Accounts | BillingPort / Stripe customer mapping |
-| AppInstallation ledger | Takosumi Accounts | source commit, app manifest digest, compiled manifest digest, grants, bindings |
-| deployment records | Takosumi kernel | Deployment, GroupHead, provider observations, operation journal |
-| Git repositories | Takos Git hosting | repository metadata, refs, object storage references |
-| agent runs | Takos agent / Takos app | product agent workflow state |
-| app-local profile | Takos app | Takos UI profile and product-local preferences |
-| bundled app data | each bundled app | docs / slide / excel / computer / yurucommu own their data |
+| データ領域                  | 所有者                | 備考                                                                                  |
+| --------------------------- | --------------------- | ------------------------------------------------------------------------------------- |
+| account identity            | Takosumi Accounts     | user / organization / OIDC subject / account profile                                  |
+| billing                     | Takosumi Accounts     | BillingPort / Stripe customer マッピング                                              |
+| AppInstallation ledger      | Takosumi Accounts     | source commit / app manifest digest / compiled manifest digest / grants / bindings    |
+| deployment 記録             | Takosumi kernel       | Deployment / GroupHead / provider observation / operation journal                     |
+| Git リポジトリ              | Takos Git hosting     | リポジトリ metadata / refs / object storage 参照                                      |
+| agent run                   | Takos agent / Takos app | プロダクト agent ワークフロー状態                                                     |
+| app-local プロファイル      | Takos app             | Takos UI プロファイルとプロダクトローカル設定                                         |
+| bundled app データ          | 各 bundled app        | docs / slide / excel / computer / yurucommu が自身のデータを所有                      |
 
-## Rules
+## ルール
 
-- Takos app does not own account, billing, or AppInstallation ledger tables.
-- Takosumi kernel does not own product user profile or billing tables.
-- `takos-private/` connects through published packages, images, APIs, and manifests.
-- Cross-service wire shapes come from the owning service contract package.
+- Takos app は account / billing / AppInstallation ledger テーブルを所有しません。
+- Takosumi kernel はプロダクトユーザーのプロファイルや billing テーブルを所有しません。
+- `takos-private/` は publish 済みパッケージ・image・API・manifest 経由で接続します。
+- サービス間の wire shape は所有サービスの contract パッケージから取得します。
 
-## References
+## 参考
 
 - [API Reference](/reference/api)
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)

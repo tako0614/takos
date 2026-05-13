@@ -15,11 +15,10 @@ Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/)
 です。本番環境にそのまま流用しないでください。本番運用では下記のすべてを満たす必要があります:
 
 - `.env.local` ではなく `.env.production` を作成し、独自の値で全項目を埋める
-- `S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` / `JWT_PUBLIC_KEY` /
-  `ENCRYPTION_KEY` / `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` /
-  `EXECUTOR_PROXY_SECRET` / `TAKOS_INTERNAL_API_SECRET` を含む secret を
-  **絶対に `takos-dev-secret` のままにしない**。32 byte
-  以上のランダム値を生成して差し替える
+- `S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` / `ENCRYPTION_KEY` /
+  `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` / `EXECUTOR_PROXY_SECRET` /
+  `TAKOS_INTERNAL_API_SECRET` を含む secret を **絶対に `takos-dev-secret`
+  のままにしない**。32 byte 以上のランダム値を生成して差し替える
 - `compose.local.yml` ではなく `takos-private/compose.server.yml`
   を使う。private server stack を起動する場合は
   `takos-private/.env.server.example` を元に `takos-private/.env.server`
@@ -37,15 +36,14 @@ Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/)
 cloud-specific ページを参照してください。 :::
 
 セルフホストは検証専用ではありません。PostgreSQL / Redis / S3-compatible object
-storage / TLS / secret management を production-grade backing services
-に置き換えた構成は production packaging として扱えます。current contract
-に含まれない項目は
-[Not A Current Contract](/hosting/differences#not-a-current-contract)
+storage / TLS / secret management を production-grade な backing service に
+置き換えた構成は production packaging として扱えます。本ドキュメントの範囲外
+の項目は [範囲外](/hosting/differences#本ドキュメントの範囲外)
 を参照してください。
 
 ## 統合 distribution からこの target を選ぶ
 
-Takos product distribution artifact の正本は `takos/deploy/` にあり、
+Takos product distribution artifact は `takos/deploy/` にあり、
 `takos-private/distribution.yml` は private operator が target を選ぶ instance
 config です。Self-hosted (docker-compose) を kernel host に選ぶには:
 
@@ -117,9 +115,9 @@ cp .env.local.example .env.local
 
 private server stack を使う場合は `takos-private/.env.server.example` を元に
 `takos-private/.env.server` を作成し、`PLATFORM_PRIVATE_KEY` /
-`PLATFORM_PUBLIC_KEY` / `JWT_PUBLIC_KEY` / `ENCRYPTION_KEY` /
-`S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` などのすべての secret を
-`takos-dev-secret` のようなプレースホルダから差し替えてください:
+`PLATFORM_PUBLIC_KEY` / `ENCRYPTION_KEY` / `S3_SECRET_ACCESS_KEY` /
+`MINIO_ROOT_PASSWORD` などのすべての secret を `takos-dev-secret`
+のようなプレースホルダから差し替えてください:
 
 ```bash
 cd takos-private
@@ -214,7 +212,6 @@ private stack の `takos-private/compose.server.yml` は MinIO を host `9000` /
 | ------------------------------- | -------------------------------------------------------------------------- |
 | `PLATFORM_PRIVATE_KEY`          | runtime signing 用の PKCS#8 RSA 秘密鍵 PEM (`-----BEGIN PRIVATE KEY-----`) |
 | `PLATFORM_PUBLIC_KEY`           | runtime signing 用の RSA 公開鍵                                            |
-| `JWT_PUBLIC_KEY`                | JWT 検証用公開鍵                                                           |
 | `ENCRYPTION_KEY`                | データ暗号化キー（Base64 エンコード済み 32 バイト）                        |
 | `TAKOS_SECRET_STORE_PASSPHRASE` | secret store at-rest 暗号化 passphrase (production / staging で **必須**)  |
 | `OIDC_ISSUER_URL`               | Takosumi Accounts issuer URL                                               |

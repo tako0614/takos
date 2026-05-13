@@ -2,24 +2,16 @@
 
 > このページでわかること: Takosumi kernel の公開 API エンドポイント一覧。
 
-`../takosumi/packages/kernel/src/api/openapi.ts` owns a dependency-free
-OpenAPI-ish JSON snapshot for the Takosumi mounted route surface. The current
-kernel public contract is `POST /v1/deployments`; older `/api/public/v1/*` paths
-are migration compatibility routing and should not be described as the current
-kernel public API. The generator is intentionally a plain TypeScript object
-generator so API documentation can be checked without adding a docs/runtime
-dependency to the kernel service.
+`../takosumi/packages/kernel/src/api/openapi.ts` が Takosumi の mounted route を表す依存ゼロの OpenAPI 風 JSON snapshot を保持します。kernel の公開 contract は `POST /v1/deployments`。`/api/public/v1/*` の Takos プロダクト gateway route は `takos/app` 側で管理しており、kernel 公開 API としては扱いません。
 
-Covered route groups:
+snapshot generator は plain TypeScript object として実装してあり、kernel service に docs / runtime 依存を増やさずに API documentation を検証できます。
 
-- process: `GET /health`, `GET /capabilities`
+カバーする route グループ。
+
+- プロセス: `GET /health`, `GET /capabilities`
 - kernel deploy API: `POST /v1/deployments`
-- migration compatibility documentation aliases: `/api/spaces`, `/api/groups`,
-  `/api/deploy/plans`, `/api/deploy/applies`
-- current mounted public route constants are preserved under
-  `x-takos-mounted-path` / `x-takos-public-mounted-paths`
-- internal service API: `/internal/spaces`, `/internal/groups`,
-  `/internal/deploy/plans`, `/internal/deploy/applies`
+- Takos に mount された snapshot 用 documentation alias: `/api/spaces`, `/api/groups`, `/api/deploy/plans`, `/api/deploy/applies`
+- mount されている public route 定数は `x-takos-mounted-path` / `x-takos-public-mounted-paths` で保持
+- internal service API: `/internal/spaces`, `/internal/groups`, `/internal/deploy/plans`, `/internal/deploy/applies`
 
-The generator does not mount routes and must not be treated as router source of
-truth. Route handlers remain in `public_routes.ts` and `internal_routes.ts`.
+このスナップショット生成器は route を mount しないため、router の source of truth として扱ってはいけません。route handler は `public_routes.ts` と `internal_routes.ts` にあります。

@@ -2,26 +2,20 @@
 
 > このページでわかること: プラグイン基盤の readiness チェック手順。
 
-`scripts/real-backend-readiness.ts` is a no-start readiness gate for deciding
-which plugin-backed infrastructure smoke checks can run from `takos`. These
-checks are operator proofs for plugin/local adapter wiring. They are not PaaS
-kernel release criteria.
+`scripts/real-backend-readiness.ts` は、`takos` から実行可能な plugin-backed infrastructure smoke を選別するための no-start readiness ゲートです。これらの smoke は plugin / local adapter 配線のオペレータ proof であり、PaaS kernel の release 基準ではありません。
 
-The script checks:
+スクリプトは次を検査します。
 
-- required command-line tools: `docker`, `docker compose`, and `git`
-- optional `psql` availability for manual Postgres inspection
-- required local files: `compose.local.yml`, `.env.local.example`, and the
-  selected env file (`TAKOS_LOCAL_ENV_FILE`, default `.env.local`)
-- non-defaulted `${VAR}` references in `compose.local.yml` are present in the
-  selected env file
-- host port availability for the local real backend stack
-- which existing smoke scripts are ready to run
+- 必須 CLI: `docker` / `docker compose` / `git`
+- 任意の `psql` (手動 Postgres 検査用)
+- 必須ローカルファイル: `compose.local.yml` / `.env.local.example` / 選択された env ファイル (`TAKOS_LOCAL_ENV_FILE`、default `.env.local`)
+- `compose.local.yml` 内の default 未指定 `${VAR}` 参照が、選択された env ファイルに存在すること
+- ローカル real backend スタック向けの host port 空き状況
+- 実行可能な既存 smoke スクリプトの一覧
 
-It intentionally does **not** start Docker, Postgres, Redis, MinIO, or any Takos
-service.
+Docker / Postgres / Redis / MinIO / Takos サービスを起動することはありません。
 
-## Run readiness
+## Readiness 実行
 
 ```sh
 cd takos
@@ -34,8 +28,7 @@ deno run \
   scripts/real-backend-readiness.ts
 ```
 
-Use another env file by setting `TAKOS_LOCAL_ENV_FILE` and adding it to
-`--allow-read`:
+別の env ファイルを使う場合は `TAKOS_LOCAL_ENV_FILE` を設定し、`--allow-read` にも追加します。
 
 ```sh
 TAKOS_LOCAL_ENV_FILE=/tmp/takos-local.env deno run \
@@ -47,30 +40,22 @@ TAKOS_LOCAL_ENV_FILE=/tmp/takos-local.env deno run \
   scripts/real-backend-readiness.ts
 ```
 
-## Interpreting results
+## 結果の解釈
 
-- `docker` and `docker compose` must be present before compose-backed plugin
-  infrastructure smokes can run.
-- `git` must be present before the opt-in git source plugin smoke can run.
-- `psql` is optional. Missing `psql` should not block the smoke suite, but it
-  limits manual database debugging.
-- Port checks are expected to be `ok` before starting the compose stack. If a
-  Takos stack is already running, those ports may be blocked; in that case the
-  readiness output will mark
-  `local health smoke against an already-running
-  stack` as runnable.
+- compose ベースの plugin infrastructure smoke を実行するには `docker` と `docker compose` が必要。
+- opt-in git source plugin smoke には `git` が必要。
+- `psql` は任意。無くても smoke suite はブロックされませんが、手動 DB デバッグが制限されます。
+- compose スタック起動前は port チェックが `ok` であることが期待されます。既に Takos スタックが動いていて port が塞がっている場合、readiness 出力は `local health smoke against an already-running stack` を実行可能として表示します。
 
-## Follow-up smoke commands
+## Follow-up smoke コマンド
 
-The readiness output prints concrete commands for the smokes it detects as
-runnable, including:
+readiness 出力は、実行可能と判定した smoke の具体的なコマンドを表示します。
 
 - compose dry-run checklist: `scripts/compose-smoke.ts`
 - opt-in compose plugin infrastructure smoke: `TAKOS_RUN_COMPOSE_SMOKE=1 ...`
-- local health smoke against an already-running stack: `scripts/local-smoke.mjs`
+- 起動中スタックに対する local health smoke: `scripts/local-smoke.mjs`
 - opt-in git source smoke: `TAKOS_RUN_GIT_SMOKE=1 ...`
 - opt-in docker provider smoke: `TAKOS_RUN_DOCKER_SMOKE=1 ...`
 - Postgres storage dry-run smoke: `scripts/postgres-storage-smoke.ts`
 
-Run readiness first, then run only the smoke commands whose prerequisites match
-the intended environment.
+readiness を先に実行し、実環境に合った前提条件を満たす smoke のみを動かしてください。

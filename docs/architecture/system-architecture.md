@@ -5,11 +5,11 @@
 Takos は Takosumi PaaS の上で動作するセルフホスト型プロダクトです。
 AI エージェントと会話してソフトウェアを作る「ソフトウェアの民主化」を目指しています。
 
-## Product Services And Substrate
+## プロダクトサービスと substrate
 
-Takos product services are `takos-app` / `takos-git` / `takos-agent`. The
-Takosumi rows below are the substrate / account-plane / installer products used
-by the local and production stack; they are not Takos product services.
+Takos product のサービスは `takos-app` / `takos-git` / `takos-agent` の 3 つです。
+表の Takosumi 系は Takos が動く substrate / account plane / installer であり、
+Takos の product service ではありません。
 
 | service           | owner path        | role                                                          |
 | ----------------- | ----------------- | ------------------------------------------------------------- |
@@ -22,16 +22,15 @@ by the local and production stack; they are not Takos product services.
 
 `takos-agent-engine` は service ではなく library です。
 
-## Ownership boundaries
+## 責務の境界
 
-- identity / OIDC issuer / billing / AppInstallation ownership は operator
-  account plane が持つ (reference implementation: Takosumi Accounts)
-- deploy / runtime lifecycle は Takosumi kernel が持つ
-- Git URL install、`.takosumi/` project convention、workflow は takosumi-git
-  が持つ
-- Takos product は UI、public API、AI agent workflow、bundled app experience
-  を持つ
-- bundled apps は product root ごとに独立管理する
+- ID / OIDC issuer / 課金 / AppInstallation のオーナーシップは operator account
+  plane が持ちます (リファレンス実装: Takosumi Accounts)
+- デプロイと runtime lifecycle は Takosumi kernel が持ちます
+- Git URL からのインストール、`.takosumi/` プロジェクト規約、workflow は
+  takosumi-git が持ちます
+- Takos product は UI / public API / AI agent / バンドルアプリ体験を持ちます
+- バンドルアプリは各 product root で独立管理されます
 
 ## Install flow
 
@@ -55,11 +54,11 @@ Takos UI / API
   -> workload resources
 ```
 
-## Product docs split
+## ドキュメントの配置
 
 - Takos product docs: `takos/docs/`
 - Takosumi kernel docs: `takosumi/docs/`
 - Takosumi Accounts docs: `takosumi-cloud/docs/`
 - takosumi-git docs: `takosumi-git/docs/`
 
-Cross-product vocabulary lives in ecosystem root `docs/`.
+プロダクト横断の用語集は ecosystem root の `docs/` にあります。

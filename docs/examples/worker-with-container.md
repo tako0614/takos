@@ -1,11 +1,11 @@
 # Worker + Container
 
 > このページでわかること: request-driven Worker と long-running container を
-> current `resources[]` manifest で組み合わせる方法。
+> 1 つのマニフェストで組み合わせる方法。
 
-旧 attached container pattern は、current manifest では `worker@v1` と
-`web-service@v1` の 2 resource として表現します。Worker が edge entrypoint
-を持ち、container は internal service として重い処理を担当します。
+`worker@v1` と `web-service@v1` の 2 resource を組み合わせます。Worker が
+edge entrypoint を持ち、container は internal service として重い処理を
+担当します。
 
 ## Deploy Manifest
 

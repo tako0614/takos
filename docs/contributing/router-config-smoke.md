@@ -2,27 +2,22 @@
 
 > このページでわかること: Router 設定の smoke テスト。
 
-`scripts/router-config-smoke.ts` is a no-external-services smoke entrypoint for
-router config rendering and adapter persistence.
+`scripts/router-config-smoke.ts` は router config レンダリングと adapter 永続化のための、外部サービス不要な smoke エントリポイントです。
 
-## Run
+## 実行
 
 ```sh
 deno run --config deno.json --allow-read --allow-write scripts/router-config-smoke.ts
 ```
 
-The script constructs a sample `RouteProjection`, applies it through both
-`InMemoryRouterConfigAdapter` and `FileRouterConfigAdapter`, writes the file
-adapter output to a temporary JSON file, verifies the rendered content matches
-between adapters and the file, prints a summary, and removes the temporary
-directory on exit.
+サンプルの `RouteProjection` を組み立て、`InMemoryRouterConfigAdapter` と `FileRouterConfigAdapter` の両方で apply し、file adapter の出力を一時 JSON ファイルへ書き込みます。adapter 間とファイルの内容一致を検証し、サマリを出力し、終了時に一時ディレクトリを削除します。
 
-## Expected output
+## 期待される出力
 
-A successful run prints:
+成功時の出力。
 
 - `Router config smoke passed.`
 - projection id
 - route count
-- memory and file adapter apply timestamps
-- temporary config path used during the smoke
+- memory / file adapter の apply timestamp
+- smoke で使用した一時 config パス

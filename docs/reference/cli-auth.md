@@ -64,6 +64,6 @@ takos endpoint show
 
 ## 次に読むページ
 
-- [CLI command reference](/reference/cli)
+- [CLI コマンドリファレンス](/reference/cli)
 - [OIDC Consumer](/apps/oidc-consumer)
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)

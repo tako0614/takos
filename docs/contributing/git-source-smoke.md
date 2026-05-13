@@ -2,33 +2,28 @@
 
 > このページでわかること: Git source アダプターの smoke テスト。
 
-Safe-by-default smoke coverage for source adapters lives in
-`scripts/git-source-smoke.ts`.
+source adapter の safe-by-default smoke は `scripts/git-source-smoke.ts` にあります。
 
-## Coverage
+## カバレッジ
 
-- Immutable manifest adapter snapshots a public manifest and verifies the
-  manifest/source digest shape.
-- Local upload adapter snapshots a temporary directory, verifies file discovery,
-  and checks the local tree digest shape.
-- Git adapter snapshots a ref without network or git execution by default.
-- Optional real git execution is gated by both:
+- immutable manifest adapter: 公開 manifest をスナップショットし、manifest / source digest の形を検証。
+- local upload adapter: 一時ディレクトリをスナップショットし、ファイル発見と local tree digest を検証。
+- git adapter: default ではネットワークも git 実行もせずに ref をスナップショット。
+- 実 git 実行は次の両方が揃ったときのみ opt-in 有効。
   - `TAKOS_RUN_GIT_SMOKE=1`
   - `TAKOS_GIT_SMOKE_REPO=<local-git-repo>`
 
-When opt-in is enabled, the smoke uses `DenoGitCommandRunner` to resolve
-`TAKOS_GIT_SMOKE_REF` (default: `HEAD`) and validates the resolved commit/tree
-object ids.
+opt-in 時は `DenoGitCommandRunner` で `TAKOS_GIT_SMOKE_REF` (default: `HEAD`) を解決し、解決された commit / tree object id を検証します。
 
-## Commands
+## コマンド
 
-Default dry-run:
+Default dry-run。
 
 ```sh
 deno run --allow-env=TAKOS_RUN_GIT_SMOKE,TAKOS_GIT_SMOKE_REPO,TAKOS_GIT_SMOKE_REF --allow-read --allow-write scripts/git-source-smoke.ts
 ```
 
-Opt-in real git run against a local checkout:
+ローカル checkout を対象にした real git 実行 (opt-in)。
 
 ```sh
 TAKOS_RUN_GIT_SMOKE=1 TAKOS_GIT_SMOKE_REPO=/path/to/repo TAKOS_GIT_SMOKE_REF=HEAD \

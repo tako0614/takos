@@ -2,14 +2,17 @@
 
 > このページでわかること: Shape リソースで公開エンドポイントを宣言する方法。
 
-- `worker@v1` uses `spec.routes: string[]`.
-- `web-service@v1` exposes a service URL and may use `spec.domains: string[]`
-  when the provider supports direct domains.
-- `custom-domain@v1` creates a DNS/TLS resource that points at another resource
-  output, usually `${ref:<web-service>.url}` or `${ref:<worker>.url}`.
+公開エンドポイントの宣言方法は Shape ごとに異なります:
 
-The normative field list is
-[Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md).
+- `worker@v1` — `spec.routes: string[]` を使います
+- `web-service@v1` — service URL を出力します。プロバイダが対応していれば
+  `spec.domains: string[]` で直接ドメインを指定できます
+- `custom-domain@v1` — 他リソースの output (通常は `${ref:<web-service>.url}` /
+  `${ref:<worker>.url}`) を指す DNS/TLS リソースを作ります
+
+フィールドの正式定義は
+[Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
+を参照してください。
 
 ## Worker Routes
 
@@ -51,8 +54,9 @@ resources:
         - api.example.com
 ```
 
-Use direct `spec.domains` only when the selected provider documents support for
-it. For portable custom hostnames, prefer `custom-domain@v1`.
+`spec.domains` を直接指定するのは、選んだプロバイダがそのフィールドをサポート
+していると明示している場合だけにしてください。ポータブルなカスタムホスト名は
+`custom-domain@v1` を使うのが安全です。
 
 ## Custom Domains
 
@@ -80,14 +84,14 @@ resources:
         kind: auto
 ```
 
-## Validation
+## バリデーション
 
-- `worker@v1.spec.routes` must be an array of non-empty strings.
-- `web-service@v1.spec.scale` is required.
-- `custom-domain@v1.spec.name` and `custom-domain@v1.spec.target` are required.
-- `custom-domain@v1.requires` must be satisfied by the selected provider.
+- `worker@v1.spec.routes` は非空の文字列配列でなければなりません
+- `web-service@v1.spec.scale` は必須です
+- `custom-domain@v1.spec.name` と `custom-domain@v1.spec.target` は必須です
+- `custom-domain@v1.requires` は選んだプロバイダが満たす必要があります
 
-## Next
+## 次に読むページ
 
 - [Environment](/deploy/environment)
 - [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
