@@ -49,7 +49,7 @@ Takosumi Accounts です。
 
 ## Dedicated Runtime Adoption
 
-この項目は internal operator evidence / adoption 用であり、public user の carry-over
+この項目は internal operator evidence / adoption 用であり、public install 導線の
 手順ではありません。current public install は最初から AppInstallation 経由で作成します。
 
 operator が既に動いている dedicated runtime を Accounts-owned `AppInstallation`

@@ -66,9 +66,9 @@ Git URL を指定してインストールします。ビルドからデプロイ
 - [はじめてのアプリ](/get-started/your-first-app)
 - [デプロイの設定](/deploy/)
 
-### shared-cell から専用環境に移行したい
+### shared-cell から専用環境に切り替えたい
 
-shared-cell で運用していたアプリを、データや設定を保ったまま専用環境に移行できます。
+shared-cell で運用していたアプリを、データや設定を保ったまま dedicated runtime に materialize できます。
 
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
 
