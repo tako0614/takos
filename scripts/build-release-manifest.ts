@@ -37,6 +37,14 @@ type GitInfo = {
   dirty?: boolean | null;
 };
 
+type SubmodulePointer = {
+  path: string;
+  commit: string;
+  state: 'recorded' | 'uninitialized' | 'checkout-differs' | 'conflict' | 'unknown';
+  prefix: string;
+  description: string | null;
+};
+
 type OfficialImage = {
   name: string;
   context: string;
@@ -84,6 +92,7 @@ const manifest = {
   generatedAt: new Date().toISOString(),
   package: await collectPackageManifest(),
   git: gitInfo,
+  submodules: await collectSubmodulePointers(),
   validationCommands: commands,
   officialImages: await collectOfficialImages(gitInfo, options),
   distributionContract: await collectDistributionContract(),
@@ -186,6 +195,67 @@ async function collectGitInfo(): Promise<GitInfo> {
     describe: emptyToNull(describe),
     dirty: status === null ? null : status.length > 0,
   };
+}
+
+async function collectSubmodulePointers(): Promise<JsonValue> {
+  const status = await git(['submodule', 'status', '--recursive']);
+  if (status === null) {
+    return { available: false, pointers: [] };
+  }
+
+  const pointers = status.split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .map(parseSubmoduleStatusLine);
+  const states = pointers.reduce<Record<string, number>>((counts, pointer) => {
+    counts[pointer.state] = (counts[pointer.state] ?? 0) + 1;
+    return counts;
+  }, {});
+
+  return {
+    available: true,
+    clean: pointers.every((pointer) => pointer.state === 'recorded'),
+    count: pointers.length,
+    states,
+    pointers,
+  };
+}
+
+function parseSubmoduleStatusLine(line: string): SubmodulePointer {
+  const match = /^([ +-U]?)([0-9a-f]{40})\s+(\S+)(?:\s+\(([^)]*)\))?$/.exec(line);
+  if (!match) {
+    return {
+      path: line,
+      commit: '',
+      state: 'unknown',
+      prefix: '',
+      description: null,
+    };
+  }
+
+  const prefix = match[1] || ' ';
+  return {
+    path: match[3],
+    commit: match[2],
+    state: submoduleState(prefix),
+    prefix,
+    description: match[4] ?? null,
+  };
+}
+
+function submoduleState(prefix: string): SubmodulePointer['state'] {
+  switch (prefix) {
+    case ' ':
+      return 'recorded';
+    case '-':
+      return 'uninitialized';
+    case '+':
+      return 'checkout-differs';
+    case 'U':
+      return 'conflict';
+    default:
+      return 'unknown';
+  }
 }
 
 async function collectOfficialImages(

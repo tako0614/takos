@@ -105,6 +105,8 @@ const requiredTextFiles = [
       'validate-release-promotion',
       'validate:release-promotion',
       'officialImages',
+      'submodules',
+      'collectSubmodulePointers',
       '--require-image-digests',
       'digestRef',
       'provenance',
