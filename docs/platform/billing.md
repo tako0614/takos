@@ -16,8 +16,9 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
 ::: warning Public paid access
 このページの Plus / Pay As You Go と Stripe Checkout は operator account plane の current contract
 を説明するものです。`takosumi-cloud` reference implementation の public paid checkout は、managed offering
-launch-readiness evidence、canonical digest、separate operator approval、sanitized public summary が揃うまで
-closed です。
+launch-readiness evidence、`acceptedReady: true` topology reports、`ready: true` public summary、saved live audit、
+canonical digest、separate operator approval、sanitized public summary が揃い、`managed-offering:status` が
+`canOpenManagedOffering: true` を返すまで closed です。
 :::
 
 ユーザーから見える表示:

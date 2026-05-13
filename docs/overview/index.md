@@ -11,7 +11,8 @@ Takosumi PaaS の上で動作します。
 
 ::: warning Managed offering status
 `Use Takos` は local / operator-owned rehearsal path として実装済みですが、public managed signup
-は `takosumi-cloud` の launch-readiness evidence と operator approval が揃うまで closed です。
+は `takosumi-cloud` の launch-readiness evidence、`acceptedReady: true` topology reports、saved live audit、operator approval が揃い、
+`managed-offering:status` が `canOpenManagedOffering: true` を返すまで closed です。
 公開 operator から案内された入口がない場合は、Self-host または local stack の手順を使ってください。
 :::
 

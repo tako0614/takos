@@ -23,7 +23,7 @@ features:
     link: /overview/
   - icon: 📦
     title: アプリをかんたんインストール
-    details: "Git URL install と bundled app auto-install の current contract。public managed signup / install apply は launch-readiness evidence と operator approval が揃うまで closed"
+    details: "Git URL install と bundled app auto-install の current contract。public managed signup / install apply は managed-offering:status が canOpenManagedOffering:true になるまで closed"
     link: /apps/install-paths
   - icon: 🏠
     title: セルフホスト対応
