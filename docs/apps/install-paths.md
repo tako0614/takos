@@ -10,8 +10,9 @@ Takos には 3 つの始め方があります:
 
 ::: warning Managed offering gate
 `Use Takos` と managed `Install from Git` は local / staged rehearsal path として実装済みですが、public managed
-offering は `takosumi-cloud launch-readiness validate --file <json>` が通った private evidence、canonical digest、
-separate operator approval、sanitized public summary が揃うまで closed です。Self-host path はこの public managed
+offering は private readiness bundle、`acceptedReady: true` topology reports、`ready: true` public summary、saved
+live audit、canonical digest、separate operator approval、sanitized public summary が揃い、
+`managed-offering:status` が `canOpenManagedOffering: true` を返すまで closed です。Self-host path はこの public managed
 offering gate とは別に使えます。
 :::
 

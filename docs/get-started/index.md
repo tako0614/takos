@@ -15,8 +15,8 @@ operator が public signup を開いている場合の最速の方法です。Ac
 
 ::: warning Public managed offering gate
 この flow は local / operator-owned rehearsal では実装済みですが、public managed signup は
-`takosumi-cloud launch-readiness validate --file <json>` が通った operator evidence と separate approval
-が揃うまで closed です。公開された operator から案内された URL 以外では、まず Self-host または開発用 local stack
+private readiness bundle、`acceptedReady: true` topology reports、`ready: true` public summary、saved live audit、
+separate approval が揃い、`managed-offering:status` が `canOpenManagedOffering: true` を返すまで closed です。公開された operator から案内された URL 以外では、まず Self-host または開発用 local stack
 を使ってください。
 :::
 
