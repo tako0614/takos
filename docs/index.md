@@ -23,7 +23,7 @@ features:
     link: /overview/
   - icon: 📦
     title: アプリをかんたんインストール
-    details: "Git URL を指定するだけでアプリをインストール。バンドルアプリ (docs, slide, excel, computer) は Space 作成時に自動で使える"
+    details: "Git URL install と bundled app auto-install の current contract。public managed signup / install apply は launch-readiness evidence と operator approval が揃うまで closed"
     link: /apps/install-paths
   - icon: 🏠
     title: セルフホスト対応

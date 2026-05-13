@@ -38,7 +38,7 @@ const ACCOUNT_MODEL_REQUIRED_TERMS = [
   'email_verified = true',
   'identity.oidc@v1',
   'personal_access_tokens',
-  'dedicated runtime adoption runbook',
+  'public contract / migration path ではなく private operator evidence shaping',
 ];
 const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
   {
