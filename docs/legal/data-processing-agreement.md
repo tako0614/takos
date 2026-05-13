@@ -1,12 +1,13 @@
 # Legal: Data Processing Agreement Template
 
 > このページでわかること: Takos の customer DPA template、processing scope、
-> security measures、sub-processor approval flow、GA 前の legal review
-> blockers。
+> security measures、sub-processor approval flow、operator-owned execution
+> boundary。
 
-This document is a template for a future customer Data Processing Agreement
-(DPA). It is not legal advice, not a signed agreement, and must be reviewed by
-counsel before Takos offers it for signature.
+This document is the public template baseline for a customer Data Processing
+Agreement (DPA). It is not legal advice and is not a signed agreement. Customer
+execution requires the applicable operator order form, legal approval, and
+signature process.
 
 ## Status
 
@@ -15,8 +16,8 @@ counsel before Takos offers it for signature.
 | Owner            | Data protection owner                                                                                  |
 | Last reviewed    | 2026-05-07                                                                                             |
 | Scope            | Takos Web / API, Takos Git hosting, Takos agent execution, and Takosumi/operator-managed deploy/runtime operations used by Takos spaces |
-| Current status   | Draft template published for GA readiness                                                              |
-| Signature status | Not signable until legal review and E-11.2 data subject request handlers are complete                  |
+| Current status   | Public template baseline                                                                               |
+| Signature status | Customer execution requires operator / legal approval and a signed order                               |
 
 ## Regulatory Baseline
 
@@ -156,19 +157,16 @@ risk of processing, including:
 | Backups                  | Backup / restore cadence and retention documented in operations runbooks                         |
 | Incident response        | SEV policy, incident response runbook, customer notification process                             |
 | Vulnerability management | Dependency update policy, Trivy scan, severity-based remediation SLA                             |
-| Data deletion            | Account / space deletion workflow and retention exceptions documented before GA                  |
+| Data deletion            | Account / space deletion workflow and retention exceptions documented by the operator            |
 
 ## 7. Data Subject Requests
 
 Takos must assist Customer with access, export, correction, and deletion
 requests to the extent Customer Personal Data is processed by Takos.
 
-GA blocker: this section is not signable until the E-11.2 data subject rights
-handler exists for access / export / deletion and its operational owner is
-documented.
-
-Until that handler is complete, Takos may only provide manual assistance in
-non-production pilots where the Customer accepts the limitation in writing.
+Customer execution requires operator approval that the data subject rights
+handler, manual fallback, and operational owner are recorded for the applicable
+managed environment.
 
 ## 8. Personal Data Breach
 

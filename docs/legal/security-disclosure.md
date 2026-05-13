@@ -7,7 +7,7 @@
 | ------------- | ------------------------------------------------------------------------------------------------------ |
 | Last reviewed | 2026-05-07                                                                                             |
 | Owner         | Security owner / Takos app (`takos/app`)                                                               |
-| Status        | Policy published; `security@takos.jp` delivery evidence and PGP key publication are required before GA |
+| Status        | Published policy; mailbox and encrypted-exchange evidence is operator-private                          |
 
 ## Scope
 
@@ -68,22 +68,23 @@ Do not include production secrets, private keys, raw access tokens, or customer
 data. If sensitive evidence is necessary, first send a minimal report and wait
 for an encrypted exchange path.
 
-## PGP Key Publication
+## Encrypted Evidence Exchange
 
-PGP encryption is required before GA for high-sensitivity reports. The public
-key must be published at `https://docs.takos.jp/legal/security-pgp.asc`, and the
-fingerprint must be listed in this policy after the key ceremony.
+High-sensitivity reports should use an encrypted exchange path coordinated by
+the security owner. When a public PGP key is published, the public key is served
+at `https://docs.takos.jp/legal/security-pgp.asc`, and the fingerprint is listed
+in this policy.
 
-Before marking the disclosure process GA-ready, the security owner must store
-private evidence that:
+The security owner stores private evidence that:
 
 - `security@takos.jp` accepts inbound mail from outside the organization
 - an encrypted loopback report can be decrypted by the security owner and deputy
-- the published public key fingerprint matches the private key in custody
+- any published public key fingerprint matches the private key in custody
 - key expiry, rotation owner, and revocation procedure are recorded
 
-Until that evidence exists, reports to `security@takos.jp` should avoid exploit
-payloads, secrets, and customer data.
+Reports to `security@takos.jp` should avoid exploit payloads, secrets, and
+customer data until the reporter and security owner agree on the encrypted
+exchange path.
 
 ## Responsible Disclosure Window
 
