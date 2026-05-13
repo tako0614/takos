@@ -5,33 +5,35 @@
 
 ## 1. Upgrade
 
-AppInstallation の `sourceRef` を新しい ref に進める操作。同じ source git URL
-配下の新しい tag / commit を pin し直し、必要に応じて binding / grant の diff
-をユーザに承認させてから kernel deploy を更新する。
+AppInstallation の source revision を新しい ref に進める Accounts 台帳操作。同じ
+source git URL 配下の tag / commit を pin し直し、必要に応じて binding / grant
+の diff をユーザに承認させてから `installation.upgraded` event を記録する。
 
 ### 1.1 CLI
 
 ```bash
-takosumi-git upgrade inst_abc --ref v1.2.4
+takosumi-git upgrade inst_abc --ref v1.2.4 --accounts-url https://accounts.example.com
 ```
 
 `--ref` には **immutable な tag または commit SHA** を指定する。`main` 等の
-mutable ref は `400 mutable-ref-rejected` で拒否される。
+mutable-looking ref は `takosumi-git` が apply 前に拒否する。
 
 ### 1.2 流れ
 
 ```txt
 1. new ref fetch       (takosumi-git が source repo から指定 ref を pin)
 2. app.yml parse       (.takosumi/app.yml を parse し metadata / bindings 抽出)
-3. manifest diff       (current compiledManifestDigest と new manifest の diff)
+3. revision preview    (current source / digest と next source / digest の diff)
 4. permission diff     (requestedGrants / requestedBindings の add/remove)
-5. migration plan      (database schema migration / bucket re-provision 等)
+5. binding review      (database / object-store / domain 等の binding-level review)
 6. approve             (UI / CLI で permissionDigest と costAck を ack)
-7. apply               (kernel に新 compiled manifest を apply、watcher が ready 待ち)
+7. apply               (Accounts が source pin / digest を更新し ledger event を append)
 ```
 
-`apply` 段階で失敗した場合は `installation.upgrade-failed` event が発火し、
-status は `ready` (previous ref のまま) に rollback される。
+current implementation は ledger revision primitive です。kernel rollout / watcher
+readiness / provider worker rollback は operator 側の実行系が接続する領域であり、
+このページでは「台帳上の source pin と event が更新される」ことを current
+contract として扱います。
 
 ### 1.3 UI 例
 
@@ -47,7 +49,7 @@ Changes:
   - api image updated
   - web image updated
   - new permission: none
-  - database migration: yes (3 statements)
+  - binding review: database.postgres changed
 
 Estimated cost change:
   no change
@@ -95,28 +97,29 @@ takosumi-git rollback inst_abc --to v1.2.3
 
 ### 2.2 必要保存物
 
-rollback を成立させるために、AppInstallation は次を **過去 N 世代分** 保存する
-(default N=3、operator plan で増減):
+current Accounts 台帳は、upgrade / rollback の revision event に次を記録する:
 
-- 過去の `sourceCommit`
-- 過去の `compiledManifestDigest`
-- 過去の artifact (image digest)
-- migration checkpoint (database schema を巻き戻すための forward-only ledger
-  checkpoint)
+- source ref / source commit
+- `appManifestDigest`
+- `compiledManifestDigest` (ある場合)
+- requested binding / grant の snapshot
+- `permissionDigest` / `costAck` の confirm evidence
 
 データそのもの (Postgres rows / blob objects) は **rollback で巻き戻されない**。
-schema migration の forward-only 性質を尊重するため、rollback は "manifest
-pointer の swap" として表現される。
+current rollback は ledger source pointer の revision として扱う。artifact retention
+や database restore marker の世代保持は operator policy / provider worker evidence
+の領域であり、このページでは current guarantee としては扱わない。
 
 ### 2.3 制限事項
 
-- `database.postgres@v1` extension の追加は forward-only (rollback 後も
-  extension は残る)
-- `object-store.s3-compatible@v1` の `encryption.mode` 変更は再 provision を
-  伴うため rollback 不能 (new bucket へ data を再配置するため)
-- `domain.http@v1` の `hostname` 変更も rollback 不能
+- provider data copy / schema migration の巻き戻しは rollback の current guarantee
+  ではない
+- `database.postgres@v1` / `object-store.s3-compatible@v1` / `domain.http@v1`
+  の変更は binding-level review と user approval の対象
+- production-grade artifact retention / rollback drill は managed offering
+  launch-readiness evidence 側で扱う
 
-これらの制限は upgrade 前の preview に warning として表示される。
+preview は binding / grant / cost の差分を示し、必要な approval を要求する。
 
 ## 3. Export bundle
 
