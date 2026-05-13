@@ -50,7 +50,8 @@ https://<OPERATOR_INSTALL_HOST>/install?git=https://github.com/example/my-app&re
 ### 3. Self-host — 自前運用したい人向け
 
 Takos をまるごと自分のサーバーにデプロイし、データ・ログイン・課金すべてを自分で管理する方法です。
-既存のアプリをエクスポートして持ち出すこともできます。
+AppInstallation export/import は contract / API と local proof があり、production provider ごとの full restore は
+launch-readiness evidence の対象です。
 
 ```bash
 # アプリのエクスポート

@@ -56,6 +56,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
   const files = [
     'docs/platform/upgrade-export.md',
     'docs/apps/install-paths.md',
+    'docs/get-started/index.md',
     'docs/overview/index.md',
     'docs/operator/account-model.md',
   ];
@@ -73,6 +74,14 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
         'takosumi-git install bundle --to',
         'データや設定はそのまま引き継がれます',
         'dedicated-runtime-appinstallation-adoption',
+        'Takos がソースを保証する',
+        'ユーザーのデータ主権を保証',
+        '途中で path を乗り換えても所有・data namespace',
+        '後から乗り換えられる',
+        '最初の選択を間違えても所有権と data はそのまま持ち越せる',
+        'データや設定を保ったまま dedicated runtime に materialize',
+        '既存のアプリをエクスポートして持ち出すこともできます',
+        'Export は「data を移植し',
       ]
     ) {
       if (text.includes(forbidden)) {

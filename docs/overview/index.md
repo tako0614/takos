@@ -77,14 +77,16 @@ Git URL を指定してインストールします。ビルドからデプロイ
 
 ### shared-cell から専用環境に切り替えたい
 
-shared-cell で運用していたアプリを、データや設定を保ったまま dedicated runtime に materialize できます。
+shared-cell → dedicated は AppInstallation contract 上の materialize target です。current public docs では live data
+copy guarantee ではなく、operator evidence 対象として扱います。
 
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
 
 ### 完全にセルフホストしたい
 
 Takos を自分のサーバーにデプロイし、データ・ログイン・課金すべてを自分で管理します。
-既存のアプリをエクスポートして持ち出すこともできます。
+既存 AppInstallation の export/import は contract / API と local proof があります。production provider ごとの full
+restore は launch-readiness evidence の対象です。
 
 - [ホスティングガイド](/hosting/)
 

@@ -28,9 +28,9 @@ Runtime mode の詳細は [Runtime Modes](https://github.com/tako0614/takos-ecos
 | `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (managed example: `takosumi.cloud/install?...`) | app preview 確認 → build → deploy       |
 | `Self-host`        | 退出 / 企業 / 主権重視            | `self-hosted`                    | operator deploy + app export/import                                          | 自前 takosumi で運用                    |
 
-`Install from Git` と app export/import は Installable App Model の同じ
-AppInstallation 行に着地するため、途中で path を乗り換えても所有・data namespace
-を持ったまま次の mode に materialize / export できる (詳細は
+`Install from Git` と app export/import は同じ AppInstallation contract 上に設計されています。current implementation
+は ledger / API / local proof までで、public managed offering での live data copy / clean self-host restore は
+launch-readiness evidence の対象です (詳細は
 [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md))。
 
 ## 2. Use Takos (instant managed install)
@@ -78,12 +78,12 @@ chat 開始
 host、`takos.example.com` は launch 先の Takos host の例。特定の
 `accounts.takosumi.cloud` hostname に依存しない。
 
-### 2.3 後から乗り換えられる
+### 2.3 Materialize / export contract
 
 operator-opened `Use Takos` で作られた Space の bundled / third-party app installation
-は、後から `takosumi-git materialize inst_abc --mode dedicated` で `dedicated`
-に物理化したり、 `takosumi-git export inst_abc` で `self-hosted` に export
-できる。最初の選択は 不可逆ではない。
+も同じ AppInstallation contract に乗ります。`takosumi-git materialize` /
+`takosumi-git export` は current contract / rehearsal 対象であり、
+operator-opened flow の live migration guarantee ではありません。
 
 ## 3. Install from Git
 
@@ -219,9 +219,9 @@ takosumi-git import ./takos-export.tar.zst \
 | 企業 / コンプライアンス要件で自社境界に置きたい | `Self-host`                                                  |
 | Takosumi Cloud 依存を完全に切りたい             | `Self-host`                                                  |
 
-3 path は排他ではなく、**operator-opened `Use Takos` で作られた Space と bundled app
-installation を後から `Self-host` に export する** といった連続的な乗り換えが
-想定されている。 最初の選択を間違えても所有権と data はそのまま持ち越せる。
+3 path は同じ ownership model に収束する設計です。ただし pre-GA docs では
+migration / adoption promise として案内しません。live data portability は
+provider adapter と launch-readiness evidence が揃った operator だけが宣言できます。
 
 ## 6. 既存 "はじめる" への導線
 
