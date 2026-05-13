@@ -79,7 +79,7 @@ Every production space with a residency commitment must have:
 Cross-region replication, DR copies, support exports, and model-provider fallbacks are disabled by default for strict
 `us`, `eu`, and `jp` profiles unless an exception is recorded.
 
-## Operator Evidence
+## Enforcement Evidence
 
 For a managed production tenant with a residency commitment, the operator keeps
 private evidence for the configured profile:

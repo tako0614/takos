@@ -68,12 +68,17 @@ Do not include production secrets, private keys, raw access tokens, or customer
 data. If sensitive evidence is necessary, first send a minimal report and wait
 for an encrypted exchange path.
 
+## PGP Key Publication
+
+Public PGP key publication is optional until the operator has generated,
+reviewed, and privately stored the key custody evidence. When published, the
+public key is served at `https://docs.takos.jp/legal/security-pgp.asc`, and the
+fingerprint is listed in this policy.
+
 ## Encrypted Evidence Exchange
 
 High-sensitivity reports should use an encrypted exchange path coordinated by
-the security owner. When a public PGP key is published, the public key is served
-at `https://docs.takos.jp/legal/security-pgp.asc`, and the fingerprint is listed
-in this policy.
+the security owner.
 
 The security owner stores private evidence that:
 
