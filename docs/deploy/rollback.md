@@ -8,7 +8,8 @@
 
 install された app は source commit、`.takosumi/app.yml` digest、compiled manifest
 digest を AppInstallation ledger に pin しています。rollback は以前の pinned
-version を選び、install preview と同じ確認を通してから runtime を戻します。
+version を選び、install preview と同じ確認を通して ledger source pointer を戻します。
+provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません。
 
 ```bash
 takosumi-git rollback inst_abc --to v1.2.3

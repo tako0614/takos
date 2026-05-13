@@ -70,7 +70,8 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 deploy 後に
 `cd takos-private && deno task e2e:smoke:real --env=production --api-url=https://takos.jp`
 で full-stack smoke を実行し、`auth-smoke` の login flow / Accounts bearer /
-agent run まで通れば operator が残すのは初回 admin login のみです。
+agent run まで確認します。これは Cloudflare target の smoke evidence であり、public managed offering を開くには
+別途 launch-readiness evidence / operator approval / staged rehearsal が必要です。
 
 ## セットアップ
 
