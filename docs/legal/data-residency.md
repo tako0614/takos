@@ -1,7 +1,7 @@
 # Legal: Data Residency Policy
 
 > このページでわかること: Takos の residency profile、data class ごとの region rule、provider-specific limitation、GA
-> 前に必要な enforcement evidence。
+> evidence boundary。
 
 This policy defines how Takos offers regional handling of Customer Personal Data. It is a product and operations policy,
 not a guarantee that every sub-processor can be forced into one jurisdiction for every processing purpose. Customer
@@ -14,8 +14,8 @@ contracts must reference the exact residency profile, provider set, and exceptio
 | Owner          | Data protection owner                                                                                  |
 | Last reviewed  | 2026-05-07                                                                                             |
 | Scope          | Takos Web / API, Takos Git hosting, Takos agent execution, Takosumi/operator-managed deploy/runtime operations used by Takos spaces |
-| Current status | Policy published for GA readiness                                                                      |
-| GA requirement | Production spaces must record residency profile, primary region, provider set, and approved exceptions |
+| Current status | Published policy                                                                                       |
+| Evidence rule  | Production spaces record residency profile, primary region, provider set, and approved exceptions      |
 
 ## Boundary
 
@@ -79,10 +79,10 @@ Every production space with a residency commitment must have:
 Cross-region replication, DR copies, support exports, and model-provider fallbacks are disabled by default for strict
 `us`, `eu`, and `jp` profiles unless an exception is recorded.
 
-## Enforcement Evidence
+## Operator Evidence
 
-Before GA, Takos must be able to produce the following evidence for at least one staging or pilot tenant per supported
-profile:
+For a managed production tenant with a residency commitment, the operator keeps
+private evidence for the configured profile:
 
 | Evidence            | Required proof                                                                                       |
 | ------------------- | ---------------------------------------------------------------------------------------------------- |

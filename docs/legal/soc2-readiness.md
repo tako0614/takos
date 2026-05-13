@@ -1,7 +1,7 @@
 # Legal: SOC 2 Readiness Checklist
 
 > このページでわかること: Takos の SOC 2 readiness scope、control owners、
-> evidence targets、post-GA audit preparation backlog。
+> evidence targets、audit preparation backlog。
 
 This checklist is a readiness artifact, not an audit report. Takos does not
 claim SOC 2 compliance until a qualified auditor completes the engagement.
@@ -90,14 +90,14 @@ Out of scope for the first readiness pass:
 - Trivy HIGH / CRITICAL findings block the patch workflow.
 - Observability dashboard artifacts are versioned.
 - Request correlation and trace IDs exist for Takosumi API paths.
-- Security disclosure intake path is published before GA.
+- Security disclosure intake path is published.
 
 ### Data Protection
 
-- Privacy Policy / Terms / DPA are legally reviewed before GA.
-- Data subject export/delete handler exists before GA.
-- Sub-processor list is published before GA.
-- Data residency policy is published before GA.
+- Privacy Policy / Terms / DPA legal review is tracked by the operator.
+- Data subject export/delete handler exists.
+- Sub-processor list is published.
+- Data residency policy is published.
 - Audit retention and redaction policy are documented.
 
 ### Vendor Management
@@ -121,13 +121,13 @@ Out of scope for the first readiness pass:
 | Migration safety  | [`takos-private/docs/operations/online-db-migrations.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/online-db-migrations.md)   | production migration logs |
 | Release gate      | [`docs/quality/release-gate.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/quality/release-gate.md)                                     | CI run artifacts          |
 
-## Pre-audit Backlog
+## Audit Preparation Backlog
 
-- Publish final Privacy Policy, Terms, DPA, and sub-processor list.
-- Implement data subject access / export / deletion request handlers.
-- Publish data residency policy.
-- Publish security disclosure policy with working `security@` inbox and PGP
-  public key.
+- Store legal approval evidence for Privacy Policy, Terms, DPA, and
+  sub-processor list.
+- Store data subject access / export / deletion request evidence.
+- Store data residency enforcement evidence for managed production tenants.
+- Store security disclosure mailbox and encrypted-exchange evidence.
 - Export branch protection / required review settings for each repo.
 - Run one SEV-1 staging simulation and attach evidence.
 - Run one rollback SOP staging rehearsal and attach evidence.
