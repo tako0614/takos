@@ -92,6 +92,14 @@
         "ref": "v1.2.6",
         "refType": "tag",
         "preinstall": true
+      },
+      {
+        "name": "road-to-me",
+        "title": "Road to Me",
+        "repositoryUrl": "https://github.com/tako0614/road-to-me.git",
+        "ref": "v0.1.0",
+        "refType": "tag",
+        "preinstall": false
       }
     ],
     "environmentOverrides": {

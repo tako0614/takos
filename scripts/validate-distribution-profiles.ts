@@ -166,12 +166,23 @@ const expectedDefaultAppEntries: readonly ExpectedDefaultAppEntry[] = [
     refType: 'tag',
     preinstall: true,
   },
+  {
+    name: 'road-to-me',
+    title: 'Road to Me',
+    repositoryUrl: 'https://github.com/tako0614/road-to-me.git',
+    ref: 'v0.1.0',
+    refType: 'tag',
+    preinstall: false,
+  },
 ];
 const expectedDefaultAppNames = expectedDefaultAppEntries.map((entry) => entry.name);
+const expectedDefaultAppPreinstallNames = expectedDefaultAppEntries
+  .filter((entry) => entry.preinstall)
+  .map((entry) => entry.name);
 const expectedDefaultAppPreinstallByEnvironment = {
   local: [],
-  staging: expectedDefaultAppNames,
-  production: expectedDefaultAppNames,
+  staging: expectedDefaultAppPreinstallNames,
+  production: expectedDefaultAppPreinstallNames,
 } as const;
 
 const takosDenoConfig = await readJson(join(takosRoot, 'deno.json'));
