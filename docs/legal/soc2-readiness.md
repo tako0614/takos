@@ -103,6 +103,7 @@ Out of scope for the first readiness pass:
 ### Vendor Management
 
 - Stripe, Cloudflare, AWS, GCP, OpenAI, and hosting providers are listed.
+- Sub-processor list is published before GA.
 - Vendor purpose and data category are documented.
 - Vendor security / privacy review evidence is stored privately.
 - New vendor onboarding requires owner approval.
