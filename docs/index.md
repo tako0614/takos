@@ -13,7 +13,7 @@ hero:
       text: Takos の全体像
       link: /overview/
     - theme: alt
-      text: Use Takos
+      text: Install paths
       link: /apps/install-paths
 
 features:
