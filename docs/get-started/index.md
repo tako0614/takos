@@ -35,8 +35,12 @@ Git URL とバージョンタグを指定して、アプリリポジトリから
 ソースコードがコミット単位で追跡されるため、透明性と再現性を重視する開発者に向いています。
 
 ```text
-https://takosumi.cloud/install?git=https://github.com/example/my-app&ref=v1.2.3
+https://<OPERATOR_INSTALL_HOST>/install?git=https://github.com/example/my-app&ref=v1.2.3
 ```
+
+`takosumi.cloud/install` などの managed example は、operator が public managed gate
+を開いた場合の入口形です。gate が closed の間は、self-host / local operator URL
+を使ってください。
 
 - ソースはコミットに固定される (`ref=main` は使えません)
 - インストール内容がすべて記録されるため、あとから監査可能
