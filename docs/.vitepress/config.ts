@@ -18,7 +18,7 @@ export default defineConfig({
     'AIエージェントによるサービスとソフトウェアの民主化基盤 Takos の全体像、アプリ構成、デプロイ、プラットフォーム仕様をまとめた公式 docs',
   cleanUrls: true,
   lastUpdated: enableLastUpdated,
-  srcExclude: ['**/_*.md', 'contributing/**'],
+  srcExclude: ['**/_*.md', 'contributing/**', 'releases/**'],
   themeConfig: {
     siteTitle: 'Takos Docs',
     search: {
