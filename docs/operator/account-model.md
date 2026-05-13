@@ -47,17 +47,12 @@ Takos app-local `personal_access_tokens` は発行元ではなく historical / l
 credential inventory として扱い、current automation credential の owner は
 Takosumi Accounts です。
 
-## Dedicated Runtime Adoption
+## Dedicated Runtime
 
-この項目は internal operator evidence / adoption 用であり、public install 導線の
-手順ではありません。current public install は最初から AppInstallation 経由で作成します。
-
-operator が既に動いている dedicated runtime を Accounts-owned `AppInstallation`
-として記録する場合は、AppInstallation `mode: dedicated`、explicit
-`RuntimeBinding`、source pin、binding、grant、launch token bootstrap をまとめて
-作成します。private operator 手順は
-[dedicated runtime adoption runbook](https://github.com/tako0614/takos-private/blob/main/docs/operations/dedicated-runtime-appinstallation-adoption.md)
-を参照してください。
+public install 導線では、dedicated runtime も最初から AppInstallation 経由で
+作成します。既に動いている dedicated runtime を後から台帳に採用する手順は、
+public contract / migration path ではなく private operator evidence shaping
+です。この公開 docs では手順化しません。
 
 ## 検証
 

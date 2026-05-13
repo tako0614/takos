@@ -178,14 +178,18 @@ install できる。
 
 ```bash
 git clone https://github.com/example/my-app
-takosumi-git install ./my-app --ref v1.2.3 --to https://my-takosumi.example.com
+takosumi-git install ./my-app --ref v1.2.3 --accounts-url https://my-takosumi.example.com
 ```
 
 または既存 installation を export してから:
 
 ```bash
-takosumi-git export inst_abc --output takos.bundle
-takosumi-git install ./takos.bundle --to https://my-takosumi.example.com
+takosumi-git export inst_abc --output takos-export.tar.zst
+takosumi-git import ./takos-export.tar.zst \
+  --to https://my-takosumi.example.com \
+  --account-id acct_self_host \
+  --space-id space_self_host \
+  --subject tsub_owner
 ```
 
 ### 4.2 self-host が決めるもの

@@ -2,6 +2,7 @@ const checks: Array<() => Promise<string[]>> = [
   validateRemovedHistoricalDocs,
   validateVitePressExcludesNonCurrentDocs,
   validateContributingIndex,
+  validateCurrentInstallDocs,
 ];
 
 const errors = (await Promise.all(checks.map((check) => check()))).flat();
@@ -49,6 +50,50 @@ async function validateContributingIndex(): Promise<string[]> {
   return forbidden
     .filter((term) => index.includes(term))
     .map((term) => `docs/contributing/index.md: remove non-current docs reference '${term}'`);
+}
+
+async function validateCurrentInstallDocs(): Promise<string[]> {
+  const files = [
+    'docs/platform/upgrade-export.md',
+    'docs/apps/install-paths.md',
+    'docs/overview/index.md',
+    'docs/operator/account-model.md',
+  ];
+  const errors: string[] = [];
+  for (const path of files) {
+    const text = await Deno.readTextFile(path);
+    for (
+      const forbidden of [
+        '400 mutable-ref-rejected',
+        'installation.upgrade-failed',
+        'database migration: yes',
+        'migration checkpoint',
+        '過去 N 世代',
+        'takosumi-git install ./takos.bundle',
+        'takosumi-git install bundle --to',
+        'データや設定はそのまま引き継がれます',
+        'dedicated-runtime-appinstallation-adoption',
+      ]
+    ) {
+      if (text.includes(forbidden)) {
+        errors.push(`${path}: remove stale current install wording '${forbidden}'`);
+      }
+    }
+  }
+  const upgradeExport = await Deno.readTextFile('docs/platform/upgrade-export.md');
+  for (
+    const required of [
+      'Accounts 台帳操作',
+      'binding-level review',
+      'ledger revision primitive',
+      'current guarantee としては扱わない',
+    ]
+  ) {
+    if (!upgradeExport.includes(required)) {
+      errors.push(`docs/platform/upgrade-export.md: missing current revision boundary '${required}'`);
+    }
+  }
+  return errors;
 }
 
 async function exists(path: string): Promise<boolean> {
