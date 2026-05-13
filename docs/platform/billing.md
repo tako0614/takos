@@ -13,6 +13,13 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
   に報告する立場
 - アプリの利用量は AppInstallation 単位で計上
 
+::: warning Public paid access
+このページの Plus / Pay As You Go と Stripe Checkout は operator account plane の current contract
+を説明するものです。`takosumi-cloud` reference implementation の public paid checkout は、managed offering
+launch-readiness evidence、canonical digest、separate operator approval、sanitized public summary が揃うまで
+closed です。
+:::
+
 ユーザーから見える表示:
 
 ```txt
@@ -36,12 +43,12 @@ Billed by <operator>
 | プラン            | ID          | 課金モデル         | 説明                                         |
 | ----------------- | ----------- | ------------------ | -------------------------------------------- |
 | **Free**          | `plan_free` | 無料               | 個人の検証・小規模利用向け。デフォルトプラン |
-| **Plus**          | `plan_plus` | サブスクリプション | 個人向け有料プラン。Stripe Checkout で契約   |
-| **Pay As You Go** | `plan_payg` | プリペイド残高     | クレジットを購入して残高から消費             |
+| **Plus**          | `plan_plus` | サブスクリプション | operator が public paid access を開いた後に Stripe Checkout で契約 |
+| **Pay As You Go** | `plan_payg` | プリペイド残高     | operator が paid checkout を開いた後にクレジットを購入して残高から消費 |
 
-プランは課金アカウントごとに 1 つです。takosumi-cloud Accounts では Takosumi
-Accounts の Stripe checkout endpoint からサブスクリプション / 支払い checkout
-session を作成し、Stripe webhook で billing 状態を更新します。
+プランは課金アカウントごとに 1 つです。takosumi-cloud Accounts では、operator が managed offering gate
+を開いた場合に Takosumi Accounts の Stripe checkout endpoint からサブスクリプション / 支払い checkout session
+を作成し、Stripe webhook で billing 状態を更新します。
 
 ::: info Billing portal / invoice API Billing portal、invoice list、usage read
 API は将来の拡張予定です。 現在の Accounts HTTP surface は
