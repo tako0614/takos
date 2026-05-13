@@ -27,7 +27,7 @@ features:
     link: /apps/install-paths
   - icon: 🏠
     title: セルフホスト対応
-    details: "自分のサーバーにデプロイして完全にコントロール。データもアイデンティティも自分のもの"
+    details: "自分のサーバーにデプロイして operator / data / account plane の境界を自分で管理"
     link: /hosting/
   - icon: 📚
     title: リファレンス

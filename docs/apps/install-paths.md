@@ -171,8 +171,9 @@ install できる。
 
 ## 4. Self-host
 
-完全退出。利用者自身が Takosumi instance と Takos product distribution
-を運用し、 bundled / third-party app installation bundle をそこに import する。
+current operator 依存を切る path。利用者自身が Takosumi instance と Takos
+product distribution を運用し、 bundled / third-party app installation bundle
+をそこに import する。
 
 ### 4.1 流れ (新規 install の場合)
 

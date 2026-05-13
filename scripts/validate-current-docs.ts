@@ -56,6 +56,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
   const files = [
     'docs/platform/upgrade-export.md',
     'docs/apps/install-paths.md',
+    'docs/index.md',
     'docs/get-started/index.md',
     'docs/overview/index.md',
     'docs/operator/account-model.md',
@@ -88,6 +89,8 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
         'runtime を戻します',
         'Takosumi kernel は 5 つのホスティング先に対応しています',
         'operator が残すのは初回 admin login のみ',
+        'データもアイデンティティも自分のもの',
+        '完全退出。利用者自身',
       ]
     ) {
       if (text.includes(forbidden)) {
