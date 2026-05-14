@@ -84,7 +84,7 @@ host、`takos.example.com` は launch 先の Takos host の例。特定の
 operator-opened `Use Takos` で作られた Space の bundled / third-party app installation
 も同じ AppInstallation contract に乗ります。`takosumi-git materialize` /
 `takosumi-git export` は current contract / rehearsal 対象であり、
-operator-opened flow の live migration guarantee ではありません。
+operator-opened flow で live data portability を保証するものではありません。
 
 ## 3. Install from Git
 
@@ -222,8 +222,9 @@ takosumi-git import ./takos-export.tar.zst \
 | Takosumi Cloud 依存を完全に切りたい             | `Self-host`                                                  |
 
 3 path は同じ ownership model に収束する設計です。ただし pre-GA docs では
-migration / adoption promise として案内しません。live data portability は
-provider adapter と launch-readiness evidence が揃った operator だけが宣言できます。
+既存環境の切替や dedicated runtime 採用を約束する案内として扱いません。live data
+portability は provider adapter と launch-readiness evidence が揃った operator
+だけが宣言できます。
 
 ## 6. 既存 "はじめる" への導線
 
