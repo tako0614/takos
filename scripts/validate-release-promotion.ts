@@ -93,7 +93,7 @@ const requiredDocs = [
 const requiredTextFiles = [
   {
     path: 'deno.json',
-    expected: ['"validate:release-promotion"', '"release-manifest:check-clean"'],
+    expected: ['"validate:release-promotion"', '"release-manifest:check-clean"', '"release-manifest:check-artifacts"'],
   },
   {
     path: 'scripts/release-gate.ts',
