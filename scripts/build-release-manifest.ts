@@ -49,6 +49,14 @@ type BuildReleaseManifestOptions = {
   requireCleanGit: boolean;
 };
 
+type ReleaseIdentity = {
+  name: string | null;
+  version: string | null;
+  tag: string | null;
+  requestedVersion: string | null;
+  requestedTag: string | null;
+};
+
 type GitInfo = {
   available: boolean;
   branch?: string | null;
@@ -124,17 +132,18 @@ assertRequiredValidationCommands(commands);
 const gitInfo = await collectGitInfo();
 const submodules = await collectSubmodulePointers();
 assertCleanGitState(gitInfo, submodules, options);
+const release = await collectReleaseIdentity(options);
 
 const manifest = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
-  release: await collectReleaseIdentity(options),
+  release,
   package: await collectPackageManifest(),
   releaseComponents: await collectReleaseComponents(),
   git: gitInfo,
   submodules,
   validationCommands: commands,
-  officialImages: await collectOfficialImages(gitInfo, options),
+  officialImages: await collectOfficialImages(gitInfo, options, release),
   distributionContract: await collectDistributionContract(),
   distributions: await collectDistributionManifests(),
   serviceSet: await collectServiceSet(),
@@ -208,7 +217,7 @@ function usage(): never {
 
 async function collectReleaseIdentity(
   options: BuildReleaseManifestOptions,
-): Promise<JsonValue> {
+): Promise<ReleaseIdentity> {
   const rootConfig = await readJson<DenoConfig>('deno.json');
   const metadata = denoReleaseMetadata(rootConfig);
   const errors: string[] = [];
@@ -482,6 +491,7 @@ function submoduleState(prefix: string): SubmodulePointer['state'] {
 async function collectOfficialImages(
   gitInfo: GitInfo,
   options: BuildReleaseManifestOptions,
+  release: ReleaseIdentity,
 ): Promise<JsonValue> {
   const owner = await collectGitHubOwner();
   const digestRecords = await collectImageDigestRecords(options.imageDigestDir);
@@ -500,6 +510,7 @@ async function collectOfficialImages(
         repository,
         record.record,
         gitInfo,
+        release.version,
         errors,
       );
     }
@@ -576,6 +587,7 @@ function validateImageDigestRecord(
   repository: string,
   record: ImageDigestRecord,
   gitInfo: GitInfo,
+  releaseVersion: string | null,
   errors: string[],
 ): void {
   if (record.image !== repository) {
@@ -587,8 +599,17 @@ function validateImageDigestRecord(
   if (record.digestRef !== `${repository}@${record.digest}`) {
     errors.push(`${name}: digestRef must pin ${repository}@${record.digest}`);
   }
-  if (!Array.isArray(record.tags) || record.tags.length === 0) {
+  const tags = Array.isArray(record.tags) ? record.tags : [];
+  if (tags.length === 0) {
     errors.push(`${name}: tags must include semver and sha-* references`);
+  } else {
+    const expectedVersionTag = releaseVersion ? `${repository}:${releaseVersion}` : null;
+    if (expectedVersionTag && !tags.includes(expectedVersionTag)) {
+      errors.push(`${name}: tags must include ${expectedVersionTag}`);
+    }
+    if (!tags.some((tag) => tag.startsWith(`${repository}:sha-`))) {
+      errors.push(`${name}: tags must include ${repository}:sha-*`);
+    }
   }
   if (gitInfo.commit && record.commit !== gitInfo.commit) {
     errors.push(`${name}: commit must match ${gitInfo.commit}`);

@@ -133,6 +133,7 @@ const requiredTextFiles = [
       'docker/build-push-action',
       'sbom: true',
       'provenance: mode=max',
+      'type=raw,value=${{ inputs.version }}',
       'steps.build.outputs.digest',
       'takos-image-digest-',
       '--require-image-digests',
