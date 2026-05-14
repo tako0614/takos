@@ -50,9 +50,9 @@ Takosumi Accounts です。
 ## Dedicated Runtime
 
 public install 導線では、dedicated runtime も最初から AppInstallation 経由で
-作成します。既に動いている dedicated runtime を後から台帳に採用する手順は、
-public contract / migration path ではなく private operator evidence shaping
-です。この公開 docs では手順化しません。
+作成します。既に動いている dedicated runtime を後から台帳に採用する作業は、
+公開 contract ではなく private operator evidence shaping です。この公開 docs では
+手順化しません。
 
 ## 検証
 
