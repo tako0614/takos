@@ -1,0 +1,297 @@
+# Phase 1 — Takos product full stack on top of Phase 0 ingress.
+#
+# Profiles:
+#   postgres   takosumi kernel (Deno + Postgres + MinIO) + Accounts + takos product
+#   workers    takosumi kernel (workerd / miniflare + D1 + R2-via-MinIO) + 同上 (Phase 1b で完成)
+#
+# Source mount + deno task pattern を採用 (image build 不要)。 production image
+# でないのは「test bed」 のために意図的。 ファイル変更が即反映される。
+
+services:
+  # ---- 共通 storage / queue ----
+
+  substrate-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: takos
+      POSTGRES_PASSWORD: takos
+      POSTGRES_DB: takos_app
+    volumes:
+      - substrate-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U takos -d takos_app"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      takos-local-internal:
+        aliases:
+          - postgres
+
+  substrate-postgres-init:
+    image: postgres:16-alpine
+    restart: "no"
+    depends_on:
+      substrate-postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: takos
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        for db in takosumi takosumi_accounts takos_git; do
+          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname='$$db'" \
+            | grep -q 1 \
+            || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE $$db"
+        done
+    networks:
+      - takos-local-internal
+
+  substrate-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - substrate-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      takos-local-internal:
+        aliases:
+          - redis
+
+  substrate-minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-takos}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-takos-minio-pw}
+    volumes:
+      - substrate-minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /data/.minio.sys/format.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks:
+      takos-local-internal:
+        aliases:
+          - minio
+
+  substrate-minio-init:
+    image: minio/mc:latest
+    depends_on:
+      substrate-minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until mc alias set takos http://minio:9000 \
+          "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done
+        mc mb --ignore-existing takos/takosumi
+        mc mb --ignore-existing takos/takos-app
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-takos}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-takos-minio-pw}
+    networks:
+      - takos-local-internal
+
+  # ---- Takosumi Accounts (OIDC issuer) ----
+
+  accounts:
+    image: denoland/deno:2.7.10
+    restart: unless-stopped
+    depends_on:
+      substrate-postgres-init:
+        condition: service_completed_successfully
+    working_dir: /workspace/deploy/node-postgres
+    command:
+      - deno
+      - run
+      - -A
+      - src/server.ts
+    environment:
+      PORT: "8787"
+      TAKOSUMI_ACCOUNTS_HOSTNAME: 0.0.0.0
+      TAKOSUMI_ACCOUNTS_ISSUER: https://accounts.takos.test
+      TAKOSUMI_ACCOUNTS_DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi_accounts
+      TAKOSUMI_ACCOUNTS_CLIENT_ID: takos-app
+      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback
+      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: closed
+    volumes:
+      - ../../../takosumi-cloud:/workspace
+    healthcheck:
+      test:
+        - CMD
+        - deno
+        - eval
+        - "const r = await fetch('http://127.0.0.1:8787/.well-known/openid-configuration'); if(!r.ok) Deno.exit(1)"
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+    networks:
+      takos-local-internal:
+        aliases:
+          - accounts
+
+  # ---- Takosumi kernel (postgres profile) ----
+
+  # kernel embeds runtime-agent in-process when TAKOSUMI_AGENT_URL is unset,
+  # so we don't run a separate runtime-agent service for the local-substrate.
+  kernel:
+    profiles: ["postgres"]
+    image: denoland/deno:2.7.10
+    restart: unless-stopped
+    depends_on:
+      substrate-postgres-init:
+        condition: service_completed_successfully
+      substrate-minio-init:
+        condition: service_completed_successfully
+    working_dir: /workspace
+    # Use a wrapper that imports kernel + embedded agent from local source
+    # (instead of takosumi-cli server which pins JSR-published kernel).
+    command:
+      - deno
+      - run
+      - -A
+      - --config
+      - /workspace/deno.json
+      - /wrappers/kernel-with-embedded-agent.ts
+    environment:
+      PORT: "8788"
+      TAKOSUMI_ENVIRONMENT: development
+      TAKOSUMI_DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi
+      DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi
+      TAKOSUMI_DEPLOY_TOKEN: ${TAKOSUMI_DEPLOY_TOKEN:-local-substrate-deploy-token}
+      TAKOSUMI_INTERNAL_API_SECRET: ${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}
+      TAKOSUMI_DEV_MODE: "1"
+      TAKOSUMI_DB_AUTO_MIGRATE: "true"
+      # Selfhost provider config (consumed by embedded runtime-agent)
+      TAKOSUMI_SELFHOSTED_OBJECT_STORE_ENDPOINT: http://minio:9000
+      TAKOSUMI_SELFHOSTED_DOCKER_SOCKET: /var/run/docker.sock
+    volumes:
+      - ../../../takosumi:/workspace
+      - ./wrappers:/wrappers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test:
+        - CMD
+        - deno
+        - eval
+        - "const r = await fetch('http://127.0.0.1:8788/health'); if(!r.ok) Deno.exit(1)"
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 90s
+    networks:
+      takos-local-internal:
+        aliases:
+          - kernel
+
+  # ---- Takosumi kernel (workers profile) — Phase 1b で実装 ----
+  kernel-workers:
+    profiles: ["workers"]
+    image: node:22-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "echo 'workers profile not yet implemented' && sleep infinity"]
+    networks:
+      takos-local-internal:
+        aliases:
+          - kernel
+
+  # ---- Takos product ----
+
+  # takos-app uses the local-platform package (Postgres + Redis + libsql)
+  # instead of the apps/api Deno entry which expects D1 bindings.
+  # Entry: takos/app/apps/control/deno.json → dev:local:web →
+  #   packages/control/local-platform/src/web.ts
+  takos-app:
+    image: denoland/deno:2.7.10
+    restart: unless-stopped
+    depends_on:
+      substrate-postgres-init:
+        condition: service_completed_successfully
+      substrate-redis:
+        condition: service_healthy
+      accounts:
+        condition: service_healthy
+    working_dir: /workspace/apps/control
+    command: ["deno", "task", "dev:local:web"]
+    environment:
+      PORT: "8787"
+      ADMIN_DOMAIN: app.takos.test
+      TENANT_BASE_DOMAIN: app.takos.test
+      AUTH_PUBLIC_BASE_URL: https://app.takos.test
+      OIDC_ISSUER_URL: https://accounts.takos.test
+      OIDC_CLIENT_ID: takos-app
+      OIDC_REDIRECT_URI: https://app.takos.test/oauth/callback
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-local-substrate-oidc-client-secret}
+      TAKOS_LOCAL_DATA_DIR: /var/lib/takos-local-substrate
+      TAKOS_LOCAL_DATABASE_URL: postgres://takos:takos@postgres:5432/takos_app
+      REDIS_URL: redis://redis:6379
+      TAKOS_INTERNAL_SERVICE_SECRET: ${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}
+    volumes:
+      - ../../app:/workspace
+      - ../../git:/git:ro
+      - takos-app-data:/var/lib/takos-local-substrate
+    healthcheck:
+      test:
+        - CMD
+        - deno
+        - eval
+        - "const r = await fetch('http://127.0.0.1:8787/health'); if(!r.ok) Deno.exit(1)"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    networks:
+      takos-local-internal:
+        aliases:
+          - takos-app
+
+  takos-git:
+    image: denoland/deno:2.7.10
+    restart: unless-stopped
+    depends_on:
+      substrate-postgres-init:
+        condition: service_completed_successfully
+    working_dir: /workspace
+    command: ["deno", "task", "dev"]
+    environment:
+      PORT: "8790"
+      TAKOS_GIT_INTERNAL_URL: http://takos-git:8790
+      TAKOS_INTERNAL_SERVICE_SECRET: ${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}
+      TAKOS_GIT_REPOSITORY_ROOT: /var/lib/takos-git/repositories
+      TAKOS_GIT_DATABASE_URL: sqlite:///var/lib/takos-git/repositories/.takos/git.sqlite
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+    volumes:
+      - ../../git:/workspace
+      - takos-git-node-modules:/workspace/node_modules
+      - takos-git-repos:/var/lib/takos-git/repositories
+    networks:
+      takos-local-internal:
+        aliases:
+          - takos-git
+
+volumes:
+  substrate-postgres-data:
+  substrate-redis-data:
+  substrate-minio-data:
+  takos-git-node-modules:
+  takos-git-repos:
+  takos-app-data:
+
+networks:
+  takos-local-internal:
+    external: true
+    name: local-substrate_takos-local-internal
