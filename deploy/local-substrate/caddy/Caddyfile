@@ -1,0 +1,28 @@
+{
+	acme_ca https://pebble:14000/dir
+	acme_ca_root /runtime/pebble.minica.pem
+	admin 0.0.0.0:2019
+}
+
+hello.takos.test {
+	respond "hello from local-substrate (Phase 0)" 200
+}
+
+accounts.takos.test {
+	reverse_proxy accounts:8787
+}
+
+kernel.takos.test {
+	reverse_proxy kernel:8788
+}
+
+app.takos.test {
+	reverse_proxy takos-app:8787
+}
+
+git.takos.test {
+	reverse_proxy takos-git:8790
+}
+
+# Phase 3 で route-registrar が *.app.takos.test に動的 route を追加する。
+# Phase 1 では catch-all 404 にしておく。

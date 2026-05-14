@@ -1,0 +1,77 @@
+# Phase 0 baseline. Pebble (ACME staging) + CoreDNS (*.takos.test) + Caddy
+# (Pebble issuer) を host へ無線にせず docker network 内で完結させる。
+#
+# 検証の golden path:
+#   1. scripts/up.sh で起動
+#   2. scripts/ca-install.sh で Pebble issuance root を host trust store に追加
+#   3. curl https://hello.takos.test/ が Pebble-signed cert chain 付きで 200
+
+services:
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    restart: unless-stopped
+    command:
+      - -config
+      - /pebble/pebble-config.json
+    environment:
+      PEBBLE_VA_NOSLEEP: "1"
+      PEBBLE_WFE_NONCEREJECT: "0"
+    volumes:
+      - ./pebble/pebble-config.json:/pebble/pebble-config.json:ro
+    ports:
+      - "127.0.0.1:15000:15000"
+    networks:
+      takos-local-internal:
+        aliases:
+          - pebble
+
+  coredns:
+    image: coredns/coredns:latest
+    restart: unless-stopped
+    command:
+      - "-conf"
+      - "/etc/coredns/Corefile"
+    volumes:
+      - ./coredns/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns/zones:/etc/coredns/zones:ro
+    ports:
+      - "127.0.0.1:53:53/udp"
+      - "127.0.0.1:53:53/tcp"
+    networks:
+      takos-local-internal:
+        aliases:
+          - coredns
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      pebble:
+        condition: service_started
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/runtime:/runtime:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:2019:2019"
+    networks:
+      takos-local-internal:
+        aliases:
+          - caddy
+          - hello.takos.test
+          - accounts.takos.test
+          - kernel.takos.test
+          - app.takos.test
+          - git.takos.test
+          - agent.takos.test
+
+networks:
+  takos-local-internal:
+    driver: bridge
+
+volumes:
+  caddy-data:
+  caddy-config:

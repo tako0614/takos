@@ -1,0 +1,12 @@
+takos.test:53 {
+    file /etc/coredns/zones/takos.test.zone
+    log
+    errors
+}
+
+. {
+    forward . 1.1.1.1 8.8.8.8
+    cache 30
+    log
+    errors
+}
