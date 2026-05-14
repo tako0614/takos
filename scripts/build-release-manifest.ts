@@ -43,6 +43,8 @@ type ReleaseComponentConfig = {
 type BuildReleaseManifestOptions = {
   output: string | null;
   imageDigestDir: string;
+  releaseVersion: string | null;
+  releaseTag: string | null;
   requireImageDigests: boolean;
   requireCleanGit: boolean;
 };
@@ -126,6 +128,7 @@ assertCleanGitState(gitInfo, submodules, options);
 const manifest = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
+  release: await collectReleaseIdentity(options),
   package: await collectPackageManifest(),
   releaseComponents: await collectReleaseComponents(),
   git: gitInfo,
@@ -150,6 +153,8 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
   const options: BuildReleaseManifestOptions = {
     output: null,
     imageDigestDir: 'dist/image-digests',
+    releaseVersion: null,
+    releaseTag: null,
     requireImageDigests: false,
     requireCleanGit: false,
   };
@@ -168,6 +173,18 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
       options.imageDigestDir = value;
       continue;
     }
+    if (flag === '--release-version') {
+      const value = args[++index];
+      if (!value) usage();
+      options.releaseVersion = value;
+      continue;
+    }
+    if (flag === '--release-tag') {
+      const value = args[++index];
+      if (!value) usage();
+      options.releaseTag = value;
+      continue;
+    }
     if (flag === '--require-image-digests') {
       options.requireImageDigests = true;
       continue;
@@ -184,9 +201,61 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
 function usage(): never {
   console.error(
-    'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--require-image-digests] [--require-clean-git]',
+    'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]',
   );
   Deno.exit(2);
+}
+
+async function collectReleaseIdentity(
+  options: BuildReleaseManifestOptions,
+): Promise<JsonValue> {
+  const rootConfig = await readJson<DenoConfig>('deno.json');
+  const metadata = denoReleaseMetadata(rootConfig);
+  const errors: string[] = [];
+  const version = metadata.version ?? null;
+  const canonicalTag = version ? `v${version}` : null;
+
+  if (!metadata.name) {
+    errors.push('release root package name is required');
+  }
+  if (!version || !isSemver(version)) {
+    errors.push('release root package version must be a semver string');
+  }
+  if (
+    options.releaseVersion !== null &&
+    (!isSemver(options.releaseVersion) || options.releaseVersion !== version)
+  ) {
+    errors.push(
+      `--release-version must match deno.json takosRelease.version (${version ?? '<missing>'})`,
+    );
+  }
+  if (options.releaseTag !== null) {
+    const tagVersion = releaseVersionFromTag(options.releaseTag);
+    if (tagVersion === null) {
+      errors.push('--release-tag must use v<semver>');
+    } else if (tagVersion !== version) {
+      errors.push(
+        `--release-tag must match deno.json takosRelease.version (${version ?? '<missing>'})`,
+      );
+    }
+    if (options.releaseVersion !== null && tagVersion !== null && tagVersion !== options.releaseVersion) {
+      errors.push('--release-tag must match --release-version');
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error('Release identity validation failed:');
+    for (const error of errors) console.error(`- ${error}`);
+    Deno.exit(1);
+  }
+
+  return {
+    name: metadata.name ?? null,
+    version,
+    tag: canonicalTag,
+    requestedVersion: options.releaseVersion,
+    requestedTag: options.releaseTag,
+  };
 }
 
 async function collectPackageManifest(): Promise<JsonValue> {
@@ -288,6 +357,12 @@ function validateReleaseComponentMetadata(
 
 function isSemver(version: string): boolean {
   return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
+}
+
+function releaseVersionFromTag(tag: string): string | null {
+  if (!tag.startsWith('v')) return null;
+  const version = tag.slice(1);
+  return isSemver(version) ? version : null;
 }
 
 async function collectGitInfo(): Promise<GitInfo> {

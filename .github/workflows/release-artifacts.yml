@@ -243,7 +243,16 @@ jobs:
           merge-multiple: true
 
       - name: Build release manifest
+        shell: bash
         run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            release_version="${GITHUB_REF_NAME#v}"
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            release_version="${{ inputs.version }}"
+            release_tag="v${{ inputs.version }}"
+          fi
           deno run \
             --config deno.json \
             --allow-read \
@@ -251,6 +260,8 @@ jobs:
             --allow-write=dist/release-manifest.json \
             scripts/build-release-manifest.ts \
             --image-digest-dir dist/image-digests \
+            --release-version "${release_version}" \
+            --release-tag "${release_tag}" \
             --require-image-digests \
             --output dist/release-manifest.json
 
