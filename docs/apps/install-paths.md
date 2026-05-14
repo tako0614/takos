@@ -221,10 +221,9 @@ takosumi-git import ./takos-export.tar.zst \
 | 企業 / コンプライアンス要件で自社境界に置きたい | `Self-host`                                                  |
 | Takosumi Cloud 依存を完全に切りたい             | `Self-host`                                                  |
 
-3 path は同じ ownership model に収束する設計です。ただし pre-GA docs では
-既存環境の切替や dedicated runtime 採用を約束する案内として扱いません。live data
-portability は provider adapter と launch-readiness evidence が揃った operator
-だけが宣言できます。
+3 path は同じ ownership model に収束する設計です。ただし current docs では
+environment cutover や dedicated runtime 採用を約束する案内として扱いません。live data portability は provider adapter
+と launch-readiness evidence が揃った operator だけが宣言できます。
 
 ## 6. 既存 "はじめる" への導線
 
