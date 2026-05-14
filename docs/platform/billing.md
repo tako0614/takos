@@ -357,4 +357,4 @@ download の公開 UI は managed offering launch overlay の運用 hardening �
 - [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md)
   — installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize /
-  export 時の billing 移行
+  export 時の billing 再紐付け
