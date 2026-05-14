@@ -1,0 +1,9 @@
+{
+  "name": "@takos/local-substrate-route-registrar",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "exports": "./mod.ts",
+  "tasks": {
+    "start": "deno run --allow-net --allow-env mod.ts"
+  }
+}

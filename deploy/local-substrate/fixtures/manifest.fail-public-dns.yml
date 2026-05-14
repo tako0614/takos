@@ -1,0 +1,21 @@
+# Negative test for the public-exposure deny guard. Asks for an AWS Route53
+# A-record. The local-substrate factory does NOT register Route53Connector
+# (and the connector class is not even imported). Kernel should respond
+# with provider_not_registered and HTTP 400.
+#
+# prove-no-public-leak.sh asserts this manifest is rejected.
+apiVersion: takosumi.takos.jp/v1
+kind: Manifest
+metadata:
+  id: fail-public-dns
+  generation: 1
+spec:
+  resources:
+    - id: would-leak
+      shape:
+        id: custom-domain
+        version: v1
+      provider: "@takos/aws-route53"
+      spec:
+        name: leak-attempt.takos.test
+        target: "127.0.0.1"

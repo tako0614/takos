@@ -1,0 +1,14 @@
+$ORIGIN letsencrypt.org.
+$TTL 60
+@       IN  SOA  ns.letsencrypt.org. admin.letsencrypt.org. (
+            1
+            60
+            60
+            60
+            60
+        )
+@       IN  NS   ns.letsencrypt.org.
+; All A queries for *.letsencrypt.org return empty (RFC 8020-style NXDOMAIN
+; handled by upstream of CoreDNS). Caddy ACME pointing to public Let's
+; Encrypt cannot resolve and falls back to the configured Pebble issuer.
+ns      IN  A    127.0.0.1
