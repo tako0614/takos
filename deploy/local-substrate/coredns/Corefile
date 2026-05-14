@@ -4,6 +4,17 @@ takos.test:53 {
     errors
 }
 
+# Defense in depth: NXDOMAIN any *.letsencrypt.org query so a
+# misconfigured Caddy can't fall back to public ACME prod even if the
+# Caddyfile pin is later removed.
+letsencrypt.org:53 {
+    template ANY ANY {
+        rcode NXDOMAIN
+    }
+    log
+    errors
+}
+
 . {
     forward . 1.1.1.1 8.8.8.8
     cache 30

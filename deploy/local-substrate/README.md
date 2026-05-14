@@ -20,25 +20,36 @@ Windows は対象外。
 | 2 | LocalStack / k3d / fake-gcs / Azurite / miniflare を `compose.emulators.yml` 1 本で並行統合 | `scripts/smoke.sh` 全 cloud fixture が pass |
 | 3 | factory で endpoint override + Caddy admin route registrar + 公開面 deny 多重防御 | dynamic subdomain が deploy 直後に hit する + `prove-no-public-leak.sh` pass |
 
-現在 Phase 0 のみ実装済み。
+現在 Phase 0–3 まで実装済み (kernel db_migrations 由来の `POST /v1/deployments` 500
+は upstream 側で別途修正待ち)。
 
-## Phase 0 quick start
+## Quick start
 
 ```bash
 cd takos/deploy/local-substrate
+
+# Phase 0: ingress only (Pebble + CoreDNS + Caddy)
 bash scripts/up.sh
+
+# Phase 1+: substrate (kernel + accounts + takos-app + takos-git +
+# route-registrar) on top of Phase 0 ingress
+bash scripts/up.sh --profile postgres
 
 # one-time per host
 sudo bash scripts/ca-install.sh
 sudo bash scripts/configure-dns.sh
 
+# verify
+bash scripts/smoke.sh
+bash scripts/prove-no-public-leak.sh
 curl https://hello.takos.test/
+curl https://accounts.takos.test/.well-known/openid-configuration
 ```
 
 詳細は [docs/root-ca-install.md](docs/root-ca-install.md) と
 [docs/operator-runbook.md](docs/operator-runbook.md)。
 
-## ファイル layout (Phase 0 時点)
+## ファイル layout
 
 ```
 takos/deploy/local-substrate/
@@ -46,25 +57,34 @@ takos/deploy/local-substrate/
 ├── docs/
 │   ├── architecture.md
 │   ├── root-ca-install.md
-│   └── operator-runbook.md
-├── compose.ingress.yml
+│   ├── operator-runbook.md
+│   └── browser-test-playbook.md
+├── compose.ingress.yml          # Pebble + CoreDNS + Caddy
+├── compose.substrate.yml        # kernel + accounts + takos-app + takos-git + route-registrar
+├── compose.emulators.yml        # opt-in: localstack, k3d
 ├── caddy/
 │   ├── Caddyfile
-│   └── runtime/                  # up.sh が生成 (gitignored)
+│   └── runtime/                 # up.sh が生成 (gitignored)
 ├── coredns/
 │   ├── Corefile
-│   └── zones/takos.test.zone
-├── pebble/
-│   └── pebble-config.json
+│   └── zones/{takos.test.zone, deny-letsencrypt.zone}
+├── pebble/pebble-config.json
+├── factories/
+│   └── local-substrate-factories.ts   # 公開 DNS provider import-time deny
+├── wrappers/
+│   └── kernel-with-embedded-agent.ts  # local source kernel + agent in-process
+├── route-registrar/
+│   ├── deno.json
+│   └── mod.ts                   # poll kernel → patch Caddy admin API
+├── fixtures/manifest.*.yml
 └── scripts/
     ├── up.sh
     ├── down.sh
     ├── ca-install.sh
-    └── configure-dns.sh
+    ├── configure-dns.sh
+    ├── smoke.sh
+    └── prove-no-public-leak.sh
 ```
-
-Phase 1 以降で `compose.substrate.yml` / `compose.emulators.yml` /
-`factories/` / `route-registrar/` / `fixtures/` を増やしていく。
 
 ## 制約
 

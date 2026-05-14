@@ -180,6 +180,7 @@ services:
     volumes:
       - ../../../takosumi:/workspace
       - ./wrappers:/wrappers:ro
+      - ./factories:/local-substrate-factories:ro
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test:
@@ -282,6 +283,27 @@ services:
       takos-local-internal:
         aliases:
           - takos-git
+
+  # ---- Phase 3 route registrar ----
+  # Polls kernel for applied deployments and mirrors their routes into
+  # Caddy admin API as dynamic reverse_proxy entries.
+  route-registrar:
+    image: denoland/deno:2.7.10
+    restart: unless-stopped
+    depends_on:
+      kernel:
+        condition: service_healthy
+    working_dir: /app
+    command: ["deno", "task", "start"]
+    environment:
+      KERNEL_URL: http://kernel:8788
+      CADDY_ADMIN_URL: http://caddy:2019
+      KERNEL_DEPLOY_TOKEN: ${TAKOSUMI_DEPLOY_TOKEN:-local-substrate-deploy-token}
+      POLL_INTERVAL_MS: "5000"
+    volumes:
+      - ./route-registrar:/app:ro
+    networks:
+      - takos-local-internal
 
 volumes:
   substrate-postgres-data:
