@@ -11,6 +11,10 @@ type JsonValue =
 type DenoConfig = {
   name?: string;
   version?: string;
+  takosRelease?: {
+    name?: string;
+    version?: string;
+  };
   workspace?: string[];
   exports?: Record<string, string> | string;
   tasks?: Record<string, string>;
@@ -33,6 +37,7 @@ type ReleaseComponentConfig = {
   id: string;
   path: string;
   kind: 'deno' | 'cargo';
+  expectedName: string;
 };
 
 type BuildReleaseManifestOptions = {
@@ -104,10 +109,10 @@ const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
 ];
 
 const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [
-  { id: 'takos-shell', path: 'deno.json', kind: 'deno' },
-  { id: 'takos-app', path: 'app/deno.json', kind: 'deno' },
-  { id: 'takos-git', path: 'git/deno.json', kind: 'deno' },
-  { id: 'takos-agent', path: 'agent/Cargo.toml', kind: 'cargo' },
+  { id: 'takos-shell', path: 'deno.json', kind: 'deno', expectedName: 'takos' },
+  { id: 'takos-app', path: 'app/deno.json', kind: 'deno', expectedName: 'takos-app' },
+  { id: 'takos-git', path: 'git/deno.json', kind: 'deno', expectedName: 'takos-git' },
+  { id: 'takos-agent', path: 'agent/Cargo.toml', kind: 'cargo', expectedName: 'takos-agent' },
 ];
 
 const root = Deno.cwd();
@@ -187,16 +192,18 @@ function usage(): never {
 async function collectPackageManifest(): Promise<JsonValue> {
   const rootConfig = await readJson<DenoConfig>('deno.json');
   const workspace = rootConfig.workspace ?? [];
+  const rootReleaseMetadata = denoReleaseMetadata(rootConfig);
   const packages = [];
 
   for (const workspacePath of workspace) {
     const configPath = `${workspacePath.replace(/\/$/, '')}/deno.json`;
     const config = await readJson<DenoConfig>(configPath);
+    const releaseMetadata = denoReleaseMetadata(config);
     packages.push({
       path: workspacePath,
       config: configPath,
-      name: config.name ?? null,
-      version: config.version ?? null,
+      name: releaseMetadata.name ?? null,
+      version: releaseMetadata.version ?? null,
       exports: config.exports ?? null,
       tasks: Object.keys(config.tasks ?? {}).sort(),
     });
@@ -205,8 +212,8 @@ async function collectPackageManifest(): Promise<JsonValue> {
   return {
     root,
     config: 'deno.json',
-    name: rootConfig.name ?? null,
-    version: rootConfig.version ?? null,
+    name: rootReleaseMetadata.name ?? null,
+    version: rootReleaseMetadata.version ?? null,
     tasks: Object.keys(rootConfig.tasks ?? {}).sort(),
     workspace,
     packages,
@@ -215,15 +222,18 @@ async function collectPackageManifest(): Promise<JsonValue> {
 
 async function collectReleaseComponents(): Promise<JsonValue> {
   const components = [];
+  const errors: string[] = [];
   for (const component of RELEASE_COMPONENT_CONFIGS) {
     if (component.kind === 'deno') {
       const config = await readJson<DenoConfig>(component.path);
+      const releaseMetadata = denoReleaseMetadata(config);
+      validateReleaseComponentMetadata(component, releaseMetadata.name, releaseMetadata.version, errors);
       components.push({
         id: component.id,
         kind: component.kind,
         config: component.path,
-        name: config.name ?? null,
-        version: config.version ?? null,
+        name: releaseMetadata.name ?? null,
+        version: releaseMetadata.version ?? null,
         workspaceCount: config.workspace?.length ?? 0,
         taskCount: Object.keys(config.tasks ?? {}).length,
       });
@@ -231,6 +241,7 @@ async function collectReleaseComponents(): Promise<JsonValue> {
     }
 
     const cargoPackage = await readCargoPackage(component.path);
+    validateReleaseComponentMetadata(component, cargoPackage.name, cargoPackage.version, errors);
     components.push({
       id: component.id,
       kind: component.kind,
@@ -242,10 +253,41 @@ async function collectReleaseComponents(): Promise<JsonValue> {
     });
   }
 
+  if (errors.length > 0) {
+    console.error('Release component metadata validation failed:');
+    for (const error of errors) console.error(`- ${error}`);
+    Deno.exit(1);
+  }
+
   return {
     configs: RELEASE_COMPONENT_CONFIGS.map((component) => component.path),
     components,
   };
+}
+
+function denoReleaseMetadata(config: DenoConfig): { name?: string; version?: string } {
+  return {
+    name: config.takosRelease?.name ?? config.name,
+    version: config.takosRelease?.version ?? config.version,
+  };
+}
+
+function validateReleaseComponentMetadata(
+  component: ReleaseComponentConfig,
+  name: string | undefined,
+  version: string | undefined,
+  errors: string[],
+): void {
+  if (name !== component.expectedName) {
+    errors.push(`${component.id}: ${component.path} name must be ${component.expectedName}`);
+  }
+  if (!version || !isSemver(version)) {
+    errors.push(`${component.id}: ${component.path} version must be a semver string`);
+  }
+}
+
+function isSemver(version: string): boolean {
+  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
 }
 
 async function collectGitInfo(): Promise<GitInfo> {

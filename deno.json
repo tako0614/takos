@@ -1,4 +1,8 @@
 {
+  "takosRelease": {
+    "name": "takos",
+    "version": "0.9.0"
+  },
   "tasks": {
     "doctor": "node scripts/doctor.mjs",
     "check": "node scripts/doctor.mjs --check",
