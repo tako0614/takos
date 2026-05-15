@@ -146,9 +146,13 @@ services:
 
   # kernel embeds runtime-agent in-process when TAKOSUMI_AGENT_URL is unset,
   # so we don't run a separate runtime-agent service for the local-substrate.
+  # The image is a thin overlay on denoland/deno that adds docker CLI so
+  # the embedded selfhost-docker-compose connector can spawn `docker compose`.
   kernel:
     profiles: ["postgres"]
-    image: denoland/deno:2.7.10
+    build:
+      context: .
+      dockerfile: wrappers/Dockerfile.kernel
     restart: unless-stopped
     depends_on:
       substrate-postgres-init:
