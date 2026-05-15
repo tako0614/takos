@@ -37,5 +37,10 @@ check "phase1.kernel.health" "kernel.takos.test" "/health" "200"
 check "phase1.app.health" "app.takos.test" "/health" "200"
 
 echo
+echo "==> Production mirror — takosumi.com / cloud.takosumi.com under .test"
+check "prod-mirror.docs.index" "takosumi.test" "/" "200"
+check "prod-mirror.cloud.oidc-discovery" "cloud.takosumi.test" "/.well-known/openid-configuration" "200"
+
+echo
 echo "==> ${PASS} passed, ${FAIL} failed"
 [[ $FAIL -eq 0 ]]

@@ -4,6 +4,12 @@ takos.test:53 {
     errors
 }
 
+takosumi.test:53 {
+    file /etc/coredns/zones/takosumi.test.zone
+    log
+    errors
+}
+
 # Defense in depth: NXDOMAIN any *.letsencrypt.org query so a
 # misconfigured Caddy can't fall back to public ACME prod even if the
 # Caddyfile pin is later removed.

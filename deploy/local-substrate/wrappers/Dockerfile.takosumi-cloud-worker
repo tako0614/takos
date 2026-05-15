@@ -1,0 +1,10 @@
+# Miniflare runtime for the takosumi-cloud Cloudflare Worker.
+#
+# Pre-installs miniflare so the container can start fast without a fresh
+# npm install on every up.sh. Debian base (not alpine) so the bundled
+# workerd binary (@cloudflare/workerd-linux-64) — glibc only — works.
+FROM node:22-slim
+WORKDIR /app
+RUN npm install --no-fund --no-audit miniflare@3 \
+    && npm cache clean --force
+EXPOSE 8787
