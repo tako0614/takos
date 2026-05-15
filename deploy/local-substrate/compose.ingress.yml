@@ -51,6 +51,7 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy/runtime:/runtime:ro
+      - ../../../takosumi/docs/.vitepress/dist:/srv/takosumi-docs:ro
       - caddy-data:/data
       - caddy-config:/config
     ports:
@@ -67,6 +68,8 @@ services:
           - app.takos.test
           - git.takos.test
           - agent.takos.test
+          - takosumi.test
+          - cloud.takosumi.test
 
 networks:
   takos-local-internal:

@@ -8,6 +8,19 @@ hello.takos.test {
 	respond "hello from local-substrate (Phase 0)" 200
 }
 
+# takosumi docs (VitePress static build). Mirrors production takosumi.com.
+takosumi.test {
+	root * /srv/takosumi-docs
+	try_files {path} {path}/ {path}.html /index.html
+	file_server
+	encode gzip
+}
+
+# takosumi-cloud Worker. Mirrors production cloud.takosumi.com.
+cloud.takosumi.test {
+	reverse_proxy takosumi-cloud-worker:8787
+}
+
 accounts.takos.test {
 	reverse_proxy accounts:8787
 }

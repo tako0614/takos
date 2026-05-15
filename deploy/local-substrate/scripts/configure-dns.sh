@@ -19,7 +19,7 @@ cat > "$CONF" <<'EOF'
 # Managed by takos/deploy/local-substrate/scripts/configure-dns.sh
 [Resolve]
 DNS=127.0.0.1
-Domains=~takos.test
+Domains=~takos.test ~takosumi.test
 EOF
 
 systemctl restart systemd-resolved

@@ -1,0 +1,13 @@
+$ORIGIN takosumi.test.
+$TTL 60
+@       IN  SOA  ns.takosumi.test. admin.takosumi.test. (
+            1
+            60
+            60
+            60
+            60
+        )
+@       IN  NS   ns.takosumi.test.
+ns      IN  A    127.0.0.1
+@       IN  A    127.0.0.1
+*       IN  A    127.0.0.1

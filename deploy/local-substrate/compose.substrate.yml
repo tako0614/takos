@@ -288,6 +288,80 @@ services:
         aliases:
           - takos-git
 
+  # ---- takosumi docs (mirrors takosumi.com on Cloudflare Pages) ----
+  takosumi-docs-build:
+    profiles: ["postgres"]
+    # Debian-based (not alpine) — vitepress / rollup pull glibc-flavored
+    # native binaries; alpine + musl breaks the install.
+    image: node:22-slim
+    restart: "no"
+    working_dir: /docs
+    command:
+      - sh
+      - -c
+      - |
+        # vitepress needs git for lastUpdated metadata, and may need
+        # rebuilt native modules if the host's node_modules were from a
+        # different libc.
+        apt-get update -qq && apt-get install -y --no-install-recommends git ca-certificates >/dev/null
+        if [ -f node_modules/rollup/dist/native.js ] && \
+           ! ldd node_modules/rollup/dist/native.js >/dev/null 2>&1; then
+          rm -rf node_modules
+        fi
+        if [ ! -d node_modules ]; then
+          npm install --no-fund --no-audit
+        fi
+        npm run build
+    volumes:
+      - ../../../takosumi/docs:/docs
+
+  # ---- takosumi-cloud Worker (mirrors cloud.takosumi.com on Cloudflare Workers) ----
+  takosumi-cloud-worker-build:
+    profiles: ["postgres"]
+    image: denoland/deno:2.7.10
+    restart: "no"
+    working_dir: /work
+    command:
+      - sh
+      - -c
+      - |
+        mkdir -p deploy/cloudflare/.wrangler/dist
+        deno bundle \
+          --config deploy/cloudflare/deno.json \
+          --platform browser \
+          deploy/cloudflare/src/worker.ts \
+          -o deploy/cloudflare/.wrangler/dist/takosumi-cloud-accounts-worker.mjs
+    volumes:
+      - ../../../takosumi-cloud:/work
+
+  takosumi-cloud-worker:
+    profiles: ["postgres"]
+    build:
+      context: .
+      dockerfile: wrappers/Dockerfile.takosumi-cloud-worker
+    restart: unless-stopped
+    depends_on:
+      takosumi-cloud-worker-build:
+        condition: service_completed_successfully
+    working_dir: /app
+    command: ["node", "/app/runner.mjs"]
+    environment:
+      WORKER_SCRIPT: /worker/takosumi-cloud-accounts-worker.mjs
+      WORKER_PORT: "8787"
+      TAKOSUMI_ACCOUNTS_ISSUER: https://cloud.takosumi.test
+      TAKOSUMI_ACCOUNTS_SUBJECT: tsub_takosumi_cloud_local
+      TAKOSUMI_ACCOUNTS_CLIENT_ID: takos-app-local
+      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback
+      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: closed
+    volumes:
+      - ../../../takosumi-cloud/deploy/cloudflare/.wrangler/dist:/worker:ro
+      - ./wrappers/takosumi-cloud-worker-runner.mjs:/app/runner.mjs:ro
+      - takosumi-cloud-worker-data:/data
+    networks:
+      takos-local-internal:
+        aliases:
+          - takosumi-cloud-worker
+
   # ---- Phase 3 route registrar ----
   # Polls kernel for applied deployments and mirrors their routes into
   # Caddy admin API as dynamic reverse_proxy entries.
@@ -316,6 +390,7 @@ volumes:
   takos-git-node-modules:
   takos-git-repos:
   takos-app-data:
+  takosumi-cloud-worker-data:
 
 networks:
   takos-local-internal:
