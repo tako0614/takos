@@ -51,6 +51,12 @@ oauth-mock.test {
 	reverse_proxy oauth-mock:8789
 }
 
+# Mailpit web UI — inbox for anything any local service SMTPs to mailpit:1025.
+mailpit.takos.test {
+	encode gzip
+	reverse_proxy mailpit:8025
+}
+
 # cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
 #
 # Wrap in `route { ... handle ... }` so Caddy evaluates the API handler before

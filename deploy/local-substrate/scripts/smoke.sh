@@ -27,6 +27,47 @@ check() {
 	fi
 }
 
+# Status + JSON shape assertion. Walks the GET response through python so
+# we catch schema drift (e.g. backend renames installation.id → id_new
+# without telling the SPA) earlier than 'HTTP 200 = green' would.
+check_json() {
+	local label=$1
+	local host=$2
+	local path=$3
+	local jq_path=$4   # python-style: a.b.c or a.b[0].c
+	local body status
+	body=$(curl -sk --cacert "$CA" --resolve "${host}:443:127.0.0.1" \
+		-w "\n%{http_code}" "https://${host}${path}")
+	status=$(echo "$body" | tail -n1)
+	if [[ "$status" != "200" ]]; then
+		echo "    FAIL [$label] https://${host}${path} -> $status (expected 200)"
+		FAIL=$((FAIL + 1))
+		return
+	fi
+	local body_only
+	body_only=$(echo "$body" | head -n -1)
+	if echo "$body_only" | python3 -c "
+import json, sys
+data = json.loads(sys.stdin.read())
+path = '$jq_path'
+cur = data
+for part in path.split('.'):
+    if '[' in part:
+        key, idx = part.split('[')
+        idx = int(idx.rstrip(']'))
+        cur = cur[key][idx] if key else cur[idx]
+    else:
+        cur = cur[part]
+assert cur is not None and cur != '', 'value is falsy'
+" 2>/dev/null; then
+		echo "    PASS [$label] https://${host}${path} → 200 with $jq_path"
+		PASS=$((PASS + 1))
+	else
+		echo "    FAIL [$label] https://${host}${path} → 200 but $jq_path is missing/empty"
+		FAIL=$((FAIL + 1))
+	fi
+}
+
 # POST a JSON body and assert status. Used for endpoints that 400/405 on GET
 # but should return 200 when called correctly.
 check_post() {
@@ -64,7 +105,7 @@ check "prod-mirror.landing.favicon" "takosumi.test" "/brand/favicon.svg" "200"
 check "prod-mirror.landing.geometric" "takosumi.test" "/brand/geometric.svg" "200"
 check "prod-mirror.landing.inkdrop" "takosumi.test" "/brand/inkdrop.svg" "200"
 check "prod-mirror.docs.index" "takosumi.test" "/docs/" "200"
-check "prod-mirror.cloud.oidc-discovery" "cloud.takosumi.test" "/.well-known/openid-configuration" "200"
+check_json "prod-mirror.cloud.oidc-discovery" "cloud.takosumi.test" "/.well-known/openid-configuration" "authorization_endpoint"
 check "prod-mirror.cloud.dashboard-index" "cloud.takosumi.test" "/" "200"
 check "prod-mirror.cloud.dashboard-signin" "cloud.takosumi.test" "/sign-in" "200"
 check "prod-mirror.cloud.dashboard-deeplink" "cloud.takosumi.test" "/apps/abc" "200"
@@ -161,6 +202,16 @@ if bash "$SCRIPT_DIR/bundled-apps-smoke.sh" >/dev/null 2>&1; then
 	PASS=$((PASS + 1))
 else
 	echo "    FAIL [bundled.apps] see scripts/bundled-apps-smoke.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> mailpit SMTP catcher (ready for backend email when wired)"
+if bash "$SCRIPT_DIR/mailpit-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [mailpit] inbox API reachable + probe email delivered + indexed"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [mailpit] see scripts/mailpit-smoke.sh"
 	FAIL=$((FAIL + 1))
 fi
 
