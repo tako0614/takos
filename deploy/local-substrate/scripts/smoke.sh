@@ -86,5 +86,20 @@ check_post "install.preview.yurucommu" "cloud.takosumi.test" "/v1/install/previe
 	'{"source":{"gitUrl":"https://github.com/tako0614/yurucommu.git","ref":"main"}}' "200"
 
 echo
+echo "==> OAuth flow — upstream mock (accounts.google.com / github.com)"
+# These walk the full 3-step upstream OAuth dance against oauth-mock and
+# assert a session is created. The dedicated script handles the redirect
+# chain; here we just gate it as one PASS/FAIL per provider.
+for provider in google github; do
+	if bash "$SCRIPT_DIR/oauth-e2e.sh" "$provider" >/dev/null 2>&1; then
+		echo "    PASS [oauth.e2e.$provider] full authorize → callback dance returned session"
+		PASS=$((PASS + 1))
+	else
+		echo "    FAIL [oauth.e2e.$provider] see scripts/oauth-e2e.sh $provider for the failure"
+		FAIL=$((FAIL + 1))
+	fi
+done
+
+echo
 echo "==> ${PASS} passed, ${FAIL} failed"
 [[ $FAIL -eq 0 ]]

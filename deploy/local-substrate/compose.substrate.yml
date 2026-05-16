@@ -369,6 +369,22 @@ services:
         aliases:
           - install-preview-mock
 
+  # ---- oauth-mock (stands in for accounts.google.com + github.com) ----
+  # Auto-approves /authorize and returns deterministic /userinfo so the
+  # cloud sign-in flow (Google / GitHub button) completes without external
+  # network. Reachable from browser + worker via Caddy at oauth-mock.test.
+  oauth-mock:
+    profiles: ["postgres"]
+    image: denoland/deno:alpine-2.1.4
+    restart: unless-stopped
+    command: ["run", "--allow-net", "--allow-env=PORT", "/srv/main.ts"]
+    volumes:
+      - ./oauth-mock/main.ts:/srv/main.ts:ro
+    networks:
+      takos-local-internal:
+        aliases:
+          - oauth-mock
+
   # ---- yurucommu landing (plain HTML, mirrors yurucommu.com root) ----
   # No build step; site/ ships as static files. This service exists so
   # `docker compose up` shows yurucommu in the topology summary even
@@ -428,6 +444,8 @@ services:
         condition: service_completed_successfully
       install-preview-mock:
         condition: service_started
+      oauth-mock:
+        condition: service_started
     working_dir: /app
     command: ["node", "/app/runner.mjs"]
     environment:
@@ -449,6 +467,29 @@ services:
       TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_PUBLIC_SUMMARY: "Local substrate p0 staged rehearsal — evidence retained with rehearsal log; no production traffic served."
       # Mock install-preview service running in the same docker network.
       TAKOSUMI_ACCOUNTS_INSTALL_PREVIEW_URL: http://install-preview-mock:8788
+      # Upstream OAuth — pointed at the local oauth-mock for both google +
+      # github so the cloud sign-in flow can complete without external network.
+      # SUBJECT_SECRET is required when any upstream provider is configured;
+      # the value is a deterministic local-only secret (not production).
+      TAKOSUMI_ACCOUNTS_SUBJECT_SECRET: "local-substrate-upstream-subject-secret-v1"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_ID: "takos-cloud-local-google"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_SECRET: "mock-secret-google"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_REDIRECT_URI: "https://cloud.takosumi.test/sign-in/callback"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_ISSUER: "https://oauth-mock.test/google"
+      # /authorize is browser-facing (must be HTTPS so the SPA can redirect to
+      # it); /token + /userinfo are worker-facing fetches, which bypass Caddy
+      # and hit the mock container directly over HTTP (avoids the workerd TLS
+      # trust store not having the Pebble root).
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/google/authorize"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_TOKEN_ENDPOINT: "http://oauth-mock:8789/google/token"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_USERINFO_ENDPOINT: "http://oauth-mock:8789/google/userinfo"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_ID: "takos-cloud-local-github"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_SECRET: "mock-secret-github"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_REDIRECT_URI: "https://cloud.takosumi.test/sign-in/callback"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_ISSUER: "https://oauth-mock.test/github"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/github/authorize"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_TOKEN_ENDPOINT: "http://oauth-mock:8789/github/access_token"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_USERINFO_ENDPOINT: "http://oauth-mock:8789/github/user"
     volumes:
       - ../../../takosumi-cloud/deploy/cloudflare/.wrangler/dist:/worker:ro
       - ./wrappers/takosumi-cloud-worker-runner.mjs:/app/runner.mjs:ro

@@ -76,6 +76,7 @@ services:
           - cloud.takosumi.test
           - takos.test
           - yurucommu.test
+          - oauth-mock.test
 
 networks:
   takos-local-internal:

@@ -1,0 +1,13 @@
+$ORIGIN oauth-mock.test.
+$TTL 60
+@       IN  SOA  ns.oauth-mock.test. admin.oauth-mock.test. (
+            1
+            60
+            60
+            60
+            60
+        )
+@       IN  NS   ns.oauth-mock.test.
+ns      IN  A    127.0.0.1
+@       IN  A    127.0.0.1
+*       IN  A    127.0.0.1
