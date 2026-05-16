@@ -49,5 +49,11 @@ check "prod-mirror.cloud.dashboard-signin" "cloud.takosumi.test" "/sign-in" "200
 check "prod-mirror.cloud.dashboard-deeplink" "cloud.takosumi.test" "/apps/abc" "200"
 
 echo
+echo "==> Product landings — takos.jp / yurucommu.com under .test"
+check "prod-mirror.takos.landing.index" "takos.test" "/" "200"
+check "prod-mirror.takos.landing.favicon" "takos.test" "/brand/favicon.svg" "200"
+check "prod-mirror.yurucommu.landing.index" "yurucommu.test" "/" "200"
+
+echo
 echo "==> ${PASS} passed, ${FAIL} failed"
 [[ $FAIL -eq 0 ]]

@@ -27,6 +27,22 @@ takosumi.test {
 	}
 }
 
+# takos.jp mirror — marketing landing.
+takos.test {
+	encode gzip
+	root * /srv/takos-marketing
+	try_files {path} {path}/index.html /index.html
+	file_server
+}
+
+# yurucommu.com mirror — marketing landing (vanilla HTML in yurucommu/site/).
+yurucommu.test {
+	encode gzip
+	root * /srv/yurucommu-marketing
+	try_files {path} {path}/index.html /index.html
+	file_server
+}
+
 # cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
 #
 # Wrap in `route { ... handle ... }` so Caddy evaluates the API handler before

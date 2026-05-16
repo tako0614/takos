@@ -1,0 +1,23 @@
+{
+  "name": "takos-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev --port 4322",
+    "build": "vinxi build",
+    "preview": "vinxi start --port 4322",
+    "version": "vinxi version"
+  },
+  "dependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.2.10",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@solidjs/meta": "^0.29.4",
+    "@solidjs/router": "^0.15.3",
+    "@solidjs/start": "^1.1.0",
+    "solid-js": "^1.9.4",
+    "vinxi": "^0.5.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
