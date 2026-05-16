@@ -1,0 +1,48 @@
+{
+  "appId": "jp.takos.slide",
+  "bindings": [
+    {
+      "kind": "identity.oidc@v1",
+      "name": "auth",
+      "required": true
+    },
+    {
+      "kind": "object-store.s3-compatible@v1",
+      "name": "presentations",
+      "required": true
+    },
+    {
+      "kind": "domain.http@v1",
+      "name": "domain",
+      "required": false
+    },
+    {
+      "kind": "install-launch-token@v1",
+      "name": "bootstrap",
+      "required": true
+    }
+  ],
+  "grants": [
+    {
+      "capability": "files:read"
+    },
+    {
+      "capability": "files:write"
+    },
+    {
+      "capability": "logs.read.own"
+    }
+  ],
+  "metadata": {
+    "fixture": true,
+    "fromAppYml": "/home/tako/Desktop/takos/takos/deploy/local-substrate/../../../takos-apps/takos-slide/.takosumi/app.yml",
+    "generatedAt": "2026-05-16T15:39:00Z"
+  },
+  "source": {
+    "appManifestDigest": "sha256:83ec0516f33a6d0d7728002982e6810f31abdb698e8c0e586e5e56642e2c31bf",
+    "commit": "38b89fe5cc9d12bc882f42e9aba62cdf41690d29",
+    "compiledManifestDigest": "sha256:83ec0516f33a6d0d7728002982e6810f31abdb698e8c0e586e5e56642e2c31bf",
+    "gitUrl": "https://github.com/tako0614/takos-slide.git",
+    "ref": "v0.1.2"
+  }
+}

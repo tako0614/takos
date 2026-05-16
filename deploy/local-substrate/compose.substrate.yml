@@ -361,9 +361,10 @@ services:
     profiles: ["postgres"]
     image: denoland/deno:alpine-2.1.4
     restart: unless-stopped
-    command: ["run", "--allow-net", "--allow-env=PORT", "/srv/main.ts"]
+    command: ["run", "--allow-net", "--allow-env=PORT", "--allow-read=/srv", "/srv/main.ts"]
     volumes:
       - ./install-preview-mock/main.ts:/srv/main.ts:ro
+      - ./install-preview-mock/fixtures:/srv/fixtures:ro
     networks:
       takos-local-internal:
         aliases:

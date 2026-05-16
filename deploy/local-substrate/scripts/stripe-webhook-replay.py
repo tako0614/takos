@@ -108,40 +108,87 @@ def sign_stripe_event(payload: bytes, secret: str, timestamp: int) -> str:
     return f"t={timestamp},v1={sig}"
 
 
-def build_checkout_event(*, event_id: str, subject: str,
-                         customer: str, subscription: str) -> dict:
-    """Minimal checkout.session.completed event shape with the fields the
-    accounts-service normalizer needs. Subject is read from metadata
-    .takosumi_subject (not client_reference_id)."""
+def _event_envelope(event_type: str, obj: dict, *, event_id: str | None = None) -> dict:
     return {
-        "id": event_id,
+        "id": event_id or ("evt_test_" + secrets.token_hex(8)),
         "object": "event",
-        "type": "checkout.session.completed",
+        "type": event_type,
         "api_version": "2024-11-20.acacia",
         "created": int(time.time()),
-        "data": {
-            "object": {
-                "id": "cs_test_" + secrets.token_hex(8),
-                "object": "checkout.session",
-                "client_reference_id": subject,
-                "customer": customer,
-                "subscription": subscription,
-                "payment_status": "paid",
-                "status": "complete",
-                "mode": "subscription",
-                "metadata": {
-                    "takosumi_subject": subject,
-                    "plan_code": "local-test-plan",
-                },
-            },
-        },
+        "data": {"object": obj},
     }
 
 
-def post_webhook(event: dict) -> tuple[int, str]:
+def build_checkout_event(*, event_id: str, subject: str,
+                         customer: str, subscription: str) -> dict:
+    return _event_envelope("checkout.session.completed", {
+        "id": "cs_test_" + secrets.token_hex(8),
+        "object": "checkout.session",
+        "client_reference_id": subject,
+        "customer": customer,
+        "subscription": subscription,
+        "payment_status": "paid",
+        "status": "complete",
+        "mode": "subscription",
+        "metadata": {
+            "takosumi_subject": subject,
+            "plan_code": "local-test-plan",
+        },
+    }, event_id=event_id)
+
+
+def build_invoice_paid_event(*, customer: str, subscription: str) -> dict:
+    return _event_envelope("invoice.paid", {
+        "id": "in_test_" + secrets.token_hex(8),
+        "object": "invoice",
+        "customer": customer,
+        "subscription": subscription,
+        "status": "paid",
+        "lines": {"data": [{
+            "period": {
+                "start": int(time.time()) - 3600,
+                "end": int(time.time()) + 30 * 86400,
+            },
+        }]},
+    })
+
+
+def build_invoice_failed_event(*, customer: str) -> dict:
+    return _event_envelope("invoice.payment_failed", {
+        "id": "in_test_" + secrets.token_hex(8),
+        "object": "invoice",
+        "customer": customer,
+        "status": "open",
+        "next_payment_attempt": int(time.time()) + 86400,
+        "attempt_count": 1,
+    })
+
+
+def build_subscription_updated_event(*, customer: str, subscription: str) -> dict:
+    return _event_envelope("customer.subscription.updated", {
+        "id": subscription,
+        "object": "subscription",
+        "customer": customer,
+        "status": "active",
+        "current_period_end": int(time.time()) + 30 * 86400,
+        "items": {"data": [{"price": {"id": "price_test_basic"}}]},
+    })
+
+
+def build_subscription_deleted_event(*, customer: str, subscription: str) -> dict:
+    return _event_envelope("customer.subscription.deleted", {
+        "id": subscription,
+        "object": "subscription",
+        "customer": customer,
+        "status": "canceled",
+    })
+
+
+def post_webhook(event: dict, *, ts_offset: int = 0,
+                 secret: str = WEBHOOK_SECRET) -> tuple[int, str]:
     payload = json.dumps(event, separators=(",", ":")).encode()
-    timestamp = int(time.time())
-    sig = sign_stripe_event(payload, WEBHOOK_SECRET, timestamp)
+    timestamp = int(time.time()) + ts_offset
+    sig = sign_stripe_event(payload, secret, timestamp)
     status, _h, body = request(
         "POST", "/v1/billing/stripe/webhook",
         body=payload,
@@ -151,54 +198,92 @@ def post_webhook(event: dict) -> tuple[int, str]:
 
 
 def main() -> None:
-    print("[1/4] Minting subject via oauth-mock...")
+    print("[1/9] Minting subject via oauth-mock...")
     subject = mint_subject_via_oauth()
     print(f"      subject={subject}")
 
     event_id = "evt_test_" + secrets.token_hex(8)
     customer = "cus_test_" + secrets.token_hex(8)
     subscription = "sub_test_" + secrets.token_hex(8)
-    event = build_checkout_event(
+
+    # ---- checkout: 1st delivery + replay + wrong secret ----
+    checkout = build_checkout_event(
         event_id=event_id, subject=subject,
         customer=customer, subscription=subscription,
     )
 
-    print("[2/4] POSTing checkout.session.completed webhook...")
-    status, body = post_webhook(event)
+    print("[2/9] POST checkout.session.completed (first delivery)...")
+    status, body = post_webhook(checkout)
     if status != 200:
-        sys.exit(f"webhook POST failed: {status} {body}")
+        sys.exit(f"checkout POST failed: {status} {body}")
     parsed = json.loads(body)
-    if not parsed.get("received"):
-        sys.exit(f"received=false: {parsed}")
-    if parsed.get("duplicate"):
-        sys.exit(f"first delivery should not be duplicate: {parsed}")
+    if not parsed.get("received") or parsed.get("duplicate"):
+        sys.exit(f"unexpected first-delivery shape: {parsed}")
     print(f"      {parsed}")
 
-    print("[3/4] Replaying same event to verify idempotency...")
-    status, body = post_webhook(event)
-    if status != 200:
-        sys.exit(f"replay POST failed: {status} {body}")
-    parsed2 = json.loads(body)
-    if not parsed2.get("duplicate"):
-        sys.exit(f"second delivery should be duplicate: {parsed2}")
-    print(f"      {parsed2}")
+    print("[3/9] Replay same event — expect duplicate=true...")
+    status, body = post_webhook(checkout)
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("duplicate"):
+        sys.exit(f"replay did not de-dup: {status} {parsed}")
+    print(f"      {parsed}")
 
-    print("[4/4] Verifying signature rejection (wrong secret)...")
-    payload = json.dumps(event, separators=(",", ":")).encode()
-    timestamp = int(time.time())
-    bad_sig = sign_stripe_event(payload, "whsec_wrong_secret", timestamp)
-    status, _h, body = request(
-        "POST", "/v1/billing/stripe/webhook",
-        body=payload,
-        headers={"Stripe-Signature": bad_sig, "Content-Type": "application/json"},
-    )
+    print("[4/9] Wrong secret — expect 400 invalid_signature...")
+    status, body = post_webhook(checkout, secret="whsec_wrong_secret_v0")
     if status != 400:
         sys.exit(f"wrong-secret POST should be 400, got {status}: {body}")
     print(f"      rejected with 400 as expected")
 
+    print("[5/9] Timestamp 6min old — expect 400 (tolerance is 300s)...")
+    stale = build_checkout_event(
+        event_id="evt_test_stale_" + secrets.token_hex(8),
+        subject=subject, customer=customer, subscription=subscription,
+    )
+    status, body = post_webhook(stale, ts_offset=-400)
+    if status != 400:
+        sys.exit(f"stale-timestamp POST should be 400, got {status}: {body}")
+    print(f"      rejected with 400 as expected")
+
+    # ---- additional event types ----
+    print("[6/9] POST invoice.paid (continuation of same customer)...")
+    status, body = post_webhook(
+        build_invoice_paid_event(customer=customer, subscription=subscription),
+    )
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("received"):
+        sys.exit(f"invoice.paid failed: {status} {parsed}")
+    print(f"      {parsed}")
+
+    print("[7/9] POST invoice.payment_failed...")
+    status, body = post_webhook(
+        build_invoice_failed_event(customer=customer),
+    )
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("received"):
+        sys.exit(f"invoice.payment_failed failed: {status} {parsed}")
+    print(f"      {parsed}")
+
+    print("[8/9] POST customer.subscription.updated...")
+    status, body = post_webhook(
+        build_subscription_updated_event(customer=customer, subscription=subscription),
+    )
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("received"):
+        sys.exit(f"customer.subscription.updated failed: {status} {parsed}")
+    print(f"      {parsed}")
+
+    print("[9/9] POST customer.subscription.deleted...")
+    status, body = post_webhook(
+        build_subscription_deleted_event(customer=customer, subscription=subscription),
+    )
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("received"):
+        sys.exit(f"customer.subscription.deleted failed: {status} {parsed}")
+    print(f"      {parsed}")
+
     print()
-    print(f"OK stripe webhook verified — event_id={event_id} "
-          f"first.status={parsed.get('status')} dup.status={parsed2.get('status')}")
+    print(f"OK stripe webhook fully exercised — 5 event types + replay-dedup + "
+          f"wrong-secret reject + stale-timestamp reject (initial event={event_id})")
 
 
 if __name__ == "__main__":
