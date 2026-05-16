@@ -44,6 +44,9 @@ check "prod-mirror.landing.geometric" "takosumi.test" "/brand/geometric.svg" "20
 check "prod-mirror.landing.inkdrop" "takosumi.test" "/brand/inkdrop.svg" "200"
 check "prod-mirror.docs.index" "takosumi.test" "/docs/" "200"
 check "prod-mirror.cloud.oidc-discovery" "cloud.takosumi.test" "/.well-known/openid-configuration" "200"
+check "prod-mirror.cloud.dashboard-index" "cloud.takosumi.test" "/" "200"
+check "prod-mirror.cloud.dashboard-signin" "cloud.takosumi.test" "/sign-in" "200"
+check "prod-mirror.cloud.dashboard-deeplink" "cloud.takosumi.test" "/apps/abc" "200"
 
 echo
 echo "==> ${PASS} passed, ${FAIL} failed"

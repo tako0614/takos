@@ -27,9 +27,24 @@ takosumi.test {
 	}
 }
 
-# takosumi-cloud Worker. Mirrors production cloud.takosumi.com.
+# cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
 cloud.takosumi.test {
-	reverse_proxy takosumi-cloud-worker:8787
+	encode gzip
+
+	# API routes (defined as a named matcher to keep this DRY)
+	@api {
+		path /.well-known/* /oauth/* /passkey/* /installations/*
+		path /dashboard/* /stripe/* /upstream/* /v1/auth/*
+		path /account/tokens /healthz
+	}
+	reverse_proxy @api takosumi-cloud-worker:8787
+
+	# SPA static + client-side routing fallback for everything else
+	handle {
+		root * /srv/takosumi-cloud-dashboard
+		try_files {path} {path}/ /index.html
+		file_server
+	}
 }
 
 accounts.takos.test {
