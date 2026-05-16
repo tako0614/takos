@@ -1,0 +1,48 @@
+{
+  "appId": "jp.takos.excel",
+  "bindings": [
+    {
+      "kind": "identity.oidc@v1",
+      "name": "auth",
+      "required": true
+    },
+    {
+      "kind": "object-store.s3-compatible@v1",
+      "name": "spreadsheets",
+      "required": true
+    },
+    {
+      "kind": "domain.http@v1",
+      "name": "domain",
+      "required": false
+    },
+    {
+      "kind": "install-launch-token@v1",
+      "name": "bootstrap",
+      "required": true
+    }
+  ],
+  "grants": [
+    {
+      "capability": "files:read"
+    },
+    {
+      "capability": "files:write"
+    },
+    {
+      "capability": "logs.read.own"
+    }
+  ],
+  "metadata": {
+    "fixture": true,
+    "fromAppYml": "/home/tako/Desktop/takos/takos/deploy/local-substrate/../../../takos-apps/takos-excel/.takosumi/app.yml",
+    "generatedAt": "2026-05-16T15:39:00Z"
+  },
+  "source": {
+    "appManifestDigest": "sha256:1fdf35a6d731e0e5ad1b473bea6c98a8370314e403d881d8813a76246f0ac0ba",
+    "commit": "73eec71215418916246f62d3ee84ea48b27a7c7f",
+    "compiledManifestDigest": "sha256:1fdf35a6d731e0e5ad1b473bea6c98a8370314e403d881d8813a76246f0ac0ba",
+    "gitUrl": "https://github.com/tako0614/takos-excel.git",
+    "ref": "v0.1.2"
+  }
+}

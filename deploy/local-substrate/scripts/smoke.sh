@@ -237,7 +237,7 @@ else
 fi
 
 echo
-echo "==> k6 load baseline (20 RPS x 20s — local-substrate regression watch)"
+echo "==> k6 load baseline via Caddy + TLS (20 RPS x 20s — regression watch only, NOT SLO)"
 if bash "$SCRIPT_DIR/k6-baseline.sh" >/dev/null 2>&1; then
 	echo "    PASS [k6.baseline] install/preview + oidc both within p95 + error-rate thresholds"
 	PASS=$((PASS + 1))

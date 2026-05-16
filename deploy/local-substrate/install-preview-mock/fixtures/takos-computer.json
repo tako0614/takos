@@ -1,0 +1,79 @@
+{
+  "appId": "jp.takos.computer",
+  "bindings": [
+    {
+      "kind": "identity.oidc@v1",
+      "name": "auth",
+      "required": true
+    },
+    {
+      "kind": "domain.http@v1",
+      "name": "domain",
+      "required": false
+    },
+    {
+      "kind": "install-launch-token@v1",
+      "name": "bootstrap",
+      "required": true
+    }
+  ],
+  "grants": [
+    {
+      "capability": "spaces:read"
+    },
+    {
+      "capability": "files:read"
+    },
+    {
+      "capability": "files:write"
+    },
+    {
+      "capability": "memories:read"
+    },
+    {
+      "capability": "memories:write"
+    },
+    {
+      "capability": "threads:read"
+    },
+    {
+      "capability": "threads:write"
+    },
+    {
+      "capability": "runs:read"
+    },
+    {
+      "capability": "runs:write"
+    },
+    {
+      "capability": "agents:execute"
+    },
+    {
+      "capability": "repos:read"
+    },
+    {
+      "capability": "repos:write"
+    },
+    {
+      "capability": "mcp:invoke"
+    },
+    {
+      "capability": "events:subscribe"
+    },
+    {
+      "capability": "logs.read.own"
+    }
+  ],
+  "metadata": {
+    "fixture": true,
+    "fromAppYml": "/home/tako/Desktop/takos/takos/deploy/local-substrate/../../../takos-apps/takos-computer/.takosumi/app.yml",
+    "generatedAt": "2026-05-16T15:39:00Z"
+  },
+  "source": {
+    "appManifestDigest": "sha256:143fedc2fd933044fb790db9e1ffbb9ed54577f2b5ab36fa0f426c13f1dbd5b6",
+    "commit": "931609d1815faff772c5229bdd2ff82497d44bec",
+    "compiledManifestDigest": "sha256:143fedc2fd933044fb790db9e1ffbb9ed54577f2b5ab36fa0f426c13f1dbd5b6",
+    "gitUrl": "https://github.com/tako0614/takos-computer.git",
+    "ref": "v2.1.2"
+  }
+}

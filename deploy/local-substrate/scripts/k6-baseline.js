@@ -1,12 +1,16 @@
-// k6 load baseline for local-substrate critical paths.
-// Run via:
-//   docker run --rm -i --network local-substrate_takos-local-internal \
-//     -v "$PWD/scripts:/scripts:ro" \
-//     grafana/k6:0.55.0 run /scripts/k6-baseline.js
+// k6 load baseline against local-substrate via Caddy + TLS.
 //
-// Thresholds are deliberately loose for the local-substrate; the goal is
-// regression detection ("p95 jumped 5×, what changed?") not capacity
-// planning. Tune in CI once we have a stable baseline measured per host.
+// Previously this script hit the worker directly over HTTP (docker network
+// short-circuit), which gave great-looking numbers (~5ms p95) that didn't
+// reflect what production users see. Now it goes through Caddy with the
+// Pebble root injected as the system CA, so the numbers include TLS
+// handshake + Caddy proxying overhead.
+//
+// Run via scripts/k6-baseline.sh which mounts the Pebble root and the
+// docker network for us.
+//
+// NOTE: these thresholds are loose regression-watch numbers, NOT SLO
+// targets. Production runs on Cloudflare's edge, not this machine.
 import http from "k6/http";
 import { check } from "k6";
 
@@ -34,16 +38,15 @@ export const options = {
   thresholds: {
     "http_req_failed{scenario:install_preview}": ["rate<0.01"],
     "http_req_failed{scenario:oidc_discovery}": ["rate<0.01"],
-    "http_req_duration{scenario:install_preview}": ["p(95)<1500"],
-    "http_req_duration{scenario:oidc_discovery}": ["p(95)<500"],
+    // Loose thresholds — TLS handshake + Caddy proxy + worker round-trip.
+    // Tighten in CI once a stable per-host baseline is established.
+    "http_req_duration{scenario:install_preview}": ["p(95)<3000"],
+    "http_req_duration{scenario:oidc_discovery}": ["p(95)<1500"],
   },
 };
 
-// Inside the docker network, hit services directly — Pebble TLS is the
-// outer ingress; the network calls would otherwise hit cert-trust friction.
-const PREVIEW_URL = "http://takosumi-cloud-worker:8787/v1/install/preview";
-const OIDC_URL =
-  "http://takosumi-cloud-worker:8787/.well-known/openid-configuration";
+const PREVIEW_URL = "https://cloud.takosumi.test/v1/install/preview";
+const OIDC_URL = "https://cloud.takosumi.test/.well-known/openid-configuration";
 
 export function installPreview() {
   const res = http.post(

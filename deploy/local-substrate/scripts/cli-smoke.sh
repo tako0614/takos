@@ -57,3 +57,26 @@ if [[ "$STATUS" != "ok" || "$APPLY_STATUS" != "succeeded" ]]; then
 fi
 
 echo "OK deploy=$DEPLOY_NAME status=$STATUS outcome.status=$APPLY_STATUS"
+
+# Best-effort cleanup so we don't accumulate deployment records over time.
+# Kernel exposes DELETE /v1/deployments/<id>? If not, fall through silently.
+curl -sk --cacert "$CA" -X DELETE \
+	-H "Authorization: Bearer $TOKEN" \
+	"https://kernel.takos.test/v1/deployments/$DEPLOY_NAME" \
+	>/dev/null 2>&1 || true
+
+# B6: also assert install-preview-mock returns real bindings (fixture-hit
+# path, not the empty fallback) — this is the install wizard's read of
+# the bundled apps' .takosumi/app.yml.
+PREVIEW=$(curl -sk --cacert "$CA" \
+	-H "Content-Type: application/json" \
+	-d '{"source":{"gitUrl":"https://github.com/tako0614/yurucommu.git","ref":"main"}}' \
+	"https://cloud.takosumi.test/v1/install/preview")
+BIND_COUNT=$(echo "$PREVIEW" | python3 -c "import json,sys;d=json.loads(sys.stdin.read());print(len(d.get('bindings') or []))")
+if [[ "$BIND_COUNT" -lt 3 ]]; then
+	echo "FAIL: install-preview returned $BIND_COUNT bindings for yurucommu (expected >=3)" >&2
+	echo "      response: $PREVIEW" >&2
+	exit 1
+fi
+
+echo "OK install-preview yurucommu → $BIND_COUNT real bindings (fixture-hit)"

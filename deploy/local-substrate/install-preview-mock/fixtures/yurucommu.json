@@ -1,0 +1,42 @@
+{
+  "appId": "com.yurucommu.app",
+  "bindings": [
+    {
+      "kind": "identity.oidc@v1",
+      "name": "auth",
+      "required": true
+    },
+    {
+      "kind": "object-store.s3-compatible@v1",
+      "name": "media",
+      "required": true
+    },
+    {
+      "kind": "domain.http@v1",
+      "name": "domain",
+      "required": true
+    },
+    {
+      "kind": "install-launch-token@v1",
+      "name": "bootstrap",
+      "required": true
+    }
+  ],
+  "grants": [
+    {
+      "capability": "logs.read.own"
+    }
+  ],
+  "metadata": {
+    "fixture": true,
+    "fromAppYml": "/home/tako/Desktop/takos/takos/deploy/local-substrate/../../../yurucommu/.takosumi/app.yml",
+    "generatedAt": "2026-05-16T15:39:00Z"
+  },
+  "source": {
+    "appManifestDigest": "sha256:952a5d1a0b661fef2c1faf482d7cc164c1aeb0a68cc29d9320d9a6f07f11a4d7",
+    "commit": "42dbc112a13be02a9696db18dba4f4c660d62ca4",
+    "compiledManifestDigest": "sha256:952a5d1a0b661fef2c1faf482d7cc164c1aeb0a68cc29d9320d9a6f07f11a4d7",
+    "gitUrl": "https://github.com/tako0614/yurucommu.git",
+    "ref": "v1.2.6"
+  }
+}

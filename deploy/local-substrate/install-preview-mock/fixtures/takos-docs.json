@@ -1,0 +1,48 @@
+{
+  "appId": "jp.takos.docs",
+  "bindings": [
+    {
+      "kind": "identity.oidc@v1",
+      "name": "auth",
+      "required": true
+    },
+    {
+      "kind": "object-store.s3-compatible@v1",
+      "name": "documents",
+      "required": true
+    },
+    {
+      "kind": "domain.http@v1",
+      "name": "domain",
+      "required": false
+    },
+    {
+      "kind": "install-launch-token@v1",
+      "name": "bootstrap",
+      "required": true
+    }
+  ],
+  "grants": [
+    {
+      "capability": "files:read"
+    },
+    {
+      "capability": "files:write"
+    },
+    {
+      "capability": "logs.read.own"
+    }
+  ],
+  "metadata": {
+    "fixture": true,
+    "fromAppYml": "/home/tako/Desktop/takos/takos/deploy/local-substrate/../../../takos-apps/takos-docs/.takosumi/app.yml",
+    "generatedAt": "2026-05-16T15:39:00Z"
+  },
+  "source": {
+    "appManifestDigest": "sha256:c8a08fbc25e5a0945035ec8c8758a22bd8359086adcf6a7a433cea4bc3c5eefc",
+    "commit": "ea565503ed1b8d1a64dfe0d22832281efda8d34a",
+    "compiledManifestDigest": "sha256:c8a08fbc25e5a0945035ec8c8758a22bd8359086adcf6a7a433cea4bc3c5eefc",
+    "gitUrl": "https://github.com/tako0614/takos-docs.git",
+    "ref": "v0.1.2"
+  }
+}
