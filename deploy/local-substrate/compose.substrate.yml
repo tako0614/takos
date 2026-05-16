@@ -490,6 +490,11 @@ services:
       TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/github/authorize"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_TOKEN_ENDPOINT: "http://oauth-mock:8789/github/access_token"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_USERINFO_ENDPOINT: "http://oauth-mock:8789/github/user"
+      # Passkey RP config — required for the WebAuthn flow. RP ID is the
+      # domain (no scheme); origin is the full https origin.
+      TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID: cloud.takosumi.test
+      TAKOSUMI_ACCOUNTS_PASSKEY_RP_NAME: "Takosumi Cloud (local)"
+      TAKOSUMI_ACCOUNTS_PASSKEY_ORIGIN: https://cloud.takosumi.test
     volumes:
       - ../../../takosumi-cloud/deploy/cloudflare/.wrangler/dist:/worker:ro
       - ./wrappers/takosumi-cloud-worker-runner.mjs:/app/runner.mjs:ro
