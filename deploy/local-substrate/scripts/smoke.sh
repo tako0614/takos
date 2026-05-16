@@ -115,6 +115,56 @@ else
 fi
 
 echo
+echo "==> Kernel deploy (POST /v1/deployments — canonical entry point)"
+if bash "$SCRIPT_DIR/cli-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [kernel.deploy.e2e] manifest applied to kernel, outcome=succeeded"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [kernel.deploy.e2e] see scripts/cli-smoke.sh for the failure"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> Phase 3 route-registrar (kernel → Caddy admin sync)"
+if bash "$SCRIPT_DIR/route-registrar-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [registrar.alive] container running + ticking + static routes preserved"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [registrar.alive] see scripts/route-registrar-smoke.sh for the failure"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> takos-private manifest yaml/compose lint"
+if bash "$SCRIPT_DIR/private-dryrun.sh" >/dev/null 2>&1; then
+	echo "    PASS [private.lint] all yaml/compose files parse cleanly"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [private.lint] see scripts/private-dryrun.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> MinIO object round-trip (R2-compatible backend for object-store@v1)"
+if bash "$SCRIPT_DIR/minio-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [minio.roundtrip] mb → put → get → sha256 match → cleanup"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [minio.roundtrip] see scripts/minio-smoke.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> Bundled apps .takosumi/ sanity (install link reachability)"
+if bash "$SCRIPT_DIR/bundled-apps-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [bundled.apps] all 5 advertised apps have valid .takosumi/app.yml"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [bundled.apps] see scripts/bundled-apps-smoke.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "==> Stripe webhook replay (signed HMAC + idempotency)"
 # Signs a checkout.session.completed event with the local fixture webhook
 # secret, asserts received=true and duplicate=false on first delivery, then
