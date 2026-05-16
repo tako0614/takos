@@ -115,5 +115,19 @@ else
 fi
 
 echo
+echo "==> Stripe webhook replay (signed HMAC + idempotency)"
+# Signs a checkout.session.completed event with the local fixture webhook
+# secret, asserts received=true and duplicate=false on first delivery, then
+# replays to assert duplicate=true. Also asserts a wrong-secret POST is
+# rejected with 400.
+if python3 "$SCRIPT_DIR/stripe-webhook-replay.py" >/dev/null 2>&1; then
+	echo "    PASS [stripe.webhook.e2e] verify + replay + reject all behaved"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [stripe.webhook.e2e] see scripts/stripe-webhook-replay.py"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "==> ${PASS} passed, ${FAIL} failed"
 [[ $FAIL -eq 0 ]]

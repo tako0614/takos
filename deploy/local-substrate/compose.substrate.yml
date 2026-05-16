@@ -495,6 +495,12 @@ services:
       TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID: cloud.takosumi.test
       TAKOSUMI_ACCOUNTS_PASSKEY_RP_NAME: "Takosumi Cloud (local)"
       TAKOSUMI_ACCOUNTS_PASSKEY_ORIGIN: https://cloud.takosumi.test
+      # Stripe billing — local-only fixture secrets. Webhook replay script
+      # (scripts/stripe-webhook-replay.py) signs events with WEBHOOK_SECRET.
+      # SECRET_KEY is only used for outbound checkout creation; not exercised
+      # in webhook tests but required by the worker's config validation.
+      TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY: "sk_test_local_substrate_fixture"
+      TAKOSUMI_ACCOUNTS_STRIPE_WEBHOOK_SECRET: "whsec_local_substrate_fixture_v1"
     volumes:
       - ../../../takosumi-cloud/deploy/cloudflare/.wrangler/dist:/worker:ro
       - ./wrappers/takosumi-cloud-worker-runner.mjs:/app/runner.mjs:ro
