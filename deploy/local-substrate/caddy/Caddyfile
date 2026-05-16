@@ -8,12 +8,23 @@ hello.takos.test {
 	respond "hello from local-substrate (Phase 0)" 200
 }
 
-# takosumi docs (VitePress static build). Mirrors production takosumi.com.
+# takosumi.com mirror — marketing landing at "/", docs at "/docs/*".
 takosumi.test {
-	root * /srv/takosumi-docs
-	try_files {path} {path}/ {path}.html /index.html
-	file_server
 	encode gzip
+
+	# Docs (VitePress dist; built with base="/docs/").
+	handle_path /docs/* {
+		root * /srv/takosumi-docs
+		try_files {path} {path}/ {path}.html /index.html
+		file_server
+	}
+
+	# Marketing landing (vanilla HTML/CSS in takosumi/website/).
+	handle {
+		root * /srv/takosumi-marketing
+		try_files {path} {path}/index.html /index.html
+		file_server
+	}
 }
 
 # takosumi-cloud Worker. Mirrors production cloud.takosumi.com.
