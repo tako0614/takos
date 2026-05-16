@@ -74,6 +74,32 @@ Deno.serve({ port: PORT, hostname: "0.0.0.0" }, async (req) => {
     return new Response("ok", { headers: { "content-type": "text/plain" } });
   }
 
+  // /tls-fail/{authorize,token,userinfo} — negative test surface.
+  // Used by scripts/oauth-tls-negative.sh to verify the cloud worker
+  // surfaces upstream 5xx (what a TLS handshake failure would produce in
+  // production) as 502 upstream_oauth_failed rather than crashing.
+  //
+  // /authorize behaves normally (so the dance reaches /token), but
+  // /token + /userinfo always return 503.
+  if (url.pathname === "/tls-fail/authorize") {
+    const redirectUri = url.searchParams.get("redirect_uri");
+    const state = url.searchParams.get("state");
+    if (!redirectUri || !state) {
+      return Response.json({ error: "invalid_request" }, { status: 400 });
+    }
+    const code = newCode("tls-fail");
+    const target = new URL(redirectUri);
+    target.searchParams.set("code", code);
+    target.searchParams.set("state", state);
+    return Response.redirect(target.toString(), 302);
+  }
+  if (url.pathname === "/tls-fail/token" || url.pathname === "/tls-fail/userinfo") {
+    return Response.json(
+      { error: "tls_misconfigured", error_description: "simulated upstream TLS / 5xx" },
+      { status: 503 },
+    );
+  }
+
   // /authorize — for both providers
   const authzMatch = url.pathname.match(/^\/(google|github)\/authorize$/);
   if (authzMatch) {

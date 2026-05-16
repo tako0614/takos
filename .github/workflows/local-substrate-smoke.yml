@@ -1,0 +1,119 @@
+name: local-substrate smoke
+
+# Brings up local-substrate (Pebble + CoreDNS + Caddy + accounts +
+# kernel + cloud-worker + mocks) and runs the full smoke + negative
+# tests on every PR / push to main. Without this, smoke regressions
+# silently merge.
+
+on:
+  pull_request:
+    paths:
+      - "deploy/local-substrate/**"
+      - "app/**"
+      - "git/**"
+      - "agent/**"
+      - ".github/workflows/local-substrate-smoke.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "deploy/local-substrate/**"
+      - "app/**"
+      - "git/**"
+      - "agent/**"
+      - ".github/workflows/local-substrate-smoke.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: local-substrate-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: System deps (python yaml + cryptography)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-yaml python3-cryptography \
+            libnss3-tools jq
+
+      - name: Bring up local-substrate (postgres profile)
+        working-directory: deploy/local-substrate
+        run: |
+          bash scripts/up.sh --profile postgres
+          # Caddy needs a moment to finish ACME against Pebble.
+          sleep 15
+
+      - name: Run smoke
+        id: smoke
+        working-directory: deploy/local-substrate
+        run: |
+          set +e
+          bash scripts/smoke.sh
+          RC=$?
+          echo "smoke_rc=$RC" >> "$GITHUB_OUTPUT"
+          exit $RC
+
+      - name: Capture container logs on failure
+        if: failure()
+        working-directory: deploy/local-substrate
+        run: |
+          mkdir -p /tmp/smoke-logs
+          docker compose -f compose.ingress.yml \
+            -f compose.substrate.yml --profile postgres ps > /tmp/smoke-logs/ps.txt
+          for c in $(docker ps -a --format '{{.Names}}' | grep ^local-substrate-); do
+            docker logs "$c" > "/tmp/smoke-logs/${c}.log" 2>&1 || true
+          done
+
+      - name: Upload logs (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs-${{ github.run_id }}
+          path: /tmp/smoke-logs
+
+      - name: Tear down
+        if: always()
+        working-directory: deploy/local-substrate
+        run: |
+          docker compose -f compose.ingress.yml \
+            -f compose.substrate.yml --profile postgres down -v --remove-orphans || true
+
+  dashboard-ui-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      # The dashboard-ui workspace lives under the takosumi-cloud submodule
+      # of the parent ecosystem repo. CI runs from the takos repo, so the
+      # ecosystem checkout is what brings in takosumi-cloud/.
+      - name: Locate dashboard-ui workspace
+        id: locate
+        run: |
+          if [ -d "../takosumi-cloud/packages/dashboard-ui" ]; then
+            echo "path=../takosumi-cloud/packages/dashboard-ui" >> "$GITHUB_OUTPUT"
+          else
+            echo "dashboard-ui workspace not in CI checkout — skipping"
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install + test (vitest)
+        if: steps.locate.outputs.path != ''
+        working-directory: ${{ steps.locate.outputs.path }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
