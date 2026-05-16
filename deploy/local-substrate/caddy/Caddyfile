@@ -28,22 +28,26 @@ takosumi.test {
 }
 
 # cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
+#
+# Wrap in `route { ... handle ... }` so Caddy evaluates the API handler before
+# the SPA fallback. Without explicit `route`+`handle` blocks, Caddy's directive
+# sorter puts the catch-all `handle` first and the worker is never reached.
 cloud.takosumi.test {
-	encode gzip
+	route {
+		# API routes — accounts-service constants live under /v1/*, plus
+		# legacy /oauth/* (OIDC server) and /.well-known/* (discovery).
+		@api path /v1/* /oauth/* /.well-known/* /healthz
+		handle @api {
+			reverse_proxy takosumi-cloud-worker:8787
+		}
 
-	# API routes (defined as a named matcher to keep this DRY)
-	@api {
-		path /.well-known/* /oauth/* /passkey/* /installations/*
-		path /dashboard/* /stripe/* /upstream/* /v1/auth/*
-		path /account/tokens /healthz
-	}
-	reverse_proxy @api takosumi-cloud-worker:8787
-
-	# SPA static + client-side routing fallback for everything else
-	handle {
-		root * /srv/takosumi-cloud-dashboard
-		try_files {path} {path}/ /index.html
-		file_server
+		# SPA static + client-side routing fallback for everything else
+		handle {
+			encode gzip
+			root * /srv/takosumi-cloud-dashboard
+			try_files {path} {path}/ /index.html
+			file_server
+		}
 	}
 }
 
