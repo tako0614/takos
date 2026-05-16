@@ -527,10 +527,18 @@ services:
       TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_SECRET: "mock-secret-google"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_REDIRECT_URI: "https://cloud.takosumi.test/sign-in/callback"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_ISSUER: "https://oauth-mock.test/google"
-      # /authorize is browser-facing (must be HTTPS so the SPA can redirect to
-      # it); /token + /userinfo are worker-facing fetches, which bypass Caddy
-      # and hit the mock container directly over HTTP (avoids the workerd TLS
-      # trust store not having the Pebble root).
+      # ====================================================================
+      # LOCAL ONLY — workerd TLS divergence.
+      # Production: ALL upstream OAuth endpoints (Google + GitHub) are HTTPS.
+      # Here: /authorize is HTTPS via Caddy (browser-facing), but /token +
+      # /userinfo are plain HTTP through the docker network because workerd's
+      # TLS trust store does not include the Pebble root and adding it
+      # requires patching the workerd binary (deferred).
+      # The negative-path coverage that the worker correctly surfaces
+      # upstream 5xx/TLS errors is provided by scripts/oauth-tls-negative.sh
+      # (smoke check: oauth.tls-negative). Do NOT copy this env block to
+      # production deploys.
+      # ====================================================================
       TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/google/authorize"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_TOKEN_ENDPOINT: "http://oauth-mock:8789/google/token"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_USERINFO_ENDPOINT: "http://oauth-mock:8789/google/userinfo"
@@ -541,6 +549,20 @@ services:
       TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/github/authorize"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_TOKEN_ENDPOINT: "http://oauth-mock:8789/github/access_token"
       TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_USERINFO_ENDPOINT: "http://oauth-mock:8789/github/user"
+      # Custom OIDC slot wired to oauth-mock's /tls-fail endpoints. The
+      # provider id 'tls-fail' is local-only; scripts/oauth-tls-negative.sh
+      # uses it to assert the worker returns 502 upstream_oauth_failed
+      # when upstream /token returns 5xx (which is what a TLS handshake
+      # failure would look like in production).
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_PROVIDER_ID: "tls-fail"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_ISSUER: "https://oauth-mock.test/tls-fail"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/tls-fail/authorize"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_TOKEN_ENDPOINT: "http://oauth-mock:8789/tls-fail/token"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_USERINFO_ENDPOINT: "http://oauth-mock:8789/tls-fail/userinfo"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_ID: "takos-cloud-local-tls-fail"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_SECRET: "mock-secret-tls-fail"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_REDIRECT_URI: "https://cloud.takosumi.test/sign-in/callback"
+      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_SUBJECT_CLAIM: "sub"
       # Passkey RP config — required for the WebAuthn flow. RP ID is the
       # domain (no scheme); origin is the full https origin.
       TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID: cloud.takosumi.test

@@ -86,6 +86,36 @@ takos/deploy/local-substrate/
     └── prove-no-public-leak.sh
 ```
 
+## Browser trust (Chrome / Firefox 上で `.test` を踏める状態にする)
+
+Pebble は毎回 root CA を再生成するので、 ホストの trust store にも、
+Chrome / Firefox の NSS DB にも root を入れる必要がある。 `ca-install.sh`
+は両方を一括で処理する:
+
+```bash
+sudo bash deploy/local-substrate/scripts/ca-install.sh
+```
+
+実行後の手動確認 checklist:
+
+- [ ] Chromium / Chrome を完全終了 (タスクトレイ含む) → 再起動 →
+  `https://takos.test/` で privacy error が出ないこと
+- [ ] 同じく `https://cloud.takosumi.test/` が緑鍵で開くこと
+- [ ] Firefox (snap か deb どちらでも) を再起動 → 同様に確認
+- [ ] `scripts/up.sh` で Pebble を再起動した場合は root が rotation
+  されているので、 `sudo bash scripts/ca-install.sh` を再実行 +
+  ブラウザ再起動
+
+`certutil` が無い場合 `sudo` ありで実行すれば `libnss3-tools` を
+自動 install する。 非 sudo で実行すると system trust は skip、 NSS DB
+のみ更新する (NSS は per-user)。
+
+最後に手動 verification した日付を以下に記録:
+
+| 日付 | Chrome | Firefox (snap) | 確認者 |
+| --- | --- | --- | --- |
+| _未確認_ | _-_ | _-_ | _-_ |
+
 ## 制約
 
 - **公開面は絶対に出さない**: ACME は Pebble 固定、 DNS は CoreDNS 固定、

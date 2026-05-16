@@ -141,6 +141,17 @@ for provider in google github; do
 	fi
 done
 
+# Negative path: with upstream /token returning 5xx the worker must
+# surface 502 upstream_oauth_failed (NOT crash). Provider 'tls-fail' is a
+# custom-OIDC slot wired to oauth-mock's /tls-fail/* endpoints.
+if bash "$SCRIPT_DIR/oauth-tls-negative.sh" >/dev/null 2>&1; then
+	echo "    PASS [oauth.tls-negative] worker returns 502 upstream_oauth_failed when /token is 5xx"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [oauth.tls-negative] see scripts/oauth-tls-negative.sh"
+	FAIL=$((FAIL + 1))
+fi
+
 echo
 echo "==> Passkey register + authenticate (virtual P-256 authenticator)"
 # Generates a real P-256 keypair, registers it as a passkey credential,
