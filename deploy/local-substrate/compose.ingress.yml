@@ -79,6 +79,8 @@ services:
           - oauth-mock.test
           - mailpit.takos.test
           - jaeger.takos.test
+          - inst-a.takos.test
+          - inst-b.takos.test
 
 networks:
   takos-local-internal:

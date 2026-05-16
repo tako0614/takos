@@ -177,6 +177,26 @@ else
 fi
 
 echo
+echo "==> yurucommu 2-instance federation infrastructure"
+if bash "$SCRIPT_DIR/federation-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [federation.infra] inst-a + inst-b nodeinfo + webfinger + cross-reach"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [federation.infra] see scripts/federation-smoke.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> Workers profile (cloud worker on workerd + D1)"
+if bash "$SCRIPT_DIR/workers-cli-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [workers.cli-smoke] cloud worker healthy via workerd + D1"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [workers.cli-smoke] see scripts/workers-cli-smoke.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "==> Phase 3 route-registrar (kernel → Caddy admin sync)"
 if bash "$SCRIPT_DIR/route-registrar-smoke.sh" >/dev/null 2>&1; then
 	echo "    PASS [registrar.alive] container running + ticking + static routes preserved"

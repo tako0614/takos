@@ -63,6 +63,17 @@ jaeger.takos.test {
 	reverse_proxy jaeger:16686
 }
 
+# yurucommu federation pair — inst-a / inst-b on the same network so
+# Follow / Accept ActivityPub flows can be smoked across instances.
+inst-a.takos.test {
+	encode gzip
+	reverse_proxy yurucommu-a:8791
+}
+inst-b.takos.test {
+	encode gzip
+	reverse_proxy yurucommu-b:8791
+}
+
 # cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
 #
 # Wrap in `route { ... handle ... }` so Caddy evaluates the API handler before
