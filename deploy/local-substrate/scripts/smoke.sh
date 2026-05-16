@@ -206,6 +206,36 @@ else
 fi
 
 echo
+echo "==> D1 schema idempotency (worker restart preserves schema)"
+if bash "$SCRIPT_DIR/migration-idempotency.sh" >/dev/null 2>&1; then
+	echo "    PASS [migration.idempotency] schema byte-identical across worker recreate"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [migration.idempotency] see scripts/migration-idempotency.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> OTel pipeline (otel-collector → jaeger)"
+if bash "$SCRIPT_DIR/otel-smoke.sh" >/dev/null 2>&1; then
+	echo "    PASS [otel.pipeline] synthetic OTLP trace landed in Jaeger /api/services"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [otel.pipeline] see scripts/otel-smoke.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> k6 load baseline (20 RPS x 20s — local-substrate regression watch)"
+if bash "$SCRIPT_DIR/k6-baseline.sh" >/dev/null 2>&1; then
+	echo "    PASS [k6.baseline] install/preview + oidc both within p95 + error-rate thresholds"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [k6.baseline] see scripts/k6-baseline.sh --verbose"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "==> mailpit SMTP catcher (ready for backend email when wired)"
 if bash "$SCRIPT_DIR/mailpit-smoke.sh" >/dev/null 2>&1; then
 	echo "    PASS [mailpit] inbox API reachable + probe email delivered + indexed"

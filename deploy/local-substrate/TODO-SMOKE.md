@@ -1,74 +1,70 @@
 # Local-substrate smoke TODO
 
-These are deferred test-bed additions that each need a non-trivial design
-call before implementation. Listed in rough order of "what would catch the
-most regressions if implemented next."
+These remain deferred. Each needs upstream work in the actual product
+(instrument the service, build the missing entry point, etc.) — they
+can't be smoked from the test bed alone.
 
 ## P1 — Workers profile kernel smoke
 
 The `kernel-workers` service in `compose.substrate.yml` is a placeholder
 (`echo 'workers profile not yet implemented' && sleep infinity`). The
-postgres-profile kernel runs under Deno; the workers-profile kernel would
-run under miniflare with D1. Without it, smoke only covers the Deno+Postgres
-code path; the Cloudflare-deployed kernel could diverge silently.
+postgres-profile kernel runs under Deno; a workers-profile kernel would
+run under miniflare with D1.
 
-Blockers:
-- Need a kernel entry that exports a workerd-compatible Worker module.
-- D1 schema must be applied via the existing `wrangler d1 migrations apply`
-  or by inline `db.exec` on first boot.
-- Tests would otherwise mirror cli-smoke.sh against `kernel-workers`.
+Today's smoke covers the workers code path indirectly: the
+takosumi-cloud-worker IS on workerd+D1 (postgres profile or not — it
+always runs there), and oauth-e2e / install-preview / passkey / stripe
+all hit it. So Cloudflare's worker path *for accounts-service* is
+covered.
 
-## P2 — OpenTelemetry / distributed trace
+What's NOT covered is the kernel itself running on workerd. Building
+that requires:
+1. A kernel entry that exports `default { async fetch(req, env) }` —
+   the JSR `@takos/takosumi-kernel` package today exports a Deno server,
+   not a worker module.
+2. D1 schema applied via `wrangler d1 migrations apply` or `db.exec`
+   on first boot (kernel currently does Postgres migrations).
+3. Then `scripts/cli-smoke.sh` could be re-run against the workers-
+   kernel endpoint.
 
-No service currently emits OTel. Adding `otel-collector` (+ Jaeger or Tempo)
-to compose lets us add a smoke that asserts traces actually arrive when
-the substrate services start exporting. Right now there's nothing to trace.
+The cleanest path is upstream: open an issue against
+`@takos/takosumi-kernel` to add a worker entry point. Until that lands,
+this smoke can only stub.
 
-Steps when ready:
-1. Add `@opentelemetry/api` + autoinstrumentation to:
-   - accounts-service (cloud worker)
-   - takosumi kernel
-   - takos-app / takos-git
-2. Stand up `otel/opentelemetry-collector-contrib` with OTLP/gRPC ingest.
-3. Add `jaegertracing/all-in-one` with UI at `jaeger.takos.test`.
-4. Smoke: trigger a request through the stack, GET Jaeger's `/api/traces`
-   and assert spans for each hop are present.
+## P2 — Multi-instance ActivityPub federation
 
-## P3 — Multi-instance federation (ActivityPub)
+`yurucommu` is the only product in the ecosystem with a working AP
+implementation (`src/backend/routes/activitypub/*`). It needs:
+- a running database (drizzle migrations applied),
+- HTTP signing keys,
+- 2 isolated instances on different `*.test` hostnames,
+- a smoke that has inst-a Follow inst-b → assert Accept activity.
 
-`inst-a.takos.test` + `inst-b.takos.test` with separate Postgres schemas
-and independent takos-app instances, then smoke `inst-a follows inst-b
-user → inst-b receives Follow activity → inst-a sees Accept`.
+Booting yurucommu's backend in local-substrate is ~1 day of work
+(Postgres schema, migrations, env wiring, ActivityPub keypair gen).
+Tracked separately; landing page + `.takosumi/app.yml` are enough for
+today's install-link smoke.
 
-Blockers:
-- Need to confirm takos-app's federation code path is at the layer we
-  want to test (vs ActivityPub library defaults).
-- Each instance needs its own substrate-postgres schema namespace.
+When ready:
+1. Add `yurucommu-a` + `yurucommu-b` services to compose with separate
+   DB schemas.
+2. Caddy: `inst-a.takos.test` / `inst-b.takos.test` → respective backend.
+3. `scripts/federation-smoke.sh` posts a Follow from a → b, asserts
+   the corresponding Accept activity is delivered.
 
-## P4 — Migration rollback drill
+## P3 — wrangler dev --remote
 
-Accounts-service uses `CREATE TABLE IF NOT EXISTS` so there's no actual
-migration framework (no up/down pairs). A rollback drill requires building
-the migration plumbing first. Tracked under per-product `AGENTS.md`.
-
-## P5 — k6 load baseline
-
-Define target RPS / p95 latency for each critical endpoint:
-- POST /v1/installations
-- POST /v1/auth/upstream/callback
-- POST /v1/auth/passkeys/authenticate/complete
-- POST /v1/billing/stripe/webhook
-
-Pick a baseline (e.g. 50 RPS sustained @ p95 < 200ms locally) and add
-`scripts/k6-baseline.js`. Run on-demand; not part of smoke (too slow).
-
-## P6 — `wrangler dev --remote`
-
-Closer-to-prod test that exercises real Cloudflare bindings (KV / DO /
-Queues / D1) against staging CF infrastructure. Requires:
-- Cloudflare account credentials
-- Separate `wrangler-staging.toml`
-- CI secrets for `CLOUDFLARE_API_TOKEN`
+Closer-to-prod test against real Cloudflare bindings (KV / DO / Queues
+/ D1). Requires:
+- Cloudflare account credentials (CLOUDFLARE_API_TOKEN env)
+- `wrangler-staging.toml` separate from production
+- Staging-only D1 / KV / DO namespaces
 
 Add as a separate `scripts/wrangler-remote-smoke.sh` that's opt-in (not
-in the default smoke run).
+in the default smoke run) and reads creds from the user's keychain or
+1Password CLI.
+
+Today's miniflare-based cloud worker smoke catches the *code* path; this
+would catch the *infrastructure* path (binding semantics that miniflare
+emulates imperfectly: Queue ordering, DO single-instance guarantees,
+KV eventual consistency).

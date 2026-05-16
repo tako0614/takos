@@ -57,6 +57,12 @@ mailpit.takos.test {
 	reverse_proxy mailpit:8025
 }
 
+# Jaeger UI — trace viewer for whatever exports OTLP via otel-collector.
+jaeger.takos.test {
+	encode gzip
+	reverse_proxy jaeger:16686
+}
+
 # cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
 #
 # Wrap in `route { ... handle ... }` so Caddy evaluates the API handler before
