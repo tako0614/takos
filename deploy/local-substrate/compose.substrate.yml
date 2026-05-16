@@ -369,6 +369,23 @@ services:
         aliases:
           - install-preview-mock
 
+  # ---- mailpit SMTP catcher (catches anything any service sends) ----
+  # Backends don't send email today, but the infra is here so that the
+  # moment they start (signup confirmation, billing alerts, invite mail)
+  # the smoke can assert the bytes arrived. Web UI at
+  # https://mailpit.takos.test/, SMTP at mailpit:1025 (in-network).
+  mailpit:
+    profiles: ["postgres"]
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    networks:
+      takos-local-internal:
+        aliases:
+          - mailpit
+
   # ---- oauth-mock (stands in for accounts.google.com + github.com) ----
   # Auto-approves /authorize and returns deterministic /userinfo so the
   # cloud sign-in flow (Google / GitHub button) completes without external

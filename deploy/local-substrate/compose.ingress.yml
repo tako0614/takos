@@ -77,6 +77,7 @@ services:
           - takos.test
           - yurucommu.test
           - oauth-mock.test
+          - mailpit.takos.test
 
 networks:
   takos-local-internal:
