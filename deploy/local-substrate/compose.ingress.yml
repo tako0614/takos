@@ -53,6 +53,7 @@ services:
       - ./caddy/runtime:/runtime:ro
       - ../../../takosumi/website/.output/public:/srv/takosumi-marketing:ro
       - ../../../takosumi/docs/.vitepress/dist:/srv/takosumi-docs:ro
+      - ../../../takosumi-cloud/packages/dashboard-ui/.output/public:/srv/takosumi-cloud-dashboard:ro
       - caddy-data:/data
       - caddy-config:/config
     ports:

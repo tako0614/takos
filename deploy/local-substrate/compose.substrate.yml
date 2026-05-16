@@ -123,7 +123,7 @@ services:
       TAKOSUMI_ACCOUNTS_ISSUER: https://accounts.takos.test
       TAKOSUMI_ACCOUNTS_DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi_accounts
       TAKOSUMI_ACCOUNTS_CLIENT_ID: takos-app
-      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback
+      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback https://cloud.takosumi.test/sign-in/callback
       TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: closed
     volumes:
       - ../../../takosumi-cloud:/workspace
@@ -332,6 +332,23 @@ services:
     volumes:
       - ../../../takosumi/docs:/docs
 
+  # ---- takosumi-cloud dashboard SPA (mirrors cloud.takosumi.com root) ----
+  takosumi-cloud-dashboard-build:
+    profiles: ["postgres"]
+    image: node:22-slim
+    restart: "no"
+    working_dir: /dashboard
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -d node_modules ]; then
+          npm install --no-fund --no-audit
+        fi
+        npm run build
+    volumes:
+      - ../../../takosumi-cloud/packages/dashboard-ui:/dashboard
+
   # ---- takosumi-cloud Worker (mirrors cloud.takosumi.com on Cloudflare Workers) ----
   takosumi-cloud-worker-build:
     profiles: ["postgres"]
@@ -368,7 +385,7 @@ services:
       TAKOSUMI_ACCOUNTS_ISSUER: https://cloud.takosumi.test
       TAKOSUMI_ACCOUNTS_SUBJECT: tsub_takosumi_cloud_local
       TAKOSUMI_ACCOUNTS_CLIENT_ID: takos-app-local
-      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback
+      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback https://cloud.takosumi.test/sign-in/callback
       TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: closed
     volumes:
       - ../../../takosumi-cloud/deploy/cloudflare/.wrangler/dist:/worker:ro
