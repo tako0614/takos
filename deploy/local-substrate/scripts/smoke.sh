@@ -101,5 +101,19 @@ for provider in google github; do
 done
 
 echo
+echo "==> Passkey register + authenticate (virtual P-256 authenticator)"
+# Generates a real P-256 keypair, registers it as a passkey credential,
+# then signs an assertion challenge and asserts the worker accepts it.
+# Exercises the full COSE/JWK + ECDSA verification path. Needs python3 +
+# cryptography (python3-cryptography on debian/ubuntu).
+if python3 "$SCRIPT_DIR/passkey-e2e.py" >/dev/null 2>&1; then
+	echo "    PASS [passkey.e2e] register + authenticate verified end-to-end"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [passkey.e2e] see scripts/passkey-e2e.py for the failure"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "==> ${PASS} passed, ${FAIL} failed"
 [[ $FAIL -eq 0 ]]
