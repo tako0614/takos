@@ -1,0 +1,136 @@
+:root {
+  color-scheme: light dark;
+
+  /* ===== Palette — Pure neutral black + white + 朱 red accent =====
+   * No warm cream, no cool blue, no violet tint. Just black, white, red.
+   */
+
+  --tg-bg: #ffffff;
+  --tg-bg-elev: #ffffff;
+  --tg-bg-subtle: #f5f5f5;
+  --tg-fg: #0a0a0a;
+  --tg-fg-muted: #525252;
+  --tg-fg-subtle: #8a8a8a;
+  --tg-line: #e5e5e5;
+  --tg-line-strong: #cccccc;
+  --tg-code-bg: #f5f5f5;
+  --tg-code-fg: #0a0a0a;
+
+  --tg-accent: #dc2626;          /* 朱 red */
+  --tg-accent-hover: #b91c1c;
+  --tg-accent-fg: #ffffff;
+  --tg-accent-soft: #fef2f2;
+
+  /* Gradient — pure black to red, for text accents only */
+  --tg-grad-from: #0a0a0a;
+  --tg-grad-mid: #7c1010;
+  --tg-grad-to: #dc2626;
+
+  --tg-success: #16a34a;
+  --tg-warn: #ea580c;
+  --tg-danger: #dc2626;
+
+  /* Spacing scale */
+  --tg-s-1: 4px;
+  --tg-s-2: 8px;
+  --tg-s-3: 12px;
+  --tg-s-4: 16px;
+  --tg-s-5: 24px;
+  --tg-s-6: 32px;
+  --tg-s-7: 48px;
+  --tg-s-8: 64px;
+  --tg-s-9: 96px;
+  --tg-s-10: 128px;
+
+  /* Typography */
+  --tg-font-body:
+    "Bricolage Grotesque Variable", "Bricolage Grotesque",
+    -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+    "Yu Gothic UI", "Segoe UI", Roboto, sans-serif;
+  --tg-font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono",
+    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --tg-font-display: var(--tg-font-body);
+
+  --tg-fs-xs: 0.78rem;
+  --tg-fs-sm: 0.88rem;
+  --tg-fs-base: 1rem;
+  --tg-fs-lg: 1.13rem;
+  --tg-fs-xl: 1.31rem;
+  --tg-fs-2xl: 1.6rem;
+  --tg-fs-3xl: 2rem;
+  --tg-fs-4xl: 2.6rem;
+  --tg-fs-5xl: 3.4rem;
+  --tg-fs-6xl: clamp(2.8rem, 6vw, 5rem);
+
+  --tg-lh-tight: 1.15;
+  --tg-lh-snug: 1.35;
+  --tg-lh-body: 1.7;
+
+  /* Shadows — pure neutral, no tint */
+  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08);
+  --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12);
+
+  /* Radii */
+  --tg-r-sm: 6px;
+  --tg-r-md: 10px;
+  --tg-r-lg: 16px;
+  --tg-r-xl: 24px;
+  --tg-r-full: 999px;
+
+  /* Layout */
+  --tg-container: 1120px;
+  --tg-nav-h: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tg-bg: #0a0a0a;
+    --tg-bg-elev: #141414;
+    --tg-bg-subtle: #1a1a1a;
+    --tg-fg: #fafafa;
+    --tg-fg-muted: #a3a3a3;
+    --tg-fg-subtle: #6b6b6b;
+    --tg-line: #262626;
+    --tg-line-strong: #3f3f3f;
+    --tg-code-bg: #141414;
+    --tg-code-fg: #fafafa;
+
+    --tg-accent: #ef4444;
+    --tg-accent-hover: #f87171;
+    --tg-accent-fg: #0a0a0a;
+    --tg-accent-soft: #2a0a0a;
+
+    --tg-grad-from: #fafafa;
+    --tg-grad-mid: #ef4444;
+    --tg-grad-to: #dc2626;
+
+    --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
+    --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
+  }
+}
+
+[data-theme="dark"] {
+  --tg-bg: #0a0a0a;
+  --tg-bg-elev: #141414;
+  --tg-bg-subtle: #1a1a1a;
+  --tg-fg: #fafafa;
+  --tg-fg-muted: #a3a3a3;
+  --tg-fg-subtle: #6b6b6b;
+  --tg-line: #262626;
+  --tg-line-strong: #3f3f3f;
+  --tg-code-bg: #141414;
+  --tg-code-fg: #fafafa;
+  --tg-accent: #ef4444;
+  --tg-accent-hover: #f87171;
+  --tg-accent-fg: #0a0a0a;
+  --tg-accent-soft: #2a0a0a;
+  --tg-grad-from: #fafafa;
+  --tg-grad-mid: #ef4444;
+  --tg-grad-to: #dc2626;
+  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
+  --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
+}

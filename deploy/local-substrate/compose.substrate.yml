@@ -332,6 +332,39 @@ services:
     volumes:
       - ../../../takosumi/docs:/docs
 
+  # ---- takos landing (SolidStart, mirrors takos.jp root) ----
+  takos-website-build:
+    profiles: ["postgres"]
+    image: node:22-slim
+    restart: "no"
+    working_dir: /website
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -d node_modules ]; then
+          npm install --no-fund --no-audit
+        fi
+        # Point the cloud-install CTA at the local-substrate cloud mirror
+        # instead of cloud.takosumi.com so links work end-to-end in the
+        # local test bed.
+        export VITE_CLOUD_INSTALL_URL="https://cloud.takosumi.test/apps/install?git=https%3A%2F%2Fgithub.com%2Ftako0614%2Ftakos.git&ref=main&mode=shared-cell&autopreview=1"
+        npm run build
+    volumes:
+      - ../../../takos/website:/website
+
+  # ---- yurucommu landing (plain HTML, mirrors yurucommu.com root) ----
+  # No build step; site/ ships as static files. This service exists so
+  # `docker compose up` shows yurucommu in the topology summary even
+  # though no work runs.
+  yurucommu-site-noop:
+    profiles: ["postgres"]
+    image: alpine:3.20
+    restart: "no"
+    command: ["sh", "-c", "echo 'yurucommu site is static — no build needed'"]
+    volumes:
+      - ../../../yurucommu/site:/site:ro
+
   # ---- takosumi-cloud dashboard SPA (mirrors cloud.takosumi.com root) ----
   takosumi-cloud-dashboard-build:
     profiles: ["postgres"]

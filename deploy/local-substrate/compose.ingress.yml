@@ -54,6 +54,8 @@ services:
       - ../../../takosumi/website/.output/public:/srv/takosumi-marketing:ro
       - ../../../takosumi/docs/.vitepress/dist:/srv/takosumi-docs:ro
       - ../../../takosumi-cloud/packages/dashboard-ui/.output/public:/srv/takosumi-cloud-dashboard:ro
+      - ../../../takos/website/.output/public:/srv/takos-marketing:ro
+      - ../../../yurucommu/site:/srv/yurucommu-marketing:ro
       - caddy-data:/data
       - caddy-config:/config
     ports:
@@ -72,6 +74,8 @@ services:
           - agent.takos.test
           - takosumi.test
           - cloud.takosumi.test
+          - takos.test
+          - yurucommu.test
 
 networks:
   takos-local-internal:
