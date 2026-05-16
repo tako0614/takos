@@ -27,6 +27,27 @@ check() {
 	fi
 }
 
+# POST a JSON body and assert status. Used for endpoints that 400/405 on GET
+# but should return 200 when called correctly.
+check_post() {
+	local label=$1
+	local host=$2
+	local path=$3
+	local body=$4
+	local expect_status=$5
+	local code
+	code=$(curl -sk --cacert "$CA" --resolve "${host}:443:127.0.0.1" \
+		-X POST -H "Content-Type: application/json" --data "$body" \
+		-o /dev/null -w "%{http_code}" "https://${host}${path}")
+	if [[ "$code" == "$expect_status" ]]; then
+		echo "    PASS [$label] POST https://${host}${path} -> $code"
+		PASS=$((PASS + 1))
+	else
+		echo "    FAIL [$label] POST https://${host}${path} -> $code (expected $expect_status)"
+		FAIL=$((FAIL + 1))
+	fi
+}
+
 echo "==> Phase 0 — ingress"
 check "phase0.hello" "hello.takos.test" "/" "200"
 
@@ -53,6 +74,16 @@ echo "==> Product landings — takos.jp / yurucommu.com under .test"
 check "prod-mirror.takos.landing.index" "takos.test" "/" "200"
 check "prod-mirror.takos.landing.favicon" "takos.test" "/brand/favicon.svg" "200"
 check "prod-mirror.yurucommu.landing.index" "yurucommu.test" "/" "200"
+
+echo
+echo "==> Install flow — managed-offering bypass + install-preview mock"
+# managed-offering gate is flipped to 'open' for the local test bed, so the
+# preview endpoint should return 200 instead of 503 (launch_readiness_not_complete).
+check_post "install.preview.takos" "cloud.takosumi.test" "/v1/install/preview" \
+	'{"source":{"gitUrl":"https://github.com/tako0614/takos.git","ref":"main"}}' "200"
+# yurucommu through the same wizard
+check_post "install.preview.yurucommu" "cloud.takosumi.test" "/v1/install/preview" \
+	'{"source":{"gitUrl":"https://github.com/tako0614/yurucommu.git","ref":"main"}}' "200"
 
 echo
 echo "==> ${PASS} passed, ${FAIL} failed"

@@ -353,6 +353,22 @@ services:
     volumes:
       - ../../../takos/website:/website
 
+  # ---- install_preview mock (stands in for takosumi-git's preview API) ----
+  # Returns deterministic fake {appId, source.commit, source.*Digest} so the
+  # install wizard can complete preview → install end-to-end without a real
+  # git mirror behind it.
+  install-preview-mock:
+    profiles: ["postgres"]
+    image: denoland/deno:alpine-2.1.4
+    restart: unless-stopped
+    command: ["run", "--allow-net", "--allow-env=PORT", "/srv/main.ts"]
+    volumes:
+      - ./install-preview-mock/main.ts:/srv/main.ts:ro
+    networks:
+      takos-local-internal:
+        aliases:
+          - install-preview-mock
+
   # ---- yurucommu landing (plain HTML, mirrors yurucommu.com root) ----
   # No build step; site/ ships as static files. This service exists so
   # `docker compose up` shows yurucommu in the topology summary even
@@ -410,6 +426,8 @@ services:
     depends_on:
       takosumi-cloud-worker-build:
         condition: service_completed_successfully
+      install-preview-mock:
+        condition: service_started
     working_dir: /app
     command: ["node", "/app/runner.mjs"]
     environment:
@@ -419,7 +437,18 @@ services:
       TAKOSUMI_ACCOUNTS_SUBJECT: tsub_takosumi_cloud_local
       TAKOSUMI_ACCOUNTS_CLIENT_ID: takos-app-local
       TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback https://cloud.takosumi.test/sign-in/callback
-      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: closed
+      # Managed-offering gate flipped to 'open' for the local test bed so
+      # install / signup / billing flows are reachable. The digest is the
+      # sha256 of the literal string 'local-substrate-readiness-v1' and the
+      # refs point at the launch-readiness docs in takos-private. None of
+      # this is production evidence — it's a deterministic local fixture.
+      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: open
+      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_READINESS_DIGEST: "sha256:e35f7540857c615ddd26a779ca95674237c649bbb99712e7e795e3bdc9ce3357"
+      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_EVIDENCE_REF: "git+https://github.com/tako0614/takos-private.git#docs/launch-readiness/p0-evidence.md"
+      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_APPROVAL_REF: "git+https://github.com/tako0614/takos-private.git#docs/launch-readiness/p0-approval.md"
+      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_PUBLIC_SUMMARY: "Local substrate p0 staged rehearsal — evidence retained with rehearsal log; no production traffic served."
+      # Mock install-preview service running in the same docker network.
+      TAKOSUMI_ACCOUNTS_INSTALL_PREVIEW_URL: http://install-preview-mock:8788
     volumes:
       - ../../../takosumi-cloud/deploy/cloudflare/.wrangler/dist:/worker:ro
       - ./wrappers/takosumi-cloud-worker-runner.mjs:/app/runner.mjs:ro
