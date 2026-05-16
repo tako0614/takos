@@ -201,16 +201,29 @@ services:
         aliases:
           - kernel
 
-  # ---- Takosumi kernel (workers profile) — Phase 1b で実装 ----
+  # ---- Takosumi kernel (workers profile) ----
+  # The cloud worker (takosumi-cloud-worker) ALREADY runs on workerd + D1
+  # regardless of profile, so workers-side coverage for the accounts plane
+  # is exercised by the postgres-profile smoke (17+ checks under cloud.*,
+  # oauth.*, install.preview.*, passkey.*, stripe.webhook.*).
+  # The kernel ITSELF running on workerd is a separate upstream task: the
+  # current takosumi-kernel does `import('npm:pg')` and runs Postgres-
+  # specific migrations at module boot, neither of which work in workerd.
+  # When @takos/takosumi-kernel lands lazy-init + a D1 adapter, replace
+  # this stub. Tracked in TODO-SMOKE.md.
   kernel-workers:
     profiles: ["workers"]
     image: node:22-alpine
-    restart: unless-stopped
-    command: ["sh", "-c", "echo 'workers profile not yet implemented' && sleep infinity"]
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        echo "kernel-workers: upstream needs D1 adapter — see TODO-SMOKE.md"
+        echo "(takosumi-cloud-worker is the workerd code path that smoke covers)"
+        exit 0
     networks:
-      takos-local-internal:
-        aliases:
-          - kernel
+      - takos-local-internal
 
   # ---- Takos product ----
 
@@ -437,6 +450,82 @@ services:
         aliases:
           - oauth-mock
 
+  # ---- yurucommu backend instances (federation smoke) ----
+  # Two isolated instances on inst-a.takos.test / inst-b.takos.test so
+  # scripts/federation-smoke.sh can verify cross-instance ActivityPub
+  # discovery (webfinger lookup, actor fetch). Full Follow → Accept
+  # exercise depends on signup endpoint surface that yurucommu currently
+  # gates; smoke does what it can and documents the rest as deferred.
+  yurucommu-a:
+    profiles: ["postgres"]
+    image: denoland/deno:debian-2.7.10
+    restart: unless-stopped
+    working_dir: /workspace
+    command:
+      - sh
+      - -c
+      - |
+        if ! command -v sqlite3 >/dev/null 2>&1; then
+          apt-get update -qq && apt-get install -y -qq libsqlite3-dev sqlite3 >/dev/null
+        fi
+        # deno x/sqlite3 dlopen's libsqlite3.so directly (not .so.0).
+        ln -sf libsqlite3.so.0 /usr/lib/x86_64-linux-gnu/libsqlite3.so 2>/dev/null || true
+        mkdir -p /data/storage
+        deno run -A npm:drizzle-kit push --force >/dev/null 2>&1 || true
+        # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
+        # in deno.json doesn't include it; pass directly here).
+        exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
+    environment:
+      PORT: "8791"
+      APP_URL: https://inst-a.takos.test
+      DATABASE_PATH: /data/yurucommu.db
+      STORAGE_PATH: /data/storage
+      NODE_ENV: development
+    volumes:
+      - ../../../yurucommu:/workspace
+      - yurucommu-a-data:/data
+      - yurucommu-deno-cache:/deno-dir
+    networks:
+      takos-local-internal:
+        aliases:
+          - yurucommu-a
+          - inst-a.takos.test
+
+  yurucommu-b:
+    profiles: ["postgres"]
+    image: denoland/deno:debian-2.7.10
+    restart: unless-stopped
+    working_dir: /workspace
+    command:
+      - sh
+      - -c
+      - |
+        if ! command -v sqlite3 >/dev/null 2>&1; then
+          apt-get update -qq && apt-get install -y -qq libsqlite3-dev sqlite3 >/dev/null
+        fi
+        # deno x/sqlite3 dlopen's libsqlite3.so directly (not .so.0).
+        ln -sf libsqlite3.so.0 /usr/lib/x86_64-linux-gnu/libsqlite3.so 2>/dev/null || true
+        mkdir -p /data/storage
+        deno run -A npm:drizzle-kit push --force >/dev/null 2>&1 || true
+        # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
+        # in deno.json doesn't include it; pass directly here).
+        exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
+    environment:
+      PORT: "8791"
+      APP_URL: https://inst-b.takos.test
+      DATABASE_PATH: /data/yurucommu.db
+      STORAGE_PATH: /data/storage
+      NODE_ENV: development
+    volumes:
+      - ../../../yurucommu:/workspace
+      - yurucommu-b-data:/data
+      - yurucommu-deno-cache:/deno-dir
+    networks:
+      takos-local-internal:
+        aliases:
+          - yurucommu-b
+          - inst-b.takos.test
+
   # ---- yurucommu landing (plain HTML, mirrors yurucommu.com root) ----
   # No build step; site/ ships as static files. This service exists so
   # `docker compose up` shows yurucommu in the topology summary even
@@ -613,6 +702,9 @@ volumes:
   takos-git-repos:
   takos-app-data:
   takosumi-cloud-worker-data:
+  yurucommu-a-data:
+  yurucommu-b-data:
+  yurucommu-deno-cache:
 
 networks:
   takos-local-internal:
