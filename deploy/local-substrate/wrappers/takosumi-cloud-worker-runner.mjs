@@ -14,6 +14,22 @@ const scriptPath = process.env.WORKER_SCRIPT ??
 const port = Number(process.env.WORKER_PORT ?? 8787);
 const scriptContents = readFileSync(scriptPath, "utf8");
 
+// Pass through every TAKOSUMI_ACCOUNTS_* env var as a worker binding so we
+// don't have to enumerate each new config knob (managed-offering refs,
+// install_preview URL, upstream OAuth, passkey RP, etc) in this runner.
+const bindings = Object.fromEntries(
+  Object.entries(process.env).filter(([k, v]) =>
+    typeof v === "string" && k.startsWith("TAKOSUMI_ACCOUNTS_")
+  ),
+);
+// Sensible defaults if the operator forgot to set the basics.
+bindings.TAKOSUMI_ACCOUNTS_ISSUER ??= "https://cloud.takosumi.test";
+bindings.TAKOSUMI_ACCOUNTS_SUBJECT ??= "tsub_takosumi_cloud_local";
+bindings.TAKOSUMI_ACCOUNTS_CLIENT_ID ??= "takos-app-local";
+bindings.TAKOSUMI_ACCOUNTS_REDIRECT_URIS ??=
+  "https://app.takos.test/oauth/callback";
+bindings.TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS ??= "closed";
+
 const mf = new Miniflare({
   modules: [{
     type: "ESModule",
@@ -25,19 +41,7 @@ const mf = new Miniflare({
   compatibilityDate: process.env.WORKER_COMPATIBILITY_DATE ?? "2026-04-15",
   d1Databases: { TAKOSUMI_ACCOUNTS_DB: "takosumi-cloud-accounts" },
   d1Persist: "/data/d1",
-  bindings: {
-    TAKOSUMI_ACCOUNTS_ISSUER: process.env.TAKOSUMI_ACCOUNTS_ISSUER ??
-      "https://cloud.takosumi.test",
-    TAKOSUMI_ACCOUNTS_SUBJECT: process.env.TAKOSUMI_ACCOUNTS_SUBJECT ??
-      "tsub_takosumi_cloud_local",
-    TAKOSUMI_ACCOUNTS_CLIENT_ID: process.env.TAKOSUMI_ACCOUNTS_CLIENT_ID ??
-      "takos-app-local",
-    TAKOSUMI_ACCOUNTS_REDIRECT_URIS:
-      process.env.TAKOSUMI_ACCOUNTS_REDIRECT_URIS ??
-        "https://app.takos.test/oauth/callback",
-    TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS:
-      process.env.TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS ?? "closed",
-  },
+  bindings,
 });
 
 const url = await mf.ready;
