@@ -4,22 +4,36 @@
 	admin 0.0.0.0:2019
 }
 
+# ===== Snippets ============================================================
+# Static file site served from a single root with SPA-style fallback.
+# Used by every marketing landing in this Caddyfile.
+(static_site) {
+	encode gzip
+	root * {args[0]}
+	try_files {path} {path}/index.html /index.html
+	file_server
+}
+
+# Reverse proxy + gzip — used by all the *.takos.test single-upstream sites.
+(proxy_site) {
+	encode gzip
+	reverse_proxy {args[0]}
+}
+
+# ===== Phase 0 / hello =====================================================
 hello.takos.test {
 	respond "hello from local-substrate (Phase 0)" 200
 }
 
-# takosumi.com mirror — marketing landing at "/", docs at "/docs/*".
+# ===== Marketing landings ==================================================
+# takosumi.com mirror — landing at /, docs at /docs/*.
 takosumi.test {
 	encode gzip
-
-	# Docs (VitePress dist; built with base="/docs/").
 	handle_path /docs/* {
 		root * /srv/takosumi-docs
 		try_files {path} {path}/ {path}.html /index.html
 		file_server
 	}
-
-	# Marketing landing (vanilla HTML/CSS in takosumi/website/).
 	handle {
 		root * /srv/takosumi-marketing
 		try_files {path} {path}/index.html /index.html
@@ -27,68 +41,43 @@ takosumi.test {
 	}
 }
 
-# takos.jp mirror — marketing landing.
 takos.test {
-	encode gzip
-	root * /srv/takos-marketing
-	try_files {path} {path}/index.html /index.html
-	file_server
+	import static_site /srv/takos-marketing
 }
-
-# yurucommu.com mirror — marketing landing (vanilla HTML in yurucommu/site/).
 yurucommu.test {
-	encode gzip
-	root * /srv/yurucommu-marketing
-	try_files {path} {path}/index.html /index.html
-	file_server
+	import static_site /srv/yurucommu-marketing
 }
 
-# OAuth mock — stands in for accounts.google.com + github.com so the
-# cloud sign-in flow can complete in local-substrate without external
-# network. See deploy/local-substrate/oauth-mock/main.ts for routes.
+# ===== Tooling / observability =============================================
 oauth-mock.test {
-	encode gzip
-	reverse_proxy oauth-mock:8789
+	import proxy_site oauth-mock:8789
 }
-
-# Mailpit web UI — inbox for anything any local service SMTPs to mailpit:1025.
 mailpit.takos.test {
-	encode gzip
-	reverse_proxy mailpit:8025
+	import proxy_site mailpit:8025
 }
-
-# Jaeger UI — trace viewer for whatever exports OTLP via otel-collector.
 jaeger.takos.test {
-	encode gzip
-	reverse_proxy jaeger:16686
+	import proxy_site jaeger:16686
 }
 
-# yurucommu federation pair — inst-a / inst-b on the same network so
-# Follow / Accept ActivityPub flows can be smoked across instances.
+# ===== yurucommu federation pair (inst-a / inst-b) =========================
 inst-a.takos.test {
-	encode gzip
-	reverse_proxy yurucommu-a:8791
+	import proxy_site yurucommu-a:8791
 }
 inst-b.takos.test {
-	encode gzip
-	reverse_proxy yurucommu-b:8791
+	import proxy_site yurucommu-b:8791
 }
 
-# cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
-#
-# Wrap in `route { ... handle ... }` so Caddy evaluates the API handler before
-# the SPA fallback. Without explicit `route`+`handle` blocks, Caddy's directive
-# sorter puts the catch-all `handle` first and the worker is never reached.
+# ===== cloud.takosumi.com mirror — SPA + worker split ======================
+# Wrap in `route { handle @api ... handle ... }` so Caddy evaluates the API
+# handler before the SPA fallback. Without explicit handle blocks, Caddy's
+# directive sorter puts the catch-all `handle` first and the worker never
+# sees /v1/* requests.
 cloud.takosumi.test {
 	route {
-		# API routes — accounts-service constants live under /v1/*, plus
-		# legacy /oauth/* (OIDC server) and /.well-known/* (discovery).
 		@api path /v1/* /oauth/* /.well-known/* /healthz
 		handle @api {
 			reverse_proxy takosumi-cloud-worker:8787
 		}
-
-		# SPA static + client-side routing fallback for everything else
 		handle {
 			encode gzip
 			root * /srv/takosumi-cloud-dashboard
@@ -98,21 +87,18 @@ cloud.takosumi.test {
 	}
 }
 
+# ===== Phase 1 substrate ===================================================
 accounts.takos.test {
 	reverse_proxy accounts:8787
 }
-
 kernel.takos.test {
 	reverse_proxy kernel:8788
 }
-
 app.takos.test {
 	reverse_proxy takos-app:8787
 }
-
 git.takos.test {
 	reverse_proxy takos-git:8790
 }
 
 # Phase 3 で route-registrar が *.app.takos.test に動的 route を追加する。
-# Phase 1 では catch-all 404 にしておく。

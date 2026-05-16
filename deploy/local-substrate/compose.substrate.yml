@@ -589,81 +589,10 @@ services:
         condition: service_started
     working_dir: /app
     command: ["node", "/app/runner.mjs"]
-    environment:
-      WORKER_SCRIPT: /worker/takosumi-cloud-accounts-worker.mjs
-      WORKER_PORT: "8787"
-      TAKOSUMI_ACCOUNTS_ISSUER: https://cloud.takosumi.test
-      TAKOSUMI_ACCOUNTS_SUBJECT: tsub_takosumi_cloud_local
-      TAKOSUMI_ACCOUNTS_CLIENT_ID: takos-app-local
-      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback https://cloud.takosumi.test/sign-in/callback
-      # Managed-offering gate flipped to 'open' for the local test bed so
-      # install / signup / billing flows are reachable. The digest is the
-      # sha256 of the literal string 'local-substrate-readiness-v1' and the
-      # refs point at the launch-readiness docs in takos-private. None of
-      # this is production evidence — it's a deterministic local fixture.
-      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: open
-      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_READINESS_DIGEST: "sha256:e35f7540857c615ddd26a779ca95674237c649bbb99712e7e795e3bdc9ce3357"
-      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_EVIDENCE_REF: "git+https://github.com/tako0614/takos-private.git#docs/launch-readiness/p0-evidence.md"
-      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_APPROVAL_REF: "git+https://github.com/tako0614/takos-private.git#docs/launch-readiness/p0-approval.md"
-      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_PUBLIC_SUMMARY: "Local substrate p0 staged rehearsal — evidence retained with rehearsal log; no production traffic served."
-      # Mock install-preview service running in the same docker network.
-      TAKOSUMI_ACCOUNTS_INSTALL_PREVIEW_URL: http://install-preview-mock:8788
-      # Upstream OAuth — pointed at the local oauth-mock for both google +
-      # github so the cloud sign-in flow can complete without external network.
-      # SUBJECT_SECRET is required when any upstream provider is configured;
-      # the value is a deterministic local-only secret (not production).
-      TAKOSUMI_ACCOUNTS_SUBJECT_SECRET: "local-substrate-upstream-subject-secret-v1"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_ID: "takos-cloud-local-google"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_SECRET: "mock-secret-google"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_REDIRECT_URI: "https://cloud.takosumi.test/sign-in/callback"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_ISSUER: "https://oauth-mock.test/google"
-      # ====================================================================
-      # LOCAL ONLY — workerd TLS divergence.
-      # Production: ALL upstream OAuth endpoints (Google + GitHub) are HTTPS.
-      # Here: /authorize is HTTPS via Caddy (browser-facing), but /token +
-      # /userinfo are plain HTTP through the docker network because workerd's
-      # TLS trust store does not include the Pebble root and adding it
-      # requires patching the workerd binary (deferred).
-      # The negative-path coverage that the worker correctly surfaces
-      # upstream 5xx/TLS errors is provided by scripts/oauth-tls-negative.sh
-      # (smoke check: oauth.tls-negative). Do NOT copy this env block to
-      # production deploys.
-      # ====================================================================
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/google/authorize"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_TOKEN_ENDPOINT: "http://oauth-mock:8789/google/token"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_USERINFO_ENDPOINT: "http://oauth-mock:8789/google/userinfo"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_ID: "takos-cloud-local-github"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_SECRET: "mock-secret-github"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_REDIRECT_URI: "https://cloud.takosumi.test/sign-in/callback"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_ISSUER: "https://oauth-mock.test/github"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/github/authorize"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_TOKEN_ENDPOINT: "http://oauth-mock:8789/github/access_token"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_USERINFO_ENDPOINT: "http://oauth-mock:8789/github/user"
-      # Custom OIDC slot wired to oauth-mock's /tls-fail endpoints. The
-      # provider id 'tls-fail' is local-only; scripts/oauth-tls-negative.sh
-      # uses it to assert the worker returns 502 upstream_oauth_failed
-      # when upstream /token returns 5xx (which is what a TLS handshake
-      # failure would look like in production).
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_PROVIDER_ID: "tls-fail"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_ISSUER: "https://oauth-mock.test/tls-fail"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_AUTHORIZATION_ENDPOINT: "https://oauth-mock.test/tls-fail/authorize"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_TOKEN_ENDPOINT: "http://oauth-mock:8789/tls-fail/token"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_USERINFO_ENDPOINT: "http://oauth-mock:8789/tls-fail/userinfo"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_ID: "takos-cloud-local-tls-fail"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_SECRET: "mock-secret-tls-fail"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_REDIRECT_URI: "https://cloud.takosumi.test/sign-in/callback"
-      TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_SUBJECT_CLAIM: "sub"
-      # Passkey RP config — required for the WebAuthn flow. RP ID is the
-      # domain (no scheme); origin is the full https origin.
-      TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID: cloud.takosumi.test
-      TAKOSUMI_ACCOUNTS_PASSKEY_RP_NAME: "Takosumi Cloud (local)"
-      TAKOSUMI_ACCOUNTS_PASSKEY_ORIGIN: https://cloud.takosumi.test
-      # Stripe billing — local-only fixture secrets. Webhook replay script
-      # (scripts/stripe-webhook-replay.py) signs events with WEBHOOK_SECRET.
-      # SECRET_KEY is only used for outbound checkout creation; not exercised
-      # in webhook tests but required by the worker's config validation.
-      TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY: "sk_test_local_substrate_fixture"
-      TAKOSUMI_ACCOUNTS_STRIPE_WEBHOOK_SECRET: "whsec_local_substrate_fixture_v1"
+    # All ~30 env vars live in env/takosumi-cloud-worker.env so the compose
+    # service block stays readable. Inline-only deltas would go here.
+    env_file:
+      - ./env/takosumi-cloud-worker.env
     volumes:
       - ../../../takosumi-cloud/deploy/cloudflare/.wrangler/dist:/worker:ro
       - ./wrappers/takosumi-cloud-worker-runner.mjs:/app/runner.mjs:ro

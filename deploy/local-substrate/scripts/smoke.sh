@@ -9,6 +9,24 @@ cd "$SUBSTRATE_DIR"
 CA="caddy/runtime/pebble-issuance-root.pem"
 PASS=0
 FAIL=0
+SMOKE_LOG_DIR="${SMOKE_LOG_DIR:-/tmp/smoke-logs}"
+mkdir -p "$SMOKE_LOG_DIR"
+
+# Wrap a script invocation so its full stdout+stderr is captured to
+# $SMOKE_LOG_DIR/<label>.log when it fails. CI uploads the dir as a
+# build artifact so post-mortem doesn't require manual re-run.
+run_script() {
+	local label=$1
+	local cmd=$2  # space-separated command-line
+	local logfile="$SMOKE_LOG_DIR/${label}.log"
+	if eval "$cmd" >"$logfile" 2>&1; then
+		return 0
+	else
+		echo "      → log: $logfile (last 5 lines:)"
+		tail -n 5 "$logfile" | sed 's/^/        /'
+		return 1
+	fi
+}
 
 check() {
 	local label=$1
@@ -132,7 +150,7 @@ echo "==> OAuth flow — upstream mock (accounts.google.com / github.com)"
 # assert a session is created. The dedicated script handles the redirect
 # chain; here we just gate it as one PASS/FAIL per provider.
 for provider in google github; do
-	if bash "$SCRIPT_DIR/oauth-e2e.sh" "$provider" >/dev/null 2>&1; then
+	if bash "$SCRIPT_DIR/oauth-e2e.sh" "$provider"  >/dev/null 2>&1; then
 		echo "    PASS [oauth.e2e.$provider] full authorize → callback dance returned session"
 		PASS=$((PASS + 1))
 	else
@@ -144,7 +162,7 @@ done
 # Negative path: with upstream /token returning 5xx the worker must
 # surface 502 upstream_oauth_failed (NOT crash). Provider 'tls-fail' is a
 # custom-OIDC slot wired to oauth-mock's /tls-fail/* endpoints.
-if bash "$SCRIPT_DIR/oauth-tls-negative.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/oauth-tls-negative.sh"  >/dev/null 2>&1; then
 	echo "    PASS [oauth.tls-negative] worker returns 502 upstream_oauth_failed when /token is 5xx"
 	PASS=$((PASS + 1))
 else
@@ -158,7 +176,7 @@ echo "==> Passkey register + authenticate (virtual P-256 authenticator)"
 # then signs an assertion challenge and asserts the worker accepts it.
 # Exercises the full COSE/JWK + ECDSA verification path. Needs python3 +
 # cryptography (python3-cryptography on debian/ubuntu).
-if python3 "$SCRIPT_DIR/passkey-e2e.py" >/dev/null 2>&1; then
+if python3 "$SCRIPT_DIR/passkey-e2e.py"  >/dev/null 2>&1; then
 	echo "    PASS [passkey.e2e] register + authenticate verified end-to-end"
 	PASS=$((PASS + 1))
 else
@@ -168,7 +186,7 @@ fi
 
 echo
 echo "==> Kernel deploy (POST /v1/deployments — canonical entry point)"
-if bash "$SCRIPT_DIR/cli-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/cli-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [kernel.deploy.e2e] manifest applied to kernel, outcome=succeeded"
 	PASS=$((PASS + 1))
 else
@@ -178,7 +196,7 @@ fi
 
 echo
 echo "==> yurucommu 2-instance federation infrastructure"
-if bash "$SCRIPT_DIR/federation-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/federation-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [federation.infra] inst-a + inst-b nodeinfo + webfinger + cross-reach"
 	PASS=$((PASS + 1))
 else
@@ -188,7 +206,7 @@ fi
 
 echo
 echo "==> Workers profile (cloud worker on workerd + D1)"
-if bash "$SCRIPT_DIR/workers-cli-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/workers-cli-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [workers.cli-smoke] cloud worker healthy via workerd + D1"
 	PASS=$((PASS + 1))
 else
@@ -198,7 +216,7 @@ fi
 
 echo
 echo "==> Phase 3 route-registrar (kernel → Caddy admin sync)"
-if bash "$SCRIPT_DIR/route-registrar-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/route-registrar-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [registrar.alive] container running + ticking + static routes preserved"
 	PASS=$((PASS + 1))
 else
@@ -208,7 +226,7 @@ fi
 
 echo
 echo "==> takos-private manifest yaml/compose lint"
-if bash "$SCRIPT_DIR/private-dryrun.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/private-dryrun.sh"  >/dev/null 2>&1; then
 	echo "    PASS [private.lint] all yaml/compose files parse cleanly"
 	PASS=$((PASS + 1))
 else
@@ -218,7 +236,7 @@ fi
 
 echo
 echo "==> MinIO object round-trip (R2-compatible backend for object-store@v1)"
-if bash "$SCRIPT_DIR/minio-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/minio-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [minio.roundtrip] mb → put → get → sha256 match → cleanup"
 	PASS=$((PASS + 1))
 else
@@ -228,7 +246,7 @@ fi
 
 echo
 echo "==> Bundled apps .takosumi/ sanity (install link reachability)"
-if bash "$SCRIPT_DIR/bundled-apps-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/bundled-apps-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [bundled.apps] all 5 advertised apps have valid .takosumi/app.yml"
 	PASS=$((PASS + 1))
 else
@@ -238,7 +256,7 @@ fi
 
 echo
 echo "==> D1 schema idempotency (worker restart preserves schema)"
-if bash "$SCRIPT_DIR/migration-idempotency.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/migration-idempotency.sh"  >/dev/null 2>&1; then
 	echo "    PASS [migration.idempotency] schema byte-identical across worker recreate"
 	PASS=$((PASS + 1))
 else
@@ -248,7 +266,7 @@ fi
 
 echo
 echo "==> OTel pipeline (otel-collector → jaeger)"
-if bash "$SCRIPT_DIR/otel-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/otel-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [otel.pipeline] synthetic OTLP trace landed in Jaeger /api/services"
 	PASS=$((PASS + 1))
 else
@@ -258,7 +276,7 @@ fi
 
 echo
 echo "==> k6 load baseline via Caddy + TLS (20 RPS x 20s — regression watch only, NOT SLO)"
-if bash "$SCRIPT_DIR/k6-baseline.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/k6-baseline.sh"  >/dev/null 2>&1; then
 	echo "    PASS [k6.baseline] install/preview + oidc both within p95 + error-rate thresholds"
 	PASS=$((PASS + 1))
 else
@@ -268,7 +286,7 @@ fi
 
 echo
 echo "==> mailpit SMTP catcher (ready for backend email when wired)"
-if bash "$SCRIPT_DIR/mailpit-smoke.sh" >/dev/null 2>&1; then
+if bash "$SCRIPT_DIR/mailpit-smoke.sh"  >/dev/null 2>&1; then
 	echo "    PASS [mailpit] inbox API reachable + probe email delivered + indexed"
 	PASS=$((PASS + 1))
 else
@@ -282,7 +300,7 @@ echo "==> Stripe webhook replay (signed HMAC + idempotency)"
 # secret, asserts received=true and duplicate=false on first delivery, then
 # replays to assert duplicate=true. Also asserts a wrong-secret POST is
 # rejected with 400.
-if python3 "$SCRIPT_DIR/stripe-webhook-replay.py" >/dev/null 2>&1; then
+if python3 "$SCRIPT_DIR/stripe-webhook-replay.py"  >/dev/null 2>&1; then
 	echo "    PASS [stripe.webhook.e2e] verify + replay + reject all behaved"
 	PASS=$((PASS + 1))
 else
@@ -292,4 +310,7 @@ fi
 
 echo
 echo "==> ${PASS} passed, ${FAIL} failed"
+if [[ "$FAIL" -gt 0 ]]; then
+	echo "==> FAIL logs preserved in $SMOKE_LOG_DIR"
+fi
 [[ $FAIL -eq 0 ]]

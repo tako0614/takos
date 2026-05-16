@@ -31,8 +31,55 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import atexit
+import subprocess
+
 SUBSTRATE_DIR = Path(__file__).resolve().parent.parent
 CA_PATH = SUBSTRATE_DIR / "caddy" / "runtime" / "pebble-issuance-root.pem"
+
+
+def cleanup_billing(subject: str | None, customer: str | None) -> None:
+    """Wipe the test-created billing_account + webhook_events from D1.
+    Backend has no DELETE endpoint for either; touch sqlite directly."""
+    if not subject and not customer:
+        return
+    try:
+        sqlite_path = subprocess.check_output(
+            ["docker", "exec", "local-substrate-takosumi-cloud-worker-1",
+             "sh", "-c", "find /data/d1 -name '*.sqlite' | head -1"],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if not sqlite_path:
+            return
+        subprocess.run(
+            ["docker", "cp",
+             f"local-substrate-takosumi-cloud-worker-1:{sqlite_path}",
+             "/tmp/d1-stripe-cleanup.sqlite"],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        import sqlite3
+        con = sqlite3.connect("/tmp/d1-stripe-cleanup.sqlite")
+        try:
+            for needle in [subject, customer]:
+                if not needle: continue
+                con.execute(
+                    "DELETE FROM takosumi_accounts_documents WHERE document LIKE ?",
+                    (f"%{needle}%",),
+                )
+            con.commit()
+        finally:
+            con.close()
+        subprocess.run(
+            ["docker", "cp", "/tmp/d1-stripe-cleanup.sqlite",
+             f"local-substrate-takosumi-cloud-worker-1:{sqlite_path}"],
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
+_state: dict[str, str | None] = {"subject": None, "customer": None}
+atexit.register(lambda: cleanup_billing(_state["subject"], _state["customer"]))
 BASE = "https://cloud.takosumi.test"
 WEBHOOK_SECRET = "whsec_local_substrate_fixture_v1"
 
@@ -200,11 +247,13 @@ def post_webhook(event: dict, *, ts_offset: int = 0,
 def main() -> None:
     print("[1/9] Minting subject via oauth-mock...")
     subject = mint_subject_via_oauth()
+    _state["subject"] = subject
     print(f"      subject={subject}")
 
     event_id = "evt_test_" + secrets.token_hex(8)
     customer = "cus_test_" + secrets.token_hex(8)
     subscription = "sub_test_" + secrets.token_hex(8)
+    _state["customer"] = customer
 
     # ---- checkout: 1st delivery + replay + wrong secret ----
     checkout = build_checkout_event(

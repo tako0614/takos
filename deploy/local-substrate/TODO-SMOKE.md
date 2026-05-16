@@ -1,58 +1,76 @@
 # Local-substrate smoke TODO
 
-These remain deferred. Each needs upstream work in the actual product
-(instrument the service, build the missing entry point, etc.) — they
-can't be smoked from the test bed alone.
+Remaining items after the false-confidence cleanup pass. Each needs
+either upstream product work or a coordination call (out of scope of
+the test bed itself).
 
-## P1 — Workers profile kernel smoke
+## Workers-profile kernel — needs upstream lazy-init + D1 adapter
 
-The `kernel-workers` service in `compose.substrate.yml` is a placeholder
-(`echo 'workers profile not yet implemented' && sleep infinity`). The
-postgres-profile kernel runs under Deno; a workers-profile kernel would
-run under miniflare with D1.
+`takosumi/packages/kernel/src/index.ts` *does* `export default app` (a
+Hono app), so structurally it's worker-compatible. But the same file
+runs Postgres-tied boot code at module load (`npm:pg`, SQL migration
+runner, audit replication chain verification), all of which fail when
+hosted on workerd.
 
-Today's smoke covers the workers code path indirectly: the
-takosumi-cloud-worker IS on workerd+D1 (postgres profile or not — it
-always runs there), and oauth-e2e / install-preview / passkey / stripe
-all hit it. So Cloudflare's worker path *for accounts-service* is
-covered.
+To make the workers profile actually run the kernel itself on workerd:
 
-What's NOT covered is the kernel itself running on workerd. Building
-that requires:
-1. A kernel entry that exports `default { async fetch(req, env) }` —
-   the JSR `@takos/takosumi-kernel` package today exports a Deno server,
-   not a worker module.
-2. D1 schema applied via `wrangler d1 migrations apply` or `db.exec`
-   on first boot (kernel currently does Postgres migrations).
-3. Then `scripts/cli-smoke.sh` could be re-run against the workers-
-   kernel endpoint.
+1. Move every effectful boot step in kernel/src/index.ts into a
+   `bootstrap()` helper that's invoked lazily from the Hono fetch
+   handler the first time a request lands (memoized).
+2. Add a D1 adapter alongside the SqlClient pg pool path so kernel
+   stores can land on either.
+3. Replace `kernel-workers` placeholder with a miniflare runner mirroring
+   wrappers/takosumi-cloud-worker-runner.mjs.
 
-The cleanest path is upstream: open an issue against
-`@takos/takosumi-kernel` to add a worker entry point. Until that lands,
-this smoke can only stub.
+For now the cloud worker (`takosumi-cloud-worker`) IS the workerd code
+path that smoke exercises — see scripts/workers-cli-smoke.sh + the
+~17 cloud.* / oauth.* / install.preview.* / passkey.* / stripe.* smoke
+checks. Kernel-on-workerd is upstream work tracked in
+@takos/takosumi-kernel.
 
-## P2 — Multi-instance ActivityPub federation
+## Full ActivityPub Follow → Accept federation smoke
 
-`yurucommu` is the only product in the ecosystem with a working AP
-implementation (`src/backend/routes/activitypub/*`). It needs:
-- a running database (drizzle migrations applied),
-- HTTP signing keys,
-- 2 isolated instances on different `*.test` hostnames,
-- a smoke that has inst-a Follow inst-b → assert Accept activity.
+Today's `scripts/federation-smoke.sh` brings up `yurucommu-a` and
+`yurucommu-b` on inst-a.takos.test / inst-b.takos.test and verifies:
+- both nodeinfo + webfinger respond
+- cross-instance reach through Caddy
 
-Booting yurucommu's backend in local-substrate is ~1 day of work
-(Postgres schema, migrations, env wiring, ActivityPub keypair gen).
-Tracked separately; landing page + `.takosumi/app.yml` are enough for
-today's install-link smoke.
+What's NOT yet smoked: the actual Follow / Accept exchange. That needs:
 
-When ready:
-1. Add `yurucommu-a` + `yurucommu-b` services to compose with separate
-   DB schemas.
-2. Caddy: `inst-a.takos.test` / `inst-b.takos.test` → respective backend.
-3. `scripts/federation-smoke.sh` posts a Follow from a → b, asserts
-   the corresponding Accept activity is delivered.
+1. A signup endpoint that doesn't require admin password (yurucommu's
+   signup is currently gated).
+2. HTTP Signature keypair generation per actor (yurucommu emits this
+   on user create — would just need to call the user create API).
+3. POST to /actor/<user>/outbox with a Follow activity targeting the
+   remote actor, polled for the corresponding Accept on the remote side.
 
-## P3 — wrangler dev --remote
+About 1–2 hours of yurucommu API spelunking + signing helpers.
+
+## brand-tokens JSR package (D13)
+
+Today `takos/website/src/styles/{tokens,global}.css` is a 691-line fork
+of `takosumi/website/src/styles/global.css`. They will drift. The right
+fix is a small JSR package `@takos/brand-tokens` shipping:
+
+- `tokens.css` — colors / typography / spacing / radii
+- `components/{GeometricMark,InkdropMark,Wordmark}.tsx` — framework-
+  agnostic mark + wordmark components
+
+Then both takos/website and takosumi/website import from JSR. Out of
+scope of the test bed (publishing a new JSR scope + coordination with
+takosumi/website + landing PRs across multiple repos).
+
+## smoke.d/ full split (D17 — partial)
+
+scripts/smoke.sh has a `run_script <label> <cmd>` helper that captures
+stdout+stderr to `$SMOKE_LOG_DIR/<label>.log` on failure. CI uploads
+that dir as an artifact. Today the helper is plumbed into a few key
+checks (oauth, passkey, stripe, federation, kernel-deploy). The full
+refactor to per-script files under `scripts/smoke.d/*.sh` with auto-
+discovery is mechanical but bigger; not strictly necessary now that
+log capture works.
+
+## wrangler dev --remote
 
 Closer-to-prod test against real Cloudflare bindings (KV / DO / Queues
 / D1). Requires:
