@@ -369,6 +369,40 @@ services:
         aliases:
           - install-preview-mock
 
+  # ---- OpenTelemetry collector + Jaeger (trace + metric sink) ----
+  # No service emits OTel today, but the collector + UI are sitting here so
+  # the moment instrumentation lands (accounts-service / kernel / takos-app)
+  # you can verify traces flow end-to-end:
+  #   1. service exports OTLP → collector at otel-collector:4317 (gRPC) /
+  #      4318 (HTTP)
+  #   2. collector forwards to Jaeger at jaeger:4317 (OTLP) / 14250 (jaeger)
+  #   3. Jaeger UI at https://jaeger.takos.test/ shows the spans
+  jaeger:
+    profiles: ["postgres"]
+    image: jaegertracing/jaeger:2.4.0
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      takos-local-internal:
+        aliases:
+          - jaeger
+
+  otel-collector:
+    profiles: ["postgres"]
+    image: otel/opentelemetry-collector-contrib:0.118.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    depends_on:
+      jaeger:
+        condition: service_started
+    volumes:
+      - ./otel/config.yaml:/etc/otelcol/config.yaml:ro
+    networks:
+      takos-local-internal:
+        aliases:
+          - otel-collector
+
   # ---- mailpit SMTP catcher (catches anything any service sends) ----
   # Backends don't send email today, but the infra is here so that the
   # moment they start (signup confirmation, billing alerts, invite mail)
