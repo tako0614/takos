@@ -1,4 +1,20 @@
 /**
+ * ============================================================================
+ * LOCAL-SUBSTRATE TEST RUNNER ONLY.
+ *
+ * This runner pass-throughs every TAKOSUMI_ACCOUNTS_* env var of the host
+ * process into the miniflare worker bindings. That convenience is acceptable
+ * inside the local-substrate docker network — where the host process IS the
+ * test harness — but in production it would be a credential-exfiltration
+ * vector: any env var with the right prefix would leak into worker context
+ * regardless of whether the operator intended to expose it.
+ *
+ * Production deploys go through `wrangler deploy` with an explicit env block
+ * in wrangler.toml or the Cloudflare dashboard. THIS FILE MUST NEVER BE
+ * COPIED to a production runner. The LOCAL_SUBSTRATE_TEST_BED=1 guard below
+ * fails fast if someone tries.
+ * ============================================================================
+ *
  * Boots the takosumi-cloud Accounts Worker (the bundle produced by
  * `deno bundle` from takosumi-cloud/deploy/cloudflare/src/worker.ts)
  * inside Miniflare with a local SQLite D1 binding. Mirrors the
@@ -8,6 +24,17 @@
 import { Miniflare } from "miniflare";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
+
+if (process.env.LOCAL_SUBSTRATE_TEST_BED !== "1") {
+  console.error(
+    "[takosumi-cloud-worker] refusing to start: this runner is local-substrate-only.\n" +
+      "    It pass-throughs ALL TAKOSUMI_ACCOUNTS_* env vars into worker bindings,\n" +
+      "    which is a credential leak path outside a controlled test bed.\n" +
+      "    For production use `wrangler deploy` with an explicit env block.\n" +
+      "    For local-substrate use, set LOCAL_SUBSTRATE_TEST_BED=1.",
+  );
+  process.exit(1);
+}
 
 const scriptPath = process.env.WORKER_SCRIPT ??
   "/worker/takosumi-cloud-accounts-worker.mjs";

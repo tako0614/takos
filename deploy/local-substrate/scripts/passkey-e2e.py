@@ -31,8 +31,69 @@ from pathlib import Path
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, utils as ec_utils
 
+import atexit
+import subprocess
+
 SUBSTRATE_DIR = Path(__file__).resolve().parent.parent
 CA_PATH = SUBSTRATE_DIR / "caddy" / "runtime" / "pebble-issuance-root.pem"
+
+
+def cleanup_subject(subject: str | None, credential_id: str | None) -> None:
+    """Remove the test-created subject and passkey credential from D1.
+    Backend doesn't expose DELETE endpoints for either yet, so we go
+    straight to the sqlite file via docker cp + python sqlite3."""
+    if not subject and not credential_id:
+        return
+    try:
+        sqlite_path = subprocess.check_output(
+            [
+                "docker", "exec", "local-substrate-takosumi-cloud-worker-1",
+                "sh", "-c", "find /data/d1 -name '*.sqlite' | head -1",
+            ],
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        if not sqlite_path:
+            return
+        subprocess.run(
+            ["docker", "cp",
+             f"local-substrate-takosumi-cloud-worker-1:{sqlite_path}",
+             "/tmp/d1-cleanup.sqlite"],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        import sqlite3
+        con = sqlite3.connect("/tmp/d1-cleanup.sqlite")
+        # Tables are document/index pairs; the schema is JSON-document
+        # based so target by document json containing the credential_id /
+        # subject. Best-effort, swallow errors.
+        try:
+            cur = con.cursor()
+            if credential_id:
+                cur.execute(
+                    "DELETE FROM takosumi_accounts_documents WHERE document LIKE ?",
+                    (f'%"credentialId":"{credential_id}"%',),
+                )
+            if subject:
+                cur.execute(
+                    "DELETE FROM takosumi_accounts_documents WHERE document LIKE ?",
+                    (f'%"subject":"{subject}"%',),
+                )
+            con.commit()
+        finally:
+            con.close()
+        subprocess.run(
+            ["docker", "cp", "/tmp/d1-cleanup.sqlite",
+             f"local-substrate-takosumi-cloud-worker-1:{sqlite_path}"],
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        # cleanup is best-effort; D1 will accumulate test entries slowly
+        # but won't crash the smoke
+        pass
+
+
+# Mutable holder so atexit can read the final subject/credential
+_state: dict[str, str | None] = {"subject": None, "credential_id": None}
+atexit.register(lambda: cleanup_subject(_state["subject"], _state["credential_id"]))
 RP_ID = "cloud.takosumi.test"
 ORIGIN = "https://cloud.takosumi.test"
 BASE = "https://cloud.takosumi.test"
@@ -120,6 +181,7 @@ def make_authenticator_data(rp_id: str, sign_count: int = 1) -> bytes:
 def main() -> None:
     print("[1/7] Minting an account subject via the oauth-mock...")
     subject = mint_subject_via_oauth()
+    _state["subject"] = subject
     print(f"      subject={subject}")
 
     print("[2/7] Generating a fresh P-256 keypair as our virtual authenticator...")
@@ -135,6 +197,7 @@ def main() -> None:
         "y": b64url_encode(pub_y),
     }
     credential_id = b64url_encode(secrets.token_bytes(32))
+    _state["credential_id"] = credential_id
     print(f"      credentialId={credential_id[:20]}...")
 
     print("[3/7] POST /v1/auth/passkeys/register/options...")
