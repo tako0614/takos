@@ -43,6 +43,14 @@ yurucommu.test {
 	file_server
 }
 
+# OAuth mock — stands in for accounts.google.com + github.com so the
+# cloud sign-in flow can complete in local-substrate without external
+# network. See deploy/local-substrate/oauth-mock/main.ts for routes.
+oauth-mock.test {
+	encode gzip
+	reverse_proxy oauth-mock:8789
+}
+
 # cloud.takosumi.com mirror — dashboard SPA at "/", API paths to the worker.
 #
 # Wrap in `route { ... handle ... }` so Caddy evaluates the API handler before
