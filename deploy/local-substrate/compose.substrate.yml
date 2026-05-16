@@ -288,7 +288,24 @@ services:
         aliases:
           - takos-git
 
-  # ---- takosumi docs (mirrors takosumi.com on Cloudflare Pages) ----
+  # ---- takosumi landing (SolidStart, mirrors takosumi.com root) ----
+  takosumi-website-build:
+    profiles: ["postgres"]
+    image: node:22-slim
+    restart: "no"
+    working_dir: /website
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -d node_modules ]; then
+          npm install --no-fund --no-audit
+        fi
+        npm run build
+    volumes:
+      - ../../../takosumi/website:/website
+
+  # ---- takosumi docs (VitePress, mirrors takosumi.com/docs/) ----
   takosumi-docs-build:
     profiles: ["postgres"]
     # Debian-based (not alpine) — vitepress / rollup pull glibc-flavored

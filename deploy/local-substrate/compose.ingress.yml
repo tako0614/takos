@@ -51,7 +51,7 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy/runtime:/runtime:ro
-      - ../../../takosumi/website:/srv/takosumi-marketing:ro
+      - ../../../takosumi/website/.output/public:/srv/takosumi-marketing:ro
       - ../../../takosumi/docs/.vitepress/dist:/srv/takosumi-docs:ro
       - caddy-data:/data
       - caddy-config:/config

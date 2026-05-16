@@ -38,8 +38,10 @@ check "phase1.app.health" "app.takos.test" "/health" "200"
 
 echo
 echo "==> Production mirror — takosumi.com / cloud.takosumi.com under .test"
-check "prod-mirror.marketing.index" "takosumi.test" "/" "200"
-check "prod-mirror.marketing.styles" "takosumi.test" "/styles.css" "200"
+check "prod-mirror.landing.index" "takosumi.test" "/" "200"
+check "prod-mirror.landing.favicon" "takosumi.test" "/brand/favicon.svg" "200"
+check "prod-mirror.landing.geometric" "takosumi.test" "/brand/geometric.svg" "200"
+check "prod-mirror.landing.inkdrop" "takosumi.test" "/brand/inkdrop.svg" "200"
 check "prod-mirror.docs.index" "takosumi.test" "/docs/" "200"
 check "prod-mirror.cloud.oidc-discovery" "cloud.takosumi.test" "/.well-known/openid-configuration" "200"
 
