@@ -1,21 +1,35 @@
-# Takosumi Kernel In-Process Smoke Script
+# Current Takos Smoke Commands
 
-> このページでわかること: サーバー不要の Takosumi manifest deploy lifecycle smoke テストの実行方法。
+> このページでわかること: Takos product root で使う current smoke / release gate。
 
-`./scripts/paas-smoke.ts` は Takosumi manifest deploy lifecycle を、サーバーや Docker を起動せずに検証する smoke チェックです。
+Takos product の smoke は `takos/` で実行します。Takosumi kernel の in-process
+deploy lifecycle は `takosumi/` 側の test と local-substrate smoke が正本です。
 
-in-process で次を実行します。
-
-- public route handler を小さな local route harness に登録する。
-- public handler 経由で space と app group を作成する。
-- deploy service を使ってシンプルな manifest を plan / apply する。
-- 結果として得られる activation から noop runtime vertical slice を実行する。
-- CLI / HTTP smoke の確認に使える JSON サマリを出力する。
-
-実行コマンド。
+## Product smoke
 
 ```sh
-deno run --no-config --allow-read --allow-env scripts/paas-smoke.ts
+cd takos
+deno task check
+deno task validate:distributions
+deno task distribution:smoke
 ```
 
-default ではサーバー・Docker・外部サービスを起動しません。
+起動済み local stack に対する HTTP smoke は次です。
+
+```sh
+cd takos
+deno task local:smoke
+```
+
+## Broad local gate
+
+リリース候補の広い local proof は次です。
+
+```sh
+cd takos
+deno task release-gate
+```
+
+Cloudflare / AWS / GCP / Kubernetes / self-hosted の live proof は operator-owned
+evidence です。public source の distribution smoke は manifest と dry-run path を検証し、live
+URL や provider credential の存在までは証明しません。

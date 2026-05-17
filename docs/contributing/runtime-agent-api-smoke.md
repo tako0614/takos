@@ -1,35 +1,22 @@
-# Runtime agent API smoke script
+# Runtime Agent API Proof
 
-> このページでわかること: Runtime agent API の smoke テスト。
+> このページでわかること: runtime-agent API の current proof。
 
-`scripts/runtime-agent-api-smoke.ts` は runtime agent API の配線を、外部サーバー無しに確認する smoke エントリポイントです。
-
-## 実行
+Runtime-agent API は Takosumi kernel / runtime-agent packages の contract です。
+Takos product docs からは、次の Takosumi tests を参照します。
 
 ```sh
-deno run --config deno.json scripts/runtime-agent-api-smoke.ts
+cd ../takosumi
+deno test --allow-all \
+  packages/kernel/src/api/runtime_agent_routes_test.ts \
+  packages/runtime-agent/src/server_test.ts \
+  packages/all/tests/e2e_deploy_test.ts
 ```
 
-`createApiApp` で Hono API を in-process に組み立て、default の internal / public route を無効化し、`InMemoryRuntimeAgentRegistry` を裏に置いた `registerRuntimeAgentRoutes` を mount します。
+Takos product の agent 実行面は `takos/agent` と `takos-agent-engine` の tests
+で扱います。product release gate では次を起点に確認します。
 
-## カバレッジ
-
-ソケットを開かずに runtime agent lifecycle を検証します。
-
-- API でローカル runtime agent を enroll
-- API で heartbeat を送信
-- in-memory registry に直接 work item を 1 件 enqueue
-- API でその work を lease
-- API で lease を completed として報告
-- API で drain を要求
-- draining 中の agent に追加 lease が割り当てられないことを確認
-
-## 期待される出力
-
-成功時の出力。
-
-- `Runtime agent API smoke passed.`
-- agent id
-- work id
-- lease id
-- lifecycle 流れのサマリ
+```sh
+cd takos
+deno task release-gate
+```
