@@ -38,15 +38,29 @@ and verifies:
 - both nodeinfo + webfinger respond
 - cross-instance reach through Caddy
 
-What's NOT yet smoked: the actual Follow / Accept exchange. That needs:
+What's NOT yet smoked: the actual Follow / Accept exchange. Round 2 attempted to add this and learned the surface
+is bigger than the 1–2 hour estimate. Updated state of play (2026-05-17):
 
-1. A signup endpoint that doesn't require admin password (yurucommu's signup is currently gated).
-2. HTTP Signature keypair generation per actor (yurucommu emits this on user create — would just need to call the user
-   create API).
-3. POST to /actor/<user>/outbox with a Follow activity targeting the remote actor, polled for the corresponding Accept
-   on the remote side.
+1. **No public signup endpoint exists.** yurucommu is a single-user instance — `POST /api/auth/login` returns the
+   pre-existing `owner` actor (or creates a default "tako" owner the first time) gated on a PBKDF2-hashed
+   `AUTH_PASSWORD_HASH` env var. `POST /api/auth/accounts` creates sub-accounts but requires an already-signed-in
+   actor. So provisioning two distinct subjects on inst-a vs inst-b means each instance gets the same "tako" owner
+   under a separate `APP_URL`, which is fine for federation testing (the actors have different `ap_id`s).
+2. **`POST /api/auth/login` needs `AUTH_PASSWORD_HASH` in the yurucommu-a/b env.** Generating the PBKDF2 hash is a
+   one-time setup task; the helper is in `yurucommu/src/backend/utils/password.ts`.
+3. **No public POST outbox endpoint.** The federation activity is emitted by yurucommu's own room/posting code; the
+   `ap.get("/ap/users/:username/outbox")` route is read-only. A real Follow activity would need to go through whatever
+   internal API creates Follow records (TBD — possibly the rooms/communities API, possibly the federation worker).
+4. **HTTP Signature on outbound POSTs** is then handled by yurucommu's federation queue; the test would just need to
+   poll inst-b's followers collection for inst-a's actor.
 
-About 1–2 hours of yurucommu API spelunking + signing helpers.
+Best path forward: write the smoke against the internal "create Follow" API once that API surface is identified, OR
+add a minimal `POST /api/test/follow` endpoint guarded by a `LOCAL_SUBSTRATE_TEST_BED=1` env to give the smoke a
+direct hook. Either way the work is bigger than originally scoped — track separately.
+
+In the meantime `federation-smoke.sh` continues to verify the wire-level reachability (nodeinfo + webfinger + cross-
+reach through Caddy) which catches the most common regression class (one yurucommu instance can't see the other at
+all).
 
 ## brand-tokens JSR package (D13)
 
