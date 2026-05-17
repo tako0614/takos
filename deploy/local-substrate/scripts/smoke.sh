@@ -243,9 +243,19 @@ else
 fi
 
 echo
+echo "==> OAuth CSRF / replay defenses — code reuse + state mismatch + unknown code"
+if run_script "oauth.csrf-replay" "bash $SCRIPT_DIR/oauth-csrf-replay.sh"; then
+	echo "    PASS [oauth.csrf-replay] state mismatch, code replay, and unknown code are rejected"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [oauth.csrf-replay] see scripts/oauth-csrf-replay.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "==> Tenant isolation — cross-subject installation read must not leak"
 if bash "$SCRIPT_DIR/tenant-isolation.sh"  >/dev/null 2>&1; then
-	echo "    PASS [tenant.isolation] audit completed; set TENANT_ISOLATION_STRICT=1 once upstream is fixed"
+	echo "    PASS [tenant.isolation] subject B cannot read subject A's installation"
 	PASS=$((PASS + 1))
 else
 	echo "    FAIL [tenant.isolation] see scripts/tenant-isolation.sh"

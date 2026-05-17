@@ -19,20 +19,23 @@ SUBSTRATE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CA="$SUBSTRATE_DIR/caddy/runtime/pebble-issuance-root.pem"
 
 STATE="oauth_tls_neg_$(date +%s%N)_$$"
+JAR=$(mktemp)
+trap 'rm -f "$JAR"' EXIT
 
 # 1. /v1/auth/upstream/authorize?provider=tls-fail → 302 to mock /tls-fail/authorize
-LOC1=$(curl -sk --cacert "$CA" -o /dev/null -w "%{redirect_url}" \
+#    (use a cookie jar so the worker's state-binding cookie sticks for step 3).
+LOC1=$(curl -sk --cacert "$CA" -c "$JAR" -b "$JAR" -o /dev/null -w "%{redirect_url}" \
 	"https://cloud.takosumi.test/v1/auth/upstream/authorize?provider=tls-fail&state=$STATE")
 [[ -n "$LOC1" ]] || { echo "FAIL: worker /authorize did not 302 for tls-fail provider" >&2; exit 1; }
 
 # 2. Follow mock /tls-fail/authorize → 302 with code (this part still works)
-LOC2=$(curl -sk --cacert "$CA" -o /dev/null -w "%{redirect_url}" "$LOC1")
+LOC2=$(curl -sk --cacert "$CA" -c "$JAR" -b "$JAR" -o /dev/null -w "%{redirect_url}" "$LOC1")
 CODE=$(echo "$LOC2" | sed -nE 's/.*[?&]code=([^&]*).*/\1/p')
 [[ -n "$CODE" ]] || { echo "FAIL: tls-fail authorize did not return a code" >&2; exit 1; }
 
 # 3. Worker /callback hits /tls-fail/token → 503 → worker should return 502
-#    upstream_oauth_failed.
-RESP=$(curl -sk --cacert "$CA" -w "\n%{http_code}" \
+#    upstream_oauth_failed. State cookie matches because we reused the jar.
+RESP=$(curl -sk --cacert "$CA" -c "$JAR" -b "$JAR" -w "\n%{http_code}" \
 	"https://cloud.takosumi.test/v1/auth/upstream/callback?provider=tls-fail&code=$CODE&state=$STATE")
 STATUS=$(echo "$RESP" | tail -n1)
 BODY=$(echo "$RESP" | head -n -1)

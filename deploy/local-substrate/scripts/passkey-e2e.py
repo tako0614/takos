@@ -41,8 +41,25 @@ CA_PATH = SUBSTRATE_DIR / "caddy" / "runtime" / "pebble-issuance-root.pem"
 def cleanup_subject(subject: str | None, credential_id: str | None) -> None:
     """Remove the test-created subject and passkey credential from D1.
     Backend doesn't expose DELETE endpoints for either yet, so we go
-    straight to the sqlite file via docker cp + python sqlite3."""
+    straight to the sqlite file via docker cp + python sqlite3.
+
+    Best-effort — if docker isn't available (CI without docker-in-docker)
+    we skip the cleanup with a stderr breadcrumb so D1 accumulation is
+    visible but the smoke itself is not affected.
+    """
     if not subject and not credential_id:
+        return
+    docker_ok = subprocess.run(
+        ["docker", "info"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if docker_ok.returncode != 0:
+        sys.stderr.write(
+            "[passkey-e2e] cleanup skipped: docker daemon not reachable "
+            "(D1 will accumulate test entries; harmless for next run)\n",
+        )
         return
     try:
         sqlite_path = subprocess.check_output(
@@ -62,20 +79,22 @@ def cleanup_subject(subject: str | None, credential_id: str | None) -> None:
         )
         import sqlite3
         con = sqlite3.connect("/tmp/d1-cleanup.sqlite")
-        # Tables are document/index pairs; the schema is JSON-document
-        # based so target by document json containing the credential_id /
-        # subject. Best-effort, swallow errors.
+        # The document column is JSON. Use json_extract so a stray
+        # 'credentialId' or 'subject' substring inside unrelated text
+        # can't accidentally widen the DELETE.
         try:
             cur = con.cursor()
             if credential_id:
                 cur.execute(
-                    "DELETE FROM takosumi_accounts_documents WHERE document LIKE ?",
-                    (f'%"credentialId":"{credential_id}"%',),
+                    "DELETE FROM takosumi_accounts_documents "
+                    "WHERE json_extract(document, '$.credentialId') = ?",
+                    (credential_id,),
                 )
             if subject:
                 cur.execute(
-                    "DELETE FROM takosumi_accounts_documents WHERE document LIKE ?",
-                    (f'%"subject":"{subject}"%',),
+                    "DELETE FROM takosumi_accounts_documents "
+                    "WHERE json_extract(document, '$.subject') = ?",
+                    (subject,),
                 )
             con.commit()
         finally:
@@ -85,10 +104,10 @@ def cleanup_subject(subject: str | None, credential_id: str | None) -> None:
              f"local-substrate-takosumi-cloud-worker-1:{sqlite_path}"],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
-    except Exception:
-        # cleanup is best-effort; D1 will accumulate test entries slowly
-        # but won't crash the smoke
-        pass
+    except Exception as exc:
+        sys.stderr.write(
+            f"[passkey-e2e] cleanup best-effort failed: {exc}\n",
+        )
 
 
 # Mutable holder so atexit can read the final subject/credential
@@ -113,18 +132,25 @@ def b64url_decode(s: str) -> bytes:
     return base64.urlsafe_b64decode(s)
 
 
+import http.cookiejar
+
+# Single jar persisted across the OAuth dance so the worker's state-binding
+# cookie (set on /authorize) is sent back on /callback. Without this the
+# worker's CSRF defense (state-cookie vs query-state comparison) fails.
+_COOKIE_JAR = http.cookiejar.CookieJar()
+
+
 def http_request(method: str, path: str, body: dict | None = None,
-                 follow: bool = False) -> tuple[int, dict, str]:
-    url = BASE + path
+                 follow: bool = False, url: str | None = None) -> tuple[int, dict, str]:
+    target = url if url is not None else (BASE + path)
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method)
+    req = urllib.request.Request(target, data=data, method=method)
     if data is not None:
         req.add_header("Content-Type", "application/json")
     opener = urllib.request.build_opener(
         urllib.request.HTTPSHandler(context=SSL_CTX),
-        # When follow=False, don't auto-follow 302s.
-        urllib.request.HTTPRedirectHandler() if follow
-        else _NoRedirectHandler(),
+        urllib.request.HTTPCookieProcessor(_COOKIE_JAR),
+        urllib.request.HTTPRedirectHandler() if follow else _NoRedirectHandler(),
     )
     try:
         with opener.open(req) as resp:
@@ -150,14 +176,10 @@ def mint_subject_via_oauth() -> str:
     if status != 302:
         sys.exit(f"oauth authorize did not 302 (got {status})")
     loc = headers["Location"]
-    # follow mock /authorize → /sign-in/callback?code=...
-    req = urllib.request.Request(loc)
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=SSL_CTX),
-        _NoRedirectHandler(),
-    )
-    with opener.open(req) as resp:
-        loc2 = resp.headers["Location"]
+    # follow mock /authorize → /sign-in/callback?code=..., reusing the
+    # shared cookie jar so the worker's state cookie survives the dance.
+    _status, headers2, _body2 = http_request("GET", "", url=loc)
+    loc2 = headers2["Location"]
     code = urllib.parse.parse_qs(urllib.parse.urlparse(loc2).query)["code"][0]
     status, _headers, body = http_request(
         "GET",
