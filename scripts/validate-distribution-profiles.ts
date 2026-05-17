@@ -48,6 +48,8 @@ const expectedArtifacts: Record<ExpectedTargetId, readonly ExpectedArtifact[]> =
   cloudflare: [
     { kind: 'wrangler', ref: '../takosumi/deploy/cloudflare/wrangler.toml' },
     { kind: 'operator', ref: '../takosumi/deploy/cloudflare' },
+    { kind: 'wrangler', ref: '../takosumi-cloud/deploy/cloudflare/wrangler.toml' },
+    { kind: 'operator', ref: '../takosumi-cloud/deploy/cloudflare' },
   ],
   gcp: [
     { kind: 'terraform', ref: 'deploy/terraform/environments/gcp-prod' },
@@ -66,10 +68,11 @@ const expectedRequiredBindings: Record<ExpectedTargetId, readonly ExpectedBindin
     { kind: 'aws-vpc', name: 'takos-vpc' },
   ],
   cloudflare: [
-    { kind: 'cloudflare-d1', name: 'TAKOS_DB' },
-    { kind: 'cloudflare-r2', name: 'TAKOS_OBJECTS' },
+    { kind: 'cloudflare-d1', name: 'TAKOS_D1' },
+    { kind: 'cloudflare-r2', name: 'TAKOS_ARTIFACTS' },
     { kind: 'cloudflare-queue', name: 'TAKOS_QUEUE' },
     { kind: 'cloudflare-durable-object', name: 'TAKOS_COORDINATION' },
+    { kind: 'cloudflare-d1', name: 'TAKOSUMI_ACCOUNTS_DB' },
   ],
   gcp: [
     { kind: 'gcp-service-account', name: 'takos-provider' },
@@ -101,9 +104,9 @@ const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, E
       internalUrl: 'https://takosumi.internal.takos.example',
     },
     'takosumi-cloud': {
-      runtime: 'container',
-      artifactField: 'image',
-      artifact: 'ghcr.io/takos/takosumi-cloud-accounts:latest',
+      runtime: 'worker',
+      artifactField: 'artifactRef',
+      artifact: 'worker:takosumi-cloud-accounts',
       internalUrl: 'https://takosumi-cloud.internal.takos.example',
       publicUrl: 'https://accounts.takos.example.com',
     },

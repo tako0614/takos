@@ -18,6 +18,14 @@
     {
       "kind": "operator",
       "ref": "../takosumi/deploy/cloudflare"
+    },
+    {
+      "kind": "wrangler",
+      "ref": "../takosumi-cloud/deploy/cloudflare/wrangler.toml"
+    },
+    {
+      "kind": "operator",
+      "ref": "../takosumi-cloud/deploy/cloudflare"
     }
   ],
   "providerProof": {
@@ -30,11 +38,11 @@
   "requiredBindings": [
     {
       "kind": "cloudflare-d1",
-      "name": "TAKOS_DB"
+      "name": "TAKOS_D1"
     },
     {
       "kind": "cloudflare-r2",
-      "name": "TAKOS_OBJECTS"
+      "name": "TAKOS_ARTIFACTS"
     },
     {
       "kind": "cloudflare-queue",
@@ -43,6 +51,10 @@
     {
       "kind": "cloudflare-durable-object",
       "name": "TAKOS_COORDINATION"
+    },
+    {
+      "kind": "cloudflare-d1",
+      "name": "TAKOSUMI_ACCOUNTS_DB"
     }
   ],
   "target": {
@@ -170,9 +182,9 @@
     },
     {
       "serviceId": "takosumi-cloud",
-      "runtime": "container",
+      "runtime": "worker",
       "hostingTargetId": "cloudflare",
-      "image": "ghcr.io/takos/takosumi-cloud-accounts:latest",
+      "artifactRef": "worker:takosumi-cloud-accounts",
       "internalUrl": "https://takosumi-cloud.internal.takos.example",
       "publicUrl": "https://accounts.takos.example.com",
       "smoke": {
