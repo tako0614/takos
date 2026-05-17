@@ -36,9 +36,9 @@ and verifies:
 - both nodeinfo + webfinger respond
 - cross-instance reach through Caddy
 
-What's NOT yet fully smoked: the Follow / Accept exchange. `scripts/federation-follow.sh` now covers the first half:
-login on both yurucommu instances, inst-a fetches inst-b's actor, and `POST /api/follow` persists the Follow row as
-`pending`. Updated state of play (2026-05-17):
+What's NOT yet fully smoked: the Follow / Accept exchange. `scripts/federation-follow.sh` now covers login on both
+yurucommu instances, Origin/CSRF acceptance, session handling, and the `/api/follow` request shape. It currently stops
+at the remote-actor fetch boundary. Updated state of play (2026-05-17):
 
 1. **No public signup endpoint exists.** yurucommu is a single-user instance — `POST /api/auth/login` returns the
    pre-existing `owner` actor (or creates a default "tako" owner the first time) gated on a PBKDF2-hashed
@@ -47,18 +47,20 @@ login on both yurucommu instances, inst-a fetches inst-b's actor, and `POST /api
    separate `APP_URL`, which is fine for federation testing (the actors have different `ap_id`s).
 2. **`POST /api/auth/login` now has deterministic local-substrate fixtures** in `env/yurucommu-{a,b}.env`, so the smoke
    can create / reuse each instance's default owner actor with one known fixture password.
-3. **`POST /api/follow` is the internal create-Follow hook.** The partial smoke uses it to create the Follow row and
-   prove inst-a can fetch inst-b's actor through Caddy + Pebble TLS.
-4. **Accept delivery is still missing in Deno mode.** The Follow activity delivery depends on the queue/worker path
-   (`DELIVERY_QUEUE` in Worker mode), so the smoke cannot yet prove inst-b receives the Follow, emits Accept, and inst-a
-   flips the row to accepted.
+3. **`POST /api/follow` is the internal create-Follow hook.** The partial smoke reaches it with a valid session and
+   body, but `assertSafeRemoteUrlResolved` currently rejects `.test` hosts that resolve to Docker bridge IPs, so the
+   known-block response is `Failed to fetch remote actor`.
+4. **Accept delivery is still missing in Deno mode.** Even past the SSRF gate, the Follow activity delivery depends on
+   the queue/worker path (`DELIVERY_QUEUE` in Worker mode), so the smoke cannot yet prove inst-b receives the Follow,
+   emits Accept, and inst-a flips the row to accepted.
 
-Best path forward: add a memory-backed delivery worker in `src/backend/server.ts` for Deno local mode, or add a
-synchronous HTTP-signature delivery hook guarded by `LOCAL_SUBSTRATE_TEST_BED=1`, then extend `federation-follow.sh` to
-poll inst-b's followers collection and inst-a's accepted status.
+Best path forward: add a `LOCAL_SUBSTRATE_TEST_BED=1`-guarded SSRF allowlist for `.takos.test` / Docker bridge targets,
+then add a memory-backed delivery worker in `src/backend/server.ts` for Deno local mode or a synchronous HTTP-signature
+delivery hook. After that, extend `federation-follow.sh` to poll inst-b's followers collection and inst-a's accepted
+status.
 
 In the meantime `federation-smoke.sh` verifies wire-level reachability (nodeinfo + webfinger + cross-reach through
-Caddy), and `federation-follow.sh` verifies the pre-delivery Follow creation path.
+Caddy), and `federation-follow.sh` verifies the pre-remote-fetch Follow API path.
 
 ## brand-tokens JSR package (D13)
 

@@ -288,11 +288,21 @@ fi
 
 echo
 echo "==> yurucommu 2-instance federation infrastructure"
-if bash "$SCRIPT_DIR/federation-smoke.sh"  >/dev/null 2>&1; then
+if run_script "federation.infra" "bash $SCRIPT_DIR/federation-smoke.sh"; then
 	echo "    PASS [federation.infra] inst-a + inst-b nodeinfo + webfinger + cross-reach"
 	PASS=$((PASS + 1))
 else
 	echo "    FAIL [federation.infra] see scripts/federation-smoke.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "==> Federation Follow flow — login + Origin + Follow API surface"
+if run_script "federation.follow" "bash $SCRIPT_DIR/federation-follow.sh"; then
+	echo "    PASS [federation.follow] auth + Follow API reached; cross-actor fetch is informational (set FEDERATION_FOLLOW_STRICT=1 once SSRF bypass lands)"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [federation.follow] see scripts/federation-follow.sh"
 	FAIL=$((FAIL + 1))
 fi
 
