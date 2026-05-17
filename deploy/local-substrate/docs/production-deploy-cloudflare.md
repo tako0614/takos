@@ -2,11 +2,11 @@
 
 The local-substrate mirrors production using `.test` TLDs:
 
-| Production                                 | Local mirror                        | Backend                                                                 |
-| ------------------------------------------ | ----------------------------------- | ----------------------------------------------------------------------- |
-| `https://takosumi.com/`                    | `https://takosumi.test/`            | Cloudflare Pages (prod) / Caddy file_server (local)                     |
-| `https://cloud.takosumi.com/`              | `https://cloud.takosumi.test/`      | Accounts Cloudflare Worker + D1 (prod) / Miniflare + SQLite (local)     |
-| operator-selected Takosumi kernel hostname | `https://kernel-worker.takos.test/` | Takosumi kernel Worker + D1/R2/Queues/DO (prod) / Miniflare local binds |
+| Production                                 | Local mirror                        | Backend                                                                  |
+| ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------ |
+| `https://takosumi.com/`                    | `https://takosumi.test/`            | Cloudflare Pages (prod) / Caddy file_server (local)                      |
+| `https://cloud.takosumi.com/`              | `https://cloud.takosumi.test/`      | Accounts Cloudflare Worker + D1 + R2 (prod) / Miniflare + SQLite (local) |
+| operator-selected Takosumi kernel hostname | `https://kernel-worker.takos.test/` | Takosumi kernel Worker + D1/R2/Queues/DO (prod) / Miniflare local binds  |
 
 Once the local mirror passes `scripts/smoke.sh`, follow this runbook to push the same artifacts to real Cloudflare. The
 Worker code is byte-for- byte identical; only DNS / binding IDs / secrets differ.
@@ -31,10 +31,14 @@ wrangler d1 create takosumi-cloud-accounts
 # Paste the UUID into deploy/cloudflare/wrangler.toml's [[d1_databases]]
 # database_id field, replacing the all-zeros placeholder.
 
+# Create the R2 bucket for metadata-only AppInstallation export artifacts.
+wrangler r2 bucket create takosumi-cloud-accounts-exports
+
 # Push secrets (interactive prompts).
 wrangler secret put TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK    --config deploy/cloudflare/wrangler.toml
 wrangler secret put TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET --config deploy/cloudflare/wrangler.toml
 wrangler secret put TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET --config deploy/cloudflare/wrangler.toml
+wrangler secret put TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET --config deploy/cloudflare/wrangler.toml
 # (Stripe / upstream OIDC / passkey secrets if used)
 
 # Deploy.

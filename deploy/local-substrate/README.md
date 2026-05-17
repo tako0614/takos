@@ -48,8 +48,9 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 | stripe          |    1 | `stripe.webhook.e2e` (HMAC verify + idempotency + tolerance)                                              |
 | public-leak     |    1 | `prove-no-public-leak.sh` (separate script — DNS / ACME / network egress audit)                           |
 
-加えて vitest 4 case (COSE/JWK decode) + worker_test.ts 28 case (issuer policy + IPv6/CGNAT + fail-closed) + Playwright
-2 spec (install wizard happy path + TLS trust regression) を CI で並列実行する。
+加えて vitest 4 case (COSE/JWK decode) + worker_test.ts 30 case (issuer policy + IPv6/CGNAT + fail-closed + R2 signed
+export / data-bearing refusal) + Playwright 2 spec (install wizard happy path + TLS trust regression) を CI で並列実行
+する。
 
 CI workflow は ecosystem-root の `.github/workflows/local-substrate-smoke.yml` を参照。 3 job (smoke / vitest /
 playwright) が submodule checkout 経由で takos + takosumi-cloud + yurucommu を同時に揃え、 ca-install.sh の sudo run +
