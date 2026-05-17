@@ -9,8 +9,8 @@
 などの managed resource を binding します。Cloudflare Containers は API gateway
 や Takosumi Accounts の critical path ではなく、image-backed workload が必要な
 場合に限って OCI deployment adapter の背後で使う任意の tenant workload substrate
-です。この構成は backend-neutral な public spec の参照実装であり、PaaS Core の
-標準プロバイダではありません。
+です。この構成は backend-neutral な public spec の参照実装であり、Takosumi
+kernel の特権プロバイダではありません。
 Cloudflare に関する詳細はこのページで扱い、`architecture/` 章では
 collapsible 節に簡略版を置きます。
 
