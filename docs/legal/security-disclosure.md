@@ -106,9 +106,9 @@ time to triage and remediate the issue.
 
 The default coordinated disclosure window is 90 calendar days from verified
 report receipt. The security owner may request an extension when remediation
-requires coordinated upstream fixes, customer migration time, or third-party
-vendor action. Reporters may request earlier disclosure when the issue is
-already publicly exploited or the fix is broadly deployed.
+requires coordinated upstream fixes, customer remediation coordination, or
+third-party vendor action. Reporters may request earlier disclosure when the
+issue is already publicly exploited or the fix is broadly deployed.
 
 ## Safe Harbor
 

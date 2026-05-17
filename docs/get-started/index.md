@@ -38,9 +38,9 @@ Git URL とバージョンタグを指定して、アプリリポジトリから
 https://<OPERATOR_INSTALL_HOST>/install?git=https://github.com/example/my-app&ref=v1.2.3
 ```
 
-`takosumi.cloud/install` などの managed example は、operator が public managed gate
-を開いた場合の入口形です。gate が closed の間は、self-host / local operator URL
-を使ってください。
+`<OPERATOR_INSTALL_HOST>` は、operator が public managed gate を開いた場合は
+managed install host、gate が closed の間は self-host / local operator URL
+を指します。
 
 - ソースはコミットに固定される (`ref=main` は使えません)
 - インストール内容がすべて記録されるため、あとから監査可能
