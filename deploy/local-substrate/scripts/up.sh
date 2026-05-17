@@ -99,7 +99,13 @@ Next steps (one-time per host):
 Verify (Phase 0):
    curl https://hello.takos.test/
 
-Verify (Phase 1 — profile=postgres only):
+Verify (profile=postgres):
    curl https://accounts.takos.test/.well-known/openid-configuration
    curl https://kernel.takos.test/health
+   curl https://kernel-worker.takos.test/healthz
+
+Verify (profile=workers):
+   curl https://accounts.takos.test/.well-known/openid-configuration
+   curl https://kernel.takos.test/healthz
+   curl https://kernel.takos.test/storage/healthz
 EOF
