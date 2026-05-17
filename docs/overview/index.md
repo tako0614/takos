@@ -93,7 +93,7 @@ restore は launch-readiness evidence の対象です。
 
 ## データモデルの詳細
 
-より詳しいデータモデル (Installation、AppBinding、AppGrant、RuntimeBinding、
+より詳しいデータモデル (Installation、use edge、permission grant、Installation runtime mode、
 Shape resource、Group、Workload、Route、Namespace export など) については
 以下を参照してください。
 

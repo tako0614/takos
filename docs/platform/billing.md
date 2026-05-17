@@ -339,7 +339,7 @@ ingest です。
 | --------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
 | `/v1/billing/stripe/checkout`                       | POST     | Stripe Checkout session 作成                                                                 |
 | `/v1/billing/stripe/webhook`                        | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                  |
-| `/v1/installations/{id}/billing/usage-reports`      | POST     | Installation OIDC access token + `billing.usage.report` AppGrant で保護された使用量 report |
+| `/v1/installations/{id}/billing/usage-reports`      | POST     | Installation OIDC access token + `billing.usage.report` permission grant で保護された使用量 report |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。

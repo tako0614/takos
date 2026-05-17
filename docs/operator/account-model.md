@@ -13,7 +13,7 @@ Accounts が発行する OIDC クライアントを使って認証します。
 | billing / Installation ledger       | Takosumi Accounts                |
 | OIDC issuer / client registration      | Takosumi Accounts                |
 | Takos の app-local profile / session   | Takos app                        |
-| dedicated runtime binding / source pin | Installation + RuntimeBinding |
+| dedicated runtime binding / source pin | Installation + Installation runtime mode |
 
 Keycloak / Authentik / Auth0 などを使う場合も、Takos runtime へ直接 issuer
 として 渡しません。Takosumi Accounts の upstream IdP として接続し、Takos runtime
@@ -39,7 +39,7 @@ account merge に使わず、表示・監査用の `email_snapshot` にのみ残
 - Takosumi Accounts の issuer が `operator.identity.oidc` export / OIDC
   discovery で解決できること
 - `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
-  `OIDC_REDIRECT_URI` が AppBinding (`identity.oidc@v1`) から materialize
+  `OIDC_REDIRECT_URI` が use edge (`identity.oidc@v1`) から materialize
   されること
 
 automation credential は Takosumi Accounts が発行する bearer / PAT を使います。

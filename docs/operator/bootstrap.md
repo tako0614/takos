@@ -14,7 +14,7 @@ Takos に接続します。
   redirect が登録済み
 - Installation の domain が `<TENANT_HOST>` として確定している
 - Installation 用の OIDC client (`OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
-  `OIDC_REDIRECT_URI`) が Takosumi Accounts / AppBinding 経由で materialize 済み
+  `OIDC_REDIRECT_URI`) が Takosumi Accounts / use edge 経由で materialize 済み
 - `DB` / `SESSION_DO` / `OIDC_CLIENT_SECRET` (Takosumi Accounts 連携) が
   production または staging profile に入っている
 - trusted edge / internal service secret は public internet へ露出していない
