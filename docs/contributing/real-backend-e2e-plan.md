@@ -1,61 +1,27 @@
-# Plugin-backed infrastructure readiness runbook
+# Live Backend Proof Plan
 
-> このページでわかること: プラグイン基盤の readiness チェック手順。
+> このページでわかること: real backend proof を current commands に分ける方法。
 
-`scripts/real-backend-readiness.ts` は、`takos` から実行可能な plugin-backed infrastructure smoke を選別するための no-start readiness ゲートです。これらの smoke は plugin / local adapter 配線のオペレータ proof であり、PaaS kernel の release 基準ではありません。
-
-スクリプトは次を検査します。
-
-- 必須 CLI: `docker` / `docker compose` / `git`
-- 任意の `psql` (手動 Postgres 検査用)
-- 必須ローカルファイル: `compose.local.yml` / `.env.local.example` / 選択された env ファイル (`TAKOS_LOCAL_ENV_FILE`、default `.env.local`)
-- `compose.local.yml` 内の default 未指定 `${VAR}` 参照が、選択された env ファイルに存在すること
-- ローカル real backend スタック向けの host port 空き状況
-- 実行可能な既存 smoke スクリプトの一覧
-
-Docker / Postgres / Redis / MinIO / Takos サービスを起動することはありません。
-
-## Readiness 実行
+Local source checks and real provider proof are separate. Start with the
+source-controlled gates:
 
 ```sh
 cd takos
-deno run \
-  --config deno.json \
-  --allow-read=compose.local.yml,.env.local,.env.local.example \
-  --allow-env=TAKOS_LOCAL_ENV_FILE \
-  --allow-run=docker,git,psql \
-  --allow-net=127.0.0.1 \
-  scripts/real-backend-readiness.ts
+deno task check
+deno task validate:distributions
+deno task distribution:smoke
 ```
 
-別の env ファイルを使う場合は `TAKOS_LOCAL_ENV_FILE` を設定し、`--allow-read` にも追加します。
+Then choose the matching live path:
 
-```sh
-TAKOS_LOCAL_ENV_FILE=/tmp/takos-local.env deno run \
-  --config deno.json \
-  --allow-read=compose.local.yml,.env.local.example,/tmp/takos-local.env \
-  --allow-env=TAKOS_LOCAL_ENV_FILE \
-  --allow-run=docker,git,psql \
-  --allow-net=127.0.0.1 \
-  scripts/real-backend-readiness.ts
-```
+- Local Docker Compose: `deno task local:config`, `deno task local:up`,
+  `deno task local:smoke`, `deno task local:down`
+- Cloudflare / AWS / GCP / Kubernetes / self-hosted distribution:
+  `deno task distribution:smoke --manifest deploy/distributions/<target>.json --live`
+- Takosumi provider fixture:
+  `cd ../takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=<fixture> deno task live-provisioning-smoke`
+- Public managed Takos:
+  `cd ../takos-private && deno task managed-offering:status -- --environment <env> --date <YYYY-MM-DD>`
 
-## 結果の解釈
-
-- compose ベースの plugin infrastructure smoke を実行するには `docker` と `docker compose` が必要。
-- opt-in git source plugin smoke には `git` が必要。
-- `psql` は任意。無くても smoke suite はブロックされませんが、手動 DB デバッグが制限されます。
-- compose スタック起動前は port チェックが `ok` であることが期待されます。既に Takos スタックが動いていて port が塞がっている場合、readiness 出力は `local health smoke against an already-running stack` を実行可能として表示します。
-
-## Follow-up smoke コマンド
-
-readiness 出力は、実行可能と判定した smoke の具体的なコマンドを表示します。
-
-- compose dry-run checklist: `scripts/compose-smoke.ts`
-- opt-in compose plugin infrastructure smoke: `TAKOS_RUN_COMPOSE_SMOKE=1 ...`
-- 起動中スタックに対する local health smoke: `scripts/local-smoke.mjs`
-- opt-in git source smoke: `TAKOS_RUN_GIT_SMOKE=1 ...`
-- opt-in docker provider smoke: `TAKOS_RUN_DOCKER_SMOKE=1 ...`
-- Postgres storage dry-run smoke: `scripts/postgres-storage-smoke.ts`
-
-readiness を先に実行し、実環境に合った前提条件を満たす smoke のみを動かしてください。
+Only the source-controlled gates are CI-equivalent. Live backend proof requires
+operator credentials, target URLs, and private evidence refs.

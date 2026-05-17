@@ -1,36 +1,24 @@
-# Docker provider plugin smoke script
+# Docker / Self-Host Proof
 
-> このページでわかること: Docker provider プラグインの smoke テスト手順。
+> このページでわかること: Docker self-host path の current proof。
 
-`scripts/docker-provider-smoke.ts` はローカル Docker provider plugin の materialization パス用の safe-by-default smoke エントリポイントです。plugin / adapter 挙動の検証用であり、kernel release gate には含まれません。
-
-## Default dry-run
-
-Docker アクセスなしで実行します。
+Takos product の Docker proof は local Compose と self-host distribution smoke
+で扱います。
 
 ```sh
-deno run --config deno.json --allow-env=TAKOS_RUN_DOCKER_SMOKE scripts/docker-provider-smoke.ts
+cd takos
+deno task local:config
+deno task distribution:smoke --manifest deploy/distributions/self-hosted.json
 ```
 
-`DenoCommandDockerRunner` を生成せず、Docker も不要で、`LocalDockerProviderMaterializer` の dry-run runner を使います。生成された Docker コマンドと operation status が出力されます。
-
-## Opt-in Docker 実行
-
-実 Docker コマンドを実行するには、明示的に opt-in して run permission を付与します。
+実 Docker 起動を伴う proof は operator local evidence です。
 
 ```sh
-TAKOS_RUN_DOCKER_SMOKE=1 deno run \
-  --config deno.json \
-  --allow-env=TAKOS_RUN_DOCKER_SMOKE \
-  --allow-run=docker \
-  scripts/docker-provider-smoke.ts
+cd takos
+TAKOS_LOCAL_ENV_FILE=.env.local deno task local:up
+TAKOS_LOCAL_ENV_FILE=.env.local deno task local:smoke
+TAKOS_LOCAL_ENV_FILE=.env.local deno task local:down
 ```
 
-`TAKOS_RUN_DOCKER_SMOKE=1` の場合のみ、`LocalDockerProviderMaterializer` に `DenoCommandDockerRunner` を注入します。一意な network / group suffix を使い、作成された container / network のクリーンアップ手順が出力されます。
-
-実行される実コマンド例。
-
-- `docker network create takos-docker-smoke-<timestamp>`
-- `docker image pull busybox:latest`
-- `docker container create ... busybox:latest sh -c 'echo takos docker provider smoke'`
-- `docker container start <generated-container-name>`
+Takosumi provider-specific live provisioning proof は `takosumi/` の
+`live-provisioning-smoke` と provider fixture で扱います。
