@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Workers-profile smoke for workerd/D1/R2 code paths.
+# Smoke for local workerd/D1/R2 code paths.
 #
 # What this script verifies:
 #   1. takosumi-cloud Accounts Worker runs on workerd with D1.
-#   2. takosumi kernel Worker runs on workerd with D1/R2, Queue, and DO.
+#   2. takosumi kernel Worker runs on workerd with D1/R2, Queue, and DO
+#      either as the postgres-profile mirror at kernel-worker.takos.test or
+#      as the workers-profile kernel at kernel.takos.test.
 #   3. The Accounts install preview and OIDC discovery surfaces still answer.
 #   4. D1 binding semantics: the sqlite file underneath miniflare's D1
 #      emulator supports json_extract on the document column AND a
@@ -17,6 +19,39 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBSTRATE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CA="$SUBSTRATE_DIR/caddy/runtime/pebble-issuance-root.pem"
 
+resolve_kernel_worker_host() {
+	local candidates=()
+	if [[ -n "${KERNEL_WORKER_HOST:-}" ]]; then
+		candidates+=("$KERNEL_WORKER_HOST")
+	else
+		# postgres profile exposes the Worker mirror beside the Deno+Postgres
+		# kernel. workers profile replaces kernel.takos.test with the Worker.
+		candidates+=(kernel-worker.takos.test kernel.takos.test)
+	fi
+
+	local host body
+	for host in "${candidates[@]}"; do
+		body=$(curl -sk --cacert "$CA" --resolve "${host}:443:127.0.0.1" \
+			"https://${host}/healthz" || true)
+		if echo "$body" | python3 -c "
+import json, sys
+try:
+    d = json.loads(sys.stdin.read())
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0 if d.get('provider') == 'cloudflare-worker' else 1)
+" >/dev/null 2>&1; then
+			printf '%s\n' "$host"
+			return 0
+		fi
+	done
+
+	echo "FAIL: no Takosumi kernel Worker host answered /healthz as provider=cloudflare-worker" >&2
+	return 1
+}
+
+KERNEL_HOST="$(resolve_kernel_worker_host)"
+
 # 1. Accounts workerd-edge sentinel
 HEALTH=$(curl -sk --cacert "$CA" https://cloud.takosumi.test/healthz)
 echo "$HEALTH" | python3 -c "
@@ -27,42 +62,43 @@ assert d.get('persistence') == 'd1', f'expected persistence=d1, got {d!r}'
 " || { echo "FAIL: /healthz did not look workerd-local: $HEALTH" >&2; exit 1; }
 
 # 2. Kernel Worker sentinel + D1/R2 storage probe.
-KERNEL_HEALTH=$(curl -sk --cacert "$CA" https://kernel-worker.takos.test/healthz)
+KERNEL_HEALTH=$(curl -sk --cacert "$CA" --resolve "${KERNEL_HOST}:443:127.0.0.1" "https://${KERNEL_HOST}/healthz")
 echo "$KERNEL_HEALTH" | python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read())
 assert d.get('provider') == 'cloudflare-worker', f'expected provider=cloudflare-worker, got {d!r}'
-" || { echo "FAIL: kernel-worker /healthz did not look workerd-local: $KERNEL_HEALTH" >&2; exit 1; }
+" || { echo "FAIL: $KERNEL_HOST /healthz did not look workerd-local: $KERNEL_HEALTH" >&2; exit 1; }
 
-KERNEL_STORAGE=$(curl -sk --cacert "$CA" https://kernel-worker.takos.test/storage/healthz)
+KERNEL_STORAGE=$(curl -sk --cacert "$CA" --resolve "${KERNEL_HOST}:443:127.0.0.1" "https://${KERNEL_HOST}/storage/healthz")
 echo "$KERNEL_STORAGE" | python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read())
 assert d.get('ok') is True, f'expected ok=true, got {d!r}'
 assert d.get('storage') == 'cloudflare-d1-r2', f'expected storage=cloudflare-d1-r2, got {d!r}'
-" || { echo "FAIL: kernel-worker /storage/healthz did not prove D1/R2: $KERNEL_STORAGE" >&2; exit 1; }
+" || { echo "FAIL: $KERNEL_HOST /storage/healthz did not prove D1/R2: $KERNEL_STORAGE" >&2; exit 1; }
 
-KERNEL_COORDINATION=$(curl -sk --cacert "$CA" https://kernel-worker.takos.test/coordination/healthz)
+KERNEL_COORDINATION=$(curl -sk --cacert "$CA" --resolve "${KERNEL_HOST}:443:127.0.0.1" "https://${KERNEL_HOST}/coordination/healthz")
 echo "$KERNEL_COORDINATION" | python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read())
 assert d.get('ok') is True, f'expected ok=true, got {d!r}'
 assert d.get('role') == 'coordination', f'expected role=coordination, got {d!r}'
-" || { echo "FAIL: kernel-worker /coordination/healthz did not prove Durable Object routing: $KERNEL_COORDINATION" >&2; exit 1; }
+" || { echo "FAIL: $KERNEL_HOST /coordination/healthz did not prove Durable Object routing: $KERNEL_COORDINATION" >&2; exit 1; }
 
 KERNEL_QUEUE=$(curl -sk --cacert "$CA" -X POST \
+	--resolve "${KERNEL_HOST}:443:127.0.0.1" \
 	-H "Content-Type: application/json" \
 	-d '{"kind":"local-substrate-smoke"}' \
-	https://kernel-worker.takos.test/queue/test)
+	"https://${KERNEL_HOST}/queue/test")
 echo "$KERNEL_QUEUE" | python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read())
 assert d.get('queued') is True, f'expected queued=true, got {d!r}'
-" || { echo "FAIL: kernel-worker /queue/test did not accept Queue producer send: $KERNEL_QUEUE" >&2; exit 1; }
+" || { echo "FAIL: $KERNEL_HOST /queue/test did not accept Queue producer send: $KERNEL_QUEUE" >&2; exit 1; }
 
-KERNEL_API_STATUS=$(curl -sk --cacert "$CA" -o /dev/null -w "%{http_code}" https://kernel-worker.takos.test/health)
+KERNEL_API_STATUS=$(curl -sk --cacert "$CA" --resolve "${KERNEL_HOST}:443:127.0.0.1" -o /dev/null -w "%{http_code}" "https://${KERNEL_HOST}/health")
 [[ "$KERNEL_API_STATUS" == "200" ]] || {
-	echo "FAIL: kernel-worker /health returned $KERNEL_API_STATUS (expected 200)" >&2
+	echo "FAIL: $KERNEL_HOST /health returned $KERNEL_API_STATUS (expected 200)" >&2
 	exit 1
 }
 
@@ -93,7 +129,7 @@ ISSUER=$(echo "$DISC" | python3 -c "import json,sys;print(json.loads(sys.stdin.r
 SQLITE_PATH=$(docker exec local-substrate-takosumi-cloud-worker-1 \
 	sh -c "find /data/d1 -name '*.sqlite' | head -1" 2>/dev/null || true)
 if [[ -z "$SQLITE_PATH" ]]; then
-	echo "OK cloud worker healthy (D1 semantics check SKIPPED — sqlite path not yet materialised); appId=$APP_ID issuer=$ISSUER"
+	echo "OK accounts worker + kernel worker healthy via $KERNEL_HOST (D1 semantics check SKIPPED — sqlite path not yet materialised); appId=$APP_ID issuer=$ISSUER"
 	exit 0
 fi
 SCRATCH_DB=$(mktemp --suffix=.sqlite)
@@ -120,4 +156,4 @@ assert r[0] == ":x\"y{z}", f"expected ':x\\\"y{{z}}', got {r[0]!r}"
 db.close()
 PY
 
-echo "OK accounts worker + kernel worker healthy; D1/R2/Queue/DO smoke passed; D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"
+echo "OK accounts worker + kernel worker healthy via $KERNEL_HOST; D1/R2/Queue/DO smoke passed; D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"

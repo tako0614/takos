@@ -8,6 +8,13 @@ cd takos/deploy/local-substrate
 # 起動 (Pebble + CoreDNS + Caddy。 minica と issuance root を auto-capture)
 bash scripts/up.sh
 
+# Postgres profile: Deno+Postgres Takosumi kernel + Accounts + Takos product.
+bash scripts/up.sh --profile postgres
+
+# Workers profile: Accounts Worker on D1 + Takosumi kernel Worker on
+# D1/R2/Queue/DO. In this profile kernel.takos.test is the Worker endpoint.
+bash scripts/up.sh --profile workers
+
 # 停止 (volume は残る)
 bash scripts/down.sh
 
@@ -73,4 +80,12 @@ curl -sk https://127.0.0.1:15000/dir
 
 # CoreDNS 経由の wildcard 解決
 dig random-name.takos.test @127.0.0.1 +short
+
+# Postgres profile kernel + Worker mirror
+curl -sk --cacert caddy/runtime/pebble-issuance-root.pem https://kernel.takos.test/health
+curl -sk --cacert caddy/runtime/pebble-issuance-root.pem https://kernel-worker.takos.test/healthz
+
+# Workers profile kernel Worker
+curl -sk --cacert caddy/runtime/pebble-issuance-root.pem https://kernel.takos.test/healthz
+curl -sk --cacert caddy/runtime/pebble-issuance-root.pem https://kernel.takos.test/storage/healthz
 ```

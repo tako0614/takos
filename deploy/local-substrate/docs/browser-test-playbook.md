@@ -8,6 +8,9 @@ claude-in-chrome MCP. CI automation is out of scope for the current plan; this p
 ```bash
 cd takos/deploy/local-substrate
 bash scripts/up.sh --profile postgres
+# Or use the Worker-first mirror where kernel.takos.test is the Takosumi
+# kernel Worker on D1/R2/Queue/DO:
+# bash scripts/up.sh --profile workers
 sudo bash scripts/ca-install.sh         # trust Pebble issuance root
 sudo bash scripts/configure-dns.sh      # *.takos.test → 127.0.0.1
 ```
@@ -24,16 +27,18 @@ resolves `accounts.takos.test`, `app.takos.test`, etc. via CoreDNS.
 ## Smoke flow B — kernel admin probe
 
 1. Navigate: `https://kernel.takos.test/health`
-2. Expect: 200 with `{"ok":true,"service":"takosumi","domains":["core","deploy"]}`
+2. Expect with `--profile postgres`: 200 with `{"ok":true,"service":"takosumi","domains":["core","deploy"]}`
+3. Expect with `--profile workers`: 200 from the Takosumi kernel Worker routed through Cloudflare Worker bindings
 
 ## Smoke flow C — Takosumi kernel Worker probe
 
-1. Navigate: `https://kernel-worker.takos.test/healthz`
-2. Expect: 200 with `{"ok":true,"provider":"cloudflare-worker"}`
-3. Navigate: `https://kernel-worker.takos.test/storage/healthz`
-4. Expect: 200 with `{"ok":true,"storage":"cloudflare-d1-r2"}`
-5. Navigate: `https://kernel-worker.takos.test/coordination/healthz`
-6. Expect: 200 with `{"ok":true,"role":"coordination"}`
+1. Navigate with `--profile postgres`: `https://kernel-worker.takos.test/healthz`
+2. Navigate with `--profile workers`: `https://kernel.takos.test/healthz`
+3. Expect: 200 with `{"ok":true,"provider":"cloudflare-worker"}`
+4. Navigate with the same host: `/storage/healthz`
+5. Expect: 200 with `{"ok":true,"storage":"cloudflare-d1-r2"}`
+6. Navigate with the same host: `/coordination/healthz`
+7. Expect: 200 with `{"ok":true,"role":"coordination"}`
 
 ## Smoke flow D — takos-app login (the canonical UX path)
 

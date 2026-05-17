@@ -18,7 +18,8 @@ The local-substrate now runs that same bundle under Miniflare:
    selected.
 4. `scripts/workers-cli-smoke.sh` now verifies both workerd code paths: the Accounts Worker on D1 and the Takosumi
    kernel Worker on D1/R2/Queue/DO (`/healthz`, `/storage/healthz`, `/coordination/healthz`, `/queue/test`, and
-   `/health`).
+   `/health`). It uses `kernel-worker.takos.test` for the postgres-profile mirror and `kernel.takos.test` for the
+   workers profile.
 
 ## Tenant isolation — LANDED (smoke strict as of 2026-05-17)
 

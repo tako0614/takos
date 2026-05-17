@@ -332,7 +332,7 @@ else
 fi
 
 echo
-echo "==> Workers profile (accounts worker + kernel worker on workerd + D1/R2/Queue/DO)"
+echo "==> Worker-first mirrors (accounts worker + kernel worker on workerd + D1/R2/Queue/DO)"
 if run_script "workers.cli-smoke" "bash $SCRIPT_DIR/workers-cli-smoke.sh"; then
 	echo "    PASS [workers.cli-smoke] workers healthy via workerd + D1/R2/Queue/DO"
 	PASS=$((PASS + 1))

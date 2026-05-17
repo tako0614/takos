@@ -18,9 +18,9 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 | 2     | LocalStack / k3d / fake-gcs / Azurite / miniflare を `compose.emulators.yml` 1 本で並行統合 | `scripts/smoke.sh` 全 cloud fixture が pass                                  |
 | 3     | factory で endpoint override + Caddy admin route registrar + 公開面 deny 多重防御           | dynamic subdomain が deploy 直後に hit する + `prove-no-public-leak.sh` pass |
 
-現在 Phase 0–3 まで実装済み (kernel db_migrations 由来の `POST /v1/deployments` 500 は upstream 側で別途修正待ち)。
+現在 Phase 0–3 まで実装済み。`scripts/smoke.sh` は canonical `POST /v1/deployments` path も含めて検証する。
 
-## Current smoke coverage (37 checks)
+## Current smoke coverage (38 checks)
 
 `scripts/smoke.sh` のチェック一覧 — 「smoke green = deploy しても 99% 動く」 を目標に、 honest pass のみを数える。 各
 ファイル詳細は [TODO-SMOKE.md](TODO-SMOKE.md) と script header を参照。
@@ -67,6 +67,10 @@ bash scripts/up.sh
 # route-registrar) on top of Phase 0 ingress
 bash scripts/up.sh --profile postgres
 
+# Worker-first substrate mirror: Accounts Worker on D1 plus Takosumi
+# kernel Worker on D1/R2/Queue/DO. Here kernel.takos.test is the Worker.
+bash scripts/up.sh --profile workers
+
 # one-time per host
 sudo bash scripts/ca-install.sh
 sudo bash scripts/configure-dns.sh
@@ -76,6 +80,8 @@ bash scripts/smoke.sh
 bash scripts/prove-no-public-leak.sh
 curl https://hello.takos.test/
 curl https://accounts.takos.test/.well-known/openid-configuration
+curl https://kernel-worker.takos.test/healthz  # postgres profile mirror
+curl https://kernel.takos.test/healthz         # workers profile
 ```
 
 詳細は [docs/root-ca-install.md](docs/root-ca-install.md) と [docs/operator-runbook.md](docs/operator-runbook.md)。
@@ -103,7 +109,8 @@ takos/deploy/local-substrate/
 ├── factories/
 │   └── local-substrate-factories.ts   # 公開 DNS provider import-time deny
 ├── wrappers/
-│   └── kernel-with-embedded-agent.ts  # local source kernel + agent in-process
+│   ├── kernel-with-embedded-agent.ts  # postgres profile kernel + agent in-process
+│   └── takosumi-kernel-worker-runner.mjs # local-only Miniflare D1/R2/Queue/DO runner
 ├── route-registrar/
 │   ├── deno.json
 │   └── mod.ts                   # poll kernel → patch Caddy admin API
