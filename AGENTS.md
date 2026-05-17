@@ -37,8 +37,7 @@ definition は [`../docs/reference/design-principles.md`](../docs/reference/desi
 
 ## 隣接 product との contract
 
-- **Upstream platform**: `../takosumi/` (kernel)、 `../takosumi-cloud/` (Accounts)
-- **Sibling helper**: `../takosumi-git/` (optional installer)
+- **Upstream platform**: `../takosumi/` (kernel + installer)、 `../takosumi-cloud/` (Accounts)
 - **Downstream**: `../takos-private/` (deployment artifact 消費)、 bundled apps (`../takos-apps/*`、 `../yurucommu/`、
   `../road-to-me/`)
 - **Internal**: `app/` (user-facing)、 `git/` (Git hosting)、 `agent/` (agent execution)
@@ -47,8 +46,8 @@ definition は [`../docs/reference/design-principles.md`](../docs/reference/desi
 
 - **Takos product 自体**: Takosumi PaaS 上で動作する self-hostable product。 AI agents / Git / chat / spaces / memory /
   tools を駆使してソフトウェアの民主化を体現。 層 (layer) ではないが、 architectural 特権 framing も使わない
-  (Installable App Model の consumer side)。
-- **Takosumi への依存**: kernel / operator account plane / takosumi-git は各々 substitutable (詳細は
+  (App consumer side)。
+- **Takosumi への依存**: kernel + installer / operator account plane は substitutable (詳細は
   [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §「Layering Principle: Substitutability」)。
 
 ## Layer rules
