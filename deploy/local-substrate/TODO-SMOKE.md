@@ -20,15 +20,13 @@ For now the cloud worker (`takosumi-cloud-worker`) IS the workerd code path that
 scripts/workers-cli-smoke.sh + the ~17 cloud.* / oauth.* / install.preview.* / passkey.* / stripe.* smoke checks.
 Kernel-on-workerd is upstream work tracked in @takos/takosumi-kernel.
 
-## Tenant isolation strict mode
+## Tenant isolation — LANDED (smoke strict as of 2026-05-17)
 
-`scripts/tenant-isolation.sh` currently runs in informational mode because
-`takosumi-cloud/packages/accounts-service/src/installation-routes.ts` does not yet enforce subject/account membership on
-`GET /v1/installations/{id}`. The script still mints two distinct local-substrate sessions, creates an installation as
-subject A, and attempts to read it as subject B so the gap is visible in smoke logs.
-
-Once the Accounts service filters installation reads by the authenticated subject/account membership, set
-`TENANT_ISOLATION_STRICT=1` in CI so a cross-subject `200` becomes a hard failure.
+`scripts/tenant-isolation.sh` runs in strict mode (subject B's cross-read of subject A's installation must be non-200).
+The upstream fix lives in `takosumi-cloud/packages/accounts-service/src/installation-routes.ts` —
+`handleGetAppInstallation` + `handleListAppInstallations` now go through `requireAccountSession()` +
+`subjectCanAccessAccount()` (see `account-session.ts`). CI runs with `TENANT_ISOLATION_STRICT=1` so any regression back
+to the open behavior is a hard FAIL.
 
 ## Full ActivityPub Follow → Accept federation smoke
 
