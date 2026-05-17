@@ -184,6 +184,16 @@ check "prod-mirror.landing.favicon" "takosumi.test" "/brand/favicon.svg" "200"
 check "prod-mirror.landing.geometric" "takosumi.test" "/brand/geometric.svg" "200"
 check "prod-mirror.landing.inkdrop" "takosumi.test" "/brand/inkdrop.svg" "200"
 check "prod-mirror.docs.index" "takosumi.test" "/docs/" "200"
+
+echo
+echo "==> Docs surfaces — one-hop link check (catches renamed sections breaking nav)"
+if run_script "docs.link-check" "bash $SCRIPT_DIR/docs-link-check.sh"; then
+	echo "    PASS [docs.link-check] takos + takosumi + accounts + marketing one-hop deep"
+else
+	overall_failed=$((overall_failed + 1))
+	echo "    FAIL [docs.link-check] see scripts/docs-link-check.sh"
+fi
+
 check_json "prod-mirror.cloud.oidc-discovery" "cloud.takosumi.test" "/.well-known/openid-configuration" "authorization_endpoint"
 check "prod-mirror.cloud.dashboard-index" "cloud.takosumi.test" "/" "200"
 check "prod-mirror.cloud.dashboard-signin" "cloud.takosumi.test" "/sign-in" "200"
