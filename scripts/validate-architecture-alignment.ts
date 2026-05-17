@@ -19,7 +19,6 @@ const ARCHITECTURE_ALIGNMENT_DOCS = [
   '../takosumi/docs/reference/architecture/workflow-extension-design.md',
 ];
 const APP_GRANT_CATALOG_DOCS = [
-  '../takosumi-git/docs/reference/app-yml-spec.md',
   '../takosumi-cloud/docs/architecture/app-installation.md',
 ];
 const APP_INSTALLATION_STATUS_DOCS = [
