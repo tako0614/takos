@@ -168,20 +168,19 @@ deno task helm:generate-overlays
 deno task helm:check-overlays
 ```
 
-CI は Helm v3 と kind cluster を setup した上で base / AWS / GCP values の
-`helm template` と `helm install --dry-run=client` を
-`TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:template-smoke`
-で検査します。test CRD は kind 上で GCP `ManagedCertificate` resource mapping
-を検査するためだけに入れます。ローカルで kubeconfig がない場合、この task は
-template smoke を必須とし、install dry-run は cluster unreachable として skip
-します。
+Release Artifacts workflow は Helm v3 を setup し、base / AWS / GCP values の
+`helm template` を `deno task helm:template-smoke` で検査します。同じ task は
+`TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1` を付けて
+到達可能な kind / k3d / operator cluster に向けると `helm install --dry-run=client`
+も必須にできます。kubeconfig がないローカルでは template smoke を必須とし、
+install dry-run は cluster unreachable として skip します。
 
-実 cluster への install smoke は同じ kind cluster 上で
-`TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:install-smoke` を実行します。この
-task は base / AWS / GCP values ごとに `helm install`、`helm status`、
-`helm get manifest`、`helm uninstall` を走らせ、4 service の Deployment /
-Service が release manifest に載ったことを検査します。image pull / pod readiness
-は production image publish 後の rollout gate として扱います。
+実 cluster への install smoke は operator が用意した kind / k3d / production-like
+cluster 上で `TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:install-smoke` を
+実行します。この task は base / AWS / GCP values ごとに `helm install`、
+`helm status`、`helm get manifest`、`helm uninstall` を走らせ、4 service の
+Deployment / Service が release manifest に載ったことを検査します。image pull /
+pod readiness は production image publish 後の rollout gate として扱います。
 
 production では Secret 値を `--set` で渡す代わりに External Secrets Operator /
 Sealed Secrets / platform secret manager を使い、`secrets.create: false` と
