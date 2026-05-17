@@ -11,7 +11,7 @@ bash scripts/up.sh
 # Postgres profile: Deno+Postgres Takosumi kernel + Accounts + Takos product.
 bash scripts/up.sh --profile postgres
 
-# Workers profile: Accounts Worker on D1 + Takosumi kernel Worker on
+# Workers profile: Accounts Worker on D1/R2 + Takosumi kernel Worker on
 # D1/R2/Queue/DO. In this profile kernel.takos.test is the Worker endpoint.
 bash scripts/up.sh --profile workers
 

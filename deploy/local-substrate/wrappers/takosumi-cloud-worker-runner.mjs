@@ -17,9 +17,9 @@
  *
  * Boots the takosumi-cloud Accounts Worker (the bundle produced by
  * `deno bundle` from takosumi-cloud/deploy/cloudflare/src/worker.ts)
- * inside Miniflare with a local SQLite D1 binding. Mirrors the
- * cloud.takosumi.com production setup, just substituting Cloudflare D1
- * with miniflare's emulated D1 stored at /data/d1.
+ * inside Miniflare with local D1 and R2 bindings. Mirrors the
+ * cloud.takosumi.com production setup, just substituting Cloudflare D1/R2
+ * with miniflare's emulated stores under /data.
  */
 import { Miniflare } from 'miniflare';
 import { readFileSync } from 'node:fs';
@@ -54,6 +54,7 @@ bindings.TAKOSUMI_ACCOUNTS_SUBJECT ??= 'tsub_takosumi_cloud_local';
 bindings.TAKOSUMI_ACCOUNTS_CLIENT_ID ??= 'takos-app-local';
 bindings.TAKOSUMI_ACCOUNTS_REDIRECT_URIS ??= 'https://app.takos.test/oauth/callback';
 bindings.TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS ??= 'closed';
+bindings.TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET ??= 'local-substrate-export-download-secret-v1';
 
 const mf = new Miniflare({
   modules: [{
@@ -66,6 +67,8 @@ const mf = new Miniflare({
   compatibilityDate: process.env.WORKER_COMPATIBILITY_DATE ?? '2026-04-15',
   d1Databases: { TAKOSUMI_ACCOUNTS_DB: 'takosumi-cloud-accounts' },
   d1Persist: '/data/d1',
+  r2Buckets: ['TAKOSUMI_ACCOUNTS_EXPORTS'],
+  r2Persist: '/data/r2',
   bindings,
 });
 

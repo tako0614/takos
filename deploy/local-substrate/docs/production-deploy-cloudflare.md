@@ -2,11 +2,11 @@
 
 The local-substrate mirrors production using `.test` TLDs:
 
-| Production                                 | Local mirror                        | Backend                                                                  |
-| ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------ |
-| `https://takosumi.com/`                    | `https://takosumi.test/`            | Cloudflare Pages (prod) / Caddy file_server (local)                      |
-| `https://cloud.takosumi.com/`              | `https://cloud.takosumi.test/`      | Accounts Cloudflare Worker + D1 + R2 (prod) / Miniflare + SQLite (local) |
-| operator-selected Takosumi kernel hostname | `https://kernel-worker.takos.test/` | Takosumi kernel Worker + D1/R2/Queues/DO (prod) / Miniflare local binds  |
+| Production                                 | Local mirror                        | Backend                                                                     |
+| ------------------------------------------ | ----------------------------------- | --------------------------------------------------------------------------- |
+| `https://takosumi.com/`                    | `https://takosumi.test/`            | Cloudflare Pages (prod) / Caddy file_server (local)                         |
+| `https://cloud.takosumi.com/`              | `https://cloud.takosumi.test/`      | Accounts Cloudflare Worker + D1 + R2 (prod) / Miniflare + SQLite/R2 (local) |
+| operator-selected Takosumi kernel hostname | `https://kernel-worker.takos.test/` | Takosumi kernel Worker + D1/R2/Queues/DO (prod) / Miniflare local binds     |
 
 Once the local mirror passes `scripts/smoke.sh`, follow this runbook to push the same artifacts to real Cloudflare. The
 Worker code is byte-for- byte identical; only DNS / binding IDs / secrets differ.

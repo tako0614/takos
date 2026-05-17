@@ -16,10 +16,10 @@ The local-substrate now runs that same bundle under Miniflare:
    normal Takos product stack can keep using the Deno+Postgres kernel at `kernel.takos.test`.
 3. `kernel-workers` is the replacement workers-profile service, aliasing itself as `kernel` when `--profile workers` is
    selected.
-4. `scripts/workers-cli-smoke.sh` now verifies both workerd code paths: the Accounts Worker on D1 and the Takosumi
-   kernel Worker on D1/R2/Queue/DO (`/healthz`, `/storage/healthz`, `/coordination/healthz`, `/queue/test`, and
-   `/health`). It uses `kernel-worker.takos.test` for the postgres-profile mirror and `kernel.takos.test` for the
-   workers profile.
+4. `scripts/workers-cli-smoke.sh` now verifies both workerd code paths: the Accounts Worker on D1/R2 and the Takosumi
+   kernel Worker on D1/R2/Queue/DO (`/healthz`, `/__takosumi/exports/*` signature rejection, `/storage/healthz`,
+   `/coordination/healthz`, `/queue/test`, and `/health`). It uses `kernel-worker.takos.test` for the postgres-profile
+   mirror and `kernel.takos.test` for the workers profile.
 
 ## Tenant isolation — LANDED (smoke strict as of 2026-05-17)
 
