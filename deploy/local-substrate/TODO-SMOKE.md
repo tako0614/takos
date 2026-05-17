@@ -48,32 +48,6 @@ What's NOT yet smoked: the actual Follow / Accept exchange. That needs:
 
 About 1–2 hours of yurucommu API spelunking + signing helpers.
 
-## Tenant isolation gap — `/v1/installations/{id}` GET (#tenant-isolation)
-
-`scripts/tenant-isolation.sh` is currently informational (PASS-with-WARN). It calls the cloud worker as two distinct
-OIDC subjects (A: google-mock, B: github-mock) and verifies that subject B cannot read subject A's installation via
-`GET /v1/installations/<id>`. As of 2026-05-17 the cross-read returns 200 — i.e. **any session can read any installation
-by id**.
-
-Root cause: `takosumi-cloud/packages/accounts-service/src/installation-routes.ts:60` `handleGetAppInstallation` takes
-only `installationId` and `store`; it does not see the caller's subject and does not consult an account membership map.
-The route in `mod.ts` (around line 924) forwards directly without inserting an ACL check. The same is true of
-`handleListAppInstallations`, `handleDashboardInstallationDetail`, and most other installation detail endpoints.
-
-What the fix needs:
-
-1. Decide whether the tenancy boundary is `subject` (single-user accounts) or `accountId` (multi-user orgs with
-   subject→account membership). Probably the latter, matching the existing `installation.accountId`/`spaceId` fields.
-2. A `subject → accountIds[]` membership lookup on the store side.
-3. Insert an ACL check before every `findAppInstallation` / `listAppInstallationsForSpace` /
-   `listAppBindingsForInstallation` call — preferably as a small `requireInstallationAccess()` helper threaded through
-   the existing route adapters.
-4. Once the gap is closed, flip `TENANT_ISOLATION_STRICT=1` in `.github/workflows/local-substrate-smoke.yml` so the
-   smoke escalates from WARN to FAIL on regression.
-
-This is a real production gap, not a local-substrate quirk — out-of-scope of the test bed itself but tracked here
-because the smoke is what discovered it.
-
 ## brand-tokens JSR package (D13)
 
 Today `takos/website/src/styles/{tokens,global}.css` is a 691-line fork of `takosumi/website/src/styles/global.css`.

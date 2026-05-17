@@ -40,8 +40,27 @@ CA_PATH = SUBSTRATE_DIR / "caddy" / "runtime" / "pebble-issuance-root.pem"
 
 def cleanup_billing(subject: str | None, customer: str | None) -> None:
     """Wipe the test-created billing_account + webhook_events from D1.
-    Backend has no DELETE endpoint for either; touch sqlite directly."""
+
+    Best-effort — if docker isn't available (CI without docker-in-docker)
+    we skip the cleanup with a stderr breadcrumb. The DELETE uses
+    json_extract to compare the exact subject / customer fields so a
+    stray substring match (e.g. customer id appearing in a stripe event
+    payload for an unrelated subject) can't widen the delete.
+    """
     if not subject and not customer:
+        return
+    docker_ok = subprocess.run(
+        ["docker", "info"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if docker_ok.returncode != 0:
+        sys.stderr.write(
+            "[stripe-webhook-replay] cleanup skipped: docker daemon not "
+            "reachable (D1 will accumulate test entries; harmless for "
+            "next run)\n",
+        )
         return
     try:
         sqlite_path = subprocess.check_output(
@@ -60,11 +79,18 @@ def cleanup_billing(subject: str | None, customer: str | None) -> None:
         import sqlite3
         con = sqlite3.connect("/tmp/d1-stripe-cleanup.sqlite")
         try:
-            for needle in [subject, customer]:
-                if not needle: continue
+            if subject:
                 con.execute(
-                    "DELETE FROM takosumi_accounts_documents WHERE document LIKE ?",
-                    (f"%{needle}%",),
+                    "DELETE FROM takosumi_accounts_documents "
+                    "WHERE json_extract(document, '$.subject') = ?",
+                    (subject,),
+                )
+            if customer:
+                con.execute(
+                    "DELETE FROM takosumi_accounts_documents "
+                    "WHERE json_extract(document, '$.customerId') = ? "
+                    "   OR json_extract(document, '$.stripeCustomerId') = ?",
+                    (customer, customer),
                 )
             con.commit()
         finally:
@@ -74,8 +100,10 @@ def cleanup_billing(subject: str | None, customer: str | None) -> None:
              f"local-substrate-takosumi-cloud-worker-1:{sqlite_path}"],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        sys.stderr.write(
+            f"[stripe-webhook-replay] cleanup best-effort failed: {exc}\n",
+        )
 
 
 _state: dict[str, str | None] = {"subject": None, "customer": None}
@@ -98,9 +126,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
     )
 
 
+import http.cookiejar
+
+# Shared jar so the worker's OAuth state cookie survives the dance.
+_COOKIE_JAR = http.cookiejar.CookieJar()
+
+
 def request(method: str, path: str, *, body: dict | bytes | None = None,
-            headers: dict[str, str] | None = None) -> tuple[int, dict, str]:
-    url = BASE + path
+            headers: dict[str, str] | None = None,
+            url: str | None = None) -> tuple[int, dict, str]:
+    target = url if url is not None else (BASE + path)
     data: bytes | None
     if isinstance(body, bytes):
         data = body
@@ -108,13 +143,15 @@ def request(method: str, path: str, *, body: dict | bytes | None = None,
         data = json.dumps(body).encode()
     else:
         data = None
-    req = urllib.request.Request(url, data=data, method=method)
+    req = urllib.request.Request(target, data=data, method=method)
     for k, v in (headers or {}).items():
         req.add_header(k, v)
     if data is not None and "Content-Type" not in (headers or {}):
         req.add_header("Content-Type", "application/json")
     opener = urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=SSL_CTX), _NoRedirect(),
+        urllib.request.HTTPSHandler(context=SSL_CTX),
+        urllib.request.HTTPCookieProcessor(_COOKIE_JAR),
+        _NoRedirect(),
     )
     try:
         with opener.open(req) as resp:
@@ -131,13 +168,10 @@ def mint_subject_via_oauth() -> str:
     )
     if status != 302:
         sys.exit(f"oauth authorize did not 302 (got {status})")
-    loc = headers["Location"]
-    req = urllib.request.Request(loc)
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=SSL_CTX), _NoRedirect(),
-    )
-    with opener.open(req) as resp:
-        loc2 = resp.headers["Location"]
+    # Mock /authorize → /sign-in/callback?code=..., reusing the jar so
+    # the worker's state cookie sticks across the dance.
+    _status, headers2, _body2 = request("GET", "", url=headers["Location"])
+    loc2 = headers2["Location"]
     code = urllib.parse.parse_qs(urllib.parse.urlparse(loc2).query)["code"][0]
     status, _h, body = request(
         "GET",
