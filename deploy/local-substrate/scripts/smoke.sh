@@ -298,7 +298,7 @@ fi
 
 echo
 echo "==> Workers profile (cloud worker on workerd + D1)"
-if bash "$SCRIPT_DIR/workers-cli-smoke.sh"  >/dev/null 2>&1; then
+if run_script "workers.cli-smoke" "bash $SCRIPT_DIR/workers-cli-smoke.sh"; then
 	echo "    PASS [workers.cli-smoke] cloud worker healthy via workerd + D1"
 	PASS=$((PASS + 1))
 else
@@ -308,7 +308,7 @@ fi
 
 echo
 echo "==> Phase 3 route-registrar (kernel → Caddy admin sync)"
-if bash "$SCRIPT_DIR/route-registrar-smoke.sh"  >/dev/null 2>&1; then
+if run_script "registrar.alive" "bash $SCRIPT_DIR/route-registrar-smoke.sh"; then
 	echo "    PASS [registrar.alive] container running + ticking + static routes preserved"
 	PASS=$((PASS + 1))
 else
@@ -318,7 +318,7 @@ fi
 
 echo
 echo "==> takos-private manifest yaml/compose lint"
-if bash "$SCRIPT_DIR/private-dryrun.sh"  >/dev/null 2>&1; then
+if run_script "private.lint" "bash $SCRIPT_DIR/private-dryrun.sh"; then
 	echo "    PASS [private.lint] all yaml/compose files parse cleanly"
 	PASS=$((PASS + 1))
 else
@@ -328,7 +328,7 @@ fi
 
 echo
 echo "==> MinIO object round-trip (R2-compatible backend for object-store@v1)"
-if bash "$SCRIPT_DIR/minio-smoke.sh"  >/dev/null 2>&1; then
+if run_script "minio.roundtrip" "bash $SCRIPT_DIR/minio-smoke.sh"; then
 	echo "    PASS [minio.roundtrip] mb → put → get → sha256 match → cleanup"
 	PASS=$((PASS + 1))
 else
@@ -338,7 +338,7 @@ fi
 
 echo
 echo "==> Bundled apps .takosumi/ sanity (install link reachability)"
-if bash "$SCRIPT_DIR/bundled-apps-smoke.sh"  >/dev/null 2>&1; then
+if run_script "bundled.apps" "bash $SCRIPT_DIR/bundled-apps-smoke.sh"; then
 	echo "    PASS [bundled.apps] all 5 advertised apps have valid .takosumi/app.yml"
 	PASS=$((PASS + 1))
 else
@@ -348,7 +348,7 @@ fi
 
 echo
 echo "==> D1 schema idempotency (worker restart preserves schema)"
-if bash "$SCRIPT_DIR/migration-idempotency.sh"  >/dev/null 2>&1; then
+if run_script "migration.idempotency" "bash $SCRIPT_DIR/migration-idempotency.sh"; then
 	echo "    PASS [migration.idempotency] schema byte-identical across worker recreate"
 	PASS=$((PASS + 1))
 else
@@ -358,7 +358,7 @@ fi
 
 echo
 echo "==> OTel pipeline (otel-collector → jaeger)"
-if bash "$SCRIPT_DIR/otel-smoke.sh"  >/dev/null 2>&1; then
+if run_script "otel.pipeline" "bash $SCRIPT_DIR/otel-smoke.sh"; then
 	echo "    PASS [otel.pipeline] synthetic OTLP trace landed in Jaeger /api/services"
 	PASS=$((PASS + 1))
 else
@@ -368,7 +368,7 @@ fi
 
 echo
 echo "==> k6 load baseline via Caddy + TLS (20 RPS x 20s — regression watch only, NOT SLO)"
-if bash "$SCRIPT_DIR/k6-baseline.sh"  >/dev/null 2>&1; then
+if run_script "k6.baseline" "bash $SCRIPT_DIR/k6-baseline.sh"; then
 	echo "    PASS [k6.baseline] install/preview + oidc both within p95 + error-rate thresholds"
 	PASS=$((PASS + 1))
 else
@@ -378,7 +378,7 @@ fi
 
 echo
 echo "==> mailpit SMTP catcher (ready for backend email when wired)"
-if bash "$SCRIPT_DIR/mailpit-smoke.sh"  >/dev/null 2>&1; then
+if run_script "mailpit" "bash $SCRIPT_DIR/mailpit-smoke.sh"; then
 	echo "    PASS [mailpit] inbox API reachable + probe email delivered + indexed"
 	PASS=$((PASS + 1))
 else
@@ -392,7 +392,7 @@ echo "==> Stripe webhook replay (signed HMAC + idempotency)"
 # secret, asserts received=true and duplicate=false on first delivery, then
 # replays to assert duplicate=true. Also asserts a wrong-secret POST is
 # rejected with 400.
-if python3 "$SCRIPT_DIR/stripe-webhook-replay.py"  >/dev/null 2>&1; then
+if run_script "stripe.webhook.e2e" "python3 $SCRIPT_DIR/stripe-webhook-replay.py"; then
 	echo "    PASS [stripe.webhook.e2e] verify + replay + reject all behaved"
 	PASS=$((PASS + 1))
 else
