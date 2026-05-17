@@ -23,11 +23,11 @@ Runtime mode の詳細は [Runtime Modes](https://github.com/tako0614/takos-ecos
 
 ## 1. 3 path 一覧
 
-| path               | target user                       | runtime mode                     | install 入口                                                                 | UX                                      |
-| ------------------ | --------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------- |
+| path               | target user                       | runtime mode                     | install 入口                                                                 | UX                                                  |
+| ------------------ | --------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- |
 | `Use Takos`        | 一般ユーザー / 試したい人         | `shared-cell`                    | operator Accounts の `/start?takos_url=...` ボタン                           | public signup open 後に Account / Space 作成 → chat |
-| `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (managed example: `takosumi.cloud/install?...`) | app preview 確認 → build → deploy       |
-| `Self-host`        | 退出 / 企業 / 主権重視            | `self-hosted`                    | operator deploy + app export/import                                          | 自前 takosumi で運用                    |
+| `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (`https://<OPERATOR_INSTALL_HOST>/install?...`) | app preview 確認 → build → deploy                   |
+| `Self-host`        | 退出 / 企業 / 主権重視            | `self-hosted`                    | operator deploy + app export/import                                          | 自前 takosumi で運用                                |
 
 `Install from Git` と app export/import は同じ AppInstallation contract 上に設計されています。current implementation
 は ledger / API / local proof までで、public managed offering での live data copy / clean self-host restore は
@@ -96,7 +96,7 @@ custom fork 利用を可能にする。
 ```txt
 README / operator-selected install UI
   ↓ Install App ボタン
-takosumi.cloud/install?git=...&ref=v1.2.3  (managed example)
+https://<OPERATOR_INSTALL_HOST>/install?git=...&ref=v1.2.3
   ↓
 Takosumi Account 作成 / login
   ↓
@@ -118,12 +118,11 @@ preview / pipeline の詳細は
 
 ### 3.2 ボタン例
 
-app repo の install ボタン (managed example。operator / self-host instance では
-base URL が変わります):
+app repo の install ボタン (operator / self-host instance で base URL が変わります):
 
 ```html
 <a
-  href="https://takosumi.cloud/install?git=https://github.com/example/my-app&ref=v1.2.3"
+  href="https://<OPERATOR_INSTALL_HOST>/install?git=https://github.com/example/my-app&ref=v1.2.3"
 >
   Install App
 </a>
@@ -132,7 +131,7 @@ base URL が変わります):
 README の badge:
 
 ```md
-[![Install App](https://takosumi.cloud/badges/install-app.svg)](https://takosumi.cloud/install?git=https://github.com/example/my-app&ref=v1.2.3)
+[![Install App](https://<OPERATOR_INSTALL_HOST>/badges/install-app.svg)](https://<OPERATOR_INSTALL_HOST>/install?git=https://github.com/example/my-app&ref=v1.2.3)
 ```
 
 fork した派生版を配る場合も同じ形。`git=` と `ref=` を fork 側に差し替えるだけで
