@@ -59,6 +59,6 @@ Takos UI / API
 - Takos product docs: `takos/docs/`
 - Takosumi kernel docs: `takosumi/docs/`
 - Takosumi Accounts docs: `takosumi-cloud/docs/`
-- takosumi-git docs: `takosumi-git/docs/`
+- takosumi-git docs: `takosumi/docs/`
 
 プロダクト横断の用語集は ecosystem root の `docs/` にあります。

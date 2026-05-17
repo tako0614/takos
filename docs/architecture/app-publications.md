@@ -18,9 +18,9 @@ kernel は compiled Shape manifest を apply し、resource outputs を返しま
 Takos app / installer layer はその outputs を使って MCP registry、file handler
 catalog、launcher entry を materialize します。
 
-## AppBinding
+## use edge
 
-`AppBinding` は account plane の primitive です。`.takosumi.yml` の
+`use edge` は account plane の primitive です。`.takosumi.yml` の
 `bindings:` で宣言し、Takosumi Accounts / takosumi-git が install pipeline 中に
 provision して compiled manifest に反映します。
 

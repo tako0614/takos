@@ -78,7 +78,7 @@ operator approval が揃い、`managed-offering:status` が `canOpenManagedOffer
 :::
 
 managed (Use Takos / Install from Git) では、Takosumi Accounts が発行する OIDC
-client と、app installation に紐づく `identity.oidc@v1` AppBinding が上記 env の
+client と、app installation に紐づく `identity.oidc@v1` use edge が上記 env の
 provisioning plan になります。Takosumi Accounts
 の materialization result を current takosumi-git が受け取り、`${bindings.*}` /
 `${secrets.*}` を解決します。 deploy request build 後も未解決なら kernel request
@@ -174,7 +174,7 @@ Takos は ID token から **最小限の claim だけ** を読みます。
 | `takosumi.role`            | optional | app-local role 推定の hint (Takos 内 ACL は再評価する)  |
 
 custom claim (`takosumi.*`) は **hint として読むだけ** で、Takos 内の
-権限判定には依存しません。Takos の権限判定は AppGrant と app-local profile を
+権限判定には依存しません。Takos の権限判定は permission grant と app-local profile を
 元に行います。
 
 `sub` は **pairwise** で計算されます。同一の Takosumi user でも別 installation

@@ -228,7 +228,7 @@ App manifest と install pipeline
 を通じて、以下が自動的に関連づけられます:
 
 - group identity / service / route / hostname
-- resource binding / OIDC client (`identity.oidc@v1` AppBinding 経由、 詳細は
+- resource binding / OIDC client (`identity.oidc@v1` use edge 経由、 詳細は
   [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md))
 - app metadata registration (launcher, MCP server, file handler, etc.)
 

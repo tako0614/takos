@@ -62,7 +62,7 @@ store / provider secret reference として扱います。
 
 ## Install-Time Bindings
 
-`.takosumi.yml` の AppBinding は installer-bound です。Accounts と
+`.takosumi.yml` の use edge は installer-bound です。Accounts と
 takosumi-git が binding を materialize した後、compiled manifest には concrete
 env または secret ref が入ります。
 
@@ -119,10 +119,10 @@ compile 後に uppercase 正規化した env 名が衝突する場合も invalid
 | env | 由来例 | 説明 |
 | --- | --- | --- |
 | `AUTH_DRIVER` | static `oidc` | OIDC consumer mode |
-| `OIDC_ISSUER_URL` | AppBinding materialization | issuer URL |
-| `OIDC_CLIENT_ID` | AppBinding materialization | OIDC client id |
+| `OIDC_ISSUER_URL` | use edge materialization | issuer URL |
+| `OIDC_CLIENT_ID` | use edge materialization | OIDC client id |
 | `OIDC_CLIENT_SECRET` | secret ref | OIDC client secret |
-| `OIDC_REDIRECT_URI` | AppBinding materialization | callback URL |
+| `OIDC_REDIRECT_URI` | use edge materialization | callback URL |
 | `DATABASE_URL` | resource output / secret ref | Postgres connection URL |
 | `BLOB_ENDPOINT` | object-store binding | Object store endpoint |
 | `BLOB_BUCKET` | object-store binding | Object store bucket |

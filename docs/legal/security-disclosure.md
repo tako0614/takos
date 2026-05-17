@@ -26,7 +26,7 @@ In scope:
 - Takos agent service (`takos/agent`)
 - Takosumi Accounts (`operator.identity.oidc` / `operator.billing.default`) —
   identity / billing / Installation owner; OIDC issuer, opaque launch token
-  redeem, AppGrant revocation, and pairwise OIDC subject derivation are in scope
+  redeem, permission grant revocation, and pairwise OIDC subject derivation are in scope
   when Takos managed service is impacted
 - managed Takos deployment artifacts under `takos/deploy/`
 - Takos docs and public service configuration
