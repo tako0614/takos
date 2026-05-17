@@ -175,7 +175,7 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 ### 構成
 
-Takosumi (`@takosumi/plugins`) の GCP provider plugin は 6 provider
+Takosumi (`@takos/takosumi-plugins`) の GCP provider plugin は 6 provider
 を提供します:
 
 | provider client               | 用途                          | 参照クラス                            |

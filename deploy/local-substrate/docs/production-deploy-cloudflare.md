@@ -164,7 +164,8 @@ takosumi/deploy/cloudflare/.wrangler/dist/takosumi-cloudflare-worker.mjs
 The build containers produce them; Miniflare runs them locally with emulated D1/R2/Queues/DO bindings. The difference
 between local and prod is the provider-managed binding backend and the binding / secret values. Code path is identical.
 
-If `cloud.takosumi.test/.well-known/openid-configuration` returns 200 in local-substrate, the same endpoint at
-`cloud.takosumi.com` will too, modulo Cloudflare-side configuration. If
+If `cloud.takosumi.test/.well-known/openid-configuration` returns 200 in local-substrate, the same Worker route should
+work on `cloud.takosumi.com` only after Cloudflare-side DNS/TLS, route, D1/R2 binding IDs, and secrets are validated and
+recorded as launch-readiness evidence. If
 `kernel-worker.takos.test/{healthz,storage/healthz,coordination/healthz,queue/test}` passes locally, the kernel Worker
 bundle has booted with the same Cloudflare binding contract that production uses.

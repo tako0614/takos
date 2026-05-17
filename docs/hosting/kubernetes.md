@@ -206,7 +206,7 @@ standalone runtime / executor / orchestrator workload は作りません。
 
 ### 構成
 
-Takosumi (`@takosumi/plugins`) の k8s provider plugin は次の resource lifecycle
+Takosumi (`@takos/takosumi-plugins`) の k8s provider plugin は次の resource lifecycle
 を提供します:
 
 | provider client             | 用途                                                 | 参照クラス                                       |

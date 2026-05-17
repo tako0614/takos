@@ -169,7 +169,7 @@ certificate ARN を設定します。
 
 ### 構成
 
-Takosumi (`@takosumi/plugins`) の AWS provider plugin は 6 provider
+Takosumi (`@takos/takosumi-plugins`) の AWS provider plugin は 6 provider
 を提供します:
 
 | provider client              | 用途                          | 参照クラス                             |
@@ -341,8 +341,8 @@ runtime-agent を常駐させて work lease を pull する方式です。
 import {
   RuntimeAgentHttpClient,
   RuntimeAgentLoop,
-} from "@takosumi/plugins/runtime-agent";
-import { awsProviderExecutors } from "@takosumi/plugins/providers/aws";
+} from "@takos/takosumi-plugins/runtime-agent";
+import { awsProviderExecutors } from "@takos/takosumi-plugins/providers/aws";
 
 const client = new RuntimeAgentHttpClient({
   baseUrl: Deno.env.get("TAKOS_KERNEL_URL")!,

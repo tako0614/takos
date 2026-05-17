@@ -329,7 +329,7 @@ agent プロセスの最小構成:
 import {
   RuntimeAgentHttpClient,
   RuntimeAgentLoop,
-} from "@takosumi/plugins/runtime-agent";
+} from "@takos/takosumi-plugins/runtime-agent";
 
 const client = new RuntimeAgentHttpClient({
   baseUrl: Deno.env.get("TAKOS_KERNEL_URL")!,
