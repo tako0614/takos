@@ -72,8 +72,46 @@ This is operator-owned. Re-evaluate addresses periodically.
 EOF
 }
 
+assert_mocks_not_host_published() {
+	# The added mock + emulator services (install-preview-mock, oauth-mock,
+	# mailpit web UI, jaeger UI, otel-collector, yurucommu-a/b, minio) must
+	# stay on the internal docker network. If anyone accidentally adds a
+	# `ports:` entry that publishes them to 0.0.0.0, this catches it.
+	echo "==> [docker] Verifying new mock/emulator containers do not bind 0.0.0.0"
+	local leaked=0
+	local services=(
+		install-preview-mock
+		oauth-mock
+		mailpit
+		jaeger
+		otel-collector
+		yurucommu-a
+		yurucommu-b
+		minio
+	)
+	for svc in "${services[@]}"; do
+		local cid
+		cid=$(docker ps --filter "name=local-substrate-${svc}-1" --format '{{.ID}}' | head -1)
+		if [[ -z "$cid" ]]; then continue; fi
+		local public
+		public=$(docker port "$cid" 2>/dev/null | grep -E '^.* -> 0\.0\.0\.0:' || true)
+		if [[ -n "$public" ]]; then
+			echo "    FAIL [docker.no-public-publish.$svc] container is published to host:"
+			echo "$public" | sed 's/^/        /'
+			leaked=$((leaked + 1))
+		fi
+	done
+	if [[ "$leaked" -eq 0 ]]; then
+		echo "    PASS all 8 mock/emulator services are internal-only (no 0.0.0.0 bind)"
+		PASS=$((PASS + 1))
+	else
+		FAIL=$((FAIL + 1))
+	fi
+}
+
 assert_factory_denies_public_dns
 assert_coredns_nxdomain_letsencrypt
+assert_mocks_not_host_published
 recommend_egress_filter
 
 echo
