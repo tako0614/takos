@@ -36,28 +36,29 @@ and verifies:
 - both nodeinfo + webfinger respond
 - cross-instance reach through Caddy
 
-What's NOT yet smoked: the actual Follow / Accept exchange. Round 2 attempted to add this and learned the surface is
-bigger than the 1–2 hour estimate. Updated state of play (2026-05-17):
+What's NOT yet fully smoked: the Follow / Accept exchange. `scripts/federation-follow.sh` now covers the first half:
+login on both yurucommu instances, inst-a fetches inst-b's actor, and `POST /api/follow` persists the Follow row as
+`pending`. Updated state of play (2026-05-17):
 
 1. **No public signup endpoint exists.** yurucommu is a single-user instance — `POST /api/auth/login` returns the
    pre-existing `owner` actor (or creates a default "tako" owner the first time) gated on a PBKDF2-hashed
    `AUTH_PASSWORD_HASH` env var. `POST /api/auth/accounts` creates sub-accounts but requires an already-signed-in actor.
    So provisioning two distinct subjects on inst-a vs inst-b means each instance gets the same "tako" owner under a
    separate `APP_URL`, which is fine for federation testing (the actors have different `ap_id`s).
-2. **`POST /api/auth/login` needs `AUTH_PASSWORD_HASH` in the yurucommu-a/b env.** Generating the PBKDF2 hash is a
-   one-time setup task; the helper is in `yurucommu/src/backend/utils/password.ts`.
-3. **No public POST outbox endpoint.** The federation activity is emitted by yurucommu's own room/posting code; the
-   `ap.get("/ap/users/:username/outbox")` route is read-only. A real Follow activity would need to go through whatever
-   internal API creates Follow records (TBD — possibly the rooms/communities API, possibly the federation worker).
-4. **HTTP Signature on outbound POSTs** is then handled by yurucommu's federation queue; the test would just need to
-   poll inst-b's followers collection for inst-a's actor.
+2. **`POST /api/auth/login` now has deterministic local-substrate fixtures** in `env/yurucommu-{a,b}.env`, so the smoke
+   can create / reuse each instance's default owner actor with one known fixture password.
+3. **`POST /api/follow` is the internal create-Follow hook.** The partial smoke uses it to create the Follow row and
+   prove inst-a can fetch inst-b's actor through Caddy + Pebble TLS.
+4. **Accept delivery is still missing in Deno mode.** The Follow activity delivery depends on the queue/worker path
+   (`DELIVERY_QUEUE` in Worker mode), so the smoke cannot yet prove inst-b receives the Follow, emits Accept, and inst-a
+   flips the row to accepted.
 
-Best path forward: write the smoke against the internal "create Follow" API once that API surface is identified, OR add
-a minimal `POST /api/test/follow` endpoint guarded by a `LOCAL_SUBSTRATE_TEST_BED=1` env to give the smoke a direct
-hook. Either way the work is bigger than originally scoped — track separately.
+Best path forward: add a memory-backed delivery worker in `src/backend/server.ts` for Deno local mode, or add a
+synchronous HTTP-signature delivery hook guarded by `LOCAL_SUBSTRATE_TEST_BED=1`, then extend `federation-follow.sh` to
+poll inst-b's followers collection and inst-a's accepted status.
 
-In the meantime `federation-smoke.sh` continues to verify the wire-level reachability (nodeinfo + webfinger + cross-
-reach through Caddy) which catches the most common regression class (one yurucommu instance can't see the other at all).
+In the meantime `federation-smoke.sh` verifies wire-level reachability (nodeinfo + webfinger + cross-reach through
+Caddy), and `federation-follow.sh` verifies the pre-delivery Follow creation path.
 
 ## brand-tokens JSR package (D13)
 
