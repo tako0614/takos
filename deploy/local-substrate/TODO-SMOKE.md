@@ -20,6 +20,16 @@ For now the cloud worker (`takosumi-cloud-worker`) IS the workerd code path that
 scripts/workers-cli-smoke.sh + the ~17 cloud.* / oauth.* / install.preview.* / passkey.* / stripe.* smoke checks.
 Kernel-on-workerd is upstream work tracked in @takos/takosumi-kernel.
 
+## Tenant isolation strict mode
+
+`scripts/tenant-isolation.sh` currently runs in informational mode because
+`takosumi-cloud/packages/accounts-service/src/installation-routes.ts` does not yet enforce subject/account membership on
+`GET /v1/installations/{id}`. The script still mints two distinct local-substrate sessions, creates an installation as
+subject A, and attempts to read it as subject B so the gap is visible in smoke logs.
+
+Once the Accounts service filters installation reads by the authenticated subject/account membership, set
+`TENANT_ISOLATION_STRICT=1` in CI so a cross-subject `200` becomes a hard failure.
+
 ## Full ActivityPub Follow → Accept federation smoke
 
 Today's `scripts/federation-smoke.sh` brings up `yurucommu-a` and `yurucommu-b` on inst-a.takos.test / inst-b.takos.test
@@ -37,6 +47,32 @@ What's NOT yet smoked: the actual Follow / Accept exchange. That needs:
    on the remote side.
 
 About 1–2 hours of yurucommu API spelunking + signing helpers.
+
+## Tenant isolation gap — `/v1/installations/{id}` GET (#tenant-isolation)
+
+`scripts/tenant-isolation.sh` is currently informational (PASS-with-WARN). It calls the cloud worker as two distinct
+OIDC subjects (A: google-mock, B: github-mock) and verifies that subject B cannot read subject A's installation via
+`GET /v1/installations/<id>`. As of 2026-05-17 the cross-read returns 200 — i.e. **any session can read any installation
+by id**.
+
+Root cause: `takosumi-cloud/packages/accounts-service/src/installation-routes.ts:60` `handleGetAppInstallation` takes
+only `installationId` and `store`; it does not see the caller's subject and does not consult an account membership map.
+The route in `mod.ts` (around line 924) forwards directly without inserting an ACL check. The same is true of
+`handleListAppInstallations`, `handleDashboardInstallationDetail`, and most other installation detail endpoints.
+
+What the fix needs:
+
+1. Decide whether the tenancy boundary is `subject` (single-user accounts) or `accountId` (multi-user orgs with
+   subject→account membership). Probably the latter, matching the existing `installation.accountId`/`spaceId` fields.
+2. A `subject → accountIds[]` membership lookup on the store side.
+3. Insert an ACL check before every `findAppInstallation` / `listAppInstallationsForSpace` /
+   `listAppBindingsForInstallation` call — preferably as a small `requireInstallationAccess()` helper threaded through
+   the existing route adapters.
+4. Once the gap is closed, flip `TENANT_ISOLATION_STRICT=1` in `.github/workflows/local-substrate-smoke.yml` so the
+   smoke escalates from WARN to FAIL on regression.
+
+This is a real production gap, not a local-substrate quirk — out-of-scope of the test bed itself but tracked here
+because the smoke is what discovered it.
 
 ## brand-tokens JSR package (D13)
 
