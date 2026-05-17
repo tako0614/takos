@@ -3,7 +3,7 @@
 > このページでわかること: 新しい Space に自動インストールされるアプリの一覧と仕組み。
 
 バンドルアプリは、新しい Space を作成したときに自動的にインストールされるアプリです。
-通常のアプリと同じ仕組み (AppInstallation) で管理されるため、不要ならアンインストールできます。
+通常のアプリと同じ仕組み (Installation) で管理されるため、不要ならアンインストールできます。
 
 ## 一覧
 
@@ -21,12 +21,12 @@ bundled app distribution には含めません。
 ## 動作原理
 
 1. Space 作成時に bundled app entry の Git URL / ref を解決する
-2. Takosumi Accounts が AppInstallation を作成する
+2. Takosumi Accounts が Installation を作成する
 3. `takosumi-git install apply` が source ref を commit に pin する
-4. `.takosumi/app.yml` から binding / grant / permission preview を作る
-5. `.takosumi/manifest.yml` と workflow artifact を compile する
+4. `.takosumi.yml` から binding / grant / permission preview を作る
+5. `.takosumi.yml` と workflow artifact を compile する
 6. compiled manifest を Takosumi kernel に apply する
-7. AppInstallation ledger に source commit / app manifest digest / compiled manifest digest を記録する
+7. Installation ledger に source commit / app manifest digest / compiled manifest digest を記録する
 
 bundled app も third-party app と同じ install lifecycle を通ります。default set
 に含まれても kernel primitive や group が特権化されるわけではありません。

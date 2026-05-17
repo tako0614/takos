@@ -2,163 +2,78 @@
 
 > このページでわかること: バンドルアプリ takos-docs の概要。
 
-Google Docs のようなリッチテキストドキュメントエディタです。
+rich text document editor with a Streamable HTTP MCP server。
 
 ## 役割
 
 - Tiptap ベースのリッチテキストエディタ
 - ドキュメントの作成・編集・閲覧
-- source tree の standalone MCP server でドキュメント操作 tools を提供
-- kernel の Storage 機能に依存（files:read / files:write）
-- group に所属しなくても動作可能
+- agent が直接使える published MCP tool surface
+- Cloudflare Workers backend で worker bundle を host
+- Takosumi Accounts OIDC consumer
 
-## Takosumi 上での動作
-
-hostname は routing layer が割り当てる。
-
-- auto: `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}`
-- custom slug / custom domain もオプションで設定可能
-
-例: `team-a-my-docs.app.example.com` or `docs.mycompany.com`
-
-```text
-{hostname}
-  /                         → built frontend / static asset surface (deployment mount)
-  /api                      → app API, OIDC callback, session routes
-  /api/auth/callback        → OIDC callback (Takosumi Accounts 経由)。詳細: [OIDC Consumer](/apps/oidc-consumer)
-  /mcp                      → Docs MCP server (streamable HTTP)
-  /files/:id                → Storage file handler open route
-```
-
-bundled app manifest は UI の built frontend / static asset surface と MCP
-server (`/mcp`) と app API (`/api`) と file handler open route (`/files/:id`)
-を同じ worker artifact で publish する。
-
-## App Metadata And Bindings
-
-`.takosumi/app.yml` (InstallableApp v1) は app catalog metadata + bindings +
-install hooks を宣言します。 launcher icon / display title / category 等の
-UI metadata は YAML field ではなく、 install 時に Takos app catalog
-publications row の `display` フィールド (title / description / icon / category /
-sortOrder) として登録されます。 MCP endpoint は `bindings.mcp` (binding-catalog
-参照) または app 側 route advertisement として扱われ、 file handler は
-publications row の `spec.fileHandlers` / Takos storage management の
-mount として登録されます。
+## AppSpec (`.takosumi.yml`)
 
 ```yaml
-apiVersion: app.takosumi.dev/v1
-kind: InstallableApp
+apiVersion: takosumi.dev/v1
+kind: App
+
 metadata:
   id: jp.takos.docs
   name: Takos Docs
-  description: Rich text document editor with a Streamable HTTP MCP server.
   publisher: takos
-  homepage: https://github.com/tako0614/takos-docs
-source:
-  git: https://github.com/tako0614/takos-docs.git
-  ref: v0.1.2
-entry:
-  manifest: .takosumi/manifest.yml
-runtime:
-  modes:
-    - shared-cell
-    - dedicated
-    - self-hosted
-```
 
-workload 自体は `.takosumi/manifest.yml` の Shape resource (`worker@v1` 等)
-で deploy します。 OIDC sign-in は `.takosumi/app.yml` の bindings.auth で
-`identity.oidc@v1` AppBinding として宣言します
-([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
-/
-[`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
-を参照)。
+components:
+  web:
+    kind: worker
+    build:
+      command: deno task build
+      output: dist/worker.mjs
+    routes:
+      - /
+      - /api
+      - /mcp
+      - /files/:id
+    use:
+      documents:
+        envPrefix: BLOB_
+      auth:
+        mount: oidc
 
-```yaml
-bindings:
+  documents:
+    kind: object-store
+
   auth:
-    type: identity.oidc@v1
-    required: true
+    kind: oidc
     redirectPaths:
       - /api/auth/callback
-    allowedScopes:
-      - openid
-      - profile
-      - email
-  documents:
-    type: object-store.s3-compatible@v1
-    required: true
-    plan: standard
-    lifecycleDays: 0
-  domain:
-    type: domain.http@v1
-    required: false
-    hostname: auto
-    tlsMode: auto
-  bootstrap:
-    type: install-launch-token@v1
-    required: true
-    consumePath: /api/auth/launch
-    maxLifetimeSeconds: 300
-install:
-  healthcheckPath: /healthz
-  postInstallLaunchPath: /api/auth/launch
+    scopes: [openid, profile, email]
+
+interfaces:
+  launch:
+    target: web
+    path: /api/auth/launch
+  mcp:
+    target: web
+    path: /mcp
+  health:
+    target: web
+    path: /healthz
+
+permissions:
+  requested:
+    - files:read
+    - files:write
+    - logs.read.own
 ```
 
-## UI と MCP server
+## OIDC consumer
 
-UI と `/mcp` は同じ worker にまとめて配置します。MCP registry には bearer
-token ref が付き、installer が worker scope の secret env を用意します。
-`MCP_AUTH_TOKEN` が未設定で `MCP_ALLOW_UNAUTHENTICATED=true` も指定されていない
-場合は fail-closed (アクセス拒否) になります。
+`use: { mount: oidc }` から Takosumi が per-Installation OIDC client を発行し、
+`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS`
+を worker に env で inject します。 詳細は [OIDC Consumer](/apps/oidc-consumer)。
 
-Shape manifest の route は `/`、`/api`、`/mcp`、`/files/:id` を `web` resource
-に向けます (`/api` には app session API と OIDC callback が含まれます)。
-installer は次の env を runtime に渡します:
+## 関連ページ
 
-- `APP_SESSION_SECRET` — 自動生成される署名鍵
-- `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_ISSUER_URL` / `OIDC_REDIRECT_URI`
-  — `identity.oidc@v1` AppBinding から渡される OIDC client 情報
-
-## Storage との連携
-
-takos-docs は app-layer storage grant から Takos Storage API の endpoint /
-credential を受け取り、Storage API を呼び出してファイルの読み書きを行います。
-managed Takos installation では `TAKOS_STORAGE_API_URL` /
-`TAKOS_STORAGE_ACCESS_TOKEN` が materialize されます。
-
-Storage UI からドキュメントファイルを開くときは、file handler metadata の
-`/files/:id` route を使います。新規作成・保存するファイルは `.takosdoc`
-拡張子と `application/vnd.takos.docs+json` MIME type を使います。既存ファイル
-も同じ MIME type で識別します。
-
-API / UI / MCP リクエストは `space_id` または `spaceId` query parameter を
-優先します。指定がなければ env `TAKOS_SPACE_ID` をデフォルト Storage space
-として使い、どちらもない場合は `space_id is required` エラーになります。
-
-## Scopes
-
-| scope         | 用途                                            |
-| ------------- | ----------------------------------------------- |
-| `files:read`  | kernel Storage からドキュメントファイル読み取り |
-| `files:write` | kernel Storage へドキュメントファイル書き込み   |
-| `openid`      | Takosumi Accounts OIDC sign-in                  |
-| `profile`     | ユーザープロフィール取得                        |
-| `email`       | メールアドレス取得                              |
-
-## 永続データ
-
-takos-docs 自体は永続データを持ちません。ドキュメントデータはすべて kernel
-Storage に保存されます。
-
-## リソース
-
-ドキュメントストレージは kernel Storage に委譲します。アプリ自身が持つ
-リソースは `docs-session-secret` 1 つだけで、`APP_SESSION_SECRET` に bind
-して cookie / session 署名に使います。
-
-## 参照
-
-- [OIDC Consumer](/apps/oidc-consumer)
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-- [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
+- [AppSpec spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [Component Kind Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/component-kind-catalog.md)

@@ -6,9 +6,9 @@
 
 | 種別 | 所有者 | kernel に渡る形 |
 | --- | --- | --- |
-| HTTP workload / ingress | `.takosumi/manifest.yml` `resources[]` | `worker@v1` / `web-service@v1` / `custom-domain@v1` |
-| App install metadata | `.takosumi/app.yml` | 渡らない |
-| OIDC / DB / blob / launch binding | `.takosumi/app.yml` `bindings:` | compiled env / secret refs |
+| HTTP workload / ingress | `.takosumi.yml` `resources[]` | `worker@v1` / `web-service@v1` / `custom-domain@v1` |
+| App install metadata | `.takosumi.yml` | 渡らない |
+| OIDC / DB / blob / launch binding | `.takosumi.yml` `bindings:` | compiled env / secret refs |
 | MCP endpoint metadata | Takos app catalog / runtime registry | 渡らない |
 | File handler metadata | Takos app catalog / runtime registry | 渡らない |
 | Launcher metadata | Takos app catalog / Store | 渡らない |
@@ -20,7 +20,7 @@ catalog、launcher entry を materialize します。
 
 ## AppBinding
 
-`AppBinding` は account plane の primitive です。`.takosumi/app.yml` の
+`AppBinding` は account plane の primitive です。`.takosumi.yml` の
 `bindings:` で宣言し、Takosumi Accounts / takosumi-git が install pipeline 中に
 provision して compiled manifest に反映します。
 
@@ -33,7 +33,7 @@ bindings:
       - /auth/oidc/callback
 ```
 
-`identity.oidc@v1` は per-AppInstallation の OIDC client を発行します。Takos
+`identity.oidc@v1` は per-Installation の OIDC client を発行します。Takos
 runtime からは `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
 `OIDC_REDIRECT_URI` として見えます。
 

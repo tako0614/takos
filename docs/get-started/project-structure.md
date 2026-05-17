@@ -25,8 +25,8 @@ my-app/
 
 | ファイル                 | 役割                                   | 詳細仕様 |
 | ------------------------ | -------------------------------------- | -------- |
-| `.takosumi/app.yml`      | アプリのメタデータと必要な権限の宣言   | [app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md) |
-| `.takosumi/manifest.yml` | デプロイするリソース (サーバー、DB 等) の定義 | [manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) |
+| `.takosumi.yml`      | アプリのメタデータと必要な権限の宣言   | [app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md) |
+| `.takosumi.yml` | デプロイするリソース (サーバー、DB 等) の定義 | [manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) |
 
 `manifest.yml` にはビルド中に解決される一時的なプレースホルダー (`PLACEHOLDER`, `workflowRef`) を
 書けます。デプロイ時にビルドツールがこれらを実際の値に置き換え、最終的なマニフェストだけが
@@ -78,7 +78,7 @@ resources:
 
 ```yaml
 apiVersion: app.takosumi.dev/v1
-kind: InstallableApp
+kind: App
 id: examples.my-app
 name: My App
 bindings:
@@ -111,7 +111,7 @@ jobs:
 
 ## 制約
 
-- `.takosumi/app.yml` と `.takosumi/manifest.yml` は `.takosumi/` 直下に置く
+- `.takosumi.yml` と `.takosumi.yml` は `.takosumi/` 直下に置く
 - ワークフローは `.takosumi/workflows/` 配下に置く
 - `manifest.yml` は `apiVersion: "1.0"` と `kind: Manifest` が必須
 - デプロイエンジンに渡る最終マニフェストに `workflowRef` やプレースホルダーは残らない

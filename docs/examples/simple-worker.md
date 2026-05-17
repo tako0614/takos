@@ -24,7 +24,7 @@ my-app/
 
 ```yaml
 apiVersion: app.takosumi.dev/v1
-kind: InstallableApp
+kind: App
 metadata:
   id: example.simple-worker
   name: Simple Worker
@@ -34,7 +34,7 @@ source:
   git: https://github.com/example/simple-worker
   ref: v1.0.0
 entry:
-  manifest: .takosumi/manifest.yml
+  manifest: .takosumi.yml
 runtime:
   modes:
     - shared-cell

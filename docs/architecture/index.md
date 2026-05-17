@@ -14,7 +14,7 @@
 
 | 内容                                                    | 詳細ドキュメント                                                                        |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Installable App Model / AppInstallation / runtime modes | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
+| Installable App Model / Installation / runtime modes | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
 | Takosumi Accounts / billing / OIDC issuer               | [takosumi-cloud docs](https://github.com/tako0614/takosumi-cloud/tree/master/docs)      |
 | takosumi kernel / Shape manifest / kernel HTTP API      | [takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)                  |
 | `.takosumi/` convention / Git URL install / workflowRef | [takosumi-git docs](https://github.com/tako0614/takosumi-git/tree/master/docs)          |

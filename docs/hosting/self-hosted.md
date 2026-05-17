@@ -361,7 +361,7 @@ services:
 | `takos-git`   | Git Smart HTTP / refs / objects / source resolution |
 | `takos-agent` | Takos agent execution service                       |
 
-workflow build / `workflowRef` 解決は `takosumi-git`、AppInstallation / OIDC /
+workflow build / `workflowRef` 解決は `takosumi-git`、Installation / OIDC /
 billing は self-host operator の Takosumi Accounts (`takosumi-cloud`)
 が担当します。
 

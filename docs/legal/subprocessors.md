@@ -25,7 +25,7 @@ store.
 > customer account state.
 > **Takosumi Accounts** (`operator.identity.oidc` /
 > `operator.billing.default`) is the separate identity / billing processor
-> that owns OIDC issuance, AppInstallation ownership, and operator BillingPort
+> that owns OIDC issuance, Installation ownership, and operator BillingPort
 > billing. External sub-processors below are referenced by both planes only when
 > the relevant feature is enabled.
 

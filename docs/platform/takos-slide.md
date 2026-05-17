@@ -2,139 +2,71 @@
 
 > このページでわかること: バンドルアプリ takos-slide の概要。
 
-Google Slides のようなプレゼンテーションエディタです。
+プレゼンテーションエディタ with a Streamable HTTP MCP server。
 
 ## 役割
 
-- プレゼンテーションの作成・編集
-- スライド操作 (追加 / 削除 / 並び替え)
-- テキスト・図形・画像の配置
-- source tree の standalone MCP server でスライド操作 tools を提供
-- app metadata でプレゼンテーション UI / MCP / file handler を提供
-- group に所属しなくても動作可能
+- スライドの作成・編集・閲覧
+- agent が直接使える published MCP tool surface
+- Cloudflare Workers backend
+- Takosumi Accounts OIDC consumer
 
-## Takosumi 上での動作
-
-hostname は routing layer が割り当てる。
-
-- auto: `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}`
-- custom slug / custom domain もオプションで設定可能
-
-例: `team-a-my-slide.app.example.com` or `slides.mycompany.com`
-
-single worker (web) 構成。
-
-```text
-{hostname}
-  /                         → built frontend / static asset surface (deployment mount)
-  /api                      → app API, OIDC callback, session routes
-  /api/auth/callback        → OIDC callback (Takosumi Accounts 経由)。詳細: [OIDC Consumer](/apps/oidc-consumer)
-  /mcp                      → Slide MCP server (streamable HTTP)
-  /files/:id                → Storage file handler open route
-```
-
-## App Metadata And Bindings
-
-`.takosumi/app.yml` (InstallableApp v1) は app catalog metadata + bindings +
-install hooks を宣言します。 launcher icon / display title / category 等の UI
-metadata は YAML field ではなく、 install 時に Takos app catalog publications
-row の `display` フィールドとして登録されます。 MCP endpoint と file handler は
-publications row の `spec` field / Takos storage management の mount 経由で
-登録され、 install YAML には現れません。
+## AppSpec (`.takosumi.yml`)
 
 ```yaml
-apiVersion: app.takosumi.dev/v1
-kind: InstallableApp
+apiVersion: takosumi.dev/v1
+kind: App
+
 metadata:
   id: jp.takos.slide
   name: Takos Slide
-  description: Presentation editor with a Streamable HTTP MCP server.
   publisher: takos
-  homepage: https://github.com/tako0614/takos-slide
-source:
-  git: https://github.com/tako0614/takos-slide.git
-  ref: v0.1.2
-entry:
-  manifest: .takosumi/manifest.yml
-runtime:
-  modes:
-    - shared-cell
-    - dedicated
-    - self-hosted
-```
 
-workload 自体は `.takosumi/manifest.yml` の Shape resource (`worker@v1` 等)
-で deploy します。 OIDC sign-in は `.takosumi/app.yml` の bindings.auth で
-`identity.oidc@v1` AppBinding として宣言します
-([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
-/
-[`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
-を参照)。
+components:
+  web:
+    kind: worker
+    build:
+      command: deno task build
+      output: dist/worker.mjs
+    routes:
+      - /
+      - /api
+      - /mcp
+      - /files/:id
+    use:
+      presentations:
+        envPrefix: BLOB_
+      auth:
+        mount: oidc
 
-```yaml
-bindings:
+  presentations:
+    kind: object-store
+
   auth:
-    type: identity.oidc@v1
-    required: true
+    kind: oidc
     redirectPaths:
       - /api/auth/callback
-    allowedScopes:
-      - openid
-      - profile
-      - email
-  presentations:
-    type: object-store.s3-compatible@v1
-    required: true
-    plan: standard
-    lifecycleDays: 0
+    scopes: [openid, profile, email]
+
+interfaces:
+  launch:
+    target: web
+    path: /api/auth/launch
+  mcp:
+    target: web
+    path: /mcp
+  health:
+    target: web
+    path: /healthz
+
+permissions:
+  requested:
+    - files:read
+    - files:write
+    - logs.read.own
 ```
 
-UI と `/mcp` は同じ worker にまとめて配置します。MCP registry には bearer
-token ref が付き、installer が worker scope の secret env を用意します。
-`MCP_AUTH_TOKEN` が未設定で `MCP_ALLOW_UNAUTHENTICATED=true` も指定されていない
-場合は fail-closed (アクセス拒否) になります。
+## 関連ページ
 
-Shape manifest の route は `/`、`/api`、`/mcp`、`/files/:id` を `web` resource
-に向けます (`/api` には app session API と OIDC callback が含まれます)。
-installer は次の env を runtime に渡します:
-
-- `APP_SESSION_SECRET` — 自動生成される署名鍵
-- `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_ISSUER_URL` / `OIDC_REDIRECT_URI`
-  — `identity.oidc@v1` AppBinding から渡される OIDC client 情報
-
-## Storage との連携
-
-takos-slide は app-layer storage grant から Takos Storage API の endpoint と
-credential を受け取り、Storage API を呼び出してプレゼンテーションファイルを
-読み書きします。managed Takos installation では `TAKOS_STORAGE_API_URL` と
-`TAKOS_STORAGE_ACCESS_TOKEN` が自動的に渡されます。
-
-Storage UI からプレゼンテーションファイルを開くときは、file handler metadata
-の `/files/:id` route を使います。新規作成・保存するファイルは `.takosslide`
-拡張子と `application/vnd.takos.slide+json` MIME type を使います。
-
-API / UI / MCP リクエストは `space_id` または `spaceId` query parameter を
-優先します。指定がなければ env `TAKOS_SPACE_ID` をデフォルト Storage space
-として使い、どちらもない場合は `space_id is required` エラーになります。
-
-## Scopes
-
-| scope       | 用途                                   |
-| ----------- | -------------------------------------- |
-| files:read  | kernel の Storage からファイル読み取り |
-| files:write | kernel の Storage へファイル書き込み   |
-| openid      | Takosumi Accounts OIDC sign-in         |
-| profile     | ユーザープロフィール取得               |
-| email       | メールアドレス取得                     |
-
-## リソース
-
-プレゼンテーションのストレージは kernel Storage に委譲します。アプリ自身が持つ
-リソースは `slide-session-secret` 1 つだけで、`APP_SESSION_SECRET` に bind
-して cookie / session 署名に使います。
-
-## 参照
-
+- [AppSpec spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
 - [OIDC Consumer](/apps/oidc-consumer)
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-- [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)

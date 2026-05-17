@@ -2,12 +2,12 @@
 
 > このページでわかること: インストール済みアプリを以前のバージョンに戻す方法。
 
-ロールバックは AppInstallation のバージョンを戻す操作です。
+ロールバックは Installation のバージョンを戻す操作です。
 
-## AppInstallation rollback
+## Installation rollback
 
-install された app は source commit、`.takosumi/app.yml` digest、compiled manifest
-digest を AppInstallation ledger に pin しています。rollback は以前の pinned
+install された app は source commit、`.takosumi.yml` digest、compiled manifest
+digest を Installation ledger に pin しています。rollback は以前の pinned
 version を選び、install preview と同じ確認を通して ledger source pointer を戻します。
 provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません。
 
@@ -15,7 +15,7 @@ provider data copy / schema migration の巻き戻しは rollback の current gu
 takosumi-git rollback inst_abc --to v1.2.3
 ```
 
-成功すると AppInstallation は `ready` に戻り、InstallationEvent ledger に rollback
+成功すると Installation は `ready` に戻り、InstallationEvent ledger に rollback
 event が残ります。
 
 ## Kernel rollback

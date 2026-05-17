@@ -183,13 +183,13 @@ Takos product は **Takosumi PaaS** の上で動く consumer。 platform 側 lif
   app-output / supply-chain) は kernel package が所有し、 Takos product
   からは public HTTP contract 経由でのみ触る
 - **Takosumi Accounts** (`../takosumi-cloud/packages/accounts-service/`) —
-  operator account plane。 OIDC issuer / billing / AppInstallation ledger
+  operator account plane。 OIDC issuer / billing / Installation ledger
 - **`takosumi-git`** (`../takosumi-git/`) — `.takosumi/` convention の
   canonical installer
 - **integration test bed** (`../takosumi/deploy/local-substrate/`) — Takosumi
   platform の full integration を public network 依存ゼロで踏む
 
-Takos product は上記のいずれも内製しない。 OIDC issuer / billing / AppInstallation
+Takos product は上記のいずれも内製しない。 OIDC issuer / billing / Installation
 ownership / `.takosumi/` convention parsing は operator account plane および
 `takosumi-git` 側の責務。
 

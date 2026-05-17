@@ -62,7 +62,7 @@ graph TB
 ## Sequence Diagram: resolveDeployment
 
 kernel direct deploy の参照系シーケンス。takosumi-git を使う場合は、この前段で
-`.takosumi/manifest.yml` の `workflowRef` / installer placeholder が解決され、
+`.takosumi.yml` の `workflowRef` / installer placeholder が解決され、
 kernel には compiled Shape manifest だけが届く。
 
 ```mermaid

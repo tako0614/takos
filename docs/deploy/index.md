@@ -2,41 +2,40 @@
 
 > このページでわかること: Takos にアプリをデプロイする方法の全体像。
 
-アプリのデプロイは Git URL と ref を指定して始めます。`takosumi-git` が
-`.takosumi/app.yml` と `.takosumi/manifest.yml` を読み、コンパイル済みマニフェストを
-Takosumi kernel に渡します。
+アプリのデプロイは Git URL と ref を指定して始めます。 Takosumi が
+source root の `.takosumi.yml` (= AppSpec) を読み、 Space に Installation を作り、
+apply ごとに Deployment を記録します。
 
 ## 使う入口
 
-| 目的 | 入口 | 所有者 |
-| --- | --- | --- |
-| bundled / third-party app を install する | `POST /v1/installations` または install UI | operator account plane (reference impl: Takosumi Accounts) |
-| Git URL から manifest を compile する | `takosumi-git install <git-url> --ref <tag>` | takosumi-git |
-| operator が compiled manifest を直接 apply する | `takosumi deploy <manifest>` | Takosumi kernel |
+| 目的                                       | 入口                                       | 所有者                                                      |
+| ------------------------------------------ | ------------------------------------------ | ----------------------------------------------------------- |
+| bundled / third-party app を install する  | `POST /v1/installations` または install UI | Takosumi (kernel installer) + operator account plane (Accounts) |
+| Git URL から AppSpec を install する       | `takosumi install --source git:<url>#<ref>` | Takosumi CLI                                                |
+| 既存 Installation に upgrade を apply する | `takosumi deploy <installation-id>`        | Takosumi CLI                                                |
+| 過去 Deployment へ rollback する           | `takosumi rollback <inst-id> <deploy-id>`  | Takosumi CLI                                                |
 
-Takos product は Web UI / public API / bundled app lifecycle を提供します。Git fetch、
-workflow、artifact 解決、manifest compile は `takosumi-git`、kernel への direct
-apply は `takosumi` CLI の責務です。
+Takos product は Web UI / public API / bundled app lifecycle を提供します。
+Git fetch、 component.build 実行、 provider materialize、 Installation /
+Deployment record の persist は Takosumi 本体の責務です。
 
 ## デプロイの流れ
 
-1. app author は `.takosumi/app.yml` に install metadata、binding、permission を書く
-2. `.takosumi/manifest.yml` に compute / storage / route などの Shape resource を書く
-3. install preview で source、grant、binding、cost、runtime mode を確認する
-4. user approval 後に `takosumi-git` が build / artifact resolve / manifest compile を行う
-5. Accounts が AppInstallation ledger に source commit と manifest digest を pin する
-6. compiled manifest が Takosumi kernel に apply される
+1. app author は `.takosumi.yml` に metadata、 components、 use edge、 permissions を書く
+2. install dry-run で source commit、 changes、 推定コスト、 expected.commit を確認する
+3. user approval 後に `POST /v1/installations` で Installation を作成
+4. Takosumi が source を fetch、 `component.build` を実行、 provider plugin で resource を materialize
+5. Installation ledger に source commit と manifest digest を pin し、 最初の Deployment を記録
+6. 以降の更新は `POST /v1/installations/{id}/deployments` で Deployment 履歴を append
 
-## 2 つの manifest
+## 1 つの manifest
 
-| ファイル / payload | 読む主体 | 役割 |
-| --- | --- | --- |
-| `.takosumi/app.yml` | takosumi-git / Takosumi Accounts | InstallableApp metadata、binding、grant、permission preview |
-| `.takosumi/manifest.yml` | takosumi-git compiler | authoring 用 Shape manifest。placeholder や `workflowRef` は compile 前だけ許可 |
-| compiled manifest | Takosumi kernel | `resources[]` の closed Shape declarations |
+| ファイル          | 読む主体  | 役割                                                |
+| ----------------- | --------- | --------------------------------------------------- |
+| `.takosumi.yml`   | Takosumi  | AppSpec (`apiVersion: takosumi.dev/v1` / `kind: App`)。 metadata / components / use edge / interfaces / permissions |
 
-kernel に渡るのは compiled manifest だけです。install 用 binding や permission は
-Accounts と takosumi-git の install pipeline で解決されます。
+AppSpec は 1 ファイルです。 旧 `.takosumi/app.yml` + `.takosumi/manifest.yml` +
+`.takosumi/workflows/` + compiled manifest の区別は廃止されました。
 
 ## 関連ページ
 

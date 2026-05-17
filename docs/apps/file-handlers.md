@@ -51,7 +51,7 @@ fileHandlers:
 `url` の `:id` は URL encode された file ID に置換されます。`:id` は path segment として必須です。storage UI
 は起動時に `space_id` query parameter も付けます。
 
-この metadata は compiled Shape manifest の top-level field ではありません。 InstallableApp metadata、Takos app
+この metadata は compiled Shape manifest の top-level field ではありません。 App metadata、Takos app
 catalog、または runtime registration が Storage の file handler registry に materialize します。
 
 ## 複数ハンドラー
@@ -104,4 +104,4 @@ sort されます。
 
 - [MCP Server](/apps/mcp) --- MCP Server の公開方法
 - [App Integration Metadata Boundary](/architecture/app-publications)
-- [Deploy Manifest](/deploy/manifest) --- `.takosumi/manifest.yml` の全体像
+- [Deploy Manifest](/deploy/manifest) --- `.takosumi.yml` の全体像

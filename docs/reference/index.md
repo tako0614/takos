@@ -15,8 +15,8 @@
 
 | 確認したいこと                            | 参照先                                                                                                                 |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `.takosumi/manifest.yml` / Shape manifest | [takosumi manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)             |
-| `.takosumi/app.yml`                       | [takosumi-git app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)       |
+| `.takosumi.yml` / Shape manifest | [takosumi manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)             |
+| `.takosumi.yml`                       | [takosumi-git app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)       |
 | AppBinding / binding kind                 | [ecosystem binding catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)    |
-| AppInstallation API                       | [ecosystem install API](https://github.com/tako0614/takosumi-cloud/blob/master/docs/accounts-service.md)               |
+| Installation API                       | [ecosystem install API](https://github.com/tako0614/takosumi-cloud/blob/master/docs/accounts-service.md)               |
 | 共有用語                                  | [ecosystem glossary](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/glossary.md)               |

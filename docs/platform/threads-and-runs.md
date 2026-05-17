@@ -13,7 +13,7 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
 - **`takos-agent`** (ランタイムコンテナ) が実際のプロンプト構築、スキル選択、ツール実行を担当します
 - agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携します
 
-Run の起動には `spaceId` が必須です。AppInstallation 経由の Run では `installationId` と
+Run の起動には `spaceId` が必須です。Installation 経由の Run では `installationId` と
 `runtimeNamespace` が追加され、メモリストアがインストール単位で隔離されます。
 
 managed skill は Takos app / API gateway から渡されたカタログが優先されます。

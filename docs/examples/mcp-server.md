@@ -4,7 +4,7 @@
 
 MCP Server を `worker@v1` resource として公開する最小構成です。current compiled Shape manifest では top-level
 `publications[]` を使いません。MCP endpoint の catalog / install UI / client discovery は Takos app 側の metadata と
-AppInstallation layer で扱い、kernel manifest は HTTP entrypoint を materialize するだけです。
+Installation layer で扱い、kernel manifest は HTTP entrypoint を materialize するだけです。
 
 ## Deploy Manifest
 

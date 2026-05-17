@@ -23,7 +23,7 @@
 ### [MCP Server](/examples/mcp-server)
 
 - MCP HTTP endpoint on a route-bearing resource
-- install-time bindings and permissions live in `.takosumi/app.yml`
+- install-time bindings and permissions live in `.takosumi.yml`
 
 ### [Multi-service](/examples/multi-service)
 
