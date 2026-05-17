@@ -1,149 +1,227 @@
-# Takosumi Current State
+# Takos Product Current State
 
-> このページでわかること: Takosumi の現在の実装状態のスナップショット。
+> このページでわかること: Takos product (`app/`, `git/`, `agent/`) の現在の実装状態のスナップショット。
+> Takosumi platform (`../takosumi/`) や operator account plane (`../takosumi-cloud/`)
+> の状態は対象外で、 各 product repo 側の docs を参照する。
 
-このスナップショットは、本プロダクトルートに存在する実装の要約です。前向きの計画は ecosystem root の
-[`ROADMAP.md`](https://github.com/tako0614/takos-ecosystem/blob/master/ROADMAP.md) を参照してください。
+このスナップショットは Takos product shell に含まれる 3 つの nested submodule
+(`takos/app/`, `takos/git/`, `takos/agent/`) と shell-owned distribution
+artifacts の状態を要約する。 前向きの計画は ecosystem root の
+[`ROADMAP.md`](https://github.com/tako0614/takos-ecosystem/blob/master/ROADMAP.md)
+を参照。
 
 ::: info Current audit boundary
-2026-05-14 audit では、Takos 1.x local / CI-equivalent exit criteria は完了扱いです。このページの kernel
-baseline は historical freeze evidence を含みます。public managed offering としての launch readiness は
-`ROADMAP.md §3.5` の live operator evidence / staged rehearsal が揃うまで別 gate です。
+Takos 1.x local / CI-equivalent exit criteria は完了扱い。 残る release-candidate
+hygiene は ecosystem root `ROADMAP.md §7.2-7.4` (per-product progress view)
+で追跡する。 public managed offering の launch readiness は `ROADMAP.md §3.5`
+の live operator evidence / staged rehearsal が揃うまで別 gate。
 :::
 
-## 実装アーキテクチャ
+## Takos product の構成
 
-- `../takosumi/packages/kernel/src/index.ts` が `../takosumi/packages/kernel/src/api` から Hono HTTP アプリを起動し、standalone エントリポイントで kernel route を有効化します。
-- `../takosumi/packages/kernel/src/api` の公開内容。
-  - `GET /health` と `GET /capabilities`。
-  - kernel deploy route `POST /v1/deployments` (コンパイル済み Shape manifest の apply)。
-  - `/api/public/v1` 配下の Takos プロダクト gateway route は `takos/app` 側で管理しており、kernel 公開 contract としては扱いません。
-  - `takosumi-contract` のパス定数を介した署名付き internal service route。
-- `../takosumi/packages/contract` は共通 DTO と署名付き internal リクエストヘルパーを持ちます。internal 認証は method・path・timestamp・request id・actor コンテキスト・caller / audience・body digest を束ねます。
-- `../takosumi/packages/kernel/src/app_context.ts` が in-process の主要 composition point。in-memory store、構成可能な local adapter、コアサービス、deploy apply サービス、runtime materializer を配線します。
-- Runtime config と bootstrap チェックで production safety をモデル化: 安全でない production default は、storage / provider / source / secret / operator-config / 認証選択を明示しない限り reject されます。
-- ドメインモジュールは core / deploy / runtime / resources / routing / network / registry / audit / events / app-output 依存 safety / supply-chain に存在。公開モデルは「app metadata / resource outputs / registry entries / explicit grants」として記述します。
-- Takos product deploy artifacts are `takos-app` / `takos-git` / `takos-agent`。
-  local/substrate stack may also include Takosumi kernel / Takosumi Accounts /
-  takosumi-git, but they are not Takos product services.
-- worker と orchestration ヘルパーは apply job、outbox dispatch、registry sync、repair、runtime vertical slice activation、deploy-to-runtime オーケストレーション、event planning、app-output 依存 planning、change-set planning、status / readiness projection、provider operation、resource operation、rollout canary step、supply-chain 準備、usage 集計、runtime ログ、direct deploy compile、approval、backup / restore、コントロールプレーン upgrade planning、bootstrap 診断に対応。
-- Storage はトランザクション対応 in-memory driver と Postgres driver の境界の両方を持ちます。Postgres migration / statement と SQL-backed store は core / deploy / resources / registry / audit の各 store ファミリに存在。migration runner test は順序適用・dry-run レポート・チェックサム検証をカバー。Postgres smoke は optional な `npm:pg` client adapter 経由で実 DB を opt-in 検証できます。
-- provider / source / secret / auth / operator-config / queue / object-storage adapter は port として実装され、ローカル default が用意されています。kernel / plugin ABI は `../takosumi/packages/contract/src/plugin.ts` で版管理され、型付き registry・env module loader・no-I/O reference plugin が `../takosumi/packages/kernel/src/plugins` にあります。self-host / cloud 接続は plugin の責務です。
+Takos product は次の 3 nested submodule + shell-owned artifacts で構成される
+(詳細は `takos/AGENTS.md`):
+
+| Component | 役割 | Stack |
+| --- | --- | --- |
+| `app/` | user-facing app / public API gateway / OIDC consumer | Deno + Hono + Solid (frontend) |
+| `git/` | Git hosting service (Smart HTTP / source resolution) | Deno + git CLI |
+| `agent/` | agent execution service (agent loop / memory / skills) | Rust (uses `takos-agent-engine` library) |
+
+Shell-owned (`takos/` 直下):
+
+- `deploy/distributions/` — Takos distribution manifests (Cloudflare / AWS / GCP / K8s / self-hosted)
+- `deploy/helm/`, `deploy/terraform/` — k8s / IaC artifact
+- `docs/` — VitePress docs site (`docs.takos.jp`)
+- `website/` — landing site (SolidStart, `takos.jp`)
+- `scripts/` — product validator (release-gate / validate:helm / validate:distributions 等)
+
+## takos-app の実装状態
+
+- **public HTTP API** (`apps/api/`) — chat / agent / memory / space / tools の
+  primitive を公開する canonical destination
+- **OIDC consumer** — `/auth/oidc/login` / `/auth/oidc/callback` / `/auth/logout`
+  で operator account plane (Takosumi Accounts) を issuer として消費する。
+  自前 OAuth provider / `/oauth/*` route は廃止済 (Phase 1.4)
+- **app-local profile / user settings** — Account / Space membership metadata
+  と独立に local profile を持つ
+- **typed client contracts** (`packages/api-contract/`) — DTO 公開
+- **Solid frontend** (`apps/web/`) — browser UI
+- **internal RPC verification** — `x-takos-internal-secret` + session / PAT
+  を verify
+
+## takos-git の実装状態
+
+- **Git Smart HTTP hosting** — clone / push / fetch
+- **repository metadata / refs / object storage**
+- **source snapshot resolution** — Takosumi kernel への source provenance を
+  immutable snapshot として提供
+- **repository API contracts** — signed internal RPC のみ受け入れる
+- **Takos Git authorization** — signed internal actor context を verify
+
+ecosystem sibling の `takosumi-git/` (`.takosumi/` convention の canonical
+installer implementation) とは別物。 名前が紛らわしいが domain が異なる。
+
+## takos-agent の実装状態
+
+- **agent loop orchestration** — Rust 実装
+- **memory substrate** + local memory tools
+- **managed skill** 定義 / catalog 合成 / selection
+- **prompt construction** — skill prompt / system prompt
+- **model runner wiring**
+- **Takosumi control plane RPC client** — agent-control RPC で接続
+- **remote tool execution bridge**
+
+実装は `takos-agent-engine` Rust library を service process 内で利用する形。
+library 自体は別 repo (`../takos-agent-engine/`) で管理。
 
 ## 実装済みの本番相当機能
 
-- Runtime configuration は in-memory や default ローカル配線での production boot を reject しつつ、本番相当環境向けに安全な明示選択を許可します。
-- 署名付き internal 認証は `WorkerAuthzService`・workload identity・service grant チェック・private-egress policy 否認テストと連動。
-- Provider 実行は `ProviderOperationService` を介して表現され、idempotency-key リプレイ、永続化された operation 記録、成功 / 失敗の分類、再試行可能な一時障害のハンドリング、provider 失敗による activation truth 改変防止を備えます。
-- Deploy-to-runtime オーケストレーションは plan / apply、artifact 準備、runtime output materialize、status projection、要求時の artifact 準備スキップに対応。
-- supply-chain 準備は prepared artifact、mirror 決定、package 解決 digest、protected window、digest 衝突拒否、再利用検証を記録。
-- registry は同梱の digest-pinned seed、trust / revocation 記録、provider support report、revoke された trust のセキュリティブロック報告を持ちます。
-- event planning と app-output 依存 safety で、明示バインディング、曖昧出力ブロック、依存サイクル検出、breaking-change な依存先 plan、canary / shadow 挙動、external schedule の target デフォルト、queue consumer 切替プレビューをモデル化。
-- resource operation で create / bind / unbind、migration ledger、checksum ブロック、imported / shared の migration 制限、resource operation としての restore をモデル化。
-- router / status projection は commit 済み activation と観測された runtime state から導出され、canonical desired state を書き換えません。
+- **production safety**: in-memory や default ローカル配線での production boot
+  を reject。 storage / provider / source / secret / operator-config / 認証
+  選択を明示しなければ起動しない
+- **signed internal RPC**: `x-takos-internal-secret` validation +
+  `WorkerAuthzService` で service grant チェック + private-egress policy
+- **deploy artifact**: `deploy/distributions/*.json` が Cloudflare / AWS / GCP /
+  K8s / self-hosted profile を持ち、 distribution profile によって target を
+  差し替えられる
+- **Helm chart**: `deploy/helm/` が takos product の k8s deploy 用 chart 一式
 
 ## 検証済みテスト
 
-`/home/tako/Desktop/takos/takos` から実行。
+`/home/tako/Desktop/takos/takos` から実行:
 
 ```sh
-deno task check
-cd ../takosumi && deno task test
+deno task check                # doctor + 各 nested submodule の check
+deno task lint:agent-docs      # AGENTS.md ↔ 実装の整合
+deno task lint:docs            # docs site build
+deno task release-gate         # ecosystem release gate (Takos product 側)
+deno lint
+deno fmt --check
 ```
 
-Latest local evidence は ecosystem root の `deno task check:all` と `deno task check:roadmap-release-readiness`
-で確認します。2026-04-29 の kernel-only smoke ベースラインは historical freeze evidence であり、現在の test count
-は `cd ../takosumi && deno task test` を再実行して確認します。ecosystem release-gate は `cd takos && deno task release-gate`
-を正本コマンドとし、固定の test 件数はこの current-state page では pin しません。
+カバー範囲:
 
-カバー範囲。
+- **takos-app**: OIDC consumer flow / session 検証 / PAT verification /
+  internal RPC 署名 / chat / agent / memory / space / tools API surface
+- **takos-git**: Git Smart HTTP / source snapshot resolution / signed internal
+  actor context verify
+- **takos-agent**: agent loop / memory substrate / managed skill / tool bridge
+  (Rust unit tests + integration tests against mock LLM)
+- **shell validators**:
+  - `validate:distributions` — distribution manifest 各 cloud profile の
+    consistency
+  - `validate:helm` — Helm chart 構造
+  - `validate:agent-docs` — AGENTS.md の implementation 整合
+  - `validate:current-docs` — current-state.md の forward statement 検出
+  - `validate:retired-route-removal` — 廃止済 route が再導入されていない
+    こと (e.g. takos-app の `/oauth/*`)
+  - `validate:migration-safety` — DB migration の online-safety guard
+  - `validate:terraform-secrets` — Terraform secret policy
+  - `validate:legal-docs` — legal docs の consistency
+  - `validate:observability-artifacts` — observability surface
+  - `validate:patch-management` — patch management gate
+  - `validate:architecture` — architecture alignment
 
-- 署名付き internal API リクエスト生成 / 検証、ローカル actor 認証、署名付き service actor 認証。
-- public / internal route mount 動作、standalone route default、未署名 internal route の rejection。
-- 基本的な space / group 作成、owner membership、non-admin 拒否。
-- non-mutating deploy plan、immutable activation 作成、pointer 進行、`must-replan` の stale apply rejection、stale apply-worker 失敗記録。
-- memory / Postgres storage driver / store のラウンドトリップ、および migration runner の順序・dry-run・チェックサム検証。
-- runtime desired / observed state の分離、runtime vertical slice materialization、provider-output 記録、observed-state キャプチャ、route projection、status projection。
-- deploy-to-runtime のオーケストレーション (plan / apply、artifact 準備、runtime materialization、status projection)。
-- provider operation の idempotency、成功 / 失敗分類、一時障害の再試行、Docker dry-run / injected コマンド挙動、commit 済み activation truth の隔離。
-- rollout canary の activation-per-step 挙動と HTTP-only 割当 default。
-- resource create / bind / unbind、migration checksum 検証、migration 適格性制限、restore-as-resource-operation のモデル化。
-- registry resolution / trust store、trust 失効報告、bundled registry seed adapter、package support レポート、supply-chain prepared artifact の再利用 / GC 保護。
-- event store と app-output 依存 planner、明示バインディング、依存サイクル検出、breaking-change な依存先 plan、queue / external-schedule のデフォルト、canary / shadow target 挙動。
-- audit append / query / hash-chain、network report 集計、runtime agent registry と HTTP route、bootstrap adapter 選択 / 機密マスク、通知 sink、KMS / secret store、source snapshot、local / env operator config、readiness / status route、OpenAPI route inventory、direct deploy、approval、backup / restore、change-set オーケストレーション、conformance、GC / retention、runtime ログ、usage projection、コントロールプレーン upgrade planning、Redis queue adapter、S3 互換 object-storage adapter のリクエスト署名。
+最新の local evidence は `cd takos && deno task release-gate` を正本コマンド
+とする。 固定の test 件数はこの current-state page では pin しない (release-gate
+が numerical assertion の正本)。
 
 ## Smoke 状況
 
-safe-by-default smoke スクリプトは 2026-04-28 docs refresh 時点の状態です。
+Takos product 側の smoke スクリプト (`scripts/`):
 
-| Boundary                     | Default 状態                                | Real / opt-in                                                                                                                | 備考                                                                                                                                                                                                          |
-| ---------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Postgres storage / migration | Pass                                        | `TAKOS_RUN_POSTGRES_SMOKE=1` と `DATABASE_URL` で実行可能                                                                    | dry-run は 15 テーブル / 6 migration / SQL プレビューと fake `SqlClient` トランザクションパスを DB 接続なしで報告。                                                                                           |
-| Redis queue                  | Pass                                        | `TAKOS_RUN_REDIS_QUEUE_SMOKE=1` と Redis URL で実行可能                                                                      | dry-run は注入された command client 越しに `RedisQueueAdapter` の enqueue / lease / ack / 空 lease を Redis 接続なしで検証。                                                                                  |
-| S3 互換 object storage       | Pass                                        | `TAKOS_RUN_OBJECT_STORAGE_SMOKE=1` と `TAKOS_OBJECT_STORAGE_SMOKE_REAL_ENDPOINT=1` および endpoint 認証で実行可能             | dry-run は memory object storage の put / head / get / list / delete と、S3 PUT / HEAD / GET / LIST / DELETE のリクエスト署名を fetch / network なしで検証。                                                  |
-| Docker Compose ローカル      | Safe dry-run pass / real harness local pass | Real モードは `TAKOS_RUN_REAL_COMPOSE_SMOKE=1`、Docker Compose、`.env.local`、空きポート、ローカルイメージビルドが必要        | 2026-04-28 の real 実行で Postgres / Redis / MinIO / Takosumi substrate process / runtime / `takos-agent` を起動し、health endpoint を確認し、cleanup を実行。default release gate には含めません。             |
+| Boundary | Default | Real / opt-in | 備考 |
+| --- | --- | --- | --- |
+| Docker Compose ローカル | Safe dry-run | `TAKOS_RUN_REAL_COMPOSE_SMOKE=1` + Docker Compose + `.env.local` + 空きポート + ローカルイメージビルド | real 実行で Postgres / Redis / MinIO / `takos-app` / `takos-git` / `takos-agent` を起動し、 health endpoint 確認 + cleanup |
+| Helm 検証 | Pass | — | `deno task validate:helm` で chart 構造 dry-run |
+| Distribution profile | Pass | live cloud evidence は `ROADMAP.md H-19` (operator-owned) | `deno task validate:distributions` で manifest consistency |
+
+Takosumi platform 側の smoke (kernel storage / migration / queue / object-storage
+等) は sibling `../takosumi/` repo + `../takosumi/deploy/local-substrate/`
+test bed の責務であり、 ここでは扱わない。
 
 ## 実行可能コマンド
 
-ルート `deno.json` のローカル検証コマンド。
+ルート `deno.json` のローカル検証コマンド:
 
 ```sh
-deno task check
-deno task lint:agent-docs
-deno task lint:docs
-deno task release-gate
-deno lint
+deno task check                # doctor + nested check
+deno task lint:agent-docs      # AGENTS.md ↔ impl alignment
+deno task lint:docs            # VitePress build
+deno task release-gate         # product 側 release-gate
+deno task docs:build           # docs site build
+deno task docs:deploy          # Cloudflare Pages `takos-docs` → docs.takos.jp
 deno fmt --check
-deno fmt
 ```
 
-その他に便利なコマンド。
+各 nested submodule:
 
 ```sh
-cd ../takosumi && deno task check
-cd ../takosumi && deno test --allow-all packages/kernel/src/domains/deploy
-deno task validate:service-set
-deno task local:up
+cd app && deno task check && deno task test
+cd git && deno task check && deno task test
+cd agent && cargo check && cargo test
+```
+
+local Compose (Takos product full stack):
+
+```sh
+deno task local:up             # compose.local.yml 起動 (postgres + redis + takos-app + takos-git + takos-agent)
 deno task local:logs
 deno task local:down
 ```
 
-メモ。
+## Takos が依存する Takosumi platform
 
-- Takosumi のフルテスト実行は sibling kernel リポ (`cd ../takosumi && deno test --allow-all`) が所有。
-- Takosumi kernel のローカル開発は sibling `../takosumi` で行い、この shell ではローカル合成と Takos 固有 deploy artifact のみを扱う。
-- docs ゲートは `takos/deno.json` の `lint:docs` / `lint:agent-docs` / `docs:build` / `docs:deploy`。
-- ローカル Compose / Helm メタデータには Takos サービス ID と internal URL 配線を反映済み。
+Takos product は **Takosumi PaaS** の上で動く consumer。 platform 側 lifecycle
+は Takos の責務ではなく、 各 platform repo の test に委ねる:
 
-## In-memory と real の境界
+- **Takosumi kernel** (`../takosumi/`) — manifest deploy engine。
+  `POST /v1/deployments` 経由で Takos の deploy artifact を receive。
+  kernel の internal domains (`packages/kernel/src/domains/` 配下: deploy /
+  runtime / resources / routing / network / registry / audit / events /
+  app-output / supply-chain) は kernel package が所有し、 Takos product
+  からは public HTTP contract 経由でのみ触る
+- **Takosumi Accounts** (`../takosumi-cloud/packages/accounts-service/`) —
+  operator account plane。 OIDC issuer / billing / AppInstallation ledger
+- **`takosumi-git`** (`../takosumi-git/`) — `.takosumi/` convention の
+  canonical installer
+- **integration test bed** (`../takosumi/deploy/local-substrate/`) — Takosumi
+  platform の full integration を public network 依存ゼロで踏む
 
-default の runtime はローカル / in-memory です。
+Takos product は上記のいずれも内製しない。 OIDC issuer / billing / AppInstallation
+ownership / `.takosumi/` convention parsing は operator account plane および
+`takosumi-git` 側の責務。
 
-- `createInMemoryAppContext` は core / deploy / runtime / resources / registry / audit に in-memory store を使います。
-- default adapter はローカル / メモリベース: ローカル actor / 認証、memory 通知、ローカル operator config、no-op provider、メモリ暗号化 secret store、`MemoryStorageDriver`。
-- source adapter は immutable snapshot を生成。Git コマンド実行は default では dry-run、実 Git は明示的に `DenoGitCommandRunner` / runner 注入を行ったときのみ動きます。
-- ローカル Docker materialization は決定論的な Docker operation を記録し、default の dry-run runner を使用。実 Docker 実行は注入されたコマンド runner が必要です。
-- provider observed state は canonical な deploy / runtime desired state とは別にモデル化。テストでは observed drift / provider 失敗が canonical desired state や activation truth を書き換えないことを確認します。
+### kernel / plugin boundary
 
-コードとして存在するが default の配線ではない real / 本番向け境界。
-
-- `createConfiguredAppContext` と runtime config 選択は、安全でない production default を reject し、plugin-backed な外部境界を選択し、operator 選択 plugin が未登録なら fail fast します。
-- `PostgresStorageDriver`・SQL store 実装・storage migration runner・optional な `npm:pg` SQL client 生成は `StorageDriver` トランザクション境界の背後にありますが、同梱の app composition は引き続きメモリストアを使います。
-- `DenoCommandDockerRunner` と `DenoGitCommandRunner` は明示選択 / 注入時に実外部コマンドを実行できます。
-- env operator config は raw 値を露出せずに secret 参照を読めますが、本番 secret 管理は adapter 境界の作業であり、default context にデプロイ済みの secret backend は含まれません。
-- 署名付き internal service 認証、workload identity、service grant、network policy チェックは service レベルの enforcement として存在。全 mutation 境界にまたがる runtime identity の発行 / enforcement は本番統合作業として残ります。
+Takosumi kernel の domain modules (kernel が所有する core logic) と plugin
+(operator が差し替える provider / source / secret / queue / object-storage
+backend 等) の境界は **`../takosumi/`** 側 docs の正本である
+[kernel architecture page](https://github.com/tako0614/takosumi/blob/main/docs/reference/architecture/kernel.md)
+を参照。 Takos product は kernel API を public HTTP contract (`POST /v1/deployments`
+等) 経由でのみ叩き、 plugin / internal domain には直接依存しない。
+Takos product が kernel plugin 経由で持つ依存 (Postgres storage / Redis queue
+/ S3-compatible object-storage / Docker compose runner 等) は distribution
+profile 経由で operator が選択する。
 
 ## Live / provider hardening backlog
 
-以下は Takos 1.x local exit の未完条件ではなく、provider-specific live proof や managed offering evidence
-として扱う hardening backlog です。
+以下は Takos product 1.x local exit の未完条件ではなく、 release-candidate
+hygiene / live operator evidence 側で扱う backlog:
 
-- HTTP / runtime エントリポイントを明示的な本番 storage 選択・migration 実行・health / readiness チェックに接続し、in-memory app state default をやめる。
-- workload identity 発行、`ServiceGrant` lookup、entitlement チェック、mutation 境界 policy をすべての internal route / worker パスに接続する (現在は service レベルの認可 slice のみ)。
-- provider operation 永続化を full apply パスに昇格し、durable retry key、object ref、package digest、status 永続化、materialization 各段階の non-mutating な失敗挙動を備える。
-- trust 失効、provider support レポート、migration checksum ブロック、network enforcement、approval チェック、package digest チェックを単独サービス / store から plan / apply の phase 境界 enforcement に昇格する。
-- durable な resource lifecycle の本番セマンティクス (backup / restore、migration、sharing / import 制限、rollback window、provider native restore、operator 向け復旧フロー) を完成させる。
-- apply パイプラインにおける app-output / event / dependency オーケストレーション (cross-group grant、managed projection health、queue / external schedule の activation default、canary / shadow trafic の副作用制御) を完成させる。
-- 実 self-host / cloud provider / source / storage / queue / object / KMS / secret 実装を kernel plugin に移し、kernel release gate の外で plugin 固有の release gate を回す。
-- ローカル Compose / Helm のリソース名とコマンドパスを Takos プロダクトサービス + Takosumi substrate スタックに揃え続ける。
-- 残りの本番 gap に route / worker レベルの regression test が付くまで、[`acceptance-matrix.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/quality/acceptance-matrix.md) のカバレッジを広げ続ける。
+- **release-candidate hygiene**: per-product semver の Takos 0.x → 1.0 切り
+  出し。 release-gate を numerical assertion で fix し、 distribution manifest
+  の cross-cloud parity を verified にする
+- **live distribution proof**: Cloudflare / AWS / GCP / K8s 各 distribution
+  profile の live deploy evidence (`ROADMAP.md H-19`、 operator-owned)
+- **managed offering evidence**: `takosumi-cloud` 側 operator が live operator
+  evidence / staged rehearsal を揃える (`ROADMAP.md §3.5`)。 Takos product
+  自体は managed-offering-aware だが、 evidence は operator が出す
+- **chain of custody**: deploy intent log で agent が deploy intent を Git
+  commit として表現する経路 (Phase 1.7 GitOps deploy binding) は local exit
+  済、 production rotation evidence は operator-owned
+- **acceptance test coverage**:
+  [`acceptance-matrix.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/quality/acceptance-matrix.md)
+  の route / worker レベル regression test を Takos product 側 surface でも
+  維持
