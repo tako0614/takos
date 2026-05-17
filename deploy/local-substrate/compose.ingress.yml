@@ -61,7 +61,11 @@ services:
     ports:
       - '80:80'
       - '443:443'
-      - '127.0.0.1:2019:2019'
+      # Caddy admin API (2019) is intentionally NOT exposed to the host.
+      # route-registrar talks to it over the internal docker network. To
+      # poke it from the host ad-hoc, use:
+      #   docker exec local-substrate-caddy-1 caddy reload --config /etc/caddy/Caddyfile
+      # or `docker compose exec caddy curl -s localhost:2019/config/`.
     networks:
       takos-local-internal:
         aliases:
