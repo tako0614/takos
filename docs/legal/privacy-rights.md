@@ -40,9 +40,9 @@ retention window に従って削除・匿名化します。
 > が受け付けます。Takos は受領後 **5 営業日以内** に operator account plane へ forward し、forward 完了を data subject
 > に通知する SLA を負います。
 
-**Region 制約**: Export API は AppInstallation の **residency profile** を尊重し、 profile が定める primary region
+**Region 制約**: Export API は Installation の **residency profile** を尊重し、 profile が定める primary region
 内でのみ data を回収します。cross-region replication は profile の例外 ([data-residency](/legal/data-residency) 参照)
-として 記録され、export bundle は AppInstallation の primary region で生成されます。 Takosumi Account level の identity
+として 記録され、export bundle は Installation の primary region で生成されます。 Takosumi Account level の identity
 export は `operator.identity.oidc` namespace export で resolve される Takosumi Accounts 側の別 SAR endpoint
 で処理されます。
 

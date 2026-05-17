@@ -5,15 +5,15 @@
 Deployment group は複数の Shape resources を 1 つのグループとして扱います。
 ロールバックは GroupHead のポインターを過去の Deployment に戻す操作です。
 
-## AppInstallation との関係
+## Installation との関係
 
 | 階層 | 表すもの | 所有者 |
 | --- | --- | --- |
-| AppInstallation | Account に install された app 1 件 | Takosumi Accounts |
+| Installation | Account に install された app 1 件 | Takosumi Accounts |
 | Deployment group | apply された resource set の履歴 scope | Takosumi kernel |
 | Shape resource | `web-service@v1` / `worker@v1` / `database-postgres@v1` など | provider / runtime-agent |
 
-Installation は group の一種ではありません。AppInstallation ledger は ownership、
+Installation は group の一種ではありません。Installation ledger は ownership、
 billing、grant、launch token を持ち、kernel group は runtime apply の履歴を持ちます。
 
 ## 何が group で変わるか

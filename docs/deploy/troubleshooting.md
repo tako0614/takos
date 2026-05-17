@@ -26,7 +26,7 @@ takosumi-git install preview --cwd . --json
 takosumi-git install apply --cwd . ...
 ```
 
-`takosumi-git` の compile 後も placeholder が残る場合は、`.takosumi/app.yml` の
+`takosumi-git` の compile 後も placeholder が残る場合は、`.takosumi.yml` の
 binding 宣言、workflow artifact output、install params を確認してください。
 
 ### artifact digest がない
@@ -39,14 +39,14 @@ output から digest を materialize する場合は `workflowRef.target` が正
 
 ### OIDC redirect が失敗する
 
-- `.takosumi/app.yml` の `bindings.auth.redirectPaths` を確認する
+- `.takosumi.yml` の `bindings.auth.redirectPaths` を確認する
 - materialized `OIDC_REDIRECT_URI` が app の callback と一致するか確認する
 - Accounts 側の client registration と issuer URL を確認する
 
 ### launch token が redeem できない
 
 - `ACCOUNTS_BASE_URL` が install 時に materialize されているか確認する
-- `INSTALL_LAUNCH_INSTALLATION_ID` が AppInstallation id と一致するか確認する
+- `INSTALL_LAUNCH_INSTALLATION_ID` が Installation id と一致するか確認する
 - `INSTALL_LAUNCH_REDIRECT_URI` が Accounts 発行時に bind した URL
   と完全一致するか確認する (mismatch は 409)
 - `/_takosumi/launch` の handler が
@@ -57,7 +57,7 @@ output から digest を materialize する場合は `workflowRef.target` が正
 
 ## Direct deploy
 
-direct deploy では AppInstallation ledger を経由しないため、binding 自動注入や
+direct deploy では Installation ledger を経由しないため、binding 自動注入や
 permission preview はありません。operator は compiled manifest と secrets を
 自分で用意します。
 

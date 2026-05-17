@@ -62,13 +62,13 @@ store / provider secret reference として扱います。
 
 ## Install-Time Bindings
 
-`.takosumi/app.yml` の AppBinding は installer-bound です。Accounts と
+`.takosumi.yml` の AppBinding は installer-bound です。Accounts と
 takosumi-git が binding を materialize した後、compiled manifest には concrete
 env または secret ref が入ります。
 
 ```yaml
 apiVersion: app.takosumi.dev/v1
-kind: InstallableApp
+kind: App
 bindings:
   auth:
     type: identity.oidc@v1
@@ -127,9 +127,9 @@ compile 後に uppercase 正規化した env 名が衝突する場合も invalid
 | `BLOB_ENDPOINT` | object-store binding | Object store endpoint |
 | `BLOB_BUCKET` | object-store binding | Object store bucket |
 | `BASE_URL` | concrete URL or `${ref:api.url}` | public origin |
-| `TAKOS_INSTALLATION_ID` | AppInstallation id | installation id |
+| `TAKOS_INSTALLATION_ID` | Installation id | installation id |
 | `ACCOUNTS_BASE_URL` | launch-token binding | Takosumi Accounts service の base URL。`/consume` で opaque launch token を redeem する |
-| `INSTALL_LAUNCH_INSTALLATION_ID` | launch-token binding | redeem 時に渡す AppInstallation id (`inst_xxx`) |
+| `INSTALL_LAUNCH_INSTALLATION_ID` | launch-token binding | redeem 時に渡す Installation id (`inst_xxx`) |
 | `INSTALL_LAUNCH_REDIRECT_URI` | launch-token binding | Accounts が token 発行時に bind した redirect URI。redeem 時に完全一致比較 |
 | `INSTALL_LAUNCH_CONSUME_PATH` | static (default `/_takosumi/launch`) | app 側の consume handler path |
 

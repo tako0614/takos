@@ -10,10 +10,10 @@ Accounts が発行する OIDC クライアントを使って認証します。
 | 対象                                   | 管理元                           |
 | -------------------------------------- | -------------------------------- |
 | account / credential / upstream IdP    | Takosumi Accounts                |
-| billing / AppInstallation ledger       | Takosumi Accounts                |
+| billing / Installation ledger       | Takosumi Accounts                |
 | OIDC issuer / client registration      | Takosumi Accounts                |
 | Takos の app-local profile / session   | Takos app                        |
-| dedicated runtime binding / source pin | AppInstallation + RuntimeBinding |
+| dedicated runtime binding / source pin | Installation + RuntimeBinding |
 
 Keycloak / Authentik / Auth0 などを使う場合も、Takos runtime へ直接 issuer
 として 渡しません。Takosumi Accounts の upstream IdP として接続し、Takos runtime
@@ -49,7 +49,7 @@ surface は提供しません)。
 
 ## Dedicated Runtime
 
-public install 導線では、dedicated runtime も最初から AppInstallation 経由で
+public install 導線では、dedicated runtime も最初から Installation 経由で
 作成します。既に動いている dedicated runtime を後から台帳に採用する作業は、
 公開 contract ではなく private operator evidence shaping です。この公開 docs では
 手順化しません。
@@ -78,7 +78,7 @@ deno task docs:build
 rollback は backup を使った短期復旧に限定します。OIDC identity の state は
 `auth_identities` を正とします。
 
-- deploy を戻す場合も Takosumi Accounts issuer / AppInstallation ledger
+- deploy を戻す場合も Takosumi Accounts issuer / Installation ledger
   は維持する
 - user merge を取り消す場合は `auth_identities` の対象 row を削除し、次回 login
   で verified email linking をやり直す

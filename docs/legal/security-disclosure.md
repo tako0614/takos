@@ -25,7 +25,7 @@ In scope:
 - Takos Git hosting (`takos/git`)
 - Takos agent service (`takos/agent`)
 - Takosumi Accounts (`operator.identity.oidc` / `operator.billing.default`) —
-  identity / billing / AppInstallation owner; OIDC issuer, opaque launch token
+  identity / billing / Installation owner; OIDC issuer, opaque launch token
   redeem, AppGrant revocation, and pairwise OIDC subject derivation are in scope
   when Takos managed service is impacted
 - managed Takos deployment artifacts under `takos/deploy/`

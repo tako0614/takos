@@ -56,7 +56,7 @@ deno task distribute:dry-run --confirm production
 # 4. 本番へ apply (wrangler / Helm / compose のいずれかに dispatch される)
 deno task distribute:apply --confirm production
 
-# 5. Operator account-plane seed plan を生成 (identity / billing / AppInstallation owner)
+# 5. Operator account-plane seed plan を生成 (identity / billing / Installation owner)
 cd ../takosumi-cloud
 deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.example.com \

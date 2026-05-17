@@ -56,7 +56,7 @@ mkdir -p .takosumi/workflows
 ### デプロイするリソースの定義
 
 ```yaml
-# .takosumi/manifest.yml
+# .takosumi.yml
 apiVersion: "1.0"
 kind: Manifest
 metadata:
@@ -91,9 +91,9 @@ resources:
 ### アプリのメタデータと権限
 
 ```yaml
-# .takosumi/app.yml
+# .takosumi.yml
 apiVersion: app.takosumi.dev/v1
-kind: InstallableApp
+kind: App
 id: examples.my-first-app
 name: My First App
 bindings:
@@ -152,7 +152,7 @@ takosumi-git install apply \
   --deploy-token "$TAKOSUMI_DEPLOY_TOKEN"
 ```
 
-成功すると AppInstallation が `ready` になり、アプリが利用可能になります。
+成功すると Installation が `ready` になり、アプリが利用可能になります。
 
 ## 認証の仕組み
 
@@ -163,7 +163,7 @@ takosumi-git install apply \
 - **初回インストール直後**: launch token で自動的にセッションが作られるため、
   再ログイン不要でアプリが開きます
 
-OIDC の設定 (clientId, clientSecret 等) は `.takosumi/app.yml` の `bindings.auth` で
+OIDC の設定 (clientId, clientSecret 等) は `.takosumi.yml` の `bindings.auth` で
 宣言するだけで、インストール時に自動で払い出されます。
 
 詳しくは [OIDC consumer](/apps/oidc-consumer) を参照。

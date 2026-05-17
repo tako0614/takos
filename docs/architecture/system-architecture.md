@@ -24,7 +24,7 @@ Takos の product service ではありません。
 
 ## 責務の境界
 
-- ID / OIDC issuer / 課金 / AppInstallation のオーナーシップは operator account
+- ID / OIDC issuer / 課金 / Installation のオーナーシップは operator account
   plane が持ちます (リファレンス実装: Takosumi Accounts)
 - デプロイと runtime lifecycle は Takosumi kernel が持ちます
 - Git URL からのインストール、`.takosumi/` プロジェクト規約、workflow は
@@ -38,10 +38,10 @@ Takos の product service ではありません。
 Store / install UI
   -> Takosumi Accounts install preview
   -> user approval
-  -> AppInstallation create
+  -> Installation create
   -> takosumi-git fetch / build / compile
   -> takosumi kernel POST /v1/deployments
-  -> AppInstallation ready
+  -> Installation ready
 ```
 
 ## Runtime flow

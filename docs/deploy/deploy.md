@@ -7,7 +7,7 @@
 
 ## 位置づけ
 
-direct deploy は AppInstallation ledger を経由しません。binding provision、
+direct deploy は Installation ledger を経由しません。binding provision、
 permission preview、launch token、billing owner、upgrade preview は Accounts の
 install lifecycle にだけあります。direct deploy は operator が infrastructure
 検証、kernel smoke、unmanaged workload apply を行うための経路です。
@@ -66,7 +66,7 @@ reference を参照してください。
 | 状況 | 使う経路 |
 | --- | --- |
 | user が app を install する | Git / Store install |
-| bundled app lifecycle を管理する | AppInstallation |
+| bundled app lifecycle を管理する | Installation |
 | operator が kernel contract を検証する | direct manifest deploy |
 | CI が compiled manifest を apply する | `takosumi deploy <manifest>` |
 

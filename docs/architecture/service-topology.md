@@ -13,7 +13,7 @@ Takos の実装は `app/` (Web/API)、`git/` (Git ホスティング)、`agent/`
 | ------------------------- | ------: | -------------------- | ----------------------------------------------------------------------------------------------- |
 | `takos-app`               |  `8787` | `app/`               | OIDC consumer、app-local profile、Web/CLI API ゲートウェイ                                       |
 | `takosumi kernel`         |  `8788` | `../takosumi/`       | manifest deploy エンジン。compiled Shape manifest の apply / routing / resource provisioning    |
-| `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / AppInstallation |
+| `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / Installation |
 | `takos-agent`             |  `8789` | `agent/`             | エージェント実行サービス                                                                          |
 | `takos-git`               |  `8790` | `git/`               | Git ホスティング、Smart HTTP、refs、objects                                                      |
 | `postgres`                | `15432` | shell compose        | app / Takosumi / Git のローカル永続化                                                            |
@@ -28,7 +28,7 @@ Takos の実装は `app/` (Web/API)、`git/` (Git ホスティング)、`agent/`
 - `takos-agent` は Takos の agent workload を実行し、必要なときに kernel の
   runtime control ports と通信します
 - `takos-app` は app 固有のデータを保存しますが、account / 課金 / OIDC issuer /
-  AppInstallation のオーナーシップは持ちません
+  Installation のオーナーシップは持ちません
 - ローカルでのサービスディスカバリは `TAKOSUMI_INTERNAL_URL`、
   `TAKOS_GIT_INTERNAL_URL`、`TAKOS_AGENT_INTERNAL_URL` を fallback として使います
 - `TAKOS_INTERNAL_SERVICE_SECRET` はローカル compose だけで共有されます。app の
@@ -38,9 +38,9 @@ Takos の実装は `app/` (Web/API)、`git/` (Git ホスティング)、`agent/`
 ## 責務の境界
 
 - デプロイと runtime lifecycle のオーナーシップは 3 つの sibling product に分かれます:
-  - **インストールパイプライン / `.takosumi/app.yml` parse / workflow / manifest compile** → `takosumi-git`
+  - **インストールパイプライン / `.takosumi.yml` parse / workflow / manifest compile** → `takosumi-git`
   - **compiled manifest の apply / plan / destroy / routing / resource provisioning** → `takosumi kernel`
-  - **account / 課金 / OIDC issuer / AppInstallation 台帳** → Takosumi Accounts
+  - **account / 課金 / OIDC issuer / Installation 台帳** → Takosumi Accounts
 - shell compose にスタンドアロンの deploy/runtime サービスを足さないでください
 - 本番・staging の deploy 設定は `takos-private` が管理します。この shell は
   ローカル合成のみを扱います

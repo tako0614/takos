@@ -1,179 +1,107 @@
-# デプロイマニフェスト (`.takosumi/manifest.yml`)
+# デプロイマニフェスト (`.takosumi.yml`)
 
-> このページでわかること: `.takosumi/manifest.yml` の書き方と各フィールドの意味。
+> このページでわかること: `.takosumi.yml` の書き方と各フィールドの意味。
 
-`.takosumi/` には 2 つのマニフェストがあります。
+source root に置く `.takosumi.yml` (= AppSpec) が唯一のマニフェストです。 1 ファイルで
+install + deploy + rollback まで動きます。
 
-| file | owner | role |
-| --- | --- | --- |
-| `.takosumi/app.yml` | takosumi-git / Takosumi Accounts | install metadata、binding、permission、publisher、upgrade policy |
-| `.takosumi/manifest.yml` | takosumi-git compiler | compute / storage / route の authoring manifest |
-
-kernel に届くのは compiled Shape manifest だけです。field 定義は
-[Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)、
-install metadata は
-[App YAML Spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
+仕様の正本は [AppSpec
+spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md) と
+[Component Kind
+Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/component-kind-catalog.md)
 を参照してください。
 
 ## 基本原則
 
-- `apiVersion: "1.0"` と `kind: Manifest` は必須
-- runtime-bearing unit は `resources[]` の Shape resource として書く
-- workflow / build / Git convention は `takosumi-git` が扱う
-- install-time binding は `.takosumi/app.yml` に書く
-- kernel に届く compiled manifest には concrete value、resource ref、secret ref だけを残す
+- `apiVersion: takosumi.dev/v1` と `kind: App` は必須
+- runtime-bearing unit は `components.<name>` として書き、 `kind` を 5 種
+  (`worker` / `postgres` / `object-store` / `oidc` / `custom-domain`) から選ぶ
+- workflow / CI / cron は AppSpec に内包しない (= `component.build` の最小 recipe のみ表現可)
+- component 間の依存は `use:` edge で構造的に宣言する (= 文字列 placeholder は廃止)
 
 ## Worker
 
 ```yaml
-apiVersion: "1.0"
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
-  name: simple-worker
-resources:
-  - shape: worker@v1
-    name: web
-    provider: "@takos/cloudflare-workers"
-    spec:
-      artifact:
-        kind: js-bundle
-        hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
-      routes:
-        - simple-worker.example.com/*
-    workflowRef:
-      file: build.yml
-      job: build-worker
-      artifact: bundle
-      target: spec.artifact.hash
+  id: com.example.simple-worker
+  name: Simple Worker
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - simple-worker.example.com/*
 ```
 
-`workflowRef` は takosumi-git の authoring extension です。workflow が artifact
-digest を出力すると、takosumi-git が `spec.artifact.hash` に書き込み、
-`workflowRef` を削除してから kernel に送ります。
-
-## Web Service
+## DB 付き Worker
 
 ```yaml
-apiVersion: "1.0"
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
-  name: api
-resources:
-  - shape: web-service@v1
-    name: api
-    provider: "@takos/aws-fargate"
+  id: com.example.api
+  name: API
+components:
+  api:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - api.example.com/*
+    use:
+      db:
+        env: DATABASE_URL
+  db:
+    kind: postgres
     spec:
-      image: ghcr.io/example/api@sha256:0123456789abcdef
-      port: 8080
-      scale: { min: 1, max: 3 }
-      env:
-        LOG_LEVEL: info
+      class: standard
 ```
 
-portable な manifest では digest-pinned image URI を使います。
-
-## Resource Wiring
-
-resource 間の dependency は `${ref:...}` / `${secret-ref:...}` で表現します。
+## OIDC consumer
 
 ```yaml
-apiVersion: "1.0"
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
-  name: api-with-db
-resources:
-  - shape: database-postgres@v1
-    name: db
-    provider: "@takos/aws-rds"
-    spec:
-      version: "16"
-      size: small
-
-  - shape: web-service@v1
-    name: api
-    provider: "@takos/aws-fargate"
-    spec:
-      image: ghcr.io/example/api@sha256:0123456789abcdef
-      port: 8080
-      scale: { min: 1, max: 3 }
-      env:
-        DATABASE_URL: ${ref:db.connectionString}
-        DB_PASSWORD: ${secret-ref:db.passwordSecretRef}
-```
-
-## Public Entry Points
-
-入口は Shape spec か `custom-domain@v1` resource に書きます。
-
-```yaml
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: api-with-domain
-resources:
-  - shape: web-service@v1
-    name: api
-    provider: "@takos/aws-fargate"
-    spec:
-      image: ghcr.io/example/api@sha256:0123456789abcdef
-      port: 8080
-      scale: { min: 1, max: 3 }
-
-  - shape: custom-domain@v1
-    name: api-domain
-    provider: "@takos/cloudflare-dns"
-    spec:
-      name: api.example.com
-      target: ${ref:api.url}
-      certificate:
-        kind: auto
-```
-
-## Install Bindings
-
-OIDC、database allocation、object storage allocation、domain binding、launch token、
-deploy intent は `.takosumi/app.yml` の `bindings:` に宣言します。
-
-```yaml
-apiVersion: app.takosumi.dev/v1
-kind: InstallableApp
-bindings:
+  id: com.example.notes
+  name: Notes
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - /
+    use:
+      auth:
+        mount: oidc
   auth:
-    type: identity.oidc@v1
-    required: true
+    kind: oidc
     redirectPaths:
-      - /auth/oidc/callback
+      - /api/auth/callback
+    scopes: [openid, profile, email]
+
+interfaces:
+  launch:
+    target: web
+    path: /api/auth/login
+  health:
+    target: web
+    path: /healthz
 ```
 
-Accounts / takosumi-git が binding を materialize した後、compiled manifest には
-concrete env または secret ref が入ります。
+`use: { mount: oidc }` が宣言されると、 Installation 作成時に Takosumi Accounts が
+per-Installation OIDC client を発行し、 `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
+`OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS` を worker の env に inject します。
 
-## Apply Flow
+## 関連ページ
 
-```bash
-takosumi-git install preview --cwd . --json
-takosumi-git install apply \
-  --cwd . \
-  --accounts-url "$TAKOSUMI_ACCOUNTS_URL" \
-  --account-id "$TAKOSUMI_ACCOUNT_ID" \
-  --space-id "$TAKOSUMI_SPACE_ID" \
-  --subject "$TAKOSUMI_SUBJECT" \
-  --source-commit "$SOURCE_COMMIT" \
-  --runtime-base-url "$RUNTIME_BASE_URL" \
-  --endpoint "$TAKOSUMI_ENDPOINT" \
-  --deploy-token "$TAKOSUMI_DEPLOY_TOKEN"
-```
-
-operator が compiled manifest を直接 apply する場合は explicit path を渡します。
-
-```bash
-takosumi deploy ./compiled-manifest.yml --remote "$TAKOSUMI_ENDPOINT"
-```
-
-## Next
-
-- [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
-- [App YAML Spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
-- [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
-- [Routes](/deploy/routes)
+- [AppSpec spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [Component Kind Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/component-kind-catalog.md)
+- [Installer API (5 endpoint)](https://github.com/tako0614/takosumi/blob/master/docs/reference/installer-api.md)

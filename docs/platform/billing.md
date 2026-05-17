@@ -11,7 +11,7 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
   に紐づく
 - Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort
   に報告する立場
-- アプリの利用量は AppInstallation 単位で計上
+- アプリの利用量は Installation 単位で計上
 
 ::: warning Public paid access
 このページの Plus / Pay As You Go と Stripe Checkout は operator account plane の current contract
@@ -332,14 +332,14 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 ## API 一覧
 
 current `takosumi-cloud` Accounts reference implementation の billing HTTP
-surface は、Stripe checkout / webhook と AppInstallation scoped usage report
+surface は、Stripe checkout / webhook と Installation scoped usage report
 ingest です。
 
 | エンドポイント                                      | メソッド | 説明                                                                                         |
 | --------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
 | `/v1/billing/stripe/checkout`                       | POST     | Stripe Checkout session 作成                                                                 |
 | `/v1/billing/stripe/webhook`                        | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                  |
-| `/v1/installations/{id}/billing/usage-reports`      | POST     | AppInstallation OIDC access token + `billing.usage.report` AppGrant で保護された使用量 report |
+| `/v1/installations/{id}/billing/usage-reports`      | POST     | Installation OIDC access token + `billing.usage.report` AppGrant で保護された使用量 report |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。
