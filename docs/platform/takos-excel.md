@@ -36,35 +36,37 @@ single worker (web) 構成。
 
 ## App Metadata And Bindings
 
-launcher / MCP / file handler は kernel manifest の `publications[]` ではなく、
-Takos app catalog / runtime registry の metadata として登録します。workload
-自体は `.takosumi/manifest.yml` の Shape resource で deploy します。
+`.takosumi/app.yml` (InstallableApp v1) は app catalog metadata + bindings +
+install hooks を宣言します。 launcher icon / display title / category 等の UI
+metadata は YAML field ではなく、 install 時に Takos app catalog publications
+row の `display` フィールドとして登録されます。 MCP endpoint と file handler は
+publications row の `spec` field / Takos storage management の mount 経由で
+登録され、 install YAML には現れません。
 
 ```yaml
-launcher:
-  name: excel-ui
-  title: Excel
-  url: ${ref:web.url}/
-mcp:
-  endpoints:
-    - name: excel-mcp
-      title: Excel MCP
-      transport: streamable-http
-      url: ${ref:web.url}/mcp
-      auth:
-        kind: bearer
-        tokenRef: mcp-auth-token
-fileHandlers:
-  - name: excel-file-handler
-    title: Excel
-    url: ${ref:web.url}/files/:id
-    mimeTypes:
-      - application/vnd.takos.excel+json
-    extensions:
-      - .takossheet
+apiVersion: app.takosumi.dev/v1
+kind: InstallableApp
+metadata:
+  id: jp.takos.excel
+  name: Takos Excel
+  description: Spreadsheet editor with formulas and a Streamable HTTP MCP server.
+  publisher: takos
+  homepage: https://github.com/tako0614/takos-excel
+source:
+  git: https://github.com/tako0614/takos-excel.git
+  ref: v0.1.2
+entry:
+  manifest: .takosumi/manifest.yml
+runtime:
+  modes:
+    - shared-cell
+    - dedicated
+    - self-hosted
 ```
 
-OIDC sign-in は `.takosumi/app.yml` の `identity.oidc@v1` AppBinding で宣言する
+workload 自体は `.takosumi/manifest.yml` の Shape resource (`worker@v1` 等)
+で deploy します。 OIDC sign-in は `.takosumi/app.yml` の bindings.auth で
+`identity.oidc@v1` AppBinding として宣言します
 ([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
 /
 [`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
@@ -81,6 +83,11 @@ bindings:
       - openid
       - profile
       - email
+  spreadsheets:
+    type: object-store.s3-compatible@v1
+    required: true
+    plan: standard
+    lifecycleDays: 0
 ```
 
 UI と `/mcp` は同じ worker にまとめて配置します。MCP registry には bearer
