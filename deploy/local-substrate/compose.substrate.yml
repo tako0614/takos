@@ -9,7 +9,6 @@
 
 services:
   # ---- 共通 storage / queue ----
-
   substrate-postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -20,7 +19,7 @@ services:
     volumes:
       - substrate-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U takos -d takos_app"]
+      test: ['CMD-SHELL', 'pg_isready -U takos -d takos_app']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -31,7 +30,7 @@ services:
 
   substrate-postgres-init:
     image: postgres:16-alpine
-    restart: "no"
+    restart: 'no'
     depends_on:
       substrate-postgres:
         condition: service_healthy
@@ -41,11 +40,11 @@ services:
       - /bin/sh
       - -c
       - |
-        for db in takosumi takosumi_accounts takos_git; do
-          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname='$$db'" \
-            | grep -q 1 \
-            || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE $$db"
-        done
+          for db in takosumi takosumi_accounts takos_git; do
+            psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname='$$db'" \
+              | grep -q 1 \
+              || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE $$db"
+          done
     networks:
       - takos-local-internal
 
@@ -55,7 +54,7 @@ services:
     volumes:
       - substrate-redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      test: ['CMD-SHELL', 'redis-cli ping | grep -q PONG']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -74,7 +73,7 @@ services:
     volumes:
       - substrate-minio-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "test -f /data/.minio.sys/format.json"]
+      test: ['CMD-SHELL', 'test -f /data/.minio.sys/format.json']
       interval: 5s
       timeout: 3s
       retries: 30
@@ -88,15 +87,15 @@ services:
     depends_on:
       substrate-minio:
         condition: service_healthy
-    restart: "no"
+    restart: 'no'
     entrypoint:
       - /bin/sh
       - -c
       - |
-        until mc alias set takos http://minio:9000 \
-          "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done
-        mc mb --ignore-existing takos/takosumi
-        mc mb --ignore-existing takos/takos-app
+          until mc alias set takos http://minio:9000 \
+            "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done
+          mc mb --ignore-existing takos/takosumi
+          mc mb --ignore-existing takos/takos-app
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-takos}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-takos-minio-pw}
@@ -118,7 +117,7 @@ services:
       - -A
       - src/server.ts
     environment:
-      PORT: "8787"
+      PORT: '8787'
       TAKOSUMI_ACCOUNTS_HOSTNAME: 0.0.0.0
       TAKOSUMI_ACCOUNTS_ISSUER: https://accounts.takos.test
       TAKOSUMI_ACCOUNTS_DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi_accounts
@@ -149,7 +148,7 @@ services:
   # The image is a thin overlay on denoland/deno that adds docker CLI so
   # the embedded selfhost-docker-compose connector can spawn `docker compose`.
   kernel:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     build:
       context: .
       dockerfile: wrappers/Dockerfile.kernel
@@ -170,14 +169,14 @@ services:
       - /workspace/deno.json
       - /wrappers/kernel-with-embedded-agent.ts
     environment:
-      PORT: "8788"
+      PORT: '8788'
       TAKOSUMI_ENVIRONMENT: development
       TAKOSUMI_DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi
       DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi
       TAKOSUMI_DEPLOY_TOKEN: ${TAKOSUMI_DEPLOY_TOKEN:-local-substrate-deploy-token}
       TAKOSUMI_INTERNAL_API_SECRET: ${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}
-      TAKOSUMI_DEV_MODE: "1"
-      TAKOSUMI_DB_AUTO_MIGRATE: "true"
+      TAKOSUMI_DEV_MODE: '1'
+      TAKOSUMI_DB_AUTO_MIGRATE: 'true'
       # Selfhost provider config (consumed by embedded runtime-agent)
       TAKOSUMI_SELFHOSTED_OBJECT_STORE_ENDPOINT: http://minio:9000
       TAKOSUMI_SELFHOSTED_DOCKER_SOCKET: /var/run/docker.sock
@@ -212,16 +211,16 @@ services:
   # When @takos/takosumi-kernel lands lazy-init + a D1 adapter, replace
   # this stub. Tracked in TODO-SMOKE.md.
   kernel-workers:
-    profiles: ["workers"]
+    profiles: ['workers']
     image: node:22-alpine
-    restart: "no"
+    restart: 'no'
     command:
       - sh
       - -c
       - |
-        echo "kernel-workers: upstream needs D1 adapter — see TODO-SMOKE.md"
-        echo "(takosumi-cloud-worker is the workerd code path that smoke covers)"
-        exit 0
+          echo "kernel-workers: upstream needs D1 adapter — see TODO-SMOKE.md"
+          echo "(takosumi-cloud-worker is the workerd code path that smoke covers)"
+          exit 0
     networks:
       - takos-local-internal
 
@@ -242,9 +241,9 @@ services:
       accounts:
         condition: service_healthy
     working_dir: /workspace/apps/control
-    command: ["deno", "task", "dev:local:web"]
+    command: ['deno', 'task', 'dev:local:web']
     environment:
-      PORT: "8787"
+      PORT: '8787'
       ADMIN_DOMAIN: app.takos.test
       TENANT_BASE_DOMAIN: app.takos.test
       AUTH_PUBLIC_BASE_URL: https://app.takos.test
@@ -282,16 +281,16 @@ services:
       substrate-postgres-init:
         condition: service_completed_successfully
     working_dir: /workspace
-    command: ["deno", "task", "dev"]
+    command: ['deno', 'task', 'dev']
     environment:
-      PORT: "8790"
+      PORT: '8790'
       TAKOS_GIT_INTERNAL_URL: http://takos-git:8790
       TAKOS_INTERNAL_SERVICE_SECRET: ${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}
       TAKOS_GIT_REPOSITORY_ROOT: /var/lib/takos-git/repositories
       TAKOS_GIT_DATABASE_URL: sqlite:///var/lib/takos-git/repositories/.takos/git.sqlite
-      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: safe.directory
-      GIT_CONFIG_VALUE_0: "*"
+      GIT_CONFIG_VALUE_0: '*'
     volumes:
       - ../../git:/workspace
       - takos-git-node-modules:/workspace/node_modules
@@ -303,66 +302,66 @@ services:
 
   # ---- takosumi landing (SolidStart, mirrors takosumi.com root) ----
   takosumi-website-build:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: node:22-slim
-    restart: "no"
+    restart: 'no'
     working_dir: /website
     command:
       - sh
       - -c
       - |
-        if [ ! -d node_modules ]; then
-          npm install --no-fund --no-audit
-        fi
-        npm run build
+          if [ ! -d node_modules ]; then
+            npm install --no-fund --no-audit
+          fi
+          npm run build
     volumes:
       - ../../../takosumi/website:/website
 
   # ---- takosumi docs (VitePress, mirrors takosumi.com/docs/) ----
   takosumi-docs-build:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     # Debian-based (not alpine) — vitepress / rollup pull glibc-flavored
     # native binaries; alpine + musl breaks the install.
     image: node:22-slim
-    restart: "no"
+    restart: 'no'
     working_dir: /docs
     command:
       - sh
       - -c
       - |
-        # vitepress needs git for lastUpdated metadata, and may need
-        # rebuilt native modules if the host's node_modules were from a
-        # different libc.
-        apt-get update -qq && apt-get install -y --no-install-recommends git ca-certificates >/dev/null
-        if [ -f node_modules/rollup/dist/native.js ] && \
-           ! ldd node_modules/rollup/dist/native.js >/dev/null 2>&1; then
-          rm -rf node_modules
-        fi
-        if [ ! -d node_modules ]; then
-          npm install --no-fund --no-audit
-        fi
-        npm run build
+          # vitepress needs git for lastUpdated metadata, and may need
+          # rebuilt native modules if the host's node_modules were from a
+          # different libc.
+          apt-get update -qq && apt-get install -y --no-install-recommends git ca-certificates >/dev/null
+          if [ -f node_modules/rollup/dist/native.js ] && \
+             ! ldd node_modules/rollup/dist/native.js >/dev/null 2>&1; then
+            rm -rf node_modules
+          fi
+          if [ ! -d node_modules ]; then
+            npm install --no-fund --no-audit
+          fi
+          npm run build
     volumes:
       - ../../../takosumi/docs:/docs
 
   # ---- takos landing (SolidStart, mirrors takos.jp root) ----
   takos-website-build:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: node:22-slim
-    restart: "no"
+    restart: 'no'
     working_dir: /website
     command:
       - sh
       - -c
       - |
-        if [ ! -d node_modules ]; then
-          npm install --no-fund --no-audit
-        fi
-        # Point the cloud-install CTA at the local-substrate cloud mirror
-        # instead of cloud.takosumi.com so links work end-to-end in the
-        # local test bed.
-        export VITE_CLOUD_INSTALL_URL="https://cloud.takosumi.test/apps/install?git=https%3A%2F%2Fgithub.com%2Ftako0614%2Ftakos.git&ref=main&mode=shared-cell&autopreview=1"
-        npm run build
+          if [ ! -d node_modules ]; then
+            npm install --no-fund --no-audit
+          fi
+          # Point the cloud-install CTA at the local-substrate cloud mirror
+          # instead of cloud.takosumi.com so links work end-to-end in the
+          # local test bed.
+          export VITE_CLOUD_INSTALL_URL="https://cloud.takosumi.test/apps/install?git=https%3A%2F%2Fgithub.com%2Ftako0614%2Ftakos.git&ref=main&mode=shared-cell&autopreview=1"
+          npm run build
     volumes:
       - ../../../takos/website:/website
 
@@ -371,10 +370,10 @@ services:
   # install wizard can complete preview → install end-to-end without a real
   # git mirror behind it.
   install-preview-mock:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: denoland/deno:alpine-2.1.4
     restart: unless-stopped
-    command: ["run", "--allow-net", "--allow-env=PORT", "--allow-read=/srv", "/srv/main.ts"]
+    command: ['run', '--allow-net', '--allow-env=PORT', '--allow-read=/srv', '/srv/main.ts']
     volumes:
       - ./install-preview-mock/main.ts:/srv/main.ts:ro
       - ./install-preview-mock/fixtures:/srv/fixtures:ro
@@ -392,21 +391,21 @@ services:
   #   2. collector forwards to Jaeger at jaeger:4317 (OTLP) / 14250 (jaeger)
   #   3. Jaeger UI at https://jaeger.takos.test/ shows the spans
   jaeger:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: jaegertracing/jaeger:2.4.0
     restart: unless-stopped
     environment:
-      COLLECTOR_OTLP_ENABLED: "true"
+      COLLECTOR_OTLP_ENABLED: 'true'
     networks:
       takos-local-internal:
         aliases:
           - jaeger
 
   otel-collector:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: otel/opentelemetry-collector-contrib:0.118.0
     restart: unless-stopped
-    command: ["--config=/etc/otelcol/config.yaml"]
+    command: ['--config=/etc/otelcol/config.yaml']
     depends_on:
       jaeger:
         condition: service_started
@@ -423,12 +422,12 @@ services:
   # the smoke can assert the bytes arrived. Web UI at
   # https://mailpit.takos.test/, SMTP at mailpit:1025 (in-network).
   mailpit:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: axllent/mailpit:latest
     restart: unless-stopped
     environment:
-      MP_SMTP_AUTH_ACCEPT_ANY: "1"
-      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+      MP_SMTP_AUTH_ACCEPT_ANY: '1'
+      MP_SMTP_AUTH_ALLOW_INSECURE: '1'
     networks:
       takos-local-internal:
         aliases:
@@ -439,10 +438,10 @@ services:
   # cloud sign-in flow (Google / GitHub button) completes without external
   # network. Reachable from browser + worker via Caddy at oauth-mock.test.
   oauth-mock:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: denoland/deno:alpine-2.1.4
     restart: unless-stopped
-    command: ["run", "--allow-net", "--allow-env=PORT", "/srv/main.ts"]
+    command: ['run', '--allow-net', '--allow-env=PORT', '/srv/main.ts']
     volumes:
       - ./oauth-mock/main.ts:/srv/main.ts:ro
     networks:
@@ -457,7 +456,7 @@ services:
   # exercise depends on signup endpoint surface that yurucommu currently
   # gates; smoke does what it can and documents the rest as deferred.
   yurucommu-a:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: denoland/deno:debian-2.7.10
     restart: unless-stopped
     working_dir: /workspace
@@ -465,18 +464,18 @@ services:
       - sh
       - -c
       - |
-        if ! command -v sqlite3 >/dev/null 2>&1; then
-          apt-get update -qq && apt-get install -y -qq libsqlite3-dev sqlite3 >/dev/null
-        fi
-        # deno x/sqlite3 dlopen's libsqlite3.so directly (not .so.0).
-        ln -sf libsqlite3.so.0 /usr/lib/x86_64-linux-gnu/libsqlite3.so 2>/dev/null || true
-        mkdir -p /data/storage
-        deno run -A npm:drizzle-kit push --force >/dev/null 2>&1 || true
-        # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
-        # in deno.json doesn't include it; pass directly here).
-        exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
+          if ! command -v sqlite3 >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq libsqlite3-dev sqlite3 >/dev/null
+          fi
+          # deno x/sqlite3 dlopen's libsqlite3.so directly (not .so.0).
+          ln -sf libsqlite3.so.0 /usr/lib/x86_64-linux-gnu/libsqlite3.so 2>/dev/null || true
+          mkdir -p /data/storage
+          deno run -A npm:drizzle-kit push --force >/dev/null 2>&1 || true
+          # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
+          # in deno.json doesn't include it; pass directly here).
+          exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
     environment:
-      PORT: "8791"
+      PORT: '8791'
       APP_URL: https://inst-a.takos.test
       DATABASE_PATH: /data/yurucommu.db
       STORAGE_PATH: /data/storage
@@ -492,7 +491,7 @@ services:
           - inst-a.takos.test
 
   yurucommu-b:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: denoland/deno:debian-2.7.10
     restart: unless-stopped
     working_dir: /workspace
@@ -500,18 +499,18 @@ services:
       - sh
       - -c
       - |
-        if ! command -v sqlite3 >/dev/null 2>&1; then
-          apt-get update -qq && apt-get install -y -qq libsqlite3-dev sqlite3 >/dev/null
-        fi
-        # deno x/sqlite3 dlopen's libsqlite3.so directly (not .so.0).
-        ln -sf libsqlite3.so.0 /usr/lib/x86_64-linux-gnu/libsqlite3.so 2>/dev/null || true
-        mkdir -p /data/storage
-        deno run -A npm:drizzle-kit push --force >/dev/null 2>&1 || true
-        # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
-        # in deno.json doesn't include it; pass directly here).
-        exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
+          if ! command -v sqlite3 >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq libsqlite3-dev sqlite3 >/dev/null
+          fi
+          # deno x/sqlite3 dlopen's libsqlite3.so directly (not .so.0).
+          ln -sf libsqlite3.so.0 /usr/lib/x86_64-linux-gnu/libsqlite3.so 2>/dev/null || true
+          mkdir -p /data/storage
+          deno run -A npm:drizzle-kit push --force >/dev/null 2>&1 || true
+          # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
+          # in deno.json doesn't include it; pass directly here).
+          exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
     environment:
-      PORT: "8791"
+      PORT: '8791'
       APP_URL: https://inst-b.takos.test
       DATABASE_PATH: /data/yurucommu.db
       STORAGE_PATH: /data/storage
@@ -531,51 +530,51 @@ services:
   # `docker compose up` shows yurucommu in the topology summary even
   # though no work runs.
   yurucommu-site-noop:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: alpine:3.20
-    restart: "no"
-    command: ["sh", "-c", "echo 'yurucommu site is static — no build needed'"]
+    restart: 'no'
+    command: ['sh', '-c', "echo 'yurucommu site is static — no build needed'"]
     volumes:
       - ../../../yurucommu/site:/site:ro
 
   # ---- takosumi-cloud dashboard SPA (mirrors cloud.takosumi.com root) ----
   takosumi-cloud-dashboard-build:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: node:22-slim
-    restart: "no"
+    restart: 'no'
     working_dir: /dashboard
     command:
       - sh
       - -c
       - |
-        if [ ! -d node_modules ]; then
-          npm install --no-fund --no-audit
-        fi
-        npm run build
+          if [ ! -d node_modules ]; then
+            npm install --no-fund --no-audit
+          fi
+          npm run build
     volumes:
       - ../../../takosumi-cloud/packages/dashboard-ui:/dashboard
 
   # ---- takosumi-cloud Worker (mirrors cloud.takosumi.com on Cloudflare Workers) ----
   takosumi-cloud-worker-build:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     image: denoland/deno:2.7.10
-    restart: "no"
+    restart: 'no'
     working_dir: /work
     command:
       - sh
       - -c
       - |
-        mkdir -p deploy/cloudflare/.wrangler/dist
-        deno bundle \
-          --config deploy/cloudflare/deno.json \
-          --platform browser \
-          deploy/cloudflare/src/worker.ts \
-          -o deploy/cloudflare/.wrangler/dist/takosumi-cloud-accounts-worker.mjs
+          mkdir -p deploy/cloudflare/.wrangler/dist
+          deno bundle \
+            --config deploy/cloudflare/deno.json \
+            --platform browser \
+            deploy/cloudflare/src/worker.ts \
+            -o deploy/cloudflare/.wrangler/dist/takosumi-cloud-accounts-worker.mjs
     volumes:
       - ../../../takosumi-cloud:/work
 
   takosumi-cloud-worker:
-    profiles: ["postgres"]
+    profiles: ['postgres']
     build:
       context: .
       dockerfile: wrappers/Dockerfile.takosumi-cloud-worker
@@ -588,7 +587,7 @@ services:
       oauth-mock:
         condition: service_started
     working_dir: /app
-    command: ["node", "/app/runner.mjs"]
+    command: ['node', '/app/runner.mjs']
     # All ~30 env vars live in env/takosumi-cloud-worker.env so the compose
     # service block stays readable. Inline-only deltas would go here.
     env_file:
@@ -612,12 +611,12 @@ services:
       kernel:
         condition: service_healthy
     working_dir: /app
-    command: ["deno", "task", "start"]
+    command: ['deno', 'task', 'start']
     environment:
       KERNEL_URL: http://kernel:8788
       CADDY_ADMIN_URL: http://caddy:2019
       KERNEL_DEPLOY_TOKEN: ${TAKOSUMI_DEPLOY_TOKEN:-local-substrate-deploy-token}
-      POLL_INTERVAL_MS: "5000"
+      POLL_INTERVAL_MS: '5000'
     volumes:
       - ./route-registrar:/app:ro
     networks:

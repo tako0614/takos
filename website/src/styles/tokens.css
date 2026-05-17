@@ -16,7 +16,7 @@
   --tg-code-bg: #f5f5f5;
   --tg-code-fg: #0a0a0a;
 
-  --tg-accent: #dc2626;          /* 朱 red */
+  --tg-accent: #dc2626; /* 朱 red */
   --tg-accent-hover: #b91c1c;
   --tg-accent-fg: #ffffff;
   --tg-accent-soft: #fef2f2;
@@ -44,12 +44,16 @@
 
   /* Typography */
   --tg-font-body:
-    "Bricolage Grotesque Variable", "Bricolage Grotesque",
-    -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
-    "Yu Gothic UI", "Segoe UI", Roboto, sans-serif;
-  --tg-font-mono:
-    "JetBrains Mono Variable", "JetBrains Mono",
-    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    'Bricolage Grotesque Variable',
+    'Bricolage Grotesque',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Hiragino Kaku Gothic ProN',
+    'Yu Gothic UI',
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  --tg-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --tg-font-display: var(--tg-font-body);
 
   --tg-fs-xs: 0.78rem;
@@ -85,7 +89,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme='light']) {
     --tg-bg: #0a0a0a;
     --tg-bg-elev: #141414;
     --tg-bg-subtle: #1a1a1a;
@@ -112,7 +116,7 @@
   }
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   --tg-bg: #0a0a0a;
   --tg-bg-elev: #141414;
   --tg-bg-subtle: #1a1a1a;

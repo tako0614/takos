@@ -7,5 +7,12 @@
     </linearGradient>
   </defs>
   <path d="M24 4 C18 16, 8 22, 8 31 C8 39, 15 44, 24 44 C33 44, 40 39, 40 31 C40 22, 30 16, 24 4 Z" fill="url(#g)" />
-  <path d="M30 30 a6 6 0 1 1 -10 -3 a4 4 0 1 1 7 1.5" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.92" />
+  <path
+    d="M30 30 a6 6 0 1 1 -10 -3 a4 4 0 1 1 7 1.5"
+    stroke="#ffffff"
+    stroke-width="1.6"
+    stroke-linecap="round"
+    fill="none"
+    opacity="0.92"
+  />
 </svg>

@@ -104,16 +104,16 @@ sudo bash deploy/local-substrate/scripts/ca-install.sh
 
 最後に手動 verification した日付を以下に記録:
 
-| 日付       | Chrome     | Firefox (snap) | 確認者       | 環境                           | メモ |
-| ---------- | ---------- | -------------- | ------------ | ------------------------------ | ---- |
-| _未確認_   | _-_        | _-_            | _-_          | _-_                            | _CI (.github/workflows/local-substrate-smoke.yml) で毎 PR 自動実行されている (smoke + dashboard-ui-playwright job)。 ローカル目視は別途要_ |
+| 日付     | Chrome | Firefox (snap) | 確認者 | 環境 | メモ                                                                                                                                       |
+| -------- | ------ | -------------- | ------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| _未確認_ | _-_    | _-_            | _-_    | _-_  | _CI (.github/workflows/local-substrate-smoke.yml) で毎 PR 自動実行されている (smoke + dashboard-ui-playwright job)。 ローカル目視は別途要_ |
 
 CI で自動検証されるパス:
 
 - ecosystem-root の `.github/workflows/local-substrate-smoke.yml`
   - `smoke` job: `up.sh → sudo bash scripts/ca-install.sh → bash scripts/smoke.sh`
-  - `dashboard-ui-playwright` job: 同 install + Playwright が **`ignoreHTTPSErrors=false`** で
-    Chromium が Pebble 経由の cert を NSS DB から validate するかを assert
+  - `dashboard-ui-playwright` job: 同 install + Playwright が **`ignoreHTTPSErrors=false`** で Chromium が Pebble 経由の
+    cert を NSS DB から validate するかを assert
   - `dashboard-ui-vitest` job: COSE/JWK unit test
 
 ローカル目視は dev iteration の中で実行し、 上記 table に行追加して commit する。

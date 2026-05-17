@@ -13,7 +13,7 @@ spec:
       shape:
         id: web-service
         version: v1
-      provider: "@takos/kubernetes-k3s-deployment"
+      provider: '@takos/kubernetes-k3s-deployment'
       spec:
         image: nginx:alpine
         port: 80

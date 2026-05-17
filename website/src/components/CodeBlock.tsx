@@ -1,4 +1,4 @@
-import type { JSX } from "solid-js";
+import type { JSX } from 'solid-js';
 
 interface Props {
   children: JSX.Element;
@@ -13,10 +13,10 @@ interface Props {
  */
 export default function CodeBlock(props: Props) {
   const klass = () => {
-    const parts = ["codeblock"];
-    if (props.terminal) parts.push("code-terminal");
+    const parts = ['codeblock'];
+    if (props.terminal) parts.push('code-terminal');
     if (props.class) parts.push(props.class);
-    return parts.join(" ");
+    return parts.join(' ');
   };
   return (
     <div class={klass()}>
