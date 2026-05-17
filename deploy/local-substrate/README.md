@@ -20,6 +20,41 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 
 現在 Phase 0–3 まで実装済み (kernel db_migrations 由来の `POST /v1/deployments` 500 は upstream 側で別途修正待ち)。
 
+## Current smoke coverage (36 checks)
+
+`scripts/smoke.sh` のチェック一覧 — 「smoke green = deploy しても 99% 動く」 を目標に、 honest pass のみを数える。 各
+ファイル詳細は [TODO-SMOKE.md](TODO-SMOKE.md) と script header を参照。
+
+| 範疇                | 件数 | 代表 check                                                                                                                      |
+| ------------------- | ---: | ------------------------------------------------------------------------------------------------------------------------------- |
+| ingress             |    4 | `hello.tls`, `accounts.oidc-discovery`, `kernel.healthz`, `takos.healthz`                                                       |
+| prod-mirror         |   10 | `prod-mirror.{landing,docs,cloud.*,takos.*,yurucommu.*}`                                                                        |
+| install flow        |    3 | `install.preview`, `install.materialize`, `install.uninstall`                                                                   |
+| OAuth               |    3 | `oauth.e2e`, `oauth.csrf-replay`, `oauth.tls-negative`                                                                          |
+| tenant              |    1 | `tenant.isolation` (informational; gap tracked in TODO-SMOKE.md)                                                                |
+| docs                |    1 | `docs.link-check` (one-hop link audit across 4 docs surfaces)                                                                   |
+| passkey             |    1 | `passkey.e2e` (register + authenticate with virtual P-256)                                                                      |
+| kernel deploy       |    1 | `kernel.deploy.e2e` (full POST /v1/deployments manifest path)                                                                   |
+| federation          |    1 | `federation.infra` (yurucommu-a / yurucommu-b nodeinfo + webfinger)                                                             |
+| workers             |    1 | `workers.cli-smoke` (cloud worker on workerd + D1)                                                                              |
+| route-registrar     |    1 | `registrar.alive` (kernel → Caddy admin sync via internal network)                                                              |
+| takos-private       |    1 | `private.lint` (yaml/compose syntax across all manifests)                                                                       |
+| object store        |    1 | `minio.roundtrip` (mb → put → get → sha256 round-trip)                                                                          |
+| bundled apps        |    1 | `bundled.apps` (5 advertised .takosumi/app.yml resolvable)                                                                      |
+| migrations          |    1 | `migration.idempotency` (worker restart preserves schema byte-identical)                                                        |
+| otel                |    1 | `otel.pipeline` (synthetic OTLP trace lands in Jaeger)                                                                          |
+| k6 perf             |    1 | `k6.baseline` (20 RPS × 20s with `p(95)<50ms` install_preview + `<30ms` oidc — regression watch, NOT SLO)                       |
+| mailpit             |    1 | `mailpit` (SMTP catcher reachable + probe email delivered)                                                                      |
+| stripe              |    1 | `stripe.webhook.e2e` (HMAC verify + idempotency + tolerance)                                                                    |
+| public-leak         |    1 | `prove-no-public-leak.sh` (separate script — DNS / ACME / network egress audit)                                                 |
+
+加えて vitest 4 case (COSE/JWK decode) + worker_test.ts 28 case (issuer policy + IPv6/CGNAT + fail-closed) +
+Playwright 2 spec (install wizard happy path + TLS trust regression) を CI で並列実行する。
+
+CI workflow は ecosystem-root の `.github/workflows/local-substrate-smoke.yml` を参照。 3 job (smoke / vitest /
+playwright) が submodule checkout 経由で takos + takosumi-cloud + yurucommu を同時に揃え、 ca-install.sh の sudo
+run + Pebble root の NSS install を含めた full chain を毎 PR で再現する。
+
 ## Quick start
 
 ```bash
