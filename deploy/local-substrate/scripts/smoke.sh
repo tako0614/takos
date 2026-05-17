@@ -189,8 +189,9 @@ echo
 echo "==> Docs surfaces — one-hop link check (catches renamed sections breaking nav)"
 if run_script "docs.link-check" "bash $SCRIPT_DIR/docs-link-check.sh"; then
 	echo "    PASS [docs.link-check] takos + takosumi + accounts + marketing one-hop deep"
+	PASS=$((PASS + 1))
 else
-	overall_failed=$((overall_failed + 1))
+	FAIL=$((FAIL + 1))
 	echo "    FAIL [docs.link-check] see scripts/docs-link-check.sh"
 fi
 
