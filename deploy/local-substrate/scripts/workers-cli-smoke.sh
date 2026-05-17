@@ -1,26 +1,10 @@
 #!/usr/bin/env bash
-# Workers-profile smoke for the cloud worker (D1 + workerd code path).
+# Workers-profile smoke for workerd/D1/R2 code paths.
 #
-# Honest framing: 'workers profile' historically meant 'both the cloud
-# worker AND the takosumi kernel run on workerd/D1'. The cloud worker
-# ALWAYS runs on workerd (postgres profile or not), so the postgres
-# profile already exercises the D1 / workerd code path for accounts-
-# service via 17+ smoke checks (cloud.*, oauth.*, install.preview.*,
-# passkey.*, stripe.webhook.*, etc.).
-#
-# The takosumi-kernel itself running on workerd is a separate
-# undertaking that requires lazy-init at the module boundary plus a D1
-# adapter (currently the kernel imports `npm:pg` at boot and uses a SQL
-# migration runner that targets Postgres). That work belongs upstream
-# in @takos/takosumi-kernel and is tracked in TODO-SMOKE.md.
-#
-# What this script verifies: the cloud-worker side of the workers
-# profile is healthy. Asserts:
-#   1. /healthz returns the workerd-local edge sentinel (proves the
-#      worker is running on workerd, not a Deno fallback).
-#   2. /v1/install/preview answers (proves env wiring + D1 init still
-#      complete from a workers-only stack viewpoint).
-#   3. /.well-known/openid-configuration has the right shape.
+# What this script verifies:
+#   1. takosumi-cloud Accounts Worker runs on workerd with D1.
+#   2. takosumi kernel Worker runs on workerd with D1/R2, Queue, and DO.
+#   3. The Accounts install preview and OIDC discovery surfaces still answer.
 #   4. D1 binding semantics: the sqlite file underneath miniflare's D1
 #      emulator supports json_extract on the document column AND a
 #      multi-statement INSERT/SELECT round-trip — these are the two
@@ -33,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBSTRATE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CA="$SUBSTRATE_DIR/caddy/runtime/pebble-issuance-root.pem"
 
-# 1. workerd-edge sentinel
+# 1. Accounts workerd-edge sentinel
 HEALTH=$(curl -sk --cacert "$CA" https://cloud.takosumi.test/healthz)
 echo "$HEALTH" | python3 -c "
 import json, sys
@@ -42,7 +26,47 @@ assert d.get('provider') == 'cloudflare', f'expected provider=cloudflare, got {d
 assert d.get('persistence') == 'd1', f'expected persistence=d1, got {d!r}'
 " || { echo "FAIL: /healthz did not look workerd-local: $HEALTH" >&2; exit 1; }
 
-# 2. install preview (D1 + handler init still working from this stack)
+# 2. Kernel Worker sentinel + D1/R2 storage probe.
+KERNEL_HEALTH=$(curl -sk --cacert "$CA" https://kernel-worker.takos.test/healthz)
+echo "$KERNEL_HEALTH" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('provider') == 'cloudflare-worker', f'expected provider=cloudflare-worker, got {d!r}'
+" || { echo "FAIL: kernel-worker /healthz did not look workerd-local: $KERNEL_HEALTH" >&2; exit 1; }
+
+KERNEL_STORAGE=$(curl -sk --cacert "$CA" https://kernel-worker.takos.test/storage/healthz)
+echo "$KERNEL_STORAGE" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('ok') is True, f'expected ok=true, got {d!r}'
+assert d.get('storage') == 'cloudflare-d1-r2', f'expected storage=cloudflare-d1-r2, got {d!r}'
+" || { echo "FAIL: kernel-worker /storage/healthz did not prove D1/R2: $KERNEL_STORAGE" >&2; exit 1; }
+
+KERNEL_COORDINATION=$(curl -sk --cacert "$CA" https://kernel-worker.takos.test/coordination/healthz)
+echo "$KERNEL_COORDINATION" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('ok') is True, f'expected ok=true, got {d!r}'
+assert d.get('role') == 'coordination', f'expected role=coordination, got {d!r}'
+" || { echo "FAIL: kernel-worker /coordination/healthz did not prove Durable Object routing: $KERNEL_COORDINATION" >&2; exit 1; }
+
+KERNEL_QUEUE=$(curl -sk --cacert "$CA" -X POST \
+	-H "Content-Type: application/json" \
+	-d '{"kind":"local-substrate-smoke"}' \
+	https://kernel-worker.takos.test/queue/test)
+echo "$KERNEL_QUEUE" | python3 -c "
+import json, sys
+d = json.loads(sys.stdin.read())
+assert d.get('queued') is True, f'expected queued=true, got {d!r}'
+" || { echo "FAIL: kernel-worker /queue/test did not accept Queue producer send: $KERNEL_QUEUE" >&2; exit 1; }
+
+KERNEL_API_STATUS=$(curl -sk --cacert "$CA" -o /dev/null -w "%{http_code}" https://kernel-worker.takos.test/health)
+[[ "$KERNEL_API_STATUS" == "200" ]] || {
+	echo "FAIL: kernel-worker /health returned $KERNEL_API_STATUS (expected 200)" >&2
+	exit 1
+}
+
+# 3. install preview (D1 + handler init still working from this stack)
 PREVIEW=$(curl -sk --cacert "$CA" -X POST \
 	-H "Content-Type: application/json" \
 	-d '{"source":{"gitUrl":"https://github.com/tako0614/yurucommu.git","ref":"main"}}' \
@@ -50,12 +74,12 @@ PREVIEW=$(curl -sk --cacert "$CA" -X POST \
 APP_ID=$(echo "$PREVIEW" | python3 -c "import json,sys;print(json.loads(sys.stdin.read()).get('appId',''))")
 [[ -n "$APP_ID" ]] || { echo "FAIL: /v1/install/preview did not return appId: $PREVIEW" >&2; exit 1; }
 
-# 3. OIDC discovery shape
+# 4. OIDC discovery shape
 DISC=$(curl -sk --cacert "$CA" https://cloud.takosumi.test/.well-known/openid-configuration)
 ISSUER=$(echo "$DISC" | python3 -c "import json,sys;print(json.loads(sys.stdin.read()).get('issuer',''))")
 [[ -n "$ISSUER" ]] || { echo "FAIL: /.well-known/openid-configuration missing issuer" >&2; exit 1; }
 
-# 4. D1 binding semantics — verify the sqlite file underneath miniflare's
+# 5. D1 binding semantics — verify the sqlite file underneath miniflare's
 #    D1 emulator has the json1 extension AND that a real INSERT-then-
 #    SELECT round-trip with json_extract works. Catches "miniflare image
 #    rebuilt without json1" or "schema migration silently lost the
@@ -96,4 +120,4 @@ assert r[0] == ":x\"y{z}", f"expected ':x\\\"y{{z}}', got {r[0]!r}"
 db.close()
 PY
 
-echo "OK cloud worker healthy + D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"
+echo "OK accounts worker + kernel worker healthy; D1/R2/Queue/DO smoke passed; D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"

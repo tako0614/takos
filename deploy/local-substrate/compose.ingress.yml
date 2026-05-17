@@ -73,6 +73,7 @@ services:
           - hello.takos.test
           - accounts.takos.test
           - kernel.takos.test
+          - kernel-worker.takos.test
           - app.takos.test
           - git.takos.test
           - agent.takos.test

@@ -94,6 +94,9 @@ accounts.takos.test {
 kernel.takos.test {
 	reverse_proxy kernel:8788
 }
+kernel-worker.takos.test {
+	reverse_proxy takosumi-kernel-worker:8788
+}
 app.takos.test {
 	reverse_proxy takos-app:8787
 }

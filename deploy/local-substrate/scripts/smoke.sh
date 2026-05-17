@@ -64,6 +64,31 @@ bundle_freshness_gate() {
 			echo "==> [bundle-gate] worker rebuilt + restarted"
 		fi
 	fi
+	# Takosumi kernel Worker bundle: takosumi/deploy/cloudflare runs the
+	# kernel in-process on workerd with D1/R2 bindings.
+	local kernel_worker_bundle="$repo_root/takosumi/deploy/cloudflare/.wrangler/dist/takosumi-cloudflare-worker.mjs"
+	local kernel_worker_sources=(
+		"$repo_root/takosumi/deploy/cloudflare/src"
+		"$repo_root/takosumi/packages/kernel/src"
+	)
+	if [[ -f "$kernel_worker_bundle" ]]; then
+		local kernel_newer
+		kernel_newer=$(find "${kernel_worker_sources[@]}" -type f -newer "$kernel_worker_bundle" \
+			\( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | head -3)
+		if [[ -n "$kernel_newer" ]]; then
+			echo "==> [bundle-gate] kernel worker source newer than bundle, auto-rebuilding..."
+			echo "$kernel_newer" | sed 's/^/                   /'
+			docker compose -f compose.substrate.yml --profile postgres \
+				run --rm takosumi-kernel-worker-build >"$SMOKE_LOG_DIR/bundle-gate-kernel-worker.log" 2>&1 || {
+				echo "==> [bundle-gate] kernel worker rebuild FAILED; see $SMOKE_LOG_DIR/bundle-gate-kernel-worker.log" >&2
+				exit 1
+			}
+			docker compose -f compose.substrate.yml --profile postgres \
+				up -d --force-recreate takosumi-kernel-worker >/dev/null 2>&1
+			sleep 3
+			echo "==> [bundle-gate] kernel worker rebuilt + restarted"
+		fi
+	fi
 	# SPA bundle: .output/public/index.html is the entrypoint vinxi emits.
 	local spa_bundle="$repo_root/takosumi-cloud/packages/dashboard-ui/.output/public/index.html"
 	local spa_sources="$repo_root/takosumi-cloud/packages/dashboard-ui/src"
@@ -297,9 +322,9 @@ else
 fi
 
 echo
-echo "==> Federation Follow flow — login + Origin + Follow API surface"
+echo "==> Federation Follow flow — login + Origin + Follow→Accept"
 if run_script "federation.follow" "bash $SCRIPT_DIR/federation-follow.sh"; then
-	echo "    PASS [federation.follow] auth + Follow API reached; cross-actor fetch is informational (set FEDERATION_FOLLOW_STRICT=1 once SSRF bypass lands)"
+	echo "    PASS [federation.follow] strict Follow→Accept completed"
 	PASS=$((PASS + 1))
 else
 	echo "    FAIL [federation.follow] see scripts/federation-follow.sh"
@@ -307,9 +332,9 @@ else
 fi
 
 echo
-echo "==> Workers profile (cloud worker on workerd + D1)"
+echo "==> Workers profile (accounts worker + kernel worker on workerd + D1/R2/Queue/DO)"
 if run_script "workers.cli-smoke" "bash $SCRIPT_DIR/workers-cli-smoke.sh"; then
-	echo "    PASS [workers.cli-smoke] cloud worker healthy via workerd + D1"
+	echo "    PASS [workers.cli-smoke] workers healthy via workerd + D1/R2/Queue/DO"
 	PASS=$((PASS + 1))
 else
 	echo "    FAIL [workers.cli-smoke] see scripts/workers-cli-smoke.sh"
