@@ -5,7 +5,7 @@ const apiDoc = await Deno.readTextFile(
 const requiredText = [
   '## Current Boundary',
   'Takosumi Accounts',
-  'AppInstallation API',
+  'Installation API',
   '`/api/public/v1/deployments`',
   '`/api/spaces/:spaceId/threads/search`',
   '`/api/threads/:threadId/runs`',
