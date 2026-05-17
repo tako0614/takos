@@ -116,14 +116,8 @@ services:
       - run
       - -A
       - src/server.ts
-    environment:
-      PORT: '8787'
-      TAKOSUMI_ACCOUNTS_HOSTNAME: 0.0.0.0
-      TAKOSUMI_ACCOUNTS_ISSUER: https://accounts.takos.test
-      TAKOSUMI_ACCOUNTS_DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi_accounts
-      TAKOSUMI_ACCOUNTS_CLIENT_ID: takos-app
-      TAKOSUMI_ACCOUNTS_REDIRECT_URIS: https://app.takos.test/oauth/callback https://cloud.takosumi.test/sign-in/callback
-      TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS: closed
+    env_file:
+      - env/accounts.env
     volumes:
       - ../../../takosumi-cloud:/workspace
     healthcheck:
@@ -168,18 +162,8 @@ services:
       - --config
       - /workspace/deno.json
       - /wrappers/kernel-with-embedded-agent.ts
-    environment:
-      PORT: '8788'
-      TAKOSUMI_ENVIRONMENT: development
-      TAKOSUMI_DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi
-      DATABASE_URL: postgres://takos:takos@postgres:5432/takosumi
-      TAKOSUMI_DEPLOY_TOKEN: ${TAKOSUMI_DEPLOY_TOKEN:-local-substrate-deploy-token}
-      TAKOSUMI_INTERNAL_API_SECRET: ${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}
-      TAKOSUMI_DEV_MODE: '1'
-      TAKOSUMI_DB_AUTO_MIGRATE: 'true'
-      # Selfhost provider config (consumed by embedded runtime-agent)
-      TAKOSUMI_SELFHOSTED_OBJECT_STORE_ENDPOINT: http://minio:9000
-      TAKOSUMI_SELFHOSTED_DOCKER_SOCKET: /var/run/docker.sock
+    env_file:
+      - env/kernel.env
     volumes:
       - ../../../takosumi:/workspace
       - ./wrappers:/wrappers:ro
@@ -242,19 +226,8 @@ services:
         condition: service_healthy
     working_dir: /workspace/apps/control
     command: ['deno', 'task', 'dev:local:web']
-    environment:
-      PORT: '8787'
-      ADMIN_DOMAIN: app.takos.test
-      TENANT_BASE_DOMAIN: app.takos.test
-      AUTH_PUBLIC_BASE_URL: https://app.takos.test
-      OIDC_ISSUER_URL: https://accounts.takos.test
-      OIDC_CLIENT_ID: takos-app
-      OIDC_REDIRECT_URI: https://app.takos.test/oauth/callback
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-local-substrate-oidc-client-secret}
-      TAKOS_LOCAL_DATA_DIR: /var/lib/takos-local-substrate
-      TAKOS_LOCAL_DATABASE_URL: postgres://takos:takos@postgres:5432/takos_app
-      REDIS_URL: redis://redis:6379
-      TAKOS_INTERNAL_SERVICE_SECRET: ${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}
+    env_file:
+      - env/takos-app.env
     volumes:
       - ../../app:/workspace
       - ../../git:/git:ro
@@ -474,12 +447,8 @@ services:
           # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
           # in deno.json doesn't include it; pass directly here).
           exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
-    environment:
-      PORT: '8791'
-      APP_URL: https://inst-a.takos.test
-      DATABASE_PATH: /data/yurucommu.db
-      STORAGE_PATH: /data/storage
-      NODE_ENV: development
+    env_file:
+      - env/yurucommu-a.env
     volumes:
       - ../../../yurucommu:/workspace
       - yurucommu-a-data:/data
@@ -509,12 +478,8 @@ services:
           # --allow-ffi is required for deno.land/x/sqlite3 (the dev:deno task
           # in deno.json doesn't include it; pass directly here).
           exec deno run --allow-net --allow-read --allow-write --allow-env --allow-ffi --allow-sys --allow-run src/backend/server.ts
-    environment:
-      PORT: '8791'
-      APP_URL: https://inst-b.takos.test
-      DATABASE_PATH: /data/yurucommu.db
-      STORAGE_PATH: /data/storage
-      NODE_ENV: development
+    env_file:
+      - env/yurucommu-b.env
     volumes:
       - ../../../yurucommu:/workspace
       - yurucommu-b-data:/data
