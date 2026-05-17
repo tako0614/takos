@@ -36,7 +36,7 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 | passkey         |    1 | `passkey.e2e` (register + authenticate with virtual P-256)                                                |
 | kernel deploy   |    1 | `kernel.deploy.e2e` (full POST /v1/deployments manifest path)                                             |
 | federation      |    2 | `federation.infra`, `federation.follow` (reachability + strict Follow → Accept exchange)                  |
-| workers         |    1 | `workers.cli-smoke` (Accounts Worker D1 + kernel Worker D1/R2/Queue/DO on workerd)                        |
+| workers         |    1 | `workers.cli-smoke` (Accounts Worker D1/R2 + kernel Worker D1/R2/Queue/DO on workerd)                     |
 | route-registrar |    1 | `registrar.alive` (kernel → Caddy admin sync via internal network)                                        |
 | takos-private   |    1 | `private.lint` (yaml/compose syntax across all manifests)                                                 |
 | object store    |    1 | `minio.roundtrip` (mb → put → get → sha256 round-trip)                                                    |
@@ -68,7 +68,7 @@ bash scripts/up.sh
 # route-registrar) on top of Phase 0 ingress
 bash scripts/up.sh --profile postgres
 
-# Worker-first substrate mirror: Accounts Worker on D1 plus Takosumi
+# Worker-first substrate mirror: Accounts Worker on D1/R2 plus Takosumi
 # kernel Worker on D1/R2/Queue/DO. Here kernel.takos.test is the Worker.
 bash scripts/up.sh --profile workers
 

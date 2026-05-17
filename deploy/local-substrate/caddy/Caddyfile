@@ -74,7 +74,7 @@ inst-b.takos.test {
 # sees /v1/* requests.
 cloud.takosumi.test {
 	route {
-		@api path /v1/* /oauth/* /.well-known/* /healthz
+		@api path /v1/* /oauth/* /.well-known/* /healthz /__takosumi/exports/*
 		handle @api {
 			reverse_proxy takosumi-cloud-worker:8787
 		}

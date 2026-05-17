@@ -2,7 +2,7 @@
 # Smoke for local workerd/D1/R2 code paths.
 #
 # What this script verifies:
-#   1. takosumi-cloud Accounts Worker runs on workerd with D1.
+#   1. takosumi-cloud Accounts Worker runs on workerd with D1/R2.
 #   2. takosumi kernel Worker runs on workerd with D1/R2, Queue, and DO
 #      either as the postgres-profile mirror at kernel-worker.takos.test or
 #      as the workers-profile kernel at kernel.takos.test.
@@ -58,7 +58,7 @@ echo "$HEALTH" | python3 -c "
 import json, sys
 d = json.loads(sys.stdin.read())
 assert d.get('provider') == 'cloudflare', f'expected provider=cloudflare, got {d!r}'
-assert d.get('persistence') == 'd1', f'expected persistence=d1, got {d!r}'
+assert d.get('persistence') == 'd1+r2', f'expected persistence=d1+r2, got {d!r}'
 " || { echo "FAIL: /healthz did not look workerd-local: $HEALTH" >&2; exit 1; }
 
 # 2. Kernel Worker sentinel + D1/R2 storage probe.
@@ -115,7 +115,22 @@ DISC=$(curl -sk --cacert "$CA" https://cloud.takosumi.test/.well-known/openid-co
 ISSUER=$(echo "$DISC" | python3 -c "import json,sys;print(json.loads(sys.stdin.read()).get('issuer',''))")
 [[ -n "$ISSUER" ]] || { echo "FAIL: /.well-known/openid-configuration missing issuer" >&2; exit 1; }
 
-# 5. D1 binding semantics — verify the sqlite file underneath miniflare's
+# 5. R2 export download route is worker-owned, not SPA fallback. A deliberately
+#    bad signature should be rejected by the Worker with JSON, proving Caddy
+#    forwards the signed export path to the Accounts Worker.
+EXPORT_ROUTE=$(curl -sk --cacert "$CA" -o /tmp/accounts-export-route-smoke.json -w "%{http_code}" \
+	"https://cloud.takosumi.test/__takosumi/exports/missing-object.json?expires=4102444800000&sig=bad")
+[[ "$EXPORT_ROUTE" == "403" ]] || {
+	echo "FAIL: /__takosumi/exports did not return Worker signature rejection (status=$EXPORT_ROUTE body=$(cat /tmp/accounts-export-route-smoke.json))" >&2
+	exit 1
+}
+python3 - /tmp/accounts-export-route-smoke.json <<'PY' || { echo "FAIL: /__takosumi/exports did not return JSON error" >&2; exit 1; }
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d.get("error") == "invalid_export_download_signature", d
+PY
+
+# 6. D1 binding semantics — verify the sqlite file underneath miniflare's
 #    D1 emulator has the json1 extension AND that a real INSERT-then-
 #    SELECT round-trip with json_extract works. Catches "miniflare image
 #    rebuilt without json1" or "schema migration silently lost the
@@ -156,4 +171,4 @@ assert r[0] == ":x\"y{z}", f"expected ':x\\\"y{{z}}', got {r[0]!r}"
 db.close()
 PY
 
-echo "OK accounts worker + kernel worker healthy via $KERNEL_HOST; D1/R2/Queue/DO smoke passed; D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"
+echo "OK accounts worker + kernel worker healthy via $KERNEL_HOST; Accounts D1/R2 and kernel D1/R2/Queue/DO smoke passed; D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"
