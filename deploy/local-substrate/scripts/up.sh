@@ -3,7 +3,7 @@
 #
 # Without --profile : Phase 0 ingress only (Pebble + CoreDNS + Caddy).
 # With --profile postgres : ingress + Postgres-flavored substrate (kernel + accounts + takos).
-# With --profile workers  : ingress + Workers-flavored substrate (kernel-workers + accounts + takos). (Phase 1b)
+# With --profile workers  : ingress + Workers-flavored substrate (kernel-workers + accounts + takos).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

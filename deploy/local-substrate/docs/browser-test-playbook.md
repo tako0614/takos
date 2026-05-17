@@ -26,7 +26,16 @@ resolves `accounts.takos.test`, `app.takos.test`, etc. via CoreDNS.
 1. Navigate: `https://kernel.takos.test/health`
 2. Expect: 200 with `{"ok":true,"service":"takosumi","domains":["core","deploy"]}`
 
-## Smoke flow C — takos-app login (the canonical UX path)
+## Smoke flow C — Takosumi kernel Worker probe
+
+1. Navigate: `https://kernel-worker.takos.test/healthz`
+2. Expect: 200 with `{"ok":true,"provider":"cloudflare-worker"}`
+3. Navigate: `https://kernel-worker.takos.test/storage/healthz`
+4. Expect: 200 with `{"ok":true,"storage":"cloudflare-d1-r2"}`
+5. Navigate: `https://kernel-worker.takos.test/coordination/healthz`
+6. Expect: 200 with `{"ok":true,"role":"coordination"}`
+
+## Smoke flow D — takos-app login (the canonical UX path)
 
 1. Navigate: `https://app.takos.test/admin` (or whichever path initiates OIDC)
 2. Expect: redirect to `https://accounts.takos.test/oauth/authorize?client_id=takos-app&...`
@@ -34,7 +43,7 @@ resolves `accounts.takos.test`, `app.takos.test`, etc. via CoreDNS.
 4. Expect: redirect back to `https://app.takos.test/oauth/callback?code=...`
 5. Expect: app sets a session cookie and shows the admin dashboard
 
-## Smoke flow D — dynamic deploy subdomain
+## Smoke flow E — dynamic deploy subdomain
 
 (Only after Phase 3 route-registrar is wired and a deployment with a route has been applied.)
 
@@ -50,7 +59,7 @@ resolves `accounts.takos.test`, `app.takos.test`, etc. via CoreDNS.
 3. Navigate to the assigned subdomain in Chrome
 4. Expect: the deployed service responds (e.g., nginx default page)
 
-## Failure flow E — public-DNS deny
+## Failure flow F — public-DNS deny
 
 1. POST `manifest.fail-public-dns.yml` (asks for Route53 record)
 2. Expect: HTTP 400 with `provider_not_registered` (the connector is not even imported in the local-substrate factory)

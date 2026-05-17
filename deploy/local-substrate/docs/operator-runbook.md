@@ -48,6 +48,9 @@ docker compose -f compose.ingress.yml logs caddy | grep -i "error\|acme"
 
 - `caddy/runtime/pebble.minica.pem` が無い → `bash scripts/up.sh` を再実行
 - Pebble が起動しきっていない → up.sh の `Waiting for Pebble` ループに任せる
+- 新しい hostname を `compose.ingress.yml` の Caddy network alias に追加した直後 →
+  `docker compose -f compose.ingress.yml up -d --force-recreate caddy` で Caddy container を作り直す。Caddyfile reload
+  だけでは Docker network alias は増えない。
 
 ### Caddy admin API への curl が refused
 

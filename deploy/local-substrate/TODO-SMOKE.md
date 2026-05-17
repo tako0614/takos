@@ -3,22 +3,22 @@
 Remaining items after the false-confidence cleanup pass. Each needs either upstream product work or a coordination call
 (out of scope of the test bed itself).
 
-## Workers-profile kernel — needs upstream lazy-init + D1 adapter
+## Workers-profile kernel — LANDED (local Miniflare smoke as of 2026-05-17)
 
-`takosumi/packages/kernel/src/index.ts` _does_ `export default app` (a Hono app), so structurally it's
-worker-compatible. But the same file runs Postgres-tied boot code at module load (`npm:pg`, SQL migration runner, audit
-replication chain verification), all of which fail when hosted on workerd.
+`takosumi/deploy/cloudflare/` is the Worker-first kernel scaffold. It bundles `deploy/cloudflare/src/worker.ts`, runs
+the kernel in-process through `createPaaSApp`, persists kernel snapshots / public deploy records in D1, and stores
+artifacts in R2. It has no Cloudflare Container binding.
 
-To make the workers profile actually run the kernel itself on workerd:
+The local-substrate now runs that same bundle under Miniflare:
 
-1. Move every effectful boot step in kernel/src/index.ts into a `bootstrap()` helper that's invoked lazily from the Hono
-   fetch handler the first time a request lands (memoized).
-2. Add a D1 adapter alongside the SqlClient pg pool path so kernel stores can land on either.
-3. Replace `kernel-workers` placeholder with a miniflare runner mirroring wrappers/takosumi-cloud-worker-runner.mjs.
-
-For now the cloud worker (`takosumi-cloud-worker`) IS the workerd code path that smoke exercises — see
-scripts/workers-cli-smoke.sh + the ~17 cloud.* / oauth.* / install.preview.* / passkey.* / stripe.* smoke checks.
-Kernel-on-workerd is upstream work tracked in @takos/takosumi-kernel.
+1. `takosumi-kernel-worker-build` bundles `takosumi/deploy/cloudflare/src/worker.ts`.
+2. `takosumi-kernel-worker` serves it at `kernel-worker.takos.test` during the default postgres-profile smoke so the
+   normal Takos product stack can keep using the Deno+Postgres kernel at `kernel.takos.test`.
+3. `kernel-workers` is the replacement workers-profile service, aliasing itself as `kernel` when `--profile workers` is
+   selected.
+4. `scripts/workers-cli-smoke.sh` now verifies both workerd code paths: the Accounts Worker on D1 and the Takosumi
+   kernel Worker on D1/R2/Queue/DO (`/healthz`, `/storage/healthz`, `/coordination/healthz`, `/queue/test`, and
+   `/health`).
 
 ## Tenant isolation — LANDED (smoke strict as of 2026-05-17)
 

@@ -36,12 +36,12 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 | passkey         |    1 | `passkey.e2e` (register + authenticate with virtual P-256)                                                |
 | kernel deploy   |    1 | `kernel.deploy.e2e` (full POST /v1/deployments manifest path)                                             |
 | federation      |    2 | `federation.infra`, `federation.follow` (reachability + strict Follow → Accept exchange)                  |
-| workers         |    1 | `workers.cli-smoke` (cloud worker on workerd + D1)                                                        |
+| workers         |    1 | `workers.cli-smoke` (Accounts Worker D1 + kernel Worker D1/R2/Queue/DO on workerd)                        |
 | route-registrar |    1 | `registrar.alive` (kernel → Caddy admin sync via internal network)                                        |
 | takos-private   |    1 | `private.lint` (yaml/compose syntax across all manifests)                                                 |
 | object store    |    1 | `minio.roundtrip` (mb → put → get → sha256 round-trip)                                                    |
 | bundled apps    |    1 | `bundled.apps` (5 advertised .takosumi/app.yml resolvable)                                                |
-| migrations      |    1 | `migration.idempotency` (worker restart preserves schema byte-identical)                                  |
+| migrations      |    1 | `migration.idempotency` (Accounts Worker D1 restart preserves schema byte-identical)                      |
 | otel            |    1 | `otel.pipeline` (synthetic OTLP trace lands in Jaeger)                                                    |
 | k6 perf         |    1 | `k6.baseline` (20 RPS × 20s with `p(95)<50ms` install_preview + `<30ms` oidc — regression watch, NOT SLO) |
 | mailpit         |    1 | `mailpit` (SMTP catcher reachable + probe email delivered)                                                |

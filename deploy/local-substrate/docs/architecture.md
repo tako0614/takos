@@ -44,8 +44,8 @@ host のクエリは systemd-resolved の per-domain split で CoreDNS に流す
 
 Phase 0–2 では単一 bridge network `takos-local-internal`。 Phase 3 で:
 
-- `takos-local-internal` — emulator / Caddy / CoreDNS / Pebble / kernel / accounts / takos-app。 `internal: true`
-  で外向き禁止
+- `takos-local-internal` — emulator / Caddy / CoreDNS / Pebble / kernel / accounts / takos-app / Miniflare Worker
+  mirrors。 `internal: true` で外向き禁止
 - `takos-local-egress` — 実 cloud compute (Fargate / Cloud Run / …) を呼ぶ runtime-agent のみ join。 default gateway
   経由で外向き可
 

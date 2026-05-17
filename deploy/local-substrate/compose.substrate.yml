@@ -2,7 +2,7 @@
 #
 # Profiles:
 #   postgres   takosumi kernel (Deno + Postgres + MinIO) + Accounts + takos product
-#   workers    takosumi kernel (workerd / miniflare + D1 + R2-via-MinIO) + 同上 (Phase 1b で完成)
+#   workers    takosumi kernel (workerd / miniflare + D1 + R2) + 同上
 #
 # Source mount + deno task pattern を採用 (image build 不要)。 production image
 # でないのは「test bed」 のために意図的。 ファイル変更が即反映される。
@@ -184,29 +184,94 @@ services:
         aliases:
           - kernel
 
-  # ---- Takosumi kernel (workers profile) ----
-  # The cloud worker (takosumi-cloud-worker) ALREADY runs on workerd + D1
-  # regardless of profile, so workers-side coverage for the accounts plane
-  # is exercised by the postgres-profile smoke (17+ checks under cloud.*,
-  # oauth.*, install.preview.*, passkey.*, stripe.webhook.*).
-  # The kernel ITSELF running on workerd is a separate upstream task: the
-  # current takosumi-kernel does `import('npm:pg')` and runs Postgres-
-  # specific migrations at module boot, neither of which work in workerd.
-  # When @takos/takosumi-kernel lands lazy-init + a D1 adapter, replace
-  # this stub. Tracked in TODO-SMOKE.md.
-  kernel-workers:
-    profiles: ['workers']
-    image: node:22-alpine
+  # ---- Takosumi kernel (Cloudflare Worker profile) ----
+  # Builds and runs takosumi/deploy/cloudflare's Worker-first scaffold under
+  # Miniflare with D1/R2 bindings. The postgres profile also starts a mirror
+  # at kernel-worker.takos.test so default smoke can verify the Worker code
+  # path without replacing the Deno+Postgres kernel used by the Takos product
+  # stack.
+  takosumi-kernel-worker-build:
+    profiles: ['postgres', 'workers']
+    image: denoland/deno:2.7.10
     restart: 'no'
+    working_dir: /work
     command:
       - sh
       - -c
       - |
-          echo "kernel-workers: upstream needs D1 adapter — see TODO-SMOKE.md"
-          echo "(takosumi-cloud-worker is the workerd code path that smoke covers)"
-          exit 0
+          mkdir -p deploy/cloudflare/.wrangler/dist
+          deno bundle \
+            --config deploy/cloudflare/deno.json \
+            --platform browser \
+            deploy/cloudflare/src/worker.ts \
+            -o deploy/cloudflare/.wrangler/dist/takosumi-cloudflare-worker.mjs
+    volumes:
+      - ../../../takosumi:/work
+
+  takosumi-kernel-worker:
+    profiles: ['postgres']
+    build:
+      context: .
+      dockerfile: wrappers/Dockerfile.takosumi-cloud-worker
+    restart: unless-stopped
+    depends_on:
+      takosumi-kernel-worker-build:
+        condition: service_completed_successfully
+    working_dir: /app
+    command: ['node', '/app/runner.mjs']
+    env_file:
+      - ./env/takosumi-kernel-worker.env
+    volumes:
+      - ../../../takosumi/deploy/cloudflare/.wrangler/dist:/worker:ro
+      - ./wrappers/takosumi-kernel-worker-runner.mjs:/app/runner.mjs:ro
+      - takosumi-kernel-worker-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8788/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     networks:
-      - takos-local-internal
+      takos-local-internal:
+        aliases:
+          - takosumi-kernel-worker
+
+  kernel-workers:
+    profiles: ['workers']
+    build:
+      context: .
+      dockerfile: wrappers/Dockerfile.takosumi-cloud-worker
+    restart: unless-stopped
+    depends_on:
+      takosumi-kernel-worker-build:
+        condition: service_completed_successfully
+    working_dir: /app
+    command: ['node', '/app/runner.mjs']
+    env_file:
+      - ./env/takosumi-kernel-worker.env
+    volumes:
+      - ../../../takosumi/deploy/cloudflare/.wrangler/dist:/worker:ro
+      - ./wrappers/takosumi-kernel-worker-runner.mjs:/app/runner.mjs:ro
+      - takosumi-kernel-workers-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8788/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+    networks:
+      takos-local-internal:
+        aliases:
+          - kernel
+          - kernel-workers
 
   # ---- Takos product ----
 
@@ -343,7 +408,7 @@ services:
   # install wizard can complete preview → install end-to-end without a real
   # git mirror behind it.
   install-preview-mock:
-    profiles: ['postgres']
+    profiles: ['postgres', 'workers']
     image: denoland/deno:alpine-2.1.4
     restart: unless-stopped
     command: ['run', '--allow-net', '--allow-env=PORT', '--allow-read=/srv', '/srv/main.ts']
@@ -411,7 +476,7 @@ services:
   # cloud sign-in flow (Google / GitHub button) completes without external
   # network. Reachable from browser + worker via Caddy at oauth-mock.test.
   oauth-mock:
-    profiles: ['postgres']
+    profiles: ['postgres', 'workers']
     image: denoland/deno:alpine-2.1.4
     restart: unless-stopped
     command: ['run', '--allow-net', '--allow-env=PORT', '/srv/main.ts']
@@ -509,7 +574,7 @@ services:
 
   # ---- takosumi-cloud dashboard SPA (mirrors cloud.takosumi.com root) ----
   takosumi-cloud-dashboard-build:
-    profiles: ['postgres']
+    profiles: ['postgres', 'workers']
     image: node:22-slim
     restart: 'no'
     working_dir: /dashboard
@@ -526,7 +591,7 @@ services:
 
   # ---- takosumi-cloud Worker (mirrors cloud.takosumi.com on Cloudflare Workers) ----
   takosumi-cloud-worker-build:
-    profiles: ['postgres']
+    profiles: ['postgres', 'workers']
     image: denoland/deno:2.7.10
     restart: 'no'
     working_dir: /work
@@ -544,7 +609,7 @@ services:
       - ../../../takosumi-cloud:/work
 
   takosumi-cloud-worker:
-    profiles: ['postgres']
+    profiles: ['postgres', 'workers']
     build:
       context: .
       dockerfile: wrappers/Dockerfile.takosumi-cloud-worker
@@ -575,6 +640,7 @@ services:
   # Polls kernel for applied deployments and mirrors their routes into
   # Caddy admin API as dynamic reverse_proxy entries.
   route-registrar:
+    profiles: ['postgres']
     image: denoland/deno:2.7.10
     restart: unless-stopped
     depends_on:
@@ -592,6 +658,25 @@ services:
     networks:
       - takos-local-internal
 
+  route-registrar-workers:
+    profiles: ['workers']
+    image: denoland/deno:2.7.10
+    restart: unless-stopped
+    depends_on:
+      kernel-workers:
+        condition: service_healthy
+    working_dir: /app
+    command: ['deno', 'task', 'start']
+    environment:
+      KERNEL_URL: http://kernel-workers:8788
+      CADDY_ADMIN_URL: http://caddy:2019
+      KERNEL_DEPLOY_TOKEN: ${TAKOSUMI_DEPLOY_TOKEN:-local-substrate-deploy-token}
+      POLL_INTERVAL_MS: '5000'
+    volumes:
+      - ./route-registrar:/app:ro
+    networks:
+      - takos-local-internal
+
 volumes:
   substrate-postgres-data:
   substrate-redis-data:
@@ -600,6 +685,8 @@ volumes:
   takos-git-repos:
   takos-app-data:
   takosumi-cloud-worker-data:
+  takosumi-kernel-worker-data:
+  takosumi-kernel-workers-data:
   yurucommu-a-data:
   yurucommu-b-data:
   yurucommu-deno-cache:
