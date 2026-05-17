@@ -36,36 +36,39 @@ server (`/mcp`) と app API (`/api`) と file handler open route (`/files/:id`)
 
 ## App Metadata And Bindings
 
-launcher / MCP / file handler は kernel manifest の `publications[]` ではなく、
-Takos app catalog / runtime registry の metadata として登録します。workload
-自体は `.takosumi/manifest.yml` の Shape resource で deploy します。
+`.takosumi/app.yml` (InstallableApp v1) は app catalog metadata + bindings +
+install hooks を宣言します。 launcher icon / display title / category 等の
+UI metadata は YAML field ではなく、 install 時に Takos app catalog
+publications row の `display` フィールド (title / description / icon / category /
+sortOrder) として登録されます。 MCP endpoint は `bindings.mcp` (binding-catalog
+参照) または app 側 route advertisement として扱われ、 file handler は
+publications row の `spec.fileHandlers` / Takos storage management の
+mount として登録されます。
 
 ```yaml
-launcher:
-  name: docs-ui
-  title: Docs
-  url: ${ref:web.url}/
-mcp:
-  endpoints:
-    - name: docs-mcp
-      title: Docs MCP
-      transport: streamable-http
-      url: ${ref:web.url}/mcp
-      auth:
-        kind: bearer
-        tokenRef: mcp-auth-token
-fileHandlers:
-  - name: docs-file-handler
-    title: Docs
-    url: ${ref:web.url}/files/:id
-    mimeTypes:
-      - application/vnd.takos.docs+json
-    extensions:
-      - .takosdoc
+apiVersion: app.takosumi.dev/v1
+kind: InstallableApp
+metadata:
+  id: jp.takos.docs
+  name: Takos Docs
+  description: Rich text document editor with a Streamable HTTP MCP server.
+  publisher: takos
+  homepage: https://github.com/tako0614/takos-docs
+source:
+  git: https://github.com/tako0614/takos-docs.git
+  ref: v0.1.2
+entry:
+  manifest: .takosumi/manifest.yml
+runtime:
+  modes:
+    - shared-cell
+    - dedicated
+    - self-hosted
 ```
 
-OIDC sign-in は `.takosumi/app.yml` の `identity.oidc@v1` AppBinding
-で宣言します
+workload 自体は `.takosumi/manifest.yml` の Shape resource (`worker@v1` 等)
+で deploy します。 OIDC sign-in は `.takosumi/app.yml` の bindings.auth で
+`identity.oidc@v1` AppBinding として宣言します
 ([`reference/app-yml-spec.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
 /
 [`reference/binding-catalog.md`](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)
@@ -82,6 +85,24 @@ bindings:
       - openid
       - profile
       - email
+  documents:
+    type: object-store.s3-compatible@v1
+    required: true
+    plan: standard
+    lifecycleDays: 0
+  domain:
+    type: domain.http@v1
+    required: false
+    hostname: auto
+    tlsMode: auto
+  bootstrap:
+    type: install-launch-token@v1
+    required: true
+    consumePath: /api/auth/launch
+    maxLifetimeSeconds: 300
+install:
+  healthcheckPath: /healthz
+  postInstallLaunchPath: /api/auth/launch
 ```
 
 ## UI と MCP server

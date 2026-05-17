@@ -38,22 +38,35 @@ single worker (`web`) と attached container (`sandbox`) の構成。
   /icons/computer.svg          → launcher icon
 ```
 
-## App Metadata And Grants
+## App Metadata And Permissions
+
+`.takosumi/app.yml` (InstallableApp v1) は app catalog metadata + bindings +
+permissions + install hooks を宣言します。 launcher icon / display title /
+category 等の UI metadata は YAML field ではなく、 install 時に Takos app
+catalog publications row の `display` フィールドとして登録されます。 MCP
+endpoint は publications row の `spec` field 経由で MCP registry に登録され、
+install YAML には現れません。
 
 ```yaml
-launcher:
-  name: computer-ui
-  title: Computer
-  url: ${ref:web.url}/gui
-mcp:
-  endpoints:
-    - name: computer-mcp
-      transport: streamable-http
-      url: ${ref:web.url}/mcp
-      auth:
-        kind: bearer
-        tokenRef: published-mcp-auth-token
-grants:
+apiVersion: app.takosumi.dev/v1
+kind: InstallableApp
+metadata:
+  id: jp.takos.computer
+  name: Takos Computer
+  description: Browser automation and sandbox computer with a Streamable HTTP MCP server.
+  publisher: takos
+  homepage: https://github.com/tako0614/takos-computer
+source:
+  git: https://github.com/tako0614/takos-computer.git
+  ref: v2.1.2
+entry:
+  manifest: .takosumi/manifest.yml
+runtime:
+  modes:
+    - shared-cell
+    - dedicated
+    - self-hosted
+permissions:
   requested:
     - spaces:read
     - files:read
@@ -69,13 +82,14 @@ grants:
     - repos:write
     - mcp:invoke
     - events:subscribe
+    - logs.read.own
 ```
 
-launcher / MCP endpoint は kernel manifest ではなく Takos の app catalog /
-MCP registry が管理する metadata です。`/mcp` は `computer_shell_exec` /
-`computer_file_read` / `computer_file_write` などの `computer_*` tool を
-公開し、必要に応じて sandbox session を作って `/session/:id/mcp` に proxy
-します。Takos API へのアクセスは app-layer の grant から materialize されます。
+MCP endpoint は workload の `/mcp` route で公開され (`/mcp` は
+`computer_shell_exec` / `computer_file_read` / `computer_file_write` 等の
+`computer_*` tool を expose)、 必要に応じて sandbox session を作って
+`/session/:id/mcp` に proxy します。 Takos API へのアクセスは app-layer の
+`permissions` field から materialize される AppGrant 経由です。
 
 published MCP endpoint の認証には `PUBLISHED_MCP_AUTH_TOKEN` を使います。これは
 agent (= MCP client) が `/mcp` を呼ぶときの machine-to-machine bearer token で、
