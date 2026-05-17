@@ -19,5 +19,5 @@ takosumi/website` so Pages serves both from one project.
 
 ## Local mirror
 
-In the local-substrate (`takos/deploy/local-substrate/`), Caddy serves this directory at `https://takosumi.test/` and
-the docs at `https://takosumi.test/docs/`. See `takos/deploy/local-substrate/docs/production-deploy-cloudflare.md`.
+In the local-substrate (`takosumi/deploy/local-substrate/`), Caddy serves this directory at `https://takosumi.test/` and
+the docs at `https://takosumi.test/docs/`. See `takosumi/deploy/local-substrate/docs/production-deploy-cloudflare.md`.

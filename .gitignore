@@ -15,6 +15,7 @@ deploy/terraform/environments/**/terraform.tfvars
 deploy/terraform/environments/**/terraform.tfvars.json
 deploy/terraform/environments/**/*.auto.tfvars
 deploy/terraform/environments/**/*.auto.tfvars.json
+deploy/local-substrate/
 .takos-local/
 .takos-git/
 *.log
