@@ -63,7 +63,7 @@ definition は [`../docs/reference/design-principles.md`](../docs/reference/desi
 - The PaaS kernel implementation lives in the standalone Takosumi repository (`../takosumi/`,
   `jsr:@takos/takosumi-kernel`). `deploy/` here only carries Takos-specific deploy artifacts that wrap the upstream
   kernel.
-- The official provider bundle is **Takosumi** (`@takosumi/plugins`, in-tree at `../takosumi/`).
+- The official provider bundle is **Takosumi** (`@takos/takosumi-plugins`, in-tree at `../takosumi/`).
 - Hosting target ids are an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`.
 
 ## Workflow

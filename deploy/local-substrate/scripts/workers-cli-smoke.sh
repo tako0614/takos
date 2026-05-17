@@ -171,4 +171,4 @@ assert r[0] == ":x\"y{z}", f"expected ':x\\\"y{{z}}', got {r[0]!r}"
 db.close()
 PY
 
-echo "OK accounts worker + kernel worker healthy via $KERNEL_HOST; Accounts D1/R2 and kernel D1/R2/Queue/DO smoke passed; D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"
+echo "OK accounts worker + kernel worker healthy via $KERNEL_HOST; Accounts D1 health + R2 signed-route and kernel D1/R2/Queue/DO smoke passed; D1 json1 + INSERT/SELECT semantics intact; appId=$APP_ID issuer=$ISSUER"
