@@ -28,6 +28,67 @@ run_script() {
 	fi
 }
 
+# Bundle freshness gate — refuse to run smoke against a stale worker /
+# SPA bundle. Without this an editor could edit accounts-service/src/*.ts
+# OR dashboard-ui/src/**/*.tsx and get smoke green against the *old*
+# bundle, then push and have CI / production fail.
+#
+# Pattern: if any source file is newer than the build output, automatically
+# rebuild via the corresponding compose service. Operators see a clear
+# log line, but don't have to remember to rebuild manually.
+bundle_freshness_gate() {
+	local repo_root
+	repo_root=$(cd "$SUBSTRATE_DIR/../../.." && pwd)
+	# Worker bundle: takosumi-cloud-accounts-worker.mjs is bundled from
+	# takosumi-cloud/packages/accounts-service/src + deploy/cloudflare/src.
+	local worker_bundle="$repo_root/takosumi-cloud/deploy/cloudflare/.wrangler/dist/takosumi-cloud-accounts-worker.mjs"
+	local worker_sources=(
+		"$repo_root/takosumi-cloud/packages/accounts-service/src"
+		"$repo_root/takosumi-cloud/deploy/cloudflare/src"
+	)
+	if [[ -f "$worker_bundle" ]]; then
+		local newer
+		newer=$(find "${worker_sources[@]}" -type f -newer "$worker_bundle" \
+			\( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | head -3)
+		if [[ -n "$newer" ]]; then
+			echo "==> [bundle-gate] worker source newer than bundle, auto-rebuilding..."
+			echo "$newer" | sed 's/^/                   /'
+			docker compose -f compose.substrate.yml --profile postgres \
+				run --rm takosumi-cloud-worker-build >"$SMOKE_LOG_DIR/bundle-gate-worker.log" 2>&1 || {
+				echo "==> [bundle-gate] worker rebuild FAILED; see $SMOKE_LOG_DIR/bundle-gate-worker.log" >&2
+				exit 1
+			}
+			docker compose -f compose.substrate.yml --profile postgres \
+				up -d --force-recreate takosumi-cloud-worker >/dev/null 2>&1
+			sleep 3
+			echo "==> [bundle-gate] worker rebuilt + restarted"
+		fi
+	fi
+	# SPA bundle: .output/public/index.html is the entrypoint vinxi emits.
+	local spa_bundle="$repo_root/takosumi-cloud/packages/dashboard-ui/.output/public/index.html"
+	local spa_sources="$repo_root/takosumi-cloud/packages/dashboard-ui/src"
+	if [[ -f "$spa_bundle" ]]; then
+		local newer
+		newer=$(find "$spa_sources" -type f -newer "$spa_bundle" \
+			\( -name '*.tsx' -o -name '*.ts' -o -name '*.css' \) 2>/dev/null | head -3)
+		if [[ -n "$newer" ]]; then
+			echo "==> [bundle-gate] SPA source newer than bundle, auto-rebuilding..."
+			echo "$newer" | sed 's/^/                   /'
+			docker compose -f compose.substrate.yml --profile postgres \
+				run --rm takosumi-cloud-dashboard-build >"$SMOKE_LOG_DIR/bundle-gate-spa.log" 2>&1 || {
+				echo "==> [bundle-gate] SPA rebuild FAILED; see $SMOKE_LOG_DIR/bundle-gate-spa.log" >&2
+				exit 1
+			}
+			# Caddy bind-mount needs recreate (not restart) to pick up new files
+			docker compose -f compose.ingress.yml up -d --force-recreate caddy >/dev/null 2>&1
+			sleep 3
+			echo "==> [bundle-gate] SPA rebuilt + Caddy recreated"
+		fi
+	fi
+}
+
+bundle_freshness_gate
+
 check() {
 	local label=$1
 	local host=$2
