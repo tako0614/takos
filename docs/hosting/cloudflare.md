@@ -14,6 +14,15 @@ kernel の特権プロバイダではありません。
 Cloudflare に関する詳細はこのページで扱い、`architecture/` 章では
 collapsible 節に簡略版を置きます。
 
+source-controlled gate が証明するのは `takos-app` / Takosumi kernel /
+Takosumi Accounts の Cloudflare distribution profile、wrangler template、
+binding shape、dry-run smoke 定義です。実際に Takos product gateway
+(`takos-app`) が Cloudflare Worker として応答していることは、operator が
+deploy 後に `distribution:smoke --live` または `takos-private`
+の real backend smoke を実行して private evidence に保存する必要があります。
+local-substrate の Worker smoke は Takosumi kernel / Accounts の Worker path
+を検証するもので、Takos product gateway の live Worker proof ではありません。
+
 Takos product から Takosumi 上に app を install する方法は [Deploy](/deploy/)
 を参照してください。
 
