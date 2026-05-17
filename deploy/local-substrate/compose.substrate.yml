@@ -453,6 +453,10 @@ services:
       - ../../../yurucommu:/workspace
       - yurucommu-a-data:/data
       - yurucommu-deno-cache:/deno-dir
+      # Mount Pebble issuance root so Deno fetch() can validate the
+      # peer instance's HTTPS cert during federation (cross-fetch of
+      # actor JSON before queuing the Follow delivery).
+      - ./caddy/runtime/pebble-issuance-root.pem:/etc/ssl/pebble-root.pem:ro
     networks:
       takos-local-internal:
         aliases:
@@ -484,6 +488,8 @@ services:
       - ../../../yurucommu:/workspace
       - yurucommu-b-data:/data
       - yurucommu-deno-cache:/deno-dir
+      # Pebble root for cross-instance federation HTTPS (see yurucommu-a).
+      - ./caddy/runtime/pebble-issuance-root.pem:/etc/ssl/pebble-root.pem:ro
     networks:
       takos-local-internal:
         aliases:
