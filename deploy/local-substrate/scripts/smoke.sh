@@ -232,6 +232,16 @@ else
 fi
 
 echo
+echo "==> Tenant isolation — cross-subject installation read must not leak"
+if bash "$SCRIPT_DIR/tenant-isolation.sh"  >/dev/null 2>&1; then
+	echo "    PASS [tenant.isolation] subject B cannot read subject A's installation"
+	PASS=$((PASS + 1))
+else
+	echo "    FAIL [tenant.isolation] see scripts/tenant-isolation.sh"
+	FAIL=$((FAIL + 1))
+fi
+
+echo
 echo "==> Passkey register + authenticate (virtual P-256 authenticator)"
 # Generates a real P-256 keypair, registers it as a passkey credential,
 # then signs an assertion challenge and asserts the worker accepts it.
