@@ -1,11 +1,16 @@
 # Cloudflare
 
-> このページでわかること: Takos を Cloudflare Workers / Containers でホストする構成と設定。
+> このページでわかること: Takos product / API gateway を Cloudflare Workers
+> にホストし、必要な managed resources を接続する構成と設定。
 
 このページは **Takos product / API gateway を Cloudflare Workers
-にホストする方法**を説明します。Takos オペレーター向けです。Cloudflare Workers /
-Containers / D1 / R2 / KV / Queues を組み合わせた構成は backend-neutral な
-public spec の参照実装であり、PaaS Core の標準プロバイダではありません。
+にホストする方法**を説明します。Takos オペレーター向けです。Cloudflare target
+の control path は Worker-first で、D1 / R2 / KV / Queues / Durable Objects
+などの managed resource を binding します。Cloudflare Containers は API gateway
+や Takosumi Accounts の critical path ではなく、image-backed workload が必要な
+場合に限って OCI deployment adapter の背後で使う任意の tenant workload substrate
+です。この構成は backend-neutral な public spec の参照実装であり、PaaS Core の
+標準プロバイダではありません。
 Cloudflare に関する詳細はこのページで扱い、`architecture/` 章では
 collapsible 節に簡略版を置きます。
 
@@ -745,9 +750,10 @@ control plane のステート管理に使われる。Cloudflare では Durable O
 ### Container workloads
 
 image-backed `services` / `containers` は tracked reference Workers backend でも
-current 実装では OCI deployment adapter を通る。他環境では Docker / k8s / ECS /
-Cloud Run などの tenant image workload adapter で解決する。ECS / Cloud Run は
-Takos product hosting target ではない。
+API gateway / account plane からは分離され、current 実装では OCI deployment
+adapter を通る。他環境では Docker / k8s / ECS / Cloud Run などの tenant image
+workload adapter で解決する。ECS / Cloud Run は Takos product hosting target
+ではない。
 
 image-backed workload を使う場合は `OCI_ORCHESTRATOR_URL` が必要で、認証付き
 orchestrator を使うなら `OCI_ORCHESTRATOR_TOKEN` を設定する。
