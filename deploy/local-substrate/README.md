@@ -20,7 +20,7 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 
 現在 Phase 0–3 まで実装済み (kernel db_migrations 由来の `POST /v1/deployments` 500 は upstream 側で別途修正待ち)。
 
-## Current smoke coverage (36 checks)
+## Current smoke coverage (37 checks)
 
 `scripts/smoke.sh` のチェック一覧 — 「smoke green = deploy しても 99% 動く」 を目標に、 honest pass のみを数える。 各
 ファイル詳細は [TODO-SMOKE.md](TODO-SMOKE.md) と script header を参照。
@@ -35,7 +35,7 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 | docs            |    1 | `docs.link-check` (one-hop link audit across 4 docs surfaces)                                             |
 | passkey         |    1 | `passkey.e2e` (register + authenticate with virtual P-256)                                                |
 | kernel deploy   |    1 | `kernel.deploy.e2e` (full POST /v1/deployments manifest path)                                             |
-| federation      |    1 | `federation.infra` (yurucommu-a / yurucommu-b nodeinfo + webfinger)                                       |
+| federation      |    2 | `federation.infra`, `federation.follow` (reachability + pre-delivery Follow API surface)                  |
 | workers         |    1 | `workers.cli-smoke` (cloud worker on workerd + D1)                                                        |
 | route-registrar |    1 | `registrar.alive` (kernel → Caddy admin sync via internal network)                                        |
 | takos-private   |    1 | `private.lint` (yaml/compose syntax across all manifests)                                                 |
