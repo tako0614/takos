@@ -56,7 +56,8 @@ queue bindings / object storage バケット名 / ネットワーク / workload 
 chart は `TAKOS_MANAGED_RESOURCES_JSON` として各サービスに配布します。
 credentials や secret は `takos-private` または external secrets から注入します。
 
-Release owner は Terraform 1.9.8 で credential 不要の staging plan ゲートも実行できます。
+root `CI` / `Release Gate` workflows と release owner は、Terraform 1.9.8 で
+credential 不要の staging plan ゲートも実行します。
 
 ```bash
 cd takos
@@ -66,7 +67,6 @@ deno task terraform:plan-gate
 このゲートは `deploy/terraform/plan/{aws-staging,gcp-staging}.tfvars` と
 `terraform_plan_mode = true` を使い、`terraform plan -refresh=false` の結果を
 `.terraform-plan/summary.md` とフル plan のテキスト artifact に書き出します。
-hosted CI に組み込む場合も、この task をそのまま使います。
 実環境の state backend / live credentials を使う plan は operator が `takos-private` 側で
 実行します。secret 境界の詳細は [Hosting Secret Policy](/hosting/secrets) を参照してください。
 
