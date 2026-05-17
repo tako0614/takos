@@ -43,9 +43,9 @@ account merge に使わず、表示・監査用の `email_snapshot` にのみ残
   されること
 
 automation credential は Takosumi Accounts が発行する bearer / PAT を使います。
-Takos app-local `personal_access_tokens` は発行元ではなく historical / local
-credential inventory として扱い、current automation credential の owner は
-Takosumi Accounts です。
+発行 / 失効 / rotation は Takosumi Accounts が所有し、Takos app 自体は
+credential issuer を持ちません (Takos app の `personal_access_tokens`
+surface は提供しません)。
 
 ## Dedicated Runtime
 
