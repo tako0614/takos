@@ -28,39 +28,33 @@ The upstream fix lives in `takosumi-cloud/packages/accounts-service/src/installa
 `subjectCanAccessAccount()` (see `account-session.ts`). CI runs the strict smoke directly, so any regression back to the
 open behavior is a hard FAIL.
 
-## Full ActivityPub Follow → Accept federation smoke
+## Full ActivityPub Follow → Accept federation smoke — LANDED (strict as of 2026-05-17)
 
-Today's `scripts/federation-smoke.sh` brings up `yurucommu-a` and `yurucommu-b` on inst-a.takos.test / inst-b.takos.test
-and verifies:
+`scripts/federation-smoke.sh` brings up `yurucommu-a` and `yurucommu-b` on inst-a.takos.test / inst-b.takos.test and
+verifies:
 
 - both nodeinfo + webfinger respond
 - cross-instance reach through Caddy
 
-What's NOT yet fully smoked: the Follow / Accept exchange. `scripts/federation-follow.sh` now covers login on both
-yurucommu instances, Origin/CSRF acceptance, session handling, and the `/api/follow` request shape. It currently stops
-at the remote-actor fetch boundary. Updated state of play (2026-05-17):
+`scripts/federation-follow.sh` now covers the full happy path:
 
-1. **No public signup endpoint exists.** yurucommu is a single-user instance — `POST /api/auth/login` returns the
+1. **No public signup endpoint exists.** yurucommu is a single-user instance, so `POST /api/auth/login` returns the
    pre-existing `owner` actor (or creates a default "tako" owner the first time) gated on a PBKDF2-hashed
    `AUTH_PASSWORD_HASH` env var. `POST /api/auth/accounts` creates sub-accounts but requires an already-signed-in actor.
    So provisioning two distinct subjects on inst-a vs inst-b means each instance gets the same "tako" owner under a
    separate `APP_URL`, which is fine for federation testing (the actors have different `ap_id`s).
 2. **`POST /api/auth/login` now has deterministic local-substrate fixtures** in `env/yurucommu-{a,b}.env`, so the smoke
    can create / reuse each instance's default owner actor with one known fixture password.
-3. **`POST /api/follow` is the internal create-Follow hook.** The partial smoke reaches it with a valid session and
-   body, but `assertSafeRemoteUrlResolved` currently rejects `.test` hosts that resolve to Docker bridge IPs, so the
-   known-block response is `Failed to fetch remote actor`.
-4. **Accept delivery is still missing in Deno mode.** Even past the SSRF gate, the Follow activity delivery depends on
-   the queue/worker path (`DELIVERY_QUEUE` in Worker mode), so the smoke cannot yet prove inst-b receives the Follow,
-   emits Accept, and inst-a flips the row to accepted.
-
-Best path forward: add a `LOCAL_SUBSTRATE_TEST_BED=1`-guarded SSRF allowlist for `.takos.test` / Docker bridge targets,
-then add a memory-backed delivery worker in `src/backend/server.ts` for Deno local mode or a synchronous HTTP-signature
-delivery hook. After that, extend `federation-follow.sh` to poll inst-b's followers collection and inst-a's accepted
-status.
-
-In the meantime `federation-smoke.sh` verifies wire-level reachability (nodeinfo + webfinger + cross-reach through
-Caddy), and `federation-follow.sh` verifies the pre-remote-fetch Follow API path.
+3. **`POST /api/follow` is the internal create-Follow hook.** The strict smoke reaches it with a valid session and body,
+   and yurucommu's local-substrate-only guard allows HTTPS `*.takos.test` actor fetches only when
+   `YURUCOMMU_ENABLE_LOCAL_SUBSTRATE_REMOTE_FETCHES=true` and local DNS resolves to `127.0.0.1` or Docker bridge
+   `172.16.0.0/12`.
+4. **Deno mode now has local delivery queue bindings.** `YURUCOMMU_ENABLE_DENO_DELIVERY_QUEUE=true` attaches an
+   in-memory Queue-compatible drain in `src/backend/server.ts`, so the existing Worker queue path runs locally without
+   adding remote POSTs to request handlers.
+5. **The strict assertion polls accepted relations.** The script fails unless inst-b's followers collection contains
+   inst-a and inst-a's following collection contains inst-b, proving Follow delivery, Accept emission, and
+   accepted-state finalization.
 
 ## brand-tokens JSR package (D13)
 

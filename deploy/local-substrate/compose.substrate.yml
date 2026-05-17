@@ -425,9 +425,8 @@ services:
   # ---- yurucommu backend instances (federation smoke) ----
   # Two isolated instances on inst-a.takos.test / inst-b.takos.test so
   # scripts/federation-smoke.sh can verify cross-instance ActivityPub
-  # discovery (webfinger lookup, actor fetch). Full Follow → Accept
-  # exercise depends on signup endpoint surface that yurucommu currently
-  # gates; smoke does what it can and documents the rest as deferred.
+  # discovery and scripts/federation-follow.sh can exercise the strict
+  # Follow → Accept path through yurucommu's Deno local delivery queue.
   yurucommu-a:
     profiles: ['postgres']
     image: denoland/deno:debian-2.7.10

@@ -35,7 +35,7 @@ Linux native 前提 (systemd-resolved / Docker daemon)。 macOS / WSL / native W
 | docs            |    1 | `docs.link-check` (one-hop link audit across 4 docs surfaces)                                             |
 | passkey         |    1 | `passkey.e2e` (register + authenticate with virtual P-256)                                                |
 | kernel deploy   |    1 | `kernel.deploy.e2e` (full POST /v1/deployments manifest path)                                             |
-| federation      |    2 | `federation.infra`, `federation.follow` (reachability + pre-delivery Follow API surface)                  |
+| federation      |    2 | `federation.infra`, `federation.follow` (reachability + strict Follow → Accept exchange)                  |
 | workers         |    1 | `workers.cli-smoke` (cloud worker on workerd + D1)                                                        |
 | route-registrar |    1 | `registrar.alive` (kernel → Caddy admin sync via internal network)                                        |
 | takos-private   |    1 | `private.lint` (yaml/compose syntax across all manifests)                                                 |
