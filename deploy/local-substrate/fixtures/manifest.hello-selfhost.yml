@@ -11,7 +11,7 @@ spec:
       shape:
         id: web-service
         version: v1
-      provider: "@takos/selfhost-docker-compose"
+      provider: '@takos/selfhost-docker-compose'
       spec:
         image: nginx:alpine
         port: 80

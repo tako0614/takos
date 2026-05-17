@@ -1,8 +1,7 @@
 # Browser test playbook (claude-in-chrome)
 
-Manually reproducible end-to-end test of the local-substrate's user-facing
-flows from the host's Chrome via the claude-in-chrome MCP. CI automation
-is out of scope for the current plan; this playbook is the audit trail.
+Manually reproducible end-to-end test of the local-substrate's user-facing flows from the host's Chrome via the
+claude-in-chrome MCP. CI automation is out of scope for the current plan; this playbook is the audit trail.
 
 ## Prerequisites
 
@@ -13,9 +12,8 @@ sudo bash scripts/ca-install.sh         # trust Pebble issuance root
 sudo bash scripts/configure-dns.sh      # *.takos.test → 127.0.0.1
 ```
 
-After `ca-install.sh` Chrome trusts the Pebble-issued certs (no green-lock
-warning). After `configure-dns.sh` the host resolves `accounts.takos.test`,
-`app.takos.test`, etc. via CoreDNS.
+After `ca-install.sh` Chrome trusts the Pebble-issued certs (no green-lock warning). After `configure-dns.sh` the host
+resolves `accounts.takos.test`, `app.takos.test`, etc. via CoreDNS.
 
 ## Smoke flow A — accounts OIDC discovery
 
@@ -32,15 +30,13 @@ warning). After `configure-dns.sh` the host resolves `accounts.takos.test`,
 
 1. Navigate: `https://app.takos.test/admin` (or whichever path initiates OIDC)
 2. Expect: redirect to `https://accounts.takos.test/oauth/authorize?client_id=takos-app&...`
-3. Complete login (use the test user seeded by accounts on first run, or
-   create one via the Accounts admin if available)
+3. Complete login (use the test user seeded by accounts on first run, or create one via the Accounts admin if available)
 4. Expect: redirect back to `https://app.takos.test/oauth/callback?code=...`
 5. Expect: app sets a session cookie and shows the admin dashboard
 
 ## Smoke flow D — dynamic deploy subdomain
 
-(Only after Phase 3 route-registrar is wired and a deployment with a route
-has been applied.)
+(Only after Phase 3 route-registrar is wired and a deployment with a route has been applied.)
 
 1. POST a manifest that allocates `<id>.app.takos.test`:
    ```bash
@@ -57,15 +53,13 @@ has been applied.)
 ## Failure flow E — public-DNS deny
 
 1. POST `manifest.fail-public-dns.yml` (asks for Route53 record)
-2. Expect: HTTP 400 with `provider_not_registered` (the connector is
-   not even imported in the local-substrate factory)
-3. `tcpdump -i any port 443` on the host while POSTing — verify zero
-   outbound packets to `acme-v02.api.letsencrypt.org` or AWS Route53
-   endpoints
+2. Expect: HTTP 400 with `provider_not_registered` (the connector is not even imported in the local-substrate factory)
+3. `tcpdump -i any port 443` on the host while POSTing — verify zero outbound packets to `acme-v02.api.letsencrypt.org`
+   or AWS Route53 endpoints
 
 ## Notes
 
-- The `--cacert` flag is needed only for `curl` from inside the local-substrate
-  dir — Chrome uses the system trust store after `ca-install.sh`.
-- If Pebble is restarted (down -v then up.sh) the issuance root regenerates
-  and `ca-install.sh` must be re-run — host trust is invalidated otherwise.
+- The `--cacert` flag is needed only for `curl` from inside the local-substrate dir — Chrome uses the system trust store
+  after `ca-install.sh`.
+- If Pebble is restarted (down -v then up.sh) the issuance root regenerates and `ca-install.sh` must be re-run — host
+  trust is invalidated otherwise.

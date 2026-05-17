@@ -231,6 +231,53 @@ def build_subscription_deleted_event(*, customer: str, subscription: str) -> dic
     })
 
 
+def build_invoice_dunning_updated_event(*, customer: str) -> dict:
+    # invoice.updated with dunning signals — backend's normalizer surfaces
+    # this as kind='invoice_dunning_updated' only when next_payment_attempt
+    # / attempt_count are present in previous_attributes.
+    base_obj = {
+        "id": "in_test_" + secrets.token_hex(8),
+        "object": "invoice",
+        "customer": customer,
+        "status": "open",
+        "next_payment_attempt": int(time.time()) + 86400,
+        "attempt_count": 2,
+    }
+    return {
+        "id": "evt_test_" + secrets.token_hex(8),
+        "object": "event",
+        "type": "invoice.updated",
+        "api_version": "2024-11-20.acacia",
+        "created": int(time.time()),
+        "data": {
+            "object": base_obj,
+            "previous_attributes": {
+                "next_payment_attempt": int(time.time()) - 86400,
+                "attempt_count": 1,
+            },
+        },
+    }
+
+
+def build_invoice_marked_uncollectible_event(*, customer: str) -> dict:
+    return _event_envelope("invoice.marked_uncollectible", {
+        "id": "in_test_" + secrets.token_hex(8),
+        "object": "invoice",
+        "customer": customer,
+        "status": "uncollectible",
+    })
+
+
+def build_invoice_finalized_event(*, customer: str) -> dict:
+    return _event_envelope("invoice.finalized", {
+        "id": "in_test_" + secrets.token_hex(8),
+        "object": "invoice",
+        "customer": customer,
+        "status": "open",
+        "metadata": {"tax_policy_ref": "tax_policy_v1_local"},
+    })
+
+
 def post_webhook(event: dict, *, ts_offset: int = 0,
                  secret: str = WEBHOOK_SECRET) -> tuple[int, str]:
     payload = json.dumps(event, separators=(",", ":")).encode()
@@ -321,13 +368,40 @@ def main() -> None:
         sys.exit(f"customer.subscription.updated failed: {status} {parsed}")
     print(f"      {parsed}")
 
-    print("[9/9] POST customer.subscription.deleted...")
+    print("[9/12] POST customer.subscription.deleted...")
     status, body = post_webhook(
         build_subscription_deleted_event(customer=customer, subscription=subscription),
     )
     parsed = json.loads(body)
     if status != 200 or not parsed.get("received"):
         sys.exit(f"customer.subscription.deleted failed: {status} {parsed}")
+    print(f"      {parsed}")
+
+    print("[10/12] POST invoice.updated (dunning signal)...")
+    status, body = post_webhook(
+        build_invoice_dunning_updated_event(customer=customer),
+    )
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("received"):
+        sys.exit(f"invoice.updated dunning failed: {status} {parsed}")
+    print(f"      {parsed}")
+
+    print("[11/12] POST invoice.marked_uncollectible...")
+    status, body = post_webhook(
+        build_invoice_marked_uncollectible_event(customer=customer),
+    )
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("received"):
+        sys.exit(f"invoice.marked_uncollectible failed: {status} {parsed}")
+    print(f"      {parsed}")
+
+    print("[12/12] POST invoice.finalized (tax_policy)...")
+    status, body = post_webhook(
+        build_invoice_finalized_event(customer=customer),
+    )
+    parsed = json.loads(body)
+    if status != 200 or not parsed.get("received"):
+        sys.exit(f"invoice.finalized failed: {status} {parsed}")
     print(f"      {parsed}")
 
     print()

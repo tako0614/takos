@@ -22,14 +22,14 @@
  * Idempotent on restart. No bootstrap step needed.
  */
 
-const KERNEL_URL = Deno.env.get("KERNEL_URL") ?? "http://kernel:8788";
-const KERNEL_TOKEN = Deno.env.get("KERNEL_DEPLOY_TOKEN") ??
-  Deno.env.get("TAKOSUMI_DEPLOY_TOKEN") ?? "";
-const CADDY_ADMIN_URL = Deno.env.get("CADDY_ADMIN_URL") ??
-  "http://caddy:2019";
-const POLL_INTERVAL_MS = Number(Deno.env.get("POLL_INTERVAL_MS") ?? "5000");
-const DYNAMIC_HOST_SUFFIX = Deno.env.get("DYNAMIC_HOST_SUFFIX") ??
-  ".app.takos.test";
+const KERNEL_URL = Deno.env.get('KERNEL_URL') ?? 'http://kernel:8788';
+const KERNEL_TOKEN = Deno.env.get('KERNEL_DEPLOY_TOKEN') ??
+  Deno.env.get('TAKOSUMI_DEPLOY_TOKEN') ?? '';
+const CADDY_ADMIN_URL = Deno.env.get('CADDY_ADMIN_URL') ??
+  'http://caddy:2019';
+const POLL_INTERVAL_MS = Number(Deno.env.get('POLL_INTERVAL_MS') ?? '5000');
+const DYNAMIC_HOST_SUFFIX = Deno.env.get('DYNAMIC_HOST_SUFFIX') ??
+  '.app.takos.test';
 
 interface KernelDeploymentRoute {
   readonly host?: string;
@@ -86,9 +86,7 @@ async function fetchCaddyRoutes(): Promise<readonly CaddyRoute[]> {
 
 function isDynamicRoute(route: CaddyRoute): boolean {
   const hosts = route.match?.flatMap((m) => m.host ?? []) ?? [];
-  return hosts.some((host) =>
-    host.endsWith(DYNAMIC_HOST_SUFFIX) && host !== DYNAMIC_HOST_SUFFIX.slice(1)
-  );
+  return hosts.some((host) => host.endsWith(DYNAMIC_HOST_SUFFIX) && host !== DYNAMIC_HOST_SUFFIX.slice(1));
 }
 
 function caddyRouteFor(route: KernelDeploymentRoute): CaddyRoute | null {
@@ -103,7 +101,7 @@ function caddyRouteFor(route: KernelDeploymentRoute): CaddyRoute | null {
   return {
     match: [{ host: [route.host] }],
     handle: [{
-      handler: "reverse_proxy",
+      handler: 'reverse_proxy',
       upstreams: [{ dial: `${route.upstream}:${port}` }],
     }],
     terminal: true,
@@ -119,7 +117,7 @@ async function tick(): Promise<void> {
     const staticRoutes = currentRoutes.filter((r) => !isDynamicRoute(r));
     const dynamicRoutes: CaddyRoute[] = [];
     for (const dep of deployments) {
-      if (dep.status !== "applied") continue;
+      if (dep.status !== 'applied') continue;
       for (const route of dep.desired?.routes ?? []) {
         const caddyRoute = caddyRouteFor(route);
         if (caddyRoute) dynamicRoutes.push(caddyRoute);
@@ -129,8 +127,8 @@ async function tick(): Promise<void> {
     const res = await fetch(
       `${CADDY_ADMIN_URL}/config/apps/http/servers/srv0/routes`,
       {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify(merged),
       },
     );

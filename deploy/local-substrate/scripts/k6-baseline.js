@@ -11,65 +11,67 @@
 //
 // NOTE: these thresholds are loose regression-watch numbers, NOT SLO
 // targets. Production runs on Cloudflare's edge, not this machine.
-import http from "k6/http";
-import { check } from "k6";
+import http from 'k6/http';
+import { check } from 'k6';
 
 export const options = {
   scenarios: {
     install_preview: {
-      executor: "constant-arrival-rate",
+      executor: 'constant-arrival-rate',
       rate: 10,
-      timeUnit: "1s",
-      duration: "20s",
+      timeUnit: '1s',
+      duration: '20s',
       preAllocatedVUs: 5,
       maxVUs: 20,
-      exec: "installPreview",
+      exec: 'installPreview',
     },
     oidc_discovery: {
-      executor: "constant-arrival-rate",
+      executor: 'constant-arrival-rate',
       rate: 10,
-      timeUnit: "1s",
-      duration: "20s",
+      timeUnit: '1s',
+      duration: '20s',
       preAllocatedVUs: 5,
       maxVUs: 20,
-      exec: "oidcDiscovery",
+      exec: 'oidcDiscovery',
     },
   },
   thresholds: {
-    "http_req_failed{scenario:install_preview}": ["rate<0.01"],
-    "http_req_failed{scenario:oidc_discovery}": ["rate<0.01"],
-    // Loose thresholds — TLS handshake + Caddy proxy + worker round-trip.
-    // Tighten in CI once a stable per-host baseline is established.
-    "http_req_duration{scenario:install_preview}": ["p(95)<3000"],
-    "http_req_duration{scenario:oidc_discovery}": ["p(95)<1500"],
+    'http_req_failed{scenario:install_preview}': ['rate<0.01'],
+    'http_req_failed{scenario:oidc_discovery}': ['rate<0.01'],
+    // Tight thresholds — actual measured p95 on the local-substrate
+    // (via Caddy + TLS) is ~8ms for install_preview and ~5ms for OIDC
+    // discovery. Set to ~5× current baseline so a 5× regression fails
+    // smoke. Previous values (3000ms / 1500ms) were ~400× looser and
+    // wouldn't catch a real performance regression.
+    'http_req_duration{scenario:install_preview}': ['p(95)<50'],
+    'http_req_duration{scenario:oidc_discovery}': ['p(95)<30'],
   },
 };
 
-const PREVIEW_URL = "https://cloud.takosumi.test/v1/install/preview";
-const OIDC_URL = "https://cloud.takosumi.test/.well-known/openid-configuration";
+const PREVIEW_URL = 'https://cloud.takosumi.test/v1/install/preview';
+const OIDC_URL = 'https://cloud.takosumi.test/.well-known/openid-configuration';
 
 export function installPreview() {
   const res = http.post(
     PREVIEW_URL,
     JSON.stringify({
       source: {
-        gitUrl: "https://github.com/tako0614/takos.git",
-        ref: "main",
+        gitUrl: 'https://github.com/tako0614/takos.git',
+        ref: 'main',
       },
     }),
-    { headers: { "Content-Type": "application/json" } },
+    { headers: { 'Content-Type': 'application/json' } },
   );
   check(res, {
-    "preview status 200": (r) => r.status === 200,
-    "preview has appId": (r) => r.json("appId") !== undefined,
+    'preview status 200': (r) => r.status === 200,
+    'preview has appId': (r) => r.json('appId') !== undefined,
   });
 }
 
 export function oidcDiscovery() {
   const res = http.get(OIDC_URL);
   check(res, {
-    "oidc status 200": (r) => r.status === 200,
-    "oidc has authorization_endpoint": (r) =>
-      r.json("authorization_endpoint") !== undefined,
+    'oidc status 200': (r) => r.status === 200,
+    'oidc has authorization_endpoint': (r) => r.json('authorization_endpoint') !== undefined,
   });
 }

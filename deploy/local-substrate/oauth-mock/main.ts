@@ -17,33 +17,33 @@
  *   (same for GITHUB)
  */
 
-const PORT = Number(Deno.env.get("PORT") ?? "8789");
+const PORT = Number(Deno.env.get('PORT') ?? '8789');
 
 interface Provider {
-  readonly id: "google" | "github";
+  readonly id: 'google' | 'github';
   readonly userInfo: () => Record<string, unknown>;
 }
 
 const PROVIDERS: Record<string, Provider> = {
   google: {
-    id: "google",
+    id: 'google',
     userInfo: () => ({
-      sub: "google_mock_user_001",
-      email: "mock.google.user@example.invalid",
+      sub: 'google_mock_user_001',
+      email: 'mock.google.user@example.invalid',
       email_verified: true,
-      name: "Mock Google User",
-      given_name: "Mock",
-      family_name: "User",
-      locale: "ja",
+      name: 'Mock Google User',
+      given_name: 'Mock',
+      family_name: 'User',
+      locale: 'ja',
     }),
   },
   github: {
-    id: "github",
+    id: 'github',
     userInfo: () => ({
       id: 1010101,
-      login: "mock-github-user",
-      name: "Mock GitHub User",
-      email: "mock.github.user@example.invalid",
+      login: 'mock-github-user',
+      name: 'Mock GitHub User',
+      email: 'mock.github.user@example.invalid',
     }),
   },
 };
@@ -53,7 +53,7 @@ const PROVIDERS: Record<string, Provider> = {
 const codes = new Map<string, { providerId: string; expiresAt: number }>();
 
 function newCode(providerId: string): string {
-  const code = `mock_${providerId}_${crypto.randomUUID().replaceAll("-", "")}`;
+  const code = `mock_${providerId}_${crypto.randomUUID().replaceAll('-', '')}`;
   codes.set(code, { providerId, expiresAt: Date.now() + 5 * 60 * 1000 });
   return code;
 }
@@ -66,12 +66,14 @@ function consumeCode(code: string): { providerId: string } | null {
   return { providerId: entry.providerId };
 }
 
-Deno.serve({ port: PORT, hostname: "0.0.0.0" }, async (req) => {
+Deno.serve({ port: PORT, hostname: '0.0.0.0' }, async (req) => {
   const url = new URL(req.url);
-  console.log(`[oauth-mock] ${req.method} ${url.pathname}${url.search ? "?" + url.searchParams.toString().slice(0, 80) : ""}`);
+  console.log(
+    `[oauth-mock] ${req.method} ${url.pathname}${url.search ? '?' + url.searchParams.toString().slice(0, 80) : ''}`,
+  );
 
-  if (url.pathname === "/healthz") {
-    return new Response("ok", { headers: { "content-type": "text/plain" } });
+  if (url.pathname === '/healthz') {
+    return new Response('ok', { headers: { 'content-type': 'text/plain' } });
   }
 
   // /tls-fail/{authorize,token,userinfo} — negative test surface.
@@ -81,21 +83,21 @@ Deno.serve({ port: PORT, hostname: "0.0.0.0" }, async (req) => {
   //
   // /authorize behaves normally (so the dance reaches /token), but
   // /token + /userinfo always return 503.
-  if (url.pathname === "/tls-fail/authorize") {
-    const redirectUri = url.searchParams.get("redirect_uri");
-    const state = url.searchParams.get("state");
+  if (url.pathname === '/tls-fail/authorize') {
+    const redirectUri = url.searchParams.get('redirect_uri');
+    const state = url.searchParams.get('state');
     if (!redirectUri || !state) {
-      return Response.json({ error: "invalid_request" }, { status: 400 });
+      return Response.json({ error: 'invalid_request' }, { status: 400 });
     }
-    const code = newCode("tls-fail");
+    const code = newCode('tls-fail');
     const target = new URL(redirectUri);
-    target.searchParams.set("code", code);
-    target.searchParams.set("state", state);
+    target.searchParams.set('code', code);
+    target.searchParams.set('state', state);
     return Response.redirect(target.toString(), 302);
   }
-  if (url.pathname === "/tls-fail/token" || url.pathname === "/tls-fail/userinfo") {
+  if (url.pathname === '/tls-fail/token' || url.pathname === '/tls-fail/userinfo') {
     return Response.json(
-      { error: "tls_misconfigured", error_description: "simulated upstream TLS / 5xx" },
+      { error: 'tls_misconfigured', error_description: 'simulated upstream TLS / 5xx' },
       { status: 503 },
     );
   }
@@ -104,54 +106,56 @@ Deno.serve({ port: PORT, hostname: "0.0.0.0" }, async (req) => {
   const authzMatch = url.pathname.match(/^\/(google|github)\/authorize$/);
   if (authzMatch) {
     const providerId = authzMatch[1];
-    const redirectUri = url.searchParams.get("redirect_uri");
-    const state = url.searchParams.get("state");
+    const redirectUri = url.searchParams.get('redirect_uri');
+    const state = url.searchParams.get('state');
     if (!redirectUri || !state) {
-      return Response.json({ error: "invalid_request", error_description: "redirect_uri and state required" }, { status: 400 });
+      return Response.json({ error: 'invalid_request', error_description: 'redirect_uri and state required' }, {
+        status: 400,
+      });
     }
     const code = newCode(providerId);
     const target = new URL(redirectUri);
-    target.searchParams.set("code", code);
-    target.searchParams.set("state", state);
+    target.searchParams.set('code', code);
+    target.searchParams.set('state', state);
     return Response.redirect(target.toString(), 302);
   }
 
   // /token — google uses /token, github traditionally /access_token. Accept either.
   const tokenMatch = url.pathname.match(/^\/(google|github)\/(?:token|access_token)$/);
-  if (tokenMatch && req.method === "POST") {
+  if (tokenMatch && req.method === 'POST') {
     const providerId = tokenMatch[1];
     const body = await req.text();
     const form = new URLSearchParams(body);
-    const code = form.get("code");
+    const code = form.get('code');
     if (!code) {
-      return Response.json({ error: "invalid_request", error_description: "code required" }, { status: 400 });
+      return Response.json({ error: 'invalid_request', error_description: 'code required' }, { status: 400 });
     }
     const consumed = consumeCode(code);
     if (!consumed || consumed.providerId !== providerId) {
-      return Response.json({ error: "invalid_grant" }, { status: 400 });
+      return Response.json({ error: 'invalid_grant' }, { status: 400 });
     }
-    const accessToken = `mock_access_${providerId}_${crypto.randomUUID().replaceAll("-", "")}`;
+    const accessToken = `mock_access_${providerId}_${crypto.randomUUID().replaceAll('-', '')}`;
     return Response.json({
       access_token: accessToken,
-      token_type: "Bearer",
+      token_type: 'Bearer',
       expires_in: 3600,
-      scope: providerId === "google" ? "openid profile email" : "read:user user:email",
+      scope: providerId === 'google' ? 'openid profile email' : 'read:user user:email',
     });
   }
 
   // /userinfo — google uses /userinfo, github traditionally /user.
   const userInfoMatch = url.pathname.match(/^\/(google|github)\/(?:userinfo|user)$/);
-  if (userInfoMatch && req.method === "GET") {
+  if (userInfoMatch && req.method === 'GET') {
     const providerId = userInfoMatch[1];
     const provider = PROVIDERS[providerId];
-    const auth = req.headers.get("authorization") ?? "";
+    const auth = req.headers.get('authorization') ?? '';
     if (!/^bearer\s+mock_access_/i.test(auth)) {
-      return Response.json({ error: "invalid_token" }, { status: 401 });
+      return Response.json({ error: 'invalid_token' }, { status: 401 });
     }
     return Response.json(provider.userInfo());
   }
 
-  return Response.json({ error: "not_found", path: url.pathname }, { status: 404 });
+  return Response.json({ error: 'not_found', path: url.pathname }, { status: 404 });
 });
 
 console.log(`[oauth-mock] listening on :${PORT}`);

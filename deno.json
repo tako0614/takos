@@ -57,6 +57,8 @@
       "agent/",
       "git/",
       "node_modules/",
+      "website/.output/",
+      "website/.vinxi/",
       "CLA.md",
       "CONTRIBUTING.md",
       "SECURITY.md",
@@ -78,6 +80,8 @@
       "agent/",
       "git/",
       "node_modules/",
+      "website/.output/",
+      "website/.vinxi/",
       "docs/.vitepress/cache/",
       "docs/.vitepress/dist/",
       ".terraform-plan/"

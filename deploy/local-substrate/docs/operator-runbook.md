@@ -45,6 +45,7 @@ docker compose -f compose.ingress.yml logs caddy | grep -i "error\|acme"
 ```
 
 典型例:
+
 - `caddy/runtime/pebble.minica.pem` が無い → `bash scripts/up.sh` を再実行
 - Pebble が起動しきっていない → up.sh の `Waiting for Pebble` ループに任せる
 

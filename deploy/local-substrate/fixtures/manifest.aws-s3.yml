@@ -14,6 +14,6 @@ spec:
       shape:
         id: object-store
         version: v1
-      provider: "@takos/aws-s3"
+      provider: '@takos/aws-s3'
       spec:
         bucketName: takos-local-hello-bucket

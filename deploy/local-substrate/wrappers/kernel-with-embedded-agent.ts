@@ -13,16 +13,16 @@
  * module is imported, so LIFECYCLE_AGENT_URL_ENV is set when the kernel
  * reads its env at boot. Hence dynamic import of the kernel.
  */
-import { serveRuntimeAgent } from "/workspace/packages/runtime-agent/src/server.ts";
+import { serveRuntimeAgent } from '/workspace/packages/runtime-agent/src/server.ts';
 import {
   LIFECYCLE_AGENT_TOKEN_ENV,
   LIFECYCLE_AGENT_URL_ENV,
-} from "/workspace/packages/contract/src/runtime-agent-lifecycle.ts";
-import { currentRuntime } from "/workspace/packages/kernel/src/shared/runtime/index.ts";
-import { buildLocalSubstrateRegistry } from "/local-substrate-factories/local-substrate-factories.ts";
+} from '/workspace/packages/contract/src/runtime-agent-lifecycle.ts';
+import { currentRuntime } from '/workspace/packages/kernel/src/shared/runtime/index.ts';
+import { buildLocalSubstrateRegistry } from '/local-substrate-factories/local-substrate-factories.ts';
 
-const agentPort = Number(Deno.env.get("TAKOSUMI_AGENT_PORT") ?? "8789");
-const kernelPort = Number(Deno.env.get("PORT") ?? "8788");
+const agentPort = Number(Deno.env.get('TAKOSUMI_AGENT_PORT') ?? '8789');
+const kernelPort = Number(Deno.env.get('PORT') ?? '8788');
 
 const env = Deno.env.toObject();
 const registry = buildLocalSubstrateRegistry(env);
@@ -32,7 +32,7 @@ const agent = serveRuntimeAgent({
   registry,
   token,
   port: agentPort,
-  hostname: "127.0.0.1",
+  hostname: '127.0.0.1',
 });
 
 Deno.env.set(LIFECYCLE_AGENT_URL_ENV, agent.url);
@@ -46,7 +46,7 @@ console.log(
 // Now that LIFECYCLE_AGENT_URL_ENV is set, importing the kernel will
 // register providers against the embedded agent.
 const kernelModule = await import(
-  "/workspace/packages/kernel/src/index.ts"
+  '/workspace/packages/kernel/src/index.ts'
 );
 const app = kernelModule.default;
 
@@ -62,11 +62,11 @@ const shutdown = (signal: string) => {
     Deno.exit(0);
   });
 };
-runtime.onSignal("SIGINT", () => shutdown("SIGINT"));
-runtime.onSignal("SIGTERM", () => shutdown("SIGTERM"));
+runtime.onSignal('SIGINT', () => shutdown('SIGINT'));
+runtime.onSignal('SIGTERM', () => shutdown('SIGTERM'));
 
 function randomToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }

@@ -12,19 +12,19 @@
 
 services:
   localstack:
-    profiles: ["localstack"]
+    profiles: ['localstack']
     image: localstack/localstack:latest
     restart: unless-stopped
     environment:
       SERVICES: s3,sts,iam,rds
       DEFAULT_REGION: ${AWS_REGION:-us-east-1}
-      DISABLE_CORS_CHECKS: "1"
+      DISABLE_CORS_CHECKS: '1'
     ports:
-      - "127.0.0.1:4566:4566"
+      - '127.0.0.1:4566:4566'
     volumes:
       - localstack-data:/var/lib/localstack
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:4566/_localstack/health || exit 1"]
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:4566/_localstack/health || exit 1']
       interval: 10s
       timeout: 5s
       retries: 30
@@ -39,7 +39,7 @@ services:
   # via a oneshot service that calls k3d cluster create. Cluster API is
   # exposed at https://k3d:6443 inside the network.
   k3d:
-    profiles: ["k3d"]
+    profiles: ['k3d']
     image: rancher/k3s:v1.30.0-k3s1
     restart: unless-stopped
     privileged: true
@@ -56,7 +56,7 @@ services:
       - k3d-data:/var/lib/rancher/k3s
       - k3d-output:/output
     expose:
-      - "6443"
+      - '6443'
     networks:
       takos-local-internal:
         aliases:

@@ -15,7 +15,7 @@ spec:
       shape:
         id: custom-domain
         version: v1
-      provider: "@takos/aws-route53"
+      provider: '@takos/aws-route53'
       spec:
         name: leak-attempt.takos.test
-        target: "127.0.0.1"
+        target: '127.0.0.1'
