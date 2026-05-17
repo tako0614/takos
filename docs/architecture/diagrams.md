@@ -29,7 +29,7 @@ graph TB
   Plugin[Provider Plugin Bundle<br/>composite resolver / binding resolver / materializer]
   Agent[takos-agent<br/>Rust execution service]
   Git[takos-git<br/>Git Smart HTTP / object storage]
-  CF[Cloudflare<br/>Workers / Containers / R2 / D1]
+  CF[Cloudflare<br/>Workers / D1 / R2 / Queues / OCI adapter]
   AWS[AWS<br/>Lambda / Fargate / S3 / RDS]
   GCP[GCP<br/>Cloud Run / GCS / Cloud SQL]
   K8S[Kubernetes<br/>Deployment / Service / PVC]
