@@ -31,7 +31,6 @@ const requiredDocs = [
       '`sha-*` tag',
       'deno task release-manifest:check-artifacts',
       'takosumi/',
-      'takosumi-git/',
       'takos-app',
     ],
   },
