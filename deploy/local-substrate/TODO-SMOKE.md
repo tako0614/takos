@@ -25,8 +25,8 @@ Kernel-on-workerd is upstream work tracked in @takos/takosumi-kernel.
 `scripts/tenant-isolation.sh` runs in strict mode (subject B's cross-read of subject A's installation must be non-200).
 The upstream fix lives in `takosumi-cloud/packages/accounts-service/src/installation-routes.ts` —
 `handleGetAppInstallation` + `handleListAppInstallations` now go through `requireAccountSession()` +
-`subjectCanAccessAccount()` (see `account-session.ts`). CI runs with `TENANT_ISOLATION_STRICT=1` so any regression back
-to the open behavior is a hard FAIL.
+`subjectCanAccessAccount()` (see `account-session.ts`). CI runs the strict smoke directly, so any regression back to the
+open behavior is a hard FAIL.
 
 ## Full ActivityPub Follow → Accept federation smoke
 
