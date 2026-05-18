@@ -64,13 +64,9 @@ components:
       output: dist/worker.mjs
     routes:
       - my-first-app.example.com/*
-    use:
-      auth:
-        mount: oidc
-  auth:
-    kind: oidc
-    redirectPaths:
-      - /auth/oidc/callback
+    listen:
+      operator.identity.oidc:
+        as: env
 interfaces:
   launch:
     target: web
@@ -111,9 +107,9 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 - **初回インストール直後**: launch token で自動的にセッションが作られるため、
   再ログイン不要でアプリが開きます
 
-OIDC の設定 (clientId, clientSecret 等) は `.takosumi.yml` の `components.auth` と
-`components.web.use.auth` で
-宣言するだけで、インストール時に自動で払い出されます。
+OIDC の設定 (clientId, clientSecret 等) は AppSpec で `listen: { operator.identity.oidc: { as: env } }`
+を宣言するだけで、 takosumi-cloud (operator account plane) が provider として publish して
+インストール時に自動で払い出されます。 worker は `OIDC_*` env を読むだけです。
 
 詳しくは [OIDC consumer](/apps/oidc-consumer) を参照。
 

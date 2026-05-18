@@ -33,7 +33,7 @@ forward-only に追加します。
 ## 戻るもの
 
 - workload code
-- AppSpec use edge から materialize された env
+- AppSpec の namespace `publish` / `listen` declaration から materialize された env
 - route / custom-domain desired state
 - resource desired state
 - retained artifact digest

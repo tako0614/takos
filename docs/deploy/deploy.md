@@ -20,7 +20,7 @@ provider materialization、Installation / Deployment record の保存は Takosum
 
 ## 流れ
 
-1. app author は `.takosumi.yml` に `metadata`、`components`、`use` edge、`interfaces`、`permissions` を書く
+1. app author は `.takosumi.yml` に `metadata`、 `components` (各 component の `publish` / `listen`)、 `interfaces`、 `permissions` を書く
 2. install dry-run で source commit、component changes、推定コスト、`expected.commit` を確認する
 3. user approval 後に `POST /v1/installations` で Installation を作成する
 4. Takosumi が source を fetch し、必要な `component.build` を実行し、provider に materialize を依頼する
@@ -31,9 +31,10 @@ provider materialization、Installation / Deployment record の保存は Takosum
 
 | ファイル | 読む主体 | 役割 |
 | --- | --- | --- |
-| `.takosumi.yml` | Takosumi | AppSpec (`apiVersion: takosumi.dev/v1` / `kind: App`)。metadata / components / use edge / interfaces / permissions |
+| `.takosumi.yml` | Takosumi | AppSpec (`apiVersion: takosumi.dev/v1` / `kind: App`)。 metadata / components (`kind` / `publish` / `listen`) / interfaces / permissions |
 
-AppSpec は 1 ファイルです。source root にはこのファイルだけを置き、build や dependency edge もここに集約します。
+AppSpec は 1 ファイルです。 source root にはこのファイルだけを置き、 build や namespace
+pub/sub (`publish` / `listen`) もここに集約します。
 
 ## 関連ページ
 

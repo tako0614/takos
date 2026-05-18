@@ -170,9 +170,9 @@ POST /v1/installations/{id}/deployments
 POST /v1/installations/{id}/rollback
 ```
 
-AppSpec は component catalog (`worker` / `postgres` / `object-store` / `oidc` /
-`custom-domain`) と `use:` edge を使って、runtime と resource の関係を構造的に
-宣言します。
+AppSpec は extensible kind catalog (e.g. `worker` / `postgres` / `object-store` /
+`custom-domain`、 alias / URI による拡張可) と namespace pub/sub (`publish` / `listen`)
+を使って、 runtime と resource の関係を構造的に宣言します。
 
 ```yaml
 apiVersion: takosumi.dev/v1
@@ -188,11 +188,14 @@ components:
       output: dist/api.mjs
     routes:
       - api.example.com/*
-    use:
-      db:
-        env: DATABASE_URL
+    listen:
+      example.api-with-db.db:
+        as: env
+        prefix: DB_
   db:
     kind: postgres
+    publish:
+      - example.api-with-db.db
     spec:
       class: standard
 ```

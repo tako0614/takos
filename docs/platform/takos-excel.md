@@ -33,20 +33,17 @@ components:
       - /api
       - /mcp
       - /files/:id
-    use:
-      spreadsheets:
-        envPrefix: BLOB_
-      auth:
-        mount: oidc
+    listen:
+      jp.takos.excel.spreadsheets:
+        as: env
+        prefix: BLOB_
+      operator.identity.oidc:
+        as: env
 
   spreadsheets:
     kind: object-store
-
-  auth:
-    kind: oidc
-    redirectPaths:
-      - /api/auth/callback
-    scopes: [openid, profile, email]
+    publish:
+      - jp.takos.excel.spreadsheets
 
 interfaces:
   launch:

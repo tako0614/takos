@@ -25,7 +25,7 @@ components:
 ### AppSpec の解決に失敗する
 
 通常の install / deploy は `.takosumi.yml` を Takosumi installer が読み、
-build / dependency edge / OIDC / route output を解決してから apply します。
+build / namespace pub/sub / route output を解決してから apply します。
 
 ```bash
 takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
@@ -33,8 +33,11 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
 
 dry-run が失敗する場合は、`.takosumi.yml` の `components.*.build.output`、
-`components.*.use` edge、OIDC `redirectPaths`、install 時の `source` と
-`spaceId` を確認してください。
+`components.*.publish` / `components.*.listen` 宣言、 install 時の `source` と
+`spaceId` を確認してください。 `listen` 側の namespace path が sibling component
+の `publish` または operator が publish する namespace (e.g. `operator.identity.oidc`)
+に解決できないと、 dry-run は HTTP `409 Conflict` で失敗します。 binding payload が
+size 上限 (`413 Payload Too Large`) を超える場合も同様に dry-run で報告されます。
 
 ### build output がない
 
@@ -45,9 +48,9 @@ dry-run が失敗する場合は、`.takosumi.yml` の `components.*.build.outpu
 
 ### OIDC redirect が失敗する
 
-- `.takosumi.yml` の `components.<auth>.redirectPaths` を確認する
+- `.takosumi.yml` の `listen: { operator.identity.oidc: { as: env } }` 宣言を確認する
 - materialized `OIDC_REDIRECT_URI` が app の callback と一致するか確認する
-- Accounts 側の client registration と issuer URL を確認する
+- Takosumi Accounts (takosumi-cloud) 側の client registration と issuer URL を確認する
 
 ### launch token が redeem できない
 

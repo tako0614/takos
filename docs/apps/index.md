@@ -25,5 +25,6 @@ Takos では "app" という言葉が 2 つの意味で出ます。
 | Installable App Model  | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)   |
 | Installation ledger | [ecosystem Installation docs](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md) |
 | `.takosumi.yml`    | [Takosumi AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)            |
-| binding kinds          | [Takosumi AppSpec use edges](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)      |
+| component kind catalog | [Takosumi AppSpec component kind catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/component-kind-catalog.md) |
+| namespace pub/sub      | [Takosumi AppSpec namespace pub/sub](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)      |
 | launch token           | [takosumi-cloud launch token docs](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)        |
