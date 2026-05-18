@@ -16,19 +16,23 @@ components:
       output: dist/api.mjs
     routes:
       - api.example.com/*
-    use:
-      db:
-        env: DATABASE_URL
+    listen:
+      example.full-stack.db:
+        as: env
+        prefix: DB_
   jobs:
     kind: worker
     build:
       command: npm ci && npm run build:jobs
       output: dist/jobs.mjs
-    use:
-      db:
-        env: DATABASE_URL
+    listen:
+      example.full-stack.db:
+        as: env
+        prefix: DB_
   db:
     kind: postgres
+    publish:
+      - example.full-stack.db
     spec:
       class: standard
 interfaces:
@@ -47,7 +51,8 @@ kernel は workflow / cron / scheduler surface を public concept にしませ�
 ポイント:
 
 - 複数 workload は `components` に複数 component として並べる
-- shared database は `use:` edge で各 workload に渡す
+- shared database は 1 つの namespace path (`example.full-stack.db`) を `db` が publish し、
+  `api` / `jobs` が同じ namespace を `listen` する
 - HTTP entrypoint は route-bearing worker と `interfaces.launch` で表現する
 
 関連:

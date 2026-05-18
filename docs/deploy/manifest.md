@@ -14,10 +14,11 @@ Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/compone
 ## 基本原則
 
 - `apiVersion: takosumi.dev/v1` と `kind: App` は必須
-- runtime-bearing unit は `components.<name>` として書き、 `kind` を 5 種
-  (`worker` / `postgres` / `object-store` / `oidc` / `custom-domain`) から選ぶ
+- runtime-bearing unit は `components.<name>` として書き、 `kind` を catalog から選ぶ
+  (= catalog は extensible で、 alias / URI による拡張可)
 - workflow / CI / cron は AppSpec に内包しない (= `component.build` の最小 recipe のみ表現可)
-- component 間の依存は `use:` edge で構造的に宣言する (= 文字列 placeholder は廃止)
+- component 間の依存は namespace pub/sub (`publish` / `listen`) で構造的に宣言する
+  (= 文字列 placeholder / `use:` edge は廃止)
 
 ## Worker
 
@@ -53,11 +54,14 @@ components:
       output: dist/worker.mjs
     routes:
       - api.example.com/*
-    use:
-      db:
-        env: DATABASE_URL
+    listen:
+      com.example.api.db:
+        as: env
+        prefix: DB_
   db:
     kind: postgres
+    publish:
+      - com.example.api.db
     spec:
       class: standard
 ```
@@ -78,14 +82,9 @@ components:
       output: dist/worker.mjs
     routes:
       - /
-    use:
-      auth:
-        mount: oidc
-  auth:
-    kind: oidc
-    redirectPaths:
-      - /api/auth/callback
-    scopes: [openid, profile, email]
+    listen:
+      operator.identity.oidc:
+        as: env
 
 interfaces:
   launch:
@@ -96,9 +95,11 @@ interfaces:
     path: /healthz
 ```
 
-`use: { mount: oidc }` が宣言されると、 Installation 作成時に Takosumi Accounts が
-per-Installation OIDC client を発行し、 `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
-`OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS` を worker の env に inject します。
+`listen: { operator.identity.oidc: { as: env } }` が宣言されると、 Installation 作成時に
+takosumi-cloud が publish する `operator.identity.oidc` namespace から per-Installation
+OIDC client が発行され、 `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
+`OIDC_REDIRECT_URIS` が worker の env に inject されます。 OIDC kind 自身は AppSpec に
+書かず、 takosumi-cloud (operator account plane) が provider として提供します。
 
 ## 関連ページ
 

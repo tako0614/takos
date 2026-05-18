@@ -72,4 +72,4 @@ interfaces:
 ## 次に読むページ
 
 - [Environment](/deploy/environment)
-- [AppSpec use edges](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [AppSpec namespace pub/sub](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)

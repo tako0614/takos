@@ -34,20 +34,17 @@ components:
       - /api
       - /mcp
       - /files/:id
-    use:
-      documents:
-        envPrefix: BLOB_
-      auth:
-        mount: oidc
+    listen:
+      jp.takos.docs.documents:
+        as: env
+        prefix: BLOB_
+      operator.identity.oidc:
+        as: env
 
   documents:
     kind: object-store
-
-  auth:
-    kind: oidc
-    redirectPaths:
-      - /api/auth/callback
-    scopes: [openid, profile, email]
+    publish:
+      - jp.takos.docs.documents
 
 interfaces:
   launch:
@@ -69,9 +66,11 @@ permissions:
 
 ## OIDC consumer
 
-`use: { mount: oidc }` から Takosumi が per-Installation OIDC client を発行し、
+`listen: { operator.identity.oidc: { as: env } }` を宣言すると、 takosumi-cloud
+(operator account plane) が provider として per-Installation OIDC client を発行し、
 `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS`
-を worker に env で inject します。 詳細は [OIDC Consumer](/apps/oidc-consumer)。
+を worker に env で inject します。 OIDC kind 自体は AppSpec に書きません。
+詳細は [OIDC Consumer](/apps/oidc-consumer)。
 
 ## 関連ページ
 

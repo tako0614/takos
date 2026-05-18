@@ -13,7 +13,7 @@
 ### [Worker + DB](/examples/worker-with-db)
 
 - worker component plus postgres / object-store components
-- runtime env is materialized from `use:` edges
+- runtime env is materialized from namespace `publish` / `listen` declarations
 
 ### [Worker + Container](/examples/worker-with-container)
 
@@ -28,7 +28,7 @@
 ### [Multi-service](/examples/multi-service)
 
 - multiple AppSpec components
-- explicit `use:` wiring between components
+- explicit namespace pub/sub wiring between components (`publish` / `listen`)
 
 ## Default Group 構成
 

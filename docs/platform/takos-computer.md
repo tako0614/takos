@@ -64,15 +64,9 @@ components:
       - /session/:id
       - /session/:id/mcp
       - /icons/computer.svg
-    use:
-      auth:
-        mount: oidc
-
-  auth:
-    kind: oidc
-    redirectPaths:
-      - /gui/api/auth/callback
-    scopes: [openid, profile, email]
+    listen:
+      operator.identity.oidc:
+        as: env
 
 interfaces:
   launch:
@@ -108,8 +102,9 @@ permissions:
 
 published MCP endpoint の認証には `PUBLISHED_MCP_AUTH_TOKEN` を使います。これは
 agent (= MCP client) が `/mcp` を呼ぶときの machine-to-machine bearer token で、
-**エンドユーザー認証とは別の layer** です。 エンドユーザーの sign-in は
-`kind: oidc` component 経由の OIDC consumer flow で処理します。
+**エンドユーザー認証とは別の layer** です。 エンドユーザーの sign-in は AppSpec の
+`listen: { operator.identity.oidc: { as: env } }` 経由で takosumi-cloud が provider
+として発行する OIDC consumer flow で処理します。
 
 managed Takos installation では `PUBLISHED_MCP_AUTH_TOKEN` を自動生成します。
 他に以下の 2 つの machine token も内部で使い、 それぞれ用途が異なります:

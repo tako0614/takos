@@ -33,20 +33,17 @@ components:
       - /api
       - /mcp
       - /files/:id
-    use:
-      presentations:
-        envPrefix: BLOB_
-      auth:
-        mount: oidc
+    listen:
+      jp.takos.slide.presentations:
+        as: env
+        prefix: BLOB_
+      operator.identity.oidc:
+        as: env
 
   presentations:
     kind: object-store
-
-  auth:
-    kind: oidc
-    redirectPaths:
-      - /api/auth/callback
-    scopes: [openid, profile, email]
+    publish:
+      - jp.takos.slide.presentations
 
 interfaces:
   launch:

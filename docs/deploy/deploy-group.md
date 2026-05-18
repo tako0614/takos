@@ -13,7 +13,7 @@ Takosumi v1 の public concept は AppSpec / Installation / Deployment の 3 つ
 | AppSpec | source root の `.takosumi.yml` | app author |
 | Installation | Space に install された app 1 件 | operator account plane |
 | Deployment | 1 回の apply / rollback の結果 | Takosumi installer / kernel |
-| Component | `worker` / `postgres` / `object-store` / `oidc` / `custom-domain` | provider / runtime-agent |
+| Component | extensible kind catalog (`worker` / `postgres` / `object-store` / `custom-domain` / 拡張 kind) | provider / runtime-agent |
 
 Installation は ownership、billing、grant、launch token、current Deployment pointer を
 持ちます。Deployment は source commit、manifest digest、materialized resources、
@@ -44,19 +44,23 @@ components:
       output: dist/api.mjs
     routes:
       - api.example.com/*
-    use:
-      db:
-        env: DATABASE_URL
+    listen:
+      example.full-stack.db:
+        as: env
+        prefix: DB_
   jobs:
     kind: worker
     build:
       command: npm ci && npm run build:jobs
       output: dist/jobs.mjs
-    use:
-      db:
-        env: DATABASE_URL
+    listen:
+      example.full-stack.db:
+        as: env
+        prefix: DB_
   db:
     kind: postgres
+    publish:
+      - example.full-stack.db
 ```
 
 この AppSpec を apply すると、`api` / `jobs` / `db` の materialization が同じ

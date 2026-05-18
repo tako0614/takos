@@ -7,13 +7,13 @@
 
 ## 一覧
 
-| app | 既定 ref | 役割 | 主な bindings |
+| app | 既定 ref | 役割 | 主な component / namespace listen |
 | --- | --- | --- | --- |
-| [takos-docs](/platform/takos-docs) | `v0.1.2` tag | リッチテキストエディタ | launcher / MCP / file handler / storage grant |
-| [takos-excel](/platform/takos-excel) | `v0.1.2` tag | スプレッドシート | launcher / MCP / file handler / storage grant |
-| [takos-slide](/platform/takos-slide) | `v0.1.2` tag | プレゼンテーション | launcher / MCP / file handler / storage grant |
-| [takos-computer](/platform/takos-computer) | `v2.1.2` tag | browser automation / sandbox computer | launcher / MCP / sandbox runtime / Takos API grant |
-| [yurucommu](/platform/yurucommu) | `v1.2.6` tag | ActivityPub / community social | `identity.oidc@v1` / DB / object-store / queue |
+| [takos-docs](/platform/takos-docs) | `v0.1.2` tag | リッチテキストエディタ | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
+| [takos-excel](/platform/takos-excel) | `v0.1.2` tag | スプレッドシート | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
+| [takos-slide](/platform/takos-slide) | `v0.1.2` tag | プレゼンテーション | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
+| [takos-computer](/platform/takos-computer) | `v2.1.2` tag | browser automation / sandbox computer | launcher / MCP / sandbox runtime / `operator.identity.oidc` |
+| [yurucommu](/platform/yurucommu) | `v1.2.6` tag | ActivityPub / community social | postgres / object-store / `operator.identity.oidc` |
 
 Agent、Chat、Git、Storage、Store は Takos product の core feature であり、
 bundled app distribution には含めません。
@@ -21,9 +21,9 @@ bundled app distribution には含めません。
 ## 動作原理
 
 1. Space 作成時に bundled app entry の Git URL / ref を解決する
-2. Takosumi Accounts が Installation を作成する
+2. takosumi-cloud (operator account plane / リファレンス実装: Takosumi Accounts) が Installation を作成する
 3. `POST /v1/installations` が source ref を commit に pin する
-4. `.takosumi.yml` から binding / grant / permission dry-run を作る
+4. `.takosumi.yml` から namespace pub/sub (`publish` / `listen`) / grant / permission dry-run を作る
 5. `components.<name>.build` が必要な artifact を作る
 6. Takosumi kernel が Deployment record と provider outputs を記録する
 7. Installation ledger に source commit / AppSpec digest / Deployment evidence を記録する
