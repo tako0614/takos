@@ -133,7 +133,6 @@ end user 向けの OIDC issuer は Takosumi Accounts に置きます。fresh ope
 Takos bootstrap の primary path は Web UI です。Takos product CLI を fresh
 operator の主要導線として増やしません。
 
-application manifest / workflow / git bridge は `takosumi-git`、kernel の
-explicit manifest apply は `takosumi` が扱います。Takos product は Web UI と
+AppSpec install / Deployment apply は `takosumi` が扱います。Takos product は Web UI と
 public API から space / catalog / app-local product API を扱い、OAuth / billing は
 operator account plane の OIDC / BillingPort を consume します。

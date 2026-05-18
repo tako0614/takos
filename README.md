@@ -74,7 +74,7 @@ takos/
 | プラットフォーム仕様  | `../docs/` (ecosystem root)           |
 | Takosumi kernel docs  | `../takosumi/docs/`                   |
 | Accounts / 課金 docs  | `../takosumi-cloud/docs/`             |
-| Git installer docs    | `../takosumi/docs/`               |
+| Git installer docs    | `../takosumi/docs/`                   |
 | 運用 runbook          | `../takos-private/docs/`              |
 
 ## 関連

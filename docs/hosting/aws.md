@@ -107,7 +107,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 | runtime config  | `runtimeConfig.environment=production`、plugin id は fail-closed empty         |
 | ingress         | ALB ingress class と ALB annotation を使う                                     |
 | service account | IRSA 用 annotation を受け取る                                                  |
-| workloads       | `takos-app` / `takosumi` / `takos-git` / `takos-agent`                         |
+| workloads       | `takos-app` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`       |
 
 overlay は generated artifact です。distribution profile を更新したら:
 

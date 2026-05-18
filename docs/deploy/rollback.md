@@ -6,17 +6,17 @@
 
 ## Installation rollback
 
-install された app は source commit、`.takosumi.yml` digest、compiled manifest
-digest を Installation ledger に pin しています。rollback は以前の pinned
-version を選び、install preview と同じ確認を通して ledger source pointer を戻します。
+install された app は source commit、`.takosumi.yml` AppSpec digest、Deployment
+record を Installation ledger に pin しています。rollback は以前の pinned
+Deployment を選び、install dry-run と同じ確認を通して新しい Deployment を記録します。
 provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません。
 
 ```bash
-takosumi-git rollback inst_abc --to v1.2.3
+takosumi rollback inst_abc dep_previous
 ```
 
-成功すると Installation は `ready` に戻り、InstallationEvent ledger に rollback
-event が残ります。
+成功すると Installation の current Deployment が rollback Deployment に進み、
+ledger に rollback event が残ります。
 
 ## Kernel rollback
 
@@ -27,13 +27,13 @@ current_deployment_id  -> dep_new
 previous_deployment_id -> dep_old
 ```
 
-rollback は `current_deployment_id` を retained Deployment に切り替える pointer
-move です。新しい Deployment record は作りません。
+rollback は retained Deployment を入力に、新しい rollback Deployment record を
+forward-only に追加します。
 
 ## 戻るもの
 
 - workload code
-- compiled manifest の env
+- AppSpec use edge から materialize された env
 - route / custom-domain desired state
 - resource desired state
 - retained artifact digest

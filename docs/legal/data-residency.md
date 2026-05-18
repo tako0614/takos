@@ -22,7 +22,7 @@ contracts must reference the exact residency profile, provider set, and exceptio
 Takos is delivered through the Installable App Model. Account, authentication, contract, and billing are owned by
 **Takosumi Accounts** (the Takosumi Account home region applies). Takos `takos/app` provides the public API / UI surface
 and stores app-local profile derived from the Takosumi Accounts subject in the same residency profile. Takosumi kernel
-is the generic PaaS compute substrate and takosumi-git is the installer / workflow / git bridge; they inherit residency
+is the generic PaaS compute substrate and takosumi owns AppSpec install / Deployment apply; they inherit residency
 requirements only when Takos uses them to operate a customer space or deployment.
 
 Residency decisions attach to the customer space / deployment profile, not to a local CLI convention.

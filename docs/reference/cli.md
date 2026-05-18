@@ -3,7 +3,7 @@
 > このページでわかること: Takos CLI のコマンドと認証方法。
 
 Takos CLI は Space やリポジトリの操作を行うクライアントです。
-マニフェスト作成は `takosumi-git`、直接デプロイは `takosumi` CLI を使います。
+マニフェスト作成は `takosumi`、直接デプロイは `takosumi` CLI を使います。
 
 ## 認証
 
@@ -80,9 +80,9 @@ takos notification list
 
 | 目的 | CLI |
 | --- | --- |
-| Git URL からアプリをインストールする | `takosumi-git install <git-url> --ref <tag>` |
-| アプリを upgrade する | `takosumi-git upgrade <installation-id> --ref <tag>` |
-| コンパイル済み manifest を直接 apply する | `takosumi deploy <manifest>` |
+| Git URL からアプリをインストールする | `takosumi install <git-url> --ref <tag>` |
+| アプリを upgrade する | `takosumi deploy <installation-id> --source <git-url>#<tag>` |
+| Deployment を rollback する | `takosumi rollback <installation-id> <deployment-id>` |
 
 Takos CLI はアプリインストールや kernel apply パイプラインの実行主体ではなく、
 Takos プロダクトの API を操作するクライアントとして使います。

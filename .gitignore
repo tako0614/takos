@@ -4,8 +4,13 @@
 !.env.*.example
 
 node_modules/
+node_modules.root-owned-stale/
 dist/
 coverage/
+website/.output/
+website/.output.*/
+website/.vinxi/
+website/.vinxi.*/
 .wrangler/
 .terraform/
 **/.terraform/

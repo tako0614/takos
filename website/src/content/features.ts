@@ -17,7 +17,7 @@ export const FEATURES: readonly Feature[] = [
   {
     title: 'Takosumi 上で動く',
     body:
-      'Takos は Takosumi PaaS の上で動く top-level product。 だから Cloudflare / AWS / GCP / docker / 自前 VM のどこにでも同じ manifest で deploy できる。',
+      'Takos は Takosumi PaaS の上で動く top-level product。 だから Cloudflare / AWS / GCP / docker / 自前 VM のどこにでも .takosumi.yml AppSpec で install できる。',
   },
   {
     title: 'Federation で繋がる',

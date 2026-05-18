@@ -57,16 +57,16 @@ CI 用 smoke です。
 | サービス           | ポート            | 役割                                          |
 | ------------------ | ----------------- | --------------------------------------------- |
 | `takos-app`        | `8787`            | OIDC consumer / Web UI / public API gateway   |
-| `takosumi`         | `8788`            | generic manifest deploy engine                |
+| `takosumi`         | `8788`            | AppSpec install / Deployment apply engine     |
 | `takos-agent`      | `8789`            | agent execution service                       |
 | `takos-git`        | `8790`            | Git hosting service                           |
 | `postgres`         | `15432`           | PostgreSQL                                    |
 | `redis`            | `16379`           | Redis（queue/cache backing）                  |
 
-local での user-defined group workload 実行は Takosumi kernel の manifest
-deploy engine と provider/runtime-agent connector 経由で扱います。workflow build
-や `workflowRef` 解決は `takosumi-git`、Git hosting は `takos-git`、agent 実行は
-`takos-agent` の責務です。
+local での user-defined group workload 実行は Takosumi installer / kernel と
+provider/runtime-agent connector 経由で扱います。AppSpec の
+`components.*.build`、dependency edge、Installation materialization は
+`takosumi`、Git hosting は `takos-git`、agent 実行は `takos-agent` の責務です。
 
 private server stack の基準は `takos-private/`
 で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、

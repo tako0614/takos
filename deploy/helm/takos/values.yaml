@@ -57,7 +57,7 @@ runtimeConfig:
   defaultAppDistributionJson: ""
   defaultApps:
     preinstallEnabled: false
-    installApplyUrl: ""
+    installUrl: ""
     installAccountId: ""
     installSubject: ""
     installMode: ""
@@ -78,7 +78,7 @@ runtimeConfig:
     runtime-agent: takos.kernel.reference
 
 ## -----------------------------------------------------------------
-## Takos service workloads
+## Runtime stack workloads
 ## -----------------------------------------------------------------
 services:
   takosApp:
@@ -162,7 +162,7 @@ secrets:
   executorProxySecret: ""
   internalApiSecret: ""
   accountsDatabaseUrl: ""
-  defaultAppInstallApplyToken: ""
+  defaultAppInstallToken: ""
   googleClientId: ""
   googleClientSecret: ""
   oidcClientSecret: ""

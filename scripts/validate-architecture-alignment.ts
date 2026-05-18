@@ -7,7 +7,6 @@ const README_PATH = 'README.md';
 const CURRENT_STATE_PATH = 'docs/contributing/current-state.md';
 const KERNEL_ARCHITECTURE_PATH = '../takosumi/docs/reference/architecture/kernel.md';
 const DOMAIN_ROOT = '../takosumi/packages/kernel/src/domains';
-const TAKOSUMI_CLOUD_ACCOUNTS_CONTRACT = '../takosumi-cloud/packages/accounts-contract/src/mod.ts';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
 const REQUIRED_KERNEL_PLUGIN_DOCS = [CURRENT_STATE_PATH];
@@ -18,7 +17,7 @@ const ARCHITECTURE_ALIGNMENT_DOCS = [
   '../takosumi/docs/reference/architecture/operator-boundaries.md',
   '../takosumi/docs/reference/architecture/workflow-extension-design.md',
 ];
-const APP_GRANT_CATALOG_DOCS = [
+const PERMISSION_SCOPE_DOCS = [
   '../takosumi-cloud/docs/architecture/app-installation.md',
 ];
 const APP_INSTALLATION_STATUS_DOCS = [
@@ -26,7 +25,7 @@ const APP_INSTALLATION_STATUS_DOCS = [
   '../takosumi-cloud/docs/architecture/app-installation.md',
   'docs/platform/upgrade-export.md',
 ];
-const RUNTIME_BINDING_TARGET_DOCS = [
+const RUNTIME_TARGET_DOCS = [
   '../takosumi-cloud/docs/architecture/app-installation.md',
   '../takosumi-cloud/docs/accounts-service.md',
 ];
@@ -171,25 +170,6 @@ function hasAny(text: string, terms: string[]): boolean {
   return terms.some((term) => lowerText.includes(term));
 }
 
-function extractStringArrayConst(
-  path: string,
-  text: string,
-  constName: string,
-  failures: CheckFailure[],
-): string[] {
-  const match = new RegExp(
-    `export\\s+const\\s+${constName}\\s*=\\s*\\[([\\s\\S]*?)\\]\\s+as\\s+const`,
-  ).exec(text);
-  if (!match) {
-    failures.push({
-      path,
-      message: `Unable to find exported const array ${constName}.`,
-    });
-    return [];
-  }
-  return [...match[1].matchAll(/"([^"]+)"/g)].map((item) => item[1]);
-}
-
 function validateInternalDomainMentions(
   path: string,
   text: string,
@@ -289,7 +269,7 @@ async function validateDomainDirs(failures: CheckFailure[]): Promise<void> {
   }
 }
 
-async function validateAppGrantCatalogDocs(
+async function validatePermissionScopeDocs(
   _failures: CheckFailure[],
 ): Promise<void> {
   // v1 contract reset (Wave 6): TAKOSUMI_APP_GRANT_CAPABILITIES is removed.
@@ -322,16 +302,16 @@ async function validateAppInstallationStatusDocs(
   }
 }
 
-async function validateRuntimeBindingTargetDocs(
+async function validateRuntimeTargetDocs(
   failures: CheckFailure[],
 ): Promise<void> {
-  for (const path of RUNTIME_BINDING_TARGET_DOCS) {
+  for (const path of RUNTIME_TARGET_DOCS) {
     const text = await readText(path, failures);
     if (!text.includes('shared-cell://')) {
       failures.push({
         path,
         message:
-          'Expected shared-cell RuntimeBinding docs to show shared-cell://<cell>/namespaces/<installation> target ids.',
+          'Expected shared-cell runtime target docs to show shared-cell://<cell>/namespaces/<installation> target ids.',
       });
     }
     for (const rule of FORBIDDEN_RUNTIME_BINDING_TARGET_PATTERNS) {
@@ -387,9 +367,9 @@ async function main(): Promise<void> {
   }
 
   await validateDomainDirs(failures);
-  await validateAppGrantCatalogDocs(failures);
+  await validatePermissionScopeDocs(failures);
   await validateAppInstallationStatusDocs(failures);
-  await validateRuntimeBindingTargetDocs(failures);
+  await validateRuntimeTargetDocs(failures);
   await validateAccountModelDocs(failures);
 
   if (failures.length > 0) {
@@ -406,13 +386,13 @@ async function main(): Promise<void> {
   );
   console.log(`Verified ${REQUIRED_DOMAIN_DIRS.length} domain directories.`);
   console.log(
-    `Verified AppGrant catalog docs in ${APP_GRANT_CATALOG_DOCS.length} files.`,
+    `Verified permission scope docs in ${PERMISSION_SCOPE_DOCS.length} files.`,
   );
   console.log(
     `Verified AppInstallation status docs in ${APP_INSTALLATION_STATUS_DOCS.length} files.`,
   );
   console.log(
-    `Verified RuntimeBinding target docs in ${RUNTIME_BINDING_TARGET_DOCS.length} files.`,
+    `Verified runtime target docs in ${RUNTIME_TARGET_DOCS.length} files.`,
   );
   console.log('Verified account model docs.');
 }

@@ -59,8 +59,8 @@ Shell-owned (`takos/` 直下):
 - **repository API contracts** — signed internal RPC のみ受け入れる
 - **Takos Git authorization** — signed internal actor context を verify
 
-ecosystem sibling の `takosumi-git/` (`.takosumi/` convention の canonical
-installer implementation) とは別物。 名前が紛らわしいが domain が異なる。
+ecosystem sibling の `takosumi/` (`.takosumi.yml` AppSpec installer implementation)
+とは別物。 名前が紛らわしいが domain が異なる。
 
 ## takos-agent の実装状態
 
@@ -176,22 +176,23 @@ deno task local:down
 Takos product は **Takosumi PaaS** の上で動く consumer。 platform 側 lifecycle
 は Takos の責務ではなく、 各 platform repo の test に委ねる:
 
-- **Takosumi kernel** (`../takosumi/`) — manifest deploy engine。
-  `POST /v1/deployments` 経由で Takos の deploy artifact を receive。
+- **Takosumi kernel + installer** (`../takosumi/`) — `.takosumi.yml` AppSpec
+  を読み、5 endpoint installer API で Installation / Deployment を記録する
+  platform substrate。
   kernel の internal domains (`packages/kernel/src/domains/` 配下: deploy /
   runtime / resources / routing / network / registry / audit / events /
   app-output / supply-chain) は kernel package が所有し、 Takos product
   からは public HTTP contract 経由でのみ触る
 - **Takosumi Accounts** (`../takosumi-cloud/packages/accounts-service/`) —
   operator account plane。 OIDC issuer / billing / Installation ledger
-- **`takosumi-git`** (`../takosumi-git/`) — `.takosumi/` convention の
-  canonical installer
+- **`takosumi`** (`../takosumi/`) — `.takosumi.yml` AppSpec と installer
+  pipeline の canonical implementation
 - **integration test bed** (`../takosumi/deploy/local-substrate/`) — Takosumi
   platform の full integration を public network 依存ゼロで踏む
 
 Takos product は上記のいずれも内製しない。 OIDC issuer / billing / Installation
-ownership / `.takosumi/` convention parsing は operator account plane および
-`takosumi-git` 側の責務。
+ownership / `.takosumi.yml` AppSpec parsing は operator account plane および
+`takosumi` 側の責務。
 
 ### kernel / plugin boundary
 
@@ -199,8 +200,8 @@ Takosumi kernel の domain modules (kernel が所有する core logic) と plugi
 (operator が差し替える provider / source / secret / queue / object-storage
 backend 等) の境界は **`../takosumi/`** 側 docs の正本である
 [kernel architecture page](https://github.com/tako0614/takosumi/blob/main/docs/reference/architecture/kernel.md)
-を参照。 Takos product は kernel API を public HTTP contract (`POST /v1/deployments`
-等) 経由でのみ叩き、 plugin / internal domain には直接依存しない。
+を参照。 Takos product は Takosumi installer API / account-plane contract
+経由でのみ platform に接続し、 plugin / internal domain には直接依存しない。
 Takos product が kernel plugin 経由で持つ依存 (Postgres storage / Redis queue
 / S3-compatible object-storage / Docker compose runner 等) は distribution
 profile 経由で operator が選択する。

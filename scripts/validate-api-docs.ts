@@ -25,7 +25,7 @@ const requiredText = [
   '`/api/services/*`',
   '`/api/spaces/:spaceId/resources/*`',
   '`/api/spaces/:spaceId/app-installations`',
-  '`/api/spaces/:spaceId/app-installations/git-url/preview`',
+  '`/api/spaces/:spaceId/app-installations/git-url/dry-run`',
   '`/_takosumi/launch`',
   '`/git/:owner/:repo.git/info/refs`',
 ] as const;

@@ -80,7 +80,7 @@ assertContains(
 assertContains(
   `${chartRoot}/values.yaml`,
   valuesText,
-  '    installApplyUrl: ""',
+  '    installUrl: ""',
 );
 assertContains(
   `${chartRoot}/values.yaml`,
@@ -105,7 +105,7 @@ assertContains(
 assertContains(
   `${chartRoot}/values.yaml`,
   valuesText,
-  '  defaultAppInstallApplyToken: ""',
+  '  defaultAppInstallToken: ""',
 );
 assertContains(
   `${templateRoot}/configmap-global.yaml`,
@@ -124,7 +124,7 @@ assertContains(
 );
 for (
   const envName of [
-    'TAKOS_DEFAULT_APP_INSTALL_APPLY_URL',
+    'TAKOS_DEFAULT_APP_INSTALL_URL',
     'TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID',
     'TAKOS_DEFAULT_APP_INSTALL_SUBJECT',
     'TAKOS_DEFAULT_APP_INSTALL_MODE',
@@ -140,7 +140,7 @@ for (
 assertContains(
   `${templateRoot}/secret-platform.yaml`,
   platformSecretText,
-  'TAKOS_DEFAULT_APP_INSTALL_APPLY_TOKEN: {{ .Values.secrets.defaultAppInstallApplyToken | b64enc | quote }}',
+  'TAKOS_DEFAULT_APP_INSTALL_TOKEN: {{ .Values.secrets.defaultAppInstallToken | b64enc | quote }}',
 );
 assertContains(
   `${templateRoot}/_helpers.tpl`,

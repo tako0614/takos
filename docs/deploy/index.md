@@ -34,13 +34,13 @@ Deployment record の persist は Takosumi 本体の責務です。
 | ----------------- | --------- | --------------------------------------------------- |
 | `.takosumi.yml`   | Takosumi  | AppSpec (`apiVersion: takosumi.dev/v1` / `kind: App`)。 metadata / components / use edge / interfaces / permissions |
 
-AppSpec は 1 ファイルです。 旧 `.takosumi/app.yml` + `.takosumi/manifest.yml` +
-`.takosumi/workflows/` + compiled manifest の区別は廃止されました。
+AppSpec は 1 ファイルです。source root にはこのファイルだけを置き、build や
+dependency edge もここに集約します。
 
 ## 関連ページ
 
 - [Git / Store install](/deploy/store-deploy)
-- [Direct manifest deploy](/deploy/deploy)
+- [AppSpec deployment lifecycle](/deploy/deploy)
 - [マニフェスト](/deploy/manifest)
 - [環境変数](/deploy/environment)
 - [ロールバック](/deploy/rollback)

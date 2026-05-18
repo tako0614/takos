@@ -2,9 +2,9 @@
   "apiVersion": "takosumi.com/hosting/v1",
   "kind": "TakosDistribution",
   "environment": "production",
-  "profile": "@takosumi/plugins/profiles/gcp",
+  "profile": "@takos/takosumi-plugins/profiles/gcp",
   "providerProfile": {
-    "bundle": "@takosumi/plugins",
+    "bundle": "@takos/takosumi-plugins",
     "profileId": "operator.takosumi.gcp",
     "pluginIds": [
       "operator.takosumi.gcp"
@@ -45,7 +45,7 @@
     "loadBalancerName": "takos-lb",
     "cloudDnsZone": "takos-zone",
     "metadata": {
-      "providerBundle": "@takosumi/plugins",
+      "providerBundle": "@takos/takosumi-plugins",
       "terraform": "deploy/terraform/environments/gcp-prod",
       "helmOverlay": "deploy/helm/takos/values-gcp.yaml"
     }

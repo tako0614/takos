@@ -352,18 +352,19 @@ services:
 
 `minio-init` サービスが起動後に `mc mb` でバケットを自動作成する。
 
-### Takos product services
+### Runtime stack services
 
-| Service       | 役割                                                |
-| ------------- | --------------------------------------------------- |
-| `takos-app`   | OIDC consumer / Web UI / public API gateway         |
-| `takosumi`    | generic manifest deploy engine                      |
-| `takos-git`   | Git Smart HTTP / refs / objects / source resolution |
-| `takos-agent` | Takos agent execution service                       |
+| Service          | 役割                                                       |
+| ---------------- | ---------------------------------------------------------- |
+| `takos-app`      | OIDC consumer / Web UI / public API gateway                |
+| `takosumi`       | AppSpec install / Deployment apply engine                  |
+| `takosumi-cloud` | Takosumi Accounts / Installation ledger / billing dashboard |
+| `takos-git`      | Git Smart HTTP / refs / objects / source resolution        |
+| `takos-agent`    | Takos agent execution service                              |
 
-workflow build / `workflowRef` 解決は `takosumi-git`、Installation / OIDC /
-billing は self-host operator の Takosumi Accounts (`takosumi-cloud`)
-が担当します。
+AppSpec の `components.*.build`、dependency edge、Deployment apply は
+`takosumi`、Installation / OIDC / billing は self-host operator の Takosumi
+Accounts (`takosumi-cloud`) が担当します。
 
 ### ネットワーク構成
 

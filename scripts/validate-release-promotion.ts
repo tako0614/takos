@@ -66,7 +66,8 @@ const requiredDocs = [
       'Takos-owned OAuth/OIDC issuer endpoints',
       'Takos app public/proxy direct deploy routes',
       'does **not** include takosumi kernel',
-      'POST /v1/deployments',
+      '5 endpoint API',
+      'Takosumi installer / Accounts',
       'Required Evidence',
       'Completion Rule',
       'actual public no-user clean-cut evidence',
@@ -86,7 +87,7 @@ const requiredDocs = [
       'single public Takos release',
       'no-user clean cut',
       'no-user-clean-cut-evidence.md',
-      'Keep the ROADMAP at `96/96`',
+      'Keep the ROADMAP at `95/95`',
     ],
   },
 ];

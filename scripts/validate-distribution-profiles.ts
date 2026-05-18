@@ -21,6 +21,7 @@ const expectedServices = [
   'takosumi',
   'takosumi-cloud',
 ] as const;
+const officialProviderBundle = '@takos/takosumi-plugins';
 type ExpectedTargetId = typeof expectedTargets[number];
 type ExpectedServiceId = typeof expectedServices[number];
 type ExpectedArtifact = { kind: string; ref: string };
@@ -234,9 +235,11 @@ async function validateDistribution(path: string): Promise<void> {
   const label = path;
   const profile = await readJson(resolve(takosRoot, path));
   validateJsonSchema(profile, distributionProfileSchema, label);
-  const targetId = stringAt(recordAt(profile, 'target', label), 'id', `${label}.target`);
+  const target = recordAt(profile, 'target', label);
+  const targetId = stringAt(target, 'id', `${label}.target`);
   const expectedTarget = requireExpectedTargetId(basename(path, '.json'), `${label} filename target`);
   if (!expectedTarget) return;
+  const providerProfile = recordAt(profile, 'providerProfile', label);
   const providerProof = recordAt(profile, 'providerProof', label);
   const metadata = maybeRecord(profile.metadata);
 
@@ -245,12 +248,51 @@ async function validateDistribution(path: string): Promise<void> {
   expectString(profile.environment, 'production', `${label}.environment`);
   expectString(targetId, expectedTarget, `${label}.target.id`);
 
+  validateProviderProfile(profile, providerProfile, target, label, expectedTarget);
   validateArtifacts(arrayAt(profile, 'artifacts', label), label, expectedTarget);
   validateProviderProof(providerProof, label, expectedTarget);
   validateServices(arrayAt(profile, 'services', label), label, targetId);
   validateRequiredBindings(arrayAt(profile, 'requiredBindings', label), label, expectedTarget);
   validateDefaultApps(recordAt(profile, 'defaultApps', label), label);
   validateMetadataCommands(metadata, label);
+}
+
+function validateProviderProfile(
+  profile: JsonRecord,
+  providerProfile: JsonRecord,
+  target: JsonRecord,
+  label: string,
+  targetId: ExpectedTargetId,
+): void {
+  const expectedProfile = `${officialProviderBundle}/profiles/${targetId}`;
+  const expectedPluginId = `operator.takosumi.${targetId}`;
+  expectString(
+    stringAt(profile, 'profile', label),
+    expectedProfile,
+    `${label}.profile`,
+  );
+  expectString(
+    stringAt(providerProfile, 'bundle', `${label}.providerProfile`),
+    officialProviderBundle,
+    `${label}.providerProfile.bundle`,
+  );
+  expectString(
+    stringAt(providerProfile, 'profileId', `${label}.providerProfile`),
+    expectedPluginId,
+    `${label}.providerProfile.profileId`,
+  );
+  const pluginIds = stringArray(
+    arrayAt(providerProfile, 'pluginIds', `${label}.providerProfile`),
+  );
+  if (pluginIds.join(',') !== expectedPluginId) {
+    errors.push(`${label}.providerProfile.pluginIds must be exactly ${expectedPluginId}`);
+  }
+  const targetMetadata = recordAt(target, 'metadata', `${label}.target`);
+  expectString(
+    stringAt(targetMetadata, 'providerBundle', `${label}.target.metadata`),
+    officialProviderBundle,
+    `${label}.target.metadata.providerBundle`,
+  );
 }
 
 function kubernetesLikeServiceSpecs(

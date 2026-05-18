@@ -17,7 +17,7 @@ base layer (deploy / infra / runtime contract):
 | `takos/`                                   | Terraform module shape、plan fixture、Helm chart、non-secret output bridge、validator    |
 | `takos-private`                            | production / staging tfvars 生成元、cloud credentials、runtime secrets、rotation runbook |
 | cloud secret manager / k8s external secret | Secrets Manager / Secret Manager / External Secrets / Sealed Secrets などの値保管先      |
-| Takosumi kernel                            | `resource.secret@v1` / secret-ref / runtime binding contract。raw value は保持しない     |
+| Takosumi kernel                            | secret-ref / runtime target contract。raw value は保持しない                            |
 
 OIDC / launch token layer (mode 別。Installation の identity 配線):
 
@@ -185,6 +185,6 @@ PR / release review では次を確認します:
 - [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md)
   --- one-shot opaque token と `/_takosumi/launch` → Accounts `/consume` redeem
   の仕様
-- [Binding Catalog § install-launch-token@v1](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md#6-install-launch-tokenv1)
+- [AppSpec use edges § install-launch-token@v1](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
   --- `ACCOUNTS_BASE_URL` / `INSTALL_LAUNCH_*` env を materialize する
   use edge

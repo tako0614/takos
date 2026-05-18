@@ -8,9 +8,12 @@ Takos は Takosumi Accounts の OIDC issuer を consumer として使い、app i
 operator account plane の Installation API が所有します。Takos product gateway は chat / agent / memory / space
 操作、GitOps deploy intent、installed app launch、runtime gateway、Takos Git への public route を扱います。
 
-Takosumi kernel の canonical deploy entry point は Takosumi 側の `POST /v1/deployments` です。Takos の
-`/api/public/v1/deployments` は GitOps deploy intent を書くための product gateway であり、kernel API の mirror
-ではありません。
+Takosumi の canonical install / deploy entry point は Takosumi installer API の
+5 endpoint (`POST /v1/installations/dry-run`、`POST /v1/installations`、
+`POST /v1/installations/{id}/deployments/dry-run`、
+`POST /v1/installations/{id}/deployments`、`POST /v1/installations/{id}/rollback`)
+です。Takos の `/api/public/v1/deployments` は GitOps deploy intent を書くための
+product gateway であり、Takosumi installer API の mirror ではありません。
 
 Takos は OAuth provider、billing provider、publication、group deployment snapshot の API owner ではありません。
 これらは current Takos API として expose しません。
@@ -118,6 +121,8 @@ Explore / catalog route は `apps/api` が所有します。unknown `/api/explor
 
 Takos product gateway は Installation-owned lifecycle に接続するため、GitOps deploy intent を repository に書き込みます。
 direct unmanaged deploy は Takosumi kernel API を直接使う経路です。
+request body は `appSpec` に `.takosumi.yml` AppSpec (`apiVersion: takosumi.dev/v1` /
+`kind: App`) を載せます。旧 `Manifest` envelope は受け付けません。
 
 | method | path | 説明 |
 | --- | --- | --- |
@@ -194,9 +199,9 @@ app-local セッションを扱います。
 | GET | `/api/apps/*` | named app route |
 | GET | `/api/spaces/:spaceId/app-installations` | Installation ledger 一覧 |
 | POST | `/api/spaces/:spaceId/app-installations/apply` | bundled app install apply |
-| POST | `/api/spaces/:spaceId/app-installations/git-url/preview` | Git URL app install preview |
+| POST | `/api/spaces/:spaceId/app-installations/git-url/dry-run` | Git URL app install dry-run bridge |
 | POST | `/api/spaces/:spaceId/app-installations/git-url/apply` | Git URL app install apply |
-| POST | `/api/spaces/:spaceId/app-installations/git-url/revision/preview` | Git URL app revision preview |
+| POST | `/api/spaces/:spaceId/app-installations/git-url/revision/dry-run` | Git URL app Deployment dry-run bridge |
 | POST | `/api/spaces/:spaceId/app-installations/git-url/revision/apply` | Git URL app revision apply |
 | DELETE | `/api/spaces/:spaceId/app-installations/:installationId` | Installation 削除 |
 | GET | `/_takosumi/launch` | launch token 消費後の app-local セッション作成 |

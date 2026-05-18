@@ -17,7 +17,7 @@ drift across the ecosystem checkout.
 | `takos/git/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno package metadata |
 | `takos/agent/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Cargo package metadata |
 | `takosumi/` | `MIT` | `LICENSE`, `.reuse/dep5`, JSR package metadata |
-| `takosumi-git/` | `MIT` | `LICENSE`, `.reuse/dep5`, JSR package metadata |
+| `takosumi/` | `MIT` | `LICENSE`, `.reuse/dep5`, JSR package metadata |
 | `takos-cli/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno package metadata |
 | `takos-agent-engine/` | `MIT` | `LICENSE`, `.reuse/dep5`, Cargo package metadata |
 | `takos-apps/takos-computer/` | `MIT` | `LICENSE`, `.reuse/dep5`, Deno package metadata |

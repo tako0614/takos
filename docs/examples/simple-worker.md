@@ -1,95 +1,44 @@
 # Simple Worker
 
-> このページでわかること: `worker@v1` resource 1 つだけの最小構成。
-
-この例は
-[最小マニフェスト](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md#canonical-minimal-manifest)
-の Shape model に従います。
+> このページでわかること: `worker` component 1 つだけの最小 AppSpec。
 
 ## 完成形
 
 ```text
 my-app/
-├── .takosumi/
-│   ├── app.yml
-│   ├── manifest.yml
-│   └── workflows/
-│       └── build.yml
+├── .takosumi.yml
 ├── src/
 │   └── index.ts
 └── package.json
 ```
 
-## app.yml
+## `.takosumi.yml`
 
 ```yaml
-apiVersion: app.takosumi.dev/v1
+apiVersion: takosumi.dev/v1
 kind: App
 metadata:
   id: example.simple-worker
   name: Simple Worker
   description: Minimal worker app
   publisher: example
-source:
-  git: https://github.com/example/simple-worker
-  ref: v1.0.0
-entry:
-  manifest: .takosumi.yml
-runtime:
-  modes:
-    - shared-cell
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - simple-worker.example.com/*
+interfaces:
+  launch:
+    target: web
+    path: /
+  health:
+    target: web
+    path: /api/health
 permissions:
   requested: []
-```
-
-## manifest.yml
-
-```yaml
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: simple-worker
-resources:
-  - shape: worker@v1
-    name: web
-    provider: "@takos/cloudflare-workers"
-    spec:
-      artifact:
-        kind: js-bundle
-        hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
-      routes:
-        - simple-worker.example.com/*
-    workflowRef:
-      file: build.yml
-      job: build-worker
-      artifact: bundle
-      target: spec.artifact.hash
-```
-
-`workflowRef` は takosumi-git の private extension です。`push` /
-`install apply` が workflow を実行し、`TAKOSUMI_ARTIFACT=<hash>` を
-`spec.artifact.hash` に書き込んでから `workflowRef` を strip します。kernel には
-`workflowRef` は届きません。
-
-## Workflow
-
-```yaml
-version: "0"
-jobs:
-  - name: build-worker
-    steps:
-      - name: install
-        run: npm install
-      - name: build
-        run: npm run build
-      - name: upload
-        run: |
-          # Replace this with the provider uploader. It must print an immutable
-          # bundle hash or URI according to the Artifact URI Contract.
-          echo "TAKOSUMI_ARTIFACT=sha256:0123456789abcdef"
-    artifact:
-      name: bundle
 ```
 
 ## Worker code
@@ -115,31 +64,19 @@ export default {
 };
 ```
 
-## Dry run
+## Dry-run / apply
 
 ```bash
-takosumi-git push --dry-run
-```
-
-Dry-run prints the cleaned manifest. The printed resource should contain
-`spec.artifact.hash: sha256:0123456789abcdef` and no `workflowRef`.
-
-## Apply
-
-```bash
-takosumi-git push \
-  --endpoint "$TAKOSUMI_ENDPOINT" \
-  --token "$TAKOSUMI_TOKEN"
+takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
+takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
 
 ## Points
 
-- `apiVersion: "1.0"` and `kind: Manifest` are required.
-- `worker@v1` requires `spec.artifact.kind: js-bundle`, `spec.artifact.hash`,
-  and `spec.compatibilityDate`.
-- `spec.routes` is a provider-interpreted string array.
-- `workflowRef.target: spec.artifact.hash` is what makes worker bundles work
-  without abusing `spec.image`.
+- `apiVersion: takosumi.dev/v1` and `kind: App` are required.
+- `components.web.kind: worker` declares the runtime-bearing unit.
+- `components.web.build.output` points to the generated worker bundle.
+- `interfaces.launch` is what Takos uses to open the installed app.
 
 ## Next
 

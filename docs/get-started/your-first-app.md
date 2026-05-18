@@ -44,115 +44,63 @@ export default {
 };
 ```
 
-環境変数はすべてインストール時にマニフェストから注入されます。
+環境変数はすべてインストール時に AppSpec から注入されます。
 アプリコードでは標準的な OIDC client ライブラリで `OIDC_ISSUER_URL` を使うだけです。
 
 ## 3. マニフェストを書く
 
-```bash
-mkdir -p .takosumi/workflows
-```
-
-### デプロイするリソースの定義
-
 ```yaml
 # .takosumi.yml
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: my-first-app
-resources:
-  - shape: worker@v1
-    name: web
-    provider: "@takos/cloudflare-workers"
-    spec:
-      artifact:
-        kind: js-bundle
-        hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
-      routes:
-        - my-first-app.example.com/*
-      env:
-        AUTH_DRIVER: oidc
-        OIDC_ISSUER_URL: https://accounts.example.com
-        OIDC_CLIENT_ID: takos_inst_abc
-        OIDC_CLIENT_SECRET: resolved-client-secret
-        OIDC_REDIRECT_URI: https://my-first-app.example.com/auth/oidc/callback
-        TAKOS_INSTALLATION_ID: inst_abc
-    workflowRef:
-      file: .takosumi/workflows/deploy.yml
-      job: bundle
-      artifact: web
-      target: spec.artifact.hash
-```
-
-`PLACEHOLDER` と `workflowRef` はビルド時に自動で解決されます。
-
-### アプリのメタデータと権限
-
-```yaml
-# .takosumi.yml
-apiVersion: app.takosumi.dev/v1
+apiVersion: takosumi.dev/v1
 kind: App
-id: examples.my-first-app
-name: My First App
-bindings:
+metadata:
+  id: examples.my-first-app
+  name: my-first-app
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - my-first-app.example.com/*
+    use:
+      auth:
+        mount: oidc
   auth:
-    type: identity.oidc@v1
+    kind: oidc
     redirectPaths:
       - /auth/oidc/callback
-  bootstrap:
-    type: install-launch-token@v1
+interfaces:
+  launch:
+    target: web
+    path: /
+  health:
+    target: web
+    path: /healthz
 ```
 
-## 4. ビルドワークフローを書く
-
-```yaml
-# .takosumi/workflows/deploy.yml
-name: deploy
-jobs:
-  bundle:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install dependencies
-        run: npm install
-      - name: Build
-        run: npm run build
-    artifacts:
-      web:
-        path: dist/worker
-```
-
-## 5. ビルドスクリプトを用意
+## 4. ビルドスクリプトを用意
 
 ```bash
-npm pkg set scripts.build="esbuild src/index.ts --bundle --outdir=dist/worker --format=esm"
+npm pkg set scripts.build="esbuild src/index.ts --bundle --outfile=dist/worker.mjs --format=esm"
 npm install --save-dev esbuild
 npm run build
 ```
 
-`dist/worker/index.js` が生成されれば OK です。
+`dist/worker.mjs` が生成されれば OK です。
 
-## 6. インストールプレビューとデプロイ
+## 5. Install dry-run と apply
 
 ```bash
-# インストール内容のプレビュー
-takosumi-git install preview --cwd . --json
+# インストール内容の dry-run
+takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
 
 # デプロイ
-takosumi-git install apply \
-  --cwd . \
-  --accounts-url "$TAKOSUMI_ACCOUNTS_URL" \
-  --account-id "$TAKOSUMI_ACCOUNT_ID" \
-  --space-id "$TAKOSUMI_SPACE_ID" \
-  --subject "$TAKOSUMI_SUBJECT" \
-  --source-commit "$(git rev-parse HEAD)" \
-  --runtime-base-url "$RUNTIME_BASE_URL" \
-  --endpoint "$TAKOSUMI_ENDPOINT" \
-  --deploy-token "$TAKOSUMI_DEPLOY_TOKEN"
+takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
 
-成功すると Installation が `ready` になり、アプリが利用可能になります。
+成功すると Installation が作成され、最初の Deployment が記録されます。
 
 ## 認証の仕組み
 
@@ -163,14 +111,15 @@ takosumi-git install apply \
 - **初回インストール直後**: launch token で自動的にセッションが作られるため、
   再ログイン不要でアプリが開きます
 
-OIDC の設定 (clientId, clientSecret 等) は `.takosumi.yml` の `bindings.auth` で
+OIDC の設定 (clientId, clientSecret 等) は `.takosumi.yml` の `components.auth` と
+`components.web.use.auth` で
 宣言するだけで、インストール時に自動で払い出されます。
 
 詳しくは [OIDC consumer](/apps/oidc-consumer) を参照。
 
 ## 次のステップ
 
-- [プロジェクト構成](/get-started/project-structure) — `.takosumi/` の全体像
+- [プロジェクト構成](/get-started/project-structure) — `.takosumi.yml` の全体像
 - [Worker + Database](/examples/worker-with-db) — DB を追加する
 - [Worker + Container](/examples/worker-with-container) — Docker コンテナと組み合わせる
 - [サンプル集](/examples/) — その他のサンプル

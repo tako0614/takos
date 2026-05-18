@@ -1,72 +1,57 @@
 # Multi-Service 構成
 
-> このページでわかること: API + バックグラウンド Worker + DB を 1 つのマニフェストにまとめるサンプル。
+> このページでわかること: API + background Worker + DB を 1 つの AppSpec にまとめるサンプル。
 
 ```yaml
-apiVersion: '1.0'
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
-  name: full-stack-app
-resources:
-  - shape: database-postgres@v1
-    name: app-db
-    provider: '@takos/managed-postgres'
+  id: example.full-stack
+  name: Full Stack App
+components:
+  api:
+    kind: worker
+    build:
+      command: npm ci && npm run build:api
+      output: dist/api.mjs
+    routes:
+      - api.example.com/*
+    use:
+      db:
+        env: DATABASE_URL
+  jobs:
+    kind: worker
+    build:
+      command: npm ci && npm run build:jobs
+      output: dist/jobs.mjs
+    use:
+      db:
+        env: DATABASE_URL
+  db:
+    kind: postgres
     spec:
-      version: '16'
-      size: small
-
-  - shape: web-service@v1
-    name: api
-    provider: '@takos/aws-fargate'
-    spec:
-      image: PLACEHOLDER
-      port: 8080
-      scale: { min: 1, max: 4 }
-      domains:
-        - api.example.com
-      env:
-        DATABASE_URL: ${ref:app-db.connectionString}
-        DATABASE_PASSWORD: ${secret-ref:app-db.passwordSecretRef}
-    workflowRef:
-      file: .takosumi/workflows/deploy.yml
-      job: build-api
-      artifact: api-image
-      target: spec.image
-
-  - shape: worker@v1
-    name: jobs
-    provider: '@takos/cloudflare-workers'
-    spec:
-      artifact:
-        kind: js-bundle
-        hash: PLACEHOLDER
-      compatibilityDate: '2026-05-09'
-      env:
-        DATABASE_URL: ${ref:app-db.connectionString}
-        DATABASE_PASSWORD: ${secret-ref:app-db.passwordSecretRef}
-    workflowRef:
-      file: .takosumi/workflows/deploy.yml
-      job: build-jobs
-      artifact: jobs-bundle
-      target: spec.artifact.hash
+      class: standard
+interfaces:
+  launch:
+    target: api
+    path: /
+  health:
+    target: api
+    path: /healthz
 ```
 
-`workflowRef` は takosumi-git が処理する authoring extension です。kernel に届く manifest では `api.spec.image` と
-`jobs.spec.artifact.hash` が concrete digest になり、`workflowRef` は削除されます。
-
-background job を cron で起動したい場合、schedule は kernel manifest ではなく takosumi-git の workflow / event
-layer、または provider plugin の上位設定として 扱います。takosumi kernel は workflow / cron / scheduler surface
-を持ちません。
+background job を cron で起動したい場合、schedule は AppSpec の current public
+surface ではなく、operator / app layer の上位設定として扱います。Takosumi
+kernel は workflow / cron / scheduler surface を public concept にしません。
 
 ポイント:
 
-- 複数 workload は `resources[]` に複数 resource として並べる
-- shared database は `${ref:app-db.connectionString}` と `${secret-ref:app-db.passwordSecretRef}` で各 workload に渡す
-- HTTP domain は `web-service@v1.spec.domains` か `custom-domain@v1` resource で表現する
-- top-level `components` / `bindings[]` / schedule route は current manifest surface ではない
+- 複数 workload は `components` に複数 component として並べる
+- shared database は `use:` edge で各 workload に渡す
+- HTTP entrypoint は route-bearing worker と `interfaces.launch` で表現する
 
 関連:
 
-- [Manifest Reference](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
+- [AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
 - [環境変数](/deploy/environment)
 - [Worker + DB](/examples/worker-with-db)

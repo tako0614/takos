@@ -1,123 +1,102 @@
 # プロジェクト構成
 
-> このページでわかること: Takos にデプロイするプロジェクトの `.takosumi/` ディレクトリと各ファイルの役割。
+> このページでわかること: Takosumi installer が読む `.takosumi.yml` と、アプリ source root の基本構成。
 
 ## ディレクトリ構成
 
-Takos にデプロイするプロジェクトは、ルートに `.takosumi/` ディレクトリを置きます。
+Takos に install するアプリは、source root に `.takosumi.yml` を 1 つ置きます。
 
 ```text
 my-app/
-├── .takosumi/
-│   ├── app.yml              ← アプリの情報と必要な権限
-│   ├── manifest.yml         ← デプロイするリソースの定義
-│   └── workflows/
-│       ├── build-api.yml    ← ビルド手順
-│       └── build-web.yml
+├── .takosumi.yml
+├── package.json
 ├── src/
 │   └── index.ts
 └── ...
 ```
 
-## 2 つのマニフェスト
+`.takosumi.yml` は Takosumi の AppSpec です。アプリの display metadata、
+runtime component、build recipe、component 間の dependency edge、Takos から見える
+interface を同じファイルで宣言します。
 
-`.takosumi/` には 2 つのマニフェストファイルがあり、それぞれ役割が異なります。
-
-| ファイル                 | 役割                                   | 詳細仕様 |
-| ------------------------ | -------------------------------------- | -------- |
-| `.takosumi.yml`      | アプリのメタデータと必要な権限の宣言   | [app.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md) |
-| `.takosumi.yml` | デプロイするリソース (サーバー、DB 等) の定義 | [manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md) |
-
-`manifest.yml` にはビルド中に解決される一時的なプレースホルダー (`PLACEHOLDER`, `workflowRef`) を
-書けます。デプロイ時にビルドツールがこれらを実際の値に置き換え、最終的なマニフェストだけが
-デプロイエンジンに渡されます。
-
-## 各ファイルの書き方
-
-### `manifest.yml` — デプロイするリソースの定義
-
-「何をデプロイするか」を宣言します。
+## `.takosumi.yml`
 
 ```yaml
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: my-app
-resources:
-  - shape: worker@v1
-    name: web
-    provider: "@takos/cloudflare-workers"
-    spec:
-      artifact:
-        kind: js-bundle
-        hash: PLACEHOLDER
-      compatibilityDate: "2026-05-09"
-      routes:
-        - my-app.example.com/*
-      env:
-        AUTH_DRIVER: oidc
-        OIDC_ISSUER_URL: https://accounts.example.com
-        OIDC_CLIENT_ID: takos_inst_abc
-        OIDC_CLIENT_SECRET: resolved-client-secret
-    workflowRef:
-      file: .takosumi/workflows/build-web.yml
-      job: build
-      artifact: web
-      target: spec.artifact.hash
-```
-
-- `resources[]` にデプロイしたいリソース (Worker, DB, ドメインなど) を列挙
-- `workflowRef` でビルドの出力を `spec` のフィールドに自動注入
-- 環境変数は `spec.env` に記述
-
-詳しくは [Deploy Manifest](/deploy/manifest) を参照。
-
-### `app.yml` — アプリのメタデータと権限
-
-インストール時に必要な権限 (ログイン、DB、ストレージなど) を宣言します。
-
-```yaml
-apiVersion: app.takosumi.dev/v1
+apiVersion: takosumi.dev/v1
 kind: App
-id: examples.my-app
-name: My App
-bindings:
-  auth:
-    type: identity.oidc@v1
-    redirectPaths:
-      - /auth/oidc/callback
-  bootstrap:
-    type: install-launch-token@v1
+metadata:
+  id: examples.my-app
+  name: My App
+  description: Example worker app
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - my-app.example.com/*
+    use:
+      db:
+        env: DATABASE_URL
+  db:
+    kind: postgres
+    spec:
+      class: small
+interfaces:
+  launch:
+    target: web
+    path: /
+  health:
+    target: web
+    path: /healthz
+permissions:
+  requested: []
 ```
 
-インストール時にユーザーが権限を確認・承認できるようになっています。
+主な field:
 
-### `workflows/*.yml` — ビルド手順
+| field | 役割 |
+| --- | --- |
+| `metadata` | App ID、表示名、publisher、homepage など |
+| `components` | worker / postgres / object-store / oidc / custom-domain |
+| `components.*.build` | artifact を得る最小 build recipe |
+| `components.*.use` | DB、object-store、OIDC などへの構造的 dependency edge |
+| `interfaces` | launch、MCP、health など Takos / operator が使う entry point |
+| `permissions` | Installation が要求する Takos API scope |
 
-ビルドの手順と出力を定義します。`manifest.yml` の `workflowRef` から参照されます。
+## Install lifecycle
 
-```yaml
-version: "0"
-jobs:
-  - name: build
-    steps:
-      - name: Install dependencies
-        run: npm ci
-      - name: Build
-        run: npm run build
-    artifact:
-      name: web
+開発者は source root をそのまま dry-run / apply します。
+
+```bash
+takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
+takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
+
+Git URL install では operator account plane が repository を commit に pin し、
+`.takosumi.yml` を読みます。
+
+```bash
+takosumi install dry-run \
+  git:https://github.com/example/my-app#v1.0.0 \
+  --space "$TAKOSUMI_SPACE_ID"
+```
+
+Takosumi installer は AppSpec から build output、resource dependency、OIDC
+client、route output を materialize し、Installation と Deployment record を
+残します。
 
 ## 制約
 
-- `.takosumi.yml` と `.takosumi.yml` は `.takosumi/` 直下に置く
-- ワークフローは `.takosumi/workflows/` 配下に置く
-- `manifest.yml` は `apiVersion: "1.0"` と `kind: Manifest` が必須
-- デプロイエンジンに渡る最終マニフェストに `workflowRef` やプレースホルダーは残らない
+- `.takosumi.yml` は source root に置く
+- `apiVersion: takosumi.dev/v1` と `kind: App` は必須
+- workflow / CI DSL は AppSpec に入れない
+- component 間の依存は `use:` edge で宣言する
+- Deployment evidence や provider resource ID はユーザーが手書きしない
 
 ## 次のステップ
 
-- [はじめてのアプリ](/get-started/your-first-app) — 実際にアプリを作ってデプロイする
-- [Deploy 構成](/apps/) — マニフェストとアプリ設定のガイド
+- [はじめてのアプリ](/get-started/your-first-app) — 実際にアプリを作って install する
+- [Deploy Manifest](/deploy/manifest) — `.takosumi.yml` の field 例
 - [サンプル集](/examples/) — コピペで始められるサンプル

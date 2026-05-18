@@ -111,7 +111,7 @@ managed と同じバイナリで動きます (詳細は
 
 アプリ側で OAuth client が必要な場合は、Installation の `identity.oidc@v1`
 use edge が自動で OIDC client を発行します (詳細は
-[Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md))。
+[AppSpec use edges](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md))。
 
 ## Smoke Checks
 

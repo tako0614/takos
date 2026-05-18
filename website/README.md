@@ -1,23 +1,27 @@
-# takosumi/website
+# takos/website
 
-Marketing landing for `takosumi.com`. Vanilla HTML + CSS, no build step, no runtime dependencies. Ships as a Cloudflare
-Pages project alongside the docs (which mount under `/docs/`).
+Landing site for `takos.jp`. It is a SolidStart / Vinxi static prerender app, separate from the Takos docs site under
+`docs/`.
+
+Build artifacts are generated under `.output/` and `.vinxi/`; those directories are ignored and should not be committed.
+
+## Build
+
+```sh
+npm ci
+npm run build
+```
 
 ## Deploy
 
 ```sh
-wrangler pages deploy takosumi/website --project-name takosumi-landing
+wrangler pages deploy .output/public --project-name takos-landing
 ```
 
-Then in the Cloudflare dashboard, add `takosumi.com` (apex) as a custom domain. The docs Pages project (`takosumi-docs`)
-attaches at `takosumi.com/docs/` via Pages' base-path routing or via a separate project with the same custom domain and
-different path matcher.
-
-For a single-project deploy, copy `takosumi/docs/.vitepress/dist/` under `takosumi/website/docs/` before
-`wrangler pages deploy
-takosumi/website` so Pages serves both from one project.
+The docs site deploys from `takos/docs/` to the `takos-docs` Pages project. Keep landing deploys and docs deploys
+separate unless an operator explicitly chooses to combine them at the Cloudflare routing layer.
 
 ## Local mirror
 
-In the local-substrate (`takosumi/deploy/local-substrate/`), Caddy serves this directory at `https://takosumi.test/` and
-the docs at `https://takosumi.test/docs/`. See `takosumi/deploy/local-substrate/docs/production-deploy-cloudflare.md`.
+In local-substrate, Caddy serves the prerendered landing at `https://takos.test/` and docs at
+`https://takos.test/docs/`.

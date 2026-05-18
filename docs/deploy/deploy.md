@@ -1,78 +1,44 @@
-# マニフェスト直接デプロイ
+# AppSpec deployment lifecycle
 
-> このページでわかること: コンパイル済みマニフェストを kernel に直接送る方法。
+> このページでわかること: `.takosumi.yml` から Installation / Deployment が作られる流れ。
 
-通常は [Git / Store install](/deploy/store-deploy) を使います。
-このページはオペレーターがマニフェストを直接 apply する場合の説明です。
+Takos でアプリを追加・更新する入口は Git URL と ref です。Takosumi が source root の
+`.takosumi.yml` (= AppSpec) を読み、Space に Installation を作り、apply ごとに Deployment を記録します。
+ユーザー向け docs では unmanaged な中間 manifest を案内しません。
 
-## 位置づけ
+## 入口
 
-direct deploy は Installation ledger を経由しません。binding provision、
-permission preview、launch token、billing owner、upgrade preview は Accounts の
-install lifecycle にだけあります。direct deploy は operator が infrastructure
-検証、kernel smoke、unmanaged workload apply を行うための経路です。
+| 目的 | 入口 | 所有者 |
+| --- | --- | --- |
+| bundled / third-party app を install する | `POST /v1/installations` または install UI | Takosumi installer + operator account plane |
+| Git URL から AppSpec を install する | `takosumi install --source git:<url>#<ref>` | Takosumi CLI |
+| 既存 Installation に upgrade を apply する | `takosumi deploy <installation-id>` | Takosumi CLI |
+| 過去 Deployment へ rollback する | `takosumi rollback <installation-id> <deployment-id>` | Takosumi CLI |
 
-## コマンド
+Takos product は Web UI / public API / bundled app lifecycle を提供します。Git fetch、`component.build` 実行、
+provider materialization、Installation / Deployment record の保存は Takosumi 本体の責務です。
 
-```bash
-takosumi deploy ./compiled-manifest.yml --remote https://kernel.example.com
-```
+## 流れ
 
-local manifest は explicit path で渡します。project layout の探索や
-`.takosumi/` convention は `takosumi-git` の責務です。
+1. app author は `.takosumi.yml` に `metadata`、`components`、`use` edge、`interfaces`、`permissions` を書く
+2. install dry-run で source commit、component changes、推定コスト、`expected.commit` を確認する
+3. user approval 後に `POST /v1/installations` で Installation を作成する
+4. Takosumi が source を fetch し、必要な `component.build` を実行し、provider に materialize を依頼する
+5. Installation ledger に source commit と manifest digest を pin し、最初の Deployment を記録する
+6. 以降の更新は `POST /v1/installations/{id}/deployments` で Deployment 履歴を append する
 
-## Manifest requirements
+## 1 つの manifest
 
-kernel に渡せる manifest は compiled Shape manifest です。
+| ファイル | 読む主体 | 役割 |
+| --- | --- | --- |
+| `.takosumi.yml` | Takosumi | AppSpec (`apiVersion: takosumi.dev/v1` / `kind: App`)。metadata / components / use edge / interfaces / permissions |
 
-```yaml
-apiVersion: "1.0"
-kind: Manifest
-metadata:
-  name: my-app
-resources:
-  - shape: web-service@v1
-    name: web
-    provider: "@takos/self-hosted-process"
-    spec:
-      image: ghcr.io/acme/web@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      port: 8080
-```
-
-次の authoring-only 要素は kernel request 前に解決されている必要があります。
-
-- `workflowRef`
-- `${bindings.*}`
-- `${secrets.*}`
-- `${artifacts.*}`
-- `${installation.*}`
-- `${params.*}`
-
-## Preview / apply
-
-operator workflow は次の順に分けます。
-
-```bash
-takosumi plan ./compiled-manifest.yml --remote https://kernel.example.com
-takosumi deploy ./compiled-manifest.yml --remote https://kernel.example.com
-takosumi status my-app --remote https://kernel.example.com
-```
-
-approval、risk、provider operation、drift detection の詳細は Takosumi kernel の
-reference を参照してください。
-
-## 使い分け
-
-| 状況 | 使う経路 |
-| --- | --- |
-| user が app を install する | Git / Store install |
-| bundled app lifecycle を管理する | Installation |
-| operator が kernel contract を検証する | direct manifest deploy |
-| CI が compiled manifest を apply する | `takosumi deploy <manifest>` |
+AppSpec は 1 ファイルです。source root にはこのファイルだけを置き、build や dependency edge もここに集約します。
 
 ## 関連ページ
 
 - [Git / Store install](/deploy/store-deploy)
 - [マニフェスト](/deploy/manifest)
-- [Takosumi manifest spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/manifest-spec.md)
-- [takosumi-git installer pipeline](https://github.com/tako0614/takosumi-git/blob/master/docs/architecture/installer-pipeline.md)
+- [環境変数](/deploy/environment)
+- [ロールバック](/deploy/rollback)
+- [トラブルシューティング](/deploy/troubleshooting)

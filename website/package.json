@@ -19,5 +19,8 @@
   },
   "devDependencies": {
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "h3": "1.15.11"
   }
 }

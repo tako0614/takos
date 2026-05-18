@@ -25,20 +25,28 @@ export default function Hero() {
             <a class='btn btn-primary' href={CLOUD_INSTALL_URL} rel='noopener'>
               Takosumi Cloud で install →
             </a>
-            <a class='btn btn-secondary' href='https://github.com/tako0614/takos' rel='noopener'>
+            <a
+              class='btn btn-secondary'
+              href='https://github.com/tako0614/takos'
+              rel='noopener'
+            >
               GitHub
             </a>
           </div>
         </div>
         <div class='hero-terminal'>
           <CodeBlock terminal>
-            <span class='c'># どこにでも install できるが、 一番速いのは Takosumi Cloud。</span>
+            <span class='c'>
+              # どこにでも install できるが、 一番速いのは Takosumi Cloud。
+            </span>
             {'\n'}
             <span class='k'>$</span> open https://cloud.takosumi.com{'\n'}
             <span class='k'>$</span>&nbsp;&nbsp;&nbsp;→ Install Takos (1-click){'\n'}
-            <span class='c'># 自前 substrate にも同じ manifest で deploy 可:</span>
+            <span class='c'>
+              # 自前 substrate では AppSpec を install lifecycle に渡す:
+            </span>
             {'\n'}
-            <span class='k'>$</span> takosumi deploy ./takos.manifest.yml{'\n'}
+            <span class='k'>$</span> takosumi install --source . --space my-space{'\n'}
             <span class='c'>✓ takos-app → http://your-takos.example/</span>
             {'\n'}
             <span class='c'>✓ takos-git → docs / files / agents</span>

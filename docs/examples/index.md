@@ -1,34 +1,34 @@
 # サンプル集
 
-> このページでわかること: `.takosumi/` を使ったアプリのサンプル一覧。コピーして使えます。
+> このページでわかること: `.takosumi.yml` AppSpec を使ったアプリのサンプル一覧。コピーして使えます。
 
 ## List
 
 ### [Simple Worker](/examples/simple-worker)
 
-- `worker@v1` resource
-- `workflowRef.target: spec.artifact.hash`
-- `spec.routes` string patterns
+- `worker` component
+- `components.web.build.output`
+- `interfaces.launch`
 
 ### [Worker + DB](/examples/worker-with-db)
 
-- worker resource plus database / object-store resources
-- runtime env is materialized from refs and install bindings
+- worker component plus postgres / object-store components
+- runtime env is materialized from `use:` edges
 
 ### [Worker + Container](/examples/worker-with-container)
 
-- worker resource plus `web-service@v1`
-- use `custom-domain@v1` or provider domains for public entrypoints
+- portable worker entrypoint plus object-store
+- operator-specific container is a provider extension
 
 ### [MCP Server](/examples/mcp-server)
 
-- MCP HTTP endpoint on a route-bearing resource
-- install-time bindings and permissions live in `.takosumi.yml`
+- MCP HTTP endpoint on a route-bearing component
+- MCP interface lives in `.takosumi.yml`
 
 ### [Multi-service](/examples/multi-service)
 
-- multiple Shape resources
-- explicit `${ref:...}` wiring between resources
+- multiple AppSpec components
+- explicit `use:` wiring between components
 
 ## Default Group 構成
 
