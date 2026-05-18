@@ -39,7 +39,7 @@
     "profile": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^@takosumi/plugins/profiles/[a-z][a-z0-9-]*$"
+      "pattern": "^@takos/takosumi-plugins/profiles/[a-z][a-z0-9-]*$"
     },
     "providerProfile": {
       "type": "object",

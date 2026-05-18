@@ -80,7 +80,7 @@ operator approval が揃い、`managed-offering:status` が `canOpenManagedOffer
 managed (Use Takos / Install from Git) では、Takosumi Accounts が発行する OIDC
 client と、app installation に紐づく `identity.oidc@v1` use edge が上記 env の
 provisioning plan になります。Takosumi Accounts
-の materialization result を current takosumi-git が受け取り、`${bindings.*}` /
+の materialization result を current takosumi が受け取り、`${bindings.*}` /
 `${secrets.*}` を解決します。 deploy request build 後も未解決なら kernel request
 前に失敗します。 `OIDC_CLIENT_SECRET` は Takosumi Accounts が発行し、compiled
 manifest には provider secret reference または concrete materialized value
@@ -106,10 +106,10 @@ OIDC consumer 統合に直接関係する env は上記だが、Takos runtime �
 
 | Env 種類                                                             | 参照先                                                                                                                                                                                                                                                                              |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Database (`DATABASE_URL`) / Object Store (`OBJECT_STORE_*`) / Domain | [Binding Catalog](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)                                                                                                                                                                           |
+| Database (`DATABASE_URL`) / Object Store (`OBJECT_STORE_*`) / Domain | [AppSpec use edges](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)                                                                                                                                                                           |
 | Installation identifier (`TAKOS_INSTALLATION_ID`, `BASE_URL`)        | [Environment 変数](/deploy/environment)                                                                                                                                                                                                                                             |
-| GitOps Deploy (`DEPLOY_INTENT_*`)                                    | [Binding Catalog § deploy-intent.gitops@v1](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md)                                                                                                                                                 |
-| Launch Token (`ACCOUNTS_BASE_URL` / `INSTALL_LAUNCH_*`)              | [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md) / [Binding Catalog § install-launch-token@v1](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/binding-catalog.md#6-install-launch-tokenv1) |
+| GitOps Deploy (`DEPLOY_INTENT_*`)                                    | [AppSpec use edges § deploy-intent.gitops@v1](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)                                                                                                                                                 |
+| Launch Token (`ACCOUNTS_BASE_URL` / `INSTALL_LAUNCH_*`)              | [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/master/docs/apps/launch-token.md) / [AppSpec use edges § install-launch-token@v1](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md) |
 
 OIDC consumer page は OIDC scope に専念し、これら他 env
 は対応する各ページで詳述する。
@@ -241,7 +241,7 @@ custom claim (`takosumi.*`) は optional です。ただし Installable App Mode
   — install 直後の one-time bootstrap
 - [Install Paths](/apps/install-paths) — Use / Install from Git / Self-host の 3
   経路
-- [.takosumi.yml spec](https://github.com/tako0614/takosumi-git/blob/master/docs/reference/app-yml-spec.md)
+- [.takosumi.yml spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
   — `bindings.auth` の宣言
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
   — issuer 側の責務

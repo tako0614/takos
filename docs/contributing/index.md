@@ -25,7 +25,7 @@
 - [`self-host-e2e.md`](./self-host-e2e.md) — self-host distribution smoke と local Compose proof。
 - [`self-host-runbook.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/self-host-runbook.md) — 実機 single-node self-host E2E のオペレータ runbook。
 - [`compose-smoke.md`](./compose-smoke.md) — `deno task local:*` による current Compose smoke。
-- [`git-source-smoke.md`](./git-source-smoke.md) — `takosumi-git` の Git URL install / source proof。
+- [`git-source-smoke.md`](./git-source-smoke.md) — `takosumi` の Git URL install / source proof。
 - [`postgres-storage-smoke.md`](./postgres-storage-smoke.md) — SQL storage / migration proof。
 - [`redis-queue-smoke.md`](./redis-queue-smoke.md) — queue / background worker proof。
 - [`object-storage-smoke.md`](./object-storage-smoke.md) — object-store / R2 export artifact proof。

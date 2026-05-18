@@ -2,44 +2,50 @@
 
 > このページでわかること: デプロイ時によくあるエラーとその対処法。
 
-## Manifest validation
+## AppSpec validation
 
-### `metadata.name is required`
+### `metadata.id` / `metadata.name` is required
 
-compiled manifest には `metadata.name` が必要です。
+`.takosumi.yml` AppSpec には `metadata.id` と `metadata.name` が必要です。
 
 ```yaml
-apiVersion: "1.0"
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
+  id: com.example.my-app
   name: my-app
-resources: []
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
 ```
 
-### unresolved placeholder
+### AppSpec の解決に失敗する
 
-kernel request 前に `workflowRef` と installer-only placeholder は解決されている
-必要があります。
+通常の install / deploy は `.takosumi.yml` を Takosumi installer が読み、
+build / dependency edge / OIDC / route output を解決してから apply します。
 
 ```bash
-takosumi-git install preview --cwd . --json
-takosumi-git install apply --cwd . ...
+takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
+takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
 
-`takosumi-git` の compile 後も placeholder が残る場合は、`.takosumi.yml` の
-binding 宣言、workflow artifact output、install params を確認してください。
+dry-run が失敗する場合は、`.takosumi.yml` の `components.*.build.output`、
+`components.*.use` edge、OIDC `redirectPaths`、install 時の `source` と
+`spaceId` を確認してください。
 
-### artifact digest がない
+### build output がない
 
-`worker@v1` は `spec.artifact.hash` に concrete digest が必要です。workflow
-output から digest を materialize する場合は `workflowRef.target` が正しい field
-を指して いるか確認します。
+`worker` component は `components.<name>.build.output` に concrete bundle path が必要です。build command 後に
+その path が存在するか確認します。
 
 ## Binding / Accounts
 
 ### OIDC redirect が失敗する
 
-- `.takosumi.yml` の `bindings.auth.redirectPaths` を確認する
+- `.takosumi.yml` の `components.<auth>.redirectPaths` を確認する
 - materialized `OIDC_REDIRECT_URI` が app の callback と一致するか確認する
 - Accounts 側の client registration と issuer URL を確認する
 
@@ -55,20 +61,17 @@ output から digest を materialize する場合は `workflowRef.target` が正
 - token が one-time (used flag) で消費されたか、 期限切れ (5 分 hard cap)
   を超えていないか確認する
 
-## Direct deploy
+## Install / Deployment apply
 
-direct deploy では Installation ledger を経由しないため、binding 自動注入や
-permission preview はありません。operator は compiled manifest と secrets を
-自分で用意します。
+Installation ledger を経由する current path は install dry-run / apply です。Provider operation の失敗は
+Takosumi kernel の Deployment output / conditions と Accounts 側 InstallationEvent を確認します。
 
 ```bash
-takosumi plan ./compiled-manifest.yml --remote "$TAKOSUMI_ENDPOINT"
-takosumi deploy ./compiled-manifest.yml --remote "$TAKOSUMI_ENDPOINT"
-takosumi status my-app --remote "$TAKOSUMI_ENDPOINT"
+takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
+takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
+takosumi deploy dry-run "$INSTALLATION_ID" --source .
+takosumi deploy "$INSTALLATION_ID" --source .
 ```
-
-Provider operation の失敗は Takosumi kernel の status output / conditions
-を確認します。
 
 ## Auth
 
@@ -84,5 +87,5 @@ Takos CLI の auth は [CLI / Auth model](/reference/cli-auth)
 ## Next
 
 - [Git / Store install](/deploy/store-deploy)
-- [Direct manifest deploy](/deploy/deploy)
+- [AppSpec deployment lifecycle](/deploy/deploy)
 - [ロールバック](/deploy/rollback)

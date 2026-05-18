@@ -4,35 +4,33 @@
 
 File handler はストレージ UI からファイルを対応アプリで開くための仕組みです。
 
-## Kernel Manifest
+## AppSpec
 
 handler UI 自体は普通の HTTP workload として deploy します。
 
 ```yaml
-apiVersion: '1.0'
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
-  name: docs-handler
-resources:
-  - shape: worker@v1
-    name: web
-    provider: '@takos/cloudflare-workers'
-    spec:
-      artifact:
-        kind: js-bundle
-        hash: PLACEHOLDER
-      compatibilityDate: '2026-05-09'
-      routes:
-        - docs.example.com/files/*
-    workflowRef:
-      file: .takosumi/workflows/deploy.yml
-      job: build
-      artifact: web
-      target: spec.artifact.hash
+  id: com.example.docs-handler
+  name: Docs Handler
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - docs.example.com/*
+interfaces:
+  launch:
+    target: web
+    path: /
 ```
 
-`workflowRef` は takosumi-git の authoring extension です。kernel に届く compiled manifest では artifact digest が
-concrete になり、`workflowRef` は存在しません。
+Takosumi installer は `.takosumi.yml` から build output と route を解決して
+Deployment record を作ります。ユーザー向け AppSpec に compiled artifact
+placeholder は書きません。
 
 ## App Metadata
 
@@ -51,7 +49,7 @@ fileHandlers:
 `url` の `:id` は URL encode された file ID に置換されます。`:id` は path segment として必須です。storage UI
 は起動時に `space_id` query parameter も付けます。
 
-この metadata は compiled Shape manifest の top-level field ではありません。 App metadata、Takos app
+この metadata は `.takosumi.yml` AppSpec の component schema ではありません。App metadata、Takos app
 catalog、または runtime registration が Storage の file handler registry に materialize します。
 
 ## 複数ハンドラー

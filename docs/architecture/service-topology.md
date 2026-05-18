@@ -12,7 +12,7 @@ Takos の実装は `app/` (Web/API)、`git/` (Git ホスティング)、`agent/`
 | サービス                  |  ポート | 配置先               | 役割                                                                                            |
 | ------------------------- | ------: | -------------------- | ----------------------------------------------------------------------------------------------- |
 | `takos-app`               |  `8787` | `app/`               | OIDC consumer、app-local profile、Web/CLI API ゲートウェイ                                       |
-| `takosumi kernel`         |  `8788` | `../takosumi/`       | manifest deploy エンジン。compiled Shape manifest の apply / routing / resource provisioning    |
+| `takosumi kernel`         |  `8788` | `../takosumi/`       | AppSpec install / Deployment apply エンジン。routing / resource provisioning を担当             |
 | `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / Installation |
 | `takos-agent`             |  `8789` | `agent/`             | エージェント実行サービス                                                                          |
 | `takos-git`               |  `8790` | `git/`               | Git ホスティング、Smart HTTP、refs、objects                                                      |
@@ -38,8 +38,8 @@ Takos の実装は `app/` (Web/API)、`git/` (Git ホスティング)、`agent/`
 ## 責務の境界
 
 - デプロイと runtime lifecycle のオーナーシップは 3 つの sibling product に分かれます:
-  - **インストールパイプライン / `.takosumi.yml` parse / workflow / manifest compile** → `takosumi-git`
-  - **compiled manifest の apply / plan / destroy / routing / resource provisioning** → `takosumi kernel`
+  - **インストールパイプライン / `.takosumi.yml` parse / build artifact 解決** → `takosumi`
+  - **Deployment apply / rollback / routing / resource provisioning** → `takosumi kernel`
   - **account / 課金 / OIDC issuer / Installation 台帳** → Takosumi Accounts
 - shell compose にスタンドアロンの deploy/runtime サービスを足さないでください
 - 本番・staging の deploy 設定は `takos-private` が管理します。この shell は

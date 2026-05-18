@@ -2,9 +2,9 @@
   "apiVersion": "takosumi.com/hosting/v1",
   "kind": "TakosDistribution",
   "environment": "production",
-  "profile": "@takosumi/plugins/profiles/aws",
+  "profile": "@takos/takosumi-plugins/profiles/aws",
   "providerProfile": {
-    "bundle": "@takosumi/plugins",
+    "bundle": "@takos/takosumi-plugins",
     "profileId": "operator.takosumi.aws",
     "pluginIds": [
       "operator.takosumi.aws"
@@ -45,7 +45,7 @@
     "loadBalancerName": "takos-alb",
     "route53ZoneId": "Z00000000000000000000",
     "metadata": {
-      "providerBundle": "@takosumi/plugins",
+      "providerBundle": "@takos/takosumi-plugins",
       "terraform": "deploy/terraform/environments/aws-prod",
       "helmOverlay": "deploy/helm/takos/values-aws.yaml"
     }

@@ -2,10 +2,10 @@
 
 > このページでわかること: Git URL install / source resolution の current proof。
 
-Git URL install と `.takosumi/` project convention は `takosumi-git` が正本です。
+Git URL install と `.takosumi.yml` AppSpec convention は `takosumi` が正本です。
 
 ```sh
-cd ../takosumi-git
+cd ../takosumi
 deno task check
 deno task test
 ```

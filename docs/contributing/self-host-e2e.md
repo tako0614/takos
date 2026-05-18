@@ -7,7 +7,7 @@ Self-host static proof uses the distribution profile:
 ```sh
 cd takos
 deno task validate:distributions
-deno task distribution:smoke --manifest deploy/distributions/self-hosted.json
+deno task distribution:smoke --manifest deploy/distributions/selfhosted.json
 ```
 
 実 Docker Compose proof は operator-owned local evidence です。
@@ -29,5 +29,5 @@ TAKOS_LOCAL_ENV_FILE=.env.local deno task local:down
 - `takos-git`
 - `takos-agent`
 
-Takosumi kernel / Takosumi Accounts / takosumi-git are substrate services, not
+Takosumi kernel / Takosumi Accounts are substrate / account-plane services, not
 Takos product services.

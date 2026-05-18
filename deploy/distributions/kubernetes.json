@@ -2,9 +2,9 @@
   "apiVersion": "takosumi.com/hosting/v1",
   "kind": "TakosDistribution",
   "environment": "production",
-  "profile": "@takosumi/plugins/profiles/kubernetes",
+  "profile": "@takos/takosumi-plugins/profiles/kubernetes",
   "providerProfile": {
-    "bundle": "@takosumi/plugins",
+    "bundle": "@takos/takosumi-plugins",
     "profileId": "operator.takosumi.kubernetes",
     "pluginIds": [
       "operator.takosumi.kubernetes"
@@ -40,7 +40,7 @@
     "context": "takos-production",
     "ingressClass": "nginx",
     "metadata": {
-      "providerBundle": "@takosumi/plugins",
+      "providerBundle": "@takos/takosumi-plugins",
       "helmChart": "deploy/helm/takos"
     }
   },

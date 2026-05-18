@@ -1,77 +1,78 @@
-# Deployment Group
+# Deployment History
 
-> このページでわかること: 複数リソースを 1 つのライフサイクルでまとめて管理する仕組み。
+> このページでわかること: Installation に紐づく Deployment 履歴と rollback の単位。
 
-Deployment group は複数の Shape resources を 1 つのグループとして扱います。
-ロールバックは GroupHead のポインターを過去の Deployment に戻す操作です。
+Takosumi v1 の public concept は AppSpec / Installation / Deployment の 3 つです。
+複数 component の apply 結果は、Installation に紐づく 1 つの Deployment として
+履歴化されます。
 
 ## Installation との関係
 
 | 階層 | 表すもの | 所有者 |
 | --- | --- | --- |
-| Installation | Account に install された app 1 件 | Takosumi Accounts |
-| Deployment group | apply された resource set の履歴 scope | Takosumi kernel |
-| Shape resource | `web-service@v1` / `worker@v1` / `database-postgres@v1` など | provider / runtime-agent |
+| AppSpec | source root の `.takosumi.yml` | app author |
+| Installation | Space に install された app 1 件 | operator account plane |
+| Deployment | 1 回の apply / rollback の結果 | Takosumi installer / kernel |
+| Component | `worker` / `postgres` / `object-store` / `oidc` / `custom-domain` | provider / runtime-agent |
 
-Installation は group の一種ではありません。Installation ledger は ownership、
-billing、grant、launch token を持ち、kernel group は runtime apply の履歴を持ちます。
+Installation は ownership、billing、grant、launch token、current Deployment pointer を
+持ちます。Deployment は source commit、manifest digest、materialized resources、
+outputs、audit event を持ちます。
 
-## 何が group で変わるか
+## 何が履歴化されるか
 
-- resources をまとめて履歴化できる
-- current / previous Deployment を追跡できる
-- rollback の単位になる
-- inventory や status を app 単位で表示できる
+- source commit / manifest digest
+- created / updated / deleted component
+- build artifact digest
+- provider resource ID と output
+- apply status と observation
+- rollback の元になった Deployment ID
 
-group は runtime backend、resource provider、routing layer ではありません。
-group に属していても、resource の Shape contract は変わりません。
-
-## Manifest との対応
-
-manifest の `metadata.name` は group 名の既定値として使われます。
+## AppSpec との対応
 
 ```yaml
-apiVersion: "1.0"
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
-  name: full-stack
-resources:
-  - shape: web-service@v1
-    name: api
-    provider: "@takos/self-hosted-process"
-    spec:
-      image: ghcr.io/acme/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      port: 8080
-      scale: { min: 1, max: 3 }
-  - shape: worker@v1
-    name: jobs
-    provider: "@takos/cloudflare-workers"
-    spec:
-      artifact:
-        kind: js-bundle
-        hash: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-      compatibilityDate: "2026-05-09"
+  id: example.full-stack
+  name: Full Stack
+components:
+  api:
+    kind: worker
+    build:
+      command: npm ci && npm run build:api
+      output: dist/api.mjs
+    routes:
+      - api.example.com/*
+    use:
+      db:
+        env: DATABASE_URL
+  jobs:
+    kind: worker
+    build:
+      command: npm ci && npm run build:jobs
+      output: dist/jobs.mjs
+    use:
+      db:
+        env: DATABASE_URL
+  db:
+    kind: postgres
 ```
 
-この manifest は `full-stack` group の current Deployment として扱えます。
+この AppSpec を apply すると、`api` / `jobs` / `db` の materialization が同じ
+Deployment record に保存されます。
 
-## GroupHead
+## Rollback
 
-```text
-GroupHead:
-  group_id
-  current_deployment_id
-  previous_deployment_id
-  generation
-  advanced_at
+rollback は過去 Deployment を改竄せず、その Deployment の source / manifest digest
+を元に新しい Deployment を作る forward-only 操作です。
+
+```bash
+takosumi rollback "$INSTALLATION_ID" --to "$DEPLOYMENT_ID"
 ```
-
-新しい Deployment が apply されると `current_deployment_id` が進み、直前の
-Deployment が `previous_deployment_id` に残ります。rollback は retained
-Deployment を指すように pointer を切り替えます。
 
 ## 関連ページ
 
-- [Direct manifest deploy](/deploy/deploy)
+- [Git / Store install](/deploy/store-deploy)
 - [ロールバック](/deploy/rollback)
-- [Takosumi Deploy System](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/deploy-system.md)
+- [Takosumi installer API](https://github.com/tako0614/takosumi/blob/master/docs/reference/installer-api.md)

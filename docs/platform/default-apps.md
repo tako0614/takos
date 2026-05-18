@@ -22,11 +22,11 @@ bundled app distribution には含めません。
 
 1. Space 作成時に bundled app entry の Git URL / ref を解決する
 2. Takosumi Accounts が Installation を作成する
-3. `takosumi-git install apply` が source ref を commit に pin する
-4. `.takosumi.yml` から binding / grant / permission preview を作る
-5. `.takosumi.yml` と workflow artifact を compile する
-6. compiled manifest を Takosumi kernel に apply する
-7. Installation ledger に source commit / app manifest digest / compiled manifest digest を記録する
+3. `POST /v1/installations` が source ref を commit に pin する
+4. `.takosumi.yml` から binding / grant / permission dry-run を作る
+5. `components.<name>.build` が必要な artifact を作る
+6. Takosumi kernel が Deployment record と provider outputs を記録する
+7. Installation ledger に source commit / AppSpec digest / Deployment evidence を記録する
 
 bundled app も third-party app と同じ install lifecycle を通ります。default set
 に含まれても kernel primitive や group が特権化されるわけではありません。
@@ -51,9 +51,9 @@ operator は環境ごとに preinstall 対象を選べます。
 
 | env | 説明 |
 | --- | --- |
-| `TAKOS_DEFAULT_APPS_PREINSTALL` | bundled app preinstall の opt-in |
-| `TAKOS_DEFAULT_APP_INSTALL_APPLY_URL` | `takosumi-git serve` の install apply endpoint |
-| `TAKOS_DEFAULT_APP_INSTALL_APPLY_TOKEN` | install apply endpoint の bearer token |
+| `TAKOS_DEFAULT_APPS_PREINSTALL` | `false` のときだけ bundled app preinstall を止める kill switch |
+| `TAKOS_DEFAULT_APP_INSTALL_URL` | Takosumi installer の `POST /v1/installations` endpoint |
+| `TAKOS_DEFAULT_APP_INSTALL_TOKEN` | install endpoint の bearer token |
 | `TAKOS_DEFAULT_APP_INSTALL_SUBJECT` | Accounts ledger の `createdBySubject` |
 | `TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID` | install apply request の account override |
 | `TAKOS_DEFAULT_APP_INSTALL_MODE` | optional runtime mode |

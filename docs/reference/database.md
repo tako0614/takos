@@ -8,7 +8,7 @@
 | --------------------------- | --------------------- | ------------------------------------------------------------------------------------- |
 | account identity            | Takosumi Accounts     | user / organization / OIDC subject / account profile                                  |
 | billing                     | Takosumi Accounts     | BillingPort / Stripe customer マッピング                                              |
-| Installation ledger      | Takosumi Accounts     | source commit / app manifest digest / compiled manifest digest / grants / bindings    |
+| Installation ledger         | Takosumi Accounts       | source commit / app manifest digest / Deployment evidence / grants / bindings          |
 | deployment 記録             | Takosumi kernel       | Deployment / GroupHead / provider observation / operation journal                     |
 | Git リポジトリ              | Takos Git hosting     | リポジトリ metadata / refs / object storage 参照                                      |
 | agent run                   | Takos agent / Takos app | プロダクト agent ワークフロー状態                                                     |

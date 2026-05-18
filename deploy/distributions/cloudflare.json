@@ -2,9 +2,9 @@
   "apiVersion": "takosumi.com/hosting/v1",
   "kind": "TakosDistribution",
   "environment": "production",
-  "profile": "@takosumi/plugins/profiles/cloudflare",
+  "profile": "@takos/takosumi-plugins/profiles/cloudflare",
   "providerProfile": {
-    "bundle": "@takosumi/plugins",
+    "bundle": "@takos/takosumi-plugins",
     "profileId": "operator.takosumi.cloudflare",
     "pluginIds": [
       "operator.takosumi.cloudflare"
@@ -64,7 +64,7 @@
     "dispatchNamespace": "takos-tenants",
     "zoneId": "cloudflare-zone-id",
     "metadata": {
-      "providerBundle": "@takosumi/plugins",
+      "providerBundle": "@takos/takosumi-plugins",
       "paasRuntimeAgent": "cloudflare-containers"
     }
   },

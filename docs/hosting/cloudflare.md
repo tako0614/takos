@@ -910,7 +910,7 @@ takos オペレーターが takos をどのクラウドにホストするかは 
 を書き、provider selection は operator config に任せます:
 
 ```bash
-takosumi-git install https://github.com/acme/my-app --ref v1.2.3
+takosumi install https://github.com/acme/my-app --ref v1.2.3
 ```
 
 takos

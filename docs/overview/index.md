@@ -93,8 +93,8 @@ restore は launch-readiness evidence の対象です。
 
 ## データモデルの詳細
 
-より詳しいデータモデル (Installation、use edge、permission grant、Installation runtime mode、
-Shape resource、Group、Workload、Route、Namespace export など) については
+より詳しいデータモデル (Installation、use edge、permission grant、runtime target metadata、
+AppSpec component、Deployment、Route、Namespace export など) については
 以下を参照してください。
 
 - [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md) — アプリインストールの仕組み

@@ -21,8 +21,8 @@ data:
   {{ end }}
   {{ with .Values.runtimeConfig.defaultApps }}
   TAKOS_DEFAULT_APPS_PREINSTALL: {{ ternary "true" "false" (.preinstallEnabled | default false) | quote }}
-  {{ with .installApplyUrl }}
-  TAKOS_DEFAULT_APP_INSTALL_APPLY_URL: {{ . | quote }}
+  {{ with .installUrl }}
+  TAKOS_DEFAULT_APP_INSTALL_URL: {{ . | quote }}
   {{ end }}
   {{ with .installAccountId }}
   TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID: {{ . | quote }}

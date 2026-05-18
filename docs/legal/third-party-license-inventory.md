@@ -16,7 +16,7 @@ license strings where available.
 | `takos/app/deno.lock`                 |          676 |            7 |              0 |
 | `takos/git/deno.lock`                 |            2 |            1 |              0 |
 | `takosumi/deno.lock`                  |           16 |           12 |              0 |
-| `takosumi-git/deno.lock`              |            0 |            5 |              0 |
+| `takosumi/deno.lock`              |            0 |            5 |              0 |
 | `takos-cli/deno.lock`                 |            4 |            4 |              0 |
 | `takos-apps/takos-computer/deno.lock` |          333 |            2 |              0 |
 | `takos-apps/takos-docs/deno.lock`     |          356 |            2 |              0 |

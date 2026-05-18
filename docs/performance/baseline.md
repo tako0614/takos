@@ -23,7 +23,7 @@ raw データは `scripts/load-test/load-test-results.json` と
 | -------------------------------------------------- | --------------- | --------------------------------------- |
 | `resolveDeployment` p50 (in-process)               | < 50 ms         | 単一 deployment、N=10                   |
 | `applyDeployment` p50 (in-process)                 | < 200 ms        | synthetic provider adapter              |
-| HTTP API スループット (POST /deployments resolve)  | > 500 req/sec   | loopback / single isolate               |
+| HTTP API スループット (installer dry-run)          | > 500 req/sec   | loopback / single isolate               |
 | Cloudflare Workers CPU 時間 / resolve (100 component) | < 30,000 ms  | Workers Free / Paid 上限 (CPU time)     |
 | HTTP エラー率 (実環境、k6)                          | < 1 %           | k6 threshold                            |
 | HTTP p95 latency (実環境、k6)                       | < 500 ms        | k6 threshold                            |
@@ -70,17 +70,17 @@ raw データは `scripts/load-test/load-test-results.json` と
 `Deno.serve` + 同 isolate からの `fetch` で計測します。
 auth / catalog hash assertion を bypass した kernel-only handler を使用します。
 
-| Endpoint                                | Requests | Concurrency | p50 (ms) | p95 (ms) | p99 (ms) | Throughput (req/sec) | Errors |
-| --------------------------------------- | -------: | ----------: | -------: | -------: | -------: | -------------------: | -----: |
-| POST /deployments (preview, warmup)     |      100 |          16 |     5.62 |    19.56 |    20.21 |             1,955.02 |      0 |
-| POST /deployments (preview)             |    1,000 |          32 |     8.58 |    13.35 |    31.52 |             3,346.28 |      0 |
-| POST /deployments (resolve)             |      500 |          16 |     4.18 |     6.41 |     6.92 |             3,556.35 |      0 |
-| GET  /deployments/:id                   |    2,000 |          32 |     3.19 |     4.58 |     6.27 |            10,390.12 |      0 |
+| Endpoint                                           | Requests | Concurrency | p50 (ms) | p95 (ms) | p99 (ms) | Throughput (req/sec) | Errors |
+| -------------------------------------------------- | -------: | ----------: | -------: | -------: | -------: | -------------------: | -----: |
+| POST /v1/installations/dry-run (warmup)            |      100 |          16 |     5.62 |    19.56 |    20.21 |             1,955.02 |      0 |
+| POST /v1/installations/dry-run                     |    1,000 |          32 |     8.58 |    13.35 |    31.52 |             3,346.28 |      0 |
+| POST /v1/installations/{id}/deployments/dry-run    |      500 |          16 |     4.18 |     6.41 |     6.92 |             3,556.35 |      0 |
+| POST /v1/installations/{id}/deployments            |    2,000 |          32 |     3.19 |     4.58 |     6.27 |            10,390.12 |      0 |
 
 判定:
 
-- POST resolve スループット **3,556 req/sec** (target > 500 req/sec) — 達成
-- GET スループット **10,390 req/sec** — 達成
+- deployment dry-run スループット **3,556 req/sec** (target > 500 req/sec) — 達成
+- deployment apply スループット **10,390 req/sec** — 達成
 - p95 < 50 ms (loopback、auth bypass)
 - エラー 0 件
 
@@ -147,9 +147,9 @@ threshold (失敗時 exit code != 0):
 
 トラフィックミックス:
 
-- 55 % POST /deployments (preview)
-- 30 % POST /deployments (resolve) → GET /deployments/:id 往復
-- 15 % POST /deployments (resolve)
+- 55 % POST /v1/installations/dry-run
+- 30 % POST /v1/installations/{id}/deployments/dry-run → POST /v1/installations/{id}/deployments
+- 15 % POST /v1/installations/{id}/deployments/dry-run
 
 サマリは `k6-load-test-summary.json` に出力されます。
 

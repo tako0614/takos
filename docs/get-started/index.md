@@ -55,10 +55,10 @@ launch-readiness evidence の対象です。
 
 ```bash
 # アプリのエクスポート
-takosumi-git export inst_abc --output takos-export.tar.zst
+takosumi export inst_abc --output takos-export.tar.zst
 
 # 自前環境へのインポート
-takosumi-git import ./takos-export.tar.zst \
+takosumi import ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
   --account-id acct_self_host \
   --space-id space_self_host \
@@ -99,61 +99,51 @@ curl -fsS \
 
 ### 3. プロジェクトを用意する
 
-プロジェクトのルートに `.takosumi.yml` と `.takosumi/workflows/` を作成します。
+プロジェクトのルートに `.takosumi.yml` を作成します。
 
 ```yaml
 # .takosumi.yml
-apiVersion: "1.0"
-kind: Manifest
+apiVersion: takosumi.dev/v1
+kind: App
 metadata:
+  id: com.example.my-app
   name: my-app
-resources:
-  - shape: web-service@v1
-    name: web
-    provider: "@takos/aws-fargate"
-    spec:
-      image: PLACEHOLDER
-      port: 8080
-      scale: { min: 1, max: 2 }
-    workflowRef:
-      file: .takosumi/workflows/build.yml
-      job: image
-      artifact: image
-      target: spec.image
+components:
+  web:
+    kind: worker
+    build:
+      command: npm ci && npm run build
+      output: dist/worker.mjs
+    routes:
+      - my-app.example.com/*
+interfaces:
+  launch:
+    target: web
+    path: /
 ```
 
-### 4. ビルドワークフローを書く
+### 4. ビルドスクリプトを用意する
 
-```yaml
-# .takosumi/workflows/build.yml
-version: "0"
-jobs:
-  - name: image
-    steps:
-      - name: Install dependencies
-        run: npm ci
-      - name: Build
-        run: |
-          npm run build
-          echo "ghcr.io/example/my-app@sha256:0123456789abcdef"
-    artifact:
-      name: image
+```bash
+npm pkg set scripts.build="esbuild src/index.ts --bundle --outfile=dist/worker.mjs --format=esm"
+npm install --save-dev esbuild
+npm run build
 ```
 
 ### 5. デプロイする
 
 ```bash
-takosumi-git push \
-  --endpoint "$TAKOSUMI_ENDPOINT" \
-  --token "$TAKOSUMI_TOKEN"
+takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
+takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
 
-ワークフローが実行され、ビルドされたイメージがデプロイされます。
+Takosumi installer が `.takosumi.yml` を読み、build output を Deployment として
+記録します。
 
 ## 次のステップ
 
 - [はじめてのアプリ](/get-started/your-first-app) — 実際にアプリを作ってデプロイするチュートリアル
-- [プロジェクト構成](/get-started/project-structure) — `.takosumi/` ディレクトリの中身
+- [プロジェクト構成](/get-started/project-structure) — `.takosumi.yml` の構成
 - [ローカル開発](/get-started/local-development) — ローカル環境のセットアップ
 - [Deploy 構成](/apps/) — マニフェストとアプリ設定のガイド
 - [サンプル集](/examples/) — コピペで始められるサンプル
