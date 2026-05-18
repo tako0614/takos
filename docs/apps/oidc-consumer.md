@@ -78,13 +78,14 @@ operator approval が揃い、`managed-offering:status` が `canOpenManagedOffer
 :::
 
 managed (Use Takos / Install from Git) では、Takosumi Accounts が発行する OIDC
-client と、app installation に紐づく `identity.oidc@v1` use edge が上記 env の
-provisioning plan になります。Takosumi Accounts
-の materialization result を current takosumi が受け取り、`${bindings.*}` /
-`${secrets.*}` を解決します。 deploy request build 後も未解決なら kernel request
-前に失敗します。 `OIDC_CLIENT_SECRET` は Takosumi Accounts が発行し、compiled
-manifest には provider secret reference または concrete materialized value
-として渡します。
+client と、app installation に紐づく `oidc` component (kind: `oidc`) の use
+edge が上記 env の provisioning plan になります。Takosumi Accounts
+の materialization result を current takosumi が受け取り、`oidc` component
+が export する env 値 (`OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI`
+/ `OIDC_CLIENT_SECRET`) を Installation の use edge に従って consumer worker
+の env に注入します。 deploy request build 後も未解決なら kernel request 前に
+失敗します。 `OIDC_CLIENT_SECRET` は Takosumi Accounts が発行し、 Deployment
+build にはそのまま materialized value として渡します。
 
 self-host では operator が手で env を設定します (§6 参照)。
 
