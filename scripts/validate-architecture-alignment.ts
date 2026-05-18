@@ -290,27 +290,14 @@ async function validateDomainDirs(failures: CheckFailure[]): Promise<void> {
 }
 
 async function validateAppGrantCatalogDocs(
-  failures: CheckFailure[],
+  _failures: CheckFailure[],
 ): Promise<void> {
-  const contract = await readText(TAKOSUMI_CLOUD_ACCOUNTS_CONTRACT, failures);
-  const capabilities = extractStringArrayConst(
-    TAKOSUMI_CLOUD_ACCOUNTS_CONTRACT,
-    contract,
-    'TAKOSUMI_APP_GRANT_CAPABILITIES',
-    failures,
-  );
-  if (capabilities.length === 0) return;
-
-  for (const path of APP_GRANT_CATALOG_DOCS) {
-    const text = await readText(path, failures);
-    const missing = capabilities.filter((capability) => !text.includes(capability));
-    if (missing.length > 0) {
-      failures.push({
-        path,
-        message: `Missing AppGrant capability catalog entries: ${missing.join(', ')}`,
-      });
-    }
-  }
+  // v1 contract reset (Wave 6): TAKOSUMI_APP_GRANT_CAPABILITIES is removed.
+  // App scopes now live in AppSpec `permissions.requested[]` per
+  // takosumi/docs/reference/app-spec.md, not in a frozen catalog enum.
+  // This validator is retained as a no-op so the call site stays stable;
+  // delete it together with the call in main() once the surrounding
+  // architecture validator is restructured.
 }
 
 async function validateAppInstallationStatusDocs(
