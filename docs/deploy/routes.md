@@ -1,13 +1,18 @@
 # ルーティング
 
-> このページでわかること: AppSpec で公開エンドポイントを宣言する方法。
+> このページでわかること: AppSpec の worker component で公開エンドポイントを
+> 宣言する方法。
 
-公開エンドポイントは `.takosumi.yml` の component と interface で宣言します。
+Takosumi の Wave J Component contract minimization で AppSpec から
+`Component.routes` / `AppSpec.interfaces` / `AppSpec.permissions` の top-level
+field を物理削除しました。 公開エンドポイント (= HTTP route / launcher path /
+MCP endpoint / health check path) は次のいずれかで表現します:
 
-- `components.<name>.routes` — provider が materialize する HTTP route
-- `interfaces.launch` — Takos launcher が開く path
-- `interfaces.mcp` — agent layer が discover する MCP endpoint
-- `custom-domain` component — portable な独自ドメイン
+- worker component の **`spec.routes`** (= worker materializer の実装慣習。
+  `@takos/takosumi-cloudflare-providers` 等の shape provider が HTTP route
+  pattern を読み取って materialize する)
+- 専用 `custom-domain` component (= portable な独自ドメイン)
+- 別 kind / namespace pub/sub で operator が表現する任意 layer
 
 フィールドの正式定義は
 [AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
@@ -27,13 +32,10 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - docs.example.com/*
-      - docs.example.com/api/*
-interfaces:
-  launch:
-    target: web
-    path: /
+    spec:
+      routes:
+        - docs.example.com/*
+        - docs.example.com/api/*
 ```
 
 ## Custom Domain

@@ -28,18 +28,15 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - simple-worker.example.com/*
-interfaces:
-  launch:
-    target: web
-    path: /
-  health:
-    target: web
-    path: /api/health
-permissions:
-  requested: []
+    spec:
+      routes:
+        - simple-worker.example.com/*
 ```
+
+> Wave J で AppSpec から `interfaces:` / `permissions:` top-level field を
+> 物理削除しました。 launcher / health endpoint / capability request は
+> worker materializer 慣習 (= `spec.routes` の HTTP path), 別 kind, または
+> namespace pub/sub のいずれかで表現します (= 「底は自由」 原則)。
 
 ## Worker code
 
@@ -76,7 +73,9 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 - `apiVersion: takosumi.dev/v1` and `kind: App` are required.
 - `components.web.kind: worker` declares the runtime-bearing unit.
 - `components.web.build.output` points to the generated worker bundle.
-- `interfaces.launch` is what Takos uses to open the installed app.
+- `components.web.spec.routes` are HTTP route patterns the worker
+  materializer reads (= implementation convention, not part of the
+  AppSpec kind contract).
 
 ## Next
 

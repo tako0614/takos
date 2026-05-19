@@ -8,7 +8,8 @@
 
 - `worker` component
 - `components.web.build.output`
-- `interfaces.launch`
+- `components.web.spec.routes` (= worker materializer convention; AppSpec
+  contract は kind-agnostic、 Wave J で top-level `interfaces:` を削除済)
 
 ### [Worker + DB](/examples/worker-with-db)
 

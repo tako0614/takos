@@ -11,9 +11,9 @@
 | Component output (DB / blob 等) | `.takosumi.yml` `components.*.publish` | namespace path + payload schema |
 | Operator/account-plane output (OIDC 等) | takosumi-cloud が publish する namespace (e.g. `operator.identity.oidc`) | namespace export |
 | App subscription | `.takosumi.yml` `components.*.listen` | compiled env / secret refs |
-| MCP endpoint metadata | `.takosumi.yml` `interfaces.mcp` + Takos registry | 渡らない |
-| File handler metadata | Takos app catalog / runtime registry | 渡らない |
-| Launcher metadata | `.takosumi.yml` `interfaces.launch` + Store | 渡らない |
+| MCP endpoint metadata | Takos registry (= AppSpec の worker `spec` 内 convention で表現)     | 渡らない |
+| File handler metadata | Takos app catalog / runtime registry                                  | 渡らない |
+| Launcher metadata     | Takos Store + worker `spec.routes` / namespace pub (Wave J 以降)      | 渡らない |
 
 Takosumi installer は AppSpec を読み、 build artifact、 `publish` 宣言、 `listen`
 subscription、 route output を materialize して Deployment record を残します。 Takos app
