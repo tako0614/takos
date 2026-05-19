@@ -22,7 +22,6 @@ MCP endpoint / health check path) は次のいずれかで表現します:
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.docs
   name: Docs
@@ -42,7 +41,6 @@ components:
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.api
   name: API

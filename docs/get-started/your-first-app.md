@@ -52,7 +52,6 @@ export default {
 ```yaml
 # .takosumi.yml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: examples.my-first-app
   name: my-first-app

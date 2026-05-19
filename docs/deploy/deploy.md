@@ -31,7 +31,7 @@ provider materialization、Installation / Deployment record の保存は Takosum
 
 | ファイル | 読む主体 | 役割 |
 | --- | --- | --- |
-| `.takosumi.yml` | Takosumi | AppSpec (`apiVersion: takosumi.dev/v1` / `kind: App`)。 metadata / components (`kind` / `publish` / `listen`) / interfaces / permissions |
+| `.takosumi.yml` | Takosumi | AppSpec (`apiVersion: takosumi.dev/v1`)。 metadata / components (`kind` / `publish` / `listen`) |
 
 AppSpec は 1 ファイルです。 source root にはこのファイルだけを置き、 build や namespace
 pub/sub (`publish` / `listen`) もここに集約します。

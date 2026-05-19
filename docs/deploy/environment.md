@@ -16,7 +16,6 @@ env の主な入力元:
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.notes
   name: Notes
@@ -44,7 +43,6 @@ connection string / secret reference が `DB_URL` などとして worker に inj
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.media
   name: Media
@@ -70,7 +68,6 @@ components:
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.portal
   name: Portal

@@ -38,7 +38,6 @@ hostname は routing layer が割り当てる。
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 
 metadata:
   id: jp.takos.computer

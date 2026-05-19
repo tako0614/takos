@@ -16,7 +16,6 @@ rich text document editor with a Streamable HTTP MCP server。
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 
 metadata:
   id: jp.takos.docs
