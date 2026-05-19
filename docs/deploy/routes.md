@@ -52,24 +52,20 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/api.mjs
-    routes:
-      - /
+    spec:
+      routes:
+        - /
   publicDomain:
     kind: custom-domain
     name: api.example.com
     target: api
-interfaces:
-  launch:
-    target: api
-    path: /
 ```
 
 ## バリデーション
 
-- route-bearing component は `routes` に非空の文字列配列を持つ
+- route-bearing worker component は `spec.routes` に非空の文字列配列を持つ
 - `custom-domain.name` は operator が許可した hostname でなければならない
 - `custom-domain.target` は同じ AppSpec 内の component を指す
-- `interfaces.*.target` は route-bearing component を指す
 
 ## 次に読むページ
 
