@@ -224,15 +224,19 @@ AppSpec と install pipeline
 を通じて、以下が自動的に関連づけられます:
 
 - app identity / service / route / hostname
-- resource binding / OIDC client (`components.<name>.use` edge 経由、 詳細は
-  [AppSpec use edges](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md))
+- resource binding / OIDC client (= namespace pub/sub、 詳細は
+  [AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+  の `publish` / `listen` 章)
 - app metadata registration (launcher, MCP server, file handler, etc.)
 
 ## MCP 統合
 
-MCP endpoint の workload は AppSpec の `components` と `interfaces.mcp` で
-宣言し、MCP server としての discovery metadata は app metadata / MCP registry
-に登録します。
+MCP endpoint の workload は AppSpec の worker component で宣言し
+(= `spec.routes` で MCP server の HTTP path を expose)、 MCP server としての
+discovery metadata は app metadata / MCP registry に登録します。 Wave J で
+AppSpec から `interfaces:` top-level field を削除済 (= launcher / MCP /
+health endpoint は worker materializer 慣習 + Takos registry 側 metadata の
+組み合わせで表現)。
 
 ```yaml
 apiVersion: takosumi.dev/v1
@@ -246,12 +250,10 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - tools.example.com/*
-interfaces:
-  mcp:
-    target: web
-    path: /mcp
+    spec:
+      routes:
+        - tools.example.com/*
+        - tools.example.com/mcp
 ```
 
 詳細は [MCP Server](/apps/mcp) と
@@ -259,9 +261,10 @@ interfaces:
 
 ## file handler 統合
 
-file handler UI の workload は AppSpec の `components` と `interfaces` で
-宣言し、Storage UI 向けの discovery metadata は file handler registry に
-登録します。
+file handler UI の workload は AppSpec の worker component で宣言し
+(= `spec.routes` で file handler の HTTP path を expose)、 Storage UI 向けの
+discovery metadata は file handler registry に登録します (= Takos product
+側 metadata layer)。
 
 ```yaml
 apiVersion: takosumi.dev/v1
@@ -275,12 +278,10 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - docs.example.com/*
-interfaces:
-  launch:
-    target: web
-    path: /files/:id
+    spec:
+      routes:
+        - docs.example.com/*
+        - docs.example.com/files/:id
 ```
 
 handler URL は `:id` path segment を必ず含みます。Storage UI は起動時に

@@ -273,11 +273,13 @@ async function validatePermissionScopeDocs(
   _failures: CheckFailure[],
 ): Promise<void> {
   // v1 contract reset (Wave 6): TAKOSUMI_APP_GRANT_CAPABILITIES is removed.
-  // App scopes now live in AppSpec `permissions.requested[]` per
-  // takosumi/docs/reference/app-spec.md, not in a frozen catalog enum.
-  // This validator is retained as a no-op so the call site stays stable;
-  // delete it together with the call in main() once the surrounding
-  // architecture validator is restructured.
+  // Wave J Component contract minimization: AppSpec `permissions.requested[]`
+  // is also removed — the AppSpec contract is kind-agnostic and capability
+  // requests are modeled outside the AppSpec contract (= operator account
+  // plane / namespace pub-sub / consumer-defined kind, per
+  // takosumi/docs/reference/app-spec.md). This validator is retained as a
+  // no-op so the call site stays stable; delete it together with the call
+  // in main() once the surrounding architecture validator is restructured.
 }
 
 async function validateAppInstallationStatusDocs(
