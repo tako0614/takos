@@ -32,7 +32,6 @@ outputs、audit event を持ちます。
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.full-stack
   name: Full Stack

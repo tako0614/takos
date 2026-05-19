@@ -7,7 +7,6 @@
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.notes
   name: Notes

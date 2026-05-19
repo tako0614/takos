@@ -176,7 +176,6 @@ AppSpec は extensible kind catalog (e.g. `worker` / `postgres` / `object-store`
 
 ```yaml
 apiVersion: takosumi.dev/v1
-kind: App
 metadata:
   id: example.api-with-db
   name: api-with-db
