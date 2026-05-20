@@ -12,7 +12,7 @@ Store 周辺で使う 3 つの概念を区別します:
 | 概念             | 役割                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------- |
 | **Catalog App**  | Store / UI 上の **product label**。catalog で表示される顔                             |
-| **AppSpec**      | `.takosumi.yml` で宣言される、**Git URL から install される 1 単位** (= `apiVersion: takosumi.dev/v1` envelope)    |
+| **AppSpec**      | `.takosumi.yml` で宣言される、**Git URL から install される 1 単位** (= `apiVersion: v1` envelope)    |
 | **Installation** | AppSpec が Takosumi Account の Space に install された **instance** (台帳 record)     |
 
 つまり:
@@ -239,7 +239,7 @@ health endpoint は worker materializer 慣習 + Takos registry 側 metadata の
 組み合わせで表現)。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.tools
   name: Example Tools
@@ -266,7 +266,7 @@ discovery metadata は file handler registry に登録します (= Takos product
 側 metadata layer)。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.markdown
   name: Markdown Handler

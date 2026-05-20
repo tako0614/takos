@@ -32,7 +32,7 @@ Deployment record の persist は Takosumi 本体の責務です。
 
 | ファイル          | 読む主体  | 役割                                                |
 | ----------------- | --------- | --------------------------------------------------- |
-| `.takosumi.yml`   | Takosumi  | AppSpec (`apiVersion: takosumi.dev/v1`)。 metadata / components (`kind` / `publish` / `listen`) |
+| `.takosumi.yml`   | Takosumi  | AppSpec (`apiVersion: v1`)。 metadata / components (`kind` / `publish` / `listen`) |
 
 AppSpec は 1 ファイルです。 source root にはこのファイルだけを置き、 build や
 namespace pub/sub (`publish` / `listen`) もここに集約します。

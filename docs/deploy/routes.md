@@ -21,7 +21,7 @@ MCP endpoint / health check path) は次のいずれかで表現します:
 ## Worker Routes
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.docs
   name: Docs
@@ -40,7 +40,7 @@ components:
 ## Custom Domain
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.api
   name: API

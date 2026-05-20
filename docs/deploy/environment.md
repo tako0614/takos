@@ -15,7 +15,7 @@ env の主な入力元:
 ## DB connection
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.notes
   name: Notes
@@ -42,7 +42,7 @@ connection string / secret reference が `DB_URL` などとして worker に inj
 ## Object store prefix
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.media
   name: Media
@@ -67,7 +67,7 @@ components:
 ## OIDC consumer
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.portal
   name: Portal

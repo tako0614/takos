@@ -175,7 +175,7 @@ AppSpec は extensible kind catalog (e.g. `worker` / `postgres` / `object-store`
 を使って、 runtime と resource の関係を構造的に宣言します。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.api-with-db
   name: api-with-db
