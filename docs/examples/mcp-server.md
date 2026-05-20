@@ -9,7 +9,7 @@ Installation layer で扱います。AppSpec は HTTP entrypoint と MCP interfa
 ## AppSpec
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.my-tools
   name: My Tools

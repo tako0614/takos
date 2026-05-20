@@ -121,9 +121,11 @@ Explore / catalog route は `apps/api` が所有します。unknown `/api/explor
 
 Takos product gateway は Installation-owned lifecycle に接続するため、GitOps deploy intent を repository に書き込みます。
 direct unmanaged deploy は Takosumi kernel API を直接使う経路です。
-request body は `appSpec` に `.takosumi.yml` AppSpec (`apiVersion: takosumi.dev/v1`)
+request body は `appSpec` に `.takosumi.yml` AppSpec (`apiVersion: v1`)
 を載せます。旧 `Manifest` envelope と旧 `kind: App` root field を含む payload は
-受け付けません (= Wave K で root envelope を 3 field に minimize 済)。
+受け付けません (= Wave K で root envelope を 3 field に minimize 済)。 旧
+`apiVersion: takosumi.dev/v1` を含む payload も受け付けません (= Wave L で
+group prefix を削除し plain `v1` に統一済)。
 
 | method | path | 説明 |
 | --- | --- | --- |

@@ -9,7 +9,7 @@
 `.takosumi.yml` AppSpec には `metadata.id` と `metadata.name` が必要です。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.my-app
   name: my-app

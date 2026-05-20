@@ -9,7 +9,7 @@ File handler はストレージ UI からファイルを対応アプリで開く
 handler UI 自体は普通の HTTP workload として deploy します。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.docs-handler
   name: Docs Handler

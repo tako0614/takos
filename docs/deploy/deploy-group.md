@@ -31,7 +31,7 @@ outputs、audit event を持ちます。
 ## AppSpec との対応
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.full-stack
   name: Full Stack

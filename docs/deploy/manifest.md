@@ -13,7 +13,7 @@ Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/compone
 
 ## 基本原則
 
-- `apiVersion: takosumi.dev/v1` は必須 (= AppSpec root の discriminator)
+- `apiVersion: v1` は必須 (= AppSpec root の discriminator)
 - runtime-bearing unit は `components.<name>` として書き、 `kind` を catalog から選ぶ
   (= catalog は extensible で、 alias / URI による拡張可)
 - workflow / CI / cron は AppSpec に内包しない (= `component.build` の最小 recipe のみ表現可)
@@ -23,7 +23,7 @@ Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/compone
 ## Worker
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.simple-worker
   name: Simple Worker
@@ -40,7 +40,7 @@ components:
 ## DB 付き Worker
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.api
   name: API
@@ -67,7 +67,7 @@ components:
 ## OIDC consumer
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.notes
   name: Notes

@@ -6,7 +6,7 @@
 (`publish` / `listen`) で Worker へ DB connection を渡します。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.notes
   name: Notes

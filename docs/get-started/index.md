@@ -103,7 +103,7 @@ curl -fsS \
 
 ```yaml
 # .takosumi.yml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: com.example.my-app
   name: my-app

@@ -15,7 +15,7 @@ my-app/
 ## `.takosumi.yml`
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.simple-worker
   name: Simple Worker
@@ -69,7 +69,7 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 
 ## Points
 
-- `apiVersion: takosumi.dev/v1` is required (= AppSpec root discriminator).
+- `apiVersion: v1` is required (= AppSpec root discriminator).
 - `components.web.kind: worker` declares the runtime-bearing unit.
 - `components.web.build.output` points to the generated worker bundle.
 - `components.web.spec.routes` are HTTP route patterns the worker

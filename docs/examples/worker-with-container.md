@@ -8,7 +8,7 @@ runtime は operator/provider extension として扱い、 OIDC のような ide
 takosumi-cloud が publish する namespace を listen する形で受け取ります。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.processor
   name: Processor

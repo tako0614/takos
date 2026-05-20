@@ -3,7 +3,7 @@
 > このページでわかること: API + background Worker + DB を 1 つの AppSpec にまとめるサンプル。
 
 ```yaml
-apiVersion: takosumi.dev/v1
+apiVersion: v1
 metadata:
   id: example.full-stack
   name: Full Stack App
