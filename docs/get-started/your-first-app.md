@@ -61,19 +61,18 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - my-first-app.example.com/*
+    spec:
+      routes:
+        - my-first-app.example.com/*
+        - my-first-app.example.com/healthz
     listen:
       operator.identity.oidc:
         as: env
-interfaces:
-  launch:
-    target: web
-    path: /
-  health:
-    target: web
-    path: /healthz
 ```
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field は物理削除済。 launcher (`/`) と health (`/healthz`) endpoint は
+> worker materializer convention (= `spec.routes` の HTTP path) で表現します。
 
 ## 4. ビルドスクリプトを用意
 

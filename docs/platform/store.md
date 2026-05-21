@@ -234,9 +234,11 @@ AppSpec と install pipeline
 MCP endpoint の workload は AppSpec の worker component で宣言し
 (= `spec.routes` で MCP server の HTTP path を expose)、 MCP server としての
 discovery metadata は app metadata / MCP registry に登録します。 Wave J で
-AppSpec から `interfaces:` top-level field を削除済 (= launcher / MCP /
-health endpoint は worker materializer 慣習 + Takos registry 側 metadata の
-組み合わせで表現)。
+AppSpec から top-level `interfaces:` / `permissions:` / `routes:` field を
+物理削除済 (= takosumi parser reject)。 launcher / MCP / health endpoint は
+worker materializer convention (= `spec.routes` の HTTP path) と Takos product
+内部 metadata layer (= app launcher / MCP registry、 AppSpec contract とは別
+layer) の組み合わせで表現します。
 
 ```yaml
 apiVersion: v1

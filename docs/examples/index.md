@@ -16,8 +16,16 @@
 
 - `worker` component
 - `components.web.build.output`
-- `components.web.spec.routes` (= worker materializer convention; AppSpec
-  contract は kind-agnostic、 Wave J で top-level `interfaces:` を削除済)
+- `components.web.spec.routes` (= worker materializer convention)
+
+> **Wave J で AppSpec contract から `interfaces:` / `permissions:` / `routes:`
+> top-level field を物理削除済** (= takosumi parser は top-level
+> `interfaces:` / `permissions:` / `routes:` を reject する)。 launcher / MCP /
+> health endpoint / capability request は worker materializer convention
+> (= `spec.routes` の HTTP path)、 別 kind の namespace pub/sub、 または Takos
+> product 内部 metadata layer (= app launcher / MCP registry, AppSpec contract
+> とは別) で表現します。 すなわち AppSpec contract は kind-agnostic、 「底は
+> 自由」 原則に従います。
 
 ### [Worker + DB](/examples/worker-with-db)
 

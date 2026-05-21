@@ -14,6 +14,29 @@
 を作成したときに自動的にインストールされるアプリです。 通常のアプリと同じ仕組み
 (Installation) で管理されるため、不要ならアンインストールできます。
 
+## 定義
+
+**bundled apps (= Takosumi installer 経由で 新 Space 作成時 auto-install される
+5 product)** は、 Takos distribution と一緒に ship される 1st-party app
+集合です。 通常の Installation entry として記録され、 user は不要なら
+uninstall できます。 default set に含まれても kernel primitive や group が
+特権化されるわけではなく、 third-party app と同じ install lifecycle を通ります。
+
+canonical 5 bundled apps:
+
+- **takos-docs** — リッチテキストエディタ
+- **takos-slide** — プレゼンテーション
+- **takos-excel** — スプレッドシート
+- **takos-computer** — browser automation / sandbox computer
+- **yurucommu** — ActivityPub / community social
+
+Takos product の core feature (Agent / Chat / Git / Storage / Store) は
+bundled app distribution には **含まれません** (= Takos product の shell が
+直接 host する内部 service、 個別 Installation として記録されない)。 これは
+「bundled app」 (= AppSpec で declare、 Installation として記録される 1 app)
+と 「Takos product core feature」 (= Takos product shell の内部 service)
+の layer 区別です。
+
 ## 一覧
 
 | app                                        | 既定 ref     | 役割                                  | 主な component / namespace listen                                       |
@@ -23,9 +46,6 @@
 | [takos-slide](/platform/takos-slide)       | `v0.1.2` tag | プレゼンテーション                    | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
 | [takos-computer](/platform/takos-computer) | `v2.1.2` tag | browser automation / sandbox computer | launcher / MCP / sandbox runtime / `operator.identity.oidc`             |
 | [yurucommu](/platform/yurucommu)           | `v1.2.6` tag | ActivityPub / community social        | postgres / object-store / `operator.identity.oidc`                      |
-
-Agent、Chat、Git、Storage、Store は Takos product の core feature であり、
-bundled app distribution には含めません。
 
 ## 動作原理
 

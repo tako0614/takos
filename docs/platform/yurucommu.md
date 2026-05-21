@@ -29,13 +29,16 @@ components:
     build:
       command: deno task build:worker
       output: dist/worker.mjs
-    routes:
-      - /
-      - /api
-      - /ap
-      - /users
-      - /communities
-      - /inbox
+    spec:
+      routes:
+        - /
+        - /api
+        - /ap
+        - /users
+        - /communities
+        - /inbox
+        - /api/auth/login/takos
+        - /readyz
     listen:
       com.yurucommu.app.db:
         as: env
@@ -55,15 +58,13 @@ components:
     kind: object-store
     publish:
       - com.yurucommu.app.media
-
-interfaces:
-  launch:
-    target: web
-    path: /api/auth/login/takos
-  health:
-    target: web
-    path: /readyz
 ```
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field は物理削除済。 launcher (`/api/auth/login/takos`) と health (`/readyz`)
+> endpoint は worker materializer convention (= `spec.routes` の HTTP path) と
+> Takos product 内部 app launcher metadata (= AppSpec contract とは別 layer)
+> で表現します。
 
 ## OIDC consumer
 

@@ -113,13 +113,15 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - my-app.example.com/*
-interfaces:
-  launch:
-    target: web
-    path: /
+    spec:
+      routes:
+        - my-app.example.com/*
 ```
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field は物理削除済。 launcher endpoint は worker materializer convention
+> (= `spec.routes` の HTTP path) と Takos product 内部 app launcher metadata
+> (= AppSpec contract とは別 layer) で表現します。
 
 ### 4. ビルドスクリプトを用意する
 

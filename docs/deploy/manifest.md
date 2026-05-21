@@ -88,19 +88,14 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - /
+    spec:
+      routes:
+        - /
+        - /api/auth/login
+        - /healthz
     listen:
       operator.identity.oidc:
         as: env
-
-interfaces:
-  launch:
-    target: web
-    path: /api/auth/login
-  health:
-    target: web
-    path: /healthz
 ```
 
 `listen: { operator.identity.oidc: { as: env } }` が宣言されると、 Installation
@@ -109,6 +104,11 @@ per-Installation OIDC client が発行され、 `OIDC_ISSUER_URL` / `OIDC_CLIENT
 `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS` が worker の env に inject
 されます。 OIDC kind 自身は AppSpec に 書かず、 takosumi-cloud (operator account
 plane) が provider として提供します。
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field を物理削除しました。 launcher / health endpoint は worker materializer
+> convention (= `spec.routes` の HTTP path) で表現します (= 例の `/api/auth/login`
+> / `/healthz` がそれぞれ launcher / health に対応する HTTP route)。
 
 ## 関連ページ
 

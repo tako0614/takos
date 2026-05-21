@@ -79,6 +79,6 @@ takos/
 
 ## 関連
 
-- [Service Topology](docs/architecture/service-topology.md)
-- [Local Shell Runbook](docs/get-started/local-shell.md)
+- [Service Topology](https://docs.takos.jp/architecture/service-topology)
+- [Local Shell Runbook](https://docs.takos.jp/get-started/local-shell)
 - [Component Matrix](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/component-matrix.md)

@@ -50,52 +50,34 @@ components:
     build:
       command: deno task build
       output: dist/worker.mjs
-    routes:
-      - /mcp
-      - /gui
-      - /gui/*
-      - /gui/api/auth/*
-      - /healthz
-      - /health
-      - /readyz
-      - /create
-      - /session
-      - /session/:id
-      - /session/:id/mcp
-      - /icons/computer.svg
+    spec:
+      routes:
+        - /mcp
+        - /gui
+        - /gui/*
+        - /gui/api/auth/*
+        - /gui/api/auth/launch
+        - /healthz
+        - /health
+        - /readyz
+        - /create
+        - /session
+        - /session/:id
+        - /session/:id/mcp
+        - /icons/computer.svg
     listen:
       operator.identity.oidc:
         as: env
-
-interfaces:
-  launch:
-    target: web
-    path: /gui/api/auth/launch
-  mcp:
-    target: web
-    path: /mcp
-  health:
-    target: web
-    path: /readyz
-
-permissions:
-  requested:
-    - spaces:read
-    - files:read
-    - files:write
-    - memories:read
-    - memories:write
-    - threads:read
-    - threads:write
-    - runs:read
-    - runs:write
-    - agents:execute
-    - repos:read
-    - repos:write
-    - mcp:invoke
-    - events:subscribe
-    - logs.read.own
 ```
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field は物理削除済。 launcher (`/gui/api/auth/launch`) / MCP (`/mcp`) / health
+> (`/readyz`) endpoint は worker materializer convention (= `spec.routes`
+> の HTTP path) と Takos product 内部 app launcher / MCP registry metadata
+> (= AppSpec contract とは別 layer) で表現します。 capability request
+> (= かつての `permissions.requested[]`、 spaces / files / memories / threads /
+> runs / agents / repos / mcp / events / logs scope) は Takos product 内部
+> metadata layer で表現します。
 
 ## MCP authentication
 
