@@ -1,6 +1,14 @@
 # サンプル集
 
-> このページでわかること: `.takosumi.yml` AppSpec を使ったアプリのサンプル一覧。コピーして使えます。
+> このページでわかること: `.takosumi.yml` AppSpec
+> を使ったアプリのサンプル一覧。コピーして使えます。
+
+> **Wave N planned (2026-05-21 RFC stage)**: サンプルが使う `build:` field と
+> curated 4 kind (= worker / postgres / object-store / custom-domain) は
+> takosumi Wave N で削除予定 (= kernel pure contract executor 化、 build は別
+> `kind: build` component に移管)。 詳細 design は takosumi
+> [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic) を参照。
+> 現状のサンプルは引き続き動作します。
 
 ## List
 

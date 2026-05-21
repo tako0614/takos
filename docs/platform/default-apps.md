@@ -1,19 +1,28 @@
 # バンドルアプリ
 
-> このページでわかること: 新しい Space に自動インストールされるアプリの一覧と仕組み。
+> このページでわかること: 新しい Space
+> に自動インストールされるアプリの一覧と仕組み。
 
-バンドルアプリは、新しい Space を作成したときに自動的にインストールされるアプリです。
-通常のアプリと同じ仕組み (Installation) で管理されるため、不要ならアンインストールできます。
+> **Wave N planned (2026-05-21 RFC stage)**: 本動作原理に含まれる
+> `components.<name>.build` artifact 生成 step は takosumi Wave N で削除予定 (=
+> kernel pure contract executor 化、 build は別 `kind: build` component に移管、
+> artifact は namespace pub/sub 経由で consumer に届く)。 詳細 design は
+> takosumi [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)
+> を参照。
+
+バンドルアプリは、新しい Space
+を作成したときに自動的にインストールされるアプリです。 通常のアプリと同じ仕組み
+(Installation) で管理されるため、不要ならアンインストールできます。
 
 ## 一覧
 
-| app | 既定 ref | 役割 | 主な component / namespace listen |
-| --- | --- | --- | --- |
-| [takos-docs](/platform/takos-docs) | `v0.1.2` tag | リッチテキストエディタ | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
-| [takos-excel](/platform/takos-excel) | `v0.1.2` tag | スプレッドシート | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
-| [takos-slide](/platform/takos-slide) | `v0.1.2` tag | プレゼンテーション | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
-| [takos-computer](/platform/takos-computer) | `v2.1.2` tag | browser automation / sandbox computer | launcher / MCP / sandbox runtime / `operator.identity.oidc` |
-| [yurucommu](/platform/yurucommu) | `v1.2.6` tag | ActivityPub / community social | postgres / object-store / `operator.identity.oidc` |
+| app                                        | 既定 ref     | 役割                                  | 主な component / namespace listen                                       |
+| ------------------------------------------ | ------------ | ------------------------------------- | ----------------------------------------------------------------------- |
+| [takos-docs](/platform/takos-docs)         | `v0.1.2` tag | リッチテキストエディタ                | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
+| [takos-excel](/platform/takos-excel)       | `v0.1.2` tag | スプレッドシート                      | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
+| [takos-slide](/platform/takos-slide)       | `v0.1.2` tag | プレゼンテーション                    | launcher / MCP / file handler / object-store / `operator.identity.oidc` |
+| [takos-computer](/platform/takos-computer) | `v2.1.2` tag | browser automation / sandbox computer | launcher / MCP / sandbox runtime / `operator.identity.oidc`             |
+| [yurucommu](/platform/yurucommu)           | `v1.2.6` tag | ActivityPub / community social        | postgres / object-store / `operator.identity.oidc`                      |
 
 Agent、Chat、Git、Storage、Store は Takos product の core feature であり、
 bundled app distribution には含めません。
@@ -21,12 +30,15 @@ bundled app distribution には含めません。
 ## 動作原理
 
 1. Space 作成時に bundled app entry の Git URL / ref を解決する
-2. takosumi-cloud (operator account plane / リファレンス実装: Takosumi Accounts) が Installation を作成する
+2. takosumi-cloud (operator account plane / リファレンス実装: Takosumi Accounts)
+   が Installation を作成する
 3. `POST /v1/installations` が source ref を commit に pin する
-4. `.takosumi.yml` から namespace pub/sub (`publish` / `listen`) / grant / permission dry-run を作る
+4. `.takosumi.yml` から namespace pub/sub (`publish` / `listen`) / grant /
+   permission dry-run を作る
 5. `components.<name>.build` が必要な artifact を作る
 6. Takosumi kernel が Deployment record と provider outputs を記録する
-7. Installation ledger に source commit / AppSpec digest / Deployment evidence を記録する
+7. Installation ledger に source commit / AppSpec digest / Deployment evidence
+   を記録する
 
 bundled app も third-party app と同じ install lifecycle を通ります。default set
 に含まれても kernel primitive や group が特権化されるわけではありません。
@@ -35,29 +47,29 @@ bundled app も third-party app と同じ install lifecycle を通ります。de
 
 office 系 bundled apps は Storage の file handler registry に登録されます。
 
-| app | route | extension | MIME type |
-| --- | --- | --- | --- |
-| takos-docs | `/files/:id` | `.takosdoc` | `application/vnd.takos.docs+json` |
+| app         | route        | extension     | MIME type                          |
+| ----------- | ------------ | ------------- | ---------------------------------- |
+| takos-docs  | `/files/:id` | `.takosdoc`   | `application/vnd.takos.docs+json`  |
 | takos-excel | `/files/:id` | `.takossheet` | `application/vnd.takos.excel+json` |
 | takos-slide | `/files/:id` | `.takosslide` | `application/vnd.takos.slide+json` |
 
-launcher / MCP / file handler metadata は Takos app catalog / runtime registry の
-surface です。kernel manifest の field ではありません。
+launcher / MCP / file handler metadata は Takos app catalog / runtime registry
+の surface です。kernel manifest の field ではありません。
 
 ## Operator overrides
 
-Product distribution profile は `defaultApps.entries` に repository ref を持ちます。
-operator は環境ごとに preinstall 対象を選べます。
+Product distribution profile は `defaultApps.entries` に repository ref
+を持ちます。 operator は環境ごとに preinstall 対象を選べます。
 
-| env | 説明 |
-| --- | --- |
-| `TAKOS_DEFAULT_APPS_PREINSTALL` | `false` のときだけ bundled app preinstall を止める kill switch |
-| `TAKOS_DEFAULT_APP_INSTALL_URL` | Takosumi installer の `POST /v1/installations` endpoint |
-| `TAKOS_DEFAULT_APP_INSTALL_TOKEN` | install endpoint の bearer token |
-| `TAKOS_DEFAULT_APP_INSTALL_SUBJECT` | Accounts ledger の `createdBySubject` |
-| `TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID` | install apply request の account override |
-| `TAKOS_DEFAULT_APP_INSTALL_MODE` | optional runtime mode |
-| `TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL` | optional runtime base URL |
+| env                                          | 説明                                                           |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| `TAKOS_DEFAULT_APPS_PREINSTALL`              | `false` のときだけ bundled app preinstall を止める kill switch |
+| `TAKOS_DEFAULT_APP_INSTALL_URL`              | Takosumi installer の `POST /v1/installations` endpoint        |
+| `TAKOS_DEFAULT_APP_INSTALL_TOKEN`            | install endpoint の bearer token                               |
+| `TAKOS_DEFAULT_APP_INSTALL_SUBJECT`          | Accounts ledger の `createdBySubject`                          |
+| `TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID`       | install apply request の account override                      |
+| `TAKOS_DEFAULT_APP_INSTALL_MODE`             | optional runtime mode                                          |
+| `TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL` | optional runtime base URL                                      |
 
 ## Related
 
