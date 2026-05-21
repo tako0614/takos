@@ -2,6 +2,14 @@
 
 > このページでわかること: request-driven Worker と long-running service を組み合わせる考え方。
 
+> **Wave N planned (2026-05-21 RFC stage)**: 本サンプルが使う `build:` field と
+> curated 4 kind (= worker / postgres / object-store / custom-domain) は
+> takosumi Wave N で削除予定 (= kernel pure contract executor 化、 build は
+> 別 `kind: build` component に移管、 specific kind は operator distribution
+> が JSON-LD + plugin で持ち込む)。 詳細 design は takosumi
+> [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic) を参照。
+> 現状のサンプルは引き続き動作します。
+
 Takosumi v1 AppSpec の core kind catalog は `worker` / `postgres` / `object-store` /
 `custom-domain` を含み、 catalog は extensible (alias / URI で拡張可) です。 container
 runtime は operator/provider extension として扱い、 OIDC のような identity surface は
@@ -18,8 +26,9 @@ components:
     build:
       command: npm ci && npm run build:host
       output: dist/host.mjs
-    routes:
-      - processor.example.com/*
+    spec:
+      routes:
+        - processor.example.com/*
     listen:
       example.processor.media:
         as: env
@@ -28,14 +37,11 @@ components:
     kind: object-store
     publish:
       - example.processor.media
-interfaces:
-  launch:
-    target: host
-    path: /
-  health:
-    target: host
-    path: /healthz
 ```
+
+> launcher / health endpoint は worker materializer convention (= `spec.routes`
+> の HTTP path) で表現します (= Wave J で top-level `interfaces:` は AppSpec
+> から物理削除済)。
 
 重い処理を container に逃がす必要がある場合は、operator distribution が提供する
 provider extension、または app 層の外部 service として扱います。 portable AppSpec

@@ -2,6 +2,13 @@
 
 > このページでわかること: `worker` component 1 つだけの最小 AppSpec。
 
+> **Wave N planned (2026-05-21 RFC stage)**: 本サンプルが使う `build:` field と
+> `kind: worker` は、 takosumi Wave N で削除/再定義予定 (= kernel pure contract
+> executor 化、 build は別 `kind: build` component に移管、 worker kind は
+> operator distribution が JSON-LD + plugin で持ち込む)。 詳細 design は
+> takosumi [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)
+> を参照。 現状のサンプルは引き続き動作します。
+
 ## 完成形
 
 ```text

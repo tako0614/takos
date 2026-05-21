@@ -14,6 +14,9 @@
 `.takosumi.yml` AppSpec には `metadata.id` と `metadata.name` が必要です。
 
 ```yaml
+# 現在のサンプル (Wave L) — bare apiVersion v1 + AppSpec root 3 field
+# (metadata / components) + Component 5 field (kind / spec / publish / listen
+# / build) の current contract に整合
 apiVersion: v1
 metadata:
   id: com.example.my-app

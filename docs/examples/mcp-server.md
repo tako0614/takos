@@ -2,9 +2,18 @@
 
 > このページでわかること: MCP Server を Worker として install し、Takos app から使えるようにするサンプル。
 
+> **Wave N planned (2026-05-21 RFC stage)**: 本サンプルが使う `build:` field と
+> `kind: worker` は、 takosumi Wave N で削除/再定義予定 (= kernel pure contract
+> executor 化、 build は別 `kind: build` component に移管、 worker kind は
+> operator distribution が JSON-LD + plugin で持ち込む)。 詳細 design は
+> takosumi [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)
+> を参照。 現状のサンプルは引き続き動作します。
+
 MCP endpoint の catalog / install UI / client discovery は Takos app layer と
-Installation layer で扱います。AppSpec は HTTP entrypoint と MCP interface を
-宣言します。
+Installation layer で扱います。AppSpec は HTTP entrypoint だけを宣言し、
+MCP / health endpoint は worker materializer convention (= `spec.routes` の HTTP
+path) + Takos app metadata 側で表現します (= Wave J で top-level `interfaces:`
+は AppSpec から物理削除済)。
 
 ## AppSpec
 
@@ -19,15 +28,11 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - tools.example.com/*
-interfaces:
-  mcp:
-    target: mcp
-    path: /mcp
-  health:
-    target: mcp
-    path: /healthz
+    spec:
+      routes:
+        - tools.example.com/*
+        - tools.example.com/mcp
+        - tools.example.com/healthz
 ```
 
 ## Worker のコード

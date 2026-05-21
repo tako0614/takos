@@ -19,17 +19,19 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - docs.example.com/*
-interfaces:
-  launch:
-    target: web
-    path: /
+    spec:
+      routes:
+        - docs.example.com/*
 ```
 
 Takosumi installer は `.takosumi.yml` から build output と route を解決して
 Deployment record を作ります。ユーザー向け AppSpec に compiled artifact
 placeholder は書きません。
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field を物理削除しました。 launcher endpoint は worker materializer convention
+> (= `spec.routes` の HTTP path) と Takos product 内部 metadata layer
+> (= app launcher registry、 AppSpec contract とは別) で表現します。
 
 ## App Metadata
 

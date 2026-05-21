@@ -42,6 +42,21 @@ definition は [`../docs/reference/design-principles.md`](../docs/reference/desi
   `../road-to-me/`)
 - **Internal**: `app/` (user-facing)、 `git/` (Git hosting)、 `agent/` (agent execution)
 
+## Terminology
+
+| term                                                 | 意味                                                                                                                                                                |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Takos product**                                    | self-hostable AI-first chat & agent product。 = takos.jp で deploy される shell。 = `takos/` repository の product 単位 (app + git + agent + bundled apps の集合体)。 |
+| **takos-app / takos-git / takos-agent**              | Takos product を構成する 3 service component (nested submodule `app/` / `git/` / `agent/`)。 docker compose / Helm chart の service id でもある。                   |
+| **Takos app (= 抽象)**                               | Takosumi 上で deploy される 1 application unit (= AppSpec で declare)。 bundled apps (takos-docs / takos-slide / takos-excel / takos-computer / yurucommu) や third-party app が該当する。 |
+
+`Takos product` vs `Takos app` の混同を避けるため、 docs では次の wording を使う:
+
+- Takos product 全体 / shell を指すとき: "**Takos product**"、 "Takos"
+- Takos product の 3 service を指すとき: "**takos-app**" / "**takos-git**" / "**takos-agent**"
+- Takosumi 上の 1 app unit を指すとき: "**Takos app**" / "**bundled app**" / "**third-party app**"
+- Takos product の core feature (= shell 内部 service) を指すとき: "**Takos product core feature**" (Agent / Chat / Git / Storage / Store)
+
 ## Substitutability
 
 - **Takos product 自体**: Takosumi PaaS 上で動作する self-hostable product。 AI agents / Git / chat / spaces / memory /

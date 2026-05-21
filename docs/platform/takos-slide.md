@@ -27,11 +27,14 @@ components:
     build:
       command: deno task build
       output: dist/worker.mjs
-    routes:
-      - /
-      - /api
-      - /mcp
-      - /files/:id
+    spec:
+      routes:
+        - /
+        - /api
+        - /api/auth/launch
+        - /mcp
+        - /healthz
+        - /files/:id
     listen:
       jp.takos.slide.presentations:
         as: env
@@ -43,24 +46,15 @@ components:
     kind: object-store
     publish:
       - jp.takos.slide.presentations
-
-interfaces:
-  launch:
-    target: web
-    path: /api/auth/launch
-  mcp:
-    target: web
-    path: /mcp
-  health:
-    target: web
-    path: /healthz
-
-permissions:
-  requested:
-    - files:read
-    - files:write
-    - logs.read.own
 ```
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field は物理削除済。 launcher (`/api/auth/launch`) / MCP (`/mcp`) / health
+> (`/healthz`) endpoint は worker materializer convention (= `spec.routes`
+> の HTTP path) と Takos product 内部 app launcher / MCP registry metadata
+> (= AppSpec contract とは別 layer) で表現します。 capability request
+> (= かつての `permissions.requested[]`) は Takos product 内部 metadata layer
+> で表現します。
 
 ## 関連ページ
 

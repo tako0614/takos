@@ -25,16 +25,19 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - tools.example.com/*
-interfaces:
-  mcp:
-    target: mcp
-    path: /mcp
+    spec:
+      routes:
+        - tools.example.com/*
+        - tools.example.com/mcp
 ```
 
 Takosumi installer は `components.mcp.build` を実行し、build output の digest と
 route を Deployment record に残します。
+
+> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
+> field を物理削除しました。 MCP / health endpoint は worker materializer
+> convention (= `spec.routes` の HTTP path) と Takos product 内部 MCP registry
+> metadata (= AppSpec contract とは別 layer) の組み合わせで表現します。
 
 ## App Metadata
 
@@ -100,16 +103,16 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - tools.example.com/*
-interfaces:
-  mcp:
-    target: mcp
-    path: /mcp
-permissions:
-  requested:
-    - mcp.call
+    spec:
+      routes:
+        - tools.example.com/*
+        - tools.example.com/mcp
 ```
+
+> capability request (= かつての `permissions.requested[]`) は AppSpec contract
+> から物理削除済 (Wave J)。 MCP call の access control は Takos product 内部
+> MCP registry の role gate / bearer auth と worker 側 `Authorization` header
+> 検証で表現します。
 
 worker 側は `Authorization: Bearer ...` を検証します。client side は MCP
 metadata の `auth.tokenRef` から token source を解決します。

@@ -42,8 +42,9 @@ components:
     build:
       command: npm ci && npm run build
       output: dist/worker.mjs
-    routes:
-      - my-app.example.com/*
+    spec:
+      routes:
+        - my-app.example.com/*
     listen:
       examples.my-app.db:
         as: env
@@ -54,16 +55,13 @@ components:
       - examples.my-app.db
     spec:
       class: small
-interfaces:
-  launch:
-    target: web
-    path: /
-  health:
-    target: web
-    path: /healthz
-permissions:
-  requested: []
 ```
+
+> Wave J で AppSpec root から top-level `interfaces:` / `permissions:` /
+> `routes:` field は物理削除済 (= takosumi parser reject)。 launcher / MCP /
+> health endpoint は worker materializer convention (= `spec.routes` の HTTP
+> path)、 capability request は Takos product 内部 metadata layer (= AppSpec
+> contract とは別) で表現します (= 「底は自由」 原則)。
 
 主な field:
 
@@ -71,11 +69,11 @@ permissions:
 | ---------------------- | ---------------------------------------------------------------------------------------------- |
 | `metadata`             | App ID、表示名、publisher、homepage など                                                       |
 | `components`           | extensible kind catalog (`worker` / `postgres` / `object-store` / `custom-domain` / 拡張 kind) |
+| `components.*.kind`    | component の contract (catalog から選ぶ、 alias / URI で拡張可)                                |
+| `components.*.spec`    | kind ごとの open spec (= worker なら `routes`、 postgres なら `class` 等)                      |
 | `components.*.build`   | artifact を得る最小 build recipe                                                               |
 | `components.*.publish` | この component が export する namespace path 一覧                                              |
 | `components.*.listen`  | sibling component や operator が publish する namespace path への subscribe declaration        |
-| `interfaces`           | launch、MCP、health など Takos / operator が使う entry point                                   |
-| `permissions`          | Installation が要求する Takos API scope                                                        |
 
 ## Install lifecycle
 
