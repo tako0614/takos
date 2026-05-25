@@ -4,11 +4,9 @@
 
 Cloudflare アカウントなしでローカルに Takos を動かせます。
 
-::: info これは production deploy target ではありません ローカル開発は
-`distribution.yml` の `kernel_host.target` には含めません (5 target =
-`cloudflare` / `aws` / `gcp` / `kubernetes` / `selfhosted`)。本番 deploy target
-として bare metal / VM を使う場合は [Self-hosted](/hosting/self-hosted)
-(`selfhosted`) を選んでください。 :::
+::: info これは production deploy target ではありませんローカル開発は `distribution.yml` の `kernel_host.target`
+には含めません (5 target = `cloudflare` / `aws` / `gcp` / `kubernetes` / `selfhosted`)。本番 deploy target として bare
+metal / VM を使う場合は [Self-hosted](/hosting/self-hosted) (`selfhosted`) を選んでください。 :::
 
 ## 前提
 
@@ -31,8 +29,8 @@ deno task local:logs      # ログ確認
 deno task local:down      # 停止
 ```
 
-compose project 名は既定で `takos-local` です。既存 stack と分離したい場合は
-`TAKOS_LOCAL_COMPOSE_PROJECT=<name>` を指定します。
+compose project 名は既定で `takos-local` です。既存 stack と分離したい場合は `TAKOS_LOCAL_COMPOSE_PROJECT=<name>`
+を指定します。
 
 バックグラウンドで起動したい場合:
 
@@ -49,40 +47,38 @@ deno task local:e2e                # isolated compose e2e + Smart HTTP git clone
 
 ### `deno task local:e2e` とは
 
-isolated compose project を起動し、health checks、apps/api 経由の Smart HTTP git clone、主要 service の疎通を確認する
-CI 用 smoke です。
+isolated compose project を起動し、health checks、apps/api 経由の Smart HTTP git clone、主要 service の疎通を確認する CI
+用 smoke です。
 
 ## 主要サービス
 
-| サービス           | ポート            | 役割                                          |
-| ------------------ | ----------------- | --------------------------------------------- |
-| `takos-app`        | `8787`            | OIDC consumer / Web UI / public API gateway   |
-| `takosumi`         | `8788`            | AppSpec install / Deployment apply engine     |
-| `takos-agent`      | `8789`            | agent execution service                       |
-| `takos-git`        | `8790`            | Git hosting service                           |
-| `postgres`         | `15432`           | PostgreSQL                                    |
-| `redis`            | `16379`           | Redis（queue/cache backing）                  |
+| サービス      | ポート  | 役割                                        |
+| ------------- | ------- | ------------------------------------------- |
+| `takos-app`   | `8787`  | OIDC consumer / Web UI / public API gateway |
+| `takosumi`    | `8788`  | AppSpec install / Deployment apply engine   |
+| `takos-agent` | `8789`  | agent execution service                     |
+| `takos-git`   | `8790`  | Git hosting service                         |
+| `postgres`    | `15432` | PostgreSQL                                  |
+| `redis`       | `16379` | Redis（queue/cache backing）                |
 
-local での user-defined group workload 実行は Takosumi installer / kernel と
-provider/runtime-agent connector 経由で扱います。AppSpec の
-`components.*.build`、dependency edge、Installation materialization は
-`takosumi`、Git hosting は `takos-git`、agent 実行は `takos-agent` の責務です。
+local での user-defined app workload 実行は Takosumi installer / kernel と provider/runtime-agent connector
+経由で扱います。AppSpec の source fetch、`publish` / `listen` resolution、Installation materialization は
+`takosumi`、build は build service / CI、Git hosting は `takos-git`、agent 実行は `takos-agent` の責務です。
 
 private server stack の基準は `takos-private/`
-で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、
-`takos/agent/Dockerfile` を使います。OSS local stack は `./.env.local.example`
-と `compose.local.yml` を使い、private 側は sibling checkout で別管理です。
+で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、 `takos/agent/Dockerfile` を使います。OSS
+local stack は `./.env.local.example` と `compose.local.yml` を使い、private 側は sibling checkout で別管理です。
 
 ### ローカル service target override
 
-通常は `compose.local.yml` / `.env.local.example` の既定値を使う。個別の owning
-service だけを外部プロセスへ逃がす場合は、compose env の internal URL を明示する。
+通常は `compose.local.yml` / `.env.local.example` の既定値を使う。個別の owning service
+だけを外部プロセスへ逃がす場合は、compose env の internal URL を明示する。
 
-| 変数                                | 用途                                                        |
-| ----------------------------------- | ----------------------------------------------------------- |
-| `TAKOSUMI_INTERNAL_URL`             | takos-app から Takosumi kernel への internal URL            |
-| `TAKOS_GIT_INTERNAL_URL`            | takos-app から Takos Git hosting への internal URL          |
-| `TAKOS_AGENT_INTERNAL_URL`          | takos-app から Takos agent service への internal URL        |
+| 変数                       | 用途                                                 |
+| -------------------------- | ---------------------------------------------------- |
+| `TAKOSUMI_INTERNAL_URL`    | takos-app から Takosumi kernel への internal URL     |
+| `TAKOS_GIT_INTERNAL_URL`   | takos-app から Takos Git hosting への internal URL   |
+| `TAKOS_AGENT_INTERNAL_URL` | takos-app から Takos agent service への internal URL |
 
 ```bash
 TAKOSUMI_INTERNAL_URL=http://127.0.0.1:8788
@@ -90,11 +86,10 @@ TAKOSUMI_INTERNAL_URL=http://127.0.0.1:8788
 
 ## 個別起動
 
-compose を使わずに個別にサービスを起動する場合は、各 owning repository の
-AGENTS.md / README に従います。
+compose を使わずに個別にサービスを起動する場合は、各 owning repository の AGENTS.md / README に従います。
 
-private server stack を構成する場合は `takos-private/.env.server.example` と
-`takos-private/compose.server.yml` を参考に環境変数を設定する。
+private server stack を構成する場合は `takos-private/.env.server.example` と `takos-private/compose.server.yml`
+を参考に環境変数を設定する。
 
 ## Vectorize（pgvector）の設定
 
@@ -105,10 +100,10 @@ private server stack を構成する場合は `takos-private/.env.server.example
 PGVECTOR_ENABLED=true
 ```
 
-| 値               | 動作                                               |
-| ---------------- | -------------------------------------------------- |
+| 値               | 動作                                                |
+| ---------------- | --------------------------------------------------- |
 | `true`           | pgvector を使った semantic search mode が有効になる |
-| 未設定 / `false` | vectorize binding を使う Worker の起動時にエラー   |
+| 未設定 / `false` | vectorize binding を使う Worker の起動時にエラー    |
 
 前提として PostgreSQL に pgvector 拡張がインストールされている必要がある:
 
@@ -120,8 +115,7 @@ Docker の場合は pgvector 対応イメージ（`pgvector/pgvector:pg16`）を
 
 ## `.takos-session` ファイル
 
-CLI
-がローカル環境に自動接続するためのセッションファイル。作業ディレクトリまたは親ディレクトリに配置する。
+CLI がローカル環境に自動接続するためのセッションファイル。作業ディレクトリまたは親ディレクトリに配置する。
 
 ```json
 {
@@ -141,8 +135,7 @@ CLI
 
 - ファイルパーミッションは `600`（owner のみ読み書き）にすること
 - パーミッションが不適切な場合、CLI はセッションファイルの読み込みを拒否する
-- CLI はカレントディレクトリから親ディレクトリに向かって `.takos-session`
-  を探索する
+- CLI はカレントディレクトリから親ディレクトリに向かって `.takos-session` を探索する
 
 ```bash
 # パーミッションの設定
@@ -153,15 +146,14 @@ chmod 600 .takos-session
 
 `.takos-session` の代わりに環境変数でも認証できる:
 
-| 変数               | 用途                         |
-| ------------------ | ---------------------------- |
-| `TAKOS_SESSION_ID` | セッション ID                |
+| 変数               | 用途                                |
+| ------------------ | ----------------------------------- |
+| `TAKOS_SESSION_ID` | セッション ID                       |
 | `TAKOS_TOKEN`      | Takosumi Accounts PAT / OIDC bearer |
-| `TAKOS_SPACE_ID`   | デフォルトの space ID        |
-| `TAKOS_API_URL`    | API エンドポイント URL       |
+| `TAKOS_SPACE_ID`   | デフォルトの space ID               |
+| `TAKOS_API_URL`    | API エンドポイント URL              |
 
-優先順位: `TAKOS_SESSION_ID` > `TAKOS_TOKEN` > `.takos-session` ファイル >
-`~/.takos/config.json`
+優先順位: `TAKOS_SESSION_ID` > `TAKOS_TOKEN` > `.takos-session` ファイル > `~/.takos/config.json`
 
 ## CLI の接続先切り替え
 
@@ -182,12 +174,10 @@ takos endpoint use https://custom.example.com
 
 ## 初回マイグレーション
 
-`compose.local.yml` の PostgreSQL backend は起動時に
-`takos/app/apps/control/db/migrations` を self-host migration runner で自動適用
-する。手動で以下を実行する必要はない。
+`compose.local.yml` の PostgreSQL backend は起動時に `takos/app/apps/control/db/migrations` を self-host migration
+runner で自動適用する。手動で以下を実行する必要はない。
 
-Wrangler の local D1 backend を単体で使う場合だけ、同じ migration source
-に対して 次を実行する:
+Wrangler の local D1 backend を単体で使う場合だけ、同じ migration source に対して次を実行する:
 
 ```bash
 cd takos/app/apps/control && deno task db:migrate
@@ -195,14 +185,13 @@ cd takos/app/apps/control && deno task db:migrate
 
 ## ローカル環境の制限
 
-- backend に依存しないデプロイ仕様をローカル backend 上で再現しますが、
-  tracked reference の Workers backend と完全同一ではありません
-- backend 固有の queue consumer / scheduler / workflow セマンティクスは完全には再現できません。
-  queue binding の基本配信は動作しますが、backend 固有のトリガー動作は
-  ターゲットの runtime connector の制約に従います
+- backend に依存しないデプロイ仕様をローカル backend 上で再現しますが、 tracked reference の Workers backend
+  と完全同一ではありません
+- backend 固有の queue consumer / scheduler / workflow セマンティクスは完全には再現できません。 queue binding
+  の基本配信は動作しますが、backend 固有のトリガー動作はターゲットの runtime connector の制約に従います
 - vectorize binding には PostgreSQL + pgvector が必要です (`PGVECTOR_ENABLED=true`)
-- Durable Object binding は永続的なローカルランタイムで利用できますが、
-  tracked reference の Workers backend と byte-for-byte 一致するものではありません
+- Durable Object binding は永続的なローカルランタイムで利用できますが、 tracked reference の Workers backend と
+  byte-for-byte 一致するものではありません
 - Dispatch Namespace は提供されず、tenant runtime path を使用します
 
 詳細は [環境ごとの差異](/hosting/differences) を参照してください。
@@ -211,4 +200,4 @@ cd takos/app/apps/control && deno task db:migrate
 
 - [セルフホスト](/hosting/self-hosted) --- 本番向けセルフホスト
 - [環境ごとの差異](/hosting/differences) --- 全環境の比較
-- [はじめての group](/get-started/your-first-app) --- group を作ってデプロイ
+- [はじめての app](/get-started/your-first-app) --- app を作ってデプロイ

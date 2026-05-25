@@ -1,5 +1,7 @@
 # takos-computer
 
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+
 > このページでわかること: バンドルアプリ takos-computer の概要。
 
 ブラウザ自動操作とサンドボックスコンピューターを提供するアプリです。
@@ -27,7 +29,7 @@ hostname は routing layer が割り当てる。
   /gui/api/auth/callback       → OIDC callback (Takosumi Accounts 経由)
   /healthz                     → liveness health check
   /health                      → health alias
-  /readyz                      → readiness check
+  /readyz                      → readiness endpoint
   /create                      → sandbox session creation
   /session/:id                 → sandbox session state
   /session/:id/mcp             → sandbox MCP proxy
@@ -35,6 +37,11 @@ hostname は routing layer が割り当てる。
 ```
 
 ## AppSpec (`.takosumi.yml`)
+
+`spec.entrypoint` points to a runtime file inside the resolved source. Managed
+install uses the prepared source produced by the build service when that file is
+generated; direct Git/local apply is valid only when the file is already present
+in the source snapshot.
 
 ```yaml
 apiVersion: v1
@@ -47,54 +54,59 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: deno task build
-      output: dist/worker.mjs
     spec:
-      routes:
-        - /mcp
-        - /gui
-        - /gui/*
-        - /gui/api/auth/*
-        - /gui/api/auth/launch
-        - /healthz
-        - /health
-        - /readyz
-        - /create
-        - /session
-        - /session/:id
-        - /session/:id/mcp
-        - /icons/computer.svg
+      entrypoint: dist/sandbox-host.js
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      operator.identity.oidc:
-        as: env
+      oidc:
+        from: operator.identity.oidc
+        as: secret-env
+        prefix: OIDC
+        required: true
+
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 ```
 
-> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
-> field は物理削除済。 launcher (`/gui/api/auth/launch`) / MCP (`/mcp`) / health
-> (`/readyz`) endpoint は worker materializer convention (= `spec.routes`
-> の HTTP path) と Takos product 内部 app launcher / MCP registry metadata
-> (= AppSpec contract とは別 layer) で表現します。 capability request
-> (= かつての `permissions.requested[]`、 spaces / files / memories / threads /
-> runs / agents / repos / mcp / events / logs scope) は Takos product 内部
-> metadata layer で表現します。
+gateway は `/` を worker に渡し、worker が
+`/mcp`、`/gui`、`/readyz`、`/create`、`/session/:id`、 `/session/:id/mcp`
+を処理します。Takos product metadata は launcher / MCP registry / capability
+request を登録します。
 
 ## MCP authentication
 
 published MCP endpoint の認証には `PUBLISHED_MCP_AUTH_TOKEN` を使います。これは
 agent (= MCP client) が `/mcp` を呼ぶときの machine-to-machine bearer token で、
-**エンドユーザー認証とは別の layer** です。 エンドユーザーの sign-in は AppSpec の
-`listen: { operator.identity.oidc: { as: env } }` 経由で takosumi-cloud が provider
-として発行する OIDC consumer flow で処理します。
+**エンドユーザー認証とは別の layer** です。エンドユーザーの sign-in は AppSpec
+の `listen.oidc.from: operator.identity.oidc` 経由で takosumi-cloud が発行する
+OIDC consumer flow で処理します。
 
-managed Takos installation では `PUBLISHED_MCP_AUTH_TOKEN` を自動生成します。
-他に以下の 2 つの machine token も内部で使い、 それぞれ用途が異なります:
+managed Takos installation では `PUBLISHED_MCP_AUTH_TOKEN`
+を自動生成します。他に以下の 2 つの machine token
+も内部で使い、それぞれ用途が異なります:
 
 - `SANDBOX_HOST_AUTH_TOKEN` — host admin / session route 用
 - `MCP_AUTH_TOKEN` — worker と container の間の認証用
 
-これら 3 つはすべて MCP / sandbox host 内部の machine credential であり、
-ユーザー認証 (OIDC consumer 経由) とは完全に分離されています。
+これら 3 つはすべて MCP / sandbox host 内部の machine credential
+であり、ユーザー認証 (OIDC consumer 経由) とは完全に分離されています。
 
 ## ランタイム
 
@@ -105,6 +117,6 @@ worker bundle は `npm run build` 等で生成されます。 Cloudflare Workers
 
 ## 関連ページ
 
-- [AppSpec spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
-- [Component Kind Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/component-kind-catalog.md)
+- [AppSpec spec](https://takosumi.com/docs/reference/app-spec)
+- [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
 - [OIDC Consumer](/apps/oidc-consumer)

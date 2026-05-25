@@ -5,7 +5,7 @@
 このページは **Takosumi kernel
 をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
 
-Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/)
+Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
 を参照してください。
 
 ::: danger このページのサンプルはローカル開発向けデフォルトを含みます
@@ -30,7 +30,7 @@ Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/)
   リバースプロキシを前段に置く
 - operator/Takosumi runtime secret (`PLATFORM_PRIVATE_KEY` /
   `PLATFORM_PUBLIC_KEY` / `ENCRYPTION_KEY` / `EXECUTOR_PROXY_SECRET` /
-  `TAKOS_INTERNAL_API_SECRET`) は 鍵ローテーション計画と一緒に管理する
+  `TAKOS_INTERNAL_API_SECRET`) は鍵ローテーション計画と一緒に管理する
 
 詳細な production checklist は [Kubernetes](/hosting/kubernetes) と各
 cloud-specific ページを参照してください。 :::
@@ -153,7 +153,7 @@ deno task server:up
 | `TAKOS_EXECUTOR_PORT`         | `8082`            | Executor のホスト側公開ポート（container `8080` に map） |
 
 `takos-private/compose.server.yml` では `TAKOS_ADMIN_DOMAIN` /
-`TAKOS_TENANT_BASE_DOMAIN` を 受け取り、control プロセスには `ADMIN_DOMAIN` /
+`TAKOS_TENANT_BASE_DOMAIN` を受け取り、control プロセスには `ADMIN_DOMAIN` /
 `TENANT_BASE_DOMAIN` として渡す。compose を使わずに起動する場合は `ADMIN_DOMAIN`
 / `TENANT_BASE_DOMAIN` を直接設定する。
 
@@ -208,17 +208,17 @@ private stack の `takos-private/compose.server.yml` は MinIO を host `9000` /
 
 #### 認証・暗号化
 
-| 変数                            | 用途                                                                       |
-| ------------------------------- | -------------------------------------------------------------------------- |
-| `PLATFORM_PRIVATE_KEY`          | runtime signing 用の PKCS#8 RSA 秘密鍵 PEM (`-----BEGIN PRIVATE KEY-----`) |
-| `PLATFORM_PUBLIC_KEY`           | runtime signing 用の RSA 公開鍵                                            |
-| `ENCRYPTION_KEY`                | データ暗号化キー（Base64 エンコード済み 32 バイト）                        |
-| `TAKOS_SECRET_STORE_PASSPHRASE` | secret store at-rest 暗号化 passphrase (production / staging で **必須**)  |
-| `OIDC_ISSUER_URL`               | Takosumi Accounts issuer URL                                               |
-| `OIDC_CLIENT_ID`                | Takosumi Accounts が installation 単位に発行する OIDC client id            |
-| `OIDC_CLIENT_SECRET`            | 同 OIDC client secret                                                      |
-| `OIDC_REDIRECT_URI`             | `/auth/oidc/callback` の絶対 URL                                           |
-| `TAKOS_INTERNAL_API_SECRET`     | trusted edge / internal API bridge secret                                  |
+| 変数                            | 用途                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `PLATFORM_PRIVATE_KEY`          | Takos product-internal runtime signing 用の PKCS#8 RSA 秘密鍵 PEM (`-----BEGIN PRIVATE KEY-----`) |
+| `PLATFORM_PUBLIC_KEY`           | Takos product-internal runtime signing 用の RSA 公開鍵                                            |
+| `ENCRYPTION_KEY`                | データ暗号化キー（Base64 エンコード済み 32 バイト）                                               |
+| `TAKOS_SECRET_STORE_PASSPHRASE` | secret store at-rest 暗号化 passphrase (production / staging で **必須**)                         |
+| `OIDC_ISSUER_URL`               | Takosumi Accounts issuer URL                                                                      |
+| `OIDC_CLIENT_ID`                | Takosumi Accounts が installation 単位に発行する OIDC client id                                   |
+| `OIDC_CLIENT_SECRET`            | 同 OIDC client secret                                                                             |
+| `OIDC_REDIRECT_URI`             | `/auth/oidc/callback` の絶対 URL                                                                  |
+| `TAKOS_INTERNAL_API_SECRET`     | trusted edge / internal API bridge secret                                                         |
 
 ::: danger production / staging では secret-store encryption key が必須
 `TAKOS_ENVIRONMENT=production` または `staging` で takosumi を起動するとき、
@@ -309,7 +309,7 @@ services:
 ```
 
 - **イメージ**: `postgres:16-alpine`
-- **ホストポート**: `5432` → コンテナポート `5432`
+- **ホストポート**: `5432` →コンテナポート `5432`
 - **初期設定**: DB 名 `takos`、ユーザー `takos`、パスワード `takos`
 - **ボリューム**: `takos-private-postgres`（永続化）
 - **ヘルスチェック**: `pg_isready -U takos -d takos`（10 秒間隔）
@@ -324,7 +324,7 @@ services:
 ```
 
 - **イメージ**: `redis:7-alpine`
-- **ホストポート**: `6379` → コンテナポート `6379`
+- **ホストポート**: `6379` →コンテナポート `6379`
 - **ボリューム**: `takos-private-redis`（永続化）
 - **ヘルスチェック**: `redis-cli ping`（10 秒間隔）
 - **用途**: queue / coordination backend
@@ -354,17 +354,17 @@ services:
 
 ### Runtime stack services
 
-| Service          | 役割                                                       |
-| ---------------- | ---------------------------------------------------------- |
-| `takos-app`      | OIDC consumer / Web UI / public API gateway                |
-| `takosumi`       | AppSpec install / Deployment apply engine                  |
+| Service          | 役割                                                        |
+| ---------------- | ----------------------------------------------------------- |
+| `takos-app`      | OIDC consumer / Web UI / public API gateway                 |
+| `takosumi`       | AppSpec install / Deployment apply engine                   |
 | `takosumi-cloud` | Takosumi Accounts / Installation ledger / billing dashboard |
-| `takos-git`      | Git Smart HTTP / refs / objects / source resolution        |
-| `takos-agent`    | Takos agent execution service                              |
+| `takos-git`      | Git Smart HTTP / refs / objects / source resolution         |
+| `takos-agent`    | Takos agent execution service                               |
 
-AppSpec の `components.*.build`、dependency edge、Deployment apply は
-`takosumi`、Installation / OIDC / billing は self-host operator の Takosumi
-Accounts (`takosumi-cloud`) が担当します。
+AppSpec の source fetch、`publish` / `listen` resolution、Deployment apply は
+`takosumi`、build は build service / CI、Installation / OIDC / billing は
+self-host operator の Takosumi Accounts (`takosumi-cloud`) が担当します。
 
 ### ネットワーク構成
 
@@ -457,11 +457,12 @@ deno task server:smoke
 
 k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes) を参照。
 
-## selfhosted provider plugin
+## selfhosted reference provider adapter client
 
 bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
-`provider` 契約として呼び出したい場合は **selfhosted provider plugin** を
-使います。`profiles/selfhosted.example.json` で
+takosumi.com reference implementation の配線として呼び出したい場合は
+**selfhosted reference provider adapter client**
+を使います。`profiles/selfhosted.example.json` で
 `clients.provider: "local-container-provider"` を選ぶ構成です。
 
 ### 構成
@@ -477,9 +478,9 @@ bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
 | `local-secret-store`               | filesystem secret rotation              | `src/providers/selfhosted/secrets.ts`        |
 | `selfhosted-router-config`         | reverse proxy config (Caddy / nginx)    | `src/providers/selfhosted/router.ts`         |
 
-### Operator が手動でやること / kernel が plugin 経由でやること
+### Operator が手動でやること / reference binding が行うこと
 
-| step                                                                | operator             | kernel (plugin) |
+| step                                                                | operator             | reference binding |
 | ------------------------------------------------------------------- | -------------------- | --------------- |
 | Postgres / MinIO / Docker host / reverse proxy 用意                 | yes                  | no              |
 | systemd service / supervisor 設定                                   | yes                  | no              |
@@ -493,8 +494,8 @@ bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
 
 ### runtime-agent on bare metal
 
-selfhosted provider plugin と一緒に runtime-agent を bare metal に置く例
-(systemd):
+selfhosted reference provider adapter と一緒に runtime-agent を bare metal
+に置く例 (systemd):
 
 ```ini
 # /etc/systemd/system/takos-runtime-agent.service
@@ -531,7 +532,7 @@ DOCKER_SOCKET_PATH=/var/run/docker.sock
 ```
 
 agent は kernel に enroll → heartbeat → lease pull → psql / docker / file ops
-を実行 → 結果を report します。Docker socket access は Docker group
+を実行→結果を report します。Docker socket access は Docker group
 経由で許可します。
 
 ### routing layer (selfhosted) の設定

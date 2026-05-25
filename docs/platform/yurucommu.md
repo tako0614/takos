@@ -1,19 +1,28 @@
 # yurucommu
 
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+
 > このページでわかること: バンドルアプリ yurucommu の概要。
 
-yurucommu はセルフホスト型の ActivityPub / コミュニティソーシャルアプリです。
-新しい Space を作ると自動インストールされます。
+yurucommu はセルフホスト型の ActivityPub /
+コミュニティソーシャルアプリです。新しい Space
+を作ると自動インストールされます。
 
 ## 役割
 
 - social / community UI
-- **takosumi-cloud が publish する `operator.identity.oidc` namespace を listen** し、
-  Takosumi Accounts OIDC consumer として sign-in
+- **`operator.identity.oidc` を listen** し、 Takosumi Accounts OIDC consumer
+  として sign-in
 - ActivityPub federation、 posts、 media、 DM、 community 機能を app 側で管理
-- PostgreSQL / object-store component を AppSpec で宣言 (OIDC は AppSpec に書かない)
+- PostgreSQL / object-store component を AppSpec で宣言し、OIDC は
+  `operator.identity.oidc` を listen する
 
 ## AppSpec (`.takosumi.yml`)
+
+`spec.entrypoint` points to a runtime file inside the resolved source. Managed
+install uses the prepared source produced by the build service when that file is
+generated; direct Git/local apply is valid only when the file is already present
+in the source snapshot.
 
 ```yaml
 apiVersion: v1
@@ -26,60 +35,81 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: deno task build:worker
-      output: dist/worker.mjs
     spec:
-      routes:
-        - /
-        - /api
-        - /ap
-        - /users
-        - /communities
-        - /inbox
-        - /api/auth/login/takos
-        - /readyz
+      entrypoint: dist/worker.js
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      com.yurucommu.app.db:
-        as: env
-        prefix: DB_
-      com.yurucommu.app.media:
-        as: env
-        prefix: MEDIA_
-      operator.identity.oidc:
-        as: env
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
+      media:
+        from: media.bucket
+        as: secret-env
+        prefix: MEDIA
+      oidc:
+        from: operator.identity.oidc
+        as: secret-env
+        prefix: OIDC
+        required: true
+
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 
   db:
     kind: postgres
+    spec:
+      size: small
     publish:
-      - com.yurucommu.app.db
+      connection:
+        as: service-binding
 
   media:
     kind: object-store
+    spec:
+      name: yurucommu-media
     publish:
-      - com.yurucommu.app.media
+      bucket:
+        as: object-store
 ```
 
-> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
-> field は物理削除済。 launcher (`/api/auth/login/takos`) と health (`/readyz`)
-> endpoint は worker materializer convention (= `spec.routes` の HTTP path) と
-> Takos product 内部 app launcher metadata (= AppSpec contract とは別 layer)
-> で表現します。
+gateway は public endpoint を作り、worker が ActivityPub / API / auth /
+readiness の runtime path を処理します。 Takos product metadata は launcher
+metadata を登録します。
 
 ## OIDC consumer
 
-`listen: { operator.identity.oidc: { as: env } }` を web component に宣言すると、
-Installation 作成時に takosumi-cloud (operator account plane) が provider として
+`listen.oidc.from: operator.identity.oidc` を web component
+に宣言すると、Installation 作成時に takosumi-cloud (operator account plane) が
 per-Installation OIDC client を Takosumi Accounts に登録し、 worker に
-`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS`
-を env で inject します。 redirect URI は `/api/auth/callback/takos`、 要求する scope は
-`openid` / `profile` / `email`。 OIDC component を AppSpec 側に書く必要はありません。
+`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
+`OIDC_REDIRECT_URI` を secretRef-mediated runtime env で inject します。
+redirect URI は `/api/auth/callback/takos`、要求する scope は `openid` /
+`profile` / `email`。
 
-ActivityPub actor URL や callback URL など自分の public origin が必要な処理は、
-worker の routes から導出される `APP_URL` を参照します。
+ActivityPub actor URL や callback URL など自分の public origin
+が必要な処理は、operator runtime config の `APP_URL` を参照します。値は operator
+domain policy と exposure activation 後に確定した public origin に合わせます。
 
 ## 関連ページ
 
-- [AppSpec spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
-- [Component Kind Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/component-kind-catalog.md)
+- [AppSpec spec](https://takosumi.com/docs/reference/app-spec)
+- [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
 - [OIDC Consumer](/apps/oidc-consumer)

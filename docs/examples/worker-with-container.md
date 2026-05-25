@@ -1,19 +1,16 @@
 # Worker + Container
 
-> このページでわかること: request-driven Worker と long-running service を組み合わせる考え方。
+> このページでわかること: request-driven Worker と long-running service
+> を組み合わせる考え方。
 
-> **Wave N planned (2026-05-21 RFC stage)**: 本サンプルが使う `build:` field と
-> curated 4 kind (= worker / postgres / object-store / custom-domain) は
-> takosumi Wave N で削除予定 (= kernel pure contract executor 化、 build は
-> 別 `kind: build` component に移管、 specific kind は operator distribution
-> が JSON-LD + plugin で持ち込む)。 詳細 design は takosumi
-> [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic) を参照。
-> 現状のサンプルは引き続き動作します。
+Takosumi v1 AppSpec は kind-agnostic です。`worker` / `object-store` / `gateway`
+などの短い kind 名は operator の alias map で解決されます。 container runtime は
+operator/provider extension として扱い、OIDC のような identity surface は
+operator-owned external publication を listen する形で受け取ります。
 
-Takosumi v1 AppSpec の core kind catalog は `worker` / `postgres` / `object-store` /
-`custom-domain` を含み、 catalog は extensible (alias / URI で拡張可) です。 container
-runtime は operator/provider extension として扱い、 OIDC のような identity surface は
-takosumi-cloud が publish する namespace を listen する形で受け取ります。
+the route list in gateway `spec` belongs to the adopted gateway descriptor's
+open `spec`. `host.spec.entrypoint` points to a runtime file already present in
+the resolved source or prepared archive.
 
 ```yaml
 apiVersion: v1
@@ -23,55 +20,76 @@ metadata:
 components:
   host:
     kind: worker
-    build:
-      command: npm ci && npm run build:host
-      output: dist/host.mjs
     spec:
-      routes:
-        - processor.example.com/*
+      entrypoint: src/host.ts
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      example.processor.media:
-        as: env
-        prefix: BLOB_
+      media:
+        from: media.bucket
+        as: secret-env
+        prefix: BLOB
   media:
     kind: object-store
     publish:
-      - example.processor.media
+      bucket:
+        as: object-store
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: host.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: processor.example.com
+          tls: auto
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 ```
 
-> launcher / health endpoint は worker materializer convention (= `spec.routes`
-> の HTTP path) で表現します (= Wave J で top-level `interfaces:` は AppSpec
-> から物理削除済)。
+launcher / health endpoint は gateway descriptor spec と Takos product metadata
+で表現します。
 
 重い処理を container に逃がす必要がある場合は、operator distribution が提供する
-provider extension、または app 層の外部 service として扱います。 portable AppSpec
-では worker が public entrypoint になり、 必要な data asset を namespace pub/sub
-(`publish` / `listen`) で受け取ります。
+provider extension、または app 層の外部 service として扱います。 portable
+AppSpec では worker が HTTP material を publish し、gateway が public entrypoint
+になります。DB / object-store / HTTP などの data dependency は `publish` /
+`listen` で受け取り、source / runtime files は prepared source で渡します。
+optional blob は operator DataAsset extension の領域です。
 
 ## ホスト側コード
 
 ```typescript
 // src/host.ts
 interface Env {
-  BLOB_BUCKET_NAME: string;
+  BLOB_BUCKET: string;
 }
 
 export default {
   async fetch(_request: Request, env: Env): Promise<Response> {
-    return Response.json({ ok: true, bucket: env.BLOB_BUCKET_NAME });
+    return Response.json({ ok: true, bucket: env.BLOB_BUCKET });
   },
 };
 ```
 
 ## ポイント
 
-- AppSpec portable core では component kind を catalog から選び、 alias / URI による
-  拡張 kind は documented contract として ship する
+- AppSpec portable core では component kind を opaque string として扱い、 alias
+  / URI の意味は operator が提供する documented contract として ship する
 - operator-specific container は provider extension として docs を分ける
-- resource 間の接続は string interpolation ではなく namespace pub/sub
-  (`publish` / `listen`) で宣言する
+- resource 間の接続は string interpolation ではなく `publish.<name>.as` /
+  `listen.<binding>.from` で宣言する
 
 ## 次のステップ
 
-- MCP Server を公開したい → [MCP Server](/examples/mcp-server)
-- 完全な構成例 → [AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- MCP Server を公開したい→ [MCP Server](/examples/mcp-server)
+- 完全な構成例→ [AppSpec](https://takosumi.com/docs/reference/app-spec)

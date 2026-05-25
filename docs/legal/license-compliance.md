@@ -1,7 +1,8 @@
 # Legal: License Compliance
 
-> このページでわかること: Takosumi / Takos ecosystem の first-party license inventory、
-> REUSE / SPDX baseline、third-party license inventory の更新ルール。
+> このページでわかること: Takosumi / Takos ecosystem の first-party license
+> inventory、 REUSE / SPDX baseline、third-party license inventory
+> の更新ルール。
 
 This page is a compliance artifact for GA readiness. It documents the
 first-party license posture and the release gate that prevents license metadata
@@ -9,24 +10,24 @@ drift across the ecosystem checkout.
 
 ## First-party License Inventory
 
-| Repo | License | Evidence |
-| --- | --- | --- |
-| `takos-ecosystem` root | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5` |
-| `takos/` shell | `AGPL-3.0-only` | `takos/LICENSE`, `takos/.reuse/dep5` |
-| `takos/app/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno / npm package metadata |
-| `takos/git/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno package metadata |
-| `takos/agent/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Cargo package metadata |
-| `takosumi/` | `MIT` | `LICENSE`, `.reuse/dep5`, JSR package metadata |
-| `takosumi/` | `MIT` | `LICENSE`, `.reuse/dep5`, JSR package metadata |
-| `takos-cli/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno package metadata |
-| `takos-agent-engine/` | `MIT` | `LICENSE`, `.reuse/dep5`, Cargo package metadata |
-| `takos-apps/takos-computer/` | `MIT` | `LICENSE`, `.reuse/dep5`, Deno package metadata |
-| `takos-apps/takos-docs/` | `MIT` | `LICENSE`, `.reuse/dep5`, Deno metadata |
-| `takos-apps/takos-slide/` | `MIT` | `LICENSE`, `.reuse/dep5`, Deno metadata |
-| `takos-apps/takos-excel/` | `GPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno metadata; aligns with HyperFormula GPLv3 use |
-| `yurucommu/` | `GPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno metadata |
-| `road-to-me/` | `AGPL-3.0-only` | `LICENSE`, `.reuse/dep5`, Deno / Cargo metadata |
-| `takos-private/` | private / unpublished | no public OSS license; deploy configuration and secrets evidence remain private |
+| Repo                         | License               | Evidence                                                                        |
+| ---------------------------- | --------------------- | ------------------------------------------------------------------------------- |
+| `takos-ecosystem` root       | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`                                                        |
+| `takos/` shell               | `AGPL-3.0-only`       | `takos/LICENSE`, `takos/.reuse/dep5`                                            |
+| `takos/app/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno / npm package metadata                           |
+| `takos/git/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
+| `takos/agent/`               | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
+| `takosumi/`                  | `MIT`                 | `LICENSE`, `.reuse/dep5`, JSR package metadata                                  |
+| `takosumi/`                  | `MIT`                 | `LICENSE`, `.reuse/dep5`, JSR package metadata                                  |
+| `takos-cli/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
+| `takos-agent-engine/`        | `MIT`                 | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
+| `takos-apps/takos-computer/` | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
+| `takos-apps/takos-docs/`     | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno metadata                                         |
+| `takos-apps/takos-slide/`    | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno metadata                                         |
+| `takos-apps/takos-excel/`    | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, Deno metadata; aligns with HyperFormula GPLv3 use     |
+| `yurucommu/`                 | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, Deno metadata                                         |
+| `road-to-me/`                | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno / Cargo metadata                                 |
+| `takos-private/`             | private / unpublished | no public OSS license; deploy configuration and secrets evidence remain private |
 
 ## REUSE / SPDX Baseline
 
@@ -43,10 +44,11 @@ file-level SPDX headers or a narrower `.reuse/dep5` stanza before merge.
 
 ## Third-party Inventory
 
-The third-party inventory is published at `/legal/third-party-license-inventory`.
-Release owners update it whenever lockfiles change in a way that adds a new
-license family, introduces copyleft / source-available terms, or changes a
-direct dependency with a known commercial-license option.
+The third-party inventory is published at
+`/legal/third-party-license-inventory`. Release owners update it whenever
+lockfiles change in a way that adds a new license family, introduces copyleft /
+source-available terms, or changes a direct dependency with a known
+commercial-license option.
 
 ## Release Gate
 

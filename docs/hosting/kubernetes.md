@@ -1,24 +1,25 @@
 # Kubernetes
 
-> このページでわかること: Takosumi kernel を Kubernetes (Helm chart) にホストする方法。
+> このページでわかること: Takosumi kernel を Kubernetes (Helm chart)
+> にホストする方法。
 
 このページは **Takosumi kernel を Kubernetes にホストする operator**
 向けです。カバー範囲は 2 通りです:
 
 1. **base Helm chart で kernel hosting** ― `takos/deploy/helm/takos` chart
    を直接使う、または AWS / GCP overlay と組み合わせる path。
-2. **k8s provider plugin** ― namespace / Deployment / Service /
-   Ingress / Secret / ConfigMap を Takosumi kernel から `provider` 契約
-   として呼び出す path。Cloudflare control plane + k8s tenant runtime
+2. **k8s reference provider adapter client** ― namespace / Deployment / Service
+   / Ingress / Secret / ConfigMap を takosumi.com reference implementation
+   の配線として呼び出す path。Cloudflare control plane + k8s tenant runtime
    (`composite.cf-control-k8s-tenant@v1`) や k8s 単独 profile
    (`profiles/cloudflare-kubernetes.example.json`) で使う。
 
-Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
-target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
+Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
+を参照してください。 5 target 横断 runbook は
+[Multi-cloud](/hosting/multi-cloud) を参照してください。
 
-::: tip 対象範囲
-本ページは Helm chart と k8s provider plugin が提供する範囲を扱います。
-:::
+::: tip 対象範囲本ページは Helm chart と k8s reference provider adapter client
+が提供する範囲を扱います。 :::
 
 AWS / GCP 向けは同じ chart の Helm overlay として提供します。target ごとの
 対応状況は [環境ごとの差異](/hosting/differences) を参照してください。
@@ -87,7 +88,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 | 状況                                                                | 推奨 path             |
 | ------------------------------------------------------------------- | --------------------- |
-| 自分の k8s クラスタに Takosumi kernel 全体を置きたい                   | section 1 (Helm)      |
+| 自分の k8s クラスタに Takosumi kernel 全体を置きたい                | section 1 (Helm)      |
 | Cloudflare で kernel を動かしつつ tenant workload を k8s に置きたい | section 2 (plugin)    |
 | k8s 上で kernel + tenant workload を組む                            | section 1 + section 2 |
 
@@ -129,7 +130,7 @@ admin / tenant ingress はどちらも `takos-app` に向きます。Browser / C
 | `services.<service>.port`                           | service container / ClusterIP port                 |
 | `services.<service>.healthPath`                     | liveness / readiness HTTP path                     |
 | `services.<service>.resources`                      | requests / limits                                  |
-| `runtimeConfig.plugins.*`                           | Takosumi kernel plugin selection                   |
+| `runtimeConfig.implementationBindings.*`            | reference implementation binding selection         |
 | `secrets.create`                                    | chart が Secret を作るか、既存 Secret を参照するか |
 | `secrets.existingSecrets.*`                         | 既存 Secret 名                                     |
 | `ingress.*`                                         | admin / tenant ingress                             |
@@ -168,23 +169,27 @@ deno task helm:generate-overlays
 deno task helm:check-overlays
 ```
 
-root `CI` / `Release Gate` workflow は Helm v3 と kind cluster を setup し、
-base / AWS / GCP values の `helm template` と `helm install --dry-run=client` を
-`TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:template-smoke`
-で検査します。test CRD は kind 上で GCP `ManagedCertificate` resource mapping
+ecosystem root workflows は Helm v3 と kind cluster を setup し、 base / AWS /
+GCP values の `helm template` と `helm install --dry-run=client` を
+`deno task helm:template-smoke` で検査します。CI では
+`TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1`
+を付けます。 test CRD は kind 上で GCP `ManagedCertificate` resource mapping
 を検査するためだけに入れます。ローカルで kubeconfig がない場合、この task は
 template smoke を必須とし、install dry-run は cluster unreachable として skip
 します。
 
-同じ root workflows は kind cluster 上で
-`TAKOS_HELM_INSTALL_TEST_CRDS=1 deno task helm:install-smoke` も実行します。この
-task は base / AWS / GCP values ごとに `helm install`、`helm status`、
+同じ ecosystem root workflows は kind cluster 上で
+`deno task helm:install-smoke` も実行します。CI では
+`TAKOS_HELM_INSTALL_TEST_CRDS=1` を付けます。この task は base / AWS / GCP
+values ごとに `helm install`、`helm status`、
 `helm get manifest`、`helm uninstall` を走らせ、5 service の Deployment /
 Service が release manifest に載ったことを検査します。Takos product の
-`Release Artifacts` workflow は artifact build 前に `deno task helm:template-smoke`
-だけを走らせ、cluster install smoke は root workflows / operator-owned
-cluster evidence 側で扱います。image pull / pod readiness は production image
-publish 後の rollout gate として扱います。
+`Release Artifacts` workflow は artifact build 前に
+`deno task helm:template-smoke` だけを走らせ、cluster install smoke は ecosystem
+root workflows / operator-owned cluster evidence 側で扱います。image pull / pod
+readiness は production image publish 後の rollout gate として扱います。
+
+<!-- root `CI` / `Release Gate` workflow runs `deno task helm:template-smoke` and `deno task helm:install-smoke`; `Release Artifacts` workflow runs `deno task helm:template-smoke`; cluster install smoke は root workflows. -->
 
 production では Secret 値を `--set` で渡す代わりに External Secrets Operator /
 Sealed Secrets / platform secret manager を使い、`secrets.create: false` と
@@ -196,18 +201,19 @@ Sealed Secrets / platform secret manager を使い、`secrets.create: false` と
 
 ### Workload runtime
 
-この chart は Takos product services と Takosumi substrate / account-plane services
-を同じ runtime stack に載せるための chart です。tenant workload / deploy runtime
-の lifecycle は `takosumi` と selected provider plugin の ownership であり、
-chart 側に standalone runtime / executor / orchestrator workload は作りません。
+この chart は Takos product services と Takosumi substrate / account-plane
+services を同じ runtime stack に載せるための chart です。tenant workload /
+deploy runtime の lifecycle は `takosumi` と selected provider adapter の
+ownership であり、 chart 側に standalone runtime / executor / orchestrator
+workload は作りません。
 
 ---
 
-## Section 2: k8s provider plugin
+## Section 2: k8s reference provider adapter
 
 ### 構成
 
-Takosumi (`@takos/takosumi-plugins`) の k8s provider plugin は次の resource lifecycle
+Takosumi reference provider package の k8s adapter は次の resource lifecycle
 を提供します:
 
 | provider client             | 用途                                                 | 参照クラス                                       |
@@ -223,9 +229,9 @@ Takosumi (`@takos/takosumi-plugins`) の k8s provider plugin は次の resource 
 `clients.provider: "k8s-provider-gateway"` を設定すると、Takosumi kernel が k8s
 API server (kubectl proxy / API gateway) 経由で resource を materialize します。
 
-### Operator が手動でやること / kernel が plugin 経由でやること
+### Operator が手動でやること / reference binding が行うこと
 
-| step                                                               | operator               | kernel (plugin) |
+| step                                                               | operator               | reference binding |
 | ------------------------------------------------------------------ | ---------------------- | --------------- |
 | k8s cluster 作成 (EKS / GKE / AKS / on-prem)                       | yes                    | no              |
 | ServiceAccount + RBAC (Role / RoleBinding) 作成                    | yes                    | no              |
@@ -322,7 +328,7 @@ k8s API server が internet-facing でない場合、bastion host に kubectl pr
 }
 ```
 
-### runtime-agent  を k8s に置く
+### runtime-agent を k8s に置く
 
 ```yaml
 apiVersion: apps/v1
@@ -369,11 +375,11 @@ roleRef:
 ```
 
 agent は kernel に enroll → heartbeat → lease pull → namespace / Deployment /
-Service / Ingress / Secret / ConfigMap ops を実行 → 結果を report します。
+Service / Ingress / Secret / ConfigMap ops を実行→結果を report します。
 in-cluster mode で実行すると ServiceAccount projected token を自動 mount
 できます (`/var/run/secrets/kubernetes.io/serviceaccount/token`)。
 
-### Ingress routing  の DNS 設定
+### Ingress routing の DNS 設定
 
 `k8s-ingress-router` provider client は次を materialize します:
 
@@ -406,7 +412,7 @@ kernel がやること:
 - DynamoDB / Firestore / SQS / Pub/Sub / cloud secret manager の provider matrix
 - manifest の abstract resource を各 provider service に必ず materialize
   する保証
-- provider 固有 adapter 名を deploy manifest author 向け public surface
+- provider 固有 adapter 名を AppSpec author 向け public surface
   として固定する contract
 
 ## 次に読むページ

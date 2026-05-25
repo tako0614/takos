@@ -10,7 +10,8 @@ deno task check
 deno task test
 ```
 
-Takos product 側の distribution / bundled app install path は product gate で確認します。
+Takos product 側の distribution / bundled app install path は product gate
+で確認します。
 
 ```sh
 cd takos

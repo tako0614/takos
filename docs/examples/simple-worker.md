@@ -1,13 +1,7 @@
 # Simple Worker
 
-> このページでわかること: `worker` component 1 つだけの最小 AppSpec。
-
-> **Wave N planned (2026-05-21 RFC stage)**: 本サンプルが使う `build:` field と
-> `kind: worker` は、 takosumi Wave N で削除/再定義予定 (= kernel pure contract
-> executor 化、 build は別 `kind: build` component に移管、 worker kind は
-> operator distribution が JSON-LD + plugin で持ち込む)。 詳細 design は
-> takosumi [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)
-> を参照。 現状のサンプルは引き続き動作します。
+> このページでわかること: worker と gateway で public app endpoint を作る最小
+> AppSpec。
 
 ## 完成形
 
@@ -21,6 +15,11 @@ my-app/
 
 ## `.takosumi.yml`
 
+Short kind names are operator-profile aliases. The route list in gateway `spec`
+belongs to the adopted gateway descriptor's open `spec`. `web.spec.entrypoint`
+points to a runtime file already present in the resolved source or prepared
+archive.
+
 ```yaml
 apiVersion: v1
 metadata:
@@ -31,18 +30,34 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
     spec:
+      entrypoint: src/index.ts
+    publish:
+      http:
+        as: http-endpoint
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: simple-worker.example.com
+          tls: auto
       routes:
-        - simple-worker.example.com/*
+        - listener: public
+          path: /
+          to: upstream
 ```
 
-> Wave J で AppSpec から `interfaces:` / `permissions:` top-level field を
-> 物理削除しました。 launcher / health endpoint / capability request は
-> worker materializer 慣習 (= `spec.routes` の HTTP path), 別 kind, または
-> namespace pub/sub のいずれかで表現します (= 「底は自由」 原則)。
+public app endpoint は adopted gateway/ingress component の gateway descriptor intent、launcher / health /
+capability は Takos product metadata や kind-specific spec で表現します。
 
 ## Worker code
 
@@ -78,10 +93,11 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 
 - `apiVersion: v1` is required (= AppSpec root discriminator).
 - `components.web.kind: worker` declares the runtime-bearing unit.
-- `components.web.build.output` points to the generated worker bundle.
-- `components.web.spec.routes` are HTTP route patterns the worker
-  materializer reads (= implementation convention, not part of the
-  AppSpec kind contract).
+- `components.web.spec.entrypoint` points at the runtime file in the resolved
+  source snapshot.
+- `components.web.publish.http` offers an internal HTTP endpoint.
+- `components.public` turns that endpoint into public ingress with listener /
+  gateway descriptor intent.
 
 ## Next
 

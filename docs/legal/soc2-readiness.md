@@ -53,11 +53,10 @@ Out of scope for the first readiness pass:
 - Service owner map exists for every product root.
 - Policy exception process exists with owner and expiry.
 - Quarterly risk review meeting is scheduled.
-- Installation ledger and Takosumi Account billing model are listed in the
-  data protection owner audit checklist (Installable App Model: identity /
-  billing owner = the operator-selected account plane, managed example:
-  takosumi-cloud の Takosumi Accounts; Installation 台帳 = ownership
-  primitive).
+- Installation ledger and Takosumi Account billing model are listed in the data
+  protection owner audit checklist (Takosumi Installation Lifecycle: identity / billing
+  owner = the operator-selected account plane, managed example: takosumi-cloud
+  の Takosumi Accounts; Installation 台帳 = ownership primitive).
 
 ### Access Control
 

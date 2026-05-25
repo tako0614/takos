@@ -11,13 +11,13 @@ signature process.
 
 ## Status
 
-| Field            | Value                                                                                                  |
-| ---------------- | ------------------------------------------------------------------------------------------------------ |
-| Owner            | Data protection owner                                                                                  |
-| Last reviewed    | 2026-05-07                                                                                             |
+| Field            | Value                                                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner            | Data protection owner                                                                                                                   |
+| Last reviewed    | 2026-05-07                                                                                                                              |
 | Scope            | Takos Web / API, Takos Git hosting, Takos agent execution, and Takosumi/operator-managed deploy/runtime operations used by Takos spaces |
-| Current status   | Public template baseline                                                                               |
-| Signature status | Customer execution requires operator / legal approval and a signed order                               |
+| Current status   | Public template baseline                                                                                                                |
+| Signature status | Customer execution requires operator / legal approval and a signed order                                                                |
 
 ## Regulatory Baseline
 
@@ -41,17 +41,17 @@ contract, billing, and DPA signature purposes, and is fixed for the life of the
 DPA.
 
 `Installation owner` means the operational owner of a specific Takos
-Installation under that Takosumi Account (per Space). The Installation
-owner acts as Customer's **delegated agent** for app-local configuration and
-data subject request handling, but is not itself the DPA signatory.
+Installation under that Takosumi Account (per Space). The Installation owner
+acts as Customer's **delegated agent** for app-local configuration and data
+subject request handling, but is not itself the DPA signatory.
 
 `Takos` means the Takos service operator identified in the signed order form or
 master agreement.
 
 Legal continuity rule: Installation export, dedicated materialization, or
-re-binding may move the Installation owner role within the Customer's scope,
-but the **DPA Customer remains the Takosumi Account holder**. Transferring the
-DPA Customer to a different Takosumi Account (e.g., Installation export to a
+re-binding may move the Installation owner role within the Customer's scope, but
+the **DPA Customer remains the Takosumi Account holder**. Transferring the DPA
+Customer to a different Takosumi Account (e.g., Installation export to a
 separate takosumi instance owned by a different account) requires a separate
 contract assignment, not an Installation lifecycle event.
 
@@ -61,15 +61,15 @@ deployments, agent runs, support requests, and customer-managed applications:
 | Party                              | Default role                                                                                                        |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Customer (Takosumi Account holder) | Controller, or processor where Customer processes data for its own end customer                                     |
-| Installation owner              | Customer's delegated agent for app-local processing decisions; does not change Customer's controller/processor role |
+| Installation owner                 | Customer's delegated agent for app-local processing decisions; does not change Customer's controller/processor role |
 | Takos                              | Processor, or sub-processor where Customer is a processor                                                           |
 
 The Takos service operator or operator account-plane provider may act as an
 independent controller for account administration, security, billing, fraud
 prevention, service analytics, and legal compliance. Those controller activities
 belong in the Privacy Policy and Terms of Service, not this DPA template. This
-does not make the Takos product the OIDC issuer, billing owner, or
-Installation ledger owner.
+does not make the Takos product the OIDC issuer, billing owner, or Installation
+ledger owner.
 
 ## 2. Customer Instructions
 
@@ -87,13 +87,13 @@ data protection law, unless legally prohibited.
 
 ## 3. Details of Processing
 
-| Item               | Description                                                                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Item               | Description                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Subject matter     | Providing Takos Web / API access, spaces, source and repository services, Takosumi-backed deploy orchestration, agent execution, operator account-plane billing usage, support, and security operations |
-| Duration           | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence               |
-| Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata           |
-| Frequency          | Continuous while Customer uses Takos                                                                                                                               |
-| Data subjects      | Customer admins, members, collaborators, application end users, support contacts, and people whose data Customer submits to Takos                                  |
+| Duration           | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence                                                    |
+| Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata                                                |
+| Frequency          | Continuous while Customer uses Takos                                                                                                                                                                    |
+| Data subjects      | Customer admins, members, collaborators, application end users, support contacts, and people whose data Customer submits to Takos                                                                       |
 
 ## 4. Personal Data Categories
 
@@ -227,16 +227,16 @@ Takos must:
 
 ## Annex I: Processing Details
 
-| Field                       | Template value                                                                                                   |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Data exporter               | Customer                                                                                                         |
-| Data importer               | Takos                                                                                                            |
+| Field                       | Template value                                                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Data exporter               | Customer                                                                                                                                                                  |
+| Data importer               | Takos                                                                                                                                                                     |
 | Processing purpose          | Providing Takos Web / API, Takosumi-backed deploy/runtime operation, Git hosting, agent execution, operator account-plane billing usage, support, and security operations |
-| Categories of data subjects | Customer users, Customer collaborators, Customer application users, support contacts                             |
-| Categories of personal data | Identity, access, repository, deployment, agent, application, billing, telemetry, support, and security data     |
-| Sensitive data              | Not intended unless separately agreed                                                                            |
-| Transfer frequency          | Continuous while Customer uses Takos                                                                             |
-| Retention                   | Agreement term plus documented retention exceptions                                                              |
+| Categories of data subjects | Customer users, Customer collaborators, Customer application users, support contacts                                                                                      |
+| Categories of personal data | Identity, access, repository, deployment, agent, application, billing, telemetry, support, and security data                                                              |
+| Sensitive data              | Not intended unless separately agreed                                                                                                                                     |
+| Transfer frequency          | Continuous while Customer uses Takos                                                                                                                                      |
+| Retention                   | Agreement term plus documented retention exceptions                                                                                                                       |
 
 ## Annex II: Technical and Organizational Measures
 

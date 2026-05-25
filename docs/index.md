@@ -39,15 +39,16 @@ features:
 
 このサイトは Takos プロダクトのドキュメントです。
 
-| 目的                                     | 読む場所                                                                           |
-| ---------------------------------------- | ---------------------------------------------------------------------------------- |
-| Takos で何ができるか                     | [全体像](/overview/)                                                               |
-| 使い始める                               | [はじめる](/get-started/)                                                          |
-| アプリのインストール方法                 | [Install paths](/apps/install-paths)                                               |
-| デプロイの設定                           | [Deploy](/deploy/)                                                                 |
-| ホスティングと運用                       | [Hosting](/hosting/)                                                               |
-| API・CLI リファレンス                    | [Reference](/reference/)                                                           |
-| プラットフォーム全体の仕様               | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs)     |
-| Takosumi カーネルの仕様                  | [takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)             |
-| Accounts・課金・ログイン                 | [takosumi-cloud docs](https://github.com/tako0614/takosumi-cloud/tree/master/docs) |
-| `.takosumi.yml` AppSpec                  | [Takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)     |
+| 目的                       | 読む場所                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| Takos で何ができるか       | [全体像](/overview/)                                                              |
+| 使い始める                 | [はじめる](/get-started/)                                                         |
+| アプリのインストール方法   | [Install paths](/apps/install-paths)                                              |
+| デプロイの設定             | [Deploy](/deploy/)                                                                |
+| ホスティングと運用         | [Hosting](/hosting/)                                                              |
+| API・CLI リファレンス      | [Reference](/reference/)                                                          |
+| プラットフォーム全体の仕様 | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs)    |
+| Takosumi の読む順序        | [Takosumi reading paths](https://takosumi.com/docs/getting-started/reading-paths) |
+| Takosumi core の仕様       | [Core Specification](https://takosumi.com/docs/reference/core-spec)               |
+| Accounts・課金・ログイン   | [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)  |
+| `.takosumi.yml` AppSpec    | [AppSpec reference](https://takosumi.com/docs/reference/app-spec)                 |

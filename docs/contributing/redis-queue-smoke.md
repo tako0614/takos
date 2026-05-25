@@ -2,8 +2,8 @@
 
 > このページでわかること: queue / background worker surface の current proof。
 
-Takos product queue behavior is covered by the app control tests and local
-stack smoke. Run:
+Takos product queue behavior is covered by the app control tests and local stack
+smoke. Run:
 
 ```sh
 cd takos/app

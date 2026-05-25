@@ -1,12 +1,14 @@
 # はじめてのアプリ
 
-> このページでわかること: シンプルな Worker アプリを作って Takos にデプロイするまでの手順。所要時間 10 分。
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+
+> このページでわかること: シンプルな Worker アプリを作って Takos
+> にデプロイするまでの手順。所要時間 10 分。
 
 ## 作るもの
 
 - HTTP で "Hello" を返すシンプルな Worker アプリ
-- ログインは Takosumi Accounts の OIDC を利用 (自前で認証を実装する必要なし)
-- インストール直後に再ログインなしでアプリが開く (launch token)
+- Takosumi Accounts の OIDC material を受け取る AppSpec wiring を確認する
 
 ## 前提
 
@@ -24,7 +26,7 @@ mkdir -p src
 ## 2. Worker のコードを書く
 
 ```typescript
-// src/index.ts
+// src/worker.ts
 export default {
   async fetch(
     request: Request,
@@ -44,8 +46,12 @@ export default {
 };
 ```
 
-環境変数はすべてインストール時に AppSpec から注入されます。
-アプリコードでは標準的な OIDC client ライブラリで `OIDC_ISSUER_URL` を使うだけです。
+AppSpec は `operator.identity.oidc` の listen を宣言します。operator account
+plane が OIDC binding material を払い出し、provider / operator projection が
+`OIDC_*` runtime env として worker に渡します。この tutorial の worker は public
+hello endpoint だけを実装し、OIDC login / callback / launch consume handler は
+実装しません。認証付きアプリでは標準的な OIDC client ライブラリで
+`OIDC_ISSUER_URL` を使います。
 
 ## 3. マニフェストを書く
 
@@ -58,31 +64,50 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
     spec:
-      routes:
-        - my-first-app.example.com/*
-        - my-first-app.example.com/healthz
+      entrypoint: src/worker.ts
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      operator.identity.oidc:
-        as: env
+      oidc:
+        from: operator.identity.oidc
+        as: secret-env
+        prefix: OIDC
+        required: true
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: my-first-app.example.com
+          tls: auto
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 ```
 
-> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
-> field は物理削除済。 launcher (`/`) と health (`/healthz`) endpoint は
-> worker materializer convention (= `spec.routes` の HTTP path) で表現します。
+adopted gateway/ingress component は public endpoint を作ります。launcher や health の runtime
+path は worker 実装と Takos product metadata で扱います。
 
-## 4. ビルドスクリプトを用意
+## 4. runtime file を確認
 
-```bash
-npm pkg set scripts.build="esbuild src/index.ts --bundle --outfile=dist/worker.mjs --format=esm"
-npm install --save-dev esbuild
-npm run build
-```
-
-`dist/worker.mjs` が生成されれば OK です。
+この tutorial の `--source .` は local/demo 用で、kernel process から同じ
+filesystem path が見える場合だけ使います。AppSpec の `spec.entrypoint` は
+resolved source 内に既に存在する runtime file を指します。managed operator に送
+る場合は build service / CI が必要な runtime file を含む prepared source archive
+を作り、その archive URL と archive payload `source.digest` を Installer API に
+渡します。dry-run response の `expected.sourceDigest` は Installer が取得 payload
+から計算した resolved digest で、apply 時の TOCTOU guard です。
 
 ## 5. Install dry-run と apply
 
@@ -96,18 +121,19 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 
 成功すると Installation が作成され、最初の Deployment が記録されます。
 
-## 認証の仕組み
+## 認証付きアプリに進む場合
 
-このアプリは認証を自分で実装していません。代わりに:
+この tutorial のコードは認証 handler を実装していません。認証付きアプリでは:
 
-- **通常ログイン**: `/auth/oidc/login` から Takosumi Accounts にリダイレクトされ、
-  コールバックでセッションが作られます
-- **初回インストール直後**: launch token で自動的にセッションが作られるため、
-  再ログイン不要でアプリが開きます
+- **通常ログイン**: app が `/auth/oidc/login` などの route から Takosumi Accounts
+  にリダイレクトされ、コールバックでセッションが作られます
+- **初回インストール直後**: launch token
+  を app の launch consume handler が Accounts `/consume` で redeem します
 
-OIDC の設定 (clientId, clientSecret 等) は AppSpec で `listen: { operator.identity.oidc: { as: env } }`
-を宣言するだけで、 takosumi-cloud (operator account plane) が provider として publish して
-インストール時に自動で払い出されます。 worker は `OIDC_*` env を読むだけです。
+OIDC の設定 (clientId, clientSecret 等) は AppSpec で
+`listen.oidc.from: operator.identity.oidc` を宣言するだけで、 takosumi-cloud
+(operator account plane) がインストール時に自動で払い出します。 worker は
+secretRef-mediated `OIDC_*` env を読みます。
 
 詳しくは [OIDC consumer](/apps/oidc-consumer) を参照。
 
@@ -115,5 +141,6 @@ OIDC の設定 (clientId, clientSecret 等) は AppSpec で `listen: { operator.
 
 - [プロジェクト構成](/get-started/project-structure) — `.takosumi.yml` の全体像
 - [Worker + Database](/examples/worker-with-db) — DB を追加する
-- [Worker + Container](/examples/worker-with-container) — Docker コンテナと組み合わせる
-- [サンプル集](/examples/) — その他のサンプル
+- [Worker + Container](/examples/worker-with-container) — Docker
+  コンテナと組み合わせる
+- [サンプル集](/examples/) —その他のサンプル

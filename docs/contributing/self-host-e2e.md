@@ -1,6 +1,7 @@
 # Self-Host E2E Proof
 
-> このページでわかること: self-host distribution と local Compose の current proof。
+> このページでわかること: self-host distribution と local Compose の current
+> proof。
 
 Self-host static proof uses the distribution profile:
 

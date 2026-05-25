@@ -4,20 +4,21 @@
 
 ## ページ一覧
 
-- [システムアーキテクチャ](./system-architecture.md) — サービスの境界と役割分担
-- [サービストポロジー](./service-topology.md) — ローカル環境のサービス構成とポート
-- [アプリメタデータ](./app-publications.md) — アプリ情報とデプロイマニフェストの境界
-- [ランタイム / エージェント](./runtime-service.md) — エージェント実行の仕組み
-- [図](./diagrams.md) — 図で全体像を確認
+- [システムアーキテクチャ](./system-architecture.md) —サービスの境界と役割分担
+- [サービストポロジー](./service-topology.md) —
+  ローカル環境のサービス構成とポート
+- [アプリメタデータ](./app-publications.md) — アプリ情報と AppSpec の境界
+- [ランタイム / エージェント](./runtime-service.md) —エージェント実行の仕組み
+- [図](./diagrams.md) —図で全体像を確認
 
 ## 関連ドキュメント
 
-| 内容                                                    | 詳細ドキュメント                                                                        |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Installable App Model / Installation / runtime modes | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
-| Takosumi Accounts / billing / OIDC issuer               | [takosumi-cloud docs](https://github.com/tako0614/takosumi-cloud/tree/master/docs)      |
-| takosumi kernel / AppSpec / installer API                 | [takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)                  |
-| production deploy runbook / secrets                     | [takos-private docs](https://github.com/tako0614/takos-private/tree/master/docs)        |
+| 内容                                                 | 詳細ドキュメント                                                                        |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Takosumi Installation Lifecycle / Installation / runtime modes | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
+| Takosumi Accounts / billing / OIDC issuer            | [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)        |
+| takosumi kernel / AppSpec / installer API            | [Core Specification](https://takosumi.com/docs/reference/core-spec)                     |
+| production deploy runbook / secrets                  | [takos-private docs](https://github.com/tako0614/takos-private/tree/master/docs)        |
 
 Takos docs から外部仕様を説明するときは、ここに概要だけ置き、詳細は owning docs
 にリンクします。

@@ -2,16 +2,14 @@
 
 > このページでわかること: Worker と PostgreSQL を組み合わせた AppSpec。
 
-> **Wave N planned (2026-05-21 RFC stage)**: 本サンプルが使う `build:` field と
-> curated 4 kind (= worker / postgres / object-store / custom-domain) は
-> takosumi Wave N で削除予定 (= kernel pure contract executor 化、 build は
-> 別 `kind: build` component に移管、 specific kind は operator distribution
-> が JSON-LD + plugin で持ち込む)。 詳細 design は takosumi
-> [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic) を参照。
-> 現状のサンプルは引き続き動作します。
+`worker` と `postgres` component を同じ `.takosumi.yml` に置き、
+`publish.<name>.as` / `listen.<binding>.from` で Worker へ DB connection
+を渡します。
 
-`worker` と `postgres` component を同じ `.takosumi.yml` に置き、 namespace pub/sub
-(`publish` / `listen`) で Worker へ DB connection を渡します。
+Short kind names are operator-profile aliases. The route list in gateway `spec`
+belongs to the adopted gateway descriptor's open `spec`. `web.spec.entrypoint`
+points to a runtime file already present in the resolved source or prepared
+archive.
 
 ```yaml
 apiVersion: v1
@@ -21,38 +19,60 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
     spec:
-      routes:
-        - notes.example.com/*
+      entrypoint: src/worker.ts
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      example.notes.db:
-        as: env
-        prefix: DB_
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
   db:
     kind: postgres
     publish:
-      - example.notes.db
+      connection:
+        as: service-binding
     spec:
       class: small
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: notes.example.com
+          tls: auto
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 ```
 
-> launcher / health endpoint は worker materializer convention (= `spec.routes`
-> の HTTP path) で表現します (= Wave J で top-level `interfaces:` は AppSpec
-> から物理削除済)。
+launcher / health endpoint は gateway descriptor spec と Takos product metadata
+で表現します。
 
 ポイント:
 
 - runtime と data store は `components` に並べる
-- `db` component が `example.notes.db` namespace を `publish` し、 `web` が `listen` する
-- DB の credential / connection string は `listen` declaration から env (`DB_*`) に materialize される
+- `db` component が `connection` publication を `publish` し、`web` が
+  `db.connection` を `listen` する
+- DB の credential / connection string は `listen` declaration から env (`DB_*`)
+  に materialize される
 - AppSpec には provider-specific secret ref や string interpolation を書かない
-- Installation dry-run で create / update される component と推定 cost を確認する
+- Installation dry-run で create / update される component と推定 cost
+  を確認する
 
 関連:
 
-- [AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [AppSpec](https://takosumi.com/docs/reference/app-spec)
 - [環境変数](/deploy/environment)
 - [Simple Worker](/examples/simple-worker)

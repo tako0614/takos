@@ -13,5 +13,6 @@ TAKOS_LOCAL_ENV_FILE=.env.local deno task local:smoke
 TAKOS_LOCAL_ENV_FILE=.env.local deno task local:down
 ```
 
-`deno task local:up` は foreground で動くため、別 shell で `local:smoke` を実行します。
-stack を残して調査する場合は `local:down` を後で実行してください。
+`deno task local:up` は foreground で動くため、別 shell で `local:smoke`
+を実行します。 stack を残して調査する場合は `local:down`
+を後で実行してください。

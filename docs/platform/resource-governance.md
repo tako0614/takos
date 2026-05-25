@@ -2,8 +2,8 @@
 
 > このページでわかること: Takos のリソース管理・アクセス制御・課金連携の仕組み。
 
-リソースガバナンスは、リソースの CRUD、アクセス制御、ランタイム設定、課金ゲートの
-組み合わせで構成されています。
+リソースガバナンスは、リソースの
+CRUD、アクセス制御、ランタイム設定、課金ゲートの組み合わせで構成されています。
 
 ## 管理対象
 
@@ -43,8 +43,8 @@ Takos は次の面を別々に管理します。
 
 ### ランタイム設定
 
-service / worker ごとにランタイム設定・リミット・フラグを持てます。
-operator が調整する主な対象は次のとおりです。
+service / worker ごとにランタイム設定・リミット・フラグを持てます。 operator
+が調整する主な対象は次のとおりです。
 
 - ホスト名 / ルート
 - common env link
@@ -55,13 +55,13 @@ operator が調整する主な対象は次のとおりです。
 
 リクエストパスごとに billing / plan ゲートをかけています。
 
-| ゲート                           | パス                                                                 |
-| -------------------------------- | -------------------------------------------------------------------- |
-| ベクトル検索                     | `/api/spaces/:spaceId/search*`                                       |
-| Embeddings / index               | `/api/spaces/:spaceId/index*`                                        |
-| セッション実行時間               | `/api/sessions*`                                                     |
-| Service / WFP の usage           | `/api/services*`                                                     |
-| Agent ランタイム + token preflight | `/api/spaces/:spaceId/threads*`, `/api/runs*`, `/api/agent-tasks*`  |
+| ゲート                             | パス                                                               |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| ベクトル検索                       | `/api/spaces/:spaceId/search*`                                     |
+| Embeddings / index                 | `/api/spaces/:spaceId/index*`                                      |
+| セッション実行時間                 | `/api/sessions*`                                                   |
+| Service / WFP の usage             | `/api/services*`                                                   |
+| Agent ランタイム + token preflight | `/api/spaces/:spaceId/threads*`, `/api/runs*`, `/api/agent-tasks*` |
 
 agent 系では次の制限も併用します。
 
@@ -71,18 +71,20 @@ agent 系では次の制限も併用します。
 ## Usage / billing データモデル
 
 Takos app は app-local の usage を記録し、課金主体は Takosumi Accounts
-(`operator.billing.default`) に置きます。Takos app 側の主なテーブルは次のとおりです。
+(`operator.billing.default`) に置きます。Takos app
+側の主なテーブルは次のとおりです。
 
 - `app_usage_events`
 - `app_usage_rollups`
 
-billing の所有者は Takosumi Accounts の `operator.billing.default` BillingPort です。
-Takos app は usage イベントを記録し、billing API は Accounts 側が提供します。
+billing の所有者は Takosumi Accounts の `operator.billing.default` BillingPort
+です。 Takos app は usage イベントを記録し、billing API は Accounts
+側が提供します。
 
 ## operator が確認すべき状態
 
 - リソースインベントリ
-- access grant / use edge の credential
+- access grant / binding material の credential
 - common env のドリフト
 - service / worker のランタイム設定
 - usage rollup

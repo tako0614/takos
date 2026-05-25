@@ -1,6 +1,7 @@
 # GCP
 
-> このページでわかること: Takosumi kernel を GCP (GKE / Cloud Run) にホストする方法。
+> このページでわかること: Takosumi kernel を GCP (GKE / Cloud Run)
+> にホストする方法。
 
 このページは **Takosumi kernel を GCP にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
@@ -8,19 +9,18 @@
 1. **GCP 単独 hosting (GKE Helm)** ― `takos/deploy/helm/takos/values-gcp.yaml`
    overlay。Kubernetes ベースで control plane / runtime / executor を運用する
    path。
-2. **GCP provider plugin** ― Cloud Run / Cloud SQL / GCS / Pub/Sub / Cloud KMS /
-   Secret Manager の 6 provider を Takosumi kernel から `provider`
-   契約として呼び出す path。Cloudflare control plane + GCP tenant runtime
-   (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
+2. **GCP reference provider adapter client** ― Cloud Run / Cloud SQL / GCS /
+   Pub/Sub / Cloud KMS / Secret Manager の adapter を takosumi.com reference
+   implementation の配線として呼び出す path。Cloudflare control plane + GCP
+   tenant runtime (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
    (`profiles/gcp.example.json`) で使う。
 
-::: tip 対象範囲
-section 1 (Helm overlay) は Cloud Run への kernel 直接 deploy、Firestore を
-control-plane storage として使う構成、Terraform overlay を扱いません。
-section 2 (provider plugin) は 6 provider の materialization までを扱います。
-:::
+::: tip 対象範囲 section 1 (Helm overlay) は Cloud Run への kernel 直接
+deploy、Firestore を control-plane storage として使う構成、Terraform overlay
+を扱いません。 section 2 (reference provider adapter client) は provider
+materialization までを扱います。 :::
 
-Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/)
+Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
 を参照してください。 5 target 横断 runbook は
 [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
@@ -107,7 +107,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 | source          | `deploy/distributions/gcp.json` から `deno task helm:generate-overlays` で生成 |
 | images          | distribution profile の service image entries を Helm image values に展開      |
 | domains         | distribution profile の `routing` から admin / tenant base domain を展開       |
-| runtime config  | `runtimeConfig.environment=production`、plugin id は fail-closed empty         |
+| runtime config  | `runtimeConfig.environment=production`、implementation binding selector は fail-closed empty |
 | ingress         | GCE ingress class と managed certificate annotation を使う                     |
 | service account | Workload Identity 用 annotation を受け取る                                     |
 | workloads       | `takos-app` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
@@ -126,7 +126,7 @@ deno task helm:check-overlays
 - GCE Ingress
 - External Secrets Operator などの secret 管理、または Helm values で secret
   を作成する運用
-- Takosumi provider plugin が参照する GCP managed-service credentials
+- Takosumi reference provider adapter が参照する GCP managed-service credentials
 
 Terraform apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic / GCS
 bucket 名は `deno task terraform:helm-values` で generated values に変換し、
@@ -142,7 +142,7 @@ tfvars は CI plan fixture だけで、production / staging の raw secret は
 `values-gcp.yaml` は `secrets.create: false` を前提に、既定では chart の release
 fullname 由来の Secret 名を参照します。`<release>` は Helm release
 名から決まり、各 Secret は `<release>-platform` / `<release>-auth` /
-`<release>-llm` になります。外部 secret を使っていて 名前が異なる場合だけ
+`<release>-llm` になります。外部 secret を使っていて名前が異なる場合だけ
 `secrets.existingSecrets.*` を設定してください。
 
 外部 secret の `platform` には `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` /
@@ -171,12 +171,12 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 ---
 
-## Section 2: GCP provider plugin
+## Section 2: GCP reference provider adapter
 
 ### 構成
 
-Takosumi (`@takos/takosumi-plugins`) の GCP provider plugin は 6 provider
-を提供します:
+Takosumi reference implementation の GCP profile は次の adapter clients
+を使います:
 
 | provider client               | 用途                          | 参照クラス                            |
 | ----------------------------- | ----------------------------- | ------------------------------------- |
@@ -190,12 +190,12 @@ Takosumi (`@takos/takosumi-plugins`) の GCP provider plugin は 6 provider
 | `gcp-runtime-agent-registry`  | runtime-agent enrolment store | `src/providers/gcp/gateway.ts`        |
 
 profile JSON (`profiles/gcp.example.json`) で `clients.*` を上記 client
-名に向けると Takosumi kernel が `provider` 契約を GCP materializer
-経由で実行します。
+名に向けると、takosumi.com reference implementation の provider adapter wiring
+が GCP resource lifecycle を実行します。
 
-### Operator が手動でやること / kernel が plugin 経由でやること
+### Operator が手動でやること / reference binding が行うこと
 
-| step                                                                       | operator               | kernel (plugin) |
+| step                                                                       | operator               | reference binding |
 | -------------------------------------------------------------------------- | ---------------------- | --------------- |
 | GCP project 作成 / billing account link                                    | yes                    | no              |
 | service account JSON / Workload Identity 設定                              | yes                    | no              |
@@ -267,7 +267,7 @@ echo "takos-prod" | deno task secrets put GCP_PROJECT_ID --env production
 echo "asia-northeast1" | deno task secrets put GCP_REGION --env production
 ```
 
-provider plugin は base64 decode して `google-auth-library` 互換 OAuth2 token
+provider adapter は base64 decode して `google-auth-library` 互換 OAuth2 token
 を発行します。
 
 #### B. operator-managed gateway URL
@@ -363,7 +363,7 @@ spec:
 ```
 
 agent は kernel に enroll → heartbeat → lease pull → Cloud Run / Cloud SQL / GCS
-/ Pub/Sub / KMS / Secret ops を実行 → 結果を report します。
+/ Pub/Sub / KMS / Secret ops を実行→結果を report します。
 
 ### GCP LB routing の DNS 設定
 
@@ -395,18 +395,19 @@ kernel がやること:
 
 ## chart contract に含まれないもの (section 1)
 
-- Cloud Run への Takosumi kernel direct deploy
+- Cloud Run への Takosumi kernel self-deploy automation
 - Cloud Run は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - Firestore / Pub/Sub / Secret Manager を app resource backend として自動
-  provisioning する contract (※ section 2 の provider plugin はこれを担う)
+  provisioning する contract (※ section 2 の provider adapter はこれを担う)
 - Terraform による GCP resource 作成手順
-- GCP 固有 adapter 名を deploy manifest author 向けの public surface として固定
+- GCP 固有 adapter 名を AppSpec author 向けの public surface として固定
   する contract
 
 必要なら operator が追加 adapter / external service
-を構成できますが、このページは Helm overlay と provider plugin
-で実際に表現されている範囲だけを contract とします。
+を構成できますが、このページは Takos product/operator distribution の Helm
+overlay と reference provider adapter で実際に表現されている範囲だけを runbook
+として扱います。
 
 ## 次に読むページ
 

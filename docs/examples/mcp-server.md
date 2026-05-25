@@ -1,19 +1,16 @@
 # MCP Server
 
-> このページでわかること: MCP Server を Worker として install し、Takos app から使えるようにするサンプル。
-
-> **Wave N planned (2026-05-21 RFC stage)**: 本サンプルが使う `build:` field と
-> `kind: worker` は、 takosumi Wave N で削除/再定義予定 (= kernel pure contract
-> executor 化、 build は別 `kind: build` component に移管、 worker kind は
-> operator distribution が JSON-LD + plugin で持ち込む)。 詳細 design は
-> takosumi [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)
-> を参照。 現状のサンプルは引き続き動作します。
+> このページでわかること: MCP Server を Worker として install し、Takos app
+> から使えるようにするサンプル。
 
 MCP endpoint の catalog / install UI / client discovery は Takos app layer と
-Installation layer で扱います。AppSpec は HTTP entrypoint だけを宣言し、
-MCP / health endpoint は worker materializer convention (= `spec.routes` の HTTP
-path) + Takos app metadata 側で表現します (= Wave J で top-level `interfaces:`
-は AppSpec から物理削除済)。
+Installation layer で扱います。AppSpec は HTTP workload と public ingress
+を宣言し、MCP / health metadata は Takos app metadata 側で表現します。
+
+Short kind names are operator-profile aliases. The route list in gateway `spec`
+belongs to the adopted gateway descriptor's open `spec`. `mcp.spec.entrypoint`
+points to a runtime file already present in the resolved source or prepared
+archive.
 
 ## AppSpec
 
@@ -25,14 +22,30 @@ metadata:
 components:
   mcp:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
     spec:
+      entrypoint: src/worker.ts
+    publish:
+      http:
+        as: http-endpoint
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: mcp.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: tools.example.com
+          tls: auto
       routes:
-        - tools.example.com/*
-        - tools.example.com/mcp
-        - tools.example.com/healthz
+        - listener: public
+          path: /
+          to: upstream
 ```
 
 ## Worker のコード
@@ -90,18 +103,20 @@ export default {
 
 ## Catalog / Client Discovery
 
-Takos app に MCP endpoint として見せる場合、AppSpec component schema ではなく app
-metadata / runtime registry 側で endpoint descriptor を materialize します。
+Takos app に MCP endpoint として見せる場合、AppSpec component schema ではなく
+app metadata / runtime registry 側で endpoint descriptor を materialize します。
 
 ```yaml
 mcp:
   endpoints:
     - name: my-tools
       transport: streamable-http
-      url: https://tools.example.com/mcp
+      endpoint:
+        from: public.public
+        path: /mcp
 ```
 
 関連:
 
-- [AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [AppSpec](https://takosumi.com/docs/reference/app-spec)
 - [MCP App Surface](/apps/mcp)
