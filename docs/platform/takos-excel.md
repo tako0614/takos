@@ -80,5 +80,5 @@ request を登録します。
 
 ## 関連ページ
 
-- [AppSpec spec](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec spec](https://takosumi.com/docs/reference/manifest)
 - [OIDC Consumer](/apps/oidc-consumer)

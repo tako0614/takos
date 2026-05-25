@@ -232,7 +232,7 @@ operator だけが宣言できます。
   が着地する `shared-cell` / `dedicated` / `self-hosted` の物理構造。
 - [Installer Pipeline](https://takosumi.com/docs/reference/installer-api)
   `Install from Git` で実行される 13 step の pipeline。
-- [.takosumi.yml spec](https://takosumi.com/docs/reference/app-spec) install 対象 repo
+- [.takosumi.yml spec](https://takosumi.com/docs/reference/manifest) install 対象 repo
   に置く installer-bound manifest。
 - [はじめる](/get-started/) path 選択後の最初の作業。
 - [Upgrade / Export](/platform/upgrade-export) path 間の乗り換えと export bundle の運用。

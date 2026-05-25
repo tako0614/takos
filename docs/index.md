@@ -51,4 +51,4 @@ features:
 | Takosumi の読む順序        | [Takosumi reading paths](https://takosumi.com/docs/getting-started/reading-paths) |
 | Takosumi core の仕様       | [Core Specification](https://takosumi.com/docs/reference/core-spec)               |
 | Accounts・課金・ログイン   | [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)  |
-| `.takosumi.yml` AppSpec    | [AppSpec reference](https://takosumi.com/docs/reference/app-spec)                 |
+| `.takosumi.yml` AppSpec    | [AppSpec reference](https://takosumi.com/docs/reference/manifest)                 |

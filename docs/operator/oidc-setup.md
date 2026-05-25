@@ -117,7 +117,7 @@ client はセルフホスト Accounts 側で発行します。Takos 側は manag
 reference takosumi-cloud operator が per-Installation OIDC client を発行します。
 compatible operator は同等の binding material を提供でき、self-host operator は
 手動 provision できます (詳細は
-[AppSpec publish/listen](https://takosumi.com/docs/reference/app-spec))。
+[AppSpec publish/listen](https://takosumi.com/docs/reference/manifest))。
 
 ## Smoke Checks
 

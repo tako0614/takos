@@ -89,5 +89,5 @@ request を登録します。
 
 ## 関連ページ
 
-- [AppSpec spec](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec spec](https://takosumi.com/docs/reference/manifest)
 - [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)

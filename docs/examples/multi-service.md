@@ -76,6 +76,6 @@ surface ではなく、operator / app layer の上位設定として扱います
 
 関連:
 
-- [AppSpec](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec](https://takosumi.com/docs/reference/manifest)
 - [環境変数](/deploy/environment)
 - [Worker + DB](/examples/worker-with-db)

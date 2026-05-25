@@ -12,6 +12,7 @@ website/.output.*/
 website/.vinxi/
 website/.vinxi.*/
 .wrangler/
+.claude/settings.local.json
 .terraform/
 **/.terraform/
 .terraform-plan/

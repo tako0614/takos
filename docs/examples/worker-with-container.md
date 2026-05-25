@@ -92,4 +92,4 @@ export default {
 ## 次のステップ
 
 - MCP Server を公開したい→ [MCP Server](/examples/mcp-server)
-- 完全な構成例→ [AppSpec](https://takosumi.com/docs/reference/app-spec)
+- 完全な構成例→ [AppSpec](https://takosumi.com/docs/reference/manifest)

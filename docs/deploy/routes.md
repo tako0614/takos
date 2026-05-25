@@ -20,7 +20,7 @@ endpoint の material と ingress intent をつなぎます。
 runtime request は provider-native ingress から workload に直接届きます。
 Takosumi kernel が request ごとの HTTP proxy になることは要求されません。
 
-フィールドの正式定義は [AppSpec](https://takosumi.com/docs/reference/app-spec)
+フィールドの正式定義は [AppSpec](https://takosumi.com/docs/reference/manifest)
 を参照してください。
 
 ## Public app endpoint
@@ -111,4 +111,4 @@ components:
 ## 次に読むページ
 
 - [Environment](/deploy/environment)
-- [AppSpec publish/listen](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec publish/listen](https://takosumi.com/docs/reference/manifest)

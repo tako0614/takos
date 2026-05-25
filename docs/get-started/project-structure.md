@@ -127,5 +127,5 @@ service / CI を使う場合は prepared source archive を Installer API に渡
   する
 - [Takos AppSpec 例](/deploy/manifest) — Takos 向けの短い例。canonical
   field/schema は
-  [Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec)
+  [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest)
 - [サンプル集](/examples/) —コピペで始められるサンプル
