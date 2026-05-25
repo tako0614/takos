@@ -143,4 +143,4 @@ worker 側は `Authorization: Bearer ...` を検証します。client side は M
 ## Related
 
 - [MCP Server Example](/examples/mcp-server)
-- [AppSpec](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec](https://takosumi.com/docs/reference/manifest)

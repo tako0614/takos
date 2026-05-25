@@ -118,5 +118,5 @@ mcp:
 
 関連:
 
-- [AppSpec](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec](https://takosumi.com/docs/reference/manifest)
 - [MCP App Surface](/apps/mcp)

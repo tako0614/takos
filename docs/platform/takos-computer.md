@@ -117,6 +117,6 @@ worker bundle は `npm run build` 等で生成されます。 Cloudflare Workers
 
 ## 関連ページ
 
-- [AppSpec spec](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec spec](https://takosumi.com/docs/reference/manifest)
 - [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
 - [OIDC Consumer](/apps/oidc-consumer)

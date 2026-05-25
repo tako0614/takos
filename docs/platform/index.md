@@ -28,4 +28,4 @@
 | Takosumi Installation Lifecycle / Installation / runtime modes | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
 | AppSpec / Installation / Deployment                  | [Core Specification](https://takosumi.com/docs/reference/core-spec)                              |
 | OIDC issuer / billing owner / launch token           | [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)                 |
-| `.takosumi.yml` AppSpec convention                   | [AppSpec reference](https://takosumi.com/docs/reference/app-spec)                                |
+| `.takosumi.yml` AppSpec convention                   | [AppSpec reference](https://takosumi.com/docs/reference/manifest)                                |

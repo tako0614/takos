@@ -30,6 +30,10 @@ deno task local:up
 ログインや課金は Takosumi Accounts (operator account plane) が担当し、 デプロイエンジンは Takosumi kernel
 (`../takosumi`) が担当します。
 
+Takos product を Takosumi に install する入口は、この source root の `.takosumi.yml` です。build command は含めず、
+Takos の runtime components、Postgres、object storage、OIDC / billing listen、public gateway だけを AppSpec
+として宣言します。
+
 ## ローカル compose
 
 ```sh

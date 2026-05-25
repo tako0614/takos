@@ -232,7 +232,7 @@ Takosumi install pipeline と Takos product registry を通じて、以下が関
 
 - app identity / service / route / hostname
 - resource binding / OIDC client (= AppSpec publish/listen、詳細は
-  [AppSpec](https://takosumi.com/docs/reference/app-spec) の `publish` /
+  [AppSpec](https://takosumi.com/docs/reference/manifest) の `publish` /
   `listen` 章)
 - Takos app metadata registration (launcher, MCP server, file handler, etc.)
 
@@ -331,5 +331,5 @@ handler URL は runtime path の `:id` segment を必ず含みます。Storage U
 ## 次に読むページ
 
 - [Takos AppSpec examples](/deploy/manifest)
-- [AppSpec リファレンス](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec リファレンス](https://takosumi.com/docs/reference/manifest)
 - [Repository / Catalog デプロイ](/deploy/store-deploy)

@@ -1,0 +1,147 @@
+apiVersion: v1
+
+metadata:
+  id: takos.chat
+  name: Takos
+  description: Self-hostable AI-first chat and agent product
+  publisher: Takos
+  homepage: https://takos.jp
+
+components:
+  db:
+    kind: postgres
+    spec:
+      version: '16'
+      size: medium
+      storage:
+        sizeGiB: 50
+    publish:
+      connection:
+        as: service-binding
+
+  objects:
+    kind: object-store
+    spec:
+      name: takos-objects
+      versioning: true
+    publish:
+      bucket:
+        as: object-store
+
+  app:
+    kind: web-service
+    spec:
+      image: ghcr.io/takos/takos-app:latest
+      port: 8080
+      scale:
+        min: 1
+        max: 4
+      resources:
+        cpu: '1'
+        memory: 1Gi
+    listen:
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
+      objects:
+        from: objects.bucket
+        as: secret-env
+        prefix: OBJECTS
+      identity:
+        from: operator.identity.oidc
+        as: secret-env
+        prefix: OIDC
+        required: true
+      billing:
+        from: operator.billing.default
+        as: secret-env
+        prefix: BILLING
+      git:
+        from: git.http
+        as: env
+        prefix: GIT
+      agent:
+        from: agent.http
+        as: env
+        prefix: AGENT
+    publish:
+      http:
+        as: http-endpoint
+
+  git:
+    kind: web-service
+    spec:
+      image: ghcr.io/takos/takos-git:latest
+      port: 8790
+      scale:
+        min: 1
+        max: 2
+      resources:
+        cpu: '1'
+        memory: 1Gi
+    listen:
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
+      objects:
+        from: objects.bucket
+        as: secret-env
+        prefix: OBJECTS
+    publish:
+      http:
+        as: http-endpoint
+
+  agent:
+    kind: web-service
+    spec:
+      image: ghcr.io/takos/takos-agent:latest
+      port: 8080
+      scale:
+        min: 1
+        max: 4
+      resources:
+        cpu: '2'
+        memory: 2Gi
+    listen:
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
+      objects:
+        from: objects.bucket
+        as: secret-env
+        prefix: OBJECTS
+      git:
+        from: git.http
+        as: env
+        prefix: GIT
+    publish:
+      http:
+        as: http-endpoint
+
+  public:
+    kind: gateway
+    listen:
+      app:
+        from: app.http
+        as: upstream
+      git:
+        from: git.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          tls: auto
+      routes:
+        - listener: public
+          path: /git
+          to: git
+        - listener: public
+          path: /
+          to: app

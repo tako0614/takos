@@ -8,7 +8,7 @@ source root に置く `.takosumi.yml` (= AppSpec) が唯一のマニフェスト
 ファイルで install + deploy + rollback まで動きます。
 
 このページは Takos product docs の短い実例です。field / schema の正本は
-[Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec)、
+[Takosumi AppSpec](https://takosumi.com/docs/reference/manifest)、
 [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)、
 [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)
 を参照してください。
@@ -28,6 +28,17 @@ source root に置く `.takosumi.yml` (= AppSpec) が唯一のマニフェスト
   であり、 AppSpec core field ではない
 - `spec.entrypoint` は resolved source / prepared archive 内に既に存在する
   runtime file を指し、build declaration ではない
+
+## Takos product manifest
+
+Takos product 自体の installable source root は repository root です。実際の
+manifest は `.takosumi.yml` に置き、`takos-app` / `takos-git` /
+`takos-agent` を `web-service` component、Postgres と object storage を
+resource component、public HTTP entry を `gateway` component として宣言します。
+
+この manifest は build 手順ではありません。OCI image の作成、tag pinning、
+prepared source archive の作成は CI / operator build service が行い、Installer
+API には source と expected guard を渡します。
 
 ## Worker
 
@@ -169,7 +180,7 @@ metadata で扱います。
 
 ## 関連ページ
 
-- [Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec)
+- [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest)
 - [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
 - [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)
 - [Installer API (5 endpoint)](https://takosumi.com/docs/reference/installer-api)

@@ -360,6 +360,6 @@ install ──► ready ──┬─► upgrading ──► ready (new ref)
   — `materialize` で遷移する shared-cell / dedicated / self-hosted の比較
 - [Installation 台帳](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/app-installation.md)
   —過去世代を保存する record と event ledger
-- [AppSpec publish/listen bindings](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec publish/listen bindings](https://takosumi.com/docs/reference/manifest)
   —各 binding の export 時の扱い (template / secret 除外)
 - [Install paths](/apps/install-paths) — 3 path のうち self-host への遷移

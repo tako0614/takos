@@ -182,9 +182,9 @@ PR / release review では次を確認します:
 
 - [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
   --- OIDC client を発行し、launch token の `/consume` を提供する account plane
-- [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/main/docs/apps/launch-token.md)
+- [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/main/docs/ja/apps/launch-token.md)
   --- one-shot opaque token と `/_takosumi/launch` → Accounts `/consume` redeem
   の仕様
-- [Takosumi Cloud Launch Token](https://github.com/tako0614/takos-ecosystem/blob/main/takosumi-cloud/docs/apps/launch-token.md)
+- [Takosumi Cloud Launch Token](https://github.com/tako0614/takos-ecosystem/blob/main/takosumi-cloud/docs/ja/apps/launch-token.md)
   --- `ACCOUNTS_BASE_URL` / `INSTALL_LAUNCH_*` env を materialize する Cloud
   launch-token projection / binding profile

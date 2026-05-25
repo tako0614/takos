@@ -73,6 +73,6 @@ launcher / health endpoint は gateway descriptor spec と Takos product metadat
 
 関連:
 
-- [AppSpec](https://takosumi.com/docs/reference/app-spec)
+- [AppSpec](https://takosumi.com/docs/reference/manifest)
 - [環境変数](/deploy/environment)
 - [Simple Worker](/examples/simple-worker)

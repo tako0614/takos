@@ -2,7 +2,7 @@
 
 > このページでわかること: Takos エコシステムの主要な component / sequence / state 関係を mermaid
 > 図で俯瞰する。文字情報は [System Architecture](./system-architecture.md) と
-> [Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec) を元にした図示版。
+> [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest) を元にした図示版。
 
 ## ねらい
 
@@ -142,7 +142,7 @@ state 遷移の補足:
 - [System Architecture](./system-architecture.md) — service / repository boundary の詳細
 - [Deploy System](https://github.com/tako0614/takosumi/blob/main/docs/reference/architecture/deploy-system.md) —
   primitive と group 機能の deploy pipeline
-- [Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec) — AppSpec /
+- [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest) — AppSpec /
   Installation / Deployment の current contract
 - [Status Output](https://github.com/tako0614/takosumi/blob/main/docs/reference/status-output.md) — operator-facing
   status summary と InstallationEvent の読み方

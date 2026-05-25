@@ -14,4 +14,4 @@ RUN deno cache apps/api/src/index.ts
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["deno", "run", "--allow-net", "--allow-env", "apps/api/src/index.ts"]
+CMD ["deno", "run", "--allow-net", "--allow-env", "--allow-read", "apps/api/src/index.ts"]
