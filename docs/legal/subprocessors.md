@@ -11,23 +11,22 @@ store.
 
 ## Status
 
-| Field                | Value                                                                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Owner                | Data protection owner                                                                                                                                |
-| Last reviewed        | 2026-05-07                                                                                                                                           |
+| Field                | Value                                                                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner                | Data protection owner                                                                                                                                                                 |
+| Last reviewed        | 2026-05-07                                                                                                                                                                            |
 | Applies to           | Takos Web / API, Takosumi Accounts (identity / billing processor), Takosumi/operator-managed deploy/runtime operations used by Takos spaces, Takos Git hosting, Takos agent execution |
-| Related DPA          | `/legal/data-processing-agreement`                                                                                                                   |
-| Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                 |
+| Related DPA          | `/legal/data-processing-agreement`                                                                                                                                                    |
+| Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                                                  |
 
-> **Internal processor boundary note.** Within the Takosumi / Takos ecosystem itself,
-> **Takosumi kernel** is treated as the AppSpec / Deployment / resource graph /
-> provider materialization processor and never holds identity, billing, or
-> customer account state.
-> **Takosumi Accounts** (`operator.identity.oidc` /
-> `operator.billing.default`) is the separate identity / billing processor
-> that owns OIDC issuance, Installation ownership, and operator BillingPort
-> billing. External sub-processors below are referenced by both planes only when
-> the relevant feature is enabled.
+> **Internal processor boundary note.** Within the Takosumi / Takos ecosystem
+> itself, **Takosumi kernel** is treated as the AppSpec / Deployment / resource
+> graph / operator execution processor and never holds identity, billing,
+> or customer account state. **Takosumi Accounts** (`operator.identity.oidc` /
+> `operator.billing.default`) is the separate identity / billing processor that
+> owns OIDC issuance, Installation ownership, and operator BillingPort billing.
+> External sub-processors below are referenced by both planes only when the
+> relevant feature is enabled.
 
 ## Core Providers
 

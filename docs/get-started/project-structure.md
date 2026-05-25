@@ -1,15 +1,9 @@
 # プロジェクト構成
 
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+
 > このページでわかること: Takosumi installer が読む `.takosumi.yml` と、アプリ
 > source root の基本構成。
-
-> **Wave N planned (2026-05-21 RFC stage)**: 本ドキュメントの YAML 例に含まれる
-> `build:` field と curated kind 名 (= worker / postgres / object-store /
-> custom-domain) は takosumi Wave N で削除予定 (= kernel pure contract executor
-> 化、 build は別 `kind: build` component に移管、 specific kind は operator
-> distribution が JSON-LD + plugin で持ち込む model に移行)。 詳細 design は
-> takosumi [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic)
-> を参照。
 
 ## ディレクトリ構成
 
@@ -24,9 +18,10 @@ my-app/
 └── ...
 ```
 
-`.takosumi.yml` は Takosumi の AppSpec です。アプリの display metadata、 runtime
-component、build recipe、component 間の dependency edge、Takos から見える
-interface を同じファイルで宣言します。
+`.takosumi.yml` は Takosumi の AppSpec です。アプリの display metadata、runtime
+component、kind-specific `spec`、component 間の `publish` / `listen` dependency
+を同じファイルで宣言します。build command は build service / CI の convention
+に置きます。
 
 ## `.takosumi.yml`
 
@@ -39,41 +34,58 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
     spec:
-      routes:
-        - my-app.example.com/*
+      entrypoint: src/worker.ts
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      examples.my-app.db:
-        as: env
-        prefix: DB_
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
   db:
     kind: postgres
     publish:
-      - examples.my-app.db
+      connection:
+        as: service-binding
     spec:
       class: small
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: my-app.example.com
+          tls: auto
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 ```
 
-> Wave J で AppSpec root から top-level `interfaces:` / `permissions:` /
-> `routes:` field は物理削除済 (= takosumi parser reject)。 launcher / MCP /
-> health endpoint は worker materializer convention (= `spec.routes` の HTTP
-> path)、 capability request は Takos product 内部 metadata layer (= AppSpec
-> contract とは別) で表現します (= 「底は自由」 原則)。
+public app endpoint は adopted gateway/ingress component の gateway descriptor intent、launcher / MCP
+metadata と capability request は Takos product 内部 metadata layer (= AppSpec
+contract とは別) で表現します。
 
 主な field:
 
-| field                  | 役割                                                                                           |
-| ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `metadata`             | App ID、表示名、publisher、homepage など                                                       |
-| `components`           | extensible kind catalog (`worker` / `postgres` / `object-store` / `custom-domain` / 拡張 kind) |
-| `components.*.kind`    | component の contract (catalog から選ぶ、 alias / URI で拡張可)                                |
-| `components.*.spec`    | kind ごとの open spec (= worker なら `routes`、 postgres なら `class` 等)                      |
-| `components.*.build`   | artifact を得る最小 build recipe                                                               |
-| `components.*.publish` | この component が export する namespace path 一覧                                              |
-| `components.*.listen`  | sibling component や operator が publish する namespace path への subscribe declaration        |
+| field                  | 役割                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| `metadata`             | App ID、表示名、publisher、homepage など                                                     |
+| `components`           | runtime / resource / ingress intent の map                                                   |
+| `components.*.kind`    | component の contract (operator alias / URI で解決)                                          |
+| `components.*.spec`    | kind ごとの open spec (= worker なら `entrypoint`、 gateway なら listener / gateway descriptor intent 等) |
+| `components.*.publish` | local publication name と material contract                                                  |
+| `components.*.listen`  | sibling publication または external publication path への binding declaration                |
 
 ## Install lifecycle
 
@@ -93,21 +105,27 @@ takosumi install dry-run \
   --space "$TAKOSUMI_SPACE_ID"
 ```
 
-Takosumi installer は AppSpec から build output、resource dependency、OIDC
-client、route output を materialize し、Installation と Deployment record を
-残します。
+Takosumi installer は AppSpec から resource dependency と kind-owned gateway
+`spec` を記録し、selected ingress binding に渡せる Installation と Deployment
+record を残します。OIDC client は OIDC listen binding に対して operator account
+plane が払い出し、runtime env は provider / operator projection が materialize
+します。build
+service / CI を使う場合は prepared source archive を Installer API に渡します。
 
 ## 制約
 
 - `.takosumi.yml` は source root に置く
 - `apiVersion: v1` は必須 (= AppSpec root の discriminator)
 - workflow / CI DSL は AppSpec に入れない
-- component 間の依存は namespace pub/sub (`publish` / `listen`) で宣言する
-- Deployment evidence や provider resource ID はユーザーが手書きしない
+- component 間の依存は AppSpec `publish` / `listen` で宣言する
+- retained implementation/operator evidence や provider resource ID
+  はユーザーが手書きしない
 
 ## 次のステップ
 
-- [はじめてのアプリ](/get-started/your-first-app) — 実際にアプリを作って install
+- [はじめてのアプリ](/get-started/your-first-app) —実際にアプリを作って install
   する
-- [Deploy Manifest](/deploy/manifest) — `.takosumi.yml` の field 例
-- [サンプル集](/examples/) — コピペで始められるサンプル
+- [Takos AppSpec 例](/deploy/manifest) — Takos 向けの短い例。canonical
+  field/schema は
+  [Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec)
+- [サンプル集](/examples/) —コピペで始められるサンプル

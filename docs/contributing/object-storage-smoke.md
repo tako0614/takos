@@ -1,6 +1,7 @@
 # Object Storage Proof
 
-> このページでわかること: object-store / export artifact surface の current proof。
+> このページでわかること: object-store / export artifact surface の current
+> proof。
 
 Takosumi object-store contract and in-memory storage behavior are covered in
 Takosumi tests.

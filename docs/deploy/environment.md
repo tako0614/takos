@@ -1,15 +1,22 @@
 # 環境変数
 
-> このページでわかること: AppSpec の namespace pub/sub と Installation materialization で runtime env を渡す方法。
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
 
-runtime env は operator / provider が Deployment apply 時に materialize します。
-アプリ author は `.takosumi.yml` の component dependency を namespace pub/sub
-(`publish` / `listen`) で構造的に宣言します。
+> このページでわかること: AppSpec の publish/listen と Installation
+> materialization で runtime env を渡す方法。
+
+runtime env は operator / provider が Deployment apply 時に materialize
+します。アプリ author は `.takosumi.yml` の component dependency を local
+publications と external publications (`publish` / `listen`)
+で構造的に宣言します。
 
 env の主な入力元:
 
-1. sibling component の `publish` した namespace path を `listen` する (`as: env` / `as: env`+`prefix:`)
-2. takosumi-cloud が publish する `operator.identity.oidc` を `listen` する
+1. sibling component の `publish.<name>.as` を `listen.<binding>.from` で受ける
+   (`as: secret-env` / `as: env` + `prefix:`)。`env` は public/non-secret field
+   用、secret refs を含む material は `secret-env` など operator-approved
+   projection を使う
+2. takosumi-cloud が offer する `operator.identity.oidc` を `listen` する
 3. operator account plane が発行する launch / Installation metadata
 
 ## DB connection
@@ -22,22 +29,24 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
+    spec:
+      entrypoint: src/worker.ts
     listen:
-      example.notes.db:
-        as: env
-        prefix: DB_
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
   db:
     kind: postgres
     publish:
-      - example.notes.db
+      connection:
+        as: service-binding
 ```
 
-`db` component が publish する namespace path を `web` が `listen` し、 provider が作った
-connection string / secret reference が `DB_URL` などとして worker に inject されます。
-`prefix:` を省略すれば flat key (e.g. `URL` / `HOST`) で展開されます。
+`db.connection` publication を `web` が `listen` し、provider が作った
+connection string / secret reference が `DB_URL` などとして worker に inject
+されます。 `prefix:` を省略すれば flat key (e.g. `URL` / `HOST`)
+で展開されます。
 
 ## Object store prefix
 
@@ -49,20 +58,22 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
+    spec:
+      entrypoint: src/worker.ts
     listen:
-      example.media.blob:
-        as: env
-        prefix: BLOB_
+      blob:
+        from: media.bucket
+        as: secret-env
+        prefix: BLOB
   media:
     kind: object-store
     publish:
-      - example.media.blob
+      bucket:
+        as: object-store
 ```
 
-`listen` の `prefix:` は object store の output を `BLOB_*` env として展開します。
+`listen` の `prefix:` は object store の output を `BLOB_*` env
+として展開します。
 
 ## OIDC consumer
 
@@ -74,37 +85,41 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
+    spec:
+      entrypoint: src/worker.ts
     listen:
-      operator.identity.oidc:
-        as: env
+      oidc:
+        from: operator.identity.oidc
+        as: secret-env
+        prefix: OIDC
+        required: true
 ```
 
-`operator.identity.oidc` namespace を listen すると、 takosumi-cloud (operator account
-plane) が per-Installation OIDC client を発行し、 `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
-`OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS` などを runtime env に注入します。 OIDC
-component を AppSpec 側に書く必要はありません (= operator が provider として publish)。
+`operator.identity.oidc` を listen すると、takosumi-cloud (operator account
+plane) が per-Installation OIDC client を発行します。`OIDC_ISSUER_URL` /
+`OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` は grant から materialize される
+non-secret runtime config です。 `OIDC_CLIENT_SECRET` は `secretRef` /
+`secret-env` 経由で注入されます。Deployment outputs や export bundle には
+non-secret config または refs だけを含め、raw secret value は入れません。
 
 ## Collision Rule
 
-同じ component に materialize される env 名は一意でなければなりません。
-複数の `listen` entry / operator metadata が同じ env 名を生成する場合は dry-run で
-invalid になります。 collision は HTTP `409 Conflict` で報告されます。
+同じ component に materialize される env 名は一意でなければなりません。複数の
+`listen` entry / operator metadata が同じ env 名を生成する場合は dry-run で
+invalid になります。collision は `400 invalid_argument` で報告されます。
 
 ## Takos Runtime Env
 
-| env | 由来例 | 説明 |
-| --- | --- | --- |
-| `TAKOS_INSTALLATION_ID` | Installation metadata | app-local session と audit 用 ID |
-| `ACCOUNTS_BASE_URL` | operator account plane | launch token / OIDC issuer の base |
-| `INSTALL_LAUNCH_INSTALLATION_ID` | launch materialization | launch token consume 対象 |
-| `OIDC_ISSUER_URL` | `listen operator.identity.oidc` | OIDC issuer |
-| `OIDC_CLIENT_ID` | `listen operator.identity.oidc` | per-Installation OIDC client ID |
-| `OIDC_CLIENT_SECRET` | `listen operator.identity.oidc` | provider secret reference |
+| env                              | 由来例                 | 説明                               |
+| -------------------------------- | ---------------------- | ---------------------------------- |
+| `TAKOS_INSTALLATION_ID`          | Installation metadata  | app-local session と audit 用 ID   |
+| `ACCOUNTS_BASE_URL`              | operator account plane | launch token / OIDC issuer の base |
+| `INSTALL_LAUNCH_INSTALLATION_ID` | launch materialization | launch token consume 対象          |
+| `OIDC_ISSUER_URL`                | `listen.oidc.from`     | OIDC issuer                        |
+| `OIDC_CLIENT_ID`                 | `listen.oidc.from`     | per-Installation OIDC client ID    |
+| `OIDC_CLIENT_SECRET`             | `listen.oidc.from`     | provider secret reference          |
 
 ## 次に読むページ
 
 - [OIDC consumer](/apps/oidc-consumer)
-- [AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [AppSpec](https://takosumi.com/docs/reference/app-spec)

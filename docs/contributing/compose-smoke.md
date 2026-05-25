@@ -21,4 +21,5 @@ deno task local:down
 ```
 
 実行時の env file は `TAKOS_LOCAL_ENV_FILE` で差し替えます。Docker / Compose
-実行は operator-owned local proof であり、CI-equivalent な release proof とは分けて扱います。
+実行は operator-owned local proof であり、CI-equivalent な release proof
+とは分けて扱います。

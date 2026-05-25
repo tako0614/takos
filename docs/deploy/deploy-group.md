@@ -1,32 +1,38 @@
 # Deployment History
 
-> このページでわかること: Installation に紐づく Deployment 履歴と rollback の単位。
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
 
-Takosumi v1 の public concept は AppSpec / Installation / Deployment の 3 つです。
-複数 component の apply 結果は、Installation に紐づく 1 つの Deployment として
-履歴化されます。
+> このページでわかること: Installation に紐づく Deployment 履歴と rollback
+> の単位。
+
+Takosumi v1 の public concept は AppSpec / Installation / Deployment の 3
+つです。複数 component の apply 結果は、Installation に紐づく 1 つの Deployment
+として履歴化されます。
 
 ## Installation との関係
 
-| 階層 | 表すもの | 所有者 |
-| --- | --- | --- |
-| AppSpec | source root の `.takosumi.yml` | app author |
-| Installation | Space に install された app 1 件 | operator account plane |
-| Deployment | 1 回の apply / rollback の結果 | Takosumi installer / kernel |
-| Component | extensible kind catalog (`worker` / `postgres` / `object-store` / `custom-domain` / 拡張 kind) | provider / runtime-agent |
+| 階層         | 表すもの                                                                            | 所有者                      |
+| ------------ | ----------------------------------------------------------------------------------- | --------------------------- |
+| AppSpec      | source root の `.takosumi.yml`                                                      | app author                  |
+| Installation | Space に install された app 1 件の core record                                      | Takosumi installer / kernel |
+| Deployment   | 1 回の apply 結果                                                                   | Takosumi installer / kernel |
+| Component    | AppSpec 内の runtime / resource / ingress intent。implementation は operator が選ぶ | AppSpec entry               |
 
-Installation は ownership、billing、grant、launch token、current Deployment pointer を
-持ちます。Deployment は source commit、manifest digest、materialized resources、
-outputs、audit event を持ちます。
+Core Installation は current Deployment pointer と core status を持ちます。
+ownership、billing、authorization、launch token は operator account-plane projection
+が持 ちます。Deployment は resolved source identity、manifest
+digest、public/non-secret outputs、apply status、audit / operation evidence
+への参照を持ちます。
 
 ## 何が履歴化されるか
 
-- source commit / manifest digest
+- resolved source identity / manifest digest
 - created / updated / deleted component
-- build artifact digest
+- prepared archive payload digest (`source.digest` / `expected.sourceDigest`)
+- resolved publication / external publication snapshot
 - provider resource ID と output
 - apply status と observation
-- rollback の元になった Deployment ID
+- rollback audit / pointer movement の対象になった Deployment ID
 
 ## AppSpec との対応
 
@@ -38,28 +44,49 @@ metadata:
 components:
   api:
     kind: worker
-    build:
-      command: npm ci && npm run build:api
-      output: dist/api.mjs
-    routes:
-      - api.example.com/*
+    spec:
+      entrypoint: src/api.ts
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      example.full-stack.db:
-        as: env
-        prefix: DB_
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
   jobs:
     kind: worker
-    build:
-      command: npm ci && npm run build:jobs
-      output: dist/jobs.mjs
+    spec:
+      entrypoint: src/jobs.ts
     listen:
-      example.full-stack.db:
-        as: env
-        prefix: DB_
+      db:
+        from: db.connection
+        as: secret-env
+        prefix: DB
   db:
     kind: postgres
     publish:
-      - example.full-stack.db
+      connection:
+        as: service-binding
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: api.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: api.example.com
+          tls: auto
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 ```
 
 この AppSpec を apply すると、`api` / `jobs` / `db` の materialization が同じ
@@ -67,8 +94,11 @@ Deployment record に保存されます。
 
 ## Rollback
 
-rollback は過去 Deployment を改竄せず、その Deployment の source / manifest digest
-を元に新しい Deployment を作る forward-only 操作です。
+rollback は過去 Deployment を改竄せず、その retained succeeded Deployment を
+`currentDeploymentId` と public/non-secret outputs の authority として再選択する
+操作です。必要な runtime routing は retained activation evidence から再有効化しま
+す。新しい Deployment record は作らず、append-only rollback event / operation metadata として
+記録します。
 
 ```bash
 takosumi rollback "$INSTALLATION_ID" --to "$DEPLOYMENT_ID"
@@ -78,4 +108,4 @@ takosumi rollback "$INSTALLATION_ID" --to "$DEPLOYMENT_ID"
 
 - [Git / Store install](/deploy/store-deploy)
 - [ロールバック](/deploy/rollback)
-- [Takosumi installer API](https://github.com/tako0614/takosumi/blob/master/docs/reference/installer-api.md)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

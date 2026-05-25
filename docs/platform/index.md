@@ -23,9 +23,9 @@
 
 ## 関連
 
-| 内容                                                    | 詳細ドキュメント                                                                                 |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Installable App Model / Installation / runtime modes | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
-| AppSpec / Installation / Deployment                     | [takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)                           |
-| OIDC issuer / billing owner / launch token              | [takosumi-cloud docs](https://github.com/tako0614/takosumi-cloud/tree/master/docs)               |
-| `.takosumi.yml` AppSpec convention                      | [Takosumi docs](https://github.com/tako0614/takosumi/tree/master/docs)                   |
+| 内容                                                 | 詳細ドキュメント                                                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Takosumi Installation Lifecycle / Installation / runtime modes | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
+| AppSpec / Installation / Deployment                  | [Core Specification](https://takosumi.com/docs/reference/core-spec)                              |
+| OIDC issuer / billing owner / launch token           | [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)                 |
+| `.takosumi.yml` AppSpec convention                   | [AppSpec reference](https://takosumi.com/docs/reference/app-spec)                                |

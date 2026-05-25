@@ -7,19 +7,20 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
 はオペレーターの請求書に含まれる形で課金されます。
 
 - 契約・支払い方法は
-  [Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
+  [Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
   に紐づく
 - Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort
   に報告する立場
 - アプリの利用量は Installation 単位で計上
 
-::: warning Public paid access
-このページの Plus / Pay As You Go と Stripe Checkout は operator account plane の current contract
-を説明するものです。`takosumi-cloud` reference implementation の public paid checkout は、managed offering
-launch-readiness evidence、`acceptedReady: true` topology reports、`ready: true` public summary、saved live audit、
-canonical digest、separate operator approval、sanitized public summary が揃い、`managed-offering:status` が
-`canOpenManagedOffering: true` を返すまで closed です。
-:::
+::: warning Public paid access このページの Plus / Pay As You Go と Stripe
+Checkout は operator account plane の current contract
+を説明するものです。`takosumi-cloud` reference implementation の public paid
+checkout は、managed offering launch-readiness evidence、`acceptedReady: true`
+topology reports、`ready: true` public summary、saved live audit、 canonical
+digest、separate operator approval、sanitized public summary
+が揃い、`managed-offering:status` が `canOpenManagedOffering: true` を返すまで
+closed です。 :::
 
 ユーザーから見える表示:
 
@@ -41,20 +42,20 @@ Billed by <operator>
 
 ## プラン
 
-| プラン            | ID          | 課金モデル         | 説明                                         |
-| ----------------- | ----------- | ------------------ | -------------------------------------------- |
-| **Free**          | `plan_free` | 無料               | 個人の検証・小規模利用向け。デフォルトプラン |
-| **Plus**          | `plan_plus` | サブスクリプション | operator が public paid access を開いた後に Stripe Checkout で契約 |
+| プラン            | ID          | 課金モデル         | 説明                                                                   |
+| ----------------- | ----------- | ------------------ | ---------------------------------------------------------------------- |
+| **Free**          | `plan_free` | 無料               | 個人の検証・小規模利用向け。デフォルトプラン                           |
+| **Plus**          | `plan_plus` | サブスクリプション | operator が public paid access を開いた後に Stripe Checkout で契約     |
 | **Pay As You Go** | `plan_payg` | プリペイド残高     | operator が paid checkout を開いた後にクレジットを購入して残高から消費 |
 
-プランは課金アカウントごとに 1 つです。takosumi-cloud Accounts では、operator が managed offering gate
-を開いた場合に Takosumi Accounts の Stripe checkout endpoint からサブスクリプション / 支払い checkout session
-を作成し、Stripe webhook で billing 状態を更新します。
+プランは課金アカウントごとに 1 つです。takosumi-cloud Accounts では、operator が
+managed offering gate を開いた場合に Takosumi Accounts の Stripe checkout
+endpoint からサブスクリプション / 支払い checkout session を作成し、Stripe
+webhook で billing 状態を更新します。
 
 ::: info Billing portal / invoice API Billing portal、invoice list、usage read
-API は将来の拡張予定です。 現在の Accounts HTTP surface は
-`/v1/billing/stripe/checkout` と `/v1/billing/stripe/webhook` のみを公開します。
-:::
+API は将来の拡張予定です。現在の Accounts HTTP surface は Stripe checkout /
+webhook と Installation-scoped usage report ingest を公開します。 :::
 
 ## Billing line item の構造
 
@@ -290,7 +291,7 @@ Plus プランのサブスクリプション更新日は `subscription_period_en
 ```text
 POST /v1/billing/stripe/checkout { "mode": "subscription", "priceId": "price_plus_monthly" }
   → Stripe Checkout に遷移
-  → 支払い完了
+  →支払い完了
   → Webhook: checkout.session.completed (purchase_kind: "plus_subscription")
   → planId を "plan_plus" に更新
   → processorCustomerId / processorSubscriptionId を保存
@@ -301,18 +302,18 @@ POST /v1/billing/stripe/checkout { "mode": "subscription", "priceId": "price_plu
 ```text
 POST /v1/billing/stripe/checkout { "mode": "payment", "priceId": "price_payg_topup" }
   → Stripe Checkout に遷移
-  → 支払い完了
+  →支払い完了
   → Webhook: checkout.session.completed (purchase_kind: "pro_topup")
   → planId を "plan_payg" に更新
-  → クレジットを残高に加算
+  →クレジットを残高に加算
 ```
 
-### Plus → 解約
+### Plus →解約
 
 ```text
 Stripe dashboard / operator billing UI でサブスクリプションをキャンセル
   → Webhook: customer.subscription.deleted
-  → 残高があれば "plan_payg" に、なければ "plan_free" にダウングレード
+  →残高があれば "plan_payg" に、なければ "plan_free" にダウングレード
 ```
 
 ## Handled webhook events
@@ -332,29 +333,30 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 ## API 一覧
 
 current `takosumi-cloud` Accounts reference implementation の billing HTTP
-surface は、Stripe checkout / webhook と Installation scoped usage report
-ingest です。
+surface は、Stripe checkout / webhook と Installation scoped usage report ingest
+です。
 
-| エンドポイント                                      | メソッド | 説明                                                                                         |
-| --------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------- |
-| `/v1/billing/stripe/checkout`                       | POST     | Stripe Checkout session 作成                                                                 |
-| `/v1/billing/stripe/webhook`                        | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                  |
-| `/v1/installations/{id}/billing/usage-reports`      | POST     | Installation OIDC access token + `billing.usage.report` permission grant で保護された使用量 report |
+| エンドポイント                                 | メソッド | 説明                                                                                               |
+| ---------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `/v1/billing/stripe/checkout`                  | POST     | Stripe Checkout session 作成                                                                       |
+| `/v1/billing/stripe/webhook`                   | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                        |
+| `/v1/installations/{id}/billing/usage-reports` | POST     | Installation OIDC access token + `billing.usage.report` account-plane capability record で保護された使用量 report |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。
 
-請求は Takosumi Accounts の BillingPort を使います。使用量の ingest と entitlement
-projection は Accounts reference implementation にあり、customer portal / invoice
-download の公開 UI は managed offering launch overlay の運用 hardening として扱います。
+請求は Takosumi Accounts の BillingPort を使います。使用量の ingest と
+entitlement projection は Accounts reference implementation にあり、customer
+portal / invoice download の公開 UI は managed offering launch overlay の運用
+hardening として扱います。
 
 ## 関連ドキュメント
 
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/takosumi-accounts.md)
-  — 契約主体 / billing owner / OIDC issuer の詳細
-- [Installable App Model](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
+- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+  —契約主体 / billing owner / OIDC issuer の詳細
+- [Takosumi Installation Lifecycle](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
   — Takos app installation と billing の関係
-- [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/master/docs/architecture/app-installation.md)
+- [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/app-installation.md)
   — installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize /
   export 時の billing 再紐付け

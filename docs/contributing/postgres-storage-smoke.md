@@ -2,8 +2,9 @@
 
 > このページでわかること: SQL storage / migration surface の current proof。
 
-Takos product は Cloudflare D1 / SQL binding を current deploy target として扱います。
-Takosumi kernel の storage catalog / migration behavior は Takosumi tests で検証します。
+Takos product は Cloudflare D1 / SQL binding を current deploy target
+として扱います。 Takosumi kernel の storage catalog / migration behavior は
+Takosumi tests で検証します。
 
 ```sh
 cd ../takosumi

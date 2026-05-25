@@ -1,20 +1,25 @@
 # Thread / Run / Artifact
 
-> このページでわかること: AI エージェントとの対話を管理する Thread / Run / Artifact モデル。
+> このページでわかること: AI エージェントとの対話を管理する Thread / Run /
+> Artifact モデル。
 
 ## 概要
 
-Thread は対話のコンテキスト、Run は 1 回のエージェント実行、Artifact は実行結果です。
-これらは Takos のコア機能であり、チャットとエージェント実行の基本モデルを構成します。
+Thread は対話のコンテキスト、Run は 1 回のエージェント実行、Artifact
+は実行結果です。これらは Takos
+のコア機能であり、チャットとエージェント実行の基本モデルを構成します。
 
 ## 実行の仕組み
 
-- **Takos app / agent service** が Thread / Run のライフサイクル、キュー、DB、認証、Space の状態を管理します
-- **`takos-agent`** (ランタイムコンテナ) が実際のプロンプト構築、スキル選択、ツール実行を担当します
+- **Takos app / agent service** が Thread / Run
+  のライフサイクル、キュー、DB、認証、Space の状態を管理します
+- **`takos-agent`** (ランタイムコンテナ)
+  が実際のプロンプト構築、スキル選択、ツール実行を担当します
 - agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携します
 
-Run の起動には `spaceId` が必須です。Installation 経由の Run では `installationId` と
-`runtimeNamespace` が追加され、メモリストアがインストール単位で隔離されます。
+Run の起動には `spaceId` が必須です。Installation 経由の Run では
+`installationId` と `runtimeNamespace`
+が追加され、メモリストアがインストール単位で隔離されます。
 
 managed skill は Takos app / API gateway から渡されたカタログが優先されます。
 control payload に managed skill が無い場合だけ、`takos-agent` 内のローカル
@@ -53,9 +58,11 @@ pending (生成直後) → queued (実行待ち) → running → completed
                        → cancelled
 ```
 
-`pending` と `queued` はどちらも実行前の待機状態ですが、意味は同じではありません。
-`pending` は run が作られた直後の生成待ち、`queued` は実行キューに載った待機状態として扱います。
-両者は実装上も別ステータスなので、一覧や `RunStatus` を読むときに `pending` を落とさないでください。
+`pending` と `queued`
+はどちらも実行前の待機状態ですが、意味は同じではありません。 `pending` は run
+が作られた直後の生成待ち、`queued` は実行キューに載った待機状態として扱います。
+両者は実装上も別ステータスなので、一覧や `RunStatus` を読むときに `pending`
+を落とさないでください。
 
 ### 主要フィールド
 
@@ -80,12 +87,13 @@ takos run follow RUN_ID --transport ws
 
 ## Artifact
 
-Run の結果物です。`code` / `config` / `doc` / `patch` / `report` / `other` のタイプを持ち、
-space ストレージ上のファイルにリンクできます。
+Run の結果物です。`code` / `config` / `doc` / `patch` / `report` / `other`
+のタイプを持ち、 space ストレージ上のファイルにリンクできます。
 
 ## Memory / Reminder
 
-- **Memory** — agent の記憶単位。`episode` / `semantic` / `procedural` の型を持ちます
+- **Memory** — agent の記憶単位。`episode` / `semantic` / `procedural`
+  の型を持ちます
 - **Reminder** — `time` / `condition` / `context` のトリガー型を持ちます
 
 ```bash

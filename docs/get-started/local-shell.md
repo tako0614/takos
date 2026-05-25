@@ -1,6 +1,7 @@
 # Local Shell Runbook
 
-> このページでわかること: クローンしたばかりの状態から Takos のローカルシェルを起動するまでの手順。
+> このページでわかること: クローンしたばかりの状態から Takos
+> のローカルシェルを起動するまでの手順。
 
 ## 1. サブモジュールを初期化
 
@@ -20,8 +21,8 @@ deno task submodules:update
 deno task doctor
 ```
 
-必要なツール、サブモジュールの状態、compose のサービスセット、ポート、
-内部 URL 環境変数などを確認します。
+必要なツール、サブモジュールの状態、compose のサービスセット、ポート、内部 URL
+環境変数などを確認します。
 
 CI やスクリプトから使う場合は strict モードで:
 
@@ -49,7 +50,8 @@ deno task local:logs   # ログ表示
 deno task local:down   # 停止
 ```
 
-`takos-app`、`takosumi`、`takos-git`、`takos-agent`、Postgres、Redis が起動します。
+`takos-app`、`takosumi`、`takos-git`、`takos-agent`、Postgres、Redis
+が起動します。
 
 ## 各プロダクトのコマンド
 

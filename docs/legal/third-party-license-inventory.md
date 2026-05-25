@@ -1,7 +1,7 @@
 # Legal: Third-party Dependency Inventory
 
-> このページでわかること: Takosumi / Takos ecosystem の third-party dependency inventory
-> source、observed license families、review-required packages。
+> このページでわかること: Takosumi / Takos ecosystem の third-party dependency
+> inventory source、observed license families、review-required packages。
 
 This inventory is generated from committed lockfiles plus local package metadata
 observed during the 2026-05-07 license review. Lockfiles remain the source of
@@ -16,7 +16,7 @@ license strings where available.
 | `takos/app/deno.lock`                 |          676 |            7 |              0 |
 | `takos/git/deno.lock`                 |            2 |            1 |              0 |
 | `takosumi/deno.lock`                  |           16 |           12 |              0 |
-| `takosumi/deno.lock`              |            0 |            5 |              0 |
+| `takosumi/deno.lock`                  |            0 |            5 |              0 |
 | `takos-cli/deno.lock`                 |            4 |            4 |              0 |
 | `takos-apps/takos-computer/deno.lock` |          333 |            2 |              0 |
 | `takos-apps/takos-docs/deno.lock`     |          356 |            2 |              0 |

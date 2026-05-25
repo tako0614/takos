@@ -1,69 +1,52 @@
 # Architecture Diagrams
 
-> このページでわかること: Takos エコシステムの主要な component / sequence /
-> state 関係を mermaid 図で俯瞰する。文字情報は
-> [System Architecture](./system-architecture.md) と
-> [Takosumi AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md) を元にした図示版。
+> このページでわかること: Takos エコシステムの主要な component / sequence / state 関係を mermaid
+> 図で俯瞰する。文字情報は [System Architecture](./system-architecture.md) と
+> [Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec) を元にした図示版。
 
 ## ねらい
 
 - 新規参加者が Takos の主要 component を 1 枚で把握できるようにする
-- `resolveDeployment` / `applyDeployment` / rollback の主要 sequence を可視化する
-- Deployment lifecycle の state 遷移を condition reason との対応付きで示す
+- AppSpec / Installation / Deployment の public model を可視化する
+- reference implementation internals は別 section として読む
 
 ## Component Diagram
 
-Takosumi kernel (`takosumi`) を中心に、user / AI agent から provider 実体まで
-の主要 component を表す。 `takos-app` は public API gateway として user request
-を kernel に橋渡しする。 provider plugin bundle は kernel の lookup で動的に
-読み込まれ、Cloudflare / AWS / GCP / Kubernetes / Self-hosted 各 target に
-materialize する。
+Public model は AppSpec → Installation → Deployment で止まります。`takos-app` は Takos product API を所有し、install /
+update workflow は operator account plane を経由して Takosumi Installer API に接続します。
 
 ```mermaid
 graph TB
   User[User / AI Agent]
   CLI[takos-cli]
   AppGateway[takos-app<br/>public API gateway]
-  Kernel[takosumi Kernel<br/>resolveDeployment / applyDeployment]
-  Storage[(Deployment Store<br/>Postgres / D1)]
-  Plugin[Provider Plugin Bundle<br/>composite resolver / binding resolver / materializer]
+  Accounts[Takosumi Accounts<br/>operator account plane]
+  Kernel[Takosumi Installer API]
+  Storage[(Installation / Deployment Ledger)]
   Agent[takos-agent<br/>Rust execution service]
   Git[takos-git<br/>Git Smart HTTP / object storage]
-  CF[Cloudflare<br/>Workers / D1 / R2 / Queues / OCI adapter]
-  AWS[AWS<br/>Lambda / Fargate / S3 / RDS]
-  GCP[GCP<br/>Cloud Run / GCS / Cloud SQL]
-  K8S[Kubernetes<br/>Deployment / Service / PVC]
-  Self[Self-hosted<br/>Compose / local runtime]
 
   User --> CLI
   User --> AppGateway
   CLI --> AppGateway
-  AppGateway --> Kernel
+  AppGateway --> Accounts
+  Accounts --> Kernel
   Kernel --> Storage
-  Kernel --> Plugin
   Kernel --> Agent
   Kernel --> Git
-  Plugin --> CF
-  Plugin --> AWS
-  Plugin --> GCP
-  Plugin --> K8S
-  Plugin --> Self
-  Agent -. internal control RPC .-> Kernel
 ```
 
 ポイント:
 
-- kernel は plugin bundle を介してのみ provider に到達する。直接 Cloudflare /
-  AWS SDK を call しない
-- agent service は kernel の internal control RPC を呼び戻す single-direction
-  dependency を持つ。tenant runtime からの直接 outbound は存在しない
-- public API surface は `takos-app` に閉じ、kernel は internal API のみ公開する
+- Takosumi public concept は AppSpec / Installation / Deployment
+- cloud / OS credential、provider adapter、runtime-agent、WAL は reference implementation internals
+- Takos product public API surface は `takos-app` が所有する。Takosumi Installer API は operator / CLI / automation
+  向けの別 surface として扱う
 
 ## Sequence Diagram: Installation Dry-run
 
-Takosumi installer の dry-run シーケンス。`.takosumi.yml` (= AppSpec) を読み、
-変更差分と expected pin を response として返す。dry-run は Deployment entity
-として永続化しない。
+Takosumi installer の dry-run シーケンス。`.takosumi.yml` (= AppSpec) を読み、変更差分と expected pin を response
+として返す。dry-run は Deployment entity として永続化しない。
 
 ```mermaid
 sequenceDiagram
@@ -75,23 +58,23 @@ sequenceDiagram
 
   User->>CLI: takosumi install dry-run
   CLI->>K: POST /v1/installations/dry-run
-  K->>Installer: fetch source / parse AppSpec / resolve artifacts
-  Installer-->>K: AppSpec + source pin
-  K->>K: validate components / refs / provider decision
+  K->>Installer: fetch source / parse AppSpec / resolve publish-listen
+  Installer-->>K: AppSpec + resolved source identity
+  K->>K: validate components / bindings / provider decision
   K->>PG: evaluate policies (boundary, approval)
   PG-->>K: PolicyDecision
   K-->>CLI: dry-run result + expected pin
   CLI-->>User: changes / cost / expected
 ```
 
-dry-run 段階では provider への副作用はない。失敗時は validation / policy /
-provider resolution の理由が response error として返る。
+dry-run 段階では provider への副作用はない。失敗時は validation / policy / provider resolution の理由が response error
+として返る。
 
-## Sequence Diagram: applyDeployment
+## Reference Implementation Internals: applyDeployment
 
-resolved Deployment を実際に provider に materialize する更新系シーケンス。
-provider plugin の `materialize` は冪等であることを契約とし、kernel は
-`ProviderObservation` を介して drift を観測する。
+Installer API apply が Deployment を append し、provider / runtime-agent 側に operation envelope
+を渡す更新系シーケンス。reference kernel は内部 WAL で retry を整理できますが、public Installer API は caller-supplied
+idempotency key を受け取りません。
 
 ```mermaid
 sequenceDiagram
@@ -100,72 +83,69 @@ sequenceDiagram
   participant K as Kernel
   participant DS as DeploymentService
   participant DB as Deployment Store
-  participant Plug as Provider Plugin
+  participant Binding as Provider Adapter
   participant Cloud as Cloudflare / AWS / GCP / K8s
   participant Obs as ProviderObservation
 
   User->>CLI: takosumi deploy <installation-id> --source <source>
   CLI->>K: POST /v1/installations/{id}/deployments
-  K->>DS: load Deployment(resolved)
-  DS->>DB: SELECT
-  DB-->>DS: row
-  DS-->>K: Deployment
-  K->>DS: transition resolved -> applying
-  DS->>DB: UPDATE state=applying
-  K->>Plug: materialize(plan)
-  Plug->>Cloud: provider API calls (idempotent)
-  Cloud-->>Plug: object refs / status
-  Plug->>Obs: emit ProviderObservation
+  K->>DS: resolve source / validate AppSpec / plan operation
+  DS->>DB: INSERT Deployment(status=running)
+  K->>Binding: apply(operation envelope)
+  Binding->>Cloud: provider/runtime-agent operation
+  Cloud-->>Binding: object refs / status
+  Binding->>Obs: emit ProviderObservation
   Obs-->>K: drift / convergence signals
-  alt all converged
-    K->>DS: transition applying -> applied
-    DS->>DB: UPDATE state=applied
+  alt apply succeeded
+    K->>DS: complete Deployment
+    DS->>DB: UPDATE status=succeeded, outputs, evidence
   else materialization failure
-    K->>DS: transition applying -> failed
-    DS->>DB: UPDATE state=failed, conditions[]
+    K->>DS: fail Deployment
+    DS->>DB: UPDATE status=failed, evidence, InstallationEvent
   end
-  K-->>CLI: Deployment + ServingConverged|Degraded
+  K-->>CLI: Deployment(status=succeeded|failed)
   CLI-->>User: apply result
 ```
 
 ## State Machine: Deployment Lifecycle
 
-Deployment 行が取りうる主要 state とその遷移。 condition reason との対応は
-[Condition Reason Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/status-output.md) を参照。
+Deployment 行が取りうる主要 state とその遷移。`succeeded` / `failed` は terminal status です。新しい apply は新しい
+Deployment を作り、rollback は `Installation.currentDeploymentId` と retained activation evidence を retained `succeeded`
+Deployment へ戻します。
 
 ```mermaid
 stateDiagram-v2
   [*] --> running: POST /v1/installations
-  running --> succeeded: ServingConverged
-  running --> failed: ProviderMaterializationFailed<br/>ProviderRateLimited (exhausted)
-  succeeded --> running: POST /v1/installations/{id}/deployments
-  succeeded --> rolled_back: POST /v1/installations/{id}/rollback
-  failed --> rolled_back: POST /v1/installations/{id}/rollback
-  rolled_back --> [*]
-  succeeded --> [*]: superseded by next Deployment
-  failed --> [*]: superseded by next Deployment
+  running --> succeeded: apply completed
+  running --> failed: operator execution failed<br/>rate limit exhausted
+  succeeded --> [*]: terminal history row
+  failed --> [*]: terminal history row
+```
+
+```mermaid
+stateDiagram-v2
+  [*] --> current: retained succeeded Deployment
+  current --> current: rollback pointer moves to another retained succeeded Deployment
+  current --> current: new succeeded Deployment becomes current
 ```
 
 state 遷移の補足:
 
-- `running -> failed`: provider 側で `ProviderMaterializationFailed` /
-  `ProviderRateLimited` が観測されると failed に落ちる。retry policy が許す限り
-  running のまま retry する
-- `succeeded -> running`: 新しい Deployment append または repair が始まる
-- `rolled_back`: 直近 healthy Deployment の resolved graph を再 apply する。
-  `RollbackIncompatible` 等で失敗した場合は failed に落ちる
+- `running -> failed`: operator execution 側で recoverable retry を使い切った failure が観測されると failed
+  に落ちる。retry policy が許す限り running のまま retry する
+- new apply / repair: 既存 Deployment を running に戻さず、新しい Deployment row を append して `running` から始める
+- rollback: retained succeeded Deployment を current pointer と retained activation evidence の authority
+  として再選択する。historical Deployment record は改竄せず、新しい Deployment も作らない
 
 ## 関連ドキュメント
 
-- [System Architecture](./system-architecture.md) — service / repository
-  boundary の詳細
-- [Deploy System](https://github.com/tako0614/takosumi/blob/master/docs/reference/architecture/deploy-system.md) — primitive と group 機能の deploy
-  pipeline
-- [Takosumi AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md) — AppSpec /
+- [System Architecture](./system-architecture.md) — service / repository boundary の詳細
+- [Deploy System](https://github.com/tako0614/takosumi/blob/main/docs/reference/architecture/deploy-system.md) —
+  primitive と group 機能の deploy pipeline
+- [Takosumi AppSpec](https://takosumi.com/docs/reference/app-spec) — AppSpec /
   Installation / Deployment の current contract
-- [Condition Reason Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/status-output.md) —
-  `Deployment.conditions[].reason` の一覧
-- [Operations: Troubleshooting](https://github.com/tako0614/takos-private/blob/master/docs/operations/troubleshooting.md) — 実運用での
-  failure 対応
-- [Performance Baseline](/performance/baseline) — kernel resolve / apply の
-  baseline 値
+- [Status Output](https://github.com/tako0614/takosumi/blob/main/docs/reference/status-output.md) — operator-facing
+  status summary と InstallationEvent の読み方
+- [Operations: Troubleshooting](https://github.com/tako0614/takos-private/blob/master/docs/operations/troubleshooting.md)
+  —実運用での failure 対応
+- [Performance Baseline](/performance/baseline) — kernel resolve / apply の baseline 値

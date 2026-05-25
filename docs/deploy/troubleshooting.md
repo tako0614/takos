@@ -2,11 +2,6 @@
 
 > このページでわかること: デプロイ時によくあるエラーとその対処法。
 
-> **Wave N planned (2026-05-21 RFC stage)**: 本ドキュメントで YAML 例に含まれる
-> `build:` field は takosumi Wave N で削除予定 (= build は別 `kind: build`
-> component に移管)。 詳細 design は takosumi
-> [RFC 0001](https://takosumi.com/docs/rfc/0001-kernel-kind-agnostic) を参照。
-
 ## AppSpec validation
 
 ### `metadata.id` / `metadata.name` is required
@@ -14,9 +9,6 @@
 `.takosumi.yml` AppSpec には `metadata.id` と `metadata.name` が必要です。
 
 ```yaml
-# 現在のサンプル (Wave L) — bare apiVersion v1 + AppSpec root 3 field
-# (metadata / components) + Component 5 field (kind / spec / publish / listen
-# / build) の current contract に整合
 apiVersion: v1
 metadata:
   id: com.example.my-app
@@ -24,40 +16,49 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
+    spec:
+      entrypoint: src/worker.ts
 ```
 
 ### AppSpec の解決に失敗する
 
-通常の install / deploy は `.takosumi.yml` を Takosumi installer が読み、 build
-/ namespace pub/sub / route output を解決してから apply します。
+通常の install / deploy は `.takosumi.yml` を Takosumi installer が読み、
+AppSpec `publish` / `listen` と gateway descriptor spec を解決してから apply
+します。build が必要な source は、Installer API の前に build service / CI で
+prepared source archive にします。
+
+Local checkout preflight:
 
 ```bash
 takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
-takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
 
-dry-run が失敗する場合は、`.takosumi.yml` の `components.*.build.output`、
+Apply uses direct Git/local source only when every runtime file referenced by
+kind-specific `spec` already exists in that source snapshot. Build-required apps
+are applied from a prepared source URL + digest produced by the build service /
+CI.
+
+dry-run が失敗する場合は、`.takosumi.yml` の kind-specific `spec`、
 `components.*.publish` / `components.*.listen` 宣言、 install 時の `source` と
-`spaceId` を確認してください。 `listen` 側の namespace path が sibling component
-の `publish` または operator が publish する namespace (e.g.
-`operator.identity.oidc`) に解決できないと、 dry-run は HTTP `409 Conflict`
-で失敗します。 binding payload が size 上限 (`413 Payload Too Large`)
-を超える場合も同様に dry-run で報告されます。
+`spaceId` を確認してください。malformed な local `component.publication` ref や
+cycle は `400 invalid_argument` です。required external publication (e.g.
+`operator.identity.oidc`) が current Space state に無い場合や、同じ path の
+visible declaration が重複している場合は provider side effect 前に
+`409 failed_precondition` で失敗します。operator が採用していない extension kind
+/ projection は `501 not_implemented` です。request body や manifest が size
+上限を超える場合は `413 Payload Too Large` です。
 
-### build output がない
+### runtime file path がない
 
-`worker` component は `components.<name>.build.output` に concrete bundle path
-が必要です。build command 後に その path が存在するか確認します。
+`worker` component は kind-specific `spec.entrypoint` に runtime file path
+を書きます。build service / CI を使う場合は、prepared source archive の中にその
+path が含まれるか確認します。
 
 ## Binding / Accounts
 
 ### OIDC redirect が失敗する
 
-- `.takosumi.yml` の `listen: { operator.identity.oidc: { as: env } }`
-  宣言を確認する
+- `.takosumi.yml` の `listen.oidc.from: operator.identity.oidc` 宣言を確認する
 - materialized `OIDC_REDIRECT_URI` が app の callback と一致するか確認する
 - Takosumi Accounts (takosumi-cloud) 側の client registration と issuer URL
   を確認する
@@ -67,24 +68,43 @@ dry-run が失敗する場合は、`.takosumi.yml` の `components.*.build.outpu
 - `ACCOUNTS_BASE_URL` が install 時に materialize されているか確認する
 - `INSTALL_LAUNCH_INSTALLATION_ID` が Installation id と一致するか確認する
 - `INSTALL_LAUNCH_REDIRECT_URI` が Accounts 発行時に bind した URL
-  と完全一致するか確認する (mismatch は 409)
+  と完全一致するか確認する (Accounts API は
+  `409 launch_token_redirect_mismatch`)。Installer API の expected guard
+  mismatch は `409 failed_precondition`
 - `/_takosumi/launch` の handler が
   `${ACCOUNTS_BASE_URL}/v1/installations/${INSTALL_LAUNCH_INSTALLATION_ID}/launch-token/consume`
   を TLS で叩いているか確認する
-- token が one-time (used flag) で消費されたか、 期限切れ (5 分 hard cap)
+- token が one-time (used flag) で消費されたか、期限切れ (5 分 hard cap)
   を超えていないか確認する
 
 ## Install / Deployment apply
 
 Installation ledger を経由する current path は install dry-run / apply
-です。Provider operation の失敗は Takosumi kernel の Deployment output /
-conditions と Accounts 側 InstallationEvent を確認します。
+です。Provider operation の失敗は Takosumi kernel の Deployment status / output
+/ evidence と Accounts 側 InstallationEvent を確認します。
+
+Local checkout preflight:
 
 ```bash
 takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
-takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 takosumi deploy dry-run "$INSTALLATION_ID" --source .
-takosumi deploy "$INSTALLATION_ID" --source .
+```
+
+Managed apply for build-required apps passes prepared source material:
+
+```json
+{
+  "source": {
+    "kind": "prepared",
+    "url": "https://build.example.com/snapshots/app-123.archive",
+    "digest": "sha256:..."
+  },
+  "expected": {
+    "manifestDigest": "sha256:...",
+    "sourceDigest": "sha256:...",
+    "currentDeploymentId": "deployment:..."
+  }
+}
 ```
 
 ## Auth

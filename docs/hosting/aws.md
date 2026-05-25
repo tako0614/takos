@@ -1,26 +1,28 @@
 # AWS
 
-> このページでわかること: Takosumi kernel を AWS (EKS / Fargate) にホストする方法。
+> このページでわかること: Takosumi kernel を AWS (EKS / Fargate)
+> にホストする方法。
 
 このページは **Takosumi kernel を AWS にホストする operator** 向けです。
 カバー範囲は 2 通りで、用途に応じて使い分けます:
 
 1. **AWS 単独 hosting (EKS Helm)** ― `takos/deploy/helm/takos/values-aws.yaml`
-   overlay。Kubernetes ベースで control plane / runtime / executor を運用する path。
-2. **AWS provider plugin** ― ECS Fargate / RDS / S3 / SQS / KMS /
-   Secrets Manager の 6 provider を Takosumi kernel から `provider` 契約として
-   呼び出す path。Cloudflare control plane + AWS tenant runtime
+   overlay。Kubernetes ベースで control plane / runtime / executor を運用する
+   path。
+2. **AWS reference provider adapter client** ― ECS Fargate / RDS / S3 / SQS /
+   KMS / Secrets Manager の adapter を takosumi.com reference implementation
+   の配線として呼び出す path。Cloudflare control plane + AWS tenant runtime
    (`composite.cf-control-aws-tenant@v1`) や AWS 単独 profile
    (`profiles/aws.example.json`) で使う。
 
-::: tip 対象範囲
-section 1 (Helm overlay) は ECS / Fargate への kernel 直接 deploy、DynamoDB を
-control-plane storage として使う構成、Terraform / CDK overlay を扱いません。
-section 2 (provider plugin) は 6 provider の materialization までを扱います。
-:::
+::: tip 対象範囲 section 1 (Helm overlay) は ECS / Fargate への kernel 直接
+deploy、DynamoDB を control-plane storage として使う構成、Terraform / CDK
+overlay を扱いません。 section 2 (reference provider adapter client) は provider
+materialization までを扱います。 :::
 
-Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。 5
-target 横断 runbook は [Multi-cloud](/hosting/multi-cloud) を参照してください。
+Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
+を参照してください。 5 target 横断 runbook は
+[Multi-cloud](/hosting/multi-cloud) を参照してください。
 
 ## 統合 distribution からこの target を選ぶ
 
@@ -86,7 +88,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 | 状況                                                                    | 推奨 path           |
 | ----------------------------------------------------------------------- | ------------------- |
-| Takosumi kernel 全体を AWS の k8s に置く                                   | section 1 (Helm)    |
+| Takosumi kernel 全体を AWS の k8s に置く                                | section 1 (Helm)    |
 | Cloudflare で kernel を動かしつつ tenant runtime / DB を AWS に置きたい | section 2 (plugin)  |
 | AWS のみで tenant runtime + control-plane provider を組む               | section 2 + Helm    |
 | 開発・検証で provider 動作確認だけしたい                                | section 2 + dry-run |
@@ -104,10 +106,10 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 | source          | `deploy/distributions/aws.json` から `deno task helm:generate-overlays` で生成 |
 | images          | distribution profile の service image entries を Helm image values に展開      |
 | domains         | distribution profile の `routing` から admin / tenant base domain を展開       |
-| runtime config  | `runtimeConfig.environment=production`、plugin id は fail-closed empty         |
+| runtime config  | `runtimeConfig.environment=production`、implementation binding selector は fail-closed empty |
 | ingress         | ALB ingress class と ALB annotation を使う                                     |
 | service account | IRSA 用 annotation を受け取る                                                  |
-| workloads       | `takos-app` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`       |
+| workloads       | `takos-app` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
 
 overlay は generated artifact です。distribution profile を更新したら:
 
@@ -123,7 +125,7 @@ deno task helm:check-overlays
 - ALB Ingress Controller
 - External Secrets Operator / Sealed Secrets などの secret 管理、または Helm
   values で secret を作成する運用
-- Takosumi provider plugin が参照する AWS managed-service credentials
+- Takosumi reference provider adapter が参照する AWS managed-service credentials
 
 Terraform apply 後の DB endpoint / Redis URL / SQS URL / S3 bucket 名は
 `deno task terraform:helm-values` で generated values に変換し、base overlay の
@@ -139,7 +141,7 @@ tfvars は CI plan fixture だけで、production / staging の raw secret は
 `values-aws.yaml` は `secrets.create: false` を前提に、既定では chart の release
 fullname 由来の Secret 名を参照します。`<release>` は Helm release
 名から決まり、各 Secret は `<release>-platform` / `<release>-auth` /
-`<release>-llm` になります。外部 secret を使っていて 名前が異なる場合だけ
+`<release>-llm` になります。外部 secret を使っていて名前が異なる場合だけ
 `secrets.existingSecrets.*` を設定してください。
 
 外部 secret の `platform` には `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` /
@@ -165,12 +167,12 @@ certificate ARN を設定します。
 
 ---
 
-## Section 2: AWS provider plugin
+## Section 2: AWS reference provider adapter
 
 ### 構成
 
-Takosumi (`@takos/takosumi-plugins`) の AWS provider plugin は 6 provider
-を提供します:
+Takosumi reference implementation の AWS profile は次の adapter clients
+を使います:
 
 | provider client              | 用途                          | 参照クラス                             |
 | ---------------------------- | ----------------------------- | -------------------------------------- |
@@ -184,12 +186,12 @@ Takosumi (`@takos/takosumi-plugins`) の AWS provider plugin は 6 provider
 | `aws-runtime-agent-registry` | runtime-agent enrolment store | `src/providers/aws/gateway.ts`         |
 
 profile JSON (`profiles/aws.example.json`) で `clients.*` を上記 client
-名に向けると Takosumi kernel が `provider` 契約を AWS materializer
-経由で実行します。
+名に向けると、takosumi.com reference implementation の provider adapter wiring
+が AWS resource lifecycle を実行します。
 
-### Operator が手動でやること / kernel が plugin 経由でやること
+### Operator が手動でやること / reference binding が行うこと
 
-| step                                                               | operator               | kernel (plugin) |
+| step                                                               | operator               | reference binding |
 | ------------------------------------------------------------------ | ---------------------- | --------------- |
 | AWS account / IAM role 作成                                        | yes                    | no              |
 | IAM policy attach (ECS / RDS / S3 / SQS / KMS / Secrets / Route53) | yes                    | no              |
@@ -288,12 +290,12 @@ profile JSON (`profiles/aws.example.json`) で `clients.*` を上記 client
 
 ### Credential injection 方式
 
-provider plugin への credential 経路は 2 通りあります:
+provider adapter への credential 経路は 2 通りあります:
 
 #### A. Cloudflare Worker secret (Cloudflare control + AWS tenant の場合)
 
-Cloudflare 上の Takosumi kernel から AWS provider plugin を呼ぶ場合、Worker secret
-として AWS credentials を inject します:
+Cloudflare 上の Takosumi kernel から AWS provider adapter を呼ぶ場合、Worker
+secret として AWS credentials を inject します:
 
 ```bash
 cd takos-private/apps/control
@@ -308,7 +310,7 @@ profile (`profiles/cloudflare-aws.example.json`) で
 
 #### B. operator-managed gateway URL (kernel が AWS の外にある場合)
 
-provider plugin は SDK を直接 import せず、operator が用意する HTTP gateway
+provider adapter は SDK を直接 import せず、operator が用意する HTTP gateway
 を介して呼ぶ前提です。`src/providers/aws/gateway.ts` の URL 構成は profile の
 `pluginConfig.operator.takosumi.aws.gatewayUrl` で上書きできます:
 
@@ -329,7 +331,7 @@ provider plugin は SDK を直接 import せず、operator が用意する HTTP 
 gateway URL を使うと Cloudflare Worker から AWS SDK を直接呼べない制約を
 迂回できます。gateway 自体は operator が EC2 / Fargate に配置します。
 
-### runtime-agent  を AWS に置く
+### runtime-agent を AWS に置く
 
 Cloudflare 上の kernel が直接 AWS resource を触るのではなく、AWS 側に
 runtime-agent を常駐させて work lease を pull する方式です。
@@ -417,10 +419,10 @@ Fargate (ECS task definition):
 ```
 
 agent は kernel に enroll → heartbeat → lease pull → ECS / RDS / S3 / SQS / KMS
-/ Secrets ops を実行 → 結果を report します。詳細は
+/ Secrets ops を実行→結果を report します。詳細は
 [Multi-cloud](/hosting/multi-cloud#runtime-agent-placement) を参照。
 
-### ALB routing  の DNS 設定
+### ALB routing の DNS 設定
 
 `aws-alb-route53-router` provider client は次を materialize します:
 
@@ -449,18 +451,19 @@ kernel がやること:
 
 ## chart contract に含まれないもの (section 1)
 
-- ECS / Fargate への Takosumi kernel direct deploy
+- ECS / Fargate への Takosumi kernel self-deploy automation
 - ECS は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - DynamoDB / SQS / Secrets Manager を app resource backend として自動
-  provisioning する contract (※ section 2 の provider plugin はこれを担う)
+  provisioning する contract (※ section 2 の provider adapter はこれを担う)
 - Terraform / CDK による AWS resource 作成手順
-- AWS 固有 adapter 名を deploy manifest author 向けの public surface として固定
+- AWS 固有 adapter 名を AppSpec author 向けの public surface として固定
   する contract
 
 必要なら operator が追加 adapter / external service
-を構成できますが、このページは Helm overlay と provider plugin
-で実際に表現されている範囲だけを contract とします。
+を構成できますが、このページは Takos product/operator distribution の Helm
+overlay と reference provider adapter で実際に表現されている範囲だけを runbook
+として扱います。
 
 ## 次に読むページ
 

@@ -1,5 +1,7 @@
 # takos-excel
 
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+
 > このページでわかること: バンドルアプリ takos-excel の概要。
 
 スプレッドシートエディタ with formulas and a Streamable HTTP MCP server。
@@ -13,6 +15,11 @@
 
 ## AppSpec (`.takosumi.yml`)
 
+`spec.entrypoint` points to a runtime file inside the resolved source. Managed
+install uses the prepared source produced by the build service when that file is
+generated; direct Git/local apply is valid only when the file is already present
+in the source snapshot.
+
 ```yaml
 apiVersion: v1
 
@@ -24,39 +31,54 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: deno task build
-      output: dist/worker.mjs
     spec:
-      routes:
-        - /
-        - /api
-        - /api/auth/launch
-        - /mcp
-        - /healthz
-        - /files/:id
+      entrypoint: dist/worker.js
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      jp.takos.excel.spreadsheets:
-        as: env
-        prefix: BLOB_
-      operator.identity.oidc:
-        as: env
+      spreadsheets:
+        from: spreadsheets.bucket
+        as: secret-env
+        prefix: BLOB
+      oidc:
+        from: operator.identity.oidc
+        as: secret-env
+        prefix: OIDC
+        required: true
+
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 
   spreadsheets:
     kind: object-store
+    spec:
+      name: takos-excel-spreadsheets
     publish:
-      - jp.takos.excel.spreadsheets
+      bucket:
+        as: object-store
 ```
 
-> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
-> field は物理削除済。 launcher (`/api/auth/launch`) / MCP (`/mcp`) / health
-> (`/healthz`) endpoint は worker materializer convention (= `spec.routes`
-> の HTTP path) と Takos product 内部 app launcher / MCP registry metadata
-> (= AppSpec contract とは別 layer) で表現します。 capability request
-> (= かつての `permissions.requested[]`) は Takos product 内部 metadata layer
-> で表現します。
+gateway は public endpoint を作り、worker が app runtime path
+を処理します。Takos product metadata は launcher / MCP registry / capability
+request を登録します。
 
 ## 関連ページ
 
-- [AppSpec spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [AppSpec spec](https://takosumi.com/docs/reference/app-spec)
 - [OIDC Consumer](/apps/oidc-consumer)

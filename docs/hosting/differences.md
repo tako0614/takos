@@ -1,13 +1,17 @@
 # 環境ごとの差異
 
-> このページでわかること: Cloudflare / AWS / GCP / Kubernetes / セルフホストの対応状況の比較。
+> このページでわかること: Cloudflare / AWS / GCP / Kubernetes /
+> セルフホストの対応状況の比較。
 
-Takosumi 上に app/group を deploy する方法は [Deploy](/deploy/) を参照してください。
+Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
+を参照してください。
 
 `distribution.yml` の `kernel_host.target` で選べるのは `cloudflare` / `aws` /
-`gcp` / `kubernetes` / `selfhosted` の 5 種類です。Cloudflare は公開 spec の
-参照実装で、Workers backend を tracked reference として使います。AWS / GCP /
-Kubernetes は Helm overlay、selfhosted は docker-compose で扱います。
+`gcp` / `kubernetes` / `selfhosted` の 5 種類です。Cloudflare は Takos operation
+の tracked reference deployment/backend です。Takosumi public spec は AppSpec /
+Installation / Deployment と Installer API に閉じ、provider proof は operator
+evidence として扱います。AWS / GCP / Kubernetes は Helm overlay、selfhosted は
+docker-compose で扱います。
 
 このページでの compatible は schema / translation parity を指し、全 provider
 で同じ runtime behavior や resource existence を保証する意味ではありません。
@@ -16,7 +20,7 @@ target ごとの readiness status は
 
 ## ホスティング対応一覧
 
-| page                                | `kernel_host.target` | 内容                                                                                  | バンドル / 想定バックエンド                           |
+| page                                | `kernel_host.target` | 内容                                                                                | バンドル / 想定バックエンド                           |
 | ----------------------------------- | -------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | [Cloudflare](/hosting/cloudflare)   | `cloudflare`         | Cloudflare Workers / D1 / R2 / KV / Queues を使う tracked reference Workers backend | Cloudflare resources                                  |
 | [AWS](/hosting/aws)                 | `aws`                | EKS 向け Helm overlay (`values-aws.yaml`)                                           | external PostgreSQL / Redis / S3-compatible storage   |
@@ -27,29 +31,29 @@ target ごとの readiness status は
 
 ## Parity / Gate マトリクス
 
-| surface                  | parity の主張                                                       | proof / gate                                   |
-| ------------------------ | ------------------------------------------------------------------- | ---------------------------------------------- |
-| デプロイマニフェスト     | 同じスキーマと resolution contract を全 target で共有               | Takosumi docs / manifest contract / リリースゲート |
-| Dispatch target id       | コマンド構築前に canonical id を検証                                | `takos-private` の `distribute:test`           |
-| Cloudflare hosting       | 公開 contract のリファレンス Workers backend                        | opt-in な Cloudflare dry-run / deploy gate     |
-| AWS / GCP hosting        | EKS / GKE 向け Helm パッケージング (ECS / Cloud Run kernel host は対象外) | opt-in な Helm / preflight gate                |
-| Kubernetes / selfhosted  | operator 所有のクラスタ / Docker host 向けパッケージング            | opt-in な Helm / compose preflight gate        |
-| Provider materialization | provider 固有の振る舞い (kernel リリースの default parity ではない) | opt-in な provider-plugin smoke / live proof   |
+| surface                  | parity の主張                                                             | proof / gate                                       |
+| ------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------- |
+| デプロイマニフェスト     | 同じスキーマと resolution contract を全 target で共有                     | Takosumi docs / manifest contract / リリースゲート |
+| Dispatch target id       | コマンド構築前に canonical id を検証                                      | `takos-private` の `distribute:test`               |
+| Cloudflare hosting       | 公開 contract のリファレンス Workers backend                              | opt-in な Cloudflare dry-run / deploy gate         |
+| AWS / GCP hosting        | EKS / GKE 向け Helm パッケージング (ECS / Cloud Run kernel host は対象外) | opt-in な Helm / preflight gate                    |
+| Kubernetes / selfhosted  | operator 所有のクラスタ / Docker host 向けパッケージング                  | opt-in な Helm / compose preflight gate            |
+| Provider materialization | provider 固有の振る舞い (kernel リリースの default parity ではない)       | opt-in な provider binding smoke / live proof      |
 
 provider proof は opt-in です。provider credential / cluster / account / remote
-gateway を必要とする proof は、operator が用意した環境で gate ベースに実行します。
-docs build と kernel リリースゲートは、provider 実環境への到達性や resource
-existence parity を要求しません。
+gateway を必要とする proof は、operator が用意した環境で gate
+ベースに実行します。 docs build と kernel リリースゲートは、provider
+実環境への到達性や resource existence parity を要求しません。
 
 ## ワークロード一覧
 
-| ワークロード                       | Kubernetes / AWS / GCP のサービス名                    |
-| -------------------------------- | ----------------------------------------------- |
-| Takos Web / public API gateway   | `takos-app` ワークロード                          |
-| Takosumi マニフェスト deploy エンジン | `takosumi` ワークロード                           |
-| Takos Git ホスティング              | `takos-git` ワークロード                          |
-| Takos エージェント実行              | `takos-agent` ワークロード                        |
-| Takosumi Accounts / install UI   | `takosumi-cloud` ワークロード (operator plane)    |
+| ワークロード                          | Kubernetes / AWS / GCP のサービス名            |
+| ------------------------------------- | ---------------------------------------------- |
+| Takos Web / public API gateway        | `takos-app` ワークロード                       |
+| Takosumi マニフェスト deploy エンジン | `takosumi` ワークロード                        |
+| Takos Git ホスティング                | `takos-git` ワークロード                       |
+| Takos エージェント実行                | `takos-agent` ワークロード                     |
+| Takosumi Accounts / install UI        | `takosumi-cloud` ワークロード (operator plane) |
 
 ## 本ドキュメントの範囲外
 
@@ -65,6 +69,7 @@ existence parity を要求しません。
 - provider 固有 adapter 名のマニフェスト author 向け public surface としての固定
 
 ECS / Cloud Run は tenant image workload adapter として OCI orchestrator
-経由で使うことはありますが、Takosumi kernel 自体のホスティング対象ではありません。
-provider 固有の adapter や external service は operator が追加構成できますが、
-本ドキュメントでは Helm chart / overlay に存在する設定のみを扱います。
+経由で使うことはありますが、Takosumi kernel
+自体のホスティング対象ではありません。 provider 固有の adapter や external
+service は operator が追加構成できますが、本ドキュメントでは Helm chart /
+overlay に存在する設定のみを扱います。

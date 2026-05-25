@@ -1,24 +1,29 @@
 # ルーティング
 
-> このページでわかること: AppSpec の worker component で公開エンドポイントを
-> 宣言する方法。
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
 
-Takosumi の Wave J Component contract minimization で AppSpec から
-`Component.routes` / `AppSpec.interfaces` / `AppSpec.permissions` の top-level
-field を物理削除しました。 公開エンドポイント (= HTTP route / launcher path /
-MCP endpoint / health check path) は次のいずれかで表現します:
+> このページでわかること: AppSpec で workload を public app endpoint
+> として公開する方法。
 
-- worker component の **`spec.routes`** (= worker materializer の実装慣習。
-  `@takos/takosumi-cloudflare-providers` 等の shape provider が HTTP route
-  pattern を読み取って materialize する)
-- 専用 `custom-domain` component (= portable な独自ドメイン)
-- 別 kind / namespace pub/sub で operator が表現する任意 layer
+公開エンドポイントの外側の入口 (= hostname / TLS / route rule) は、通常の
+component graph として表現します:
 
-フィールドの正式定義は
-[AppSpec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- workload は `http-endpoint` material を `publish` する
+- `gateway` のような ingress component がその publication を `listen` する
+- public hostname / TLS / route rule は ingress component の kind-specific
+  `spec` に書く
+
+`/mcp`、`/files/:id`、OIDC callback、health check などの runtime path は
+workload 実装と Takos app metadata / registry が扱います。AppSpec は public
+endpoint の material と ingress intent をつなぎます。
+
+runtime request は provider-native ingress から workload に直接届きます。
+Takosumi kernel が request ごとの HTTP proxy になることは要求されません。
+
+フィールドの正式定義は [AppSpec](https://takosumi.com/docs/reference/app-spec)
 を参照してください。
 
-## Worker Routes
+## Public app endpoint
 
 ```yaml
 apiVersion: v1
@@ -28,14 +33,36 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/worker.mjs
     spec:
+      entrypoint: src/worker.ts
+    publish:
+      http:
+        as: http-endpoint
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+          host: docs.example.com
+          tls: auto
       routes:
-        - docs.example.com/*
-        - docs.example.com/api/*
+        - listener: public
+          path: /
+          to: upstream
 ```
+
+`web.http` は upstream material です。それだけでは public ingress
+ではありません。 `public` component が host / TLS / gateway descriptor intent
+を持ち、operator の domain policy と activation を通った後に public endpoint
+になります。`/api` などの runtime path は worker/web-service 側が処理します。
 
 ## Custom Domain
 
@@ -47,25 +74,41 @@ metadata:
 components:
   api:
     kind: worker
-    build:
-      command: npm ci && npm run build
-      output: dist/api.mjs
     spec:
+      entrypoint: src/api.ts
+    publish:
+      http:
+        as: http-endpoint
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: api.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        api:
+          protocol: https
+          host: api.example.com
+          tls: auto
       routes:
-        - /
-  publicDomain:
-    kind: custom-domain
-    name: api.example.com
-    target: api
+        - listener: api
+          path: /
+          to: upstream
 ```
 
 ## バリデーション
 
-- route-bearing worker component は `spec.routes` に非空の文字列配列を持つ
-- `custom-domain.name` は operator が許可した hostname でなければならない
-- `custom-domain.target` は同じ AppSpec 内の component を指す
+- `listen.<binding>.from` は同じ AppSpec 内の `component.publication` か
+  external publication path に解決できる
+- `host` は operator が許可した hostname でなければならない
+- custom domain は account-plane / provider flow で DNS ownership proof と
+  conflict check を通す
 
 ## 次に読むページ
 
 - [Environment](/deploy/environment)
-- [AppSpec namespace pub/sub](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
+- [AppSpec publish/listen](https://takosumi.com/docs/reference/app-spec)

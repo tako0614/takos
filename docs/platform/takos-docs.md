@@ -1,5 +1,7 @@
 # takos-docs
 
+AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+
 > このページでわかること: バンドルアプリ takos-docs の概要。
 
 rich text document editor with a Streamable HTTP MCP server。
@@ -14,6 +16,11 @@ rich text document editor with a Streamable HTTP MCP server。
 
 ## AppSpec (`.takosumi.yml`)
 
+`spec.entrypoint` points to a runtime file inside the resolved source. Managed
+install uses the prepared source produced by the build service when that file is
+generated; direct Git/local apply is valid only when the file is already present
+in the source snapshot.
+
 ```yaml
 apiVersion: v1
 
@@ -25,47 +32,62 @@ metadata:
 components:
   web:
     kind: worker
-    build:
-      command: deno task build
-      output: dist/worker.mjs
     spec:
-      routes:
-        - /
-        - /api
-        - /api/auth/launch
-        - /mcp
-        - /healthz
-        - /files/:id
+      entrypoint: dist/worker.js
+    publish:
+      http:
+        as: http-endpoint
     listen:
-      jp.takos.docs.documents:
-        as: env
-        prefix: BLOB_
-      operator.identity.oidc:
-        as: env
+      documents:
+        from: documents.bucket
+        as: secret-env
+        prefix: BLOB
+      oidc:
+        from: operator.identity.oidc
+        as: secret-env
+        prefix: OIDC
+        required: true
+
+  public:
+    kind: gateway
+    listen:
+      upstream:
+        from: web.http
+        as: upstream
+    publish:
+      public:
+        as: http-endpoint
+    spec:
+      listeners:
+        public:
+          protocol: https
+      routes:
+        - listener: public
+          path: /
+          to: upstream
 
   documents:
     kind: object-store
+    spec:
+      name: takos-docs-documents
     publish:
-      - jp.takos.docs.documents
+      bucket:
+        as: object-store
 ```
 
-> Wave J で AppSpec から top-level `interfaces:` / `permissions:` / `routes:`
-> field は物理削除済。 launcher (`/api/auth/launch`) / MCP (`/mcp`) / health
-> (`/healthz`) endpoint は worker materializer convention (= `spec.routes`
-> の HTTP path) と Takos product 内部 app launcher / MCP registry metadata
-> (= AppSpec contract とは別 layer) で表現します。 capability request
-> (= かつての `permissions.requested[]`) は Takos product 内部 metadata layer
-> で表現します。
+gateway は public endpoint を作り、worker が app runtime path
+を処理します。Takos product metadata は launcher / MCP registry / capability
+request を登録します。
 
 ## OIDC consumer
 
-`listen: { operator.identity.oidc: { as: env } }` を宣言すると、 takosumi-cloud
-(operator account plane) が provider として per-Installation OIDC client を発行し、
-`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URIS`
-を worker に env で inject します。 OIDC kind 自体は AppSpec に書きません。
-詳細は [OIDC Consumer](/apps/oidc-consumer)。
+`listen.oidc.from: operator.identity.oidc` を宣言すると、 takosumi-cloud
+(operator account plane) が per-Installation OIDC client を発行し、
+`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
+`OIDC_REDIRECT_URI` を secretRef-mediated runtime env で inject します。詳細は
+[OIDC Consumer](/apps/oidc-consumer)。
 
 ## 関連ページ
 
-- [AppSpec spec](https://github.com/tako0614/takosumi/blob/master/docs/reference/app-spec.md)
-- [Component Kind Catalog](https://github.com/tako0614/takosumi/blob/master/docs/reference/component-kind-catalog.md)
+- [AppSpec spec](https://takosumi.com/docs/reference/app-spec)
+- [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)

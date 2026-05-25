@@ -3,11 +3,11 @@
 > このページでわかること: Takos の脆弱性報告受付、responsible disclosure
 > window、safe harbor、PGP key publication の運用境界。
 
-| Field         | Value                                                                                                  |
-| ------------- | ------------------------------------------------------------------------------------------------------ |
-| Last reviewed | 2026-05-07                                                                                             |
-| Owner         | Security owner / Takos app (`takos/app`)                                                               |
-| Status        | Published policy; mailbox and encrypted-exchange evidence is operator-private                          |
+| Field         | Value                                                                         |
+| ------------- | ----------------------------------------------------------------------------- |
+| Last reviewed | 2026-05-07                                                                    |
+| Owner         | Security owner / Takos app (`takos/app`)                                      |
+| Status        | Published policy; mailbox and encrypted-exchange evidence is operator-private |
 
 ## Scope
 
@@ -26,8 +26,8 @@ In scope:
 - Takos agent service (`takos/agent`)
 - Takosumi Accounts (`operator.identity.oidc` / `operator.billing.default`) —
   identity / billing / Installation owner; OIDC issuer, opaque launch token
-  redeem, permission grant revocation, and pairwise OIDC subject derivation are in scope
-  when Takos managed service is impacted
+  redeem, account-plane capability record revocation, and pairwise OIDC subject
+  derivation are in scope when Takos managed service is impacted
 - managed Takos deployment artifacts under `takos/deploy/`
 - Takos docs and public service configuration
 - Takos bundled apps when deployed as part of Takos managed service

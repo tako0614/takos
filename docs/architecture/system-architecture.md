@@ -2,23 +2,23 @@
 
 > このページでわかること: Takos を構成するサービスとその役割分担。
 
-Takos は Takosumi PaaS の上で動作するセルフホスト型プロダクトです。
-AI エージェントと会話してソフトウェアを作る「ソフトウェアの民主化」を目指しています。
+Takos は Takosumi PaaS の上で動作するセルフホスト型プロダクトです。 AI
+エージェントと会話してソフトウェアを作る「ソフトウェアの民主化」を目指しています。
 
 ## プロダクトサービスと substrate
 
-Takos product のサービスは `takos-app` / `takos-git` / `takos-agent` の 3 つです。
-表の Takosumi 系は Takos が動く substrate / account plane / installer であり、
-Takos の product service ではありません。
+Takos product のサービスは `takos-app` / `takos-git` / `takos-agent` の 3
+つです。表の Takosumi 系は Takos が動く substrate / account plane / installer
+であり、 Takos の product service ではありません。
 
-| service           | owner path        | role                                                          |
-| ----------------- | ----------------- | ------------------------------------------------------------- |
-| `takos-app`       | `takos/app/`      | Web UI、public API gateway、OIDC consumer、app-local profile  |
-| `takos-git`       | `takos/git/`      | Git Smart HTTP、repositories、refs、object storage            |
-| `takos-agent`     | `takos/agent/`    | agent execution service                                       |
-| `takosumi`        | `takosumi/`       | AppSpec install / Deployment apply engine                     |
-| Takosumi Accounts | `takosumi-cloud/` | operator account plane reference implementation               |
-| Takosumi installer | `takosumi/`      | Git URL install、AppSpec parse、artifact resolve、Deployment append |
+| service            | owner path        | role                                                                             |
+| ------------------ | ----------------- | -------------------------------------------------------------------------------- |
+| `takos-app`        | `takos/app/`      | Web UI、public API gateway、OIDC consumer、app-local profile                     |
+| `takos-git`        | `takos/git/`      | Git Smart HTTP、repositories、refs、object storage                               |
+| `takos-agent`      | `takos/agent/`    | agent execution service                                                          |
+| `takosumi`         | `takosumi/`       | AppSpec install / Deployment apply engine                                        |
+| Takosumi Accounts  | `takosumi-cloud/` | operator account plane reference implementation                                  |
+| Takosumi installer | `takosumi/`       | source fetch/verify、AppSpec parse、publish/listen resolution、Deployment append |
 
 `takos-agent-engine` は service ではなく library です。
 
@@ -27,8 +27,8 @@ Takos の product service ではありません。
 - ID / OIDC issuer / 課金 / Installation のオーナーシップは operator account
   plane が持ちます (リファレンス実装: Takosumi Accounts)
 - デプロイと runtime lifecycle は Takosumi kernel が持ちます
-- Git URL からのインストール、`.takosumi.yml` AppSpec、workflow は
-  takosumi が持ちます
+- Git URL からのインストール、`.takosumi.yml` AppSpec、workflow は takosumi
+  が持ちます
 - Takos product は UI / public API / AI agent / バンドルアプリ体験を持ちます
 - バンドルアプリは各 product root で独立管理されます
 
@@ -39,11 +39,15 @@ Store / install UI
   -> Takosumi installer POST /v1/installations/dry-run
   -> user approval
   -> Takosumi installer POST /v1/installations
-  -> takosumi fetch / build / compile
+  -> takosumi fetch / verify source / resolve AppSpec
   -> Deployment record
 ```
 
-## Runtime flow
+Build service / CI は Installer API の前に source を prepare します。kernel が
+build command を実行したり、AppSpec を generated manifest に rewrite したりは
+しません。
+
+## Agent / Control-Plane Flow
 
 ```text
 Takos UI / API
@@ -51,6 +55,18 @@ Takos UI / API
   -> takosumi internal control RPC
   -> provider / runtime-agent
   -> workload resources
+```
+
+This is an agent/control-plane operation path. It is not the installed app public
+HTTP request path.
+
+```text
+installed app HTTP request:
+  client
+    -> provider-native ingress
+    -> installed workload
+    -> provider-native ingress
+    -> client
 ```
 
 ## ドキュメントの配置
