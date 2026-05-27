@@ -17,12 +17,26 @@ yurucommu はセルフホスト型の ActivityPub /
 - PostgreSQL / object-store component を AppSpec で宣言し、OIDC は
   `identity.primary.oidc` を listen する
 
+## Install / launch
+
+Browser users install yurucommu through the Takosumi Cloud install wizard:
+
+```text
+https://cloud.takosumi.com/apps/install?git=https://github.com/tako0614/yurucommu.git&ref=main&mode=shared-cell&autodryrun=1
+```
+
+The local substrate mirror rewrites that host to `cloud.takosumi.test`. The wizard performs the account-plane dry-run,
+then apply, and records the Installation in the Cloud ledger before exposing the launch action.
+
+yurucommu launch opens the activated public HTTP endpoint, for example `https://yurucommu.test` in local substrate.
+Sign-in is handled by yurucommu as a Takosumi Accounts OIDC consumer. Takos' `/_takosumi/launch` token bootstrap is a
+Takos product launch path and is not required for yurucommu.
+
 ## AppSpec (`.takosumi.yml`)
 
-`spec.entrypoint` points to a runtime file inside the resolved source. Managed
-install uses the prepared source produced by the build service when that file is
-generated; direct Git/local apply is valid only when the file is already present
-in the source snapshot.
+`spec.entrypoint` points to a runtime file inside the resolved source. Managed install uses a prepared source snapshot
+where `dist/worker.js` has already been generated from `.takosumi.build.yml`; direct local apply is valid only after the
+same file exists in the checkout.
 
 ```yaml
 apiVersion: v1
@@ -49,7 +63,6 @@ components:
     listen:
       oidc:
         path: identity.primary.oidc
-        kind: identity.oidc@v1
         inject: secret-env
         prefix: OIDC
         required: true
@@ -72,6 +85,7 @@ components:
   db:
     kind: postgres
     spec:
+      version: "16"
       size: small
 
   media:
