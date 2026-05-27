@@ -19,9 +19,10 @@ my-app/
 ```
 
 `.takosumi.yml` は Takosumi の AppSpec です。アプリの display metadata、runtime
-component、kind-specific `spec`、component 間の `publish` / `listen` dependency
-を同じファイルで宣言します。build command は build service / CI の convention
-に置きます。
+component、kind-specific `spec`、same-AppSpec `connect`、manifest 外の platform
+service を受け取る `listen` を同じファイルで宣言します。Installation output として
+記録する publication が必要な場合だけ root `publish` を追加します。build command
+は build service / CI の convention に置きます。
 
 ## `.takosumi.yml`
 
@@ -108,7 +109,8 @@ service / CI を使う場合は prepared source archive を Installer API に渡
 - `.takosumi.yml` は source root に置く
 - `apiVersion: v1` は必須 (= AppSpec root の discriminator)
 - workflow / CI DSL は AppSpec に入れない
-- component 間の依存は AppSpec `publish` / `listen` で宣言する
+- component 間の依存は AppSpec `connect` で宣言し、manifest 外の platform service
+  は `listen.path` または `listen.kind` で受け取る
 - retained implementation/operator evidence や provider resource ID
   はユーザーが手書きしない
 
