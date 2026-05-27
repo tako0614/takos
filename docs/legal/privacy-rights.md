@@ -13,7 +13,7 @@
 
 Takos の app-local profile (chat / memory / preferences) は `takos/app` が
 所有します。一方で **Takosumi Account の identity-level privacy (OIDC subject /
-authentication / billing identity) は operator account plane が所有**します。
+authentication / billing identity) は operator account plane (リファレンス実装: Takosumi Accounts) が所有**します。
 Takosumi kernel は generic PaaS の AppSpec / Deployment / resource graph /
 operator execution surface、takosumi は installer / Deployment lifecycle
 であり、Takos の個人データ access / export / deletion handler は Takos Web / API
@@ -48,7 +48,7 @@ profile が定める primary region 内でのみ data を回収します。cross
 replication は profile の例外 ([data-residency](/legal/data-residency) 参照)
 として記録され、export bundle は Installation の primary region
 で生成されます。 Takosumi Account level の identity export は
-`operator.identity.oidc` external publication で resolve される Takosumi Accounts
+`identity.primary.oidc` platform service で resolve される Takosumi Accounts
 側の別 SAR endpoint で処理されます。
 
 ## Export Redaction Rules

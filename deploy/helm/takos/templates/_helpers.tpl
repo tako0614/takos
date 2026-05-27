@@ -70,13 +70,17 @@ Create the name of the service account to use.
 {{/*
 Render an image reference from per-service image values. global.imageRegistry
 overrides image.registry when set by an operator overlay.
+Fails at template render time if tag is empty — CI must set a concrete image tag.
 */}}
 {{- define "takos.image" -}}
 {{- $root := .root -}}
 {{- $image := .image -}}
 {{- $registry := default $image.registry $root.Values.global.imageRegistry -}}
 {{- $repository := required "image.repository is required" $image.repository -}}
-{{- $tag := required "image.tag is required" $image.tag -}}
+{{- if not $image.tag -}}
+{{- fail (printf "image.tag must not be empty for repository %s — CI release pipeline must set a concrete tag" $repository) -}}
+{{- end -}}
+{{- $tag := $image.tag -}}
 {{- if $registry -}}
 {{- printf "%s/%s:%s" ($registry | trimSuffix "/") ($repository | trimPrefix "/") $tag -}}
 {{- else -}}

@@ -17,6 +17,6 @@
 | 確認したいこと                  | 参照先                                                                                                                  |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `.takosumi.yml` AppSpec         | [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest)                         |
-| binding material / binding kind | [Takosumi AppSpec publish/listen bindings](https://takosumi.com/docs/reference/manifest) |
+| binding material / binding kind | [Takosumi AppSpec connect/listen bindings](https://takosumi.com/docs/reference/manifest) |
 | Accounts lifecycle API          | [Takosumi Accounts lifecycle API](https://github.com/tako0614/takosumi-cloud/blob/main/docs/accounts-service.md)      |
 | 共有用語                        | [ecosystem glossary](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/glossary.md)                |

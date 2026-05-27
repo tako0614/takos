@@ -113,8 +113,8 @@ const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
   },
   {
     name: 'takos-agent',
-    context: 'agent',
-    dockerfile: 'agent/Dockerfile',
+    context: '..',
+    dockerfile: 'takos/agent/Dockerfile',
   },
 ];
 

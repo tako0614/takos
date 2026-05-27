@@ -5,11 +5,11 @@
 ## Current Boundary
 
 Takos は Takosumi Accounts の OIDC issuer を consumer として使い、app install / uninstall / update の lifecycle は
-operator account plane の Accounts lifecycle API が所有します。Takos product gateway は chat / agent / memory / space
+operator account plane (リファレンス実装: Takosumi Accounts) の Accounts lifecycle API が所有します。Takos product gateway は chat / agent / memory / space
 操作、repository-backed deployment request、installed app launch、product-owned resource / session control、Takos Git
 への public route を扱います。
 
-Takosumi の canonical install / deploy entry point は Takosumi installer API の 5 endpoint
+Takosumi の canonical install / deploy entry point は Takosumi Installation API (= Takosumi installer API) の 5 endpoint
 (`POST /v1/installations/dry-run`、`POST /v1/installations`、 `POST /v1/installations/{id}/deployments/dry-run`、
 `POST /v1/installations/{id}/deployments`、`POST /v1/installations/{id}/rollback`) です。Takos の
 `/api/public/v1/deployments` は repository-backed deployment request を account-plane workflow に渡す product gateway

@@ -56,25 +56,20 @@ components:
     kind: worker
     spec:
       entrypoint: dist/sandbox-host.js
-    publish:
-      http:
-        as: http-endpoint
     listen:
       oidc:
-        from: operator.identity.oidc
-        as: secret-env
+        path: identity.primary.oidc
+        kind: identity.oidc@v1
+        inject: secret-env
         prefix: OIDC
         required: true
 
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -95,7 +90,7 @@ request を登録します。
 published MCP endpoint の認証には `PUBLISHED_MCP_AUTH_TOKEN` を使います。これは
 agent (= MCP client) が `/mcp` を呼ぶときの machine-to-machine bearer token で、
 **エンドユーザー認証とは別の layer** です。エンドユーザーの sign-in は AppSpec
-の `listen.oidc.from: operator.identity.oidc` 経由で takosumi-cloud が発行する
+の `listen.oidc.path: identity.primary.oidc` 経由で takosumi-cloud が発行する
 OIDC consumer flow で処理します。
 
 managed Takos installation では `PUBLISHED_MCP_AUTH_TOKEN`
@@ -118,5 +113,5 @@ worker bundle は `npm run build` 等で生成されます。 Cloudflare Workers
 ## 関連ページ
 
 - [AppSpec spec](https://takosumi.com/docs/reference/manifest)
-- [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
+- [takosumi.com Official Catalog](https://takosumi.com/docs/reference/catalog)
 - [OIDC Consumer](/apps/oidc-consumer)

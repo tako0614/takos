@@ -6,14 +6,15 @@
 Examples use short kind names such as `worker`, `postgres`, and `gateway` as
 operator-profile aliases. URI kind values are also valid. The route list in
 gateway `spec` belongs to the adopted gateway descriptor's open `spec`; AppSpec
-core fields are `kind`, `spec`, `publish`, and `listen`.
+core fields are `kind`, `spec`, `connect`, and `listen`; root `publish` is only
+for Installation output publications.
 
 ## List
 
 ### [Simple Worker](/examples/simple-worker)
 
 - `worker` component with `spec.entrypoint`
-- `web.publish.http` as upstream material
+- `web.http` component output connected to a gateway upstream
 - `gateway` component with listener / gateway descriptor intent
 
 public app endpoint は adopted gateway/ingress component の gateway descriptor intent、launcher / MCP /
@@ -23,8 +24,7 @@ app launcher / MCP registry, AppSpec contract とは別) で表現します。
 ### [Worker + DB](/examples/worker-with-db)
 
 - worker component plus postgres / object-store components
-- runtime env is materialized from `publish.<name>.as` / `listen.<binding>.from`
-  declarations
+- runtime env is materialized from `connect.<binding>.output` declarations
 
 ### [Worker + Container](/examples/worker-with-container)
 
@@ -39,8 +39,7 @@ app launcher / MCP registry, AppSpec contract とは別) で表現します。
 ### [Multi-service](/examples/multi-service)
 
 - multiple AppSpec components
-- explicit AppSpec publish/listen wiring between components (`publish` /
-  `listen`)
+- explicit AppSpec component wiring with `connect`
 
 ## Default Group 構成
 

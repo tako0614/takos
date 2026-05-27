@@ -207,30 +207,21 @@ components:
     kind: worker
     spec:
       entrypoint: src/api.ts
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   db:
     kind: postgres
-    publish:
-      connection:
-        as: service-binding
     spec:
       class: standard
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: api.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: api.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -247,7 +238,7 @@ installer は AppSpec を Deployment operation に展開し、provider selection
 profile のポリシーゲートが決定します。
 
 ::: tip provider-agnostic の原則 AppSpec は **形 (component graph)**
-を固定します。 operator profile は、kind URI、material contract、`spec`
+を固定します。 operator profile は、kind URI、material kind、`spec`
 constraints、credential、 operator evidence が揃う範囲で Cloudflare Workers +
 Hyperdrive Postgres や AWS Lambda + RDS Postgres のような implementation に map
 できます。 :::

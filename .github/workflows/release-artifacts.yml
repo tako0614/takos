@@ -79,8 +79,8 @@ jobs:
             context: git
             dockerfile: git/Dockerfile
           - image: takos-agent
-            context: agent
-            dockerfile: agent/Dockerfile
+            context: ..
+            dockerfile: takos/agent/Dockerfile
     steps:
       - uses: actions/checkout@v6
         with:

@@ -22,8 +22,8 @@ store.
 > **Internal processor boundary note.** Within the Takosumi / Takos ecosystem
 > itself, **Takosumi kernel** is treated as the AppSpec / Deployment / resource
 > graph / operator execution processor and never holds identity, billing,
-> or customer account state. **Takosumi Accounts** (`operator.identity.oidc` /
-> `operator.billing.default`) is the separate identity / billing processor that
+> or customer account state. **Takosumi Accounts** (`identity.primary.oidc` /
+> `billing.primary.default`) is the separate identity / billing processor that
 > owns OIDC issuance, Installation ownership, and operator BillingPort billing.
 > External sub-processors below are referenced by both planes only when the
 > relevant feature is enabled.

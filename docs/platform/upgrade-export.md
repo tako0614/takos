@@ -11,6 +11,10 @@ Deployment を作ります。`Deployment.status: "succeeded"` になったあと
 は `currentDeploymentId`、source identity、digest、event metadata を ledger に
 projection します。
 
+Current revision boundary: Deployment update / rollback の authority は kernel
+Deployment です。Accounts は request / projection history を保持します。provider
+data restore や cross-provider data migration は current guarantee としては扱わない。
+
 ### 1.1 CLI
 
 ```bash
@@ -113,6 +117,11 @@ current rollback は ledger source pointer の revision として扱う。large 
 data dump retention や database restore marker の世代保持は operator policy /
 provider evidence の領域であり、このページでは current guarantee
 としては扱わない。
+
+Current revision boundary: rollback は Accounts 台帳操作として current
+Deployment pointer を過去の succeeded Deployment に戻す ledger revision primitive
+です。runtime data の復元、database restore、provider data namespace の移行は別の
+operator / provider evidence で扱います。
 
 ### 2.3 制限事項
 
@@ -223,7 +232,7 @@ review と手動復旧用の public projection。
 templates** が入る (secret material は **含まない**; self-host 側の Takosumi
 Accounts が再 materialize する)。 launch-token context template は audience /
 consume path / canonical origin intent などの non-secret redeem context
-だけを持ちます。launch token は catalog material contract ではなく Cloud-owned
+だけを持ちます。launch token は catalog material kind ではなく Cloud-owned
 account-plane bootstrap flow であり、target Accounts instance が token と consume
 ledger を再生成します。
 
@@ -255,7 +264,7 @@ takosumi-cloud accounts installations import ./takos-export.tar.zst \
 ```
 
 `--to` は **self-host 側の Takosumi Accounts (= account plane)** の base URL。
-OIDC issuer は import 先の Takosumi Accounts が `operator.identity.oidc` として
+OIDC issuer は import 先の Takosumi Accounts が `identity.primary.oidc` として
 発行する。Keycloak / Authentik / Auth0 などはその Accounts instance の upstream
 IdP として接続し、Installation の issuer を直接外部 IdP に差し替えない。 import
 planner は bundle 内の source issuer を target issuer に置換し、revoked grant を
@@ -291,14 +300,14 @@ takosumi install https://github.com/example/my-app --ref v1.2.3 \
 ### 4.2 OIDC issuer の再解決
 
 self-host 側では、Installation の `identity.oidc@v1` binding は
-`operator.identity.oidc` を self-host Takosumi Accounts に resolve して
+`identity.primary.oidc` を self-host Takosumi Accounts に resolve して
 `issuerUrl` を得ます。既存 IdP は Takosumi Accounts の upstream として接続し、
 Takos runtime が Installation ledger を迂回して直接外部 issuer を consume
 する形にはしません。
 
 | issuer の例                                       | 用途                                         |
 | ------------------------------------------------- | -------------------------------------------- |
-| `operator.identity.oidc` から resolve した issuer | managed / self-host Takosumi Accounts        |
+| `identity.primary.oidc` から resolve した issuer | managed / self-host Takosumi Accounts        |
 | Keycloak / Authentik / Auth0 / Clerk              | Takosumi Accounts の upstream IdP として接続 |
 
 issuer 切替時の制約:
@@ -360,6 +369,6 @@ install ──► ready ──┬─► upgrading ──► ready (new ref)
   — `materialize` で遷移する shared-cell / dedicated / self-hosted の比較
 - [Installation 台帳](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/app-installation.md)
   —過去世代を保存する record と event ledger
-- [AppSpec publish/listen bindings](https://takosumi.com/docs/reference/manifest)
+- [AppSpec connect/listen bindings](https://takosumi.com/docs/reference/manifest)
   —各 binding の export 時の扱い (template / secret 除外)
 - [Install paths](/apps/install-paths) — 3 path のうち self-host への遷移

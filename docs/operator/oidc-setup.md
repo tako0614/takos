@@ -2,9 +2,9 @@
 
 > このページでわかること: Takos の認証 (OIDC) をオペレーターとして設定する方法。
 
-Takos は自前の認証サーバーを持たず、operator account plane が発行する OIDC
+Takos は自前の認証サーバーを持たず、operator account plane (リファレンス実装: Takosumi Accounts) が発行する OIDC
 クライアントを使います。reference takosumi-cloud operator は
-`operator.identity.oidc` を materialize します。compatible operator は同等の
+`identity.primary.oidc` を materialize します。compatible operator は同等の
 binding material を提供でき、self-host operator は同じ env を手動 provision
 できます。
 
@@ -21,16 +21,16 @@ binding material を提供でき、self-host operator は同じ env を手動 pr
 ## Required Values
 
 Takos の Web/auth route が参照する env の一覧です。 `provisioned by` 列は
-「オペレーターが手で設定するもの」か「`listen.oidc.from: operator.identity.oidc`
+「オペレーターが手で設定するもの」か「`listen.oidc.path: identity.primary.oidc`
 経由で自動注入されるもの」かを示します。
 
 | key                  | secret  | scope                 | provisioned by                                                                                                                                           | 用途                                                 |
 | -------------------- | ------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | `ADMIN_DOMAIN`       | no      | Takos runtime         | operator (DNS / domain 設計)                                                                                                                             | Takos admin Web の host。例: `admin.example.com`     |
 | `TENANT_BASE_DOMAIN` | no      | Takos runtime         | operator (DNS / domain 設計)                                                                                                                             | tenant app の base domain。例: `app.example.com`     |
-| `OIDC_ISSUER_URL`    | no      | OIDC consumer         | operator-selected issuer from the `operator.identity.oidc` external publication                                                                           | Takos が OIDC consumer として参照する issuer         |
-| `OIDC_CLIENT_ID`     | no      | OIDC consumer         | reference takosumi-cloud は `operator.identity.oidc` から AppSpec `listen` へ materialize。compatible/self-host operator は同等 material を provision | Installation 用 OIDC client id                       |
-| `OIDC_CLIENT_SECRET` | yes     | OIDC consumer         | reference takosumi-cloud は `operator.identity.oidc` から AppSpec `listen` へ materialize。compatible/self-host operator は同等 material を provision | confidential client secret                           |
+| `OIDC_ISSUER_URL`    | no      | OIDC consumer         | operator-selected issuer from the `identity.primary.oidc` platform service                                                                           | Takos が OIDC consumer として参照する issuer         |
+| `OIDC_CLIENT_ID`     | no      | OIDC consumer         | reference takosumi-cloud は `identity.primary.oidc` から AppSpec `listen` へ materialize。compatible/self-host operator は同等 material を provision | Installation 用 OIDC client id                       |
+| `OIDC_CLIENT_SECRET` | yes     | OIDC consumer         | reference takosumi-cloud は `identity.primary.oidc` から AppSpec `listen` へ materialize。compatible/self-host operator は同等 material を provision | confidential client secret                           |
 | `OIDC_REDIRECT_URI`  | no      | OIDC consumer         | Installation の domain 確定後、operator account plane が binding material として渡す (self-host: operator が手で固定)                                   | `<base>/auth/oidc/callback` の絶対 URL               |
 | `SESSION_DO`         | binding | Takos runtime         | platform binding (Cloudflare Worker / Helm)                                                                                                              | browser session store                                |
 | `DB`                 | binding | app-local persistence | platform binding (Cloudflare Worker / Helm)                                                                                                              | app-local profile / session / OIDC state persistence |
@@ -81,7 +81,7 @@ Takosumi Accounts が Installation ごとに発行するので、オペレータ
 Accounts に新規 client を登録する必要はありません。
 
 オペレーターがやることは、 AppSpec の
-`listen.oidc.from: operator.identity.oidc` 経由で runtime に降ってくる
+`listen.oidc.path: identity.primary.oidc` 経由で runtime に降ってくる
 env を `takos-private/` で取り込み、 Takos runtime に配信することです。
 
 Takos runtime が consumer として参照する OIDC env:
@@ -96,7 +96,7 @@ OIDC_REDIRECT_URI=https://<TENANT_HOST>/auth/oidc/callback
 > **Note**: `takos_inst_<installation>` は example であり、契約上は
 > `clientId: string` (具体形式は実装依存) です。実際の client_id 形式は
 > Takosumi Accounts 側の OIDC client registration 仕様が定めます。 AppSpec の
-> `listen.oidc.from: operator.identity.oidc` から runtime env に
+> `listen.oidc.path: identity.primary.oidc` から runtime env に
 > materialize されるため、 operator は具体形式を hard-code しないでください。
 
 - `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` は Installation ごとに Takosumi
@@ -117,7 +117,7 @@ client はセルフホスト Accounts 側で発行します。Takos 側は manag
 reference takosumi-cloud operator が per-Installation OIDC client を発行します。
 compatible operator は同等の binding material を提供でき、self-host operator は
 手動 provision できます (詳細は
-[AppSpec publish/listen](https://takosumi.com/docs/reference/manifest))。
+[AppSpec connect/listen](https://takosumi.com/docs/reference/manifest))。
 
 ## Smoke Checks
 

@@ -13,7 +13,7 @@
 ## Component Diagram
 
 Public model は AppSpec → Installation → Deployment で止まります。`takos-app` は Takos product API を所有し、install /
-update workflow は operator account plane を経由して Takosumi Installer API に接続します。
+update workflow は operator account plane (リファレンス実装: Takosumi Accounts) を経由して Takosumi Installer API に接続します。
 
 ```mermaid
 graph TB

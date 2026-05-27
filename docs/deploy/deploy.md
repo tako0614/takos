@@ -13,7 +13,7 @@ manifest を案内しません。
 
 | 目的                                       | 入口                                                  | 所有者                                      |
 | ------------------------------------------ | ----------------------------------------------------- | ------------------------------------------- |
-| bundled / third-party app を install する  | `POST /v1/installations` または install UI            | Takosumi installer + operator account plane |
+| bundled / third-party app を install する  | `POST /v1/installations` または install UI            | Takosumi installer + operator account plane (リファレンス実装: Takosumi Accounts) |
 | Git URL から AppSpec を install する       | `takosumi install --source git:<url>#<ref>`           | Takosumi CLI                                |
 | 既存 Installation に upgrade を apply する | `takosumi deploy <installation-id>`                   | Takosumi CLI                                |
 | 過去 Deployment へ rollback する           | `takosumi rollback <installation-id> <deployment-id>` | Takosumi CLI                                |

@@ -231,8 +231,8 @@ Takosumi install pipeline と Takos product registry を通じて、以下が関
 れます:
 
 - app identity / service / route / hostname
-- resource binding / OIDC client (= AppSpec publish/listen、詳細は
-  [AppSpec](https://takosumi.com/docs/reference/manifest) の `publish` /
+- resource binding / OIDC client (= AppSpec connect/listen、詳細は
+  [AppSpec](https://takosumi.com/docs/reference/manifest) の `connect` /
   `listen` 章)
 - Takos app metadata registration (launcher, MCP server, file handler, etc.)
 
@@ -255,18 +255,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -300,18 +294,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:

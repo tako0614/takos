@@ -9,7 +9,7 @@ source root に置く `.takosumi.yml` (= AppSpec) が唯一のマニフェスト
 
 このページは Takos product docs の短い実例です。field / schema の正本は
 [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest)、
-[takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)、
+[takosumi.com Official Catalog](https://takosumi.com/docs/reference/catalog)、
 [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)
 を参照してください。
 
@@ -20,10 +20,10 @@ source root に置く `.takosumi.yml` (= AppSpec) が唯一のマニフェスト
   operator の alias map または URI で解決する
 - workflow / CI / cron / build command は AppSpec に内包しない。build service /
   CI は prepared source archive を Installer API に渡す
-- component 間の依存は AppSpec `publish.<name>.as` / `listen.<binding>.from`
-  で構造的に宣言する (= 文字列 placeholder / `use:` edge は廃止)
-- public app endpoint は workload が `http-endpoint` を publish し、`gateway`
-  のような ingress component が listen して listener / gateway descriptor intent を持つ
+- component 間の依存は AppSpec `connect.<binding>.output` で構造的に宣言する
+  (= 文字列 placeholder / `use:` edge は廃止)
+- public app endpoint は workload の `http` output を `gateway` のような
+  ingress component が `connect` して listener / gateway descriptor intent を持つ
 - The route list in gateway `spec` は adopted gateway descriptor の open `spec`
   であり、 AppSpec core field ではない
 - `spec.entrypoint` は resolved source / prepared archive 内に既に存在する
@@ -52,18 +52,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -88,30 +82,21 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   db:
     kind: postgres
-    publish:
-      connection:
-        as: service-binding
     spec:
       class: standard
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: api.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: api.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -136,24 +121,19 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
     listen:
       oidc:
-        from: operator.identity.oidc
-        as: secret-env
+        path: identity.primary.oidc
+        kind: identity.oidc@v1
+        inject: secret-env
         prefix: OIDC
         required: true
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -166,12 +146,12 @@ components:
           to: upstream
 ```
 
-`listen.oidc.from: operator.identity.oidc` が宣言されると、 Installation
-作成時に takosumi-cloud の operator-owned external publication から
+`listen.oidc.path: identity.primary.oidc` が宣言されると、 Installation
+作成時に takosumi-cloud の operator-owned platform service から
 per-Installation OIDC client が発行されます。 `OIDC_ISSUER_URL` /
 `OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` は non-secret runtime
 config、`OIDC_CLIENT_SECRET` は `secretRef` / `secret-env` 経由の secret
-material です。OIDC は operator account plane の external publication
+material です。OIDC は operator account plane (リファレンス実装: Takosumi Accounts) の platform service
 として受け取ります。
 
 adopted gateway/ingress component は public endpoint を作ります。OIDC login / callback /
@@ -181,6 +161,6 @@ metadata で扱います。
 ## 関連ページ
 
 - [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest)
-- [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
+- [takosumi.com Official Catalog](https://takosumi.com/docs/reference/catalog)
 - [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)
 - [Installer API (5 endpoint)](https://takosumi.com/docs/reference/installer-api)

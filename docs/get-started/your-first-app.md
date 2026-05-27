@@ -46,7 +46,7 @@ export default {
 };
 ```
 
-AppSpec は `operator.identity.oidc` の listen を宣言します。operator account
+AppSpec は `identity.primary.oidc` の listen を宣言します。operator account
 plane が OIDC binding material を払い出し、provider / operator projection が
 `OIDC_*` runtime env として worker に渡します。この tutorial の worker は public
 hello endpoint だけを実装し、OIDC login / callback / launch consume handler は
@@ -66,24 +66,19 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
     listen:
       oidc:
-        from: operator.identity.oidc
-        as: secret-env
+        path: identity.primary.oidc
+        kind: identity.oidc@v1
+        inject: secret-env
         prefix: OIDC
         required: true
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -131,8 +126,8 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
   を app の launch consume handler が Accounts `/consume` で redeem します
 
 OIDC の設定 (clientId, clientSecret 等) は AppSpec で
-`listen.oidc.from: operator.identity.oidc` を宣言するだけで、 takosumi-cloud
-(operator account plane) がインストール時に自動で払い出します。 worker は
+`listen.oidc.path: identity.primary.oidc` を宣言するだけで、 takosumi-cloud
+(operator account plane、リファレンス実装: Takosumi Accounts) がインストール時に自動で払い出します。 worker は
 secretRef-mediated `OIDC_*` env を読みます。
 
 詳しくは [OIDC consumer](/apps/oidc-consumer) を参照。

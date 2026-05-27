@@ -2,7 +2,7 @@
 
 > このページでわかること: Takos product (`app/`, `git/`, `agent/`)
 > の現在の実装状態のスナップショット。 Takosumi platform (`../takosumi/`) や
-> operator account plane (`../takosumi-cloud/`) の状態は対象外で、各 product
+> operator account plane (リファレンス実装: Takosumi Accounts、`../takosumi-cloud/`) の状態は対象外で、各 product
 > repo 側の docs を参照する。
 
 このスナップショットは Takos product shell に含まれる 3 つの nested submodule
@@ -14,7 +14,7 @@ artifacts の状態を要約する。前向きの計画は ecosystem root の
 ::: info Current audit boundary Takos 1.x local / CI-equivalent exit criteria
 は完了扱い。残る release-candidate hygiene は ecosystem root
 `ROADMAP.md §7.2-7.4` (per-product progress view) で追跡する。 public managed
-offering の launch readiness は `ROADMAP.md §3.5` の live operator evidence /
+offering の launch readiness は `ROADMAP.md` の Managed Takos Offering gap audit の live operator evidence /
 staged rehearsal が揃うまで別 gate。 :::
 
 ## Takos product の構成
@@ -218,7 +218,7 @@ hygiene / live operator evidence 側で扱う backlog:
 - **live distribution proof**: Cloudflare / AWS / GCP / K8s 各 distribution
   profile の live deploy evidence (`ROADMAP.md H-19`、 operator-owned)
 - **managed offering evidence**: `takosumi-cloud` 側 operator が live operator
-  evidence / staged rehearsal を揃える (`ROADMAP.md §3.5`)。 Takos product
+  evidence / staged rehearsal を揃える (`ROADMAP.md` Managed Takos Offering gap audit)。 Takos product
   自体は managed-offering-aware だが、 evidence は operator が出す
 - **chain of custody**: deploy intent log で agent が deploy intent を Git
   commit として表現する経路 (Phase 1.7 GitOps deploy binding) は local exit 済、

@@ -43,7 +43,7 @@ const forbiddenSurfacePatterns = [
   },
   {
     name: 'standalone takos-runtime service',
-    pattern: /\btakos-runtime\b/g,
+    pattern: /\btakos-runtime\b(?!-host)/g,
   },
   {
     name: 'retired deploy env',

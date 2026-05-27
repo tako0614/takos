@@ -13,8 +13,7 @@ git source なら commit、prepared source なら prepared archive payload diges
 以前の pinned Deployment を選び、Installation の current pointer をその retained
 Deployment へ戻します。新しい Deployment record は作りません。source の再 fetch
 / rebuild は行わず、retained activation/materialization snapshot を使って
-runtime pointer / routing assignment を target に戻します。provider data copy /
-schema migration の巻き戻しは rollback の current guarantee ではありません。
+runtime pointer / routing assignment を target に戻します。provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません。
 
 ```bash
 takosumi rollback inst_abc dep_previous

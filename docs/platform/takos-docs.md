@@ -34,29 +34,25 @@ components:
     kind: worker
     spec:
       entrypoint: dist/worker.js
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       documents:
-        from: documents.bucket
-        as: secret-env
+        output: documents.bucket
+        inject: secret-env
         prefix: BLOB
+    listen:
       oidc:
-        from: operator.identity.oidc
-        as: secret-env
+        path: identity.primary.oidc
+        kind: identity.oidc@v1
+        inject: secret-env
         prefix: OIDC
         required: true
 
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -70,9 +66,6 @@ components:
     kind: object-store
     spec:
       name: takos-docs-documents
-    publish:
-      bucket:
-        as: object-store
 ```
 
 gateway は public endpoint を作り、worker が app runtime path
@@ -81,8 +74,8 @@ request を登録します。
 
 ## OIDC consumer
 
-`listen.oidc.from: operator.identity.oidc` を宣言すると、 takosumi-cloud
-(operator account plane) が per-Installation OIDC client を発行し、
+`listen.oidc.path: identity.primary.oidc` を宣言すると、 takosumi-cloud
+(operator account plane、リファレンス実装: Takosumi Accounts) が per-Installation OIDC client を発行し、
 `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
 `OIDC_REDIRECT_URI` を secretRef-mediated runtime env で inject します。詳細は
 [OIDC Consumer](/apps/oidc-consumer)。
@@ -90,4 +83,4 @@ request を登録します。
 ## 関連ページ
 
 - [AppSpec spec](https://takosumi.com/docs/reference/manifest)
-- [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
+- [takosumi.com Official Catalog](https://takosumi.com/docs/reference/catalog)

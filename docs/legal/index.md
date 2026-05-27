@@ -6,7 +6,7 @@
 契約・課金・アイデンティティはオペレーターの account plane (Takosumi Accounts)
 が所有します。 Takos 自体はアプリ内プロフィールと OIDC consumer
 機能を提供します。法務上の customer counter-party、billing、Installation ledger
-は operator account plane の責務として定義します。
+は operator account plane (リファレンス実装: Takosumi Accounts) の責務として定義します。
 
 ## Published Artifacts
 

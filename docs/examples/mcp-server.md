@@ -24,18 +24,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: mcp.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: mcp.http
+        inject: upstream
     spec:
       listeners:
         public:

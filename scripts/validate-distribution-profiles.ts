@@ -14,13 +14,20 @@ const expectedTargets = [
   'kubernetes',
   'selfhosted',
 ] as const;
-const expectedServices = [
+const requiredServices = [
   'takos-agent',
   'takos-app',
   'takos-git',
   'takosumi',
   'takosumi-cloud',
 ] as const;
+const optionalServices = [
+  'takos-dispatch',
+  'takos-executor-host',
+  'takos-runtime-host',
+  'takos-worker',
+] as const;
+const expectedServices = [...requiredServices, ...optionalServices] as const;
 const officialProviderBundle = '@takos/takosumi-plugins';
 type ExpectedTargetId = typeof expectedTargets[number];
 type ExpectedServiceId = typeof expectedServices[number];
@@ -30,7 +37,7 @@ type ExpectedServiceSpec = {
   runtime: string;
   artifactField: 'image' | 'artifactRef';
   artifact: string;
-  internalUrl: string;
+  internalUrl?: string;
   publicUrl?: string;
 };
 type ExpectedDefaultAppEntry = {
@@ -123,6 +130,26 @@ const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, E
       artifact: 'ghcr.io/takos/takos-agent:latest',
       internalUrl: 'https://takos-agent.internal.takos.example',
     },
+    'takos-worker': {
+      runtime: 'worker',
+      artifactField: 'artifactRef',
+      artifact: 'worker:takos-worker',
+    },
+    'takos-executor-host': {
+      runtime: 'worker',
+      artifactField: 'artifactRef',
+      artifact: 'worker:takos-executor-host',
+    },
+    'takos-runtime-host': {
+      runtime: 'worker',
+      artifactField: 'artifactRef',
+      artifact: 'worker:takos-runtime-host',
+    },
+    'takos-dispatch': {
+      runtime: 'worker',
+      artifactField: 'artifactRef',
+      artifact: 'worker:takos-dispatch',
+    },
   },
   gcp: kubernetesLikeServiceSpecs('container'),
   kubernetes: kubernetesLikeServiceSpecs('kubernetes-deployment'),
@@ -192,9 +219,9 @@ const expectedDefaultAppPreinstallByEnvironment = {
 const takosDenoConfig = await readJson(join(takosRoot, 'deno.json'));
 const takosumiDenoConfig = await readJson(resolve(takosRoot, '../takosumi/deno.json'));
 const distributionProfileSchema = await readJson(resolve(takosRoot, distributionProfileSchemaPath));
+const errors: string[] = [];
 const manifestFilter = parseManifestFilter(Deno.args);
 const distributionFiles = await distributionManifestFiles(manifestFilter);
-const errors: string[] = [];
 let checkedArtifacts = 0;
 let checkedRequiredBindings = 0;
 let checkedServiceSpecs = 0;
@@ -502,10 +529,17 @@ function validateServices(services: readonly unknown[], label: string, targetId:
   const expectedSpecs = expectedTargetId ? expectedServiceSpecs[expectedTargetId] : null;
   const serviceIds = services.map((service, index) =>
     stringAt(requireRecord(service, `${label}.services[${index}]`), 'serviceId', `${label}.services[${index}]`)
-  ).sort();
-  const expected = [...expectedServices].sort();
-  if (serviceIds.join(',') !== expected.join(',')) {
-    errors.push(`${label}.services must include exactly ${expected.join(', ')}`);
+  );
+  for (const required of requiredServices) {
+    if (!serviceIds.includes(required)) {
+      errors.push(`${label}.services must include required service ${required}`);
+    }
+  }
+  const allAllowed = new Set<string>(expectedServices);
+  for (const id of serviceIds) {
+    if (id && !allAllowed.has(id)) {
+      errors.push(`${label}.services contains unknown service ${id}`);
+    }
   }
 
   services.forEach((service, index) => {
@@ -530,18 +564,25 @@ function validateServices(services: readonly unknown[], label: string, targetId:
       validateServiceSpec(record, `${label}.services[${index}]`, expectedSpecs[expectedServiceId]);
     }
 
-    const smoke = recordAt(record, 'smoke', `${label}.services[${index}]`);
+    const smoke = record.smoke;
+    if (!smoke || typeof smoke !== 'object') {
+      if ((requiredServices as readonly string[]).includes(serviceId ?? '')) {
+        errors.push(`${label}.services[${index}].smoke must be an object`);
+      }
+      return;
+    }
+    const smokeRecord = smoke as JsonRecord;
     const expectedHealthPath = serviceId === 'takosumi-cloud' ? '/healthz' : '/health';
     expectString(
-      stringAt(smoke, 'healthPath', `${label}.services[${index}].smoke`),
+      stringAt(smokeRecord, 'healthPath', `${label}.services[${index}].smoke`),
       expectedHealthPath,
       `${label}.services[${index}].smoke.healthPath`,
     );
-    const status = smoke.expectedStatus;
+    const status = smokeRecord.expectedStatus;
     if (status !== 200) {
       errors.push(`${label}.services[${index}].smoke.expectedStatus must be 200`);
     }
-    const expectedJson = recordAt(smoke, 'expectedJson', `${label}.services[${index}].smoke`);
+    const expectedJson = recordAt(smokeRecord, 'expectedJson', `${label}.services[${index}].smoke`);
     expectString(
       stringAt(expectedJson, 'service', `${label}.services[${index}].smoke.expectedJson`),
       serviceId,
@@ -570,11 +611,13 @@ function validateServiceSpec(
   if (isString(service[forbiddenArtifactField])) {
     errors.push(`${label}.${forbiddenArtifactField} must be absent for ${expected.artifactField}-backed service`);
   }
-  expectString(
-    stringAt(service, 'internalUrl', label),
-    expected.internalUrl,
-    `${label}.internalUrl`,
-  );
+  if (expected.internalUrl) {
+    expectString(
+      stringAt(service, 'internalUrl', label),
+      expected.internalUrl,
+      `${label}.internalUrl`,
+    );
+  }
   if (expected.publicUrl) {
     expectString(
       stringAt(service, 'publicUrl', label),
@@ -934,7 +977,7 @@ async function distributionManifestFiles(filter: string | null): Promise<string[
   if (filter) return [normalize(filter)];
   const files: string[] = [];
   for await (const entry of Deno.readDir(resolve(takosRoot, distributionDir))) {
-    if (entry.isFile && entry.name.endsWith('.json')) {
+    if (entry.isFile && entry.name.endsWith('.json') && entry.name !== 'default-apps.json') {
       files.push(join(distributionDir, entry.name));
     }
   }

@@ -460,7 +460,7 @@ kernel がやること:
 - AWS 固有 adapter 名を AppSpec author 向けの public surface として固定
   する contract
 
-必要なら operator が追加 adapter / external service
+必要なら operator が追加 adapter / provider implementation
 を構成できますが、このページは Takos product/operator distribution の Helm
 overlay と reference provider adapter で実際に表現されている範囲だけを runbook
 として扱います。
