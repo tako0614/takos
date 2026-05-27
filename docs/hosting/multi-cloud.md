@@ -194,8 +194,8 @@ POST /v1/installations/{id}/deployments
 POST /v1/installations/{id}/rollback
 ```
 
-AppSpec は operator-supplied kind alias / URI と AppSpec `publish` / `listen`
-を使って、runtime、resource、ingress の関係を構造的に宣言します。
+AppSpec は operator-supplied kind alias / URI、same-AppSpec `connect`、platform
+service `listen`、root `publish` を使って、runtime、resource、ingress の関係を構造的に宣言します。
 
 ```yaml
 apiVersion: v1

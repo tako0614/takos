@@ -49,7 +49,7 @@ core feature」 (= Takos product shell の内部 service) の layer 区別です
 4. `POST /v1/installations` が source ref または prepared archive payload
    `source.digest` を pin し、dry-run 後の apply は `expected.sourceDigest` /
    `expected.manifestDigest` で source bytes と AppSpec bytes を guard する
-5. `.takosumi.yml` から AppSpec `publish` / `listen` と binding material の
+5. `.takosumi.yml` から AppSpec `connect` / `listen` / root `publish` と binding material の
    dry-run を作る
 6. Takosumi kernel が Deployment record と public non-secret outputs を記録する
 7. retained implementation/operator evidence を参照しながら、account plane が

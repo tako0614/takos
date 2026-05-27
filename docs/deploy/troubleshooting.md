@@ -23,9 +23,9 @@ components:
 ### AppSpec の解決に失敗する
 
 通常の install / deploy は `.takosumi.yml` を Takosumi installer が読み、
-AppSpec `publish` / `listen` と gateway descriptor spec を解決してから apply
-します。build が必要な source は、Installer API の前に build service / CI で
-prepared source archive にします。
+AppSpec `connect`、platform service `listen`、root `publish`、gateway descriptor
+spec を解決してから apply します。build が必要な source は、Installer API の前に
+build service / CI で prepared source archive にします。
 
 Local checkout preflight:
 

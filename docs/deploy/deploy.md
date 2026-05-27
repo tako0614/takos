@@ -24,8 +24,8 @@ prepared source を Installer API に渡す operator/CI 側の前段です。
 
 ## 流れ
 
-1. app author は `.takosumi.yml` に `metadata`、 `components` (各 component の `kind` / `spec` / `publish` / `listen`)
-   を書く
+1. app author は `.takosumi.yml` に `metadata`、`components` (各 component の `kind` / `spec` / `connect` / `listen`)
+   と、必要に応じて root `publish` を書く
 2. install dry-run で source identity、component changes、推定コスト、expected guard を確認する。git source は
    `expected.commit` + `expected.manifestDigest`、prepared source は `expected.sourceDigest` +
    `expected.manifestDigest`、local source は `expected.manifestDigest` を使う
@@ -38,10 +38,10 @@ prepared source を Installer API に渡す operator/CI 側の前段です。
 
 | ファイル        | 読む主体 | 役割                                                                                        |
 | --------------- | -------- | ------------------------------------------------------------------------------------------- |
-| `.takosumi.yml` | Takosumi | AppSpec (`apiVersion: v1`)。 metadata / components (`kind` / `spec` / `publish` / `listen`) |
+| `.takosumi.yml` | Takosumi | AppSpec (`apiVersion: v1`)。 metadata / components (`kind` / `spec` / `connect` / `listen`) / optional root `publish` |
 
-AppSpec は 1 ファイルです。 source root の runtime intent と `publish` / `listen` declarations
-はここに集約します。build command は build service / CI の convention に置きます。
+AppSpec は 1 ファイルです。source root の runtime intent、same-AppSpec `connect`、platform service `listen`、
+Installation output として記録する root `publish` はここに集約します。build command は build service / CI の convention に置きます。
 
 ## 関連ページ
 
