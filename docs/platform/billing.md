@@ -14,7 +14,7 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
 - アプリの利用量は Installation 単位で計上
 
 ::: warning Public paid access このページの Plus / Pay As You Go と Stripe
-Checkout は operator account plane の current contract
+Checkout は operator account plane (リファレンス実装: Takosumi Accounts) の current contract
 を説明するものです。`takosumi-cloud` reference implementation の public paid
 checkout は、managed offering launch-readiness evidence、`acceptedReady: true`
 topology reports、`ready: true` public summary、saved live audit、 canonical

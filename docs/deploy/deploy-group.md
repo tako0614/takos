@@ -29,7 +29,7 @@ digest、public/non-secret outputs、apply status、audit / operation evidence
 - resolved source identity / manifest digest
 - created / updated / deleted component
 - prepared archive payload digest (`source.digest` / `expected.sourceDigest`)
-- resolved publication / external publication snapshot
+- resolved publication / platform service snapshot
 - provider resource ID と output
 - apply status と observation
 - rollback audit / pointer movement の対象になった Deployment ID
@@ -46,37 +46,28 @@ components:
     kind: worker
     spec:
       entrypoint: src/api.ts
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   jobs:
     kind: worker
     spec:
       entrypoint: src/jobs.ts
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   db:
     kind: postgres
-    publish:
-      connection:
-        as: service-binding
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: api.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: api.http
+        inject: upstream
     spec:
       listeners:
         public:

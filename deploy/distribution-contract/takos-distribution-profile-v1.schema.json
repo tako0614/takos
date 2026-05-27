@@ -8,7 +8,7 @@
     "serviceId": {
       "description": "Logical service slot for the Takos distribution profile. The slot names are fixed for Takos release validation; replaceable operator distributions vary by artifact, endpoint, and implementation behind the slot, not by changing this service-id vocabulary.",
       "type": "string",
-      "enum": ["takos-agent", "takos-app", "takos-git", "takosumi", "takosumi-cloud"]
+      "enum": ["takos-agent", "takos-app", "takos-git", "takos-worker", "takos-executor-host", "takos-runtime-host", "takos-dispatch", "takosumi", "takosumi-cloud"]
     }
   },
   "required": [
@@ -354,7 +354,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["serviceId", "runtime", "hostingTargetId", "internalUrl", "smoke"],
+        "required": ["serviceId", "runtime", "hostingTargetId"],
         "anyOf": [
           {
             "required": ["image"]
@@ -382,6 +382,9 @@
           "artifactRef": {
             "type": "string",
             "minLength": 1
+          },
+          "description": {
+            "type": "string"
           },
           "internalUrl": {
             "type": "string",

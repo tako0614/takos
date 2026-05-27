@@ -122,18 +122,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:

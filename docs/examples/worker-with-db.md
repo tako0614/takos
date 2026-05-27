@@ -3,7 +3,7 @@
 > このページでわかること: Worker と PostgreSQL を組み合わせた AppSpec。
 
 `worker` と `postgres` component を同じ `.takosumi.yml` に置き、
-`publish.<name>.as` / `listen.<binding>.from` で Worker へ DB connection
+`connect.<binding>.output` で Worker へ DB connection
 を渡します。
 
 Short kind names are operator-profile aliases. The route list in gateway `spec`
@@ -21,30 +21,21 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   db:
     kind: postgres
-    publish:
-      connection:
-        as: service-binding
     spec:
       class: small
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -63,9 +54,9 @@ launcher / health endpoint は gateway descriptor spec と Takos product metadat
 ポイント:
 
 - runtime と data store は `components` に並べる
-- `db` component が `connection` publication を `publish` し、`web` が
-  `db.connection` を `listen` する
-- DB の credential / connection string は `listen` declaration から env (`DB_*`)
+- `web` が `connect.db.output: db.connection` で `db` component の connection
+  output を受け取る
+- DB の credential / connection string は `connect` declaration から env (`DB_*`)
   に materialize される
 - AppSpec には provider-specific secret ref や string interpolation を書かない
 - Installation dry-run で create / update される component と推定 cost

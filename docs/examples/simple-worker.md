@@ -32,18 +32,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/index.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -95,8 +89,9 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 - `components.web.kind: worker` declares the runtime-bearing unit.
 - `components.web.spec.entrypoint` points at the runtime file in the resolved
   source snapshot.
-- `components.web.publish.http` offers an internal HTTP endpoint.
-- `components.public` turns that endpoint into public ingress with listener /
+- `components.web` exposes an `http` output slot through the adopted worker
+  kind.
+- `components.public` connects `web.http` and turns it into public ingress with listener /
   gateway descriptor intent.
 
 ## Next

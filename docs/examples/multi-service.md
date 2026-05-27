@@ -18,39 +18,30 @@ components:
     kind: worker
     spec:
       entrypoint: src/api.ts
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   jobs:
     kind: worker
     spec:
       entrypoint: src/jobs.ts
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   db:
     kind: postgres
-    publish:
-      connection:
-        as: service-binding
     spec:
       class: standard
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: api.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: api.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -70,8 +61,8 @@ surface ではなく、operator / app layer の上位設定として扱います
 ポイント:
 
 - 複数 workload は `components` に複数 component として並べる
-- shared database は 1 つの local publication (`db.connection`) を `db` が
-  publish し、`api` / `jobs` が同じ publication を `listen` する
+- shared database は `db.connection` output を `api` / `jobs` が
+  `connect` で受け取る
 - HTTP entrypoint は `gateway` component の listener / gateway descriptor intent で表現する
 
 関連:

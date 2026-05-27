@@ -15,8 +15,8 @@ artifacts (Helm / Terraform / distribution manifests / validator) を集約す�
 Takos の constituent (AI agents / Git / memory / spaces / tools) と「ソフトウェアの民主化」 core concept の formal
 definition は [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) §0 を参照。
 
-曖昧 / 旧 wording (「Takos は通常の App ではない」 だけの表現等) を増やさず、 root docs の vocabulary
-に統一する (= Takosumi 公開概念は `AppSpec` / `Installation` / `Deployment` の 3 つだけ)。
+曖昧 / 旧 wording (「Takos は通常の App ではない」 だけの表現等) を増やさず、 root docs の vocabulary に統一する (=
+Takosumi 公開概念は `AppSpec` / `Installation` / `Deployment` の 3 つだけ)。
 
 ## 責務
 
@@ -44,18 +44,19 @@ definition は [`../docs/reference/design-principles.md`](../docs/reference/desi
 
 ## Terminology
 
-| term                                                 | 意味                                                                                                                                                                |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Takos product**                                    | self-hostable AI-first chat & agent product。 = takos.jp で deploy される shell。 = `takos/` repository の product 単位 (app + git + agent + bundled apps の集合体)。 |
-| **takos-app / takos-git / takos-agent**              | Takos product を構成する 3 service component (nested submodule `app/` / `git/` / `agent/`)。 docker compose / Helm chart の service id でもある。                   |
-| **Takos app (= 抽象)**                               | Takosumi 上で deploy される 1 application unit (= AppSpec で declare)。 bundled apps (takos-docs / takos-slide / takos-excel / takos-computer / yurucommu) や third-party app が該当する。 |
+| term                                    | 意味                                                                                                                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Takos product**                       | self-hostable AI-first chat & agent product。 = takos.jp で deploy される shell。 = `takos/` repository の product 単位 (app + git + agent + bundled apps の集合体)。                      |
+| **takos-app / takos-git / takos-agent** | Takos product を構成する 3 service component (nested submodule `app/` / `git/` / `agent/`)。 docker compose / Helm chart の service id でもある。                                          |
+| **Takos app (= 抽象)**                  | Takosumi 上で deploy される 1 application unit (= AppSpec で declare)。 bundled apps (takos-docs / takos-slide / takos-excel / takos-computer / yurucommu) や third-party app が該当する。 |
 
 `Takos product` vs `Takos app` の混同を避けるため、 docs では次の wording を使う:
 
 - Takos product 全体 / shell を指すとき: "**Takos product**"、 "Takos"
 - Takos product の 3 service を指すとき: "**takos-app**" / "**takos-git**" / "**takos-agent**"
 - Takosumi 上の 1 app unit を指すとき: "**Takos app**" / "**bundled app**" / "**third-party app**"
-- Takos product の core feature (= shell 内部 service) を指すとき: "**Takos product core feature**" (Agent / Chat / Git / Storage / Store)
+- Takos product の core feature (= shell 内部 service) を指すとき: "**Takos product core feature**" (Agent / Chat / Git
+  / Storage / Store)
 
 ## Substitutability
 
@@ -108,4 +109,4 @@ section でのみ言及し、current docs に old-name carry-over instructions �
 - [`docs/`](docs/) — Takos product 専用 VitePress site (docs.takos.jp)
 - [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — ecosystem layering 原則
 - [`../AGENTS.md`](../AGENTS.md) — ecosystem AI 作業ルール
-- [`../ROADMAP.md`](../ROADMAP.md) — Phase 1.x active plan
+- [`../ROADMAP.md`](../ROADMAP.md) — Takos / Takosumi / Takosumi Cloud completion roadmap

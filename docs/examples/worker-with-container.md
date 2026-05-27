@@ -6,7 +6,7 @@
 Takosumi v1 AppSpec は kind-agnostic です。`worker` / `object-store` / `gateway`
 などの短い kind 名は operator の alias map で解決されます。 container runtime は
 operator/provider extension として扱い、OIDC のような identity surface は
-operator-owned external publication を listen する形で受け取ります。
+operator-owned platform service を listen する形で受け取ります。
 
 the route list in gateway `spec` belongs to the adopted gateway descriptor's
 open `spec`. `host.spec.entrypoint` points to a runtime file already present in
@@ -22,28 +22,19 @@ components:
     kind: worker
     spec:
       entrypoint: src/host.ts
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       media:
-        from: media.bucket
-        as: secret-env
+        output: media.bucket
+        inject: secret-env
         prefix: BLOB
   media:
     kind: object-store
-    publish:
-      bucket:
-        as: object-store
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: host.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: host.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -62,8 +53,9 @@ launcher / health endpoint は gateway descriptor spec と Takos product metadat
 重い処理を container に逃がす必要がある場合は、operator distribution が提供する
 provider extension、または app 層の外部 service として扱います。 portable
 AppSpec では worker が HTTP material を publish し、gateway が public entrypoint
-になります。DB / object-store / HTTP などの data dependency は `publish` /
-`listen` で受け取り、source / runtime files は prepared source で渡します。
+になります。DB / object-store / HTTP などの same-AppSpec data dependency は
+`connect` で受け取り、manifest 外の service は `listen.path` または
+`listen.kind` で受け取ります。source / runtime files は prepared source で渡します。
 optional blob は operator DataAsset extension の領域です。
 
 ## ホスト側コード
@@ -86,8 +78,8 @@ export default {
 - AppSpec portable core では component kind を opaque string として扱い、 alias
   / URI の意味は operator が提供する documented contract として ship する
 - operator-specific container は provider extension として docs を分ける
-- resource 間の接続は string interpolation ではなく `publish.<name>.as` /
-  `listen.<binding>.from` で宣言する
+- resource 間の接続は string interpolation ではなく
+  `connect.<binding>.output` で宣言する
 
 ## 次のステップ
 

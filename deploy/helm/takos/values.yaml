@@ -21,27 +21,27 @@ images:
   takosApp:
     registry: ghcr.io
     repository: takos/takos-app
-    tag: "latest"
+    tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
   takosumi:
     registry: ghcr.io
     repository: takos/takosumi
-    tag: "latest"
+    tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
   takosumiCloud:
     registry: ghcr.io
     repository: takos/takosumi-cloud-accounts
-    tag: "latest"
+    tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
   takosGit:
     registry: ghcr.io
     repository: takos/takos-git
-    tag: "latest"
+    tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
   takosAgent:
     registry: ghcr.io
     repository: takos/takos-agent
-    tag: "latest"
+    tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
 
 ## -----------------------------------------------------------------

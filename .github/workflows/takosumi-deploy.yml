@@ -1,0 +1,35 @@
+name: Takosumi Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [staging, production]
+      dry_run:
+        description: 'Dry run only'
+        type: boolean
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via Takosumi Installer API
+        env:
+          TAKOSUMI_INSTALLER_URL: ${{ secrets.TAKOSUMI_INSTALLER_URL }}
+          TAKOSUMI_INSTALLER_TOKEN: ${{ secrets.TAKOSUMI_INSTALLER_TOKEN }}
+          TAKOSUMI_SPACE_ID: ${{ secrets.TAKOSUMI_SPACE_ID }}
+          TAKOSUMI_INSTALLATION_ID: ${{ secrets.TAKOSUMI_INSTALLATION_ID }}
+        run: |
+          chmod +x scripts/takosumi-deploy.sh
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ./scripts/takosumi-deploy.sh --dry-run
+          else
+            ./scripts/takosumi-deploy.sh
+          fi

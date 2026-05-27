@@ -35,18 +35,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -76,18 +70,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/api.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: api.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: api.http
+        inject: upstream
     spec:
       listeners:
         api:
@@ -102,8 +90,8 @@ components:
 
 ## バリデーション
 
-- `listen.<binding>.from` は同じ AppSpec 内の `component.publication` か
-  external publication path に解決できる
+- `connect.<binding>.output` は同じ AppSpec 内の `component.output` に解決できる
+- `listen.<binding>.path` は Space-visible platform service path に解決できる
 - `host` は operator が許可した hostname でなければならない
 - custom domain は account-plane / provider flow で DNS ownership proof と
   conflict check を通す
@@ -111,4 +99,4 @@ components:
 ## 次に読むページ
 
 - [Environment](/deploy/environment)
-- [AppSpec publish/listen](https://takosumi.com/docs/reference/manifest)
+- [AppSpec connect/listen](https://takosumi.com/docs/reference/manifest)

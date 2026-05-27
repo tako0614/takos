@@ -6,6 +6,10 @@ AppSpec examples in this page use short kind names such as `worker`, `gateway`, 
 
 MCP エンドポイントは通常の HTTP ワークロードとしてデプロイします。 MCP カタログとクライアントディスカバリは Takos
 のアプリレイヤーで管理されます。
+Space 全体の MCP server を集める側は、Takosumi AppSpec の
+`listen.<binding>.kind: mcp-server@v1` と `many: true` で visible publication
+をまとめて受け取れます。個別 endpoint の表示名、認証 token、enable state
+は Takos の MCP registry metadata が管理します。
 
 ## AppSpec
 
@@ -19,18 +23,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: mcp.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: mcp.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -110,18 +108,12 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: mcp.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: mcp.http
+        inject: upstream
     spec:
       listeners:
         public:

@@ -11,11 +11,11 @@ yurucommu はセルフホスト型の ActivityPub /
 ## 役割
 
 - social / community UI
-- **`operator.identity.oidc` を listen** し、 Takosumi Accounts OIDC consumer
+- **`identity.primary.oidc` を listen** し、 Takosumi Accounts OIDC consumer
   として sign-in
 - ActivityPub federation、 posts、 media、 DM、 community 機能を app 側で管理
 - PostgreSQL / object-store component を AppSpec で宣言し、OIDC は
-  `operator.identity.oidc` を listen する
+  `identity.primary.oidc` を listen する
 
 ## AppSpec (`.takosumi.yml`)
 
@@ -37,33 +37,29 @@ components:
     kind: worker
     spec:
       entrypoint: dist/worker.js
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
       media:
-        from: media.bucket
-        as: secret-env
+        output: media.bucket
+        inject: secret-env
         prefix: MEDIA
+    listen:
       oidc:
-        from: operator.identity.oidc
-        as: secret-env
+        path: identity.primary.oidc
+        kind: identity.oidc@v1
+        inject: secret-env
         prefix: OIDC
         required: true
 
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -77,17 +73,16 @@ components:
     kind: postgres
     spec:
       size: small
-    publish:
-      connection:
-        as: service-binding
 
   media:
     kind: object-store
     spec:
       name: yurucommu-media
-    publish:
-      bucket:
-        as: object-store
+
+publish:
+  public:
+    output: public.public
+    path: yurucommu.http.public
 ```
 
 gateway は public endpoint を作り、worker が ActivityPub / API / auth /
@@ -96,8 +91,8 @@ metadata を登録します。
 
 ## OIDC consumer
 
-`listen.oidc.from: operator.identity.oidc` を web component
-に宣言すると、Installation 作成時に takosumi-cloud (operator account plane) が
+`listen.oidc.path: identity.primary.oidc` を web component
+に宣言すると、Installation 作成時に takosumi-cloud (operator account plane、リファレンス実装: Takosumi Accounts) が
 per-Installation OIDC client を Takosumi Accounts に登録し、 worker に
 `OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
 `OIDC_REDIRECT_URI` を secretRef-mediated runtime env で inject します。
@@ -108,8 +103,12 @@ ActivityPub actor URL や callback URL など自分の public origin
 が必要な処理は、operator runtime config の `APP_URL` を参照します。値は operator
 domain policy と exposure activation 後に確定した public origin に合わせます。
 
+Cloud install 後の起動は、Cloud の Installation detail から activated public HTTP endpoint
+を開き、yurucommu 側の Takosumi Accounts OIDC sign-in で初回 user session を作る形を正本にします。Takos product の
+`/_takosumi/launch` launch-token bootstrap は Takos product 用の起動 path であり、yurucommu にそのまま要求しません。
+
 ## 関連ページ
 
 - [AppSpec spec](https://takosumi.com/docs/reference/manifest)
-- [takosumi.com Type Catalog](https://takosumi.com/docs/reference/type-catalog)
+- [Takosumi Official Catalog](https://takosumi.com/docs/reference/catalog)
 - [OIDC Consumer](/apps/oidc-consumer)

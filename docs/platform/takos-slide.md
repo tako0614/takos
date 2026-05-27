@@ -33,29 +33,25 @@ components:
     kind: worker
     spec:
       entrypoint: dist/worker.js
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       presentations:
-        from: presentations.bucket
-        as: secret-env
+        output: presentations.bucket
+        inject: secret-env
         prefix: BLOB
+    listen:
       oidc:
-        from: operator.identity.oidc
-        as: secret-env
+        path: identity.primary.oidc
+        kind: identity.oidc@v1
+        inject: secret-env
         prefix: OIDC
         required: true
 
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -69,9 +65,6 @@ components:
     kind: object-store
     spec:
       name: takos-slide-presentations
-    publish:
-      bucket:
-        as: object-store
 ```
 
 gateway は public endpoint を作り、worker が app runtime path

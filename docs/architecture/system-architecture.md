@@ -18,7 +18,7 @@ Takos product のサービスは `takos-app` / `takos-git` / `takos-agent` の 3
 | `takos-agent`      | `takos/agent/`    | agent execution service                                                          |
 | `takosumi`         | `takosumi/`       | AppSpec install / Deployment apply engine                                        |
 | Takosumi Accounts  | `takosumi-cloud/` | operator account plane reference implementation                                  |
-| Takosumi installer | `takosumi/`       | source fetch/verify、AppSpec parse、publish/listen resolution、Deployment append |
+| Takosumi installer | `takosumi/`       | source fetch/verify、AppSpec parse、connect/listen/publication resolution、Deployment append |
 
 `takos-agent-engine` は service ではなく library です。
 

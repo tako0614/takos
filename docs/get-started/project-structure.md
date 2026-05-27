@@ -36,30 +36,21 @@ components:
     kind: worker
     spec:
       entrypoint: src/worker.ts
-    publish:
-      http:
-        as: http-endpoint
-    listen:
+    connect:
       db:
-        from: db.connection
-        as: secret-env
+        output: db.connection
+        inject: secret-env
         prefix: DB
   db:
     kind: postgres
-    publish:
-      connection:
-        as: service-binding
     spec:
       class: small
   public:
     kind: gateway
-    listen:
+    connect:
       upstream:
-        from: web.http
-        as: upstream
-    publish:
-      public:
-        as: http-endpoint
+        output: web.http
+        inject: upstream
     spec:
       listeners:
         public:
@@ -84,8 +75,8 @@ contract とは別) で表現します。
 | `components`           | runtime / resource / ingress intent の map                                                   |
 | `components.*.kind`    | component の contract (operator alias / URI で解決)                                          |
 | `components.*.spec`    | kind ごとの open spec (= worker なら `entrypoint`、 gateway なら listener / gateway descriptor intent 等) |
-| `components.*.publish` | local publication name と material contract                                                  |
-| `components.*.listen`  | sibling publication または external publication path への binding declaration                |
+| `components.*.connect` | same-AppSpec `component.output` への binding declaration                                      |
+| `components.*.listen`  | platform service path または `kind`/labels discovery への binding declaration                 |
 
 ## Install lifecycle
 
@@ -96,7 +87,7 @@ takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
 takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 ```
 
-Git URL install では operator account plane が repository を commit に pin し、
+Git URL install では operator account plane (リファレンス実装: Takosumi Accounts) が repository を commit に pin し、
 `.takosumi.yml` を読みます。
 
 ```bash

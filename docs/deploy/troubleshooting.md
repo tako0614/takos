@@ -39,10 +39,10 @@ are applied from a prepared source URL + digest produced by the build service /
 CI.
 
 dry-run が失敗する場合は、`.takosumi.yml` の kind-specific `spec`、
-`components.*.publish` / `components.*.listen` 宣言、 install 時の `source` と
-`spaceId` を確認してください。malformed な local `component.publication` ref や
-cycle は `400 invalid_argument` です。required external publication (e.g.
-`operator.identity.oidc`) が current Space state に無い場合や、同じ path の
+`components.*.connect` / `components.*.listen` 宣言、 install 時の `source` と
+`spaceId` を確認してください。malformed な local `component.output` ref や
+cycle は `400 invalid_argument` です。required platform service (e.g.
+`identity.primary.oidc`) が current Space state に無い場合や、同じ path の
 visible declaration が重複している場合は provider side effect 前に
 `409 failed_precondition` で失敗します。operator が採用していない extension kind
 / projection は `501 not_implemented` です。request body や manifest が size
@@ -58,7 +58,7 @@ path が含まれるか確認します。
 
 ### OIDC redirect が失敗する
 
-- `.takosumi.yml` の `listen.oidc.from: operator.identity.oidc` 宣言を確認する
+- `.takosumi.yml` の `listen.oidc.path: identity.primary.oidc` 宣言を確認する
 - materialized `OIDC_REDIRECT_URI` が app の callback と一致するか確認する
 - Takosumi Accounts (takosumi-cloud) 側の client registration と issuer URL
   を確認する
