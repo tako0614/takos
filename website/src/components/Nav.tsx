@@ -1,12 +1,14 @@
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import Wordmark from './brand/Wordmark';
 import ThemeToggle from './ThemeToggle';
-import { CLOUD_INSTALL_URL } from '~/lib/cloud-url';
+import { resolveCloudUrls } from '~/lib/cloud-url';
 
 export default function Nav() {
   const [scrolled, setScrolled] = createSignal(false);
+  const [cloudUrls, setCloudUrls] = createSignal(resolveCloudUrls(''));
 
   onMount(() => {
+    setCloudUrls(resolveCloudUrls());
     const onScroll = () => {
       setScrolled(globalThis.scrollY > globalThis.innerHeight * 0.7);
     };
@@ -23,7 +25,7 @@ export default function Nav() {
           <a href='#features'>Features</a>
           <a href='#apps'>Bundled apps</a>
           <a href='https://docs.takos.jp/' rel='external'>Docs</a>
-          <a href='https://cloud.takosumi.com/' rel='noopener'>Cloud</a>
+          <a href={cloudUrls().home} rel='noopener'>Cloud</a>
         </nav>
         <div class='nav-actions'>
           <a class='nav-icon' href='https://github.com/tako0614/takos' rel='noopener' aria-label='GitHub'>
@@ -32,7 +34,7 @@ export default function Nav() {
             </svg>
           </a>
           <ThemeToggle />
-          <a class='btn btn-primary nav-cta' href={CLOUD_INSTALL_URL} rel='noopener'>
+          <a class='btn btn-primary nav-cta' href={cloudUrls().install} rel='noopener'>
             Install
           </a>
         </div>

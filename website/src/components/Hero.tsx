@@ -1,8 +1,12 @@
 import CodeBlock from './CodeBlock';
 import InkSplash from './brand/InkSplash';
-import { CLOUD_INSTALL_URL, CLOUD_USE_TAKOS_URL } from '~/lib/cloud-url';
+import { createSignal, onMount } from 'solid-js';
+import { resolveCloudUrls } from '~/lib/cloud-url';
 
 export default function Hero() {
+  const [cloudUrls, setCloudUrls] = createSignal(resolveCloudUrls(''));
+  onMount(() => setCloudUrls(resolveCloudUrls()));
+
   return (
     <section class='hero'>
       <InkSplash class='hero-splash' variant={1} />
@@ -24,14 +28,14 @@ export default function Hero() {
           <div class='cta-row'>
             <a
               class='btn btn-primary'
-              href={CLOUD_USE_TAKOS_URL}
+              href={cloudUrls().useTakos}
               rel='noopener'
             >
               Use Takos →
             </a>
             <a
               class='btn btn-secondary'
-              href={CLOUD_INSTALL_URL}
+              href={cloudUrls().install}
               rel='noopener'
             >
               Git から install

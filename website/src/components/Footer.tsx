@@ -1,6 +1,11 @@
+import { createSignal, onMount } from 'solid-js';
 import Wordmark from './brand/Wordmark';
+import { resolveCloudUrls } from '~/lib/cloud-url';
 
 export default function Footer() {
+  const [cloudUrls, setCloudUrls] = createSignal(resolveCloudUrls(''));
+  onMount(() => setCloudUrls(resolveCloudUrls()));
+
   return (
     <footer class='site'>
       <div class='container'>
@@ -12,7 +17,7 @@ export default function Footer() {
           <a href='https://docs.takos.jp/' rel='external'>Docs</a>
           <a href='https://github.com/tako0614/takos' rel='noopener'>GitHub</a>
           <a href='https://takosumi.com/' rel='external'>Takosumi</a>
-          <a href='https://cloud.takosumi.com/' rel='noopener'>Cloud</a>
+          <a href={cloudUrls().home} rel='noopener'>Cloud</a>
         </nav>
       </div>
     </footer>
