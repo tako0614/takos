@@ -12,6 +12,13 @@
 
 | Artifact                           | Path                                   | Status                                                                             |
 | ---------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- |
+| Terms of Service template          | `/legal/terms-of-service`              | Public-launch template; operator legal review required before publishing           |
+| Privacy Policy template            | `/legal/privacy-policy`                | Public-launch template; operator / DPO review required before publishing          |
+| Acceptable Use Policy template     | `/legal/acceptable-use-policy`         | Public-launch template; trust & safety owner review required                       |
+| Cookie Policy template             | `/legal/cookie-policy`                 | Public-launch template; matches Takos essential-cookie-only baseline               |
+| Service Level Agreement template   | `/legal/sla`                           | Public-launch template; availability targets and credit policy placeholders        |
+| Sub-processors public summary      | `/legal/sub-processors`                | Public-launch operator-facing summary (paired with `/legal/subprocessors` baseline) |
+| Status Page reference              | `/legal/status-page`                   | Public-launch reference to `[STATUS_PAGE_URL]` and incident classification         |
 | Data Processing Agreement template | `/legal/data-processing-agreement`     | Published template baseline; customer execution requires operator / legal approval |
 | Sub-processor list                 | `/legal/subprocessors`                 | Published baseline; vendor review evidence is private                              |
 | Data residency policy              | `/legal/data-residency`                | Published policy; per-tenant enforcement evidence is private                       |

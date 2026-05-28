@@ -21,6 +21,9 @@ concurrency:
   group: takos-release-artifacts-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 env:
   DENO_DIR: ${{ github.workspace }}/.deno-cache
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -30,21 +33,24 @@ jobs:
     name: Release gate inputs
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           submodules: recursive
+          persist-credentials: false
 
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # pinned: v2.0.4 (2026)
         with:
           deno-version: v2.x
 
-      - uses: azure/setup-helm@v5
+      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # pinned: v5.0.0 (2026)
         with:
           version: v3.15.4
 
       - name: Cache Deno deps
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
         with:
           path: ${{ env.DENO_DIR }}
           key: ${{ runner.os }}-deno-takos-release-artifacts-${{ hashFiles('deno.lock') }}
@@ -82,15 +88,16 @@ jobs:
             context: ..
             dockerfile: takos/agent/Dockerfile
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           submodules: recursive
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
 
       - name: Login to GHCR
         if: github.event_name == 'push' || inputs.publish == true
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # pinned: v4.2.0 (2026)
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -98,7 +105,7 @@ jobs:
 
       - name: Extract image metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # pinned: v6.1.0 (2026)
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
@@ -108,7 +115,7 @@ jobs:
 
       - name: Build and publish OCI image
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # pinned: v7.2.0 (2026)
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -153,7 +160,7 @@ jobs:
               provenance: true
             }' > "dist/image-digests/${{ matrix.image }}.json"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         if: github.event_name == 'push' || inputs.publish == true
         with:
           name: takos-image-digest-${{ matrix.image }}
@@ -169,23 +176,26 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           submodules: recursive
+          persist-credentials: false
 
-      - uses: azure/setup-helm@v5
+      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # pinned: v5.0.0 (2026)
         with:
           version: v3.15.4
 
       - name: Resolve chart version
         id: version
         shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            version="${{ inputs.version }}"
+            version="${VERSION}"
           fi
           if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid SemVer chart version: ${version}" >&2
@@ -214,7 +224,7 @@ jobs:
         if: github.event_name == 'push' || inputs.publish == true
         run: helm push dist/helm/takos-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         with:
           name: takos-helm-chart
           path: dist/helm/*.tgz
@@ -229,15 +239,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           submodules: recursive
+          persist-credentials: false
 
-      - uses: denoland/setup-deno@v2
+      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # pinned: v2.0.4 (2026)
         with:
           deno-version: v2.x
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pinned: v8.0.1 (2026)
         with:
           pattern: takos-image-digest-*
           path: dist/image-digests
@@ -245,14 +256,20 @@ jobs:
 
       - name: Build release manifest
         shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             release_version="${GITHUB_REF_NAME#v}"
             release_tag="${GITHUB_REF_NAME}"
           else
-            release_version="${{ inputs.version }}"
-            release_tag="v${{ inputs.version }}"
+            release_version="${VERSION}"
+            release_tag="v${VERSION}"
+          fi
+          if [[ ! "${release_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid SemVer release version: ${release_version}" >&2
+            exit 1
           fi
           deno run \
             --config deno.json \
@@ -266,7 +283,7 @@ jobs:
             --require-image-digests \
             --output dist/release-manifest.json
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         with:
           name: takos-release-manifest
           path: dist/release-manifest.json

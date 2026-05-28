@@ -10,7 +10,7 @@ export default function InstallCTA() {
     <section id='install' class='end-cta'>
       <div class='container'>
         <span class='eyebrow'>install</span>
-        <h2>始めるには 2 通り。</h2>
+        <h2>始めるには 3 通り。</h2>
         <p class='lede'>
           Takos は Takosumi 上で動くので、 Takosumi Cloud から 1-click install できる。 自分の cloud / 自前 VM
           で動かしたいなら、 <code>.takosumi.yml</code> AppSpec を install lifecycle に渡す。

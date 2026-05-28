@@ -65,7 +65,7 @@
     "zoneId": "cloudflare-zone-id",
     "metadata": {
       "providerBundle": "@takos/takosumi-plugins",
-      "paasRuntimeAgent": "cloudflare-containers"
+      "runtimeAgent": "cloudflare-containers"
     }
   },
   "routing": {
