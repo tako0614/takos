@@ -44,9 +44,7 @@ export function resolveCloudUrls(hostname = browserHostname()): CloudUrls {
 export function resolveCloudHomeUrl(hostname = browserHostname()): string {
   const configured = import.meta.env.VITE_CLOUD_HOME_URL as string | undefined;
   if (configured) return configured;
-  return isLocalSubstrateHost(hostname)
-    ? LOCAL_CLOUD_HOME_FALLBACK
-    : CLOUD_HOME_FALLBACK;
+  return isLocalSubstrateHost(hostname) ? LOCAL_CLOUD_HOME_FALLBACK : CLOUD_HOME_FALLBACK;
 }
 
 export function resolveCloudUseTakosUrl(hostname = browserHostname()): string {
@@ -54,9 +52,7 @@ export function resolveCloudUseTakosUrl(hostname = browserHostname()): string {
     | string
     | undefined;
   if (configured) return configured;
-  return isLocalSubstrateHost(hostname)
-    ? LOCAL_USE_TAKOS_FALLBACK
-    : USE_TAKOS_FALLBACK;
+  return isLocalSubstrateHost(hostname) ? LOCAL_USE_TAKOS_FALLBACK : USE_TAKOS_FALLBACK;
 }
 
 export function resolveCloudInstallUrl(hostname = browserHostname()): string {
@@ -64,9 +60,7 @@ export function resolveCloudInstallUrl(hostname = browserHostname()): string {
     | string
     | undefined;
   if (configured) return configured;
-  return isLocalSubstrateHost(hostname)
-    ? LOCAL_INSTALL_FALLBACK
-    : INSTALL_FALLBACK;
+  return isLocalSubstrateHost(hostname) ? LOCAL_INSTALL_FALLBACK : INSTALL_FALLBACK;
 }
 
 function browserHostname(): string {
