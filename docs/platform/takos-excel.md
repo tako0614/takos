@@ -23,10 +23,14 @@ in the source snapshot.
 ```yaml
 apiVersion: v1
 
+# Short kind names are operator-profile aliases. Gateway listeners/routes are
+# gateway descriptor spec fields, not AppSpec core fields.
 metadata:
   id: jp.takos.excel
   name: Takos Excel
+  description: Spreadsheet editor with formulas and a Streamable HTTP MCP server.
   publisher: takos
+  homepage: https://github.com/tako0614/takos-excel
 
 components:
   web:
@@ -65,6 +69,11 @@ components:
     kind: object-store
     spec:
       name: takos-excel-spreadsheets
+
+publish:
+  public:
+    output: public.public
+    path: takos-excel.http.public
 ```
 
 gateway は public endpoint を作り、worker が app runtime path

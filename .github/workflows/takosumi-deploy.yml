@@ -13,12 +13,26 @@ on:
         type: boolean
         default: true
 
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+concurrency:
+  group: takosumi-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        with:
+          persist-credentials: false
 
       - name: Deploy via Takosumi Installer API
         env:
@@ -26,9 +40,10 @@ jobs:
           TAKOSUMI_INSTALLER_TOKEN: ${{ secrets.TAKOSUMI_INSTALLER_TOKEN }}
           TAKOSUMI_SPACE_ID: ${{ secrets.TAKOSUMI_SPACE_ID }}
           TAKOSUMI_INSTALLATION_ID: ${{ secrets.TAKOSUMI_INSTALLATION_ID }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           chmod +x scripts/takosumi-deploy.sh
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "${DRY_RUN}" = "true" ]; then
             ./scripts/takosumi-deploy.sh --dry-run
           else
             ./scripts/takosumi-deploy.sh

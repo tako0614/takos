@@ -7,7 +7,7 @@ interface App {
 }
 
 const APPS: readonly App[] = [
-  { name: 'takos-docs', tag: 'docs', body: 'ノート + ドキュメント。 markdown + collaborative editor。' },
+  { name: 'takos-docs', tag: 'docs', body: 'ノート + ドキュメント。 Tiptap ベースのリッチテキストエディタ (将来 collaborative)。' },
   { name: 'takos-slide', tag: 'slides', body: 'プレゼン作成。 keynote/slides の代替。' },
   { name: 'takos-excel', tag: 'sheet', body: 'スプレッドシート。 calc + formula 対応。' },
   { name: 'takos-computer', tag: 'agent-tool', body: 'agent から呼び出せる computer use 環境。' },

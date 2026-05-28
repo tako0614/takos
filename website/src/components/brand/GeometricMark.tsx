@@ -25,8 +25,8 @@ export default function GeometricMark(props: Props): JSX.Element {
     >
       <defs>
         <linearGradient id='tg-geo' x1='4' y1='4' x2='44' y2='44' gradientUnits='userSpaceOnUse'>
-          <stop offset='0' stop-color='var(--tg-grad-from, #5d3afd)' />
-          <stop offset='1' stop-color='var(--tg-grad-to, #00b1ff)' />
+          <stop offset='0' stop-color='var(--tg-grad-from, #0a0a0a)' />
+          <stop offset='1' stop-color='var(--tg-grad-to, #dc2626)' />
         </linearGradient>
       </defs>
       <rect x='6' y='6' width='30' height='10' rx='2.5' fill='url(#tg-geo)' opacity='0.55' />
