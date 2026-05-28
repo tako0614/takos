@@ -1,9 +1,11 @@
-import { resolveCloudInstallUrl, resolveCloudUseTakosUrl } from '~/lib/cloud-url';
+import { createSignal, onMount } from 'solid-js';
+import { resolveCloudUrls } from '~/lib/cloud-url';
 import CodeBlock from './CodeBlock';
 
 export default function InstallCTA() {
-  const useTakosUrl = () => resolveCloudUseTakosUrl();
-  const installUrl = () => resolveCloudInstallUrl();
+  const [cloudUrls, setCloudUrls] = createSignal(resolveCloudUrls(''));
+  onMount(() => setCloudUrls(resolveCloudUrls()));
+
   return (
     <section id='install' class='end-cta'>
       <div class='container'>
@@ -20,7 +22,7 @@ export default function InstallCTA() {
               一般ユーザー向け。Takosumi Cloud の account-plane entry で Account / Space / launch を進める。 public
               managed offering が閉じている間は launch readiness gate で止まる。
             </p>
-            <a class='btn btn-primary' href={useTakosUrl()} rel='noopener'>
+            <a class='btn btn-primary' href={cloudUrls().useTakos} rel='noopener'>
               Use Takos →
             </a>
           </div>
@@ -30,7 +32,7 @@ export default function InstallCTA() {
               ボタンを押すと cloud.takosumi.com の install wizard が開き、 git URL + ref が pre-fill された状態で
               dry-run → install できる。source を確認したい人や fork を使う人向け。
             </p>
-            <a class='btn btn-secondary' href={installUrl()} rel='noopener'>
+            <a class='btn btn-secondary' href={cloudUrls().install} rel='noopener'>
               Git から install
             </a>
           </div>
