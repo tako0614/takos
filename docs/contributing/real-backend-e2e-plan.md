@@ -7,17 +7,17 @@ source-controlled gates:
 
 ```sh
 cd takos
-deno task check
-deno task validate:distributions
-deno task distribution:smoke
+bun run check
+bun run validate:distributions
+bun run distribution:smoke
 ```
 
 Then choose the matching live path:
 
-- Local Docker Compose: `deno task local:config`, `deno task local:up`,
-  `deno task local:smoke`, `deno task local:down`
+- Local Docker Compose: `bun run local:config`, `bun run local:up`,
+  `bun run local:smoke`, `bun run local:down`
 - Cloudflare / AWS / GCP / Kubernetes / self-hosted distribution:
-  `deno task distribution:smoke --manifest deploy/distributions/<target>.json --live`
+  `bun run distribution:smoke --manifest deploy/distributions/<target>.json --live`
 - Takosumi provider fixture:
   `cd ../takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=<fixture> deno task live-provisioning-smoke`
 - Public managed Takos:

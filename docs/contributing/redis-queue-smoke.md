@@ -7,15 +7,15 @@ smoke. Run:
 
 ```sh
 cd takos
-deno task test:control
+bun run test:control
 ```
 
 For the composed product stack, use:
 
 ```sh
 cd takos
-deno task local:config
-deno task local:smoke
+bun run local:config
+bun run local:smoke
 ```
 
 Cloudflare Queue / provider queue health is live operator evidence and belongs

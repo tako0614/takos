@@ -99,12 +99,10 @@ library 自体は別 repo (`../takos-agent-engine/`) で管理。
 `/home/tako/Desktop/takos/takos` から実行:
 
 ```sh
-deno task check                # doctor + canonical layout / compose check
-deno task lint:agent-docs      # AGENTS.md ↔実装の整合
-deno task lint:docs            # docs site build
-deno task release-gate         # ecosystem release gate (Takos product 側)
-deno lint
-deno fmt --check
+bun run check                # doctor + canonical layout / compose check
+bun run lint:agent-docs      # AGENTS.md ↔実装の整合
+bun run lint:docs            # docs site build
+bun run release-gate         # ecosystem release gate (Takos product 側)
 ```
 
 カバー範囲:
@@ -130,7 +128,7 @@ deno fmt --check
   - `validate:patch-management` — patch management gate
   - `validate:architecture` — architecture alignment
 
-最新の local evidence は `cd takos && deno task release-gate` を正本コマンド
+最新の local evidence は `cd takos && bun run release-gate` を正本コマンド
 とする。固定の test 件数はこの current-state page では pin しない (release-gate
 が numerical assertion の正本)。
 
@@ -141,8 +139,8 @@ Takos product 側の smoke スクリプト (`scripts/`):
 | Boundary                | Default      | Real / opt-in                                                                                          | 備考                                                                                                                       |
 | ----------------------- | ------------ | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Docker Compose ローカル | Safe dry-run | `TAKOS_RUN_REAL_COMPOSE_SMOKE=1` + Docker Compose + `.env.local` + 空きポート + ローカルイメージビルド | real 実行で Postgres / Redis / MinIO / `takos-worker` / `takos-git` / `takos-agent` を起動し、 health endpoint 確認 + cleanup |
-| Helm 検証               | Pass         | —                                                                                                      | `deno task validate:helm` で chart 構造 dry-run                                                                            |
-| Distribution profile    | Pass         | live cloud evidence は `ROADMAP.md H-19` (operator-owned)                                              | `deno task validate:distributions` で manifest consistency                                                                 |
+| Helm 検証               | Pass         | —                                                                                                      | `bun run validate:helm` で chart 構造 dry-run                                                                            |
+| Distribution profile    | Pass         | live cloud evidence は `ROADMAP.md H-19` (operator-owned)                                              | `bun run validate:distributions` で manifest consistency                                                                 |
 
 Takosumi platform 側の smoke (kernel storage / migration / queue /
 object-storage 等) は sibling `../takosumi/` repo +
@@ -150,16 +148,15 @@ object-storage 等) は sibling `../takosumi/` repo +
 
 ## 実行可能コマンド
 
-ルート `deno.json` のローカル検証コマンド:
+ルート `package.json` のローカル検証コマンド:
 
 ```sh
-deno task check                # doctor + canonical layout / compose check
-deno task lint:agent-docs      # AGENTS.md ↔ impl alignment
-deno task lint:docs            # VitePress build
-deno task release-gate         # product 側 release-gate
-deno task docs:build           # docs site build
-deno task docs:deploy          # Cloudflare Pages `takos-docs` → docs.takos.jp
-deno fmt --check
+bun run check                # doctor + canonical layout / compose check
+bun run lint:agent-docs      # AGENTS.md ↔ impl alignment
+bun run lint:docs            # VitePress build
+bun run release-gate         # product 側 release-gate
+bun run docs:build           # docs site build
+bun run docs:deploy          # Cloudflare Pages `takos-docs` → docs.takos.jp
 ```
 
 canonical owner ごとのチェック:
@@ -175,9 +172,9 @@ cd containers/agent && cargo check && cargo test
 local Compose (Takos product full stack):
 
 ```sh
-deno task local:up             # compose.local.yml 起動 (postgres + redis + takos-worker + takos-git + takos-agent)
-deno task local:logs
-deno task local:down
+bun run local:up             # compose.local.yml 起動 (postgres + redis + takos-worker + takos-git + takos-agent)
+bun run local:logs
+bun run local:down
 ```
 
 ## Takos が依存する Takosumi platform

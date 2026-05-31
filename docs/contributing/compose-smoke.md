@@ -2,22 +2,22 @@
 
 > このページでわかること: Takos local Compose stack の current smoke。
 
-Takos local stack は `compose.local.yml` と `deno task local:*` を使います。
+Takos local stack は `compose.local.yml` と `bun run local:*` を使います。
 
 ## Static config
 
 ```sh
 cd takos
-deno task local:config
+bun run local:config
 ```
 
 ## Start / smoke / stop
 
 ```sh
 cd takos
-deno task local:up
-deno task local:smoke
-deno task local:down
+bun run local:up
+bun run local:smoke
+bun run local:down
 ```
 
 実行時の env file は `TAKOS_LOCAL_ENV_FILE` で差し替えます。Docker / Compose

@@ -7,12 +7,12 @@ Takos product root の current commands は次です。
 
 ```sh
 cd takos
-TAKOS_LOCAL_ENV_FILE=.env.local deno task local:config
-TAKOS_LOCAL_ENV_FILE=.env.local deno task local:up
-TAKOS_LOCAL_ENV_FILE=.env.local deno task local:smoke
-TAKOS_LOCAL_ENV_FILE=.env.local deno task local:down
+TAKOS_LOCAL_ENV_FILE=.env.local bun run local:config
+TAKOS_LOCAL_ENV_FILE=.env.local bun run local:up
+TAKOS_LOCAL_ENV_FILE=.env.local bun run local:smoke
+TAKOS_LOCAL_ENV_FILE=.env.local bun run local:down
 ```
 
-`deno task local:up` は foreground で動くため、別 shell で `local:smoke`
+`bun run local:up` は foreground で動くため、別 shell で `local:smoke`
 を実行します。 stack を残して調査する場合は `local:down`
 を後で実行してください。

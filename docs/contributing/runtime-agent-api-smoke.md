@@ -18,5 +18,5 @@ Takos product の agent 実行面は `takos/containers/agent` と `takos-agent-e
 
 ```sh
 cd takos
-deno task release-gate
+bun run release-gate
 ```

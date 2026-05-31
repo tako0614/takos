@@ -104,7 +104,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 
 | 項目            | current value                                                                  |
 | --------------- | ------------------------------------------------------------------------------ |
-| source          | `deploy/distributions/gcp.json` から `deno task helm:generate-overlays` で生成 |
+| source          | `deploy/distributions/gcp.json` から `bun run helm:generate-overlays` で生成 |
 | images          | distribution profile の service image entries を Helm image values に展開      |
 | domains         | distribution profile の `routing` から admin / tenant base domain を展開       |
 | runtime config  | `runtimeConfig.environment=production`、implementation binding selector は fail-closed empty |
@@ -116,8 +116,8 @@ overlay は generated artifact です。distribution profile を更新したら:
 
 ```bash
 cd takos
-deno task helm:generate-overlays
-deno task helm:check-overlays
+bun run helm:generate-overlays
+bun run helm:check-overlays
 ```
 
 ### 必要な外部サービス
@@ -129,7 +129,7 @@ deno task helm:check-overlays
 - Takosumi reference provider adapter が参照する GCP managed-service credentials
 
 Terraform apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic / GCS
-bucket 名は `deno task terraform:helm-values` で generated values に変換し、
+bucket 名は `bun run terraform:helm-values` で generated values に変換し、
 base overlay の後に重ねます。生成 values は non-secret resource id だけを
 `runtimeConfig.managedResources` へ入れ、secret は `takos-private` / external
 secrets 側に残します。
