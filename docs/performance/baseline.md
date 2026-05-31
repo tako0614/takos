@@ -167,9 +167,9 @@ threshold (失敗時 exit code != 0):
 
 ```bash
 cd takos
-deno task load-test                    # in-process 全シナリオ
-deno task load-test:concurrent-deploys # 並行 deploy 単体
-deno task load-test:kernel-api-bench   # HTTP API 単体
+bun run load-test                    # in-process 全シナリオ
+bun run load-test:concurrent-deploys # 並行 deploy 単体
+bun run load-test:kernel-api-bench   # HTTP API 単体
 ```
 
 実環境 (k6) は operator が cluster-scoped credentials で実行します。 Takos core
@@ -183,7 +183,7 @@ repo に値を commit しないでください。
 | applyDeployment p50 < 200 ms (N=10)          | **OK** (1.65 ms)       |
 | HTTP API スループット > 500 req/sec          | **OK** (3,556 req/sec) |
 | Cloudflare Workers CPU < 30s (100 component) | **OK** (6.18 ms)       |
-| `deno task load-test` 完走                   | **OK**                 |
+| `bun run load-test` 完走                   | **OK**                 |
 | in-process テスト 2 + k6 スクリプト 1        | **OK**                 |
 | baseline-metrics.md 完成                     | **OK**                 |
 

@@ -3,9 +3,11 @@
 > このページでわかること: Takos
 > のローカル開発環境を構成するサービスの一覧とポート番号。
 
-Takos の実装は単一の Worker (`src/worker`)、UI (`web`)、Git / agent containers (`containers/git` /
-`containers/agent`) に分かれています。ローカル環境ではこれに加えて
-Takosumi 系のサービスも起動します。
+Takos の実装は単一の `takos-worker` 入口 (`src/worker`)、UI (`web`)、Git / agent containers
+(`containers/git` / `containers/agent`) に分かれます。`takos-git` と
+`takos-agent` は別ユーザー向け Worker 境界を追加してデプロイするコンポーネントではなく、Takos
+製品境界内の内部 capability です。ローカル環境ではこれに加えて Takosumi 系の
+サービスも起動します。
 
 ## ローカルサービス一覧
 

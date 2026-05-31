@@ -93,7 +93,7 @@ R2 bucket aliases:
   bundles, builds, source, git, offload
 
 Worker aliases (for secrets):
-  worker, runtime-host, executor, dispatch
+  worker
 
 Secrets directory structure:
   .secrets/<env>/<SECRET_NAME>   (one file per secret, .gitignored)

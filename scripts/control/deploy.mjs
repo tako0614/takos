@@ -3,7 +3,7 @@ import * as runtime from "../runtime.ts";
 // Parameterized deploy script for Takos Cloudflare services.
 // Usage: bun scripts/control/deploy.mjs <service> <environment> [--debug]
 //
-// Services: worker, dispatch, runtime-host, executor-host
+// Service: worker (unified Takos Worker)
 // Environments: production (base config), staging ([env.staging])
 // Flags: --debug  (only valid for worker + staging — uses staging-debug build)
 
@@ -16,9 +16,6 @@ import process from 'node:process';
 
 const SERVICES = {
   worker: 'deploy/cloudflare/wrangler.toml',
-  dispatch: 'deploy/cloudflare/wrangler.dispatch.toml',
-  'runtime-host': 'deploy/cloudflare/wrangler.runtime-host.toml',
-  'executor-host': 'deploy/cloudflare/wrangler.executor.toml',
 };
 
 const ENVIRONMENTS = ['production', 'staging'];
@@ -27,11 +24,8 @@ function usage() {
   console.error(`
 Usage: bun run deploy:service <service> <environment> [--debug]
 
-Services:
+Service:
   worker         Unified public/control worker (runs build before deploy)
-  dispatch       Dispatch service
-  runtime-host   Runtime host service
-  executor-host  Executor host service
 
 Environments:
   production     Deploy using the base Wrangler config (no --env flag)
@@ -43,8 +37,6 @@ Flags:
 Examples:
   bun run deploy:service worker production
   bun run deploy:service worker staging --debug
-  bun run deploy:service dispatch staging
-  bun run deploy:service runtime-host production
 `);
   runtime.exit(1);
 }
@@ -71,18 +63,10 @@ export function buildDeployCommands(
   const deployBase = ['bunx', 'wrangler', 'deploy'];
   const commands = [];
 
-  if (service === 'worker') {
-    commands.push(
-      debug ? 'bun run build --mode staging-debug' : 'bun run build',
-    );
-    commands.push([...deployBase, '--config', SERVICES.worker, ...wranglerArgs].join(' '));
-    return commands;
-  }
-
-  const config = SERVICES[service];
   commands.push(
-    [...deployBase, '--config', config, ...wranglerArgs].join(' '),
+    debug ? 'bun run build --mode staging-debug' : 'bun run build',
   );
+  commands.push([...deployBase, '--config', SERVICES.worker, ...wranglerArgs].join(' '));
   return commands;
 }
 

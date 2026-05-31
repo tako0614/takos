@@ -269,8 +269,7 @@ jobs:
             echo "Invalid SemVer release version: ${release_version}" >&2
             exit 1
           fi
-          bun --preload ./shims/deno-compat.ts \
-            scripts/build-release-manifest.ts \
+          bun scripts/build-release-manifest.ts \
             --image-digest-dir dist/image-digests \
             --release-version "${release_version}" \
             --release-tag "${release_tag}" \
