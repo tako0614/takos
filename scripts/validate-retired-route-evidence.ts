@@ -17,13 +17,20 @@ const retiredAffordancePattern =
 
 const apiTestPath = 'src/routes/public/index_test.ts';
 const apiTestText = await Deno.readTextFile(apiTestPath);
-const missingTests = retiredRouteTests.filter((name) => !apiTestText.includes(`Deno.test("${name}"`));
+const missingTests = retiredRouteTests.filter((name) => {
+  const escaped = escapeRegExp(name);
+  return !new RegExp(`\\b(?:Deno\\.)?test\\((['"])${escaped}\\1`).test(apiTestText);
+});
 
 if (missingTests.length > 0) {
   for (const name of missingTests) {
     console.error(`missing retired-route API evidence test: ${name}`);
   }
   Deno.exit(1);
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 await run('bun', [

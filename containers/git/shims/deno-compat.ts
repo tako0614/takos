@@ -156,26 +156,11 @@ class DenoChildProcess {
   #stdoutWeb?: ReadableStream<Uint8Array>;
   #stderrWeb?: ReadableStream<Uint8Array>;
   #stdin?: WritableStream<Uint8Array>;
-  // output() buffers stdout/stderr. Collectors are attached in the constructor
-  // (before any caller await) so no early `data` chunk is lost. If instead a
-  // caller reaches for the `.stdout`/`.stderr` web stream to read directly
-  // (smart-http path), that stream's buffering is disabled and the live node
-  // stream is handed to the web reader (the two styles are mutually exclusive
-  // per call site here).
-  #outChunks: Uint8Array[] = [];
-  #errChunks: Uint8Array[] = [];
-  #outClaimed = false;
-  #errClaimed = false;
+  #outputPromise?: Promise<CommandOutput>;
 
   constructor(child: ChildProcess) {
     this.#child = child;
     this.pid = child.pid ?? -1;
-    child.stdout?.on("data", (c: Buffer) => {
-      if (!this.#outClaimed) this.#outChunks.push(new Uint8Array(c));
-    });
-    child.stderr?.on("data", (c: Buffer) => {
-      if (!this.#errClaimed) this.#errChunks.push(new Uint8Array(c));
-    });
     this.status = new Promise<CommandStatus>((res, rej) => {
       child.on("error", rej);
       child.on(
@@ -188,7 +173,6 @@ class DenoChildProcess {
 
   get stdout(): ReadableStream<Uint8Array> {
     if (!this.#stdoutWeb) {
-      this.#outClaimed = true;
       this.#stdoutWeb = this.#child.stdout
         ? (Readable.toWeb(this.#child.stdout) as unknown as ReadableStream<
           Uint8Array
@@ -200,7 +184,6 @@ class DenoChildProcess {
 
   get stderr(): ReadableStream<Uint8Array> {
     if (!this.#stderrWeb) {
-      this.#errClaimed = true;
       this.#stderrWeb = this.#child.stderr
         ? (Readable.toWeb(this.#child.stderr) as unknown as ReadableStream<
           Uint8Array
@@ -220,13 +203,39 @@ class DenoChildProcess {
   }
 
   async output(): Promise<CommandOutput> {
+    if (!this.#outputPromise) {
+      this.#outputPromise = this.#collectOutput();
+    }
+    return await this.#outputPromise;
+  }
+
+  async #collectOutput(): Promise<CommandOutput> {
+    if (this.#stdoutWeb || this.#stderrWeb) {
+      const status = await this.status;
+      return {
+        code: status.code,
+        signal: status.signal,
+        success: status.success,
+        stdout: new Uint8Array(),
+        stderr: new Uint8Array(),
+      };
+    }
+
+    const outChunks: Uint8Array[] = [];
+    const errChunks: Uint8Array[] = [];
+    this.#child.stdout?.on("data", (c: Buffer) => {
+      outChunks.push(new Uint8Array(c));
+    });
+    this.#child.stderr?.on("data", (c: Buffer) => {
+      errChunks.push(new Uint8Array(c));
+    });
     const status = await this.status;
     return {
       code: status.code,
       signal: status.signal,
       success: status.success,
-      stdout: concat(this.#outChunks),
-      stderr: concat(this.#errChunks),
+      stdout: concat(outChunks),
+      stderr: concat(errChunks),
     };
   }
 
