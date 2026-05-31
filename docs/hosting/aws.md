@@ -183,7 +183,7 @@ Takosumi reference implementation の AWS profile は次の adapter clients
 | `aws-kms`                    | KMS key + grant boundary      | `src/providers/aws/kms.ts`             |
 | `aws-secrets-manager`        | Secrets Manager rotation      | `src/providers/aws/secrets_manager.ts` |
 | `aws-alb-route53-router`     | ALB target group + Route53    | `src/providers/aws/load_balancer.ts`   |
-| `aws-runtime-agent-registry` | runtime-agent enrolment store | `src/providers/aws/gateway.ts`         |
+| `aws-runtime-agent-registry` | runtime-agent endpoint config | `src/providers/aws/gateway.ts`         |
 
 profile JSON (`profiles/aws.example.json`) で `clients.*` を上記 client
 名に向けると、takosumi.com reference implementation の provider adapter wiring
@@ -200,7 +200,7 @@ profile JSON (`profiles/aws.example.json`) で `clients.*` を上記 client
 | RDS / S3 / SQS / KMS / Secrets resource の lifecycle               | no                     | yes (provider)  |
 | ECS task definition apply / desired count 調整                     | no                     | yes (provider)  |
 | ALB listener rule + Route53 record 同期                            | no                     | yes (provider)  |
-| runtime-agent enrolment + work lease                               | yes (process deploy)   | yes (work pull) |
+| runtime-agent HTTP lifecycle endpoint                              | yes (process deploy)   | yes (lifecycle RPC) |
 | drift 検出 / rollback                                              | no                     | yes (provider)  |
 
 ### IAM role / policy 設計
@@ -334,36 +334,34 @@ gateway URL を使うと Cloudflare Worker から AWS SDK を直接呼べない�
 ### runtime-agent を AWS に置く
 
 Cloudflare 上の kernel が直接 AWS resource を触るのではなく、AWS 側に
-runtime-agent を常駐させて work lease を pull する方式です。
+runtime-agent HTTP endpoint を常駐させて lifecycle RPC を実行する方式です。
 
-**1. runtime-agent process を準備**:
+**1. runtime-agent connector registry を準備**:
 
 ```ts
 // /opt/takos/runtime-agent.ts
-import {
-  RuntimeAgentHttpClient,
-  RuntimeAgentLoop,
-} from "@takos/takosumi-plugins/runtime-agent";
-import { awsProviderExecutors } from "@takos/takosumi-plugins/providers/aws";
+import { serveRuntimeAgent } from "@takosjp/takosumi/runtime-agent";
+import { buildConnectorRegistry } from "@takosjp/takosumi-plugins/connectors";
 
-const client = new RuntimeAgentHttpClient({
-  baseUrl: process.env.TAKOS_KERNEL_URL!,
-  enrollmentToken: process.env.TAKOS_RUNTIME_AGENT_TOKEN!,
-});
-
-const loop = new RuntimeAgentLoop({
-  client,
-  agentId: process.env.HOSTNAME ?? "runtime-agent",
-  provider: "aws",
-  capabilities: {
-    kinds: ["aws.ecs.deploy", "aws.rds.materialize", "aws.s3.materialize"],
-  },
-  executors: awsProviderExecutors({
+const registry = buildConnectorRegistry({
+  aws: {
     region: "ap-northeast-1",
-    accountId: "123456789012",
-  }),
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    sessionToken: process.env.AWS_SESSION_TOKEN,
+    fargateClusterName: "takosumi",
+    fargateSubnetIds: process.env.AWS_FARGATE_SUBNET_IDS?.split(",") ?? [],
+    fargateSecurityGroupIds:
+      process.env.AWS_FARGATE_SECURITY_GROUP_IDS?.split(",") ?? [],
+  },
 });
-await loop.run();
+
+serveRuntimeAgent({
+  registry,
+  token: process.env.TAKOSUMI_AGENT_TOKEN!,
+  hostname: "0.0.0.0",
+  port: Number(process.env.PORT ?? "8789"),
+});
 ```
 
 **2. EC2 / Fargate に deploy**:
@@ -378,9 +376,9 @@ After=network.target
 
 [Service]
 Type=simple
-Environment=TAKOS_KERNEL_URL=https://admin.takos.example.com
+Environment=PORT=8789
 EnvironmentFile=/etc/takos/runtime-agent.env
-ExecStart=/usr/local/bin/deno run --allow-net --allow-env /opt/takos/runtime-agent.ts
+ExecStart=/usr/local/bin/bun /opt/takos/runtime-agent.ts
 Restart=always
 User=takos
 
@@ -402,12 +400,12 @@ Fargate (ECS task definition):
     "essential": true,
     "secrets": [
       {
-        "name": "TAKOS_RUNTIME_AGENT_TOKEN",
+        "name": "TAKOSUMI_AGENT_TOKEN",
         "valueFrom": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:takos/containers/agent-token"
       }
     ],
     "environment": [
-      { "name": "TAKOS_KERNEL_URL", "value": "https://admin.takos.example.com" }
+      { "name": "PORT", "value": "8789" }
     ]
   }],
   "requiresCompatibilities": ["FARGATE"],
@@ -418,8 +416,9 @@ Fargate (ECS task definition):
 }
 ```
 
-agent は kernel に enroll → heartbeat → lease pull → ECS / RDS / S3 / SQS / KMS
-/ Secrets ops を実行→結果を report します。詳細は
+runtime-agent は bearer 保護の lifecycle HTTP API で kernel からの apply / destroy /
+describe / verify envelope を受け、ECS / RDS / S3 / SQS / KMS / Secrets ops を実行して
+結果を返します。詳細は
 [Multi-cloud](/hosting/multi-cloud#runtime-agent-placement) を参照。
 
 ### ALB routing の DNS 設定

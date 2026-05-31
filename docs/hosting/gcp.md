@@ -187,7 +187,7 @@ Takosumi reference implementation の GCP profile は次の adapter clients
 | `gcp-cloud-kms`               | Cloud KMS key + version       | `src/providers/gcp/kms.ts`            |
 | `gcp-secret-manager`          | Secret Manager rotation       | `src/providers/gcp/secret_manager.ts` |
 | `gcp-load-balancer-router`    | HTTP(S) LB + Cloud DNS        | `src/providers/gcp/load_balancer.ts`  |
-| `gcp-runtime-agent-registry`  | runtime-agent enrolment store | `src/providers/gcp/gateway.ts`        |
+| `gcp-runtime-agent-registry`  | runtime-agent endpoint config | `src/providers/gcp/gateway.ts`        |
 
 profile JSON (`profiles/gcp.example.json`) で `clients.*` を上記 client
 名に向けると、takosumi.com reference implementation の provider adapter wiring
@@ -204,7 +204,7 @@ profile JSON (`profiles/gcp.example.json`) で `clients.*` を上記 client
 | Cloud SQL / GCS / Pub/Sub / KMS / Secret resource lifecycle                | no                     | yes (provider)  |
 | Cloud Run service deploy / revision traffic split                          | no                     | yes (provider)  |
 | HTTP(S) LB url-map + Cloud DNS record 同期                                 | no                     | yes (provider)  |
-| runtime-agent enrolment + work lease                                       | yes (process deploy)   | yes (work pull) |
+| runtime-agent HTTP lifecycle endpoint                                      | yes (process deploy)   | yes (lifecycle RPC) |
 | drift 検出 / rollback                                                      | no                     | yes (provider)  |
 
 ### IAM role 設計
@@ -320,9 +320,9 @@ spec:
       containers:
         - image: ghcr.io/takos/runtime-agent:latest
           env:
-            - name: TAKOS_KERNEL_URL
-              value: "https://admin.takos.example.com"
-            - name: TAKOS_RUNTIME_AGENT_TOKEN
+            - name: PORT
+              value: "8789"
+            - name: TAKOSUMI_AGENT_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: takos-agent-token
@@ -335,9 +335,9 @@ gcloud run services replace cloudrun.yaml \
   --region=asia-northeast1
 ```
 
-Cloud Run の min instance を 1 にして常駐させると lease pull が即時に
-反応します。serverless で間欠的に起動する場合は heartbeat の頻度を下げ、
-`heartbeatIntervalMs` を 60000 程度に伸ばします。
+Cloud Run の min instance を 1 にして常駐させると lifecycle RPC endpoint の cold
+start を避けられます。serverless で間欠的に起動する場合は operator 側の timeout /
+retry budget を長めに取ります。
 
 #### GKE pod
 
@@ -356,14 +356,15 @@ spec:
         - name: agent
           image: ghcr.io/takos/runtime-agent:latest
           env:
-            - name: TAKOS_KERNEL_URL
-              value: https://admin.takos.example.com
+            - name: PORT
+              value: "8789"
           envFrom:
             - secretRef: { name: takos-runtime-agent-token }
 ```
 
-agent は kernel に enroll → heartbeat → lease pull → Cloud Run / Cloud SQL / GCS
-/ Pub/Sub / KMS / Secret ops を実行→結果を report します。
+runtime-agent は bearer 保護の lifecycle HTTP API で kernel からの apply / destroy /
+describe / verify envelope を受け、Cloud Run / Cloud SQL / GCS / Pub/Sub / KMS /
+Secret ops を実行して結果を返します。
 
 ### GCP LB routing の DNS 設定
 

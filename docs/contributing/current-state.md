@@ -43,6 +43,11 @@ Shell-owned (`takos/` 直下):
 
 - **public HTTP API** (`src/worker` + `src/routes`) — chat / agent / memory / space / tools / Git の primitive を公開する
   canonical destination
+- **single Worker deploy unit** — Cloudflare profile は `src/worker/index.ts` から
+  Hono routes と runtime / executor Containers DO class を同時に export する。追加の
+  `takos-runtime-host` / `takos-executor-host` Worker は持たない
+- **container host callbacks** — runtime callback は `/forward/*`、agent-control
+  callback は `/api/internal/v1/agent-control/*` で同一 Worker 内に集約する
 - **OIDC consumer** — `/auth/oidc/login` / `/auth/oidc/callback` /
   `/auth/logout` で operator account plane (Takosumi Accounts) を issuer
   として消費する。自前 OAuth provider / `/oauth/*` route は廃止済 (Phase 1.4)
