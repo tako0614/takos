@@ -12,6 +12,7 @@ import {
     as verifyTakosInternalRequestFromHeaders,
 } from "takosumi-contract/internal/rpc";
 import { TAKOS_GIT_CAPABILITIES } from "takos-git-contract";
+import { getEnv } from "./runtime.ts";
 
 const TAKOS_GIT_EXPECTED_AUDIENCE = "takos-git";
 const TAKOS_GIT_DEFAULT_INTERNAL_CALLERS = [
@@ -23,7 +24,7 @@ const TAKOS_GIT_DEFAULT_INTERNAL_CALLERS = [
 export function readInternalAuth(
   request: Request,
 ): Promise<TakosGitInternalAuth | { ok: false; error: string }> {
-  const secret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
+  const secret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
   return readInternalAuthWithSecret(request, secret);
 }
 
@@ -104,7 +105,7 @@ async function readInternalAuthWithSecret(
 }
 
 function allowedInternalCallers(): string[] {
-  const configured = Deno.env.get("TAKOS_GIT_INTERNAL_CALLERS");
+  const configured = getEnv("TAKOS_GIT_INTERNAL_CALLERS");
   return (configured?.split(",") ?? TAKOS_GIT_DEFAULT_INTERNAL_CALLERS)
     .map((caller) => caller.trim())
     .filter(Boolean);

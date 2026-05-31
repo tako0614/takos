@@ -27,6 +27,7 @@ import {
   verifyConfiguredGitCommit,
 } from "./git.ts";
 import { isSafeTreePath } from "./validation.ts";
+import { getEnv } from "./runtime.ts";
 
 const DEFAULT_MAX_BLOB_BYTES = 1024 * 1024;
 const DEFAULT_MAX_SOURCE_SNAPSHOT_FILES = 5000;
@@ -49,7 +50,7 @@ function envIntegerOr(
   fallback: number,
   minimum: number,
 ): number {
-  const configured = Number(Deno.env.get(name));
+  const configured = Number(getEnv(name));
   if (Number.isInteger(configured) && configured >= minimum) return configured;
   return fallback;
 }

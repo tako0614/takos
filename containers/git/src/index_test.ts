@@ -1,6 +1,16 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
+import {
+  deleteEnv,
+  getEnv,
+  makeDirectory,
+  makeTempDir,
+  pathStat,
+  removePath,
+  setEnv,
+  spawnCommand,
+} from "./runtime.ts";
 // Bun migration: redirected from "node:sqlite" (unavailable in Bun 1.3.14) to
 // the bun:sqlite-backed DatabaseSync shim. Same class name and surface.
 import { DatabaseSync } from "../shims/node-sqlite.ts";
@@ -22,10 +32,10 @@ const actor: TakosActorContext = {
 };
 
 test("readiness distinguishes liveness from configured storage", async () => {
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  const originalDevInMemory = Deno.env.get("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
-  Deno.env.delete("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.delete("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  const originalDevInMemory = getEnv("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
+  deleteEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  deleteEnv("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
   try {
     const health = await app.request("/health");
     assert.equal(health.status, 200);
@@ -38,7 +48,7 @@ test("readiness distinguishes liveness from configured storage", async () => {
     assert.equal(notReady.status, 503);
     assert.equal((await notReady.json()).code, "git_storage_not_configured");
 
-    Deno.env.set("TAKOS_GIT_DEV_IN_MEMORY_METADATA", "true");
+    setEnv("TAKOS_GIT_DEV_IN_MEMORY_METADATA", "true");
     const ready = await app.request("/ready");
     assert.equal(ready.status, 200);
     assert.deepEqual(await ready.json(), {
@@ -193,9 +203,9 @@ test("repository metadata rejects account-owned request shape", async () => {
 });
 
 test("repository metadata creation initializes an on-disk bare repository", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   try {
     const repositoryId = `metadata-${crypto.randomUUID()}`;
     const create = await signedRequest({
@@ -210,7 +220,7 @@ test("repository metadata creation initializes an on-disk bare repository", asyn
 
     assert.equal(create.status, 201);
     assert.equal(
-      (await Deno.stat(`${root}/${repositoryId}.git`)).isDirectory,
+      (await pathStat(`${root}/${repositoryId}.git`)).isDirectory,
       true,
     );
     assert.equal(
@@ -246,14 +256,14 @@ test("repository metadata creation initializes an on-disk bare repository", asyn
     assert.match(resolvedBody.resolvedCommit, /^[0-9a-f]{40}$/);
   } finally {
     restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("repository metadata creation can initialize an empty bare repository", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   try {
     const repositoryId = `bare-${crypto.randomUUID()}`;
     const create = await signedRequest({
@@ -290,20 +300,20 @@ test("repository metadata creation can initialize an empty bare repository", asy
     });
   } finally {
     restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("external import creates a Git-owned bare repository from a remote", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  const originalAllowLocal = Deno.env.get(
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  const originalAllowLocal = getEnv(
     "TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL",
   );
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   // The fixture uses an on-disk bare repository as the remote, which is
   // rejected by the protocol allowlist by default. Opt in for the test.
-  Deno.env.set("TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL", "true");
+  setEnv("TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL", "true");
   try {
     const remote = await createRemoteFixture(root);
     const repositoryId = `imported-${crypto.randomUUID()}`;
@@ -345,14 +355,14 @@ test("external import creates a Git-owned bare repository from a remote", async 
       "TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL",
       originalAllowLocal,
     );
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("external import rejects unsupported remote protocols", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   try {
     const cases = [
       "file:///tmp/evil.git",
@@ -383,14 +393,14 @@ test("external import rejects unsupported remote protocols", async () => {
     }
   } finally {
     restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("external import rejects remoteUrl hosts that resolve to private IPs", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   try {
     const cases = [
       "https://10.0.0.1/repo.git",
@@ -427,18 +437,18 @@ test("external import rejects remoteUrl hosts that resolve to private IPs", asyn
     }
   } finally {
     restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("external fetch updates Git-owned refs from a remote", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  const originalAllowLocal = Deno.env.get(
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  const originalAllowLocal = getEnv(
     "TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL",
   );
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
-  Deno.env.set("TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL", "true");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
+  setEnv("TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL", "true");
   try {
     const remote = await createRemoteFixture(root);
     const repositoryId = `fetch-${crypto.randomUUID()}`;
@@ -489,14 +499,14 @@ test("external fetch updates Git-owned refs from a remote", async () => {
       "TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL",
       originalAllowLocal,
     );
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("repository metadata persists under configured repository root", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   try {
     const repositoryId = `durable-${crypto.randomUUID()}`;
     const create = await signedRequest({
@@ -511,7 +521,7 @@ test("repository metadata persists under configured repository root", async () =
 
     assert.equal(create.status, 201);
     assert.equal(
-      (await Deno.stat(`${root}/.takos/containers/git.sqlite`)).isFile,
+      (await pathStat(`${root}/.takos/containers/git.sqlite`)).isFile,
       true,
     );
 
@@ -530,14 +540,14 @@ test("repository metadata persists under configured repository root", async () =
     });
   } finally {
     restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("source resolver resolves refs from configured bare repository root", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const response = await signedResolveRequest({
         repositoryId: fixture.repositoryId,
@@ -560,8 +570,8 @@ test("source resolver resolves refs from configured bare repository root", async
 
 test("source resolver verifies literal commits against configured bare repository root", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const response = await signedResolveRequest({
         repositoryId: fixture.repositoryId,
@@ -583,8 +593,8 @@ test("source resolver verifies literal commits against configured bare repositor
 
 test("source resolver rejects missing literal commits when repository root is configured", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const missingCommit = "f".repeat(40);
       const response = await signedResolveRequest({
@@ -608,8 +618,8 @@ test("source resolver rejects missing literal commits when repository root is co
 
 test("refs endpoint lists refs from configured bare repository root", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const response = await signedRequest({
         method: "GET",
@@ -634,8 +644,8 @@ test("refs endpoint lists refs from configured bare repository root", async () =
 
 test("object endpoint returns git cat-file pretty output from configured bare repository root", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const response = await signedRequest({
         method: "GET",
@@ -667,8 +677,8 @@ test("object endpoint returns git cat-file pretty output from configured bare re
 
 test("raw object endpoint returns git cat-file raw content", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const response = await signedRequest({
         method: "GET",
@@ -694,8 +704,8 @@ test("raw object endpoint returns git cat-file raw content", async () => {
 
 test("repository browsing APIs return tree, blob, and commits", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const tree = await signedRequest({
         method: "GET",
@@ -812,10 +822,10 @@ test("repository browsing APIs return tree, blob, and commits", async () => {
 
 test("blob API enforces configured response size limit", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    const originalLimit = Deno.env.get("TAKOS_GIT_MAX_BLOB_BYTES");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
-    Deno.env.set("TAKOS_GIT_MAX_BLOB_BYTES", "1");
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    const originalLimit = getEnv("TAKOS_GIT_MAX_BLOB_BYTES");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    setEnv("TAKOS_GIT_MAX_BLOB_BYTES", "1");
     try {
       const blob = await signedRequest({
         method: "GET",
@@ -837,9 +847,9 @@ test("blob API enforces configured response size limit", async () => {
 });
 
 test("pull request metadata persists comments and reviews in sqlite", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   try {
     const repositoryId = `pr-${crypto.randomUUID()}`;
     const createRepository = await signedRequest({
@@ -934,14 +944,14 @@ test("pull request metadata persists comments and reviews in sqlite", async () =
     }
   } finally {
     restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("pull request diff returns hunked file changes", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const createPr = await signedRequest({
         method: "POST",
@@ -990,8 +1000,8 @@ test("pull request diff returns hunked file changes", async () => {
 
 test("pull request merge fast-forwards base branch and marks PR merged", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const createPr = await signedRequest({
         method: "POST",
@@ -1037,9 +1047,9 @@ test("pull request merge fast-forwards base branch and marks PR merged", async (
 });
 
 test("repository owner authorization rejects other actor spaces", async () => {
-  const root = await Deno.makeTempDir();
-  const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-  Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", root);
+  const root = await makeTempDir("takos-git-test-");
+  const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+  setEnv("TAKOS_GIT_REPOSITORY_ROOT", root);
   try {
     const repositoryId = `authz-${crypto.randomUUID()}`;
     const createRepository = await signedRequest({
@@ -1071,14 +1081,14 @@ test("repository owner authorization rejects other actor spaces", async () => {
     });
   } finally {
     restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 });
 
 test("source snapshot pins refs to commit and tree digest", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const response = await signedRequest({
         method: "POST",
@@ -1114,16 +1124,16 @@ test("source snapshot pins refs to commit and tree digest", async () => {
 
 test("source snapshot enforces configured file and manifest limits", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    const originalFileLimit = Deno.env.get(
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    const originalFileLimit = getEnv(
       "TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES",
     );
-    const originalManifestLimit = Deno.env.get(
+    const originalManifestLimit = getEnv(
       "TAKOS_GIT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES",
     );
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
-      Deno.env.set("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES", "0");
+      setEnv("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES", "0");
       const tooManyFiles = await signedRequest({
         method: "POST",
         path: TAKOS_GIT_INTERNAL_PATHS.sourceSnapshot,
@@ -1140,7 +1150,7 @@ test("source snapshot enforces configured file and manifest limits", async () =>
       );
 
       restoreEnv("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES", originalFileLimit);
-      Deno.env.set("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES", "1");
+      setEnv("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES", "1");
       const manifestTooLarge = await signedRequest({
         method: "POST",
         path: TAKOS_GIT_INTERNAL_PATHS.sourceSnapshot,
@@ -1169,10 +1179,10 @@ test("source snapshot enforces configured file and manifest limits", async () =>
 
 test("smart HTTP rejects unauthenticated clone/fetch discovery", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    const originalSecret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
-    Deno.env.set("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    const originalSecret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    setEnv("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
     try {
       const response = await app.request(
         `/${fixture.repositoryId}.git/info/refs?service=git-upload-pack`,
@@ -1190,10 +1200,10 @@ test("smart HTTP rejects unauthenticated clone/fetch discovery", async () => {
 
 test("smart HTTP rejects unauthenticated push endpoint", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    const originalSecret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
-    Deno.env.set("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    const originalSecret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    setEnv("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
     try {
       const response = await app.request(
         `/${fixture.repositoryId}.git/git-receive-pack`,
@@ -1218,8 +1228,8 @@ test("smart HTTP rejects unauthenticated push endpoint", async () => {
 
 test("smart HTTP serves signed clone/fetch discovery", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
       const path = `/${fixture.repositoryId}.git/info/refs`;
       const response = await signedRequest({
@@ -1243,21 +1253,20 @@ test("smart HTTP serves signed clone/fetch discovery", async () => {
 
 test("smart HTTP rejects normal git clients because they cannot sign internal requests", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    const originalSecret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
-    Deno.env.set("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
-    const server = Deno.serve({
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    const originalSecret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    setEnv("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
+    const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
-      onListen() {},
-    }, app.fetch);
+      fetch: app.fetch,
+    });
     try {
-      const cloneDir = await Deno.makeTempDir();
+      const cloneDir = await makeTempDir("takos-git-test-");
       try {
-        const addr = server.addr as Deno.NetAddr;
         const remoteUrl =
-          `http://127.0.0.1:${addr.port}/${fixture.repositoryId}.git`;
+          `http://127.0.0.1:${server.port}/${fixture.repositoryId}.git`;
         const clone = await gitOutput(["clone", remoteUrl, cloneDir]);
 
         assert.equal(clone.success, false);
@@ -1266,10 +1275,10 @@ test("smart HTTP rejects normal git clients because they cannot sign internal re
           /Authentication failed|The requested URL returned error: 401|could not read Username/,
         );
       } finally {
-        await Deno.remove(cloneDir, { recursive: true });
+        await removePath(cloneDir, { recursive: true });
       }
     } finally {
-      await server.shutdown();
+      server.stop(true);
       restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
       restoreEnv("TAKOS_INTERNAL_SERVICE_SECRET", originalSecret);
     }
@@ -1278,17 +1287,16 @@ test("smart HTTP rejects normal git clients because they cannot sign internal re
 
 test("smart HTTP supports git CLI clone, push, and fetch through a signed app proxy", async () => {
   await withBareRepository(async (fixture) => {
-    const originalRoot = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT");
-    const originalSecret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
-    Deno.env.set("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
-    Deno.env.set("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
+    const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
+    const originalSecret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
+    setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
+    setEnv("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
     const server = signedSmartHttpProxy();
     try {
-      const addr = server.addr as Deno.NetAddr;
       const remoteUrl =
-        `http://127.0.0.1:${addr.port}/${fixture.repositoryId}.git`;
-      const cloneDir = await Deno.makeTempDir();
-      const fetchDir = await Deno.makeTempDir();
+        `http://127.0.0.1:${server.port}/${fixture.repositoryId}.git`;
+      const cloneDir = await makeTempDir("takos-git-test-");
+      const fetchDir = await makeTempDir("takos-git-test-");
       try {
         await git(["clone", remoteUrl, cloneDir]);
         assert.equal(
@@ -1323,11 +1331,11 @@ test("smart HTTP supports git CLI clone, push, and fetch through a signed app pr
         ])).trim();
         assert.equal(fetchedCommit, remoteCommit);
       } finally {
-        await Deno.remove(cloneDir, { recursive: true });
-        await Deno.remove(fetchDir, { recursive: true });
+        await removePath(cloneDir, { recursive: true });
+        await removePath(fetchDir, { recursive: true });
       }
     } finally {
-      await server.shutdown();
+      server.stop(true);
       restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
       restoreEnv("TAKOS_INTERNAL_SERVICE_SECRET", originalSecret);
     }
@@ -1345,8 +1353,8 @@ test("production Dockerfile installs git CLI for Smart HTTP", async () => {
 });
 
 test("source resolver still requires internal signature auth", async () => {
-  const originalSecret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
-  Deno.env.set("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
+  const originalSecret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
+  setEnv("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
   try {
     const response = await app.request(TAKOS_GIT_INTERNAL_PATHS.resolveSource, {
       method: "POST",
@@ -1430,7 +1438,7 @@ test("isSafeAuthHeader rejects Unicode line separators", () => {
 
 test("applyHardenedConfigToExistingRepo backfills receive/transfer/hooks config",
   async () => {
-    const root = await Deno.makeTempDir();
+    const root = await makeTempDir("takos-git-test-");
     try {
       const repoPath = `${root}/legacy.git`;
       await git(["init", "--bare", repoPath]);
@@ -1468,12 +1476,12 @@ test("applyHardenedConfigToExistingRepo backfills receive/transfer/hooks config"
 
       // Marker file records that backfill ran so the boot walk can skip
       // this repository on subsequent restarts.
-      const markerStat = await Deno.stat(
+      const markerStat = await pathStat(
         `${repoPath}/.takos-hardening-applied`,
       );
       assert.equal(markerStat.isFile, true);
     } finally {
-      await Deno.remove(root, { recursive: true });
+      await removePath(root, { recursive: true });
     }
   },
 );
@@ -1515,15 +1523,15 @@ async function signedRequest(input: {
   readonly actorOverride?: TakosActorContext;
   readonly devInMemoryMetadata?: boolean;
 }): Promise<Response> {
-  const originalSecret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
-  const originalCallers = Deno.env.get("TAKOS_GIT_INTERNAL_CALLERS");
-  const originalDevInMemory = Deno.env.get("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
-  Deno.env.set("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
-  Deno.env.set("TAKOS_GIT_INTERNAL_CALLERS", "takos-worker,takosumi");
+  const originalSecret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
+  const originalCallers = getEnv("TAKOS_GIT_INTERNAL_CALLERS");
+  const originalDevInMemory = getEnv("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
+  setEnv("TAKOS_INTERNAL_SERVICE_SECRET", "test-secret");
+  setEnv("TAKOS_GIT_INTERNAL_CALLERS", "takos-worker,takosumi");
   if (input.devInMemoryMetadata ?? true) {
-    Deno.env.set("TAKOS_GIT_DEV_IN_MEMORY_METADATA", "true");
+    setEnv("TAKOS_GIT_DEV_IN_MEMORY_METADATA", "true");
   } else {
-    Deno.env.delete("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
+    deleteEnv("TAKOS_GIT_DEV_IN_MEMORY_METADATA");
   }
   try {
     const body = input.body ?? "";
@@ -1591,37 +1599,37 @@ function defaultCapabilities(method: string, path: string): readonly string[] {
   return [TAKOS_GIT_CAPABILITIES.repoWrite];
 }
 
-function signedSmartHttpProxy(): Deno.HttpServer {
-  return Deno.serve({
+function signedSmartHttpProxy(): Bun.Server<unknown> {
+  return Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
-    onListen() {},
-  }, async (request) => {
-    const url = new URL(request.url);
-    const body = new Uint8Array(await request.arrayBuffer());
-    const signed = await signTakosInternalRequest({
-      method: request.method,
-      path: url.pathname,
-      query: url.search,
-      body,
-      actor,
-      caller: "takos-worker",
-      audience: "takos-git",
-      capabilities: smartHttpCapabilities(url),
-      timestamp: new Date().toISOString(),
-      secret: "test-secret",
-    });
-    const headers = new Headers(signed.headers);
-    copyHeader(request.headers, headers, "content-type");
-    copyHeader(request.headers, headers, "accept");
-    headers.set("content-length", String(body.byteLength));
-    return await app.fetch(
-      new Request(request.url, {
+    fetch: async (request) => {
+      const url = new URL(request.url);
+      const body = new Uint8Array(await request.arrayBuffer());
+      const signed = await signTakosInternalRequest({
         method: request.method,
-        headers,
-        body: body.byteLength > 0 ? body : undefined,
-      }),
-    );
+        path: url.pathname,
+        query: url.search,
+        body,
+        actor,
+        caller: "takos-worker",
+        audience: "takos-git",
+        capabilities: smartHttpCapabilities(url),
+        timestamp: new Date().toISOString(),
+        secret: "test-secret",
+      });
+      const headers = new Headers(signed.headers);
+      copyHeader(request.headers, headers, "content-type");
+      copyHeader(request.headers, headers, "accept");
+      headers.set("content-length", String(body.byteLength));
+      return await app.fetch(
+        new Request(request.url, {
+          method: request.method,
+          headers,
+          body: body.byteLength > 0 ? body : undefined,
+        }),
+      );
+    },
   });
 }
 
@@ -1649,7 +1657,7 @@ async function withBareRepository(
     blob: string;
   }) => Promise<void>,
 ) {
-  const root = await Deno.makeTempDir();
+  const root = await makeTempDir("takos-git-test-");
   try {
     const repositoryId = "repo_fixture";
     const barePath = `${root}/${repositoryId}.git`;
@@ -1684,7 +1692,7 @@ async function withBareRepository(
     const featureCommit = await git(["-C", workPath, "rev-parse", "HEAD"]);
     const commit = await git(["-C", workPath, "rev-parse", "main"]);
     const blob = await git(["-C", workPath, "rev-parse", "main:README.md"]);
-    await Deno.mkdir(`${root}/.takos`, { recursive: true });
+    await makeDirectory(`${root}/.takos`, { recursive: true });
     const now = new Date().toISOString();
     await writeFile(
       `${root}/.takos/repositories.json`,
@@ -1715,7 +1723,7 @@ async function withBareRepository(
       blob: blob.trim(),
     });
   } finally {
-    await Deno.remove(root, { recursive: true });
+    await removePath(root, { recursive: true });
   }
 }
 
@@ -1755,10 +1763,10 @@ async function git(args: string[]): Promise<string> {
 async function gitOutput(
   args: string[],
 ): Promise<{ success: boolean; stdout: string; stderr: string }> {
-  const output = await new Deno.Command("git", {
+  const output = await spawnCommand("git", {
     args,
-    stdout: "piped",
-    stderr: "piped",
+    stdout: "pipe",
+    stderr: "pipe",
   }).output();
   return {
     success: output.success,
@@ -1768,6 +1776,6 @@ async function gitOutput(
 }
 
 function restoreEnv(key: string, value: string | undefined) {
-  if (value === undefined) Deno.env.delete(key);
-  else Deno.env.set(key, value);
+  if (value === undefined) deleteEnv(key);
+  else setEnv(key, value);
 }

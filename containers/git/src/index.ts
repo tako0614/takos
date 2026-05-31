@@ -66,6 +66,7 @@ import {
 } from "./external-import.ts";
 import { registerPullRequestRoutes } from "./routes-pull-requests.ts";
 import { handleSmartHttp, isGitSmartHttpPath } from "./smart-http.ts";
+import { getEnv } from "./runtime.ts";
 import {
   repositoryOwnerSpaceId,
   validateExternalFetchRequest,
@@ -721,14 +722,14 @@ function validateExternalImportRequest(
 }
 
 if (import.meta.main) {
-  const port = Number(Deno.env.get("PORT") ?? "8790");
+  const port = Number(getEnv("PORT") ?? "8790");
   // Backfill hardened bare-repo config (receive.denyNonFastForwards,
   // receive.denyDeletes, transfer.fsckObjects, core.hooksPath=/dev/null)
   // across every pre-existing repo under TAKOS_GIT_REPOSITORY_ROOT.
   // Runs once per process and writes a `.takos-hardening-applied`
   // marker file in each repo so the walk is cheap on restart.
   runRepositoryHardeningBackfillOnce();
-  Deno.serve({ port }, app.fetch);
+  Bun.serve({ port, fetch: app.fetch });
 }
 
 export default app;

@@ -30,7 +30,7 @@ export type ChildProcess = {
   };
   stdout: ReadableStream<Uint8Array>;
   stderr: ReadableStream<Uint8Array>;
-  kill(signal?: string): void;
+  kill(signal?: NodeJS.Signals | number): void;
   exited: Promise<number>;
   status: Promise<{ code: number; success: boolean }>;
   output(): Promise<CommandOutput>;
@@ -64,14 +64,14 @@ export function spawnCommand(
   command: string,
   options: {
     args?: string[];
-    stdin?: "pipe";
+    stdin?: "pipe" | "ignore";
     stdout?: "pipe";
     stderr?: "pipe";
     env?: Record<string, string>;
   } = {},
 ): ChildProcess {
   const proc = Bun.spawn([command, ...(options.args ?? [])], {
-    stdin: options.stdin ?? "pipe",
+    stdin: options.stdin ?? "ignore",
     stdout: options.stdout ?? "pipe",
     stderr: options.stderr ?? "pipe",
     env: options.env,
@@ -81,10 +81,10 @@ export function spawnCommand(
     success: code === 0,
   }));
   return {
-    stdin: proc.stdin,
+    stdin: proc.stdin as ChildProcess["stdin"],
     stdout: proc.stdout,
     stderr: proc.stderr,
-    kill: (signal?: string) => proc.kill(signal),
+    kill: (signal?: NodeJS.Signals | number) => proc.kill(signal),
     exited: proc.exited,
     status,
     output: async () => {

@@ -1,7 +1,6 @@
-# Bun migration: install the Deno runtime compat globals before any module
-# evaluates, so the Deno.* runtime APIs the source still uses (Deno.env,
-# Deno.makeTempDir, Deno.serve, Deno.Command, ...) work under bun without source
-# edits. Test files are native bun:test.
+# Bun migration: keep the legacy Deno compatibility shim preloaded while the
+# container runs under Bun. Source uses native Bun/Node wrappers; the shim keeps
+# older transitive/runtime entrypoints from failing if they still touch Deno.*.
 [test]
 preload = ["./shims/deno-compat.ts"]
 

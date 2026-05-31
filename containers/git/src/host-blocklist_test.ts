@@ -1,10 +1,11 @@
 import { test } from "bun:test";
 import * as assert from "node:assert/strict";
 import { classifyHost, parseIpv6 } from "./host-blocklist.ts";
+import { deleteEnv, getEnv, setEnv } from "./runtime.ts";
 
 function restoreEnv(name: string, value: string | undefined): void {
-  if (value === undefined) Deno.env.delete(name);
-  else Deno.env.set(name, value);
+  if (value === undefined) deleteEnv(name);
+  else setEnv(name, value);
 }
 
 test("classifyHost blocks IPv4 literals in private/metadata ranges", async () => {
@@ -67,8 +68,8 @@ test("classifyHost fails closed for a hostname that does not resolve", async () 
 });
 
 test("TAKOS_GIT_SSRF_SKIP_DNS_RESOLUTION opt-out skips DNS but still blocks IP literals", async () => {
-  const original = Deno.env.get("TAKOS_GIT_SSRF_SKIP_DNS_RESOLUTION");
-  Deno.env.set("TAKOS_GIT_SSRF_SKIP_DNS_RESOLUTION", "true");
+  const original = getEnv("TAKOS_GIT_SSRF_SKIP_DNS_RESOLUTION");
+  setEnv("TAKOS_GIT_SSRF_SKIP_DNS_RESOLUTION", "true");
   try {
     // Hostname is no longer resolved, so it passes (operator-egress model).
     const hostname = await classifyHost("localhost");
