@@ -6,10 +6,9 @@ import path from 'node:path';
 import { assert, assertEquals, assertRejects, assertStringIncludes } from '@std/assert';
 
 const controlRoot = import.meta.dirname!;
-const appRoot = path.resolve(controlRoot, '../../../../../src/worker');
-const sourcePackageRoot = path.resolve(controlRoot, '../..');
-const repoRoot = path.resolve(controlRoot, '../../../../../');
-const takosRoot = path.resolve(repoRoot, '..');
+const takosRoot = path.resolve(controlRoot, '../../../..');
+const sourcePackageRoot = path.join(takosRoot, 'src/worker');
+const appRoot = sourcePackageRoot;
 
 function read(relativePath: string, root = appRoot): Promise<string> {
   return readFile(path.join(root, relativePath), 'utf8');
@@ -215,10 +214,10 @@ Deno.test('local public runtime contract - removes the public local runner shim 
   // src/local-platform/<name>.mjs before deletion, so the contract now covers
   // both locations to keep them from quietly resurfacing in either spot.
   for (const shim of removedShims) {
-    await assertRejects(() => access(path.join(packageRoot, 'src', shim), constants.F_OK));
+    await assertRejects(() => access(path.join(sourcePackageRoot, shim), constants.F_OK));
     await assertRejects(() =>
       access(
-        path.join(packageRoot, 'src/local-platform', shim),
+        path.join(sourcePackageRoot, 'local-platform', shim),
         constants.F_OK,
       )
     );
