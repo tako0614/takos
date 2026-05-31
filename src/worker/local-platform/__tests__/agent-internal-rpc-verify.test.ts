@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -106,7 +107,7 @@ async function signEnvelope(
   };
 }
 
-Deno.test("verifier accepts a valid takos-internal-v3 envelope", async () => {
+test("verifier accepts a valid takos-internal-v3 envelope", async () => {
   const body = JSON.stringify({ runId: RUN_ID, serviceId: SERVICE_ID });
   const path = "/api/internal/v1/agent-control/heartbeat";
   const headers = await signEnvelope({ path, body });
@@ -126,7 +127,7 @@ Deno.test("verifier accepts a valid takos-internal-v3 envelope", async () => {
   assertEquals(verified?.actor.agentId, RUN_ID);
 });
 
-Deno.test("verifier rejects a tampered body (digest mismatch)", async () => {
+test("verifier rejects a tampered body (digest mismatch)", async () => {
   const body = JSON.stringify({ runId: RUN_ID, serviceId: SERVICE_ID });
   const path = "/api/internal/v1/agent-control/heartbeat";
   const headers = await signEnvelope({ path, body });
@@ -140,7 +141,7 @@ Deno.test("verifier rejects a tampered body (digest mismatch)", async () => {
   assertEquals(verified, undefined);
 });
 
-Deno.test("verifier rejects a wrong signature (wrong key)", async () => {
+test("verifier rejects a wrong signature (wrong key)", async () => {
   const body = JSON.stringify({ runId: RUN_ID });
   const path = "/api/internal/v1/agent-control/heartbeat";
   const headers = await signEnvelope({ path, body, secret: "other-secret" });
@@ -154,7 +155,7 @@ Deno.test("verifier rejects a wrong signature (wrong key)", async () => {
   assertEquals(verified, undefined);
 });
 
-Deno.test("verifier rejects an expired timestamp", async () => {
+test("verifier rejects an expired timestamp", async () => {
   const body = JSON.stringify({ runId: RUN_ID });
   const path = "/api/internal/v1/agent-control/heartbeat";
   const headers = await signEnvelope({
@@ -172,7 +173,7 @@ Deno.test("verifier rejects an expired timestamp", async () => {
   assertEquals(verified, undefined);
 });
 
-Deno.test("verifier returns undefined when no envelope headers are present", async () => {
+test("verifier returns undefined when no envelope headers are present", async () => {
   const verified = await verifyAgentInternalRpcFromHeaders({
     method: "POST",
     path: "/api/internal/v1/agent-control/heartbeat",
@@ -230,7 +231,7 @@ function controlRequest(body: string, extraHeaders: Record<string, string>) {
   });
 }
 
-Deno.test("executor host rejects agent-control RPC when key set but envelope missing", async () => {
+test("executor host rejects agent-control RPC when key set but envelope missing", async () => {
   const fetch = await buildLocalExecutorHostFetch(executorEnv(SECRET));
   const response = await fetch(
     controlRequest(JSON.stringify({ agentType: "default" }), {}),
@@ -238,7 +239,7 @@ Deno.test("executor host rejects agent-control RPC when key set but envelope mis
   assertEquals(response.status, 401);
 });
 
-Deno.test("executor host rejects agent-control RPC with invalid envelope when key set", async () => {
+test("executor host rejects agent-control RPC with invalid envelope when key set", async () => {
   const body = JSON.stringify({ agentType: "default" });
   const headers = await signEnvelope({
     path: RUN_CONFIG_PATH,
@@ -250,7 +251,7 @@ Deno.test("executor host rejects agent-control RPC with invalid envelope when ke
   assertEquals(response.status, 401);
 });
 
-Deno.test("executor host accepts agent-control RPC with valid envelope when key set", async () => {
+test("executor host accepts agent-control RPC with valid envelope when key set", async () => {
   const body = JSON.stringify({ agentType: "default" });
   const headers = await signEnvelope({ path: RUN_CONFIG_PATH, body });
   const fetch = await buildLocalExecutorHostFetch(executorEnv(SECRET));
@@ -259,7 +260,7 @@ Deno.test("executor host accepts agent-control RPC with valid envelope when key 
   await response.body?.cancel();
 });
 
-Deno.test("executor host allows agent-control RPC without envelope when key unset", async () => {
+test("executor host allows agent-control RPC without envelope when key unset", async () => {
   const body = JSON.stringify({ agentType: "default" });
   const fetch = await buildLocalExecutorHostFetch(executorEnv());
   const response = await fetch(controlRequest(body, {}));

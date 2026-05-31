@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { assertSpyCalls, stub } from "@std/testing/mock";
 import { createDispatchWorker, type DispatchEnv } from "../../dispatch.ts";
@@ -78,7 +79,7 @@ function createExecutionContext(): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-Deno.test("dispatch routes service-ref deployments through the registry with deploymentId", async () => {
+test("dispatch routes service-ref deployments through the registry with deploymentId", async () => {
   const env = createDispatchEnv();
   let registryCall: { name: string; deploymentId?: string } | null = null;
   const target: RoutingTarget = {
@@ -127,7 +128,7 @@ Deno.test("dispatch routes service-ref deployments through the registry with dep
   });
 });
 
-Deno.test("dispatch retries Cloudflare WFP service lookup without deploymentId", async () => {
+test("dispatch retries Cloudflare WFP service lookup without deploymentId", async () => {
   const env = createDispatchEnv();
   const calls: Array<{ name: string; deploymentId?: string }> = [];
   const target: RoutingTarget = {
@@ -175,7 +176,7 @@ Deno.test("dispatch retries Cloudflare WFP service lookup without deploymentId",
   ]);
 });
 
-Deno.test("dispatch forwards http-url targets without tenant-internal headers", async () => {
+test("dispatch forwards http-url targets without tenant-internal headers", async () => {
   const env = createDispatchEnv();
   const target: RoutingTarget = {
     type: "http-endpoint-set",

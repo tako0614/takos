@@ -1,5 +1,5 @@
+import { jest, test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
-import { FakeTime } from "@std/testing/time";
 
 import {
   bootstrapMemory,
@@ -16,6 +16,19 @@ import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 import type { AgentRunnerIo } from "../runner-io.ts";
 import type { ToolExecutorLike } from "../../../tools/executor.ts";
 import type { AgentMemoryRuntime } from "../../memory-graph/memory-graph-runtime.ts";
+
+function useFakeTime(now: string | number | Date = new Date()) {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date(now));
+  return {
+    tick(ms: number) {
+      jest.advanceTimersByTime(ms);
+    },
+    restore() {
+      jest.useRealTimers();
+    },
+  };
+}
 
 function createDeps(
   runIo: Pick<AgentRunnerIo, "getMemoryActivation" | "finalizeMemoryOverlay">,
@@ -46,7 +59,7 @@ function createToolExecutor(): ToolExecutorLike & { observerSet: boolean } {
   };
 }
 
-Deno.test("bootstrapMemory installs observer after memory activation succeeds", async () => {
+test("bootstrapMemory installs observer after memory activation succeeds", async () => {
   let activationCalls = 0;
   const deps = createDeps({
     getMemoryActivation: async () => {
@@ -65,8 +78,8 @@ Deno.test("bootstrapMemory installs observer after memory activation succeeds", 
   assertEquals(activationCalls, 1);
 });
 
-Deno.test("bootstrapMemory returns without runtime when memory activation times out", async () => {
-  const fakeTime = new FakeTime();
+test("bootstrapMemory returns without runtime when memory activation times out", async () => {
+  const fakeTime = useFakeTime();
   try {
     const deps = createDeps({
       getMemoryActivation: () => new Promise(() => {}),
@@ -87,8 +100,8 @@ Deno.test("bootstrapMemory returns without runtime when memory activation times 
   }
 });
 
-Deno.test("finalizeMemory clears runtime when memory finalize times out", async () => {
-  const fakeTime = new FakeTime();
+test("finalizeMemory clears runtime when memory finalize times out", async () => {
+  const fakeTime = useFakeTime();
   try {
     const state: MemoryState = {
       runtime: {

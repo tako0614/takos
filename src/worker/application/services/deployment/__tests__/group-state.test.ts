@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals, assertNotEquals } from "@std/assert";
 
 import { compileGroupDesiredState } from "../group-state.ts";
 
-Deno.test("compileGroupDesiredState fingerprints root manifest env changes", () => {
+test("compileGroupDesiredState fingerprints root manifest env changes", () => {
   const base = compileGroupDesiredState({
     name: "demo",
     compute: {
@@ -37,7 +38,7 @@ Deno.test("compileGroupDesiredState fingerprints root manifest env changes", () 
   );
 });
 
-Deno.test("compileGroupDesiredState keeps native Cloudflare containers inside parent worker", () => {
+test("compileGroupDesiredState keeps native Cloudflare containers inside parent worker", () => {
   const desired = compileGroupDesiredState({
     name: "computer",
     compute: {

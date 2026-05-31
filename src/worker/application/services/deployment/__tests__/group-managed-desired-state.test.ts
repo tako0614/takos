@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
 
 import { compileGroupDesiredState } from "../group-state.ts";
@@ -47,7 +48,7 @@ function createManagedStateDbMock(rows: unknown[] = []) {
   };
 }
 
-Deno.test(
+test(
   "syncGroupPublicationDesiredState restores manifest publications when publication sync fails",
   async () => {
     const publicationRows = [
@@ -181,7 +182,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "syncGroupManagedDesiredState keeps linked common env out of local env vars",
   async () => {
     const desiredState = compileGroupDesiredState({
@@ -300,7 +301,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "syncGroupManagedDesiredState keeps consumed publication env out of local env vars",
   async () => {
     const desiredState = compileGroupDesiredState({
@@ -406,7 +407,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "syncGroupManagedDesiredState provisions MCP bearer secretRef as service secret env",
   async () => {
     const desiredState = compileGroupDesiredState({
@@ -529,7 +530,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "syncGroupManagedDesiredState binds manifest resources to target workloads",
   async () => {
     const desiredState = compileGroupDesiredState({
@@ -641,7 +642,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "captureManagedWorkloadDesiredState and restoreManagedWorkloadDesiredState round-trip local env vars",
   async () => {
     const serviceEnvVars = new Map<

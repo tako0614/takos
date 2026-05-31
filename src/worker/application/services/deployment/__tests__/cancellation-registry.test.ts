@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals, assertFalse } from "@std/assert";
 
 import {
@@ -7,14 +8,14 @@ import {
   unregisterDeploymentController,
 } from "../cancellation-registry.ts";
 
-Deno.test("registerDeploymentController returns a fresh non-aborted controller", () => {
+test("registerDeploymentController returns a fresh non-aborted controller", () => {
   _resetDeploymentControllersForTest();
   const controller = registerDeploymentController("dep-1");
   assertFalse(controller.signal.aborted);
   unregisterDeploymentController("dep-1");
 });
 
-Deno.test("cancelDeployment aborts a registered controller and returns true", () => {
+test("cancelDeployment aborts a registered controller and returns true", () => {
   _resetDeploymentControllersForTest();
   const controller = registerDeploymentController("dep-2");
   const triggered = cancelDeployment("dep-2", "user-initiated");
@@ -24,13 +25,13 @@ Deno.test("cancelDeployment aborts a registered controller and returns true", ()
   unregisterDeploymentController("dep-2");
 });
 
-Deno.test("cancelDeployment returns false for unregistered deployment", () => {
+test("cancelDeployment returns false for unregistered deployment", () => {
   _resetDeploymentControllersForTest();
   const triggered = cancelDeployment("nonexistent");
   assertEquals(triggered, false);
 });
 
-Deno.test("cancelDeployment returns false after unregister", () => {
+test("cancelDeployment returns false after unregister", () => {
   _resetDeploymentControllersForTest();
   registerDeploymentController("dep-3");
   unregisterDeploymentController("dep-3");
@@ -38,7 +39,7 @@ Deno.test("cancelDeployment returns false after unregister", () => {
   assertEquals(triggered, false);
 });
 
-Deno.test("registerDeploymentController replaces an existing controller without aborting the prior", () => {
+test("registerDeploymentController replaces an existing controller without aborting the prior", () => {
   _resetDeploymentControllersForTest();
   const first = registerDeploymentController("dep-4");
   const second = registerDeploymentController("dep-4");

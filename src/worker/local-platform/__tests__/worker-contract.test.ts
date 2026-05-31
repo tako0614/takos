@@ -1,3 +1,5 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -5,37 +7,37 @@ import {
   runLocalWorkerIteration,
 } from "../worker.ts";
 
-Deno.test("resolveWorkerHeartbeatTtlMs uses the default when the env var is missing", () => {
-  const previous = Deno.env.get("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
-  Deno.env.delete("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
+test("resolveWorkerHeartbeatTtlMs uses the default when the env var is missing", () => {
+  const previous = getEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
+  deleteEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
 
   try {
     assertEquals(resolveWorkerHeartbeatTtlMs(), 120_000);
   } finally {
     if (previous === undefined) {
-      Deno.env.delete("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
+      deleteEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
     } else {
-      Deno.env.set("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS", previous);
+      setEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS", previous);
     }
   }
 });
 
-Deno.test("resolveWorkerHeartbeatTtlMs honors a positive integer env override", () => {
-  const previous = Deno.env.get("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
-  Deno.env.set("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS", "300000");
+test("resolveWorkerHeartbeatTtlMs honors a positive integer env override", () => {
+  const previous = getEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
+  setEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS", "300000");
 
   try {
     assertEquals(resolveWorkerHeartbeatTtlMs(), 300_000);
   } finally {
     if (previous === undefined) {
-      Deno.env.delete("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
+      deleteEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS");
     } else {
-      Deno.env.set("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS", previous);
+      setEnv("TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS", previous);
     }
   }
 });
 
-Deno.test("runLocalWorkerIteration returns false when every message queue is empty", async () => {
+test("runLocalWorkerIteration returns false when every message queue is empty", async () => {
   const queue = {
     queueName: "takos-runs",
     async receive() {

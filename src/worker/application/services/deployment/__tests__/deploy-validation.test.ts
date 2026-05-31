@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
 
 import type { AppManifest } from "../../source/app-manifest-types.ts";
@@ -32,7 +33,7 @@ function makeManifest(
   };
 }
 
-Deno.test("validateAttachedNotRouteTarget fails when a route targets an attached container", () => {
+test("validateAttachedNotRouteTarget fails when a route targets an attached container", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -54,7 +55,7 @@ Deno.test("validateAttachedNotRouteTarget fails when a route targets an attached
   assertEquals(errors[0].code, "attached_not_route_target");
 });
 
-Deno.test("validateAttachedNotRouteTarget fails when a route targets an unknown compute", () => {
+test("validateAttachedNotRouteTarget fails when a route targets an unknown compute", () => {
   const manifest = makeManifest({
     routes: [{ target: "missing", path: "/missing" }],
   });
@@ -63,7 +64,7 @@ Deno.test("validateAttachedNotRouteTarget fails when a route targets an unknown 
   assertEquals(errors[0].code, "route_unknown_target");
 });
 
-Deno.test("validateAttachedNotRouteTarget accepts override routes after compute merge", () => {
+test("validateAttachedNotRouteTarget accepts override routes after compute merge", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -90,7 +91,7 @@ Deno.test("validateAttachedNotRouteTarget accepts override routes after compute 
   assertEquals(validateAttachedNotRouteTarget(resolved), []);
 });
 
-Deno.test("validateAttachedNotRouteTarget fails when a route targets an internal attached workload name", () => {
+test("validateAttachedNotRouteTarget fails when a route targets an internal attached workload name", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -112,7 +113,7 @@ Deno.test("validateAttachedNotRouteTarget fails when a route targets an internal
   assertEquals(errors[0].code, "attached_not_route_target");
 });
 
-Deno.test("validateRouteUniqueness fails when same target/path is repeated", () => {
+test("validateRouteUniqueness fails when same target/path is repeated", () => {
   const manifest = makeManifest({
     routes: [
       { target: "web", path: "/api", methods: ["GET"] },
@@ -124,7 +125,7 @@ Deno.test("validateRouteUniqueness fails when same target/path is repeated", () 
   assertEquals(errors[0].code, "route_duplicate");
 });
 
-Deno.test("validateRouteUniqueness allows same path with disjoint methods", () => {
+test("validateRouteUniqueness allows same path with disjoint methods", () => {
   const manifest = makeManifest({
     routes: [
       { target: "web", path: "/api", methods: ["GET"] },
@@ -135,7 +136,7 @@ Deno.test("validateRouteUniqueness allows same path with disjoint methods", () =
   assertEquals(errors.length, 0);
 });
 
-Deno.test("validateRouteUniqueness fails when same path has overlapping methods", () => {
+test("validateRouteUniqueness fails when same path has overlapping methods", () => {
   const manifest = makeManifest({
     routes: [
       { target: "web", path: "/api", methods: ["GET", "POST"] },
@@ -147,7 +148,7 @@ Deno.test("validateRouteUniqueness fails when same path has overlapping methods"
   assertEquals(errors[0].code, "route_duplicate");
 });
 
-Deno.test("validateRouteUniqueness treats omitted methods as all methods", () => {
+test("validateRouteUniqueness treats omitted methods as all methods", () => {
   const manifest = makeManifest({
     routes: [
       { target: "web", path: "/api" },
@@ -159,7 +160,7 @@ Deno.test("validateRouteUniqueness treats omitted methods as all methods", () =>
   assertEquals(errors[0].code, "route_duplicate");
 });
 
-Deno.test("validateOnlineDeployImageSources rejects dockerfile-only attached containers", () => {
+test("validateOnlineDeployImageSources rejects dockerfile-only attached containers", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -180,7 +181,7 @@ Deno.test("validateOnlineDeployImageSources rejects dockerfile-only attached con
   assertEquals(errors[0].path, "compute.web.containers.sandbox");
 });
 
-Deno.test("validateOnlineDeployImageSources accepts native Cloudflare Dockerfile containers", () => {
+test("validateOnlineDeployImageSources accepts native Cloudflare Dockerfile containers", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -205,7 +206,7 @@ Deno.test("validateOnlineDeployImageSources accepts native Cloudflare Dockerfile
   assertEquals(errors, []);
 });
 
-Deno.test("validateOnlineDeployImageSources rejects unpinned service images", () => {
+test("validateOnlineDeployImageSources rejects unpinned service images", () => {
   const manifest = makeManifest({
     compute: {
       api: {
@@ -221,7 +222,7 @@ Deno.test("validateOnlineDeployImageSources rejects unpinned service images", ()
   assertEquals(errors[0].path, "compute.api.image");
 });
 
-Deno.test("validateConsumeReferences rejects reserved Takos publication consumes", () => {
+test("validateConsumeReferences rejects reserved Takos publication consumes", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -252,7 +253,7 @@ Deno.test("validateConsumeReferences rejects reserved Takos publication consumes
   assertEquals(errors[0].path, "compute.web.consume[1]");
 });
 
-Deno.test("validateConsumeReferences allows external catalog publication references", () => {
+test("validateConsumeReferences allows external catalog publication references", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -266,7 +267,7 @@ Deno.test("validateConsumeReferences allows external catalog publication referen
   assertDeployValid(manifest);
 });
 
-Deno.test("validateConsumeReferences allows attached container external catalog consumes", () => {
+test("validateConsumeReferences allows attached container external catalog consumes", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -287,7 +288,7 @@ Deno.test("validateConsumeReferences allows attached container external catalog 
   assertEquals(errors.length, 0);
 });
 
-Deno.test("validateConsumeReferences fails when consume aliases unknown output", () => {
+test("validateConsumeReferences fails when consume aliases unknown output", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -309,7 +310,7 @@ Deno.test("validateConsumeReferences fails when consume aliases unknown output",
   assertEquals(errors[0].code, "consume_unknown_output");
 });
 
-Deno.test("validateConsumeEnvCollision fails when consume aliases collide with local env", () => {
+test("validateConsumeEnvCollision fails when consume aliases collide with local env", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -334,7 +335,7 @@ Deno.test("validateConsumeEnvCollision fails when consume aliases collide with l
   assertEquals(errors[0].code, "consume_env_collision");
 });
 
-Deno.test("validateLocalEnvNames rejects top-level and compute env collisions", () => {
+test("validateLocalEnvNames rejects top-level and compute env collisions", () => {
   const manifest = makeManifest({
     env: {
       DATABASE_URL: "sqlite://top",
@@ -353,7 +354,7 @@ Deno.test("validateLocalEnvNames rejects top-level and compute env collisions", 
   assertEquals(errors[0].code, "env_collision");
 });
 
-Deno.test("validatePublicationKnownFields rejects unknown publication fields", () => {
+test("validatePublicationKnownFields rejects unknown publication fields", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -371,7 +372,7 @@ Deno.test("validatePublicationKnownFields rejects unknown publication fields", (
   assertEquals(errors[0].code, "publication_unknown_field");
 });
 
-Deno.test("validatePublicationKnownFields rejects unknown publication spec fields", () => {
+test("validatePublicationKnownFields rejects unknown publication spec fields", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -398,7 +399,7 @@ Deno.test("validatePublicationKnownFields rejects unknown publication spec field
   assert(errors.every((error) => error.code === "publication_unknown_field"));
 });
 
-Deno.test("validatePublicationDefinitions rejects reserved Takos publisher", () => {
+test("validatePublicationDefinitions rejects reserved Takos publisher", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -423,7 +424,7 @@ Deno.test("validatePublicationDefinitions rejects reserved Takos publisher", () 
   );
 });
 
-Deno.test("validatePublicationUniqueness rejects duplicate publish names", () => {
+test("validatePublicationUniqueness rejects duplicate publish names", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -445,7 +446,7 @@ Deno.test("validatePublicationUniqueness rejects duplicate publish names", () =>
   assertEquals(errors[0].code, "publication_duplicate");
 });
 
-Deno.test("validatePublicationUniqueness rejects duplicate route publisher/route", () => {
+test("validatePublicationUniqueness rejects duplicate route publisher/route", () => {
   const manifest = makeManifest({
     routes: [{ id: "mcp", target: "web", path: "/mcp" }],
     publish: [
@@ -473,7 +474,7 @@ Deno.test("validatePublicationUniqueness rejects duplicate route publisher/route
   );
 });
 
-Deno.test("validatePublicationRouteMatches checks resolved routes after overrides", () => {
+test("validatePublicationRouteMatches checks resolved routes after overrides", () => {
   const manifest = makeManifest({
     compute: {
       web: {
@@ -502,7 +503,7 @@ Deno.test("validatePublicationRouteMatches checks resolved routes after override
   assertEquals(errors[0].code, "publication_route_mismatch");
 });
 
-Deno.test("validatePublicationRouteMatches allows method-split routes for one publication", () => {
+test("validatePublicationRouteMatches allows method-split routes for one publication", () => {
   const manifest = makeManifest({
     routes: [
       { id: "mcp-get", target: "web", path: "/mcp", methods: ["GET"] },
@@ -520,7 +521,7 @@ Deno.test("validatePublicationRouteMatches allows method-split routes for one pu
   assertEquals(validatePublicationRouteMatches(manifest), []);
 });
 
-Deno.test("runDeployValidations aggregates publication normalization failures", () => {
+test("runDeployValidations aggregates publication normalization failures", () => {
   const manifest = makeManifest({
     publish: [
       {
@@ -558,7 +559,7 @@ Deno.test("runDeployValidations aggregates publication normalization failures", 
   );
 });
 
-Deno.test("runDeployValidations aggregates errors from every validator", () => {
+test("runDeployValidations aggregates errors from every validator", () => {
   const manifest = makeManifest({
     publish: [
       {

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 
 import { assertEquals, assertNotEquals } from "@std/assert";
@@ -190,38 +191,38 @@ function toSkillRawRow(skill: {
   ];
 }
 
-Deno.test("parseTriggers - parses comma-separated triggers", () => {
+test("parseTriggers - parses comma-separated triggers", () => {
   assertEquals(parseTriggers("hello, world, test"), ["hello", "world", "test"]);
 });
 
-Deno.test("parseTriggers - returns empty array for null", () => {
+test("parseTriggers - returns empty array for null", () => {
   assertEquals(parseTriggers(null), []);
 });
 
-Deno.test("parseTriggers - filters empty strings", () => {
+test("parseTriggers - filters empty strings", () => {
   assertEquals(parseTriggers("a,,b,"), ["a", "b"]);
 });
 
-Deno.test("parseSkillMetadata - returns empty object for null/undefined", () => {
+test("parseSkillMetadata - returns empty object for null/undefined", () => {
   assertEquals(parseSkillMetadata(null), {});
   assertEquals(parseSkillMetadata(undefined), {});
 });
 
-Deno.test("parseSkillMetadata - returns empty object for empty string", () => {
+test("parseSkillMetadata - returns empty object for empty string", () => {
   assertEquals(parseSkillMetadata(""), {});
   assertEquals(parseSkillMetadata("  "), {});
 });
 
-Deno.test("parseSkillMetadata - returns empty object for invalid JSON", () => {
+test("parseSkillMetadata - returns empty object for invalid JSON", () => {
   assertEquals(parseSkillMetadata("not json"), {});
 });
 
-Deno.test("parseSkillMetadata - parses valid JSON metadata", () => {
+test("parseSkillMetadata - parses valid JSON metadata", () => {
   const result = parseSkillMetadata('{"category":"research"}');
   assertEquals(result.category, "research");
 });
 
-Deno.test("formatSkill - formats a skill row", () => {
+test("formatSkill - formats a skill row", () => {
   const skill = createSkillRow();
 
   const result = formatSkill(skill);
@@ -232,7 +233,7 @@ Deno.test("formatSkill - formats a skill row", () => {
   assertEquals(result.editable, true);
 });
 
-Deno.test("listSkills - returns formatted skills", async () => {
+test("listSkills - returns formatted skills", async () => {
   const { db } = createFakeSqlDatabase((call) => {
     if (call.sql.includes("mcp_servers")) {
       return { rows: [] };
@@ -267,14 +268,14 @@ Deno.test("listSkills - returns formatted skills", async () => {
   assertEquals(result[0].source, "custom");
 });
 
-Deno.test("getSkill - returns null when not found", async () => {
+test("getSkill - returns null when not found", async () => {
   const { db } = createFakeSqlDatabase();
 
   const result = await getSkill(db, "ws-1", "nonexistent");
   assertEquals(result, null);
 });
 
-Deno.test("getSkill - returns skill row when found", async () => {
+test("getSkill - returns skill row when found", async () => {
   const { db } = createFakeSqlDatabase((call) => {
     if (
       call.sql.includes("skills") && call.method === "raw" &&
@@ -305,7 +306,7 @@ Deno.test("getSkill - returns skill row when found", async () => {
   assertEquals(result!.id, "s1");
 });
 
-Deno.test("createSkill - creates skill with trimmed values", async () => {
+test("createSkill - creates skill with trimmed values", async () => {
   const { db, prepared } = createFakeSqlDatabase((call) => {
     if (call.sql.includes("mcp_servers")) {
       return { rows: [] };
@@ -349,14 +350,14 @@ Deno.test("createSkill - creates skill with trimmed values", async () => {
   assertEquals(prepared[0].args.includes("ws-1"), true);
 });
 
-Deno.test("updateSkill - returns null when skill not found", async () => {
+test("updateSkill - returns null when skill not found", async () => {
   const { db } = createFakeSqlDatabase();
 
   const result = await updateSkill(db, "ws-1", "nonexistent", { name: "new" });
   assertEquals(result, null);
 });
 
-Deno.test("deleteSkill - deletes skill by id", async () => {
+test("deleteSkill - deletes skill by id", async () => {
   const { db, prepared } = createFakeSqlDatabase();
 
   await deleteSkill(db, "s1");
@@ -368,7 +369,7 @@ Deno.test("deleteSkill - deletes skill by id", async () => {
   );
 });
 
-Deno.test("updateSkillEnabled - returns the new enabled state", async () => {
+test("updateSkillEnabled - returns the new enabled state", async () => {
   const { db, prepared } = createFakeSqlDatabase();
 
   const result = await updateSkillEnabled(db, "s1", false);

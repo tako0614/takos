@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 
 import { handleIndexJobDlq, handleMemoryBuildPaths } from "../handlers.ts";
@@ -15,7 +16,7 @@ function makeDb(insertRun: (row: Record<string, unknown>) => Promise<void>) {
   };
 }
 
-Deno.test("handleIndexJobDlq persists the actual queue name", async () => {
+test("handleIndexJobDlq persists the actual queue name", async () => {
   const persisted: Record<string, unknown>[] = [];
   await handleIndexJobDlq(
     { jobId: "job_1" },
@@ -34,7 +35,7 @@ Deno.test("handleIndexJobDlq persists the actual queue name", async () => {
   assertEquals(row.retryCount, 3);
 });
 
-Deno.test("handleIndexJobDlq retries through caller when persistence fails", async () => {
+test("handleIndexJobDlq retries through caller when persistence fails", async () => {
   await assertRejects(
     () =>
       handleIndexJobDlq(
@@ -186,7 +187,7 @@ function makeMemoryDb(input: {
   };
 }
 
-Deno.test("handleMemoryBuildPaths materializes direct and multi-hop memory paths", async () => {
+test("handleMemoryBuildPaths materializes direct and multi-hop memory paths", async () => {
   const memoryDb = makeMemoryDb({
     claims: [
       memoryClaimRow("c1", { confidence: 0.9 }),

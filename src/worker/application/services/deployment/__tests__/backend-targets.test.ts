@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertThrows } from "@std/assert";
 
 import { serializeDeploymentBackendTarget } from "../backend-targets.ts";
 
-Deno.test("serializeDeploymentBackendTarget rejects unknown backend names", () => {
+test("serializeDeploymentBackendTarget rejects unknown backend names", () => {
   assertThrows(
     () =>
       serializeDeploymentBackendTarget({

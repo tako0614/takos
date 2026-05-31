@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -73,7 +74,7 @@ function createFakeContext(): {
   return { ctx, requests };
 }
 
-Deno.test("upsertQueueConsumerByQueueName updates the requested replacement consumer", async () => {
+test("upsertQueueConsumerByQueueName updates the requested replacement consumer", async () => {
   const { ctx, requests } = createFakeContext();
 
   await upsertQueueConsumerByQueueName(ctx, "jobs", {
@@ -104,7 +105,7 @@ Deno.test("upsertQueueConsumerByQueueName updates the requested replacement cons
   });
 });
 
-Deno.test("upsertQueueConsumerByQueueName does not replace unrelated existing consumers", async () => {
+test("upsertQueueConsumerByQueueName does not replace unrelated existing consumers", async () => {
   const { ctx, requests } = createFakeContext();
 
   await upsertQueueConsumerByQueueName(ctx, "jobs", {
@@ -124,7 +125,7 @@ Deno.test("upsertQueueConsumerByQueueName does not replace unrelated existing co
   });
 });
 
-Deno.test("deleteQueueConsumerByQueueName deletes the matching script consumer", async () => {
+test("deleteQueueConsumerByQueueName deletes the matching script consumer", async () => {
   const { ctx, requests } = createFakeContext();
 
   const deleted = await deleteQueueConsumerByQueueName(ctx, "jobs", {

@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
 import { createMockEnv, MockObjectStoreBinding } from "./setup.ts";
 import {
@@ -12,29 +13,29 @@ import {
 // contract without `as any`.
 type BackupEnv = Parameters<typeof runD1DailyBackup>[0];
 
-Deno.test("backup maintenance skips cleanly when TAKOS_OFFLOAD is not configured", async () => {
+test("backup maintenance skips cleanly when TAKOS_OFFLOAD is not configured", async () => {
   const env = createMockEnv() satisfies BackupEnv;
 
   const backup = await runD1DailyBackup(env);
-  assertEquals(backup, {
+  assert.deepStrictEqual(backup, {
     skipped: true,
     reason: "TAKOS_OFFLOAD bucket not configured",
   });
 
   const inventory = await runD1BackupInventory(env);
-  assertEquals(inventory, {
+  assert.deepStrictEqual(inventory, {
     skipped: true,
     reason: "TAKOS_OFFLOAD bucket not configured",
   });
 
   const integrity = await runD1BackupIntegrityCheck(env);
-  assertEquals(integrity, {
+  assert.deepStrictEqual(integrity, {
     skipped: true,
     reason: "TAKOS_OFFLOAD bucket not configured",
   });
 });
 
-Deno.test("daily backup skips cleanly when DB.dump is unsupported locally", async () => {
+test("daily backup skips cleanly when DB.dump is unsupported locally", async () => {
   const baseEnv = createMockEnv({
     TAKOS_OFFLOAD: new MockObjectStoreBinding(),
     CF_ACCOUNT_ID: undefined,
@@ -58,7 +59,7 @@ Deno.test("daily backup skips cleanly when DB.dump is unsupported locally", asyn
     force: true,
   });
 
-  assertEquals(result, {
+  assert.deepStrictEqual(result, {
     skipped: true,
     reason:
       "DB.dump() is not supported by this local database adapter; configure provider SQL export credentials instead.",

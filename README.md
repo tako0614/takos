@@ -23,7 +23,7 @@ bun run local:up
 | Component       | 責務                                                                |
 | --------------- | ------------------------------------------------------------------- |
 | `takos-worker`  | 単一の public/control Worker、Hono API、OIDC consumer、internal RPC |
-| `takos-web`     | browser UI source (`web/`)                                          |
+| Takos UI        | browser UI source (`web/`)                                          |
 | `takos-git`     | Git hosting container (Smart HTTP、リポジトリ、refs、object store) |
 | `takos-agent`   | agent execution container                                           |
 

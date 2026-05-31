@@ -1,19 +1,21 @@
+import { test } from "bun:test";
 import { Hono } from "hono";
 import * as jose from "jose";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { assertEquals, assertExists, assertStringIncludes } from "@std/assert";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { mkdtemp, rm } from "node:fs/promises";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
+import { createEphemeralAccountsHandler } from "../../../../../../../takosumi-cloud/packages/accounts-service/src/mod.ts";
 import * as schema from "../../../../infra/db/schema.ts";
 import { accounts, authIdentities } from "../../../../infra/db/schema.ts";
 import { generateCodeChallenge } from "../../../../application/services/identity/oidc-pkce.ts";
 import type { Env, User } from "../../../../shared/types/index.ts";
 import { authOidcRouter } from "../oidc.ts";
-
-const ecosystemRoot = fileURLToPath(
-  new URL("../../../../../../../../../", import.meta.url),
-);
 
 type StoredOidcState = {
   state: string;
@@ -165,7 +167,15 @@ function createApp() {
   return app;
 }
 
-Deno.test("OIDC login route rejects missing config", async () => {
+function makeTempDir(): Promise<string> {
+  return mkdtemp(join(tmpdir(), "takos-oidc-"));
+}
+
+async function removeTempDir(path: string): Promise<void> {
+  await rm(path, { recursive: true, force: true });
+}
+
+test("OIDC login route rejects missing config", async () => {
   const response = await createApp().fetch(
     new Request("https://takos.example.test/auth/oidc/login"),
     createEnv({ includeSessionStore: false }),
@@ -178,8 +188,8 @@ Deno.test("OIDC login route rejects missing config", async () => {
   );
 });
 
-Deno.test("OIDC callback exchanges code, verifies id_token, provisions app-local user, and creates a session", async () => {
-  const dir = await Deno.makeTempDir();
+test("OIDC callback exchanges code, verifies id_token, provisions app-local user, and creates a session", async () => {
+  const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/control.sqlite`);
   const states: StoredOidcState[] = [{
     state: "state-1",
@@ -316,62 +326,66 @@ Deno.test("OIDC callback exchanges code, verifies id_token, provisions app-local
   } finally {
     globalThis.fetch = originalFetch;
     authDb.client.close();
-    await Deno.remove(dir, { recursive: true });
+    await removeTempDir(dir);
   }
 });
 
-Deno.test("OIDC login reaches real Takosumi Accounts while default managed offering gate stays closed", async () => {
-  const accountsServer = await startAccountsServer({
-    clientId: "takos-client",
-    redirectUri: "https://takos.example.test/auth/oidc/callback",
-    subject: "tsub_oidc_owner",
-  });
-  const dir = await Deno.makeTempDir();
-  const authDb = await createAuthTestDb(`${dir}/real-accounts-oidc.sqlite`);
-  const states: StoredOidcState[] = [];
-  const createdSessions: CreatedSession[] = [];
-
-  try {
-    const env = createEnv({
-      states,
-      createdSessions,
-      sqlBinding: authDb.db,
-      oidcIssuerUrl: accountsServer.url,
-      oidcClientId: "takos-client",
-      oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
+test(
+  "OIDC login reaches real Takosumi Accounts while default managed offering gate stays closed",
+  async () => {
+    const accountsServer = await startAccountsServer({
+      clientId: "takos-client",
+      redirectUri: "https://takos.example.test/auth/oidc/callback",
+      subject: "tsub_oidc_owner",
     });
-    const app = createApp();
+    const dir = await makeTempDir();
+    const authDb = await createAuthTestDb(`${dir}/real-accounts-oidc.sqlite`);
+    const states: StoredOidcState[] = [];
+    const createdSessions: CreatedSession[] = [];
 
-    const loginResponse = await app.fetch(
-      new Request(
-        "https://takos.example.test/auth/oidc/login?return_to=%2Fapps",
-      ),
-      env,
-    );
-    assertEquals(loginResponse.status, 302);
-    assertEquals(states.length, 1);
-    const authorizeUrl = loginResponse.headers.get("location");
-    assertExists(authorizeUrl);
+    try {
+      const env = createEnv({
+        states,
+        createdSessions,
+        sqlBinding: authDb.db,
+        oidcIssuerUrl: accountsServer.url,
+        oidcClientId: "takos-client",
+        oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
+      });
+      const app = createApp();
 
-    const authorizeResponse = await fetch(authorizeUrl, {
-      redirect: "manual",
-    });
-    assertEquals(authorizeResponse.status, 503);
-    const authorizeBody = await authorizeResponse.json() as {
-      error?: string;
-    };
-    assertEquals(authorizeBody.error, "launch_readiness_not_complete");
-    assertEquals(states.length, 1);
-    assertEquals(createdSessions.length, 0);
-  } finally {
-    authDb.client.close();
-    await Deno.remove(dir, { recursive: true });
-    await accountsServer.stop();
-  }
-});
+      const loginResponse = await app.fetch(
+        new Request(
+          "https://takos.example.test/auth/oidc/login?return_to=%2Fapps",
+        ),
+        env,
+      );
+      assertEquals(loginResponse.status, 302);
+      assertEquals(states.length, 1);
+      const authorizeUrl = loginResponse.headers.get("location");
+      assertExists(authorizeUrl);
 
-Deno.test("regression: OIDC callback links an existing Takos account by verified email", async () => {
-  const dir = await Deno.makeTempDir();
+      const authorizeResponse = await fetch(authorizeUrl, {
+        redirect: "manual",
+      });
+      assertEquals(authorizeResponse.status, 503);
+      const authorizeBody = await authorizeResponse.json() as {
+        error?: string;
+      };
+      assertEquals(authorizeBody.error, "launch_readiness_not_complete");
+      assertEquals(states.length, 1);
+      assertEquals(createdSessions.length, 0);
+    } finally {
+      authDb.client.close();
+      await removeTempDir(dir);
+      await accountsServer.stop();
+    }
+  },
+  15_000,
+);
+
+test("regression: OIDC callback links an existing Takos account by verified email", async () => {
+  const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/control.sqlite`);
   const timestamp = new Date().toISOString();
   await authDb.db.insert(accounts).values({
@@ -502,7 +516,7 @@ Deno.test("regression: OIDC callback links an existing Takos account by verified
   } finally {
     globalThis.fetch = originalFetch;
     authDb.client.close();
-    await Deno.remove(dir, { recursive: true });
+    await removeTempDir(dir);
   }
 });
 
@@ -511,67 +525,43 @@ type AccountsServer = {
   stop: () => Promise<void>;
 };
 
-function terminateAccountsProcess(child: Deno.ChildProcess): void {
-  try {
-    child.kill("SIGTERM");
-  } catch (error) {
-    if (
-      !(error instanceof TypeError) ||
-      !error.message.includes("already terminated")
-    ) {
-      throw error;
-    }
-  }
-}
-
 async function startAccountsServer(input: {
   clientId: string;
   redirectUri: string;
   subject: string;
 }): Promise<AccountsServer> {
-  const port = freePort();
+  const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
-  const child = new Deno.Command("bun", {
-    args: [
-      "takosumi-cloud/packages/cli/src/main.ts",
-      "accounts",
-      "serve",
-      "--issuer",
-      url,
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      String(port),
-      "--subject",
-      input.subject,
-      "--client-id",
-      input.clientId,
-      "--redirect-uri",
-      input.redirectUri,
-    ],
-    cwd: ecosystemRoot,
-    stdout: "piped",
-    stderr: "piped",
-  }).spawn();
+  const handler = await createEphemeralAccountsHandler({
+    issuer: url,
+    subject: input.subject,
+    clients: [{
+      clientId: input.clientId,
+      redirectUris: [input.redirectUri],
+    }],
+    managedOfferingAccess: { status: "closed" },
+  });
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port,
+    fetch: handler,
+  });
 
   try {
     await waitForAccounts(url);
   } catch (error) {
-    terminateAccountsProcess(child);
-    const output = await child.output().catch(() => undefined);
-    const stderr = output ? new TextDecoder().decode(output.stderr) : "";
+    server.stop(true);
     throw new Error(
       `Takosumi Accounts did not start: ${
         error instanceof Error ? error.message : String(error)
-      }\n${stderr}`,
+      }`,
     );
   }
 
   return {
     url,
     stop: async () => {
-      terminateAccountsProcess(child);
-      await child.output().catch(() => undefined);
+      server.stop(true);
     },
   };
 }
@@ -598,14 +588,21 @@ async function waitForAccounts(accountsUrl: string): Promise<void> {
   throw new Error(lastError);
 }
 
-function freePort(): number {
-  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-  const port = (listener.addr as Deno.NetAddr).port;
-  listener.close();
+async function freePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => error ? reject(error) : resolve());
+  });
   return port;
 }
 
-Deno.test("OIDC login route redirects to issuer authorization endpoint", async () => {
+test("OIDC login route redirects to issuer authorization endpoint", async () => {
   const states: StoredOidcState[] = [];
   const discoveryRequests: Request[] = [];
   const originalFetch = globalThis.fetch;

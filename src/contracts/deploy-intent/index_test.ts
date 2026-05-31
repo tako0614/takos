@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { deepStrictEqual, rejects as assertRejects, throws as assertThrows } from 'node:assert/strict';
 import {
   type GitRunner,
   parseDeployIntentEnv,
@@ -17,7 +17,7 @@ test("parseDeployIntentEnv reads gitops binding env", () => {
     DEPLOY_INTENT_AUTHOR_EMAIL: "bot@example.test",
   });
 
-  assertEquals(config, {
+  deepStrictEqual(config, {
     driver: "gitops",
     remote: "https://git.example.test/inst/deploy.git",
     token: "secret-token",
@@ -29,7 +29,7 @@ test("parseDeployIntentEnv reads gitops binding env", () => {
 });
 
 test("parseDeployIntentEnv returns undefined when disabled", () => {
-  assertEquals(parseDeployIntentEnv({}), undefined);
+  deepStrictEqual(parseDeployIntentEnv({}), undefined);
 });
 
 test("parseDeployIntentEnv defaults to deployments prefix", () => {
@@ -39,7 +39,7 @@ test("parseDeployIntentEnv defaults to deployments prefix", () => {
     DEPLOY_INTENT_TOKEN: "secret-token",
   });
 
-  assertEquals(config?.writePathPrefix, "deployments");
+  deepStrictEqual(config?.writePathPrefix, "deployments");
 });
 
 test("writeDeployIntent commits and pushes a deploy intent document", async () => {
@@ -89,14 +89,14 @@ test("writeDeployIntent commits and pushes a deploy intent document", async () =
     },
   });
 
-  assertEquals(result, {
+  deepStrictEqual(result, {
     driver: "gitops",
     remote: "https://git.example.test/inst/deploy.git",
     branch: "main",
     path: "deploy-intents/intent-1.json",
     commit: "abc123",
   });
-  assertEquals(
+  deepStrictEqual(
     JSON.parse(writes["/tmp/worktree/deploy-intents/intent-1.json"]),
     {
       kind: "takos.deploy-intent@v1",
@@ -110,7 +110,7 @@ test("writeDeployIntent commits and pushes a deploy intent document", async () =
       },
     },
   );
-  assertEquals(commands.map((command) => command.args), [
+  deepStrictEqual(commands.map((command) => command.args), [
     ["config", "user.name", "Takos Bot"],
     ["config", "user.email", "bot@example.test"],
     ["add", "deploy-intents/intent-1.json"],
@@ -121,7 +121,7 @@ test("writeDeployIntent commits and pushes a deploy intent document", async () =
   // The deploy credential must never appear in argv (leaks via /proc & ps);
   // it is delivered to the push only through GIT_CONFIG_* env vars.
   const pushCommand = commands.find((command) => command.args[0] === "push");
-  assertEquals(pushCommand?.env, {
+  deepStrictEqual(pushCommand?.env, {
     GIT_CONFIG_COUNT: "1",
     GIT_CONFIG_KEY_0: "http.extraHeader",
     GIT_CONFIG_VALUE_0: "Authorization: Bearer secret-token",
@@ -174,7 +174,7 @@ test("writeDeployIntent clones temporary worktree when not provided", async () =
   });
 
   // Clone args carry no credential; the token rides in GIT_CONFIG_* env only.
-  assertEquals(commands[0], {
+  deepStrictEqual(commands[0], {
     cwd: ".",
     args: [
       "clone",
@@ -189,7 +189,7 @@ test("writeDeployIntent clones temporary worktree when not provided", async () =
       GIT_CONFIG_VALUE_0: "Authorization: Bearer secret-token",
     },
   });
-  assertEquals(removed, ["/tmp/generated-worktree"]);
+  deepStrictEqual(removed, ["/tmp/generated-worktree"]);
 });
 
 test("writeDeployIntent rejects unsafe intent ids and prefixes", async () => {

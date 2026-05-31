@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { getCachedUser, userCacheDeps } from "../user-cache.ts";
@@ -53,7 +54,7 @@ function restoreDeps() {
   Object.assign(userCacheDeps, originalDeps);
 }
 
-Deno.test("getCachedUser rejects non-active account rows", async () => {
+test("getCachedUser rejects non-active account rows", async () => {
   const fixture = createContext({
     id: "user-1",
     email: "user@example.com",
@@ -80,7 +81,7 @@ Deno.test("getCachedUser rejects non-active account rows", async () => {
   }
 });
 
-Deno.test("getCachedUser returns active account rows", async () => {
+test("getCachedUser returns active account rows", async () => {
   const fixture = createContext({
     id: "user-1",
     email: "user@example.com",

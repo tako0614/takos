@@ -6,7 +6,6 @@
  * - Test utilities and helpers
  * - Environment configuration for testing
  */
-import { spy } from "@std/testing/mock";
 import { buildWorkersWebPlatform } from "@/platform/adapters/workers.ts";
 import type { Env } from "@/types";
 import type {
@@ -640,7 +639,7 @@ export function createMockEnv(
     CF_API_TOKEN: "test-api-token",
     WFP_DISPATCH_NAMESPACE: "takos-tenants",
     OPENAI_API_KEY: "test-openai-key",
-    RUNTIME_HOST: { fetch: spy() },
+    RUNTIME_HOST: { fetch: async () => new Response("{}", { status: 200 }) },
     ...overrides,
   };
 

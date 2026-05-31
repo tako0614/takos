@@ -1,3 +1,5 @@
+import { strict as assert } from "node:assert";
+import { mock, test } from "bun:test";
 import {
   type AgentExecutorControlConfig,
   type AgentExecutorDispatchStub,
@@ -11,11 +13,8 @@ import {
   generateProxyToken,
 } from "@/runtime/container-hosts/executor-proxy-config.ts";
 
-import { assert, assertEquals, assertObjectMatch } from "@std/assert";
-import { assertSpyCallArgs, assertSpyCalls, spy } from "@std/testing/mock";
-
-Deno.test("dispatchAgentExecutorStart - keeps only TAKOS_AGENT_CONTROL_RPC_BASE_URL in container env vars", () => {
-  assertEquals(
+test("dispatchAgentExecutorStart - keeps only TAKOS_AGENT_CONTROL_RPC_BASE_URL in container env vars", () => {
+  assert.deepStrictEqual(
     buildAgentExecutorContainerEnvVars({
       TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://control-rpc.example.internal",
     }),
@@ -25,8 +24,8 @@ Deno.test("dispatchAgentExecutorStart - keeps only TAKOS_AGENT_CONTROL_RPC_BASE_
   );
 });
 
-Deno.test("dispatchAgentExecutorStart - allows an empty TAKOS_AGENT_CONTROL_RPC_BASE_URL for adapter-owned resolution", () => {
-  assertEquals(
+test("dispatchAgentExecutorStart - allows an empty TAKOS_AGENT_CONTROL_RPC_BASE_URL for adapter-owned resolution", () => {
+  assert.deepStrictEqual(
     buildAgentExecutorContainerEnvVars({
       TAKOS_AGENT_CONTROL_RPC_BASE_URL: undefined,
     }),
@@ -36,28 +35,28 @@ Deno.test("dispatchAgentExecutorStart - allows an empty TAKOS_AGENT_CONTROL_RPC_
   );
 });
 
-Deno.test("dispatchAgentExecutorStart - generates a random control RPC token (not JWT)", () => {
+test("dispatchAgentExecutorStart - generates a random control RPC token (not JWT)", () => {
   const controlConfig = buildAgentExecutorProxyConfig({
     TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://control-rpc.example.internal",
   });
 
-  assert(controlConfig.controlRpcToken);
-  assertEquals(
+  assert.ok(controlConfig.controlRpcToken);
+  assert.deepStrictEqual(
     controlConfig.controlRpcBaseUrl,
     "https://control-rpc.example.internal",
   );
-  assert(controlConfig.controlRpcToken.length > 20);
+  assert.ok(controlConfig.controlRpcToken.length > 20);
 });
 
-Deno.test("dispatchAgentExecutorStart - generateProxyToken returns base64url without padding", () => {
+test("dispatchAgentExecutorStart - generateProxyToken returns base64url without padding", () => {
   const token = generateProxyToken();
-  assert(/^[A-Za-z0-9_-]+$/.test(token));
-  assert(token.length > 20);
+  assert.ok(/^[A-Za-z0-9_-]+$/.test(token));
+  assert.ok(token.length > 20);
 });
 
-Deno.test("dispatchAgentExecutorStart - forwards only canonical control RPC fields through the /start payload", async () => {
-  const startAndWaitForPorts = spy(async () => undefined);
-  const fetch = spy(async (_request: Request) =>
+test("dispatchAgentExecutorStart - forwards only canonical control RPC fields through the /start payload", async () => {
+  const startAndWaitForPorts = mock(async () => undefined);
+  const fetch = mock(async (_request: Request) =>
     new Response('{"status":"accepted","runId":"run-secret"}', { status: 202 })
   );
   const controlConfig = buildAgentExecutorProxyConfig({
@@ -74,18 +73,16 @@ Deno.test("dispatchAgentExecutorStart - forwards only canonical control RPC fiel
     controlConfig,
   );
 
-  assertSpyCalls(startAndWaitForPorts, 1);
-  const request = fetch.calls[0]!.args[0] as Request;
+  assert.deepStrictEqual(startAndWaitForPorts.mock.calls.length, 1);
+  const request = fetch.mock.calls[0]![0] as Request;
   const payload = await request.json() as Record<string, unknown>;
-  assertObjectMatch(payload, {
-    controlRpcBaseUrl: "https://control-rpc.example.internal",
-  });
-  assert(payload.controlRpcToken);
+  assert.deepStrictEqual(payload.controlRpcBaseUrl, controlConfig.controlRpcBaseUrl);
+  assert.ok(payload.controlRpcToken);
 });
 
-Deno.test("dispatchAgentExecutorStart - waits for port 8080 and posts the start payload inside the container DO", async () => {
-  const startAndWaitForPorts = spy(async () => undefined);
-  const fetch = spy(async (_request: Request) =>
+test("dispatchAgentExecutorStart - waits for port 8080 and posts the start payload inside the container DO", async () => {
+  const startAndWaitForPorts = mock(async () => undefined);
+  const fetch = mock(async (_request: Request) =>
     new Response('{"status":"accepted","runId":"run-1"}', { status: 202 })
   );
   const controlConfig: AgentExecutorControlConfig = {
@@ -105,29 +102,29 @@ Deno.test("dispatchAgentExecutorStart - waits for port 8080 and posts the start 
     controlConfig,
   );
 
-  assertSpyCallArgs(startAndWaitForPorts, 0, [8080]);
-  assertSpyCalls(fetch, 1);
+  assert.deepStrictEqual(startAndWaitForPorts.mock.calls[0], [8080]);
+  assert.deepStrictEqual(fetch.mock.calls.length, 1);
 
-  const request = fetch.calls[0]!.args[0] as Request;
-  assertEquals(request.url, "https://executor/start");
-  assertEquals(request.method, "POST");
-  assertEquals(request.headers.get("Content-Type"), "application/json");
-  await assertEquals(await request.json(), {
+  const request = fetch.mock.calls[0]![0] as Request;
+  assert.deepStrictEqual(request.url, "https://executor/start");
+  assert.deepStrictEqual(request.method, "POST");
+  assert.deepStrictEqual(request.headers.get("Content-Type"), "application/json");
+  assert.deepStrictEqual(await request.json(), {
     ...payload,
     serviceId: "worker-1",
     ...controlConfig,
   });
 
-  assertEquals(result, {
+  assert.deepStrictEqual(result, {
     ok: true,
     status: 202,
     body: '{"status":"accepted","runId":"run-1"}',
   });
 });
 
-Deno.test("dispatchAgentExecutorStart - preserves non-2xx start failures for host-side logging", async () => {
-  const startAndWaitForPorts = spy(async () => undefined);
-  const fetch = spy(async (_request: Request) =>
+test("dispatchAgentExecutorStart - preserves non-2xx start failures for host-side logging", async () => {
+  const startAndWaitForPorts = mock(async () => undefined);
+  const fetch = mock(async (_request: Request) =>
     new Response("Proxy not configured", { status: 503 })
   );
   const controlConfig: AgentExecutorControlConfig = {
@@ -146,16 +143,16 @@ Deno.test("dispatchAgentExecutorStart - preserves non-2xx start failures for hos
     controlConfig,
   );
 
-  assertSpyCallArgs(startAndWaitForPorts, 0, [8080]);
-  assertEquals(result, {
+  assert.deepStrictEqual(startAndWaitForPorts.mock.calls[0], [8080]);
+  assert.deepStrictEqual(result, {
     ok: false,
     status: 503,
     body: "Proxy not configured",
   });
 });
 
-Deno.test("dispatchAgentExecutorStart - returns the container acceptance response to the caller", async () => {
-  const dispatchStart = spy(async () => ({
+test("dispatchAgentExecutorStart - returns the container acceptance response to the caller", async () => {
+  const dispatchStart = mock(async () => ({
     ok: true,
     status: 202,
     body: '{"status":"accepted","runId":"run-3"}',
@@ -170,20 +167,20 @@ Deno.test("dispatchAgentExecutorStart - returns the container acceptance respons
     },
   );
 
-  assertSpyCallArgs(dispatchStart, 0, [{
+  assert.deepStrictEqual(dispatchStart.mock.calls[0], [{
     runId: "run-3",
     serviceId: "worker-3",
     workerId: "worker-3",
   }]);
-  assertEquals(response.status, 202);
-  await assertEquals(
+  assert.deepStrictEqual(response.status, 202);
+  assert.deepStrictEqual(
     await response.text(),
     '{"status":"accepted","runId":"run-3"}',
   );
 });
 
-Deno.test("dispatchAgentExecutorStart - turns startup exceptions into dispatch failures so the runner can retry", async () => {
-  const dispatchStart = spy(async () => {
+test("dispatchAgentExecutorStart - turns startup exceptions into dispatch failures so the runner can retry", async () => {
+  const dispatchStart = mock(async () => {
     throw new Error("boom");
   });
 
@@ -196,8 +193,8 @@ Deno.test("dispatchAgentExecutorStart - turns startup exceptions into dispatch f
     },
   );
 
-  assertEquals(response.status, 500);
-  await assertEquals(await response.json(), {
+  assert.deepStrictEqual(response.status, 500);
+  assert.deepStrictEqual(await response.json(), {
     error: "Failed to start container: boom",
   });
 });

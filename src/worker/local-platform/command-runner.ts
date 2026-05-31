@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { execFile } from "node:child_process";
 
 export type CommandRunnerOptions = {
@@ -40,7 +41,7 @@ const SAFE_HOST_ENV_KEYS = [
 function buildBaseCommandEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const key of SAFE_HOST_ENV_KEYS) {
-    const value = Deno.env.get(key);
+    const value = getEnv(key);
     if (value !== undefined) {
       env[key] = value;
     }
@@ -51,7 +52,7 @@ function buildBaseCommandEnv(): NodeJS.ProcessEnv {
 export function pickHostCommandEnv(keys: readonly string[]): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const key of keys) {
-    const value = Deno.env.get(key);
+    const value = getEnv(key);
     if (value !== undefined) {
       env[key] = value;
     }

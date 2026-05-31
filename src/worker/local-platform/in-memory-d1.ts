@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 /**
  * No-op stub of the SQL database (SQLite-compatible edge database) interface.
  *
@@ -31,11 +32,11 @@ import { logWarn } from "../shared/utils/logger.ts";
  * non-production environment we warn loudly so a stray fallback is visible.
  */
 function assertNotDurableInProduction(): void {
-  const isTest = Deno.env.get("VITEST") !== undefined ||
-    Deno.env.get("DENO_TEST") !== undefined;
+  const isTest = getEnv("VITEST") !== undefined ||
+    getEnv("DENO_TEST") !== undefined;
   if (isTest) return;
 
-  const environment = Deno.env.get("ENVIRONMENT");
+  const environment = getEnv("ENVIRONMENT");
   if (environment === "production") {
     throw new Error(
       "in-memory SQL database refused: the non-durable in-memory SQL stub cannot back the control plane in a production environment. Configure a durable store (POSTGRES_URL/DATABASE_URL or TAKOS_LOCAL_DATA_DIR) instead.",

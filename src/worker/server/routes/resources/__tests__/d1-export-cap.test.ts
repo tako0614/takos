@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertStringIncludes } from "@std/assert";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
@@ -8,12 +9,12 @@ import {
   enforceExportRowLimit,
 } from "../d1.ts";
 
-Deno.test("enforceExportRowLimit returns rows within the export cap", () => {
+test("enforceExportRowLimit returns rows within the export cap", () => {
   const rows = [{ id: 1 }, { id: 2 }];
   assertEquals(enforceExportRowLimit("items", rows, 2), rows);
 });
 
-Deno.test("enforceExportRowLimit throws HTTP 413 above the export cap", () => {
+test("enforceExportRowLimit throws HTTP 413 above the export cap", () => {
   const rows = [{ id: 1 }, { id: 2 }, { id: 3 }];
   try {
     enforceExportRowLimit("items", rows, 2);
@@ -27,18 +28,18 @@ Deno.test("enforceExportRowLimit throws HTTP 413 above the export cap", () => {
   }
 });
 
-Deno.test("D1_EXPORT_ROW_LIMIT is capped at 100k rows per table", () => {
+test("D1_EXPORT_ROW_LIMIT is capped at 100k rows per table", () => {
   assertEquals(D1_EXPORT_ROW_LIMIT, 100_000);
 });
 
-Deno.test(
+test(
   "D1_EXPORT_AGGREGATE_ROW_LIMIT bounds total rows across tables",
   () => {
     assertEquals(D1_EXPORT_AGGREGATE_ROW_LIMIT, 500_000);
   },
 );
 
-Deno.test(
+test(
   "enforceExportAggregateRowLimit is a no-op at or below the aggregate cap",
   () => {
     // running totals within the cap should not throw
@@ -48,7 +49,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "enforceExportAggregateRowLimit throws HTTP 413 above the aggregate cap",
   () => {
     try {
@@ -65,7 +66,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "enforceExportAggregateRowLimit fails fast when summing across tables",
   () => {
     // Simulate the running-count loop in exportHandler: per-table caps are

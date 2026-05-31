@@ -1,5 +1,9 @@
-import { assert, assertEquals } from '@std/assert';
+import assert, { deepStrictEqual } from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'bun:test';
 import app from './index.ts';
 import { TAKOS_PUBLIC_API_PATHS } from 'takos-api-contract';
 import { TAKOSUMI_INTERNAL_PATHS } from 'takosumi-contract-v2/internal/api';
@@ -9,11 +13,11 @@ import { SESSION_COOKIE_NAME, SESSION_TTL_MS } from '../../worker/application/se
 import type { DurableNamespaceBinding, DurableObjectStubBinding } from '../../worker/shared/types/bindings.ts';
 import type { Env } from '../../worker/shared/types/index.ts';
 
-Deno.test('src/routes/public gateway contract mounts control routes in-process', async () => {
-  const tempDir = await Deno.makeTempDir();
+test('src/routes/public gateway contract mounts control routes in-process', async () => {
+  const tempDir = await makeTempDir('gateway-contract-test-');
   const db = await createSqliteSqlDatabase(
     `${tempDir}/gateway-contract.sqlite`,
-    fileURLToPath(new URL('../../control/db/migrations/', import.meta.url)),
+    fileURLToPath(new URL('../../../db/migrations-control/migrations/', import.meta.url)),
   );
   const sessionId = 'session_contract_1234567890';
   const sessions = new Map<string, StoredSession>([
@@ -46,16 +50,16 @@ Deno.test('src/routes/public gateway contract mounts control routes in-process',
     const spacesBody = await spaces.json() as {
       spaces: unknown[];
     };
-    assertEquals(spaces.status, 200);
-    assertEquals(spacesBody.spaces, []);
-    assertEquals(takosumiCalls.length, 1);
-    assertEquals(
+    deepStrictEqual(spaces.status, 200);
+    deepStrictEqual(spacesBody.spaces, []);
+    deepStrictEqual(takosumiCalls.length, 1);
+    deepStrictEqual(
       new URL(takosumiCalls[0].url).pathname,
       TAKOSUMI_INTERNAL_PATHS.spaces,
     );
     const actor = actorFromSignedHeaders(takosumiCalls[0].headers);
-    assertEquals(actor.actorAccountId, 'acct_contract');
-    assertEquals(actor.spaceId, undefined);
+    deepStrictEqual(actor.actorAccountId, 'acct_contract');
+    deepStrictEqual(actor.spaceId, undefined);
 
     const me = await app.request('/api/me', {
       headers: {
@@ -68,10 +72,10 @@ Deno.test('src/routes/public gateway contract mounts control routes in-process',
       username: string;
       setup_completed: boolean;
     };
-    assertEquals(me.status, 200);
-    assertEquals(meBody.email, 'tako@example.com');
-    assertEquals(meBody.username, 'tako');
-    assertEquals(meBody.setup_completed, true);
+    deepStrictEqual(me.status, 200);
+    deepStrictEqual(meBody.email, 'tako@example.com');
+    deepStrictEqual(meBody.username, 'tako');
+    deepStrictEqual(meBody.setup_completed, true);
 
     const authMe = await app.request('/api/auth/me', {
       headers: { cookie },
@@ -79,29 +83,31 @@ Deno.test('src/routes/public gateway contract mounts control routes in-process',
     const authMeBody = await authMe.json() as {
       user: { email: string; username: string };
     };
-    assertEquals(authMe.status, 200);
-    assertEquals(authMeBody.user.email, 'tako@example.com');
-    assertEquals(authMeBody.user.username, 'tako');
+    deepStrictEqual(authMe.status, 200);
+    deepStrictEqual(authMeBody.user.email, 'tako@example.com');
+    deepStrictEqual(authMeBody.user.username, 'tako');
 
     const profile = await app.request('/api/users/tako', {}, controlEnv);
     const profileBody = await profile.json() as {
       user: { username: string; public_repo_count: number };
     };
-    assertEquals(profile.status, 200);
-    assertEquals(profileBody.user.username, 'tako');
-    assertEquals(profileBody.user.public_repo_count, 0);
+    deepStrictEqual(profile.status, 200);
+    deepStrictEqual(profileBody.user.username, 'tako');
+    deepStrictEqual(profileBody.user.public_repo_count, 0);
 
     const billing = await app.request('/api/billing', {
       headers: { cookie },
     }, controlEnv);
-    assertEquals(billing.status, 410);
+    deepStrictEqual(billing.status, 410);
   } finally {
     restoreEnv();
     await takosumiServer.close();
     closeDb(db);
-    await Deno.remove(tempDir, { recursive: true });
+    await rm(tempDir, { recursive: true, force: true });
   }
 });
+
+import { test } from 'bun:test';
 
 type StoredSession = {
   id: string;
@@ -261,9 +267,10 @@ function serveRecordedJson(
   calls: RecordedRequest[],
   responseBody: unknown,
 ): TestServer {
-  const server = Deno.serve(
-    { hostname: '127.0.0.1', port: 0, onListen() {} },
-    async (request) => {
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch: async (request) => {
       calls.push({
         url: request.url,
         method: request.method,
@@ -272,7 +279,7 @@ function serveRecordedJson(
       });
       return Response.json(responseBody);
     },
-  );
+  });
   return serverInfo(server);
 }
 
@@ -281,11 +288,14 @@ type TestServer = {
   close: () => Promise<void>;
 };
 
-function serverInfo(server: Deno.HttpServer<Deno.NetAddr>): TestServer {
-  const { hostname, port } = server.addr;
+function serverInfo(server: Bun.Server): TestServer {
+  const { hostname, port } = server;
   return {
     origin: `http://${hostname}:${port}`,
-    close: () => server.shutdown(),
+    close: () => {
+      server.stop();
+      return Promise.resolve();
+    },
   };
 }
 
@@ -296,15 +306,15 @@ function configureGatewayEnv(input: { takosumiUrl: string }): () => void {
     TAKOSUMI_INTERNAL_URL: input.takosumiUrl,
   };
   const previous = new Map(
-    Object.keys(values).map((key) => [key, Deno.env.get(key)]),
+    Object.keys(values).map((key) => [key, process.env[key]]),
   );
   for (const [key, value] of Object.entries(values)) {
-    Deno.env.set(key, value);
+    process.env[key] = value;
   }
   return () => {
     for (const [key, value] of previous) {
-      if (value === undefined) Deno.env.delete(key);
-      else Deno.env.set(key, value);
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
     }
   };
 }
@@ -320,4 +330,8 @@ function actorFromSignedHeaders(
 
 function closeDb(db: ServerSqlDatabase): void {
   (db as ServerSqlDatabase & { close?: () => void }).close?.();
+}
+
+async function makeTempDir(prefix: string): Promise<string> {
+  return mkdtemp(join(tmpdir(), `${prefix}`));
 }

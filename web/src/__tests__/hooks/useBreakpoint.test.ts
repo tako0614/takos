@@ -1,7 +1,9 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import { calcBreakpointState } from "../../hooks/useBreakpoint.ts";
+import { test } from "bun:test";
 
-Deno.test("calcBreakpointState - classifies viewport widths correctly", () => {
+
+test("calcBreakpointState - classifies viewport widths correctly", () => {
   assertEquals(calcBreakpointState(375), {
     isMobile: true,
     isTablet: false,

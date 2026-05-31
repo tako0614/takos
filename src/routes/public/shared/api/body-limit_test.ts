@@ -1,4 +1,5 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual } from 'node:assert/strict';
+import { test } from 'bun:test';
 import { Hono } from "hono";
 import {
   bodyLimitMiddleware,
@@ -8,36 +9,36 @@ import {
   GIT_SMART_HTTP_BODY_LIMIT_BYTES,
 } from "./body-limit.ts";
 
-Deno.test("evaluateBodyLimit allows non-body methods regardless of Content-Length", () => {
+test("evaluateBodyLimit allows non-body methods regardless of Content-Length", () => {
   for (const method of ["GET", "HEAD", "OPTIONS", "DELETE"]) {
     const decision = evaluateBodyLimit(
       new Request("https://t.local/x", { method }),
       { maxBytes: 16 },
     );
-    assertEquals(decision.ok, true);
+    deepStrictEqual(decision.ok, true);
   }
 });
 
-Deno.test("evaluateBodyLimit allows POST without Content-Length by default", () => {
+test("evaluateBodyLimit allows POST without Content-Length by default", () => {
   const decision = evaluateBodyLimit(
     new Request("https://t.local/x", { method: "POST" }),
     { maxBytes: 16 },
   );
-  assertEquals(decision.ok, true);
+  deepStrictEqual(decision.ok, true);
 });
 
-Deno.test("evaluateBodyLimit rejects missing Content-Length in strict mode", () => {
+test("evaluateBodyLimit rejects missing Content-Length in strict mode", () => {
   const decision = evaluateBodyLimit(
     new Request("https://t.local/x", { method: "POST" }),
     { maxBytes: 16, requireContentLength: true },
   );
-  assertEquals(decision.ok, false);
+  deepStrictEqual(decision.ok, false);
   if (!decision.ok) {
-    assertEquals(decision.reason, "body_length_required");
+    deepStrictEqual(decision.reason, "body_length_required");
   }
 });
 
-Deno.test("evaluateBodyLimit rejects oversize Content-Length", () => {
+test("evaluateBodyLimit rejects oversize Content-Length", () => {
   const decision = evaluateBodyLimit(
     new Request("https://t.local/x", {
       method: "POST",
@@ -46,15 +47,15 @@ Deno.test("evaluateBodyLimit rejects oversize Content-Length", () => {
     }),
     { maxBytes: 16 },
   );
-  assertEquals(decision.ok, false);
+  deepStrictEqual(decision.ok, false);
   if (!decision.ok) {
-    assertEquals(decision.reason, "body_too_large");
-    assertEquals(decision.declared, 100);
-    assertEquals(decision.limit, 16);
+    deepStrictEqual(decision.reason, "body_too_large");
+    deepStrictEqual(decision.declared, 100);
+    deepStrictEqual(decision.limit, 16);
   }
 });
 
-Deno.test("bodyLimitMiddleware returns closed-envelope 413", async () => {
+test("bodyLimitMiddleware returns closed-envelope 413", async () => {
   const app = new Hono();
   app.use("*", bodyLimitMiddleware({ maxBytes: 8 }));
   app.post("/x", (c) => c.json({ ok: true }));
@@ -65,14 +66,14 @@ Deno.test("bodyLimitMiddleware returns closed-envelope 413", async () => {
       body: "x".repeat(32),
     }),
   );
-  assertEquals(res.status, 413);
+  deepStrictEqual(res.status, 413);
   const json = await res.json() as {
     error: { code: string; message: string };
   };
-  assertEquals(json.error.code, "body_too_large");
+  deepStrictEqual(json.error.code, "body_too_large");
 });
 
-Deno.test("bodyLimitMiddleware supports per-request resolver", async () => {
+test("bodyLimitMiddleware supports per-request resolver", async () => {
   const app = new Hono();
   app.use(
     "*",
@@ -94,7 +95,7 @@ Deno.test("bodyLimitMiddleware supports per-request resolver", async () => {
       body: "x".repeat(512),
     }),
   );
-  assertEquals(big.status, 200);
+  deepStrictEqual(big.status, 200);
 
   const small = await app.fetch(
     new Request("https://t.local/small", {
@@ -103,7 +104,7 @@ Deno.test("bodyLimitMiddleware supports per-request resolver", async () => {
       body: "x".repeat(32),
     }),
   );
-  assertEquals(small.status, 413);
+  deepStrictEqual(small.status, 413);
 });
 
 function chunkedRequest(url: string, chunks: Uint8Array[]): Request {
@@ -121,7 +122,7 @@ function chunkedRequest(url: string, chunks: Uint8Array[]): Request {
   });
 }
 
-Deno.test("bodyLimitMiddleware caps a chunked (no Content-Length) oversize body", async () => {
+test("bodyLimitMiddleware caps a chunked (no Content-Length) oversize body", async () => {
   const app = new Hono();
   app.use("*", bodyLimitMiddleware({ maxBytes: 8 }));
   app.post("/x", async (c) => {
@@ -137,10 +138,10 @@ Deno.test("bodyLimitMiddleware caps a chunked (no Content-Length) oversize body"
   // accepting the oversize body. The key assertion is that the handler does
   // NOT return its 200 ok-body.
   const text = await res.text();
-  assertEquals(text.includes('"ok":true'), false);
+  deepStrictEqual(text.includes('"ok":true'), false);
 });
 
-Deno.test("bodyLimitMiddleware lets a chunked under-cap body through", async () => {
+test("bodyLimitMiddleware lets a chunked under-cap body through", async () => {
   const app = new Hono();
   app.use("*", bodyLimitMiddleware({ maxBytes: 64 }));
   app.post("/x", async (c) => {
@@ -150,13 +151,13 @@ Deno.test("bodyLimitMiddleware lets a chunked under-cap body through", async () 
 
   const small = new Uint8Array(8);
   const res = await app.fetch(chunkedRequest("https://t.local/x", [small]));
-  assertEquals(res.status, 200);
+  deepStrictEqual(res.status, 200);
   const json = await res.json() as { size: number };
-  assertEquals(json.size, 8);
+  deepStrictEqual(json.size, 8);
 });
 
-Deno.test("body-limit constants stay within expected envelopes", () => {
-  assertEquals(DEFAULT_BODY_LIMIT_BYTES, 1 * 1024 * 1024);
-  assertEquals(DEPLOY_BODY_LIMIT_BYTES, 8 * 1024 * 1024);
-  assertEquals(GIT_SMART_HTTP_BODY_LIMIT_BYTES, 256 * 1024 * 1024);
+test("body-limit constants stay within expected envelopes", () => {
+  deepStrictEqual(DEFAULT_BODY_LIMIT_BYTES, 1 * 1024 * 1024);
+  deepStrictEqual(DEPLOY_BODY_LIMIT_BYTES, 8 * 1024 * 1024);
+  deepStrictEqual(GIT_SMART_HTTP_BODY_LIMIT_BYTES, 256 * 1024 * 1024);
 });

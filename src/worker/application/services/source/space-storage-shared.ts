@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { SpaceStorageFileType } from "../../../shared/types/index.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import type { accountStorageFiles } from "../../../infra/db/index.ts";
@@ -23,22 +24,11 @@ export const R2_KEY_PREFIX = "ws-storage";
 const DEFAULT_MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 function resolveMaxFileSize(): number {
-  try {
-    const raw = (globalThis as {
-      Deno?: { env?: { get(name: string): string | undefined } };
-    })
-      .Deno
-      ?.env
-      ?.get("TAKOS_STORAGE_MAX_FILE_SIZE_BYTES")
-      ?.trim();
-    if (!raw) return DEFAULT_MAX_FILE_SIZE;
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_FILE_SIZE;
-    return parsed;
-  } catch {
-    // Workers / sandboxed envs without Deno.env access fall back silently.
-    return DEFAULT_MAX_FILE_SIZE;
-  }
+  const raw = getEnv("TAKOS_STORAGE_MAX_FILE_SIZE_BYTES")?.trim();
+  if (!raw) return DEFAULT_MAX_FILE_SIZE;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_FILE_SIZE;
+  return parsed;
 }
 
 export const MAX_FILE_SIZE = resolveMaxFileSize();

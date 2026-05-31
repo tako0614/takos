@@ -1,10 +1,12 @@
-import { assertEquals, assertStrictEquals } from "@std/assert";
-import {
-  type ChatSessionInitState,
-  nextChatSessionInitState,
+import { deepStrictEqual as assertEquals, strictEqual as assertStrictEquals } from "node:assert/strict";
+import type {
+  ChatSessionInitState,
 } from "../../hooks/chat-session-init.ts";
+import { test } from "bun:test";
 
-Deno.test("nextChatSessionInitState - initializes on first load", () => {
+import { nextChatSessionInitState } from "../../hooks/chat-session-init.ts";
+
+test("nextChatSessionInitState - initializes on first load", () => {
   assertEquals(
     nextChatSessionInitState(undefined, "thread-1", null),
     {
@@ -14,7 +16,7 @@ Deno.test("nextChatSessionInitState - initializes on first load", () => {
   );
 });
 
-Deno.test("nextChatSessionInitState - keeps previous state when focus clears on same thread", () => {
+test("nextChatSessionInitState - keeps previous state when focus clears on same thread", () => {
   const previous: ChatSessionInitState = {
     threadId: "thread-1",
     focusSequence: 42,
@@ -26,7 +28,7 @@ Deno.test("nextChatSessionInitState - keeps previous state when focus clears on 
   );
 });
 
-Deno.test("nextChatSessionInitState - advances when focus changes on same thread", () => {
+test("nextChatSessionInitState - advances when focus changes on same thread", () => {
   const previous: ChatSessionInitState = {
     threadId: "thread-1",
     focusSequence: 42,
@@ -41,7 +43,7 @@ Deno.test("nextChatSessionInitState - advances when focus changes on same thread
   );
 });
 
-Deno.test("nextChatSessionInitState - advances when thread changes", () => {
+test("nextChatSessionInitState - advances when thread changes", () => {
   const previous: ChatSessionInitState = {
     threadId: "thread-1",
     focusSequence: 42,

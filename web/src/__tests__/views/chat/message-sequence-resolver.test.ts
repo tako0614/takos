@@ -1,10 +1,12 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
+import { test } from "bun:test";
+
 
 const { resolveMessageSequenceById } = await import(
   "../../../views/chat/message-sequence-resolver.ts"
 );
 
-Deno.test("resolveMessageSequenceById - finds the target sequence", async () => {
+test("resolveMessageSequenceById - finds the target sequence", async () => {
   const sequence = await resolveMessageSequenceById({
     messageId: "message-2",
     fetchPage: (offset) => {
@@ -24,7 +26,7 @@ Deno.test("resolveMessageSequenceById - finds the target sequence", async () => 
   assertEquals(sequence, 11);
 });
 
-Deno.test("resolveMessageSequenceById - caps the scan at maxPages", async () => {
+test("resolveMessageSequenceById - caps the scan at maxPages", async () => {
   let pagesFetched = 0;
   const sequence = await resolveMessageSequenceById({
     messageId: "missing",
@@ -48,7 +50,7 @@ Deno.test("resolveMessageSequenceById - caps the scan at maxPages", async () => 
   assertEquals(pagesFetched, 3);
 });
 
-Deno.test("resolveMessageSequenceById - returns null on fetch failure", async () => {
+test("resolveMessageSequenceById - returns null on fetch failure", async () => {
   const sequence = await resolveMessageSequenceById({
     messageId: "message-2",
     fetchPage: () => {

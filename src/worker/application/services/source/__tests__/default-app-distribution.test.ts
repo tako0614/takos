@@ -1,5 +1,7 @@
+import { test } from "bun:test";
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { getTableName } from "drizzle-orm";
+import { readFile } from "node:fs/promises";
 import YAML from "yaml";
 
 import type { Env } from "../../../../shared/types/index.ts";
@@ -39,8 +41,7 @@ function tableName(table: unknown): string | null {
   }
 }
 
-const APP_ROOT = new URL("../../../../../../../", import.meta.url);
-const ECOSYSTEM_ROOT = new URL("../../", APP_ROOT);
+const ECOSYSTEM_ROOT = new URL("../../../../../../../", import.meta.url);
 
 const DEFAULT_APP_MANIFESTS = [
   {
@@ -109,7 +110,7 @@ function manifestString(value: unknown, field: string): string {
 async function readInstallableAppManifest(
   path: string,
 ): Promise<InstallableAppManifestSummary> {
-  const text = await Deno.readTextFile(new URL(path, ECOSYSTEM_ROOT));
+  const text = await readFile(new URL(path, ECOSYSTEM_ROOT), "utf8");
   const parsed = manifestRecord(YAML.parse(text), path);
   const metadata = manifestRecord(parsed.metadata, `${path}.metadata`);
   const components = manifestRecord(parsed.components, `${path}.components`);
@@ -153,7 +154,7 @@ async function readInstallableAppManifest(
   };
 }
 
-Deno.test("resolveDefaultAppDistribution returns default app fallback set", () => {
+test("resolveDefaultAppDistribution returns default app fallback set", () => {
   const entries = resolveDefaultAppDistribution(makeEnv());
 
   assertEquals(entries.map((entry) => entry.name), [
@@ -224,7 +225,7 @@ Deno.test("resolveDefaultAppDistribution returns default app fallback set", () =
   );
 });
 
-Deno.test("resolveDefaultAppDistribution stays in sync with installable app manifests", async () => {
+test("resolveDefaultAppDistribution stays in sync with installable app manifests", async () => {
   const entries = resolveDefaultAppDistribution(makeEnv({
     TAKOS_DEFAULT_APPS_PREINSTALL: "true",
   }));
@@ -260,7 +261,7 @@ Deno.test("resolveDefaultAppDistribution stays in sync with installable app mani
   }
 });
 
-Deno.test("resolveDefaultAppDistribution keeps road-to-me catalog-only when fallback preinstall is enabled", () => {
+test("resolveDefaultAppDistribution keeps road-to-me catalog-only when fallback preinstall is enabled", () => {
   const entries = resolveDefaultAppDistribution(makeEnv({
     TAKOS_DEFAULT_APPS_PREINSTALL: "true",
   }));
@@ -281,7 +282,7 @@ Deno.test("resolveDefaultAppDistribution keeps road-to-me catalog-only when fall
   );
 });
 
-Deno.test("resolveDefaultAppDistribution lets operators replace the distribution", () => {
+test("resolveDefaultAppDistribution lets operators replace the distribution", () => {
   const entries = resolveDefaultAppDistribution(makeEnv({
     TAKOS_DEFAULT_APPS_PREINSTALL: "false",
     TAKOS_DEFAULT_APP_REF: "stable",
@@ -305,7 +306,7 @@ Deno.test("resolveDefaultAppDistribution lets operators replace the distribution
   }]);
 });
 
-Deno.test("resolveDefaultAppDistribution prefers distribution JSON over repository list JSON", () => {
+test("resolveDefaultAppDistribution prefers distribution JSON over repository list JSON", () => {
   const entries = resolveDefaultAppDistribution(makeEnv({
     TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
       {
@@ -326,7 +327,7 @@ Deno.test("resolveDefaultAppDistribution prefers distribution JSON over reposito
   assertEquals(entries.map((entry) => entry.name), ["distribution-docs"]);
 });
 
-Deno.test("resolveDefaultAppDistribution accepts repository list JSON", () => {
+test("resolveDefaultAppDistribution accepts repository list JSON", () => {
   const entries = resolveDefaultAppDistribution(makeEnv({
     TAKOS_DEFAULT_APP_REF: "stable",
     TAKOS_DEFAULT_APP_REF_TYPE: "tag",
@@ -360,7 +361,7 @@ Deno.test("resolveDefaultAppDistribution accepts repository list JSON", () => {
   ]);
 });
 
-Deno.test("resolveDefaultAppDistributionForBootstrap prefers repository list env over DB", async () => {
+test("resolveDefaultAppDistributionForBootstrap prefers repository list env over DB", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   let selectCalled = false;
@@ -404,7 +405,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap prefers repository list env
   }
 });
 
-Deno.test("resolveDefaultAppDistributionForBootstrap honors the preinstall kill switch before parsing overrides", async () => {
+test("resolveDefaultAppDistributionForBootstrap honors the preinstall kill switch before parsing overrides", async () => {
   const entries = await resolveDefaultAppDistributionForBootstrap(makeEnv({
     TAKOS_DEFAULT_APPS_PREINSTALL: "false",
     TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: "{not json",
@@ -422,7 +423,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap honors the preinstall kill 
   assertEquals(entries.every((entry) => entry.preinstall === false), true);
 });
 
-Deno.test("resolveDefaultAppDistribution rejects non-portable repository URLs", () => {
+test("resolveDefaultAppDistribution rejects non-portable repository URLs", () => {
   assertThrows(
     () =>
       resolveDefaultAppDistribution(makeEnv({
@@ -439,7 +440,7 @@ Deno.test("resolveDefaultAppDistribution rejects non-portable repository URLs", 
   );
 });
 
-Deno.test("resolveDefaultAppDistribution rejects invalid global ref type", () => {
+test("resolveDefaultAppDistribution rejects invalid global ref type", () => {
   assertThrows(
     () =>
       resolveDefaultAppDistribution(makeEnv({
@@ -450,7 +451,7 @@ Deno.test("resolveDefaultAppDistribution rejects invalid global ref type", () =>
   );
 });
 
-Deno.test("resolveDefaultAppDistribution rejects invalid global backend", () => {
+test("resolveDefaultAppDistribution rejects invalid global backend", () => {
   assertThrows(
     () =>
       resolveDefaultAppDistribution(makeEnv({
@@ -461,7 +462,7 @@ Deno.test("resolveDefaultAppDistribution rejects invalid global backend", () => 
   );
 });
 
-Deno.test("getDefaultAppReconcileStatus reports env distribution and preinstall jobs", async () => {
+test("getDefaultAppReconcileStatus reports env distribution and preinstall jobs", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const jobRows = [
@@ -538,7 +539,7 @@ Deno.test("getDefaultAppReconcileStatus reports env distribution and preinstall 
   }
 });
 
-Deno.test("resolveDefaultAppDistributionForBootstrap keeps an empty DB distribution empty", async () => {
+test("resolveDefaultAppDistributionForBootstrap keeps an empty DB distribution empty", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   let selectCalls = 0;
@@ -585,7 +586,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap keeps an empty DB distribut
   }
 });
 
-Deno.test("resolveDefaultAppDistributionForBootstrap falls back when DB read fails", async () => {
+test("resolveDefaultAppDistributionForBootstrap falls back when DB read fails", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const db = {
@@ -622,7 +623,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap falls back when DB read fai
   }
 });
 
-Deno.test("resolveDefaultAppDistributionForBootstrap rejects invalid DB configuration instead of falling back", async () => {
+test("resolveDefaultAppDistributionForBootstrap rejects invalid DB configuration instead of falling back", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const db = {
@@ -673,7 +674,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap rejects invalid DB configur
   }
 });
 
-Deno.test("resolveDefaultAppDistributionForBootstrap reads persisted distribution once per cache window", async () => {
+test("resolveDefaultAppDistributionForBootstrap reads persisted distribution once per cache window", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   let selectCalls = 0;
@@ -733,7 +734,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap reads persisted distributio
   }
 });
 
-Deno.test("resolveDefaultAppDistributionForBootstrap keeps cache entries scoped per DB binding", async () => {
+test("resolveDefaultAppDistributionForBootstrap keeps cache entries scoped per DB binding", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   function makeDb(name: string) {
@@ -795,7 +796,7 @@ Deno.test("resolveDefaultAppDistributionForBootstrap keeps cache entries scoped 
   }
 });
 
-Deno.test("saveDefaultAppDistributionEntries rejects duplicate names before mutating the DB", async () => {
+test("saveDefaultAppDistributionEntries rejects duplicate names before mutating the DB", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   let deleted = false;
@@ -844,7 +845,7 @@ Deno.test("saveDefaultAppDistributionEntries rejects duplicate names before muta
   }
 });
 
-Deno.test("saveDefaultAppDistributionEntries replaces persisted repositories and warms cache", async () => {
+test("saveDefaultAppDistributionEntries replaces persisted repositories and warms cache", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   let deletedEntries = false;
@@ -948,7 +949,7 @@ Deno.test("saveDefaultAppDistributionEntries replaces persisted repositories and
   }
 });
 
-Deno.test("clearDefaultAppDistributionEntries disables DB distribution and requeues blocked jobs", async () => {
+test("clearDefaultAppDistributionEntries disables DB distribution and requeues blocked jobs", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const deletedTables: string[] = [];
@@ -1013,7 +1014,7 @@ Deno.test("clearDefaultAppDistributionEntries disables DB distribution and reque
   }
 });
 
-Deno.test("enqueueDefaultAppPreinstallJob persists a queued job and honors the kill switch", async () => {
+test("enqueueDefaultAppPreinstallJob persists a queued job and honors the kill switch", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const inserted: Array<Record<string, unknown>> = [];
@@ -1057,7 +1058,7 @@ Deno.test("enqueueDefaultAppPreinstallJob persists a queued job and honors the k
   }
 });
 
-Deno.test("enqueueDefaultAppPreinstallJob defers source resolution until processing", async () => {
+test("enqueueDefaultAppPreinstallJob defers source resolution until processing", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const inserted: Array<Record<string, unknown>> = [];
@@ -1110,7 +1111,7 @@ Deno.test("enqueueDefaultAppPreinstallJob defers source resolution until process
   }
 });
 
-Deno.test("processDefaultAppPreinstallJobs pauses queued jobs when preinstall is disabled", async () => {
+test("processDefaultAppPreinstallJobs pauses queued jobs when preinstall is disabled", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const jobRows = [{
@@ -1184,7 +1185,7 @@ Deno.test("processDefaultAppPreinstallJobs pauses queued jobs when preinstall is
   }
 });
 
-Deno.test("processDefaultAppPreinstallJobs applies default apps through Installation install when configured", async () => {
+test("processDefaultAppPreinstallJobs applies default apps through Installation install when configured", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();
@@ -1282,7 +1283,7 @@ Deno.test("processDefaultAppPreinstallJobs applies default apps through Installa
   }
 });
 
-Deno.test("processDefaultAppPreinstallJobs blocks incomplete Installation install config", async () => {
+test("processDefaultAppPreinstallJobs blocks incomplete Installation install config", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();
@@ -1369,7 +1370,7 @@ Deno.test("processDefaultAppPreinstallJobs blocks incomplete Installation instal
   }
 });
 
-Deno.test("processDefaultAppPreinstallJobs skips rows another processor already claimed", async () => {
+test("processDefaultAppPreinstallJobs skips rows another processor already claimed", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const jobRows = [{
@@ -1434,7 +1435,7 @@ Deno.test("processDefaultAppPreinstallJobs skips rows another processor already 
   }
 });
 
-Deno.test("processDefaultAppPreinstallJobs blocks invalid config without permanent failure", async () => {
+test("processDefaultAppPreinstallJobs blocks invalid config without permanent failure", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const jobRows = [{
@@ -1500,7 +1501,7 @@ Deno.test("processDefaultAppPreinstallJobs blocks invalid config without permane
   }
 });
 
-Deno.test("preinstallDefaultAppsForSpace requires Installation config", async () => {
+test("preinstallDefaultAppsForSpace requires Installation config", async () => {
   await assertRejects(
     () =>
       preinstallDefaultAppsForSpace(
@@ -1516,7 +1517,7 @@ Deno.test("preinstallDefaultAppsForSpace requires Installation config", async ()
   );
 });
 
-Deno.test("preinstallDefaultAppsForSpace applies every bundled app through Installation when configured", async () => {
+test("preinstallDefaultAppsForSpace applies every bundled app through Installation when configured", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();
@@ -1632,7 +1633,7 @@ Deno.test("preinstallDefaultAppsForSpace applies every bundled app through Insta
   }
 });
 
-Deno.test("preinstallDefaultAppsForSpace skips database work when preinstall is disabled", async () => {
+test("preinstallDefaultAppsForSpace skips database work when preinstall is disabled", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   let getDbCalled = false;
@@ -1659,7 +1660,7 @@ Deno.test("preinstallDefaultAppsForSpace skips database work when preinstall is 
   }
 });
 
-Deno.test("preinstallDefaultAppsForSpace honors the kill switch even when env entries request preinstall", async () => {
+test("preinstallDefaultAppsForSpace honors the kill switch even when env entries request preinstall", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   let getDbCalled = false;
@@ -1715,7 +1716,7 @@ Deno.test("preinstallDefaultAppsForSpace honors the kill switch even when env en
   }
 });
 
-Deno.test("invalidateDistributionCache drops the in-memory cache entry for a DB binding", async () => {
+test("invalidateDistributionCache drops the in-memory cache entry for a DB binding", async () => {
   const {
     getDistributionCacheEntry,
     invalidateDistributionCache,
@@ -1734,7 +1735,7 @@ Deno.test("invalidateDistributionCache drops the in-memory cache entry for a DB 
   assertEquals(getDistributionCacheEntry(dbBinding), null);
 });
 
-Deno.test("saveDefaultAppDistributionEntries invalidates the cache before reseeding fresh data", async () => {
+test("saveDefaultAppDistributionEntries invalidates the cache before reseeding fresh data", async () => {
   const { getDistributionCacheEntry, setDistributionCacheEntry } = await import(
     "../default-app-distribution-internal.ts"
   );
@@ -1791,7 +1792,7 @@ Deno.test("saveDefaultAppDistributionEntries invalidates the cache before reseed
   }
 });
 
-Deno.test("clearDefaultAppDistributionEntries invalidates the cache before reseeding empty state", async () => {
+test("clearDefaultAppDistributionEntries invalidates the cache before reseeding empty state", async () => {
   const { getDistributionCacheEntry, setDistributionCacheEntry } = await import(
     "../default-app-distribution-internal.ts"
   );

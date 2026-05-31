@@ -22,7 +22,7 @@ export interface HostContainerContext {
 
 /**
  * Non-functional fallback used ONLY when the real `@cloudflare/containers`
- * runtime is unavailable (Deno / plain Node — i.e. tests and local tooling).
+ * runtime is unavailable (plain process runtimes — i.e. tests and local tooling).
  * It cannot actually run a container: `getTcpPort` (and therefore any real
  * `dispatchStart` that reaches the container) fails closed with a clear error.
  * The lifecycle methods are no-ops solely so the executor DO classes can
@@ -58,7 +58,6 @@ export class LocalHostContainerRuntime<Env = unknown> {
 }
 
 type RuntimeGlobal = typeof globalThis & {
-  Deno?: unknown;
   WebSocketPair?: unknown;
 };
 
@@ -72,12 +71,11 @@ export function shouldUseLocalHostContainerRuntime(
   globalScope: RuntimeGlobal = globalThis as RuntimeGlobal,
   processLike: ProcessLike | undefined = process,
 ): boolean {
-  const isDenoRuntime = typeof globalScope.Deno !== "undefined";
-  const isNodeRuntime = typeof processLike !== "undefined" &&
+  const isProcessRuntime = typeof processLike !== "undefined" &&
     Boolean(processLike.versions?.node);
   const isWorkersRuntime = typeof globalScope.WebSocketPair !== "undefined";
 
-  return isDenoRuntime || (isNodeRuntime && !isWorkersRuntime);
+  return isProcessRuntime && !isWorkersRuntime;
 }
 
 const runtimeModule = shouldUseLocalHostContainerRuntime()

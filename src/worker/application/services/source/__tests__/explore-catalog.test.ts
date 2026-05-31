@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { Env } from "../../../../shared/types/index.ts";
@@ -106,7 +107,7 @@ async function withDeployManifestPath<T>(
   }
 }
 
-Deno.test("listCatalogItems treats public non-draft releases as deployable apps without package assets", async () => {
+test("listCatalogItems treats public non-draft releases as deployable apps without package assets", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -270,7 +271,7 @@ Deno.test("listCatalogItems treats public non-draft releases as deployable apps 
   });
 });
 
-Deno.test("listCatalogItems marks repository packages installed from Accounts ledger source URL and release tag", async () => {
+test("listCatalogItems marks repository packages installed from Accounts ledger source URL and release tag", async () => {
   const db = createCatalogDb({
     repos: [{
       id: "repo-app",
@@ -348,7 +349,7 @@ Deno.test("listCatalogItems marks repository packages installed from Accounts le
   });
 });
 
-Deno.test("listCatalogItems requires .takosumi.yml when git objects are available", async () => {
+test("listCatalogItems requires .takosumi.yml when git objects are available", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -396,7 +397,7 @@ Deno.test("listCatalogItems requires .takosumi.yml when git objects are availabl
   });
 });
 
-Deno.test("listCatalogItems accepts .takosumi.yml when git objects are available", async () => {
+test("listCatalogItems accepts .takosumi.yml when git objects are available", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -444,7 +445,7 @@ Deno.test("listCatalogItems accepts .takosumi.yml when git objects are available
   });
 });
 
-Deno.test("filterDeployablePackageReleases keeps only manifest-backed releases", async () => {
+test("filterDeployablePackageReleases keeps only manifest-backed releases", async () => {
   const originalGitStore = sourceServiceDeps.gitStore;
   (sourceServiceDeps as {
     gitStore: typeof sourceServiceDeps.gitStore;
@@ -485,7 +486,7 @@ Deno.test("filterDeployablePackageReleases keeps only manifest-backed releases",
   }
 });
 
-Deno.test("listCatalogItems marks release catalog entries unavailable when git objects are missing", async () => {
+test("listCatalogItems marks release catalog entries unavailable when git objects are missing", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -530,7 +531,7 @@ Deno.test("listCatalogItems marks release catalog entries unavailable when git o
   assertEquals(deployable.items, []);
 });
 
-Deno.test("listCatalogItems includes default app distribution entries in the catalog", async () => {
+test("listCatalogItems includes default app distribution entries in the catalog", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -607,7 +608,7 @@ Deno.test("listCatalogItems includes default app distribution entries in the cat
   });
 });
 
-Deno.test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async () => {
+test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -676,7 +677,7 @@ Deno.test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", 
   });
 });
 
-Deno.test("listCatalogItems does not infer default app installation without Accounts ledger readback", async () => {
+test("listCatalogItems does not infer default app installation without Accounts ledger readback", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -705,7 +706,7 @@ Deno.test("listCatalogItems does not infer default app installation without Acco
   assertEquals(result.items[0]?.installation, undefined);
 });
 
-Deno.test("listCatalogItems overlays default app installation state from Accounts ledger", async () => {
+test("listCatalogItems overlays default app installation state from Accounts ledger", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],

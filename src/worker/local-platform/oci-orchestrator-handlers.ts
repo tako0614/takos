@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { Hono } from "hono";
 import type { Context, Next } from "hono";
 import { z } from "zod";
@@ -19,7 +20,7 @@ import {
 } from "./oci-orchestrator-storage.ts";
 import type { OciServiceRecord } from "./oci-orchestrator-storage.ts";
 
-const DEFAULT_DOCKER_NETWORK = Deno.env.get("TAKOS_DOCKER_NETWORK") ||
+const DEFAULT_DOCKER_NETWORK = getEnv("TAKOS_DOCKER_NETWORK") ||
   "takos-containers";
 
 const deploySchema = z.object({
@@ -75,7 +76,7 @@ export interface OciOrchestratorRouteDeps {
 }
 
 function createAuthMiddleware() {
-  const token = Deno.env.get("OCI_ORCHESTRATOR_TOKEN")?.trim();
+  const token = getEnv("OCI_ORCHESTRATOR_TOKEN")?.trim();
   return async (c: Context, next: Next) => {
     if (!token) {
       return next();

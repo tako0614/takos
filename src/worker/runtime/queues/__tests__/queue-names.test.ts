@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -5,7 +6,7 @@ import {
   normalizeWorkerQueueName,
 } from "../queue-names.ts";
 
-Deno.test("classifyWorkerQueueName accepts OSS and private queue prefixes", () => {
+test("classifyWorkerQueueName accepts OSS and private queue prefixes", () => {
   assertEquals(classifyWorkerQueueName("takos-runs"), "runs");
   assertEquals(classifyWorkerQueueName("takos-runs-dlq"), "runs_dlq");
   assertEquals(classifyWorkerQueueName("takos-index-jobs"), "index_jobs");
@@ -55,7 +56,7 @@ Deno.test("classifyWorkerQueueName accepts OSS and private queue prefixes", () =
   );
 });
 
-Deno.test("classifyWorkerQueueName strips staging suffix after dlq suffix", () => {
+test("classifyWorkerQueueName strips staging suffix after dlq suffix", () => {
   assertEquals(
     normalizeWorkerQueueName("takos-private-deployment-jobs-dlq-staging"),
     "takos-private-deployment-jobs-dlq",
@@ -78,7 +79,7 @@ Deno.test("classifyWorkerQueueName strips staging suffix after dlq suffix", () =
   );
 });
 
-Deno.test("classifyWorkerQueueName rejects unrelated queues", () => {
+test("classifyWorkerQueueName rejects unrelated queues", () => {
   assertEquals(classifyWorkerQueueName("mail-jobs"), null);
   assertEquals(classifyWorkerQueueName("takos-deployment-jobs-preview"), null);
 });

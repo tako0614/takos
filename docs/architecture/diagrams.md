@@ -23,7 +23,7 @@ Takos product API を所有し、install / update workflow は operator account 
 graph TB
   User[User / AI Agent]
   AppGateway[takos-worker<br/>public/control Worker]
-  Web[takos-web<br/>browser UI]
+  Web[Takos UI<br/>web/]
   Accounts[Takosumi Accounts<br/>operator account plane]
   Kernel[Takosumi Installer API]
   Storage[(Installation / Deployment Ledger)]

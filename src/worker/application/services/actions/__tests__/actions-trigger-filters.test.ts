@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
 
 import {
@@ -5,7 +6,7 @@ import {
   globToRegExp,
 } from "../actions-trigger-filters.ts";
 
-Deno.test("globToRegExp caches compiled patterns", () => {
+test("globToRegExp caches compiled patterns", () => {
   __globCacheInternals.clear();
   const a = globToRegExp("src/**/*.ts");
   const b = globToRegExp("src/**/*.ts");
@@ -13,7 +14,7 @@ Deno.test("globToRegExp caches compiled patterns", () => {
   assertEquals(__globCacheInternals.size(), 1);
 });
 
-Deno.test("globToRegExp glob cache is bounded by max entries", () => {
+test("globToRegExp glob cache is bounded by max entries", () => {
   __globCacheInternals.clear();
   const max = __globCacheInternals.maxEntries;
   // Fill cache up to the cap.
@@ -32,7 +33,7 @@ Deno.test("globToRegExp glob cache is bounded by max entries", () => {
   assertEquals(__globCacheInternals.size(), 1);
 });
 
-Deno.test("globToRegExp produces working regexes after overflow eviction", () => {
+test("globToRegExp produces working regexes after overflow eviction", () => {
   __globCacheInternals.clear();
   const max = __globCacheInternals.maxEntries;
   for (let i = 0; i < max + 5; i++) {

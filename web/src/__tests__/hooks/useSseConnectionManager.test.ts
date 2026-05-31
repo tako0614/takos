@@ -1,17 +1,18 @@
-import { assert, assertEquals } from "@std/assert";
+import { strict as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
 import {
   looksLikeWrappedConnectionMessage,
   SSE_RUN_EVENT_TYPES,
   wrapSseMessage,
 } from "../../hooks/useSseConnectionManager.ts";
+import { test } from "bun:test";
 
-Deno.test("useSseConnectionManager helpers - register named SSE run events", () => {
+test("useSseConnectionManager helpers - register named SSE run events", () => {
   assert(SSE_RUN_EVENT_TYPES.includes("tool_call"));
   assert(SSE_RUN_EVENT_TYPES.includes("completed"));
   assert(!SSE_RUN_EVENT_TYPES.includes("message"));
 });
 
-Deno.test("useSseConnectionManager helpers - wraps named events with event id", () => {
+test("useSseConnectionManager helpers - wraps named events with event id", () => {
   const wrapped = wrapSseMessage(
     "tool_call",
     JSON.stringify({ tool: "fs" }),
@@ -32,7 +33,7 @@ Deno.test("useSseConnectionManager helpers - wraps named events with event id", 
   });
 });
 
-Deno.test("useSseConnectionManager helpers - keeps already wrapped message payloads intact", () => {
+test("useSseConnectionManager helpers - keeps already wrapped message payloads intact", () => {
   const wrappedMessage = JSON.stringify({
     type: "completed",
     data: { status: "done" },

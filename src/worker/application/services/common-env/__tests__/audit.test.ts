@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 
@@ -113,25 +114,25 @@ function createFakeSqlDatabase() {
   return { db, prepared };
 }
 
-Deno.test("hashAuditIp - returns undefined for empty ip", async () => {
+test("hashAuditIp - returns undefined for empty ip", async () => {
   const env = { AUDIT_IP_HASH_KEY: "secret" } as unknown as Env;
   const result = await hashAuditIp(env, "");
   assertEquals(result, undefined);
 });
 
-Deno.test("hashAuditIp - returns undefined for undefined ip", async () => {
+test("hashAuditIp - returns undefined for undefined ip", async () => {
   const env = { AUDIT_IP_HASH_KEY: "secret" } as unknown as Env;
   const result = await hashAuditIp(env, undefined);
   assertEquals(result, undefined);
 });
 
-Deno.test("hashAuditIp - returns undefined when AUDIT_IP_HASH_KEY is not set", async () => {
+test("hashAuditIp - returns undefined when AUDIT_IP_HASH_KEY is not set", async () => {
   const env = {} as unknown as Env;
   const result = await hashAuditIp(env, "127.0.0.1");
   assertEquals(result, undefined);
 });
 
-Deno.test("hashAuditIp - returns a hex string for valid ip and key", async () => {
+test("hashAuditIp - returns a hex string for valid ip and key", async () => {
   const env = { AUDIT_IP_HASH_KEY: "test-secret-key" } as unknown as Env;
   const result = await hashAuditIp(env, "192.168.1.1");
   assert(result !== undefined);
@@ -140,21 +141,21 @@ Deno.test("hashAuditIp - returns a hex string for valid ip and key", async () =>
   assertEquals(/^[0-9a-f]+$/.test(result!), true);
 });
 
-Deno.test("hashAuditIp - produces consistent hashes for the same input", async () => {
+test("hashAuditIp - produces consistent hashes for the same input", async () => {
   const env = { AUDIT_IP_HASH_KEY: "test-secret-key" } as unknown as Env;
   const result1 = await hashAuditIp(env, "10.0.0.1");
   const result2 = await hashAuditIp(env, "10.0.0.1");
   assertEquals(result1, result2);
 });
 
-Deno.test("hashAuditIp - produces different hashes for different ips", async () => {
+test("hashAuditIp - produces different hashes for different ips", async () => {
   const env = { AUDIT_IP_HASH_KEY: "test-secret-key" } as unknown as Env;
   const result1 = await hashAuditIp(env, "10.0.0.1");
   const result2 = await hashAuditIp(env, "10.0.0.2");
   assertNotEquals(result1, result2);
 });
 
-Deno.test("writeCommonEnvAuditLog - inserts an audit log entry with the expected values", async () => {
+test("writeCommonEnvAuditLog - inserts an audit log entry with the expected values", async () => {
   const { db, prepared } = createFakeSqlDatabase();
 
   await writeCommonEnvAuditLog({
@@ -192,7 +193,7 @@ Deno.test("writeCommonEnvAuditLog - inserts an audit log entry with the expected
   assert(args.includes("user-1"));
 });
 
-Deno.test("writeCommonEnvAuditLog - uses system actor defaults when actor is not provided", async () => {
+test("writeCommonEnvAuditLog - uses system actor defaults when actor is not provided", async () => {
   const { prepared, db } = createFakeSqlDatabase();
 
   await writeCommonEnvAuditLog({
@@ -208,7 +209,7 @@ Deno.test("writeCommonEnvAuditLog - uses system actor defaults when actor is not
   assertEquals(args.includes(null), true);
 });
 
-Deno.test("writeCommonEnvAuditLog - handles null/undefined optional fields", async () => {
+test("writeCommonEnvAuditLog - handles null/undefined optional fields", async () => {
   const { prepared, db } = createFakeSqlDatabase();
 
   await writeCommonEnvAuditLog({

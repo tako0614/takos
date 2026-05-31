@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 
 import { CapabilityRegistry } from "../../capability-registry.ts";
@@ -5,7 +6,7 @@ import type { CapabilityDescriptor } from "../../capability-types.ts";
 import type { ToolContext, ToolDefinition } from "../../tool-definitions.ts";
 import { capabilityDescribeHandler, toolboxHandler } from "../discovery.ts";
 
-Deno.test("toolbox search hides router tools and points agents back to toolbox", async () => {
+test("toolbox search hides router tools and points agents back to toolbox", async () => {
   const registry = new CapabilityRegistry();
   registry.registerAll(
     [
@@ -83,7 +84,7 @@ Deno.test("toolbox search hides router tools and points agents back to toolbox",
   assertStringIncludes(output.hint, "action=call");
 });
 
-Deno.test("toolbox describe returns manual instructions for skill descriptors", async () => {
+test("toolbox describe returns manual instructions for skill descriptors", async () => {
   const registry = new CapabilityRegistry();
   registry.register({
     id: "skill:research-brief",
@@ -124,7 +125,7 @@ Deno.test("toolbox describe returns manual instructions for skill descriptors", 
   assertStringIncludes(output.manuals[0].instructions, "Gather facts");
 });
 
-Deno.test("toolbox describe returns full schemas for discovered tools", async () => {
+test("toolbox describe returns full schemas for discovered tools", async () => {
   const tools: ToolDefinition[] = [
     {
       name: "slide_create",
@@ -166,7 +167,7 @@ Deno.test("toolbox describe returns full schemas for discovered tools", async ()
   assertStringIncludes(output.hint, "toolbox action=call");
 });
 
-Deno.test("toolbox call executes non-router tools", async () => {
+test("toolbox call executes non-router tools", async () => {
   const calls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
 
   const output = await toolboxHandler(
@@ -199,7 +200,7 @@ Deno.test("toolbox call executes non-router tools", async () => {
   ]);
 });
 
-Deno.test("toolbox call rejects tools outside the available catalog", async () => {
+test("toolbox call rejects tools outside the available catalog", async () => {
   await assertRejects(
     () =>
       toolboxHandler(
@@ -220,7 +221,7 @@ Deno.test("toolbox call rejects tools outside the available catalog", async () =
   );
 });
 
-Deno.test("toolbox call rejects tools missing capability descriptors when registry is attached", async () => {
+test("toolbox call rejects tools missing capability descriptors when registry is attached", async () => {
   const registry = new CapabilityRegistry();
   await assertRejects(
     () =>
@@ -248,7 +249,7 @@ Deno.test("toolbox call rejects tools missing capability descriptors when regist
   );
 });
 
-Deno.test("capability aliases delegate to toolbox behavior", async () => {
+test("capability aliases delegate to toolbox behavior", async () => {
   const tools: ToolDefinition[] = [
     {
       name: "slide_create",

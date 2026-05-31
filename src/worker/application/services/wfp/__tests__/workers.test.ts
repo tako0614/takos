@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { createWorker, createWorkerWithWasm } from "../workers.ts";
@@ -43,7 +44,7 @@ function createFakeContext(): {
   return { ctx, requests };
 }
 
-Deno.test("createWorkerWithWasm formats SQL bindings with database_id", async () => {
+test("createWorkerWithWasm formats SQL bindings with database_id", async () => {
   const { ctx, requests } = createFakeContext();
 
   await createWorkerWithWasm(
@@ -81,7 +82,7 @@ Deno.test("createWorkerWithWasm formats SQL bindings with database_id", async ()
   ]);
 });
 
-Deno.test("createWorker includes native Cloudflare container metadata", async () => {
+test("createWorker includes native Cloudflare container metadata", async () => {
   const { ctx, requests } = createFakeContext();
 
   await createWorker(ctx, {

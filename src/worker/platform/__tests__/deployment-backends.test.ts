@@ -1,10 +1,11 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
   resolveDeploymentBackendConfigsFromEnv,
 } from "../deployment-backends.ts";
 
-Deno.test("resolveDeploymentBackendConfigsFromEnv activates k8s only when K8S_NAMESPACE is present", () => {
+test("resolveDeploymentBackendConfigsFromEnv activates k8s only when K8S_NAMESPACE is present", () => {
   assertEquals(
     resolveDeploymentBackendConfigsFromEnv({
       K8S_DEPLOYMENT_NAME: "takos-worker",

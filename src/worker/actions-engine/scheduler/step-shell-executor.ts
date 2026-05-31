@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { spawn } from "node:child_process";
 import { Buffer } from "node:buffer";
 
@@ -175,8 +176,12 @@ function terminateChildProcess(
       killChildProcess(child, "SIGKILL");
     }
   }, FORCE_KILL_TIMEOUT_MS);
-  Deno.unrefTimer(forceKill);
+  unrefTimer(forceKill);
   return forceKill;
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
+  (timer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.();
 }
 
 export const defaultShellExecutor: ShellExecutor = (
@@ -229,8 +234,8 @@ export const defaultShellExecutor: ShellExecutor = (
       "CI",
     ];
     for (const key of ALLOWED_HOST_VARS) {
-      if (Deno.env.get(key)) {
-        safeHostEnv[key] = Deno.env.get(key)!;
+      if (getEnv(key)) {
+        safeHostEnv[key] = getEnv(key)!;
       }
     }
 
@@ -266,7 +271,7 @@ export const defaultShellExecutor: ShellExecutor = (
       : undefined;
 
     if (timeout !== undefined) {
-      Deno.unrefTimer(timeout);
+      unrefTimer(timeout);
     }
 
     child.stdout?.on("data", (chunk: string | Uint8Array) => {

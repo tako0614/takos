@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertThrows } from "@std/assert";
 
 import {
@@ -29,7 +30,7 @@ function observedState(): ObservedGroupState {
   };
 }
 
-Deno.test("attached container binding plans use documented worker binding names", () => {
+test("attached container binding plans use documented worker binding names", () => {
   const plans = resolveAttachedContainerBindingPlans(
     "web",
     {
@@ -55,7 +56,7 @@ Deno.test("attached container binding plans use documented worker binding names"
   }]);
 });
 
-Deno.test("attached container binding injection adds DO namespace and endpoint bindings", () => {
+test("attached container binding injection adds DO namespace and endpoint bindings", () => {
   const plans = resolveAttachedContainerBindingPlans(
     "web",
     {
@@ -97,7 +98,7 @@ Deno.test("attached container binding injection adds DO namespace and endpoint b
   ]);
 });
 
-Deno.test("attached container binding injection rejects binding name conflicts", () => {
+test("attached container binding injection rejects binding name conflicts", () => {
   const plans = resolveAttachedContainerBindingPlans(
     "web",
     {

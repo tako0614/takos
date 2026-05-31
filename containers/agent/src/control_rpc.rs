@@ -1299,44 +1299,6 @@ mod tests {
         assert_eq!(client.base_url, "https://agent-control.example");
     }
 
-    #[test]
-    fn control_rpc_client_ignores_retired_env_aliases() {
-        let _guard = CONTROL_RPC_ENV_LOCK
-            .lock()
-            .expect("env lock should not be poisoned");
-        let saved = saved_control_rpc_env();
-        clear_control_rpc_env();
-        env::set_var(
-            "TAKOS_LEGACY_CONTROL_RPC_BASE_URL",
-            "https://retired-agent.example/",
-        );
-        env::set_var("TAKOS_LEGACY_CONTROL_RPC_TOKEN", "retired-token");
-        env::set_var("CONTROL_RPC_BASE_URL", "https://control-rpc.example/");
-        env::set_var("CONTROL_RPC_TOKEN", "control-token");
-        env::set_var(
-            "TAKOS_CONTROL_RPC_BASE_URL",
-            "https://takos-control.example/",
-        );
-        env::set_var("TAKOS_CONTROL_RPC_TOKEN", "takos-control-token");
-
-        let client = ControlRpcClient::new(&StartPayload {
-            run_id: "run-test".to_string(),
-            worker_id: "worker-test".to_string(),
-            service_id: Some("service-test".to_string()),
-            model: Some("local-smoke".to_string()),
-            lease_version: None,
-            executor_tier: None,
-            executor_container_id: None,
-            control_rpc_base_url: "https://payload-agent-control.example/".to_string(),
-            control_rpc_token: "payload-token".to_string(),
-        })
-        .expect("control RPC client should build");
-
-        restore_control_rpc_env(saved);
-        assert_eq!(client.base_url, "https://payload-agent-control.example");
-        assert_eq!(client.token, "payload-token");
-    }
-
     fn control_rpc_client_with_env_cleared(
         payload: &StartPayload,
     ) -> crate::AppResult<ControlRpcClient> {
@@ -1352,14 +1314,8 @@ mod tests {
 
     fn saved_control_rpc_env() -> Vec<(&'static str, Option<String>)> {
         [
-            "TAKOS_LEGACY_CONTROL_RPC_BASE_URL",
             "TAKOS_AGENT_CONTROL_RPC_BASE_URL",
-            "CONTROL_RPC_BASE_URL",
-            "TAKOS_CONTROL_RPC_BASE_URL",
             "TAKOS_AGENT_CONTROL_RPC_TOKEN",
-            "TAKOS_LEGACY_CONTROL_RPC_TOKEN",
-            "CONTROL_RPC_TOKEN",
-            "TAKOS_CONTROL_RPC_TOKEN",
             "TAKOSUMI_INTERNAL_URL",
         ]
         .into_iter()
@@ -1369,14 +1325,8 @@ mod tests {
 
     fn clear_control_rpc_env() {
         for key in [
-            "TAKOS_LEGACY_CONTROL_RPC_BASE_URL",
             "TAKOS_AGENT_CONTROL_RPC_BASE_URL",
-            "CONTROL_RPC_BASE_URL",
-            "TAKOS_CONTROL_RPC_BASE_URL",
             "TAKOS_AGENT_CONTROL_RPC_TOKEN",
-            "TAKOS_LEGACY_CONTROL_RPC_TOKEN",
-            "CONTROL_RPC_TOKEN",
-            "TAKOS_CONTROL_RPC_TOKEN",
             "TAKOSUMI_INTERNAL_URL",
         ] {
             env::remove_var(key);

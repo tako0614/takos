@@ -2,10 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assert, assertStringIncludes } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
 const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
-const docsRoot = Deno.env.get("TAKOS_DOCS_DIR");
+const docsRoot = process.env.TAKOS_DOCS_DIR;
 const docsCandidates = docsRoot
   ? [
     resolve(docsRoot, "takos/reference/database.md"),
@@ -27,15 +28,15 @@ if (!docsDatabasePath) {
   );
 }
 const docsDatabase = readFileSync(docsDatabasePath, "utf8");
-const appRoot = fileURLToPath(new URL("../..", import.meta.url));
+const appRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 const baselineSql = readFileSync(
-  resolve(appRoot, "db/migrations/0001_baseline.sql"),
+  resolve(appRoot, "db/migrations-control/migrations/0001_baseline.sql"),
   "utf8",
 );
 const legacyAccountIdentityMigration = readFileSync(
   resolve(
     appRoot,
-    "db/migrations/0073_drop_legacy_account_identity_columns.sql",
+    "db/migrations-control/migrations/0073_drop_legacy_account_identity_columns.sql",
   ),
   "utf8",
 );
@@ -158,33 +159,30 @@ function extractBaselineTableBlock(source: string, table: string): string {
 
 function expectBaselineTable(table: string): void {
   if (table === "service_runtimes") {
-    assert(/CREATE TABLE "(service_runtimes|infra_workers)"/.test(baselineSql));
+    assert.ok(/CREATE TABLE "(service_runtimes|infra_workers)"/.test(baselineSql));
     return;
   }
   if (table === "service_mcp_endpoints") {
-    assert(
+    assert.ok(
       /CREATE TABLE "(service_mcp_endpoints|worker_mcp_endpoints)"/.test(
         baselineSql,
       ),
     );
     return;
   }
-  assertStringIncludes(baselineSql, `CREATE TABLE "${table}"`);
+  assert.ok(baselineSql.includes(`CREATE TABLE "${table}"`));
 }
 
 function assertColumnContract(block: string, contract: ColumnContract): void {
   const columns = typeof contract === "string" ? [contract] : [...contract];
-  assert(
+  assert.ok(
     columns.some((column) => block.includes(column)),
     `Expected block to contain one of: ${columns.join(", ")}`,
   );
 }
 
 function dbContractTest(name: string, fn: () => void): void {
-  Deno.test({
-    name: `DB contract reset canon - ${name}`,
-    fn,
-  });
+  test(`DB contract reset canon - ${name}`, fn);
 }
 
 // NOTE: docs/reference/database.md was intentionally restructured from a
@@ -220,16 +218,16 @@ dbContractTest(
 
 dbContractTest("removes legacy tables from baseline SQL", () => {
   for (const table of forbiddenTables) {
-    assert(!baselineSql.includes(`CREATE TABLE "${table}"`));
+    assert.ok(!baselineSql.includes(`CREATE TABLE "${table}"`));
   }
 });
 
 dbContractTest(
   "removes mixed-product schema text from Takos database docs",
   () => {
-    assert(!docsDatabase.includes("Yurucommu Schema"));
-    assert(!docsDatabase.includes("actors"));
-    assert(!docsDatabase.includes("likes"));
+    assert.ok(!docsDatabase.includes("Yurucommu Schema"));
+    assert.ok(!docsDatabase.includes("actors"));
+    assert.ok(!docsDatabase.includes("likes"));
   },
 );
 
@@ -237,10 +235,11 @@ dbContractTest(
   "drops legacy account identity columns and indexes via forward migration",
   () => {
     for (const column of legacyAccountIdentityColumns) {
-      assertStringIncludes(baselineSql, `"${column}" TEXT`);
-      assertStringIncludes(
-        legacyAccountIdentityMigration,
-        `ALTER TABLE "accounts" DROP COLUMN "${column}";`,
+      assert.ok(baselineSql.includes(`"${column}" TEXT`));
+      assert.ok(
+        legacyAccountIdentityMigration.includes(
+          `ALTER TABLE "accounts" DROP COLUMN "${column}";`,
+        ),
       );
     }
 
@@ -251,9 +250,10 @@ dbContractTest(
         "accounts_takos_auth_id_idx",
       ]
     ) {
-      assertStringIncludes(
-        legacyAccountIdentityMigration,
-        `DROP INDEX IF EXISTS "${indexName}";`,
+      assert.ok(
+        legacyAccountIdentityMigration.includes(
+          `DROP INDEX IF EXISTS "${indexName}";`,
+        ),
       );
     }
   },
@@ -262,12 +262,12 @@ dbContractTest(
 dbContractTest(
   "uses snapshot deployment columns and normalized bundle asset references",
   () => {
-    assertStringIncludes(baselineSql, '"runtime_config_snapshot_json"');
-    assertStringIncludes(baselineSql, '"bindings_snapshot_encrypted"');
-    assertStringIncludes(baselineSql, '"env_vars_snapshot_encrypted"');
-    assert(!baselineSql.includes('"completed_steps"'));
-    assertStringIncludes(baselineSql, '"bundle_format"');
-    assertStringIncludes(baselineSql, '"bundle_meta_json"');
+    assert.ok(baselineSql.includes('"runtime_config_snapshot_json"'));
+    assert.ok(baselineSql.includes('"bindings_snapshot_encrypted"'));
+    assert.ok(baselineSql.includes('"env_vars_snapshot_encrypted"'));
+    assert.ok(!baselineSql.includes('"completed_steps"'));
+    assert.ok(baselineSql.includes('"bundle_format"'));
+    assert.ok(baselineSql.includes('"bundle_meta_json"'));
   },
 );
 

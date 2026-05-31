@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -22,7 +23,7 @@ function event(
   };
 }
 
-Deno.test("resolveCompletedStepNames ignores steps rolled back after completion", () => {
+test("resolveCompletedStepNames ignores steps rolled back after completion", () => {
   assertEquals(
     resolveCompletedStepNames([
       event("step_completed", "deploy_worker"),
@@ -34,7 +35,7 @@ Deno.test("resolveCompletedStepNames ignores steps rolled back after completion"
   );
 });
 
-Deno.test("resolveCompletedStepNames allows retry to complete a rolled-back step again", () => {
+test("resolveCompletedStepNames allows retry to complete a rolled-back step again", () => {
   assertEquals(
     resolveCompletedStepNames([
       event("step_completed", "deploy_worker"),
@@ -45,7 +46,7 @@ Deno.test("resolveCompletedStepNames allows retry to complete a rolled-back step
   );
 });
 
-Deno.test("resolveCandidateBaseUrlFromBackendState restores resumed deployment candidate URL", () => {
+test("resolveCandidateBaseUrlFromBackendState restores resumed deployment candidate URL", () => {
   assertEquals(
     resolveCandidateBaseUrlFromBackendState(JSON.stringify({
       resolved_endpoint: {

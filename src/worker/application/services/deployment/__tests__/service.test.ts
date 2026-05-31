@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 
 import {
@@ -20,7 +21,7 @@ function makeEnv(overrides: Partial<DeploymentEnv> = {}): DeploymentEnv {
   } as DeploymentEnv;
 }
 
-Deno.test("DeploymentService.createDeployment fails fast when workload bundle storage is missing", async () => {
+test("DeploymentService.createDeployment fails fast when workload bundle storage is missing", async () => {
   const env = makeEnv();
   const service = new DeploymentService(env);
   let dbAccessed = false;
@@ -46,7 +47,7 @@ Deno.test("DeploymentService.createDeployment fails fast when workload bundle st
   assertEquals(dbAccessed, false);
 });
 
-Deno.test("assertQueueConsumerBackendSupported rejects unsupported backends", () => {
+test("assertQueueConsumerBackendSupported rejects unsupported backends", () => {
   assertThrows(
     () =>
       assertQueueConsumerBackendSupported("runtime-host", {

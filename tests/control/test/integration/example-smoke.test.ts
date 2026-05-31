@@ -1,9 +1,7 @@
 import {
-  assert,
-  assertEquals,
-  assertNotEquals,
-  assertStringIncludes,
-} from "@std/assert";
+  strict as assert,
+} from "node:assert";
+import { test } from "bun:test";
 
 import {
   createThreadWithMessages,
@@ -46,31 +44,31 @@ function getUserPrincipalId(user: CanonicalUserLike): string {
   })();
 }
 
-Deno.test("factories create a user with sensible defaults", () => {
+test("factories create a user with sensible defaults", () => {
   resetIdCounter();
   const user = createUser();
 
   assert(/^user-/.test(user.id));
-  assertStringIncludes(user.email, "@test.example.com");
-  assertStringIncludes(user.name, "Test User");
+  assert.ok(user.email.includes("@test.example.com"));
+  assert.ok(user.name.includes("Test User"));
   assert(user.created_at !== undefined);
   assert(user.updated_at !== undefined);
 });
 
-Deno.test("factories create personal workspaces and memberships", () => {
+test("factories create personal workspaces and memberships", () => {
   resetIdCounter();
   const space = createWorkspace({ kind: "user" });
   const { user, workspace, member } = createUserWithWorkspace();
 
-  assertEquals(isPersonalSpace(space), true);
-  assertEquals(isPersonalSpace(workspace), true);
-  assertEquals(member.principal_id, getUserPrincipalId(user));
-  assertEquals(member.space_id, workspace.id);
-  assertEquals(member.role, "owner");
+  assert.deepStrictEqual(isPersonalSpace(space), true);
+  assert.deepStrictEqual(isPersonalSpace(workspace), true);
+  assert.deepStrictEqual(member.principal_id, getUserPrincipalId(user));
+  assert.deepStrictEqual(member.space_id, workspace.id);
+  assert.deepStrictEqual(member.role, "owner");
   assert(/^principal-/.test(getSpacePrincipalId(space) ?? ""));
 });
 
-Deno.test("thread factory creates ordered messages", () => {
+test("thread factory creates ordered messages", () => {
   resetIdCounter();
   const { thread, messages } = createThreadWithMessages(
     { title: "Test Conversation" },
@@ -81,14 +79,14 @@ Deno.test("thread factory creates ordered messages", () => {
     ],
   );
 
-  assertEquals(thread.title, "Test Conversation");
-  assertEquals(messages.length, 3);
-  assertEquals(messages[0].role, "user");
-  assertEquals(messages[1].role, "assistant");
-  assertEquals(messages[2].sequence, 2);
+  assert.deepStrictEqual(thread.title, "Test Conversation");
+  assert.deepStrictEqual(messages.length, 3);
+  assert.deepStrictEqual(messages[0].role, "user");
+  assert.deepStrictEqual(messages[1].role, "assistant");
+  assert.deepStrictEqual(messages[2].sequence, 2);
 });
 
-Deno.test("mock SQL database supports prepare/bind/first/run", async () => {
+test("mock SQL database supports prepare/bind/first/run", async () => {
   const env = createMockEnv();
 
   const first = await env.DB.prepare("SELECT * FROM users WHERE id = ?")
@@ -98,12 +96,12 @@ Deno.test("mock SQL database supports prepare/bind/first/run", async () => {
     .bind("test-id")
     .run();
 
-  assertEquals(first, null);
-  assertEquals(run.success, true);
-  assertEquals(run.meta.changes, 1);
+  assert.deepStrictEqual(first, null);
+  assert.deepStrictEqual(run.success, true);
+  assert.deepStrictEqual(run.meta.changes, 1);
 });
 
-Deno.test("mock object stores and kv stores behave as expected", async () => {
+test("mock object stores and kv stores behave as expected", async () => {
   const env = createMockEnv();
   assert(env.TENANT_SOURCE);
 
@@ -114,13 +112,13 @@ Deno.test("mock object stores and kv stores behave as expected", async () => {
   await env.HOSTNAME_ROUTING.put("test-key", "test-value");
   const kvValue = await env.HOSTNAME_ROUTING.get("test-key");
 
-  assertNotEquals(object, null);
-  assertEquals(await object!.text(), "test-content");
-  assertEquals(missingObject, null);
-  assertEquals(kvValue, "test-value");
+  assert.notStrictEqual(object, null);
+  assert.deepStrictEqual(await object!.text(), "test-content");
+  assert.deepStrictEqual(missingObject, null);
+  assert.deepStrictEqual(kvValue, "test-value");
 });
 
-Deno.test("mock message queues collect sent messages", async () => {
+test("mock message queues collect sent messages", async () => {
   const env = createMockEnv();
 
   await env.RUN_QUEUE.send({
@@ -146,7 +144,7 @@ Deno.test("mock message queues collect sent messages", async () => {
   ]);
 
   const messages = (env.RUN_QUEUE as MockQueue<RunQueueMessage>).getMessages();
-  assertEquals(messages.length, 3);
-  assertEquals(messages[0].body.runId, "run-1");
-  assertEquals(messages[2].body.runId, "run-3");
+  assert.deepStrictEqual(messages.length, 3);
+  assert.deepStrictEqual(messages[0].body.runId, "run-1");
+  assert.deepStrictEqual(messages[2].body.runId, "run-3");
 });

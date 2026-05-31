@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
 import { createSqsQueue } from "../sqs-queue.ts";
 
@@ -41,7 +42,7 @@ function withMockedSqs<T>(
   });
 }
 
-Deno.test("sqs-queue: receive() drops poison message and continues", async () => {
+test("sqs-queue: receive() drops poison message and continues", async () => {
   // Suppress structured error logging during the test to keep output clean.
   const originalError = console.error;
   console.error = () => {};
@@ -84,7 +85,7 @@ Deno.test("sqs-queue: receive() drops poison message and continues", async () =>
   }
 });
 
-Deno.test("sqs-queue: receive() returns parsed body for well-formed message", async () => {
+test("sqs-queue: receive() returns parsed body for well-formed message", async () => {
   const adapter = createSqsQueue<{ hello: string }>({
     region: "us-east-1",
     queueUrl: "https://sqs.us-east-1.amazonaws.com/123/queue",

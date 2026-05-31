@@ -1,7 +1,8 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { expandTakosumiAccountsPatScopes } from "./accounts-bearer.ts";
 
-Deno.test("expandTakosumiAccountsPatScopes maps read bucket to read-only API scopes", () => {
+test("expandTakosumiAccountsPatScopes maps read bucket to read-only API scopes", () => {
   const scopes = expandTakosumiAccountsPatScopes(["read"]);
 
   assertEquals(scopes.includes("read"), true);
@@ -12,7 +13,7 @@ Deno.test("expandTakosumiAccountsPatScopes maps read bucket to read-only API sco
   assertEquals(scopes.includes("agents:execute"), false);
 });
 
-Deno.test("expandTakosumiAccountsPatScopes maps write bucket to read/write API scopes", () => {
+test("expandTakosumiAccountsPatScopes maps write bucket to read/write API scopes", () => {
   const scopes = expandTakosumiAccountsPatScopes(["write"]);
 
   assertEquals(scopes.includes("write"), true);
@@ -22,7 +23,7 @@ Deno.test("expandTakosumiAccountsPatScopes maps write bucket to read/write API s
   assertEquals(scopes.includes("agents:execute"), false);
 });
 
-Deno.test("expandTakosumiAccountsPatScopes maps admin bucket to all API scopes", () => {
+test("expandTakosumiAccountsPatScopes maps admin bucket to all API scopes", () => {
   const scopes = expandTakosumiAccountsPatScopes(["admin"]);
 
   assertEquals(scopes.includes("admin"), true);

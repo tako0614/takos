@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { EcsContainerBackend } from "../ecs-container-backend.ts";
 import type {
   CommandRunner,
@@ -40,7 +41,7 @@ function findCall(
   return call;
 }
 
-Deno.test("EcsContainerBackend - registers a task definition revision, creates a service when missing, and tails logs", async () => {
+test("EcsContainerBackend - registers a task definition revision, creates a service when missing, and tails logs", async () => {
   const { calls, runner } = createCommandRunner(async (args) => {
     if (args[0] === "ecs" && args[1] === "describe-task-definition") {
       return {
@@ -191,7 +192,7 @@ Deno.test("EcsContainerBackend - registers a task definition revision, creates a
   assertEquals(logsCall.args[2], "/ecs/takos-worker");
 });
 
-Deno.test("EcsContainerBackend - updates an existing service instead of creating a new one", async () => {
+test("EcsContainerBackend - updates an existing service instead of creating a new one", async () => {
   const { calls, runner } = createCommandRunner(async (args) => {
     if (args[0] === "ecs" && args[1] === "describe-task-definition") {
       return {

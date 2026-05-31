@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { Hono } from "hono";
 import type { PlatformExecutionContext } from "takos-worker/shared/types";
 import type { ApiBindings } from "./shared/api/bindings.ts";
@@ -13,7 +14,6 @@ import {
   resolveRequestId,
 } from "./shared/api/common.ts";
 import { csrfMiddleware } from "./shared/api/csrf.ts";
-import { forwardInProcessControlRequest } from "./routes/in-process-control-routes.ts";
 import {
   forwardAccountControlRequest,
   isAccountControlPath,
@@ -38,6 +38,10 @@ import {
   isSetupControlPath,
 } from "./routes/setup/index.ts";
 import {
+  forwardAppInstallationsControlRequest,
+  isAppInstallationsControlPath,
+} from "./routes/app-installations/index.ts";
+import {
   forwardSpaceToolsControlRequest,
   isSpaceToolsControlPath,
 } from "./routes/space-tools/index.ts";
@@ -50,7 +54,6 @@ import {
   proxyGitSmartHttpRequest,
 } from "./shared/api/forwarding.ts";
 import {
-  isControlRouteFamilyPath,
   isRetiredTakosBillingPath,
   isRetiredTakosOAuthProviderPath,
   isRetiredTakosPublicationsPath,
@@ -94,7 +97,6 @@ const STANDALONE_STARTUP_RETRY_DELAY_MS = 1_000;
 const STANDALONE_ENV_KEYS = [
   "ADMIN_DOMAIN",
   "OIDC_DISCOVERY_URL",
-  "OIDC_INTERNAL_URL",
   "OIDC_ISSUER_URL",
   "TAKOS_INTERNAL_API_SECRET",
   "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON",
@@ -275,6 +277,13 @@ app.all("*", async (c, next) => {
   if (isAccountControlPath(pathname)) {
     return await forwardAccountControlRequest(c.req.raw, c.env, executionCtx);
   }
+  if (isAppInstallationsControlPath(pathname)) {
+    return await forwardAppInstallationsControlRequest(
+      c.req.raw,
+      c.env,
+      executionCtx,
+    );
+  }
   if (isProfileControlPath(pathname)) {
     return await forwardProfileControlRequest(c.req.raw, c.env, executionCtx);
   }
@@ -313,12 +322,6 @@ registerRuntimeGatewayPublicRoutes(app);
 
 app.all("*", async (c, next) => {
   const pathname = new URL(c.req.raw.url).pathname;
-  if (isControlRouteFamilyPath(pathname)) {
-    return await forwardInProcessControlRequest(c.req.raw, pathname, {
-      env: c.env,
-      executionCtx: maybeExecutionCtx(c),
-    });
-  }
   if (!isGitSmartHttpPath(pathname)) return await next();
   const response = await proxyGitSmartHttpRequest(c.req.raw, {
     env: c.env,
@@ -345,9 +348,9 @@ app.onError((err, c) => {
 });
 
 if (import.meta.main) {
-  const port = Number(Deno.env.get("PORT") ?? "8787");
+  const port = Number(getEnv("PORT") ?? "8787");
   const env = await createStandaloneRuntimeEnvWithRetry();
-  Deno.serve({ port }, (request) => app.fetch(request, env));
+  Bun.serve({ port, fetch: (request) => app.fetch(request, env) });
 }
 
 const defaultExport = typeof Bun === "undefined" || !import.meta.main
@@ -404,11 +407,11 @@ async function createStandaloneRuntimeEnvWithRetry(): Promise<ApiBindings> {
 }
 
 async function createStandaloneRuntimeEnv(): Promise<ApiBindings> {
-  const dbUrl = Deno.env.get("DATABASE_URL") ??
-    Deno.env.get("POSTGRES_URL") ??
-    Deno.env.get("DB_CONNECTION_STRING");
-  if (dbUrl && !Deno.env.get("DATABASE_URL")) {
-    Deno.env.set("DATABASE_URL", dbUrl);
+  const dbUrl = getEnv("DATABASE_URL") ??
+    getEnv("POSTGRES_URL") ??
+    getEnv("DB_CONNECTION_STRING");
+  if (dbUrl && !getEnv("DATABASE_URL")) {
+    setEnv("DATABASE_URL", dbUrl);
   }
 
   const { createNodeWebEnv } = await import(
@@ -416,46 +419,9 @@ async function createStandaloneRuntimeEnv(): Promise<ApiBindings> {
   );
   const env = await createNodeWebEnv() as ApiBindings;
   for (const key of STANDALONE_ENV_KEYS) {
-    const value = Deno.env.get(key);
+    const value = getEnv(key);
     if (value !== undefined) {
       (env as Record<string, unknown>)[key] = value;
-    }
-  }
-  env.TAKOSUMI_ACCOUNTS_URL ??= Deno.env.get("OIDC_ISSUER_URL");
-  // SECURITY: TAKOSUMI_ACCOUNTS_INTERNAL_URL は worker / scheduler が
-  // Takosumi Accounts に server-to-server で叩く内部 URL。
-  // 通常は cluster 内部 hostname (= mTLS / private network 越し) を期待する。
-  // 値が無い場合の fallback 順:
-  //   1. OIDC_INTERNAL_URL (= 旧名、 deprecated だが explicit な内部設定)
-  //   2. OIDC_ISSUER_URL (= public OIDC issuer、 browser-facing)
-  // 2 の fallback は public hostname を internal request に使うため、
-  // operator の network policy がその hostname を trusted treat する保証が無い。
-  // public URL から内部 trust 境界に戻ってしまう可能性があるので、
-  // 明示的に loud warning を出して operator に internal URL を分離設定するよう促す。
-  if (!env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) {
-    const internalUrl = Deno.env.get("OIDC_INTERNAL_URL");
-    const issuerUrl = Deno.env.get("OIDC_ISSUER_URL");
-    if (internalUrl) {
-      env.TAKOSUMI_ACCOUNTS_INTERNAL_URL = internalUrl;
-    } else if (issuerUrl) {
-      env.TAKOSUMI_ACCOUNTS_INTERNAL_URL = issuerUrl;
-      console.warn(
-        "[takos-worker][security] TAKOSUMI_ACCOUNTS_INTERNAL_URL / OIDC_INTERNAL_URL unset; " +
-          "OIDC_ISSUER_URL fallback used for internal traffic; " +
-          "ensure operator network policy treats this as trusted",
-      );
-    }
-  }
-  for (
-    const [deprecated, replacement] of [
-      ["OIDC_INTERNAL_URL", "TAKOSUMI_ACCOUNTS_INTERNAL_URL"],
-      ["ACCOUNTS_BASE_URL", "TAKOSUMI_ACCOUNTS_URL"],
-    ] as const
-  ) {
-    if (Deno.env.get(deprecated)) {
-      console.warn(
-        `[takos-worker] deprecated env var ${deprecated} detected; use ${replacement} instead`,
-      );
     }
   }
   return env;

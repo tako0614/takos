@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { buildStoredEndpointForRuntime } from "../infra.ts";
 
-Deno.test("buildStoredEndpointForRuntime maps backend-neutral workload runtimes to service-ref", () => {
+test("buildStoredEndpointForRuntime maps backend-neutral workload runtimes to service-ref", () => {
   assertEquals(
     buildStoredEndpointForRuntime({
       endpointName: "web",
@@ -21,7 +22,7 @@ Deno.test("buildStoredEndpointForRuntime maps backend-neutral workload runtimes 
   );
 });
 
-Deno.test("buildStoredEndpointForRuntime maps URL runtimes to http-url", () => {
+test("buildStoredEndpointForRuntime maps URL runtimes to http-url", () => {
   assertEquals(
     buildStoredEndpointForRuntime({
       endpointName: "api",
@@ -41,7 +42,7 @@ Deno.test("buildStoredEndpointForRuntime maps URL runtimes to http-url", () => {
   );
 });
 
-Deno.test("buildStoredEndpointForRuntime drops unknown non-url runtime targets", () => {
+test("buildStoredEndpointForRuntime drops unknown non-url runtime targets", () => {
   assertEquals(
     buildStoredEndpointForRuntime({
       endpointName: "api",

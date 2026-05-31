@@ -233,6 +233,26 @@ function webWritableToNode(
   });
 }
 
+async function readAllWeb(
+  stream: ReadableStream<Uint8Array> | null,
+): Promise<Uint8Array> {
+  if (!stream) return new Uint8Array();
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return chunks.length
+    ? new Uint8Array(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))))
+    : new Uint8Array();
+}
+
 class ChildProcess {
   #child: import("node:child_process").ChildProcess;
   #status: Promise<{ success: boolean; code: number; signal: string | null }>;
@@ -273,8 +293,13 @@ class ChildProcess {
     return this.#status;
   }
 
-  output() {
-    return this.#status.then(() => ({}));
+  async output() {
+    const [status, stdout, stderr] = await Promise.all([
+      this.#status,
+      readAllWeb(this.stdout),
+      readAllWeb(this.stderr),
+    ]);
+    return { ...status, stdout, stderr };
   }
 
   kill(signo?: string | number) {
@@ -638,7 +663,7 @@ const DenoShim = {
 };
 
 // Only install if a real Deno runtime is not present; otherwise merge missing
-// members onto the existing (partial) Deno (e.g. the test preload's Deno.test).
+// members onto the existing partial Deno namespace.
 const g = globalThis as { Deno?: Record<string, unknown> };
 if (!g.Deno) {
   Object.defineProperty(globalThis, "Deno", {

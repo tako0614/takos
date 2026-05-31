@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertRejects } from "@std/assert";
 
 import { compileGroupDesiredState } from "../group-state.ts";
@@ -6,7 +7,7 @@ import {
   prepareWorkloadApplyEntries,
 } from "../apply-engine-executor.ts";
 
-Deno.test(
+test(
   "executeApplyEntry restores workload desired state when deployment fails after sync",
   async () => {
     const serviceEnvVars = new Map<
@@ -323,7 +324,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "prepareWorkloadApplyEntries upserts all changed workloads before publication sync",
   async () => {
     const prepared: string[] = [];

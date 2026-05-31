@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { compileGroupDesiredState } from "../group-state.ts";
 import { validateTargetsAgainstDesiredState } from "../diff.ts";
 
-Deno.test("validateTargetsAgainstDesiredState reports unmatched targets", () => {
+test("validateTargetsAgainstDesiredState reports unmatched targets", () => {
   const desiredState = compileGroupDesiredState({
     name: "demo",
     compute: {

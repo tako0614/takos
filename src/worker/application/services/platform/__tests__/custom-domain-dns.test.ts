@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -6,7 +7,7 @@ import {
   normalizeDnsAnswer,
 } from "../custom-domains/dns.ts";
 
-Deno.test("custom domain DNS verification uses exact normalized CNAME matches", () => {
+test("custom domain DNS verification uses exact normalized CNAME matches", () => {
   assertEquals(normalizeDnsAnswer("target.example.com."), "target.example.com");
   assertEquals(
     dnsAnswerMatches(
@@ -26,7 +27,7 @@ Deno.test("custom domain DNS verification uses exact normalized CNAME matches", 
   );
 });
 
-Deno.test("custom domain DNS verification uses exact normalized TXT matches", () => {
+test("custom domain DNS verification uses exact normalized TXT matches", () => {
   assertEquals(
     dnsAnswerMatches(
       '"takos-verify=token"',
@@ -45,7 +46,7 @@ Deno.test("custom domain DNS verification uses exact normalized TXT matches", ()
   );
 });
 
-Deno.test("custom domain DNS verification records are scoped to ownership records", () => {
+test("custom domain DNS verification records are scoped to ownership records", () => {
   assertEquals(customDomainVerificationRecord("docs.example.com", "cname"), {
     recordName: "_acme-challenge.docs.example.com",
     dnsType: "CNAME",

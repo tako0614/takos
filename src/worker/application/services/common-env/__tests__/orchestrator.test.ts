@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { CommonEnvOrchestrator } from "../orchestrator.ts";
 import type { CommonEnvReconcileJobRow } from "../reconcile-jobs.ts";
 import type { Env } from "../../../../shared/types/index.ts";
@@ -214,7 +215,7 @@ function createMockReconciler() {
   } as any;
 }
 
-Deno.test("CommonEnvOrchestrator - enqueueServiceReconcile - delegates to jobs.enqueueService", async () => {
+test("CommonEnvOrchestrator - enqueueServiceReconcile - delegates to jobs.enqueueService", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs();
   const reconciler = createMockReconciler();
@@ -236,7 +237,7 @@ Deno.test("CommonEnvOrchestrator - enqueueServiceReconcile - delegates to jobs.e
   });
 });
 
-Deno.test("CommonEnvOrchestrator - reconcileServicesForEnvKey - finds linked services and enqueues jobs for them", async () => {
+test("CommonEnvOrchestrator - reconcileServicesForEnvKey - finds linked services and enqueues jobs for them", async () => {
   const { db, prepared } = createFakeSqlDatabase(() => ({
     rows: [["w-1"], ["w-2"]],
   }));
@@ -264,7 +265,7 @@ Deno.test("CommonEnvOrchestrator - reconcileServicesForEnvKey - finds linked ser
   });
 });
 
-Deno.test("CommonEnvOrchestrator - reconcileServicesForEnvKey - uses default trigger when not specified", async () => {
+test("CommonEnvOrchestrator - reconcileServicesForEnvKey - uses default trigger when not specified", async () => {
   const env = {
     DB: createFakeSqlDatabase(() => ({ rows: [["w-1"]] })).db,
   } as Pick<Env, "DB">;
@@ -280,7 +281,7 @@ Deno.test("CommonEnvOrchestrator - reconcileServicesForEnvKey - uses default tri
   );
 });
 
-Deno.test("CommonEnvOrchestrator - reconcileServices - enqueues for specified services with normalized keys", async () => {
+test("CommonEnvOrchestrator - reconcileServices - enqueues for specified services with normalized keys", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs();
   const reconciler = createMockReconciler();
@@ -301,7 +302,7 @@ Deno.test("CommonEnvOrchestrator - reconcileServices - enqueues for specified se
   });
 });
 
-Deno.test("CommonEnvOrchestrator - reconcileServices - defaults trigger to bundle_required_links", async () => {
+test("CommonEnvOrchestrator - reconcileServices - defaults trigger to bundle_required_links", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs();
   const reconciler = createMockReconciler();
@@ -318,7 +319,7 @@ Deno.test("CommonEnvOrchestrator - reconcileServices - defaults trigger to bundl
   );
 });
 
-Deno.test("CommonEnvOrchestrator - reconcileServices - passes undefined targetKeys when keys not specified", async () => {
+test("CommonEnvOrchestrator - reconcileServices - passes undefined targetKeys when keys not specified", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs();
   const reconciler = createMockReconciler();
@@ -336,7 +337,7 @@ Deno.test("CommonEnvOrchestrator - reconcileServices - passes undefined targetKe
   );
 });
 
-Deno.test("CommonEnvOrchestrator - processReconcileJobs - recovers stale and processes runnable jobs", async () => {
+test("CommonEnvOrchestrator - processReconcileJobs - recovers stale and processes runnable jobs", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs({
     recoveredStale: 2,
@@ -364,7 +365,7 @@ Deno.test("CommonEnvOrchestrator - processReconcileJobs - recovers stale and pro
   assertEquals(result, { processed: 3, completed: 1, retried: 2 });
 });
 
-Deno.test("CommonEnvOrchestrator - processReconcileJobs - marks retry on reconciler failure", async () => {
+test("CommonEnvOrchestrator - processReconcileJobs - marks retry on reconciler failure", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs({
     runnableJobs: [
@@ -394,7 +395,7 @@ Deno.test("CommonEnvOrchestrator - processReconcileJobs - marks retry on reconci
   assertEquals(result.retried, 1);
 });
 
-Deno.test("CommonEnvOrchestrator - processReconcileJobs - skips jobs that fail to claim", async () => {
+test("CommonEnvOrchestrator - processReconcileJobs - skips jobs that fail to claim", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs({
     runnableJobs: [
@@ -419,7 +420,7 @@ Deno.test("CommonEnvOrchestrator - processReconcileJobs - skips jobs that fail t
   assertEquals(result.completed, 0);
 });
 
-Deno.test("CommonEnvOrchestrator - processReconcileJobs - parses targetKeys from JSON", async () => {
+test("CommonEnvOrchestrator - processReconcileJobs - parses targetKeys from JSON", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs({
     runnableJobs: [
@@ -447,7 +448,7 @@ Deno.test("CommonEnvOrchestrator - processReconcileJobs - parses targetKeys from
   assertEquals(payload.trigger, "workspace_env_put");
 });
 
-Deno.test("CommonEnvOrchestrator - enqueuePeriodicDriftSweep - recovers stale then enqueues drift sweep", async () => {
+test("CommonEnvOrchestrator - enqueuePeriodicDriftSweep - recovers stale then enqueues drift sweep", async () => {
   const env = { DB: createFakeSqlDatabase().db } as Pick<Env, "DB">;
   const jobs = createMockJobs({
     recoveredStale: 1,

@@ -1,49 +1,40 @@
-import { assertEquals, assertRejects } from "@std/assert";
-import { FakeTime } from "@std/testing/time";
+import { deepStrictEqual as assertEquals, rejects as assertRejects } from "node:assert/strict";
 import { TimeoutError, withTimeout } from "../../lib/withTimeout.ts";
+import { test } from "bun:test";
 
-Deno.test("withTimeout - resolves when the promise settles in time", async () => {
+
+test("withTimeout - resolves when the promise settles in time", async () => {
   const result = await withTimeout(Promise.resolve("ok"), 1000, "Timed out");
   assertEquals(result, "ok");
 });
 
-Deno.test("withTimeout - rejects with TimeoutError after the deadline", async () => {
-  const fakeTime = new FakeTime();
+test("withTimeout - rejects with TimeoutError after the deadline", async () => {
   const pending = new Promise<string>(() => {});
 
-  const promise = withTimeout(pending, 100, "Timed out");
-  fakeTime.tick(150);
-
   await assertRejects(
-    async () => await promise,
+    () => withTimeout(pending, 10, "Timed out"),
     TimeoutError,
     "Timed out",
   );
-  fakeTime.restore();
 });
 
-Deno.test("withTimeout - aborts factory requests on timeout", async () => {
-  const fakeTime = new FakeTime();
+test("withTimeout - aborts factory requests on timeout", async () => {
   let aborted = false;
 
-  const promise = withTimeout(
-    (signal) => {
-      signal.addEventListener("abort", () => {
-        aborted = true;
-      }, { once: true });
-      return new Promise<string>(() => {});
-    },
-    100,
-    "Timed out",
-  );
-
-  fakeTime.tick(150);
-
   await assertRejects(
-    async () => await promise,
+    () =>
+      withTimeout(
+        (signal) => {
+          signal.addEventListener("abort", () => {
+            aborted = true;
+          }, { once: true });
+          return new Promise<string>(() => {});
+        },
+        10,
+        "Timed out",
+      ),
     TimeoutError,
     "Timed out",
   );
   assertEquals(aborted, true);
-  fakeTime.restore();
 });

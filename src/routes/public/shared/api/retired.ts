@@ -1,4 +1,4 @@
-import { commonError, pathMatchesPrefix } from "./common.ts";
+import { commonError } from "./common.ts";
 
 const RETIRED_OAUTH_PUBLIC_API_PREFIX = "/api/public/v1/oauth";
 const RETIRED_OAUTH_PREFIX = "/oauth";
@@ -12,42 +12,6 @@ const RETIRED_OAUTH_WELL_KNOWN_PATHS = new Set([
   "/.well-known/oauth-authorization-server",
   "/.well-known/openid-configuration",
   "/.well-known/jwks.json",
-]);
-
-export const CONTROL_ROUTE_API_PREFIXES = [
-  "/api/repos",
-  "/api/git",
-  "/api/memories",
-  "/api/reminders",
-  "/api/skills",
-  "/api/apps",
-  "/api/agent-tasks",
-  "/api/shortcuts",
-  "/api/notifications",
-  "/api/events",
-  "/api/mcp",
-  "/api/public/thread-shares",
-  "/api/public/stores",
-] as const;
-
-export const CONTROL_ROUTE_SPACE_FAMILIES = new Set([
-  "agent-tasks",
-  "app-installations",
-  "graph",
-  "index",
-  "managed-skills",
-  "members",
-  "memories",
-  "model",
-  "reminders",
-  "repos",
-  "repositories",
-  "search",
-  "shortcuts",
-  "skills",
-  "storage",
-  "store-registry",
-  "stores",
 ]);
 
 export const RETIRED_PUBLIC_DEPLOYMENT_PATHS = {
@@ -80,22 +44,6 @@ export function isRetiredTakosBillingPath(pathname: string): boolean {
 export function isRetiredTakosPublicationsPath(pathname: string): boolean {
   return pathname === RETIRED_PUBLICATIONS_PREFIX ||
     pathname.startsWith(`${RETIRED_PUBLICATIONS_PREFIX}/`);
-}
-
-export function isControlRouteFamilyPath(pathname: string): boolean {
-  if (
-    CONTROL_ROUTE_API_PREFIXES.some((prefix) =>
-      pathMatchesPrefix(pathname, prefix)
-    )
-  ) {
-    return true;
-  }
-
-  const parts = pathname.split("/").filter(Boolean);
-  return parts.length >= 4 &&
-    parts[0] === "api" &&
-    parts[1] === "spaces" &&
-    CONTROL_ROUTE_SPACE_FAMILIES.has(parts[3]);
 }
 
 export function retiredTakosOAuthProviderResponse(): Response {

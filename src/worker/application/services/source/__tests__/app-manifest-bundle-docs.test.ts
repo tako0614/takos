@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type {
@@ -19,7 +20,7 @@ function workerBuildSources(): Map<string, AppManifestBuildSource> {
   ]);
 }
 
-Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", () => {
+test("buildBundleDocs emits route publication kinds for bundle manifest", () => {
   const manifest: AppManifest = {
     name: "publication-bundle-app",
     compute: {},
@@ -83,7 +84,7 @@ Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", (
   });
 });
 
-Deno.test("buildBundleDocs preserves platform service consumes on workloads", () => {
+test("buildBundleDocs preserves platform service consumes on workloads", () => {
   const manifest: AppManifest = {
     name: "consume-bundle-app",
     compute: {
@@ -112,7 +113,7 @@ Deno.test("buildBundleDocs preserves platform service consumes on workloads", ()
   }]);
 });
 
-Deno.test("buildBundleDocs emits image-backed attached container workloads with dockerfile metadata", () => {
+test("buildBundleDocs emits image-backed attached container workloads with dockerfile metadata", () => {
   const manifest: AppManifest = {
     name: "container-bundle-app",
     compute: {

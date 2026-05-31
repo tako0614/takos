@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { Hono } from "hono";
 
@@ -53,7 +54,7 @@ function uninstallFakeCachesDefault(): void {
   });
 }
 
-Deno.test("invalidateCache - tag-based purge deletes URLs stored under the tag", async () => {
+test("invalidateCache - tag-based purge deletes URLs stored under the tag", async () => {
   _resetCacheTagIndexForTests();
   const { deleted, map } = installFakeCachesDefault();
   try {
@@ -90,7 +91,7 @@ Deno.test("invalidateCache - tag-based purge deletes URLs stored under the tag",
   }
 });
 
-Deno.test("invalidateCache - URL[] form keeps deleting explicit URLs", async () => {
+test("invalidateCache - URL[] form keeps deleting explicit URLs", async () => {
   _resetCacheTagIndexForTests();
   const { deleted } = installFakeCachesDefault();
   try {
@@ -108,7 +109,7 @@ Deno.test("invalidateCache - URL[] form keeps deleting explicit URLs", async () 
   }
 });
 
-Deno.test("invalidateCache - mixed urls + tags purge dedupes by URL", async () => {
+test("invalidateCache - mixed urls + tags purge dedupes by URL", async () => {
   _resetCacheTagIndexForTests();
   const { deleted, map } = installFakeCachesDefault();
   try {
@@ -131,7 +132,7 @@ Deno.test("invalidateCache - mixed urls + tags purge dedupes by URL", async () =
   }
 });
 
-Deno.test("invalidateCache - comma-separated Cache-Tag header registers each tag", async () => {
+test("invalidateCache - comma-separated Cache-Tag header registers each tag", async () => {
   _resetCacheTagIndexForTests();
   const { deleted, map } = installFakeCachesDefault();
   try {

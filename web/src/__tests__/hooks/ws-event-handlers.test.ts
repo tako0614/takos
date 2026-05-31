@@ -1,12 +1,14 @@
-import { assert, assertEquals } from "@std/assert";
+import { strict as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
 import type { ChatStreamingState } from "../../views/chat/chat-types.ts";
+import { test } from "bun:test";
+
 
 const {
   EVENT_DISPATCH,
   resolveThinkingText,
 } = await import("../../hooks/wsEventHandlers.ts");
 
-Deno.test("resolveThinkingText - uses translated fallback instead of English", () => {
+test("resolveThinkingText - uses translated fallback instead of English", () => {
   const text = resolveThinkingText(
     {},
     (key: string) => (key === "timelineThinking" ? "考え中..." : key),
@@ -15,7 +17,7 @@ Deno.test("resolveThinkingText - uses translated fallback instead of English", (
   assertEquals(text, "考え中...");
 });
 
-Deno.test("message event - clears live tool calls when final content arrives", () => {
+test("message event - clears live tool calls when final content arrives", () => {
   let streaming: ChatStreamingState = {
     thinking: "Working...",
     toolCalls: [
@@ -62,7 +64,7 @@ Deno.test("message event - clears live tool calls when final content arrives", (
   assertEquals(streaming.toolCalls, []);
 });
 
-Deno.test("error event - surfaces a visible error and still completes the run", () => {
+test("error event - surfaces a visible error and still completes the run", () => {
   let errorMessage: string | null = null;
   let completed = false;
   const appends: Array<{ type: string; message?: string }> = [];

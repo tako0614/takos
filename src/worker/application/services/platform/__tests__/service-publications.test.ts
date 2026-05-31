@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 
 import {
@@ -79,7 +80,7 @@ function makePublicationEnv(row: PublicationTestRow | null): Pick<Env, "DB"> {
   return { DB: makePublicationDb(row) } as unknown as Pick<Env, "DB">;
 }
 
-Deno.test("service publications reject Takos publisher and keep route type open-ended", () => {
+test("service publications reject Takos publisher and keep route type open-ended", () => {
   assertThrows(
     () =>
       normalizePublicationDefinition({
@@ -141,7 +142,7 @@ Deno.test("service publications reject Takos publisher and keep route type open-
   );
 });
 
-Deno.test("service consumes normalize aliases and reject duplicates", () => {
+test("service consumes normalize aliases and reject duplicates", () => {
   assertEquals(
     normalizeServiceConsumes([
       {
@@ -174,7 +175,7 @@ Deno.test("service consumes normalize aliases and reject duplicates", () => {
   );
 });
 
-Deno.test("service consume env injection resolves aliases with uppercase normalization", () => {
+test("service consume env injection resolves aliases with uppercase normalization", () => {
   const output = {
     name: "endpoint",
     defaultEnv: "publication_search_url",
@@ -197,7 +198,7 @@ Deno.test("service consume env injection resolves aliases with uppercase normali
   assertEquals(first, second);
 });
 
-Deno.test("service publication output contracts are stable", () => {
+test("service publication output contracts are stable", () => {
   assertEquals(
     publicationOutputContract({
       name: "mcp-search",
@@ -230,7 +231,7 @@ Deno.test("service publication output contracts are stable", () => {
   );
 });
 
-Deno.test("route publications resolve URLs from the group hostname", () => {
+test("route publications resolve URLs from the group hostname", () => {
   const resolved = resolveRoutePublication(
     {
       name: "search",
@@ -270,7 +271,7 @@ Deno.test("route publications resolve URLs from the group hostname", () => {
   });
 });
 
-Deno.test("publication prerequisites allow external catalog route consumes", async () => {
+test("publication prerequisites allow external catalog route consumes", async () => {
   await assertManifestPublicationPrerequisites(
     makePublicationEnv(
       makePublicationRow({
@@ -294,7 +295,7 @@ Deno.test("publication prerequisites allow external catalog route consumes", asy
   );
 });
 
-Deno.test("publication prerequisites validate aliases for external catalog route consumes", async () => {
+test("publication prerequisites validate aliases for external catalog route consumes", async () => {
   const env = makePublicationEnv(
     makePublicationRow({
       name: "external-search",
@@ -340,7 +341,7 @@ Deno.test("publication prerequisites validate aliases for external catalog route
   );
 });
 
-Deno.test("publication prerequisites allow same-manifest consumes before catalog write", async () => {
+test("publication prerequisites allow same-manifest consumes before catalog write", async () => {
   await assertManifestPublicationPrerequisites(makePublicationEnv(null), {
     spaceId: "space_1",
     manifest: {
@@ -360,7 +361,7 @@ Deno.test("publication prerequisites allow same-manifest consumes before catalog
   });
 });
 
-Deno.test("publication prerequisites require a group hostname for same-manifest route consumes", async () => {
+test("publication prerequisites require a group hostname for same-manifest route consumes", async () => {
   await assertRejects(
     () =>
       assertManifestPublicationPrerequisites(makePublicationEnv(null), {
@@ -386,7 +387,7 @@ Deno.test("publication prerequisites require a group hostname for same-manifest 
   );
 });
 
-Deno.test("publication prerequisites reject missing catalog consumes", async () => {
+test("publication prerequisites reject missing catalog consumes", async () => {
   await assertRejects(
     () =>
       assertManifestPublicationPrerequisites(
@@ -408,7 +409,7 @@ Deno.test("publication prerequisites reject missing catalog consumes", async () 
   );
 });
 
-Deno.test("publication prerequisites reject unknown aliases from catalog metadata", async () => {
+test("publication prerequisites reject unknown aliases from catalog metadata", async () => {
   await assertRejects(
     () =>
       assertManifestPublicationPrerequisites(
@@ -440,7 +441,7 @@ Deno.test("publication prerequisites reject unknown aliases from catalog metadat
   );
 });
 
-Deno.test("service publication allowed fields use route publication contract", () => {
+test("service publication allowed fields use route publication contract", () => {
   assertEquals(
     Array.from(publicationAllowedFields({
       name: "notes",
@@ -460,7 +461,7 @@ Deno.test("service publication allowed fields use route publication contract", (
   );
 });
 
-Deno.test("service publications allow same publication name in different groups", async () => {
+test("service publications allow same publication name in different groups", async () => {
   const rows: PublicationTestRow[] = [
     makePublicationRow({
       name: "shared-name",
@@ -537,7 +538,7 @@ Deno.test("service publications allow same publication name in different groups"
   assertEquals(rows.some((row) => row.groupId === "group_current"), true);
 });
 
-Deno.test("service publications reject manifest removal while still consumed", async () => {
+test("service publications reject manifest removal while still consumed", async () => {
   const row = {
     ...makePublicationRow({
       name: "shared-api",
@@ -618,7 +619,7 @@ Deno.test("service publications reject manifest removal while still consumed", a
   );
 });
 
-Deno.test("service publications preflight consumed removals before manifest writes", async () => {
+test("service publications preflight consumed removals before manifest writes", async () => {
   const row = {
     ...makePublicationRow({
       name: "shared-api",

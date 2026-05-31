@@ -1,5 +1,6 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
+import { readFile, writeFile } from "node:fs/promises";
 // Bun migration: redirected from "node:sqlite" (unavailable in Bun 1.3.14) to
 // the bun:sqlite-backed DatabaseSync shim. Same class name and surface.
 import { DatabaseSync } from "../shims/node-sqlite.ts";
@@ -454,7 +455,7 @@ test("external fetch updates Git-owned refs from a remote", async () => {
     });
     assert.equal(create.status, 201, await create.text());
 
-    await Deno.writeTextFile(`${remote.workPath}/CHANGELOG.md`, "changes\n");
+    await writeFile(`${remote.workPath}/CHANGELOG.md`, "changes\n");
     await git(["-C", remote.workPath, "add", "CHANGELOG.md"]);
     await git(["-C", remote.workPath, "commit", "-m", "add changelog"]);
     await git(["-C", remote.workPath, "push", "origin", "main"]);
@@ -1291,13 +1292,13 @@ test("smart HTTP supports git CLI clone, push, and fetch through a signed app pr
       try {
         await git(["clone", remoteUrl, cloneDir]);
         assert.equal(
-          await Deno.readTextFile(`${cloneDir}/README.md`),
+          await readFile(`${cloneDir}/README.md`, "utf8"),
           "hello from takos-git\n",
         );
 
         await git(["-C", cloneDir, "config", "user.email", "test@example.com"]);
         await git(["-C", cloneDir, "config", "user.name", "Takos Test"]);
-        await Deno.writeTextFile(
+        await writeFile(
           `${cloneDir}/README.md`,
           "hello from takos-git\nupdated through smart http\n",
         );
@@ -1334,8 +1335,9 @@ test("smart HTTP supports git CLI clone, push, and fetch through a signed app pr
 });
 
 test("production Dockerfile installs git CLI for Smart HTTP", async () => {
-  const dockerfile = await Deno.readTextFile(
+  const dockerfile = await readFile(
     new URL("../Dockerfile", import.meta.url),
+    "utf8",
   );
   assert.match(dockerfile, /apt-get install[^\n]+ git(?:\s|$)/);
   assert.match(dockerfile, /CMD \["bun", "src\/index\.ts"\]/);
@@ -1656,7 +1658,7 @@ async function withBareRepository(
     await git(["init", workPath]);
     await git(["-C", workPath, "config", "user.email", "test@example.com"]);
     await git(["-C", workPath, "config", "user.name", "Takos Test"]);
-    await Deno.writeTextFile(
+    await writeFile(
       `${workPath}/README.md`,
       "hello from takos-git\n",
     );
@@ -1668,7 +1670,7 @@ async function withBareRepository(
     await git(["-C", workPath, "tag", "v1.0.0"]);
     await git(["-C", workPath, "push", "origin", "v1.0.0"]);
     await git(["-C", workPath, "checkout", "-b", "feature/docs"]);
-    await Deno.writeTextFile(`${workPath}/GUIDE.md`, "guide\n");
+    await writeFile(`${workPath}/GUIDE.md`, "guide\n");
     await git(["-C", workPath, "add", "GUIDE.md"]);
     await git(["-C", workPath, "commit", "-m", "add guide"]);
     await git(["-C", workPath, "push", "origin", "feature/docs"]);
@@ -1684,7 +1686,7 @@ async function withBareRepository(
     const blob = await git(["-C", workPath, "rev-parse", "main:README.md"]);
     await Deno.mkdir(`${root}/.takos`, { recursive: true });
     const now = new Date().toISOString();
-    await Deno.writeTextFile(
+    await writeFile(
       `${root}/.takos/repositories.json`,
       JSON.stringify({
         repositories: [{
@@ -1728,7 +1730,7 @@ async function createRemoteFixture(root: string): Promise<{
   await git(["init", workPath]);
   await git(["-C", workPath, "config", "user.email", "test@example.com"]);
   await git(["-C", workPath, "config", "user.name", "Takos Test"]);
-  await Deno.writeTextFile(`${workPath}/README.md`, "hello\n");
+  await writeFile(`${workPath}/README.md`, "hello\n");
   await git(["-C", workPath, "add", "README.md"]);
   await git(["-C", workPath, "commit", "-m", "initial"]);
   await git(["-C", workPath, "branch", "-M", "main"]);

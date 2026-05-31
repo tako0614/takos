@@ -1,5 +1,5 @@
+import { jest, test } from "bun:test";
 import { assertEquals, assertFalse } from "@std/assert";
-import { FakeTime } from "@std/testing/time";
 import {
   __remoteToolExecutorHasForTesting,
   __remoteToolExecutorsSizeForTesting,
@@ -8,6 +8,19 @@ import {
   handleToolCatalog,
   handleToolCleanup,
 } from "../executor-control-rpc.ts";
+
+function useFakeTime(now: string | number | Date) {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date(now));
+  return {
+    tick(ms: number) {
+      jest.advanceTimersByTime(ms);
+    },
+    restore() {
+      jest.useRealTimers();
+    },
+  };
+}
 
 /**
  * Builds an Env whose DB layer throws on every operation. This forces
@@ -34,7 +47,7 @@ function envWithBrokenDb(): Record<string, unknown> {
   };
 }
 
-Deno.test(
+test(
   "handleToolCatalog evicts remoteToolExecutors entry when bootstrap fails",
   async () => {
     __resetRemoteToolExecutorsForTesting();
@@ -55,7 +68,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "handleToolCatalog evicts entry on repeated bootstrap failure (no replay leak)",
   async () => {
     __resetRemoteToolExecutorsForTesting();
@@ -71,11 +84,11 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "remoteToolExecutors TTL safety net reaps stale entries after one hour",
   async () => {
     __resetRemoteToolExecutorsForTesting();
-    const time = new FakeTime("2026-01-01T00:00:00Z");
+    const time = useFakeTime("2026-01-01T00:00:00Z");
     try {
       const env = envWithBrokenDb();
       const sentinelRunId = `run-stale-${crypto.randomUUID()}`;
@@ -111,7 +124,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "handleToolCleanup is a no-op for unknown runIds and never throws",
   async () => {
     __resetRemoteToolExecutorsForTesting();

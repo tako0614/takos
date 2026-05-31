@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import releaseCrud from "../release-crud.ts";
 
-Deno.test("latest release route is registered before the tag route", () => {
+test("latest release route is registered before the tag route", () => {
   const signatures = releaseCrud.routes.map((
     route: { method: string; path: string },
   ) => `${route.method} ${route.path}`);

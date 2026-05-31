@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 /**
  * Durable Object resolver — selects Redis/persistent/in-memory.
  */
@@ -12,7 +13,7 @@ export function resolveDurableObject(
   redisUrl: string | null,
   dataDir: string | null,
 ) {
-  if (Deno.env.get("TAKOS_DISABLE_REDIS_EXTERNALS") === "1") {
+  if (getEnv("TAKOS_DISABLE_REDIS_EXTERNALS") === "1") {
     return createInMemoryDurableObjectNamespace();
   }
   return createSyncResolverWithRedis({

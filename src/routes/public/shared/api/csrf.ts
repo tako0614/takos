@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { Context, MiddlewareHandler } from "hono";
 import { commonError } from "./common.ts";
 
@@ -28,7 +29,7 @@ export type CsrfOriginEnv = {
 };
 
 const DEFAULT_ENV: CsrfOriginEnv = {
-  read: () => Deno.env.get(CSRF_ALLOWED_ORIGINS_ENV)?.trim() || undefined,
+  read: () => getEnv(CSRF_ALLOWED_ORIGINS_ENV)?.trim() || undefined,
 };
 
 export function parseAllowedOrigins(raw: string | undefined): string[] {

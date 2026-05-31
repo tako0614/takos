@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertThrows } from "@std/assert";
 import { Hono } from "hono";
 
@@ -9,7 +10,7 @@ import {
 import storageManagement from "../storage-management.ts";
 import type { PublicationRecord } from "../../../../application/services/platform/service-publications.ts";
 
-Deno.test("buildFileHandlerOpenUrl replaces :id placeholders", () => {
+test("buildFileHandlerOpenUrl replaces :id placeholders", () => {
   assertEquals(
     buildFileHandlerOpenUrl(
       "files.example.com",
@@ -20,7 +21,7 @@ Deno.test("buildFileHandlerOpenUrl replaces :id placeholders", () => {
   );
 });
 
-Deno.test("buildFileHandlerOpenUrl URL-encodes file ids", () => {
+test("buildFileHandlerOpenUrl URL-encodes file ids", () => {
   assertEquals(
     buildFileHandlerOpenUrl(
       "files.example.com",
@@ -31,7 +32,7 @@ Deno.test("buildFileHandlerOpenUrl URL-encodes file ids", () => {
   );
 });
 
-Deno.test("buildFileHandlerOpenUrl requires a :id path template", () => {
+test("buildFileHandlerOpenUrl requires a :id path template", () => {
   assertThrows(
     () =>
       buildFileHandlerOpenUrl("files.example.com", "/files/open", "file-123"),
@@ -40,7 +41,7 @@ Deno.test("buildFileHandlerOpenUrl requires a :id path template", () => {
   );
 });
 
-Deno.test("projectFileHandlerPublication keeps only :id-templated handlers", () => {
+test("projectFileHandlerPublication keeps only :id-templated handlers", () => {
   const valid = createPublicationRecord({
     id: "pub_1",
     name: "markdown",
@@ -66,7 +67,7 @@ Deno.test("projectFileHandlerPublication keeps only :id-templated handlers", () 
   assertEquals(projectFileHandlerPublication(legacy, 1), null);
 });
 
-Deno.test(
+test(
   "PATCH storage with move and rename does not fall back to a partial move when rename fails",
   async () => {
     const originalRequireSpaceAccess =

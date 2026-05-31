@@ -1,10 +1,12 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
+import { test } from "bun:test";
+
 
 const { buildChatSearchNavigationState } = await import(
   "../../../components/layout/app-modal-state.ts"
 );
 
-Deno.test("buildChatSearchNavigationState - preserves message deep-links", () => {
+test("buildChatSearchNavigationState - preserves message deep-links", () => {
   assertEquals(
     buildChatSearchNavigationState(
       "space-1",

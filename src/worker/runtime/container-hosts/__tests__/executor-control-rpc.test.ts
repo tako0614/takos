@@ -1,7 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals, assertFalse } from "@std/assert";
+import { readFile } from "node:fs/promises";
 import { handleRunConfig, handleRunEvent } from "../executor-control-rpc.ts";
 
-Deno.test("handleRunConfig emits current camelCase fields only", async () => {
+test("handleRunConfig emits current camelCase fields only", async () => {
   const response = await handleRunConfig(
     { agentType: "default" },
     { MAX_AGENT_ITERATIONS: "7", AGENT_RATE_LIMIT: "3" } as never,
@@ -29,14 +31,23 @@ Deno.test("handleRunConfig emits current camelCase fields only", async () => {
   }
 });
 
-Deno.test("executor run-config source does not reintroduce snake_case response fields", async () => {
+test("executor run-config source does not reintroduce snake_case response fields", async () => {
   for (
-    const path of [
-      "../executor-control-rpc.ts",
-      "../../../local-platform/executor-control-rpc.ts",
+    const sourceFile of [
+      {
+        label: "../executor-control-rpc.ts",
+        url: new URL("../executor-control-rpc.ts", import.meta.url),
+      },
+      {
+        label: "../../../local-platform/executor-control-rpc.ts",
+        url: new URL(
+          "../../../local-platform/executor-control-rpc.ts",
+          import.meta.url,
+        ),
+      },
     ]
   ) {
-    const source = await Deno.readTextFile(path);
+    const source = await readFile(sourceFile.url, "utf8");
     for (
       const forbidden of [
         "agent_type:",
@@ -47,12 +58,15 @@ Deno.test("executor run-config source does not reintroduce snake_case response f
         "rate_limit:",
       ]
     ) {
-      assertFalse(source.includes(forbidden), `${path} contains ${forbidden}`);
+      assertFalse(
+        source.includes(forbidden),
+        `${sourceFile.label} contains ${forbidden}`,
+      );
     }
   }
 });
 
-Deno.test("handleRunEvent deduplicates replayed run event sequence", async () => {
+test("handleRunEvent deduplicates replayed run event sequence", async () => {
   const emittedRequests: Request[] = [];
   const env = {
     TAKOS_OFFLOAD: {},

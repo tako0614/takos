@@ -1,10 +1,11 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import {
   isRetiredAppLocalBearerToken,
   isTakosumiAccountsBearerCandidate,
 } from "./bearer-token-classification.ts";
 
-Deno.test("bearer token classification keeps retired app-local prefixes out of Accounts candidates", () => {
+test("bearer token classification keeps retired app-local prefixes out of Accounts candidates", () => {
   for (
     const token of [
       "tak_pat_retired",
@@ -16,7 +17,7 @@ Deno.test("bearer token classification keeps retired app-local prefixes out of A
   }
 });
 
-Deno.test("bearer token classification accepts current Accounts token shapes", () => {
+test("bearer token classification accepts current Accounts token shapes", () => {
   for (
     const token of [
       "takpat_current",

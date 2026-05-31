@@ -34,7 +34,7 @@ export function constantTimeEqual(a: string, b: string): boolean {
   const bufA = encoder.encode(a);
   const bufB = encoder.encode(b);
   if (bufA.byteLength !== bufB.byteLength) return false;
-  // Use crypto.subtle.timingSafeEqual if available (Deno/Workers)
+  // Use crypto.subtle.timingSafeEqual if available in the runtime.
   if (
     typeof crypto !== "undefined" && "subtle" in crypto &&
     "timingSafeEqual" in crypto.subtle

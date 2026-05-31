@@ -65,14 +65,15 @@ path が含まれるか確認します。
 
 ### launch token が redeem できない
 
-- `ACCOUNTS_BASE_URL` が install 時に materialize されているか確認する
+- `TAKOSUMI_ACCOUNTS_INTERNAL_URL` または `TAKOSUMI_ACCOUNTS_URL` が install
+  時に materialize されているか確認する
 - `INSTALL_LAUNCH_INSTALLATION_ID` が Installation id と一致するか確認する
 - `INSTALL_LAUNCH_REDIRECT_URI` が Accounts 発行時に bind した URL
   と完全一致するか確認する (Accounts API は
   `409 launch_token_redirect_mismatch`)。Installer API の expected guard
   mismatch は `409 failed_precondition`
 - `/_takosumi/launch` の handler が
-  `${ACCOUNTS_BASE_URL}/v1/installations/${INSTALL_LAUNCH_INSTALLATION_ID}/launch-token/consume`
+  `${TAKOSUMI_ACCOUNTS_INTERNAL_URL}/v1/installations/${INSTALL_LAUNCH_INSTALLATION_ID}/launch-token/consume`
   を TLS で叩いているか確認する
 - token が one-time (used flag) で消費されたか、期限切れ (5 分 hard cap)
   を超えていないか確認する

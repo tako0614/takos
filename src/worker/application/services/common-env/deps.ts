@@ -31,7 +31,7 @@ type RuntimeGlobal = typeof globalThis & { WebSocketPair?: unknown };
  * and a reconcile job is enqueued), so the correct mitigation is
  * `"d1-compensated"`: run the writes directly with no false atomicity claim and
  * let the reconciler heal partial failures. The local stateful SQLite adapter
- * (Node/Deno, no `WebSocketPair`) keeps real savepoint-based transactions via
+ * (process runtime, no `WebSocketPair`) keeps real savepoint-based transactions via
  * `"local-sqlite"`. We default to the compensated D1 path when uncertain so the
  * non-composing BEGIN/COMMIT shim is never silently relied upon in production.
  */

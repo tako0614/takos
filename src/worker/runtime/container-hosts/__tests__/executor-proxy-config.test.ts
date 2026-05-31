@@ -1,10 +1,11 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import {
   buildAgentExecutorContainerEnvVars,
   shouldInjectProviderKeysDirect,
 } from "../executor-proxy-config.ts";
 
-Deno.test("container env omits provider keys by default (proxy mode)", () => {
+test("container env omits provider keys by default (proxy mode)", () => {
   const vars = buildAgentExecutorContainerEnvVars({
     TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
     OPENAI_API_KEY: "sk-openai",
@@ -20,7 +21,7 @@ Deno.test("container env omits provider keys by default (proxy mode)", () => {
   assertEquals("GOOGLE_API_KEY" in vars, false);
 });
 
-Deno.test("container env stays proxy-only when flag is unset/empty/false", () => {
+test("container env stays proxy-only when flag is unset/empty/false", () => {
   for (const flag of [undefined, "", "   ", "0", "false", "no", "off"]) {
     const vars = buildAgentExecutorContainerEnvVars({
       TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
@@ -31,7 +32,7 @@ Deno.test("container env stays proxy-only when flag is unset/empty/false", () =>
   }
 });
 
-Deno.test("container env injects provider keys only with explicit opt-in flag", () => {
+test("container env injects provider keys only with explicit opt-in flag", () => {
   for (const flag of ["1", "true", "TRUE", " yes ", "Yes"]) {
     const vars = buildAgentExecutorContainerEnvVars({
       TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
@@ -46,7 +47,7 @@ Deno.test("container env injects provider keys only with explicit opt-in flag", 
   }
 });
 
-Deno.test("opt-in mode skips empty/whitespace provider keys", () => {
+test("opt-in mode skips empty/whitespace provider keys", () => {
   const vars = buildAgentExecutorContainerEnvVars({
     TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
     OPENAI_API_KEY: "  sk-openai  ",
@@ -58,7 +59,7 @@ Deno.test("opt-in mode skips empty/whitespace provider keys", () => {
   assertEquals("GOOGLE_API_KEY" in vars, false);
 });
 
-Deno.test("shouldInjectProviderKeysDirect parses truthy/falsy values", () => {
+test("shouldInjectProviderKeysDirect parses truthy/falsy values", () => {
   assertEquals(shouldInjectProviderKeysDirect("1"), true);
   assertEquals(shouldInjectProviderKeysDirect("true"), true);
   assertEquals(shouldInjectProviderKeysDirect("YES"), true);

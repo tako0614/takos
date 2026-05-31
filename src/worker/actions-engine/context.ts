@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 /**
  * ワークフロー実行のコンテキスト管理
  */
@@ -80,9 +81,9 @@ export function createBaseContext(
     name: "local-runner",
     os: osName,
     arch: archName,
-    temp: Deno.env.get("RUNNER_TEMP") || "/tmp",
-    tool_cache: Deno.env.get("RUNNER_TOOL_CACHE") || "/opt/hostedtoolcache",
-    debug: Deno.env.get("RUNNER_DEBUG") || "",
+    temp: getEnv("RUNNER_TEMP") || "/tmp",
+    tool_cache: getEnv("RUNNER_TOOL_CACHE") || "/opt/hostedtoolcache",
+    debug: getEnv("RUNNER_DEBUG") || "",
     ...options.runner,
   };
 

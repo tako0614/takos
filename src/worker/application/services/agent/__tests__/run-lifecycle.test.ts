@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -34,7 +35,7 @@ function makeDeps(
   };
 }
 
-Deno.test("handleSuccessfulRunCompletion keeps success terminal when post-run jobs fail", async () => {
+test("handleSuccessfulRunCompletion keeps success terminal when post-run jobs fail", async () => {
   const calls: string[] = [];
   const deps = makeDeps(calls, {
     enqueuePostRunJobs: async () => {
@@ -52,7 +53,7 @@ Deno.test("handleSuccessfulRunCompletion keeps success terminal when post-run jo
   assertEquals(calls, ["postRun", "autoClose:completed"]);
 });
 
-Deno.test("handleFailedRun does not retry the run when cleanup side effects fail", async () => {
+test("handleFailedRun does not retry the run when cleanup side effects fail", async () => {
   const calls: string[] = [];
   const deps = makeDeps(calls, {
     autoCloseSession: async (status) => {
@@ -75,7 +76,7 @@ Deno.test("handleFailedRun does not retry the run when cleanup side effects fail
   ]);
 });
 
-Deno.test("handleCancelledRun does not retry the run when cleanup side effects fail", async () => {
+test("handleCancelledRun does not retry the run when cleanup side effects fail", async () => {
   const calls: string[] = [];
   const deps = makeDeps(calls, {
     autoCloseSession: async (status) => {

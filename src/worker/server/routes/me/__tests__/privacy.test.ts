@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { Hono } from "hono";
 import { assertEquals, assertStringIncludes } from "@std/assert";
 
@@ -35,7 +36,7 @@ function restoreDeps() {
   Object.assign(privacyRouteDeps, originalDeps);
 }
 
-Deno.test("privacy access endpoint returns data subject rights summary", async () => {
+test("privacy access endpoint returns data subject rights summary", async () => {
   privacyRouteDeps.getPrivacyAccessSummary = async () => ({
     version: "2026-05-07",
     subject: {
@@ -82,7 +83,7 @@ Deno.test("privacy access endpoint returns data subject rights summary", async (
   }
 });
 
-Deno.test("privacy export endpoint returns attachment JSON without token secrets", async () => {
+test("privacy export endpoint returns attachment JSON without token secrets", async () => {
   privacyRouteDeps.buildDataSubjectExport = async () => ({
     version: "2026-05-07",
     subject: {
@@ -130,7 +131,7 @@ Deno.test("privacy export endpoint returns attachment JSON without token secrets
   }
 });
 
-Deno.test("privacy deletion request revokes current session and clears cookie", async () => {
+test("privacy deletion request revokes current session and clears cookie", async () => {
   const calls: string[] = [];
   privacyRouteDeps.requestAccountDeletion = async () => {
     calls.push("request");

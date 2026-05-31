@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 /**
  * Unit tests for the workload readiness probe (Track G).
  *
@@ -27,15 +28,15 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-Deno.test("READY_STATUS_CODE is 200 (only HTTP 200 OK is ready)", () => {
+test("READY_STATUS_CODE is 200 (only HTTP 200 OK is ready)", () => {
   assertEquals(READY_STATUS_CODE, 200);
 });
 
-Deno.test("READINESS_PROBE_TIMEOUT_MS is hard-coded 10 seconds", () => {
+test("READINESS_PROBE_TIMEOUT_MS is hard-coded 10 seconds", () => {
   assertEquals(READINESS_PROBE_TIMEOUT_MS, 10_000);
 });
 
-Deno.test("DEFAULT_READINESS_PATH defaults to '/'", () => {
+test("DEFAULT_READINESS_PATH defaults to '/'", () => {
   assertEquals(DEFAULT_READINESS_PATH, "/");
 });
 
@@ -43,7 +44,7 @@ Deno.test("DEFAULT_READINESS_PATH defaults to '/'", () => {
 // buildProbeUrl
 // ---------------------------------------------------------------------------
 
-Deno.test("buildProbeUrl joins base + path without duplicate slashes", () => {
+test("buildProbeUrl joins base + path without duplicate slashes", () => {
   assertEquals(
     buildProbeUrl("https://my-app.example.com", "/"),
     "https://my-app.example.com/",
@@ -78,7 +79,7 @@ function makeFetchStub(
   }) as typeof fetch;
 }
 
-Deno.test("probeWorkerReadiness: HTTP 200 → ready", async () => {
+test("probeWorkerReadiness: HTTP 200 → ready", async () => {
   const outcome = await probeWorkerReadiness({
     baseUrl: "https://example.com",
     path: "/",
@@ -91,7 +92,7 @@ Deno.test("probeWorkerReadiness: HTTP 200 → ready", async () => {
 // probeWorkerReadiness — failures (only 200 is ready)
 // ---------------------------------------------------------------------------
 
-Deno.test("probeWorkerReadiness: HTTP 201 Created → fail (only 200 is ready)", async () => {
+test("probeWorkerReadiness: HTTP 201 Created → fail (only 200 is ready)", async () => {
   const outcome = await probeWorkerReadiness({
     baseUrl: "https://example.com",
     path: "/",
@@ -100,7 +101,7 @@ Deno.test("probeWorkerReadiness: HTTP 201 Created → fail (only 200 is ready)",
   assertEquals(outcome, { ok: false, reason: "non-200", status: 201 });
 });
 
-Deno.test("probeWorkerReadiness: HTTP 204 No Content → fail", async () => {
+test("probeWorkerReadiness: HTTP 204 No Content → fail", async () => {
   const outcome = await probeWorkerReadiness({
     baseUrl: "https://example.com",
     path: "/",
@@ -109,7 +110,7 @@ Deno.test("probeWorkerReadiness: HTTP 204 No Content → fail", async () => {
   assertEquals(outcome, { ok: false, reason: "non-200", status: 204 });
 });
 
-Deno.test("probeWorkerReadiness: HTTP 302 redirect → fail (NOT followed)", async () => {
+test("probeWorkerReadiness: HTTP 302 redirect → fail (NOT followed)", async () => {
   // We use redirect: "manual" so the 302 is observed without being followed.
   const outcome = await probeWorkerReadiness({
     baseUrl: "https://example.com",
@@ -124,7 +125,7 @@ Deno.test("probeWorkerReadiness: HTTP 302 redirect → fail (NOT followed)", asy
   assertEquals(outcome, { ok: false, reason: "non-200", status: 302 });
 });
 
-Deno.test("probeWorkerReadiness: HTTP 401 Unauthorized → fail", async () => {
+test("probeWorkerReadiness: HTTP 401 Unauthorized → fail", async () => {
   const outcome = await probeWorkerReadiness({
     baseUrl: "https://example.com",
     path: "/",
@@ -133,7 +134,7 @@ Deno.test("probeWorkerReadiness: HTTP 401 Unauthorized → fail", async () => {
   assertEquals(outcome, { ok: false, reason: "non-200", status: 401 });
 });
 
-Deno.test("probeWorkerReadiness: HTTP 500 Internal Server Error → fail", async () => {
+test("probeWorkerReadiness: HTTP 500 Internal Server Error → fail", async () => {
   const outcome = await probeWorkerReadiness({
     baseUrl: "https://example.com",
     path: "/",
@@ -146,7 +147,7 @@ Deno.test("probeWorkerReadiness: HTTP 500 Internal Server Error → fail", async
 // probeWorkerReadiness — timeout
 // ---------------------------------------------------------------------------
 
-Deno.test("probeWorkerReadiness: timeout → fail with reason 'timeout'", async () => {
+test("probeWorkerReadiness: timeout → fail with reason 'timeout'", async () => {
   // The fetch never resolves until aborted.
   const fetchImpl: typeof fetch = ((_input, init?: RequestInit) => {
     return new Promise<Response>((_resolve, reject) => {
@@ -172,7 +173,7 @@ Deno.test("probeWorkerReadiness: timeout → fail with reason 'timeout'", async 
   assertEquals(outcome, { ok: false, reason: "timeout" });
 });
 
-Deno.test("probeWorkerReadiness: external abort cancels the request", async () => {
+test("probeWorkerReadiness: external abort cancels the request", async () => {
   const external = new AbortController();
   let observedSignal: AbortSignal | undefined;
   const fetchImpl: typeof fetch = ((_input, init?: RequestInit) => {
@@ -204,7 +205,7 @@ Deno.test("probeWorkerReadiness: external abort cancels the request", async () =
 // probeWorkerReadiness — network error
 // ---------------------------------------------------------------------------
 
-Deno.test("probeWorkerReadiness: network error → fail with reason 'error'", async () => {
+test("probeWorkerReadiness: network error → fail with reason 'error'", async () => {
   const fetchImpl: typeof fetch = (() => {
     return Promise.reject(new TypeError("connection refused"));
   }) as typeof fetch;
@@ -227,7 +228,7 @@ Deno.test("probeWorkerReadiness: network error → fail with reason 'error'", as
 // probeWorkerReadiness — passes path through correctly
 // ---------------------------------------------------------------------------
 
-Deno.test("probeWorkerReadiness: uses configured readiness path", async () => {
+test("probeWorkerReadiness: uses configured readiness path", async () => {
   let observedUrl = "";
   const fetchImpl: typeof fetch = ((input, _init?: RequestInit) => {
     observedUrl = typeof input === "string" ? input : (input as URL).toString();
@@ -242,7 +243,7 @@ Deno.test("probeWorkerReadiness: uses configured readiness path", async () => {
   assertEquals(observedUrl, "https://api.example.com/healthz");
 });
 
-Deno.test("probeWorkerReadiness: GET method only", async () => {
+test("probeWorkerReadiness: GET method only", async () => {
   let observedMethod = "";
   const fetchImpl: typeof fetch = ((_input, init?: RequestInit) => {
     observedMethod = init?.method ?? "";
@@ -261,7 +262,7 @@ Deno.test("probeWorkerReadiness: GET method only", async () => {
 // describeReadinessFailure
 // ---------------------------------------------------------------------------
 
-Deno.test("describeReadinessFailure: non-200 message includes status and rule", () => {
+test("describeReadinessFailure: non-200 message includes status and rule", () => {
   const msg = describeReadinessFailure("https://example.com/", {
     ok: false,
     reason: "non-200",
@@ -272,7 +273,7 @@ Deno.test("describeReadinessFailure: non-200 message includes status and rule", 
   assertStringIncludes(msg, "200");
 });
 
-Deno.test("describeReadinessFailure: timeout message includes 10s", () => {
+test("describeReadinessFailure: timeout message includes 10s", () => {
   const msg = describeReadinessFailure("https://example.com/", {
     ok: false,
     reason: "timeout",
@@ -281,7 +282,7 @@ Deno.test("describeReadinessFailure: timeout message includes 10s", () => {
   assertStringIncludes(msg, "10s");
 });
 
-Deno.test("describeReadinessFailure: error message includes underlying error", () => {
+test("describeReadinessFailure: error message includes underlying error", () => {
   const msg = describeReadinessFailure("https://example.com/", {
     ok: false,
     reason: "error",

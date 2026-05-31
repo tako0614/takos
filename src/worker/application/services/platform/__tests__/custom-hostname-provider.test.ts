@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertThrows } from "@std/assert";
 
 import type { Env } from "../../../../shared/types/index.ts";
@@ -6,7 +7,7 @@ import {
   resolveCustomHostnameProviderName,
 } from "../custom-domains/custom-hostname-provider.ts";
 
-Deno.test("custom hostname provider defaults to none unless Cloudflare zone is configured", () => {
+test("custom hostname provider defaults to none unless Cloudflare zone is configured", () => {
   assertEquals(resolveCustomHostnameProviderName({}), "none");
   assertEquals(
     resolveCustomHostnameProviderName({ CF_ZONE_ID: " zone-id " }),
@@ -14,7 +15,7 @@ Deno.test("custom hostname provider defaults to none unless Cloudflare zone is c
   );
 });
 
-Deno.test("custom hostname provider explicit none disables Cloudflare hostname provisioning", async () => {
+test("custom hostname provider explicit none disables Cloudflare hostname provisioning", async () => {
   const env = {
     CF_ZONE_ID: "zone-id",
     TAKOS_CUSTOM_DOMAIN_TLS_PROVIDER: "none",
@@ -27,7 +28,7 @@ Deno.test("custom hostname provider explicit none disables Cloudflare hostname p
   });
 });
 
-Deno.test("custom hostname provider explicit Cloudflare requires provider credentials", async () => {
+test("custom hostname provider explicit Cloudflare requires provider credentials", async () => {
   const env = {
     CF_ZONE_ID: "zone-id",
     TAKOS_CUSTOM_DOMAIN_TLS_PROVIDER: "cloudflare",
@@ -42,7 +43,7 @@ Deno.test("custom hostname provider explicit Cloudflare requires provider creden
   });
 });
 
-Deno.test("custom hostname provider rejects unknown explicit provider", () => {
+test("custom hostname provider rejects unknown explicit provider", () => {
   assertThrows(
     () =>
       resolveCustomHostnameProviderName({

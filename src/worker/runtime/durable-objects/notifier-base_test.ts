@@ -1,7 +1,8 @@
+import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { parseReplayCursor, toWsEnvelope } from "./notifier-base.ts";
 
-Deno.test("toWsEnvelope emits the canonical notifier broadcast shape", () => {
+test("toWsEnvelope emits the canonical notifier broadcast shape", () => {
   assert.deepEqual(
     toWsEnvelope({
       type: "run.delta",
@@ -19,14 +20,14 @@ Deno.test("toWsEnvelope emits the canonical notifier broadcast shape", () => {
   );
 });
 
-Deno.test("parseReplayCursor accepts absent/empty and non-negative integers", () => {
+test("parseReplayCursor accepts absent/empty and non-negative integers", () => {
   assert.equal(parseReplayCursor(null), 0);
   assert.equal(parseReplayCursor(""), 0);
   assert.equal(parseReplayCursor("0"), 0);
   assert.equal(parseReplayCursor("42"), 42);
 });
 
-Deno.test("parseReplayCursor fails closed (null) on garbage input", () => {
+test("parseReplayCursor fails closed (null) on garbage input", () => {
   // parseInt would have coerced these to NaN / 5 / -3, silently breaking the
   // 400 guard and the e.id > cursor replay filter. Strict parse rejects them.
   assert.equal(parseReplayCursor("abc"), null);

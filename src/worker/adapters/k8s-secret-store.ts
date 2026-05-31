@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import http from "node:http";
 import https from "node:https";
 import { readFile } from "node:fs/promises";
@@ -29,20 +30,20 @@ async function resolveApiConfig(
   config: K8sSecretStoreConfig,
 ): Promise<K8sApiConfig> {
   const apiServer = config.apiServer ??
-    (Deno.env.get("K8S_API_SERVER")?.trim() || "") ??
+    (getEnv("K8S_API_SERVER")?.trim() || "") ??
     "";
   const bearerToken = config.bearerToken ??
-    (Deno.env.get("K8S_BEARER_TOKEN")?.trim() || "") ??
+    (getEnv("K8S_BEARER_TOKEN")?.trim() || "") ??
     "";
   const namespace = config.namespace ??
-    (Deno.env.get("K8S_NAMESPACE")?.trim() || "") ??
+    (getEnv("K8S_NAMESPACE")?.trim() || "") ??
     "";
   const caFilePath = config.caFilePath ??
-    Deno.env.get("K8S_CA_CERT_FILE")?.trim() ??
+    getEnv("K8S_CA_CERT_FILE")?.trim() ??
     "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
 
-  const serviceHost = Deno.env.get("KUBERNETES_SERVICE_HOST")?.trim();
-  const servicePort = Deno.env.get("KUBERNETES_SERVICE_PORT_HTTPS")?.trim() ||
+  const serviceHost = getEnv("KUBERNETES_SERVICE_HOST")?.trim();
+  const servicePort = getEnv("KUBERNETES_SERVICE_PORT_HTTPS")?.trim() ||
     "443";
   const resolvedApiServer = apiServer ||
     (serviceHost ? `https://${serviceHost}:${servicePort}` : "");

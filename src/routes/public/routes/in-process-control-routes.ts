@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { getWebApp } from "takos-worker/core/web";
 import { buildWorkersWebPlatform } from "takos-worker/platform/adapters/workers";
 import type { ControlPlatform } from "takos-worker/platform";
@@ -107,7 +108,7 @@ export function commonError(code: string, message: string): ErrorEnvelope {
 
 function controlRequestEnv(env: ApiBindings | undefined): ControlRequestEnv {
   const bindings = { ...(env ?? {}) } as ControlRequestEnv;
-  bindings.TAKOS_INTERNAL_API_SECRET ??= Deno.env.get(
+  bindings.TAKOS_INTERNAL_API_SECRET ??= getEnv(
     "TAKOS_INTERNAL_API_SECRET",
   );
   bindings.PLATFORM ??= buildWorkersWebPlatform(bindings);

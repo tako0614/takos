@@ -2,8 +2,7 @@
 //
 // Implements the RUNTIME subset of the Deno namespace this CLI uses, backed by
 // Bun / node: APIs. Importing this module installs the global as a side effect
-// (idempotent). It does NOT provide `Deno.test` (that is test-only and added by
-// shims/deno-test-preload.ts) and deliberately omits the Deno permission model
+// (idempotent). It deliberately omits test APIs and the Deno permission model
 // (no Node/Bun equivalent).
 //
 // This is the canonical pattern reused across the ecosystem's Bun migration.
@@ -649,8 +648,7 @@ function toFileInfo(s: fs.Stats) {
   };
 }
 
-// Idempotent install: merge onto any pre-existing partial Deno (e.g. real Deno,
-// or the test preload that adds Deno.test on top of this runtime).
+// Idempotent install: merge onto any pre-existing partial Deno namespace.
 const g = globalThis as unknown as { Deno?: Record<string, unknown> };
 g.Deno = Object.assign({}, DenoCompat, g.Deno ?? {});
 

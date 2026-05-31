@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { ObjectStoreBinding } from "../../../../shared/types/bindings.ts";
@@ -13,7 +14,7 @@ function createBucketStub(): ObjectStoreBinding {
   } as unknown as ObjectStoreBinding;
 }
 
-Deno.test("runD1DailyBackup skips unsupported DB.dump capability errors", async () => {
+test("runD1DailyBackup skips unsupported DB.dump capability errors", async () => {
   const env = {
     DB: {
       dump: async () => {
@@ -35,7 +36,7 @@ Deno.test("runD1DailyBackup skips unsupported DB.dump capability errors", async 
   });
 });
 
-Deno.test("runD1DailyBackup detects unsupported DB.dump by adapter message", async () => {
+test("runD1DailyBackup detects unsupported DB.dump by adapter message", async () => {
   const env = {
     DB: {
       dump: async () => {

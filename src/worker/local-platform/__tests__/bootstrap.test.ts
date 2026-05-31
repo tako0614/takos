@@ -1,3 +1,5 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import { test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -7,7 +9,7 @@ import {
   createLocalExecutorHostFetchForTests,
   createLocalRuntimeHostFetchForTests,
   createLocalWebFetchForTests,
-} from "../bootstrap.ts";
+} from "../runtime.ts";
 import {
   createNodeWebEnv,
   disposeNodePlatformState,
@@ -86,23 +88,18 @@ function localBootstrapTest(
   name: string,
   fn: () => Promise<void> | void,
 ): void {
-  Deno.test({
-    name,
-    async fn() {
-      const originalVitest = Deno.env.get("VITEST");
-      Deno.env.set("VITEST", "1");
-      try {
-        await fn();
-      } finally {
-        if (originalVitest === undefined) {
-          Deno.env.delete("VITEST");
-        } else {
-          Deno.env.set("VITEST", originalVitest);
-        }
+  test(name, async () => {
+    const originalVitest = getEnv("VITEST");
+    setEnv("VITEST", "1");
+    try {
+      await fn();
+    } finally {
+      if (originalVitest === undefined) {
+        deleteEnv("VITEST");
+      } else {
+        setEnv("VITEST", originalVitest);
       }
-    },
-    sanitizeOps: false,
-    sanitizeResources: false,
+    }
   });
 }
 
@@ -113,9 +110,9 @@ type LocalBootstrapEnvContext = {
 function restoreOriginalBootstrapEnv(): void {
   for (const [key, value] of Object.entries(originalEnv)) {
     if (value === undefined) {
-      Deno.env.delete(key);
+      deleteEnv(key);
     } else {
-      Deno.env.set(key, value);
+      setEnv(key, value);
     }
   }
 }
@@ -123,15 +120,15 @@ function restoreOriginalBootstrapEnv(): void {
 async function withLocalBootstrapEnv(
   fn: (context: LocalBootstrapEnvContext) => Promise<void>,
 ): Promise<void> {
-  Deno.env.set("ADMIN_DOMAIN", "admin.local");
-  Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-  Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-  Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-  Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-  Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
+  setEnv("ADMIN_DOMAIN", "admin.local");
+  setEnv("TENANT_BASE_DOMAIN", "tenant.local");
+  deleteEnv("TAKOS_LOCAL_ROUTING_JSON");
+  deleteEnv("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
+  deleteEnv("TAKOS_LOCAL_RUNTIME_URL");
+  deleteEnv("TAKOS_LOCAL_EXECUTOR_URL");
   tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-  Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-  Deno.env.delete("AWS_REGION");
+  setEnv("TAKOS_LOCAL_DATA_DIR", tempDataDir);
+  deleteEnv("AWS_REGION");
   await disposeNodePlatformState({ clearData: true });
   prepareQueueMocks();
 
@@ -147,13 +144,12 @@ async function withLocalBootstrapEnv(
   }
 }
 
-// [Deno] vi.mock removed - manually stub imports from 'miniflare'// [Deno] vi.mock removed - manually stub imports from '../../adapters/sqs-queue.ts'
 async function runMiniflareDispatchSmoke(): Promise<
   { status: number; body: unknown }
 > {
-  Deno.env.set("ADMIN_DOMAIN", "admin.local");
-  Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-  Deno.env.set(
+  setEnv("ADMIN_DOMAIN", "admin.local");
+  setEnv("TENANT_BASE_DOMAIN", "tenant.local");
+  setEnv(
     "TAKOS_LOCAL_ROUTING_JSON",
     JSON.stringify({
       "hello.local": {
@@ -170,7 +166,7 @@ async function runMiniflareDispatchSmoke(): Promise<
   const tempDataDir = await mkdtemp(
     path.join(os.tmpdir(), "takos-local-dispatch-smoke-"),
   );
-  Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
+  setEnv("TAKOS_LOCAL_DATA_DIR", tempDataDir);
   await disposeNodePlatformState({ clearData: true });
 
   const env = await createNodeWebEnv();
@@ -282,16 +278,16 @@ async function seedTenantWorkerBundle(params: {
 }
 
 const originalEnv = {
-  ADMIN_DOMAIN: Deno.env.get("ADMIN_DOMAIN"),
-  TENANT_BASE_DOMAIN: Deno.env.get("TENANT_BASE_DOMAIN"),
-  TAKOS_LOCAL_ROUTING_JSON: Deno.env.get("TAKOS_LOCAL_ROUTING_JSON"),
-  TAKOS_LOCAL_DISPATCH_TARGETS_JSON: Deno.env.get(
+  ADMIN_DOMAIN: getEnv("ADMIN_DOMAIN"),
+  TENANT_BASE_DOMAIN: getEnv("TENANT_BASE_DOMAIN"),
+  TAKOS_LOCAL_ROUTING_JSON: getEnv("TAKOS_LOCAL_ROUTING_JSON"),
+  TAKOS_LOCAL_DISPATCH_TARGETS_JSON: getEnv(
     "TAKOS_LOCAL_DISPATCH_TARGETS_JSON",
   ),
-  TAKOS_LOCAL_DATA_DIR: Deno.env.get("TAKOS_LOCAL_DATA_DIR"),
-  TAKOS_LOCAL_RUNTIME_URL: Deno.env.get("TAKOS_LOCAL_RUNTIME_URL"),
-  TAKOS_LOCAL_EXECUTOR_URL: Deno.env.get("TAKOS_LOCAL_EXECUTOR_URL"),
-  TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL: Deno.env.get(
+  TAKOS_LOCAL_DATA_DIR: getEnv("TAKOS_LOCAL_DATA_DIR"),
+  TAKOS_LOCAL_RUNTIME_URL: getEnv("TAKOS_LOCAL_RUNTIME_URL"),
+  TAKOS_LOCAL_EXECUTOR_URL: getEnv("TAKOS_LOCAL_EXECUTOR_URL"),
+  TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL: getEnv(
     "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
   ),
 };
@@ -325,14 +321,14 @@ localBootstrapTest(
       "EXECUTOR_PROXY_SECRET",
     ] as const;
     const previous = Object.fromEntries(
-      guardedKeys.map((key) => [key, Deno.env.get(key)]),
+      guardedKeys.map((key) => [key, getEnv(key)]),
     ) as Record<(typeof guardedKeys)[number], string | undefined>;
 
     try {
       await withLocalBootstrapEnv(async () => {
-        Deno.env.set("ENVIRONMENT", "production");
+        setEnv("ENVIRONMENT", "production");
         for (const key of guardedKeys) {
-          if (key !== "ENVIRONMENT") Deno.env.delete(key);
+          if (key !== "ENVIRONMENT") deleteEnv(key);
         }
 
         await assertRejects(
@@ -345,9 +341,9 @@ localBootstrapTest(
       for (const key of guardedKeys) {
         const value = previous[key];
         if (value === undefined) {
-          Deno.env.delete(key);
+          deleteEnv(key);
         } else {
-          Deno.env.set(key, value);
+          setEnv(key, value);
         }
       }
     }
@@ -359,7 +355,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
         "https://example.com/yurucommu.git",
       );
@@ -420,7 +416,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
           "hello.local": {
@@ -467,7 +463,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_DISPATCH_TARGETS_JSON",
         JSON.stringify({
           "tenant-app": "http://worker.internal/base/",
@@ -489,7 +485,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
           "hello.local": {
@@ -555,7 +551,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
           "hello.local": {
@@ -1310,7 +1306,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
           "hello.local": {
@@ -1414,7 +1410,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
           "hello.local": {
@@ -1534,7 +1530,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
           "hello.local": {
@@ -1680,7 +1676,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set("TAKOS_LOCAL_RUNTIME_URL", "http://runtime.internal/base/");
+      setEnv("TAKOS_LOCAL_RUNTIME_URL", "http://runtime.internal/base/");
 
       const upstreamFetch = stubGlobalFetch((request) => {
         assertEquals(request.url, "http://runtime.internal/base/health");
@@ -1738,7 +1734,7 @@ localBootstrapTest(
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
-      Deno.env.set(
+      setEnv(
         "TAKOS_LOCAL_EXECUTOR_URL",
         "http://executor.internal/base/",
       );

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 
@@ -19,7 +20,7 @@ function createRuntimeNamespace(stub: {
   };
 }
 
-Deno.test("runtime-host rejects JWT-looking /forward/api-proxy requests without a valid proxy token", async () => {
+test("runtime-host rejects JWT-looking /forward/api-proxy requests without a valid proxy token", async () => {
   const runtimeFetch = spy(async (_request: Request) =>
     new Response("unexpected runtime fetch", { status: 500 })
   );

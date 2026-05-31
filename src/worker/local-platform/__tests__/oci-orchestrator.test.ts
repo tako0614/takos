@@ -1,4 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import { test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -94,16 +96,16 @@ function createObservedContainerBackend(
 }
 
 const originalEnv = {
-  OCI_ORCHESTRATOR_DATA_DIR: Deno.env.get("OCI_ORCHESTRATOR_DATA_DIR"),
-  TAKOS_LOCAL_DATA_DIR: Deno.env.get("TAKOS_LOCAL_DATA_DIR"),
-  TAKOS_SKIP_OCI_HEALTH_CHECK: Deno.env.get("TAKOS_SKIP_OCI_HEALTH_CHECK"),
+  OCI_ORCHESTRATOR_DATA_DIR: getEnv("OCI_ORCHESTRATOR_DATA_DIR"),
+  TAKOS_LOCAL_DATA_DIR: getEnv("TAKOS_LOCAL_DATA_DIR"),
+  TAKOS_SKIP_OCI_HEALTH_CHECK: getEnv("TAKOS_SKIP_OCI_HEALTH_CHECK"),
 };
 let tempDir: string | null = null;
-Deno.test("oci orchestrator local service - stores deployments and exposes service records and logs", async () => {
+test("oci orchestrator local service - stores deployments and exposes service records and logs", async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
-  Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
-  Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
-  Deno.env.set("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
+  setEnv("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
+  deleteEnv("TAKOS_LOCAL_DATA_DIR");
+  setEnv("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
   try {
     const fetch = await createLocalOciOrchestratorFetchForTests({
       backend: createFakeContainerBackend(),
@@ -222,9 +224,9 @@ Deno.test("oci orchestrator local service - stores deployments and exposes servi
   } finally {
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        Deno.env.delete(key);
+        deleteEnv(key);
       } else {
-        Deno.env.set(key, value);
+        setEnv(key, value);
       }
     }
     if (tempDir) {
@@ -233,11 +235,11 @@ Deno.test("oci orchestrator local service - stores deployments and exposes servi
     }
   }
 });
-Deno.test("oci orchestrator local service - resolves backend-native implementations from backend config", async () => {
+test("oci orchestrator local service - resolves backend-native implementations from backend config", async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
-  Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
-  Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
-  Deno.env.set("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
+  setEnv("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
+  deleteEnv("TAKOS_LOCAL_DATA_DIR");
+  setEnv("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
   try {
     const resolver = createDefaultOciOrchestratorBackendResolver({
       fallbackBackend: createFakeContainerBackend(),
@@ -273,9 +275,9 @@ Deno.test("oci orchestrator local service - resolves backend-native implementati
   } finally {
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        Deno.env.delete(key);
+        deleteEnv(key);
       } else {
-        Deno.env.set(key, value);
+        setEnv(key, value);
       }
     }
     if (tempDir) {
@@ -285,12 +287,12 @@ Deno.test("oci orchestrator local service - resolves backend-native implementati
   }
 });
 
-Deno.test("oci orchestrator local service - defaults missing backend fields when loading state", async () => {
+test("oci orchestrator local service - defaults missing backend fields when loading state", async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
-  Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
-  Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
+  setEnv("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
+  deleteEnv("TAKOS_LOCAL_DATA_DIR");
   try {
-    await Deno.writeTextFile(
+    await writeFile(
       path.join(tempDir, "state.json"),
       JSON.stringify({
         services: {
@@ -310,9 +312,9 @@ Deno.test("oci orchestrator local service - defaults missing backend fields when
   } finally {
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        Deno.env.delete(key);
+        deleteEnv(key);
       } else {
-        Deno.env.set(key, value);
+        setEnv(key, value);
       }
     }
     if (tempDir) {
@@ -321,11 +323,11 @@ Deno.test("oci orchestrator local service - defaults missing backend fields when
     }
   }
 });
-Deno.test("oci orchestrator local service - uses backend-specific implementations across redeploy, logs, and remove", async () => {
+test("oci orchestrator local service - uses backend-specific implementations across redeploy, logs, and remove", async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
-  Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
-  Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
-  Deno.env.set("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
+  setEnv("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
+  deleteEnv("TAKOS_LOCAL_DATA_DIR");
+  setEnv("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
   try {
     const events: string[] = [];
     const dockerBackend = createObservedContainerBackend("docker", events);
@@ -464,9 +466,9 @@ Deno.test("oci orchestrator local service - uses backend-specific implementation
   } finally {
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        Deno.env.delete(key);
+        deleteEnv(key);
       } else {
-        Deno.env.set(key, value);
+        setEnv(key, value);
       }
     }
     if (tempDir) {
@@ -476,11 +478,11 @@ Deno.test("oci orchestrator local service - uses backend-specific implementation
   }
 });
 
-Deno.test("oci orchestrator local service - keeps previous OCI container until replacement is healthy", async () => {
+test("oci orchestrator local service - keeps previous OCI container until replacement is healthy", async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
-  Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
-  Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
-  Deno.env.set("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
+  setEnv("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
+  deleteEnv("TAKOS_LOCAL_DATA_DIR");
+  setEnv("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
   try {
     const events: string[] = [];
     const dockerBackend = createObservedContainerBackend("docker", events);
@@ -534,9 +536,9 @@ Deno.test("oci orchestrator local service - keeps previous OCI container until r
   } finally {
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) {
-        Deno.env.delete(key);
+        deleteEnv(key);
       } else {
-        Deno.env.set(key, value);
+        setEnv(key, value);
       }
     }
     if (tempDir) {

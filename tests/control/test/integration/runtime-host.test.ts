@@ -1,8 +1,10 @@
+import { strict as assert } from "node:assert";
 import runtimeHost, {
   buildRuntimeContainerEnv,
   RUNTIME_PROXY_TOKEN_HEADER,
   type RuntimeHostEnv,
 } from "@/runtime/container-hosts/runtime-host.ts";
+import { mock, test } from "bun:test";
 
 function makeUnusedStubMethods() {
   return {
@@ -21,16 +23,8 @@ function makeUnusedStubMethods() {
   };
 }
 
-import { assert, assertEquals } from "@std/assert";
-import {
-  assertSpyCallArgs,
-  assertSpyCalls,
-  spy,
-  stub,
-} from "@std/testing/mock";
-
-Deno.test("runtime-host builds the runtime container env from the host worker env", () => {
-  assertEquals(
+test("runtime-host builds the runtime container env from the host worker env", () => {
+  assert.deepStrictEqual(
     buildRuntimeContainerEnv({
       ADMIN_DOMAIN: "test.takos.jp",
       PLATFORM_PUBLIC_KEY: "public-key",
@@ -44,16 +38,16 @@ Deno.test("runtime-host builds the runtime container env from the host worker en
   );
 });
 
-Deno.test("runtime-host forwards requests through the runtime container DO fetch path", async () => {
-  const fetchSpy = spy(async (_request: Request) =>
+test("runtime-host forwards requests through the runtime container DO fetch path", async () => {
+  const fetchSpy = mock(async (_request: Request) =>
     new Response("ok", { status: 200 })
   );
-  const generateSessionProxyToken = spy(async (
+  const generateSessionProxyToken = mock(async (
     _sessionId: string,
     _spaceId: string,
   ) => "token");
-  const verifyProxyToken = spy(async (_token: string) => null);
-  const getByName = spy(() => ({
+  const verifyProxyToken = mock(async (_token: string) => null);
+  const getByName = mock(() => ({
     fetch: fetchSpy,
     generateSessionProxyToken,
     verifyProxyToken,
@@ -68,22 +62,22 @@ Deno.test("runtime-host forwards requests through the runtime container DO fetch
 
   const response = await runtimeHost.fetch(request, env);
 
-  assertSpyCallArgs(getByName, 0, ["singleton"]);
-  assertSpyCalls(fetchSpy, 1);
-  const forwardedRequest = fetchSpy.calls[0]?.args[0];
-  assert(forwardedRequest instanceof Request);
-  assertEquals(forwardedRequest.url, request.url);
-  assertEquals(forwardedRequest.method, request.method);
-  assertEquals(response.status, 200);
-  assertEquals(await response.text(), "ok");
+  assert.deepStrictEqual(getByName.mock.calls[0], ["singleton"]);
+  assert.deepStrictEqual(fetchSpy.mock.calls.length, 1);
+  const forwardedRequest = fetchSpy.mock.calls[0]?.[0];
+  assert.ok(forwardedRequest instanceof Request);
+  assert.deepStrictEqual(forwardedRequest.url, request.url);
+  assert.deepStrictEqual(forwardedRequest.method, request.method);
+  assert.deepStrictEqual(response.status, 200);
+  assert.deepStrictEqual(await response.text(), "ok");
 });
 
-Deno.test("runtime-host injects a proxy token on runtime session creation", async () => {
-  const fetchSpy = spy(async (_request: Request) =>
+test("runtime-host injects a proxy token on runtime session creation", async () => {
+  const fetchSpy = mock(async (_request: Request) =>
     new Response("ok", { status: 200 })
   );
-  const generateSessionProxyToken = spy(async () => "random-proxy-token-123");
-  const verifyProxyToken = spy(async (_token: string) => null);
+  const generateSessionProxyToken = mock(async () => "random-proxy-token-123");
+  const verifyProxyToken = mock(async (_token: string) => null);
   const env = {
     RUNTIME_CONTAINER: {
       getByName: () => ({
@@ -109,28 +103,28 @@ Deno.test("runtime-host injects a proxy token on runtime session creation", asyn
     env,
   );
 
-  assertSpyCallArgs(generateSessionProxyToken, 0, [
-    "session-id-1234567890",
-    "space-a",
-  ]);
-  assertSpyCalls(fetchSpy, 1);
-  const forwardedRequest = fetchSpy.calls[0]?.args[0];
-  assert(forwardedRequest instanceof Request);
-  assertEquals(
+  assert.deepStrictEqual(
+    generateSessionProxyToken.mock.calls[0],
+    ["session-id-1234567890", "space-a"],
+  );
+  assert.deepStrictEqual(fetchSpy.mock.calls.length, 1);
+  const forwardedRequest = fetchSpy.mock.calls[0]?.[0];
+  assert.ok(forwardedRequest instanceof Request);
+  assert.deepStrictEqual(
     forwardedRequest.headers.get(RUNTIME_PROXY_TOKEN_HEADER),
     "random-proxy-token-123",
   );
-  assertEquals(await forwardedRequest.json(), {
+  assert.deepStrictEqual(await forwardedRequest.json(), {
     session_id: "session-id-1234567890",
     space_id: "space-a",
   });
 });
 
-Deno.test("runtime-host proxies /forward/api-proxy requests to takos via service binding", async () => {
-  const takosWebFetch = spy(async (_request: Request) =>
+test("runtime-host proxies /forward/api-proxy requests to takos via service binding", async () => {
+  const takosWebFetch = mock(async (_request: Request) =>
     new Response(JSON.stringify({ ok: true }), { status: 200 })
   );
-  const verifyProxyToken = spy(async (_token: string) => ({
+  const verifyProxyToken = mock(async (_token: string) => ({
     sessionId: "session-id-1234567890",
     spaceId: "space-a",
   }));
@@ -158,28 +152,31 @@ Deno.test("runtime-host proxies /forward/api-proxy requests to takos via service
     env,
   );
 
-  assertSpyCallArgs(verifyProxyToken, 0, ["valid-proxy-token"]);
-  assertSpyCalls(takosWebFetch, 1);
-  const proxiedRequest = takosWebFetch.calls[0]?.args[0];
-  assert(proxiedRequest instanceof Request);
-  assertEquals(proxiedRequest.url, "https://takos/api/repos/repo-1/status");
+  assert.deepStrictEqual(verifyProxyToken.mock.calls[0], ["valid-proxy-token"]);
+  assert.deepStrictEqual(takosWebFetch.mock.calls.length, 1);
+  const proxiedRequest = takosWebFetch.mock.calls[0]?.[0];
+  assert.ok(proxiedRequest instanceof Request);
+  assert.deepStrictEqual(proxiedRequest.url, "https://takos/api/repos/repo-1/status");
   // The marker header distinguishes this call from the unrelated
   // `X-Takos-Internal` shared-secret consumed by executor-proxy-api.ts.
-  assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
-  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), null);
-  assertEquals(
+  assert.deepStrictEqual(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
+  assert.deepStrictEqual(proxiedRequest.headers.get("X-Takos-Internal"), null);
+  assert.deepStrictEqual(
     proxiedRequest.headers.get("X-Takos-Session-Id"),
     "session-id-1234567890",
   );
-  assertEquals(proxiedRequest.headers.get("X-Takos-Space-Id"), "space-a");
-  assertEquals(response.status, 200);
+  assert.deepStrictEqual(
+    proxiedRequest.headers.get("X-Takos-Space-Id"),
+    "space-a",
+  );
+  assert.deepStrictEqual(response.status, 200);
 });
 
-Deno.test("runtime-host proxies /forward/heartbeat requests to takos via service binding", async () => {
-  const takosWebFetch = spy(async (_request: Request) =>
+test("runtime-host proxies /forward/heartbeat requests to takos via service binding", async () => {
+  const takosWebFetch = mock(async (_request: Request) =>
     new Response(JSON.stringify({ success: true }), { status: 200 })
   );
-  const verifyProxyToken = spy(async (_token: string) => ({
+  const verifyProxyToken = mock(async (_token: string) => ({
     sessionId: "session-id-1234567890",
     spaceId: "space-a",
   }));
@@ -206,26 +203,26 @@ Deno.test("runtime-host proxies /forward/heartbeat requests to takos via service
     env,
   );
 
-  assertSpyCallArgs(verifyProxyToken, 0, ["valid-proxy-token"]);
-  assertSpyCalls(takosWebFetch, 1);
-  const proxiedRequest = takosWebFetch.calls[0]?.args[0];
-  assert(proxiedRequest instanceof Request);
-  assertEquals(
+  assert.deepStrictEqual(verifyProxyToken.mock.calls[0], ["valid-proxy-token"]);
+  assert.deepStrictEqual(takosWebFetch.mock.calls.length, 1);
+  const proxiedRequest = takosWebFetch.mock.calls[0]?.[0];
+  assert.ok(proxiedRequest instanceof Request);
+  assert.deepStrictEqual(
     proxiedRequest.url,
     "https://takos/api/sessions/session-id-1234567890/heartbeat",
   );
-  assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
-  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), null);
-  assertEquals(
+  assert.deepStrictEqual(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
+  assert.deepStrictEqual(proxiedRequest.headers.get("X-Takos-Internal"), null);
+  assert.deepStrictEqual(
     proxiedRequest.headers.get("X-Takos-Session-Id"),
     "session-id-1234567890",
   );
-  assertEquals(proxiedRequest.headers.get("X-Takos-Space-Id"), "space-a");
-  assertEquals(response.status, 200);
+  assert.deepStrictEqual(proxiedRequest.headers.get("X-Takos-Space-Id"), "space-a");
+  assert.deepStrictEqual(response.status, 200);
 });
 
-Deno.test("runtime-host rejects /forward/* requests without a valid proxy token", async () => {
-  const verifyProxyToken = spy(async (_token: string) => null);
+test("runtime-host rejects /forward/* requests without a valid proxy token", async () => {
+  const verifyProxyToken = mock(async (_token: string) => null);
   const env: RuntimeHostEnv = {
     RUNTIME_CONTAINER: {
       getByName: () => ({ ...makeUnusedStubMethods(), verifyProxyToken }),
@@ -249,20 +246,21 @@ Deno.test("runtime-host rejects /forward/* requests without a valid proxy token"
     env,
   );
 
-  assertEquals(response.status, 401);
+  assert.deepStrictEqual(response.status, 401);
 });
 
-Deno.test("runtime-host surfaces startup failures from the runtime container DO fetch path", async () => {
-  const consoleError = stub(console, "error", () => {});
+test("runtime-host surfaces startup failures from the runtime container DO fetch path", async () => {
+  const originalConsoleError = console.error;
+  console.error = () => {};
   try {
-    const fetchSpy = spy(async (_request: Request) => {
+    const fetchSpy = mock(async (_request: Request) => {
       throw new Error("The container is not running, consider calling start()");
     });
-    const generateSessionProxyToken = spy(async (
+    const generateSessionProxyToken = mock(async (
       _sessionId: string,
       _spaceId: string,
     ) => "token");
-    const verifyProxyToken = spy(async (_token: string) => null);
+    const verifyProxyToken = mock(async (_token: string) => null);
     const env: RuntimeHostEnv = {
       RUNTIME_CONTAINER: {
         getByName: () => ({
@@ -281,12 +279,12 @@ Deno.test("runtime-host surfaces startup failures from the runtime container DO 
       env,
     );
 
-    assertEquals(response.status, 500);
-    assertEquals(
+    assert.deepStrictEqual(response.status, 500);
+    assert.deepStrictEqual(
       await response.text(),
       "Failed to start container: The container is not running, consider calling start()",
     );
   } finally {
-    consoleError.restore();
+    console.error = originalConsoleError;
   }
 });

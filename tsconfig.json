@@ -18,6 +18,9 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
+      "@/*": [
+        "./src/worker/*"
+      ],
       "@std/assert": [
         "./shims/std/assert.ts"
       ],
@@ -119,6 +122,9 @@
       ],
       "@takos/worker-platform-utils/logger": [
         "./src/worker/platform-utils/logger.ts"
+      ],
+      "@takos/worker-platform-utils/runtime-env": [
+        "./src/worker/platform-utils/runtime-env.ts"
       ],
       "@takos/worker-platform-utils/ttl": [
         "./src/worker/platform-utils/ttl.ts"

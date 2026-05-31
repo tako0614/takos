@@ -1,3 +1,5 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type {
@@ -9,21 +11,21 @@ import { buildDispatcher } from "../dispatch-resolver.ts";
 
 function restoreEnv(name: string, value: string | undefined) {
   if (value === undefined) {
-    Deno.env.delete(name);
+    deleteEnv(name);
   } else {
-    Deno.env.set(name, value);
+    setEnv(name, value);
   }
 }
 
-Deno.test("buildDispatcher creates tenant runtime registry for backend-specific Node env without dataDir", async () => {
-  const previousNamespace = Deno.env.get("WFP_DISPATCH_NAMESPACE");
-  const previousAccountId = Deno.env.get("CF_ACCOUNT_ID");
-  const previousApiToken = Deno.env.get("CF_API_TOKEN");
-  const previousTargets = Deno.env.get("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-  Deno.env.delete("WFP_DISPATCH_NAMESPACE");
-  Deno.env.delete("CF_ACCOUNT_ID");
-  Deno.env.delete("CF_API_TOKEN");
-  Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
+test("buildDispatcher creates tenant runtime registry for backend-specific Node env without dataDir", async () => {
+  const previousNamespace = getEnv("WFP_DISPATCH_NAMESPACE");
+  const previousAccountId = getEnv("CF_ACCOUNT_ID");
+  const previousApiToken = getEnv("CF_API_TOKEN");
+  const previousTargets = getEnv("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
+  deleteEnv("WFP_DISPATCH_NAMESPACE");
+  deleteEnv("CF_ACCOUNT_ID");
+  deleteEnv("CF_API_TOKEN");
+  deleteEnv("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
   try {
     const registries = new Set<TenantWorkerRuntimeRegistry>();
     const dispatcher = await buildDispatcher({
@@ -49,13 +51,13 @@ Deno.test("buildDispatcher creates tenant runtime registry for backend-specific 
   }
 });
 
-Deno.test("buildDispatcher leaves tenant runtime to Workers Dispatch when WFP is configured", async () => {
-  const previousNamespace = Deno.env.get("WFP_DISPATCH_NAMESPACE");
-  const previousAccountId = Deno.env.get("CF_ACCOUNT_ID");
-  const previousApiToken = Deno.env.get("CF_API_TOKEN");
-  Deno.env.set("CF_ACCOUNT_ID", "account");
-  Deno.env.set("CF_API_TOKEN", "token");
-  Deno.env.set("WFP_DISPATCH_NAMESPACE", "takos-tenants");
+test("buildDispatcher leaves tenant runtime to Workers Dispatch when WFP is configured", async () => {
+  const previousNamespace = getEnv("WFP_DISPATCH_NAMESPACE");
+  const previousAccountId = getEnv("CF_ACCOUNT_ID");
+  const previousApiToken = getEnv("CF_API_TOKEN");
+  setEnv("CF_ACCOUNT_ID", "account");
+  setEnv("CF_API_TOKEN", "token");
+  setEnv("WFP_DISPATCH_NAMESPACE", "takos-tenants");
   try {
     const registries = new Set<TenantWorkerRuntimeRegistry>();
     const dispatcher = await buildDispatcher({

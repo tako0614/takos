@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { ContainerBackend } from "./container-backend.ts";
 import {
   createDefaultOciOrchestratorBackendResolver,
@@ -5,7 +6,7 @@ import {
 } from "./oci-orchestrator.ts";
 
 async function resolveBackend(): Promise<ContainerBackend> {
-  const backendEnv = (Deno.env.get("OCI_BACKEND") ?? "docker").trim()
+  const backendEnv = (getEnv("OCI_BACKEND") ?? "docker").trim()
     .toLowerCase();
 
   switch (backendEnv) {

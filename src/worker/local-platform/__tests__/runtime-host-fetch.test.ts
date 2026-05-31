@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
 
@@ -12,7 +13,7 @@ function createRuntimeNamespace(stub: LocalRuntimeGatewayStub) {
   };
 }
 
-Deno.test("local runtime-host rejects JWT-looking /forward/api-proxy requests without a valid proxy token", async () => {
+test("local runtime-host rejects JWT-looking /forward/api-proxy requests without a valid proxy token", async () => {
   const runtimeFetch = spy(async (_request: Request) =>
     new Response(JSON.stringify({ ok: true }), { status: 200 })
   );
@@ -43,7 +44,7 @@ Deno.test("local runtime-host rejects JWT-looking /forward/api-proxy requests wi
   assertSpyCalls(runtimeFetch, 0);
 });
 
-Deno.test("local runtime-host keeps proxy-token /forward/api-proxy requests on the control API path", async () => {
+test("local runtime-host keeps proxy-token /forward/api-proxy requests on the control API path", async () => {
   const runtimeFetch = spy(async (_request: Request) =>
     new Response("unexpected runtime fetch", { status: 500 })
   );
@@ -86,7 +87,7 @@ Deno.test("local runtime-host keeps proxy-token /forward/api-proxy requests on t
   assertEquals(forwarded.headers.get("X-Takos-Space-Id"), "space-a");
 });
 
-Deno.test("local runtime-host rejects proxy-token /forward/api-proxy when session header does not match token", async () => {
+test("local runtime-host rejects proxy-token /forward/api-proxy when session header does not match token", async () => {
   const takosWebFetch = spy(async (_request: Request) =>
     new Response(JSON.stringify({ ok: true }), { status: 200 })
   );
@@ -121,7 +122,7 @@ Deno.test("local runtime-host rejects proxy-token /forward/api-proxy when sessio
   assertSpyCalls(takosWebFetch, 0);
 });
 
-Deno.test("local runtime-host rejects proxy-token /forward/heartbeat when path session does not match token", async () => {
+test("local runtime-host rejects proxy-token /forward/heartbeat when path session does not match token", async () => {
   const takosWebFetch = spy(async (_request: Request) =>
     new Response(JSON.stringify({ ok: true }), { status: 200 })
   );

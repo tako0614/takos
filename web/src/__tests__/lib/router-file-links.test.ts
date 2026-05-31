@@ -1,7 +1,9 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import { buildPath, parseRoute } from "../../hooks/router-state.ts";
+import { test } from "bun:test";
 
-Deno.test("parseRoute - parses repo file references from query params", () => {
+
+test("parseRoute - parses repo file references from query params", () => {
   assertEquals(
     parseRoute("/alice/demo", "?path=src/main.ts&line=42&ref=main"),
     {
@@ -15,7 +17,7 @@ Deno.test("parseRoute - parses repo file references from query params", () => {
   );
 });
 
-Deno.test("buildPath - builds repo file references with query params", () => {
+test("buildPath - builds repo file references with query params", () => {
   assertEquals(
     buildPath({
       view: "repo",
@@ -29,7 +31,7 @@ Deno.test("buildPath - builds repo file references with query params", () => {
   );
 });
 
-Deno.test("parseRoute - treats storage open links as file references", () => {
+test("parseRoute - treats storage open links as file references", () => {
   assertEquals(
     parseRoute("/storage/ws-1/docs/README.md", "?open=1"),
     {
@@ -41,7 +43,7 @@ Deno.test("parseRoute - treats storage open links as file references", () => {
   );
 });
 
-Deno.test("buildPath - builds storage file reference links", () => {
+test("buildPath - builds storage file reference links", () => {
   assertEquals(
     buildPath({
       view: "storage",
@@ -53,7 +55,7 @@ Deno.test("buildPath - builds storage file reference links", () => {
   );
 });
 
-Deno.test("buildPath - builds storage folder routes", () => {
+test("buildPath - builds storage folder routes", () => {
   assertEquals(
     buildPath({
       view: "storage",

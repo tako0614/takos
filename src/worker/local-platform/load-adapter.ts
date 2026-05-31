@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Env } from "../shared/types/index.ts";
@@ -16,7 +17,7 @@ function resolveAdapterSpecifier(rawSpecifier: string): string {
 }
 
 async function loadLocalAdapterModule(): Promise<LocalControlAdapterModule> {
-  const rawSpecifier = Deno.env.get("TAKOS_LOCAL_ADAPTER");
+  const rawSpecifier = getEnv("TAKOS_LOCAL_ADAPTER");
   if (!rawSpecifier) {
     return import(
       new URL("../node-platform/env-builder.ts", import.meta.url).href

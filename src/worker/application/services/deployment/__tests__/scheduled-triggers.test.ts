@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { AppManifest } from "../../source/app-manifest-types.ts";
@@ -43,7 +44,7 @@ function buildDesiredState() {
   });
 }
 
-Deno.test("selectScheduledDispatchTargets - selects only matching workload schedules", () => {
+test("selectScheduledDispatchTargets - selects only matching workload schedules", () => {
   const desiredState = buildDesiredState();
   const targets = selectScheduledDispatchTargets(desiredState, "*/15 * * * *", {
     groupId: "group-1",
@@ -77,7 +78,7 @@ Deno.test("selectScheduledDispatchTargets - selects only matching workload sched
   ]);
 });
 
-Deno.test("selectScheduledDispatchTargets - falls back to workload name when routeRef is missing", () => {
+test("selectScheduledDispatchTargets - falls back to workload name when routeRef is missing", () => {
   const desiredState = buildDesiredState();
   const targets = selectScheduledDispatchTargets(desiredState, "0 * * * *");
 
@@ -92,7 +93,7 @@ Deno.test("selectScheduledDispatchTargets - falls back to workload name when rou
   ]);
 });
 
-Deno.test("selectScheduledDispatchTargets - prefers active artifact refs", () => {
+test("selectScheduledDispatchTargets - prefers active artifact refs", () => {
   const desiredState = buildDesiredState();
   const targets = selectScheduledDispatchTargets(desiredState, "0 * * * *", {
     observedState: {
@@ -116,7 +117,7 @@ Deno.test("selectScheduledDispatchTargets - prefers active artifact refs", () =>
   ]);
 });
 
-Deno.test("selectScheduledDispatchTargets - deduplicates duplicate cron entries", () => {
+test("selectScheduledDispatchTargets - deduplicates duplicate cron entries", () => {
   const desiredState = buildDesiredState();
   const targets = selectScheduledDispatchTargets(desiredState, "*/15 * * * *");
 
@@ -138,7 +139,7 @@ Deno.test("selectScheduledDispatchTargets - deduplicates duplicate cron entries"
   ]);
 });
 
-Deno.test("selectScheduledDispatchTargets - matches canonical quarter-hour schedules on offset control crons", () => {
+test("selectScheduledDispatchTargets - matches canonical quarter-hour schedules on offset control crons", () => {
   const desiredState = buildDesiredState();
   const targets = selectScheduledDispatchTargets(
     desiredState,
@@ -166,7 +167,7 @@ Deno.test("selectScheduledDispatchTargets - matches canonical quarter-hour sched
   ]);
 });
 
-Deno.test("selectScheduledDispatchTargets - matches canonical hourly schedules on offset control crons", () => {
+test("selectScheduledDispatchTargets - matches canonical hourly schedules on offset control crons", () => {
   const desiredState = buildDesiredState();
   const targets = selectScheduledDispatchTargets(
     desiredState,

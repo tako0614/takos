@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import os from "node:os";
 import path from "node:path";
 import { mkdtemp } from "node:fs/promises";
@@ -19,7 +20,7 @@ async function createBucketFile(): Promise<string> {
   return path.join(tempDir, "bucket.json");
 }
 
-Deno.test("createPersistentObjectStore multipart upload - reassembles parts, preserves metadata, and supports resuming across adapter reloads", async () => {
+test("createPersistentObjectStore multipart upload - reassembles parts, preserves metadata, and supports resuming across adapter reloads", async () => {
   try {
     const filePath = await createBucketFile();
     const firstBucket = createPersistentObjectStore(filePath);
@@ -66,7 +67,7 @@ Deno.test("createPersistentObjectStore multipart upload - reassembles parts, pre
     await Promise.all(tempDirs.splice(0).map((dir) => removeLocalDataDir(dir)));
   }
 });
-Deno.test("createPersistentObjectStore multipart upload - aborts multipart uploads and prevents later part uploads after adapter reload", async () => {
+test("createPersistentObjectStore multipart upload - aborts multipart uploads and prevents later part uploads after adapter reload", async () => {
   try {
     const filePath = await createBucketFile();
     const firstBucket = createPersistentObjectStore(filePath);

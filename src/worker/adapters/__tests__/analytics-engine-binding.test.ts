@@ -1,11 +1,24 @@
+import { jest, test } from "bun:test";
 import { assertEquals } from "@std/assert";
-import { FakeTime } from "@std/testing/time";
 import { createAnalyticsEngineBinding } from "../analytics-engine-binding.ts";
 
-Deno.test(
+function useFakeTime(now: string | number | Date) {
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date(now));
+  return {
+    tick(ms: number) {
+      jest.advanceTimersByTime(ms);
+    },
+    restore() {
+      jest.useRealTimers();
+    },
+  };
+}
+
+test(
   "analytics-engine binding dispose() cancels the pending flush timer",
   () => {
-    const time = new FakeTime("2026-01-01T00:00:00Z");
+    const time = useFakeTime("2026-01-01T00:00:00Z");
     let fetchCalls = 0;
     const realFetch = globalThis.fetch;
     globalThis.fetch = ((
@@ -40,10 +53,10 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "analytics-engine binding writeDataPoint is a no-op after dispose()",
   () => {
-    const time = new FakeTime("2026-01-01T00:00:00Z");
+    const time = useFakeTime("2026-01-01T00:00:00Z");
     let fetchCalls = 0;
     const realFetch = globalThis.fetch;
     globalThis.fetch = ((
@@ -70,7 +83,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "analytics-engine binding buffer mode discards events after dispose()",
   () => {
     const binding = createAnalyticsEngineBinding({
@@ -90,10 +103,10 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "analytics-engine binding flush() flushes pending OTEL batch synchronously",
   () => {
-    const time = new FakeTime("2026-01-01T00:00:00Z");
+    const time = useFakeTime("2026-01-01T00:00:00Z");
     let fetchCalls = 0;
     const realFetch = globalThis.fetch;
     globalThis.fetch = ((

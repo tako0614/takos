@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 /**
  * Routing store resolver + routing seed logic for local/dev setups.
  */
@@ -35,7 +36,7 @@ export function resolveRoutingStore(
 
 export async function resolveSseNotifier(redisUrl: string | null) {
   try {
-    if (Deno.env.get("TAKOS_DISABLE_REDIS_EXTERNALS") === "1") {
+    if (getEnv("TAKOS_DISABLE_REDIS_EXTERNALS") === "1") {
       return undefined;
     }
     const { createSseNotifierService } = await import(

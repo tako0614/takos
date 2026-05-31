@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { LocalBinding } from "./runtime-types.ts";
 
 export function createForwardingBinding(baseUrl: string): LocalBinding {
@@ -61,7 +62,7 @@ export function resolveServiceUrl(
   envVarName: string,
   defaultPort: number,
 ): string {
-  const explicit = Deno.env.get(envVarName)?.trim();
+  const explicit = getEnv(envVarName)?.trim();
   if (explicit) return explicit;
   return `http://127.0.0.1:${defaultPort}/`;
 }
@@ -70,8 +71,8 @@ export function resolveOptionalServiceForwardUrl(
   envVarName: string,
   defaultPort: number,
 ): string | null {
-  const explicit = Deno.env.get(envVarName)?.trim();
+  const explicit = getEnv(envVarName)?.trim();
   if (explicit) return explicit;
-  if (Deno.env.get("VITEST")) return null;
+  if (getEnv("VITEST")) return null;
   return `http://127.0.0.1:${defaultPort}/`;
 }

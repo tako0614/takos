@@ -516,17 +516,8 @@ export class JobScheduler {
       timedOut = true;
       controller.abort();
     }, timeoutMs);
-    // Deno の timer を unref してテスト終了を妨げない（存在しない環境は無視）
-    const denoRef =
-      (globalThis as { Deno?: { unrefTimer?: (id: number) => void } }).Deno;
-    try {
-      const timerId = Number(timer);
-      if (Number.isFinite(timerId)) {
-        denoRef?.unrefTimer?.(timerId);
-      }
-    } catch {
-      // unrefTimer が無い環境は無視
-    }
+    (timer as ReturnType<typeof setTimeout> & { unref?: () => void })
+      .unref?.();
 
     try {
       return await this.executeJobSteps(

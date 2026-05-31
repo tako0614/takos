@@ -1,17 +1,18 @@
-import { copyFile, mkdir, readdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { type Client, createClient } from "@libsql/client";
-import { assertEquals } from "@std/assert";
+
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 import { ensureServerMigrations } from "../../../../src/worker/local-platform/d1-migrations.ts";
 
-const appRoot = fileURLToPath(new URL("../..", import.meta.url));
-const migrationsDir = join(appRoot, "db/migrations");
+const appRoot = fileURLToPath(new URL("../../../..", import.meta.url));
+const migrationsDir = join(appRoot, "db/migrations-control/migrations");
 
-Deno.test("retired auth boundary migrations drop app-owned tables without losing Accounts identities", async () => {
-  const tempDir = await Deno.makeTempDir({
-    prefix: "takos-retired-auth-boundary-",
-  });
+test("retired auth boundary migrations drop app-owned tables without losing Accounts identities", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "takos-retired-auth-boundary-"));
   const partialMigrationsDir = join(tempDir, "migrations-before-boundary");
   const dbPath = join(tempDir, "control.sqlite");
   const client = createClient({ url: `file:${dbPath}` });
@@ -36,7 +37,7 @@ Deno.test("retired auth boundary migrations drop app-owned tables without losing
         "pat_revoked",
       ]
     ) {
-      assertEquals(
+      assert.deepStrictEqual(
         await tableExists(client, tableName),
         false,
         `${tableName} should be retired by the boundary migrations`,
@@ -51,14 +52,14 @@ Deno.test("retired auth boundary migrations drop app-owned tables without losing
         "sessions",
       ]
     ) {
-      assertEquals(
+      assert.deepStrictEqual(
         await tableExists(client, tableName),
         true,
         `${tableName} should survive the boundary migrations`,
       );
     }
 
-    assertEquals(
+    assert.deepStrictEqual(
       await scalar(
         client,
         "SELECT email FROM accounts WHERE id = ?",
@@ -66,7 +67,7 @@ Deno.test("retired auth boundary migrations drop app-owned tables without losing
       ),
       "owner@example.test",
     );
-    assertEquals(
+    assert.deepStrictEqual(
       await scalar(
         client,
         "SELECT provider_sub FROM auth_identities WHERE user_id = ?",
@@ -74,7 +75,7 @@ Deno.test("retired auth boundary migrations drop app-owned tables without losing
       ),
       "oidc-subject",
     );
-    assertEquals(
+    assert.deepStrictEqual(
       await scalar(
         client,
         "SELECT token_hash FROM auth_sessions WHERE account_id = ?",
@@ -82,8 +83,8 @@ Deno.test("retired auth boundary migrations drop app-owned tables without losing
       ),
       "sha256:session",
     );
-    assertEquals(await columnExists(client, "accounts", "google_sub"), false);
-    assertEquals(
+    assert.deepStrictEqual(await columnExists(client, "accounts", "google_sub"), false);
+    assert.deepStrictEqual(
       await columnExists(client, "accounts", "takos_auth_id"),
       false,
     );

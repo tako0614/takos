@@ -1,4 +1,9 @@
-import { assertEquals, assertStringIncludes } from '@std/assert';
+import { deepStrictEqual, ok } from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'bun:test';
 import app from './index.ts';
 import { isGitSmartHttpPath } from './shared/api/forwarding.ts';
 import { exploreCatalogRouteDeps } from './shared/explore/catalog.ts';
@@ -22,28 +27,28 @@ const retiredDeploymentRouteBuilders = {
   groupRollback: (groupId: string): string => `/api/public/v1/groups/${encodeURIComponent(groupId)}/rollback`,
 } as const;
 
-Deno.test('isGitSmartHttpPath matches only structured Git Smart HTTP service paths', () => {
+test('isGitSmartHttpPath matches only structured Git Smart HTTP service paths', () => {
   // Real Git Smart HTTP endpoints (with and without the `/git` prefix).
-  assertEquals(isGitSmartHttpPath('/git/owner/repo.git/info/refs'), true);
-  assertEquals(isGitSmartHttpPath('/owner/repo.git/info/refs'), true);
-  assertEquals(
+  deepStrictEqual(isGitSmartHttpPath('/git/owner/repo.git/info/refs'), true);
+  deepStrictEqual(isGitSmartHttpPath('/owner/repo.git/info/refs'), true);
+  deepStrictEqual(
     isGitSmartHttpPath('/git/owner/repo.git/git-upload-pack'),
     true,
   );
-  assertEquals(
+  deepStrictEqual(
     isGitSmartHttpPath('/git/owner/repo.git/git-receive-pack'),
     true,
   );
   // A non-Git route whose segment merely ends in `.git` must NOT be classified
   // as a Git request (would otherwise be granted the larger Git body cap).
-  assertEquals(isGitSmartHttpPath('/api/threads/foo.git/bar'), false);
-  assertEquals(isGitSmartHttpPath('/api/explore/repos/foo.git'), false);
+  deepStrictEqual(isGitSmartHttpPath('/api/threads/foo.git/bar'), false);
+  deepStrictEqual(isGitSmartHttpPath('/api/explore/repos/foo.git'), false);
   // Bare repo path and unrelated `.git`-free paths are not Smart HTTP.
-  assertEquals(isGitSmartHttpPath('/git/owner/repo.git'), false);
-  assertEquals(isGitSmartHttpPath('/api/explore/catalog'), false);
+  deepStrictEqual(isGitSmartHttpPath('/git/owner/repo.git'), false);
+  deepStrictEqual(isGitSmartHttpPath('/api/explore/catalog'), false);
 });
 
-Deno.test('public v3 deployment create requires GitOps deploy intent config', async () => {
+test('public v3 deployment create requires GitOps deploy intent config', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiFetch(calls, { unexpected: true }, 500);
   try {
@@ -69,15 +74,15 @@ Deno.test('public v3 deployment create requires GitOps deploy intent config', as
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 503);
-    assertEquals(calls.length, 0);
-    assertEquals(body.error.code, 'DEPLOY_INTENT_NOT_CONFIGURED');
+    deepStrictEqual(response.status, 503);
+    deepStrictEqual(calls.length, 0);
+    deepStrictEqual(body.error.code, 'DEPLOY_INTENT_NOT_CONFIGURED');
   } finally {
     restore();
   }
 });
 
-Deno.test('public v3 deployment create authenticates before disclosing deploy-intent config', async () => {
+test('public v3 deployment create authenticates before disclosing deploy-intent config', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiFetch(calls, { unexpected: true }, 500);
   try {
@@ -102,14 +107,14 @@ Deno.test('public v3 deployment create authenticates before disclosing deploy-in
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 401);
-    assertEquals(body.error.code, 'UNAUTHORIZED');
+    deepStrictEqual(response.status, 401);
+    deepStrictEqual(body.error.code, 'UNAUTHORIZED');
   } finally {
     restore();
   }
 });
 
-Deno.test('public v3 deployment create writes GitOps deploy intent when configured', async () => {
+test('public v3 deployment create writes GitOps deploy intent when configured', async () => {
   const repo = await createLocalDeploymentRepo();
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const originalFetch = globalThis.fetch;
@@ -163,38 +168,38 @@ Deno.test('public v3 deployment create writes GitOps deploy intent when configur
     );
     const intent = JSON.parse(intentText) as Record<string, unknown>;
 
-    assertEquals(response.status, 202);
-    assertEquals(calls.length, 0);
-    assertEquals(body.accepted, true);
-    assertEquals(body.mode, 'gitops');
-    assertEquals(body.intent.branch, 'main');
-    assertEquals(body.intent.path.startsWith('deployments/deploy-'), true);
-    assertEquals(typeof body.intent.commit, 'string');
-    assertEquals(intent.kind, 'takos.deploy-intent@v1');
-    assertEquals(intent.id, body.intent.id);
-    assertEquals(intent.mode, 'apply');
-    assertEquals(intent.appSpec, {
+    deepStrictEqual(response.status, 202);
+    deepStrictEqual(calls.length, 0);
+    deepStrictEqual(body.accepted, true);
+    deepStrictEqual(body.mode, 'gitops');
+    deepStrictEqual(body.intent.branch, 'main');
+    deepStrictEqual(body.intent.path.startsWith('deployments/deploy-'), true);
+    deepStrictEqual(typeof body.intent.commit, 'string');
+    deepStrictEqual(intent.kind, 'takos.deploy-intent@v1');
+    deepStrictEqual(intent.id, body.intent.id);
+    deepStrictEqual(intent.mode, 'apply');
+    deepStrictEqual(intent.appSpec, {
       apiVersion: 'v1',
       metadata: { id: 'example.docs', name: 'Example Docs' },
       components: {},
     });
-    assertEquals(
+    deepStrictEqual(
       (intent.metadata as Record<string, unknown>).spaceId,
       'space_1',
     );
-    assertEquals((intent.metadata as Record<string, unknown>).group, 'docs');
-    assertEquals(
+    deepStrictEqual((intent.metadata as Record<string, unknown>).group, 'docs');
+    deepStrictEqual(
       (intent.metadata as Record<string, unknown>).actorAccountId,
       'acct_1',
     );
   } finally {
     globalThis.fetch = originalFetch;
     restoreDeployIntentEnv();
-    await Deno.remove(repo.root, { recursive: true });
+    await rm(repo.root, { recursive: true });
   }
 });
 
-Deno.test('public v3 deployment create rejects unmanaged direct deploy when GitOps is configured', async () => {
+test('public v3 deployment create rejects unmanaged direct deploy when GitOps is configured', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restoreDeployIntentEnv = setEnv({
     DEPLOY_INTENT_DRIVER: 'gitops',
@@ -222,16 +227,16 @@ Deno.test('public v3 deployment create rejects unmanaged direct deploy when GitO
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 410);
-    assertEquals(body.error.code, 'GONE');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 410);
+    deepStrictEqual(body.error.code, 'GONE');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
     restoreDeployIntentEnv();
   }
 });
 
-Deno.test('public v3 deployment create rejects retired inline workflow deploys', async () => {
+test('public v3 deployment create rejects retired inline workflow deploys', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiFetch(calls, {
     deployment_id: 'dep_legacy',
@@ -280,20 +285,20 @@ Deno.test('public v3 deployment create rejects retired inline workflow deploys',
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 400);
-    assertEquals(calls.length, 0);
-    assertEquals(body.error.code, 'INVALID_ARGUMENT');
-    assertStringIncludes(body.error.message, 'source.kind="inline"');
-    assertStringIncludes(body.error.message, 'takosumi init');
-    assertStringIncludes(body.error.message, 'takosumi install dry-run/apply');
-    assertStringIncludes(body.error.message, 'AppSpec');
-    assertStringIncludes(body.error.message, 'GitOps deploy intent');
+    deepStrictEqual(response.status, 400);
+    deepStrictEqual(calls.length, 0);
+    deepStrictEqual(body.error.code, 'INVALID_ARGUMENT');
+    ok(body.error.message, 'source.kind="inline"');
+    ok(body.error.message, 'takosumi init');
+    ok(body.error.message, 'takosumi install dry-run/apply');
+    ok(body.error.message, 'AppSpec');
+    ok(body.error.message, 'GitOps deploy intent');
   } finally {
     restore();
   }
 });
 
-Deno.test('public v3 deployment follow-up routes are retired', async () => {
+test('public v3 deployment follow-up routes are retired', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiFetch(calls, { unexpected: true }, 500);
   try {
@@ -328,16 +333,16 @@ Deno.test('public v3 deployment follow-up routes are retired', async () => {
       const body = await response.json() as {
         error: { code: string; message: string };
       };
-      assertEquals(response.status, 410);
-      assertEquals(body.error.code, 'GONE');
+      deepStrictEqual(response.status, 410);
+      deepStrictEqual(body.error.code, 'GONE');
     }
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('public v3 deployment list route is retired', async () => {
+test('public v3 deployment list route is retired', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiFetch(calls, { unexpected: true }, 500);
   try {
@@ -349,15 +354,15 @@ Deno.test('public v3 deployment list route is retired', async () => {
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 410);
-    assertEquals(body.error.code, 'GONE');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 410);
+    deepStrictEqual(body.error.code, 'GONE');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('retired group deployment snapshot routes are not exposed by app API', async () => {
+test('retired group deployment snapshot routes are not exposed by app API', async () => {
   const cases: Array<[string, string]> = [
     ['GET', '/api/spaces/s1/group-deployment-snapshots'],
     ['POST', '/api/spaces/s1/group-deployment-snapshots'],
@@ -377,11 +382,11 @@ Deno.test('retired group deployment snapshot routes are not exposed by app API',
       },
       body: method === 'GET' ? undefined : '{}',
     });
-    assertEquals(response.status, 404);
+    deepStrictEqual(response.status, 404);
   }
 });
 
-Deno.test('canonical group deployment mutation routes are retired', async () => {
+test('canonical group deployment mutation routes are retired', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, { unexpected: true });
   try {
@@ -429,15 +434,15 @@ Deno.test('canonical group deployment mutation routes are retired', async () => 
     );
 
     for (const retired of [response, rollback, rollbackByName]) {
-      assertEquals(retired.status, 404);
+      deepStrictEqual(retired.status, 404);
     }
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('canonical group uninstall route is not exposed', async () => {
+test('canonical group uninstall route is not exposed', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, { unexpected: true });
   try {
@@ -453,14 +458,14 @@ Deno.test('canonical group uninstall route is not exposed', async () => {
       },
     );
 
-    assertEquals(uninstall.status, 404);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(uninstall.status, 404);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('app installation apply route requires in-process control bindings', async () => {
+test('app installation apply route requires in-process control bindings', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     Response.json({
@@ -487,13 +492,13 @@ Deno.test('app installation apply route requires in-process control bindings', a
     );
 
     await assertControlBindingRequired(response);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('retired deploy routes are not exposed by app API', async () => {
+test('retired deploy routes are not exposed by app API', async () => {
   const cases: Array<[string, string]> = [
     ['POST', '/api/deploy/plan'],
     ['POST', '/api/deploy'],
@@ -511,15 +516,15 @@ Deno.test('retired deploy routes are not exposed by app API', async () => {
       },
       body: '{}',
     });
-    assertEquals(response.status, 404);
+    deepStrictEqual(response.status, 404);
   }
 });
 
-Deno.test('retired OAuth provider routes return 404 without proxying', async () => {
+test('retired OAuth provider routes return 404 without proxying', async () => {
   const calls: ExternalFetchCall[] = [];
-  const originalIssuerUrl = Deno.env.get('OIDC_ISSUER_URL');
+  const originalIssuerUrl = getEnv('OIDC_ISSUER_URL');
   const restore = stubExternalFetch(calls, { unreachable: true });
-  Deno.env.set('OIDC_ISSUER_URL', 'https://accounts.example.test');
+  setEnv('OIDC_ISSUER_URL', 'https://accounts.example.test');
   try {
     const token = await app.request('/api/public/v1/oauth/token', {
       method: 'POST',
@@ -535,25 +540,25 @@ Deno.test('retired OAuth provider routes return 404 without proxying', async () 
       error: { code: string; message: string };
     };
 
-    assertEquals(token.status, 404);
-    assertEquals(legacy.status, 404);
-    assertEquals(wellKnown.status, 404);
-    assertEquals(consent.status, 404);
-    assertEquals(body.error.code, 'NOT_FOUND');
-    assertEquals(
+    deepStrictEqual(token.status, 404);
+    deepStrictEqual(legacy.status, 404);
+    deepStrictEqual(wellKnown.status, 404);
+    deepStrictEqual(consent.status, 404);
+    deepStrictEqual(body.error.code, 'NOT_FOUND');
+    deepStrictEqual(
       body.error.message,
       'Takos OAuth provider routes are not exposed by Takos.',
     );
-    assertEquals(token.headers.get('location'), null);
-    assertEquals(wellKnown.headers.get('location'), null);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(token.headers.get('location'), null);
+    deepStrictEqual(wellKnown.headers.get('location'), null);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
     restoreEnv('OIDC_ISSUER_URL', originalIssuerUrl);
   }
 });
 
-Deno.test('retired publications routes return 404 without proxying', async () => {
+test('retired publications routes return 404 without proxying', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, { unreachable: true });
   try {
@@ -563,22 +568,22 @@ Deno.test('retired publications routes return 404 without proxying', async () =>
       error: { code: string; message: string };
     };
 
-    assertEquals(publications.status, 404);
-    assertEquals(publication.status, 404);
-    assertEquals(body.error.code, 'NOT_FOUND');
-    assertEquals(
+    deepStrictEqual(publications.status, 404);
+    deepStrictEqual(publication.status, 404);
+    deepStrictEqual(body.error.code, 'NOT_FOUND');
+    deepStrictEqual(
       body.error.message,
       'Takos publications routes are not exposed by Takos.',
     );
-    assertEquals(publications.headers.get('location'), null);
-    assertEquals(publication.headers.get('location'), null);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(publications.headers.get('location'), null);
+    deepStrictEqual(publication.headers.get('location'), null);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('account gateway routes use in-process control bindings while retired auth aliases stay closed', async () => {
+test('account gateway routes use in-process control bindings while retired auth aliases stay closed', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     new Response(null, {
@@ -641,24 +646,24 @@ Deno.test('account gateway routes use in-process control bindings while retired 
       },
     );
 
-    assertEquals(login.status, 404);
-    assertEquals(retiredExternal.status, 404);
-    assertEquals(retiredExternalCallback.status, 404);
-    assertEquals(unknownAuth.status, 404);
-    assertEquals(unknownOidc.status, 404);
+    deepStrictEqual(login.status, 404);
+    deepStrictEqual(retiredExternal.status, 404);
+    deepStrictEqual(retiredExternalCallback.status, 404);
+    deepStrictEqual(unknownAuth.status, 404);
+    deepStrictEqual(unknownOidc.status, 404);
     await assertControlBindingRequired(oidcLogin);
     await assertControlBindingRequired(me);
     await assertControlBindingRequired(logout);
     await assertControlBindingRequired(browserLogout);
-    assertEquals(personalAccessTokens.status, 404);
-    assertEquals(personalAccessTokenRevoke.status, 404);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(personalAccessTokens.status, 404);
+    deepStrictEqual(personalAccessTokenRevoke.status, 404);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('profile gateway routes use in-process control bindings', async () => {
+test('profile gateway routes use in-process control bindings', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     Response.json({ profile: { username: 'alice' }, recent_repos: [] }),
@@ -679,19 +684,15 @@ Deno.test('profile gateway routes use in-process control bindings', async () => 
 
     await assertControlBindingRequired(profile);
     await assertControlBindingRequired(follow);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('remaining control-owned route families require in-process bindings', async () => {
+test('legacy control route families are now retired', async () => {
   const calls: ExternalFetchCall[] = [];
-  const restore = stubExternalFetch(calls, [
-    Response.json({ repositories: [] }),
-    Response.json({ data: [] }),
-    Response.json({ ok: true }),
-  ]);
+  const restore = stubExternalFetch(calls, { unreachable: true });
   try {
     const cases = [
       '/api/repos/repo_1',
@@ -706,16 +707,15 @@ Deno.test('remaining control-owned route families require in-process bindings', 
           'x-takos-internal-secret': 'client-controlled',
         },
       });
-      await assertControlBindingRequired(response);
+      deepStrictEqual(response.status, 404);
     }
-
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('thread run create route is served by src/routes/public write model', async () => {
+test('thread run create route is served by src/routes/public write model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -811,24 +811,24 @@ Deno.test('thread run create route is served by src/routes/public write model', 
       run: { id: string; thread_id: string; status: string; input: string };
     };
 
-    assertEquals(response.status, 201);
-    assertEquals(body.run.thread_id, 'thread_1');
-    assertEquals(body.run.status, 'queued');
-    assertEquals(JSON.parse(body.run.input), { prompt: 'hello' });
-    assertEquals(queueMessages.length, 1);
-    assertEquals(queueMessages[0].runId, body.run.id);
-    assertEquals(queueMessages[0].model, 'gpt-5.4-mini');
-    assertEquals(invalid.status, 400);
-    assertEquals(forbidden.status, 404);
-    assertEquals(missingQueue.status, 503);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 201);
+    deepStrictEqual(body.run.thread_id, 'thread_1');
+    deepStrictEqual(body.run.status, 'queued');
+    deepStrictEqual(JSON.parse(body.run.input), { prompt: 'hello' });
+    deepStrictEqual(queueMessages.length, 1);
+    deepStrictEqual(queueMessages[0].runId, body.run.id);
+    deepStrictEqual(queueMessages[0].model, 'gpt-5.4-mini');
+    deepStrictEqual(invalid.status, 400);
+    deepStrictEqual(forbidden.status, 404);
+    deepStrictEqual(missingQueue.status, 503);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
     restoreEnv();
   }
 });
 
-Deno.test('thread export route is served by src/routes/public read model', async () => {
+test('thread export route is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -964,57 +964,57 @@ Deno.test('thread export route is served by src/routes/public read model', async
     const invalidBody = await invalid.json() as { error: string };
     const pdfBody = await pdf.json() as { error: string };
 
-    assertEquals(json.status, 200);
-    assertEquals(
+    deepStrictEqual(json.status, 200);
+    deepStrictEqual(
       json.headers.get('content-type'),
       'application/json; charset=utf-8',
     );
-    assertEquals(
+    deepStrictEqual(
       json.headers.get('content-disposition'),
       'attachment; filename="Thread-title-thread_1.json"',
     );
-    assertEquals(json.headers.get('cache-control'), 'no-store');
-    assertEquals(body.thread, {
+    deepStrictEqual(json.headers.get('cache-control'), 'no-store');
+    deepStrictEqual(body.thread, {
       id: 'thread_1',
       title: 'Thread title',
       created_at: '2026-05-13T00:00:00.000Z',
       updated_at: '2026-05-13T00:03:00.000Z',
     });
-    assertEquals(body.messages, [{
+    deepStrictEqual(body.messages, [{
       role: 'user',
       content: 'hello',
       sequence: 0,
       created_at: '2026-05-13T00:00:00.000Z',
     }]);
-    assertEquals(markdown.status, 200);
-    assertEquals(
+    deepStrictEqual(markdown.status, 200);
+    deepStrictEqual(
       markdown.headers.get('content-type'),
       'text/markdown; charset=utf-8',
     );
-    assertStringIncludes(markdownBody, '# Thread title');
-    assertStringIncludes(markdownBody, '### #0 [user]');
-    assertEquals(markdownBody.includes('internal'), false);
-    assertEquals(adminJson.status, 200);
-    assertEquals(adminBody.messages.map((message) => message.role), [
+    ok(markdownBody, '# Thread title');
+    ok(markdownBody, '### #0 [user]');
+    deepStrictEqual(markdownBody.includes('internal'), false);
+    deepStrictEqual(adminJson.status, 200);
+    deepStrictEqual(adminBody.messages.map((message) => message.role), [
       'user',
       'system',
     ]);
-    assertEquals(invalid.status, 400);
-    assertEquals(
+    deepStrictEqual(invalid.status, 400);
+    deepStrictEqual(
       invalidBody.error,
       'Invalid format. Supported: markdown, json, pdf',
     );
-    assertEquals(pdf.status, 503);
-    assertEquals(pdfBody.error, 'PDF export renderer is not configured');
-    assertEquals(missing.status, 404);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(pdf.status, 503);
+    deepStrictEqual(pdfBody.error, 'PDF export renderer is not configured');
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread mutation routes are served by src/routes/public write model', async () => {
+test('thread mutation routes are served by src/routes/public write model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1142,30 +1142,30 @@ Deno.test('thread mutation routes are served by src/routes/public write model', 
       };
     };
 
-    assertEquals(created.status, 201);
-    assertEquals(createdBody.thread.title, 'New thread');
-    assertEquals(createdBody.thread.locale, 'en');
-    assertEquals(createdBody.thread.status, 'active');
-    assertEquals(patched.status, 200);
-    assertEquals(patchedBody.thread.title, 'Updated thread');
-    assertEquals(patchedBody.thread.locale, null);
-    assertEquals(patchedBody.thread.context_window, 80);
-    assertEquals(archived.status, 200);
-    assertEquals(await archived.json(), { success: true });
-    assertEquals(unarchived.status, 200);
-    assertEquals(await unarchived.json(), { success: true });
-    assertEquals(invalidPatch.status, 400);
-    assertEquals(forbiddenDelete.status, 404);
-    assertEquals(deleted.status, 200);
-    assertEquals(await deleted.json(), { success: true });
-    assertEquals(calls.length, 0);
+    deepStrictEqual(created.status, 201);
+    deepStrictEqual(createdBody.thread.title, 'New thread');
+    deepStrictEqual(createdBody.thread.locale, 'en');
+    deepStrictEqual(createdBody.thread.status, 'active');
+    deepStrictEqual(patched.status, 200);
+    deepStrictEqual(patchedBody.thread.title, 'Updated thread');
+    deepStrictEqual(patchedBody.thread.locale, null);
+    deepStrictEqual(patchedBody.thread.context_window, 80);
+    deepStrictEqual(archived.status, 200);
+    deepStrictEqual(await archived.json(), { success: true });
+    deepStrictEqual(unarchived.status, 200);
+    deepStrictEqual(await unarchived.json(), { success: true });
+    deepStrictEqual(invalidPatch.status, 400);
+    deepStrictEqual(forbiddenDelete.status, 404);
+    deepStrictEqual(deleted.status, 200);
+    deepStrictEqual(await deleted.json(), { success: true });
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread history route is served by src/routes/public read model', async () => {
+test('thread history route is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1309,46 +1309,46 @@ Deno.test('thread history route is served by src/routes/public read model', asyn
       total: number;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(noMessages.status, 200);
-    assertEquals(missing.status, 404);
-    assertEquals(body.messages.map((message) => message.id), ['msg_1']);
-    assertEquals(body.total, 1);
-    assertEquals(body.limit, 1);
-    assertEquals(body.offset, 0);
-    assertEquals(body.runs.map((run) => run.run.id), ['run_1', 'run_2']);
-    assertEquals(body.runs[0].artifact_count, 1);
-    assertEquals(body.runs[0].artifacts.map((artifact) => artifact.id), [
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(noMessages.status, 200);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(body.messages.map((message) => message.id), ['msg_1']);
+    deepStrictEqual(body.total, 1);
+    deepStrictEqual(body.limit, 1);
+    deepStrictEqual(body.offset, 0);
+    deepStrictEqual(body.runs.map((run) => run.run.id), ['run_1', 'run_2']);
+    deepStrictEqual(body.runs[0].artifact_count, 1);
+    deepStrictEqual(body.runs[0].artifacts.map((artifact) => artifact.id), [
       'artifact_1',
     ]);
-    assertEquals(body.runs[1].events.map((event) => event.id), [2]);
-    assertEquals(body.runs[1].latest_event_at, '2026-05-13T00:04:00.000Z');
-    assertEquals(body.focus.latest_run_id, 'run_2');
-    assertEquals(body.focus.latest_active_run_id, 'run_2');
-    assertEquals(body.focus.latest_completed_run_id, 'run_1');
-    assertEquals(body.focus.resume_run_id, 'run_2');
-    assertEquals(body.activeRun?.id, 'run_2');
-    assertEquals(body.pendingSessionDiff, {
+    deepStrictEqual(body.runs[1].events.map((event) => event.id), [2]);
+    deepStrictEqual(body.runs[1].latest_event_at, '2026-05-13T00:04:00.000Z');
+    deepStrictEqual(body.focus.latest_run_id, 'run_2');
+    deepStrictEqual(body.focus.latest_active_run_id, 'run_2');
+    deepStrictEqual(body.focus.latest_completed_run_id, 'run_1');
+    deepStrictEqual(body.focus.resume_run_id, 'run_2');
+    deepStrictEqual(body.activeRun?.id, 'run_2');
+    deepStrictEqual(body.pendingSessionDiff, {
       sessionId: 'sess_1',
       sessionStatus: 'ready',
       git_mode: true,
     });
-    assertEquals(body.taskContext, {
+    deepStrictEqual(body.taskContext, {
       id: 'task_1',
       title: 'Task title',
       status: 'in_progress',
       priority: 'high',
     });
-    assertEquals(noMessagesBody.messages, []);
-    assertEquals(noMessagesBody.total, 0);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(noMessagesBody.messages, []);
+    deepStrictEqual(noMessagesBody.total, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread search routes are served by src/routes/public read model', async () => {
+test('thread search routes are served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1431,25 +1431,25 @@ Deno.test('thread search routes are served by src/routes/public read model', asy
       semantic_available: boolean;
     };
 
-    assertEquals(spaceSearch.status, 200);
-    assertEquals(messageSearch.status, 200);
-    assertEquals(missingQuery.status, 400);
-    assertEquals(missingThread.status, 404);
-    assertEquals(spaceBody.results[0].thread.id, 'thread_1');
-    assertEquals(spaceBody.results[0].message.id, 'msg_1');
-    assertEquals(spaceBody.results[0].snippet, 'hello from takos');
-    assertEquals(spaceBody.semantic_available, false);
-    assertEquals(messageBody.results[0].message.id, 'msg_1');
-    assertEquals(messageBody.results[0].snippet, 'hello from takos');
-    assertEquals(messageBody.semantic_available, false);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(spaceSearch.status, 200);
+    deepStrictEqual(messageSearch.status, 200);
+    deepStrictEqual(missingQuery.status, 400);
+    deepStrictEqual(missingThread.status, 404);
+    deepStrictEqual(spaceBody.results[0].thread.id, 'thread_1');
+    deepStrictEqual(spaceBody.results[0].message.id, 'msg_1');
+    deepStrictEqual(spaceBody.results[0].snippet, 'hello from takos');
+    deepStrictEqual(spaceBody.semantic_available, false);
+    deepStrictEqual(messageBody.results[0].message.id, 'msg_1');
+    deepStrictEqual(messageBody.results[0].snippet, 'hello from takos');
+    deepStrictEqual(messageBody.semantic_available, false);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread message create route is served by src/routes/public write model', async () => {
+test('thread message create route is served by src/routes/public write model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1523,20 +1523,20 @@ Deno.test('thread message create route is served by src/routes/public write mode
       };
     };
 
-    assertEquals(response.status, 201);
-    assertEquals(invalid.status, 400);
-    assertEquals(forbidden.status, 404);
-    assertEquals(body.message.thread_id, 'thread_1');
-    assertEquals(body.message.content, 'hello');
-    assertEquals(body.message.sequence, 1);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 201);
+    deepStrictEqual(invalid.status, 400);
+    deepStrictEqual(forbidden.status, 404);
+    deepStrictEqual(body.message.thread_id, 'thread_1');
+    deepStrictEqual(body.message.content, 'hello');
+    deepStrictEqual(body.message.sequence, 1);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread share create route is served by src/routes/public write model', async () => {
+test('thread share create route is served by src/routes/public write model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1609,28 +1609,28 @@ Deno.test('thread share create route is served by src/routes/public write model'
       password_required: boolean;
     };
 
-    assertEquals(response.status, 201);
-    assertEquals(invalid.status, 400);
-    assertEquals(forbidden.status, 404);
-    assertEquals(body.share.thread_id, 'thread_1');
-    assertEquals(body.share.space_id, 'space_1');
-    assertEquals(body.share.mode, 'public');
-    assertEquals(body.password_required, false);
-    assertEquals(body.share_path, `/share/${body.share.token}`);
-    assertEquals(
+    deepStrictEqual(response.status, 201);
+    deepStrictEqual(invalid.status, 400);
+    deepStrictEqual(forbidden.status, 404);
+    deepStrictEqual(body.share.thread_id, 'thread_1');
+    deepStrictEqual(body.share.space_id, 'space_1');
+    deepStrictEqual(body.share.mode, 'public');
+    deepStrictEqual(body.password_required, false);
+    deepStrictEqual(body.share_path, `/share/${body.share.token}`);
+    deepStrictEqual(
       body.share_url,
       `https://takos.test/share/${body.share.token}`,
     );
-    assertEquals(body.share.share_path, body.share_path);
-    assertEquals(body.share.share_url, body.share_url);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(body.share.share_path, body.share_path);
+    deepStrictEqual(body.share.share_url, body.share_url);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread share list route is served by src/routes/public read model', async () => {
+test('thread share list route is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1682,9 +1682,9 @@ Deno.test('thread share list route is served by src/routes/public read model', a
       }>;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(missing.status, 404);
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(
       body.shares.map((share) => ({
         id: share.id,
         share_path: share.share_path,
@@ -1696,14 +1696,14 @@ Deno.test('thread share list route is served by src/routes/public read model', a
         share_url: 'https://takos.test/share/abc123',
       }],
     );
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread share revoke route is served by src/routes/public write model', async () => {
+test('thread share revoke route is served by src/routes/public write model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1776,18 +1776,18 @@ Deno.test('thread share revoke route is served by src/routes/public write model'
       { DB: viewerDb },
     );
 
-    assertEquals(response.status, 200);
-    assertEquals(await response.json(), { success: true });
-    assertEquals(missing.status, 404);
-    assertEquals(forbidden.status, 404);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(await response.json(), { success: true });
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(forbidden.status, 404);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('space thread list route is served by src/routes/public read model', async () => {
+test('space thread list route is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1849,24 +1849,24 @@ Deno.test('space thread list route is served by src/routes/public read model', a
       threads: Array<{ id: string; status: string }>;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(archived.status, 200);
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(archived.status, 200);
+    deepStrictEqual(
       body.threads.map((thread) => thread.id),
       ['thread_active', 'thread_archived'],
     );
-    assertEquals(
+    deepStrictEqual(
       archivedBody.threads.map((thread) => [thread.id, thread.status]),
       [['thread_archived', 'archived']],
     );
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread messages route is served by src/routes/public read model', async () => {
+test('thread messages route is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -1929,9 +1929,9 @@ Deno.test('thread messages route is served by src/routes/public read model', asy
       runs: Array<{ id: string; thread_id: string }>;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(missing.status, 404);
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(
       body.messages.map((message) => ({
         id: message.id,
         thread_id: message.thread_id,
@@ -1943,16 +1943,16 @@ Deno.test('thread messages route is served by src/routes/public read model', asy
         content: 'second',
       }],
     );
-    assertEquals(body.total, 2);
-    assertEquals(body.runs.map((run) => run.id), ['run_1']);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(body.total, 2);
+    deepStrictEqual(body.runs.map((run) => run.id), ['run_1']);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread detail route is served by src/routes/public read model', async () => {
+test('thread detail route is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2000,23 +2000,23 @@ Deno.test('thread detail route is served by src/routes/public read model', async
       role: string;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(missing.status, 404);
-    assertEquals(body.thread.id, 'thread_1');
-    assertEquals(body.thread.space_id, 'space_1');
-    assertEquals(body.thread.locale, 'ja');
-    assertEquals(body.thread.key_points, '[]');
-    assertEquals(body.thread.retrieval_index, -1);
-    assertEquals(body.thread.context_window, 50);
-    assertEquals(body.role, 'viewer');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(body.thread.id, 'thread_1');
+    deepStrictEqual(body.thread.space_id, 'space_1');
+    deepStrictEqual(body.thread.locale, 'ja');
+    deepStrictEqual(body.thread.key_points, '[]');
+    deepStrictEqual(body.thread.retrieval_index, -1);
+    deepStrictEqual(body.thread.context_window, 50);
+    deepStrictEqual(body.role, 'viewer');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('thread run list route is served by src/routes/public read model', async () => {
+test('thread run list route is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2086,27 +2086,27 @@ Deno.test('thread run list route is served by src/routes/public read model', asy
       next_cursor: string | null;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(missing.status, 404);
-    assertEquals(invalidCursor.status, 400);
-    assertEquals(body.runs.map((run) => run.id), ['run_2']);
-    assertEquals(body.runs[0].thread_id, 'thread_1');
-    assertEquals(body.runs[0].space_id, 'space_1');
-    assertEquals(body.limit, 1);
-    assertEquals(body.active_only, true);
-    assertEquals(body.cursor, null);
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(invalidCursor.status, 400);
+    deepStrictEqual(body.runs.map((run) => run.id), ['run_2']);
+    deepStrictEqual(body.runs[0].thread_id, 'thread_1');
+    deepStrictEqual(body.runs[0].space_id, 'space_1');
+    deepStrictEqual(body.limit, 1);
+    deepStrictEqual(body.active_only, true);
+    deepStrictEqual(body.cursor, null);
+    deepStrictEqual(
       body.next_cursor,
       '2026-05-13T00:02:00.000Z,run_2',
     );
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('run detail is served by src/routes/public read model', async () => {
+test('run detail is served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2137,19 +2137,19 @@ Deno.test('run detail is served by src/routes/public read model', async () => {
       role: string;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(body.run.id, 'run_1');
-    assertEquals(body.run.space_id, 'space_1');
-    assertEquals(body.run.root_run_id, 'run_1');
-    assertEquals(body.role, 'viewer');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(body.run.id, 'run_1');
+    deepStrictEqual(body.run.space_id, 'space_1');
+    deepStrictEqual(body.run.root_run_id, 'run_1');
+    deepStrictEqual(body.role, 'viewer');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('run websocket route is served by src/routes/public notifier access check', async () => {
+test('run websocket route is served by src/routes/public notifier access check', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2211,28 +2211,28 @@ Deno.test('run websocket route is served by src/routes/public notifier access ch
       { DB: db, RUN_NOTIFIER: runNotifier },
     );
 
-    assertEquals(websocket.status, 200);
-    assertEquals(badUpgrade.status, 426);
-    assertEquals(notifierCalls.length, 1);
-    assertEquals(new URL(notifierCalls[0].url).pathname, '/api/runs/run_1/ws');
-    assertEquals(
+    deepStrictEqual(websocket.status, 200);
+    deepStrictEqual(badUpgrade.status, 426);
+    deepStrictEqual(notifierCalls.length, 1);
+    deepStrictEqual(new URL(notifierCalls[0].url).pathname, '/api/runs/run_1/ws');
+    deepStrictEqual(
       new URL(notifierCalls[0].url).searchParams.get('last_event_id'),
       '42',
     );
-    assertEquals(notifierCalls[0].headers.get('x-ws-auth-validated'), 'true');
-    assertEquals(notifierCalls[0].headers.get('x-ws-user-id'), 'acct_1');
-    assertEquals(notifierCalls[0].headers.get('x-takos-internal-secret'), null);
-    assertEquals(notifierCalls[0].headers.get('x-takos-account-id'), null);
-    assertEquals(notifierCalls[0].headers.get('x-takos-roles'), null);
-    assertEquals(notifierCalls[0].headers.get('authorization'), 'Bearer keep');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(notifierCalls[0].headers.get('x-ws-auth-validated'), 'true');
+    deepStrictEqual(notifierCalls[0].headers.get('x-ws-user-id'), 'acct_1');
+    deepStrictEqual(notifierCalls[0].headers.get('x-takos-internal-secret'), null);
+    deepStrictEqual(notifierCalls[0].headers.get('x-takos-account-id'), null);
+    deepStrictEqual(notifierCalls[0].headers.get('x-takos-roles'), null);
+    deepStrictEqual(notifierCalls[0].headers.get('authorization'), 'Bearer keep');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('run sse route is served by src/routes/public observation stream', async () => {
+test('run sse route is served by src/routes/public observation stream', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2298,23 +2298,23 @@ Deno.test('run sse route is served by src/routes/public observation stream', asy
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(response.headers.get('content-type'), 'text/event-stream');
-    assertStringIncludes(body, ': connected\n\n');
-    assertStringIncludes(body, 'id: 2\n');
-    assertStringIncludes(body, 'event: completed\n');
-    assertStringIncludes(body, 'data: {"status":"completed"}');
-    assertEquals(invalid.status, 400);
-    assertEquals(invalidBody.error.code, 'INVALID_ARGUMENT');
-    assertEquals(missing.status, 404);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(response.headers.get('content-type'), 'text/event-stream');
+    ok(body, ': connected\n\n');
+    ok(body, 'id: 2\n');
+    ok(body, 'event: completed\n');
+    ok(body, 'data: {"status":"completed"}');
+    deepStrictEqual(invalid.status, 400);
+    deepStrictEqual(invalidBody.error.code, 'INVALID_ARGUMENT');
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('run cancel route is served by src/routes/public write model', async () => {
+test('run cancel route is served by src/routes/public write model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2388,25 +2388,25 @@ Deno.test('run cancel route is served by src/routes/public write model', async (
       run_status: string;
     };
 
-    assertEquals(response.status, 200);
-    assertEquals(body, { success: true });
-    assertEquals(events.status, 200);
-    assertEquals(eventsBody.run_status, 'cancelled');
-    assertEquals(eventsBody.events.map((event) => event.type), ['cancelled']);
-    assertEquals(JSON.parse(eventsBody.events[0].data), {
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(body, { success: true });
+    deepStrictEqual(events.status, 200);
+    deepStrictEqual(eventsBody.run_status, 'cancelled');
+    deepStrictEqual(eventsBody.events.map((event) => event.type), ['cancelled']);
+    deepStrictEqual(JSON.parse(eventsBody.events[0].data), {
       status: 'cancelled',
       run: { id: 'run_1', session_id: 'sess_1' },
     });
-    assertEquals(finished.status, 400);
-    assertEquals(missing.status, 404);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(finished.status, 400);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('run observation routes are served by src/routes/public read model', async () => {
+test('run observation routes are served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2493,23 +2493,23 @@ Deno.test('run observation routes are served by src/routes/public read model', a
       run_status: string;
     };
 
-    assertEquals(events.status, 200);
-    assertEquals(replay.status, 200);
-    assertEquals(invalid.status, 400);
-    assertEquals(missing.status, 404);
-    assertEquals(eventsBody.events.map((event) => event.id), [2]);
-    assertEquals(eventsBody.events[0].event_id, '2');
-    assertEquals(eventsBody.run_status, 'completed');
-    assertEquals(replayBody.events.map((event) => event.id), [1, 2]);
-    assertEquals(replayBody.run_status, 'completed');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(events.status, 200);
+    deepStrictEqual(replay.status, 200);
+    deepStrictEqual(invalid.status, 400);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(eventsBody.events.map((event) => event.id), [2]);
+    deepStrictEqual(eventsBody.events[0].event_id, '2');
+    deepStrictEqual(eventsBody.run_status, 'completed');
+    deepStrictEqual(replayBody.events.map((event) => event.id), [1, 2]);
+    deepStrictEqual(replayBody.run_status, 'completed');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('run artifact read routes are served by src/routes/public read model', async () => {
+test('run artifact read routes are served by src/routes/public read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2562,10 +2562,10 @@ Deno.test('run artifact read routes are served by src/routes/public read model',
       artifact: { id: string; run_id: string; space_id: string };
     };
 
-    assertEquals(list.status, 200);
-    assertEquals(detail.status, 200);
-    assertEquals(missing.status, 404);
-    assertEquals(
+    deepStrictEqual(list.status, 200);
+    deepStrictEqual(detail.status, 200);
+    deepStrictEqual(missing.status, 404);
+    deepStrictEqual(
       listBody.artifacts.map((artifact) => ({
         id: artifact.id,
         run_id: artifact.run_id,
@@ -2577,16 +2577,16 @@ Deno.test('run artifact read routes are served by src/routes/public read model',
         space_id: 'space_1',
       }],
     );
-    assertEquals(detailBody.artifact.id, 'artifact_1');
-    assertEquals(detailBody.artifact.space_id, 'space_1');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(detailBody.artifact.id, 'artifact_1');
+    deepStrictEqual(detailBody.artifact.space_id, 'space_1');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('run artifact create route is served by src/routes/public write model', async () => {
+test('run artifact create route is served by src/routes/public write model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2662,23 +2662,23 @@ Deno.test('run artifact create route is served by src/routes/public write model'
       };
     };
 
-    assertEquals(response.status, 201);
-    assertEquals(invalid.status, 400);
-    assertEquals(forbidden.status, 404);
-    assertEquals(body.artifact.run_id, 'run_1');
-    assertEquals(body.artifact.space_id, 'space_1');
-    assertEquals(body.artifact.type, 'doc');
-    assertEquals(body.artifact.title, 'Result');
-    assertEquals(body.artifact.content, 'done');
-    assertEquals(body.artifact.metadata, JSON.stringify({ source: 'test' }));
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 201);
+    deepStrictEqual(invalid.status, 400);
+    deepStrictEqual(forbidden.status, 404);
+    deepStrictEqual(body.artifact.run_id, 'run_1');
+    deepStrictEqual(body.artifact.space_id, 'space_1');
+    deepStrictEqual(body.artifact.type, 'doc');
+    deepStrictEqual(body.artifact.title, 'Result');
+    deepStrictEqual(body.artifact.content, 'done');
+    deepStrictEqual(body.artifact.metadata, JSON.stringify({ source: 'test' }));
+    deepStrictEqual(calls.length, 0);
   } finally {
     restoreControl();
     restoreEnv();
   }
 });
 
-Deno.test('space tools read routes are served by src/routes/public catalog', async () => {
+test('space tools read routes are served by src/routes/public catalog', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     Response.json({ data: [] }),
@@ -2767,28 +2767,28 @@ Deno.test('space tools read routes are served by src/routes/public catalog', asy
       error: { code: string; message: string };
     };
 
-    assertEquals(list.status, 200);
-    assertEquals(detail.status, 200);
-    assertEquals(missingTool.status, 404);
-    assertEquals(nonMember.status, 404);
-    assertEquals(missingDb.status, 500);
+    deepStrictEqual(list.status, 200);
+    deepStrictEqual(detail.status, 200);
+    deepStrictEqual(missingTool.status, 404);
+    deepStrictEqual(nonMember.status, 404);
+    deepStrictEqual(missingDb.status, 500);
     await assertControlBindingRequired(postFallback);
-    assertEquals(
+    deepStrictEqual(
       listBody.data.some((tool) => tool.name === 'container_start'),
       true,
     );
-    assertEquals(detailBody.data.id, 'container_start');
-    assertEquals(detailBody.data.name, 'container_start');
-    assertEquals(missingToolBody.error.code, 'NOT_FOUND');
-    assertEquals(missingToolBody.error.message, 'Custom tool not found');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(detailBody.data.id, 'container_start');
+    deepStrictEqual(detailBody.data.name, 'container_start');
+    deepStrictEqual(missingToolBody.error.code, 'NOT_FOUND');
+    deepStrictEqual(missingToolBody.error.message, 'Custom tool not found');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
     restoreEnv();
   }
 });
 
-Deno.test('unknown explore routes return 404 without proxying', async () => {
+test('unknown explore routes return 404 without proxying', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     Response.json({ items: [] }),
@@ -2805,14 +2805,14 @@ Deno.test('unknown explore routes return 404 without proxying', async () => {
       },
     );
 
-    assertEquals(unknownTypeProbe.status, 404);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(unknownTypeProbe.status, 404);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('explore catalog route is served by src/routes/public catalog service', async () => {
+test('explore catalog route is served by src/routes/public catalog service', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -2872,17 +2872,17 @@ Deno.test('explore catalog route is served by src/routes/public catalog service'
       { DB: db },
     );
 
-    assertEquals(catalog.status, 200);
-    assertEquals(invalidSort.status, 400);
-    assertEquals(invalidType.status, 400);
-    assertEquals(missingAuth.status, 401);
-    assertEquals(await catalog.json(), {
+    deepStrictEqual(catalog.status, 200);
+    deepStrictEqual(invalidSort.status, 400);
+    deepStrictEqual(invalidType.status, 400);
+    deepStrictEqual(missingAuth.status, 401);
+    deepStrictEqual(await catalog.json(), {
       items: [],
       total: 0,
       has_more: false,
     });
-    assertEquals(catalogCalls.length, 1);
-    assertEquals(catalogCalls[0], {
+    deepStrictEqual(catalogCalls.length, 1);
+    deepStrictEqual(catalogCalls[0], {
       sort: 'downloads',
       type: 'deployable-app',
       limit: 10,
@@ -2901,7 +2901,7 @@ Deno.test('explore catalog route is served by src/routes/public catalog service'
       defaultAppEntries: [],
       accountsInstallations: undefined,
     });
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     exploreCatalogRouteDeps.listCatalogItems = originalList;
     exploreCatalogRouteDeps.resolveDefaultAppDistributionForBootstrap = originalDefaultApps;
@@ -2911,7 +2911,7 @@ Deno.test('explore catalog route is served by src/routes/public catalog service'
   }
 });
 
-Deno.test('explore catalog clamps a deep offset to the shared max', async () => {
+test('explore catalog clamps a deep offset to the shared max', async () => {
   const originalList = exploreCatalogRouteDeps.listCatalogItems;
   const originalDefaultApps = exploreCatalogRouteDeps.resolveDefaultAppDistributionForBootstrap;
   const originalAccounts = exploreCatalogRouteDeps.resolveCatalogAccountsInstallationsReadConfig;
@@ -2939,11 +2939,11 @@ Deno.test('explore catalog clamps a deep offset to the shared max', async () => 
       {},
       { DB: db },
     );
-    assertEquals(response.status, 200);
-    assertEquals(catalogCalls.length, 1);
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(catalogCalls.length, 1);
     // Deep offset is clamped to MAX_LIST_OFFSET (10_000) rather than forwarded
     // verbatim as a deep SQL OFFSET scan.
-    assertEquals(catalogCalls[0].offset, 10_000);
+    deepStrictEqual(catalogCalls[0].offset, 10_000);
   } finally {
     exploreCatalogRouteDeps.listCatalogItems = originalList;
     exploreCatalogRouteDeps.resolveDefaultAppDistributionForBootstrap = originalDefaultApps;
@@ -2951,7 +2951,7 @@ Deno.test('explore catalog clamps a deep offset to the shared max', async () => 
   }
 });
 
-Deno.test('explore catalog rejects an invalid filter (fail-closed, like discovery)', async () => {
+test('explore catalog rejects an invalid filter (fail-closed, like discovery)', async () => {
   const db = fakeApiDb({
     actorAccountId: 'acct_1',
     membershipRole: 'viewer',
@@ -2966,14 +2966,14 @@ Deno.test('explore catalog rejects an invalid filter (fail-closed, like discover
     {},
     { DB: db },
   );
-  assertEquals(response.status, 400);
+  deepStrictEqual(response.status, 400);
   const body = await response.json() as {
     error: { code: string; message: string };
   };
-  assertEquals(body.error.code, 'INVALID_ARGUMENT');
+  deepStrictEqual(body.error.code, 'INVALID_ARGUMENT');
 });
 
-Deno.test('explore package routes are served by src/routes/public package catalog', async () => {
+test('explore package routes are served by src/routes/public package catalog', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -3217,23 +3217,23 @@ Deno.test('explore package routes are served by src/routes/public package catalo
       has_more: boolean;
     };
 
-    assertEquals(list.status, 200);
-    assertEquals(suggest.status, 200);
-    assertEquals(emptySuggest.status, 200);
-    assertEquals(latest.status, 200);
-    assertEquals(versions.status, 200);
-    assertEquals(reviews.status, 200);
-    assertEquals(invalidCategory.status, 400);
-    assertEquals(invalidTags.status, 400);
-    assertEquals(listBody.packages.map((item) => item.id), ['rel_1']);
-    assertEquals(suggestBody.packages.map((item) => item.name), ['docs']);
-    assertEquals(emptySuggestBody.packages, []);
-    assertEquals(latestBody.package.app_id, 'takos-docs');
-    assertEquals(
+    deepStrictEqual(list.status, 200);
+    deepStrictEqual(suggest.status, 200);
+    deepStrictEqual(emptySuggest.status, 200);
+    deepStrictEqual(latest.status, 200);
+    deepStrictEqual(versions.status, 200);
+    deepStrictEqual(reviews.status, 200);
+    deepStrictEqual(invalidCategory.status, 400);
+    deepStrictEqual(invalidTags.status, 400);
+    deepStrictEqual(listBody.packages.map((item) => item.id), ['rel_1']);
+    deepStrictEqual(suggestBody.packages.map((item) => item.name), ['docs']);
+    deepStrictEqual(emptySuggestBody.packages, []);
+    deepStrictEqual(latestBody.package.app_id, 'takos-docs');
+    deepStrictEqual(
       latestBody.package.repository_url,
       'https://takos.example.test/git/tako/docs.git',
     );
-    assertEquals(versionsBody.versions, [{
+    deepStrictEqual(versionsBody.versions, [{
       tag: 'v1',
       app_id: 'takos-docs',
       version: '1.0.0',
@@ -3244,15 +3244,15 @@ Deno.test('explore package routes are served by src/routes/public package catalo
       download_count: 2,
       published_at: '2026-05-13T00:00:00.000Z',
     }]);
-    assertEquals(reviewsBody, {
+    deepStrictEqual(reviewsBody, {
       repo: { id: 'repo_1', name: 'docs' },
       rating: { rating_avg: null, rating_count: 0 },
       reviews: [],
       viewer_review: null,
       has_more: false,
     });
-    assertEquals(searchCalls.length, 1);
-    assertEquals(searchCalls[0], {
+    deepStrictEqual(searchCalls.length, 1);
+    deepStrictEqual(searchCalls[0], {
       searchQuery: 'docs',
       sortParamRaw: 'popular',
       limit: 10,
@@ -3261,27 +3261,27 @@ Deno.test('explore package routes are served by src/routes/public package catalo
       tags: ['cli', 'tools'],
       certifiedOnly: true,
     });
-    assertEquals(suggestCalls.length, 1);
-    assertEquals(suggestCalls[0], {
+    deepStrictEqual(suggestCalls.length, 1);
+    deepStrictEqual(suggestCalls[0], {
       query: 'doc',
       limit: 2,
       category: 'app',
       tags: ['cli'],
     });
-    assertEquals(latestCalls, [{
+    deepStrictEqual(latestCalls, [{
       username: 'tako',
       repoName: 'docs',
       gitObjects: undefined,
       repositoryBaseUrl: 'takos.example.test',
     }]);
-    assertEquals(versionCalls, [{
+    deepStrictEqual(versionCalls, [{
       username: 'tako',
       repoName: 'docs',
       gitObjects: undefined,
       repositoryBaseUrl: 'takos.example.test',
     }]);
-    assertEquals(reviewCalls, ['repo_1']);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(reviewCalls, ['repo_1']);
+    deepStrictEqual(calls.length, 0);
   } finally {
     explorePackageRouteDeps.searchPackages = originalSearch;
     explorePackageRouteDeps.suggestPackages = originalSuggest;
@@ -3292,7 +3292,7 @@ Deno.test('explore package routes are served by src/routes/public package catalo
   }
 });
 
-Deno.test('explore users and repo routes are served by src/routes/public discovery service', async () => {
+test('explore users and repo routes are served by src/routes/public discovery service', async () => {
   const calls: ExternalFetchCall[] = [];
   const restoreControl = stubExternalFetch(calls, [
     Response.json({ proxied: false }),
@@ -3464,17 +3464,17 @@ Deno.test('explore users and repo routes are served by src/routes/public discove
       { DB: db },
     );
 
-    assertEquals(users.status, 200);
-    assertEquals(user.status, 200);
-    assertEquals(repos.status, 200);
-    assertEquals(trending.status, 200);
-    assertEquals(newest.status, 200);
-    assertEquals(recent.status, 200);
-    assertEquals(byName.status, 200);
-    assertEquals(byId.status, 200);
-    assertEquals(invalidCategory.status, 400);
-    assertEquals(invalidSince.status, 400);
-    assertEquals(await users.json(), {
+    deepStrictEqual(users.status, 200);
+    deepStrictEqual(user.status, 200);
+    deepStrictEqual(repos.status, 200);
+    deepStrictEqual(trending.status, 200);
+    deepStrictEqual(newest.status, 200);
+    deepStrictEqual(recent.status, 200);
+    deepStrictEqual(byName.status, 200);
+    deepStrictEqual(byId.status, 200);
+    deepStrictEqual(invalidCategory.status, 400);
+    deepStrictEqual(invalidSince.status, 400);
+    deepStrictEqual(await users.json(), {
       users: [{
         username: 'tako',
         name: 'Tako',
@@ -3486,12 +3486,12 @@ Deno.test('explore users and repo routes are served by src/routes/public discove
     const userBody = await user.json() as {
       user: { username: string };
     };
-    assertEquals(userBody.user.username, 'tako');
-    assertEquals(await byName.json(), repoDetail);
-    assertEquals(await byId.json(), repoDetail);
-    assertEquals(userListCalls, [{ q: 'tak', limit: '5', offset: '1' }]);
-    assertEquals(userDetailCalls, [{ username: 'tako', userId: 'acct_1' }]);
-    assertEquals(listCalls, [{
+    deepStrictEqual(userBody.user.username, 'tako');
+    deepStrictEqual(await byName.json(), repoDetail);
+    deepStrictEqual(await byId.json(), repoDetail);
+    deepStrictEqual(userListCalls, [{ q: 'tak', limit: '5', offset: '1' }]);
+    deepStrictEqual(userDetailCalls, [{ username: 'tako', userId: 'acct_1' }]);
+    deepStrictEqual(listCalls, [{
       sort: 'updated',
       order: 'asc',
       limit: 10,
@@ -3503,7 +3503,7 @@ Deno.test('explore users and repo routes are served by src/routes/public discove
       since: '2026-02-01T00:00:00.000Z',
       userId: 'acct_1',
     }]);
-    assertEquals(trendingCalls, [{
+    deepStrictEqual(trendingCalls, [{
       limit: 3,
       offset: 0,
       category: 'app',
@@ -3512,7 +3512,7 @@ Deno.test('explore users and repo routes are served by src/routes/public discove
       since: undefined,
       userId: 'acct_1',
     }]);
-    assertEquals(newCalls, [{
+    deepStrictEqual(newCalls, [{
       limit: 20,
       offset: 0,
       category: undefined,
@@ -3521,7 +3521,7 @@ Deno.test('explore users and repo routes are served by src/routes/public discove
       since: undefined,
       userId: 'acct_1',
     }]);
-    assertEquals(recentCalls, [{
+    deepStrictEqual(recentCalls, [{
       limit: 20,
       offset: 0,
       category: undefined,
@@ -3530,13 +3530,13 @@ Deno.test('explore users and repo routes are served by src/routes/public discove
       since: undefined,
       userId: 'acct_1',
     }]);
-    assertEquals(repoByNameCalls, [{
+    deepStrictEqual(repoByNameCalls, [{
       username: 'tako',
       repoName: 'docs',
       userId: 'acct_1',
     }]);
-    assertEquals(repoByIdCalls, [{ repoId: 'repo_1', userId: 'acct_1' }]);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(repoByIdCalls, [{ repoId: 'repo_1', userId: 'acct_1' }]);
+    deepStrictEqual(calls.length, 0);
   } finally {
     exploreDiscoveryRouteDeps.listExploreRepos = originalList;
     exploreDiscoveryRouteDeps.listTrendingRepos = originalTrending;
@@ -3551,7 +3551,7 @@ Deno.test('explore users and repo routes are served by src/routes/public discove
   }
 });
 
-Deno.test('explore suggest routes are served by src/routes/public catalog read model', async () => {
+test('explore suggest routes are served by src/routes/public catalog read model', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     Response.json({ proxied: true }),
@@ -3590,15 +3590,15 @@ Deno.test('explore suggest routes are served by src/routes/public catalog read m
       repos: unknown[];
     };
 
-    assertEquals(suggest.status, 200);
-    assertEquals(catalogSuggest.status, 200);
-    assertEquals(empty.status, 200);
-    assertEquals(body.users, [{
+    deepStrictEqual(suggest.status, 200);
+    deepStrictEqual(catalogSuggest.status, 200);
+    deepStrictEqual(empty.status, 200);
+    deepStrictEqual(body.users, [{
       username: 'docs',
       name: 'Docs User',
       avatar_url: 'https://example.test/avatar.png',
     }]);
-    assertEquals(
+    deepStrictEqual(
       body.repos.map((repo) => ({
         id: repo.id,
         name: repo.name,
@@ -3614,15 +3614,15 @@ Deno.test('explore suggest routes are served by src/routes/public catalog read m
         },
       }],
     );
-    assertEquals(catalogBody.repos.length, 1);
-    assertEquals(emptyBody, { users: [], repos: [] });
-    assertEquals(calls.length, 0);
+    deepStrictEqual(catalogBody.repos.length, 1);
+    deepStrictEqual(emptyBody, { users: [], repos: [] });
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('setup route family requires in-process control bindings', async () => {
+test('setup route family requires in-process control bindings', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, [
     Response.json({ setup_completed: false }),
@@ -3658,13 +3658,13 @@ Deno.test('setup route family requires in-process control bindings', async () =>
     await assertControlBindingRequired(status);
     await assertControlBindingRequired(complete);
     await assertControlBindingRequired(checkUsername);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('retired billing routes return 410 and are not proxied', async () => {
+test('retired billing routes return 410 and are not proxied', async () => {
   const calls: ExternalFetchCall[] = [];
   const restore = stubExternalFetch(calls, { unreachable: true });
   try {
@@ -3697,23 +3697,23 @@ Deno.test('retired billing routes return 410 and are not proxied', async () => {
       },
     );
 
-    assertEquals(portal.status, 410);
-    assertEquals(webhook.status, 410);
-    assertEquals(internal.status, 410);
+    deepStrictEqual(portal.status, 410);
+    deepStrictEqual(webhook.status, 410);
+    deepStrictEqual(internal.status, 410);
     const body = await portal.json() as {
       error: { code: string; message: string };
     };
-    assertEquals(body.error.code, 'GONE');
-    assertEquals(portal.headers.get('location'), null);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(body.error.code, 'GONE');
+    deepStrictEqual(portal.headers.get('location'), null);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('raw actor headers are rejected without a trusted proxy marker', async () => {
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+test('raw actor headers are rejected without a trusted proxy marker', async () => {
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   try {
     const response = await app.request(TAKOS_PUBLIC_API_PATHS.spaces, {
       headers: { 'x-takos-account-id': 'acct_1' },
@@ -3722,15 +3722,15 @@ Deno.test('raw actor headers are rejected without a trusted proxy marker', async
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 401);
-    assertEquals(body.error.code, 'UNAUTHORIZED');
-    assertEquals(body.error.message, 'authentication required');
+    deepStrictEqual(response.status, 401);
+    deepStrictEqual(body.error.code, 'UNAUTHORIZED');
+    deepStrictEqual(body.error.message, 'authentication required');
   } finally {
     restoreEnv('TAKOS_INTERNAL_API_SECRET', originalTrustedSecret);
   }
 });
 
-Deno.test('direct bearer credentials are verified in-process before forwarding', async () => {
+test('direct bearer credentials are verified in-process before forwarding', async () => {
   const authCalls: AuthValidationCall[] = [];
   const calls: SignedCall[] = [];
   const restore = stubAuthVerifiedTakosumiFetch(authCalls, calls, {
@@ -3750,17 +3750,17 @@ Deno.test('direct bearer credentials are verified in-process before forwarding',
     );
     const actor = actorFromSignedHeaders(calls[0].headers);
 
-    assertEquals(response.status, 200);
-    assertEquals(authCalls.length, 1);
-    assertEquals(authCalls[0].token, 'takpat_direct');
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(authCalls.length, 1);
+    deepStrictEqual(authCalls[0].token, 'takpat_direct');
+    deepStrictEqual(
       new URL(calls[0].url).pathname,
       TAKOSUMI_INTERNAL_PATHS.spaces,
     );
-    assertEquals(actor.actorAccountId, 'acct_verified');
-    assertEquals(actor.roles, ['member']);
-    assertEquals(actor.spaceId, undefined);
-    assertEquals(typeof actor.requestId, 'string');
+    deepStrictEqual(actor.actorAccountId, 'acct_verified');
+    deepStrictEqual(actor.roles, ['member']);
+    deepStrictEqual(actor.spaceId, undefined);
+    deepStrictEqual(typeof actor.requestId, 'string');
   } finally {
     restore();
   }
@@ -3772,7 +3772,7 @@ for (
     ['tak_pat', 'tak_pat_direct'],
   ] as const
 ) {
-  Deno.test(`retired ${name} bearer credentials are not sent to the direct verifier`, async () => {
+  test(`retired ${name} bearer credentials are not sent to the direct verifier`, async () => {
     const authCalls: AuthValidationCall[] = [];
     const calls: SignedCall[] = [];
     const restore = stubAuthVerifiedTakosumiFetch(authCalls, calls, {
@@ -3789,18 +3789,18 @@ for (
         error: { code: string; message: string };
       };
 
-      assertEquals(response.status, 401);
-      assertEquals(body.error.code, 'UNAUTHORIZED');
-      assertEquals(body.error.message, 'authentication required');
-      assertEquals(authCalls.length, 0);
-      assertEquals(calls.length, 0);
+      deepStrictEqual(response.status, 401);
+      deepStrictEqual(body.error.code, 'UNAUTHORIZED');
+      deepStrictEqual(body.error.message, 'authentication required');
+      deepStrictEqual(authCalls.length, 0);
+      deepStrictEqual(calls.length, 0);
     } finally {
       restore();
     }
   });
 }
 
-Deno.test('Git Smart HTTP Basic PAT is normalized through auth verifier', async () => {
+test('Git Smart HTTP Basic PAT is normalized through auth verifier', async () => {
   const authCalls: AuthValidationCall[] = [];
   const calls: SignedCall[] = [];
   const restore = stubAuthVerifiedGitFetch(
@@ -3821,25 +3821,25 @@ Deno.test('Git Smart HTTP Basic PAT is normalized through auth verifier', async 
     );
     const actor = actorFromSignedHeaders(calls[0].headers);
 
-    assertEquals(response.status, 200);
-    assertEquals(authCalls.length, 1);
-    assertEquals(authCalls[0].token, 'takpat_git');
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(authCalls.length, 1);
+    deepStrictEqual(authCalls[0].token, 'takpat_git');
+    deepStrictEqual(
       new URL(calls[0].url).pathname,
       '/git/space_1/repo.git/info/refs',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.repo.read',
     );
-    assertEquals(actor.actorAccountId, 'acct_verified');
-    assertEquals(actor.spaceId, 'space_1');
+    deepStrictEqual(actor.actorAccountId, 'acct_verified');
+    deepStrictEqual(actor.spaceId, 'space_1');
   } finally {
     restore();
   }
 });
 
-Deno.test('direct credential verifier rejection returns common auth error', async () => {
+test('direct credential verifier rejection returns common auth error', async () => {
   const authCalls: AuthValidationCall[] = [];
   const calls: SignedCall[] = [];
   const restore = stubAuthVerifiedTakosumiFetch(
@@ -3862,35 +3862,35 @@ Deno.test('direct credential verifier rejection returns common auth error', asyn
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 401);
-    assertEquals(body.error.code, 'UNAUTHORIZED');
-    assertEquals(body.error.message, 'Invalid or expired bearer token');
-    assertEquals(authCalls.length, 1);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 401);
+    deepStrictEqual(body.error.code, 'UNAUTHORIZED');
+    deepStrictEqual(body.error.message, 'Invalid or expired bearer token');
+    deepStrictEqual(authCalls.length, 1);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('local internal proxy flag allows unauthenticated actor headers', async () => {
+test('local internal proxy flag allows unauthenticated actor headers', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
-  const originalFlag = Deno.env.get(
+  const originalFlag = getEnv(
     'TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS',
   );
-  const originalSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+  const originalSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
   const restore = stubTakosumiFetch(calls, { spaces: [] });
-  Deno.env.set('TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS', 'true');
+  setEnv('TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS', 'true');
   // The dev escape hatch is only honored when there is no real auth posture,
   // so the internal secret must be unset for this path to apply.
-  Deno.env.delete('TAKOS_INTERNAL_API_SECRET');
+  deleteEnv('TAKOS_INTERNAL_API_SECRET');
   try {
     const response = await app.request(
       TAKOS_PUBLIC_API_PATHS.spaces,
       { headers: { 'x-takos-account-id': 'acct_1' } },
     );
 
-    assertEquals(response.status, 200);
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(
       new URL(calls[0].url).pathname,
       TAKOSUMI_INTERNAL_PATHS.spaces,
     );
@@ -3901,27 +3901,27 @@ Deno.test('local internal proxy flag allows unauthenticated actor headers', asyn
   }
 });
 
-Deno.test('unauthenticated actor header flag is ignored when an internal secret is configured', async () => {
+test('unauthenticated actor header flag is ignored when an internal secret is configured', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
-  const originalFlag = Deno.env.get(
+  const originalFlag = getEnv(
     'TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS',
   );
-  const originalSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+  const originalSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
   const restore = stubTakosumiFetch(calls, { spaces: [] });
   // Flag is set AND a real internal-secret auth posture exists: the dev-only
   // raw-header escape hatch must fail closed so a client cannot assert an
   // arbitrary account id / roles without a verified credential.
-  Deno.env.set('TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS', 'true');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+  setEnv('TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS', 'true');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   try {
     const response = await app.request(
       TAKOS_PUBLIC_API_PATHS.spaces,
       { headers: { 'x-takos-account-id': 'acct_1', 'x-takos-roles': 'admin' } },
     );
 
-    assertEquals(response.status, 401);
+    deepStrictEqual(response.status, 401);
     // No upstream call should have been made with the spoofed actor.
-    assertEquals(calls.length, 0);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
     restoreEnv('TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS', originalFlag);
@@ -3929,9 +3929,9 @@ Deno.test('unauthenticated actor header flag is ignored when an internal secret 
   }
 });
 
-Deno.test('AppInstallation binding placeholder accepts trusted bindings', async () => {
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+test('AppInstallation binding placeholder accepts trusted bindings', async () => {
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   try {
     const response = await app.request(
       '/_takosumi/app-installation-bindings',
@@ -3968,25 +3968,25 @@ Deno.test('AppInstallation binding placeholder accepts trusted bindings', async 
       bindings: Array<{ name: string; kind: string; config_ref: string }>;
     };
 
-    assertEquals(response.status, 202);
-    assertEquals(body.accepted, true);
-    assertEquals(body.installationId, 'inst_1');
-    assertEquals(body.appId, 'takos.chat');
-    assertEquals(body.spaceId, 'space_1');
-    assertEquals(body.bindings.map((binding) => binding.name), [
+    deepStrictEqual(response.status, 202);
+    deepStrictEqual(body.accepted, true);
+    deepStrictEqual(body.installationId, 'inst_1');
+    deepStrictEqual(body.appId, 'takos.chat');
+    deepStrictEqual(body.spaceId, 'space_1');
+    deepStrictEqual(body.bindings.map((binding) => binding.name), [
       'auth',
       'bootstrap',
     ]);
-    assertEquals(body.bindings[0].kind, 'identity.oidc@v1');
-    assertEquals(body.bindings[0].config_ref, 'config://inst_1/auth');
+    deepStrictEqual(body.bindings[0].kind, 'identity.oidc@v1');
+    deepStrictEqual(body.bindings[0].config_ref, 'config://inst_1/auth');
   } finally {
     restoreEnv('TAKOS_INTERNAL_API_SECRET', originalTrustedSecret);
   }
 });
 
-Deno.test('AppInstallation binding placeholder rejects service import binding kind', async () => {
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+test('AppInstallation binding placeholder rejects service import binding kind', async () => {
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   try {
     const response = await app.request(
       '/_takosumi/app-installation-bindings',
@@ -4013,17 +4013,17 @@ Deno.test('AppInstallation binding placeholder rejects service import binding ki
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 400);
-    assertEquals(body.error.code, 'INVALID_ARGUMENT');
-    assertEquals(body.error.message, 'bindings[0].kind is invalid');
+    deepStrictEqual(response.status, 400);
+    deepStrictEqual(body.error.code, 'INVALID_ARGUMENT');
+    deepStrictEqual(body.error.message, 'bindings[0].kind is invalid');
   } finally {
     restoreEnv('TAKOS_INTERNAL_API_SECRET', originalTrustedSecret);
   }
 });
 
-Deno.test('AppInstallation binding placeholder rejects untrusted actor headers', async () => {
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+test('AppInstallation binding placeholder rejects untrusted actor headers', async () => {
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   try {
     const response = await app.request(
       '/_takosumi/app-installation-bindings',
@@ -4045,17 +4045,17 @@ Deno.test('AppInstallation binding placeholder rejects untrusted actor headers',
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 401);
-    assertEquals(body.error.code, 'UNAUTHORIZED');
-    assertEquals(body.error.message, 'trusted service authentication required');
+    deepStrictEqual(response.status, 401);
+    deepStrictEqual(body.error.code, 'UNAUTHORIZED');
+    deepStrictEqual(body.error.message, 'trusted service authentication required');
   } finally {
     restoreEnv('TAKOS_INTERNAL_API_SECRET', originalTrustedSecret);
   }
 });
 
-Deno.test('AppInstallation binding placeholder validates binding catalog', async () => {
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+test('AppInstallation binding placeholder validates binding catalog', async () => {
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   try {
     const response = await app.request(
       '/_takosumi/app-installation-bindings',
@@ -4081,15 +4081,15 @@ Deno.test('AppInstallation binding placeholder validates binding catalog', async
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 400);
-    assertEquals(body.error.code, 'INVALID_ARGUMENT');
-    assertStringIncludes(body.error.message, 'bindings[0].kind');
+    deepStrictEqual(response.status, 400);
+    deepStrictEqual(body.error.code, 'INVALID_ARGUMENT');
+    ok(body.error.message, 'bindings[0].kind');
   } finally {
     restoreEnv('TAKOS_INTERNAL_API_SECRET', originalTrustedSecret);
   }
 });
 
-Deno.test('Takosumi launch consumes opaque GET launch_token and requires in-process session bindings', async () => {
+test('Takosumi launch consumes opaque GET launch_token and requires in-process session bindings', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const redirectUri = 'https://takos.example.test/_takosumi/launch';
   const restore = stubTakosumiAccountsFetch(
@@ -4118,13 +4118,13 @@ Deno.test('Takosumi launch consumes opaque GET launch_token and requires in-proc
     );
 
     await assertControlBindingRequired(response);
-    assertEquals(calls.length, 1);
-    assertEquals(
+    deepStrictEqual(calls.length, 1);
+    deepStrictEqual(
       new URL(calls[0].url).pathname,
       '/v1/installations/inst_opaque/launch-token/consume',
     );
-    assertEquals(calls[0].method, 'POST');
-    assertEquals(calls[0].body, {
+    deepStrictEqual(calls[0].method, 'POST');
+    deepStrictEqual(calls[0].body, {
       token: 'opaque-get-token',
       redirect_uri: redirectUri,
     });
@@ -4133,7 +4133,7 @@ Deno.test('Takosumi launch consumes opaque GET launch_token and requires in-proc
   }
 });
 
-Deno.test('Takosumi launch accepts opaque POST body launch_token and requires in-process session bindings', async () => {
+test('Takosumi launch accepts opaque POST body launch_token and requires in-process session bindings', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const redirectUri = 'https://takos.example.test/_takosumi/launch';
   const restore = stubTakosumiAccountsFetch(
@@ -4165,8 +4165,8 @@ Deno.test('Takosumi launch accepts opaque POST body launch_token and requires in
       },
     );
     await assertControlBindingRequired(launchTokenResponse);
-    assertEquals(calls.length, 1);
-    assertEquals(calls[0].body, {
+    deepStrictEqual(calls.length, 1);
+    deepStrictEqual(calls[0].body, {
       token: 'opaque-post-launch-token',
       redirect_uri: redirectUri,
     });
@@ -4175,7 +4175,7 @@ Deno.test('Takosumi launch accepts opaque POST body launch_token and requires in
   }
 });
 
-Deno.test('Takosumi launch rejects legacy token parameter', async () => {
+test('Takosumi launch rejects legacy token parameter', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiAccountsFetch(calls, { unexpected: true });
   try {
@@ -4191,15 +4191,15 @@ Deno.test('Takosumi launch rejects legacy token parameter', async () => {
       },
     );
 
-    assertEquals(queryResponse.status, 400);
-    assertEquals(postResponse.status, 400);
-    assertEquals(calls.length, 0);
+    deepStrictEqual(queryResponse.status, 400);
+    deepStrictEqual(postResponse.status, 400);
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('Takosumi launch maps opaque token replay failures', async () => {
+test('Takosumi launch maps opaque token replay failures', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const redirectUri = 'https://takos.example.test/_takosumi/launch';
   const restore = stubTakosumiAccountsFetch(
@@ -4223,11 +4223,11 @@ Deno.test('Takosumi launch maps opaque token replay failures', async () => {
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 410);
-    assertEquals(body.error.code, 'FAILED_PRECONDITION');
-    assertEquals(body.error.message, 'launch_token_replayed');
-    assertEquals(calls.length, 1);
-    assertEquals(calls[0].body, {
+    deepStrictEqual(response.status, 410);
+    deepStrictEqual(body.error.code, 'FAILED_PRECONDITION');
+    deepStrictEqual(body.error.message, 'launch_token_replayed');
+    deepStrictEqual(calls.length, 1);
+    deepStrictEqual(calls[0].body, {
       token: 'opaque-replay',
       redirect_uri: redirectUri,
     });
@@ -4236,10 +4236,10 @@ Deno.test('Takosumi launch maps opaque token replay failures', async () => {
   }
 });
 
-Deno.test('Takosumi launch requires opaque config for launch_token', async () => {
+test('Takosumi launch requires opaque config for launch_token', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiAccountsFetch(calls, { unexpected: true });
-  Deno.env.set('INSTALL_LAUNCH_INSTALLATION_ID', 'inst_missing_redirect');
+  setEnv('INSTALL_LAUNCH_INSTALLATION_ID', 'inst_missing_redirect');
   try {
     const response = await app.request(
       'https://takos.example.test/_takosumi/launch?launch_token=opaque-missing-config',
@@ -4248,16 +4248,16 @@ Deno.test('Takosumi launch requires opaque config for launch_token', async () =>
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 500);
-    assertEquals(body.error.code, 'INTERNAL_ERROR');
-    assertStringIncludes(body.error.message, 'opaque launch token config');
-    assertEquals(calls.length, 0);
+    deepStrictEqual(response.status, 500);
+    deepStrictEqual(body.error.code, 'INTERNAL_ERROR');
+    ok(body.error.message, 'opaque launch token config');
+    deepStrictEqual(calls.length, 0);
   } finally {
     restore();
   }
 });
 
-Deno.test('runtime list forwarding preserves normalized space query', async () => {
+test('runtime list forwarding preserves normalized space query', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubRuntimeFetch(calls, { items: [] });
   const db = fakeApiDb({
@@ -4280,17 +4280,17 @@ Deno.test('runtime list forwarding preserves normalized space query', async () =
     );
 
     const url = new URL(calls[0].url);
-    assertEquals(response.status, 200);
-    assertEquals(url.pathname, '/api/internal/v1/runtime/resources');
-    assertEquals(url.searchParams.get('spaceId'), 'space_1');
-    assertEquals(url.searchParams.get('space_id'), null);
-    assertEquals(url.searchParams.get('type'), 'kv');
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(url.pathname, '/api/internal/v1/runtime/resources');
+    deepStrictEqual(url.searchParams.get('spaceId'), 'space_1');
+    deepStrictEqual(url.searchParams.get('space_id'), null);
+    deepStrictEqual(url.searchParams.get('type'), 'kv');
   } finally {
     restore();
   }
 });
 
-Deno.test('space-scoped services and sessions alias to runtime base routes', async () => {
+test('space-scoped services and sessions alias to runtime base routes', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubRuntimeFetch(calls, { items: [] });
   const db = fakeApiDb({
@@ -4317,24 +4317,24 @@ Deno.test('space-scoped services and sessions alias to runtime base routes', asy
       body: JSON.stringify({ payload: { kind: 'shell' } }),
     }, { DB: db });
 
-    assertEquals(servicesResponse.status, 200);
-    assertEquals(sessionsResponse.status, 200);
-    assertEquals(
+    deepStrictEqual(servicesResponse.status, 200);
+    deepStrictEqual(sessionsResponse.status, 200);
+    deepStrictEqual(
       new URL(calls[0].url).pathname,
       '/api/internal/v1/runtime/services',
     );
-    assertEquals(new URL(calls[0].url).searchParams.get('spaceId'), 'space_1');
-    assertEquals(
+    deepStrictEqual(new URL(calls[0].url).searchParams.get('spaceId'), 'space_1');
+    deepStrictEqual(
       new URL(calls[1].url).pathname,
       '/api/internal/v1/runtime/sessions',
     );
-    assertEquals((calls[1].body as Record<string, unknown>).spaceId, 'space_1');
+    deepStrictEqual((calls[1].body as Record<string, unknown>).spaceId, 'space_1');
   } finally {
     restore();
   }
 });
 
-Deno.test('nested runtime route families forward to Takosumi runtime', async () => {
+test('nested runtime route families forward to Takosumi runtime', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubRuntimeFetch(calls, { ok: true });
   const dbSpace1 = fakeApiDb({
@@ -4386,10 +4386,10 @@ Deno.test('nested runtime route families forward to Takosumi runtime', async () 
         },
         body: body ? JSON.stringify(body) : undefined,
       }, { DB: db });
-      assertEquals(response.status, 200);
+      deepStrictEqual(response.status, 200);
     }
 
-    assertEquals(
+    deepStrictEqual(
       calls.map((call) => [
         new URL(call.url).pathname,
         new URL(call.url).searchParams.get('spaceId'),
@@ -4434,7 +4434,7 @@ Deno.test('nested runtime route families forward to Takosumi runtime', async () 
   }
 });
 
-Deno.test('Git hosting public path signs and proxies to takos-git', async () => {
+test('Git hosting public path signs and proxies to takos-git', async () => {
   const calls: Array<{ url: string; method: string; headers: Headers }> = [];
   const restore = stubGitFetch(calls, '# service=git-upload-pack\n');
   try {
@@ -4448,15 +4448,15 @@ Deno.test('Git hosting public path signs and proxies to takos-git', async () => 
       },
     );
 
-    assertEquals(response.status, 200);
-    assertEquals(
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(
       calls[0].url,
       'https://git.internal/space_1/repo.git/info/refs?service=git-upload-pack',
     );
-    assertEquals(calls[0].method, 'GET');
-    assertEquals(calls[0].headers.get('x-takosumi-caller'), 'takos-worker');
-    assertEquals(calls[0].headers.get('x-takosumi-audience'), 'takos-git');
-    assertEquals(
+    deepStrictEqual(calls[0].method, 'GET');
+    deepStrictEqual(calls[0].headers.get('x-takosumi-caller'), 'takos-worker');
+    deepStrictEqual(calls[0].headers.get('x-takosumi-audience'), 'takos-git');
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.repo.read',
     );
@@ -4465,7 +4465,7 @@ Deno.test('Git hosting public path signs and proxies to takos-git', async () => 
   }
 });
 
-Deno.test('Git repository detail public path signs and proxies to takos-git', async () => {
+test('Git repository detail public path signs and proxies to takos-git', async () => {
   const calls: Array<{ url: string; method: string; headers: Headers }> = [];
   const restore = stubGitFetch(
     calls,
@@ -4514,14 +4514,14 @@ Deno.test('Git repository detail public path signs and proxies to takos-git', as
       { DB: db },
     );
 
-    assertEquals(detail.status, 200);
-    assertEquals(forbidden.status, 403);
-    assertEquals(missingSpace.status, 400);
-    assertEquals(
+    deepStrictEqual(detail.status, 200);
+    deepStrictEqual(forbidden.status, 403);
+    deepStrictEqual(missingSpace.status, 400);
+    deepStrictEqual(
       calls.map((call) => [new URL(call.url).pathname, call.method]),
       [['/internal/repositories/repo_1', 'GET']],
     );
-    assertEquals(
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.repo.read',
     );
@@ -4530,7 +4530,7 @@ Deno.test('Git repository detail public path signs and proxies to takos-git', as
   }
 });
 
-Deno.test('Git pull request public paths sign and proxy to takos-git', async () => {
+test('Git pull request public paths sign and proxy to takos-git', async () => {
   const calls: Array<{ url: string; method: string; headers: Headers }> = [];
   const restore = stubGitFetch(calls, JSON.stringify({ pullRequests: [] }));
   const db = fakeApiDb({
@@ -4629,13 +4629,13 @@ Deno.test('Git pull request public paths sign and proxy to takos-git', async () 
       { DB: db },
     );
 
-    assertEquals(list.status, 200);
-    assertEquals(create.status, 200);
-    assertEquals(update.status, 200);
-    assertEquals(comment.status, 200);
-    assertEquals(review.status, 200);
-    assertEquals(merge.status, 200);
-    assertEquals(
+    deepStrictEqual(list.status, 200);
+    deepStrictEqual(create.status, 200);
+    deepStrictEqual(update.status, 200);
+    deepStrictEqual(comment.status, 200);
+    deepStrictEqual(review.status, 200);
+    deepStrictEqual(merge.status, 200);
+    deepStrictEqual(
       calls.map((call) => [new URL(call.url).pathname, call.method]),
       [
         ['/internal/repositories/repo_1/pull-requests', 'GET'],
@@ -4646,27 +4646,27 @@ Deno.test('Git pull request public paths sign and proxy to takos-git', async () 
         ['/internal/repositories/repo_1/pull-requests/1/merge', 'POST'],
       ],
     );
-    assertEquals(
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.pr.read',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[1].headers.get('x-takosumi-capabilities'),
       'git.pr.write',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[2].headers.get('x-takosumi-capabilities'),
       'git.pr.write',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[3].headers.get('x-takosumi-capabilities'),
       'git.pr.write',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[4].headers.get('x-takosumi-capabilities'),
       'git.pr.write',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[5].headers.get('x-takosumi-capabilities'),
       'git.pr.merge',
     );
@@ -4675,7 +4675,7 @@ Deno.test('Git pull request public paths sign and proxy to takos-git', async () 
   }
 });
 
-Deno.test('Git pull request discussion read paths derive from takos-git detail', async () => {
+test('Git pull request discussion read paths derive from takos-git detail', async () => {
   const calls: Array<{ url: string; method: string; headers: Headers }> = [];
   const restore = stubGitFetch(
     calls,
@@ -4716,26 +4716,26 @@ Deno.test('Git pull request discussion read paths derive from takos-git detail',
       { DB: db },
     );
 
-    assertEquals(comments.status, 200);
-    assertEquals(reviews.status, 200);
-    assertEquals(await comments.json(), {
+    deepStrictEqual(comments.status, 200);
+    deepStrictEqual(reviews.status, 200);
+    deepStrictEqual(await comments.json(), {
       comments: [{ id: 'comment_1', body: 'Looks good' }],
     });
-    assertEquals(await reviews.json(), {
+    deepStrictEqual(await reviews.json(), {
       reviews: [{ id: 'review_1', status: 'approved' }],
     });
-    assertEquals(
+    deepStrictEqual(
       calls.map((call) => [new URL(call.url).pathname, call.method]),
       [
         ['/internal/repositories/repo_1/pull-requests/1', 'GET'],
         ['/internal/repositories/repo_1/pull-requests/1', 'GET'],
       ],
     );
-    assertEquals(
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.pr.read',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[1].headers.get('x-takosumi-capabilities'),
       'git.pr.read',
     );
@@ -4744,7 +4744,7 @@ Deno.test('Git pull request discussion read paths derive from takos-git detail',
   }
 });
 
-Deno.test('Git pull request diff public path signs and proxies to takos-git', async () => {
+test('Git pull request diff public path signs and proxies to takos-git', async () => {
   const calls: Array<{ url: string; method: string; headers: Headers }> = [];
   const restore = stubGitFetch(
     calls,
@@ -4772,12 +4772,12 @@ Deno.test('Git pull request diff public path signs and proxies to takos-git', as
       { DB: db },
     );
 
-    assertEquals(diff.status, 200);
-    assertEquals(
+    deepStrictEqual(diff.status, 200);
+    deepStrictEqual(
       calls.map((call) => [new URL(call.url).pathname, call.method]),
       [['/internal/repositories/repo_1/pull-requests/1/diff', 'GET']],
     );
-    assertEquals(
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.pr.read',
     );
@@ -4786,7 +4786,7 @@ Deno.test('Git pull request diff public path signs and proxies to takos-git', as
   }
 });
 
-Deno.test('Git pull request AI review forwards through signed git internal RPC with prWrite', async () => {
+test('Git pull request AI review forwards through signed git internal RPC with prWrite', async () => {
   // The AI review route used to flow through the unscoped API-side HTTP proxy. F14 promotes it to the capability-gated takos-git RPC so the
   // caller must be a space member and the request signs `git.pr.write`.
   const calls: Array<{ url: string; method: string; headers: Headers }> = [];
@@ -4830,13 +4830,13 @@ Deno.test('Git pull request AI review forwards through signed git internal RPC w
       { DB: db },
     );
 
-    assertEquals(response.status, 201);
-    assertEquals(missingSpace.status, 400);
-    assertEquals(
+    deepStrictEqual(response.status, 201);
+    deepStrictEqual(missingSpace.status, 400);
+    deepStrictEqual(
       calls.map((call) => [new URL(call.url).pathname, call.method]),
       [['/internal/repositories/repo_1/pull-requests/1/reviews', 'POST']],
     );
-    assertEquals(
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.pr.write',
     );
@@ -4845,7 +4845,7 @@ Deno.test('Git pull request AI review forwards through signed git internal RPC w
   }
 });
 
-Deno.test('Git repository browsing public paths sign and proxy to takos-git', async () => {
+test('Git repository browsing public paths sign and proxy to takos-git', async () => {
   const calls: Array<{ url: string; method: string; headers: Headers }> = [];
   const restore = stubGitFetch(calls, JSON.stringify({ entries: [] }));
   const db = fakeApiDb({
@@ -4917,45 +4917,45 @@ Deno.test('Git repository browsing public paths sign and proxy to takos-git', as
       { DB: db },
     );
 
-    assertEquals(refs.status, 200);
-    assertEquals(tree.status, 200);
-    assertEquals(branches.status, 200);
-    assertEquals(tags.status, 200);
-    assertEquals(commit.status, 200);
-    assertEquals(compare.status, 200);
+    deepStrictEqual(refs.status, 200);
+    deepStrictEqual(tree.status, 200);
+    deepStrictEqual(branches.status, 200);
+    deepStrictEqual(tags.status, 200);
+    deepStrictEqual(commit.status, 200);
+    deepStrictEqual(compare.status, 200);
     const refsUrl = new URL(calls[0].url);
     const treeUrl = new URL(calls[1].url);
     const branchesUrl = new URL(calls[2].url);
     const tagsUrl = new URL(calls[3].url);
     const commitUrl = new URL(calls[4].url);
     const compareUrl = new URL(calls[5].url);
-    assertEquals(refsUrl.pathname, '/internal/repositories/repo_1/refs');
-    assertEquals(treeUrl.pathname, '/internal/repositories/repo_1/tree');
-    assertEquals(
+    deepStrictEqual(refsUrl.pathname, '/internal/repositories/repo_1/refs');
+    deepStrictEqual(treeUrl.pathname, '/internal/repositories/repo_1/tree');
+    deepStrictEqual(
       branchesUrl.pathname,
       '/internal/repositories/repo_1/branches',
     );
-    assertEquals(tagsUrl.pathname, '/internal/repositories/repo_1/tags');
-    assertEquals(
+    deepStrictEqual(tagsUrl.pathname, '/internal/repositories/repo_1/tags');
+    deepStrictEqual(
       commitUrl.pathname,
       '/internal/repositories/repo_1/commits/abc123',
     );
-    assertEquals(compareUrl.pathname, '/internal/repositories/repo_1/compare');
-    assertEquals(treeUrl.searchParams.get('ref'), 'main');
-    assertEquals(treeUrl.searchParams.get('path'), '.');
-    assertEquals(compareUrl.searchParams.get('base'), 'main');
-    assertEquals(compareUrl.searchParams.get('head'), 'feature/docs');
-    assertEquals(calls[0].headers.get('x-takosumi-caller'), 'takos-worker');
-    assertEquals(calls[0].headers.get('x-takosumi-audience'), 'takos-git');
-    assertEquals(
+    deepStrictEqual(compareUrl.pathname, '/internal/repositories/repo_1/compare');
+    deepStrictEqual(treeUrl.searchParams.get('ref'), 'main');
+    deepStrictEqual(treeUrl.searchParams.get('path'), '.');
+    deepStrictEqual(compareUrl.searchParams.get('base'), 'main');
+    deepStrictEqual(compareUrl.searchParams.get('head'), 'feature/docs');
+    deepStrictEqual(calls[0].headers.get('x-takosumi-caller'), 'takos-worker');
+    deepStrictEqual(calls[0].headers.get('x-takosumi-audience'), 'takos-git');
+    deepStrictEqual(
       calls[0].headers.get('x-takosumi-capabilities'),
       'git.repo.read',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[1].headers.get('x-takosumi-capabilities'),
       'git.repo.read',
     );
-    assertEquals(
+    deepStrictEqual(
       calls[5].headers.get('x-takosumi-capabilities'),
       'git.repo.read',
     );
@@ -4964,14 +4964,14 @@ Deno.test('Git repository browsing public paths sign and proxy to takos-git', as
   }
 });
 
-Deno.test('internal client configuration errors use common error envelope', async () => {
-  const originalSecret = Deno.env.get('TAKOS_INTERNAL_SERVICE_SECRET');
-  const originalUrl = Deno.env.get('TAKOSUMI_INTERNAL_URL');
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+test('internal client configuration errors use common error envelope', async () => {
+  const originalSecret = getEnv('TAKOS_INTERNAL_SERVICE_SECRET');
+  const originalUrl = getEnv('TAKOSUMI_INTERNAL_URL');
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
 
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
-  Deno.env.delete('TAKOS_INTERNAL_SERVICE_SECRET');
-  Deno.env.delete('TAKOSUMI_INTERNAL_URL');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+  deleteEnv('TAKOS_INTERNAL_SERVICE_SECRET');
+  deleteEnv('TAKOSUMI_INTERNAL_URL');
   try {
     const response = await app.request('/api/spaces', {
       headers: {
@@ -4983,8 +4983,8 @@ Deno.test('internal client configuration errors use common error envelope', asyn
       error: { code: string; message: string };
     };
 
-    assertEquals(response.status, 500);
-    assertEquals(body, {
+    deepStrictEqual(response.status, 500);
+    deepStrictEqual(body, {
       error: {
         code: 'INTERNAL_ERROR',
         message: 'internal Takosumi client is not configured',
@@ -5063,9 +5063,9 @@ async function assertControlBindingRequired(response: Response): Promise<void> {
   const body = await response.json() as {
     error: { code: string; message: string };
   };
-  assertEquals(response.status, 500);
-  assertEquals(body.error.code, 'INTERNAL_ERROR');
-  assertStringIncludes(
+  deepStrictEqual(response.status, 500);
+  deepStrictEqual(body.error.code, 'INTERNAL_ERROR');
+  ok(
     body.error.message,
     'in-process control routes require the takos-worker DB binding',
   );
@@ -5080,48 +5080,46 @@ function stubTakosumiAccountsFetch(
   } = {},
 ) {
   const originalFetch = globalThis.fetch;
-  const originalAccountsBaseUrl = Deno.env.get('ACCOUNTS_BASE_URL');
-  const originalAccountsUrl = Deno.env.get('TAKOSUMI_ACCOUNTS_URL');
-  const originalAccountsInternalUrl = Deno.env.get(
+  const originalAccountsUrl = getEnv('TAKOSUMI_ACCOUNTS_URL');
+  const originalAccountsInternalUrl = getEnv(
     'TAKOSUMI_ACCOUNTS_INTERNAL_URL',
   );
-  const originalOidcIssuerUrl = Deno.env.get('OIDC_ISSUER_URL');
-  const originalLaunchInstallationId = Deno.env.get(
+  const originalOidcIssuerUrl = getEnv('OIDC_ISSUER_URL');
+  const originalLaunchInstallationId = getEnv(
     'INSTALL_LAUNCH_INSTALLATION_ID',
   );
-  const originalLaunchRedirectUri = Deno.env.get(
+  const originalLaunchRedirectUri = getEnv(
     'INSTALL_LAUNCH_REDIRECT_URI',
   );
-  const originalLaunchConsumePath = Deno.env.get('INSTALL_LAUNCH_CONSUME_PATH');
-  const originalInternalSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+  const originalLaunchConsumePath = getEnv('INSTALL_LAUNCH_CONSUME_PATH');
+  const originalInternalSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
   const accountsBaseUrl = options.opaqueLaunch?.accountsBaseUrl ??
     'https://accounts.internal';
-  Deno.env.set('TAKOSUMI_ACCOUNTS_URL', 'https://accounts.internal');
-  Deno.env.delete('ACCOUNTS_BASE_URL');
-  Deno.env.delete('TAKOSUMI_ACCOUNTS_INTERNAL_URL');
-  Deno.env.delete('OIDC_ISSUER_URL');
-  Deno.env.delete('INSTALL_LAUNCH_INSTALLATION_ID');
-  Deno.env.delete('INSTALL_LAUNCH_REDIRECT_URI');
-  Deno.env.delete('INSTALL_LAUNCH_CONSUME_PATH');
+  setEnv('TAKOSUMI_ACCOUNTS_URL', 'https://accounts.internal');
+  deleteEnv('TAKOSUMI_ACCOUNTS_INTERNAL_URL');
+  deleteEnv('OIDC_ISSUER_URL');
+  deleteEnv('INSTALL_LAUNCH_INSTALLATION_ID');
+  deleteEnv('INSTALL_LAUNCH_REDIRECT_URI');
+  deleteEnv('INSTALL_LAUNCH_CONSUME_PATH');
   if (options.opaqueLaunch) {
-    Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
-    Deno.env.set('ACCOUNTS_BASE_URL', accountsBaseUrl);
-    Deno.env.set(
+    setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+    setEnv('TAKOSUMI_ACCOUNTS_INTERNAL_URL', accountsBaseUrl);
+    setEnv(
       'INSTALL_LAUNCH_INSTALLATION_ID',
       options.opaqueLaunch.installationId,
     );
-    Deno.env.set(
+    setEnv(
       'INSTALL_LAUNCH_REDIRECT_URI',
       options.opaqueLaunch.redirectUri,
     );
     if (options.opaqueLaunch.consumePath) {
-      Deno.env.set(
+      setEnv(
         'INSTALL_LAUNCH_CONSUME_PATH',
         options.opaqueLaunch.consumePath,
       );
     }
     if (options.opaqueLaunch.issuerUrl) {
-      Deno.env.set('OIDC_ISSUER_URL', options.opaqueLaunch.issuerUrl);
+      setEnv('OIDC_ISSUER_URL', options.opaqueLaunch.issuerUrl);
     }
   }
   const accountsOrigin = new URL(accountsBaseUrl).origin;
@@ -5145,7 +5143,6 @@ function stubTakosumiAccountsFetch(
 
   return () => {
     globalThis.fetch = originalFetch;
-    restoreEnv('ACCOUNTS_BASE_URL', originalAccountsBaseUrl);
     restoreEnv('TAKOSUMI_ACCOUNTS_URL', originalAccountsUrl);
     restoreEnv('TAKOSUMI_ACCOUNTS_INTERNAL_URL', originalAccountsInternalUrl);
     restoreEnv('OIDC_ISSUER_URL', originalOidcIssuerUrl);
@@ -5238,13 +5235,13 @@ function stubAuthVerifiedFetch(input: {
   const originalFetch = globalThis.fetch;
   const originalValidateTakosumiAccountsBearer = authDeps.validateTakosumiAccountsBearer;
   const originalGetCachedUser = authDeps.getCachedUser;
-  const originalSecret = Deno.env.get('TAKOS_INTERNAL_SERVICE_SECRET');
-  const originalInternalUrl = Deno.env.get(input.internalUrlEnv);
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+  const originalSecret = getEnv('TAKOS_INTERNAL_SERVICE_SECRET');
+  const originalInternalUrl = getEnv(input.internalUrlEnv);
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
 
-  Deno.env.set('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
-  Deno.env.set(input.internalUrlEnv, input.internalUrl);
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+  setEnv('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
+  setEnv(input.internalUrlEnv, input.internalUrl);
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
 
   authDeps.validateTakosumiAccountsBearer = (validation) => {
     input.authCalls.push({
@@ -5315,14 +5312,14 @@ function stubTakosumiFetch(
   status = 200,
 ) {
   const originalFetch = globalThis.fetch;
-  const originalSecret = Deno.env.get('TAKOS_INTERNAL_SERVICE_SECRET');
-  const originalUrl = Deno.env.get('TAKOSUMI_INTERNAL_URL');
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+  const originalSecret = getEnv('TAKOS_INTERNAL_SERVICE_SECRET');
+  const originalUrl = getEnv('TAKOSUMI_INTERNAL_URL');
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
   let index = 0;
 
-  Deno.env.set('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
-  Deno.env.set('TAKOSUMI_INTERNAL_URL', 'https://takosumi.internal');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+  setEnv('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
+  setEnv('TAKOSUMI_INTERNAL_URL', 'https://takosumi.internal');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   const fetchStub: typeof fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     const bodyText = await requestBody(input, init);
@@ -5350,13 +5347,13 @@ function stubRuntimeFetch(
   status = 200,
 ) {
   const originalFetch = globalThis.fetch;
-  const originalSecret = Deno.env.get('TAKOS_INTERNAL_SERVICE_SECRET');
-  const originalUrl = Deno.env.get('TAKOSUMI_INTERNAL_URL');
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+  const originalSecret = getEnv('TAKOS_INTERNAL_SERVICE_SECRET');
+  const originalUrl = getEnv('TAKOSUMI_INTERNAL_URL');
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
 
-  Deno.env.set('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
-  Deno.env.set('TAKOSUMI_INTERNAL_URL', 'https://takosumi.internal');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+  setEnv('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
+  setEnv('TAKOSUMI_INTERNAL_URL', 'https://takosumi.internal');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   const fetchStub: typeof fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     const bodyText = await requestBody(input, init);
@@ -5383,13 +5380,13 @@ function stubGitFetch(
   status = 200,
 ) {
   const originalFetch = globalThis.fetch;
-  const originalSecret = Deno.env.get('TAKOS_INTERNAL_SERVICE_SECRET');
-  const originalUrl = Deno.env.get('TAKOS_GIT_INTERNAL_URL');
-  const originalTrustedSecret = Deno.env.get('TAKOS_INTERNAL_API_SECRET');
+  const originalSecret = getEnv('TAKOS_INTERNAL_SERVICE_SECRET');
+  const originalUrl = getEnv('TAKOS_GIT_INTERNAL_URL');
+  const originalTrustedSecret = getEnv('TAKOS_INTERNAL_API_SECRET');
 
-  Deno.env.set('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
-  Deno.env.set('TAKOS_GIT_INTERNAL_URL', 'https://git.internal');
-  Deno.env.set('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
+  setEnv('TAKOS_INTERNAL_SERVICE_SECRET', 'test-secret');
+  setEnv('TAKOS_GIT_INTERNAL_URL', 'https://git.internal');
+  setEnv('TAKOS_INTERNAL_API_SECRET', 'trusted-proxy-secret');
   const fetchStub: typeof fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     calls.push({
@@ -6257,26 +6254,61 @@ function likeNeedle(value: unknown): string {
   return String(value ?? '').replace(/^%|%$/g, '').toLowerCase();
 }
 
-function restoreEnv(key: string, value: string | undefined) {
-  if (value === undefined) Deno.env.delete(key);
-  else Deno.env.set(key, value);
+function restoreEnv(
+  key: string | undefined,
+  value?: string | undefined,
+): void {
+  if (key === undefined) return;
+  if (value === undefined) {
+    deleteEnv(key);
+  } else {
+    process.env[key] = value;
+  }
 }
 
-function setEnv(values: Record<string, string>): () => void {
+function deleteEnv(key: string): void {
+  delete process.env[key];
+}
+
+function getEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
+function setEnv(
+  values: string | Record<string, string>,
+  value?: string,
+): (() => void) | void {
+  if (typeof values === 'string') {
+    if (value !== undefined) {
+      process.env[values] = value;
+    }
+    return;
+  }
   const previous = new Map(
-    Object.keys(values).map((key) => [key, Deno.env.get(key)]),
+    Object.keys(values).map((key) => [key, getEnv(key)]),
   );
-  for (const [key, value] of Object.entries(values)) Deno.env.set(key, value);
+  for (const [key, value] of Object.entries(values)) {
+    process.env[key] = value;
+  }
   return () => {
     for (const [key, value] of previous) restoreEnv(key, value);
   };
+}
+
+function makeTempDir(
+  options: string | { prefix?: string } = {},
+): Promise<string> {
+  const prefix = typeof options === 'string'
+    ? options
+    : options.prefix ?? 'takos-';
+  return mkdtemp(join(tmpdir(), prefix));
 }
 
 async function createLocalDeploymentRepo(): Promise<{
   root: string;
   remote: string;
 }> {
-  const root = await Deno.makeTempDir({ prefix: 'takos-worker-deploy-intent-' });
+  const root = await makeTempDir({ prefix: 'takos-worker-deploy-intent-' });
   const remote = `${root}/remote.git`;
   const seed = `${root}/seed`;
   await runGit(['init', '--bare', remote], root);
@@ -6284,7 +6316,7 @@ async function createLocalDeploymentRepo(): Promise<{
   await runGit(['checkout', '-b', 'main'], seed);
   await runGit(['config', 'user.name', 'Takos Test'], seed);
   await runGit(['config', 'user.email', 'test@example.test'], seed);
-  await Deno.writeTextFile(`${seed}/README.md`, 'seed\n');
+  await writeFile(`${seed}/README.md`, 'seed\n');
   await runGit(['add', 'README.md'], seed);
   await runGit(['commit', '-m', 'seed'], seed);
   await runGit(['push', 'origin', 'main'], seed);
@@ -6300,18 +6332,12 @@ async function gitShow(
 }
 
 async function runGit(args: readonly string[], cwd: string): Promise<string> {
-  const output = await new Deno.Command('git', {
-    args: [...args],
-    cwd,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output();
-  const stdout = new TextDecoder().decode(output.stdout);
-  if (output.code !== 0) {
-    const stderr = new TextDecoder().decode(output.stderr);
+  try {
+    return execFileSync('git', [...args], { cwd, encoding: 'utf8' });
+  } catch (error) {
+    const stderr = (error as { stderr?: string }).stderr ?? '';
     throw new Error(`git ${args.join(' ')} failed: ${stderr}`);
   }
-  return stdout;
 }
 
 function requestInitMethod(init: unknown): string {

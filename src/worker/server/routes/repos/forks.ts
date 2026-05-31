@@ -34,12 +34,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       z.object({
         target_space_id: z.string().optional(),
         name: z.string().optional(),
-        // Accepted for backward compatibility with existing clients. The
-        // content-addressed full-tree fork (gitStore.forkRepository below)
-        // already carries every workflow file, so this flag no longer gates
-        // any copy step. workflows_copied always reflects the true count of
-        // workflow files present in the fork.
-        copy_workflows: z.boolean().optional(),
       }),
     ),
     async (c) => {

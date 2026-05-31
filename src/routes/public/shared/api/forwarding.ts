@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { Context } from "hono";
 import type { PlatformExecutionContext } from "takos-worker/shared/types";
 import {
@@ -46,7 +47,7 @@ export function resolveInternalServiceEndpoint(
   serviceId: string,
 ): InternalServiceEndpoint | undefined {
   const key = INTERNAL_SERVICE_URL_ENV[serviceId];
-  const url = key ? Deno.env.get(key)?.trim() : undefined;
+  const url = key ? getEnv(key)?.trim() : undefined;
   if (!url) return undefined;
   return { serviceId, audience: serviceId, url };
 }
@@ -115,7 +116,7 @@ async function forwardTakosumiRequest(
     audience: string;
   },
 ): Promise<Response | CommonErrorEnvelope> {
-  const secret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
+  const secret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
   const endpoint = resolveInternalServiceEndpoint(input.serviceId);
   const actorResult = input.actor
     ? ({ ok: true, actor: input.actor } as const)
@@ -160,7 +161,7 @@ async function forwardTakosInternalRequest(
     audience: string;
   },
 ): Promise<Response | CommonErrorEnvelope> {
-  const secret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
+  const secret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
   const endpoint = resolveInternalServiceEndpoint(input.serviceId);
   const actorResult = input.actor
     ? ({ ok: true, actor: input.actor } as const)
@@ -202,7 +203,7 @@ export async function proxyGitSmartHttpRequest(
   request: Request,
   options: { env?: ApiBindings; executionCtx?: PlatformExecutionContext } = {},
 ): Promise<Response | CommonErrorEnvelope> {
-  const secret = Deno.env.get("TAKOS_INTERNAL_SERVICE_SECRET");
+  const secret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
   const endpoint = resolveInternalServiceEndpoint("takos-git");
   if (!secret || !endpoint) {
     return commonError(

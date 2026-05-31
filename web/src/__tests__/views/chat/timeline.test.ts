@@ -1,15 +1,17 @@
-import { assert, assertEquals, assertFalse } from "@std/assert";
+import { strict as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
+import { test } from "bun:test";
+
 
 const {
   normalizeTimelineEventType,
   summarizeEvent,
 } = await import("../../../views/chat/timeline.ts");
 
-Deno.test("normalizeTimelineEventType - unknown events fall back to progress", () => {
+test("normalizeTimelineEventType - unknown events fall back to progress", () => {
   assertEquals(normalizeTimelineEventType("future.benign"), "progress");
 });
 
-Deno.test("summarizeEvent - unknown events are treated as non-failed progress", () => {
+test("summarizeEvent - unknown events are treated as non-failed progress", () => {
   const summary = summarizeEvent(
     normalizeTimelineEventType("future.benign"),
     { message: "still working" },
@@ -17,10 +19,10 @@ Deno.test("summarizeEvent - unknown events are treated as non-failed progress", 
   );
 
   assertEquals(summary.message, "still working");
-  assertFalse(summary.failed ?? false);
+  assert(!summary.failed);
 });
 
-Deno.test("summarizeEvent - failed runs still report failure", () => {
+test("summarizeEvent - failed runs still report failure", () => {
   const summary = summarizeEvent(
     "run.failed",
     { error: "boom" },

@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-import-prefix no-unversioned-import
+import { test } from "bun:test";
 import { constants } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { access } from 'node:fs/promises';
@@ -21,13 +21,9 @@ function assertSourceMatches(source: string, pattern: RegExp): void {
   );
 }
 
-Deno.test(
+test(
   'local public runtime contract - keeps bootstrap and local runtime exports free of loader registration and shim imports',
   async () => {
-    const bootstrap = await read(
-      'local-platform/bootstrap.ts',
-      sourcePackageRoot,
-    );
     const sourceRuntime = await read(
       'local-platform/runtime.ts',
       sourcePackageRoot,
@@ -55,7 +51,6 @@ Deno.test(
 
     for (
       const source of [
-        bootstrap,
         sourceRuntime,
         sourceWorker,
         sourceOciOrchestrator,
@@ -106,7 +101,7 @@ Deno.test(
   },
 );
 
-Deno.test('local public runtime contract - keeps Miniflare wiring behind the canonical tenant workload runtime factory', async () => {
+test('local public runtime contract - keeps Miniflare wiring behind the canonical tenant workload runtime factory', async () => {
   const envBuilder = await read(
     'node-platform/env-builder.ts',
     sourcePackageRoot,
@@ -152,7 +147,7 @@ Deno.test('local public runtime contract - keeps Miniflare wiring behind the can
   assert(!servicesSchema.includes('previousDeploymentId'));
 });
 
-Deno.test('local public runtime contract - publishes canonical local runtime entrypoints from src/worker', async () => {
+test('local public runtime contract - publishes canonical local runtime entrypoints from src/worker', async () => {
   const rootPackage = JSON.parse(await readFile(path.join(takosRoot, 'package.json'), 'utf8')) as {
     scripts?: Record<string, string>;
   };
@@ -202,7 +197,7 @@ Deno.test('local public runtime contract - publishes canonical local runtime ent
   await assertRejects(() => access(path.join(appRoot, 'src/worker-node.ts'), constants.F_OK));
 });
 
-Deno.test('local public runtime contract - removes the public local runner shim entirely', async () => {
+test('local public runtime contract - removes the public local runner shim entirely', async () => {
   const removedShims = [
     'node-resolve-loader.mjs',
     'cloudflare-workers-shim.mjs',
@@ -222,9 +217,16 @@ Deno.test('local public runtime contract - removes the public local runner shim 
       )
     );
   }
+
+  await assertRejects(() =>
+    access(
+      path.join(sourcePackageRoot, 'local-platform', 'bootstrap.ts'),
+      constants.F_OK,
+    )
+  );
 });
 
-Deno.test(
+test(
   'local public runtime contract - routes compose and canonical scripts through direct package imports instead of bin indirection or *-node exports',
   async () => {
     const rootPackage = JSON.parse(

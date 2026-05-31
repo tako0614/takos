@@ -59,6 +59,16 @@ export {
   parseIntValue,
   parsePort,
 } from "./env-parse.ts";
+export {
+  currentWorkingDirectory,
+  deleteEnv,
+  envObject,
+  exitProcess,
+  getEnv,
+  processArgs,
+  processId,
+  setEnv,
+} from "./runtime-env.ts";
 
 // =============================================================================
 // エラーハンドリング

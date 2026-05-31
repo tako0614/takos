@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import {
   appendFile,
   mkdir,
@@ -98,11 +99,11 @@ function normalizeServiceRecord(
 }
 
 export function resolveDataDir(): string {
-  const explicit = Deno.env.get("OCI_ORCHESTRATOR_DATA_DIR")?.trim();
+  const explicit = getEnv("OCI_ORCHESTRATOR_DATA_DIR")?.trim();
   if (explicit) {
     return path.resolve(explicit);
   }
-  const localDir = Deno.env.get("TAKOS_LOCAL_DATA_DIR")?.trim();
+  const localDir = getEnv("TAKOS_LOCAL_DATA_DIR")?.trim();
   if (localDir) {
     return path.resolve(localDir, "oci-orchestrator");
   }
@@ -111,7 +112,7 @@ export function resolveDataDir(): string {
 
 export function resolvePort(): number {
   const parsed = Number.parseInt(
-    Deno.env.get("PORT") ?? Deno.env.get("OCI_ORCHESTRATOR_PORT") ?? "",
+    getEnv("PORT") ?? getEnv("OCI_ORCHESTRATOR_PORT") ?? "",
     10,
   );
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 9002;

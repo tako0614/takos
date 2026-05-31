@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { forwardInProcessControlJsonRequest } from "../../routes/in-process-control-routes.ts";
 import type { ApiBindings } from "./bindings.ts";
 import {
@@ -122,8 +123,8 @@ type OpaqueLaunchTokenConfig =
   | { ok: false };
 
 function opaqueLaunchTokenConfig(): OpaqueLaunchTokenConfig {
-  const installationId = Deno.env.get("INSTALL_LAUNCH_INSTALLATION_ID")?.trim();
-  const redirectUri = Deno.env.get("INSTALL_LAUNCH_REDIRECT_URI")?.trim();
+  const installationId = getEnv("INSTALL_LAUNCH_INSTALLATION_ID")?.trim();
+  const redirectUri = getEnv("INSTALL_LAUNCH_REDIRECT_URI")?.trim();
   if (installationId && redirectUri) {
     return { ok: true, installationId, redirectUri };
   }
@@ -131,18 +132,16 @@ function opaqueLaunchTokenConfig(): OpaqueLaunchTokenConfig {
 }
 
 function takosumiAccountsBaseUrl(): string | null {
-  const value = Deno.env.get("ACCOUNTS_BASE_URL")?.trim() ||
-    Deno.env.get("TAKOSUMI_ACCOUNTS_INTERNAL_URL")?.trim() ||
-    Deno.env.get("TAKOSUMI_ACCOUNTS_URL")?.trim() ||
-    Deno.env.get("OIDC_ISSUER_URL")?.trim();
+  const value = getEnv("TAKOSUMI_ACCOUNTS_INTERNAL_URL")?.trim() ||
+    getEnv("TAKOSUMI_ACCOUNTS_URL")?.trim() ||
+    getEnv("OIDC_ISSUER_URL")?.trim();
   return normalizedUrl(value);
 }
 
 function takosumiAccountsIssuerUrl(): string | null {
-  const value = Deno.env.get("OIDC_ISSUER_URL")?.trim() ||
-    Deno.env.get("TAKOSUMI_ACCOUNTS_URL")?.trim() ||
-    Deno.env.get("ACCOUNTS_BASE_URL")?.trim() ||
-    Deno.env.get("TAKOSUMI_ACCOUNTS_INTERNAL_URL")?.trim();
+  const value = getEnv("OIDC_ISSUER_URL")?.trim() ||
+    getEnv("TAKOSUMI_ACCOUNTS_URL")?.trim() ||
+    getEnv("TAKOSUMI_ACCOUNTS_INTERNAL_URL")?.trim();
   return normalizedUrl(value);
 }
 
@@ -214,7 +213,7 @@ async function createLaunchSession(input: {
   issuer: string;
   launch: LaunchConsumeResult;
 }): Promise<Response> {
-  const secret = Deno.env.get("TAKOS_INTERNAL_API_SECRET")?.trim();
+  const secret = getEnv("TAKOS_INTERNAL_API_SECRET")?.trim();
   if (!secret) {
     return Response.json(
       commonError(

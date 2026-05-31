@@ -3,17 +3,18 @@
 // like /me or /workers without disallowing it in robots.txt should fail
 // loudly so we don't accidentally index a login redirect or worker probe.
 
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { strict as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
+import { test } from "bun:test";
 
 const ROBOTS_PATH = new URL(
   "../../../public/robots.txt",
   import.meta.url,
 );
 
-Deno.test("robots.txt disallows authenticated and internal surfaces", async () => {
-  const body = await Deno.readTextFile(ROBOTS_PATH);
+test("robots.txt disallows authenticated and internal surfaces", async () => {
+  const body = await Bun.file(ROBOTS_PATH).text();
 
-  assertStringIncludes(body, "User-agent: *");
+  assert(body.includes("User-agent: *"));
   for (
     const required of [
       "Disallow: /auth",
@@ -24,13 +25,13 @@ Deno.test("robots.txt disallows authenticated and internal surfaces", async () =
       "Disallow: /_internal",
     ]
   ) {
-    assertStringIncludes(body, required);
+    assert(body.includes(required));
   }
 });
 
-Deno.test("robots.txt still allows the public marketing surface", async () => {
-  const body = await Deno.readTextFile(ROBOTS_PATH);
-  assertStringIncludes(body, "Allow: /");
+test("robots.txt still allows the public marketing surface", async () => {
+  const body = await Bun.file(ROBOTS_PATH).text();
+  assert(body.includes("Allow: /"));
 
   // Sanity-check the file is not empty and ends with a newline so the
   // last directive is always emitted by static-file servers.

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import {
@@ -27,7 +28,7 @@ const workerSpec: AppCompute & { kind: "worker" } = {
   },
 };
 
-Deno.test("native Cloudflare container metadata emits DO binding, container config, and migration", () => {
+test("native Cloudflare container metadata emits DO binding, container config, and migration", () => {
   assertEquals(buildNativeCloudflareContainerBindings(workerSpec), [
     {
       type: "durable_object_namespace",

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals, assertFalse } from "@std/assert";
 
 import {
@@ -6,17 +7,17 @@ import {
 } from "../routes.ts";
 import { VALID_STATUSES } from "../handlers.ts";
 
-Deno.test("agent task statuses include failed", () => {
+test("agent task statuses include failed", () => {
   assert(VALID_STATUSES.includes("failed"));
 });
 
-Deno.test("failed agent task status is terminal", () => {
+test("failed agent task status is terminal", () => {
   assert(isTerminalAgentTaskStatus("failed"));
   assert(isTerminalAgentTaskStatus("completed"));
   assertFalse(isTerminalAgentTaskStatus("blocked"));
 });
 
-Deno.test("terminal statuses populate completedAt when missing", () => {
+test("terminal statuses populate completedAt when missing", () => {
   const updates: { startedAt?: string | null; completedAt?: string | null } =
     {};
   applyAgentTaskStatusTimestamps(updates, "failed", "2026-04-20T01:02:03.000Z");
@@ -25,7 +26,7 @@ Deno.test("terminal statuses populate completedAt when missing", () => {
   });
 });
 
-Deno.test("non-terminal statuses do not set terminal timestamps", () => {
+test("non-terminal statuses do not set terminal timestamps", () => {
   const updates: { startedAt?: string | null; completedAt?: string | null } =
     {};
   applyAgentTaskStatusTimestamps(

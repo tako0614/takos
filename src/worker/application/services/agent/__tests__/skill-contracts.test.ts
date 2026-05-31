@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
 
 import {
@@ -6,7 +7,7 @@ import {
   normalizeSkillOutputModes,
 } from "../skill-contracts.ts";
 
-Deno.test("normalizeSkillOutputMode accepts documented aliases", () => {
+test("normalizeSkillOutputMode accepts documented aliases", () => {
   assertEquals(normalizeSkillOutputMode("text"), "chat");
   assertEquals(normalizeSkillOutputMode("structured"), "chat");
   assertEquals(normalizeSkillOutputMode("artifact"), "artifact");
@@ -14,7 +15,7 @@ Deno.test("normalizeSkillOutputMode accepts documented aliases", () => {
   assertEquals(normalizeSkillOutputMode("unknown"), null);
 });
 
-Deno.test("normalizeSkillOutputModes canonicalizes and deduplicates aliases", () => {
+test("normalizeSkillOutputModes canonicalizes and deduplicates aliases", () => {
   assertEquals(
     normalizeSkillOutputModes([
       "chat",
@@ -30,7 +31,7 @@ Deno.test("normalizeSkillOutputModes canonicalizes and deduplicates aliases", ()
   );
 });
 
-Deno.test("normalizeSkillExecutionContract keeps durable modes and alias output modes", () => {
+test("normalizeSkillExecutionContract keeps durable modes and alias output modes", () => {
   const contract = normalizeSkillExecutionContract({
     preferred_tools: [" create_artifact ", ""],
     durable_output_hints: ["artifact", "invalid", "repo"],
@@ -48,7 +49,7 @@ Deno.test("normalizeSkillExecutionContract keeps durable modes and alias output 
   });
 });
 
-Deno.test("normalizeSkillExecutionContract defaults output_modes to chat", () => {
+test("normalizeSkillExecutionContract defaults output_modes to chat", () => {
   const contract = normalizeSkillExecutionContract({});
   assertEquals(contract.output_modes, ["chat"]);
   assert(contract.durable_output_hints.length === 0);

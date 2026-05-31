@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
 
 import { createSerializationGate } from "../persistent-d1.ts";
 import { normalizePostgresSql } from "../d1-shared.ts";
 
-Deno.test("createSerializationGate serializes acquirers FIFO and excludes until released", async () => {
+test("createSerializationGate serializes acquirers FIFO and excludes until released", async () => {
   const gate = createSerializationGate();
   const order: string[] = [];
 
@@ -33,7 +34,7 @@ Deno.test("createSerializationGate serializes acquirers FIFO and excludes until 
   assertEquals(order, ["a-acquired", "b-acquired"]);
 });
 
-Deno.test("createSerializationGate preserves request order across many waiters", async () => {
+test("createSerializationGate preserves request order across many waiters", async () => {
   const gate = createSerializationGate();
   const order: number[] = [];
   const tasks: Promise<void>[] = [];
@@ -52,13 +53,13 @@ Deno.test("createSerializationGate preserves request order across many waiters",
   assertEquals(order, [0, 1, 2, 3, 4]);
 });
 
-Deno.test("normalizePostgresSql collapses BEGIN modes only as a whole statement", () => {
+test("normalizePostgresSql collapses BEGIN modes only as a whole statement", () => {
   assertEquals(normalizePostgresSql("BEGIN IMMEDIATE"), "BEGIN");
   assertEquals(normalizePostgresSql("BEGIN IMMEDIATE;"), "BEGIN");
   assertEquals(normalizePostgresSql("  begin   exclusive  "), "BEGIN");
 });
 
-Deno.test("normalizePostgresSql does not mutate BEGIN-mode tokens inside literals or bodies", () => {
+test("normalizePostgresSql does not mutate BEGIN-mode tokens inside literals or bodies", () => {
   // String literal containing the token sequence must be preserved verbatim.
   const literal = "INSERT INTO t (v) VALUES ('BEGIN IMMEDIATE')";
   assertEquals(normalizePostgresSql(literal), literal);

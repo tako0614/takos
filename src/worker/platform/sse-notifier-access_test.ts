@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { getSseNotifier } from "./sse-notifier-access.ts";
 
-Deno.test("getSseNotifier returns undefined for missing or malformed env", () => {
+test("getSseNotifier returns undefined for missing or malformed env", () => {
   assertEquals(getSseNotifier(null), undefined);
   assertEquals(getSseNotifier(undefined), undefined);
   assertEquals(getSseNotifier({}), undefined);
@@ -16,7 +17,7 @@ Deno.test("getSseNotifier returns undefined for missing or malformed env", () =>
   );
 });
 
-Deno.test("getSseNotifier returns the injected Node SSE notifier", () => {
+test("getSseNotifier returns the injected Node SSE notifier", () => {
   const notifier = {
     emit: (
       _channel: string,

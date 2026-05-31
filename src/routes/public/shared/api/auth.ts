@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type { TakosumiActorContext } from "takosumi-contract-v2/internal/rpc";
 import type { PlatformExecutionContext } from "takos-worker/shared/types";
 import { forwardInProcessControlJsonRequest } from "../../routes/in-process-control-routes.ts";
@@ -116,11 +117,11 @@ export async function optionalActorAccountId(
  */
 function unauthenticatedActorHeadersAllowed(): boolean {
   if (
-    Deno.env.get("TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS") !== "true"
+    getEnv("TAKOS_API_ALLOW_UNAUTHENTICATED_ACTOR_HEADERS") !== "true"
   ) {
     return false;
   }
-  return !Deno.env.get("TAKOS_INTERNAL_API_SECRET");
+  return !getEnv("TAKOS_INTERNAL_API_SECRET");
 }
 
 async function actorFromDirectCredentials(
@@ -131,7 +132,7 @@ async function actorFromDirectCredentials(
 ): Promise<ActorExtractionResult | null> {
   if (!hasDirectCredential(request.headers)) return null;
 
-  const secret = Deno.env.get("TAKOS_INTERNAL_API_SECRET");
+  const secret = getEnv("TAKOS_INTERNAL_API_SECRET");
   if (!secret || !options.env) {
     return {
       ok: false,
@@ -316,7 +317,7 @@ function actorFromHeaders(
 }
 
 export function hasTrustedActorHeaderSource(headers: Headers): boolean {
-  const expectedSecret = Deno.env.get("TAKOS_INTERNAL_API_SECRET");
+  const expectedSecret = getEnv("TAKOS_INTERNAL_API_SECRET");
   const actualSecret = headers.get("x-takos-internal-secret");
   return Boolean(
     expectedSecret && actualSecret &&

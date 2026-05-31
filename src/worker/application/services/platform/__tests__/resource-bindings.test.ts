@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { ServiceBindingRow } from "../desired-state-types.ts";
@@ -27,7 +28,7 @@ function bindingRow(
   };
 }
 
-Deno.test("toServiceBinding maps public secret resource types to runtime secret_text", () => {
+test("toServiceBinding maps public secret resource types to runtime secret_text", () => {
   assertEquals(toRuntimeBindingType("secretRef"), "secret_text");
   assertEquals(toRuntimeBindingType("secret"), "secret_text");
 
@@ -58,7 +59,7 @@ Deno.test("toServiceBinding maps public secret resource types to runtime secret_
   );
 });
 
-Deno.test("toServiceBinding requires resolved secret text for portable secret resources", () => {
+test("toServiceBinding requires resolved secret text for portable secret resources", () => {
   const row = bindingRow({
     bindingName: "PORTABLE_TOKEN",
     bindingType: "secretRef",
@@ -77,7 +78,7 @@ Deno.test("toServiceBinding requires resolved secret text for portable secret re
   );
 });
 
-Deno.test("toServiceBinding accepts canonical public resource types", () => {
+test("toServiceBinding accepts canonical public resource types", () => {
   assertEquals(toPublicResourceType("sql"), "sql");
   assertEquals(toPublicResourceType("object-store"), "object-store");
   assertEquals(toPublicResourceType("key-value"), "key-value");
@@ -127,7 +128,7 @@ Deno.test("toServiceBinding accepts canonical public resource types", () => {
   );
 });
 
-Deno.test("toServiceBinding uses durable namespace config from resource config", () => {
+test("toServiceBinding uses durable namespace config from resource config", () => {
   assertEquals(
     toServiceBinding(bindingRow({
       bindingName: "DO",
@@ -149,7 +150,7 @@ Deno.test("toServiceBinding uses durable namespace config from resource config",
   );
 });
 
-Deno.test("toServiceBinding uses workflow runtime export from resource config", () => {
+test("toServiceBinding uses workflow runtime export from resource config", () => {
   assertEquals(
     toServiceBinding(bindingRow({
       bindingName: "WORKFLOW",
@@ -170,7 +171,7 @@ Deno.test("toServiceBinding uses workflow runtime export from resource config", 
   );
 });
 
-Deno.test("toServiceBinding uses workflow runtime name when export is absent", () => {
+test("toServiceBinding uses workflow runtime name when export is absent", () => {
   assertEquals(
     toServiceBinding(bindingRow({
       bindingName: "WORKFLOW",
