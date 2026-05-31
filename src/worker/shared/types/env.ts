@@ -65,9 +65,20 @@ export type FetchBinding = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
+export type ContainerHostBinding = DurableNamespaceBinding<
+  FetchBinding & Record<string, unknown>
+>;
+
 export interface ContainerHostEnv {
   RUNTIME_HOST?: FetchBinding;
   EXECUTOR_HOST?: FetchBinding;
+  RUNTIME_CONTAINER?: ContainerHostBinding;
+  EXECUTOR_CONTAINER?: ContainerHostBinding;
+  EXECUTOR_CONTAINER_TIER2?: ContainerHostBinding;
+  EXECUTOR_CONTAINER_TIER3?: ContainerHostBinding;
+  TAKOS_WORKER?: FetchBinding;
+  PROXY_BASE_URL?: string;
+  TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
   /**
    * Egress proxy used by the web tool (`application/tools/custom/web.ts`) and
    * the executor host (`runtime/container-hosts/executor-host.ts` /
@@ -138,6 +149,7 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOSUMI_ACCOUNTS_URL?: string;
   TAKOSUMI_ACCOUNTS_TOKEN?: string;
   ADMIN_DOMAIN: string;
+  AUTH_PUBLIC_BASE_URL?: string;
   /**
    * Optional operator-controlled origin for server-to-server calls from tenant
    * workers back into Takos. ADMIN_DOMAIN remains the public Takos admin
@@ -254,7 +266,7 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOS_INTERNAL_SERVICE_SECRET?: string;
   /** Internal takos-git service URL for signed Git hosting RPC calls. */
   TAKOS_GIT_INTERNAL_URL?: string;
-  /** Shared secret for takos-executor-host -> takos internal executor RPC. */
+  /** Shared secret for executor container host -> takos internal executor RPC. */
   EXECUTOR_PROXY_SECRET?: string;
   AUDIT_IP_HASH_KEY?: string;
   // Bot protection

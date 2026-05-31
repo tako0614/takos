@@ -146,11 +146,11 @@ async function checkHelmBridgeGuard(): Promise<void> {
 }
 
 async function gitLsFiles(path: string): Promise<string[]> {
-  const output = await new runtime.Command('git', {
+  const output = await runtime.runCommand('git', {
     args: ['ls-files', path],
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output();
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
   if (output.code !== 0) {
     throw new Error(`git ls-files ${path} failed: ${decode(output.stderr)}`);
   }

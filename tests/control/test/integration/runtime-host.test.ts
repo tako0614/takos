@@ -28,12 +28,12 @@ test("runtime-host builds the runtime container env from the host worker env", (
     buildRuntimeContainerEnv({
       ADMIN_DOMAIN: "test.takos.jp",
       PLATFORM_PUBLIC_KEY: "public-key",
-      PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+      PROXY_BASE_URL: "https://staging-admin.example.com",
     }),
     {
       TAKOS_API_URL: "https://test.takos.jp",
       JWT_PUBLIC_KEY: "public-key",
-      PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+      PROXY_BASE_URL: "https://staging-admin.example.com",
     },
   );
 });
@@ -56,7 +56,7 @@ test("runtime-host forwards requests through the runtime container DO fetch path
     RUNTIME_CONTAINER: { getByName },
     ADMIN_DOMAIN: "test.takos.jp",
     PLATFORM_PUBLIC_KEY: "public-key",
-    PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+    PROXY_BASE_URL: "https://staging-admin.example.com",
   } as RuntimeHostEnv;
   const request = new Request("https://runtime-host/api/runtime/ping");
 
@@ -88,7 +88,7 @@ test("runtime-host injects a proxy token on runtime session creation", async () 
     },
     ADMIN_DOMAIN: "test.takos.jp",
     PLATFORM_PUBLIC_KEY: "public-key",
-    PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+    PROXY_BASE_URL: "https://staging-admin.example.com",
   } as RuntimeHostEnv;
 
   await runtimeHost.fetch(
@@ -135,7 +135,7 @@ test("runtime-host proxies /forward/api-proxy requests to takos via service bind
     TAKOS_WORKER: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
     PLATFORM_PUBLIC_KEY: "public-key",
-    PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+    PROXY_BASE_URL: "https://staging-admin.example.com",
   };
 
   const response = await runtimeHost.fetch(
@@ -187,7 +187,7 @@ test("runtime-host proxies /forward/heartbeat requests to takos via service bind
     TAKOS_WORKER: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
     PLATFORM_PUBLIC_KEY: "public-key",
-    PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+    PROXY_BASE_URL: "https://staging-admin.example.com",
   };
 
   const response = await runtimeHost.fetch(
@@ -229,7 +229,7 @@ test("runtime-host rejects /forward/* requests without a valid proxy token", asy
     },
     ADMIN_DOMAIN: "test.takos.jp",
     PLATFORM_PUBLIC_KEY: "public-key",
-    PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+    PROXY_BASE_URL: "https://staging-admin.example.com",
   };
 
   const response = await runtimeHost.fetch(
@@ -271,7 +271,7 @@ test("runtime-host surfaces startup failures from the runtime container DO fetch
       },
       ADMIN_DOMAIN: "test.takos.jp",
       PLATFORM_PUBLIC_KEY: "public-key",
-      PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
+      PROXY_BASE_URL: "https://staging-admin.example.com",
     };
 
     const response = await runtimeHost.fetch(

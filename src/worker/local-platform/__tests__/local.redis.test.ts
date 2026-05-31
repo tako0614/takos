@@ -57,7 +57,6 @@ function installRedisMock(): void {
         // existing record, bump version, store, return the stored JSON. Single
         // mock client => execution is already serialized, matching Redis's
         // atomic EVAL semantics.
-        // deno-lint-ignore require-await
         async eval(
           _script: string,
           options: { keys: string[]; arguments: string[] },

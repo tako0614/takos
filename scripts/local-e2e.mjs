@@ -76,15 +76,15 @@ async function runCommand(commandName, args, options = {}) {
   } = options;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const command = new runtime.Command(commandName, {
+  const command = runtime.runCommand(commandName, {
     args,
     env,
-    stdout: 'piped',
-    stderr: 'piped',
+    stdout: 'pipe',
+    stderr: 'pipe',
     signal: controller.signal,
   });
   try {
-    const output = await command.output();
+    const output = await command;
     const stdout = new TextDecoder().decode(output.stdout);
     const stderr = new TextDecoder().decode(output.stderr);
     if (check && output.code !== 0) {

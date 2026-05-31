@@ -21,6 +21,9 @@ import type {
 export type WorkerEnv = DbEnv & {
   // --- runner ---
   EXECUTOR_HOST?: { fetch(request: Request): Promise<Response> };
+  EXECUTOR_CONTAINER?: DurableObjectNamespace;
+  EXECUTOR_CONTAINER_TIER2?: DurableObjectNamespace;
+  EXECUTOR_CONTAINER_TIER3?: DurableObjectNamespace;
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   RUN_NOTIFIER: DurableObjectNamespace;
   TAKOS_OFFLOAD?: ObjectStoreBinding;
@@ -37,8 +40,13 @@ export type WorkerEnv = DbEnv & {
 
   // --- workflow-runner ---
   RUNTIME_HOST?: { fetch(request: Request): Promise<Response> };
+  RUNTIME_CONTAINER?: DurableObjectNamespace;
   ENCRYPTION_KEY?: string;
   ADMIN_DOMAIN: string;
+  AUTH_PUBLIC_BASE_URL?: string;
+  PROXY_BASE_URL?: string;
+  TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
+  TAKOS_EGRESS?: { fetch(request: Request): Promise<Response> };
   TENANT_BASE_DOMAIN: string;
   WFP_DISPATCH_NAMESPACE?: string;
   CF_ACCOUNT_ID?: string;

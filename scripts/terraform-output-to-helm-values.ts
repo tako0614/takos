@@ -405,11 +405,11 @@ function requireMappedKeys(values: JsonRecord, keys: readonly string[], label: s
 }
 
 async function terraformOutputJson(terraformDir: string): Promise<string> {
-  const output = await new runtime.Command('terraform', {
+  const output = await runtime.runCommand('terraform', {
     args: [`-chdir=${terraformDir}`, 'output', '-json'],
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output();
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
 
   if (!output.success) {
     const stderr = new TextDecoder().decode(output.stderr).trimEnd();

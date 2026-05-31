@@ -4,11 +4,12 @@ import type {
 } from "../../shared/types/bindings.ts";
 
 /**
- * takos-runtime-host service
+ * Runtime container host handler
  *
  * Hosts TakosRuntimeContainer as a Cloudflare Container (Durable Object sidecar).
- * Other workers call this via RUNTIME_HOST service binding; requests are forwarded
- * transparently to the Node.js Express server running inside the container.
+ * The unified takos Worker calls this in-process when no RUNTIME_HOST service
+ * binding is configured. Requests are forwarded transparently to the Node.js
+ * Express server running inside the container.
  *
  * Container → host communication uses DO-local random tokens (same pattern as
  * executor). The container calls /forward/* endpoints on this worker,

@@ -46,36 +46,34 @@ export function exit(code = 0): never {
   process.exit(code);
 }
 
-export class Command {
-  constructor(
-    private readonly command: string,
-    private readonly options: {
-      args?: string[];
-      cwd?: string;
-      env?: Record<string, string>;
-      stdout?: "piped" | "inherit" | "null";
-      stderr?: "piped" | "inherit" | "null";
-      signal?: AbortSignal;
-    } = {},
-  ) {}
+type StdioMode = "pipe" | "inherit" | "ignore";
 
-  async output(): Promise<CommandOutput> {
-    const proc = Bun.spawn([this.command, ...(this.options.args ?? [])], {
-      cwd: this.options.cwd,
-      env: this.options.env
-        ? { ...process.env, ...this.options.env }
-        : process.env,
-      stdout: this.options.stdout === "inherit" ? "inherit" : "pipe",
-      stderr: this.options.stderr === "inherit" ? "inherit" : "pipe",
-      signal: this.options.signal,
-    });
-    const [code, stdout, stderr] = await Promise.all([
-      proc.exited,
-      proc.stdout ? streamBytes(proc.stdout) : Promise.resolve(new Uint8Array()),
-      proc.stderr ? streamBytes(proc.stderr) : Promise.resolve(new Uint8Array()),
-    ]);
-    return { code, success: code === 0, stdout, stderr };
-  }
+export async function runCommand(
+  command: string,
+  options: {
+    args?: string[];
+    cwd?: string;
+    env?: Record<string, string>;
+    stdout?: StdioMode;
+    stderr?: StdioMode;
+    signal?: AbortSignal;
+  } = {},
+): Promise<CommandOutput> {
+  const stdoutMode = options.stdout ?? "pipe";
+  const stderrMode = options.stderr ?? "pipe";
+  const proc = Bun.spawn([command, ...(options.args ?? [])], {
+    cwd: options.cwd,
+    env: options.env ? { ...process.env, ...options.env } : process.env,
+    stdout: stdoutMode,
+    stderr: stderrMode,
+    signal: options.signal,
+  });
+  const [code, stdout, stderr] = await Promise.all([
+    proc.exited,
+    proc.stdout ? streamBytes(proc.stdout) : Promise.resolve(new Uint8Array()),
+    proc.stderr ? streamBytes(proc.stderr) : Promise.resolve(new Uint8Array()),
+  ]);
+  return { code, success: code === 0, stdout, stderr };
 }
 
 export type CommandOutput = {
