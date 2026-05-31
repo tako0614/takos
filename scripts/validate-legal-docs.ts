@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 const requiredDocs = [
   {
@@ -98,7 +98,7 @@ const requiredDocs = [
       'First-party License Inventory',
       'REUSE / SPDX Baseline',
       'takos-private',
-      'deno task check:license-compliance',
+      'bun run check:license-compliance',
       'AGPL-3.0-only',
       'GPL-3.0-only',
       'MIT',

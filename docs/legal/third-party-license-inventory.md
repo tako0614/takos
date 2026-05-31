@@ -72,4 +72,4 @@ When a lockfile changes, the release owner must:
    appears
 4. keep first-party package license metadata aligned with direct copyleft
    dependencies
-5. rerun `deno task check:license-compliance` from the ecosystem root
+5. rerun `bun run check:license-compliance` from the ecosystem root

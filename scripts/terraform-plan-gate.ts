@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read --allow-write=.terraform-plan --allow-run --allow-env=TAKOS_TERRAFORM_BIN
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 type TargetId = 'aws' | 'gcp';
 
@@ -260,8 +260,8 @@ function requiredArgValue(values: readonly string[], index: number, flag: string
 function usage(): string {
   return [
     'Usage:',
-    '  deno task terraform:plan-gate',
-    '  deno task terraform:plan-gate --target aws --out-dir .terraform-plan',
-    '  TAKOS_TERRAFORM_BIN=/path/to/terraform deno task terraform:plan-gate',
+    '  bun run terraform:plan-gate',
+    '  bun run terraform:plan-gate --target aws --out-dir .terraform-plan',
+    '  TAKOS_TERRAFORM_BIN=/path/to/terraform bun run terraform:plan-gate',
   ].join('\n');
 }

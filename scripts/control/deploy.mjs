@@ -1,6 +1,6 @@
-#!/usr/bin/env -S deno run --allow-all
+#!/usr/bin/env bun
 // Parameterized deploy script for Takos Cloudflare services.
-// Usage: deno run --allow-all scripts/deploy.mjs <service> <environment> [--debug]
+// Usage: bun scripts/control/deploy.mjs <service> <environment> [--debug]
 //
 // Services: worker, dispatch, runtime-host, executor-host
 // Environments: production (base config), staging ([env.staging])
@@ -24,7 +24,7 @@ const ENVIRONMENTS = ['production', 'staging'];
 
 function usage() {
   console.error(`
-Usage: deno task deploy:service <service> <environment> [--debug]
+Usage: bun run deploy:service <service> <environment> [--debug]
 
 Services:
   worker         Unified public/control worker (runs build before deploy)
@@ -40,10 +40,10 @@ Flags:
   --debug        Build with staging-debug mode (worker + staging only)
 
 Examples:
-  deno task deploy:service worker production
-  deno task deploy:service worker staging --debug
-  deno task deploy:service dispatch staging
-  deno task deploy:service runtime-host production
+  bun run deploy:service worker production
+  bun run deploy:service worker staging --debug
+  bun run deploy:service dispatch staging
+  bun run deploy:service runtime-host production
 `);
   Deno.exit(1);
 }
@@ -67,12 +67,12 @@ export function buildDeployCommands(
   }
 
   const wranglerArgs = getWranglerDeployArgs(env);
-  const deployBase = ['deno', 'run', '-A', 'npm:wrangler', 'deploy'];
+  const deployBase = ['bunx', 'wrangler', 'deploy'];
   const commands = [];
 
   if (service === 'worker') {
     commands.push(
-      debug ? 'deno task build --mode staging-debug' : 'deno task build',
+      debug ? 'bun run build --mode staging-debug' : 'bun run build',
     );
     commands.push([...deployBase, '--config', SERVICES.worker, ...wranglerArgs].join(' '));
     return commands;
