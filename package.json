@@ -59,7 +59,8 @@
     "distribution:smoke": "bun --preload ./shims/deno-compat.ts scripts/distribution-smoke.ts",
     "release-gate": "bun --preload ./shims/deno-compat.ts scripts/release-gate.ts",
     "release-manifest:check-clean": "bun --preload ./shims/deno-compat.ts scripts/build-release-manifest.ts --require-clean-git",
-    "release-manifest:check-artifacts": "bun --preload ./shims/deno-compat.ts scripts/build-release-manifest.ts --require-clean-git --require-image-digests"
+    "release-manifest:check-artifacts": "bun --preload ./shims/deno-compat.ts scripts/build-release-manifest.ts --require-clean-git --require-image-digests",
+    "deploy:service": "bun scripts/control/deploy.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.700.0",

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 const dashboardDir = 'deploy/observability/grafana';
 const costDashboardPath = `${dashboardDir}/takos-cost-attribution.json`;

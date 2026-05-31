@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read --allow-run=git
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 type CheckResult = {
   name: string;

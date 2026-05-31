@@ -54,7 +54,7 @@ commercial-license option.
 Run from the ecosystem root:
 
 ```sh
-deno task check:license-compliance
+bun run check:license-compliance
 ```
 
 The gate validates:

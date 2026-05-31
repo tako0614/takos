@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read --allow-run=deno,git
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 const retiredRouteTests = [
   'public v3 deployment create rejects unmanaged direct deploy when GitOps is configured',

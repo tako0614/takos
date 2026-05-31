@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";

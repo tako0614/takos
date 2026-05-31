@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read --allow-write=deploy/helm/takos --allow-run=terraform
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 type JsonValue =
   | null
@@ -571,8 +571,8 @@ function requiredArgValue(values: readonly string[], index: number, flag: string
 function usage(): string {
   return [
     'Usage:',
-    '  deno task terraform:helm-values --target aws --terraform-dir deploy/terraform/environments/aws-staging --output deploy/helm/takos/values-aws-staging.generated.yaml',
-    '  deno task terraform:helm-values --target gcp --input terraform-output.json --stdout',
-    '  deno task terraform:helm-values:check',
+    '  bun run terraform:helm-values --target aws --terraform-dir deploy/terraform/environments/aws-staging --output deploy/helm/takos/values-aws-staging.generated.yaml',
+    '  bun run terraform:helm-values --target gcp --input terraform-output.json --stdout',
+    '  bun run terraform:helm-values:check',
   ].join('\n');
 }

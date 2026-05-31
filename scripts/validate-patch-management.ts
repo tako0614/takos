@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 const requiredFiles = [
   '.github/dependabot.yml',
