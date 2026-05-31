@@ -27,6 +27,7 @@ graph TB
   Accounts[Takosumi Accounts<br/>operator account plane]
   Kernel[Takosumi Installer API]
   Storage[(Installation / Deployment Ledger)]
+  ContainerHosts[Cloudflare Containers DO classes<br/>runtime / executor host callbacks]
   Agent[takos-agent container<br/>Rust execution service]
   Git[takos-git container<br/>Git Smart HTTP / object storage]
 
@@ -34,7 +35,9 @@ graph TB
   User --> AppGateway
   Web --> AppGateway
   AppGateway --> Accounts
-  AppGateway --> Agent
+  AppGateway --> ContainerHosts
+  ContainerHosts --> AppGateway
+  ContainerHosts --> Agent
   AppGateway --> Git
   Accounts --> Kernel
   Kernel --> Storage
@@ -47,6 +50,8 @@ graph TB
   implementation internals
 - Takos product public API surface は `takos-worker` が所有する。Takosumi Installer
   API は operator / automation 向けの別 surface として扱う
+- Cloudflare Containers の runtime / executor host は同じ `takos-worker`
+  script 内の DO class として deploy し、追加の host Worker service を前提にしない
 
 ## Sequence Diagram: Installation Dry-run
 

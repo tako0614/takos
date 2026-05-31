@@ -57,6 +57,10 @@ bun run local:e2e      # E2E スモークテスト
 | `postgres`    | データベース                  |
 | `redis`       | キュー / キャッシュ           |
 
+Takos product の public/control Worker は `takos-worker` 1 つです。local / self-host
+stack で runtime host や executor host の helper endpoint が見える場合も、これは container
+接続用の実装 detail であり、追加の Takos product Worker 境界ではありません。
+
 ## 個別のプロセスを起動する
 
 compose を使わず個別に起動したい場合は、Takos repo 内の source owner から起動します。

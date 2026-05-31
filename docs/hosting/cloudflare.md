@@ -178,9 +178,12 @@ wrangler kv namespace create HOSTNAME_ROUTING
 
 返される `id` を `wrangler.toml` の `[[kv_namespaces]]` セクションに設定する。
 
-### Dispatch Namespace
+### Workers-for-Platforms backend (optional)
 
-テナント Worker を論理分離するための namespace:
+tenant workload を Cloudflare Workers backend に載せる operator profile だけ、
+Workers for Platforms の dispatch namespace を作成します。Takos product 本体は
+単一 `takos` Worker と Cloudflare Containers DO class で構成されるため、この
+namespace は product Worker の分割には使いません。
 
 ```bash
 wrangler dispatch-namespace create takos-tenants
@@ -249,7 +252,6 @@ OIDC_REDIRECT_URI = "https://admin.example.com/auth/oidc/callback"
 AUTH_PUBLIC_BASE_URL = "https://admin.example.com"
 PROXY_BASE_URL = "https://admin.example.com"
 TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://admin.example.com"
-AUTH_ALLOWED_REDIRECT_DOMAINS = "app.example.com"
 ROUTING_DO_PHASE = "4"
 CF_ACCOUNT_ID = "replace-with-account-id"
 CF_ZONE_ID = "replace-with-zone-id"
@@ -268,7 +270,7 @@ run_worker_first = true
 binding = "DB"
 database_name = "takos-control-db"
 database_id = "replace-with-d1-database-id"
-migrations_dir = "db/migrations"
+migrations_dir = "db/migrations-control/migrations"
 
 # KV（ホスト名ルーティング用）
 [[kv_namespaces]]
@@ -302,8 +304,74 @@ name = "ROUTING_DO"
 class_name = "RoutingDO"
 
 [[durable_objects.bindings]]
-name = "GIT_PUSH_LOCK"
-class_name = "GitPushLockDO"
+name = "RUNTIME_CONTAINER"
+class_name = "TakosRuntimeContainer"
+
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER"
+class_name = "ExecutorContainerTier1"
+
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER2"
+class_name = "ExecutorContainerTier2"
+
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER3"
+class_name = "ExecutorContainerTier3"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionDO"]
+
+[[migrations]]
+tag = "v2"
+new_classes = ["RunNotifierDO"]
+
+[[migrations]]
+tag = "v3"
+new_classes = ["RateLimiterDO"]
+
+[[migrations]]
+tag = "v4"
+new_classes = ["NotificationNotifierDO"]
+
+[[migrations]]
+tag = "v5"
+new_classes = ["RoutingDO"]
+
+[[migrations]]
+tag = "v6"
+new_sqlite_classes = [
+  "TakosRuntimeContainer",
+  "ExecutorContainerTier1",
+  "ExecutorContainerTier2",
+  "ExecutorContainerTier3",
+]
+
+[[containers]]
+class_name = "TakosRuntimeContainer"
+image = "ghcr.io/takos/runtime-service:latest"
+image_build_context = "../../.."
+instance_type = "standard-2"
+max_instances = 25
+
+[[containers]]
+class_name = "ExecutorContainerTier1"
+image = "your-executor-image:tag"
+instance_type = "lite"
+max_instances = 20
+
+[[containers]]
+class_name = "ExecutorContainerTier2"
+image = "your-executor-image:tag"
+instance_type = "basic"
+max_instances = 200
+
+[[containers]]
+class_name = "ExecutorContainerTier3"
+image = "your-executor-image:tag"
+instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
+max_instances = 25
 
 # R2 Buckets
 [[r2_buckets]]
@@ -352,15 +420,16 @@ index_name = "takos-embeddings"
 [ai]
 binding = "AI"
 
-# Internal service bindings
+# Internal service binding for same-worker egress / container host callbacks
 [[services]]
 binding = "TAKOS_EGRESS"
-service = "takos-worker"
+service = "takos"
 ```
 
-private 運用で dispatch worker を分離している場合は、同じ service binding block
-に `TAKOS_DISPATCH` も追加します。OSS template では dispatch path を別 binding
-に分けない構成も許容します。
+OSS Cloudflare template は単一 `takos` Worker を deploy します。runtime /
+executor container host は同じ Worker script 内の Cloudflare Containers Durable
+Object class です。private operator が独自に worker を分割する場合でも、それは
+takos-private 側の配線であり、この OSS template の前提ではありません。
 
 ### 鍵生成
 
@@ -637,10 +706,12 @@ deno task staging:integration-test:real
 (`deno task deploy:staging`) を `--dry-run` 無しで使ってください。 integration
 test はあくまで pipeline の連続性を確認するスモークです。
 
-## Dispatch Namespace
+## Workers-for-Platforms backend (optional)
 
-テナントごとに worker を論理分離するための Cloudflare 側の仕組み。Takos product
-/ API gateway をホストする際に operator が事前に作成する必要があります。
+テナントごとに Worker workload を論理分離するための Cloudflare 側の仕組みです。
+Takos product / API gateway をホストするための必須リソースではありません。
+operator が tenant workload backend として Workers for Platforms を選ぶ場合だけ
+事前に作成します。
 
 namespace の作成:
 
@@ -649,7 +720,7 @@ wrangler dispatch-namespace create my-namespace
 ```
 
 AppSpec author は namespace を意識する必要はありません。operator profile の
-runtime binding が Dispatch Namespace に materialize します。
+runtime binding が backend-specific placement として namespace に materialize します。
 
 ## Durable Objects
 
@@ -662,7 +733,8 @@ control plane が使う Durable Objects:
 | `NotificationNotifierDO` | 通知のリアルタイム配信                  |
 | `RateLimiterDO`          | 分散レートリミッタ                      |
 | `RoutingDO`              | ホスト名ベースルーティング              |
-| `GitPushLockDO`          | Git push のロック管理                   |
+| `TakosRuntimeContainer`  | runtime container host                  |
+| `ExecutorContainerTier*` | agent executor container host           |
 
 tracked reference Workers backend は Durable Objects の基準実装
 です。セルフホスト・ローカルなどの他 backend では、Takos durable runtime が同じ
@@ -707,7 +779,7 @@ binding material 経由で Takos runtime に注入されます。Takos worker
 | `INSTALL_LAUNCH_REDIRECT_URI`                             | Accounts が token 発行時に bind した redirect URI。redeem 時に完全一致比較                                                 |
 | `INSTALL_LAUNCH_CONSUME_PATH`                             | static (default `/_takosumi/launch`)。app 側の consume handler path                                                        |
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` | AI プロバイダ                                                                                                              |
-| `EXECUTOR_PROXY_SECRET`                                   | executor-host から main `takos` worker への内部 RPC                                                                        |
+| `EXECUTOR_PROXY_SECRET`                                   | executor container host から同一 `takos` Worker への内部 RPC                                                              |
 
 login flow の Worker route は次の 3 つです。詳細は
 [OIDC Consumer](/apps/oidc-consumer) を参照してください。
@@ -753,23 +825,25 @@ control plane のステート管理に使われる。Cloudflare では Durable O
 | `NotificationNotifierDO` | 通知のリアルタイム配信         | ポーリングベース         |
 | `RateLimiterDO`          | 分散レートリミッタ             | Redis ベース             |
 | `RoutingDO`              | ホスト名ベースルーティング     | PostgreSQL + キャッシュ  |
-| `GitPushLockDO`          | Git push のロック管理          | PostgreSQL advisory lock |
+| `TakosRuntimeContainer`  | runtime container host         | self-host container helper |
+| `ExecutorContainerTier*` | agent executor container host  | self-host container helper |
 
 ### Container workloads
 
-image-backed `services` / `containers` は tracked reference Workers backend でも
-API gateway / account plane からは分離され、current 実装では OCI deployment
-adapter を通る。他環境では Docker / k8s / ECS / Cloud Run などの tenant image
-workload adapter で解決する。ECS / Cloud Run は Takos product hosting target
-ではない。
+Takos product runtime / executor は tracked reference Workers backend では同一
+`takos` Worker script 内の Cloudflare Containers Durable Object class として
+host します。tenant app の image-backed `services` / `containers` は operator
+profile の workload adapter で解決し、他環境では Docker / k8s / ECS / Cloud Run
+などに materialize できます。ECS / Cloud Run は Takos product hosting target
+そのものではありません。
 
 image-backed workload を使う場合は `OCI_ORCHESTRATOR_URL` が必要で、認証付き
 orchestrator を使うなら `OCI_ORCHESTRATOR_TOKEN` を設定する。
 
-### Dispatch Namespace
+### Workers-for-Platforms backend
 
-テナント Worker を論理分離する Cloudflare の仕組み。他環境では routing /
-dispatch が Worker `worker-bundle` の tenant worker runtime path に解決される。
+テナント Worker workload を論理分離する Cloudflare の optional backend。他環境では
+routing / dispatch が各 target の tenant runtime path に解決される。
 
 ### Routing phases
 

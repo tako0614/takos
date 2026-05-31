@@ -146,9 +146,9 @@ deno task server:up
 | `TAKOS_ADMIN_DOMAIN`          | `admin.localhost` | 管理画面のドメイン                                       |
 | `TAKOS_TENANT_BASE_DOMAIN`    | `app.localhost`   | テナント用ベースドメイン                                 |
 | `TAKOS_WORKER_PORT`           | `8787`            | Takos Worker の公開ポート                                |
-| `TAKOS_DISPATCH_PORT`         | `8788`            | Dispatch の公開ポート                                    |
-| `TAKOS_RUNTIME_HOST_PORT`     | `8789`            | Runtime Host のポート                                    |
-| `TAKOS_EXECUTOR_HOST_PORT`    | `8790`            | Executor Host のポート                                   |
+| `TAKOS_DISPATCH_PORT`         | `8788`            | local/self-host の optional tenant dispatch helper port   |
+| `TAKOS_RUNTIME_HOST_PORT`     | `8789`            | local/self-host の runtime container-host helper port     |
+| `TAKOS_EXECUTOR_HOST_PORT`    | `8790`            | local/self-host の executor container-host helper port    |
 | `TAKOS_RUNTIME_PORT`          | `8081`            | Runtime のホスト側公開ポート（container `8080` に map）  |
 | `TAKOS_EXECUTOR_PORT`         | `8082`            | Executor のホスト側公開ポート（container `8080` に map） |
 
@@ -156,6 +156,10 @@ deno task server:up
 `TAKOS_TENANT_BASE_DOMAIN` を受け取り、takos-worker プロセスには `ADMIN_DOMAIN` /
 `TENANT_BASE_DOMAIN` として渡す。compose を使わずに起動する場合は `ADMIN_DOMAIN`
 / `TENANT_BASE_DOMAIN` を直接設定する。
+
+これらの helper port は self-host stack 内部の接続点です。Takos product の公開 /
+control Worker 境界は `takos-worker` 1 つで、Cloudflare profile のような単一
+Worker deploy とは配線方法だけが異なります。
 
 #### インフラ接続
 
@@ -466,7 +470,7 @@ takosumi.com reference implementation の配線として呼び出したい場合
 | provider client                    | 用途                                    | 参照クラス                                   |
 | ---------------------------------- | --------------------------------------- | -------------------------------------------- |
 | `local-container-provider`         | Docker / OCI container deploy           | `src/providers/selfhosted/process.ts`        |
-| `local-runtime-agent-registry`     | runtime-agent enrolment store           | `src/providers/selfhosted/provider.ts`       |
+| `local-runtime-agent-registry`     | runtime-agent endpoint config           | `src/providers/selfhosted/provider.ts`       |
 | `selfhosted-postgres`              | Postgres lifecycle (psql)               | `src/providers/selfhosted/postgres.ts`       |
 | `selfhosted-postgres-coordination` | coordination via Postgres advisory lock | `src/providers/selfhosted/sql.ts`            |
 | `filesystem-artifacts`             | filesystem object-storage               | `src/providers/selfhosted/object_storage.ts` |
@@ -485,7 +489,7 @@ takosumi.com reference implementation の配線として呼び出したい場合
 | filesystem / MinIO bucket lifecycle                                 | no                   | yes (provider)  |
 | Docker container deploy / restart                                   | no                   | yes (provider)  |
 | reverse proxy config 同期 (Caddyfile / nginx.conf)                  | no                   | yes (provider)  |
-| runtime-agent enrolment + work lease                                | yes (process deploy) | yes (work pull) |
+| runtime-agent HTTP lifecycle endpoint                               | yes (process deploy) | yes (lifecycle RPC) |
 | drift 検出 / rollback                                               | no                   | yes (provider)  |
 
 ### runtime-agent on bare metal
@@ -503,10 +507,7 @@ Requires=docker.service
 [Service]
 Type=simple
 EnvironmentFile=/etc/takos/runtime-agent.env
-ExecStart=/usr/local/bin/deno run \
-  --allow-net --allow-env --allow-read --allow-write \
-  --allow-run=docker,psql,createdb \
-  /opt/takos/runtime-agent.ts
+ExecStart=/usr/local/bin/bun /opt/takos/runtime-agent.ts
 Restart=always
 User=takos
 Group=docker
@@ -518,8 +519,7 @@ WantedBy=multi-user.target
 `/etc/takos/runtime-agent.env`:
 
 ```bash
-TAKOS_KERNEL_URL=https://admin.takos.example.com
-TAKOS_RUNTIME_AGENT_TOKEN=...
+TAKOSUMI_AGENT_TOKEN=...
 DATABASE_URL=postgresql://takos:...@localhost:5432/takos
 S3_ENDPOINT=http://localhost:9000
 S3_ACCESS_KEY_ID=...
@@ -527,9 +527,9 @@ S3_SECRET_ACCESS_KEY=...
 DOCKER_SOCKET_PATH=/var/run/docker.sock
 ```
 
-agent は kernel に enroll → heartbeat → lease pull → psql / docker / file ops
-を実行→結果を report します。Docker socket access は Docker group
-経由で許可します。
+runtime-agent は bearer 保護の lifecycle HTTP API で kernel からの apply / destroy /
+describe / verify envelope を受け、psql / docker / file ops を実行して結果を返します。
+Docker socket access は Docker group 経由で許可します。
 
 ### routing layer (selfhosted) の設定
 

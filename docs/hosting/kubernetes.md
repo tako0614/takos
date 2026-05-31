@@ -219,7 +219,7 @@ Takosumi reference provider package の k8s adapter は次の resource lifecycle
 | provider client             | 用途                                                 | 参照クラス                                       |
 | --------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
 | `k8s-provider-gateway`      | namespace / Deployment / Service / Ingress lifecycle | `src/providers/k8s/provider.ts`                  |
-| `k8s-runtime-agent-gateway` | runtime-agent enrolment store                        | `src/providers/k8s/provider.ts` (`runtimeAgent`) |
+| `k8s-runtime-agent-gateway` | runtime-agent endpoint config                        | `src/providers/k8s/provider.ts` (`runtimeAgent`) |
 | `k8s-ingress-router`        | Ingress + cert-manager                               | `src/providers/k8s/ingress.ts`                   |
 | `k8s-secret`                | Kubernetes Secret rotation                           | `src/providers/k8s/secret.ts`                    |
 | `k8s-configmap`             | ConfigMap publication                                | `src/providers/k8s/configmap.ts`                 |
@@ -241,7 +241,7 @@ API server (kubectl proxy / API gateway) 経由で resource を materialize し�
 | namespace / Deployment / Service の lifecycle                      | no                     | yes (provider)    |
 | Ingress / TLS Secret rotation                                      | no                     | yes (provider)    |
 | ConfigMap / Secret 同期                                            | no                     | yes (provider)    |
-| runtime-agent enrolment + work lease                               | yes (pod deploy)       | yes (work pull)   |
+| runtime-agent HTTP lifecycle endpoint                              | yes (pod deploy)       | yes (lifecycle RPC) |
 | drift 検出 / rollback                                              | no                     | yes (provider)    |
 
 ### kubeconfig / ServiceAccount 設計
@@ -345,10 +345,10 @@ spec:
         - name: agent
           image: ghcr.io/takos/runtime-agent:latest
           env:
-            - name: TAKOS_KERNEL_URL
-              value: "https://admin.takos.example.com"
+            - name: PORT
+              value: "8789"
             - {
-                name: TAKOS_RUNTIME_AGENT_TOKEN,
+                name: TAKOSUMI_AGENT_TOKEN,
                 valueFrom: {
                   secretKeyRef: { name: takos-agent-token, key: token },
                 },
@@ -374,8 +374,9 @@ roleRef:
   }
 ```
 
-agent は kernel に enroll → heartbeat → lease pull → namespace / Deployment /
-Service / Ingress / Secret / ConfigMap ops を実行→結果を report します。
+runtime-agent は bearer 保護の lifecycle HTTP API で kernel からの apply / destroy /
+describe / verify envelope を受け、namespace / Deployment / Service / Ingress /
+Secret / ConfigMap ops を実行して結果を返します。
 in-cluster mode で実行すると ServiceAccount projected token を自動 mount
 できます (`/var/run/secrets/kubernetes.io/serviceaccount/token`)。
 

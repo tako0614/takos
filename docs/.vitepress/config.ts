@@ -81,7 +81,7 @@ export default defineConfig({
           { text: 'deploy', link: '/deploy/deploy' },
           { text: 'deploy-group', link: '/deploy/deploy-group' },
           { text: 'Repository / Catalog', link: '/deploy/store-deploy' },
-          { text: 'Namespace', link: '/deploy/namespaces' },
+          { text: 'Workload Placement', link: '/deploy/namespaces' },
           { text: 'ロールバック', link: '/deploy/rollback' },
           { text: 'トラブルシューティング', link: '/deploy/troubleshooting' },
         ],

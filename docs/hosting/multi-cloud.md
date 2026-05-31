@@ -326,21 +326,18 @@ Cloudflare Worker から AWS / GCP / k8s API を直接呼べない場合
 | EC2 / GCE / VM                | シンプル、固定 IP        | operator の運用負担                |
 | Cloud Run / Fargate           | オートスケール           | cold start、autoscale チューニング |
 | k8s Deployment                | 既存クラスタで運用一元化 | k8s が必要                         |
-| Cloudflare Worker (別 Worker) | エッジコロケーション     | egress 制限は同じ                  |
+| Cloudflare Worker route / same product Worker | エッジコロケーション | egress 制限は同じ                  |
 
 ### 形態 C: runtime-agent (本番推奨)
 
 reference provider adapter が **kernel から直接リソースを materialize
-する代わりに**、 runtime-agent プロセスが kernel から work lease を pull
-し、provider 操作を **agent が動作するクラウド内** で実行します。
+する代わりに**、 runtime-agent プロセスが bearer 保護の lifecycle HTTP API
+を公開し、provider 操作を **agent が動作するクラウド内** で実行します。
 
 ```
-kernel (CF) -- 1. enqueue work --> work queue (kernel state)
-                                          ^
-                                          | 2. lease pull
-                                          v
-agent (AWS EC2) -- 3. AWS SDK call --> AWS API
-agent (AWS EC2) -- 4. report result --> kernel
+kernel (CF) -- 1. lifecycle HTTP apply/describe --> agent (AWS EC2)
+agent (AWS EC2) -- 2. provider API call ---------> AWS API
+agent (AWS EC2) -- 3. lifecycle response --------> kernel
 ```
 
 利点:
@@ -356,8 +353,8 @@ agent (AWS EC2) -- 4. report result --> kernel
 
 ## runtime-agent の配置
 
-agent は kernel への enroll → heartbeat → lease pull →実行→ report
-のループで動作します。配置の目安は次のとおりです。
+agent は kernel からの lifecycle HTTP request を受け、登録済み connector に
+dispatch して結果を返します。配置の目安は次のとおりです。
 
 | 構成                                      | agent 推奨配置                                 |
 | ----------------------------------------- | ---------------------------------------------- |
@@ -368,31 +365,27 @@ agent は kernel への enroll → heartbeat → lease pull →実行→ report
 | AWS / GCP のみ                            | 同じクラウド内 (kernel と同じ pod)             |
 | Self-hosted                               | bare metal の systemd                          |
 
-agent プロセスの最小構成:
+agent 側で使う concrete connector registry の最小構成:
 
 ```ts
 // runtime-agent.ts
-import {
-  RuntimeAgentHttpClient,
-  RuntimeAgentLoop,
-} from "@takos/takosumi-plugins/runtime-agent";
+import { serveRuntimeAgent } from "@takosjp/takosumi/runtime-agent";
+import { buildConnectorRegistry } from "@takosjp/takosumi-plugins/connectors";
 
-const client = new RuntimeAgentHttpClient({
-  baseUrl: process.env.TAKOS_KERNEL_URL!,
-  enrollmentToken: process.env.TAKOS_RUNTIME_AGENT_TOKEN!,
-});
-
-const loop = new RuntimeAgentLoop({
-  client,
-  agentId: process.env.HOSTNAME ?? "runtime-agent",
-  provider: "aws", // or "gcp" / "k8s" / "selfhosted"
-  capabilities: { kinds: ["aws.ecs.deploy", "aws.rds.materialize"] },
-  executors: {
-    "aws.ecs.deploy": awsEcsExecutor,
-    "aws.rds.materialize": awsRdsExecutor,
+const registry = buildConnectorRegistry({
+  aws: {
+    region: process.env.AWS_REGION ?? "ap-northeast-1",
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
 });
-await loop.run();
+
+serveRuntimeAgent({
+  registry,
+  token: process.env.TAKOSUMI_AGENT_TOKEN!,
+  hostname: "0.0.0.0",
+  port: Number(process.env.PORT ?? "8789"),
+});
 ```
 
 各クラウド固有のドキュメントに、systemd / Cloud Run / k8s Deployment の YAML
@@ -403,13 +396,15 @@ await loop.run();
 - [Kubernetes](/hosting/kubernetes#runtime-agent-phase-17b-を-k8s-に置く)
 - [Self-hosted](/hosting/self-hosted#runtime-agent-on-bare-metal)
 
-### lease のセマンティクス
+### lifecycle RPC のセマンティクス
 
-- agent は `idleBackoffMs` (デフォルト 1000) でポーリング
-- lease TTL (デフォルト 60 秒) を超えると kernel が再 enqueue
-- agent が長尺操作を実行中は `reportProgress({ extendUntil })` で延長
-- `failed` で `retry: true` を返すと kernel が再 enqueue (max retry まで)
-- `failed` で `retry: false` を返すと dead-letter
+- runtime-agent は `/v1/lifecycle/apply` / `destroy` / `describe` / `verify` を
+  bearer token (`TAKOSUMI_AGENT_TOKEN`) で保護する
+- agent は起動時に `ConnectorRegistry` を構築し、各 request を connector-local
+  `(shape, provider)` selector で dispatch する
+- 長尺操作は agent host 側で実行し、kernel / operator は timeout と retry budget を
+  lifecycle request 単位で管理する
+- connector の verify endpoint は本番 apply 前の credential / permission preflight として使う
 
 ## ルーティング層の選択
 
