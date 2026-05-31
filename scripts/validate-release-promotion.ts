@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 const requiredDocs = [
   {
@@ -29,9 +29,9 @@ const requiredDocs = [
       'digest-pinned',
       'semver tags',
       '`sha-*` tag',
-      'deno task release-manifest:check-artifacts',
+      'bun run release-manifest:check-artifacts',
       'takosumi/',
-      'takos-app',
+      'takos-worker',
     ],
   },
   {
@@ -77,8 +77,13 @@ const requiredDocs = [
 
 const requiredTextFiles = [
   {
-    path: 'deno.json',
-    expected: ['"validate:release-promotion"', '"release-manifest:check-clean"', '"release-manifest:check-artifacts"'],
+    path: 'package.json',
+    expected: [
+      '"takosRelease"',
+      '"validate:release-promotion"',
+      '"release-manifest:check-clean"',
+      '"release-manifest:check-artifacts"',
+    ],
   },
   {
     path: 'scripts/release-gate.ts',
@@ -92,12 +97,12 @@ const requiredTextFiles = [
       'officialImages',
       'releaseComponents',
       'collectReleaseComponents',
-      'agent/Cargo.toml',
-      'submodules',
+      'containers/agent/Cargo.toml',
+      'canonicalLayout',
       'collectReleaseIdentity',
       '--release-version',
       '--release-tag',
-      'collectSubmodulePointers',
+      'collectCanonicalLayout',
       '--require-clean-git',
       '--require-image-digests',
       'digestRef',
@@ -109,11 +114,15 @@ const requiredTextFiles = [
     path: '.github/workflows/release-artifacts.yml',
     expected: [
       'Release Artifacts',
-      'actions/checkout@v6',
-      'actions/cache@v5',
-      'actions/upload-artifact@v7',
-      'actions/download-artifact@v8',
-      'azure/setup-helm@v5',
+      'actions/checkout@',
+      'actions/cache@',
+      'actions/upload-artifact@',
+      'actions/download-artifact@',
+      'azure/setup-helm@',
+      'pinned: v6',
+      'pinned: v5',
+      'pinned: v7',
+      'pinned: v8',
       'ghcr.io/${{ github.repository_owner }}',
       'docker/build-push-action',
       'sbom: true',
@@ -129,15 +138,15 @@ const requiredTextFiles = [
       'helm push',
       '--release-version "${release_version}"',
       '--release-tag "${release_tag}"',
-      'deno task validate:release-promotion',
+      'bun run validate:release-promotion',
       'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24',
     ],
   },
   {
-    path: 'deploy/docker/takos-app.Dockerfile',
+    path: 'deploy/docker/takos-worker.Dockerfile',
     expected: [
-      'apps/api/src/index.ts',
-      'git/packages/git-contract',
+      'src/worker/local-platform/unified-entrypoint.ts',
+      'COPY takos/src ./src',
       'PORT=8080',
     ],
   },
@@ -150,15 +159,15 @@ const externalTextFiles = [
   },
   {
     path: '../.github/workflows/ci.yml',
-    expected: ['deno task validate:release-promotion'],
+    expected: ['validate:release-promotion'],
   },
   {
     path: '../.github/workflows/pr-check.yml',
-    expected: ['deno task validate:release-promotion'],
+    expected: ['validate:release-promotion'],
   },
   {
     path: '../.github/workflows/release-gate.yml',
-    expected: ['deno task validate:release-promotion'],
+    expected: ['validate:release-promotion'],
   },
 ];
 

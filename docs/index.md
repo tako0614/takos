@@ -31,7 +31,7 @@ features:
     link: /hosting/
   - icon: 📚
     title: リファレンス
-    details: "API、CLI、マニフェスト仕様、用語集など"
+    details: "API、マニフェスト仕様、用語集など"
     link: /reference/
 ---
 
@@ -46,7 +46,7 @@ features:
 | アプリのインストール方法   | [Install paths](/apps/install-paths)                                              |
 | デプロイの設定             | [Deploy](/deploy/)                                                                |
 | ホスティングと運用         | [Hosting](/hosting/)                                                              |
-| API・CLI リファレンス      | [Reference](/reference/)                                                          |
+| API リファレンス           | [Reference](/reference/)                                                          |
 | プラットフォーム全体の仕様 | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs)    |
 | Takosumi の読む順序        | [Takosumi reading paths](https://takosumi.com/docs/getting-started/reading-paths) |
 | Takosumi core の仕様       | [Core Specification](https://takosumi.com/docs/reference/core-spec)               |

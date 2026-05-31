@@ -15,7 +15,7 @@ const retiredRouteTests = [
 const retiredAffordancePattern =
   'group_deployment_snapshot_deploy_from_repo|group_deployment_snapshot\\.deploy_from_repo|deploy_from_repo';
 
-const apiTestPath = 'app/apps/api/src/index_test.ts';
+const apiTestPath = 'src/routes/public/index_test.ts';
 const apiTestText = await Deno.readTextFile(apiTestPath);
 const missingTests = retiredRouteTests.filter((name) => !apiTestText.includes(`Deno.test("${name}"`));
 
@@ -26,21 +26,20 @@ if (missingTests.length > 0) {
   Deno.exit(1);
 }
 
-await run('deno', [
+await run('bun', [
   'test',
-  '--allow-all',
-  'apps/api/src/index_test.ts',
-], { cwd: 'app' });
+  apiTestPath,
+]);
 
-await assertNoGitGrepMatches('app', retiredAffordancePattern, [
-  'apps/api',
-  'apps/control',
+await assertNoGitGrepMatches('.', retiredAffordancePattern, [
+  'src/routes/public',
+  'src/worker',
   'packages',
 ]);
-await assertNoGitGrepMatches('agent', retiredAffordancePattern, ['.']);
+await assertNoGitGrepMatches('.', retiredAffordancePattern, ['containers/agent']);
 
 console.log(
-  `Retired-route removal evidence validated: apps/api route tests passed with ${retiredRouteTests.length} named retired-route evidence tests present and direct deploy affordance scan is clean.`,
+  `Retired-route removal evidence validated: src/routes/public route tests passed with ${retiredRouteTests.length} named retired-route evidence tests present and direct deploy affordance scan is clean.`,
 );
 
 async function run(

@@ -55,7 +55,7 @@ export default function Hero() {
             </span>
             {'\n'}
             <span class='k'>$</span> takosumi install --source . --space my-space{'\n'}
-            <span class='c'>✓ takos-app → http://your-takos.example/</span>
+            <span class='c'>✓ takos-worker → http://your-takos.example/</span>
             {'\n'}
             <span class='c'>✓ takos-git → docs / files / agents</span>
           </CodeBlock>

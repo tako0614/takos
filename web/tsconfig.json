@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "takos-api-contract/rpc-types": [
+        "../src/contracts/public/rpc-types.ts"
+      ],
+      "takos-api-contract/shared/types": [
+        "../src/contracts/public/shared/types/index.ts"
+      ]
+    }
+  },
+  "include": ["src/**/*", "*.ts"],
+  "exclude": ["node_modules"]
+}

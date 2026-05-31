@@ -12,7 +12,7 @@ Initial SOC 2 readiness scope:
 
 | Area                    | In scope                                                        | Owner            |
 | ----------------------- | --------------------------------------------------------------- | ---------------- |
-| Application security    | `takos-app`, `takos-git`, `takos-agent`, Takosumi API boundary  | service owners   |
+| Application security    | `takos-worker`, `takos-git`, `takos-agent`, Takosumi API boundary  | service owners   |
 | Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles   | operator         |
 | Change management       | PR review, release gate, staging promotion, rollback            | release owner    |
 | Incident response       | SEV policy, incident runbook, postmortem evidence               | on-call owner    |

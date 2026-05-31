@@ -1,0 +1,300 @@
+import type { InArgs, ResultSet } from "@libsql/client";
+import type { QueryResult } from "pg";
+import type {
+  SqlDatabaseBinding,
+  SqlResultBinding,
+  SqlResultMeta,
+} from "../shared/types/bindings.ts";
+import { Buffer } from "node:buffer";
+
+export type ServerSqlDatabase = SqlDatabaseBinding & {
+  close(): void;
+};
+
+export type PostgresRunner = {
+  query(
+    queryText: string,
+    values?: unknown[],
+  ): Promise<QueryResult<Record<string, unknown>>>;
+};
+
+export function createSqlResultMeta(
+  servedBy: string,
+  overrides?: Partial<SqlResultMeta>,
+): SqlResultMeta {
+  return {
+    changed_db: false,
+    changes: 0,
+    duration: 0,
+    last_row_id: 0,
+    rows_read: 0,
+    rows_written: 0,
+    served_by: servedBy,
+    size_after: 0,
+    ...overrides,
+  };
+}
+
+function normalizeArg(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  }
+  if (value === undefined) return null;
+  if (typeof value === "bigint") return value;
+  if (
+    typeof value === "number" || typeof value === "string" || value === null
+  ) return value;
+  return JSON.stringify(value);
+}
+
+export function normalizeArgs(values: unknown[]): InArgs {
+  return values.map((value) => normalizeArg(value)) as InArgs;
+}
+
+function normalizePostgresArg(value: unknown): unknown {
+  if (value === undefined) return null;
+  if (value === null) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string" || typeof value === "number") return value;
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof ArrayBuffer) return Buffer.from(value);
+  if (ArrayBuffer.isView(value)) {
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  }
+  return JSON.stringify(value);
+}
+
+export function normalizePostgresArgs(values: unknown[]): unknown[] {
+  return values.map((value) => normalizePostgresArg(value));
+}
+
+export function rowToObject(
+  row: ResultSet["rows"][number],
+  columns: string[],
+): Record<string, unknown> {
+  return Object.fromEntries(
+    columns.map((column, index) => [column, row[index]]),
+  );
+}
+
+export function rowToObjectFromRecord(
+  row: Record<string, unknown>,
+  columns: string[],
+): Record<string, unknown> {
+  return Object.fromEntries(columns.map((column) => [column, row[column]]));
+}
+
+export function resultSetToSqlResult<T>(
+  result: ResultSet,
+): SqlResultBinding<T> {
+  return {
+    results: result.rows.map((row) => rowToObject(row, result.columns) as T),
+    success: true,
+    meta: createSqlResultMeta("local-sqlite", {
+      changed_db: result.rowsAffected > 0,
+      changes: result.rowsAffected,
+      last_row_id: result.lastInsertRowid == null
+        ? 0
+        : Number(result.lastInsertRowid),
+      rows_read: result.rows.length,
+      rows_written: result.rowsAffected,
+    }),
+  };
+}
+
+export function queryResultToSqlResult<T>(
+  result: QueryResult<Record<string, unknown>>,
+  servedBy: string,
+): SqlResultBinding<T> {
+  const columns = result.fields.map((field: { name: string }) => field.name);
+  return {
+    results: result.rows.map((row: Record<string, unknown>) =>
+      rowToObjectFromRecord(row, columns) as T
+    ),
+    success: true,
+    meta: createSqlResultMeta(servedBy, {
+      changed_db: (result.rowCount ?? 0) > 0,
+      changes: result.rowCount ?? 0,
+      last_row_id: 0,
+      rows_read: result.rows.length,
+      rows_written: result.rowCount ?? 0,
+    }),
+  };
+}
+
+/**
+ * Replaces `?` placeholders with Postgres `$N` placeholders. A simple state
+ * machine skips characters that should NOT be treated as placeholders:
+ *   - characters inside single-quoted string literals (`'...'`, including
+ *     SQL `''` escapes)
+ *   - characters inside double-quoted identifiers (`"..."`)
+ *   - characters inside dollar-quoted string bodies (`$tag$...$tag$`)
+ *   - characters inside `--` line comments and block comments
+ *   - Postgres JSON operators that start with `?`: `?|`, `?&`, `??`, `?#`
+ */
+function replaceQuestionMarkParameters(query: string): string {
+  let index = 0;
+  let out = "";
+  let i = 0;
+  const len = query.length;
+
+  while (i < len) {
+    const ch = query[i];
+
+    // Line comment: --... to end of line.
+    if (ch === "-" && query[i + 1] === "-") {
+      const eol = query.indexOf("\n", i);
+      if (eol === -1) {
+        out += query.slice(i);
+        i = len;
+      } else {
+        out += query.slice(i, eol + 1);
+        i = eol + 1;
+      }
+      continue;
+    }
+
+    // Block comment: /* ... */
+    if (ch === "/" && query[i + 1] === "*") {
+      const end = query.indexOf("*/", i + 2);
+      if (end === -1) {
+        out += query.slice(i);
+        i = len;
+      } else {
+        out += query.slice(i, end + 2);
+        i = end + 2;
+      }
+      continue;
+    }
+
+    // Single-quoted string literal (handles SQL `''` escape).
+    if (ch === "'") {
+      out += ch;
+      i += 1;
+      while (i < len) {
+        const c = query[i];
+        out += c;
+        i += 1;
+        if (c === "'") {
+          if (query[i] === "'") {
+            // Escaped single-quote: consume the second '.
+            out += query[i];
+            i += 1;
+            continue;
+          }
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Double-quoted identifier (handles `""` escape).
+    if (ch === '"') {
+      out += ch;
+      i += 1;
+      while (i < len) {
+        const c = query[i];
+        out += c;
+        i += 1;
+        if (c === '"') {
+          if (query[i] === '"') {
+            out += query[i];
+            i += 1;
+            continue;
+          }
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Dollar-quoted string body: $tag$...$tag$ (tag may be empty).
+    if (ch === "$") {
+      const match = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(query.slice(i));
+      if (match) {
+        const opener = match[0];
+        out += opener;
+        i += opener.length;
+        const end = query.indexOf(opener, i);
+        if (end === -1) {
+          out += query.slice(i);
+          i = len;
+        } else {
+          out += query.slice(i, end + opener.length);
+          i = end + opener.length;
+        }
+        continue;
+      }
+    }
+
+    // Postgres JSON operators that start with `?` -- preserve verbatim so
+    // they don't get mangled into `$N` placeholders.
+    if (ch === "?") {
+      const next = query[i + 1];
+      if (next === "|" || next === "&" || next === "?" || next === "#") {
+        out += ch + next;
+        i += 2;
+        continue;
+      }
+      out += `$${++index}`;
+      i += 1;
+      continue;
+    }
+
+    out += ch;
+    i += 1;
+  }
+
+  return out;
+}
+
+/**
+ * SQLite/D1 allow `BEGIN IMMEDIATE|EXCLUSIVE|DEFERRED`; Postgres only accepts
+ * bare `BEGIN` for the transaction-start verb. We normalize the SQLite form to
+ * `BEGIN` so classifyTransactionSql/isExactTransactionControlSql can detect a
+ * transaction begin.
+ *
+ * This is applied ONLY when the entire trimmed statement is exactly that
+ * transaction-control form (optionally semicolon-terminated), not as a blind
+ * global string replace. The previous global regex ran over the whole query
+ * before the quote/comment/dollar-quote state machine, so it could in
+ * principle mutate the same token sequence appearing inside a string literal,
+ * comment, or PL/pgSQL `DO $$ BEGIN ... $$` body. Anchoring to whole-statement
+ * transaction control removes that footgun.
+ */
+const BEGIN_MODE_STATEMENT =
+  /^BEGIN\s+(?:IMMEDIATE|EXCLUSIVE|DEFERRED)\s*;?\s*$/i;
+
+export function normalizePostgresSql(query: string): string {
+  const collapsed = BEGIN_MODE_STATEMENT.test(query.trim()) ? "BEGIN" : query;
+  return replaceQuestionMarkParameters(collapsed);
+}
+
+export function classifyTransactionSql(
+  query: string,
+): "begin" | "commit" | "rollback" | null {
+  const trimmed = query.trim().replace(/;$/, "");
+  if (/^BEGIN$/i.test(trimmed)) return "begin";
+  if (/^COMMIT$/i.test(trimmed)) return "commit";
+  if (/^ROLLBACK$/i.test(trimmed)) return "rollback";
+  return null;
+}
+
+export function toPgRawRows(
+  result: QueryResult<Record<string, unknown>>,
+): [string[], ...unknown[]] | unknown[] {
+  const columns = result.fields.map((field: { name: string }) => field.name);
+  const rows = result.rows.map((row: Record<string, unknown>) =>
+    columns.map((column: string) => row[column])
+  );
+  return [columns, ...rows];
+}
+
+export function isExactTransactionControlSql(query: string): boolean {
+  const trimmed = query.trim().replace(/;$/, "");
+  return /^(BEGIN|COMMIT|ROLLBACK)$/i.test(trimmed);
+}

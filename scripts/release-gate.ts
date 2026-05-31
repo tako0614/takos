@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-run=deno --allow-env
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 type GateStatus = 'passed' | 'failed' | 'skipped';
 
@@ -24,7 +24,7 @@ const unknownArgs = Deno.args.filter((arg) => arg !== '--keep-going');
 if (unknownArgs.length > 0) {
   console.error(`Unknown argument(s): ${unknownArgs.join(', ')}`);
   console.error(
-    'Usage: deno run --config deno.json --allow-run=deno --allow-env scripts/release-gate.ts [--keep-going]',
+    'Usage: bun --preload ./shims/deno-compat.ts scripts/release-gate.ts [--keep-going]',
   );
   Deno.exit(2);
 }
@@ -32,79 +32,76 @@ if (unknownArgs.length > 0) {
 const gates: GateCommand[] = [
   {
     name: 'check',
-    command: ['deno', 'task', 'check'],
+    command: ['bun', 'run', 'check'],
   },
   {
     name: 'lint:agent-docs',
-    command: ['deno', 'task', 'lint:agent-docs'],
+    command: ['bun', 'run', 'lint:agent-docs'],
   },
   {
     name: 'validate-architecture',
-    command: ['deno', 'task', 'validate:architecture'],
+    command: ['bun', 'run', 'validate:architecture'],
   },
   {
     name: 'lint:docs',
-    command: ['deno', 'task', 'lint:docs'],
+    command: ['bun', 'run', 'lint:docs'],
   },
   {
     name: 'service-set-validator',
-    command: ['deno', 'task', 'validate:service-set'],
+    command: ['bun', 'run', 'validate:service-set'],
   },
   {
     name: 'validate-distributions',
-    command: ['deno', 'task', 'validate:distributions'],
+    command: ['bun', 'run', 'validate:distributions'],
   },
   {
     name: 'validate-observability',
-    command: ['deno', 'task', 'validate:observability'],
+    command: ['bun', 'run', 'validate:observability'],
   },
   {
     name: 'validate-patch-management',
-    command: ['deno', 'task', 'validate:patch-management'],
+    command: ['bun', 'run', 'validate:patch-management'],
   },
   {
     name: 'validate-migration-safety',
-    command: ['deno', 'task', 'validate:migration-safety'],
+    command: ['bun', 'run', 'validate:migration-safety'],
   },
   {
     name: 'validate-legal-docs',
-    command: ['deno', 'task', 'validate:legal-docs'],
+    command: ['bun', 'run', 'validate:legal-docs'],
   },
   {
     name: 'validate-release-promotion',
-    command: ['deno', 'task', 'validate:release-promotion'],
+    command: ['bun', 'run', 'validate:release-promotion'],
   },
   {
     name: 'validate-helm',
-    command: ['deno', 'task', 'validate:helm'],
+    command: ['bun', 'run', 'validate:helm'],
   },
   {
     name: 'helm-overlay-generator',
-    command: ['deno', 'task', 'helm:check-overlays'],
+    command: ['bun', 'run', 'helm:check-overlays'],
   },
   {
     name: 'terraform-helm-values',
-    command: ['deno', 'task', 'terraform:helm-values:check'],
+    command: ['bun', 'run', 'terraform:helm-values:check'],
   },
   {
     name: 'terraform-secret-policy',
-    command: ['deno', 'task', 'validate:terraform-secrets'],
+    command: ['bun', 'run', 'validate:terraform-secrets'],
   },
   {
     name: 'release-manifest',
     command: [
-      'deno',
-      'run',
-      '--config',
-      'deno.json',
-      '--allow-read',
-      '--allow-run=git',
+      'bun',
+      '--preload',
+      './shims/deno-compat.ts',
       'scripts/build-release-manifest.ts',
     ],
   },
   {
     name: 'local-config',
-    command: ['deno', 'task', 'local:config'],
+    command: ['bun', 'run', 'local:config'],
   },
 ];
 

@@ -8,7 +8,16 @@
     "serviceId": {
       "description": "Logical service slot for the Takos distribution profile. The slot names are fixed for Takos release validation; replaceable operator distributions vary by artifact, endpoint, and implementation behind the slot, not by changing this service-id vocabulary.",
       "type": "string",
-      "enum": ["takos-agent", "takos-app", "takos-git", "takos-worker", "takos-executor-host", "takos-runtime-host", "takos-dispatch", "takosumi", "takosumi-cloud"]
+      "enum": [
+        "takos-agent",
+        "takos-git",
+        "takos-worker",
+        "takos-executor-host",
+        "takos-runtime-host",
+        "takos-dispatch",
+        "takosumi",
+        "takosumi-cloud"
+      ]
     }
   },
   "required": [
@@ -44,7 +53,11 @@
     "providerProfile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["bundle", "profileId", "pluginIds"],
+      "required": [
+        "bundle",
+        "profileId",
+        "pluginIds"
+      ],
       "properties": {
         "bundle": {
           "type": "string",
@@ -70,7 +83,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "ref"],
+        "required": [
+          "kind",
+          "ref"
+        ],
         "properties": {
           "kind": {
             "type": "string",
@@ -124,7 +140,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["kind", "name"],
+        "required": [
+          "kind",
+          "name"
+        ],
         "properties": {
           "kind": {
             "type": "string",
@@ -139,7 +158,10 @@
     },
     "target": {
       "type": "object",
-      "required": ["id", "metadata"],
+      "required": [
+        "id",
+        "metadata"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -154,7 +176,13 @@
     "routing": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["publicBaseUrl", "adminBaseUrl", "accountsBaseUrl", "wildcardDomain", "dnsProvider"],
+      "required": [
+        "publicBaseUrl",
+        "adminBaseUrl",
+        "accountsBaseUrl",
+        "wildcardDomain",
+        "dnsProvider"
+      ],
       "properties": {
         "publicBaseUrl": {
           "type": "string",
@@ -181,7 +209,10 @@
     "defaultApps": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["entries", "environmentOverrides"],
+      "required": [
+        "entries",
+        "environmentOverrides"
+      ],
       "properties": {
         "entries": {
           "type": "array",
@@ -189,7 +220,14 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "title", "repositoryUrl", "ref", "refType", "preinstall"],
+            "required": [
+              "name",
+              "title",
+              "repositoryUrl",
+              "ref",
+              "refType",
+              "preinstall"
+            ],
             "properties": {
               "name": {
                 "type": "string",
@@ -224,7 +262,13 @@
               },
               "category": {
                 "type": "string",
-                "enum": ["app", "service", "library", "template", "social"]
+                "enum": [
+                  "app",
+                  "service",
+                  "library",
+                  "template",
+                  "social"
+                ]
               },
               "tags": {
                 "type": "array",
@@ -246,7 +290,11 @@
               },
               "refType": {
                 "type": "string",
-                "enum": ["branch", "tag", "commit"]
+                "enum": [
+                  "branch",
+                  "tag",
+                  "commit"
+                ]
               },
               "preinstall": {
                 "type": "boolean"
@@ -261,7 +309,11 @@
                 "maxItems": 3,
                 "items": {
                   "type": "string",
-                  "enum": ["shared-cell", "dedicated", "self-hosted"]
+                  "enum": [
+                    "shared-cell",
+                    "dedicated",
+                    "self-hosted"
+                  ]
                 }
               },
               "bindings": {
@@ -270,7 +322,11 @@
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["name", "type", "required"],
+                  "required": [
+                    "name",
+                    "type",
+                    "required"
+                  ],
                   "properties": {
                     "name": {
                       "type": "string",
@@ -288,7 +344,13 @@
               },
               "backendName": {
                 "type": "string",
-                "enum": ["cloudflare", "local", "aws", "gcp", "k8s"]
+                "enum": [
+                  "cloudflare",
+                  "local",
+                  "aws",
+                  "gcp",
+                  "k8s"
+                ]
               },
               "envName": {
                 "type": "string",
@@ -300,12 +362,18 @@
         "environmentOverrides": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["local", "staging", "production"],
+          "required": [
+            "local",
+            "staging",
+            "production"
+          ],
           "properties": {
             "local": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["preinstall"],
+              "required": [
+                "preinstall"
+              ],
               "properties": {
                 "preinstall": {
                   "type": "array",
@@ -319,7 +387,9 @@
             "staging": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["preinstall"],
+              "required": [
+                "preinstall"
+              ],
               "properties": {
                 "preinstall": {
                   "type": "array",
@@ -333,7 +403,9 @@
             "production": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["preinstall"],
+              "required": [
+                "preinstall"
+              ],
               "properties": {
                 "preinstall": {
                   "type": "array",
@@ -354,13 +426,21 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["serviceId", "runtime", "hostingTargetId"],
+        "required": [
+          "serviceId",
+          "runtime",
+          "hostingTargetId"
+        ],
         "anyOf": [
           {
-            "required": ["image"]
+            "required": [
+              "image"
+            ]
           },
           {
-            "required": ["artifactRef"]
+            "required": [
+              "artifactRef"
+            ]
           }
         ],
         "properties": {
@@ -369,7 +449,12 @@
           },
           "runtime": {
             "type": "string",
-            "enum": ["container", "worker", "kubernetes-deployment", "process"]
+            "enum": [
+              "container",
+              "worker",
+              "kubernetes-deployment",
+              "process"
+            ]
           },
           "hostingTargetId": {
             "type": "string",
@@ -397,10 +482,17 @@
           "smoke": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["healthPath", "expectedStatus", "expectedJson"],
+            "required": [
+              "healthPath",
+              "expectedStatus",
+              "expectedJson"
+            ],
             "properties": {
               "healthPath": {
-                "enum": ["/health", "/healthz"]
+                "enum": [
+                  "/health",
+                  "/healthz"
+                ]
               },
               "expectedStatus": {
                 "const": 200
@@ -408,7 +500,9 @@
               "expectedJson": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["service"],
+                "required": [
+                  "service"
+                ],
                 "properties": {
                   "service": {
                     "$ref": "#/$defs/serviceId"
@@ -423,7 +517,11 @@
     "metadata": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["official", "liveSmokeTask", "providerSmokeTask"],
+      "required": [
+        "official",
+        "liveSmokeTask",
+        "providerSmokeTask"
+      ],
       "properties": {
         "official": {
           "type": "boolean"

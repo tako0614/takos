@@ -42,7 +42,7 @@ components:
   app:
     kind: worker
     spec:
-      entrypoint: apps/control/src/web.ts
+      entrypoint: src/worker/src/worker/index.ts
     connect:
       db:
         output: db.connection

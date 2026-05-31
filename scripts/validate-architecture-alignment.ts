@@ -6,7 +6,7 @@ type CheckFailure = {
 const README_PATH = 'README.md';
 const CURRENT_STATE_PATH = 'docs/contributing/current-state.md';
 const KERNEL_ARCHITECTURE_PATH = '../takosumi/docs/reference/architecture/kernel.md';
-const DOMAIN_ROOT = '../takosumi/packages/kernel/src/domains';
+const DOMAIN_ROOT = '../takosumi/src/kernel/domains';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
 const REQUIRED_KERNEL_PLUGIN_DOCS = [CURRENT_STATE_PATH];
@@ -181,6 +181,7 @@ function validateInternalDomainMentions(
   const mentionsInternalDomains = lowerText.includes('internal domain') ||
     lowerText.includes('internal domains') ||
     lowerText.includes('domain modules') ||
+    lowerText.includes('src/kernel/domains') ||
     lowerText.includes('packages/kernel/src/domains');
   const mentionsDeployRuntimeDomains = lowerText.includes('domains/deploy') ||
     lowerText.includes('domains/runtime') ||

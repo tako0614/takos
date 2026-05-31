@@ -20,7 +20,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     connect:
       db:
         output: db.connection

@@ -13,7 +13,7 @@ deno test --allow-all \
   packages/all/tests/e2e_deploy_test.ts
 ```
 
-Takos product の agent 実行面は `takos/agent` と `takos-agent-engine` の tests
+Takos product の agent 実行面は `takos/containers/agent` と `takos-agent-engine` の tests
 で扱います。product release gate では次を起点に確認します。
 
 ```sh

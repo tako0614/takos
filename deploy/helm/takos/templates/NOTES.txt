@@ -9,8 +9,8 @@
 {{- if .Values.ingress.enabled }}
    https://{{ .Values.domains.admin }}
 {{- else }}
-   kubectl port-forward svc/{{ $fullname }}-takos-app {{ .Values.services.takosApp.port }}:{{ .Values.services.takosApp.port }}
-   Then open: http://localhost:{{ .Values.services.takosApp.port }}
+   kubectl port-forward svc/{{ $fullname }}-takos-worker {{ .Values.services.takosWorker.port }}:{{ .Values.services.takosWorker.port }}
+   Then open: http://localhost:{{ .Values.services.takosWorker.port }}
 {{- end }}
 
 2. Tenant Application URL pattern:
@@ -33,7 +33,7 @@
       - Install cert-manager and set ingress.tls.clusterIssuer in your values.
 {{- end }}
 
-   c) Create your first tenant via the admin dashboard or the Takos CLI.
+   c) Create your first tenant via the admin dashboard.
 
    d) For production deployments, review and configure:
       - secrets.existingSecrets (use an external secrets operator)

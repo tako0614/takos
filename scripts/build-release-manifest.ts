@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --config deno.json --allow-read --allow-run=git
+#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
 
 type JsonValue =
   | null
@@ -8,16 +8,18 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-type DenoConfig = {
+type RootPackageJsonConfig = {
   name?: string;
   version?: string;
   takosRelease?: {
     name?: string;
     version?: string;
   };
-  workspace?: string[];
+  workspaces?: string[];
+  private?: boolean;
+  license?: string;
   exports?: Record<string, string> | string;
-  tasks?: Record<string, string>;
+  scripts?: Record<string, string>;
 };
 
 type CargoPackageConfig = {
@@ -25,6 +27,19 @@ type CargoPackageConfig = {
   version?: string;
   publish?: boolean | string[];
   license?: string;
+};
+
+type PackageJsonConfig = {
+  name?: string;
+  version?: string;
+  private?: boolean;
+  license?: string;
+  takosRelease?: {
+    name?: string;
+    version?: string;
+  };
+  workspaces?: string[];
+  scripts?: Record<string, string>;
 };
 
 type CommandManifest = {
@@ -36,8 +51,8 @@ type CommandManifest = {
 type ReleaseComponentConfig = {
   id: string;
   path: string;
-  kind: 'deno' | 'cargo';
-  expectedName: string;
+  kind: 'cargo' | 'package';
+  expectedName?: string;
 };
 
 type BuildReleaseManifestOptions = {
@@ -66,20 +81,17 @@ type GitInfo = {
   dirty?: boolean | null;
 };
 
-type SubmodulePointer = {
+type CanonicalLayoutCheck = {
   path: string;
-  commit: string;
-  state: 'recorded' | 'uninitialized' | 'checkout-differs' | 'conflict' | 'unknown';
-  prefix: string;
-  description: string | null;
+  kind: 'required' | 'legacy';
+  ok: boolean;
+  state: 'present' | 'missing' | 'removed';
 };
 
-type SubmoduleSummary = {
-  available: boolean;
+type CanonicalLayoutSummary = {
   clean?: boolean;
   count?: number;
-  states?: Record<string, number>;
-  pointers: SubmodulePointer[];
+  paths: CanonicalLayoutCheck[];
 };
 
 type OfficialImage = {
@@ -102,36 +114,45 @@ type ImageDigestRecord = {
 
 const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
   {
-    name: 'takos-app',
-    context: '.',
-    dockerfile: 'deploy/docker/takos-app.Dockerfile',
+    name: 'takos-worker',
+    context: '..',
+    dockerfile: 'takos/deploy/docker/takos-worker.Dockerfile',
   },
   {
     name: 'takos-git',
-    context: 'git',
-    dockerfile: 'git/Dockerfile',
+    context: '..',
+    dockerfile: 'takos/containers/git/Dockerfile',
   },
   {
     name: 'takos-agent',
     context: '..',
-    dockerfile: 'takos/agent/Dockerfile',
+    dockerfile: 'takos/containers/agent/Dockerfile',
   },
 ];
 
 const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [
-  { id: 'takos-shell', path: 'deno.json', kind: 'deno', expectedName: 'takos' },
-  { id: 'takos-app', path: 'app/deno.json', kind: 'deno', expectedName: 'takos-app' },
-  { id: 'takos-git', path: 'git/deno.json', kind: 'deno', expectedName: 'takos-git' },
-  { id: 'takos-agent', path: 'agent/Cargo.toml', kind: 'cargo', expectedName: 'takos-agent' },
+  { id: 'takos-worker', path: 'package.json', kind: 'package', expectedName: '@takos/takos' },
+  { id: 'takos-git', path: 'containers/git/package.json', kind: 'package', expectedName: '@takos/containers/git' },
+  { id: 'takos-agent', path: 'containers/agent/Cargo.toml', kind: 'cargo', expectedName: 'takos-agent' },
 ];
+
+const REQUIRED_CANONICAL_LAYOUT_PATHS = [
+  'src/worker',
+  'src/routes',
+  'src/contracts',
+  'web',
+  'containers/git',
+  'containers/agent',
+] as const;
+const LEGACY_SOURCE_ROOTS = ['app', 'git', 'agent'] as const;
 
 const root = Deno.cwd();
 const options = parseArgs(Deno.args);
 const commands = validationCommands();
 assertRequiredValidationCommands(commands);
 const gitInfo = await collectGitInfo();
-const submodules = await collectSubmodulePointers();
-assertCleanGitState(gitInfo, submodules, options);
+const canonicalLayout = await collectCanonicalLayout();
+assertCleanGitState(gitInfo, canonicalLayout, options);
 const release = await collectReleaseIdentity(options);
 
 const manifest = {
@@ -141,7 +162,7 @@ const manifest = {
   package: await collectPackageManifest(),
   releaseComponents: await collectReleaseComponents(),
   git: gitInfo,
-  submodules,
+  canonicalLayout,
   validationCommands: commands,
   officialImages: await collectOfficialImages(gitInfo, options, release),
   distributionContract: await collectDistributionContract(),
@@ -210,7 +231,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
 function usage(): never {
   console.error(
-    'Usage: deno run --config deno.json --allow-read --allow-run=git --allow-write=<path> scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]',
+    'Usage: bun --preload ./shims/deno-compat.ts scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]',
   );
   Deno.exit(2);
 }
@@ -218,8 +239,8 @@ function usage(): never {
 async function collectReleaseIdentity(
   options: BuildReleaseManifestOptions,
 ): Promise<ReleaseIdentity> {
-  const rootConfig = await readJson<DenoConfig>('deno.json');
-  const metadata = denoReleaseMetadata(rootConfig);
+  const rootConfig = await readJson<RootPackageJsonConfig>('package.json');
+  const metadata = packageReleaseMetadata(rootConfig);
   const errors: string[] = [];
   const version = metadata.version ?? null;
   const canonicalTag = version ? `v${version}` : null;
@@ -235,7 +256,7 @@ async function collectReleaseIdentity(
     (!isSemver(options.releaseVersion) || options.releaseVersion !== version)
   ) {
     errors.push(
-      `--release-version must match deno.json takosRelease.version (${version ?? '<missing>'})`,
+      `--release-version must match package.json takosRelease.version (${version ?? '<missing>'})`,
     );
   }
   if (options.releaseTag !== null) {
@@ -244,7 +265,7 @@ async function collectReleaseIdentity(
       errors.push('--release-tag must use v<semver>');
     } else if (tagVersion !== version) {
       errors.push(
-        `--release-tag must match deno.json takosRelease.version (${version ?? '<missing>'})`,
+        `--release-tag must match package.json takosRelease.version (${version ?? '<missing>'})`,
       );
     }
     if (options.releaseVersion !== null && tagVersion !== null && tagVersion !== options.releaseVersion) {
@@ -268,31 +289,31 @@ async function collectReleaseIdentity(
 }
 
 async function collectPackageManifest(): Promise<JsonValue> {
-  const rootConfig = await readJson<DenoConfig>('deno.json');
-  const workspace = rootConfig.workspace ?? [];
-  const rootReleaseMetadata = denoReleaseMetadata(rootConfig);
+  const rootConfig = await readJson<RootPackageJsonConfig>('package.json');
+  const workspace = rootConfig.workspaces ?? [];
+  const rootReleaseMetadata = packageReleaseMetadata(rootConfig);
   const packages = [];
 
   for (const workspacePath of workspace) {
-    const configPath = `${workspacePath.replace(/\/$/, '')}/deno.json`;
-    const config = await readJson<DenoConfig>(configPath);
-    const releaseMetadata = denoReleaseMetadata(config);
+    const configPath = `${workspacePath.replace(/\/$/, '')}/package.json`;
+    const config = await readJson<PackageJsonConfig>(configPath);
+    const releaseMetadata = packageReleaseMetadata(config);
     packages.push({
       path: workspacePath,
       config: configPath,
       name: releaseMetadata.name ?? null,
       version: releaseMetadata.version ?? null,
       exports: config.exports ?? null,
-      tasks: Object.keys(config.tasks ?? {}).sort(),
+      scripts: Object.keys(config.scripts ?? {}).sort(),
     });
   }
 
   return {
     root,
-    config: 'deno.json',
+    config: 'package.json',
     name: rootReleaseMetadata.name ?? null,
     version: rootReleaseMetadata.version ?? null,
-    tasks: Object.keys(rootConfig.tasks ?? {}).sort(),
+    scripts: Object.keys(rootConfig.scripts ?? {}).sort(),
     workspace,
     packages,
   };
@@ -302,18 +323,18 @@ async function collectReleaseComponents(): Promise<JsonValue> {
   const components = [];
   const errors: string[] = [];
   for (const component of RELEASE_COMPONENT_CONFIGS) {
-    if (component.kind === 'deno') {
-      const config = await readJson<DenoConfig>(component.path);
-      const releaseMetadata = denoReleaseMetadata(config);
-      validateReleaseComponentMetadata(component, releaseMetadata.name, releaseMetadata.version, errors);
+    if (component.kind === 'package') {
+      const config = await readJson<PackageJsonConfig>(component.path);
+      validateReleaseComponentMetadata(component, config.name, config.version, errors);
       components.push({
         id: component.id,
         kind: component.kind,
         config: component.path,
-        name: releaseMetadata.name ?? null,
-        version: releaseMetadata.version ?? null,
-        workspaceCount: config.workspace?.length ?? 0,
-        taskCount: Object.keys(config.tasks ?? {}).length,
+        name: config.name ?? null,
+        version: config.version ?? null,
+        private: config.private ?? null,
+        license: config.license ?? null,
+        scriptCount: Object.keys(config.scripts ?? {}).length,
       });
       continue;
     }
@@ -343,7 +364,7 @@ async function collectReleaseComponents(): Promise<JsonValue> {
   };
 }
 
-function denoReleaseMetadata(config: DenoConfig): { name?: string; version?: string } {
+function packageReleaseMetadata(config: PackageJsonConfig): { name?: string; version?: string } {
   return {
     name: config.takosRelease?.name ?? config.name,
     version: config.takosRelease?.version ?? config.version,
@@ -356,7 +377,7 @@ function validateReleaseComponentMetadata(
   version: string | undefined,
   errors: string[],
 ): void {
-  if (name !== component.expectedName) {
+  if (component.expectedName !== undefined && name !== component.expectedName) {
     errors.push(`${component.id}: ${component.path} name must be ${component.expectedName}`);
   }
   if (!version || !isSemver(version)) {
@@ -395,33 +416,37 @@ async function collectGitInfo(): Promise<GitInfo> {
   };
 }
 
-async function collectSubmodulePointers(): Promise<SubmoduleSummary> {
-  const status = await git(['submodule', 'status', '--recursive']);
-  if (status === null) {
-    return { available: false, pointers: [] };
+async function collectCanonicalLayout(): Promise<CanonicalLayoutSummary> {
+  const paths: CanonicalLayoutCheck[] = [];
+  for (const path of REQUIRED_CANONICAL_LAYOUT_PATHS) {
+    const present = await exists(path);
+    paths.push({
+      path,
+      kind: 'required',
+      ok: present,
+      state: present ? 'present' : 'missing',
+    });
+  }
+  for (const path of LEGACY_SOURCE_ROOTS) {
+    const present = await exists(path);
+    paths.push({
+      path,
+      kind: 'legacy',
+      ok: !present,
+      state: present ? 'present' : 'removed',
+    });
   }
 
-  const pointers = status.split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.length > 0)
-    .map(parseSubmoduleStatusLine);
-  const states = pointers.reduce<Record<string, number>>((counts, pointer) => {
-    counts[pointer.state] = (counts[pointer.state] ?? 0) + 1;
-    return counts;
-  }, {});
-
   return {
-    available: true,
-    clean: pointers.every((pointer) => pointer.state === 'recorded'),
-    count: pointers.length,
-    states,
-    pointers,
+    clean: paths.every((path) => path.ok),
+    count: paths.length,
+    paths,
   };
 }
 
 function assertCleanGitState(
   gitInfo: GitInfo,
-  submodules: SubmoduleSummary,
+  canonicalLayout: CanonicalLayoutSummary,
   options: BuildReleaseManifestOptions,
 ): void {
   if (!options.requireCleanGit) return;
@@ -433,14 +458,12 @@ function assertCleanGitState(
     errors.push('git working tree must be clean');
   }
 
-  if (!submodules.available) {
-    errors.push('submodule status must be available');
-  } else if (submodules.clean !== true) {
-    const dirtySubmodules = submodules.pointers
-      .filter((pointer) => pointer.state !== 'recorded')
-      .map((pointer) => `${pointer.path}:${pointer.state}`);
+  if (canonicalLayout.clean !== true) {
+    const mismatches = canonicalLayout.paths
+      .filter((path) => !path.ok)
+      .map((path) => `${path.path}:${path.state}`);
     errors.push(
-      `submodules must match recorded commits${dirtySubmodules.length > 0 ? ` (${dirtySubmodules.join(', ')})` : ''}`,
+      `canonical layout must be complete${mismatches.length > 0 ? ` (${mismatches.join(', ')})` : ''}`,
     );
   }
 
@@ -449,43 +472,6 @@ function assertCleanGitState(
   console.error('Release manifest clean git validation failed:');
   for (const error of errors) console.error(`- ${error}`);
   Deno.exit(1);
-}
-
-function parseSubmoduleStatusLine(line: string): SubmodulePointer {
-  const match = /^([ +-U]?)([0-9a-f]{40})\s+(\S+)(?:\s+\(([^)]*)\))?$/.exec(line);
-  if (!match) {
-    return {
-      path: line,
-      commit: '',
-      state: 'unknown',
-      prefix: '',
-      description: null,
-    };
-  }
-
-  const prefix = match[1] || ' ';
-  return {
-    path: match[3],
-    commit: match[2],
-    state: submoduleState(prefix),
-    prefix,
-    description: match[4] ?? null,
-  };
-}
-
-function submoduleState(prefix: string): SubmodulePointer['state'] {
-  switch (prefix) {
-    case ' ':
-      return 'recorded';
-    case '-':
-      return 'uninitialized';
-    case '+':
-      return 'checkout-differs';
-    case 'U':
-      return 'conflict';
-    default:
-      return 'unknown';
-  }
 }
 
 async function collectOfficialImages(
@@ -638,58 +624,58 @@ function parseGitHubOwner(remote: string | null): string | null {
 
 function validationCommands(): CommandManifest[] {
   return [
-    { name: 'check', command: ['deno', 'task', 'check'] },
+    { name: 'check', command: ['bun', 'run', 'check'] },
     {
       name: 'lint:agent-docs',
-      command: ['deno', 'task', 'lint:agent-docs'],
+      command: ['bun', 'run', 'lint:agent-docs'],
     },
     {
       name: 'validate-architecture',
-      command: ['deno', 'task', 'validate:architecture'],
+      command: ['bun', 'run', 'validate:architecture'],
     },
     {
       name: 'lint:docs',
-      command: ['deno', 'task', 'lint:docs'],
+      command: ['bun', 'run', 'lint:docs'],
     },
     {
       name: 'service-set-validator',
       command: [
-        'deno',
-        'task',
+        'bun',
+        'run',
         'validate:service-set',
       ],
     },
     {
       name: 'validate-distributions',
-      command: ['deno', 'task', 'validate:distributions'],
+      command: ['bun', 'run', 'validate:distributions'],
     },
     {
       name: 'validate-helm',
-      command: ['deno', 'task', 'validate:helm'],
+      command: ['bun', 'run', 'validate:helm'],
     },
     {
       name: 'helm-overlay-generator',
-      command: ['deno', 'task', 'helm:check-overlays'],
+      command: ['bun', 'run', 'helm:check-overlays'],
     },
     {
       name: 'terraform-helm-values',
-      command: ['deno', 'task', 'terraform:helm-values:check'],
+      command: ['bun', 'run', 'terraform:helm-values:check'],
     },
     {
       name: 'terraform-plan-gate',
-      command: ['deno', 'task', 'terraform:plan-gate'],
+      command: ['bun', 'run', 'terraform:plan-gate'],
     },
     {
       name: 'terraform-secret-policy',
-      command: ['deno', 'task', 'validate:terraform-secrets'],
+      command: ['bun', 'run', 'validate:terraform-secrets'],
     },
     {
       name: 'validate-release-promotion',
-      command: ['deno', 'task', 'validate:release-promotion'],
+      command: ['bun', 'run', 'validate:release-promotion'],
     },
     {
       name: 'helm-template-smoke',
-      command: ['deno', 'task', 'helm:template-smoke'],
+      command: ['bun', 'run', 'helm:template-smoke'],
       env: {
         TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN: '1',
         TAKOS_HELM_INSTALL_TEST_CRDS: '1',
@@ -697,7 +683,7 @@ function validationCommands(): CommandManifest[] {
     },
     {
       name: 'helm-install-smoke',
-      command: ['deno', 'task', 'helm:install-smoke'],
+      command: ['bun', 'run', 'helm:install-smoke'],
       env: {
         TAKOS_HELM_INSTALL_TEST_CRDS: '1',
       },
@@ -705,12 +691,9 @@ function validationCommands(): CommandManifest[] {
     {
       name: 'release-gate',
       command: [
-        'deno',
-        'run',
-        '--config',
-        'deno.json',
-        '--allow-run=deno',
-        '--allow-env',
+        'bun',
+        '--preload',
+        './shims/deno-compat.ts',
         'scripts/release-gate.ts',
         '--keep-going',
       ],
@@ -718,12 +701,9 @@ function validationCommands(): CommandManifest[] {
     {
       name: 'release-manifest',
       command: [
-        'deno',
-        'run',
-        '--config',
-        'deno.json',
-        '--allow-read',
-        '--allow-run=git',
+        'bun',
+        '--preload',
+        './shims/deno-compat.ts',
         'scripts/build-release-manifest.ts',
       ],
     },
@@ -735,23 +715,23 @@ function assertRequiredValidationCommands(
 ) {
   const byName = new Map(commands.map((command) => [command.name, command]));
   const required: Record<string, readonly string[]> = {
-    'lint:agent-docs': ['deno', 'task', 'lint:agent-docs'],
-    'validate-architecture': ['deno', 'task', 'validate:architecture'],
-    'validate-distributions': ['deno', 'task', 'validate:distributions'],
-    'service-set-validator': ['deno', 'task', 'validate:service-set'],
-    'validate-helm': ['deno', 'task', 'validate:helm'],
-    'helm-overlay-generator': ['deno', 'task', 'helm:check-overlays'],
-    'terraform-helm-values': ['deno', 'task', 'terraform:helm-values:check'],
-    'terraform-plan-gate': ['deno', 'task', 'terraform:plan-gate'],
-    'terraform-secret-policy': ['deno', 'task', 'validate:terraform-secrets'],
+    'lint:agent-docs': ['bun', 'run', 'lint:agent-docs'],
+    'validate-architecture': ['bun', 'run', 'validate:architecture'],
+    'validate-distributions': ['bun', 'run', 'validate:distributions'],
+    'service-set-validator': ['bun', 'run', 'validate:service-set'],
+    'validate-helm': ['bun', 'run', 'validate:helm'],
+    'helm-overlay-generator': ['bun', 'run', 'helm:check-overlays'],
+    'terraform-helm-values': ['bun', 'run', 'terraform:helm-values:check'],
+    'terraform-plan-gate': ['bun', 'run', 'terraform:plan-gate'],
+    'terraform-secret-policy': ['bun', 'run', 'validate:terraform-secrets'],
     'validate-release-promotion': [
-      'deno',
-      'task',
+      'bun',
+      'run',
       'validate:release-promotion',
     ],
-    'helm-template-smoke': ['deno', 'task', 'helm:template-smoke'],
-    'helm-install-smoke': ['deno', 'task', 'helm:install-smoke'],
-    'lint:docs': ['deno', 'task', 'lint:docs'],
+    'helm-template-smoke': ['bun', 'run', 'helm:template-smoke'],
+    'helm-install-smoke': ['bun', 'run', 'helm:install-smoke'],
+    'lint:docs': ['bun', 'run', 'lint:docs'],
   };
   const errors: string[] = [];
 
@@ -876,7 +856,7 @@ function stringArraysEqual(
 
 async function collectServiceSet(): Promise<JsonValue> {
   const expected = [
-    'takos-app',
+    'takos-worker',
     'takosumi',
     'takos-git',
     'takos-agent',
@@ -966,7 +946,7 @@ async function collectSmokeScripts(): Promise<JsonValue> {
   ]);
   const knownEnv: Record<string, Record<string, string>> = {};
   const knownCommands: Record<string, string[]> = {
-    'local-smoke.mjs': ['node', 'scripts/local-smoke.mjs'],
+    'local-smoke.mjs': ['bun', '--preload', './shims/deno-compat.ts', 'scripts/local-smoke.mjs'],
   };
   const scripts: Array<CommandManifest & { path: string }> = [];
 
@@ -976,7 +956,7 @@ async function collectSmokeScripts(): Promise<JsonValue> {
     if (!kernelSmokeScripts.has(entry.name)) continue;
     const path = `scripts/${entry.name}`;
     const command = knownCommands[entry.name] ??
-      (entry.name.endsWith('.ts') ? ['deno', 'run', '--config', 'deno.json', '--allow-read', path] : ['node', path]);
+      (entry.name.endsWith('.ts') ? ['bun', '--preload', './shims/deno-compat.ts', path] : ['bun', path]);
     scripts.push({
       name: entry.name.replace(/\.(ts|mjs)$/, ''),
       path,
@@ -1062,6 +1042,16 @@ async function readTextIfExists(path: string): Promise<string | null> {
     return await Deno.readTextFile(path);
   } catch {
     return null;
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await Deno.stat(path);
+    return true;
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false;
+    throw error;
   }
 }
 

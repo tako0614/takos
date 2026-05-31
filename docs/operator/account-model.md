@@ -53,8 +53,8 @@ public install 導線では、dedicated runtime も最初から Installation 経
 Takos app root で OIDC account model を確認します。
 
 ```bash
-cd takos/app
-deno test --allow-all packages/control/src/server/routes/auth/__tests__/oidc-router.test.ts
+cd takos
+deno test --allow-all ../../src/worker/server/routes/auth/__tests__/oidc-router.test.ts
 deno task test:api
 deno task validate:migration-safety
 ```

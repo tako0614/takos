@@ -29,7 +29,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     connect:
       db:
         output: db.connection
@@ -55,7 +55,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     connect:
       blob:
         output: media.bucket
@@ -79,7 +79,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     listen:
       oidc:
         path: identity.primary.oidc

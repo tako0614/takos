@@ -38,8 +38,8 @@ spec:
               value: {{ .Values.services.takosAgent.port | quote }}
             - name: TAKOS_AGENT_SERVICE_ID
               value: "takos-agent"
-            - name: TAKOS_APP_INTERNAL_URL
-              value: {{ include "takos.appUrl" . | quote }}
+            - name: TAKOS_WORKER_INTERNAL_URL
+              value: {{ include "takos.workerUrl" . | quote }}
             - name: TAKOSUMI_INTERNAL_URL
               value: {{ include "takos.takosumiUrl" . | quote }}
           envFrom:

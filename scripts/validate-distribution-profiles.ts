@@ -2,6 +2,7 @@ import { basename, join, normalize, relative, resolve } from 'node:path';
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 type JsonRecord = Record<string, unknown>;
+type TaskConfig = { tasks?: JsonRecord; scripts?: JsonRecord };
 
 const takosRoot = Deno.cwd();
 const ecosystemRoot = resolve(takosRoot, '..');
@@ -16,17 +17,12 @@ const expectedTargets = [
 ] as const;
 const requiredServices = [
   'takos-agent',
-  'takos-app',
   'takos-git',
+  'takos-worker',
   'takosumi',
   'takosumi-cloud',
 ] as const;
-const optionalServices = [
-  'takos-dispatch',
-  'takos-executor-host',
-  'takos-runtime-host',
-  'takos-worker',
-] as const;
+const optionalServices = [] as const;
 const expectedServices = [...requiredServices, ...optionalServices] as const;
 const officialProviderBundle = '@takos/takosumi-plugins';
 type ExpectedTargetId = typeof expectedTargets[number];
@@ -98,11 +94,11 @@ const expectedRequiredBindings: Record<ExpectedTargetId, readonly ExpectedBindin
 const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, ExpectedServiceSpec>> = {
   aws: kubernetesLikeServiceSpecs('container'),
   cloudflare: {
-    'takos-app': {
+    'takos-worker': {
       runtime: 'worker',
       artifactField: 'artifactRef',
-      artifact: 'worker:takos-app',
-      internalUrl: 'https://takos-app.internal.takos.example',
+      artifact: 'worker:takos-worker',
+      internalUrl: 'https://takos-worker.internal.takos.example',
       publicUrl: 'https://admin.takos.example.com',
     },
     takosumi: {
@@ -129,26 +125,6 @@ const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, E
       artifactField: 'image',
       artifact: 'ghcr.io/takos/takos-agent:latest',
       internalUrl: 'https://takos-agent.internal.takos.example',
-    },
-    'takos-worker': {
-      runtime: 'worker',
-      artifactField: 'artifactRef',
-      artifact: 'worker:takos-worker',
-    },
-    'takos-executor-host': {
-      runtime: 'worker',
-      artifactField: 'artifactRef',
-      artifact: 'worker:takos-executor-host',
-    },
-    'takos-runtime-host': {
-      runtime: 'worker',
-      artifactField: 'artifactRef',
-      artifact: 'worker:takos-runtime-host',
-    },
-    'takos-dispatch': {
-      runtime: 'worker',
-      artifactField: 'artifactRef',
-      artifact: 'worker:takos-dispatch',
     },
   },
   gcp: kubernetesLikeServiceSpecs('container'),
@@ -216,8 +192,8 @@ const expectedDefaultAppPreinstallByEnvironment = {
   production: expectedDefaultAppPreinstallNames,
 } as const;
 
-const takosDenoConfig = await readJson(join(takosRoot, 'deno.json'));
-const takosumiDenoConfig = await readJson(resolve(takosRoot, '../takosumi/deno.json'));
+const takosTaskConfig = await readTaskConfig(takosRoot);
+const takosumiTaskConfig = await readTaskConfig(resolve(takosRoot, '../takosumi'));
 const distributionProfileSchema = await readJson(resolve(takosRoot, distributionProfileSchemaPath));
 const errors: string[] = [];
 const manifestFilter = parseManifestFilter(Deno.args);
@@ -326,11 +302,11 @@ function kubernetesLikeServiceSpecs(
   runtime: string,
 ): Record<ExpectedServiceId, ExpectedServiceSpec> {
   return {
-    'takos-app': {
+    'takos-worker': {
       runtime,
       artifactField: 'image',
-      artifact: 'ghcr.io/takos/takos-app:latest',
-      internalUrl: 'http://takos-app.takos-system.svc.cluster.local:8080',
+      artifact: 'ghcr.io/takos/takos-worker:latest',
+      internalUrl: 'http://takos-worker.takos-system.svc.cluster.local:8080',
       publicUrl: 'https://admin.takos.example.com',
     },
     takosumi: {
@@ -363,11 +339,11 @@ function kubernetesLikeServiceSpecs(
 
 function processServiceSpecs(): Record<ExpectedServiceId, ExpectedServiceSpec> {
   return {
-    'takos-app': {
+    'takos-worker': {
       runtime: 'process',
       artifactField: 'image',
-      artifact: 'ghcr.io/takos/takos-app:latest',
-      internalUrl: 'http://takos-app:8080',
+      artifact: 'ghcr.io/takos/takos-worker:latest',
+      internalUrl: 'http://takos-worker:8080',
       publicUrl: 'https://admin.takos.example.internal',
     },
     takosumi: {
@@ -488,9 +464,9 @@ function validateProviderCommand(input: {
   expectString(cdPath, '../takosumi', `${input.field} cd target`);
   assertPathExists(cdPath, `${input.field} cd target`);
   if (parsed.taskName !== providerTaskName) {
-    errors.push(`${input.field} must run deno task ${providerTaskName}`);
+    errors.push(`${input.field} must run bun run ${providerTaskName}`);
   }
-  assertDenoTask(takosumiDenoConfig, parsed.taskName, input.field);
+  assertConfiguredTask(takosumiTaskConfig, parsed.taskName, input.field);
   expectString(
     parsed.env.TAKOSUMI_PLUGIN_LIVE_PROVIDER,
     input.targetId,
@@ -773,8 +749,8 @@ function validateMetadataCommands(metadata: JsonRecord | null, label: string): v
   if (liveSmokeTask) {
     const parsed = parseSimpleShellCommand(liveSmokeTask, `${label}.metadata.liveSmokeTask`, { allowNoCd: true });
     if (parsed) {
-      expectString(parsed.taskName, 'distribution:smoke', `${label}.metadata.liveSmokeTask deno task`);
-      assertDenoTask(takosDenoConfig, parsed.taskName, `${label}.metadata.liveSmokeTask`);
+      expectString(parsed.taskName, 'distribution:smoke', `${label}.metadata.liveSmokeTask bun script`);
+      assertConfiguredTask(takosTaskConfig, parsed.taskName, `${label}.metadata.liveSmokeTask`);
     }
   }
   const providerSmokeTask = maybeString(metadata.providerSmokeTask);
@@ -936,17 +912,40 @@ function parseSimpleShellCommand(
     index += 1;
   }
 
-  if (parts[index] !== 'deno' || parts[index + 1] !== 'task' || !parts[index + 2]) {
-    errors.push(`${field} must run a deno task`);
+  if (parts[index] === 'deno' && parts[index + 1] === 'task' && parts[index + 2]) {
+    return { cdPath, env, taskName: parts[index + 2] };
+  }
+  if (parts[index] === 'bun' && parts[index + 1] === 'run' && parts[index + 2]) {
+    return { cdPath, env, taskName: parts[index + 2] };
+  }
+  {
+    errors.push(`${field} must run a bun script or existing deno task`);
     return null;
   }
-  return { cdPath, env, taskName: parts[index + 2] };
 }
 
-function assertDenoTask(config: JsonRecord, taskName: string, field: string): void {
-  const tasks = maybeRecord(config.tasks);
+function assertConfiguredTask(config: TaskConfig, taskName: string, field: string): void {
+  const tasks = maybeRecord(config.tasks) ?? maybeRecord(config.scripts);
   if (!tasks || !isString(tasks[taskName])) {
-    errors.push(`${field} references missing deno task ${taskName}`);
+    errors.push(`${field} references missing configured task ${taskName}`);
+  }
+}
+
+async function readTaskConfig(root: string): Promise<TaskConfig> {
+  const packagePath = join(root, 'package.json');
+  if (exists(packagePath)) return await readJson(packagePath);
+  const denoPath = join(root, 'deno.json');
+  if (exists(denoPath)) return await readJson(denoPath);
+  return {};
+}
+
+function exists(path: string): boolean {
+  try {
+    Deno.statSync(path);
+    return true;
+  } catch (error) {
+    if (error instanceof Deno.errors.NotFound) return false;
+    throw error;
   }
 }
 
@@ -993,7 +992,7 @@ function parseManifestFilter(args: readonly string[]): string | null {
   if (args.length === 0) return null;
   const [flag, value, ...rest] = args;
   if (flag !== '--manifest' || !value || rest.length > 0) {
-    console.error('Usage: deno task validate:distributions [--manifest deploy/distributions/<target>.json]');
+    console.error('Usage: bun run validate:distributions [--manifest deploy/distributions/<target>.json]');
     Deno.exit(2);
   }
   return value;

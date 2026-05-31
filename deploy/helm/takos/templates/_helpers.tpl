@@ -93,10 +93,10 @@ Fails at template render time if tag is empty — CI must set a concrete image t
      ================================================================ */}}
 
 {{/*
-Takos app internal URL
+Takos worker internal URL
 */}}
-{{- define "takos.appUrl" -}}
-{{- printf "http://%s-takos-app:%v" (include "takos.fullname" .) (int .Values.services.takosApp.port) }}
+{{- define "takos.workerUrl" -}}
+{{- printf "http://%s-takos-worker:%v" (include "takos.fullname" .) (int .Values.services.takosWorker.port) }}
 {{- end }}
 
 {{/*

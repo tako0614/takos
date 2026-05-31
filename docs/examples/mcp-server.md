@@ -23,7 +23,7 @@ components:
   mcp:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
   public:
     kind: gateway
     connect:

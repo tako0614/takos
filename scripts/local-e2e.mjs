@@ -2,7 +2,7 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 
 const servicePorts = [
-  { label: 'takos-app', env: 'TAKOS_APP_PORT', defaultPort: 8787 },
+  { label: 'takos-worker', env: 'TAKOS_WORKER_PORT', defaultPort: 8787 },
   { label: 'takosumi', env: 'TAKOSUMI_PORT', defaultPort: 8788 },
   { label: 'takos-agent', env: 'TAKOS_AGENT_PORT', defaultPort: 8789 },
   { label: 'takos-git', env: 'TAKOS_GIT_PORT', defaultPort: 8790 },
@@ -126,7 +126,7 @@ async function waitForHealth(ports) {
   );
   const deadline = Date.now() + timeoutMs;
   const healthChecks = [
-    { label: 'takos-app', url: `http://127.0.0.1:${ports.TAKOS_APP_PORT}/health` },
+    { label: 'takos-worker', url: `http://127.0.0.1:${ports.TAKOS_WORKER_PORT}/health` },
     { label: 'takosumi', url: `http://127.0.0.1:${ports.TAKOSUMI_PORT}/health` },
     { label: 'takos-agent', url: `http://127.0.0.1:${ports.TAKOS_AGENT_PORT}/health` },
     { label: 'takos-git', url: `http://127.0.0.1:${ports.TAKOS_GIT_PORT}/health` },
@@ -179,8 +179,8 @@ async function expectJson(label, url, options, validate) {
 
 async function runGatewayChecks(ports, secret) {
   await expectJson(
-    'takos-app -> takosumi spaces list',
-    `http://127.0.0.1:${ports.TAKOS_APP_PORT}/api/spaces`,
+    'takos-worker -> takosumi spaces list',
+    `http://127.0.0.1:${ports.TAKOS_WORKER_PORT}/api/spaces`,
     {
       headers: {
         'x-takos-internal-secret': secret,
@@ -196,7 +196,7 @@ async function runGatewayChecks(ports, secret) {
 }
 
 async function seedGitRepository(hostRoot) {
-  await runCommand('bash', ['git/scripts/seed-dev-git.sh', 'local/demo'], {
+  await runCommand('bash', ['containers/git/scripts/seed-dev-git.sh', 'local/demo'], {
     env: {
       TAKOS_GIT_REPOSITORY_ROOT: hostRoot,
       TAKOS_GIT_OWNER_SPACE_ID: 'local',
@@ -221,7 +221,7 @@ async function makeTreeWritableForContainer(path) {
 
 async function runGitCloneCheck(ports, secret) {
   const cloneDir = await Deno.makeTempDir({ prefix: 'takos-git-clone-' });
-  const remoteUrl = `http://127.0.0.1:${ports.TAKOS_APP_PORT}/local/demo.git`;
+  const remoteUrl = `http://127.0.0.1:${ports.TAKOS_WORKER_PORT}/local/demo.git`;
   try {
     await runCommand('git', [
       '-c',
@@ -236,7 +236,7 @@ async function runGitCloneCheck(ports, secret) {
     if (!readme.includes('Seed repository for local takos-git verification.')) {
       throw new Error('cloned repository README did not match seed content');
     }
-    console.log('[local-e2e] git clone through apps/api Smart HTTP ok');
+    console.log('[local-e2e] git clone through takos-worker Smart HTTP ok');
   } finally {
     await Deno.remove(cloneDir, { recursive: true });
   }
@@ -273,7 +273,7 @@ async function main() {
   const secret = env('TAKOS_INTERNAL_SERVICE_SECRET', 'local-dev-secret');
   const commandEnv = {
     ...ports,
-    TAKOS_APP_URL: `http://localhost:${ports.TAKOS_APP_PORT}`,
+    TAKOS_WORKER_URL: `http://localhost:${ports.TAKOS_WORKER_PORT}`,
     TAKOS_INTERNAL_SERVICE_SECRET: secret,
     TAKOS_INTERNAL_API_SECRET: env('TAKOS_INTERNAL_API_SECRET', secret),
     TAKOSUMI_INTERNAL_API_SECRET: env('TAKOSUMI_INTERNAL_API_SECRET', secret),
@@ -287,7 +287,7 @@ async function main() {
   console.log(`[local-e2e] project=${project}`);
   console.log(`[local-e2e] gitRepositoryHostRoot=${gitRepositoryHostRoot}`);
   console.log(
-    `[local-e2e] ports app=${ports.TAKOS_APP_PORT} takosumi=${ports.TAKOSUMI_PORT} agent=${ports.TAKOS_AGENT_PORT} git=${ports.TAKOS_GIT_PORT}`,
+    `[local-e2e] ports worker=${ports.TAKOS_WORKER_PORT} takosumi=${ports.TAKOSUMI_PORT} agent=${ports.TAKOS_AGENT_PORT} git=${ports.TAKOS_GIT_PORT}`,
   );
 
   try {
@@ -304,7 +304,7 @@ async function main() {
       'postgres-init',
       'redis',
       'takos-agent',
-      'takos-app',
+      'takos-worker',
       'takos-git',
       'takosumi',
     ];

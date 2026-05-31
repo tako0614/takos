@@ -1,0 +1,444 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "bun",
+      "node"
+    ],
+    "baseUrl": ".",
+    "allowImportingTsExtensions": true,
+    "moduleResolution": "bundler",
+    "module": "Preserve",
+    "target": "ESNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@std/assert": [
+        "./shims/std/assert.ts"
+      ],
+      "@std/assert/equals": [
+        "./shims/std/assert.ts"
+      ],
+      "@std/assert/*": [
+        "./shims/std/assert.ts"
+      ],
+      "@std/colors": [
+        "./shims/std/colors.ts"
+      ],
+      "@std/fmt/colors": [
+        "./shims/std/colors.ts"
+      ],
+      "@std/yaml": [
+        "./shims/std/yaml.ts"
+      ],
+      "@std/path": [
+        "./shims/std/path.ts"
+      ],
+      "@std/path/*": [
+        "./shims/std/path.ts"
+      ],
+      "@std/fs": [
+        "./shims/std/fs.ts"
+      ],
+      "@std/testing/mock": [
+        "./shims/std/mock.ts"
+      ],
+      "@std/testing": [
+        "./shims/std/mock.ts"
+      ],
+      "takosumi-contract": [
+        "../takosumi/src/contract/mod.ts"
+      ],
+      "takosumi-contract/installer-api": [
+        "../takosumi/src/contract/installer-api.ts"
+      ],
+      "takosumi-contract/internal/api": [
+        "../takosumi/src/contract/internal-api.ts"
+      ],
+      "takosumi-contract/internal/rpc": [
+        "../takosumi/src/contract/internal-rpc.ts"
+      ],
+      "@takos/takosumi-installer": [
+        "../takosumi/src/installer/mod.ts"
+      ],
+      "@takos/takosumi-installer/deploy-client": [
+        "../takosumi/src/installer/deploy-client.ts"
+      ],
+      "takosumi-contract-v2": [
+        "../takosumi/src/contract/mod.ts"
+      ],
+      "takosumi-contract-v2/internal/api": [
+        "../takosumi/src/contract/internal-api.ts"
+      ],
+      "takosumi-contract-v2/internal/rpc": [
+        "../takosumi/src/contract/internal-rpc.ts"
+      ],
+      "takos-git-contract": [
+        "./src/contracts/git/index.ts"
+      ],
+      "takos-git-contract/*": [
+        "./src/contracts/git/*"
+      ],
+      "takos-api-contract": [
+        "./src/contracts/public/index.ts"
+      ],
+      "takos-api-contract/rpc-types": [
+        "./src/contracts/public/rpc-types.ts"
+      ],
+      "takos-api-contract/shared/tools/custom-catalog": [
+        "./src/contracts/public/shared/tools/custom-catalog.ts"
+      ],
+      "takos-api-contract/shared/types": [
+        "./src/contracts/public/shared/types/index.ts"
+      ],
+      "takos-api-contract/shared/types/runs": [
+        "./src/contracts/public/shared/types/runs.ts"
+      ],
+      "@takos/worker-platform-utils": [
+        "./src/worker/platform-utils/index.ts"
+      ],
+      "@takos/worker-platform-utils/abort": [
+        "./src/worker/platform-utils/abort.ts"
+      ],
+      "@takos/worker-platform-utils/clock": [
+        "./src/worker/platform-utils/clock.ts"
+      ],
+      "@takos/worker-platform-utils/env-parse": [
+        "./src/worker/platform-utils/env-parse.ts"
+      ],
+      "@takos/worker-platform-utils/errors": [
+        "./src/worker/platform-utils/errors.ts"
+      ],
+      "@takos/worker-platform-utils/id": [
+        "./src/worker/platform-utils/id.ts"
+      ],
+      "@takos/worker-platform-utils/logger": [
+        "./src/worker/platform-utils/logger.ts"
+      ],
+      "@takos/worker-platform-utils/ttl": [
+        "./src/worker/platform-utils/ttl.ts"
+      ],
+      "@takos/worker-platform-utils/validation": [
+        "./src/worker/platform-utils/validation.ts"
+      ],
+      "takos-actions-engine": [
+        "./src/worker/actions-engine/index.ts"
+      ],
+      "@takos/deploy-intent": [
+        "./src/contracts/deploy-intent/index.ts"
+      ],
+      "@takos/worker-local-platform": [
+        "./src/worker/local-platform/index.ts"
+      ],
+      "@takos/worker-local-platform/*": [
+        "./src/worker/local-platform/*"
+      ],
+      "@takos/worker-shared/types": [
+        "./src/worker/shared/types/index.ts"
+      ],
+      "@takos/worker-shared/types/bindings": [
+        "./src/worker/shared/types/bindings.ts"
+      ],
+      "@takos/worker-shared/types/env": [
+        "./src/worker/shared/types/env.ts"
+      ],
+      "@takos/worker-shared/types/models": [
+        "./src/worker/shared/types/models.ts"
+      ],
+      "@takos/worker-shared/types/routing": [
+        "./src/worker/shared/types/routing.ts"
+      ],
+      "@takos/worker-shared/types/runs": [
+        "./src/worker/shared/types/runs.ts"
+      ],
+      "@takos/worker-shared/types/spaces": [
+        "./src/worker/shared/types/spaces.ts"
+      ],
+      "@takos/worker-shared/types/threads": [
+        "./src/worker/shared/types/threads.ts"
+      ],
+      "@takos/worker-shared/types/identity": [
+        "./src/worker/shared/types/identity.ts"
+      ],
+      "@takos/worker-shared/types/repositories": [
+        "./src/worker/shared/types/repositories.ts"
+      ],
+      "@takos/worker-shared/types/memories": [
+        "./src/worker/shared/types/memories.ts"
+      ],
+      "@takos/worker-shared/types/artifacts": [
+        "./src/worker/shared/types/artifacts.ts"
+      ],
+      "@takos/worker-shared/types/agent-tasks": [
+        "./src/worker/shared/types/agent-tasks.ts"
+      ],
+      "@takos/worker-shared/types/storage": [
+        "./src/worker/shared/types/storage.ts"
+      ],
+      "@takos/worker-shared/types/queue-messages": [
+        "./src/worker/shared/types/queue-messages.ts"
+      ],
+      "@takos/worker-shared/types/queue-message-guards": [
+        "./src/worker/shared/types/queue-message-guards.ts"
+      ],
+      "@takos/worker-shared/types/services-resources": [
+        "./src/worker/shared/types/services-resources.ts"
+      ],
+      "@takos/worker-shared/types/api-scopes": [
+        "./src/worker/shared/types/api-scopes.ts"
+      ],
+      "@takos/worker-shared/types/drizzle-utils": [
+        "./src/worker/shared/types/drizzle-utils.ts"
+      ],
+      "@takos/worker-shared/types/thread-history": [
+        "./src/worker/shared/types/thread-history.ts"
+      ],
+      "@takos/worker-shared/utils": [
+        "./src/worker/shared/utils/index.ts"
+      ],
+      "@takos/worker-shared/utils/logger": [
+        "./src/worker/shared/utils/logger.ts"
+      ],
+      "@takos/worker-shared/utils/hash": [
+        "./src/worker/shared/utils/hash.ts"
+      ],
+      "@takos/worker-shared/utils/crypto": [
+        "./src/worker/shared/utils/crypto.ts"
+      ],
+      "@takos/worker-shared/utils/gzip": [
+        "./src/worker/shared/utils/gzip.ts"
+      ],
+      "@takos/worker-shared/utils/pagination": [
+        "./src/worker/shared/utils/pagination.ts"
+      ],
+      "@takos/worker-shared/utils/db-guards": [
+        "./src/worker/shared/utils/db-guards.ts"
+      ],
+      "@takos/worker-shared/utils/db-transaction": [
+        "./src/worker/shared/utils/db-transaction.ts"
+      ],
+      "@takos/worker-shared/utils/domain-validation": [
+        "./src/worker/shared/utils/domain-validation.ts"
+      ],
+      "@takos/worker-shared/utils/http-response": [
+        "./src/worker/shared/utils/http-response.ts"
+      ],
+      "@takos/worker-shared/utils/path-validation": [
+        "./src/worker/shared/utils/path-validation.ts"
+      ],
+      "@takos/worker-shared/utils/naming-utils": [
+        "./src/worker/shared/utils/naming-utils.ts"
+      ],
+      "@takos/worker-shared/utils/encoding-utils": [
+        "./src/worker/shared/utils/encoding-utils.ts"
+      ],
+      "@takos/worker-shared/utils/content-type": [
+        "./src/worker/shared/utils/content-type.ts"
+      ],
+      "@takos/worker-shared/utils/rate-limiter": [
+        "./src/worker/shared/utils/rate-limiter.ts"
+      ],
+      "@takos/worker-shared/utils/service-client": [
+        "./src/worker/shared/utils/service-client.ts"
+      ],
+      "@takos/worker-shared/utils/git-bucket": [
+        "./src/worker/shared/utils/git-bucket.ts"
+      ],
+      "@takos/worker-shared/utils/validate-env": [
+        "./src/worker/shared/utils/validate-env.ts"
+      ],
+      "@takos/worker-shared/utils/with-timeout": [
+        "./src/worker/shared/utils/with-timeout.ts"
+      ],
+      "@takos/worker-shared/utils/affected-row-count": [
+        "./src/worker/shared/utils/affected-row-count.ts"
+      ],
+      "@takos/worker-shared/utils/unsupported-operation": [
+        "./src/worker/shared/utils/unsupported-operation.ts"
+      ],
+      "@takos/worker-shared/utils/lcs-diff": [
+        "./src/worker/shared/utils/lcs-diff.ts"
+      ],
+      "@takos/worker-shared/utils/unified-diff": [
+        "./src/worker/shared/utils/unified-diff.ts"
+      ],
+      "@takos/worker-shared/utils/zip-stream": [
+        "./src/worker/shared/utils/zip-stream.ts"
+      ],
+      "@takos/worker-shared/config": [
+        "./src/worker/shared/config/index.ts"
+      ],
+      "@takos/worker-shared/config/limits": [
+        "./src/worker/shared/config/limits.ts"
+      ],
+      "@takos/worker-shared/config/timeouts": [
+        "./src/worker/shared/config/timeouts.ts"
+      ],
+      "@takos/worker-shared/constants": [
+        "./src/worker/shared/constants/index.ts"
+      ],
+      "@takos/worker-shared/constants/app": [
+        "./src/worker/shared/constants/app.ts"
+      ],
+      "@takos/worker-shared/constants/dns": [
+        "./src/worker/shared/constants/dns.ts"
+      ],
+      "@takos/worker-shared/constants/roles": [
+        "./src/worker/shared/constants/roles.ts"
+      ],
+      "@takos/worker-shared/infra/db": [
+        "./src/worker/infra/db/index.ts"
+      ],
+      "@takos/worker-shared/infra/db/schema": [
+        "./src/worker/infra/db/schema.ts"
+      ],
+      "@takos/worker-shared/infra/db/client": [
+        "./src/worker/infra/db/client.ts"
+      ],
+      "takosumi-contract/*": [
+        "../takosumi/src/contract/*"
+      ],
+      "takosumi-contract-v2/*": [
+        "../takosumi/src/contract/*"
+      ],
+      "takos-worker/core": [
+        "./src/worker/index.ts"
+      ],
+      "takos-worker/core/web": [
+        "./src/worker/web.ts"
+      ],
+      "takos-worker/core/dispatch": [
+        "./src/worker/dispatch.ts"
+      ],
+      "takos-worker/core/worker": [
+        "./src/worker/runtime/worker/index.ts"
+      ],
+      "takos-worker/shared/types": [
+        "./src/worker/shared/types/index.ts"
+      ],
+      "takos-worker/shared/utils": [
+        "./src/worker/shared/utils/index.ts"
+      ],
+      "takos-worker/shared/config": [
+        "./src/worker/shared/config/index.ts"
+      ],
+      "takos-worker/shared/constants": [
+        "./src/worker/shared/constants/index.ts"
+      ],
+      "takos-worker/agent": [
+        "./src/worker/application/services/agent/index.ts"
+      ],
+      "takos-worker/agent/public-runner": [
+        "./src/worker/application/services/agent/runner.ts"
+      ],
+      "takos-worker/git/source": [
+        "./src/worker/application/services/source/index.ts"
+      ],
+      "takos-worker/source/app-manifest": [
+        "./src/worker/application/services/source/app-manifest.ts"
+      ],
+      "takos-worker/core/cloudflare-api": [
+        "./src/worker/application/services/cloudflare/api-client.ts"
+      ],
+      "takos-worker/core/wfp-client": [
+        "./src/worker/application/services/wfp/client.ts"
+      ],
+      "takos-worker/server/routes": [
+        "./src/worker/server/routes/index.ts"
+      ],
+      "takos-worker/rpc-types": [
+        "./src/worker/server/routes/rpc-types.ts"
+      ],
+      "takos-worker/server/middleware": [
+        "./src/worker/server/middleware/index.ts"
+      ],
+      "takos-worker/runtime/worker": [
+        "./src/worker/runtime/worker/index.ts"
+      ],
+      "takos-worker/runtime/worker/env": [
+        "./src/worker/runtime/worker/env.ts"
+      ],
+      "takos-worker/runtime/worker/egress": [
+        "./src/worker/runtime/worker/egress.ts"
+      ],
+      "takos-worker/runtime/runner": [
+        "./src/worker/runtime/runner/index.ts"
+      ],
+      "takos-worker/runtime/runner/queue-handler": [
+        "./src/worker/runtime/runner/queue-handler.ts"
+      ],
+      "takos-worker/runtime/runner/cron-handler": [
+        "./src/worker/runtime/runner/cron-handler.ts"
+      ],
+      "takos-worker/runtime/indexer": [
+        "./src/worker/runtime/indexer/index.ts"
+      ],
+      "takos-worker/runtime/executor-proxy-api": [
+        "./src/worker/runtime/executor-proxy-api.ts"
+      ],
+      "takos-worker/runtime/durable-objects": [
+        "./src/worker/runtime/durable-objects/index.ts"
+      ],
+      "takos-worker/runtime/queues": [
+        "./src/worker/runtime/queues/index.ts"
+      ],
+      "takos-worker/runtime/queues/workflow-runtime-client": [
+        "./src/worker/runtime/queues/workflow-runtime-client.ts"
+      ],
+      "takos-worker/runtime/container-hosts": [
+        "./src/worker/runtime/container-hosts/index.ts"
+      ],
+      "takos-worker/runtime/container-hosts/executor-host": [
+        "./src/worker/runtime/container-hosts/executor-host.ts"
+      ],
+      "takos-worker/runtime/container-hosts/runtime-host": [
+        "./src/worker/runtime/container-hosts/runtime-host.ts"
+      ],
+      "takos-worker/runtime/container-hosts/executor-run-state": [
+        "./src/worker/runtime/container-hosts/executor-run-state.ts"
+      ],
+      "takos-worker/platform": [
+        "./src/worker/platform/index.ts"
+      ],
+      "takos-worker/core/platform": [
+        "./src/worker/platform/index.ts"
+      ],
+      "takos-worker/platform/accessors": [
+        "./src/worker/platform/accessors.ts"
+      ],
+      "takos-worker/platform/context": [
+        "./src/worker/platform/context.ts"
+      ],
+      "takos-worker/platform/adapters/node": [
+        "./src/worker/platform/adapters/node.ts"
+      ],
+      "takos-worker/platform/adapters/shared": [
+        "./src/worker/platform/adapters/shared.ts"
+      ],
+      "takos-worker/platform/adapters/workers": [
+        "./src/worker/platform/adapters/workers.ts"
+      ],
+      "takos-worker/platform/backends/cloudflare": [
+        "./src/worker/platform/backends/cloudflare/index.ts"
+      ],
+      "takos-worker/platform/backends/node/pdf-render": [
+        "./src/worker/platform/backends/node/pdf-render.ts"
+      ],
+      "takos-worker/bindings": [
+        "./src/worker/adapters/index.ts"
+      ]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "website/node_modules.root-owned-stale",
+    "website/.output.root-owned-stale",
+    "website/.vinxi.root-owned-stale"
+  ]
+}

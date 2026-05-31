@@ -13,11 +13,10 @@ license strings where available.
 | Lockfile                              | npm packages | JSR packages | remote modules |
 | ------------------------------------- | -----------: | -----------: | -------------: |
 | `deno.lock`                           |          177 |            5 |             27 |
-| `takos/app/deno.lock`                 |          676 |            7 |              0 |
-| `takos/git/deno.lock`                 |            2 |            1 |              0 |
+| `takos/deno.lock`                 |          676 |            7 |              0 |
+| `takos/containers/git/deno.lock`                 |            2 |            1 |              0 |
 | `takosumi/deno.lock`                  |           16 |           12 |              0 |
 | `takosumi/deno.lock`                  |            0 |            5 |              0 |
-| `takos-cli/deno.lock`                 |            4 |            4 |              0 |
 | `takos-apps/takos-computer/deno.lock` |          333 |            2 |              0 |
 | `takos-apps/takos-docs/deno.lock`     |          356 |            2 |              0 |
 | `takos-apps/takos-slide/deno.lock`    |          302 |            2 |              0 |
@@ -26,13 +25,11 @@ license strings where available.
 | `road-to-me/backend/deno.lock`        |          316 |            2 |              0 |
 | `road-to-me/app/deno.lock`            |          598 |            3 |              0 |
 | `takos-private/deno.lock`             |          700 |            3 |              0 |
-| `takos/agent/Cargo.lock`              |  Rust crates |          n/a |            n/a |
+| `takos/containers/agent/Cargo.lock`              |  Rust crates |          n/a |            n/a |
 | `takos-agent-engine/Cargo.lock`       |  Rust crates |          n/a |            n/a |
 
-`takos/app/deno.lock` is canonical for the Takos app/API package; the `takos/`
-shell repo itself does not ship a top-level `deno.lock`, and the ecosystem root
-CI must not require one unless the shell starts installing dependencies
-directly.
+`takos/bun.lock` is canonical for the Takos product package; the `takos/`
+repo itself must not ship a top-level `deno.lock`.
 
 ## Observed npm License Families
 

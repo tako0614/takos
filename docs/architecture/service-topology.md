@@ -3,34 +3,35 @@
 > このページでわかること: Takos
 > のローカル開発環境を構成するサービスの一覧とポート番号。
 
-Takos の実装は `app/` (Web/API)、`git/` (Git ホスティング)、`agent/`
-(エージェント) の 3 サブモジュールに分かれています。ローカル環境ではこれに加えて
+Takos の実装は単一の Worker (`src/worker`)、UI (`web`)、Git / agent containers (`containers/git` /
+`containers/agent`) に分かれています。ローカル環境ではこれに加えて
 Takosumi 系のサービスも起動します。
 
 ## ローカルサービス一覧
 
-上 3 つが Takos product のサービス、残りの Takosumi 系は substrate 側です。
+上 4 つが Takos product の runtime component、残りの Takosumi 系は substrate 側です。
 
 | サービス                  |  ポート | 配置先               | 役割                                                                                         |
 | ------------------------- | ------: | -------------------- | -------------------------------------------------------------------------------------------- |
-| `takos-app`               |  `8787` | `app/`               | OIDC consumer、app-local profile、Web/CLI API ゲートウェイ                                   |
+| `takos-worker`            |  `8787` | `src/worker`         | OIDC consumer、app-local profile、Web/API ゲートウェイ                                       |
+| `takos-web`               |  `5173` | `web/`               | browser UI development server                                                                |
 | `takosumi kernel`         |  `8788` | `../takosumi/`       | AppSpec install / Deployment apply エンジン。runtime routing は provider data plane が担当   |
 | `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / Installation |
-| `takos-agent`             |  `8789` | `agent/`             | エージェント実行サービス                                                                     |
-| `takos-git`               |  `8790` | `git/`               | Git ホスティング、Smart HTTP、refs、objects                                                  |
+| `takos-agent`             |  `8789` | `containers/agent/`  | エージェント実行 container                                                                   |
+| `takos-git`               |  `8790` | `containers/git/`    | Git ホスティング、Smart HTTP、refs、objects                                                  |
 | `postgres`                | `15432` | shell compose        | app / Takosumi / Git のローカル永続化                                                        |
 | `redis`                   | `16379` | shell compose        | Takosumi の queue / cache                                                                    |
 
 ## サービス間の呼び出し
 
-- ブラウザと CLI のトラフィックは `takos-app` から入ります
-- `takos-app` は `takosumi` / `takos-git` を signed internal RPC
+- ブラウザと API client のトラフィックは `takos-worker` から入ります
+- `takos-worker` は `takosumi` / `takos-git` を signed internal RPC
   経由で呼び出します
-- Git Smart HTTP の公開エンドポイントは `takos-app`。`takos-git` は signed な
+- Git Smart HTTP の公開エンドポイントは `takos-worker`。`takos-git` は signed な
   internal リクエストのみを受け付けます
 - `takos-agent` は Takos の agent workload を実行し、必要なときに kernel の
   runtime control ports と通信します
-- `takos-app` は app 固有のデータを保存しますが、account / 課金 / OIDC issuer /
+- `takos-worker` は app 固有のデータを保存しますが、account / 課金 / OIDC issuer /
   Installation のオーナーシップは持ちません
 - ローカルでのサービスディスカバリは `TAKOSUMI_INTERNAL_URL`、
   `TAKOS_GIT_INTERNAL_URL`、`TAKOS_AGENT_INTERNAL_URL` を fallback

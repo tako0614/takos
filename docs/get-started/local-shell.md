@@ -3,63 +3,57 @@
 > このページでわかること: クローンしたばかりの状態から Takos
 > のローカルシェルを起動するまでの手順。
 
-## 1. サブモジュールを初期化
+## 1. リポジトリを確認
 
-```sh
-git submodule update --init --recursive
-```
-
-または:
-
-```sh
-deno task submodules:update
-```
+Takos repo 内の canonical layout は `src/worker`、`web`、`containers/git`、`containers/agent` です。 clone 後に追加の
+submodule 初期化は不要です。
 
 ## 2. 環境を診断
 
 ```sh
-deno task doctor
+bun run doctor
 ```
 
-必要なツール、サブモジュールの状態、compose のサービスセット、ポート、内部 URL
+必要なツール、canonical layout の状態、compose のサービスセット、ポート、内部 URL
 環境変数などを確認します。
 
 CI やスクリプトから使う場合は strict モードで:
 
 ```sh
-deno task check
+bun run check
 ```
 
 ## 3. compose 設定を確認
 
 ```sh
-deno task local:config
+bun run local:config
 ```
 
 デフォルトでは `.env.local.example` を読みます。別の env ファイルを使う場合:
 
 ```sh
-TAKOS_LOCAL_ENV_FILE=.env.local deno task local:config
+TAKOS_LOCAL_ENV_FILE=.env.local bun run local:config
 ```
 
 ## 4. 起動と停止
 
 ```sh
-deno task local:up     # 起動
-deno task local:logs   # ログ表示
-deno task local:down   # 停止
+bun run local:up     # 起動
+bun run local:logs   # ログ表示
+bun run local:down   # 停止
 ```
 
-`takos-app`、`takosumi`、`takos-git`、`takos-agent`、Postgres、Redis
+`takos-worker`、`takosumi`、`takos-git`、`takos-agent`、Postgres、Redis
 が起動します。
 
 ## 各プロダクトのコマンド
 
-プロダクト固有のチェックは各リポジトリから実行します:
+プロダクト固有のチェックは canonical owner から実行します:
 
 ```sh
-cd app && deno task ...           # Takos アプリ
-cd ../takosumi && deno task ...   # Takosumi カーネル
-cd git && deno task ...           # Git ホスティング
-cd agent && cargo ...             # エージェント (Rust)
+cd . && bun run ...               # Takos Worker / validators
+cd web && bun run ...             # Browser UI
+cd containers/git && bun run ...  # Git hosting container
+cd containers/agent && cargo ...  # Agent execution container
+cd ../takosumi && bun run ...     # Takosumi カーネル
 ```

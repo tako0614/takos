@@ -6,7 +6,7 @@ Takos product queue behavior is covered by the app control tests and local stack
 smoke. Run:
 
 ```sh
-cd takos/app
+cd takos
 deno task test:control
 ```
 

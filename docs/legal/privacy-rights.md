@@ -6,12 +6,12 @@
 | Field         | Value                                                   |
 | ------------- | ------------------------------------------------------- |
 | Last reviewed | 2026-05-12                                              |
-| Owner         | Takos app / API (`takos/app`)                           |
+| Owner         | Takos app / API (`takos`)                           |
 | Status        | Operational baseline; final legal review remains E-11.1 |
 
 ## Scope
 
-Takos の app-local profile (chat / memory / preferences) は `takos/app` が
+Takos の app-local profile (chat / memory / preferences) は `takos` が
 所有します。一方で **Takosumi Account の identity-level privacy (OIDC subject /
 authentication / billing identity) は operator account plane (リファレンス実装: Takosumi Accounts) が所有**します。
 Takosumi kernel は generic PaaS の AppSpec / Deployment / resource graph /
@@ -98,7 +98,7 @@ allows preference storage for language, theme, and device-local UI choices.
   account status to `pending_deletion`.
 - Auth middleware must reject non-`active` accounts, so existing cookie sessions
   cannot continue after deletion request acceptance.
-- Release validation must include `cd takos/app && deno task test` or narrower
+- Release validation must include `cd takos && deno task test` or narrower
   route tests after privacy handler changes.
 
 ## Sources

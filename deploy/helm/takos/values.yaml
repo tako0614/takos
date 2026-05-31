@@ -18,9 +18,9 @@ domains:
 ## Container images
 ## -----------------------------------------------------------------
 images:
-  takosApp:
+  takosWorker:
     registry: ghcr.io
-    repository: takos/takos-app
+    repository: takos/takos-worker
     tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
   takosumi:
@@ -81,7 +81,7 @@ runtimeConfig:
 ## Runtime stack workloads
 ## -----------------------------------------------------------------
 services:
-  takosApp:
+  takosWorker:
     replicaCount: 2
     port: 8080
     healthPath: /health

@@ -49,7 +49,7 @@ gateway を必要とする proof は、operator が用意した環境で gate
 
 | ワークロード                          | Kubernetes / AWS / GCP のサービス名            |
 | ------------------------------------- | ---------------------------------------------- |
-| Takos Web / public API gateway        | `takos-app` ワークロード                       |
+| Takos Web / public API gateway        | `takos-worker` ワークロード                       |
 | Takosumi マニフェスト deploy エンジン | `takosumi` ワークロード                        |
 | Takos Git ホスティング                | `takos-git` ワークロード                       |
 | Takos エージェント実行                | `takos-agent` ワークロード                     |

@@ -17,7 +17,7 @@ deno test --allow-all \
 Takos app の DB-facing control code は product workspace tests で確認します。
 
 ```sh
-cd takos/app
+cd takos
 deno task test:control
 ```
 

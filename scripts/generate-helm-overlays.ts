@@ -39,7 +39,7 @@ const targets: OverlayTarget[] = [
 ];
 
 const serviceValueKeys: Record<string, string> = {
-  'takos-app': 'takosApp',
+  'takos-worker': 'takosWorker',
   takosumi: 'takosumi',
   'takosumi-cloud': 'takosumiCloud',
   'takos-git': 'takosGit',
@@ -68,7 +68,7 @@ const unknownArgs = Deno.args.filter((arg) => arg !== '--check');
 if (unknownArgs.length > 0) {
   console.error(`Unknown argument(s): ${unknownArgs.join(', ')}`);
   console.error(
-    'Usage: deno run --config deno.json --allow-read [--allow-write=deploy/helm/takos] scripts/generate-helm-overlays.ts [--check]',
+    'Usage: bun --preload ./shims/deno-compat.ts scripts/generate-helm-overlays.ts [--check]',
   );
   Deno.exit(2);
 }
@@ -101,7 +101,7 @@ for (const target of targets) {
 
 if (hasDrift) {
   console.error(
-    'Helm overlay generation drift detected. Run `deno task helm:generate-overlays`.',
+    'Helm overlay generation drift detected. Run `bun run helm:generate-overlays`.',
   );
   console.error(JSON.stringify({ ok: false, check, results }, null, 2));
   Deno.exit(1);
@@ -134,7 +134,7 @@ function generateOverlay(
   const lines = [
     `# ${provider.label} fail-closed overlay template.`,
     `# Generated from ${target.manifestPath} by scripts/generate-helm-overlays.ts.`,
-    '# Re-run `deno task helm:generate-overlays` after editing the distribution profile.',
+    '# Re-run `bun run helm:generate-overlays` after editing the distribution profile.',
     '# This file is not a complete production profile by itself: every empty',
     '# runtimeConfig.plugins entry must be replaced by a trusted, non-reference',
     '# kernel plugin id supplied by the operator/plugin bundle.',
@@ -182,7 +182,7 @@ function generateOverlay(
     '',
     '# Production resource tuning',
     'services:',
-    '  takosApp:',
+    '  takosWorker:',
     '    replicaCount: 3',
     '    resources:',
     '      requests:',

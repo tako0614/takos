@@ -38,8 +38,8 @@ spec:
               value: {{ .Values.services.takosGit.port | quote }}
             - name: TAKOS_GIT_SERVICE_ID
               value: "takos-git"
-            - name: TAKOS_APP_INTERNAL_URL
-              value: {{ include "takos.appUrl" . | quote }}
+            - name: TAKOS_WORKER_INTERNAL_URL
+              value: {{ include "takos.workerUrl" . | quote }}
           envFrom:
             - configMapRef:
                 name: {{ include "takos.fullname" . }}-global

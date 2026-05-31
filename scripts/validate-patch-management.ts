@@ -4,15 +4,12 @@ const requiredFiles = [
   '.github/dependabot.yml',
   '.github/workflows/patch-management.yml',
   '../takos-private/docs/operations/patch-management.md',
-  'app/.github/dependabot.yml',
-  'git/.github/dependabot.yml',
-  'agent/.github/dependabot.yml',
 ];
 
 const dockerfiles = [
-  'app/apps/control/Dockerfile.local',
-  'git/Dockerfile',
-  'agent/Dockerfile',
+  'deploy/docker/takos-worker.Dockerfile',
+  'containers/git/Dockerfile',
+  'containers/agent/Dockerfile',
 ];
 
 const failures: string[] = [];
@@ -22,33 +19,25 @@ for (const path of requiredFiles) {
 }
 
 validateTextIncludes('.github/dependabot.yml', [
-  'package-ecosystem: "gitsubmodule"',
   'package-ecosystem: "github-actions"',
+  'package-ecosystem: "docker"',
+  'directory: "/deploy/docker"',
+  'directory: "/containers/git"',
+  'directory: "/containers/agent"',
+  'package-ecosystem: "cargo"',
 ]);
 validateTextIncludes('.github/workflows/patch-management.yml', [
-  'aquasecurity/trivy-action@v0.36.0',
-  'deno task validate:patch-management',
+  'aquasecurity/trivy-action@',
+  'pinned: v0.36.0',
+  'bun run validate:patch-management',
   'HIGH,CRITICAL',
 ]);
 validateTextIncludes('../takos-private/docs/operations/patch-management.md', [
-  'deno task validate:patch-management',
-  'deno outdated --update --lockfile-only',
+  'bun run validate:patch-management',
+  'bun outdated',
   'Trivy',
   'Dependabot',
   'Critical exploited / internet-facing RCE',
-]);
-validateTextIncludes('app/.github/dependabot.yml', [
-  'package-ecosystem: "docker"',
-  'directory: "/apps/control"',
-]);
-validateTextIncludes('git/.github/dependabot.yml', [
-  'package-ecosystem: "docker"',
-  'directory: "/"',
-]);
-validateTextIncludes('agent/.github/dependabot.yml', [
-  'package-ecosystem: "docker"',
-  'package-ecosystem: "cargo"',
-  'directory: "/"',
 ]);
 
 for (const dockerfile of dockerfiles) {

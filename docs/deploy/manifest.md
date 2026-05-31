@@ -32,7 +32,7 @@ source root に置く `.takosumi.yml` (= AppSpec) が唯一のマニフェスト
 ## Takos product manifest
 
 Takos product 自体の installable source root は repository root です。実際の
-manifest は `.takosumi.yml` に置き、`takos-app` / `takos-git` /
+manifest は `.takosumi.yml` に置き、`takos-worker` / `takos-git` /
 `takos-agent` を `web-service` component、Postgres と object storage を
 resource component、public HTTP entry を `gateway` component として宣言します。
 
@@ -51,7 +51,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
   public:
     kind: gateway
     connect:
@@ -81,7 +81,7 @@ components:
   api:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     connect:
       db:
         output: db.connection
@@ -120,7 +120,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     listen:
       oidc:
         path: identity.primary.oidc

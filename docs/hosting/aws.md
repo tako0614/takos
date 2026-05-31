@@ -109,7 +109,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 | runtime config  | `runtimeConfig.environment=production`、implementation binding selector は fail-closed empty |
 | ingress         | ALB ingress class と ALB annotation を使う                                     |
 | service account | IRSA 用 annotation を受け取る                                                  |
-| workloads       | `takos-app` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
+| workloads       | `takos-worker` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
 
 overlay は generated artifact です。distribution profile を更新したら:
 
@@ -298,7 +298,7 @@ Cloudflare 上の Takosumi kernel から AWS provider adapter を呼ぶ場合、
 secret として AWS credentials を inject します:
 
 ```bash
-cd takos-private/apps/control
+cd takos-private/src/worker
 echo "AKIA..." | deno task secrets put AWS_ACCESS_KEY_ID --env production
 echo "..." | deno task secrets put AWS_SECRET_ACCESS_KEY --env production
 echo "ap-northeast-1" | deno task secrets put AWS_REGION --env production
@@ -403,7 +403,7 @@ Fargate (ECS task definition):
     "secrets": [
       {
         "name": "TAKOS_RUNTIME_AGENT_TOKEN",
-        "valueFrom": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:takos/agent-token"
+        "valueFrom": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:takos/containers/agent-token"
       }
     ],
     "environment": [

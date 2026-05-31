@@ -89,7 +89,7 @@ const requiredDocs = [
       'PGP Key Publication',
       'Safe Harbor',
       'Out of scope',
-      'takos/app',
+      'takos',
     ],
   },
   {
@@ -143,7 +143,7 @@ validateTextIncludes('docs/.vitepress/config.ts', [
   "link: '/legal/soc2-readiness'",
 ]);
 
-validateTextIncludes('app/apps/web/public/.well-known/security.txt', [
+validateTextIncludes('web/public/.well-known/security.txt', [
   'Contact: mailto:security@takos.jp',
   'Policy: https://docs.takos.jp/legal/security-disclosure',
   'Canonical: https://takos.jp/.well-known/security.txt',

@@ -1,0 +1,35 @@
+-- 0079_workflow_runs_run_number_unique
+-- takos-migration-safety: expand
+--
+-- Workflow run_number is a user-facing monotonic counter derived per
+-- (repo_id, workflow_path). It was previously computed with a read-MAX-then-
+-- insert pattern and no DB-level uniqueness, so two concurrent fresh dispatches
+-- for the same repo+workflow could read the same MAX, compute the same
+-- run_number, and both insert -- corrupting the run history numbering.
+--
+-- This index is the DB-level backstop. The key intentionally includes
+-- run_attempt: reruns legitimately reuse the same run_number with an
+-- incremented run_attempt (see services/workflow-runs/commands.ts
+-- rerunWorkflowRun and execution/workflow-run-lifecycle.ts), so a
+-- UNIQUE(repo_id, workflow_path, run_number) WITHOUT run_attempt would reject
+-- valid rerun inserts. UNIQUE(repo_id, workflow_path, run_number, run_attempt)
+-- rejects only true fresh-dispatch collisions and leaves reruns working.
+--
+-- Application code (dispatchWorkflowRun) catches the resulting UNIQUE
+-- constraint violation and re-derives MAX(run_number)+1 in a bounded retry
+-- loop, so a losing concurrent insert is reassigned the next free number
+-- rather than failing the request.
+--
+-- run_number is nullable; the unique index treats each NULL as distinct in
+-- SQLite, so legacy rows that never got a run_number are unaffected.
+--
+-- REAL-DB VALIDATION REQUIRED: if any pre-existing rows already share the same
+-- (repo_id, workflow_path, run_number, run_attempt) tuple from the prior racy
+-- code path, building the unique index below will fail at apply time. Before
+-- applying to a live database, run the duplicate-detection query
+-- (SELECT repo_id, workflow_path, run_number, run_attempt, COUNT(*) FROM
+-- workflow_runs WHERE run_number IS NOT NULL GROUP BY 1,2,3,4 HAVING
+-- COUNT(*) > 1) and resequence offenders first.
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_runs_repo_path_number_attempt
+  ON workflow_runs (repo_id, workflow_path, run_number, run_attempt);

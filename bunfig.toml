@@ -1,0 +1,9 @@
+# Bun migration: install the Deno runtime/test compat globals before any module
+# evaluates, so existing Deno.* and Deno.test(...) call sites work under bun
+# without source edits. deno-compat installs the runtime namespace; the test
+# preload adds Deno.test backed by bun:test.
+[test]
+preload = ["./shims/deno-compat.ts", "./shims/deno-extra.ts", "./shims/deno-test-preload.ts"]
+
+[run]
+preload = ["./shims/deno-compat.ts", "./shims/deno-extra.ts"]

@@ -1,0 +1,16 @@
+# Public Takos web shell. Crawlers may index the marketing / landing surface
+# but should stay out of authenticated, internal, and machine surfaces.
+User-agent: *
+Disallow: /auth
+Disallow: /auth/
+Disallow: /me
+Disallow: /me/
+Disallow: /api
+Disallow: /api/
+Disallow: /workers
+Disallow: /workers/
+Disallow: /internal
+Disallow: /internal/
+Disallow: /_internal
+Disallow: /_internal/
+Allow: /

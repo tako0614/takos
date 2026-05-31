@@ -130,7 +130,7 @@ function parseArgs(values: readonly string[]): { manifest?: string; all: boolean
       continue;
     }
     console.error(
-      'Usage: deno task distribution:smoke [--manifest deploy/distributions/<target>.json | --all] [--live]',
+      'Usage: bun run distribution:smoke [--manifest deploy/distributions/<target>.json | --all] [--live]',
     );
     Deno.exit(2);
   }

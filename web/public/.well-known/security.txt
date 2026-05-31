@@ -1,0 +1,5 @@
+Contact: mailto:security@takos.jp
+Policy: https://docs.takos.jp/legal/security-disclosure
+Canonical: https://takos.jp/.well-known/security.txt
+Preferred-Languages: ja, en
+Expires: 2027-05-07T00:00:00Z
