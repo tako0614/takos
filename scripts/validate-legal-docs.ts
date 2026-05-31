@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 const requiredDocs = [
   {
@@ -151,7 +152,7 @@ validateTextIncludes('web/public/.well-known/security.txt', [
 
 if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(`Validated ${requiredDocs.length} legal document(s)`);
@@ -162,7 +163,7 @@ function validateTextIncludes(path: string, expectedValues: readonly string[]): 
     return;
   }
 
-  const text = Deno.readTextFileSync(path);
+  const text = runtime.readTextFileSync(path);
   for (const expected of expectedValues) {
     if (!includesExpected(text, expected)) {
       failures.push(`${path}: expected to contain '${expected}'`);
@@ -189,10 +190,10 @@ function escapeRegex(value: string): string {
 
 function exists(path: string): boolean {
   try {
-    Deno.statSync(path);
+    runtime.statSync(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (error instanceof runtime.errors.NotFound) return false;
     throw error;
   }
 }

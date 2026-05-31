@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -46,7 +47,7 @@ for (const fileName of entries) {
 
 if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(`Validated migration safety for ${entries.length} migration(s)`);
@@ -55,7 +56,7 @@ async function validateSafetyDoc(): Promise<void> {
   try {
     await stat(safetyDocPath);
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
+    if (error instanceof runtime.errors.NotFound) {
       failures.push(`missing ${safetyDocPath}`);
       return;
     }

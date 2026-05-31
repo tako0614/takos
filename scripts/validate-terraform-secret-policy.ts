@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 type CheckResult = {
   name: string;
@@ -20,7 +21,7 @@ if (failed.length > 0) {
   for (const check of failed) {
     console.error(`terraform-secret-policy: failed ${check.name}: ${check.detail}`);
   }
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(JSON.stringify({ ok: true, checked: checks.length }, null, 2));
@@ -145,7 +146,7 @@ async function checkHelmBridgeGuard(): Promise<void> {
 }
 
 async function gitLsFiles(path: string): Promise<string[]> {
-  const output = await new Deno.Command('git', {
+  const output = await new runtime.Command('git', {
     args: ['ls-files', path],
     stdout: 'piped',
     stderr: 'piped',
@@ -157,7 +158,7 @@ async function gitLsFiles(path: string): Promise<string[]> {
 }
 
 async function readText(path: string): Promise<string> {
-  return await Deno.readTextFile(path);
+  return await runtime.readTextFile(path);
 }
 
 function decode(bytes: Uint8Array): string {

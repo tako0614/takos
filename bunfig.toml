@@ -1,7 +1,1 @@
-# Bun migration: install the runtime Deno namespace before modules evaluate.
-# Tests are native bun:test; only runtime Deno.* compatibility remains.
-[test]
-preload = ["./shims/deno-compat.ts", "./shims/deno-extra.ts"]
-
-[run]
-preload = ["./shims/deno-compat.ts", "./shims/deno-extra.ts"]
+# Takos source, tests, and scripts run on Bun/Node APIs directly.

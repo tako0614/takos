@@ -1,3 +1,4 @@
+import * as runtime from "../../runtime.ts";
 /**
  * Config inference & resolution: inferring R2 buckets, D1 database IDs,
  * account IDs from wrangler.toml, and resolving global CLI options.
@@ -206,14 +207,14 @@ export function parseGlobalOptions(
 export function resolveConfig(options: GlobalOptions): ResolvedConfig {
   const wranglerToml = readWranglerToml();
   const accountId = options.accountIdOverride ||
-    Deno.env.get("CF_ACCOUNT_ID") ||
+    runtime.env.get("CF_ACCOUNT_ID") ||
     inferAccountId(options.environment, wranglerToml);
 
   const apiToken = options.apiTokenOverride ||
-    Deno.env.get("CF_API_TOKEN");
+    runtime.env.get("CF_API_TOKEN");
 
   const d1DatabaseId = options.databaseIdOverride ||
-    Deno.env.get("TAKOS_D1_DATABASE_ID") ||
+    runtime.env.get("TAKOS_D1_DATABASE_ID") ||
     inferD1DatabaseId(options.environment, wranglerToml);
 
   if (!accountId) {

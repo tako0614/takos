@@ -154,7 +154,7 @@ test('local public runtime contract - publishes canonical local runtime entrypoi
 
   assertStringIncludes(
     rootPackage.scripts?.dev ?? '',
-    'bun --preload ./shims/deno-compat.ts src/worker/local-platform/unified-entrypoint.ts',
+    'bun src/worker/local-platform/unified-entrypoint.ts',
   );
   assertStringIncludes(
     rootPackage.scripts?.['dev:api'] ?? '',

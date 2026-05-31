@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import * as runtime from "../runtime.ts";
 // Parameterized deploy script for Takos Cloudflare services.
 // Usage: bun scripts/control/deploy.mjs <service> <environment> [--debug]
 //
@@ -45,7 +46,7 @@ Examples:
   bun run deploy:service dispatch staging
   bun run deploy:service runtime-host production
 `);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 function fail(message) {

@@ -1,11 +1,12 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 const dashboardDir = 'deploy/observability/grafana';
 const costDashboardPath = `${dashboardDir}/takos-cost-attribution.json`;
 const costRunbookPath = '../takos-private/docs/operations/cost-monitoring.md';
 
 const dashboardFiles: string[] = [];
-for (const entry of Deno.readDirSync(dashboardDir)) {
+for (const entry of runtime.readDirSync(dashboardDir)) {
   if (entry.isFile && entry.name.endsWith('.json')) {
     dashboardFiles.push(`${dashboardDir}/${entry.name}`);
   }
@@ -19,7 +20,7 @@ for (const path of dashboardFiles.toSorted()) {
   validateDashboard(path);
 }
 
-const runbook = Deno.readTextFileSync(costRunbookPath);
+const runbook = runtime.readTextFileSync(costRunbookPath);
 for (
   const expected of [
     'deploy/observability/grafana/takos-cost-attribution.json',
@@ -39,7 +40,7 @@ console.log(`Validated ${dashboardFiles.length} observability dashboard(s)`);
 function validateDashboard(path: string): void {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(Deno.readTextFileSync(path));
+    parsed = JSON.parse(runtime.readTextFileSync(path));
   } catch (error) {
     fail(
       `${path}: invalid JSON: ${error instanceof Error ? error.message : String(error)}`,
@@ -100,5 +101,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function fail(message: string): never {
   console.error(message);
-  Deno.exit(1);
+  runtime.exit(1);
 }

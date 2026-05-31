@@ -13,4 +13,4 @@ RUN bun install --frozen-lockfile
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["bun", "--preload", "./shims/deno-compat.ts", "src/worker/local-platform/unified-entrypoint.ts"]
+CMD ["bun", "src/worker/local-platform/unified-entrypoint.ts"]

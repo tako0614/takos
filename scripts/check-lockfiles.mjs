@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -83,12 +84,12 @@ const sortedViolations = [...violations].sort();
 if (sortedViolations.length > 0) {
   console.error(
     [
-      'package-lock.json is not allowed under pnpm-managed roots.',
+      'package-lock.json is not allowed under Bun-managed roots.',
       'Remove:',
       ...sortedViolations.map((filePath) => ` - ${filePath}`),
     ].join('\n'),
   );
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
-console.log('No package-lock.json files found under pnpm-managed roots.');
+console.log('No package-lock.json files found under Bun-managed roots.');

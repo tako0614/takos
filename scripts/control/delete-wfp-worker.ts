@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env bun
 /**
  * Delete a worker from WFP dispatch namespace
  */
@@ -10,7 +10,7 @@ const CF_API_BASE = "https://api.cloudflare.com/client/v4";
 async function main() {
   const workerName = process.argv[2];
   if (!workerName) {
-    console.error("Usage: npx tsx scripts/delete-wfp-worker.ts <worker-name>");
+    console.error("Usage: bun scripts/control/delete-wfp-worker.ts <worker-name>");
     process.exit(1);
   }
 

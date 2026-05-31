@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 type HelmCase = {
   name: string;
   release: string;
@@ -36,7 +37,7 @@ type InstallCaseResult = {
 const chartRoot = 'deploy/helm/takos';
 const smokeCrdsChartRoot = 'deploy/helm/takos/testdata/helm-smoke-crds';
 const namespace = 'takos-install-smoke';
-const installTestCrds = Deno.env.get('TAKOS_HELM_INSTALL_TEST_CRDS') === '1';
+const installTestCrds = runtime.env.get('TAKOS_HELM_INSTALL_TEST_CRDS') === '1';
 const expectedServiceIds = [
   'takos-worker',
   'takosumi',
@@ -66,7 +67,7 @@ if (!version.success) {
     'Helm CLI is required for this smoke. Install Helm v3 and point it at a Kubernetes cluster.',
   );
   console.error(version.stderr);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 const cluster = await runHelm(['list', '--namespace', namespace]);
@@ -75,7 +76,7 @@ if (!cluster.success && isClusterUnreachable(cluster.stderr)) {
     'A reachable Kubernetes cluster is required for helm:install-smoke. Start kind/k3d or point Helm at a production kubeconfig.',
   );
   console.error(cluster.stderr);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 const setupResults: HelmStep[] = [];
@@ -135,7 +136,7 @@ const summary = {
 console.log(JSON.stringify(summary, null, 2));
 
 if (!summary.ok) {
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 async function runInstallCase(testCase: HelmCase): Promise<InstallCaseResult> {
@@ -241,7 +242,7 @@ async function runHelm(args: string[]): Promise<{
   stderr: string;
 }> {
   try {
-    const output = await new Deno.Command('helm', {
+    const output = await new runtime.Command('helm', {
       args,
       stdout: 'piped',
       stderr: 'piped',

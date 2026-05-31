@@ -1,4 +1,5 @@
-const apiDoc = await Deno.readTextFile(
+import * as runtime from "./runtime.ts";
+const apiDoc = await runtime.readTextFile(
   new URL('../docs/reference/api.md', import.meta.url),
 );
 
@@ -63,7 +64,7 @@ for (const text of forbiddenText) {
 
 if (errors.length > 0) {
   console.error(errors.join('\n'));
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(`Validated Takos API docs (${requiredText.length} required current markers).`);

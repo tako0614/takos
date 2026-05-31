@@ -1,3 +1,4 @@
+import * as runtime from "../../runtime.ts";
 /**
  * Pattern constants, limits, and table/prefix tokens for admin-cli.
  */
@@ -19,7 +20,7 @@ export const WRANGLER_TOML_PATH = path.resolve(
   CONTROL_APP_DIR,
   'deploy/cloudflare/wrangler.toml',
 );
-export const AUDIT_LOG_DIR = Deno.env.get('TAKOS_DB_AUDIT_LOG_DIR')?.trim() ||
+export const AUDIT_LOG_DIR = runtime.env.get('TAKOS_DB_AUDIT_LOG_DIR')?.trim() ||
   path.join(os.homedir(), '.takos', 'audit');
 export const AUDIT_LOG_FILE = path.join(
   AUDIT_LOG_DIR,

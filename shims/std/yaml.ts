@@ -1,5 +1,5 @@
 // Bun migration shim: @std/yaml -> the npm `yaml` package.
-// Lets Deno source keep `import { parse, stringify } from "@std/yaml"` while
+// Lets source keep `import { parse, stringify } from "@std/yaml"` while
 // running under bun, wired via tsconfig.json "paths". @std/yaml's parse/stringify
 // surface maps onto the `yaml` package's parse/stringify with compatible defaults.
 import { parse as yamlParse, stringify as yamlStringify } from "yaml";

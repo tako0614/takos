@@ -1,10 +1,11 @@
+import * as runtime from "./runtime.ts";
 import { basename, join, normalize, relative, resolve } from 'node:path';
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 type JsonRecord = Record<string, unknown>;
 type TaskConfig = { tasks?: JsonRecord; scripts?: JsonRecord };
 
-const takosRoot = Deno.cwd();
+const takosRoot = runtime.cwd();
 const ecosystemRoot = resolve(takosRoot, '..');
 const distributionDir = 'deploy/distributions';
 const distributionProfileSchemaPath = 'deploy/distribution-contract/takos-distribution-profile-v1.schema.json';
@@ -196,7 +197,7 @@ const takosTaskConfig = await readTaskConfig(takosRoot);
 const takosumiTaskConfig = await readTaskConfig(resolve(takosRoot, '../takosumi'));
 const distributionProfileSchema = await readJson(resolve(takosRoot, distributionProfileSchemaPath));
 const errors: string[] = [];
-const manifestFilter = parseManifestFilter(Deno.args);
+const manifestFilter = parseManifestFilter(runtime.args);
 const distributionFiles = await distributionManifestFiles(manifestFilter);
 let checkedArtifacts = 0;
 let checkedRequiredBindings = 0;
@@ -216,7 +217,7 @@ for (const file of distributionFiles) {
 if (errors.length > 0) {
   console.error('Distribution profile validation failed:');
   for (const error of errors) console.error(`- ${error}`);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(JSON.stringify(
@@ -936,10 +937,10 @@ async function readTaskConfig(root: string): Promise<TaskConfig> {
 
 function exists(path: string): boolean {
   try {
-    Deno.statSync(path);
+    runtime.statSync(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (error instanceof runtime.errors.NotFound) return false;
     throw error;
   }
 }
@@ -956,7 +957,7 @@ function assertPathExists(ref: string, field: string): void {
     return;
   }
   try {
-    Deno.statSync(path);
+    runtime.statSync(path);
   } catch {
     errors.push(`${field} does not exist: ${ref}`);
   }
@@ -970,7 +971,7 @@ function pathRelativeToTakosumi(ref: string): string {
 async function distributionManifestFiles(filter: string | null): Promise<string[]> {
   if (filter) return [normalize(filter)];
   const files: string[] = [];
-  for await (const entry of Deno.readDir(resolve(takosRoot, distributionDir))) {
+  for await (const entry of runtime.readDir(resolve(takosRoot, distributionDir))) {
     if (entry.isFile && entry.name.endsWith('.json') && entry.name !== 'default-apps.json') {
       files.push(join(distributionDir, entry.name));
     }
@@ -988,13 +989,13 @@ function parseManifestFilter(args: readonly string[]): string | null {
   const [flag, value, ...rest] = args;
   if (flag !== '--manifest' || !value || rest.length > 0) {
     console.error('Usage: bun run validate:distributions [--manifest deploy/distributions/<target>.json]');
-    Deno.exit(2);
+    runtime.exit(2);
   }
   return value;
 }
 
 async function readJson(path: string): Promise<JsonRecord> {
-  return JSON.parse(await Deno.readTextFile(path)) as JsonRecord;
+  return JSON.parse(await runtime.readTextFile(path)) as JsonRecord;
 }
 
 function requireRecord(value: unknown, label: string): JsonRecord {

@@ -1,4 +1,5 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env bun
+import * as runtime from "../runtime.ts";
 /**
  * Unified admin CLI for takos-control.
  *
@@ -7,10 +8,10 @@
  * - Moderation commands support ban/unban/show-user.
  *
  * Usage examples:
- *   npx tsx scripts/admin-cli.ts d1 ping --env production
- *   npx tsx scripts/admin-cli.ts d1 query "SELECT COUNT(*) AS c FROM users"
- *   npx tsx scripts/admin-cli.ts r2 list offload --prefix backups/d1
- *   npx tsx scripts/admin-cli.ts moderation ban USER_ID --reason "abuse"
+ *   bun scripts/control/admin-cli.ts d1 ping --env production
+ *   bun scripts/control/admin-cli.ts d1 query "SELECT COUNT(*) AS c FROM users"
+ *   bun scripts/control/admin-cli.ts r2 list offload --prefix backups/d1
+ *   bun scripts/control/admin-cli.ts moderation ban USER_ID --reason "abuse"
  */
 
 import { sanitizeErrorMessage } from 'takos-worker/core/wfp-client';
@@ -47,7 +48,7 @@ function showHelp(): void {
 Unified Admin CLI (Cloudflare API based)
 
 Usage:
-  npx tsx scripts/admin-cli.ts <group> <command> [args] [options]
+  bun scripts/control/admin-cli.ts <group> <command> [args] [options]
 
 Global options:
   --env <production|staging>   Target environment (default: production)
@@ -344,5 +345,5 @@ async function main(): Promise<void> {
 main().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`Error: ${sanitizeErrorMessage(message)}`);
-  Deno.exit(1);
+  runtime.exit(1);
 });

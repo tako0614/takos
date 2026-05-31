@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 const requiredFiles = [
   '.github/dependabot.yml',
@@ -46,7 +47,7 @@ for (const dockerfile of dockerfiles) {
 
 if (failures.length > 0) {
   for (const failure of failures) console.error(failure);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(`Validated patch management policy for ${dockerfiles.length} Dockerfile(s)`);
@@ -57,7 +58,7 @@ function validateDockerfile(path: string): void {
     return;
   }
 
-  const text = Deno.readTextFileSync(path);
+  const text = runtime.readTextFileSync(path);
   const fromLines = text.split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => /^FROM\s+/i.test(line));
@@ -107,7 +108,7 @@ function isMajorOnlyRuntimeTag(image: string, tag: string): boolean {
 
 function validateTextIncludes(path: string, expectedValues: readonly string[]): void {
   if (!exists(path)) return;
-  const text = Deno.readTextFileSync(path);
+  const text = runtime.readTextFileSync(path);
   for (const expected of expectedValues) {
     if (!text.includes(expected)) {
       failures.push(`${path}: expected to contain '${expected}'`);
@@ -117,10 +118,10 @@ function validateTextIncludes(path: string, expectedValues: readonly string[]): 
 
 function exists(path: string): boolean {
   try {
-    Deno.statSync(path);
+    runtime.statSync(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (error instanceof runtime.errors.NotFound) return false;
     throw error;
   }
 }

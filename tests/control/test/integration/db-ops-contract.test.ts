@@ -46,7 +46,7 @@ test("DB ops contract - keeps db maintenance entrypoints explicit in Bun scripts
   );
   assert.deepStrictEqual(
     scripts["validate:migration-safety"],
-    "bun --preload ./shims/deno-compat.ts scripts/validate-migration-safety.ts",
+    "bun scripts/validate-migration-safety.ts",
   );
 });
 

@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 type CheckFailure = {
   path: string;
   message: string;
@@ -128,10 +129,10 @@ const FORBIDDEN_CURRENT_BOUNDARY_PATTERNS = [
 
 async function pathExists(path: string): Promise<boolean> {
   try {
-    await Deno.stat(path);
+    await runtime.stat(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
+    if (error instanceof runtime.errors.NotFound) {
       return false;
     }
     throw error;
@@ -143,7 +144,7 @@ async function readText(
   failures: CheckFailure[],
 ): Promise<string> {
   try {
-    return await Deno.readTextFile(path);
+    return await runtime.readTextFile(path);
   } catch (error) {
     failures.push({
       path,
@@ -380,7 +381,7 @@ async function main(): Promise<void> {
     for (const failure of failures) {
       console.error(`- ${failure.path}: ${failure.message}`);
     }
-    Deno.exit(1);
+    runtime.exit(1);
   }
 
   console.log('Architecture alignment validation passed.');

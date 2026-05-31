@@ -1,3 +1,4 @@
+import * as runtime from "../../runtime.ts";
 /**
  * Secrets management commands: status, sync, put, prune, generate-jwt.
  */
@@ -142,7 +143,6 @@ async function runWranglerSecret(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = [
-      'exec',
       'wrangler',
       'secret',
       action,
@@ -150,9 +150,9 @@ async function runWranglerSecret(
       ...wranglerEnvArgs(configFile, environment),
     ];
 
-    const child = spawn('pnpm', args, {
+    const child = spawn('bunx', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: Deno.env.toObject(),
+      env: runtime.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
 
@@ -195,8 +195,8 @@ async function listWranglerSecrets(
 
   let stdout: string;
   try {
-    const result = await execFileAsync('pnpm', args, {
-      env: Deno.env.toObject(),
+    const result = await execFileAsync('bunx', args, {
+      env: runtime.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
     stdout = result.stdout;
