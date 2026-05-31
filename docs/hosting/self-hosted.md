@@ -125,7 +125,7 @@ cp .env.server.example .env.server
 # .env.server を編集し、secret 系をすべて本番用の値に置き換える
 ```
 
-`takos-private/compose.server.yml` で起動する場合は `takos-private` の Deno task
+`takos-private/compose.server.yml` で起動する場合は `takos-private` の運用 task
 を使ってください:
 
 ```bash
