@@ -531,14 +531,8 @@ async function startAccountsServer(input: {
 }): Promise<AccountsServer> {
   const port = freePort();
   const url = `http://127.0.0.1:${port}`;
-  const child = new Deno.Command(Deno.execPath(), {
+  const child = new Deno.Command("bun", {
     args: [
-      "run",
-      "--config",
-      "takosumi-cloud/deno.json",
-      "--allow-net",
-      "--allow-env",
-      "--allow-read",
       "takosumi-cloud/packages/cli/src/main.ts",
       "accounts",
       "serve",

@@ -57,7 +57,7 @@ deno task distribute:apply --confirm production
 
 # 5. Operator account-plane seed plan を生成 (identity / billing / Installation owner)
 cd ../takosumi-cloud
-deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.example.com \
   --subject tsub_admin \
   --client-id takos-admin \

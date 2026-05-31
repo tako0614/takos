@@ -6,9 +6,7 @@ import process from 'node:process';
 
 export default defineConfig(({ mode }) => {
   const isDebugBuild = mode === 'staging-debug';
-  const webTarget = process.env.TAKOS_WORKER_API_URL ??
-    process.env.TAKOS_WEB_API_URL ??
-    'http://localhost:8787';
+  const webTarget = process.env.TAKOS_WORKER_API_URL ?? 'http://localhost:8787';
 
   return {
     plugins: [

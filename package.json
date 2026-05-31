@@ -57,6 +57,7 @@
     "validate:service-set": "bun --preload ./shims/deno-compat.ts scripts/validate-service-set.ts",
     "validate:process-roles": "bun run validate:service-set",
     "distribution:smoke": "bun --preload ./shims/deno-compat.ts scripts/distribution-smoke.ts",
+    "generate:agent-prompts": "bun --preload ./shims/deno-compat.ts scripts/generate-agent-prompts.ts",
     "release-gate": "bun --preload ./shims/deno-compat.ts scripts/release-gate.ts",
     "release-manifest:check-clean": "bun --preload ./shims/deno-compat.ts scripts/build-release-manifest.ts --require-clean-git",
     "release-manifest:check-artifacts": "bun --preload ./shims/deno-compat.ts scripts/build-release-manifest.ts --require-clean-git --require-image-digests",

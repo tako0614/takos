@@ -541,7 +541,7 @@ ssh ec2-user@runtime-agent.takos.example.com \
 
 # 9. Takosumi Accounts seed plan を生成
 cd ../takosumi-cloud
-deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.takos.example.com \
   --subject tsub_admin \
   --client-id takos-admin \
