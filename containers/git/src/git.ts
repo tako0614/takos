@@ -2,9 +2,27 @@
 // prefix cannot be intercepted by tsconfig paths or Bun.plugin), so this
 // import is redirected to a bun:sqlite-backed DatabaseSync shim that is
 // behaviorally identical for the synchronous surface used here
-// (new/close/exec/prepare->get/run/all). Under Deno/Node this would point at
-// "node:sqlite"; the shim re-exports the same DatabaseSync class name.
+// (new/close/exec/prepare->get/run/all). The shim re-exports the same
+// DatabaseSync class name as the Node sqlite API.
 import { DatabaseSync } from "../shims/node-sqlite.ts";
+import {
+  type CommandOutput,
+  createNewFile,
+  type DirEntry,
+  getEnv,
+  isAlreadyExistsError,
+  isNotFoundError,
+  makeDirectory,
+  makeTempDirSync,
+  pathStat,
+  readDirEntries,
+  readTextFile,
+  readTextFileSync,
+  removePath,
+  spawnCommand,
+  writeBytes,
+  writeText,
+} from "./runtime.ts";
 import type {
   GitCreatePullRequestCommentRequest,
   GitCreatePullRequestRequest,
@@ -175,7 +193,7 @@ export function configuredMetadataPath(): string | undefined {
 }
 
 export function configuredDatabasePath(): string | undefined {
-  const configured = Deno.env.get("TAKOS_GIT_DATABASE_URL")?.trim();
+  const configured = getEnv("TAKOS_GIT_DATABASE_URL")?.trim();
   if (configured) {
     const prefix = "sqlite://";
     if (!configured.startsWith(prefix)) {
@@ -191,13 +209,13 @@ export function configuredDatabasePath(): string | undefined {
 }
 
 export function configuredRepositoryRoot(): string | undefined {
-  const root = Deno.env.get("TAKOS_GIT_REPOSITORY_ROOT")?.trim();
+  const root = getEnv("TAKOS_GIT_REPOSITORY_ROOT")?.trim();
   if (!root) return undefined;
   return root.replace(/\/+$/, "") || "/";
 }
 
 export function devInMemoryMetadataEnabled(): boolean {
-  return Deno.env.get("TAKOS_GIT_DEV_IN_MEMORY_METADATA") === "true";
+  return getEnv("TAKOS_GIT_DEV_IN_MEMORY_METADATA") === "true";
 }
 
 export function configuredStorageReady(): boolean {
@@ -333,7 +351,7 @@ export async function createConfiguredBareRepository(
     };
   }
 
-  await Deno.mkdir(parentDirectory(repositoryPath), { recursive: true });
+  await makeDirectory(parentDirectory(repositoryPath), { recursive: true });
   const output = await runGit(["init", "--bare", repositoryPath]);
   if (!output.success) {
     return {
@@ -406,11 +424,11 @@ export async function readConfiguredRepositoryMetadata(): Promise<
   const metadataPath = configuredMetadataPath();
   if (!metadataPath) return undefined;
   try {
-    const parsed = JSON.parse(await Deno.readTextFile(metadataPath));
+    const parsed = JSON.parse(await readTextFile(metadataPath));
     if (!Array.isArray(parsed.repositories)) return [];
     return parsed.repositories.filter(isRepositoryMetadataRecord);
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return [];
+    if (isNotFoundError(error)) return [];
     throw error;
   }
 }
@@ -426,8 +444,8 @@ export async function writeConfiguredRepositoryMetadata(
 
   const metadataPath = configuredMetadataPath();
   if (!metadataPath) return;
-  await Deno.mkdir(parentDirectory(metadataPath), { recursive: true });
-  await Deno.writeFile(
+  await makeDirectory(parentDirectory(metadataPath), { recursive: true });
+  await writeBytes(
     metadataPath,
     textEncoder.encode(
       `${JSON.stringify({ repositories }, null, 2)}\n`,
@@ -490,11 +508,11 @@ async function readJsonRepositoryMetadata(
   metadataPath: string,
 ): Promise<GitRepositoryMetadataRecord[]> {
   try {
-    const parsed = JSON.parse(await Deno.readTextFile(metadataPath));
+    const parsed = JSON.parse(await readTextFile(metadataPath));
     if (!Array.isArray(parsed.repositories)) return [];
     return parsed.repositories.filter(isRepositoryMetadataRecord);
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return [];
+    if (isNotFoundError(error)) return [];
     throw error;
   }
 }
@@ -503,8 +521,8 @@ async function writeJsonRepositoryMetadata(
   metadataPath: string,
   repositories: GitRepositoryMetadataRecord[],
 ): Promise<void> {
-  await Deno.mkdir(parentDirectory(metadataPath), { recursive: true });
-  await Deno.writeFile(
+  await makeDirectory(parentDirectory(metadataPath), { recursive: true });
+  await writeBytes(
     metadataPath,
     textEncoder.encode(`${JSON.stringify({ repositories }, null, 2)}\n`),
   );
@@ -525,19 +543,16 @@ async function withJsonMetadataLock<T>(
   metadataPath: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  await Deno.mkdir(parentDirectory(metadataPath), { recursive: true });
+  await makeDirectory(parentDirectory(metadataPath), { recursive: true });
   const lockPath = `${metadataPath}.lock`;
   const deadline = Date.now() + JSON_METADATA_LOCK_TIMEOUT_MS;
   for (;;) {
     try {
-      const handle = await Deno.open(lockPath, {
-        createNew: true,
-        write: true,
-      });
+      const handle = await createNewFile(lockPath);
       handle.close();
       break;
     } catch (error) {
-      if (!(error instanceof Deno.errors.AlreadyExists)) throw error;
+      if (!isAlreadyExistsError(error)) throw error;
       if (await reclaimStaleLock(lockPath)) continue;
       if (Date.now() >= deadline) {
         throw new Error(
@@ -550,18 +565,18 @@ async function withJsonMetadataLock<T>(
   try {
     return await fn();
   } finally {
-    await Deno.remove(lockPath).catch(() => {});
+    await removePath(lockPath).catch(() => {});
   }
 }
 
 async function reclaimStaleLock(lockPath: string): Promise<boolean> {
   try {
-    const stat = await Deno.stat(lockPath);
+    const stat = await pathStat(lockPath);
     const mtime = stat.mtime?.getTime() ?? 0;
     if (Date.now() - mtime <= JSON_METADATA_LOCK_STALE_MS) return false;
     // Older than the stale threshold: a previous writer likely crashed without
     // releasing. Remove it so we (or another waiter) can re-acquire.
-    await Deno.remove(lockPath);
+    await removePath(lockPath);
     return true;
   } catch {
     return false;
@@ -1062,29 +1077,26 @@ export async function runGit(
   args: string[],
   stdin?: Uint8Array,
   env?: Record<string, string>,
-): Promise<Deno.CommandOutput> {
+): Promise<CommandOutput> {
   const scrubbedEnv = buildScrubbedGitEnv(env);
   if (!stdin) {
-    return await new Deno.Command("git", {
+    return await spawnCommand("git", {
       args,
-      stdout: "piped",
-      stderr: "piped",
-      clearEnv: true,
+      stdout: "pipe",
+      stderr: "pipe",
       env: scrubbedEnv,
     }).output();
   }
 
-  const child = new Deno.Command("git", {
+  const child = spawnCommand("git", {
     args,
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-    clearEnv: true,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
     env: scrubbedEnv,
-  }).spawn();
-  const writer = child.stdin.getWriter();
-  await writer.write(stdin);
-  await writer.close();
+  });
+  await child.stdin.write(stdin);
+  child.stdin.end();
   return await child.output();
 }
 
@@ -1120,7 +1132,7 @@ export async function applyHardenedConfigToExistingRepo(
 }
 
 async function writeHardeningMarker(repoPath: string): Promise<void> {
-  await Deno.writeTextFile(
+  await writeText(
     `${repoPath}/${HARDENING_MARKER_FILENAME}`,
     `${new Date().toISOString()}\n`,
   );
@@ -1128,10 +1140,10 @@ async function writeHardeningMarker(repoPath: string): Promise<void> {
 
 async function hardeningMarkerExists(repoPath: string): Promise<boolean> {
   try {
-    await Deno.stat(`${repoPath}/${HARDENING_MARKER_FILENAME}`);
+    await pathStat(`${repoPath}/${HARDENING_MARKER_FILENAME}`);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (isNotFoundError(error)) return false;
     throw error;
   }
 }
@@ -1166,9 +1178,9 @@ export async function runRepositoryHardeningBackfill(
   };
   if (!root) return summary;
   try {
-    await Deno.stat(root);
+    await pathStat(root);
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return summary;
+    if (isNotFoundError(error)) return summary;
     throw error;
   }
   for await (const candidate of walkBareRepositories(root)) {
@@ -1213,7 +1225,7 @@ async function* walkBareRepositories(root: string): AsyncIterable<string> {
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (current.depth > 4) continue;
-    let entries: Deno.DirEntry[];
+    let entries: DirEntry[];
     try {
       entries = await collectDirEntries(current.path);
     } catch {
@@ -1236,18 +1248,16 @@ async function* walkBareRepositories(root: string): AsyncIterable<string> {
   }
 }
 
-async function collectDirEntries(path: string): Promise<Deno.DirEntry[]> {
-  const entries: Deno.DirEntry[] = [];
-  for await (const entry of Deno.readDir(path)) entries.push(entry);
-  return entries;
+async function collectDirEntries(path: string): Promise<DirEntry[]> {
+  return await readDirEntries(path);
 }
 
 async function fileExists(path: string): Promise<boolean> {
   try {
-    const stat = await Deno.stat(path);
+    const stat = await pathStat(path);
     return stat.isFile;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (isNotFoundError(error)) return false;
     throw error;
   }
 }
@@ -1255,7 +1265,7 @@ async function fileExists(path: string): Promise<boolean> {
 /**
  * Build a minimal environment for `git` subprocess invocations.
  *
- * The parent Deno process inherits whatever `GIT_*`, `SSH_*`, `LD_*`,
+ * The parent process inherits whatever `GIT_*`, `SSH_*`, `LD_*`,
  * `XDG_*`, and other env vars are present in its launch environment.
  * Many of those are dangerous for `git`:
  *   - `GIT_DIR`, `GIT_WORK_TREE`, `GIT_CONFIG_*` redirect git at our
@@ -1277,7 +1287,7 @@ function buildScrubbedGitEnv(
 ): Record<string, string> {
   // Restrict PATH to system locations that are expected to hold `git`.
   // If the operator's git lives elsewhere we let TAKOS_GIT_PATH override.
-  const overridePath = Deno.env.get("TAKOS_GIT_PATH")?.trim();
+  const overridePath = getEnv("TAKOS_GIT_PATH")?.trim();
   const path = overridePath && overridePath.length > 0
     ? overridePath
     : "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -1303,9 +1313,7 @@ let cachedTakosGitTempHome: string | undefined;
 function takosGitTempHome(): string {
   if (cachedTakosGitTempHome !== undefined) return cachedTakosGitTempHome;
   try {
-    cachedTakosGitTempHome = Deno.makeTempDirSync({
-      prefix: "takos-git-home-",
-    });
+    cachedTakosGitTempHome = makeTempDirSync("takos-git-home-");
   } catch {
     // Fallback for permission-restricted runtimes: use /tmp directly.
     cachedTakosGitTempHome = "/tmp";
@@ -1384,7 +1392,7 @@ async function configuredDatabase(): Promise<DatabaseSync | undefined> {
   if (cachedDatabase?.path === path) return cachedDatabase.database;
   cachedDatabase?.database.close();
 
-  await Deno.mkdir(parentDirectory(path), { recursive: true });
+  await makeDirectory(parentDirectory(path), { recursive: true });
   const database = new DatabaseSync(path);
   database.exec(`
     PRAGMA journal_mode = WAL;
@@ -1436,9 +1444,9 @@ function migrateJsonMetadataToDatabase(database: DatabaseSync): void {
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(Deno.readTextFileSync(jsonPath));
+    parsed = JSON.parse(readTextFileSync(jsonPath));
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return;
+    if (isNotFoundError(error)) return;
     throw error;
   }
   if (!parsed || typeof parsed !== "object") return;
@@ -1886,28 +1894,28 @@ async function initializeDefaultBranch(
 
 async function directoryExists(path: string): Promise<boolean> {
   try {
-    return (await Deno.stat(path)).isDirectory;
+    return (await pathStat(path)).isDirectory;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (isNotFoundError(error)) return false;
     throw error;
   }
 }
 
 async function exists(path: string): Promise<boolean> {
   try {
-    await Deno.stat(path);
+    await pathStat(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (isNotFoundError(error)) return false;
     throw error;
   }
 }
 
 async function removeDirectoryIfExists(path: string): Promise<void> {
   try {
-    await Deno.remove(path, { recursive: true });
+    await removePath(path, { recursive: true });
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return;
+    if (isNotFoundError(error)) return;
     throw error;
   }
 }

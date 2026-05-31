@@ -29,6 +29,7 @@
  * "hostname pointing at an internal IP" hole that egress policy alone is
  * awkward to express, and fails closed when resolution is unavailable.
  */
+import { getEnv, isNotFoundError, resolveDns } from "./runtime.ts";
 
 /** Outcome of classifying a host string. */
 export type HostClassification =
@@ -43,7 +44,7 @@ export type HostClassification =
  * only IP literals are blocked. IP literals are still always range-checked.
  */
 function dnsResolutionDisabled(): boolean {
-  return Deno.env.get("TAKOS_GIT_SSRF_SKIP_DNS_RESOLUTION") === "true";
+  return getEnv("TAKOS_GIT_SSRF_SKIP_DNS_RESOLUTION") === "true";
 }
 
 /**
@@ -76,12 +77,12 @@ async function classifyResolvedHostname(
   let resolveError: unknown;
   for (const recordType of ["A", "AAAA"] as const) {
     try {
-      const records = await Deno.resolveDns(hostname, recordType);
+      const records = await resolveDns(hostname, recordType);
       addresses.push(...records);
     } catch (error) {
       // NotFound for one record type is expected (e.g. IPv4-only host has no
       // AAAA); remember the last error in case BOTH lookups fail.
-      if (!(error instanceof Deno.errors.NotFound)) resolveError = error;
+      if (!isNotFoundError(error)) resolveError = error;
     }
   }
   if (addresses.length === 0) {

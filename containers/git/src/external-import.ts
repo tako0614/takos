@@ -7,12 +7,13 @@ import {
 } from "./git.ts";
 import { classifyHost } from "./host-blocklist.ts";
 import { textDecoder } from "./response-builders.ts";
+import { type CommandOutput, getEnv, removePath } from "./runtime.ts";
 
 // Opt-in escape hatch for tests that need to import / fetch from an
 // on-disk bare repository fixture. Production callers must use https://
 // or git@ SSH shorthand; this env var is only honored in dev / test.
 function devAllowLocalRemoteUrl(): boolean {
-  return Deno.env.get("TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL") === "true";
+  return getEnv("TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL") === "true";
 }
 
 export type RemoteUrlValidationError = {
@@ -429,7 +430,7 @@ async function readGitRefsFromRepositoryPath(
     });
 }
 
-function gitCommandError(prefix: string, output: Deno.CommandOutput): string {
+function gitCommandError(prefix: string, output: CommandOutput): string {
   const stderr = textDecoder.decode(output.stderr).trim();
   return stderr ? `${prefix}: ${stderr.slice(0, 200)}` : prefix;
 }
@@ -439,5 +440,5 @@ export async function removeConfiguredRepositoryDirectory(
 ): Promise<void> {
   const repositoryPath = configuredRepositoryPath(repositoryId);
   if (!repositoryPath) return;
-  await Deno.remove(repositoryPath, { recursive: true }).catch(() => {});
+  await removePath(repositoryPath, { recursive: true }).catch(() => {});
 }

@@ -10,6 +10,12 @@ import {
   notImplemented,
   readConfiguredRepositoryRecord,
 } from "./git.ts";
+import {
+  type ChildProcess,
+  getEnv,
+  makeTempDirSync,
+  spawnCommand,
+} from "./runtime.ts";
 
 const textDecoder = new TextDecoder();
 
@@ -123,21 +129,19 @@ export async function handleSmartHttp(request: Request): Promise<Response> {
     REMOTE_USER: "takos-git",
   };
 
-  const child = new Deno.Command("git", {
+  const child = spawnCommand("git", {
     args: ["http-backend"],
-    stdin: "piped",
-    stdout: "piped",
-    stderr: "piped",
-    clearEnv: true,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
     env,
-  }).spawn();
+  });
 
   // Stream request body to subprocess stdin without buffering the entire
   // payload. For receive-pack, also re-count bytes as they stream so a
   // chunked or missing content-length still cannot bypass the size cap.
   let oversize = false;
   if (request.body) {
-    const writer = child.stdin.getWriter();
     try {
       let received = 0;
       for await (const chunk of request.body) {
@@ -148,20 +152,20 @@ export async function handleSmartHttp(request: Request): Promise<Response> {
             break;
           }
         }
-        await writer.write(chunk);
+        await child.stdin.write(chunk);
       }
     } catch (_error) {
       // Subprocess may have closed stdin; treat as transport error below.
     } finally {
       try {
-        await writer.close();
+        child.stdin.end();
       } catch (_closeError) {
         // ignore close errors; output handling below reports the failure
       }
     }
   } else {
     try {
-      await child.stdin.getWriter().close();
+      child.stdin.end();
     } catch (_error) {
       // ignore
     }
@@ -202,7 +206,7 @@ export async function handleSmartHttp(request: Request): Promise<Response> {
 const MAX_CGI_HEADER_PREBUFFER_BYTES = 64 * 1024;
 
 async function streamUploadPackResponse(
-  child: Deno.ChildProcess,
+  child: ChildProcess,
 ): Promise<Response> {
   const reader = child.stdout.getReader();
 
@@ -329,7 +333,7 @@ async function streamUploadPackResponse(
   });
 }
 
-async function drainStderr(child: Deno.ChildProcess): Promise<void> {
+async function drainStderr(child: ChildProcess): Promise<void> {
   try {
     const stderrReader = child.stderr.getReader();
     try {
@@ -376,7 +380,7 @@ function parseCgiHeader(headerBytes: Uint8Array): ParsedCgiHeader {
 const DEFAULT_MAX_BUFFERED_RESPONSE_BYTES = 500 * 1024 * 1024;
 
 function configuredMaxBufferedResponseBytes(): number {
-  const raw = Deno.env.get("TAKOS_GIT_MAX_RESPONSE_SIZE")?.trim();
+  const raw = getEnv("TAKOS_GIT_MAX_RESPONSE_SIZE")?.trim();
   if (!raw) return DEFAULT_MAX_BUFFERED_RESPONSE_BYTES;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -390,7 +394,7 @@ function configuredMaxBufferedResponseBytes(): number {
 // streamUploadPackResponse) so large packs are never buffered. Buffering here
 // lets us return a clean structured 500/502 before any bytes are flushed and
 // keeps the TAKOS_GIT_MAX_RESPONSE_SIZE per-request memory cap on this path.
-async function collectAndRespond(child: Deno.ChildProcess): Promise<Response> {
+async function collectAndRespond(child: ChildProcess): Promise<Response> {
   const maxBufferedBytes = configuredMaxBufferedResponseBytes();
   // Collect stdout chunks into an array and concatenate once at the end, the
   // same O(n) pattern used for stderr below. The previous grow-and-copy
@@ -458,7 +462,7 @@ function concatChunks(chunks: Uint8Array[], totalBytes: number): Uint8Array {
 }
 
 function configuredMaxPushSize(): number {
-  const raw = Deno.env.get("TAKOS_GIT_MAX_PUSH_SIZE")?.trim();
+  const raw = getEnv("TAKOS_GIT_MAX_PUSH_SIZE")?.trim();
   if (!raw) return DEFAULT_MAX_PUSH_SIZE;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_PUSH_SIZE;
@@ -521,9 +525,7 @@ let cachedSmartHttpHome: string | undefined;
 function smartHttpHome(): string {
   if (cachedSmartHttpHome !== undefined) return cachedSmartHttpHome;
   try {
-    cachedSmartHttpHome = Deno.makeTempDirSync({
-      prefix: "takos-git-http-home-",
-    });
+    cachedSmartHttpHome = makeTempDirSync("takos-git-http-home-");
   } catch {
     cachedSmartHttpHome = "/tmp";
   }
@@ -537,7 +539,7 @@ function smartHttpHome(): string {
  * different repo or swap shared libraries under git.
  */
 function buildSmartHttpBaseEnv(): Record<string, string> {
-  const overridePath = Deno.env.get("TAKOS_GIT_PATH")?.trim();
+  const overridePath = getEnv("TAKOS_GIT_PATH")?.trim();
   const path = overridePath && overridePath.length > 0
     ? overridePath
     : "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
