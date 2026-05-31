@@ -38,21 +38,6 @@ test("platform architecture contract - Worker and container entrypoints use cano
     ),
   );
   assert.ok(
-    read("deploy/cloudflare/wrangler.dispatch.toml").includes(
-      'main = "src/worker/dispatch.ts"',
-    ),
-  );
-  assert.ok(
-    read("deploy/cloudflare/wrangler.runtime-host.toml").includes(
-      'main = "src/worker/runtime/container-hosts/runtime-host.ts"',
-    ),
-  );
-  assert.ok(
-    read("deploy/cloudflare/wrangler.executor.toml").includes(
-      'main = "src/worker/runtime/container-hosts/executor-host.ts"',
-    ),
-  );
-  assert.ok(
     read("containers/git/package.json").includes(
       '"dev": "bun --watch src/index.ts"',
     ),

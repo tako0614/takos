@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # validate-wrangler-vars.sh
 # Checks that shared vars are consistent across all wrangler*.toml files.
-# Shared keys: ADMIN_DOMAIN, TENANT_BASE_DOMAIN,
-#              WFP_DISPATCH_NAMESPACE, CF_ACCOUNT_ID
+# Shared keys: ADMIN_DOMAIN, TENANT_BASE_DOMAIN, CF_ACCOUNT_ID
 #
 # Usage: bash scripts/validate-wrangler-vars.sh
 
@@ -14,7 +13,6 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SHARED_KEYS=(
   ADMIN_DOMAIN
   TENANT_BASE_DOMAIN
-  WFP_DISPATCH_NAMESPACE
   CF_ACCOUNT_ID
 )
 
