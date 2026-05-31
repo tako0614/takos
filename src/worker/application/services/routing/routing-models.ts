@@ -25,7 +25,7 @@ export type RoutingKvNamespace = KvStoreBinding;
 /**
  * Minimal bindings required for hostname routing resolution.
  *
- * Both takos-control and takos-dispatch can implement this.
+ * Both the control worker and optional tenant dispatch handler can implement this.
  */
 export type RoutingBindings = {
   HOSTNAME_ROUTING?: RoutingKvNamespace;

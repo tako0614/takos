@@ -418,10 +418,10 @@ await loop.run();
 
 | profile                 | ルーティング              | DNS            | 証明書                       |
 | ----------------------- | ------------------------- | -------------- | ---------------------------- |
-| `cloudflare`            | dispatch namespace        | Cloudflare DNS | universal SSL                |
-| `cloudflare-aws`        | dispatch + AWS ALB        | Route53        | ACM cert                     |
-| `cloudflare-gcp`        | dispatch + GCP HTTP(S) LB | Cloud DNS      | Google-managed cert          |
-| `cloudflare-kubernetes` | dispatch + k8s Ingress    | external-dns   | cert-manager (Let's Encrypt) |
+| `cloudflare`            | unified Worker + Containers | Cloudflare DNS | universal SSL                |
+| `cloudflare-aws`        | unified Worker + AWS ALB    | Route53        | ACM cert                     |
+| `cloudflare-gcp`        | unified Worker + GCP HTTP(S) LB | Cloud DNS      | Google-managed cert          |
+| `cloudflare-kubernetes` | unified Worker + k8s Ingress | external-dns   | cert-manager (Let's Encrypt) |
 | `aws`                   | ALB + Route53             | Route53        | ACM cert                     |
 | `gcp`                   | HTTP(S) LB + Cloud DNS    | Cloud DNS      | Google-managed cert          |
 | `selfhosted`            | Caddy / nginx             | 外部           | Let's Encrypt + certbot      |

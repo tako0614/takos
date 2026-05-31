@@ -967,11 +967,11 @@ async function collectSmokeScripts(): Promise<JsonValue> {
 
 async function git(args: string[]): Promise<string | null> {
   try {
-    const output = await new runtime.Command('git', {
+    const output = await runtime.runCommand('git', {
       args,
-      stdout: 'piped',
-      stderr: 'null',
-    }).output();
+      stdout: 'pipe',
+      stderr: 'ignore',
+    });
     if (!output.success) return null;
     return new TextDecoder().decode(output.stdout).trim();
   } catch {

@@ -52,19 +52,16 @@ class StatementSync {
   }
 
   get(...params: unknown[]): unknown {
-    // deno-lint-ignore no-explicit-any
-    const row = (this.#stmt.get as (...a: unknown[]) => any)(...params);
+    const row = this.#stmt.get(...params);
     return row == null ? undefined : row;
   }
 
   run(...params: unknown[]): unknown {
-    // deno-lint-ignore no-explicit-any
-    return (this.#stmt.run as (...a: unknown[]) => any)(...params);
+    return this.#stmt.run(...params);
   }
 
   all(...params: unknown[]): unknown[] {
-    // deno-lint-ignore no-explicit-any
-    return (this.#stmt.all as (...a: unknown[]) => any[])(...params) ?? [];
+    return this.#stmt.all(...params) ?? [];
   }
 
   iterate(...params: unknown[]): IterableIterator<unknown> {

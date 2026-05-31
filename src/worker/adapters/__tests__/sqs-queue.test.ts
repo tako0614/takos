@@ -12,15 +12,19 @@ interface SqsCall {
   command: { constructor: { name: string }; input: Record<string, unknown> };
 }
 
+type MockableSqsClient = SQSClient & {
+  send(command: { constructor?: { name?: string }; input?: unknown }): Promise<unknown>;
+};
+
 function withMockedSqs<T>(
   queue: Array<{ Body: string; ReceiptHandle: string; MessageId: string }>,
   fn: (calls: SqsCall[]) => Promise<T>,
 ): Promise<T> {
   const calls: SqsCall[] = [];
   const originalSend = SQSClient.prototype.send;
-  // deno-lint-ignore no-explicit-any
-  (SQSClient.prototype as any).send = function (command: any) {
-    calls.push({ command });
+  (SQSClient.prototype as MockableSqsClient).send = function (command) {
+    const normalized = command as SqsCall["command"];
+    calls.push({ command: normalized });
     const cmdName = command?.constructor?.name;
     if (cmdName === "ReceiveMessageCommand") {
       const next = queue.shift();

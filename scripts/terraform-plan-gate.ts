@@ -125,11 +125,11 @@ async function runRequired(input: TerraformCommand): Promise<CommandOutput> {
 
 async function terraform(input: TerraformCommand): Promise<CommandOutput> {
   console.error(`terraform-plan-gate: ${input.name}: ${[args.terraformBin, ...input.args].join(' ')}`);
-  const output = await new runtime.Command(args.terraformBin, {
+  const output = await runtime.runCommand(args.terraformBin, {
     args: input.args,
     cwd: terraformRoot,
-    stdout: 'piped',
-    stderr: 'piped',
+    stdout: 'pipe',
+    stderr: 'pipe',
     env: {
       TF_DATA_DIR: tfDataDir,
       AWS_ACCESS_KEY_ID: 'mock',
@@ -138,7 +138,7 @@ async function terraform(input: TerraformCommand): Promise<CommandOutput> {
       AWS_EC2_METADATA_DISABLED: 'true',
       GOOGLE_OAUTH_ACCESS_TOKEN: 'mock',
     },
-  }).output();
+  });
 
   const decoded = {
     code: output.code,

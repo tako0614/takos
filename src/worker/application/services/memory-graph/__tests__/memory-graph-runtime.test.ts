@@ -23,8 +23,7 @@ function createRecordingDb(opts: {
 
   function makeStatement(sql: string): SqlPreparedStatementBinding {
     const stmt: SqlPreparedStatementBinding = {
-      // deno-lint-ignore no-explicit-any
-      bind(..._values: any[]): SqlPreparedStatementBinding {
+      bind(..._values: unknown[]): SqlPreparedStatementBinding {
         return stmt;
       },
       run() {

@@ -18,6 +18,8 @@ head_sampling_rate = 0.1
 ADMIN_DOMAIN = "admin.example.com"
 TENANT_BASE_DOMAIN = "app.example.com"
 AUTH_PUBLIC_BASE_URL = "https://admin.example.com"
+PROXY_BASE_URL = "https://admin.example.com"
+TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://admin.example.com"
 # TODO: AUTH_ALLOWED_REDIRECT_DOMAINS is defined but never consumed by application code.
 # It should be used for OIDC redirect URI validation (restrict redirect targets to
 # known domains). Remove this comment and implement validation, or remove the var entirely.
@@ -29,7 +31,6 @@ OIDC_REDIRECT_URI = "https://admin.example.com/auth/oidc/callback"
 OCI_ORCHESTRATOR_URL = ""
 # RoutingDO rollout phase (1-4). Node/local platform defaults to 1; CF Workers should set 4.
 ROUTING_DO_PHASE = "4"
-WFP_DISPATCH_NAMESPACE = "your-dispatch-namespace"
 CF_ACCOUNT_ID = "replace-with-account-id"
 CF_ZONE_ID = "replace-with-zone-id"
 
@@ -85,6 +86,22 @@ class_name = "RateLimiterDO"
 name = "ROUTING_DO"
 class_name = "RoutingDO"
 
+[[durable_objects.bindings]]
+name = "RUNTIME_CONTAINER"
+class_name = "TakosRuntimeContainer"
+
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER"
+class_name = "ExecutorContainerTier1"
+
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER2"
+class_name = "ExecutorContainerTier2"
+
+[[durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER3"
+class_name = "ExecutorContainerTier3"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SessionDO"]
@@ -104,6 +121,40 @@ new_classes = ["NotificationNotifierDO"]
 [[migrations]]
 tag = "v5"
 new_classes = ["RoutingDO"]
+
+[[migrations]]
+tag = "v6"
+new_sqlite_classes = [
+  "TakosRuntimeContainer",
+  "ExecutorContainerTier1",
+  "ExecutorContainerTier2",
+  "ExecutorContainerTier3",
+]
+
+[[containers]]
+class_name = "TakosRuntimeContainer"
+image = "ghcr.io/takos/runtime-service:latest"
+image_build_context = "../../.."
+instance_type = "standard-2"
+max_instances = 25
+
+[[containers]]
+class_name = "ExecutorContainerTier1"
+image = "your-executor-image:tag"
+instance_type = "lite"
+max_instances = 20
+
+[[containers]]
+class_name = "ExecutorContainerTier2"
+image = "your-executor-image:tag"
+instance_type = "basic"
+max_instances = 200
+
+[[containers]]
+class_name = "ExecutorContainerTier3"
+image = "your-executor-image:tag"
+instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
+max_instances = 25
 
 # R2 Bucket for worker bundles (optional - for production)
 [[r2_buckets]]
@@ -137,20 +188,21 @@ bucket_name = "takos-offload"
 # Platform keys:
 # - PLATFORM_PRIVATE_KEY: Private key for signing platform tokens
 # - PLATFORM_PUBLIC_KEY: Public key for verifying platform tokens
-#   The same pair is used for runtime-service JWTs: takos/takos-worker sign
-#   with PLATFORM_PRIVATE_KEY, and takos-runtime-host passes PLATFORM_PUBLIC_KEY
-#   to the runtime container as JWT_PUBLIC_KEY.
+#   The same pair is used for runtime-service JWTs. The unified takos Worker
+#   signs with PLATFORM_PRIVATE_KEY and injects PLATFORM_PUBLIC_KEY into the
+#   runtime container as JWT_PUBLIC_KEY.
 #
 # Internal executor RPC:
 # - EXECUTOR_PROXY_SECRET: Shared secret accepted by /internal/executor-rpc/*
-#   and set to the same value on takos-executor-host.
+#   and by the in-process executor container host.
 #
 # OCI deployment adapter:
 # - OCI_ORCHESTRATOR_TOKEN: optional auth token for image-backed services /
 #   containers when the orchestrator requires it.
 #
 # Cloudflare API:
-# - CF_API_TOKEN: Cloudflare API token for worker management
+# - CF_API_TOKEN: optional Cloudflare API token for Workers-for-Platforms
+#   workload deployment when that backend is explicitly enabled.
 
 # Queue for agent run execution
 [[queues.producers]]
@@ -234,10 +286,6 @@ binding = "AI"
 binding = "TAKOS_EGRESS"
 service = "takos"
 
-[[services]]
-binding = "RUNTIME_HOST"
-service = "takos-runtime-host"
-
 [env.staging]
 name = "takos-staging"
 workers_dev = true
@@ -246,13 +294,14 @@ workers_dev = true
 ADMIN_DOMAIN = "staging-admin.example.com"
 TENANT_BASE_DOMAIN = "staging-app.example.com"
 AUTH_PUBLIC_BASE_URL = "https://staging-admin.example.com"
+PROXY_BASE_URL = "https://staging-admin.example.com"
+TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://staging-admin.example.com"
 # TODO: AUTH_ALLOWED_REDIRECT_DOMAINS — see production [vars] comment.
 # AUTH_ALLOWED_REDIRECT_DOMAINS = "staging-app.example.com"
 OIDC_ISSUER_URL = "https://staging-accounts.example.com"
 OIDC_CLIENT_ID = "takos-staging-app-installation-client"
 OIDC_REDIRECT_URI = "https://staging-admin.example.com/auth/oidc/callback"
 ROUTING_DO_PHASE = "4"
-WFP_DISPATCH_NAMESPACE = "your-staging-dispatch-namespace"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"
 
@@ -289,6 +338,47 @@ class_name = "RateLimiterDO"
 [[env.staging.durable_objects.bindings]]
 name = "ROUTING_DO"
 class_name = "RoutingDO"
+
+[[env.staging.durable_objects.bindings]]
+name = "RUNTIME_CONTAINER"
+class_name = "TakosRuntimeContainer"
+
+[[env.staging.durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER"
+class_name = "ExecutorContainerTier1"
+
+[[env.staging.durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER2"
+class_name = "ExecutorContainerTier2"
+
+[[env.staging.durable_objects.bindings]]
+name = "EXECUTOR_CONTAINER_TIER3"
+class_name = "ExecutorContainerTier3"
+
+[[env.staging.containers]]
+class_name = "TakosRuntimeContainer"
+image = "ghcr.io/takos/runtime-service:latest"
+image_build_context = "../../.."
+instance_type = "standard-2"
+max_instances = 5
+
+[[env.staging.containers]]
+class_name = "ExecutorContainerTier1"
+image = "your-executor-image:tag"
+instance_type = "lite"
+max_instances = 20
+
+[[env.staging.containers]]
+class_name = "ExecutorContainerTier2"
+image = "your-executor-image:tag"
+instance_type = "basic"
+max_instances = 100
+
+[[env.staging.containers]]
+class_name = "ExecutorContainerTier3"
+image = "your-executor-image:tag"
+instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
+max_instances = 10
 
 [[env.staging.r2_buckets]]
 binding = "WORKER_BUNDLES"
@@ -384,7 +474,3 @@ binding = "AI"
 [[env.staging.services]]
 binding = "TAKOS_EGRESS"
 service = "takos-staging"
-
-[[env.staging.services]]
-binding = "RUNTIME_HOST"
-service = "takos-runtime-host-staging"

@@ -53,7 +53,6 @@ export const bgCyan = code(46, 49);
 export const bgWhite = code(47, 49);
 
 export function stripAnsiCode(str: string): string {
-  // deno-lint-ignore no-control-regex
   return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 export const stripColor = stripAnsiCode;

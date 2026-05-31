@@ -1,8 +1,9 @@
 /**
- * takos-executor-host service
+ * Executor container host handler
  *
- * Hosts tiered executor containers (runtime containers DO sidecars) and forwards
- * container control RPC to the main takos worker.
+ * Hosts tiered executor containers (runtime containers DO sidecars) and
+ * forwards container control RPC to the main takos worker. In Cloudflare
+ * deployments this is called in-process by the unified takos Worker.
  *
  * Architecture:
  *   takos-worker → POST /dispatch → this worker → container.dispatchStart(...)
@@ -81,8 +82,8 @@ export { getRequiredProxyCapability };
 // ---------------------------------------------------------------------------
 // Durable Objects — Tiered executor containers
 //
-// Three tiers share the same implementation but run on different runtime container
-// instance types (configured in wrangler.executor.toml):
+// Three tiers share the same implementation but run on different runtime
+// container instance types (configured in the unified wrangler.toml):
 //   Tier 1 (lite):   lightweight, always-on, max ~20 instances
 //   Tier 2 (basic):  scale-out, max ~200 instances
 //   Tier 3 (custom): max memory (12 GiB), max ~25 instances

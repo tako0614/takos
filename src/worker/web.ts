@@ -70,6 +70,8 @@ import {
   createAgentControlBackendRouter,
   createExecutorProxyRouter,
 } from "./runtime/executor-proxy-api.ts";
+import runtimeHostHandler from "./runtime/container-hosts/runtime-host.ts";
+import executorHostHandler from "./runtime/container-hosts/executor-host.ts";
 import { and, eq } from "drizzle-orm";
 import { type TtlSeconds, ttlSeconds } from "@takos/worker-platform-utils/ttl";
 
@@ -108,6 +110,21 @@ export function getWebApp() {
  * Alias for callers that want the singleton worker app factory shape.
  */
 export const createWebApp = getWebApp;
+
+function containerHostBaseUrl(env: Env): string {
+  return env.PROXY_BASE_URL ?? env.AUTH_PUBLIC_BASE_URL ??
+    `https://${env.ADMIN_DOMAIN}`;
+}
+
+function withUnifiedContainerHostEnv(env: Env): Env {
+  return {
+    ...env,
+    TAKOS_WORKER: env.TAKOS_EGRESS,
+    PROXY_BASE_URL: env.PROXY_BASE_URL ?? containerHostBaseUrl(env),
+    TAKOS_AGENT_CONTROL_RPC_BASE_URL:
+      env.TAKOS_AGENT_CONTROL_RPC_BASE_URL ?? containerHostBaseUrl(env),
+  } as Env;
+}
 
 function isDefaultAppDistributionSaveValidationError(error: unknown): boolean {
   if (isDefaultAppDistributionInvalidError(error)) return true;
@@ -262,6 +279,27 @@ app.use("*", staticAssetsMiddleware);
 
 // Health check
 app.get("/health", (c) => c.json({ status: "ok" }));
+
+// ============================================================================
+// Unified container-host callbacks
+// ============================================================================
+// Cloudflare Containers live as Durable Object classes exported by this same
+// Worker. External callbacks from those containers still need stable HTTP paths,
+// so the main worker routes them into the in-process host handlers.
+
+app.all("/forward/*", async (c) => {
+  return runtimeHostHandler.fetch(
+    c.req.raw,
+    withUnifiedContainerHostEnv(c.env) as never,
+  );
+});
+
+app.all("/api/internal/v1/agent-control/*", async (c) => {
+  return executorHostHandler.fetch(
+    c.req.raw,
+    withUnifiedContainerHostEnv(c.env) as never,
+  );
+});
 
 // ============================================================================
 // Public Routes (no auth required)

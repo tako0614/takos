@@ -28,6 +28,16 @@ interface MockStore {
   rolloutState: string;
 }
 
+type MockQueryChain = {
+  from(): MockQueryChain;
+  where(): MockQueryChain | Promise<unknown>;
+  set(values: Record<string, unknown>): MockQueryChain;
+  values(): MockQueryChain;
+  get(): Promise<unknown>;
+  onConflictDoNothing(): Promise<unknown>;
+  then(resolve: (v: unknown) => unknown): Promise<unknown>;
+};
+
 /**
  * Minimal drizzle-like DB. getDb() returns objects that already expose
  * select/insert/update/delete as-is, so this stub is used directly.
@@ -39,14 +49,14 @@ interface MockStore {
  * implementation would deterministically double-advance.
  */
 function createMockDb(store: MockStore, readDelayMs: number) {
-  // deno-lint-ignore no-explicit-any
-  const makeChain = (terminalGet: () => Promise<unknown>): any => {
-    // deno-lint-ignore no-explicit-any
-    const chain: any = {
+  const makeChain = (terminalGet: () => Promise<unknown>): MockQueryChain => {
+    const chain: MockQueryChain = {
       from: () => chain,
       where: () => chain,
       set: () => chain,
+      values: () => chain,
       get: terminalGet,
+      onConflictDoNothing: () => Promise.resolve({ meta: { changes: 0 } }),
       then: (resolve: (v: unknown) => unknown) =>
         Promise.resolve(undefined).then(resolve),
     };
@@ -57,13 +67,15 @@ function createMockDb(store: MockStore, readDelayMs: number) {
   // unused insert/delete keep this object on the drizzle-like fast path so it
   // is not re-wrapped as a raw D1 binding.
   const noop = () => {
-    // deno-lint-ignore no-explicit-any
-    const chain: any = {
+    const chain: MockQueryChain = {
       values: () => chain,
       set: () => chain,
       where: () => Promise.resolve(undefined),
       from: () => chain,
+      get: () => Promise.resolve(undefined),
       onConflictDoNothing: () => Promise.resolve({ meta: { changes: 0 } }),
+      then: (resolve: (v: unknown) => unknown) =>
+        Promise.resolve(undefined).then(resolve),
     };
     return chain;
   };
@@ -94,12 +106,17 @@ function createMockDb(store: MockStore, readDelayMs: number) {
     update: (table: unknown) => {
       // Capture set() payload so rolloutState writes hit the store.
       let pending: Record<string, unknown> | undefined;
-      // deno-lint-ignore no-explicit-any
-      const chain: any = {
+      const chain: MockQueryChain = {
         set: (values: Record<string, unknown>) => {
           pending = values;
           return chain;
         },
+        values: () => chain,
+        from: () => chain,
+        get: () => Promise.resolve(undefined),
+        onConflictDoNothing: () => Promise.resolve({ meta: { changes: 0 } }),
+        then: (resolve: (v: unknown) => unknown) =>
+          Promise.resolve(undefined).then(resolve),
         where: () => {
           if (pending && typeof pending.rolloutState === "string") {
             // Model the compare-and-swap: saveState bumps stateVersion

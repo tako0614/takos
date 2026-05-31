@@ -1,5 +1,5 @@
-// Canonical entrypoint for the takos-dispatch worker.
-// Owns tenant-domain fetch wiring; shared routing logic lives outside this path.
+// Tenant-domain dispatch handler for local-platform and optional WFP backend.
+// It is not a separate Takos product worker in the unified deployment.
 import { selectHttpEndpointFromHttpEndpointSet } from "./application/services/routing/service.ts";
 import type { RoutingStore } from "./application/services/routing/routing-models.ts";
 import type {

@@ -55,12 +55,12 @@ async function run(
   args: string[],
   options: { cwd?: string } = {},
 ): Promise<void> {
-  const output = await new runtime.Command(command, {
+  const output = await runtime.runCommand(command, {
     args,
     cwd: options.cwd,
     stdout: 'inherit',
     stderr: 'inherit',
-  }).output();
+  });
   if (!output.success) {
     console.error(`${command} ${args.join(' ')} failed with exit code ${output.code}`);
     runtime.exit(output.code || 1);
@@ -72,11 +72,11 @@ async function assertNoGitGrepMatches(
   pattern: string,
   paths: readonly string[],
 ): Promise<void> {
-  const output = await new runtime.Command('git', {
+  const output = await runtime.runCommand('git', {
     args: ['-C', repo, 'grep', '-n', '-E', pattern, '--', ...paths],
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output();
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
 
   if (output.code === 1) return;
 

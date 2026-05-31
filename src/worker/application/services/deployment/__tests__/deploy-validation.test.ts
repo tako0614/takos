@@ -362,8 +362,7 @@ test("validatePublicationKnownFields rejects unknown publication fields", () => 
         publisher: "web",
         type: "McpServer",
         outputs: { url: { kind: "url", routeRef: "mcp" } },
-        // deno-lint-ignore no-explicit-any
-        extras: "oops" as any,
+        extras: "oops",
       } as AppManifest["publish"][number],
     ],
   });

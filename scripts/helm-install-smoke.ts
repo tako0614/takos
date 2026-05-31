@@ -242,11 +242,11 @@ async function runHelm(args: string[]): Promise<{
   stderr: string;
 }> {
   try {
-    const output = await new runtime.Command('helm', {
+    const output = await runtime.runCommand('helm', {
       args,
-      stdout: 'piped',
-      stderr: 'piped',
-    }).output();
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
     return {
       success: output.success,
       stdout: decode(output.stdout),

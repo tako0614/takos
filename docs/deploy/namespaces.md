@@ -1,16 +1,23 @@
-# Dispatch Namespace
+# Cloudflare Workload Placement
 
-> このページでわかること: Cloudflare Workers 環境での Worker 分離の仕組み (オペレーター向け)。
+> このページでわかること: Cloudflare 環境で workload placement を operator 設定として扱う方針。
 
-Dispatch namespace は Cloudflare Workers backend が Worker を論理分離するための仕組みです。マニフェストには書きません。
+Takos product 自体は単一の public/control Worker (`takos-worker`) と Cloudflare Containers の Durable Object class
+で構成します。追加の `takos-dispatch` / `takos-runtime-host` / `takos-executor-host` Worker をデプロイする前提には
+しません。
+
+Workers for Platforms の dispatch namespace は、operator が tenant workload を Cloudflare Workers backend に
+明示的に載せたい場合だけ使う backend-specific option です。AppSpec には書きません。
 
 ## 役割
 
-- tenant worker を control plane から分離する
-- staging / production の worker placement を分ける
-- Cloudflare 固有の worker routing を operator 設定で扱う
+- Cloudflare 固有の tenant workload placement を operator 設定で扱う
+- staging / production の workload namespace を分ける
+- 単一 `takos-worker` の product boundary と、tenant workload backend を混同しない
 
 ## Operator setup
+
+Workers-for-Platforms backend を使う場合だけ作成します。
 
 ```bash
 wrangler dispatch-namespace create takos-tenants
@@ -25,7 +32,8 @@ GCP / Kubernetes target では同じ概念を manifest に露出しません。
 | 概念               | 所有者                     | 役割                                  |
 | ------------------ | -------------------------- | ------------------------------------- |
 | Deployment history | Takosumi kernel            | retained Deployment / current pointer |
-| Dispatch namespace | Cloudflare operator config | Workers backend の worker placement   |
+| Container host     | `takos-worker`             | Cloudflare Containers DO classes      |
+| Dispatch namespace | Cloudflare operator config | optional Workers backend placement    |
 
 ## Next
 

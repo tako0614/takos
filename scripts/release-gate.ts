@@ -163,12 +163,12 @@ if (failed.length > 0) {
 
 async function runGate(gate: GateCommand): Promise<GateResult> {
   const started = performance.now();
-  const output = await new runtime.Command(gate.command[0], {
+  const output = await runtime.runCommand(gate.command[0], {
     args: gate.command.slice(1),
-    stdout: 'piped',
-    stderr: 'piped',
+    stdout: 'pipe',
+    stderr: 'pipe',
     env: gate.env,
-  }).output();
+  });
   const durationMs = Math.round(performance.now() - started);
   const stdout = decode(output.stdout);
   const stderr = decode(output.stderr);
