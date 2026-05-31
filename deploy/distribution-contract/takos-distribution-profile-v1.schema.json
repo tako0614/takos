@@ -12,9 +12,6 @@
         "takos-agent",
         "takos-git",
         "takos-worker",
-        "takos-executor-host",
-        "takos-runtime-host",
-        "takos-dispatch",
         "takosumi",
         "takosumi-cloud"
       ]
