@@ -912,14 +912,11 @@ function parseSimpleShellCommand(
     index += 1;
   }
 
-  if (parts[index] === 'deno' && parts[index + 1] === 'task' && parts[index + 2]) {
-    return { cdPath, env, taskName: parts[index + 2] };
-  }
   if (parts[index] === 'bun' && parts[index + 1] === 'run' && parts[index + 2]) {
     return { cdPath, env, taskName: parts[index + 2] };
   }
   {
-    errors.push(`${field} must run a bun script or existing deno task`);
+    errors.push(`${field} must run a bun script`);
     return null;
   }
 }
@@ -934,8 +931,6 @@ function assertConfiguredTask(config: TaskConfig, taskName: string, field: strin
 async function readTaskConfig(root: string): Promise<TaskConfig> {
   const packagePath = join(root, 'package.json');
   if (exists(packagePath)) return await readJson(packagePath);
-  const denoPath = join(root, 'deno.json');
-  if (exists(denoPath)) return await readJson(denoPath);
   return {};
 }
 
