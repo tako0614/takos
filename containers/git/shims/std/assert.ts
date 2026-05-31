@@ -1,5 +1,5 @@
 // Bun migration shim: @std/assert -> node:assert/strict based implementation.
-// Lets Deno test files keep `import { assertEquals } from "@std/assert"` while
+// Lets existing test files keep `import { assertEquals } from "@std/assert"` while
 // running under `bun test`, wired via tsconfig.json "paths". Covers every
 // @std/assert symbol used across the ecosystem (full-tree census).
 import nodeAssert from "node:assert/strict";

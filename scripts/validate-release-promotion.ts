@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 const requiredDocs = [
   {
@@ -190,7 +191,7 @@ for (const file of externalTextFiles) {
 if (failures.length > 0) {
   for (const warning of warnings) console.warn(warning);
   for (const failure of failures) console.error(failure);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 for (const warning of warnings) console.warn(warning);
@@ -213,7 +214,7 @@ function validateTextIncludes(
     return;
   }
 
-  const text = Deno.readTextFileSync(path);
+  const text = runtime.readTextFileSync(path);
   validatedArtifacts += 1;
   for (const expected of expectedValues) {
     if (!text.includes(expected)) {
@@ -224,10 +225,10 @@ function validateTextIncludes(
 
 function exists(path: string): boolean {
   try {
-    Deno.statSync(path);
+    runtime.statSync(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (error instanceof runtime.errors.NotFound) return false;
     throw error;
   }
 }

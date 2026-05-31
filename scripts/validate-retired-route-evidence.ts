@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 const retiredRouteTests = [
   'public v3 deployment create rejects unmanaged direct deploy when GitOps is configured',
@@ -16,17 +17,17 @@ const retiredAffordancePattern =
   'group_deployment_snapshot_deploy_from_repo|group_deployment_snapshot\\.deploy_from_repo|deploy_from_repo';
 
 const apiTestPath = 'src/routes/public/index_test.ts';
-const apiTestText = await Deno.readTextFile(apiTestPath);
+const apiTestText = await runtime.readTextFile(apiTestPath);
 const missingTests = retiredRouteTests.filter((name) => {
   const escaped = escapeRegExp(name);
-  return !new RegExp(`\\b(?:Deno\\.)?test\\((['"])${escaped}\\1`).test(apiTestText);
+  return !new RegExp(`\\btest\\((['"])${escaped}\\1`).test(apiTestText);
 });
 
 if (missingTests.length > 0) {
   for (const name of missingTests) {
     console.error(`missing retired-route API evidence test: ${name}`);
   }
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 function escapeRegExp(input: string): string {
@@ -54,7 +55,7 @@ async function run(
   args: string[],
   options: { cwd?: string } = {},
 ): Promise<void> {
-  const output = await new Deno.Command(command, {
+  const output = await new runtime.Command(command, {
     args,
     cwd: options.cwd,
     stdout: 'inherit',
@@ -62,7 +63,7 @@ async function run(
   }).output();
   if (!output.success) {
     console.error(`${command} ${args.join(' ')} failed with exit code ${output.code}`);
-    Deno.exit(output.code || 1);
+    runtime.exit(output.code || 1);
   }
 }
 
@@ -71,7 +72,7 @@ async function assertNoGitGrepMatches(
   pattern: string,
   paths: readonly string[],
 ): Promise<void> {
-  const output = await new Deno.Command('git', {
+  const output = await new runtime.Command('git', {
     args: ['-C', repo, 'grep', '-n', '-E', pattern, '--', ...paths],
     stdout: 'piped',
     stderr: 'piped',
@@ -84,5 +85,5 @@ async function assertNoGitGrepMatches(
   if (stdout) console.error(stdout);
   if (stderr) console.error(stderr);
   console.error(`${repo}: retired direct deploy affordance pattern matched`);
-  Deno.exit(output.code || 1);
+  runtime.exit(output.code || 1);
 }

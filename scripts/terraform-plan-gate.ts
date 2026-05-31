@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 type TargetId = 'aws' | 'gcp';
 
@@ -38,13 +39,13 @@ const planCases: Record<TargetId, { label: string; varFile: string }> = {
   },
 };
 
-const args = parseArgs(Deno.args);
-const root = Deno.cwd();
+const args = parseArgs(runtime.args);
+const root = runtime.cwd();
 const terraformRoot = `${root}/deploy/terraform`;
 const outDir = args.outDir;
 const tfDataDir = `${root}/${outDir}/tfdata`;
 
-await Deno.mkdir(outDir, { recursive: true });
+await runtime.mkdir(outDir, { recursive: true });
 await runRequired({
   name: 'terraform init',
   args: ['init', '-backend=false'],
@@ -56,7 +57,7 @@ for (const target of args.targets) {
   results.push(await runPlan(target));
 }
 
-await Deno.writeTextFile(`${outDir}/summary.md`, renderMarkdownSummary(results));
+await runtime.writeTextFile(`${outDir}/summary.md`, renderMarkdownSummary(results));
 console.log(JSON.stringify({ ok: true, outDir, results }, null, 2));
 
 async function runPlan(target: TargetId): Promise<PlanResult> {
@@ -79,7 +80,7 @@ async function runPlan(target: TargetId): Promise<PlanResult> {
   });
 
   if (output.code !== 0 && output.code !== 2) {
-    await Deno.writeTextFile(textFile, joinOutput(output));
+    await runtime.writeTextFile(textFile, joinOutput(output));
     throw new Error(`${planCase.label} terraform plan failed with exit code ${output.code}. See ${textFile}`);
   }
 
@@ -88,7 +89,7 @@ async function runPlan(target: TargetId): Promise<PlanResult> {
     args: ['show', '-no-color', planFile],
     logStdout: false,
   });
-  await Deno.writeTextFile(textFile, show.stdout);
+  await runtime.writeTextFile(textFile, show.stdout);
 
   const counts = parsePlanCounts(show.stdout);
   console.error(
@@ -124,7 +125,7 @@ async function runRequired(input: TerraformCommand): Promise<CommandOutput> {
 
 async function terraform(input: TerraformCommand): Promise<CommandOutput> {
   console.error(`terraform-plan-gate: ${input.name}: ${[args.terraformBin, ...input.args].join(' ')}`);
-  const output = await new Deno.Command(args.terraformBin, {
+  const output = await new runtime.Command(args.terraformBin, {
     args: input.args,
     cwd: terraformRoot,
     stdout: 'piped',
@@ -207,7 +208,7 @@ function parseArgs(values: readonly string[]): Args {
   const parsed: Args = {
     outDir: '.terraform-plan',
     targets: ['aws', 'gcp'],
-    terraformBin: Deno.env.get('TAKOS_TERRAFORM_BIN') ?? 'terraform',
+    terraformBin: runtime.env.get('TAKOS_TERRAFORM_BIN') ?? 'terraform',
   };
 
   for (let index = 0; index < values.length; index += 1) {
@@ -223,7 +224,7 @@ function parseArgs(values: readonly string[]): Args {
         const target = requiredArgValue(values, index, value);
         if (target !== 'aws' && target !== 'gcp') {
           console.error(`--target must be aws or gcp, got ${target}`);
-          Deno.exit(2);
+          runtime.exit(2);
         }
         parsed.targets = [target];
         index += 1;
@@ -236,12 +237,12 @@ function parseArgs(values: readonly string[]): Args {
       case '--help':
       case '-h':
         console.log(usage());
-        Deno.exit(0);
+        runtime.exit(0);
         break;
       default:
         console.error(`Unknown argument: ${value}`);
         console.error(usage());
-        Deno.exit(2);
+        runtime.exit(2);
     }
   }
 
@@ -252,7 +253,7 @@ function requiredArgValue(values: readonly string[], index: number, flag: string
   const value = values[index + 1];
   if (!value || value.startsWith('--')) {
     console.error(`${flag} requires a value`);
-    Deno.exit(2);
+    runtime.exit(2);
   }
   return value;
 }

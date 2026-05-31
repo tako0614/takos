@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 type GateStatus = 'passed' | 'failed' | 'skipped';
 
@@ -18,15 +19,15 @@ type GateResult = {
   stderr: string;
 };
 
-const keepGoing = Deno.args.includes('--keep-going');
-const unknownArgs = Deno.args.filter((arg) => arg !== '--keep-going');
+const keepGoing = runtime.args.includes('--keep-going');
+const unknownArgs = runtime.args.filter((arg) => arg !== '--keep-going');
 
 if (unknownArgs.length > 0) {
   console.error(`Unknown argument(s): ${unknownArgs.join(', ')}`);
   console.error(
-    'Usage: bun --preload ./shims/deno-compat.ts scripts/release-gate.ts [--keep-going]',
+    'Usage: bun scripts/release-gate.ts [--keep-going]',
   );
-  Deno.exit(2);
+  runtime.exit(2);
 }
 
 const gates: GateCommand[] = [
@@ -94,8 +95,6 @@ const gates: GateCommand[] = [
     name: 'release-manifest',
     command: [
       'bun',
-      '--preload',
-      './shims/deno-compat.ts',
       'scripts/build-release-manifest.ts',
     ],
   },
@@ -159,12 +158,12 @@ const summary = {
 console.log(JSON.stringify(summary, null, 2));
 
 if (failed.length > 0) {
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 async function runGate(gate: GateCommand): Promise<GateResult> {
   const started = performance.now();
-  const output = await new Deno.Command(gate.command[0], {
+  const output = await new runtime.Command(gate.command[0], {
     args: gate.command.slice(1),
     stdout: 'piped',
     stderr: 'piped',

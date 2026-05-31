@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 type DistributionManifest = {
   target?: {
     id?: string;
@@ -62,15 +63,15 @@ const pluginKeys = [
   'runtime-agent',
 ];
 
-const check = Deno.args.includes('--check');
-const unknownArgs = Deno.args.filter((arg) => arg !== '--check');
+const check = runtime.args.includes('--check');
+const unknownArgs = runtime.args.filter((arg) => arg !== '--check');
 
 if (unknownArgs.length > 0) {
   console.error(`Unknown argument(s): ${unknownArgs.join(', ')}`);
   console.error(
-    'Usage: bun --preload ./shims/deno-compat.ts scripts/generate-helm-overlays.ts [--check]',
+    'Usage: bun scripts/generate-helm-overlays.ts [--check]',
   );
-  Deno.exit(2);
+  runtime.exit(2);
 }
 
 const results = [];
@@ -81,7 +82,7 @@ for (const target of targets) {
   const generated = generateOverlay(target, manifest);
 
   if (check) {
-    const current = await Deno.readTextFile(target.outputPath);
+    const current = await runtime.readTextFile(target.outputPath);
     const matches = current === generated;
     results.push({
       target: target.targetId,
@@ -90,7 +91,7 @@ for (const target of targets) {
     });
     if (!matches) hasDrift = true;
   } else {
-    await Deno.writeTextFile(target.outputPath, generated);
+    await runtime.writeTextFile(target.outputPath, generated);
     results.push({
       target: target.targetId,
       outputPath: target.outputPath,
@@ -104,7 +105,7 @@ if (hasDrift) {
     'Helm overlay generation drift detected. Run `bun run helm:generate-overlays`.',
   );
   console.error(JSON.stringify({ ok: false, check, results }, null, 2));
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(JSON.stringify({ ok: true, check, results }, null, 2));
@@ -112,7 +113,7 @@ console.log(JSON.stringify({ ok: true, check, results }, null, 2));
 async function readManifest(
   target: OverlayTarget,
 ): Promise<DistributionManifest> {
-  const parsed = JSON.parse(await Deno.readTextFile(target.manifestPath)) as DistributionManifest;
+  const parsed = JSON.parse(await runtime.readTextFile(target.manifestPath)) as DistributionManifest;
   if (parsed.target?.id !== target.targetId) {
     throw new Error(
       `${target.manifestPath} target.id must be ${target.targetId}`,

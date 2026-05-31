@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 const checks: Array<() => Promise<string[]>> = [
   validateRemovedHistoricalDocs,
   validateVitePressExcludesNonCurrentDocs,
@@ -10,7 +11,7 @@ const errors = (await Promise.all(checks.map((check) => check()))).flat();
 
 if (errors.length > 0) {
   console.error(errors.join('\n'));
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log('Validated Takos current docs boundary.');
@@ -30,7 +31,7 @@ async function validateRemovedHistoricalDocs(): Promise<string[]> {
 }
 
 async function validateVitePressExcludesNonCurrentDocs(): Promise<string[]> {
-  const config = await Deno.readTextFile('docs/.vitepress/config.ts');
+  const config = await runtime.readTextFile('docs/.vitepress/config.ts');
   const errors: string[] = [];
   for (const required of ["'contributing/**'", "'releases/**'"]) {
     if (!config.includes(required)) {
@@ -41,7 +42,7 @@ async function validateVitePressExcludesNonCurrentDocs(): Promise<string[]> {
 }
 
 async function validateContributingIndex(): Promise<string[]> {
-  const index = await Deno.readTextFile('docs/contributing/index.md');
+  const index = await runtime.readTextFile('docs/contributing/index.md');
   const forbidden = [
     'system-architecture-implementation-plan',
     'historical 1.0 Core Release plan',
@@ -67,7 +68,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
   ];
   const errors: string[] = [];
   for (const path of files) {
-    const text = await Deno.readTextFile(path);
+    const text = await runtime.readTextFile(path);
     for (
       const forbidden of [
         '400 mutable-ref-rejected',
@@ -99,7 +100,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
       }
     }
   }
-  const upgradeExport = await Deno.readTextFile('docs/platform/upgrade-export.md');
+  const upgradeExport = await runtime.readTextFile('docs/platform/upgrade-export.md');
   for (
     const required of [
       'Accounts 台帳操作',
@@ -112,7 +113,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
       errors.push(`docs/platform/upgrade-export.md: missing current revision boundary '${required}'`);
     }
   }
-  const rollback = await Deno.readTextFile('docs/deploy/rollback.md');
+  const rollback = await runtime.readTextFile('docs/deploy/rollback.md');
   if (
     !rollback.includes(
       'provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません',
@@ -120,7 +121,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
   ) {
     errors.push('docs/deploy/rollback.md: missing current rollback data boundary');
   }
-  const hostingIndex = await Deno.readTextFile('docs/hosting/index.md');
+  const hostingIndex = await runtime.readTextFile('docs/hosting/index.md');
   if (
     !includesRequiredText(
       hostingIndex,
@@ -129,7 +130,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
   ) {
     errors.push('docs/hosting/index.md: missing target parity evidence boundary');
   }
-  const cloudflareHosting = await Deno.readTextFile('docs/hosting/cloudflare.md');
+  const cloudflareHosting = await runtime.readTextFile('docs/hosting/cloudflare.md');
   if (
     !includesRequiredText(
       cloudflareHosting,
@@ -181,14 +182,14 @@ async function validateCanonicalLayoutDocs(): Promise<string[]> {
   ];
   const errors: string[] = [];
   for (const path of files) {
-    const text = await Deno.readTextFile(path);
+    const text = await runtime.readTextFile(path);
     for (const term of forbidden) {
       if (text.includes(term)) {
         errors.push(`${path}: remove stale Takos split layout reference '${term}'`);
       }
     }
   }
-  const currentState = await Deno.readTextFile('docs/contributing/current-state.md');
+  const currentState = await runtime.readTextFile('docs/contributing/current-state.md');
   for (const term of required) {
     if (!currentState.includes(term)) {
       errors.push(`docs/contributing/current-state.md: missing canonical layout reference '${term}'`);
@@ -204,10 +205,10 @@ function includesRequiredText(text: string, required: string): boolean {
 
 async function exists(path: string): Promise<boolean> {
   try {
-    await Deno.stat(path);
+    await runtime.stat(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (error instanceof runtime.errors.NotFound) return false;
     throw error;
   }
 }

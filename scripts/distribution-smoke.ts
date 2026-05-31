@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 type JsonRecord = Record<string, unknown>;
 type SmokeResult = {
   manifest: string;
@@ -7,7 +8,7 @@ type SmokeResult = {
   error?: string;
 };
 
-const args = parseArgs(Deno.args);
+const args = parseArgs(runtime.args);
 const manifests = args.all
   ? await allDistributionManifests()
   : [args.manifest ?? 'deploy/distributions/selfhosted.json'];
@@ -51,7 +52,7 @@ if (errors.length > 0 || failed.length > 0) {
   console.error('Distribution smoke failed:');
   for (const error of errors) console.error(`- ${error}`);
   for (const result of failed) console.error(`- ${result.manifest} ${result.serviceId}: ${result.error}`);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(JSON.stringify(
@@ -132,18 +133,18 @@ function parseArgs(values: readonly string[]): { manifest?: string; all: boolean
     console.error(
       'Usage: bun run distribution:smoke [--manifest deploy/distributions/<target>.json | --all] [--live]',
     );
-    Deno.exit(2);
+    runtime.exit(2);
   }
   if (all && manifest) {
     console.error('Use either --all or --manifest, not both');
-    Deno.exit(2);
+    runtime.exit(2);
   }
   return { manifest, all, live };
 }
 
 async function allDistributionManifests(): Promise<string[]> {
   const files: string[] = [];
-  for await (const entry of Deno.readDir('deploy/distributions')) {
+  for await (const entry of runtime.readDir('deploy/distributions')) {
     if (entry.isFile && entry.name.endsWith('.json')) {
       files.push(`deploy/distributions/${entry.name}`);
     }
@@ -152,7 +153,7 @@ async function allDistributionManifests(): Promise<string[]> {
 }
 
 async function readJson(path: string): Promise<JsonRecord> {
-  return JSON.parse(await Deno.readTextFile(path)) as JsonRecord;
+  return JSON.parse(await runtime.readTextFile(path)) as JsonRecord;
 }
 
 function arrayAt(recordValue: JsonRecord, key: string, label: string): unknown[] {

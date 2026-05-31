@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 import fs from 'node:fs';
 
 // Host-side defaults mirror .env.local.example for local process smoke checks.
@@ -27,14 +28,14 @@ function loadEnvFile(filePath) {
 
     const key = trimmed.slice(0, equalsIndex).trim();
     const value = trimmed.slice(equalsIndex + 1);
-    if (!Deno.env.get(key)) {
-      Deno.env.set(key, value);
+    if (!runtime.env.get(key)) {
+      runtime.env.set(key, value);
     }
   }
 }
 
 function env(name, fallback) {
-  return Deno.env.get(name) || fallback;
+  return runtime.env.get(name) || fallback;
 }
 
 function baseUrl(port) {
@@ -51,7 +52,7 @@ async function expectJsonHealth(label, url) {
 }
 
 async function main() {
-  loadEnvFile(Deno.env.get('TAKOS_LOCAL_ENV_FILE') || '.env.local');
+  loadEnvFile(runtime.env.get('TAKOS_LOCAL_ENV_FILE') || '.env.local');
 
   const takosWorkerUrl = env(
     'TAKOS_WORKER_PUBLIC_URL',
@@ -78,5 +79,5 @@ async function main() {
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
-  Deno.exit(1);
+  runtime.exit(1);
 });

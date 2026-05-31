@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 type HelmCase = {
   name: string;
   args: string[];
@@ -15,8 +16,8 @@ type HelmResult = {
 const chartRoot = 'deploy/helm/takos';
 const smokeCrdsChartRoot = 'deploy/helm/takos/testdata/helm-smoke-crds';
 const namespace = 'takos-system';
-const requireInstallDryRun = Deno.env.get('TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN') === '1';
-const installTestCrds = Deno.env.get('TAKOS_HELM_INSTALL_TEST_CRDS') === '1';
+const requireInstallDryRun = runtime.env.get('TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN') === '1';
+const installTestCrds = runtime.env.get('TAKOS_HELM_INSTALL_TEST_CRDS') === '1';
 const cases: HelmCase[] = [
   {
     name: 'base-template',
@@ -100,7 +101,7 @@ if (!version.success) {
     'Helm CLI is required for this smoke. Install Helm v3 or run it in CI via azure/setup-helm.',
   );
   console.error(version.stderr);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 const setupResults: HelmResult[] = [];
@@ -165,7 +166,7 @@ const summary = {
 console.log(JSON.stringify(summary, null, 2));
 
 if (setupFailed.length > 0 || failed.length > 0) {
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 async function runHelmCase(testCase: HelmCase): Promise<HelmResult> {
@@ -188,7 +189,7 @@ async function runHelm(args: string[]): Promise<{
   stderr: string;
 }> {
   try {
-    const output = await new Deno.Command('helm', {
+    const output = await new runtime.Command('helm', {
       args,
       stdout: 'piped',
       stderr: 'piped',

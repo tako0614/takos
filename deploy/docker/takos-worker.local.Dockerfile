@@ -19,4 +19,4 @@ USER takos
 
 ENV NODE_ENV=production
 
-CMD ["bun", "--preload", "./shims/deno-compat.ts", "src/worker/local-platform/unified-entrypoint.ts"]
+CMD ["bun", "src/worker/local-platform/unified-entrypoint.ts"]

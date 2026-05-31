@@ -1,4 +1,5 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env bun
+import * as runtime from "../runtime.ts";
 /**
  * Hot-table offload backfill (D1 -> R2).
  *
@@ -11,8 +12,8 @@
  *   threads/{threadId}/messages/{messageId}.json
  *
  * Usage:
- *   npx tsx scripts/offload-backfill.ts run-events [--remote --env staging|production] [--run-id <runId>] [--limit-runs <n>] [--dry-run] [--force]
- *   npx tsx scripts/offload-backfill.ts messages   [--remote --env staging|production] [--thread-id <threadId>] [--limit-messages <n>] [--dry-run] [--force]
+ *   bun scripts/control/offload-backfill.ts run-events [--remote --env staging|production] [--run-id <runId>] [--limit-runs <n>] [--dry-run] [--force]
+ *   bun scripts/control/offload-backfill.ts messages   [--remote --env staging|production] [--thread-id <threadId>] [--limit-messages <n>] [--dry-run] [--force]
  *
  * Notes:
  * - `--remote` targets remote D1 + remote R2 and requires `--env staging|production`. Default is local.
@@ -61,7 +62,7 @@ if (!isRemote && remoteEnvironment) {
 
 function die(message: string): never {
   console.error(`Error: ${message}`);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 function getArgValue(flag: string): string | undefined {
@@ -422,8 +423,8 @@ function showHelp(): void {
 Hot-table offload backfill (D1 -> R2)
 
 Usage:
-  npx tsx scripts/offload-backfill.ts run-events [options]
-  npx tsx scripts/offload-backfill.ts messages [options]
+  bun scripts/control/offload-backfill.ts run-events [options]
+  bun scripts/control/offload-backfill.ts messages [options]
 
 Options:
   --remote        Target remote D1 + remote R2 (default: local)

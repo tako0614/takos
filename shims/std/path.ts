@@ -1,6 +1,6 @@
 // Bun migration shim: @std/path -> node:path (+ node:url for file URL helpers).
 // Wired via tsconfig.json "paths". Covers the @std/path surface used across the
-// ecosystem. Deno's @std/path defaults to POSIX semantics on POSIX hosts, which
+// ecosystem. @std/path defaults to POSIX semantics on POSIX hosts, which
 // matches node:path on Linux.
 import * as nodePath from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";

@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 type JsonValue =
   | null
@@ -146,8 +147,8 @@ const REQUIRED_CANONICAL_LAYOUT_PATHS = [
 ] as const;
 const LEGACY_SOURCE_ROOTS = ['app', 'git', 'agent'] as const;
 
-const root = Deno.cwd();
-const options = parseArgs(Deno.args);
+const root = runtime.cwd();
+const options = parseArgs(runtime.args);
 const commands = validationCommands();
 assertRequiredValidationCommands(commands);
 const gitInfo = await collectGitInfo();
@@ -174,7 +175,7 @@ const manifest = {
 
 const json = `${JSON.stringify(manifest, null, 2)}\n`;
 if (options.output) {
-  await Deno.writeTextFile(options.output, json);
+  await runtime.writeTextFile(options.output, json);
 } else {
   console.log(json.trimEnd());
 }
@@ -231,9 +232,9 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
 function usage(): never {
   console.error(
-    'Usage: bun --preload ./shims/deno-compat.ts scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]',
+    'Usage: bun scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]',
   );
-  Deno.exit(2);
+  runtime.exit(2);
 }
 
 async function collectReleaseIdentity(
@@ -276,7 +277,7 @@ async function collectReleaseIdentity(
   if (errors.length > 0) {
     console.error('Release identity validation failed:');
     for (const error of errors) console.error(`- ${error}`);
-    Deno.exit(1);
+    runtime.exit(1);
   }
 
   return {
@@ -355,7 +356,7 @@ async function collectReleaseComponents(): Promise<JsonValue> {
   if (errors.length > 0) {
     console.error('Release component metadata validation failed:');
     for (const error of errors) console.error(`- ${error}`);
-    Deno.exit(1);
+    runtime.exit(1);
   }
 
   return {
@@ -471,7 +472,7 @@ function assertCleanGitState(
 
   console.error('Release manifest clean git validation failed:');
   for (const error of errors) console.error(`- ${error}`);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 async function collectOfficialImages(
@@ -534,7 +535,7 @@ async function collectOfficialImages(
   if (options.requireImageDigests && errors.length > 0) {
     console.error('Release manifest image digest validation failed:');
     for (const error of errors) console.error(`- ${error}`);
-    Deno.exit(1);
+    runtime.exit(1);
   }
 
   return {
@@ -553,7 +554,7 @@ async function collectImageDigestRecords(
   const records = new Map<string, { path: string; record: ImageDigestRecord }>();
 
   try {
-    for await (const entry of Deno.readDir(dir)) {
+    for await (const entry of runtime.readDir(dir)) {
       if (!entry.isFile || !entry.name.endsWith('.json')) continue;
       const path = `${dir}/${entry.name}`;
       const parsed = await readJson<ImageDigestRecord>(path);
@@ -561,7 +562,7 @@ async function collectImageDigestRecords(
       records.set(name, { path, record: parsed });
     }
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return records;
+    if (error instanceof runtime.errors.NotFound) return records;
     throw error;
   }
 
@@ -692,8 +693,6 @@ function validationCommands(): CommandManifest[] {
       name: 'release-gate',
       command: [
         'bun',
-        '--preload',
-        './shims/deno-compat.ts',
         'scripts/release-gate.ts',
         '--keep-going',
       ],
@@ -702,8 +701,6 @@ function validationCommands(): CommandManifest[] {
       name: 'release-manifest',
       command: [
         'bun',
-        '--preload',
-        './shims/deno-compat.ts',
         'scripts/build-release-manifest.ts',
       ],
     },
@@ -750,7 +747,7 @@ function assertRequiredValidationCommands(
 
   if (errors.length > 0) {
     console.error(errors.join('\n'));
-    Deno.exit(1);
+    runtime.exit(1);
   }
 }
 
@@ -758,10 +755,10 @@ async function collectDistributionManifests(): Promise<JsonValue> {
   const dir = 'deploy/distributions';
   const manifests: Array<Record<string, JsonValue>> = [];
   try {
-    for await (const entry of Deno.readDir(dir)) {
+    for await (const entry of runtime.readDir(dir)) {
       if (!entry.isFile || !entry.name.endsWith('.json')) continue;
       const path = `${dir}/${entry.name}`;
-      const text = await Deno.readTextFile(path);
+      const text = await runtime.readTextFile(path);
       const parsed = JSON.parse(text) as Record<string, unknown>;
       const target = asRecord(parsed.target);
       const routing = asRecord(parsed.routing);
@@ -826,7 +823,7 @@ async function collectDistributionManifests(): Promise<JsonValue> {
 async function collectDistributionContract(): Promise<JsonValue> {
   const path = 'deploy/distribution-contract/takos-distribution-profile-v1.schema.json';
   try {
-    const text = await Deno.readTextFile(path);
+    const text = await runtime.readTextFile(path);
     const parsed = JSON.parse(text) as Record<string, unknown>;
     const properties = asRecord(parsed.properties);
     const apiVersion = asRecord(properties?.apiVersion);
@@ -865,7 +862,7 @@ async function collectServiceSet(): Promise<JsonValue> {
   const helmDir = 'deploy/helm/takos/templates';
 
   try {
-    for await (const entry of Deno.readDir(helmDir)) {
+    for await (const entry of runtime.readDir(helmDir)) {
       if (entry.isFile && /\.(ya?ml|tpl|txt)$/.test(entry.name)) {
         targets.push(`${helmDir}/${entry.name}`);
       }
@@ -924,7 +921,7 @@ async function collectDomainDirs(): Promise<JsonValue> {
   const dirs: Array<{ name: string; path: string; files: string[] }> = [];
 
   try {
-    for await (const entry of Deno.readDir(domainRoot)) {
+    for await (const entry of runtime.readDir(domainRoot)) {
       if (!entry.isDirectory) continue;
       const path = `${domainRoot}/${entry.name}`;
       dirs.push({
@@ -946,17 +943,17 @@ async function collectSmokeScripts(): Promise<JsonValue> {
   ]);
   const knownEnv: Record<string, Record<string, string>> = {};
   const knownCommands: Record<string, string[]> = {
-    'local-smoke.mjs': ['bun', '--preload', './shims/deno-compat.ts', 'scripts/local-smoke.mjs'],
+    'local-smoke.mjs': ['bun', 'scripts/local-smoke.mjs'],
   };
   const scripts: Array<CommandManifest & { path: string }> = [];
 
-  for await (const entry of Deno.readDir('scripts')) {
+  for await (const entry of runtime.readDir('scripts')) {
     if (!entry.isFile) continue;
     if (!/(smoke|e2e).*\.(ts|mjs)$/.test(entry.name)) continue;
     if (!kernelSmokeScripts.has(entry.name)) continue;
     const path = `scripts/${entry.name}`;
     const command = knownCommands[entry.name] ??
-      (entry.name.endsWith('.ts') ? ['bun', '--preload', './shims/deno-compat.ts', path] : ['bun', path]);
+      (entry.name.endsWith('.ts') ? ['bun', path] : ['bun', path]);
     scripts.push({
       name: entry.name.replace(/\.(ts|mjs)$/, ''),
       path,
@@ -970,7 +967,7 @@ async function collectSmokeScripts(): Promise<JsonValue> {
 
 async function git(args: string[]): Promise<string | null> {
   try {
-    const output = await new Deno.Command('git', {
+    const output = await new runtime.Command('git', {
       args,
       stdout: 'piped',
       stderr: 'null',
@@ -983,11 +980,11 @@ async function git(args: string[]): Promise<string | null> {
 }
 
 async function readJson<T>(path: string): Promise<T> {
-  return JSON.parse(await Deno.readTextFile(path)) as T;
+  return JSON.parse(await runtime.readTextFile(path)) as T;
 }
 
 async function readCargoPackage(path: string): Promise<CargoPackageConfig> {
-  const text = await Deno.readTextFile(path);
+  const text = await runtime.readTextFile(path);
   const packageSection = cargoSection(text, 'package');
   return {
     name: cargoString(packageSection.name),
@@ -1039,7 +1036,7 @@ function cargoStringArray(value: string | undefined): string[] | undefined {
 
 async function readTextIfExists(path: string): Promise<string | null> {
   try {
-    return await Deno.readTextFile(path);
+    return await runtime.readTextFile(path);
   } catch {
     return null;
   }
@@ -1047,17 +1044,17 @@ async function readTextIfExists(path: string): Promise<string | null> {
 
 async function exists(path: string): Promise<boolean> {
   try {
-    await Deno.stat(path);
+    await runtime.stat(path);
     return true;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) return false;
+    if (error instanceof runtime.errors.NotFound) return false;
     throw error;
   }
 }
 
 async function listRelativeFiles(dir: string): Promise<string[]> {
   const files: string[] = [];
-  for await (const entry of Deno.readDir(dir)) {
+  for await (const entry of runtime.readDir(dir)) {
     const path = `${dir}/${entry.name}`;
     if (entry.isFile) files.push(path);
   }

@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 const expectedServices = [
   {
     id: 'takos-worker',
@@ -50,13 +51,13 @@ type Finding = {
 
 const errors: string[] = [];
 const targets = await readTargets();
-const valuesText = await Deno.readTextFile(`${helmRoot}/values.yaml`);
+const valuesText = await runtime.readTextFile(`${helmRoot}/values.yaml`);
 
 assertContains(`${helmRoot}/values.yaml`, valuesText, '  imageRegistry: ""');
 assertContains(`${helmRoot}/values.yaml`, valuesText, '  imagePullSecrets: []');
 assertContains(
   `${helmTemplateDir}/_helpers.tpl`,
-  await Deno.readTextFile(`${helmTemplateDir}/_helpers.tpl`),
+  await runtime.readTextFile(`${helmTemplateDir}/_helpers.tpl`),
   'define "takos.image"',
 );
 
@@ -118,7 +119,7 @@ for (const { path, text } of targets) {
 if (errors.length > 0) {
   console.error('Service set validation failed:');
   for (const error of errors) console.error(`- ${error}`);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(
@@ -128,12 +129,12 @@ console.log(
 async function readTargets(): Promise<Array<{ path: string; text: string }>> {
   const entries: Array<{ path: string; text: string }> = [];
 
-  for await (const entry of Deno.readDir(helmTemplateDir)) {
+  for await (const entry of runtime.readDir(helmTemplateDir)) {
     if (!entry.isFile) continue;
     if (!/\.(ya?ml|tpl|txt)$/.test(entry.name)) continue;
 
     const path = `${helmTemplateDir}/${entry.name}`;
-    entries.push({ path, text: await Deno.readTextFile(path) });
+    entries.push({ path, text: await runtime.readTextFile(path) });
   }
 
   return entries.sort((a, b) => a.path.localeCompare(b.path));
@@ -141,7 +142,7 @@ async function readTargets(): Promise<Array<{ path: string; text: string }>> {
 
 async function readRequiredText(path: string): Promise<string> {
   try {
-    return await Deno.readTextFile(path);
+    return await runtime.readTextFile(path);
   } catch {
     errors.push(`missing required Helm template ${path}`);
     return '';

@@ -1,3 +1,4 @@
+import * as runtime from "./runtime.ts";
 const chartRoot = 'deploy/helm/takos';
 const templateRoot = `${chartRoot}/templates`;
 
@@ -40,18 +41,18 @@ const expectedServices = [
 ] as const;
 
 const templateFiles: string[] = [];
-for await (const entry of Deno.readDir(templateRoot)) {
+for await (const entry of runtime.readDir(templateRoot)) {
   if (entry.isFile && entry.name.endsWith('.yaml')) {
     templateFiles.push(`${templateRoot}/${entry.name}`);
   }
 }
 
 const errors: string[] = [];
-const valuesText = await Deno.readTextFile(`${chartRoot}/values.yaml`);
-const globalConfigMapText = await Deno.readTextFile(
+const valuesText = await runtime.readTextFile(`${chartRoot}/values.yaml`);
+const globalConfigMapText = await runtime.readTextFile(
   `${templateRoot}/configmap-global.yaml`,
 );
-const platformSecretText = await Deno.readTextFile(
+const platformSecretText = await runtime.readTextFile(
   `${templateRoot}/secret-platform.yaml`,
 );
 
@@ -144,7 +145,7 @@ assertContains(
 );
 assertContains(
   `${templateRoot}/_helpers.tpl`,
-  await Deno.readTextFile(`${templateRoot}/_helpers.tpl`),
+  await runtime.readTextFile(`${templateRoot}/_helpers.tpl`),
   'define "takos.image"',
 );
 assertContains(
@@ -228,7 +229,7 @@ for (const service of expectedServices) {
 }
 
 for (const file of templateFiles.sort()) {
-  const text = await Deno.readTextFile(file);
+  const text = await runtime.readTextFile(file);
   if (text.includes('dev:local:')) {
     errors.push(`${file} must not use dev:local commands`);
   }
@@ -237,7 +238,7 @@ for (const file of templateFiles.sort()) {
 
 {
   const path = `${templateRoot}/deployment-takosumi-cloud.yaml`;
-  const text = await Deno.readTextFile(path);
+  const text = await runtime.readTextFile(path);
   assertContains(path, text, 'initContainers:');
   assertContains(path, text, '- accounts');
   assertContains(path, text, '- migrate');
@@ -249,7 +250,7 @@ for (const file of templateFiles.sort()) {
 
 for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
   const path = `${chartRoot}/${overlay}`;
-  const text = await Deno.readTextFile(path);
+  const text = await runtime.readTextFile(path);
   if (!text.includes('environment: production')) {
     errors.push(`${path} must set production environment`);
   }
@@ -269,7 +270,7 @@ for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
 
 for (const ingress of ['ingress-admin.yaml', 'ingress-tenant.yaml']) {
   const path = `${templateRoot}/${ingress}`;
-  const text = await Deno.readTextFile(path);
+  const text = await runtime.readTextFile(path);
   assertContains(
     path,
     text,
@@ -281,7 +282,7 @@ for (const ingress of ['ingress-admin.yaml', 'ingress-tenant.yaml']) {
 if (errors.length > 0) {
   console.error('Helm chart validation failed:');
   for (const error of errors) console.error(`- ${error}`);
-  Deno.exit(1);
+  runtime.exit(1);
 }
 
 console.log(
@@ -319,7 +320,7 @@ function assertExactTemplateSet(
 
 async function readTextIfExists(path: string): Promise<string> {
   try {
-    return await Deno.readTextFile(path);
+    return await runtime.readTextFile(path);
   } catch {
     errors.push(`missing required Helm template ${path}`);
     return '';

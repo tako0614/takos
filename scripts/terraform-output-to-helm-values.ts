@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bun --preload ./shims/deno-compat.ts
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
 
 type JsonValue =
   | null
@@ -57,15 +58,15 @@ const objectStorageKeys = [
   'uiBundles',
 ] as const;
 
-const args = parseArgs(Deno.args);
+const args = parseArgs(runtime.args);
 
 if (args.checkFixtures) {
   await checkFixtures();
-  Deno.exit(0);
+  runtime.exit(0);
 }
 
 const terraformOutputText = args.inputPath
-  ? await Deno.readTextFile(args.inputPath)
+  ? await runtime.readTextFile(args.inputPath)
   : await terraformOutputJson(args.terraformDir);
 const source = args.inputPath ?? `terraform -chdir=${args.terraformDir} output -json`;
 const generated = generateHelmValues(parseTerraformOutputs(terraformOutputText, source), {
@@ -77,18 +78,18 @@ if (args.stdout) {
   console.log(generated.trimEnd());
 } else if (!args.outputPath) {
   console.error(usage());
-  Deno.exit(2);
+  runtime.exit(2);
 } else if (args.check) {
-  const current = await Deno.readTextFile(args.outputPath);
+  const current = await runtime.readTextFile(args.outputPath);
   if (current !== generated) {
     console.error(
       `Terraform Helm values drift detected for ${args.outputPath}. Re-run the generation command.`,
     );
-    Deno.exit(1);
+    runtime.exit(1);
   }
   console.log(JSON.stringify({ ok: true, check: true, outputPath: args.outputPath }, null, 2));
 } else {
-  await Deno.writeTextFile(args.outputPath, generated);
+  await runtime.writeTextFile(args.outputPath, generated);
   console.log(JSON.stringify({ ok: true, written: args.outputPath }, null, 2));
 }
 
@@ -97,12 +98,12 @@ async function checkFixtures(): Promise<void> {
   let hasDrift = false;
 
   for (const fixture of fixtureCases) {
-    const input = await Deno.readTextFile(fixture.inputPath);
+    const input = await runtime.readTextFile(fixture.inputPath);
     const generated = generateHelmValues(parseTerraformOutputs(input, fixture.inputPath), {
       source: fixture.inputPath,
       target: fixture.target,
     });
-    const expected = await Deno.readTextFile(fixture.expectedPath);
+    const expected = await runtime.readTextFile(fixture.expectedPath);
     const matches = generated === expected;
     results.push({
       target: fixture.target,
@@ -115,7 +116,7 @@ async function checkFixtures(): Promise<void> {
 
   const summary = { ok: !hasDrift, checkFixtures: true, results };
   console.log(JSON.stringify(summary, null, 2));
-  if (hasDrift) Deno.exit(1);
+  if (hasDrift) runtime.exit(1);
 }
 
 function generateHelmValues(outputs: TerraformOutputs, options: GenerateOptions): string {
@@ -404,7 +405,7 @@ function requireMappedKeys(values: JsonRecord, keys: readonly string[], label: s
 }
 
 async function terraformOutputJson(terraformDir: string): Promise<string> {
-  const output = await new Deno.Command('terraform', {
+  const output = await new runtime.Command('terraform', {
     args: [`-chdir=${terraformDir}`, 'output', '-json'],
     stdout: 'piped',
     stderr: 'piped',
@@ -518,7 +519,7 @@ function parseArgs(values: readonly string[]): Args {
         const target = requiredArgValue(values, index, value);
         if (target !== 'aws' && target !== 'gcp') {
           console.error(`--target must be aws or gcp, got ${target}`);
-          Deno.exit(2);
+          runtime.exit(2);
         }
         parsed.target = target;
         index += 1;
@@ -531,12 +532,12 @@ function parseArgs(values: readonly string[]): Args {
       case '--help':
       case '-h':
         console.log(usage());
-        Deno.exit(0);
+        runtime.exit(0);
         break;
       default:
         console.error(`Unknown argument: ${value}`);
         console.error(usage());
-        Deno.exit(2);
+        runtime.exit(2);
     }
   }
 
@@ -545,15 +546,15 @@ function parseArgs(values: readonly string[]): Args {
   }
   if (parsed.inputPath && parsed.terraformDir !== 'deploy/terraform') {
     console.error('--input and --terraform-dir cannot be used together');
-    Deno.exit(2);
+    runtime.exit(2);
   }
   if (parsed.check && !parsed.outputPath) {
     console.error('--check requires --output');
-    Deno.exit(2);
+    runtime.exit(2);
   }
   if (parsed.stdout && parsed.outputPath) {
     console.error('--stdout and --output cannot be used together');
-    Deno.exit(2);
+    runtime.exit(2);
   }
 
   return parsed;
@@ -563,7 +564,7 @@ function requiredArgValue(values: readonly string[], index: number, flag: string
   const value = values[index + 1];
   if (!value || value.startsWith('--')) {
     console.error(`${flag} requires a value`);
-    Deno.exit(2);
+    runtime.exit(2);
   }
   return value;
 }

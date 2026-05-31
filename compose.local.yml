@@ -125,10 +125,8 @@ services:
     command: ['deno', 'task', '--cwd', 'packages/kernel', 'start']
     healthcheck:
       test:
-        - 'CMD'
-        - 'deno'
-        - 'eval'
-        - 'const r = await fetch(`http://localhost:$${Deno.env.get("PORT") ?? "8788"}/health`); if (!r.ok) Deno.exit(1);'
+        - 'CMD-SHELL'
+        - 'deno eval ''const r = await fetch("http://localhost:$${PORT:-8788}/health"); if (!r.ok) throw new Error("unhealthy")'''
       interval: 10s
       timeout: 5s
       retries: 10
