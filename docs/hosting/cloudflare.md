@@ -69,7 +69,7 @@ deno task generate:keys:production --per-cloud
 deno task distribute:dry-run --confirm production
 deno task distribute:apply --confirm production
 cd ../takosumi-cloud
-deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
+bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.cloudflare.example.com \
   --subject tsub_admin \
   --client-id takos-admin \
