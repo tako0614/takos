@@ -10,16 +10,16 @@ deploy lifecycle は `takosumi/` 側の test と local-substrate smoke が正本
 
 ```sh
 cd takos
-deno task check
-deno task validate:distributions
-deno task distribution:smoke
+bun run check
+bun run validate:distributions
+bun run distribution:smoke
 ```
 
 起動済み local stack に対する HTTP smoke は次です。
 
 ```sh
 cd takos
-deno task local:smoke
+bun run local:smoke
 ```
 
 ## Broad local gate
@@ -28,7 +28,7 @@ deno task local:smoke
 
 ```sh
 cd takos
-deno task release-gate
+bun run release-gate
 ```
 
 Cloudflare / AWS / GCP / Kubernetes / self-hosted の live proof は

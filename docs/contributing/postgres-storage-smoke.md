@@ -18,7 +18,7 @@ Takos app の DB-facing control code は product workspace tests で確認しま
 
 ```sh
 cd takos
-deno task test:control
+bun run test:control
 ```
 
 Provider-owned live database proof は `takos-private` managed-offering readiness

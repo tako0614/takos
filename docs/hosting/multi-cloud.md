@@ -62,7 +62,7 @@ Terraform apply 後は `terraform output -json` から Helm overlay の values
 
 ```bash
 cd takos
-deno task terraform:helm-values \
+bun run terraform:helm-values \
   --target aws \
   --terraform-dir deploy/terraform/environments/aws-staging \
   --output deploy/helm/takos/values-aws-staging.generated.yaml
@@ -79,7 +79,7 @@ credential 不要の staging plan ゲートも実行します。
 
 ```bash
 cd takos
-deno task terraform:plan-gate
+bun run terraform:plan-gate
 ```
 
 このゲートは `deploy/terraform/plan/{aws-staging,gcp-staging}.tfvars` と

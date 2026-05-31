@@ -31,11 +31,11 @@ cluster / アカウント / public URL が必要な proof は operator 所有の
 
 | proof                           | コマンド                                                                                                                                                                                                                 | default gate |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
-| schema + artifact validation    | `cd takos && deno task validate:distributions`                                                                                                                                                                           | yes          |
-| dry-run service smoke metadata  | `cd takos && deno task distribution:smoke --all`                                                                                                                                                                         | yes          |
-| ターゲット別 live service smoke | `cd takos && deno task distribution:smoke --manifest deploy/distributions/<target>.json --live`                                                                                                                          | no           |
-| provider fixture proof          | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json deno task live-provisioning-smoke`                                      | no           |
-| provider live proof             | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json deno task live-provisioning-smoke` | no           |
+| schema + artifact validation    | `cd takos && bun run validate:distributions`                                                                                                                                                                           | yes          |
+| dry-run service smoke metadata  | `cd takos && bun run distribution:smoke --all`                                                                                                                                                                         | yes          |
+| ターゲット別 live service smoke | `cd takos && bun run distribution:smoke --manifest deploy/distributions/<target>.json --live`                                                                                                                          | no           |
+| provider fixture proof          | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json bun run live-provisioning-smoke`                                      | no           |
+| provider live proof             | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json bun run live-provisioning-smoke` | no           |
 
 ## Artifact の所有
 

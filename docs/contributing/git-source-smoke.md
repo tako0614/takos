@@ -6,8 +6,8 @@ Git URL install と `.takosumi.yml` AppSpec convention は `takosumi` が正本�
 
 ```sh
 cd ../takosumi
-deno task check
-deno task test
+bun run check
+bun run test
 ```
 
 Takos product 側の distribution / bundled app install path は product gate
@@ -15,8 +15,8 @@ Takos product 側の distribution / bundled app install path は product gate
 
 ```sh
 cd takos
-deno task validate:distributions
-deno task distribution:smoke
+bun run validate:distributions
+bun run distribution:smoke
 ```
 
 Public managed offering の Git URL install rehearsal は `takos-private`

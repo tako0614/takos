@@ -45,7 +45,7 @@
   local Compose proof。
 - [`self-host-runbook.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/self-host-runbook.md)
   —実機 single-node self-host E2E のオペレータ runbook。
-- [`compose-smoke.md`](./compose-smoke.md) — `deno task local:*` による current
+- [`compose-smoke.md`](./compose-smoke.md) — `bun run local:*` による current
   Compose smoke。
 - [`git-source-smoke.md`](./git-source-smoke.md) — `takosumi` の Git URL install
   / source proof。
@@ -79,8 +79,8 @@
 
 self-host / cloud 接続は Takos product source checks と live operator proof
 を分けます。 source-controlled な current proof は
-`deno task validate:distributions` / `deno task distribution:smoke` /
-`deno task release-gate` です。実機 proof は target URL、provider
+`bun run validate:distributions` / `bun run distribution:smoke` /
+`bun run release-gate` です。実機 proof は target URL、provider
 credential、operator が編集した env file、private evidence ref を持つ runbook
 に添付します。
 

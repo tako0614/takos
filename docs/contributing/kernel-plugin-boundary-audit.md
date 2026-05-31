@@ -45,5 +45,5 @@ Takosumi のドキュメントを kernel-only
 - 実バックエンドと self-host docs は plugin-backed operator proof として再分類。
 - README / current-state / system-plan の plugin boundary 表現に validation
   チェックを追加。
-- kernel 検証ベースライン: `cd ../takosumi && deno task test` が通過。現在の
+- kernel 検証ベースライン: `cd ../takosumi && bun run test` が通過。現在の
   test count はコマンドを再実行して確認する。

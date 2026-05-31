@@ -17,6 +17,6 @@ Takos product 側の distribution profile は次で、routing / binding metadata
 
 ```sh
 cd takos
-deno task validate:distributions
-deno task distribution:smoke
+bun run validate:distributions
+bun run distribution:smoke
 ```

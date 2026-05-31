@@ -55,16 +55,16 @@ Takos app root で OIDC account model を確認します。
 ```bash
 cd takos
 deno test --allow-all ../../src/worker/server/routes/auth/__tests__/oidc-router.test.ts
-deno task test:api
-deno task validate:migration-safety
+bun run test:api
+bun run validate:migration-safety
 ```
 
 Takos docs root では、Operator docs と architecture alignment を確認します。
 
 ```bash
 cd takos
-deno task validate:architecture
-deno task docs:build
+bun run validate:architecture
+bun run docs:build
 ```
 
 ## ロールバック
