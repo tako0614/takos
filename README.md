@@ -3,6 +3,9 @@
 Takos はセルフホスト可能な AI-first chat & agent プロダクトです。AI エージェントとの会話を通じて
 ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。Takosumi PaaS の上で動作します。
 
+Takos product の実行実装とスクリプトは Bun を前提としており、`src/worker` / `web` /
+`containers/git` / `scripts` のローカル実行は `bun` コマンドで行います。
+
 バンドルアプリ (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) は 新しい Space
 作成時に自動インストールされます。
 

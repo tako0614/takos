@@ -59,29 +59,6 @@ export const WORKER_SECRETS: WorkerSecretSpec[] = [
       'AUDIT_IP_HASH_KEY',
     ],
   },
-  {
-    alias: 'runtime-host',
-    config: 'deploy/cloudflare/wrangler.runtime-host.toml',
-    required: [],
-    optional: [],
-  },
-  {
-    alias: 'executor',
-    config: 'deploy/cloudflare/wrangler.executor.toml',
-    required: [],
-    optional: [
-      'OPENAI_API_KEY',
-      'ANTHROPIC_API_KEY',
-      'GOOGLE_API_KEY',
-      'SERPER_API_KEY',
-    ],
-  },
-  {
-    alias: 'dispatch',
-    config: 'deploy/cloudflare/wrangler.dispatch.toml',
-    required: [],
-    optional: [],
-  },
 ];
 
 /** Known retired secrets that should be removed */

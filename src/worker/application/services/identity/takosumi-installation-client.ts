@@ -39,8 +39,7 @@ function installerErrorDetails(
 export async function createTakosumiInstallation(
   env: Env,
   spaceId: string,
-  // deno-lint-ignore no-unused-vars
-  spaceName: string,
+  _spaceName: string,
 ): Promise<TakosumiInstallationResult | null> {
   const client = resolveInstallerClient(env);
   if (!client) {

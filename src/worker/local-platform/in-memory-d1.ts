@@ -32,9 +32,7 @@ import { logWarn } from "../shared/utils/logger.ts";
  * non-production environment we warn loudly so a stray fallback is visible.
  */
 function assertNotDurableInProduction(): void {
-  const isTest = getEnv("VITEST") !== undefined ||
-    getEnv("DENO_TEST") !== undefined;
-  if (isTest) return;
+  if (getEnv("VITEST") !== undefined) return;
 
   const environment = getEnv("ENVIRONMENT");
   if (environment === "production") {

@@ -16,10 +16,8 @@ import {
 test("createInMemorySqlDatabase refuses to construct in a production environment", () => {
   const originalEnvironment = getEnv("ENVIRONMENT");
   const originalVitest = getEnv("VITEST");
-  const originalDenoTest = getEnv("DENO_TEST");
   // Clear test signals so the production guard is reachable.
   deleteEnv("VITEST");
-  deleteEnv("DENO_TEST");
   setEnv("ENVIRONMENT", "production");
   try {
     assertThrows(
@@ -31,9 +29,6 @@ test("createInMemorySqlDatabase refuses to construct in a production environment
     if (originalEnvironment === undefined) deleteEnv("ENVIRONMENT");
     else setEnv("ENVIRONMENT", originalEnvironment);
     if (originalVitest !== undefined) setEnv("VITEST", originalVitest);
-    if (originalDenoTest !== undefined) {
-      setEnv("DENO_TEST", originalDenoTest);
-    }
   }
 });
 
