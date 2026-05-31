@@ -39,7 +39,7 @@ data:
   {{ end }}
   ADMIN_DOMAIN: {{ .Values.domains.admin | quote }}
   TENANT_BASE_DOMAIN: {{ .Values.domains.tenantBase | quote }}
-  TAKOS_APP_INTERNAL_URL: {{ include "takos.appUrl" . | quote }}
+  TAKOS_WORKER_INTERNAL_URL: {{ include "takos.workerUrl" . | quote }}
   TAKOSUMI_INTERNAL_URL: {{ include "takos.takosumiUrl" . | quote }}
   TAKOSUMI_ACCOUNTS_INTERNAL_URL: {{ include "takos.accountsUrl" . | quote }}
   TAKOSUMI_ACCOUNTS_ISSUER: {{ include "takos.accountsIssuer" . | quote }}

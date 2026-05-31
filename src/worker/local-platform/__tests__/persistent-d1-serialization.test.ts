@@ -1,0 +1,69 @@
+import { assert, assertEquals } from "@std/assert";
+
+import { createSerializationGate } from "../persistent-d1.ts";
+import { normalizePostgresSql } from "../d1-shared.ts";
+
+Deno.test("createSerializationGate serializes acquirers FIFO and excludes until released", async () => {
+  const gate = createSerializationGate();
+  const order: string[] = [];
+
+  // First acquirer (acts like an open transaction holding the gate).
+  const releaseA = await gate.acquire();
+  order.push("a-acquired");
+
+  let bAcquired = false;
+  const bPromise = (async () => {
+    const releaseB = await gate.acquire();
+    bAcquired = true;
+    order.push("b-acquired");
+    releaseB();
+  })();
+
+  // While A holds the gate, B must NOT have acquired it. This is the invariant
+  // that prevents a concurrent caller's queries from running while another
+  // caller's transaction is open.
+  await Promise.resolve();
+  await Promise.resolve();
+  assertEquals(bAcquired, false);
+
+  // Releasing A lets B proceed.
+  releaseA();
+  await bPromise;
+  assert(bAcquired);
+  assertEquals(order, ["a-acquired", "b-acquired"]);
+});
+
+Deno.test("createSerializationGate preserves request order across many waiters", async () => {
+  const gate = createSerializationGate();
+  const order: number[] = [];
+  const tasks: Promise<void>[] = [];
+
+  for (let i = 0; i < 5; i += 1) {
+    tasks.push((async () => {
+      const release = await gate.acquire();
+      order.push(i);
+      // Yield to prove the next waiter cannot jump ahead while held.
+      await Promise.resolve();
+      release();
+    })());
+  }
+
+  await Promise.all(tasks);
+  assertEquals(order, [0, 1, 2, 3, 4]);
+});
+
+Deno.test("normalizePostgresSql collapses BEGIN modes only as a whole statement", () => {
+  assertEquals(normalizePostgresSql("BEGIN IMMEDIATE"), "BEGIN");
+  assertEquals(normalizePostgresSql("BEGIN IMMEDIATE;"), "BEGIN");
+  assertEquals(normalizePostgresSql("  begin   exclusive  "), "BEGIN");
+});
+
+Deno.test("normalizePostgresSql does not mutate BEGIN-mode tokens inside literals or bodies", () => {
+  // String literal containing the token sequence must be preserved verbatim.
+  const literal = "INSERT INTO t (v) VALUES ('BEGIN IMMEDIATE')";
+  assertEquals(normalizePostgresSql(literal), literal);
+
+  // PL/pgSQL dollar-quoted body must be preserved verbatim.
+  const body = "DO $$ BEGIN IMMEDIATE END $$";
+  assertEquals(normalizePostgresSql(body), body);
+});

@@ -38,7 +38,7 @@ const smokeCrdsChartRoot = 'deploy/helm/takos/testdata/helm-smoke-crds';
 const namespace = 'takos-install-smoke';
 const installTestCrds = Deno.env.get('TAKOS_HELM_INSTALL_TEST_CRDS') === '1';
 const expectedServiceIds = [
-  'takos-app',
+  'takos-worker',
   'takosumi',
   'takos-git',
   'takos-agent',

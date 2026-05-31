@@ -1,6 +1,9 @@
 # はじめてのアプリ
 
-AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+AppSpec examples in this page use short kind names such as `worker`, `gateway`,
+`postgres`, and `object-store` as operator-profile aliases. URI kind values are
+also valid. Gateway `listeners` and `routes` live inside the adopted gateway
+descriptor `spec`; they are not AppSpec core fields.
 
 > このページでわかること: シンプルな Worker アプリを作って Takos
 > にデプロイするまでの手順。所要時間 10 分。
@@ -12,7 +15,7 @@ AppSpec examples in this page use short kind names such as `worker`, `gateway`, 
 
 ## 前提
 
-- `takos-cli` がインストール済み ([はじめる](/get-started/) を参照)
+- `takosumi` CLI がインストール済み
 - Takosumi Accounts の PAT (Personal Access Token) を設定済み
 
 ## 1. プロジェクトを作る
@@ -26,7 +29,7 @@ mkdir -p src
 ## 2. Worker のコードを書く
 
 ```typescript
-// src/worker.ts
+// src/worker/index.ts
 export default {
   async fetch(
     request: Request,
@@ -65,7 +68,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     listen:
       oidc:
         path: identity.primary.oidc
@@ -91,8 +94,8 @@ components:
           to: upstream
 ```
 
-adopted gateway/ingress component は public endpoint を作ります。launcher や health の runtime
-path は worker 実装と Takos product metadata で扱います。
+adopted gateway/ingress component は public endpoint を作ります。launcher や
+health の runtime path は worker 実装と Takos product metadata で扱います。
 
 ## 4. runtime file を確認
 
@@ -101,8 +104,8 @@ filesystem path が見える場合だけ使います。AppSpec の `spec.entrypo
 resolved source 内に既に存在する runtime file を指します。managed operator に送
 る場合は build service / CI が必要な runtime file を含む prepared source archive
 を作り、その archive URL と archive payload `source.digest` を Installer API に
-渡します。dry-run response の `expected.sourceDigest` は Installer が取得 payload
-から計算した resolved digest で、apply 時の TOCTOU guard です。
+渡します。dry-run response の `expected.sourceDigest` は Installer が取得
+payload から計算した resolved digest で、apply 時の TOCTOU guard です。
 
 ## 5. Install dry-run と apply
 
@@ -120,15 +123,16 @@ takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
 
 この tutorial のコードは認証 handler を実装していません。認証付きアプリでは:
 
-- **通常ログイン**: app が `/auth/oidc/login` などの route から Takosumi Accounts
-  にリダイレクトされ、コールバックでセッションが作られます
-- **初回インストール直後**: launch token
-  を app の launch consume handler が Accounts `/consume` で redeem します
+- **通常ログイン**: app が `/auth/oidc/login` などの route から Takosumi
+  Accounts にリダイレクトされ、コールバックでセッションが作られます
+- **初回インストール直後**: launch token を app の launch consume handler が
+  Accounts `/consume` で redeem します
 
 OIDC の設定 (clientId, clientSecret 等) は AppSpec で
 `listen.oidc.path: identity.primary.oidc` を宣言するだけで、 takosumi-cloud
-(operator account plane、リファレンス実装: Takosumi Accounts) がインストール時に自動で払い出します。 worker は
-secretRef-mediated `OIDC_*` env を読みます。
+(operator account plane、リファレンス実装: Takosumi Accounts)
+がインストール時に自動で払い出します。 worker は secretRef-mediated `OIDC_*` env
+を読みます。
 
 詳しくは [OIDC consumer](/apps/oidc-consumer) を参照。
 

@@ -25,12 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
-          submodules: recursive
           persist-credentials: false
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # pinned: v2.0.4 (2026)
+      - uses: oven-sh/setup-bun@v2
         with:
-          deno-version: v2.x
-      - run: deno task validate:patch-management
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run validate:patch-management
 
   filesystem-cve-scan:
     runs-on: ubuntu-latest
@@ -42,7 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
-          submodules: recursive
           persist-credentials: false
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # pinned: v0.36.0 (2026)
         with:

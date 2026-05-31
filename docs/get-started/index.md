@@ -121,7 +121,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
   public:
     kind: gateway
     connect:
@@ -147,7 +147,7 @@ Takos product 内部 app metadata (= AppSpec contract とは別 layer) で表現
 
 ```bash
 mkdir -p src
-cat > src/worker.ts <<'EOF'
+cat > src/worker/index.ts <<'EOF'
 export default {
   fetch() {
     return new Response("hello from Takos");

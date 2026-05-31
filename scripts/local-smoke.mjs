@@ -2,7 +2,7 @@ import fs from 'node:fs';
 
 // Host-side defaults mirror .env.local.example for local process smoke checks.
 const defaults = {
-  takosAppPort: '8787',
+  takosWorkerPort: '8787',
   takosumiPort: '8788',
   takosAgentPort: '8789',
   takosGitPort: '8790',
@@ -53,9 +53,9 @@ async function expectJsonHealth(label, url) {
 async function main() {
   loadEnvFile(Deno.env.get('TAKOS_LOCAL_ENV_FILE') || '.env.local');
 
-  const takosAppUrl = env(
-    'TAKOS_APP_PUBLIC_URL',
-    baseUrl(env('TAKOS_APP_PORT', defaults.takosAppPort)),
+  const takosWorkerUrl = env(
+    'TAKOS_WORKER_PUBLIC_URL',
+    baseUrl(env('TAKOS_WORKER_PORT', defaults.takosWorkerPort)),
   );
   const takosumiUrl = env(
     'TAKOSUMI_PUBLIC_URL',
@@ -70,7 +70,7 @@ async function main() {
     baseUrl(env('TAKOS_GIT_PORT', defaults.takosGitPort)),
   );
 
-  await expectJsonHealth('takos-app', `${takosAppUrl}/health`);
+  await expectJsonHealth('takos-worker', `${takosWorkerUrl}/health`);
   await expectJsonHealth('takosumi', `${takosumiUrl}/health`);
   await expectJsonHealth('takos-agent', `${takosAgentUrl}/health`);
   await expectJsonHealth('takos-git', `${takosGitUrl}/health`);

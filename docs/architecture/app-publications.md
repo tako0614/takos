@@ -35,7 +35,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
     connect:
       db:
         output: db.connection
@@ -80,6 +80,6 @@ publication で、`listen` 側 component には per-Installation OIDC client
 Takosumi kernel は AppSpec evaluation、Installation / Deployment record、
 operator-selected apply を担当します。Takosumi Accounts は OIDC issuer、 OIDC
 client provisioning、billing owner、account-plane ledger を担当します。 Takos
-app layer は app catalog / Store / launcher catalog、MCP registry、 file handler
+Worker/domain layer は app catalog / Store / launcher catalog、MCP registry、 file handler
 registry の意味を担当します。 OIDC のような operator-owned surface は、external
 publication を app が `listen` する形で受け取ります。

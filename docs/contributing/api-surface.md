@@ -9,7 +9,7 @@ route snapshot を保持します。Takosumi public conformance surface は
 `POST /v1/installations/{id}/deployments/dry-run`、
 `POST /v1/installations/{id}/deployments`、
 `POST /v1/installations/{id}/rollback` の 5 endpoint です。 `/api/public/v1/*`
-の Takos product gateway route は `takos/app` 側で管理しており、kernel 公開 API
+の Takos product gateway route は `takos` 側で管理しており、kernel 公開 API
 としては扱いません。
 
 snapshot generator は plain TypeScript object として実装してあり、kernel service
@@ -19,7 +19,7 @@ snapshot がカバーする route グループ。
 
 - プロセス probe: `GET /health`, `GET /capabilities`
 - kernel installer API: `/v1/installations/*` の 5 endpoint
-- Takos 側 gateway route は `takos/app` の public API contract で扱う
+- Takos 側 gateway route は `takos` の public API contract で扱う
 - removed plan / apply / snapshot alias は current kernel surface に含めない
 - internal service API は kernel public contract として扱わない
 

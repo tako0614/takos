@@ -6,22 +6,26 @@ import process from 'node:process';
 
 const root = resolve(new URL('..', import.meta.url).pathname);
 const checkMode = process.argv.includes('--check');
-const expectedSubmodules = {
-  agent: 'https://github.com/tako0614/takos-agent.git',
-  app: 'https://github.com/tako0614/takos-app.git',
-  git: 'https://github.com/tako0614/takos-git.git',
-};
+const expectedLayoutPaths = [
+  'src/worker',
+  'src/routes',
+  'src/contracts',
+  'web',
+  'containers/git',
+  'containers/agent',
+];
+const legacySourceRoots = ['agent', 'app', 'git'];
 const expectedServices = [
   'postgres',
   'postgres-init',
   'redis',
-  'takos-app',
+  'takos-worker',
   'takos-git',
   'takosumi',
   'takos-agent',
 ];
 const expectedPortMarkers = [
-  '${TAKOS_APP_PORT:-8787}',
+  '${TAKOS_WORKER_PORT:-8787}',
   '${TAKOSUMI_PORT:-8788}',
   '${TAKOS_AGENT_PORT:-8789}',
   '${TAKOS_GIT_PORT:-8790}',
@@ -70,7 +74,7 @@ const surfaceFiles = [
   'README.md',
   'AGENTS.md',
   'compose.local.yml',
-  'deno.json',
+  'package.json',
   '.env.local.example',
 ];
 
@@ -108,63 +112,34 @@ function checkTool(name, args, displayName = name) {
   return false;
 }
 
-function parseGitmodules() {
-  const text = readFileSync(join(root, '.gitmodules'), 'utf8');
-  const modules = new Map();
-  let current;
-  for (const line of text.split('\n')) {
-    const header = line.match(/^\[submodule "(.+)"\]$/);
-    if (header) {
-      current = { name: header[1] };
-      modules.set(current.name, current);
-      continue;
-    }
-    if (!current) continue;
-    const pair = line.match(/^\s*(path|url)\s*=\s*(.+)\s*$/);
-    if (pair) current[pair[1]] = pair[2];
-  }
-  return modules;
-}
-
-function checkSubmodules() {
-  const modules = parseGitmodules();
-  const status = run('git', ['submodule', 'status', '--recursive']);
-  const statusByPath = new Map();
-  if (status.status === 0) {
-    for (const line of status.stdout.trim().split('\n').filter(Boolean)) {
-      const prefix = line[0];
-      const parts = line.slice(1).trim().split(/\s+/);
-      statusByPath.set(parts[1], { prefix, commit: parts[0] });
-    }
+function checkCanonicalLayout() {
+  const gitmodulesPath = join(root, '.gitmodules');
+  if (existsSync(gitmodulesPath)) {
+    fail('nested submodules removed', '.gitmodules should not exist in takos/');
+  } else {
+    pass('nested submodules removed', 'takos source is owned by this repo');
   }
 
-  for (const [path, expectedUrl] of Object.entries(expectedSubmodules)) {
-    const module = [...modules.values()].find((entry) => entry.path === path);
-    if (!module) {
-      fail(`submodule ${path} declared`, 'missing from .gitmodules');
+  for (const path of expectedLayoutPaths) {
+    const ownerPath = join(root, path);
+    if (!existsSync(ownerPath)) {
+      fail(`canonical layout ${path} present`, 'path is missing');
       continue;
     }
-    if (module.url !== expectedUrl) {
-      fail(`submodule ${path} remote`, `${module.url} (expected ${expectedUrl})`);
-    } else {
-      pass(`submodule ${path} remote`, module.url);
+    const nestedGitPath = join(ownerPath, '.git');
+    if (existsSync(nestedGitPath)) {
+      fail(`canonical layout ${path} absorbed`, `${path}/.git should not exist`);
+      continue;
     }
+    pass(`canonical layout ${path}`, relative(root, ownerPath));
+  }
 
-    const modulePath = join(root, path);
-    if (!existsSync(modulePath)) {
-      fail(`submodule ${path} initialized`, 'path is missing');
-      continue;
-    }
-    const gitCheck = run('git', ['-C', modulePath, 'rev-parse', '--is-inside-work-tree']);
-    const submoduleState = statusByPath.get(path);
-    if (gitCheck.status !== 0 || submoduleState?.prefix === '-') {
-      fail(`submodule ${path} initialized`, 'run deno task submodules:update');
-      continue;
-    }
-    if (submoduleState?.prefix === '+') {
-      warn(`submodule ${path} pointer`, 'checkout differs from recorded commit');
+  for (const path of legacySourceRoots) {
+    const legacyPath = join(root, path);
+    if (existsSync(legacyPath)) {
+      fail(`legacy source root ${path} removed`, `${path}/ must move to src/, web/, or containers/`);
     } else {
-      pass(`submodule ${path} initialized`, submoduleState?.commit ?? 'ok');
+      pass(`legacy source root ${path} removed`);
     }
   }
 }
@@ -310,10 +285,10 @@ function printResults() {
 }
 
 const gitAvailable = checkTool('git', ['--version']);
-checkTool('deno', ['--version']);
+checkTool('bun', ['--version']);
 const dockerComposeAvailable = checkTool('docker', ['compose', 'version'], 'docker compose');
 
-if (gitAvailable) checkSubmodules();
+if (gitAvailable) checkCanonicalLayout();
 checkCompose(dockerComposeAvailable);
 checkForbiddenSurface();
 checkDocs();

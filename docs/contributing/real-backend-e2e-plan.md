@@ -28,6 +28,6 @@ operator credentials, target URLs, and private evidence refs.
 
 For the Cloudflare target, local-substrate Worker smoke proves the Takosumi
 kernel and Takosumi Accounts Worker paths. It does not prove the Takos product
-gateway (`takos-app`) is live on Workers. Use `distribution:smoke --live` after
+gateway (`takos-worker`) is live on Workers. Use `distribution:smoke --live` after
 deploy, or the matching `takos-private` real backend smoke, before recording
-Cloudflare `takos-app` evidence.
+Cloudflare `takos-worker` evidence.

@@ -26,7 +26,7 @@ TAKOS_LOCAL_ENV_FILE=.env.local deno task local:down
 
 ## Expected Product Services
 
-- `takos-app`
+- `takos-worker`
 - `takos-git`
 - `takos-agent`
 

@@ -17,7 +17,7 @@ components:
   web:
     kind: worker
     spec:
-      entrypoint: src/worker.ts
+      entrypoint: src/worker/index.ts
 ```
 
 ### AppSpec の解決に失敗する
@@ -40,8 +40,8 @@ CI.
 
 dry-run が失敗する場合は、`.takosumi.yml` の kind-specific `spec`、
 `components.*.connect` / `components.*.listen` 宣言、 install 時の `source` と
-`spaceId` を確認してください。malformed な local `component.output` ref や
-cycle は `400 invalid_argument` です。required platform service (e.g.
+`spaceId` を確認してください。malformed な local `component.output` ref や cycle
+は `400 invalid_argument` です。required platform service (e.g.
 `identity.primary.oidc`) が current Space state に無い場合や、同じ path の
 visible declaration が重複している場合は provider side effect 前に
 `409 failed_precondition` で失敗します。operator が採用していない extension kind
@@ -109,14 +109,9 @@ Managed apply for build-required apps passes prepared source material:
 
 ## Auth
 
-```bash
-takos whoami
-takos login --api-url https://takos.example.com --token "$TAKOSUMI_ACCOUNTS_PAT"
-takos endpoint show
-```
-
-Takos CLI の auth は [CLI / Auth model](/reference/cli-auth)
-を参照してください。
+Takos product の primary access path は Web UI と public API です。API
+automation では Takosumi Accounts の bearer / OIDC grant を使い、app-local PAT
+や Takos product 固有の login state は扱いません。
 
 ## Next
 

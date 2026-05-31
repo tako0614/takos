@@ -1,0 +1,246 @@
+import { Hono } from "hono";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import { z } from "zod";
+import type { Repository } from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { requireSpaceAccess } from "../route-auth.ts";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import {
+  BadRequestError,
+  ConflictError,
+  InternalError,
+  NotFoundError,
+} from "@takos/worker-platform-utils/errors";
+import { zValidator } from "../zod-validator.ts";
+import * as gitStore from "../../../application/services/takos-git/index.ts";
+import { sanitizeRepoName } from "./routes.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { accounts, repositories } from "../../../infra/db/schema.ts";
+import { and, eq, sql } from "drizzle-orm";
+import { logError } from "../../../shared/utils/logger.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
+
+type GitObjectsBucket = NonNullable<
+  AuthenticatedRouteEnv["Bindings"]["GIT_OBJECTS"]
+>;
+type CommitDataBucket = Parameters<typeof gitStore.getCommitData>[0];
+type DirectoryBucket = Parameters<typeof gitStore.listDirectory>[0];
+
+export default new Hono<AuthenticatedRouteEnv>()
+  .post(
+    "/repos/:repoId/fork",
+    zValidator(
+      "json",
+      z.object({
+        target_space_id: z.string().optional(),
+        name: z.string().optional(),
+        // Accepted for backward compatibility with existing clients. The
+        // content-addressed full-tree fork (gitStore.forkRepository below)
+        // already carries every workflow file, so this flag no longer gates
+        // any copy step. workflows_copied always reflects the true count of
+        // workflow files present in the fork.
+        copy_workflows: z.boolean().optional(),
+      }),
+    ),
+    async (c) => {
+      const user = c.get("user");
+      const repoId = c.req.param("repoId");
+      const body = c.req.valid("json");
+
+      const db = getDb(c.env.DB);
+
+      const sourceRepoData = await db.select().from(repositories).where(
+        eq(repositories.id, repoId),
+      ).get();
+
+      if (!sourceRepoData) {
+        throw new NotFoundError("Repository");
+      }
+
+      if (sourceRepoData.visibility === "private") {
+        await requireSpaceAccess(
+          c,
+          sourceRepoData.accountId,
+          user.id,
+          undefined,
+          "Repository not found",
+        );
+      }
+      const targetSpaceId = body.target_space_id || null;
+
+      let resolvedTargetSpaceId: string;
+
+      if (targetSpaceId) {
+        const targetAccess = await requireSpaceAccess(
+          c,
+          targetSpaceId,
+          user.id,
+          ["owner", "admin", "editor"],
+          "Target workspace not found or insufficient permissions",
+        );
+        if (targetAccess instanceof Response) return targetAccess;
+        resolvedTargetSpaceId = targetAccess.space.id;
+      } else {
+        // Default to user's own account
+        resolvedTargetSpaceId = user.id;
+      }
+
+      const forkName = body.name || sourceRepoData.name;
+      const sanitizedName = sanitizeRepoName(forkName);
+
+      const existing = await db.select({ id: repositories.id })
+        .from(repositories)
+        .where(and(
+          eq(repositories.accountId, resolvedTargetSpaceId),
+          eq(repositories.name, sanitizedName),
+        ))
+        .get();
+
+      if (existing) {
+        throw new ConflictError(
+          "Repository with this name already exists in target workspace",
+        );
+      }
+
+      if (
+        resolvedTargetSpaceId === sourceRepoData.accountId &&
+        sanitizedName === sourceRepoData.name
+      ) {
+        throw new BadRequestError("Cannot fork repository to itself");
+      }
+
+      const forkId = generateId();
+      const timestamp = new Date().toISOString();
+
+      await db.insert(repositories).values({
+        id: forkId,
+        accountId: resolvedTargetSpaceId,
+        name: sanitizedName,
+        description: sourceRepoData.description,
+        visibility: "private",
+        defaultBranch: sourceRepoData.defaultBranch,
+        forkedFromId: sourceRepoData.id,
+        stars: 0,
+        forks: 0,
+        gitEnabled: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+
+      try {
+        await gitStore.forkRepository(c.env.DB, sourceRepoData.id, forkId);
+      } catch (err) {
+        await db.delete(repositories).where(eq(repositories.id, forkId));
+        logError("Failed to fork repository", err, {
+          action: "forkRepository",
+          repoId,
+          forkId,
+        });
+        throw new InternalError("Failed to fork repository");
+      }
+
+      await db.update(repositories)
+        .set({ forks: sql`${repositories.forks} + 1` })
+        .where(eq(repositories.id, sourceRepoData.id));
+
+      // Workflows already travel with the content-addressed full-tree fork
+      // above, so report the true count of workflow files present in the fork
+      // rather than a fabricated "copied" number. Counting is best-effort and
+      // never blocks the fork response.
+      let workflowsCopied = 0;
+      if (c.env.GIT_OBJECTS) {
+        workflowsCopied = await countForkWorkflows(
+          c.env.DB,
+          c.env.GIT_OBJECTS,
+          forkId,
+        );
+      }
+
+      const forkedRepoData = await db.select().from(repositories).where(
+        eq(repositories.id, forkId),
+      ).get();
+
+      const forkedRepo: Repository | null = forkedRepoData
+        ? {
+          id: forkedRepoData.id,
+          space_id: forkedRepoData.accountId,
+          name: forkedRepoData.name,
+          description: forkedRepoData.description,
+          visibility: forkedRepoData.visibility as Repository["visibility"],
+          default_branch: forkedRepoData.defaultBranch,
+          forked_from_id: forkedRepoData.forkedFromId,
+          stars: forkedRepoData.stars,
+          forks: forkedRepoData.forks,
+          git_enabled: forkedRepoData.gitEnabled,
+          created_at: textDate(forkedRepoData.createdAt),
+          updated_at: textDate(forkedRepoData.updatedAt),
+        }
+        : null;
+
+      const sourceAccount = await db.select({
+        name: accounts.name,
+        slug: accounts.slug,
+      }).from(accounts).where(eq(accounts.id, sourceRepoData.accountId)).get();
+
+      return c.json({
+        repository: forkedRepo,
+        forked_from: {
+          id: sourceRepoData.id,
+          name: sourceRepoData.name,
+          space_id: sourceRepoData.accountId,
+          owner_username: sourceAccount?.slug || null,
+          owner_name: sourceAccount?.name || null,
+        },
+        workflows_copied: workflowsCopied,
+      }, 201);
+    },
+  );
+
+/**
+ * Count the workflow files present in the fork's default branch.
+ *
+ * The full-tree fork (gitStore.forkRepository) duplicates the source tree into
+ * the fork, so the fork already contains the workflow files. This counts what
+ * actually landed in the fork (reading the fork's own default branch) rather
+ * than claiming a separate copy step occurred. Best-effort: returns 0 on any
+ * lookup failure and never throws.
+ */
+async function countForkWorkflows(
+  db: SqlDatabaseBinding,
+  bucket: GitObjectsBucket,
+  forkId: string,
+): Promise<number> {
+  try {
+    const forkDefaultBranch = await gitStore.getDefaultBranch(db, forkId);
+    if (!forkDefaultBranch) {
+      return 0;
+    }
+
+    const commit = await gitStore.getCommitData(
+      bucket as CommitDataBucket,
+      forkDefaultBranch.commit_sha,
+    );
+    if (!commit) {
+      return 0;
+    }
+
+    const workflowEntries = await gitStore.listDirectory(
+      bucket as DirectoryBucket,
+      commit.tree,
+      ".takos/workflows",
+    );
+    if (!workflowEntries) {
+      return 0;
+    }
+
+    return workflowEntries.filter((entry) =>
+      entry.mode !== gitStore.FILE_MODES.DIRECTORY
+    ).length;
+  } catch (err) {
+    logError("Failed to count fork workflows", err, {
+      action: "countForkWorkflows",
+      forkId,
+    });
+    return 0;
+  }
+}

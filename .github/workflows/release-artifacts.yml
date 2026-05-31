@@ -25,7 +25,7 @@ permissions:
   contents: read
 
 env:
-  DENO_DIR: ${{ github.workspace }}/.deno-cache
+  BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
@@ -38,31 +38,30 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
-          submodules: recursive
           persist-credentials: false
 
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # pinned: v2.0.4 (2026)
+      - uses: oven-sh/setup-bun@v2
         with:
-          deno-version: v2.x
+          bun-version: latest
 
       - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # pinned: v5.0.0 (2026)
         with:
           version: v3.15.4
 
-      - name: Cache Deno deps
+      - name: Cache Bun deps
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
         with:
-          path: ${{ env.DENO_DIR }}
-          key: ${{ runner.os }}-deno-takos-release-artifacts-${{ hashFiles('deno.lock') }}
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
+          key: ${{ runner.os }}-bun-takos-release-artifacts-${{ hashFiles('bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-deno-takos-release-artifacts-
+            ${{ runner.os }}-bun-takos-release-artifacts-
 
-      - run: deno install
-      - run: deno task check
-      - run: deno task validate:release-promotion
-      - run: deno task validate:helm
-      - run: deno task helm:check-overlays
-      - run: deno task helm:template-smoke
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run validate:release-promotion
+      - run: bun run validate:helm
+      - run: bun run helm:check-overlays
+      - run: bun run helm:template-smoke
 
   oci-images:
     name: OCI image (${{ matrix.image }})
@@ -78,19 +77,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: takos-app
-            context: .
-            dockerfile: deploy/docker/takos-app.Dockerfile
+          - image: takos-worker
+            context: ..
+            dockerfile: takos/deploy/docker/takos-worker.Dockerfile
           - image: takos-git
-            context: git
-            dockerfile: git/Dockerfile
+            context: ..
+            dockerfile: takos/containers/git/Dockerfile
           - image: takos-agent
             context: ..
-            dockerfile: takos/agent/Dockerfile
+            dockerfile: takos/containers/agent/Dockerfile
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
-          submodules: recursive
           persist-credentials: false
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
@@ -178,7 +176,6 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
-          submodules: recursive
           persist-credentials: false
 
       - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # pinned: v5.0.0 (2026)
@@ -241,12 +238,13 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
-          submodules: recursive
           persist-credentials: false
 
-      - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # pinned: v2.0.4 (2026)
+      - uses: oven-sh/setup-bun@v2
         with:
-          deno-version: v2.x
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pinned: v8.0.1 (2026)
         with:
@@ -271,11 +269,7 @@ jobs:
             echo "Invalid SemVer release version: ${release_version}" >&2
             exit 1
           fi
-          deno run \
-            --config deno.json \
-            --allow-read \
-            --allow-run=git \
-            --allow-write=dist/release-manifest.json \
+          bun --preload ./shims/deno-compat.ts \
             scripts/build-release-manifest.ts \
             --image-digest-dir dist/image-digests \
             --release-version "${release_version}" \

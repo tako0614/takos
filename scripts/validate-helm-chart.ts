@@ -3,11 +3,11 @@ const templateRoot = `${chartRoot}/templates`;
 
 const expectedServices = [
   {
-    id: 'takos-app',
-    deploymentFile: 'deployment-takos-app.yaml',
-    serviceFile: 'service-takos-app.yaml',
-    imageKey: 'takosApp',
-    valuesKey: 'takosApp',
+    id: 'takos-worker',
+    deploymentFile: 'deployment-takos-worker.yaml',
+    serviceFile: 'service-takos-worker.yaml',
+    imageKey: 'takosWorker',
+    valuesKey: 'takosWorker',
   },
   {
     id: 'takosumi',
@@ -273,9 +273,9 @@ for (const ingress of ['ingress-admin.yaml', 'ingress-tenant.yaml']) {
   assertContains(
     path,
     text,
-    `name: {{ include "takos.fullname" . }}-takos-app`,
+    `name: {{ include "takos.fullname" . }}-takos-worker`,
   );
-  assertContains(path, text, `number: {{ .Values.services.takosApp.port }}`);
+  assertContains(path, text, `number: {{ .Values.services.takosWorker.port }}`);
 }
 
 if (errors.length > 0) {

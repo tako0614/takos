@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "takos.fullname" . }}-takos-worker
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    takos.io/service-id: takos-worker
+    app.kubernetes.io/component: takos-worker
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.services.takosWorker.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/component: takos-worker
+    {{- include "takos.selectorLabels" . | nindent 4 }}

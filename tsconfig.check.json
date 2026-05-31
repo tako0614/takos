@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "shims/**/*.d.ts",
+    "shims/**/*.ts",
+    "src/worker/platform-utils/**/*.ts",
+    "src/contracts/public/**/*.ts",
+    "src/worker/actions-engine/**/*.ts",
+    "src/contracts/deploy-intent/**/*.ts",
+    "src/contracts/**/*.ts"
+  ],
+  "exclude": [
+    "**/__tests__/**",
+    "**/*_test.ts",
+    "**/*.test.ts",
+    "**/dist/**",
+    "node_modules",
+    "**/node_modules"
+  ]
+}

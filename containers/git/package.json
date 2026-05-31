@@ -1,0 +1,23 @@
+{
+  "name": "@takos/containers/git",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "module": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "seed:dev": "bash scripts/seed-dev-git.sh",
+    "smoke:live": "bun scripts/live-smoke.ts",
+    "check": "tsc --noEmit",
+    "test": "bun test ./src/"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

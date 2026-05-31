@@ -1,18 +1,25 @@
 *
 
-!app/
-!app/deno.json
-!app/deno.lock
-!app/apps/
-!app/apps/**
-!app/packages/
-!app/packages/**
+!package.json
+!bun.lock
+!bunfig.toml
+!tsconfig.json
+!shims/
+!shims/**
+!src/
+!src/**
+!web/
+!web/**
+!db/
+!db/**
 
-!git/
-!git/packages/
-!git/packages/git-contract/
-!git/packages/git-contract/**
+!containers/
+!containers/git/
+!containers/git/**
+!containers/agent/
+!containers/agent/**
 
 !deploy/
 !deploy/docker/
-!deploy/docker/takos-app.Dockerfile
+!deploy/docker/takos-worker.Dockerfile
+!deploy/docker/takos-worker.local.Dockerfile

@@ -30,7 +30,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "takos.fullname" . }}-takos-app
+                name: {{ include "takos.fullname" . }}-takos-worker
                 port:
-                  number: {{ .Values.services.takosApp.port }}
+                  number: {{ .Values.services.takosWorker.port }}
 {{- end }}

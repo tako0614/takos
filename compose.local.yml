@@ -45,53 +45,55 @@ services:
       retries: 10
       start_period: 30s
 
-  takos-app:
-    image: denoland/deno:2.7.10
+  takos-worker:
+    image: oven/bun:1.3
     depends_on:
       postgres-init:
         condition: service_completed_successfully
     working_dir: /workspace
-    command: ['deno', 'task', 'dev:api']
+    command: ['bun', 'run', 'dev']
     healthcheck:
       test:
         - 'CMD'
-        - 'deno'
-        - 'eval'
-        - 'const r = await fetch(`http://localhost:$${Deno.env.get("PORT") ?? "8787"}/health`); if (!r.ok) Deno.exit(1);'
+        - 'bun'
+        - '-e'
+        - 'const r = await fetch(`http://localhost:$${process.env.PORT ?? "8787"}/health`); if (!r.ok) process.exit(1);'
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
     environment:
-      PORT: '${TAKOS_APP_PORT:-8787}'
-      TAKOS_APP_URL: '${TAKOS_APP_URL:-http://localhost:${TAKOS_APP_PORT:-8787}}'
+      PORT: '${TAKOS_WORKER_PORT:-8787}'
+      TAKOS_WORKER_URL: '${TAKOS_WORKER_URL:-http://localhost:8787}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_AGENT_INTERNAL_URL: 'http://takos-agent:${TAKOS_AGENT_PORT:-8789}'
+      TAKOS_AGENT_START_TOKEN: '${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOS_INTERNAL_API_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_APP_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
+      TAKOS_WORKER_DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
+      DATABASE_URL: 'postgres://takos:takos@postgres:5432/takos_app'
     ports:
-      - '${TAKOS_APP_PORT:-8787}:${TAKOS_APP_PORT:-8787}'
+      - '${TAKOS_WORKER_PORT:-8787}:${TAKOS_WORKER_PORT:-8787}'
     volumes:
-      - ./app:/workspace
-      - ./git:/git:ro
+      - .:/workspace
+      - ../takosumi:/takosumi:ro
 
   takos-git:
     build:
-      context: ./git
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: takos/containers/git/Dockerfile
     depends_on:
       postgres-init:
         condition: service_completed_successfully
-    working_dir: /workspace
-    command: ['deno', 'task', 'dev']
+    working_dir: /workspace/containers/git
+    command: ['bun', 'run', 'dev']
     healthcheck:
       test:
         - 'CMD'
-        - 'deno'
-        - 'eval'
-        - 'const r = await fetch(`http://localhost:$${Deno.env.get("PORT") ?? "8790"}/health`); if (!r.ok) Deno.exit(1);'
+        - 'bun'
+        - '-e'
+        - 'const r = await fetch(`http://localhost:$${process.env.PORT ?? "8790"}/health`); if (!r.ok) process.exit(1);'
       interval: 10s
       timeout: 5s
       retries: 10
@@ -101,15 +103,16 @@ services:
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOS_GIT_REPOSITORY_ROOT: '/var/lib/takos-git/repositories'
-      TAKOS_GIT_DATABASE_URL: 'sqlite:///var/lib/takos-git/repositories/.takos/git.sqlite'
+      TAKOS_GIT_DATABASE_URL: 'sqlite:///var/lib/takos-git/repositories/.takos/containers/git.sqlite'
       GIT_CONFIG_COUNT: '1'
       GIT_CONFIG_KEY_0: 'safe.directory'
       GIT_CONFIG_VALUE_0: '*'
     ports:
       - '${TAKOS_GIT_PORT:-8790}:${TAKOS_GIT_PORT:-8790}'
     volumes:
-      - ./git:/workspace
-      - takos-git-node-modules:/workspace/node_modules
+      - .:/workspace
+      - ../takosumi:/takosumi:ro
+      - takos-git-node-modules:/workspace/containers/git/node_modules
       - '${TAKOS_GIT_REPOSITORY_HOST_ROOT:-./.takos-git/repositories}:/var/lib/takos-git/repositories'
 
   takosumi:
@@ -133,7 +136,7 @@ services:
     working_dir: /workspace
     environment:
       PORT: '${TAKOSUMI_PORT:-8788}'
-      TAKOS_APP_URL: '${TAKOS_APP_URL:-http://takos-app:${TAKOS_APP_PORT:-8787}}'
+      TAKOS_WORKER_URL: '${TAKOS_WORKER_URL:-http://takos-worker:8787}'
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOSUMI_INTERNAL_API_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
@@ -148,7 +151,7 @@ services:
   takos-agent:
     build:
       context: ..
-      dockerfile: takos/agent/Dockerfile
+      dockerfile: takos/containers/agent/Dockerfile
     depends_on:
       takosumi:
         condition: service_healthy
@@ -157,6 +160,7 @@ services:
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
+      TAKOS_AGENT_START_TOKEN: '${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}'
     ports:
       - '${TAKOS_AGENT_PORT:-8789}:${TAKOS_AGENT_PORT:-8789}'
     healthcheck:

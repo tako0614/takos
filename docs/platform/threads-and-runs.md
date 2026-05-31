@@ -82,7 +82,7 @@ pending (生成直後) → queued (実行待ち) → running → completed
 GET /api/runs/:id/events
 
 # WebSocket
-takos run follow RUN_ID --transport ws
+GET /api/runs/:id/ws
 ```
 
 ## Artifact
@@ -96,6 +96,4 @@ Run の結果物です。`code` / `config` / `doc` / `patch` / `report` / `other
   の型を持ちます
 - **Reminder** — `time` / `condition` / `context` のトリガー型を持ちます
 
-```bash
-takos context list /spaces/SPACE_ID/memories
-```
+Memory / Reminder の取得と更新は Web UI と public API から行います。

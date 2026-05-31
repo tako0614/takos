@@ -1,15 +1,15 @@
 # AWS fail-closed overlay template.
 # Generated from deploy/distributions/aws.json by scripts/generate-helm-overlays.ts.
-# Re-run `deno task helm:generate-overlays` after editing the distribution profile.
+# Re-run `bun run helm:generate-overlays` after editing the distribution profile.
 # This file is not a complete production profile by itself: every empty
 # runtimeConfig.plugins entry must be replaced by a trusted, non-reference
 # kernel plugin id supplied by the operator/plugin bundle.
 # Usage: helm install takos . -f values.yaml -f values-aws.yaml
 
 images:
-  takosApp:
+  takosWorker:
     registry: ghcr.io
-    repository: takos/takos-app
+    repository: takos/takos-worker
     tag: "latest"
     pullPolicy: IfNotPresent
   takosumi:
@@ -86,7 +86,7 @@ ingress:
 
 # Production resource tuning
 services:
-  takosApp:
+  takosWorker:
     replicaCount: 3
     resources:
       requests:

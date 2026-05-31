@@ -145,15 +145,15 @@ deno task server:up
 | ----------------------------- | ----------------- | -------------------------------------------------------- |
 | `TAKOS_ADMIN_DOMAIN`          | `admin.localhost` | 管理画面のドメイン                                       |
 | `TAKOS_TENANT_BASE_DOMAIN`    | `app.localhost`   | テナント用ベースドメイン                                 |
-| `TAKOS_CONTROL_WEB_PORT`      | `8787`            | Control Web の公開ポート                                 |
-| `TAKOS_CONTROL_DISPATCH_PORT` | `8788`            | Dispatch の公開ポート                                    |
+| `TAKOS_WORKER_PORT`           | `8787`            | Takos Worker の公開ポート                                |
+| `TAKOS_DISPATCH_PORT`         | `8788`            | Dispatch の公開ポート                                    |
 | `TAKOS_RUNTIME_HOST_PORT`     | `8789`            | Runtime Host のポート                                    |
 | `TAKOS_EXECUTOR_HOST_PORT`    | `8790`            | Executor Host のポート                                   |
 | `TAKOS_RUNTIME_PORT`          | `8081`            | Runtime のホスト側公開ポート（container `8080` に map）  |
 | `TAKOS_EXECUTOR_PORT`         | `8082`            | Executor のホスト側公開ポート（container `8080` に map） |
 
 `takos-private/compose.server.yml` では `TAKOS_ADMIN_DOMAIN` /
-`TAKOS_TENANT_BASE_DOMAIN` を受け取り、control プロセスには `ADMIN_DOMAIN` /
+`TAKOS_TENANT_BASE_DOMAIN` を受け取り、takos-worker プロセスには `ADMIN_DOMAIN` /
 `TENANT_BASE_DOMAIN` として渡す。compose を使わずに起動する場合は `ADMIN_DOMAIN`
 / `TENANT_BASE_DOMAIN` を直接設定する。
 
@@ -252,14 +252,14 @@ opt-in を渡しても fail-closed のままです)。 :::
 | `TAKOS_DOCKER_NETWORK`        | `takos-containers`                                | Docker backend が workload container を接続する network |
 | `DOCKER_SOCKET_PATH`          | `/var/run/docker.sock`                            | Docker backend が使う Docker socket                     |
 
-#### Worker 設定
+#### Worker loop 設定
 
 | 変数                                         | デフォルト                                             | 用途                                 |
 | -------------------------------------------- | ------------------------------------------------------ | ------------------------------------ |
-| `TAKOS_CONTROL_WORKER_POLL_INTERVAL_MS`      | `250`                                                  | ジョブポーリング間隔（ms）           |
-| `TAKOS_CONTROL_WORKER_SCHEDULED_INTERVAL_MS` | `60000`                                                | スケジュールジョブ実行間隔（ms）     |
-| `TAKOS_CONTROL_WORKER_HEARTBEAT_FILE`        | `/var/lib/takos-private/control/worker-heartbeat.json` | ヘルスチェック用ハートビートファイル |
-| `TAKOS_CONTROL_WORKER_HEARTBEAT_TTL_MS`      | `120000`                                               | ハートビート TTL（ms）               |
+| `TAKOS_WORKER_POLL_INTERVAL_MS`              | `250`                                                  | ジョブポーリング間隔（ms）           |
+| `TAKOS_WORKER_SCHEDULED_INTERVAL_MS`         | `60000`                                                | スケジュールジョブ実行間隔（ms）     |
+| `TAKOS_WORKER_HEARTBEAT_FILE`                | `/var/lib/takos-private/takos-worker-heartbeat.json`   | ヘルスチェック用ハートビートファイル |
+| `TAKOS_WORKER_HEARTBEAT_TTL_MS`              | `120000`                                               | ハートビート TTL（ms）               |
 
 #### Vectorize（pgvector）
 
@@ -356,7 +356,7 @@ services:
 
 | Service          | 役割                                                        |
 | ---------------- | ----------------------------------------------------------- |
-| `takos-app`      | OIDC consumer / Web UI / public API gateway                 |
+| `takos-worker`      | OIDC consumer / Web UI / public API gateway                 |
 | `takosumi`       | AppSpec install / Deployment apply engine                   |
 | `takosumi-cloud` | Takosumi Accounts / Installation ledger / billing dashboard |
 | `takos-git`      | Git Smart HTTP / refs / objects / source resolution         |
@@ -423,14 +423,10 @@ PGVECTOR_ENABLED=true
 
 ## 初回マイグレーション
 
-PostgreSQL backend は control service 起動時に
-`takos/app/apps/control/db/migrations` を self-host migration runner で自動適用
-する。Wrangler の local D1 backend を単体で使う場合だけ、同じ migration source
-に対して次を実行する:
-
-```bash
-cd takos/app/apps/control && deno task db:migrate
-```
+PostgreSQL backend は takos-worker 起動時に
+`takos/db/migrations-control/migrations` を self-host migration runner で自動適用
+する。Wrangler の local D1 backend を単体で使う場合だけ、
+`db/migrations-control/migrations` を migration source として Wrangler 側から適用する。
 
 ## 停止
 

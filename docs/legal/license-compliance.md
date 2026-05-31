@@ -14,12 +14,11 @@ drift across the ecosystem checkout.
 | ---------------------------- | --------------------- | ------------------------------------------------------------------------------- |
 | `takos-ecosystem` root       | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`                                                        |
 | `takos/` shell               | `AGPL-3.0-only`       | `takos/LICENSE`, `takos/.reuse/dep5`                                            |
-| `takos/app/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno / npm package metadata                           |
-| `takos/git/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
-| `takos/agent/`               | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
+| `takos/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno / npm package metadata                           |
+| `takos/containers/git/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
+| `takos/containers/agent/`               | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
 | `takosumi/`                  | `MIT`                 | `LICENSE`, `.reuse/dep5`, JSR package metadata                                  |
 | `takosumi/`                  | `MIT`                 | `LICENSE`, `.reuse/dep5`, JSR package metadata                                  |
-| `takos-cli/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
 | `takos-agent-engine/`        | `MIT`                 | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
 | `takos-apps/takos-computer/` | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
 | `takos-apps/takos-docs/`     | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno metadata                                         |

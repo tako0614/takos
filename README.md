@@ -13,19 +13,19 @@ Takos はセルフホスト可能な AI-first chat & agent プロダクトです
 ## Quick Start
 
 ```sh
-git submodule update --init --recursive
-deno task doctor
-deno task local:config
-deno task local:up
+bun run doctor
+bun run local:config
+bun run local:up
 ```
 
 ## サービス構成
 
-| サービス      | 責務                                                                |
-| ------------- | ------------------------------------------------------------------- |
-| `takos-app`   | UI、API ゲートウェイ、OIDC consumer セッション                      |
-| `takos-git`   | Git ホスティング (Smart HTTP、リポジトリ、refs、オブジェクトストア) |
-| `takos-agent` | エージェント実行                                                    |
+| Component       | 責務                                                                |
+| --------------- | ------------------------------------------------------------------- |
+| `takos-worker`  | 単一の public/control Worker、Hono API、OIDC consumer、internal RPC |
+| `takos-web`     | browser UI source (`web/`)                                          |
+| `takos-git`     | Git hosting container (Smart HTTP、リポジトリ、refs、object store) |
+| `takos-agent`   | agent execution container                                           |
 
 ログインや課金は Takosumi Accounts (operator account plane) が担当し、 デプロイエンジンは Takosumi kernel
 (`../takosumi`) が担当します。
@@ -37,38 +37,43 @@ Takos の runtime components、Postgres、object storage、OIDC / billing listen
 ## ローカル compose
 
 ```sh
-deno task local:up
+bun run local:up
 ```
 
-`takos-app`、`takos-git`、`takosumi`、`takos-agent` と、Postgres / Redis の サポートサービスが起動します。
+`takos-worker`、`takos-git`、`takos-agent`、`takosumi` と、Postgres / Redis のサポートサービスが起動します。
 
 ## レイアウト
 
 ```text
 takos/
-  agent/  -> takos-agent (エージェント実行)
-  app/    -> takos-app (ユーザー向け UI / API ゲートウェイ)
-  git/    -> takos-git (Git ホスティング)
-  deploy/ -> デプロイ用アーティファクト (Helm / Terraform / distribution)
-  docs/   -> プロダクトドキュメント (VitePress site → docs.takos.jp)
+  src/
+    worker/    -> Takos Worker entrypoint
+    routes/    -> Hono route 分割
+    contracts/ -> Worker と containers の wire contract
+  web/          -> browser UI
+  containers/
+    git/        -> Git hosting container
+    agent/      -> agent execution container
+  deploy/       -> デプロイ用アーティファクト (Helm / Terraform / distribution)
+  docs/         -> プロダクトドキュメント (VitePress site → docs.takos.jp)
 ```
 
 ## よく使うコマンド
 
-| コマンド                           | 説明                                     |
-| ---------------------------------- | ---------------------------------------- |
-| `deno task doctor`                 | ツール・サブモジュール・compose の診断   |
-| `deno task check`                  | 軽量な自動チェック                       |
-| `deno task local:up` / `down`      | ローカル compose の起動 / 停止           |
-| `deno task local:logs`             | ローカルサービスのログ                   |
-| `deno task local:smoke`            | ローカルサービスのヘルスチェック         |
-| `deno task local:e2e`              | docker compose による E2E スモークテスト |
-| `deno task docs:dev`               | ドキュメントの開発サーバー起動           |
-| `deno task docs:build` / `deploy`  | ドキュメントのビルド / デプロイ          |
-| `deno task lint:docs`              | ドキュメントの lint                      |
-| `deno task validate:distributions` | ディストリビューションの検証             |
-| `deno task validate:service-set`   | Helm chart のサービスセット検証          |
-| `deno task helm:template-smoke`    | Helm テンプレートのスモークテスト        |
+| コマンド                           | 説明                                      |
+| ---------------------------------- | ----------------------------------------- |
+| `bun run doctor`                 | ツール・canonical layout・compose の診断  |
+| `bun run check`                  | 軽量な自動チェック                        |
+| `bun run local:up` / `down`      | ローカル compose の起動 / 停止            |
+| `bun run local:logs`             | ローカルサービスのログ                    |
+| `bun run local:smoke`            | ローカルサービスのヘルスチェック          |
+| `bun run local:e2e`              | docker compose による E2E スモークテスト  |
+| `bun run docs:dev`               | ドキュメントの開発サーバー起動            |
+| `bun run docs:build` / `deploy`  | ドキュメントのビルド / デプロイ           |
+| `bun run lint:docs`              | ドキュメントの lint                       |
+| `bun run validate:distributions` | ディストリビューションの検証              |
+| `bun run validate:service-set`   | Helm chart のサービスセット検証           |
+| `bun run helm:template-smoke`    | Helm テンプレートのスモークテスト         |
 
 ## ドキュメントの場所
 

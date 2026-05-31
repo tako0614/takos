@@ -1,10 +1,10 @@
 const expectedServices = [
   {
-    id: 'takos-app',
-    deploymentFile: 'deployment-takos-app.yaml',
-    serviceFile: 'service-takos-app.yaml',
-    imageKey: 'takosApp',
-    valuesKey: 'takosApp',
+    id: 'takos-worker',
+    deploymentFile: 'deployment-takos-worker.yaml',
+    serviceFile: 'service-takos-worker.yaml',
+    imageKey: 'takosWorker',
+    valuesKey: 'takosWorker',
   },
   {
     id: 'takosumi',

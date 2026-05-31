@@ -51,7 +51,7 @@ Keycloak / Authentik / Auth0 / 自前 OIDC issuer は upstream IdP として
 ## Auth-related runtime secrets
 
 Takos runtime に渡す auth 関連 secret の最低集合は以下です。値は
-`takos-private/apps/control/.secrets/<env>/` に配置し、`secrets:sync:*` /
+`takos-private/src/worker/.secrets/<env>/` に配置し、`secrets:sync:*` /
 `wrangler secret put` で deploy target に流します。
 
 | name                 | 由来                                    | 用途                                                                     |
@@ -98,8 +98,8 @@ managed / self-host いずれも次の順序で進めます:
 1. rotation owner (managed / self-host Takosumi Accounts) 側で新
    `OIDC_CLIENT_SECRET` を発行する (launch token は都度 opaque token
    を発行するため、rotation 対象ではない)
-2. `takos-private/apps/control/.secrets/<env>/` の対応 file を更新する
-3. `cd takos-private/apps/control && deno task secrets:sync:<env>` で Worker
+2. `takos-private/src/worker/.secrets/<env>/` の対応 file を更新する
+3. `cd takos-private/src/worker && deno task secrets:sync:<env>` で Worker
    secret / k8s Secret を同期する (単発更新は
    `deno task secrets put OIDC_CLIENT_SECRET --env <env>`)
 4. rotated-out secret を rotation owner 側で revoke する

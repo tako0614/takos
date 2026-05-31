@@ -6,7 +6,7 @@
 | Field         | Value                                                                         |
 | ------------- | ----------------------------------------------------------------------------- |
 | Last reviewed | 2026-05-07                                                                    |
-| Owner         | Security owner / Takos app (`takos/app`)                                      |
+| Owner         | Security owner / Takos app (`takos`)                                      |
 | Status        | Published policy; mailbox and encrypted-exchange evidence is operator-private |
 
 ## Scope
@@ -21,9 +21,9 @@ owning product root へ triage します。
 
 In scope:
 
-- Takos Web / API (`takos/app`)
-- Takos Git hosting (`takos/git`)
-- Takos agent service (`takos/agent`)
+- Takos Web / API (`takos`)
+- Takos Git hosting (`takos/containers/git`)
+- Takos agent service (`takos/containers/agent`)
 - Takosumi Accounts (`identity.primary.oidc` / `billing.primary.default`) —
   identity / billing / Installation owner; OIDC issuer, opaque launch token
   redeem, account-plane capability record revocation, and pairwise OIDC subject

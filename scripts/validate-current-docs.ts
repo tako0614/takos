@@ -3,6 +3,7 @@ const checks: Array<() => Promise<string[]>> = [
   validateVitePressExcludesNonCurrentDocs,
   validateContributingIndex,
   validateCurrentInstallDocs,
+  validateCanonicalLayoutDocs,
 ];
 
 const errors = (await Promise.all(checks.map((check) => check()))).flat();
@@ -107,7 +108,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
       'current guarantee としては扱わない',
     ]
   ) {
-    if (!upgradeExport.includes(required)) {
+    if (!includesRequiredText(upgradeExport, required)) {
       errors.push(`docs/platform/upgrade-export.md: missing current revision boundary '${required}'`);
     }
   }
@@ -129,8 +130,69 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
     errors.push('docs/hosting/index.md: missing target parity evidence boundary');
   }
   const cloudflareHosting = await Deno.readTextFile('docs/hosting/cloudflare.md');
-  if (!cloudflareHosting.includes('launch-readiness evidence / operator approval / staged rehearsal')) {
+  if (
+    !includesRequiredText(
+      cloudflareHosting,
+      'launch-readiness evidence / operator approval / staged rehearsal',
+    )
+  ) {
     errors.push('docs/hosting/cloudflare.md: missing public managed offering readiness boundary');
+  }
+  return errors;
+}
+
+async function validateCanonicalLayoutDocs(): Promise<string[]> {
+  const files = [
+    'README.md',
+    'AGENTS.md',
+    'docs/architecture/system-architecture.md',
+    'docs/architecture/service-topology.md',
+    'docs/architecture/diagrams.md',
+    'docs/contributing/current-state.md',
+    'docs/get-started/local-shell.md',
+    'docs/get-started/local-development.md',
+    'docs/hosting/cloudflare.md',
+    'docs/hosting/local.md',
+    'docs/hosting/self-hosted.md',
+  ];
+  const forbidden = [
+    'takos/app/',
+    'takos/git/',
+    'takos/agent/',
+    '`app/`',
+    '`git/`',
+    '`agent/`',
+    '`takos-app`',
+    'apps/api',
+    'apps/control',
+    'packages/control',
+    'packages/common',
+    'packages/api-contract',
+    'packages/actions-engine',
+    'packages/deploy-intent',
+    'wrangler.worker.toml',
+    'apps/web',
+  ];
+  const required = [
+    'src/worker',
+    'web',
+    'containers/git',
+    'containers/agent',
+  ];
+  const errors: string[] = [];
+  for (const path of files) {
+    const text = await Deno.readTextFile(path);
+    for (const term of forbidden) {
+      if (text.includes(term)) {
+        errors.push(`${path}: remove stale Takos split layout reference '${term}'`);
+      }
+    }
+  }
+  const currentState = await Deno.readTextFile('docs/contributing/current-state.md');
+  for (const term of required) {
+    if (!currentState.includes(term)) {
+      errors.push(`docs/contributing/current-state.md: missing canonical layout reference '${term}'`);
+    }
   }
   return errors;
 }

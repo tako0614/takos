@@ -186,8 +186,6 @@ export default defineConfig({
       {
         text: 'リファレンス',
         items: [
-          { text: 'CLI', link: '/reference/cli' },
-          { text: 'CLI 認証', link: '/reference/cli-auth' },
           { text: 'API', link: '/reference/api' },
           { text: 'Database Ownership', link: '/reference/database' },
         ],

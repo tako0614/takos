@@ -110,7 +110,7 @@ deno run --config deno.json --allow-all packages/cli/src/main.ts accounts seed \
 | runtime config  | `runtimeConfig.environment=production`、implementation binding selector は fail-closed empty |
 | ingress         | GCE ingress class と managed certificate annotation を使う                     |
 | service account | Workload Identity 用 annotation を受け取る                                     |
-| workloads       | `takos-app` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
+| workloads       | `takos-worker` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
 
 overlay は generated artifact です。distribution profile を更新したら:
 
@@ -261,7 +261,7 @@ gcloud iam service-accounts keys create ~/takos-provider.json \
 service account JSON を base64 してから secret に inject:
 
 ```bash
-cd takos-private/apps/control
+cd takos-private/src/worker
 base64 -w0 ~/takos-provider.json | deno task secrets put GCP_SERVICE_ACCOUNT_JSON --env production
 echo "takos-prod" | deno task secrets put GCP_PROJECT_ID --env production
 echo "asia-northeast1" | deno task secrets put GCP_REGION --env production
@@ -378,7 +378,7 @@ agent は kernel に enroll → heartbeat → lease pull → Cloud Run / Cloud S
 operator がやること:
 
 - Cloud DNS managed zone (`takos.example.com`) 作成
-- static external IP 取得 (`gcloud compute addresses create takos-app --global`)
+- static external IP 取得 (`gcloud compute addresses create takos-worker --global`)
 - Google-managed SSL cert または独自 cert を target proxy に attach (wildcard
   推奨: `*.app.takos.example.com`)
 - profile の `pluginConfig.operator.takosumi.gcp.routerConfig` に `urlMapName` /

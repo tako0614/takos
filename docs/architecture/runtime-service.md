@@ -9,13 +9,14 @@ Takos のランタイム実行は、エージェントサービス、Takosumi ke
 
 | コンポーネント         | 役割                                                                                            |
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `takos-agent`          | エージェントの実行と Takos 固有の挙動                                                           |
+| `takos-worker`         | public/control entrypoint、agent run orchestration、container dispatch                           |
+| `takos-agent` container | エージェントの実行と Takos 固有の Rust wrapper                                                  |
 | Takosumi kernel        | デプロイのライフサイクル、plan/apply/status、provider 調整                                      |
 | implementation binding | ターゲット別のリソース materialize。takosumi.com reference implementation では provider adapter |
 | runtime-agent          | ワークロードホストのライフサイクルと実装 RPC                                                    |
 
-Takos のコードは、wire shape を所有するサービスの contract
-を経由して呼び出します。サービス間で型を generic
+Takos のコードは、Worker と containers の wire shape を `src/contracts`
+経由で呼び出します。component 間で型を generic
 な共通パッケージに複製しません。
 
 ## ローカル実行
