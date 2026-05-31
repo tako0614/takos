@@ -347,13 +347,13 @@ import {
 import { awsProviderExecutors } from "@takos/takosumi-plugins/providers/aws";
 
 const client = new RuntimeAgentHttpClient({
-  baseUrl: Deno.env.get("TAKOS_KERNEL_URL")!,
-  enrollmentToken: Deno.env.get("TAKOS_RUNTIME_AGENT_TOKEN")!,
+  baseUrl: process.env.TAKOS_KERNEL_URL!,
+  enrollmentToken: process.env.TAKOS_RUNTIME_AGENT_TOKEN!,
 });
 
 const loop = new RuntimeAgentLoop({
   client,
-  agentId: Deno.hostname(),
+  agentId: process.env.HOSTNAME ?? "runtime-agent",
   provider: "aws",
   capabilities: {
     kinds: ["aws.ecs.deploy", "aws.rds.materialize", "aws.s3.materialize"],

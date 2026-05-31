@@ -378,13 +378,13 @@ import {
 } from "@takos/takosumi-plugins/runtime-agent";
 
 const client = new RuntimeAgentHttpClient({
-  baseUrl: Deno.env.get("TAKOS_KERNEL_URL")!,
-  enrollmentToken: Deno.env.get("TAKOS_RUNTIME_AGENT_TOKEN")!,
+  baseUrl: process.env.TAKOS_KERNEL_URL!,
+  enrollmentToken: process.env.TAKOS_RUNTIME_AGENT_TOKEN!,
 });
 
 const loop = new RuntimeAgentLoop({
   client,
-  agentId: Deno.hostname(),
+  agentId: process.env.HOSTNAME ?? "runtime-agent",
   provider: "aws", // or "gcp" / "k8s" / "selfhosted"
   capabilities: { kinds: ["aws.ecs.deploy", "aws.rds.materialize"] },
   executors: {
@@ -709,7 +709,7 @@ const replication = new AuditReplicationDriver({
 
 const sink = new SqlObservabilitySink({
   client,
-  retentionPolicy: resolveAuditRetention({ env: Deno.env.toObject() }),
+  retentionPolicy: resolveAuditRetention({ env: process.env }),
   replication,
 });
 ```

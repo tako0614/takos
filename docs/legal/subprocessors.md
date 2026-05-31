@@ -56,7 +56,7 @@ feature:
 | System                                            | Reason                                                                                                                           |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | GitHub Actions for OSS repository CI              | Processes source and CI metadata for Takos development, not customer production personal data by default                         |
-| Deno / JSR package registry                       | Distributes packages; no Takos customer production personal data is sent by default                                              |
+| JSR package registry                       | Distributes packages; no Takos customer production personal data is sent by default                                              |
 | Customer self-hosted databases / object stores    | Controlled by Customer or operator deployment choices, not a Takos-managed sub-processor unless Takos operates them for Customer |
 | Prometheus / Grafana in self-hosted observability | Deployment-local tooling unless Takos uses a managed third-party observability vendor                                            |
 

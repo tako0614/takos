@@ -14,18 +14,18 @@ drift across the ecosystem checkout.
 | ---------------------------- | --------------------- | ------------------------------------------------------------------------------- |
 | `takos-ecosystem` root       | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`                                                        |
 | `takos/` shell               | `AGPL-3.0-only`       | `takos/LICENSE`, `takos/.reuse/dep5`                                            |
-| `takos/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno / npm package metadata                           |
-| `takos/containers/git/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
+| `takos/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                           |
+| `takos/containers/git/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                                 |
 | `takos/containers/agent/`               | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
 | `takosumi/`                  | `MIT`                 | `LICENSE`, `.reuse/dep5`, JSR package metadata                                  |
 | `takosumi/`                  | `MIT`                 | `LICENSE`, `.reuse/dep5`, JSR package metadata                                  |
 | `takos-agent-engine/`        | `MIT`                 | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
-| `takos-apps/takos-computer/` | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno package metadata                                 |
-| `takos-apps/takos-docs/`     | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno metadata                                         |
-| `takos-apps/takos-slide/`    | `MIT`                 | `LICENSE`, `.reuse/dep5`, Deno metadata                                         |
-| `takos-apps/takos-excel/`    | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, Deno metadata; aligns with HyperFormula GPLv3 use     |
-| `yurucommu/`                 | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, Deno metadata                                         |
-| `road-to-me/`                | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Deno / Cargo metadata                                 |
+| `takos-apps/takos-computer/` | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm package metadata                                 |
+| `takos-apps/takos-docs/`     | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                         |
+| `takos-apps/takos-slide/`    | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                         |
+| `takos-apps/takos-excel/`    | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata; aligns with HyperFormula GPLv3 use     |
+| `yurucommu/`                 | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata                                         |
+| `road-to-me/`                | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm / Cargo metadata                                 |
 | `takos-private/`             | private / unpublished | no public OSS license; deploy configuration and secrets evidence remain private |
 
 ## REUSE / SPDX Baseline
@@ -34,7 +34,7 @@ Every public repo in the ecosystem must carry:
 
 - root `LICENSE`
 - root `.reuse/dep5` with `Files: *` and the repo SPDX license id
-- package metadata license fields for Deno / npm / Cargo packages that are
+- package metadata license fields for npm / Cargo packages that are
   published, built, or distributed
 
 New source files should keep using repo-wide `.reuse/dep5` unless a file has a
@@ -61,7 +61,7 @@ The gate validates:
 
 - public repo `LICENSE` files match the approved first-party license inventory
 - `.reuse/dep5` exists and names the expected SPDX license id
-- Deno / npm / Cargo manifests declare the expected license
+- npm / Cargo manifests declare the expected license
 - `takos-private/` remains private and does not publish an OSS license from the
   public tree without legal review
 - legal docs include the first-party and third-party inventory artifacts
