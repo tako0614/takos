@@ -3,7 +3,7 @@
 /**
  * Remote DB Reset Script
  * Resets remote D1 databases (staging/production) by deleting rows.
- * For local reset, use the local stack/bootstrap flow (`deno task local:up`);
+ * For local reset, use the local stack/bootstrap flow (`bun run local:up`);
  * this script is for staging/production only.
  *
  * Usage: node scripts/reset-db.js --env <staging|production> [--include-accounts]
@@ -48,7 +48,7 @@ function printUsage() {
   console.log("  --include-accounts  Also delete accounts table");
   console.log("");
   console.log(
-    "For local reset, use the local stack/bootstrap flow (`deno task local:up`); this script is for staging/production only.",
+    "For local reset, use the local stack/bootstrap flow (`bun run local:up`); this script is for staging/production only.",
   );
 }
 

@@ -4,36 +4,36 @@ import { fileURLToPath } from "node:url";
 
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 
-const appRoot = fileURLToPath(new URL("../..", import.meta.url));
+const appRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const baselineSql = readFileSync(
-  resolve(appRoot, "db/migrations/0001_baseline.sql"),
+  resolve(appRoot, "db/migrations-control/migrations/0001_baseline.sql"),
   "utf8",
 );
 const resetDbScript = readFileSync(
-  resolve(appRoot, "scripts/reset-db.js"),
+  resolve(appRoot, "scripts/control/reset-db.js"),
   "utf8",
 );
 const resetDbShellScript = readFileSync(
-  resolve(appRoot, "scripts/reset-db.sh"),
+  resolve(appRoot, "scripts/control/reset-db.sh"),
   "utf8",
 );
 const defaultAppDistributionSql = readFileSync(
-  resolve(appRoot, "db/migrations/0054_default_app_distribution_entries.sql"),
+  resolve(appRoot, "db/migrations-control/migrations/0054_default_app_distribution_entries.sql"),
   "utf8",
 );
 const offloadBackfillScript = readFileSync(
-  resolve(appRoot, "scripts/offload-backfill.ts"),
+  resolve(appRoot, "scripts/control/offload-backfill.ts"),
   "utf8",
 );
 const fixWorkerBindingsScript = readFileSync(
-  resolve(appRoot, "scripts/fix-worker-bindings.js"),
+  resolve(appRoot, "scripts/control/fix-worker-bindings.js"),
   "utf8",
 );
-const dropAllSql = readFileSync(resolve(appRoot, "drop_all.sql"), "utf8");
-const denoConfig = JSON.parse(
-  readFileSync(resolve(appRoot, "deno.json"), "utf8"),
+const dropAllSql = readFileSync(resolve(appRoot, "db/drop_all.sql"), "utf8");
+const packageConfig = JSON.parse(
+  readFileSync(resolve(appRoot, "package.json"), "utf8"),
 ) as {
-  tasks?: Record<string, string>;
+  scripts?: Record<string, string>;
 };
 
 function assertSourceMatches(source: string, pattern: RegExp): void {
@@ -42,7 +42,7 @@ function assertSourceMatches(source: string, pattern: RegExp): void {
     `Expected source to match ${pattern}`,
   );
 }
-const tasks = denoConfig.tasks ?? {};
+const scripts = packageConfig.scripts ?? {};
 
 const postBaselineMigrationTables = [
   "app_usage_events",
@@ -178,13 +178,13 @@ Deno.test("reset DB inventory - preserves accounts and login identities by defau
 });
 
 Deno.test("reset DB inventory - keeps remote reset script-driven instead of hiding it behind shorthand tasks", () => {
-  assertEquals(tasks["db:reset"], undefined);
-  assertEquals(tasks["db:reset:local"], undefined);
-  assertEquals(tasks["db:reset:staging"], undefined);
-  assertEquals(tasks["db:reset:prod"], undefined);
+  assertEquals(scripts["db:reset"], undefined);
+  assertEquals(scripts["db:reset:local"], undefined);
+  assertEquals(scripts["db:reset:staging"], undefined);
+  assertEquals(scripts["db:reset:prod"], undefined);
   assertEquals(
-    tasks["db:migrate"],
-    "deno run -A npm:wrangler d1 migrations apply DB --local",
+    scripts["db:migrate"],
+    undefined,
   );
 
   assertStringIncludes(
@@ -193,7 +193,7 @@ Deno.test("reset DB inventory - keeps remote reset script-driven instead of hidi
   );
   assertStringIncludes(
     resetDbScript,
-    "For local reset, use the local stack/bootstrap flow (`deno task local:up`); this script is for staging/production only.",
+    "For local reset, use the local stack/bootstrap flow (`bun run local:up`); this script is for staging/production only.",
   );
   assertStringIncludes(
     resetDbShellScript,

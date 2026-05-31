@@ -4,27 +4,27 @@ import { fileURLToPath } from "node:url";
 
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 
-const appRoot = fileURLToPath(new URL("../..", import.meta.url));
-const denoConfig = JSON.parse(
-  readFileSync(resolve(appRoot, "deno.json"), "utf8"),
+const appRoot = fileURLToPath(new URL("../../../../", import.meta.url));
+const packageConfig = JSON.parse(
+  readFileSync(resolve(appRoot, "package.json"), "utf8"),
 ) as {
-  tasks?: Record<string, string>;
+  scripts?: Record<string, string>;
 };
-const tasks = denoConfig.tasks ?? {};
+const scripts = packageConfig.scripts ?? {};
 const resetDbScript = readFileSync(
-  resolve(appRoot, "scripts/reset-db.js"),
+  resolve(appRoot, "scripts/control/reset-db.js"),
   "utf8",
 );
 const resetDbShell = readFileSync(
-  resolve(appRoot, "scripts/reset-db.sh"),
+  resolve(appRoot, "scripts/control/reset-db.sh"),
   "utf8",
 );
 const offloadBackfill = readFileSync(
-  resolve(appRoot, "scripts/offload-backfill.ts"),
+  resolve(appRoot, "scripts/control/offload-backfill.ts"),
   "utf8",
 );
 const fixWorkerBindings = readFileSync(
-  resolve(appRoot, "scripts/fix-worker-bindings.js"),
+  resolve(appRoot, "scripts/control/fix-worker-bindings.js"),
   "utf8",
 );
 
@@ -34,18 +34,18 @@ function assertSourceMatches(source: string, pattern: RegExp): void {
     `Expected source to match ${pattern}`,
   );
 }
-Deno.test("DB ops contract - keeps db maintenance entrypoints explicit in Deno tasks and scripts", () => {
-  assertEquals(tasks["db:reset"], undefined);
-  assertEquals(tasks["db:reset:local"], undefined);
-  assertEquals(tasks["db:reset:staging"], undefined);
-  assertEquals(tasks["db:reset:prod"], undefined);
+Deno.test("DB ops contract - keeps db maintenance entrypoints explicit in Bun scripts and control scripts", () => {
+  assertEquals(scripts["db:reset"], undefined);
+  assertEquals(scripts["db:reset:local"], undefined);
+  assertEquals(scripts["db:reset:staging"], undefined);
+  assertEquals(scripts["db:reset:prod"], undefined);
   assertEquals(
-    tasks["db:migrate"],
-    "deno run -A npm:wrangler d1 migrations apply DB --local",
+    scripts["db:migrate"],
+    undefined,
   );
   assertEquals(
-    tasks["validate:migration-safety"],
-    "deno task --cwd ../.. validate:migration-safety",
+    scripts["validate:migration-safety"],
+    "bun --preload ./shims/deno-compat.ts scripts/validate-migration-safety.ts",
   );
 });
 
@@ -57,7 +57,7 @@ Deno.test("DB ops contract - makes remote DB maintenance scripts require explici
   assertStringIncludes(resetDbScript, "--env <staging|production>");
   assertStringIncludes(
     resetDbScript,
-    "For local reset, use the local stack/bootstrap flow (`deno task local:up`); this script is for staging/production only.",
+    "For local reset, use the local stack/bootstrap flow (`bun run local:up`); this script is for staging/production only.",
   );
   assertStringIncludes(resetDbScript, "DB");
   assert(!resetDbScript.includes("takos-control-db ${mode}"));
