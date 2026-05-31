@@ -39,10 +39,10 @@ components:
 
   # --- Compute ---
 
-  app:
+  worker:
     kind: worker
     spec:
-      entrypoint: src/worker/src/worker/index.ts
+      entrypoint: src/worker/index.ts
     connect:
       db:
         output: db.connection
@@ -130,8 +130,8 @@ components:
   public:
     kind: gateway
     connect:
-      app:
-        output: app.http
+      worker:
+        output: worker.http
         inject: upstream
       git:
         output: git.http
@@ -147,7 +147,7 @@ components:
           to: git
         - listener: public
           path: /
-          to: app
+          to: worker
 
 publish:
   public:
