@@ -164,7 +164,7 @@ canonical owner ごとのチェック:
 ```sh
 bun run check
 bun test
-cd web && bun run check
+bun run web:build
 cd containers/git && bun run check && bun test
 cd containers/agent && cargo check && cargo test
 ```

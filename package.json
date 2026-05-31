@@ -15,7 +15,7 @@
     "dev:web": "bunx vite --host 0.0.0.0 --config web/vite.config.ts",
     "web:dev": "bun run dev:web",
     "web:build": "bunx vite build --config web/vite.config.ts",
-    "web:check": "tsc -p web/tsconfig.json --noEmit",
+    "web:check": "bun run web:build",
     "build": "bun run web:build",
     "doctor": "bun scripts/doctor.mjs",
     "local:config": "bash -lc 'docker compose --env-file \"${TAKOS_LOCAL_ENV_FILE:-.env.local.example}\" -p \"${TAKOS_LOCAL_COMPOSE_PROJECT:-takos-local}\" -f compose.local.yml config'",
