@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import {
   signTakosumiInternalRequest as signTakosInternalRequest,
@@ -11,7 +12,7 @@ import {
 } from "../executor-auth.ts";
 import { forwardToControlPlane, isControlRpcPath } from "../executor-utils.ts";
 
-Deno.test("claimsMatchRequestBody passes when body asserts the bound run/service id", () => {
+test("claimsMatchRequestBody passes when body asserts the bound run/service id", () => {
   const claims = { run_id: "run_a", service_id: "svc_a", worker_id: "svc_a" };
   assertEquals(
     claimsMatchRequestBody(claims, { runId: "run_a", serviceId: "svc_a" }),
@@ -24,7 +25,7 @@ Deno.test("claimsMatchRequestBody passes when body asserts the bound run/service
   );
 });
 
-Deno.test("claimsMatchRequestBody fails closed when the body omits the bound id", () => {
+test("claimsMatchRequestBody fails closed when the body omits the bound id", () => {
   const claims = { run_id: "run_a", service_id: "svc_a", worker_id: "svc_a" };
   // Historical fail-open: omitting runId/serviceId skipped the comparison.
   assertEquals(claimsMatchRequestBody(claims, {}), false);
@@ -32,7 +33,7 @@ Deno.test("claimsMatchRequestBody fails closed when the body omits the bound id"
   assertEquals(claimsMatchRequestBody(claims, { serviceId: "svc_a" }), false);
 });
 
-Deno.test("claimsMatchRequestBody fails closed when the body asserts a different id", () => {
+test("claimsMatchRequestBody fails closed when the body asserts a different id", () => {
   const claims = { run_id: "run_a", service_id: "svc_a", worker_id: "svc_a" };
   assertEquals(
     claimsMatchRequestBody(claims, { runId: "run_b", serviceId: "svc_a" }),
@@ -44,7 +45,7 @@ Deno.test("claimsMatchRequestBody fails closed when the body asserts a different
   );
 });
 
-Deno.test("executor auth rejects removed binding proxy paths", () => {
+test("executor auth rejects removed binding proxy paths", () => {
   for (
     const path of [
       "/proxy/db/query",
@@ -72,7 +73,7 @@ Deno.test("executor auth rejects removed binding proxy paths", () => {
   }
 });
 
-Deno.test("executor host recognizes canonical agent-control paths for forwarding", () => {
+test("executor host recognizes canonical agent-control paths for forwarding", () => {
   assertEquals(
     isControlRpcPath("/api/internal/v1/agent-control/heartbeat"),
     true,
@@ -91,7 +92,7 @@ Deno.test("executor host recognizes canonical agent-control paths for forwarding
   );
 });
 
-Deno.test("executor auth maps current dispatch-issued RPC paths to control capability", () => {
+test("executor auth maps current dispatch-issued RPC paths to control capability", () => {
   for (
     const path of [
       "/api/internal/v1/agent-control/heartbeat",
@@ -105,7 +106,7 @@ Deno.test("executor auth maps current dispatch-issued RPC paths to control capab
   }
 });
 
-Deno.test("agent-control backend bridge requires signed Takosumi internal auth", async () => {
+test("agent-control backend bridge requires signed Takosumi internal auth", async () => {
   const router = createAgentControlBackendRouter();
   const secret = "backend-secret";
   const body = JSON.stringify({ runId: "run_1" });
@@ -159,7 +160,7 @@ Deno.test("agent-control backend bridge requires signed Takosumi internal auth",
   });
 });
 
-Deno.test("executor host forwards mapped control RPC to Takosumi canonical agent-control when binding is configured", async () => {
+test("executor host forwards mapped control RPC to Takosumi canonical agent-control when binding is configured", async () => {
   const requests: Request[] = [];
   const response = await forwardToControlPlane(
     "/api/internal/v1/agent-control/heartbeat",

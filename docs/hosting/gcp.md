@@ -263,7 +263,7 @@ service account JSON を base64 してから secret に inject:
 ```bash
 cd takos-private/src/worker
 base64 -w0 ~/takos-provider.json | deno task secrets put GCP_SERVICE_ACCOUNT_JSON --env production
-echo "takos-prod" | deno task secrets put GCP_PROJECT_ID --env production
+echo "takos-prod" | deno task secrets put GOOGLE_CLOUD_PROJECT --env production
 echo "asia-northeast1" | deno task secrets put GCP_REGION --env production
 ```
 

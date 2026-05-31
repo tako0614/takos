@@ -3,8 +3,9 @@ import {
   TAKOS_GIT_CAPABILITIES,
   TAKOS_GIT_INTERNAL_PATHS,
 } from "./internal-api.ts";
+import { test } from "bun:test";
 
-Deno.test("Git contract exposes only Git-owned paths and capabilities", () => {
+test("Git contract exposes only Git-owned paths and capabilities", () => {
   assert.equal(TAKOS_GIT_INTERNAL_PATHS.repositories, "/internal/repositories");
   assert.equal(
     TAKOS_GIT_INTERNAL_PATHS.importExternalRepository,

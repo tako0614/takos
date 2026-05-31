@@ -1,9 +1,11 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import { createRoot, createSignal } from "solid-js";
 import { sourceInstallationKey } from "../../hooks/sourceInstall.ts";
 import { useSourceFetchActions } from "../../hooks/useSourceFetchActions.ts";
 import { useSourceFetchQueries } from "../../hooks/useSourceFetchQueries.ts";
 import type { SourceItem } from "../../hooks/useSourceData.ts";
+import { test } from "bun:test";
+
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -54,7 +56,7 @@ function makeItem(overrides: Partial<SourceItem> = {}): SourceItem {
   };
 }
 
-Deno.test(
+test(
   "source install state - fetchAll trusts catalog installation data",
   async () => {
     const originalFetch = globalThis.fetch;
@@ -187,7 +189,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "source install state - fetchInstallations keeps the newest AppInstallation",
   async () => {
     const originalFetch = globalThis.fetch;
@@ -284,7 +286,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "source install state - repository catalog install opens Git URL approval flow",
   async () => {
     const originalFetch = globalThis.fetch;
@@ -369,7 +371,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "source install state - repository install fails closed without approval flow",
   async () => {
     const originalFetch = globalThis.fetch;
@@ -442,7 +444,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "source install state - default app install uses Installation apply",
   async () => {
     const originalFetch = globalThis.fetch;
@@ -572,7 +574,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "source install state - installed default app update opens Git URL revision flow",
   async () => {
     const originalFetch = globalThis.fetch;
@@ -689,7 +691,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "source install state - rollback opens AppInstallation revision flow",
   async () => {
     const originalFetch = globalThis.fetch;
@@ -771,7 +773,7 @@ Deno.test(
   },
 );
 
-Deno.test("source install state - uninstall removes the AppInstallation", async () => {
+test("source install state - uninstall removes the AppInstallation", async () => {
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;
   const item = makeItem({

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
@@ -16,7 +17,7 @@ function activeResource(overrides: Record<string, unknown>) {
   };
 }
 
-Deno.test("buildBindingFromResource uses workflow runtime config", async () => {
+test("buildBindingFromResource uses workflow runtime config", async () => {
   const originalGetResourceById = resourceBindingDeps.getResourceById;
   resourceBindingDeps.getResourceById = () =>
     Promise.resolve(activeResource({
@@ -48,7 +49,7 @@ Deno.test("buildBindingFromResource uses workflow runtime config", async () => {
   }
 });
 
-Deno.test("buildBindingFromResource uses durable namespace config", async () => {
+test("buildBindingFromResource uses durable namespace config", async () => {
   const originalGetResourceById = resourceBindingDeps.getResourceById;
   resourceBindingDeps.getResourceById = () =>
     Promise.resolve(activeResource({

@@ -1,12 +1,21 @@
-import { assertEquals, assertObjectMatch } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import type { RouteState } from "../../types/index.ts";
 import {
   normalizeNavigationState,
   parseRoute,
   shouldPushHistory,
 } from "../../hooks/router-state.ts";
+import { test } from "bun:test";
 
-Deno.test("normalizeNavigationState - clears stale storage state when entering storage", () => {
+const assertObjectMatch = (actual: unknown, expected: Record<string, unknown>) => {
+  const actualRecord = actual as Record<string, unknown>;
+  const actualSubset = Object.fromEntries(
+    Object.entries(expected).map(([key]) => [key, actualRecord[key]]),
+  );
+  assertEquals(actualSubset, expected);
+};
+
+test("normalizeNavigationState - clears stale storage state when entering storage", () => {
   const previous: RouteState = {
     view: "chat",
     spaceId: "ws-1",
@@ -36,7 +45,7 @@ Deno.test("normalizeNavigationState - clears stale storage state when entering s
   );
 });
 
-Deno.test("normalizeNavigationState - clears stale storage state when entering chat", () => {
+test("normalizeNavigationState - clears stale storage state when entering chat", () => {
   const previous: RouteState = {
     view: "storage",
     spaceId: "ws-1",
@@ -62,7 +71,7 @@ Deno.test("normalizeNavigationState - clears stale storage state when entering c
   );
 });
 
-Deno.test("normalizeNavigationState - preserves explicit clears while staying in chat", () => {
+test("normalizeNavigationState - preserves explicit clears while staying in chat", () => {
   const previous: RouteState = {
     view: "chat",
     spaceId: "ws-1",
@@ -97,7 +106,7 @@ Deno.test("normalizeNavigationState - preserves explicit clears while staying in
   );
 });
 
-Deno.test("normalizeNavigationState - clears stale storage state when leaving storage", () => {
+test("normalizeNavigationState - clears stale storage state when leaving storage", () => {
   const previous: RouteState = {
     view: "storage",
     spaceId: "ws-1",
@@ -124,7 +133,7 @@ Deno.test("normalizeNavigationState - clears stale storage state when leaving st
   );
 });
 
-Deno.test("normalizeNavigationState - preserves explicit clears while staying in storage", () => {
+test("normalizeNavigationState - preserves explicit clears while staying in storage", () => {
   const previous: RouteState = {
     view: "storage",
     spaceId: "ws-1",
@@ -159,7 +168,7 @@ Deno.test("normalizeNavigationState - preserves explicit clears while staying in
   );
 });
 
-Deno.test("parseRoute - preserves search params for internal routes", () => {
+test("parseRoute - preserves search params for internal routes", () => {
   assertEquals(
     parseRoute("/chat/ws-1/thread-9", "?message=msg-1&run=run-7"),
     {
@@ -172,12 +181,12 @@ Deno.test("parseRoute - preserves search params for internal routes", () => {
   );
 });
 
-Deno.test("parseRoute - retired /app shortcuts do not fall through to repo routes", () => {
+test("parseRoute - retired /app shortcuts do not fall through to repo routes", () => {
   assertEquals(parseRoute("/app/store"), { view: "home" });
   assertEquals(parseRoute("/app/docs"), { view: "home" });
 });
 
-Deno.test("shouldPushHistory - compares pathname and search", () => {
+test("shouldPushHistory - compares pathname and search", () => {
   assertEquals(
     shouldPushHistory(
       "/chat/ws-1/thread-9",

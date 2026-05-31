@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,7 +63,7 @@ function collectSourceFiles(dir: string): string[] {
   return files;
 }
 
-Deno.test("DB runtime contract guard - does not reference removed schema columns in runtime source", () => {
+test("DB runtime contract guard - does not reference removed schema columns in runtime source", () => {
   const files = collectSourceFiles(srcRoot);
   const offenders: string[] = [];
 

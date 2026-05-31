@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 /**
  * End-to-end signal forwarding test for the workers-dispatch deploy path.
  *
@@ -124,7 +125,7 @@ function createTrackedAbortController(): {
   return { controller, listenerCount: () => count };
 }
 
-Deno.test(
+test(
   "WFPService.workers.createWorker aborts the underlying Cloudflare fetch mid-call",
   async () => {
     const harness = installRecordingFetch();
@@ -185,7 +186,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "workers-dispatch backend forwards signal into the Cloudflare HTTP fetch",
   async () => {
     const harness = installRecordingFetch();
@@ -249,7 +250,7 @@ Deno.test(
   },
 );
 
-Deno.test("WfpClient.fetch removes parent-signal listener after success", async () => {
+test("WfpClient.fetch removes parent-signal listener after success", async () => {
   const original = globalThis.fetch;
   const tracked = createTrackedAbortController();
   try {
@@ -286,7 +287,7 @@ Deno.test("WfpClient.fetch removes parent-signal listener after success", async 
   }
 });
 
-Deno.test("WFPService retry delay stops promptly when the caller signal aborts", async () => {
+test("WFPService retry delay stops promptly when the caller signal aborts", async () => {
   const original = globalThis.fetch;
   try {
     globalThis.fetch = (() =>

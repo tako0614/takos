@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
 const takosRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 
@@ -10,7 +11,7 @@ function read(relativePath: string): string {
   return readFileSync(path.join(takosRoot, relativePath), "utf8");
 }
 
-Deno.test("platform architecture contract - canonical Takos layout is single worker plus containers", () => {
+test("platform architecture contract - canonical Takos layout is single worker plus containers", () => {
   for (
     const requiredPath of [
       "src/worker",
@@ -22,31 +23,43 @@ Deno.test("platform architecture contract - canonical Takos layout is single wor
       "containers/agent",
     ]
   ) {
-    assert(existsSync(path.join(takosRoot, requiredPath)), `${requiredPath} must exist`);
+    assert.ok(existsSync(path.join(takosRoot, requiredPath)), `${requiredPath} must exist`);
   }
 
   for (const removedPath of ["app", "git", "agent", "packages/control", "packages/control-shared"]) {
-    assertEquals(existsSync(path.join(takosRoot, removedPath)), false, `${removedPath} must stay removed`);
+    assert.deepStrictEqual(existsSync(path.join(takosRoot, removedPath)), false, `${removedPath} must stay removed`);
   }
 });
 
-Deno.test("platform architecture contract - Worker and container entrypoints use canonical files", () => {
-  assertStringIncludes(
-    read("deploy/cloudflare/wrangler.toml"),
-    'main = "src/worker/index.ts"',
+test("platform architecture contract - Worker and container entrypoints use canonical files", () => {
+  assert.ok(
+    read("deploy/cloudflare/wrangler.toml").includes(
+      'main = "src/worker/index.ts"',
+    ),
   );
-  assertStringIncludes(
-    read("deploy/cloudflare/wrangler.dispatch.toml"),
-    'main = "src/worker/dispatch.ts"',
+  assert.ok(
+    read("deploy/cloudflare/wrangler.dispatch.toml").includes(
+      'main = "src/worker/dispatch.ts"',
+    ),
   );
-  assertStringIncludes(
-    read("deploy/cloudflare/wrangler.runtime-host.toml"),
-    'main = "src/worker/runtime/container-hosts/runtime-host.ts"',
+  assert.ok(
+    read("deploy/cloudflare/wrangler.runtime-host.toml").includes(
+      'main = "src/worker/runtime/container-hosts/runtime-host.ts"',
+    ),
   );
-  assertStringIncludes(
-    read("deploy/cloudflare/wrangler.executor.toml"),
-    'main = "src/worker/runtime/container-hosts/executor-host.ts"',
+  assert.ok(
+    read("deploy/cloudflare/wrangler.executor.toml").includes(
+      'main = "src/worker/runtime/container-hosts/executor-host.ts"',
+    ),
   );
-  assertStringIncludes(read("containers/git/package.json"), '"dev": "bun --watch src/index.ts"');
-  assertStringIncludes(read("containers/agent/Cargo.toml"), 'path = "../../../takos-agent-engine"');
+  assert.ok(
+    read("containers/git/package.json").includes(
+      '"dev": "bun --watch src/index.ts"',
+    ),
+  );
+  assert.ok(
+    read("containers/agent/Cargo.toml").includes(
+      'path = "../../../takos-agent-engine"',
+    ),
+  );
 });

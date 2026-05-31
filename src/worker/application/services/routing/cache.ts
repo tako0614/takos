@@ -30,25 +30,10 @@ const L2_MAX_AGE: TtlMs = ttlMs(90_000);
 
 // Phase 4: kv store is pure cache (short TTL)
 export const L2_KV_TTL: TtlSeconds = ttlSeconds(120);
-/**
- * @deprecated prefer `L2_KV_TTL` (TtlSeconds). Kept for back-compat; remove once
- * `routing/service.ts` consumes the branded `TtlSeconds` value directly.
- */
-export const L2_KV_TTL_SECONDS: number = L2_KV_TTL;
 
 export const DEFAULT_DO_TIMEOUT: TtlMs = ttlMs(1_000);
-/**
- * @deprecated prefer `DEFAULT_DO_TIMEOUT` (TtlMs). Kept for back-compat; remove
- * once `routing/service.ts` consumes the branded `TtlMs` value directly.
- */
-export const DEFAULT_DO_TIMEOUT_MS: number = DEFAULT_DO_TIMEOUT;
 
 export const DEFAULT_TOMBSTONE_TTL: TtlMs = ttlMs(2 * 60_000); // 2 minutes
-/**
- * @deprecated prefer `DEFAULT_TOMBSTONE_TTL` (TtlMs). Kept for back-compat;
- * remove once `routing/service.ts` consumes the branded `TtlMs` value directly.
- */
-export const DEFAULT_TOMBSTONE_TTL_MS: number = DEFAULT_TOMBSTONE_TTL;
 
 type L1Entry = { expiresAt: number; value: ResolvedRouting };
 const l1Cache = new Map<string, L1Entry>();

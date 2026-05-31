@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter as pathDelimiter, join } from "node:path";
@@ -65,7 +66,7 @@ export async function applyStepCommandFileEnvironmentUpdates(
   const pathContent = await readStepCommandFile(commandFiles.path);
   const appendedPaths = parsePathFile(pathContent);
   if (appendedPaths.length > 0) {
-    const basePath = sharedEnv.PATH ?? shellEnv.PATH ?? Deno.env.get("PATH") ??
+    const basePath = sharedEnv.PATH ?? shellEnv.PATH ?? getEnv("PATH") ??
       "";
     const prefix = appendedPaths.join(pathDelimiter);
     sharedEnv.PATH = basePath.length > 0

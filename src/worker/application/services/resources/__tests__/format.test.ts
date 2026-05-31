@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { toApiResource } from "../format.ts";
 
-Deno.test("toApiResource returns canonical public resource types", () => {
+test("toApiResource returns canonical public resource types", () => {
   assertEquals(
     toApiResource({
       id: "res-1",

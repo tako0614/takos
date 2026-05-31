@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertExists } from "@std/assert";
 
 import type { Env } from "../../../../shared/types/index.ts";
@@ -79,7 +80,7 @@ function createWorkspaceDb() {
   };
 }
 
-Deno.test("createWorkspaceWithDefaultRepo enqueues default app preinstall after space bootstrap", async () => {
+test("createWorkspaceWithDefaultRepo enqueues default app preinstall after space bootstrap", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
   const originalEnqueue = spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
   const originalProcess = spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
@@ -138,7 +139,7 @@ Deno.test("createWorkspaceWithDefaultRepo enqueues default app preinstall after 
   }
 });
 
-Deno.test("createWorkspaceWithDefaultRepo skips default app preinstall when explicitly disabled", async () => {
+test("createWorkspaceWithDefaultRepo skips default app preinstall when explicitly disabled", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
   const originalEnqueue = spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
   const originalProcess = spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
@@ -183,7 +184,7 @@ Deno.test("createWorkspaceWithDefaultRepo skips default app preinstall when expl
   }
 });
 
-Deno.test("createWorkspaceWithDefaultRepo still creates the space when default app enqueue fails (idempotent compensation)", async () => {
+test("createWorkspaceWithDefaultRepo still creates the space when default app enqueue fails (idempotent compensation)", async () => {
   // The space bundle is committed atomically via drizzle.batch before the
   // preinstall job is enqueued. The enqueue is deterministic-id +
   // onConflictDoNothing, so a transient enqueue failure is recoverable on a
@@ -226,7 +227,7 @@ Deno.test("createWorkspaceWithDefaultRepo still creates the space when default a
   }
 });
 
-Deno.test("createWorkspaceWithDefaultRepo succeeds when immediate preinstall processing fails", async () => {
+test("createWorkspaceWithDefaultRepo succeeds when immediate preinstall processing fails", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
   const originalEnqueue = spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
   const originalProcess = spaceCrudWriteDeps.processDefaultAppPreinstallJobs;

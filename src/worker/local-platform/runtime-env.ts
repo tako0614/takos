@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { createInMemoryDurableObjectNamespace } from "./in-memory-bindings.ts";
 import { createNodeWebEnv } from "../node-platform/env-builder.ts";
 import {
@@ -35,8 +36,8 @@ export async function createRuntimeHostEnvForTests(deps: {
   return {
     RUNTIME_CONTAINER: runtimeNamespace,
     TAKOS_WORKER: { fetch: (request: Request) => deps.webFetch(request) },
-    ADMIN_DOMAIN: Deno.env.get("ADMIN_DOMAIN") ?? DEFAULT_LOCAL_DOMAINS.admin,
-    PROXY_BASE_URL: Deno.env.get("PROXY_BASE_URL") ??
+    ADMIN_DOMAIN: getEnv("ADMIN_DOMAIN") ?? DEFAULT_LOCAL_DOMAINS.admin,
+    PROXY_BASE_URL: getEnv("PROXY_BASE_URL") ??
       "http://runtime-host.local",
   };
 }
@@ -56,8 +57,8 @@ export async function createRuntimeHostEnv() {
     TAKOS_WORKER: createForwardingBinding(
       resolveServiceUrl("TAKOS_LOCAL_WEB_URL", DEFAULT_LOCAL_PORTS.web),
     ),
-    ADMIN_DOMAIN: Deno.env.get("ADMIN_DOMAIN") ?? DEFAULT_LOCAL_DOMAINS.admin,
-    PROXY_BASE_URL: Deno.env.get("PROXY_BASE_URL") ??
+    ADMIN_DOMAIN: getEnv("ADMIN_DOMAIN") ?? DEFAULT_LOCAL_DOMAINS.admin,
+    PROXY_BASE_URL: getEnv("PROXY_BASE_URL") ??
       `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.runtimeHost}`,
   };
 }
@@ -90,9 +91,9 @@ export async function createExecutorHostEnvForTests(deps: {
       }
       : {}),
     TAKOS_AGENT_CONTROL_RPC_BASE_URL:
-      Deno.env.get("TAKOS_AGENT_CONTROL_RPC_BASE_URL") ??
+      getEnv("TAKOS_AGENT_CONTROL_RPC_BASE_URL") ??
         `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
-    PROXY_BASE_URL: Deno.env.get("PROXY_BASE_URL") ??
+    PROXY_BASE_URL: getEnv("PROXY_BASE_URL") ??
       "http://executor-host.local",
   };
 }
@@ -122,9 +123,9 @@ export async function createExecutorHostEnv() {
       ),
     ),
     TAKOS_AGENT_CONTROL_RPC_BASE_URL:
-      Deno.env.get("TAKOS_AGENT_CONTROL_RPC_BASE_URL") ??
+      getEnv("TAKOS_AGENT_CONTROL_RPC_BASE_URL") ??
         `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
-    PROXY_BASE_URL: Deno.env.get("PROXY_BASE_URL") ??
+    PROXY_BASE_URL: getEnv("PROXY_BASE_URL") ??
       `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
   };
 }

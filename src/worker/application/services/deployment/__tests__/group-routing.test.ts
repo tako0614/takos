@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertRejects } from "@std/assert";
 
 import { reconcileGroupRouting } from "../group-routing.ts";
@@ -133,7 +134,7 @@ function workloads(): ObservedGroupState["workloads"] {
   };
 }
 
-Deno.test("reconcileGroupRouting uses one group hostname set for all routes", async () => {
+test("reconcileGroupRouting uses one group hostname set for all routes", async () => {
   const routingStore = createRoutingStore();
   const env = {
     ROUTING_STORE: routingStore,
@@ -215,7 +216,7 @@ Deno.test("reconcileGroupRouting uses one group hostname set for all routes", as
   );
 });
 
-Deno.test(
+test(
   "runRoutingMutationWithRollback restores routing after partial hostname apply failure",
   async () => {
     const routingStore = createRoutingStore({
@@ -272,7 +273,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "reconcileGroupRouting restores hostname state when delete fails mid-reconciliation",
   async () => {
     const routingStore = createRoutingStore({

@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
 const appRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const packageConfig = JSON.parse(
@@ -34,37 +35,37 @@ function assertSourceMatches(source: string, pattern: RegExp): void {
     `Expected source to match ${pattern}`,
   );
 }
-Deno.test("DB ops contract - keeps db maintenance entrypoints explicit in Bun scripts and control scripts", () => {
-  assertEquals(scripts["db:reset"], undefined);
-  assertEquals(scripts["db:reset:local"], undefined);
-  assertEquals(scripts["db:reset:staging"], undefined);
-  assertEquals(scripts["db:reset:prod"], undefined);
-  assertEquals(
+test("DB ops contract - keeps db maintenance entrypoints explicit in Bun scripts and control scripts", () => {
+  assert.deepStrictEqual(scripts["db:reset"], undefined);
+  assert.deepStrictEqual(scripts["db:reset:local"], undefined);
+  assert.deepStrictEqual(scripts["db:reset:staging"], undefined);
+  assert.deepStrictEqual(scripts["db:reset:prod"], undefined);
+  assert.deepStrictEqual(
     scripts["db:migrate"],
     undefined,
   );
-  assertEquals(
+  assert.deepStrictEqual(
     scripts["validate:migration-safety"],
     "bun --preload ./shims/deno-compat.ts scripts/validate-migration-safety.ts",
   );
 });
 
-Deno.test("DB ops contract - routes shell reset through the canonical JS implementation", () => {
-  assertStringIncludes(resetDbShell, 'node "$SCRIPT_DIR/reset-db.js" "$@"');
+test("DB ops contract - routes shell reset through the canonical JS implementation", () => {
+  assert.ok(resetDbShell.includes('node "$SCRIPT_DIR/reset-db.js" "$@"'));
 });
 
-Deno.test("DB ops contract - makes remote DB maintenance scripts require explicit environments", () => {
-  assertStringIncludes(resetDbScript, "--env <staging|production>");
-  assertStringIncludes(
-    resetDbScript,
-    "For local reset, use the local stack/bootstrap flow (`bun run local:up`); this script is for staging/production only.",
+test("DB ops contract - makes remote DB maintenance scripts require explicit environments", () => {
+  assert.ok(resetDbScript.includes("--env <staging|production>"));
+  assert.ok(
+    resetDbScript.includes(
+      "For local reset, use the local stack/bootstrap flow (`bun run local:up`); this script is for staging/production only.",
+    ),
   );
-  assertStringIncludes(resetDbScript, "DB");
-  assert(!resetDbScript.includes("takos-control-db ${mode}"));
+  assert.ok(resetDbScript.includes("DB"));
+  assert.ok(!resetDbScript.includes("takos-control-db ${mode}"));
 
-  assertStringIncludes(
-    offloadBackfill,
-    "--remote requires --env staging|production",
+  assert.ok(
+    offloadBackfill.includes("--remote requires --env staging|production"),
   );
   assertSourceMatches(offloadBackfill, /const D1_TARGET = ["']DB["'];?/);
   assertSourceMatches(
@@ -73,9 +74,10 @@ Deno.test("DB ops contract - makes remote DB maintenance scripts require explici
   );
   assertSourceMatches(offloadBackfill, /production:\s*["']takos-offload["']/);
 
-  assertStringIncludes(
-    fixWorkerBindings,
-    "Usage: node scripts/fix-worker-bindings.js <route-ref> [--local|--env staging|production]",
+  assert.ok(
+    fixWorkerBindings.includes(
+      "Usage: node scripts/fix-worker-bindings.js <route-ref> [--local|--env staging|production]",
+    ),
   );
   assertSourceMatches(
     fixWorkerBindings,

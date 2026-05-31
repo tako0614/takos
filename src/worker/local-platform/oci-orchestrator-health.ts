@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import http from "node:http";
 import type {
   ContainerBackend,
@@ -34,7 +35,7 @@ async function pollHealthCheck(
   healthPath: string,
   timeoutMs: number,
 ): Promise<boolean> {
-  if (Deno.env.get("TAKOS_SKIP_OCI_HEALTH_CHECK") === "1") {
+  if (getEnv("TAKOS_SKIP_OCI_HEALTH_CHECK") === "1") {
     return true;
   }
 
@@ -85,7 +86,7 @@ async function pollHealthCheckUrl(
   url: string,
   timeoutMs: number,
 ): Promise<boolean> {
-  if (Deno.env.get("TAKOS_SKIP_OCI_HEALTH_CHECK") === "1") {
+  if (getEnv("TAKOS_SKIP_OCI_HEALTH_CHECK") === "1") {
     return true;
   }
 

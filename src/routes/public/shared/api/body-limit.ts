@@ -12,7 +12,7 @@ import { commonError } from "./common.ts";
  * - Methods that never carry a body (GET / HEAD / OPTIONS / DELETE) are
  *   skipped.
  * - Missing `Content-Length` is allowed by default so that chunked-encoded
- *   uploads and runtimes that omit the header (e.g. Deno's `Request`
+ *   uploads and runtimes that omit the header (for example fetch `Request`
  *   constructor for string bodies) still pass through, BUT a chunked body is
  *   not trusted to stay under the cap on the header's word alone: when
  *   `Content-Length` is absent the body stream is wrapped in a byte counter
@@ -144,7 +144,7 @@ export function capRequestBodyStream(
     redirect: request.redirect,
     signal: request.signal,
     // @ts-expect-error duplex is a valid RequestInit field at runtime but is
-    // not yet in the lib.dom typings shipped with this Deno version.
+    // not yet in the lib.dom typings shipped with the current runtime types.
     duplex: "half",
   });
 }

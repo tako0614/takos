@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 /**
  * Node-specific HTTP server starters for the local-platform stack.
  *
@@ -19,14 +20,14 @@ import {
 } from "./runtime.ts";
 
 function resolvePort(defaultPort: number): number {
-  const parsed = Number.parseInt(Deno.env.get("PORT") ?? "", 10);
+  const parsed = Number.parseInt(getEnv("PORT") ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultPort;
 }
 
 function logLocalServerStart(service: string, port: number) {
   logInfo(`${service} local runtime listening on :${port}`, {
     module: "local_platform",
-    adapter: Deno.env.get("TAKOS_LOCAL_ADAPTER"),
+    adapter: getEnv("TAKOS_LOCAL_ADAPTER"),
     runtime: "node",
   });
 }

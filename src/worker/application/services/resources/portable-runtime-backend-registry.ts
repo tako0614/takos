@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import {
   CreateQueueCommand,
   DeleteQueueCommand,
@@ -104,14 +105,14 @@ function missingPortablePgVectorRequirements(): string[] {
 
 function missingPortableK8sSecretRequirements(): string[] {
   return [
-    ...(optionalEnv("K8S_API_SERVER") || Deno.env.get("KUBERNETES_SERVICE_HOST")
+    ...(optionalEnv("K8S_API_SERVER") || getEnv("KUBERNETES_SERVICE_HOST")
       ? []
       : ["K8S_API_SERVER or in-cluster Kubernetes service env"]),
     ...(optionalEnv("K8S_BEARER_TOKEN") ||
-        Deno.env.get("KUBERNETES_SERVICE_HOST")
+        getEnv("KUBERNETES_SERVICE_HOST")
       ? []
       : ["K8S_BEARER_TOKEN or in-cluster service account token"]),
-    ...(optionalEnv("K8S_NAMESPACE") || Deno.env.get("KUBERNETES_SERVICE_HOST")
+    ...(optionalEnv("K8S_NAMESPACE") || getEnv("KUBERNETES_SERVICE_HOST")
       ? []
       : ["K8S_NAMESPACE or in-cluster service account namespace"]),
   ];

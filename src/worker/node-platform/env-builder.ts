@@ -536,11 +536,7 @@ export async function createNodeWebEnv(): Promise<Env> {
     AWS_ECS_BASE_URL: optionalEnv("AWS_ECS_BASE_URL"),
     AWS_ECS_HEALTH_URL: optionalEnv("AWS_ECS_HEALTH_URL"),
     AWS_ECR_REPOSITORY_URI: optionalEnv("AWS_ECR_REPOSITORY_URI"),
-    // Canonical Google Cloud SDK / Cloud Run env. GCP_PROJECT_ID is accepted
-    // as an operator-local fallback; consumers reading via
-    // resolveGoogleCloudProject emit a one-time warning when it is the source.
-    GOOGLE_CLOUD_PROJECT: optionalEnv("GOOGLE_CLOUD_PROJECT") ??
-      optionalEnv("GCP_PROJECT_ID"),
+    GOOGLE_CLOUD_PROJECT: optionalEnv("GOOGLE_CLOUD_PROJECT"),
     GCP_REGION: optionalEnv("GCP_REGION"),
     GCP_CLOUD_RUN_REGION: optionalEnv("GCP_CLOUD_RUN_REGION"),
     GCP_CLOUD_RUN_SERVICE_ID: optionalEnv("GCP_CLOUD_RUN_SERVICE_ID"),

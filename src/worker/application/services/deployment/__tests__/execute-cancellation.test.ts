@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 /**
  * Cancellation tests for the deployment pipeline.
  *
@@ -70,7 +71,7 @@ function makeDeploymentRow(
   } as DeploymentRow;
 }
 
-Deno.test("executeDeploymentPipeline throws at the lock phase boundary when signal is pre-aborted", async () => {
+test("executeDeploymentPipeline throws at the lock phase boundary when signal is pre-aborted", async () => {
   const env = makeEnv();
   const controller = new AbortController();
   controller.abort("user-cancelled");
@@ -106,7 +107,7 @@ Deno.test("executeDeploymentPipeline throws at the lock phase boundary when sign
   }
 });
 
-Deno.test("executeDeploymentPipeline honors a persisted cancellation flag before state transition", async () => {
+test("executeDeploymentPipeline honors a persisted cancellation flag before state transition", async () => {
   const env = makeEnv();
   const row = makeDeploymentRow({ cancellationRequestedAt: 1_767_225_600_000 });
   const updates: Array<Record<string, unknown>> = [];
@@ -163,7 +164,7 @@ Deno.test("executeDeploymentPipeline honors a persisted cancellation flag before
   assertEquals(events[0].eventType, "failed");
 });
 
-Deno.test("DeploymentService.executeDeployment honors a pre-aborted AbortSignal", async () => {
+test("DeploymentService.executeDeployment honors a pre-aborted AbortSignal", async () => {
   const env = makeEnv();
   const service = new DeploymentService(env);
   const controller = new AbortController();
@@ -190,7 +191,7 @@ Deno.test("DeploymentService.executeDeployment honors a pre-aborted AbortSignal"
   }
 });
 
-Deno.test("executeDeploymentPipeline default signal (none passed) runs without aborting at phase boundaries", async () => {
+test("executeDeploymentPipeline default signal (none passed) runs without aborting at phase boundaries", async () => {
   // When no signal is passed the pipeline uses a never-aborted default, so
   // it must NOT throw at the lock-phase boundary. It will of course fail
   // later because the env is empty; we only assert that the failure is not

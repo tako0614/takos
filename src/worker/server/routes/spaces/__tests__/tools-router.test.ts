@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { createApiRouter } from "../../api.ts";
 
-Deno.test("space tools routes are mounted under /spaces/:spaceId/tools", () => {
+test("space tools routes are mounted under /spaces/:spaceId/tools", () => {
   const noop = async (_c: unknown, next: () => Promise<void>) => {
     await next();
   };

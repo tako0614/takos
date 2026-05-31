@@ -1,4 +1,5 @@
-import type { SqlDatabaseBinding } from "@/shared/types/bindings.ts";
+import { test } from "bun:test";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { assertEquals, assertStringIncludes } from "@std/assert";
 
 import {
@@ -63,7 +64,7 @@ function createEnv(
   } as RunnerEnv & { sentMessages: unknown[] };
 }
 
-Deno.test("reenqueueStaleUnclaimedRuns re-enqueues stale pending and queued runs", async () => {
+test("reenqueueStaleUnclaimedRuns re-enqueues stale pending and queued runs", async () => {
   const { db, prepareCalls } = createFakeSqlDatabaseBinding([
     { rawRows: [["run-queued", "queued"], ["run-pending", "pending"]] },
     { run: { meta: { changes: 1 } } },
@@ -93,7 +94,7 @@ Deno.test("reenqueueStaleUnclaimedRuns re-enqueues stale pending and queued runs
   assertStringIncludes(prepareCalls[2].sql.toLowerCase(), "update");
 });
 
-Deno.test("reenqueueStaleUnclaimedRuns leaves fresh queues untouched when no rows match", async () => {
+test("reenqueueStaleUnclaimedRuns leaves fresh queues untouched when no rows match", async () => {
   const { db, prepareCalls } = createFakeSqlDatabaseBinding([
     { rawRows: [] },
   ]);
@@ -105,7 +106,7 @@ Deno.test("reenqueueStaleUnclaimedRuns leaves fresh queues untouched when no row
   assertEquals(prepareCalls.length, 1);
 });
 
-Deno.test("reenqueueStaleRunningRuns reverts to stale running when queue send fails", async () => {
+test("reenqueueStaleRunningRuns reverts to stale running when queue send fails", async () => {
   const { db, prepareCalls } = createFakeSqlDatabaseBinding([
     { rawRows: [["run-running"]] },
     { run: { meta: { changes: 1 } } },

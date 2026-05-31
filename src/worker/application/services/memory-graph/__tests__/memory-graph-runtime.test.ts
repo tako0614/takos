@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
 
 import { AgentMemoryRuntime } from "../memory-graph-runtime.ts";
@@ -95,7 +96,7 @@ function makeRememberArgs(content: string) {
   } as never;
 }
 
-Deno.test(
+test(
   "memory-graph flushOverlay commits writes in a single transaction",
   async () => {
     const recording = createRecordingDb();
@@ -126,7 +127,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "memory-graph flushOverlay rolls back and leaves overlay intact on failure",
   async () => {
     // Fail on the SECOND insertEvidence call so we know we're mid-loop.

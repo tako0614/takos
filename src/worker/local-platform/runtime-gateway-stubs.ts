@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import type {
   AgentExecutorControlConfig,
   AgentExecutorDispatchPayload,
@@ -107,10 +108,10 @@ export function createLocalExecutorGatewayStub(
       }
       const controlToken = crypto.randomUUID().replace(/-/g, "");
       const controlConfig: AgentExecutorControlConfig = {
-        controlRpcBaseUrl: Deno.env.get("TAKOS_AGENT_CONTROL_RPC_BASE_URL") ??
+        controlRpcBaseUrl: getEnv("TAKOS_AGENT_CONTROL_RPC_BASE_URL") ??
           `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
         controlRpcToken: controlToken,
-        startToken: Deno.env.get("TAKOS_AGENT_START_TOKEN"),
+        startToken: getEnv("TAKOS_AGENT_START_TOKEN"),
       };
       tokens.set(controlToken, {
         runId: body.runId,

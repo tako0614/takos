@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { compileGroupDesiredState } from "../group-state.ts";
@@ -10,7 +11,7 @@ import {
 } from "../apply-engine.ts";
 import { computeSHA256 } from "../../../../shared/utils/hash.ts";
 
-Deno.test(
+test(
   "buildGroupSnapshotUpdate keeps the previous group snapshot on degraded apply",
   () => {
     const desiredState = compileGroupDesiredState({
@@ -49,7 +50,7 @@ Deno.test(
   },
 );
 
-Deno.test("manifestNeedsEarlyPublicationSync only triggers for same-manifest consumes", () => {
+test("manifestNeedsEarlyPublicationSync only triggers for same-manifest consumes", () => {
   assertEquals(
     manifestNeedsEarlyPublicationSync({
       publish: [{
@@ -98,7 +99,7 @@ Deno.test("manifestNeedsEarlyPublicationSync only triggers for same-manifest con
   );
 });
 
-Deno.test("applyArtifactChangesToDiff marks unchanged workload when bundle code changes", async () => {
+test("applyArtifactChangesToDiff marks unchanged workload when bundle code changes", async () => {
   const currentHash = await computeSHA256("old bundle");
   const result = await applyArtifactChangesToDiff(
     {
@@ -137,7 +138,7 @@ Deno.test("applyArtifactChangesToDiff marks unchanged workload when bundle code 
   assertEquals(result.hasChanges, true);
 });
 
-Deno.test("buildGroupSnapshotUpdate advances the group snapshot on success", () => {
+test("buildGroupSnapshotUpdate advances the group snapshot on success", () => {
   const desiredState = compileGroupDesiredState({
     name: "demo",
     version: "2.0.0",
@@ -167,7 +168,7 @@ Deno.test("buildGroupSnapshotUpdate advances the group snapshot on success", () 
   });
 });
 
-Deno.test(
+test(
   "resolveTargetWorkloadNames and buildPublicationPrerequisiteManifest scope targeted applies",
   () => {
     const desiredState = compileGroupDesiredState({

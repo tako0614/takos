@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import type { WorkerBinding } from "../application/services/wfp/index.ts";
@@ -87,7 +88,7 @@ function getLocalPlatformTestHooks(): LocalPlatformTestHooks {
 }
 
 function resolveMiniflareHost(): string {
-  const explicit = Deno.env.get("TAKOS_MINIFLARE_HOST")?.trim();
+  const explicit = getEnv("TAKOS_MINIFLARE_HOST")?.trim();
   if (explicit) {
     return explicit;
   }
@@ -96,7 +97,7 @@ function resolveMiniflareHost(): string {
 
 function resolveMiniflarePort(): number | undefined {
   const parsed = Number.parseInt(
-    Deno.env.get("TAKOS_MINIFLARE_PORT")?.trim() ?? "",
+    getEnv("TAKOS_MINIFLARE_PORT")?.trim() ?? "",
     10,
   );
   if (Number.isFinite(parsed) && parsed > 0) {
@@ -165,23 +166,23 @@ async function createBackendQueueAdapter(
       }
       const { createSqsQueue } = await import("../adapters/sqs-queue.ts");
       return createSqsQueue({
-        region: Deno.env.get("AWS_REGION")?.trim() || "us-east-1",
+        region: getEnv("AWS_REGION")?.trim() || "us-east-1",
         queueUrl: binding.queue_url,
-        accessKeyId: Deno.env.get("AWS_ACCESS_KEY_ID")?.trim(),
-        secretAccessKey: Deno.env.get("AWS_SECRET_ACCESS_KEY")?.trim(),
+        accessKeyId: getEnv("AWS_ACCESS_KEY_ID")?.trim(),
+        secretAccessKey: getEnv("AWS_SECRET_ACCESS_KEY")?.trim(),
       });
     }
     case "pubsub": {
       const { createPubSubQueue } = await import("../adapters/pubsub-queue.ts");
       return createPubSubQueue({
         projectId: resolveGoogleCloudProjectFromProcess(),
-        keyFilePath: Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS")?.trim(),
+        keyFilePath: getEnv("GOOGLE_APPLICATION_CREDENTIALS")?.trim(),
         topicName: binding.queue_name || binding.name,
         subscriptionName: binding.subscription_name,
       });
     }
     case "redis": {
-      const redisUrl = Deno.env.get("REDIS_URL")?.trim();
+      const redisUrl = getEnv("REDIS_URL")?.trim();
       if (!redisUrl) {
         throw new Error(
           `Message queue binding "${binding.name}" requires REDIS_URL for Redis-backed delivery`,

@@ -237,15 +237,11 @@ export function finalizeJobResult(
       // fail-CLOSED: outputs 式の評価に失敗したら、誤った (空文字で穴埋めされた)
       // 出力を黙って公開せず、ジョブを失敗扱いにする。式評価エラーが scheduler
       // 全体を巻き込んでクラッシュするのも防ぐ (このジョブ限定で失敗させる)。
-      if (typeof Deno !== "undefined") {
-        Deno.stderr.writeSync(
-          new TextEncoder().encode(
-            `[actions-engine] Job "${result.id}" outputs evaluation failed: ${
-              err instanceof Error ? err.message : String(err)
-            }\n`,
-          ),
-        );
-      }
+      console.error(
+        `[actions-engine] Job "${result.id}" outputs evaluation failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
       result.conclusion = "failure";
       result.outputs = {};
       return;

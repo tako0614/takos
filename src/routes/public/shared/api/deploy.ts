@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import {
   createDeployIntentClient,
   parseDeployIntentEnv,
@@ -177,7 +178,7 @@ export async function maybeWriteGitOpsDeploymentIntent(
 
   let config;
   try {
-    config = parseDeployIntentEnv(Deno.env.toObject());
+    config = parseDeployIntentEnv(envObject());
   } catch {
     // Do not surface the raw parse error.message: it can echo back env-derived
     // configuration detail. The operator finds the cause in server logs.

@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
@@ -48,7 +49,7 @@ function createApp() {
   return app;
 }
 
-Deno.test("groups routes do not expose direct deployment collection", async () => {
+test("groups routes do not expose direct deployment collection", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -79,7 +80,7 @@ Deno.test("groups routes do not expose direct deployment collection", async () =
   }
 });
 
-Deno.test("groups routes do not parse direct deployment bodies", async () => {
+test("groups routes do not parse direct deployment bodies", async () => {
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" } }) as never;
   try {
@@ -106,7 +107,7 @@ Deno.test("groups routes do not parse direct deployment bodies", async () => {
   }
 });
 
-Deno.test("groups routes do not expose direct rollback routes", async () => {
+test("groups routes do not expose direct rollback routes", async () => {
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" } }) as never;
   try {

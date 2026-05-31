@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { Hono } from "hono";
 import { assertEquals } from "@std/assert";
 import { assertSpyCalls, spy } from "@std/testing/mock";
@@ -165,7 +166,7 @@ function restoreOauthAuthDeps() {
   Object.assign(oauthAuthDeps, originalOauthAuthDeps);
 }
 
-Deno.test("protected API denies Accounts bearer tokens missing the route family read scope", async () => {
+test("protected API denies Accounts bearer tokens missing the route family read scope", async () => {
   const validateTakosumiAccountsBearerSpy = spy(async () => ({
     userId: "user-1",
     scopes: ["profile"],
@@ -198,7 +199,7 @@ Deno.test("protected API denies Accounts bearer tokens missing the route family 
   }
 });
 
-Deno.test("protected API does not treat tak_oat as scoped API auth", async () => {
+test("protected API does not treat tak_oat as scoped API auth", async () => {
   const requireAuthSpy = spy(
     async (
       c: Parameters<ApiRequireAuth>[0],
@@ -227,7 +228,7 @@ Deno.test("protected API does not treat tak_oat as scoped API auth", async () =>
   assertSpyCalls(requireAuthSpy, 1);
 });
 
-Deno.test("protected API does not treat legacy tak_pat as scoped API auth", async () => {
+test("protected API does not treat legacy tak_pat as scoped API auth", async () => {
   const requireAuthSpy = spy(
     async (
       c: Parameters<ApiRequireAuth>[0],
@@ -256,7 +257,7 @@ Deno.test("protected API does not treat legacy tak_pat as scoped API auth", asyn
   assertSpyCalls(requireAuthSpy, 1);
 });
 
-Deno.test("protected API allows Accounts bearer tokens with the route family scope", async () => {
+test("protected API allows Accounts bearer tokens with the route family scope", async () => {
   oauthAuthDeps.validateTakosumiAccountsBearer = spy(async () => ({
     userId: "user-1",
     scopes: ["profile"],
@@ -285,7 +286,7 @@ Deno.test("protected API allows Accounts bearer tokens with the route family sco
   }
 });
 
-Deno.test("billing API is not mounted before PAT scope checks", async () => {
+test("billing API is not mounted before PAT scope checks", async () => {
   const validateTakosumiAccountsBearerSpy = spy(async () => ({
     userId: "user-1",
     scopes: ["profile"],
@@ -313,7 +314,7 @@ Deno.test("billing API is not mounted before PAT scope checks", async () => {
   }
 });
 
-Deno.test("publications API is not mounted before PAT scope checks", async () => {
+test("publications API is not mounted before PAT scope checks", async () => {
   const validateTakosumiAccountsBearerSpy = spy(async () => ({
     userId: "user-1",
     scopes: ["profile"],
@@ -341,7 +342,7 @@ Deno.test("publications API is not mounted before PAT scope checks", async () =>
   }
 });
 
-Deno.test("billing API is not mounted before retired bearer auth fallback", async () => {
+test("billing API is not mounted before retired bearer auth fallback", async () => {
   const requireAuthSpy = spy(
     async (
       c: Parameters<ApiRequireAuth>[0],
@@ -366,7 +367,7 @@ Deno.test("billing API is not mounted before retired bearer auth fallback", asyn
   }
 });
 
-Deno.test("billing API is not mounted before browser auth fallback", async () => {
+test("billing API is not mounted before browser auth fallback", async () => {
   const validateTakosumiAccountsBearerSpy = spy(
     oauthAuthDeps.validateTakosumiAccountsBearer,
   );
@@ -397,7 +398,7 @@ Deno.test("billing API is not mounted before browser auth fallback", async () =>
   }
 });
 
-Deno.test("protected API keeps browser sessions at full access without token scopes", async () => {
+test("protected API keeps browser sessions at full access without token scopes", async () => {
   const validateTakosumiAccountsBearerSpy = spy(
     oauthAuthDeps.validateTakosumiAccountsBearer,
   );

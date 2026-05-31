@@ -14,7 +14,7 @@ Takosumi 系のサービスも起動します。
 | サービス                  |  ポート | 配置先               | 役割                                                                                         |
 | ------------------------- | ------: | -------------------- | -------------------------------------------------------------------------------------------- |
 | `takos-worker`            |  `8787` | `src/worker`         | OIDC consumer、app-local profile、Web/API ゲートウェイ                                       |
-| `takos-web`               |  `5173` | `web/`               | browser UI development server                                                                |
+| Takos UI                  |  `5173` | `web/`               | browser UI development server                                                                |
 | `takosumi kernel`         |  `8788` | `../takosumi/`       | AppSpec install / Deployment apply エンジン。runtime routing は provider data plane が担当   |
 | `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / Installation |
 | `takos-agent`             |  `8789` | `containers/agent/`  | エージェント実行 container                                                                   |

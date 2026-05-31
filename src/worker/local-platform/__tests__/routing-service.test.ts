@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { resolveHostnameRouting } from "../../application/services/routing/service.ts";
 import type { RoutingBindings } from "../../application/services/routing/routing-models.ts";
 
-Deno.test("routing service keeps kv store tombstones authoritative in cache phases", async () => {
+test("routing service keeps kv store tombstones authoritative in cache phases", async () => {
   const tombstoneUntil = Date.now() + 60_000;
   const env: RoutingBindings = {
     ROUTING_DO_PHASE: "4",

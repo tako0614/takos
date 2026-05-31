@@ -140,7 +140,7 @@ function handleReplayEvent(ctx: EventHandlerContext): void {
     })
     .catch((err) => {
       console.error(
-        "[takos-web] verifyRunStatus failed during replay",
+        "[takos-ui] verifyRunStatus failed during replay",
         err,
       );
     });

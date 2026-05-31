@@ -41,34 +41,6 @@ export class SessionDO {
 
   constructor(private state: DurableObjectStateBinding) {
     this.state.blockConcurrencyWhile(async () => {
-      // Migrate from legacy single-key format if present
-      const legacy = await this.state.storage.get<{
-        sessions: Record<string, Session>;
-        oidcStates: Record<string, OIDCState>;
-      }>("data");
-      if (legacy) {
-        for (const [key, value] of Object.entries(legacy.sessions || {})) {
-          this.sessions.set(key, value);
-        }
-        for (const [key, value] of Object.entries(legacy.oidcStates || {})) {
-          this.oidcStates.set(key, value);
-        }
-        // Persist in new per-key format and delete legacy key
-        const puts: Record<string, Session | OIDCState> = {};
-        for (const [key, value] of this.sessions) {
-          puts[`${SESSION_PREFIX}${key}`] = value;
-        }
-        for (const [key, value] of this.oidcStates) {
-          puts[`${OIDC_PREFIX}${key}`] = value;
-        }
-        if (Object.keys(puts).length > 0) {
-          await this.state.storage.put(puts);
-        }
-        await this.state.storage.delete("data");
-        return;
-      }
-
-      // Load from per-key storage
       const allEntries = await this.state.storage.list<Session | OIDCState>();
       for (const [key, value] of allEntries) {
         if (key.startsWith(SESSION_PREFIX)) {

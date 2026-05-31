@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 /**
  * Shared environment helpers for the Node.js platform resolvers.
  */
@@ -8,7 +9,7 @@ import path from "node:path";
 // ---------------------------------------------------------------------------
 
 export function optionalEnv(name: string): string | undefined {
-  return Deno.env.get(name)?.trim() || undefined;
+  return getEnv(name)?.trim() || undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -18,7 +19,7 @@ export function optionalEnv(name: string): string | undefined {
 export function resolveLocalDataDir(): string | null {
   const explicit = optionalEnv("TAKOS_LOCAL_DATA_DIR");
   if (explicit) return path.resolve(explicit);
-  if (Deno.env.get("VITEST")) return null;
+  if (getEnv("VITEST")) return null;
   // Only use the default directory if no cloud storage env vars are set —
   // this avoids accidentally creating a .takos-local directory when running
   // on a cloud platform.
@@ -42,9 +43,6 @@ function hasCloudBindings(): boolean {
     optionalEnv("AWS_S3_GIT_OBJECTS_BUCKET") ||
     optionalEnv("GCP_GCS_GIT_OBJECTS_BUCKET") ||
     optionalEnv("AWS_ECS_CLUSTER_ARN") ||
-    // Honor both GOOGLE_CLOUD_PROJECT and the operator-local GCP_PROJECT_ID
-    // fallback during local-data-dir detection.
-    optionalEnv("GOOGLE_CLOUD_PROJECT") ||
-    optionalEnv("GCP_PROJECT_ID")
+    optionalEnv("GOOGLE_CLOUD_PROJECT")
   );
 }

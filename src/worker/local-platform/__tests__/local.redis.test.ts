@@ -1,4 +1,9 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import { test } from "bun:test";
 import { assert, assertEquals } from "@std/assert";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   createNodeWebEnv,
   disposeNodePlatformState,
@@ -103,16 +108,16 @@ function installRedisMock(): void {
   );
 }
 
-Deno.test("local redis-backed bindings - uses redis for local message queue and routing persistence when REDIS_URL is set", async () => {
-  const originalRedisUrl = Deno.env.get("REDIS_URL");
-  const originalDisableRedisExternals = Deno.env.get(
+test("local redis-backed bindings - uses redis for local message queue and routing persistence when REDIS_URL is set", async () => {
+  const originalRedisUrl = getEnv("REDIS_URL");
+  const originalDisableRedisExternals = getEnv(
     "TAKOS_DISABLE_REDIS_EXTERNALS",
   );
-  const originalLocalDataDir = Deno.env.get("TAKOS_LOCAL_DATA_DIR");
-  const tempLocalDataDir = await Deno.makeTempDir();
-  Deno.env.set("REDIS_URL", "redis://localhost:6379");
-  Deno.env.set("TAKOS_DISABLE_REDIS_EXTERNALS", "1");
-  Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempLocalDataDir);
+  const originalLocalDataDir = getEnv("TAKOS_LOCAL_DATA_DIR");
+  const tempLocalDataDir = await mkdtemp(join(tmpdir(), "takos-local-redis-"));
+  setEnv("REDIS_URL", "redis://localhost:6379");
+  setEnv("TAKOS_DISABLE_REDIS_EXTERNALS", "1");
+  setEnv("TAKOS_LOCAL_DATA_DIR", tempLocalDataDir);
   calls.length = 0;
   stores.clear();
   installRedisMock();
@@ -169,26 +174,26 @@ Deno.test("local redis-backed bindings - uses redis for local message queue and 
     });
   } finally {
     if (originalRedisUrl === undefined) {
-      Deno.env.delete("REDIS_URL");
+      deleteEnv("REDIS_URL");
     } else {
-      Deno.env.set("REDIS_URL", originalRedisUrl);
+      setEnv("REDIS_URL", originalRedisUrl);
     }
     if (originalDisableRedisExternals === undefined) {
-      Deno.env.delete("TAKOS_DISABLE_REDIS_EXTERNALS");
+      deleteEnv("TAKOS_DISABLE_REDIS_EXTERNALS");
     } else {
-      Deno.env.set(
+      setEnv(
         "TAKOS_DISABLE_REDIS_EXTERNALS",
         originalDisableRedisExternals,
       );
     }
     if (originalLocalDataDir === undefined) {
-      Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
+      deleteEnv("TAKOS_LOCAL_DATA_DIR");
     } else {
-      Deno.env.set("TAKOS_LOCAL_DATA_DIR", originalLocalDataDir);
+      setEnv("TAKOS_LOCAL_DATA_DIR", originalLocalDataDir);
     }
     setRedisClientFactoryForTests(null);
     resetRedisClientForTests();
     await disposeNodePlatformState();
-    await Deno.remove(tempLocalDataDir, { recursive: true });
+    await rm(tempLocalDataDir, { recursive: true, force: true });
   }
 });

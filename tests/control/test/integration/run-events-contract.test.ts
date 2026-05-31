@@ -5,9 +5,10 @@ import {
   TERMINAL_STATUS_BY_EVENT_TYPE,
 } from "@/application/services/run-notifier/run-events-contract.ts";
 
-import { assertEquals } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
-Deno.test("run events contract - builds terminal payload with status and run metadata", () => {
+test("run events contract - builds terminal payload with status and run metadata", () => {
   const payload = buildTerminalPayload(
     "run_1",
     "completed",
@@ -15,7 +16,7 @@ Deno.test("run events contract - builds terminal payload with status and run met
     "session_1",
   );
 
-  assertEquals(payload, {
+  assert.deepStrictEqual(payload, {
     status: "completed",
     run: {
       id: "run_1",
@@ -25,13 +26,13 @@ Deno.test("run events contract - builds terminal payload with status and run met
   });
 });
 
-Deno.test("run events contract - builds failed payload with optional permanence and session id", () => {
+test("run events contract - builds failed payload with optional permanence and session id", () => {
   const payload = buildRunFailedPayload("run_2", "failed permanently", {
     permanent: true,
     sessionId: null,
   });
 
-  assertEquals(payload, {
+  assert.deepStrictEqual(payload, {
     status: "failed",
     run: {
       id: "run_2",
@@ -42,12 +43,15 @@ Deno.test("run events contract - builds failed payload with optional permanence 
   });
 });
 
-Deno.test("run events contract - maps terminal event types to terminal statuses", () => {
-  assertEquals(TERMINAL_STATUS_BY_EVENT_TYPE["completed"], "completed");
-  assertEquals(TERMINAL_STATUS_BY_EVENT_TYPE["error"], "failed");
-  assertEquals(TERMINAL_STATUS_BY_EVENT_TYPE["cancelled"], "cancelled");
-  assertEquals(TERMINAL_STATUS_BY_EVENT_TYPE["run.failed"], "failed");
-  assertEquals(RUN_TERMINAL_EVENT_TYPES.has("completed"), true);
-  assertEquals(RUN_TERMINAL_EVENT_TYPES.has("run.failed"), true);
-  assertEquals(RUN_TERMINAL_EVENT_TYPES.has("run.status" as never), false);
+test("run events contract - maps terminal event types to terminal statuses", () => {
+  assert.deepStrictEqual(TERMINAL_STATUS_BY_EVENT_TYPE["completed"], "completed");
+  assert.deepStrictEqual(TERMINAL_STATUS_BY_EVENT_TYPE["error"], "failed");
+  assert.deepStrictEqual(TERMINAL_STATUS_BY_EVENT_TYPE["cancelled"], "cancelled");
+  assert.deepStrictEqual(TERMINAL_STATUS_BY_EVENT_TYPE["run.failed"], "failed");
+  assert.deepStrictEqual(RUN_TERMINAL_EVENT_TYPES.has("completed"), true);
+  assert.deepStrictEqual(RUN_TERMINAL_EVENT_TYPES.has("run.failed"), true);
+  assert.deepStrictEqual(
+    RUN_TERMINAL_EVENT_TYPES.has("run.status" as never),
+    false,
+  );
 });

@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import {
   formatInstalledValue,
   formatRepositorySourceLabel,
@@ -7,6 +7,7 @@ import {
   shortCommit,
 } from "../../../views/source/sourceDisplay.ts";
 import type { SourceItem } from "../../../hooks/useSourceData.ts";
+import { test } from "bun:test";
 
 function makeItem(overrides: Partial<SourceItem> = {}): SourceItem {
   return {
@@ -29,7 +30,7 @@ function makeItem(overrides: Partial<SourceItem> = {}): SourceItem {
   };
 }
 
-Deno.test("source display - derives source from explicit git_ref metadata", () => {
+test("source display - derives source from explicit git_ref metadata", () => {
   const item = makeItem({
     source: {
       kind: "git_ref",
@@ -47,7 +48,7 @@ Deno.test("source display - derives source from explicit git_ref metadata", () =
   );
 });
 
-Deno.test("source display - falls back to install source for deployable catalog items", () => {
+test("source display - falls back to install source for deployable catalog items", () => {
   const originalLocation = globalThis.location;
   Object.defineProperty(globalThis, "location", {
     configurable: true,
@@ -86,7 +87,7 @@ Deno.test("source display - falls back to install source for deployable catalog 
   }
 });
 
-Deno.test("source display - formats tracking and installed commit labels", () => {
+test("source display - formats tracking and installed commit labels", () => {
   assertEquals(shortCommit("abcdef1234567890"), "abcdef123456");
   assertEquals(
     formatTrackingRefLabel(

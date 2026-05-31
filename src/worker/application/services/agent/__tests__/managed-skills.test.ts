@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { validateCustomSkillMetadata } from "../managed-skills.ts";
 
-Deno.test("validateCustomSkillMetadata accepts documented output mode aliases", () => {
+test("validateCustomSkillMetadata accepts documented output mode aliases", () => {
   const result = validateCustomSkillMetadata({
     execution_contract: {
       output_modes: ["text", "structured", "artifact", "repo"],

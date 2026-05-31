@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertObjectMatch, assertRejects } from "@std/assert";
 import { spy } from "@std/testing/mock";
 
@@ -9,7 +10,7 @@ import {
 } from "../backend.ts";
 import type { Deployment } from "../models.ts";
 
-Deno.test("OCI deployment backend forwards runtime env vars and cleans up deployed artifacts", async () => {
+test("OCI deployment backend forwards runtime env vars and cleans up deployed artifacts", async () => {
   const fetchSpy = spy(
     async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST" && String(_input).endsWith("/deploy")) {
@@ -135,7 +136,7 @@ Deno.test("OCI deployment backend forwards runtime env vars and cleans up deploy
   assertEquals((cleanupCall.args[1] as RequestInit).method, "POST");
 });
 
-Deno.test("OCI deployment backend rejects pre-aborted signals before fetch", async () => {
+test("OCI deployment backend rejects pre-aborted signals before fetch", async () => {
   const fetchSpy = spy(
     async (_input: RequestInfo | URL, _init?: RequestInit) =>
       new Response(JSON.stringify({ ok: true }), {
@@ -183,7 +184,7 @@ Deno.test("OCI deployment backend rejects pre-aborted signals before fetch", asy
   assertEquals(fetchSpy.calls.length, 0);
 });
 
-Deno.test("OCI deployment backend aborts an in-flight fetch when the signal fires mid-call", async () => {
+test("OCI deployment backend aborts an in-flight fetch when the signal fires mid-call", async () => {
   // Force the orchestrator fetch to block until the test triggers abort.
   // The real fetch implementation honors `signal` and rejects with
   // AbortError; we model the same shape so the test exercises the path the
@@ -259,7 +260,7 @@ Deno.test("OCI deployment backend aborts an in-flight fetch when the signal fire
   assertEquals(fetchCalls[0]?.signal, controller.signal);
 });
 
-Deno.test("createDeploymentBackend rejects unknown deployment backend names", async () => {
+test("createDeploymentBackend rejects unknown deployment backend names", async () => {
   await assertRejects(
     async () => {
       createDeploymentBackend(
@@ -275,7 +276,7 @@ Deno.test("createDeploymentBackend rejects unknown deployment backend names", as
   );
 });
 
-Deno.test("runtime-host backend rejects pre-aborted signals before validation", async () => {
+test("runtime-host backend rejects pre-aborted signals before validation", async () => {
   const backend = createRuntimeHostDeploymentBackend();
   const controller = new AbortController();
   controller.abort("cancelled-runtime-host");
@@ -295,7 +296,7 @@ Deno.test("runtime-host backend rejects pre-aborted signals before validation", 
   );
 });
 
-Deno.test("workers-dispatch backend upserts declared message queue consumers", async () => {
+test("workers-dispatch backend upserts declared message queue consumers", async () => {
   const workerCalls: unknown[] = [];
   const queueCalls: Array<{
     action?: string;
@@ -395,7 +396,7 @@ Deno.test("workers-dispatch backend upserts declared message queue consumers", a
   }]);
 });
 
-Deno.test("workers-dispatch backend rejects pre-aborted signals before upload", async () => {
+test("workers-dispatch backend rejects pre-aborted signals before upload", async () => {
   const workerCalls: unknown[] = [];
   const backend = createWorkersDispatchDeploymentBackend({
     workers: {
@@ -429,7 +430,7 @@ Deno.test("workers-dispatch backend rejects pre-aborted signals before upload", 
   assertEquals(workerCalls.length, 0);
 });
 
-Deno.test(
+test(
   "workers-dispatch backend rejects with caller reason when signal aborts mid-deploy",
   async () => {
     let resolveWorker: (() => void) | undefined;
@@ -473,12 +474,12 @@ Deno.test(
     );
     assertEquals(workerCalls.length, 1);
     // Resolve the hanging worker promise so its microtask queue drains and
-    // Deno's leak detector stays happy.
+    // Keep the test runner's leak detector happy.
     resolveWorker?.();
   },
 );
 
-Deno.test("workers-dispatch backend deletes stale message queue consumers during sync", async () => {
+test("workers-dispatch backend deletes stale message queue consumers during sync", async () => {
   const queueCalls: unknown[] = [];
   const backend = createWorkersDispatchDeploymentBackend({
     workers: {
@@ -551,7 +552,7 @@ Deno.test("workers-dispatch backend deletes stale message queue consumers during
   ]);
 });
 
-Deno.test("workers-dispatch backend replaces previous message queue consumer explicitly", async () => {
+test("workers-dispatch backend replaces previous message queue consumer explicitly", async () => {
   const queueCalls: unknown[] = [];
   const backend = createWorkersDispatchDeploymentBackend({
     workers: {
@@ -623,7 +624,7 @@ Deno.test("workers-dispatch backend replaces previous message queue consumer exp
   ]);
 });
 
-Deno.test("workers-dispatch backend restores previous message queue consumers after sync failure", async () => {
+test("workers-dispatch backend restores previous message queue consumers after sync failure", async () => {
   const queueCalls: unknown[] = [];
   const backend = createWorkersDispatchDeploymentBackend({
     workers: {

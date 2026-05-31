@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import {
   repoBlob,
   repoBranches,
@@ -14,8 +14,9 @@ import {
   repoRunPullRequestAiReview,
   repoTree,
 } from "../../lib/rpc.ts";
+import { test } from "bun:test";
 
-Deno.test("repository read helpers use split gateway repository routes", async () => {
+test("repository read helpers use split gateway repository routes", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; accept: string | null }> = [];
 
@@ -46,7 +47,7 @@ Deno.test("repository read helpers use split gateway repository routes", async (
   }
 });
 
-Deno.test("repository commits helper normalizes split gateway responses", async () => {
+test("repository commits helper normalizes split gateway responses", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; method: string }> = [];
 
@@ -98,7 +99,7 @@ Deno.test("repository commits helper normalizes split gateway responses", async 
   }
 });
 
-Deno.test("repository branches helper normalizes split gateway refs", async () => {
+test("repository branches helper normalizes split gateway refs", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; method: string }> = [];
 
@@ -143,7 +144,7 @@ Deno.test("repository branches helper normalizes split gateway refs", async () =
   }
 });
 
-Deno.test("repository pull request helper normalizes split gateway responses", async () => {
+test("repository pull request helper normalizes split gateway responses", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; method: string; body?: string }> = [];
 
@@ -219,7 +220,7 @@ Deno.test("repository pull request helper normalizes split gateway responses", a
   }
 });
 
-Deno.test("repository pull request action helpers post to split gateway routes", async () => {
+test("repository pull request action helpers post to split gateway routes", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{
     url: string;
@@ -387,7 +388,7 @@ Deno.test("repository pull request action helpers post to split gateway routes",
   }
 });
 
-Deno.test("repository pull request discussion helpers read split gateway routes", async () => {
+test("repository pull request discussion helpers read split gateway routes", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; method: string }> = [];
 
@@ -460,7 +461,7 @@ Deno.test("repository pull request discussion helpers read split gateway routes"
   }
 });
 
-Deno.test("repository pull request diff helper normalizes hunked diff", async () => {
+test("repository pull request diff helper normalizes hunked diff", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; method: string }> = [];
 
@@ -522,7 +523,7 @@ Deno.test("repository pull request diff helper normalizes hunked diff", async ()
   }
 });
 
-Deno.test("repository pull request AI review helper uses split gateway route", async () => {
+test("repository pull request AI review helper uses split gateway route", async () => {
   const originalFetch = globalThis.fetch;
   const calls: Array<{ url: string; method: string }> = [];
 

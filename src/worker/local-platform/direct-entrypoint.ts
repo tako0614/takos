@@ -27,5 +27,5 @@ export function logEntrypointError(error: unknown): never {
   } else {
     console.error(String(error));
   }
-  Deno.exit(1);
+  process.exit(1);
 }

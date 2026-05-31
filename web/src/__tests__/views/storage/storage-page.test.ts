@@ -1,5 +1,7 @@
-import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import { strict as assert, deepStrictEqual as assertEquals, throws as assertThrows } from "node:assert/strict";
 import type { FileHandler } from "../../../views/storage/storageUtils.tsx";
+import { test } from "bun:test";
+
 
 const {
   buildStorageNavigationState,
@@ -21,21 +23,21 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
-Deno.test("resolveStorageInitialPath - prefers file parent path", () => {
+test("resolveStorageInitialPath - prefers file parent path", () => {
   assertEquals(
     resolveStorageInitialPath("/docs", "/docs/README.md"),
     "/docs",
   );
 });
 
-Deno.test("shouldEmitStoragePathChange - waits for initial load", () => {
+test("shouldEmitStoragePathChange - waits for initial load", () => {
   assertEquals(
     shouldEmitStoragePathChange("/", "/docs", undefined, false),
     false,
   );
 });
 
-Deno.test("shouldEmitStoragePathChange - emits only after load and path change", () => {
+test("shouldEmitStoragePathChange - emits only after load and path change", () => {
   assertEquals(
     shouldEmitStoragePathChange("/docs", "/docs", undefined, true),
     false,
@@ -46,7 +48,7 @@ Deno.test("shouldEmitStoragePathChange - emits only after load and path change",
   );
 });
 
-Deno.test("buildStorageNavigationState - clears stale route state", () => {
+test("buildStorageNavigationState - clears stale route state", () => {
   assertEquals(buildStorageNavigationState("ws-1", "/"), {
     view: "storage",
     spaceId: "ws-1",
@@ -69,7 +71,7 @@ Deno.test("buildStorageNavigationState - clears stale route state", () => {
   });
 });
 
-Deno.test("loadStorageFileHandlers - ignores stale responses", async () => {
+test("loadStorageFileHandlers - ignores stale responses", async () => {
   type MockResponse = {
     ok: boolean;
     json: () => Promise<{ handlers?: FileHandler[] }>;
@@ -137,7 +139,7 @@ Deno.test("loadStorageFileHandlers - ignores stale responses", async () => {
   assertEquals(await firstRequest, null);
 });
 
-Deno.test("loadStorageFileHandlers - includes current file mime and ext query params", async () => {
+test("loadStorageFileHandlers - includes current file mime and ext query params", async () => {
   const requestedUrls: string[] = [];
 
   const fetchImpl = async (input: string | URL | Request) => {
@@ -163,15 +165,12 @@ Deno.test("loadStorageFileHandlers - includes current file mime and ext query pa
   );
 
   assertEquals(requestedUrls.length, 1);
-  assertStringIncludes(
-    requestedUrls[0],
-    "/api/spaces/space-a/storage/file-handlers?",
-  );
-  assertStringIncludes(requestedUrls[0], "mime=text%2Fmarkdown");
-  assertStringIncludes(requestedUrls[0], "ext=.md");
+  assert(requestedUrls[0].includes("/api/spaces/space-a/storage/file-handlers?"));
+  assert(requestedUrls[0].includes("mime=text%2Fmarkdown"));
+  assert(requestedUrls[0].includes("ext=.md"));
 });
 
-Deno.test("buildFileHandlerLaunchUrl - replaces :id path template with file id", () => {
+test("buildFileHandlerLaunchUrl - replaces :id path template with file id", () => {
   const url = buildFileHandlerLaunchUrl(
     {
       open_url: "https://docs.example.com/files/:id#edit",
@@ -189,7 +188,7 @@ Deno.test("buildFileHandlerLaunchUrl - replaces :id path template with file id",
   );
 });
 
-Deno.test("buildFileHandlerLaunchUrl - requires :id in the path", () => {
+test("buildFileHandlerLaunchUrl - requires :id in the path", () => {
   assertThrows(
     () =>
       buildFileHandlerLaunchUrl(

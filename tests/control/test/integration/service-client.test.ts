@@ -4,35 +4,36 @@ import {
   ServiceCallError,
 } from "@/shared/utils/service-client.ts";
 
-import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
-Deno.test("ServiceCallError - keeps BAD_REQUEST/400 fallback for unmapped upstream 4xx statuses", () => {
+test("ServiceCallError - keeps BAD_REQUEST/400 fallback for unmapped upstream 4xx statuses", () => {
   const error = new ServiceCallError({
     serviceName: "profile-service",
     upstreamStatus: 418,
   });
 
-  assertEquals(error.code, ErrorCodes.BAD_REQUEST);
-  assertEquals(error.statusCode, 400);
+  assert.deepStrictEqual(error.code, ErrorCodes.BAD_REQUEST);
+  assert.deepStrictEqual(error.statusCode, 400);
 });
 
-Deno.test("ServiceCallError - keeps INTERNAL_ERROR/500 fallback for unmapped upstream 5xx statuses", () => {
+test("ServiceCallError - keeps INTERNAL_ERROR/500 fallback for unmapped upstream 5xx statuses", () => {
   const error = new ServiceCallError({
     serviceName: "profile-service",
     upstreamStatus: 500,
   });
 
-  assertEquals(error.code, ErrorCodes.INTERNAL_ERROR);
-  assertEquals(error.statusCode, 500);
+  assert.deepStrictEqual(error.code, ErrorCodes.INTERNAL_ERROR);
+  assert.deepStrictEqual(error.statusCode, 500);
 });
 
-Deno.test("parseServiceResponse - returns parsed JSON for 200 success responses", async () => {
+test("parseServiceResponse - returns parsed JSON for 200 success responses", async () => {
   const res = new Response(JSON.stringify({ ok: true, value: 42 }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
 
-  assertEquals(
+  assert.deepStrictEqual(
     await parseServiceResponse<{ ok: boolean; value: number }>(
       res,
       "profile-service",
@@ -41,16 +42,16 @@ Deno.test("parseServiceResponse - returns parsed JSON for 200 success responses"
   );
 });
 
-Deno.test("parseServiceResponse - returns undefined for 204 empty success responses", async () => {
+test("parseServiceResponse - returns undefined for 204 empty success responses", async () => {
   const res = new Response(null, { status: 204 });
 
-  assertEquals(
+  assert.deepStrictEqual(
     await parseServiceResponse<undefined>(res, "profile-service"),
     undefined,
   );
 });
 
-Deno.test("parseServiceResponse - throws ServiceCallError for malformed JSON on 2xx responses", async () => {
+test("parseServiceResponse - throws ServiceCallError for malformed JSON on 2xx responses", async () => {
   const res = new Response('{"ok":', {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -62,14 +63,14 @@ Deno.test("parseServiceResponse - throws ServiceCallError for malformed JSON on 
       "Expected parseServiceResponse to throw for malformed JSON",
     );
   } catch (error) {
-    assert(error instanceof ServiceCallError);
-    assertEquals(error.upstreamStatus, 200);
-    assertEquals(error.upstreamBody, '{"ok":');
-    assertStringIncludes(error.message, "malformed JSON");
+    assert.ok(error instanceof ServiceCallError);
+    assert.deepStrictEqual(error.upstreamStatus, 200);
+    assert.deepStrictEqual(error.upstreamBody, '{"ok":');
+    assert.ok(error.message.includes("malformed JSON"));
   }
 });
 
-Deno.test("parseServiceResponse - extracts upstream error code for non-2xx responses", async () => {
+test("parseServiceResponse - extracts upstream error code for non-2xx responses", async () => {
   const res = new Response(
     JSON.stringify({
       error: {
@@ -89,9 +90,9 @@ Deno.test("parseServiceResponse - extracts upstream error code for non-2xx respo
       "Expected parseServiceResponse to throw for non-2xx response",
     );
   } catch (error) {
-    assert(error instanceof ServiceCallError);
-    assertEquals(error.upstreamStatus, 503);
-    assertEquals(error.upstreamCode, "UPSTREAM_TIMEOUT");
-    assertEquals(error.code, ErrorCodes.SERVICE_UNAVAILABLE);
+    assert.ok(error instanceof ServiceCallError);
+    assert.deepStrictEqual(error.upstreamStatus, 503);
+    assert.deepStrictEqual(error.upstreamCode, "UPSTREAM_TIMEOUT");
+    assert.deepStrictEqual(error.code, ErrorCodes.SERVICE_UNAVAILABLE);
   }
 });

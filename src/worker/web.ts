@@ -73,10 +73,6 @@ import {
 import { and, eq } from "drizzle-orm";
 import { type TtlSeconds, ttlSeconds } from "@takos/worker-platform-utils/ttl";
 
-// Re-export for the legacy import path used by tests
-// (./__tests__/web-scheduled-maintenance.test.ts).
-export { runScheduledFamilyMaintenance } from "./application/services/maintenance/scheduled-cron.ts";
-
 // Durable Object exports for wrangler.toml bindings.
 export { SessionDO } from "./runtime/durable-objects/session.ts";
 export { RunNotifierDO } from "./runtime/durable-objects/run-notifier.ts";

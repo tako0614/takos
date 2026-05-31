@@ -1,127 +1,126 @@
 import { getRequiredProxyCapability } from "@/runtime/container-hosts/executor-host.ts";
 
-import { assertEquals } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
-Deno.test("executor-host proxy capability boundaries - maps current control paths to control capability", () => {
-  assertEquals(getRequiredProxyCapability("/proxy/db/first"), null);
-  assertEquals(getRequiredProxyCapability("/proxy/runtime/fetch"), null);
-  assertEquals(getRequiredProxyCapability("/proxy/unknown/fetch"), null);
-  assertEquals(getRequiredProxyCapability("/proxy/heartbeat"), null);
-  assertEquals(
+test("executor-host proxy capability boundaries - maps current control paths to control capability", () => {
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/db/first"), null);
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/runtime/fetch"), null);
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/unknown/fetch"), null);
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/heartbeat"), null);
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/heartbeat"),
     "control",
   );
-  assertEquals(getRequiredProxyCapability("/proxy/run/reset"), null);
-  assertEquals(
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/run/reset"), null);
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/run-reset"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/run-record"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/run-bootstrap"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability(
       "/api/internal/v1/agent-control/run-bootstrap",
     ),
     "control",
   );
-  assertEquals(getRequiredProxyCapability("/proxy/api-keys"), null);
-  assertEquals(
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/api-keys"), null);
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/api-keys"),
     "control",
   );
-  assertEquals(getRequiredProxyCapability("/proxy/run/usage"), null);
-  assertEquals(
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/run/usage"), null);
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/run-usage"),
     "control",
   );
-  assertEquals(getRequiredProxyCapability("/proxy/billing/run-usage"), null);
-  assertEquals(
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/billing/run-usage"), null);
+  assert.deepStrictEqual(
     getRequiredProxyCapability(
       "/api/internal/v1/agent-control/billing-run-usage",
     ),
     null,
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/run-context"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability(
       "/api/internal/v1/agent-control/no-llm-complete",
     ),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability(
       "/api/internal/v1/agent-control/conversation-history",
     ),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/skill-plan"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability(
       "/api/internal/v1/agent-control/memory-activation",
     ),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability(
       "/api/internal/v1/agent-control/memory-finalize",
     ),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/add-message"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability(
       "/api/internal/v1/agent-control/update-run-status",
     ),
     "control",
   );
-  assertEquals(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/current-session",
-    ),
+  assert.deepStrictEqual(
+    getRequiredProxyCapability("/api/internal/v1/agent-control/current-session"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/is-cancelled"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/tool-catalog"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/tool-execute"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/tool-execute"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/tool-cleanup"),
     "control",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getRequiredProxyCapability("/api/internal/v1/agent-control/run-event"),
     "control",
   );
 });
 
-Deno.test("executor-host proxy capability boundaries - rejects unknown proxy paths", () => {
-  assertEquals(getRequiredProxyCapability("/proxy/unknown"), null);
-  assertEquals(getRequiredProxyCapability("/proxy/token/refresh"), null);
+test("executor-host proxy capability boundaries - rejects unknown proxy paths", () => {
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/unknown"), null);
+  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/token/refresh"), null);
 });

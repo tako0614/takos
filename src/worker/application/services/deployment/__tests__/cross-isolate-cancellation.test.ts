@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 /**
  * Cross-isolate cancellation tests.
  *
@@ -121,7 +122,7 @@ function bindSharedDb(state: { row: DeploymentRow }): void {
   })) as unknown as typeof deploymentStoreDeps.getDb;
 }
 
-Deno.test(
+test(
   "cross-isolate cancel: write from one isolate is visible to the other",
   async () => {
     const state = { row: makeDeploymentRow() };
@@ -153,7 +154,7 @@ Deno.test(
   },
 );
 
-Deno.test(
+test(
   "cross-isolate cancel: pipeline observes a DB-set flag at preflight (acts as fast path before poller arms)",
   async () => {
     const state = {

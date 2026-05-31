@@ -3,7 +3,8 @@ import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
 } from "@/shared/types/index.ts";
 
-import { assertSpyCalls, spy } from "@std/testing/mock";
+import { strict as assert } from "node:assert";
+import { mock, test } from "bun:test";
 
 import workflowRunner from "@/runtime/queues/workflow-runner.ts";
 
@@ -41,12 +42,12 @@ function createMessageQueueMessage(runId: string, attempts: number) {
       timestamp: Date.now(),
     },
     attempts,
-    ack: spy(() => undefined),
-    retry: spy(() => undefined),
+    ack: mock(() => undefined),
+    retry: mock(() => undefined),
   } satisfies MessageQueueMessage;
 }
 
-Deno.test("workflow-runner DLQ ack semantics - acks invalid DLQ messages after the handler returns", async () => {
+test("workflow-runner DLQ ack semantics - acks invalid DLQ messages after the handler returns", async () => {
   const message = {
     ...createMessageQueueMessage("run-1", 1),
     body: { runId: "run-1" },
@@ -57,11 +58,11 @@ Deno.test("workflow-runner DLQ ack semantics - acks invalid DLQ messages after t
     { DB: {} } as Env,
   );
 
-  assertSpyCalls(message.ack, 1);
-  assertSpyCalls(message.retry, 0);
+  assert.deepStrictEqual(message.ack.mock.calls.length, 1);
+  assert.deepStrictEqual(message.retry.mock.calls.length, 0);
 });
 
-Deno.test("workflow-runner DLQ ack semantics - retries DLQ messages when handler processing throws", async () => {
+test("workflow-runner DLQ ack semantics - retries DLQ messages when handler processing throws", async () => {
   const message = createMessageQueueMessage("run-2", 2);
 
   await workflowRunner.queue(
@@ -69,6 +70,6 @@ Deno.test("workflow-runner DLQ ack semantics - retries DLQ messages when handler
     { DB: {} } as Env,
   );
 
-  assertSpyCalls(message.retry, 1);
-  assertSpyCalls(message.ack, 0);
+  assert.deepStrictEqual(message.retry.mock.calls.length, 1);
+  assert.deepStrictEqual(message.ack.mock.calls.length, 0);
 });

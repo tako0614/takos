@@ -8,7 +8,8 @@
 // - an unreachable Takosumi Accounts upstream turns it into 503,
 // - a healthy upstream contributes to a 200 response.
 
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual } from 'node:assert/strict';
+import { test } from 'bun:test';
 import app from "./index.ts";
 import type { ApiBindings } from "./shared/api/bindings.ts";
 
@@ -45,14 +46,14 @@ function makeBindings(overrides: Partial<ApiBindings> = {}): ApiBindings {
   } as ApiBindings;
 }
 
-Deno.test("/health returns 200 with the DB check when no upstream is configured", async () => {
+test("/health returns 200 with the DB check when no upstream is configured", async () => {
   const response = await app.request(
     "/health",
     {},
     makeBindings(),
   );
 
-  assertEquals(response.status, 200);
+  deepStrictEqual(response.status, 200);
   const body = await response.json() as {
     ok: boolean;
     status: string;
@@ -62,32 +63,32 @@ Deno.test("/health returns 200 with the DB check when no upstream is configured"
       takosumiAccounts: { skipped?: boolean };
     };
   };
-  assertEquals(body.ok, true);
-  assertEquals(body.status, "ok");
-  assertEquals(body.service, "takos-worker");
-  assertEquals(body.checks.db.ok, true);
-  assertEquals(body.checks.takosumiAccounts.skipped, true);
+  deepStrictEqual(body.ok, true);
+  deepStrictEqual(body.status, "ok");
+  deepStrictEqual(body.service, "takos-worker");
+  deepStrictEqual(body.checks.db.ok, true);
+  deepStrictEqual(body.checks.takosumiAccounts.skipped, true);
 });
 
-Deno.test("/health returns 503 when the D1 binding is missing", async () => {
+test("/health returns 503 when the D1 binding is missing", async () => {
   const response = await app.request(
     "/health",
     {},
     makeBindings({ DB: undefined }),
   );
 
-  assertEquals(response.status, 503);
+  deepStrictEqual(response.status, 503);
   const body = await response.json() as {
     ok: boolean;
     status: string;
     checks: { db: { ok: boolean; reason: string } };
   };
-  assertEquals(body.ok, false);
-  assertEquals(body.status, "degraded");
-  assertEquals(body.checks.db.ok, false);
+  deepStrictEqual(body.ok, false);
+  deepStrictEqual(body.status, "degraded");
+  deepStrictEqual(body.checks.db.ok, false);
 });
 
-Deno.test("/health surfaces a failing Takosumi Accounts probe as 503", async () => {
+test("/health surfaces a failing Takosumi Accounts probe as 503", async () => {
   const originalFetch = globalThis.fetch;
   let requestedUrl = "";
   globalThis.fetch = (input) => {
@@ -103,7 +104,7 @@ Deno.test("/health surfaces a failing Takosumi Accounts probe as 503", async () 
       }),
     );
 
-    assertEquals(response.status, 503);
+    deepStrictEqual(response.status, 503);
     const body = await response.json() as {
       ok: boolean;
       checks: {
@@ -111,16 +112,16 @@ Deno.test("/health surfaces a failing Takosumi Accounts probe as 503", async () 
         takosumiAccounts: { ok: boolean; reason?: string };
       };
     };
-    assertEquals(body.ok, false);
-    assertEquals(body.checks.db.ok, true);
-    assertEquals(body.checks.takosumiAccounts.ok, false);
-    assertEquals(requestedUrl, "https://accounts.example.test/healthz");
+    deepStrictEqual(body.ok, false);
+    deepStrictEqual(body.checks.db.ok, true);
+    deepStrictEqual(body.checks.takosumiAccounts.ok, false);
+    deepStrictEqual(requestedUrl, "https://accounts.example.test/healthz");
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-Deno.test("/health returns 200 when both DB and Takosumi Accounts respond", async () => {
+test("/health returns 200 when both DB and Takosumi Accounts respond", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () =>
     Promise.resolve(
@@ -138,7 +139,7 @@ Deno.test("/health returns 200 when both DB and Takosumi Accounts respond", asyn
       }),
     );
 
-    assertEquals(response.status, 200);
+    deepStrictEqual(response.status, 200);
     const body = await response.json() as {
       ok: boolean;
       checks: {
@@ -146,9 +147,9 @@ Deno.test("/health returns 200 when both DB and Takosumi Accounts respond", asyn
         takosumiAccounts: { ok: boolean };
       };
     };
-    assertEquals(body.ok, true);
-    assertEquals(body.checks.db.ok, true);
-    assertEquals(body.checks.takosumiAccounts.ok, true);
+    deepStrictEqual(body.ok, true);
+    deepStrictEqual(body.checks.db.ok, true);
+    deepStrictEqual(body.checks.takosumiAccounts.ok, true);
   } finally {
     globalThis.fetch = originalFetch;
   }

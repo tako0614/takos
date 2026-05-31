@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { RolloutService, type RolloutState } from "../rollout.ts";
 import type { Env } from "../../../../shared/types/index.ts";
@@ -167,7 +168,7 @@ function initialState(): RolloutState {
   };
 }
 
-Deno.test("concurrent advanceStage does not double-advance (stays serialized)", async () => {
+test("concurrent advanceStage does not double-advance (stays serialized)", async () => {
   const store: MockStore = {
     rolloutState: JSON.stringify(initialState()),
   };
@@ -189,7 +190,7 @@ Deno.test("concurrent advanceStage does not double-advance (stays serialized)", 
   assertEquals(persisted.status, "in_progress");
 });
 
-Deno.test("sequential advanceStage advances one stage at a time", async () => {
+test("sequential advanceStage advances one stage at a time", async () => {
   const store: MockStore = {
     rolloutState: JSON.stringify(initialState()),
   };

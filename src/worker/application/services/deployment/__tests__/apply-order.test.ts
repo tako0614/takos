@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { DiffEntry } from "../diff.ts";
@@ -24,7 +25,7 @@ function sortNames(entries: DiffEntry[]): string[] {
   );
 }
 
-Deno.test("topologicalSortApplyEntries orders creates after their dependencies", () => {
+test("topologicalSortApplyEntries orders creates after their dependencies", () => {
   const entries: DiffEntry[] = [
     { name: "gateway", category: "worker", action: "create" },
     { name: "db", category: "service", action: "create" },
@@ -38,7 +39,7 @@ Deno.test("topologicalSortApplyEntries orders creates after their dependencies",
   ]);
 });
 
-Deno.test("topologicalSortApplyEntries reverses delete order across dependencies", () => {
+test("topologicalSortApplyEntries reverses delete order across dependencies", () => {
   const entries: DiffEntry[] = [
     { name: "gateway", category: "worker", action: "delete" },
     { name: "db", category: "service", action: "delete" },
@@ -52,7 +53,7 @@ Deno.test("topologicalSortApplyEntries reverses delete order across dependencies
   ]);
 });
 
-Deno.test("topologicalSortApplyEntries keeps category priority for unrelated entries", () => {
+test("topologicalSortApplyEntries keeps category priority for unrelated entries", () => {
   const entries: DiffEntry[] = [
     { name: "api-route", category: "route", action: "create" },
     { name: "cache", category: "service", action: "create" },

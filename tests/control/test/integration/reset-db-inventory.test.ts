@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
 const appRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const baselineSql = readFileSync(
@@ -37,7 +38,7 @@ const packageConfig = JSON.parse(
 };
 
 function assertSourceMatches(source: string, pattern: RegExp): void {
-  assert(
+  assert.ok(
     pattern.test(source),
     `Expected source to match ${pattern}`,
   );
@@ -137,91 +138,90 @@ function currentCanonicalTables(): string[] {
   return [...tables].sort();
 }
 
-Deno.test("reset DB inventory - keeps reset-db.js aligned with the canonical current SQL table inventory", () => {
+test("reset DB inventory - keeps reset-db.js aligned with the canonical current SQL table inventory", () => {
   const baselineTables = currentCanonicalTables();
   const resetTables = parseQuotedArray(resetDbScript, "TABLES");
 
-  assert(/const ACCOUNT_TABLE = ["']accounts["'];/.test(resetDbScript));
-  assert(!resetTables.includes("accounts"));
-  assertEquals(resetTables.length, new Set(resetTables).size);
+  assert.ok(/const ACCOUNT_TABLE = ["']accounts["'];/.test(resetDbScript));
+  assert.ok(!resetTables.includes("accounts"));
+  assert.deepStrictEqual(resetTables.length, new Set(resetTables).size);
 
   const fullInventory = [...resetTables, "accounts"].sort();
-  assertEquals(fullInventory, baselineTables);
+  assert.deepStrictEqual(fullInventory, baselineTables);
 });
-Deno.test("reset DB inventory - documents contracted legacy baseline tables", () => {
+test("reset DB inventory - documents contracted legacy baseline tables", () => {
   const baselineTables = [
     ...new Set([
       ...parseBaselineTables(baselineSql),
     ]),
   ];
   for (const table of contractedBaselineTables) {
-    assert(baselineTables.includes(table));
-    assert(!parseQuotedArray(resetDbScript, "TABLES").includes(table));
+    assert.ok(baselineTables.includes(table));
+    assert.ok(!parseQuotedArray(resetDbScript, "TABLES").includes(table));
   }
 });
 
-Deno.test("reset DB inventory - preserves accounts and login identities by default", () => {
-  assertStringIncludes(
-    resetDbScript,
-    "This will DELETE all data except accounts and login identity rows.",
+test("reset DB inventory - preserves accounts and login identities by default", () => {
+  assert.ok(
+    resetDbScript.includes(
+      "This will DELETE all data except accounts and login identity rows.",
+    ),
   );
-  assertStringIncludes(
-    resetDbScript,
-    "PRESERVED_WITH_ACCOUNTS = new Set",
+  assert.ok(
+    resetDbScript.includes("PRESERVED_WITH_ACCOUNTS = new Set"),
   );
-  assertStringIncludes(
-    resetDbScript,
-    '"auth_identities"',
-  );
-  assert(!resetDbScript.includes("users"));
-  assert(!resetDbScript.includes("principals"));
+  assert.ok(resetDbScript.includes('"auth_identities"'));
+  assert.ok(!resetDbScript.includes("users"));
+  assert.ok(!resetDbScript.includes("principals"));
 });
 
-Deno.test("reset DB inventory - keeps remote reset script-driven instead of hiding it behind shorthand tasks", () => {
-  assertEquals(scripts["db:reset"], undefined);
-  assertEquals(scripts["db:reset:local"], undefined);
-  assertEquals(scripts["db:reset:staging"], undefined);
-  assertEquals(scripts["db:reset:prod"], undefined);
-  assertEquals(
+test("reset DB inventory - keeps remote reset script-driven instead of hiding it behind shorthand tasks", () => {
+  assert.deepStrictEqual(scripts["db:reset"], undefined);
+  assert.deepStrictEqual(scripts["db:reset:local"], undefined);
+  assert.deepStrictEqual(scripts["db:reset:staging"], undefined);
+  assert.deepStrictEqual(scripts["db:reset:prod"], undefined);
+  assert.deepStrictEqual(
     scripts["db:migrate"],
     undefined,
   );
 
-  assertStringIncludes(
-    resetDbScript,
-    "Usage: node scripts/reset-db.js --env <staging|production> [--include-accounts]",
+  assert.ok(
+    resetDbScript.includes(
+      "Usage: node scripts/reset-db.js --env <staging|production> [--include-accounts]",
+    ),
   );
-  assertStringIncludes(
-    resetDbScript,
-    "For local reset, use the local stack/bootstrap flow (`bun run local:up`); this script is for staging/production only.",
+  assert.ok(
+    resetDbScript.includes(
+      "For local reset, use the local stack/bootstrap flow (`bun run local:up`); this script is for staging/production only.",
+    ),
   );
-  assertStringIncludes(
-    resetDbShellScript,
-    'node "$SCRIPT_DIR/reset-db.js" "$@"',
+  assert.ok(
+    resetDbShellScript.includes('node "$SCRIPT_DIR/reset-db.js" "$@"'),
   );
 });
 
-Deno.test("reset DB inventory - requires explicit remote environment selection for maintenance helpers", () => {
-  assertStringIncludes(
-    offloadBackfillScript,
-    "--remote requires --env staging|production",
+test("reset DB inventory - requires explicit remote environment selection for maintenance helpers", () => {
+  assert.ok(
+    offloadBackfillScript.includes(
+      "--remote requires --env staging|production",
+    ),
   );
   assertSourceMatches(offloadBackfillScript, /const D1_TARGET = ["']DB["'];/);
-  assert(!offloadBackfillScript.includes("takos-control-db"));
-  assertStringIncludes(fixWorkerBindingsScript, "--env staging|production");
+  assert.ok(!offloadBackfillScript.includes("takos-control-db"));
+  assert.ok(fixWorkerBindingsScript.includes("--env staging|production"));
   assertSourceMatches(fixWorkerBindingsScript, /["']DB["']/);
-  assert(!fixWorkerBindingsScript.includes("takos-control-db"));
+  assert.ok(!fixWorkerBindingsScript.includes("takos-control-db"));
 });
 
-Deno.test("reset DB inventory - keeps drop_all.sql aligned with the canonical current SQL table inventory", () => {
+test("reset DB inventory - keeps drop_all.sql aligned with the canonical current SQL table inventory", () => {
   const baselineTables = currentCanonicalTables();
   const dropTables = parseDropTables(dropAllSql);
 
-  assertEquals(dropTables.length, new Set(dropTables).size);
-  assert(dropTables.includes("d1_migrations"));
+  assert.deepStrictEqual(dropTables.length, new Set(dropTables).size);
+  assert.ok(dropTables.includes("d1_migrations"));
 
   const dropTablesWithoutMigrations = dropTables
     .filter((table) => table !== "d1_migrations")
     .sort();
-  assertEquals(dropTablesWithoutMigrations, baselineTables);
+  assert.deepStrictEqual(dropTablesWithoutMigrations, baselineTables);
 });

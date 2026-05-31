@@ -1,3 +1,5 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import { test } from "bun:test";
 import {
   createInMemoryObjectStore,
   createInMemorySqlDatabase,
@@ -11,14 +13,14 @@ import {
   assertThrows,
 } from "@std/assert";
 
-Deno.test("createInMemorySqlDatabase refuses to construct in a production environment", () => {
-  const originalEnvironment = Deno.env.get("ENVIRONMENT");
-  const originalVitest = Deno.env.get("VITEST");
-  const originalDenoTest = Deno.env.get("DENO_TEST");
+test("createInMemorySqlDatabase refuses to construct in a production environment", () => {
+  const originalEnvironment = getEnv("ENVIRONMENT");
+  const originalVitest = getEnv("VITEST");
+  const originalDenoTest = getEnv("DENO_TEST");
   // Clear test signals so the production guard is reachable.
-  Deno.env.delete("VITEST");
-  Deno.env.delete("DENO_TEST");
-  Deno.env.set("ENVIRONMENT", "production");
+  deleteEnv("VITEST");
+  deleteEnv("DENO_TEST");
+  setEnv("ENVIRONMENT", "production");
   try {
     assertThrows(
       () => createInMemorySqlDatabase(),
@@ -26,18 +28,18 @@ Deno.test("createInMemorySqlDatabase refuses to construct in a production enviro
       "in-memory SQL database refused",
     );
   } finally {
-    if (originalEnvironment === undefined) Deno.env.delete("ENVIRONMENT");
-    else Deno.env.set("ENVIRONMENT", originalEnvironment);
-    if (originalVitest !== undefined) Deno.env.set("VITEST", originalVitest);
+    if (originalEnvironment === undefined) deleteEnv("ENVIRONMENT");
+    else setEnv("ENVIRONMENT", originalEnvironment);
+    if (originalVitest !== undefined) setEnv("VITEST", originalVitest);
     if (originalDenoTest !== undefined) {
-      Deno.env.set("DENO_TEST", originalDenoTest);
+      setEnv("DENO_TEST", originalDenoTest);
     }
   }
 });
 
-Deno.test("createInMemorySqlDatabase is allowed (non-production) and is a no-op stub", async () => {
-  const originalEnvironment = Deno.env.get("ENVIRONMENT");
-  Deno.env.set("ENVIRONMENT", "development");
+test("createInMemorySqlDatabase is allowed (non-production) and is a no-op stub", async () => {
+  const originalEnvironment = getEnv("ENVIRONMENT");
+  setEnv("ENVIRONMENT", "development");
   try {
     const db = createInMemorySqlDatabase();
     const result = await db.prepare("INSERT INTO t VALUES (1)").run();
@@ -47,12 +49,12 @@ Deno.test("createInMemorySqlDatabase is allowed (non-production) and is a no-op 
     const read = await db.prepare("SELECT * FROM t").all();
     assertEquals(read.results, []);
   } finally {
-    if (originalEnvironment === undefined) Deno.env.delete("ENVIRONMENT");
-    else Deno.env.set("ENVIRONMENT", originalEnvironment);
+    if (originalEnvironment === undefined) deleteEnv("ENVIRONMENT");
+    else setEnv("ENVIRONMENT", originalEnvironment);
   }
 });
 
-Deno.test("createInMemoryObjectStore multipart upload - reassembles parts, preserves metadata, and supports resuming", async () => {
+test("createInMemoryObjectStore multipart upload - reassembles parts, preserves metadata, and supports resuming", async () => {
   const bucket = createInMemoryObjectStore();
   const upload = await bucket.createMultipartUpload("docs/report.txt", {
     customMetadata: { owner: "alice" },
@@ -91,7 +93,7 @@ Deno.test("createInMemoryObjectStore multipart upload - reassembles parts, prese
   const stored = await bucket.get("docs/report.txt");
   assertEquals(await stored?.text(), "hello world");
 });
-Deno.test("createInMemoryObjectStore multipart upload - aborts multipart uploads and prevents completion", async () => {
+test("createInMemoryObjectStore multipart upload - aborts multipart uploads and prevents completion", async () => {
   const bucket = createInMemoryObjectStore();
   const upload = await bucket.createMultipartUpload("docs/aborted.txt");
 

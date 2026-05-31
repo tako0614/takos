@@ -14,7 +14,7 @@ substrate / account plane / installer
 | service            | owner path        | role                                                                             |
 | ------------------ | ----------------- | -------------------------------------------------------------------------------- |
 | `takos-worker`     | `takos/src/worker` | public/control Worker、Hono API、OIDC consumer、app-local profile               |
-| `takos-web`        | `takos/web/`      | browser UI                                                                       |
+| Takos UI           | `takos/web/`      | browser UI                                                                       |
 | `takos-git`        | `takos/containers/git/` | Git Smart HTTP、repositories、refs、object storage                         |
 | `takos-agent`      | `takos/containers/agent/` | agent execution container                                                  |
 | `takosumi`         | `takosumi/`       | AppSpec install / Deployment apply engine                                        |

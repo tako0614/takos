@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import { stub } from "@std/testing/mock";
 
@@ -117,7 +118,7 @@ function externalRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-Deno.test("registerExternalMcpServer rejects a name already published in the space", async () => {
+test("registerExternalMcpServer rejects a name already published in the space", async () => {
   const env = makeMcpEnv({
     mcpServers: [],
     publications: [publicationRow()],
@@ -135,7 +136,7 @@ Deno.test("registerExternalMcpServer rejects a name already published in the spa
   );
 });
 
-Deno.test("updateMcpServer rejects rename collisions with published MCP servers", async () => {
+test("updateMcpServer rejects rename collisions with published MCP servers", async () => {
   const env = makeMcpEnv({
     mcpServers: [externalRow({ name: "old-name" })],
     publications: [publicationRow()],
@@ -151,7 +152,7 @@ Deno.test("updateMcpServer rejects rename collisions with published MCP servers"
   );
 });
 
-Deno.test("listMcpServers keeps publication and external MCP rows visible", async () => {
+test("listMcpServers keeps publication and external MCP rows visible", async () => {
   const servers = await listMcpServers(
     (makeMcpEnv({
       mcpServers: [externalRow()],
@@ -170,7 +171,7 @@ Deno.test("listMcpServers keeps publication and external MCP rows visible", asyn
   );
 });
 
-Deno.test("loadMcpTools keeps same-name publication and external servers distinct", async () => {
+test("loadMcpTools keeps same-name publication and external servers distinct", async () => {
   const connectStub = stub(
     McpClient.prototype as any,
     "connect",
@@ -234,7 +235,7 @@ Deno.test("loadMcpTools keeps same-name publication and external servers distinc
   }
 });
 
-Deno.test("mcpRemoveServerHandler removes external servers by id only", async () => {
+test("mcpRemoveServerHandler removes external servers by id only", async () => {
   const db = makeDb({
     mcpServers: [externalRow()],
     publications: [],

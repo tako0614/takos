@@ -128,7 +128,7 @@ function createCloudRunConfig(
   env: EnvRecord,
 ): CloudRunDeployBackendConfig | null {
   const projectId = resolveGoogleCloudProject(
-    env as { GOOGLE_CLOUD_PROJECT?: string; GCP_PROJECT_ID?: string },
+    env as { GOOGLE_CLOUD_PROJECT?: string },
   );
   const region = getEnvString(env, "GCP_CLOUD_RUN_REGION") ??
     getEnvString(env, "GCP_REGION");

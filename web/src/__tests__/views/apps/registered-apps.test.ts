@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import { createRoot, createSignal } from "solid-js";
 import {
   clearRegisteredAppsCacheForTests,
@@ -11,6 +11,7 @@ import {
   useRegisteredApps,
 } from "../../../views/apps/registered-apps.ts";
 import type { TranslationKey } from "../../../store/i18n.ts";
+import { test } from "bun:test";
 
 function makeRegisteredApp(overrides: Partial<RegisteredApp> = {}) {
   return {
@@ -60,7 +61,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
   }
 }
 
-Deno.test(
+test(
   "registered apps - requests the current space inventory with the space header",
   async () => {
     let capturedHeaders: HeadersInit | undefined;
@@ -87,7 +88,7 @@ Deno.test(
   },
 );
 
-Deno.test("registered apps - formats app labels and status variants", () => {
+test("registered apps - formats app labels and status variants", () => {
   assertEquals(formatAppTypeLabel("platform", testT), "Platform");
   assertEquals(formatAppTypeLabel("custom", testT), "Custom");
   assertEquals(formatAppStatusLabel("pending_queue", testT), "Pending Queue");
@@ -96,7 +97,7 @@ Deno.test("registered apps - formats app labels and status variants", () => {
   assertEquals(getAppStatusVariant("pending_queue"), "warning");
 });
 
-Deno.test("registered apps - treats safe icon URLs as images", () => {
+test("registered apps - treats safe icon URLs as images", () => {
   assertEquals(
     getAppIconImageSrc("https://cdn.example.com/apps/docs.png"),
     "https://cdn.example.com/apps/docs.png",
@@ -108,7 +109,7 @@ Deno.test("registered apps - treats safe icon URLs as images", () => {
   assertEquals(getAppIconImageSrc("data:image/svg+xml,<svg />"), null);
 });
 
-Deno.test(
+test(
   "registered apps - keeps cached apps visible while revalidating",
   async () => {
     clearRegisteredAppsCacheForTests();

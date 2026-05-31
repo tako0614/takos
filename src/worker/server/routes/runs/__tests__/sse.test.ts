@@ -1,7 +1,8 @@
+import { test } from "bun:test";
 import { assertStringIncludes } from "@std/assert";
 import { createPollingRunObservationStream } from "../observation.ts";
 
-Deno.test("run SSE polling stream emits buffered events and closes on terminal status", async () => {
+test("run SSE polling stream emits buffered events and closes on terminal status", async () => {
   const observedCursor: number[] = [];
   let callCount = 0;
 
@@ -44,7 +45,7 @@ Deno.test("run SSE polling stream emits buffered events and closes on terminal s
   assertStringIncludes(JSON.stringify(observedCursor), "[0,7]");
 });
 
-Deno.test("run SSE polling stream closes after emitting a terminal event", async () => {
+test("run SSE polling stream closes after emitting a terminal event", async () => {
   const observedCursor: number[] = [];
   const stream = createPollingRunObservationStream(
     async (afterEventId) => {

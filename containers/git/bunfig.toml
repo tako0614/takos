@@ -1,7 +1,7 @@
 # Bun migration: install the Deno runtime compat globals before any module
 # evaluates, so the Deno.* runtime APIs the source still uses (Deno.env,
 # Deno.makeTempDir, Deno.serve, Deno.Command, ...) work under bun without source
-# edits. Test files are now native bun:test, so no Deno.test preload is needed.
+# edits. Test files are native bun:test.
 [test]
 preload = ["./shims/deno-compat.ts"]
 

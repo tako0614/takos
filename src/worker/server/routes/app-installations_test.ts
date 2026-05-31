@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals, assertObjectMatch } from "@std/assert";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
@@ -86,7 +87,7 @@ const installConfig = {
   mode: "shared-cell",
 } satisfies DefaultAppInstallConfig;
 
-Deno.test("app-installations route applies a default app through Installation", async () => {
+test("app-installations route applies a default app through Installation", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -169,7 +170,7 @@ Deno.test("app-installations route applies a default app through Installation", 
   }
 });
 
-Deno.test("app-installations route applies catalog-only road-to-me by app_id", async () => {
+test("app-installations route applies catalog-only road-to-me by app_id", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -241,7 +242,7 @@ Deno.test("app-installations route applies catalog-only road-to-me by app_id", a
   }
 });
 
-Deno.test("app-installations route requires Installation install config", async () => {
+test("app-installations route requires Installation install config", async () => {
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
   appInstallationsRouteDeps.resolveDefaultAppDistributionForBootstrap =
@@ -272,7 +273,7 @@ Deno.test("app-installations route requires Installation install config", async 
   }
 });
 
-Deno.test("app-installations route rejects camelCase request aliases", async () => {
+test("app-installations route rejects camelCase request aliases", async () => {
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
 
@@ -300,7 +301,7 @@ Deno.test("app-installations route rejects camelCase request aliases", async () 
   }
 });
 
-Deno.test("app-installations route proxies Git URL install dry-run", async () => {
+test("app-installations route proxies Git URL install dry-run", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -386,7 +387,7 @@ Deno.test("app-installations route proxies Git URL install dry-run", async () =>
   }
 });
 
-Deno.test("app-installations route proxies Git URL install apply with approval evidence", async () => {
+test("app-installations route proxies Git URL install apply with approval evidence", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -487,7 +488,7 @@ Deno.test("app-installations route proxies Git URL install apply with approval e
   }
 });
 
-Deno.test("app-installations route proxies Git URL deployment dry-run and apply", async () => {
+test("app-installations route proxies Git URL deployment dry-run and apply", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -600,7 +601,7 @@ Deno.test("app-installations route proxies Git URL deployment dry-run and apply"
   }
 });
 
-Deno.test("app-installations route lists and deletes through Takosumi Accounts", async () => {
+test("app-installations route lists and deletes through Takosumi Accounts", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -693,7 +694,7 @@ Deno.test("app-installations route lists and deletes through Takosumi Accounts",
   }
 });
 
-Deno.test("app-installations route requires Git URL install approval evidence", async () => {
+test("app-installations route requires Git URL install approval evidence", async () => {
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
 

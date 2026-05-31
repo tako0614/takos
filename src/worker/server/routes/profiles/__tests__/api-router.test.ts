@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { createApiRouter } from "../../api.ts";
 
-Deno.test("profile repo routes are mounted under /api/users", () => {
+test("profile repo routes are mounted under /api/users", () => {
   const noop = async (_c: unknown, next: () => Promise<void>) => {
     await next();
   };

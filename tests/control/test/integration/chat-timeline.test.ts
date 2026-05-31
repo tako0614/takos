@@ -18,7 +18,8 @@ type RunStatus =
   | "failed"
   | "cancelled";
 
-import { assertEquals } from "@std/assert";
+import { strict as assert } from "node:assert";
+import { test } from "bun:test";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -120,63 +121,63 @@ function isRunInRootTree(
   return false;
 }
 
-Deno.test("chat timeline helpers - parses JSON payload strings", () => {
+test("chat timeline helpers - parses JSON payload strings", () => {
   const parsed = parseEventData('{"message":"hello","tool":"file_read"}');
-  assertEquals(parsed.message, "hello");
-  assertEquals(parsed.tool, "file_read");
+  assert.deepStrictEqual(parsed.message, "hello");
+  assert.deepStrictEqual(parsed.tool, "file_read");
 });
-Deno.test("chat timeline helpers - falls back to message payload for non-JSON strings", () => {
+test("chat timeline helpers - falls back to message payload for non-JSON strings", () => {
   const parsed = parseEventData("plain text");
-  assertEquals(parsed, { message: "plain text" });
+  assert.deepStrictEqual(parsed, { message: "plain text" });
 });
-Deno.test("chat timeline helpers - normalizes unknown event types to error", () => {
-  assertEquals(normalizeTimelineEventType("progress"), "progress");
-  assertEquals(normalizeTimelineEventType("unexpected_event"), "error");
+test("chat timeline helpers - normalizes unknown event types to error", () => {
+  assert.deepStrictEqual(normalizeTimelineEventType("progress"), "progress");
+  assert.deepStrictEqual(normalizeTimelineEventType("unexpected_event"), "error");
 });
-Deno.test("chat timeline helpers - parses event ids from numeric and string forms", () => {
-  assertEquals(parseTimelineEventId({ id: 42 }), 42);
-  assertEquals(parseTimelineEventId({ event_id: "11" }), 11);
-  assertEquals(parseTimelineEventId({ event_id: "x" }), undefined);
+test("chat timeline helpers - parses event ids from numeric and string forms", () => {
+  assert.deepStrictEqual(parseTimelineEventId({ id: 42 }), 42);
+  assert.deepStrictEqual(parseTimelineEventId({ event_id: "11" }), 11);
+  assert.deepStrictEqual(parseTimelineEventId({ event_id: "x" }), undefined);
 });
-Deno.test("chat timeline helpers - maps terminal timeline event types to terminal run statuses", () => {
-  assertEquals(
+test("chat timeline helpers - maps terminal timeline event types to terminal run statuses", () => {
+  assert.deepStrictEqual(
     getTerminalRunStatusFromTimelineEvent("completed", {}),
     "completed",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getTerminalRunStatusFromTimelineEvent("cancelled", {}),
     "cancelled",
   );
-  assertEquals(getTerminalRunStatusFromTimelineEvent("error", {}), "failed");
-  assertEquals(
+  assert.deepStrictEqual(getTerminalRunStatusFromTimelineEvent("error", {}), "failed");
+  assert.deepStrictEqual(
     getTerminalRunStatusFromTimelineEvent("run.failed", {}),
     "failed",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getTerminalRunStatusFromTimelineEvent("run_status", {
       status: "completed",
     }),
     "completed",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getTerminalRunStatusFromTimelineEvent("run_status", { status: "failed" }),
     "failed",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getTerminalRunStatusFromTimelineEvent("run_status", {
       status: "cancelled",
     }),
     "cancelled",
   );
-  assertEquals(
+  assert.deepStrictEqual(
     getTerminalRunStatusFromTimelineEvent("run_status", {
       run: { status: "completed" },
     }),
     "completed",
   );
 });
-Deno.test("chat timeline helpers - derives terminal status from timeline events with fallback", () => {
-  assertEquals(
+test("chat timeline helpers - derives terminal status from timeline events with fallback", () => {
+  assert.deepStrictEqual(
     deriveRunStatusFromTimelineEvents("running", [
       { type: "thinking", data: { message: "..." } },
       { type: "completed", data: { success: true } },
@@ -184,7 +185,7 @@ Deno.test("chat timeline helpers - derives terminal status from timeline events 
     "completed",
   );
 
-  assertEquals(
+  assert.deepStrictEqual(
     deriveRunStatusFromTimelineEvents("queued", [
       { type: "progress", data: { message: "step 1" } },
       { type: "error", data: { error: "boom" } },
@@ -193,21 +194,21 @@ Deno.test("chat timeline helpers - derives terminal status from timeline events 
     "cancelled",
   );
 
-  assertEquals(
+  assert.deepStrictEqual(
     deriveRunStatusFromTimelineEvents("running", [
       { type: "run_status", data: { status: "failed" } },
     ]),
     "failed",
   );
 
-  assertEquals(
+  assert.deepStrictEqual(
     deriveRunStatusFromTimelineEvents("running", [
       { type: "thinking", data: { message: "still running" } },
     ]),
     "running",
   );
 });
-Deno.test("chat timeline helpers - resolves whether a run belongs to a root run tree", () => {
+test("chat timeline helpers - resolves whether a run belongs to a root run tree", () => {
   const byId = new Map([
     ["root", { id: "root", parent_run_id: null }],
     ["child", { id: "child", parent_run_id: "root" }],
@@ -215,17 +216,17 @@ Deno.test("chat timeline helpers - resolves whether a run belongs to a root run 
     ["other", { id: "other", parent_run_id: null }],
   ]);
 
-  assertEquals(isRunInRootTree("root", "root", byId), true);
-  assertEquals(isRunInRootTree("child", "root", byId), true);
-  assertEquals(isRunInRootTree("grandchild", "root", byId), true);
-  assertEquals(isRunInRootTree("other", "root", byId), false);
+  assert.deepStrictEqual(isRunInRootTree("root", "root", byId), true);
+  assert.deepStrictEqual(isRunInRootTree("child", "root", byId), true);
+  assert.deepStrictEqual(isRunInRootTree("grandchild", "root", byId), true);
+  assert.deepStrictEqual(isRunInRootTree("other", "root", byId), false);
 });
-Deno.test("chat timeline helpers - fails closed on cyclic parent chains", () => {
+test("chat timeline helpers - fails closed on cyclic parent chains", () => {
   const byId = new Map([
     ["root", { id: "root", parent_run_id: null }],
     ["a", { id: "a", parent_run_id: "b" }],
     ["b", { id: "b", parent_run_id: "a" }],
   ]);
 
-  assertEquals(isRunInRootTree("a", "root", byId), false);
+  assert.deepStrictEqual(isRunInRootTree("a", "root", byId), false);
 });

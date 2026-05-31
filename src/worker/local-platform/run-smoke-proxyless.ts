@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 import { disposeNodePlatformState } from "../node-platform/env-builder.ts";
 import { runLocalSmoke } from "./run-smoke.ts";
 import { DEFAULT_LOCAL_PORTS } from "./runtime-types.ts";
@@ -8,7 +9,7 @@ type ProxyUsageResponse = {
 };
 
 function executorHostBaseUrl(): string {
-  const raw = Deno.env.get("TAKOS_LOCAL_EXECUTOR_HOST_URL")?.trim();
+  const raw = getEnv("TAKOS_LOCAL_EXECUTOR_HOST_URL")?.trim();
   if (raw) {
     return raw.replace(/\/$/, "");
   }

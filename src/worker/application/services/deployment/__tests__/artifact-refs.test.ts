@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 import { assertThrows } from "@std/assert";
 
 import { assertMatchingIdempotentRequest } from "../artifact-refs.ts";
 import type { Deployment } from "../models.ts";
 
-Deno.test("assertMatchingIdempotentRequest rejects workload target changes", () => {
+test("assertMatchingIdempotentRequest rejects workload target changes", () => {
   const deployment = {
     artifact_kind: "worker-bundle",
     bundle_hash: "hash-1",
@@ -31,7 +32,7 @@ Deno.test("assertMatchingIdempotentRequest rejects workload target changes", () 
   );
 });
 
-Deno.test("assertMatchingIdempotentRequest rejects container target changes", () => {
+test("assertMatchingIdempotentRequest rejects container target changes", () => {
   const deployment = {
     artifact_kind: "container-image",
     bundle_hash: null,

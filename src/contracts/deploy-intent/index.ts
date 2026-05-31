@@ -1,4 +1,7 @@
-import { dirname, join, normalize } from "@std/path";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, normalize } from "node:path";
 
 export type DeployIntentDriver = "gitops";
 export type DeployIntentMode = "apply" | "plan" | "destroy";
@@ -108,11 +111,11 @@ export async function writeDeployIntent(
   assertSafeIntentId(input.id);
   const config = options.config;
   const git = options.git ?? defaultGitRunner;
-  const mkdir = options.mkdir ?? Deno.mkdir;
-  const writeTextFile = options.writeTextFile ?? Deno.writeTextFile;
-  const remove = options.remove ?? Deno.remove;
+  const makeDirectory = options.mkdir ?? mkdir;
+  const writeText = options.writeTextFile ?? writeFile;
+  const remove = options.remove ?? removePath;
   const makeTempDir = options.makeTempDir ??
-    (() => Deno.makeTempDir({ prefix: "takos-deploy-intent-" }));
+    (() => mkdtemp(join(tmpdir(), "takos-deploy-intent-")));
   const ownedWorktree = options.worktree ? undefined : await makeTempDir();
   const worktree = options.worktree ?? ownedWorktree!;
   const relativePath = `${config.writePathPrefix}/${input.id}.json`;
@@ -130,8 +133,8 @@ export async function writeDeployIntent(
         worktree,
       ], { env: authEnv });
     }
-    await mkdir(dirname(targetPath), { recursive: true });
-    await writeTextFile(
+    await makeDirectory(dirname(targetPath), { recursive: true });
+    await writeText(
       targetPath,
       `${JSON.stringify(deployIntentDocument(input), null, 2)}\n`,
     );
@@ -253,18 +256,38 @@ async function defaultGitRunner(
 ): Promise<
   { readonly code: number; readonly stdout: string; readonly stderr: string }
 > {
-  const output = await new Deno.Command("git", {
-    args: [...args],
-    cwd,
-    // Inherit the parent environment and overlay the credential-carrying
-    // GIT_CONFIG_* vars. clearEnv stays false so git keeps PATH/HOME/etc.
-    ...(options?.env ? { env: { ...options.env } } : {}),
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  return {
-    code: output.code,
-    stdout: new TextDecoder().decode(output.stdout),
-    stderr: new TextDecoder().decode(output.stderr),
-  };
+  return await new Promise<
+    { readonly code: number; readonly stdout: string; readonly stderr: string }
+  >((resolve, reject) => {
+    const child = spawn("git", [...args], {
+      cwd,
+      // Inherit the parent environment and overlay the credential-carrying
+      // GIT_CONFIG_* vars so git keeps PATH/HOME/etc.
+      env: options?.env ? { ...process.env, ...options.env } : process.env,
+      windowsHide: true,
+    });
+    const stdout: Uint8Array[] = [];
+    const stderr: Uint8Array[] = [];
+    child.stdout.on("data", (chunk: Uint8Array | string) => {
+      stdout.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    });
+    child.stderr.on("data", (chunk: Uint8Array | string) => {
+      stderr.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({
+        code: code ?? 1,
+        stdout: Buffer.concat(stdout).toString("utf8"),
+        stderr: Buffer.concat(stderr).toString("utf8"),
+      });
+    });
+  });
+}
+
+async function removePath(
+  path: string,
+  options?: { recursive?: boolean },
+): Promise<void> {
+  await rm(path, { recursive: options?.recursive, force: true });
 }

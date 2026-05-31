@@ -1,7 +1,8 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { readRunBootstrapInstallationContext } from "../executor-run-state.ts";
 
-Deno.test("readRunBootstrapInstallationContext extracts install namespace context", () => {
+test("readRunBootstrapInstallationContext extracts install namespace context", () => {
   assertEquals(
     readRunBootstrapInstallationContext(JSON.stringify({
       installationId: " inst_1 ",
@@ -14,7 +15,7 @@ Deno.test("readRunBootstrapInstallationContext extracts install namespace contex
   );
 });
 
-Deno.test("readRunBootstrapInstallationContext supports nested Accounts materialization context", () => {
+test("readRunBootstrapInstallationContext supports nested Accounts materialization context", () => {
   assertEquals(
     readRunBootstrapInstallationContext(JSON.stringify({
       accounts: { installationId: "inst_nested" },
@@ -29,7 +30,7 @@ Deno.test("readRunBootstrapInstallationContext supports nested Accounts material
   );
 });
 
-Deno.test("readRunBootstrapInstallationContext ignores invalid run input", () => {
+test("readRunBootstrapInstallationContext ignores invalid run input", () => {
   assertEquals(readRunBootstrapInstallationContext("{not json"), {});
   assertEquals(readRunBootstrapInstallationContext(JSON.stringify([])), {});
   assertEquals(readRunBootstrapInstallationContext(null), {});

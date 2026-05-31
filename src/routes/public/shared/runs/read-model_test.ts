@@ -1,8 +1,9 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual } from 'node:assert/strict';
+import { test } from 'bun:test';
 import type { SqlDatabaseBinding } from "takos-api-contract/shared/types";
 import { readRunAccess } from "./read-model.ts";
 
-Deno.test("readRunAccess returns run detail when actor is a space member", async () => {
+test("readRunAccess returns run detail when actor is a space member", async () => {
   const db = fakeRunDb({
     actorAccountId: "acct_1",
     membershipRole: "editor",
@@ -12,14 +13,14 @@ Deno.test("readRunAccess returns run detail when actor is a space member", async
 
   const result = await readRunAccess(db, "run_1", "acct_1");
 
-  assertEquals(result?.role, "editor");
-  assertEquals(result?.run.id, "run_1");
-  assertEquals(result?.run.space_id, "space_1");
-  assertEquals(result?.run.root_thread_id, "thread_1");
-  assertEquals(result?.run.root_run_id, "run_1");
+  deepStrictEqual(result?.role, "editor");
+  deepStrictEqual(result?.run.id, "run_1");
+  deepStrictEqual(result?.run.space_id, "space_1");
+  deepStrictEqual(result?.run.root_thread_id, "thread_1");
+  deepStrictEqual(result?.run.root_run_id, "run_1");
 });
 
-Deno.test("readRunAccess hides runs from non-members", async () => {
+test("readRunAccess hides runs from non-members", async () => {
   const db = fakeRunDb({
     actorAccountId: "acct_1",
     membershipRole: null,
@@ -29,7 +30,7 @@ Deno.test("readRunAccess hides runs from non-members", async () => {
 
   const result = await readRunAccess(db, "run_1", "acct_1");
 
-  assertEquals(result, null);
+  deepStrictEqual(result, null);
 });
 
 function fakeRunDb(config: {

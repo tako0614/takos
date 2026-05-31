@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
@@ -146,7 +147,7 @@ function createFakeSqlDatabase(initialRows: AppRow[]) {
   return { db, prepared, rows };
 }
 
-Deno.test(
+test(
   "app mutations resolve the requested space before returning not found",
   async () => {
     const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;

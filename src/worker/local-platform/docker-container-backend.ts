@@ -1,3 +1,4 @@
+import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
 /**
  * DockerContainerBackend — ContainerBackend implementation using the Docker
  * Engine API via Unix socket.
@@ -13,7 +14,7 @@ import type {
   ContainerCreateResult,
 } from "./container-backend.ts";
 
-const DOCKER_SOCKET = Deno.env.get("DOCKER_SOCKET_PATH") ||
+const DOCKER_SOCKET = getEnv("DOCKER_SOCKET_PATH") ||
   "/var/run/docker.sock";
 
 // ─── Docker Engine API helpers ───

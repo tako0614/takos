@@ -1,6 +1,8 @@
-import { assertEquals } from "@std/assert";
+import { deepStrictEqual as assertEquals } from "node:assert/strict";
 import type { ChatTimelineEntry } from "../../../views/chat/chat-types.ts";
 import type { ChatRunMetaMap } from "../../../views/chat/chat-types.ts";
+import { test } from "bun:test";
+
 
 const { buildActiveRunActivityGroups, buildPersistentRunActivityGroups } =
   await import("../../../views/chat/run-activity.ts");
@@ -21,7 +23,7 @@ function entry(
   };
 }
 
-Deno.test("buildPersistentRunActivityGroups - keeps saved thinking for terminal runs", () => {
+test("buildPersistentRunActivityGroups - keeps saved thinking for terminal runs", () => {
   const groups = buildPersistentRunActivityGroups(
     [
       entry("run-1", 1, "thinking", "Reading context"),
@@ -46,7 +48,7 @@ Deno.test("buildPersistentRunActivityGroups - keeps saved thinking for terminal 
   ]);
 });
 
-Deno.test("buildPersistentRunActivityGroups - hides active runs to avoid duplicating live thinking", () => {
+test("buildPersistentRunActivityGroups - hides active runs to avoid duplicating live thinking", () => {
   const groups = buildPersistentRunActivityGroups(
     [entry("run-1", 1, "thinking", "Working")],
     {
@@ -62,7 +64,7 @@ Deno.test("buildPersistentRunActivityGroups - hides active runs to avoid duplica
   assertEquals(groups, []);
 });
 
-Deno.test("buildActiveRunActivityGroups - restores saved thinking for active runs", () => {
+test("buildActiveRunActivityGroups - restores saved thinking for active runs", () => {
   const groups = buildActiveRunActivityGroups(
     [
       entry("run-1", 1, "thinking", "Reading context"),
@@ -86,7 +88,7 @@ Deno.test("buildActiveRunActivityGroups - restores saved thinking for active run
   ]);
 });
 
-Deno.test("buildPersistentRunActivityGroups - derives terminal status from saved events", () => {
+test("buildPersistentRunActivityGroups - derives terminal status from saved events", () => {
   const groups = buildPersistentRunActivityGroups(
     [
       entry("run-1", 1, "thinking", "Working"),

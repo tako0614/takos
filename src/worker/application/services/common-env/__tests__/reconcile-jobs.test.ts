@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { CommonEnvReconcileJobStore } from "../reconcile-jobs.ts";
 
-Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - parses valid JSON array of strings", () => {
+test("CommonEnvReconcileJobStore.parseTargetKeys - parses valid JSON array of strings", () => {
   const result = CommonEnvReconcileJobStore.parseTargetKeys({
     targetKeysJson: '["MY_VAR","ANOTHER"]',
   });
@@ -10,7 +11,7 @@ Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - parses valid JSON array 
   assertEquals(result, ["MY_VAR", "ANOTHER"]);
 });
 
-Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for null targetKeysJson", () => {
+test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for null targetKeysJson", () => {
   const result = CommonEnvReconcileJobStore.parseTargetKeys({
     targetKeysJson: null,
   });
@@ -18,7 +19,7 @@ Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for nu
   assertEquals(result, undefined);
 });
 
-Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for invalid JSON", () => {
+test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for invalid JSON", () => {
   const result = CommonEnvReconcileJobStore.parseTargetKeys({
     targetKeysJson: "not-json",
   });
@@ -26,7 +27,7 @@ Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for in
   assertEquals(result, undefined);
 });
 
-Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for non-array JSON", () => {
+test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for non-array JSON", () => {
   const result = CommonEnvReconcileJobStore.parseTargetKeys({
     targetKeysJson: '{"key":"val"}',
   });
@@ -34,7 +35,7 @@ Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for no
   assertEquals(result, undefined);
 });
 
-Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - filters out non-string elements", () => {
+test("CommonEnvReconcileJobStore.parseTargetKeys - filters out non-string elements", () => {
   const result = CommonEnvReconcileJobStore.parseTargetKeys({
     targetKeysJson: '["MY_VAR", 123, null, "ANOTHER"]',
   });
@@ -42,7 +43,7 @@ Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - filters out non-string e
   assertEquals(result, ["MY_VAR", "ANOTHER"]);
 });
 
-Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for empty array", () => {
+test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for empty array", () => {
   const result = CommonEnvReconcileJobStore.parseTargetKeys({
     targetKeysJson: "[]",
   });
@@ -50,7 +51,7 @@ Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for em
   assertEquals(result, undefined);
 });
 
-Deno.test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for array of all non-strings", () => {
+test("CommonEnvReconcileJobStore.parseTargetKeys - returns undefined for array of all non-strings", () => {
   const result = CommonEnvReconcileJobStore.parseTargetKeys({
     targetKeysJson: "[1, 2, 3]",
   });

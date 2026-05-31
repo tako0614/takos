@@ -3,26 +3,10 @@
 # Container images are built separately via CI and pushed to ghcr.io.
 
 components:
-  app:
-    workingDir: app
+  worker:
+    workingDir: .
     steps:
-      - run: deno task build
+      - run: bun install --frozen-lockfile
+      - run: bun run web:build
     output:
-      entrypoint: dist/web.js
-
-  git:
-    workingDir: git
-    steps:
-      - run: deno task build
-    output:
-      entrypoint: dist/index.js
-
-  agent:
-    # The Workers entrypoint (DO host) is built from the app workspace.
-    # Container images (executor/runtime) are built in CI via Dockerfile
-    # and pushed to ghcr.io/takos/takos-agent and ghcr.io/takos/takos-runtime.
-    workingDir: app
-    steps:
-      - run: deno task build:agent-host
-    output:
-      entrypoint: dist/agent-host.js
+      entrypoint: src/worker/index.ts

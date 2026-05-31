@@ -1,7 +1,8 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { Env } from "../shared/types/index.ts";
-import { runScheduledFamilyMaintenance } from "../web.ts";
+import { runScheduledFamilyMaintenance } from "../application/services/maintenance/scheduled-cron.ts";
 
 type ScheduledFamilyMaintenanceDeps = NonNullable<
   Parameters<typeof runScheduledFamilyMaintenance>[4]
@@ -100,7 +101,7 @@ function createDeps(
   };
 }
 
-Deno.test("runScheduledFamilyMaintenance includes workflow artifact GC in the hourly family", async () => {
+test("runScheduledFamilyMaintenance includes workflow artifact GC in the hourly family", async () => {
   const env = createTestEnv();
   const calls: string[] = [];
   const errors: Array<{ job: string; error: string }> = [];
@@ -117,7 +118,7 @@ Deno.test("runScheduledFamilyMaintenance includes workflow artifact GC in the ho
   assertEquals(errors, []);
 });
 
-Deno.test("runScheduledFamilyMaintenance keeps hourly jobs running after workflow artifact GC failures", async () => {
+test("runScheduledFamilyMaintenance keeps hourly jobs running after workflow artifact GC failures", async () => {
   const env = createTestEnv();
   const calls: string[] = [];
   const errors: Array<{ job: string; error: string }> = [];

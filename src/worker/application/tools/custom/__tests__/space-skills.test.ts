@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { SKILL_CREATE, SKILL_UPDATE } from "../space-skills.ts";
@@ -9,7 +10,7 @@ function getOutputModeEnum(tool: typeof SKILL_CREATE | typeof SKILL_UPDATE) {
   return outputModes?.items?.enum ?? [];
 }
 
-Deno.test("custom skill tools expose documented output mode aliases", () => {
+test("custom skill tools expose documented output mode aliases", () => {
   const expected = [
     "chat",
     "text",

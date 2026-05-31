@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import {
   createBindingFingerprint,
   decryptCommonEnvValue,
@@ -26,20 +27,20 @@ const env = {
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 } as const;
 
-Deno.test("normalizeEnvName uppercases and trims valid names", () => {
+test("normalizeEnvName uppercases and trims valid names", () => {
   assertEquals(normalizeEnvName("  my_var  "), "MY_VAR");
 });
 
-Deno.test("normalizeEnvName rejects invalid names", () => {
+test("normalizeEnvName rejects invalid names", () => {
   assertThrows(() => normalizeEnvName(""), Error, "required");
   assertThrows(() => normalizeEnvName("1_VAR"), Error, "Invalid");
 });
 
-Deno.test("uniqueEnvNames deduplicates normalized names", () => {
+test("uniqueEnvNames deduplicates normalized names", () => {
   assertEquals(uniqueEnvNames(["foo", "FOO", "bar"]), ["FOO", "BAR"]);
 });
 
-Deno.test("managed env key helpers expose the expected sets", () => {
+test("managed env key helpers expose the expected sets", () => {
   assert(isManagedCommonEnvKey("APP_BASE_URL"));
   assert(isReservedSpaceCommonEnvKey("TAKOS_API_URL"));
   assertEquals(MANAGED_COMMON_ENV_KEYS.has("TAKOS_ACCESS_TOKEN"), false);
@@ -50,7 +51,7 @@ Deno.test("managed env key helpers expose the expected sets", () => {
   assertEquals(RESERVED_SPACE_COMMON_ENV_KEYS.has("APP_BASE_URL"), false);
 });
 
-Deno.test("getCommonEnvSecret requires ENCRYPTION_KEY", () => {
+test("getCommonEnvSecret requires ENCRYPTION_KEY", () => {
   assertThrows(
     () => getCommonEnvSecret({ ENCRYPTION_KEY: "" } as never),
     Error,
@@ -58,7 +59,7 @@ Deno.test("getCommonEnvSecret requires ENCRYPTION_KEY", () => {
   );
 });
 
-Deno.test("encrypt/decrypt common env values round-trip", async () => {
+test("encrypt/decrypt common env values round-trip", async () => {
   const encrypted = await encryptCommonEnvValue(
     env,
     "space-1",
@@ -74,7 +75,7 @@ Deno.test("encrypt/decrypt common env values round-trip", async () => {
   assertEquals(decrypted, "super-secret");
 });
 
-Deno.test("decryptCommonEnvValue rejects invalid payloads", async () => {
+test("decryptCommonEnvValue rejects invalid payloads", async () => {
   await assertRejects(
     () =>
       decryptCommonEnvValue(env, {
@@ -87,7 +88,7 @@ Deno.test("decryptCommonEnvValue rejects invalid payloads", async () => {
   );
 });
 
-Deno.test("fingerprint helpers produce stable v2 fingerprints", async () => {
+test("fingerprint helpers produce stable v2 fingerprints", async () => {
   const first = await createBindingFingerprint({
     env,
     spaceId: "space-1",

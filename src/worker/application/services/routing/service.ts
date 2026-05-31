@@ -32,8 +32,8 @@ export { getRoutingPhase } from "./phase.ts";
 import { normalizeHostname, parseRoutingValue } from "./resolver.ts";
 import {
   buildKVPayload,
-  DEFAULT_DO_TIMEOUT_MS,
-  DEFAULT_TOMBSTONE_TTL_MS,
+  DEFAULT_DO_TIMEOUT,
+  DEFAULT_TOMBSTONE_TTL,
   deleteL1,
   doDeleteRecord,
   doGetRecord,
@@ -41,7 +41,7 @@ import {
   getL1,
   hasRoutingDO,
   hasRoutingStore,
-  L2_KV_TTL_SECONDS,
+  L2_KV_TTL,
   putL1,
   ROUTING_LOG_PREFIX,
   runBackground,
@@ -100,7 +100,7 @@ export async function resolveHostnameRouting(options: {
   }
 
   const envWithDo = hasRoutingDO(options.env) ? options.env : null;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT;
 
   const maybeResolveFromDo = async (): Promise<ResolvedRouting | null> => {
     if (!envWithDo) return null;
@@ -240,7 +240,7 @@ export async function resolveHostnameRouting(options: {
         tombstoneUntil: resolved.record.tombstoneUntil,
       });
       const kvOpts = phase >= 4
-        ? { expirationTtl: L2_KV_TTL_SECONDS }
+        ? { expirationTtl: L2_KV_TTL }
         : undefined;
       const task = options.env.HOSTNAME_ROUTING.put(hostname, payload, kvOpts)
         .catch((err: unknown) => {
@@ -286,7 +286,7 @@ export async function upsertHostnameRouting(options: {
   const hostname = normalizeHostname(options.hostname);
   const phase = getRoutingPhase(options.env);
   const nowMs = (options.clock ?? systemClock).now();
-  const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT;
   deleteL1(hostname);
 
   if (hasRoutingStore(options.env)) {
@@ -302,7 +302,7 @@ export async function upsertHostnameRouting(options: {
     target: options.target,
     updatedAt: nowMs,
   });
-  const kvOpts = phase >= 4 ? { expirationTtl: L2_KV_TTL_SECONDS } : undefined;
+  const kvOpts = phase >= 4 ? { expirationTtl: L2_KV_TTL } : undefined;
 
   if (phase < 3) {
     await options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, kvOpts);
@@ -352,8 +352,8 @@ export async function deleteHostnameRouting(options: {
   const hostname = normalizeHostname(options.hostname);
   const phase = getRoutingPhase(options.env);
   const nowMs = (options.clock ?? systemClock).now();
-  const tombstoneTtlMs = options.tombstoneTtlMs ?? DEFAULT_TOMBSTONE_TTL_MS;
-  const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT_MS;
+  const tombstoneTtlMs = options.tombstoneTtlMs ?? DEFAULT_TOMBSTONE_TTL;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT;
   deleteL1(hostname);
 
   if (hasRoutingStore(options.env)) {
@@ -402,7 +402,7 @@ export async function deleteHostnameRouting(options: {
     tombstoneUntil,
   });
   const kvTask = options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, {
-    expirationTtl: L2_KV_TTL_SECONDS,
+    expirationTtl: L2_KV_TTL,
   }).catch(
     (err: unknown) => {
       logWarn(`${ROUTING_LOG_PREFIX} KV tombstone put failed for ${hostname}`, {

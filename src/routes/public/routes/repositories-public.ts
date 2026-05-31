@@ -384,12 +384,10 @@ export function registerRepositoriesPublicRoutes(
   app.post(
     "/api/repositories/:repositoryId/pull-requests/:number/ai-review",
     async (c) => {
-      // AI review used to forward unauthenticated/unscoped through the legacy
-      // upstream proxy. Replace with a capability-gated git internal forward
-      // so the caller's prWrite capability is checked and a known actor
-      // identity flows downstream. Membership is required via spaceId query
-      // (or body fallback) — without it any account could request AI review
-      // on private PRs.
+      // Capability-gated git internal forward: the caller's prWrite capability
+      // is checked and a known actor identity flows downstream. Membership is
+      // required via spaceId query (or body fallback) so private PRs never
+      // accept account-only requests.
       const body = await c.req.raw.text();
       const spaceId = spaceIdFromMutationBody(body, c.req.query("spaceId")) ??
         "";
@@ -516,10 +514,9 @@ export function registerRepositoriesPublicRoutes(
     async (c) => {
       // Single source of truth for the merge route: spaceId comes from the
       // request body. Falling back to the query string ambiguates the
-      // authorization decision — the body says one space, the query says
-      // another, and the legacy code happily forwarded both. We pick the
-      // body first (the user submitted it explicitly), but require the
-      // membership check before any downstream call.
+      // authorization decision: the body says one space and the query says
+      // another. We pick the body first, but require the membership check
+      // before any downstream call.
       const body = await c.req.raw.text();
       const spaceId = spaceIdFromMutationBody(body, c.req.query("spaceId")) ??
         "";

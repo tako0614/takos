@@ -1,3 +1,4 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import type { DeploymentEnv } from "../models.ts";
@@ -15,7 +16,7 @@ function env(overrides: Partial<DeploymentEnv>): DeploymentEnv {
   };
 }
 
-Deno.test("resolveDefaultDeploymentBackendName uses workers-dispatch only when WFP is configured", () => {
+test("resolveDefaultDeploymentBackendName uses workers-dispatch only when WFP is configured", () => {
   assertEquals(
     resolveDefaultDeploymentBackendName(
       env({
@@ -36,7 +37,7 @@ Deno.test("resolveDefaultDeploymentBackendName uses workers-dispatch only when W
   );
 });
 
-Deno.test("resolveDefaultDeploymentBackendName keeps workload bundles on runtime-host for k8s and S3-only envs", () => {
+test("resolveDefaultDeploymentBackendName keeps workload bundles on runtime-host for k8s and S3-only envs", () => {
   assertEquals(
     resolveDefaultDeploymentBackendName(
       env({
@@ -49,7 +50,7 @@ Deno.test("resolveDefaultDeploymentBackendName keeps workload bundles on runtime
   );
 });
 
-Deno.test("resolveDefaultDeploymentBackendName chooses container backend from concrete operator env", () => {
+test("resolveDefaultDeploymentBackendName chooses container backend from concrete operator env", () => {
   assertEquals(
     resolveDefaultDeploymentBackendName(
       env({

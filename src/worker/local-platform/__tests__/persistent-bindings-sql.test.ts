@@ -1,8 +1,9 @@
+import { test } from "bun:test";
 import { assertEquals } from "@std/assert";
 
 import { splitSqlStatements } from "../persistent-bindings.ts";
 
-Deno.test("splitSqlStatements splits multiple statements while preserving quoted semicolons", () => {
+test("splitSqlStatements splits multiple statements while preserving quoted semicolons", () => {
   const statements = splitSqlStatements(`
     CREATE TABLE demo (id INTEGER PRIMARY KEY, note TEXT);
     INSERT INTO demo (note) VALUES ('hello; world');
@@ -16,7 +17,7 @@ Deno.test("splitSqlStatements splits multiple statements while preserving quoted
   ]);
 });
 
-Deno.test("splitSqlStatements ignores empty statements", () => {
+test("splitSqlStatements ignores empty statements", () => {
   const statements = splitSqlStatements(" ; SELECT 1; ; ");
 
   assertEquals(statements, ["SELECT 1"]);

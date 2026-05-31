@@ -1,9 +1,10 @@
+import { test } from "bun:test";
 import { CloudRunContainerBackend } from "../cloud-run-container-backend.ts";
 
 import { assertEquals } from "@std/assert";
 import { assertSpyCallArgs, spy } from "@std/testing/mock";
 
-Deno.test("CloudRunContainerBackend - deploys a service, returns the service URL, reads logs, and deletes the service", async () => {
+test("CloudRunContainerBackend - deploys a service, returns the service URL, reads logs, and deletes the service", async () => {
   let callIndex = 0;
   const responses = [
     {
