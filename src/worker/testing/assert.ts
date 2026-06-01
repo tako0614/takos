@@ -1,7 +1,4 @@
-// Bun migration shim: @std/assert -> node:assert/strict based implementation.
-// Lets existing test files keep `import { assertEquals } from "@std/assert"` while
-// running under `bun test`, wired via tsconfig.json "paths". Covers every
-// @std/assert symbol used across the ecosystem (full-tree census).
+// Product-local test assertions backed by node:assert/strict.
 import nodeAssert from "node:assert/strict";
 
 export class AssertionError extends Error {

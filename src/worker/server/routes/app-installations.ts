@@ -41,7 +41,9 @@ type InstallableAppApplyBody = {
   runtime_base_url?: unknown;
   source_commit?: unknown;
   expected_commit?: unknown;
-  expected_manifest_digest?: unknown;
+  expected_plan_snapshot_digest?: unknown;
+  expected_current_deployment_id?: unknown;
+  expected?: unknown;
   installation_id?: unknown;
   operation?: unknown;
   reason?: unknown;
@@ -218,6 +220,47 @@ function readPathString(
   return readString(current);
 }
 
+function readBodyExpectedCommit(body: InstallableAppApplyBody): string | null {
+  return readString(body.expected_commit) ??
+    readPathString(body.expected, ["commit"]);
+}
+
+function readBodyExpectedPlanSnapshotDigest(
+  body: InstallableAppApplyBody,
+): string | null {
+  return readString(body.expected_plan_snapshot_digest) ??
+    readPathString(body.expected, ["planSnapshotDigest"]);
+}
+
+function readBodyExpectedCurrentDeploymentId(
+  body: InstallableAppApplyBody,
+): { provided: boolean; value: string | null } {
+  if ("expected_current_deployment_id" in body) {
+    return readNullableString(
+      body.expected_current_deployment_id,
+      "expected_current_deployment_id",
+    );
+  }
+  const expected = readRecord(body.expected);
+  if (expected && "currentDeploymentId" in expected) {
+    return readNullableString(
+      expected.currentDeploymentId,
+      "expected.currentDeploymentId",
+    );
+  }
+  return { provided: false, value: null };
+}
+
+function readNullableString(
+  value: unknown,
+  field: string,
+): { provided: true; value: string | null } {
+  if (value === null) return { provided: true, value: null };
+  const text = readString(value);
+  if (text) return { provided: true, value: text };
+  throw new BadRequestError(`${field} must be a string or null`);
+}
+
 function extractInstallationId(value: unknown): string | null {
   return readPathString(value, ["accounts", "installationId"]) ??
     readPathString(value, ["accounts", "installation_id"]) ??
@@ -342,13 +385,13 @@ appInstallationsRouter.post(
     }
 
     const costAck = readOptionalBodyBoolean(body, "cost_ack");
-    const expectedCommit = readString(body.expected_commit) ?? undefined;
-    const expectedManifestDigest = readString(
-      body.expected_manifest_digest,
+    const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
+    const expectedPlanSnapshotDigest = readBodyExpectedPlanSnapshotDigest(
+      body,
     ) ?? undefined;
-    if (!expectedCommit || !expectedManifestDigest) {
+    if (!expectedCommit || !expectedPlanSnapshotDigest) {
       throw new BadRequestError(
-        "expected_commit and expected_manifest_digest are required after install dry-run approval",
+        "expected_commit and expected_plan_snapshot_digest are required after install dry-run approval",
       );
     }
 
@@ -379,7 +422,7 @@ appInstallationsRouter.post(
         ...(mode ? { mode } : {}),
         ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
         ...(expectedCommit ? { expectedCommit } : {}),
-        ...(expectedManifestDigest ? { expectedManifestDigest } : {}),
+        ...(expectedPlanSnapshotDigest ? { expectedPlanSnapshotDigest } : {}),
         ...(costAck === undefined ? {} : { costAck }),
       }, installConfig);
     return jsonFromUpstream(c, upstream);
@@ -444,6 +487,22 @@ appInstallationsRouter.post(
     }
     const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
+    const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
+    const expectedPlanSnapshotDigest = readBodyExpectedPlanSnapshotDigest(
+      body,
+    ) ?? undefined;
+    const expectedCurrentDeploymentId = readBodyExpectedCurrentDeploymentId(
+      body,
+    );
+    if (
+      operation === "upgrade" &&
+      (!expectedCommit || !expectedPlanSnapshotDigest ||
+        !expectedCurrentDeploymentId.provided)
+    ) {
+      throw new BadRequestError(
+        "expected.commit, expected.planSnapshotDigest, and expected.currentDeploymentId are required after deployment dry-run approval",
+      );
+    }
     const upstream = await appInstallationsRouteDeps
       .applyInstallableAppRevision({
         ...source,
@@ -451,6 +510,11 @@ appInstallationsRouter.post(
         operation,
         ...(sourceCommit ? { sourceCommit } : {}),
         ...(reason ? { reason } : {}),
+        ...(expectedCommit ? { expectedCommit } : {}),
+        ...(expectedPlanSnapshotDigest ? { expectedPlanSnapshotDigest } : {}),
+        ...(expectedCurrentDeploymentId.provided
+          ? { expectedCurrentDeploymentId: expectedCurrentDeploymentId.value }
+          : {}),
       }, installConfig);
     return jsonFromUpstream(c, upstream);
   },

@@ -1,69 +1,37 @@
 # Worker + DB
 
-> このページでわかること: Worker と PostgreSQL を組み合わせた AppSpec。
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-`worker` と `postgres` component を同じ `.takosumi.yml` に置き、
-`connect.<binding>.output` で Worker へ DB connection
-を渡します。
+## Current Flow
 
-Short kind names are operator-profile aliases. The route list in gateway `spec`
-belongs to the adopted gateway descriptor's open `spec`. `web.spec.entrypoint`
-points to a runtime file already present in the resolved source or prepared
-archive.
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-```yaml
-apiVersion: v1
-metadata:
-  id: example.notes
-  name: Notes
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/worker/index.ts
-    connect:
-      db:
-        output: db.connection
-        inject: secret-env
-        prefix: DB
-  db:
-    kind: postgres
-    spec:
-      class: small
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: web.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-          host: notes.example.com
-          tls: auto
-      routes:
-        - listener: public
-          path: /
-          to: upstream
+## Takos Boundary
+
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+
+## API Shape
+
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-launcher / health endpoint は gateway descriptor spec と Takos product metadata
-で表現します。
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-ポイント:
+## References
 
-- runtime と data store は `components` に並べる
-- `web` が `connect.db.output: db.connection` で `db` component の connection
-  output を受け取る
-- DB の credential / connection string は `connect` declaration から env (`DB_*`)
-  に materialize される
-- AppSpec には provider-specific secret ref や string interpolation を書かない
-- Installation dry-run で create / update される component と推定 cost
-  を確認する
-
-関連:
-
-- [AppSpec](https://takosumi.com/docs/reference/manifest)
-- [環境変数](/deploy/environment)
-- [Simple Worker](/examples/simple-worker)
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

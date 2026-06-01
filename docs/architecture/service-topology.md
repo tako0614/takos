@@ -11,14 +11,14 @@ Takos の実装は単一の `takos-worker` 入口 (`src/worker`)、UI (`web`)、
 
 ## ローカルサービス一覧
 
-上 4 つが Takos product の runtime component、残りの Takosumi 系は substrate 側です。
+上 4 つが Takos product の runtime planned service、残りの Takosumi 系は substrate 側です。
 
 | サービス                  |  ポート | 配置先               | 役割                                                                                         |
 | ------------------------- | ------: | -------------------- | -------------------------------------------------------------------------------------------- |
 | `takos-worker`            |  `8787` | `src/worker`         | OIDC consumer、app-local profile、Web/API ゲートウェイ                                       |
 | Takos UI                  |  `5173` | `web/`               | browser UI development server                                                                |
-| `takosumi kernel`         |  `8788` | `../takosumi/`       | AppSpec install / Deployment apply エンジン。runtime routing は provider data plane が担当   |
-| `takosumi-cloud accounts` | `8787+` | `../takosumi-cloud/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / Installation |
+| `takosumi kernel`         |  `8788` | `../takosumi/`       | Source install / Deployment apply エンジン。runtime routing は operator data plane が担当            |
+| `takosumi accounts` | `8787+` | `../takosumi/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / Installation |
 | `takos-agent`             |  `8789` | `containers/agent/`  | エージェント実行 container                                                                   |
 | `takos-git`               |  `8790` | `containers/git/`    | Git ホスティング、Smart HTTP、refs、objects                                                  |
 | `postgres`                | `15432` | shell compose        | app / Takosumi / Git のローカル永続化                                                        |
@@ -46,10 +46,12 @@ Takos の実装は単一の `takos-worker` 入口 (`src/worker`)、UI (`web`)、
 
 - デプロイと runtime lifecycle のオーナーシップは 3 つの sibling product
   に分かれます:
-  - **インストールパイプライン / source fetch / `.takosumi.yml` parse /
-    publish-listen resolution** → `takosumi`
-  - **Deployment apply / rollback / routing / resource provisioning** →
+  - **インストールパイプライン / source fetch / source input parse /
+    publication/binding resolution** → `takosumi`
+  - **Deployment record / apply guard / rollback pointer / binding evidence** →
     `takosumi kernel`
+  - **routing / infrastructure lifecycle / resource provisioning** →
+    operator distribution / runtime-agent connector
   - **account / 課金 / OIDC issuer / Installation 台帳** → Takosumi Accounts
 - shell compose にスタンドアロンの deploy/runtime サービスを足さないでください
 - 本番・staging の deploy 設定は `takos-private` が管理します。この shell は

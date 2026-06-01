@@ -1122,14 +1122,11 @@ test("source snapshot pins refs to commit and tree digest", async () => {
   });
 });
 
-test("source snapshot enforces configured file and manifest limits", async () => {
+test("source snapshot enforces configured file limit", async () => {
   await withBareRepository(async (fixture) => {
     const originalRoot = getEnv("TAKOS_GIT_REPOSITORY_ROOT");
     const originalFileLimit = getEnv(
       "TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES",
-    );
-    const originalManifestLimit = getEnv(
-      "TAKOS_GIT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES",
     );
     setEnv("TAKOS_GIT_REPOSITORY_ROOT", fixture.root);
     try {
@@ -1149,30 +1146,9 @@ test("source snapshot enforces configured file and manifest limits", async () =>
         "git_source_snapshot_file_limit_exceeded",
       );
 
-      restoreEnv("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES", originalFileLimit);
-      setEnv("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES", "1");
-      const manifestTooLarge = await signedRequest({
-        method: "POST",
-        path: TAKOS_GIT_INTERNAL_PATHS.sourceSnapshot,
-        capabilities: [TAKOS_GIT_CAPABILITIES.sourceSnapshot],
-        body: JSON.stringify({
-          repositoryId: fixture.repositoryId,
-          sourceRef: "main",
-          manifestPath: "README.md",
-        }),
-      });
-      assert.equal(manifestTooLarge.status, 422);
-      assert.equal(
-        (await manifestTooLarge.json()).code,
-        "git_source_snapshot_manifest_too_large",
-      );
     } finally {
       restoreEnv("TAKOS_GIT_REPOSITORY_ROOT", originalRoot);
       restoreEnv("TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES", originalFileLimit);
-      restoreEnv(
-        "TAKOS_GIT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES",
-        originalManifestLimit,
-      );
     }
   });
 });

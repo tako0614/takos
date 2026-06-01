@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@takos/test/assert";
 import { BadRequestError } from "@takos/worker-platform-utils/errors";
 
 import type { Env } from "../../../../shared/types/index.ts";

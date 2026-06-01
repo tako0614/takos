@@ -9,18 +9,18 @@
 1. **GCP 単独 hosting (GKE Helm)** ― `takos/deploy/helm/takos/values-gcp.yaml`
    overlay。Kubernetes ベースで control plane / runtime / executor を運用する
    path。
-2. **GCP reference provider adapter client** ― Cloud Run / Cloud SQL / GCS /
-   Pub/Sub / Cloud KMS / Secret Manager の adapter を takosumi.com reference
+2. **GCP reference runtime connector** ― Cloud Run / Cloud SQL / GCS /
+   Pub/Sub / Cloud KMS / Secret Manager の inventory / evidence connector を takosumi.com reference
    implementation の配線として呼び出す path。Cloudflare control plane + GCP
    tenant runtime (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
    (`profiles/gcp.example.json`) で使う。
 
 ::: tip 対象範囲 section 1 (Helm overlay) は Cloud Run への kernel 直接
 deploy、Firestore を control-plane storage として使う構成、Terraform overlay
-を扱いません。 section 2 (reference provider adapter client) は provider
-materialization までを扱います。 :::
+を扱いません。 section 2 (reference runtime connector) は operator-owned infra workflow
+が作った PlatformService inventory と Deployment evidence の接続までを扱います。 :::
 
-Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
+Takosumi 上で Source から Installation を作り、Deployment を管理する方法は [Deploy](/deploy/)
 を参照してください。 5 target 横断 runbook は
 [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
@@ -69,11 +69,11 @@ GCP GKE target に固有の prerequisites:
 ```bash
 # 共通手順 (5 target で同じ)
 cd takos-private
-deno task generate:keys:production --per-cloud
+bun run generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = gcp)
-deno task distribute:dry-run --confirm production
-deno task distribute:apply --confirm production
-cd ../takosumi-cloud
+bun run distribute:dry-run --confirm production
+bun run distribute:apply --confirm production
+cd ../takosumi
 bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.gcp.example.com \
   --subject tsub_admin \
@@ -110,7 +110,7 @@ bun packages/cli/src/main.ts accounts seed \
 | runtime config  | `runtimeConfig.environment=production`、implementation binding selector は fail-closed empty |
 | ingress         | GCE ingress class と managed certificate annotation を使う                     |
 | service account | Workload Identity 用 annotation を受け取る                                     |
-| workloads       | `takos-worker` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
+| workloads       | `takos-worker` / `takosumi` / `takosumi` / `takos-git` / `takos-agent`      |
 
 overlay は generated artifact です。distribution profile を更新したら:
 
@@ -126,7 +126,7 @@ bun run helm:check-overlays
 - GCE Ingress
 - External Secrets Operator などの secret 管理、または Helm values で secret
   を作成する運用
-- Takosumi reference provider adapter が参照する GCP managed-service credentials
+- operator-owned GCP workflow / runtime connector が参照する GCP managed-service credentials
 
 Terraform apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic / GCS
 bucket 名は `bun run terraform:helm-values` で generated values に変換し、
@@ -171,41 +171,41 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 ---
 
-## Section 2: GCP reference provider adapter
+## Section 2: GCP reference runtime connector
 
 ### 構成
 
-Takosumi reference implementation の GCP profile は次の adapter clients
+Takosumi reference implementation の GCP profile は次の runtime connector clients
 を使います:
 
-| provider client               | 用途                          | 参照クラス                            |
+| connector client              | 用途                          | 参照クラス                            |
 | ----------------------------- | ----------------------------- | ------------------------------------- |
 | `gcp-control-plane`           | Cloud Run service / revision  | `src/providers/gcp/cloud_run.ts`      |
 | `gcp-cloud-sql-postgres`      | Cloud SQL Postgres lifecycle  | `src/providers/gcp/cloud_sql.ts`      |
-| `gcp-cloud-storage-artifacts` | GCS bucket lifecycle          | `src/providers/gcp/gcs.ts`            |
-| `gcp-pubsub-control-plane`    | Pub/Sub topic + subscription  | `src/providers/gcp/pubsub.ts`         |
+| `gcp-cloud-storage-artifacts` | GCS bucket provisioning       | `src/providers/gcp/gcs.ts`            |
+| `gcp-pubsub-control-plane`    | Pub/Sub topic / consumer binding | `src/providers/gcp/pubsub.ts`      |
 | `gcp-cloud-kms`               | Cloud KMS key + version       | `src/providers/gcp/kms.ts`            |
 | `gcp-secret-manager`          | Secret Manager rotation       | `src/providers/gcp/secret_manager.ts` |
 | `gcp-load-balancer-router`    | HTTP(S) LB + Cloud DNS        | `src/providers/gcp/load_balancer.ts`  |
 | `gcp-runtime-agent-registry`  | runtime-agent endpoint config | `src/providers/gcp/gateway.ts`        |
 
 profile JSON (`profiles/gcp.example.json`) で `clients.*` を上記 client
-名に向けると、takosumi.com reference implementation の provider adapter wiring
-が GCP resource lifecycle を実行します。
+名に向けると、takosumi.com reference implementation は operator-owned GCP
+workflow の PlatformService inventory と Deployment evidence を読み書きします。
 
-### Operator が手動でやること / reference binding が行うこと
+### Operator workflow がやること / reference connector が記録すること
 
-| step                                                                       | operator               | reference binding |
+| step                                                                       | operator workflow      | reference connector |
 | -------------------------------------------------------------------------- | ---------------------- | --------------- |
 | GCP project 作成 / billing account link                                    | yes                    | no              |
 | service account JSON / Workload Identity 設定                              | yes                    | no              |
 | IAM role attach (Cloud Run / Cloud SQL / Storage / Pub/Sub / KMS / Secret) | yes                    | no              |
 | service account JSON または OAuth2 token を kernel に inject               | yes (operator-managed) | no              |
-| Cloud SQL / GCS / Pub/Sub / KMS / Secret resource lifecycle                | no                     | yes (provider)  |
-| Cloud Run service deploy / revision traffic split                          | no                     | yes (provider)  |
-| HTTP(S) LB url-map + Cloud DNS record 同期                                 | no                     | yes (provider)  |
+| Cloud SQL / GCS / Pub/Sub / KMS / Secret resource provisioning             | yes                    | records evidence |
+| Cloud Run service deploy / revision traffic split                          | yes                    | records evidence |
+| HTTP(S) LB url-map + Cloud DNS record 同期                                 | yes                    | records evidence |
 | runtime-agent HTTP lifecycle endpoint                                      | yes (process deploy)   | yes (lifecycle RPC) |
-| drift 検出 / rollback                                                      | no                     | yes (provider)  |
+| drift 検出 / rollback                                                      | yes                    | records evidence |
 
 ### IAM role 設計
 
@@ -261,13 +261,13 @@ gcloud iam service-accounts keys create ~/takos-provider.json \
 service account JSON を base64 してから secret に inject:
 
 ```bash
-cd takos-private/src/worker
-base64 -w0 ~/takos-provider.json | deno task secrets put GCP_SERVICE_ACCOUNT_JSON --env production
-echo "takos-prod" | deno task secrets put GOOGLE_CLOUD_PROJECT --env production
-echo "asia-northeast1" | deno task secrets put GCP_REGION --env production
+cd takos-private
+base64 -w0 ~/takos-provider.json | bun run control:secrets put GCP_SERVICE_ACCOUNT_JSON --env production
+echo "takos-prod" | bun run control:secrets put GOOGLE_CLOUD_PROJECT --env production
+echo "asia-northeast1" | bun run control:secrets put GCP_REGION --env production
 ```
 
-provider adapter は base64 decode して `google-auth-library` 互換 OAuth2 token
+runtime connector は base64 decode して `google-auth-library` 互換 OAuth2 token
 を発行します。
 
 #### B. operator-managed gateway URL
@@ -368,7 +368,7 @@ Secret ops を実行して結果を返します。
 
 ### GCP LB routing の DNS 設定
 
-`gcp-load-balancer-router` provider client は次を materialize します:
+`gcp-load-balancer-router` connector は次の lifecycle を扱います:
 
 1. Backend service (tenant Cloud Run service / NEG を attach)
 2. URL map / host rule (per-tenant host header matcher)
@@ -400,14 +400,14 @@ kernel がやること:
 - Cloud Run は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - Firestore / Pub/Sub / Secret Manager を app resource backend として自動
-  provisioning する contract (※ section 2 の provider adapter はこれを担う)
+  provisioning する contract (※ section 2 は operator-owned workflow の inventory / evidence 接続を扱う)
 - Terraform による GCP resource 作成手順
-- GCP 固有 adapter 名を AppSpec author 向けの public surface として固定
+- GCP 固有 connector 名を app author 向けの public surface として固定
   する contract
 
-必要なら operator が追加 adapter / provider implementation
+必要なら operator が追加 connector / inventory importer
 を構成できますが、このページは Takos product/operator distribution の Helm
-overlay と reference provider adapter で実際に表現されている範囲だけを runbook
+overlay と reference runtime connector で実際に表現されている範囲だけを runbook
 として扱います。
 
 ## 次に読むページ

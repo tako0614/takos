@@ -133,9 +133,9 @@ export function extractBuildSourcesFromManifestJson(
     .sort((left, right) => left.service_name.localeCompare(right.service_name));
 }
 
-export function selectAppManifestPathFromRepo(
+export function selectInstallableSourcePathFromRepo(
   entries: ReadonlyArray<string>,
 ): string | null {
-  if (entries.includes(".takosumi.yml")) return ".takosumi.yml";
+  if (entries.includes("package.json")) return "package.json";
   return null;
 }

@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import {
   signTakosumiInternalRequest as signTakosInternalRequest,
   TAKOSUMI_INTERNAL_AUDIENCE_HEADER as TAKOS_INTERNAL_AUDIENCE_HEADER,

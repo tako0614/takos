@@ -1,19 +1,37 @@
 # リファレンス
 
-> このページでわかること: Takos の API、データベースなど技術リファレンスの目次。
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-## Takos のリファレンス
+## Current Flow
 
-| 確認したいこと      | ページ                                    |
-| ------------------- | ----------------------------------------- |
-| Takos の Public API | [API](/reference/api)                     |
-| データ所有権        | [データベース所有権](/reference/database) |
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-## 外部リファレンス
+## Takos Boundary
 
-| 確認したいこと                  | 参照先                                                                                                           |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `.takosumi.yml` AppSpec         | [Takosumi AppSpec](https://takosumi.com/docs/reference/manifest)                                                 |
-| binding material / binding kind | [Takosumi AppSpec connect/listen bindings](https://takosumi.com/docs/reference/manifest)                         |
-| Accounts lifecycle API          | [Takosumi Accounts lifecycle API](https://github.com/tako0614/takosumi-cloud/blob/main/docs/accounts-service.md) |
-| 共有用語                        | [ecosystem glossary](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/glossary.md)         |
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+
+## API Shape
+
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
+```
+
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+
+## References
+
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

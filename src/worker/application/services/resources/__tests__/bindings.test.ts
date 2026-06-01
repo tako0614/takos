@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 import { buildBindingFromResource, resourceBindingDeps } from "../bindings.ts";

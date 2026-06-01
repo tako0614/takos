@@ -5,7 +5,7 @@
 このページは **Takosumi kernel
 をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
 
-Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
+Takosumi 上で Source から Installation を作り、Deployment を管理する方法は [Deploy](/deploy/)
 を参照してください。
 
 ::: danger このページのサンプルはローカル開発向けデフォルトを含みます
@@ -22,7 +22,7 @@ Takosumi 上に AppSpec を install し、Installation / Deployment を管理す
 - `compose.local.yml` ではなく `takos-private/compose.server.yml`
   を使う。private server stack を起動する場合は
   `takos-private/.env.server.example` を元に `takos-private/.env.server`
-  を作成し、`takos-private` で `deno task server:up` を実行する
+  を作成し、`takos-private` で `bun run server:up` を実行する
 - backing services (PostgreSQL / Redis / オブジェクトストレージ)
   はホスト上の単独 container ではなく managed service もしくは production-grade
   な構成に置き換える
@@ -80,11 +80,11 @@ Self-hosted (docker-compose) target に固有の prerequisites:
 ```bash
 # 共通手順 (5 target で同じ)
 cd takos-private
-deno task generate:keys:production --per-cloud
+bun run generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = selfhosted)
-deno task distribute:dry-run --confirm production
-deno task distribute:apply --confirm production
-cd ../takosumi-cloud
+bun run distribute:dry-run --confirm production
+bun run distribute:apply --confirm production
+cd ../takosumi
 bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.selfhosted.example.com \
   --subject tsub_admin \
@@ -130,7 +130,7 @@ cp .env.server.example .env.server
 
 ```bash
 cd takos-private
-deno task server:up
+bun run server:up
 ```
 
 この stack の定義は `takos-private/compose.server.yml`
@@ -287,7 +287,7 @@ cp takos-private/.env.server.example takos-private/.env.server
 
 ```bash
 cd takos-private
-deno task server:up
+bun run server:up
 ```
 
 バックグラウンドで起動する場合:
@@ -361,14 +361,14 @@ services:
 | Service          | 役割                                                        |
 | ---------------- | ----------------------------------------------------------- |
 | `takos-worker`      | OIDC consumer / Web UI / public API gateway                 |
-| `takosumi`       | AppSpec install / Deployment apply engine                   |
-| `takosumi-cloud` | Takosumi Accounts / Installation ledger / billing dashboard |
+| `takosumi`       | Source resolution / Installation / Deployment ledger engine         |
+| `takosumi` | Takosumi Accounts / Installation ledger / billing dashboard |
 | `takos-git`      | Git Smart HTTP / refs / objects / source resolution         |
 | `takos-agent`    | Takos agent execution service                               |
 
-AppSpec の source fetch、`publish` / `listen` resolution、Deployment apply は
-`takosumi`、build は build service / CI、Installation / OIDC / billing は
-self-host operator の Takosumi Accounts (`takosumi-cloud`) が担当します。
+Source resolution、PlatformService inventory binding resolution、Deployment apply evidence は
+`takosumi`、infra provisioning は operator-owned Terraform / OpenTofu / Helm / runtime-agent workflow、build は
+build service / CI、Installation / OIDC / billing は self-host operator の Takosumi Accounts (`takosumi`) が担当します。
 
 ### ネットワーク構成
 
@@ -436,38 +436,38 @@ PostgreSQL backend は takos-worker 起動時に
 
 ```bash
 cd takos-private
-deno task server:down
+bun run server:down
 ```
 
 ## ログ確認
 
 ```bash
 cd takos-private
-deno task server:logs
+bun run server:logs
 ```
 
 ## スモークテスト
 
 ```bash
 cd takos-private
-deno task server:smoke
+bun run server:smoke
 ```
 
 ## Kubernetes
 
 k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes) を参照。
 
-## selfhosted reference provider adapter client
+## selfhosted reference runtime connector
 
 bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
 takosumi.com reference implementation の配線として呼び出したい場合は
-**selfhosted reference provider adapter client**
+**selfhosted reference runtime connector**
 を使います。`profiles/selfhosted.example.json` で
 `clients.provider: "local-container-provider"` を選ぶ構成です。
 
 ### 構成
 
-| provider client                    | 用途                                    | 参照クラス                                   |
+| runtime connector                  | 用途                                    | 参照クラス                                   |
 | ---------------------------------- | --------------------------------------- | -------------------------------------------- |
 | `local-container-provider`         | Docker / OCI container deploy           | `src/providers/selfhosted/process.ts`        |
 | `local-runtime-agent-registry`     | runtime-agent endpoint config           | `src/providers/selfhosted/provider.ts`       |
@@ -478,23 +478,23 @@ takosumi.com reference implementation の配線として呼び出したい場合
 | `local-secret-store`               | filesystem secret rotation              | `src/providers/selfhosted/secrets.ts`        |
 | `selfhosted-router-config`         | reverse proxy config (Caddy / nginx)    | `src/providers/selfhosted/router.ts`         |
 
-### Operator が手動でやること / reference binding が行うこと
+### Operator workflow がやること / reference connector が記録すること
 
-| step                                                                | operator             | reference binding |
+| step                                                                | operator workflow    | reference connector |
 | ------------------------------------------------------------------- | -------------------- | --------------- |
 | Postgres / MinIO / Docker host / reverse proxy 用意                 | yes                  | no              |
 | systemd service / supervisor 設定                                   | yes                  | no              |
 | `DATABASE_URL` / `S3_*` / `DOCKER_SOCKET_PATH` などを kernel に提供 | yes                  | no              |
-| psql 経由の database / schema lifecycle                             | no                   | yes (provider)  |
-| filesystem / MinIO bucket lifecycle                                 | no                   | yes (provider)  |
-| Docker container deploy / restart                                   | no                   | yes (provider)  |
-| reverse proxy config 同期 (Caddyfile / nginx.conf)                  | no                   | yes (provider)  |
+| psql 経由の database / schema lifecycle                             | yes                  | records evidence |
+| filesystem / MinIO bucket provisioning                              | yes                  | records evidence |
+| Docker container deploy / restart                                   | yes                  | records evidence |
+| reverse proxy config 同期 (Caddyfile / nginx.conf)                  | yes                  | records evidence |
 | runtime-agent HTTP lifecycle endpoint                               | yes (process deploy) | yes (lifecycle RPC) |
-| drift 検出 / rollback                                               | no                   | yes (provider)  |
+| drift 検出 / rollback                                               | yes                  | records evidence |
 
 ### runtime-agent on bare metal
 
-selfhosted reference provider adapter と一緒に runtime-agent を bare metal
+selfhosted reference runtime connector と一緒に runtime-agent を bare metal
 に置く例 (systemd):
 
 ```ini
@@ -533,8 +533,8 @@ Docker socket access は Docker group 経由で許可します。
 
 ### routing layer (selfhosted) の設定
 
-`selfhosted-router-config` provider client は Caddy / nginx の config file を
-materialize します。operator がやること:
+`selfhosted-router-config` connector は Caddy / nginx の config file lifecycle を
+扱います。operator がやること:
 
 - Caddy or nginx を install / systemd service として常駐
 - TLS cert (Let's Encrypt + certbot) を自動更新する仕組みを設定

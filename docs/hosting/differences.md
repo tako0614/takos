@@ -3,13 +3,13 @@
 > このページでわかること: Cloudflare / AWS / GCP / Kubernetes /
 > セルフホストの対応状況の比較。
 
-Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
+Takosumi 上に Source を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
 を参照してください。
 
 `distribution.yml` の `kernel_host.target` で選べるのは `cloudflare` / `aws` /
 `gcp` / `kubernetes` / `selfhosted` の 5 種類です。Cloudflare は Takos operation
-の tracked reference deployment/backend です。Takosumi public spec は AppSpec /
-Installation / Deployment と Installer API に閉じ、provider proof は operator
+の tracked reference deployment/backend です。Takosumi public spec は Source /
+Installation / Deployment / PlatformService と Installer API に閉じ、infrastructure proof は operator
 evidence として扱います。AWS / GCP / Kubernetes は Helm overlay、selfhosted は
 docker-compose で扱います。
 
@@ -33,14 +33,14 @@ target ごとの readiness status は
 
 | surface                  | parity の主張                                                             | proof / gate                                       |
 | ------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------- |
-| デプロイマニフェスト     | 同じスキーマと resolution contract を全 target で共有                     | Takosumi docs / manifest contract / リリースゲート |
+| Distribution artifacts   | 同じ schema と dispatch contract を全 target で共有                       | Takosumi docs / Source contract / リリースゲート |
 | Dispatch target id       | コマンド構築前に canonical id を検証                                      | `takos-private` の `distribute:test`               |
 | Cloudflare hosting       | 公開 contract のリファレンス Workers backend                              | opt-in な Cloudflare dry-run / deploy gate         |
 | AWS / GCP hosting        | EKS / GKE 向け Helm パッケージング (ECS / Cloud Run kernel host は対象外) | opt-in な Helm / preflight gate                    |
 | Kubernetes / selfhosted  | operator 所有のクラスタ / Docker host 向けパッケージング                  | opt-in な Helm / compose preflight gate            |
-| Provider materialization | provider 固有の振る舞い (kernel リリースの default parity ではない)       | opt-in な provider binding smoke / live proof      |
+| Operator infrastructure lifecycle | operator 固有の振る舞い (kernel リリースの default parity ではない) | opt-in な PlatformService binding smoke / live proof |
 
-provider proof は opt-in です。provider credential / cluster / account / remote
+infrastructure proof は opt-in です。provider credential / cluster / account / remote
 gateway を必要とする proof は、operator が用意した環境で gate
 ベースに実行します。 docs build と kernel リリースゲートは、provider
 実環境への到達性や resource existence parity を要求しません。
@@ -50,10 +50,10 @@ gateway を必要とする proof は、operator が用意した環境で gate
 | ワークロード                          | Kubernetes / AWS / GCP のサービス名            |
 | ------------------------------------- | ---------------------------------------------- |
 | Takos Web / public API gateway        | `takos-worker` ワークロード                       |
-| Takosumi マニフェスト deploy エンジン | `takosumi` ワークロード                        |
+| Source / Deployment ledger          | `takosumi` ワークロード                        |
 | Takos Git ホスティング                | `takos-git` ワークロード                       |
 | Takos エージェント実行                | `takos-agent` ワークロード                     |
-| Takosumi Accounts / install UI        | `takosumi-cloud` ワークロード (operator plane) |
+| Takosumi Accounts / install UI        | `takosumi` ワークロード (operator plane) |
 
 ## 本ドキュメントの範囲外
 
@@ -61,12 +61,12 @@ gateway を必要とする proof は、operator が用意した環境で gate
 
 - AWS ECS / Fargate / GCP Cloud Run への Takosumi kernel 直接 deploy 手順
 - ECS / Cloud Run を Takosumi kernel hosting target として扱う構成
-- DynamoDB / Firestore / SQS / Pub/Sub / cloud secret manager の manifest
+- DynamoDB / Firestore / SQS / Pub/Sub / cloud secret manager の source
   resource からの自動 provisioning
 - 全 provider で byte-for-byte 同じ runtime behavior の保証
 - compatible レポートが resource existence や runtime behavior parity を
   保証する保証
-- provider 固有 adapter 名のマニフェスト author 向け public surface としての固定
+- provider 固有 adapter 名を Source author 向け public surface として固定すること
 
 ECS / Cloud Run は tenant image workload adapter として OCI orchestrator
 経由で使うことはありますが、Takosumi kernel

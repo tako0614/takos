@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertThrows } from "@std/assert";
+import { assertThrows } from "@takos/test/assert";
 
 import { assertMatchingIdempotentRequest } from "../artifact-refs.ts";
 import type { Deployment } from "../models.ts";

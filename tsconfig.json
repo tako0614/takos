@@ -21,38 +21,11 @@
       "@/*": [
         "./src/worker/*"
       ],
-      "@std/assert": [
-        "./shims/std/assert.ts"
+      "@takos/test/assert": [
+        "./src/worker/testing/assert.ts"
       ],
-      "@std/assert/equals": [
-        "./shims/std/assert.ts"
-      ],
-      "@std/assert/*": [
-        "./shims/std/assert.ts"
-      ],
-      "@std/colors": [
-        "./shims/std/colors.ts"
-      ],
-      "@std/fmt/colors": [
-        "./shims/std/colors.ts"
-      ],
-      "@std/yaml": [
-        "./shims/std/yaml.ts"
-      ],
-      "@std/path": [
-        "./shims/std/path.ts"
-      ],
-      "@std/path/*": [
-        "./shims/std/path.ts"
-      ],
-      "@std/fs": [
-        "./shims/std/fs.ts"
-      ],
-      "@std/testing/mock": [
-        "./shims/std/mock.ts"
-      ],
-      "@std/testing": [
-        "./shims/std/mock.ts"
+      "@takos/test/mock": [
+        "./src/worker/testing/mock.ts"
       ],
       "takosumi-contract": [
         "../takosumi/src/contract/mod.ts"
@@ -134,9 +107,6 @@
       ],
       "takos-actions-engine": [
         "./src/worker/actions-engine/index.ts"
-      ],
-      "@takos/deploy-intent": [
-        "./src/contracts/deploy-intent/index.ts"
       ],
       "@takos/worker-local-platform": [
         "./src/worker/local-platform/index.ts"
@@ -344,9 +314,6 @@
       ],
       "takos-worker/git/source": [
         "./src/worker/application/services/source/index.ts"
-      ],
-      "takos-worker/source/app-manifest": [
-        "./src/worker/application/services/source/app-manifest.ts"
       ],
       "takos-worker/core/cloudflare-api": [
         "./src/worker/application/services/cloudflare/api-client.ts"

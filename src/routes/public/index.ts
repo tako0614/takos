@@ -230,7 +230,7 @@ app.get("/health", async (c) => {
 // picks the cap per request:
 //
 // - Git Smart HTTP push uploads can carry large pack files (cap at 256 MiB).
-// - Deployment routes accept AppSpec / source descriptors (a few MiB max).
+// - Retired deployment routes still accept source descriptors (a few MiB max).
 // - Everything else falls back to the strict 1 MiB default.
 //
 // Missing `Content-Length` is allowed by default so chunked-encoded uploads

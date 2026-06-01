@@ -204,7 +204,7 @@ export function resolveFallbackDefaultAppDistribution(
             : entry.repositoryUrl,
           ref: defaults.refFromEnv ? defaults.ref : entry.ref,
           refType: defaults.refFromEnv ? defaults.refType : entry.refType,
-          entryManifest: entry.entryManifest,
+          sourcePath: entry.sourcePath,
           runtimeModes: entry.runtimeModes,
           bindings: entry.bindings,
           preinstall: "preinstall" in entry ? entry.preinstall : undefined,

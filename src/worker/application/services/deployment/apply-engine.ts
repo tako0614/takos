@@ -73,7 +73,7 @@ export interface PlanResult {
   translationReport: TranslationReport;
 }
 
-export interface ApplyManifestOpts {
+export interface ApplyDesiredStateOpts {
   target?: string[];
   groupName?: string;
   envName?: string;
@@ -405,11 +405,11 @@ export function manifestNeedsEarlyPublicationSync(
   );
 }
 
-export async function applyManifest(
+export async function applyDesiredState(
   env: Env,
   groupId: string,
   manifest?: AppManifest,
-  opts: ApplyManifestOpts = {},
+  opts: ApplyDesiredStateOpts = {},
 ): Promise<ApplyResult> {
   const group = await getGroupRecord(env, groupId);
   if (!group) {

@@ -6,7 +6,7 @@
 // SQLite binding. This shim re-exports a `DatabaseSync` class backed by
 // `bun:sqlite` so the existing `import { DatabaseSync } from "node:sqlite"`
 // call sites run unchanged under bun. It is wired in via tsconfig "paths"
-// ("node:sqlite" -> this file), the same mechanism the @std/* shims use.
+// ("node:sqlite" -> this file), matching the local path-alias shim mechanism.
 //
 // Surface required by this repo (verified by grep over src/):
 //   new DatabaseSync(path)         -> open a database file (or :memory:)

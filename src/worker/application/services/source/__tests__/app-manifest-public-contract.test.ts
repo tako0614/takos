@@ -1,12 +1,12 @@
 import { test } from "bun:test";
-import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@takos/test/assert";
 import { applyManifestOverrides } from "../../deployment/group-state.ts";
 import {
   assertManifestInputDoesNotUseBuildMetadata,
   parseAppManifestYaml,
 } from "../app-manifest.ts";
 
-test("public manifest contract - rejects compute.build.fromWorkflow", () => {
+test("public source contract - rejects compute.build.fromWorkflow", () => {
   const error = assertThrows(() =>
     parseAppManifestYaml(`
 name: rejected-build-app
@@ -31,10 +31,10 @@ routes:
     error.message,
     "no longer supported",
   );
-  assertStringIncludes(error.message, ".takosumi.yml AppSpec");
+  assertStringIncludes(error.message, "Takosumi Source install flow");
 });
 
-test("public manifest contract - rejects override build.fromWorkflow", () => {
+test("public source contract - rejects override build.fromWorkflow", () => {
   const error = assertThrows(() =>
     parseAppManifestYaml(`
 name: override-rejected-build-app
@@ -65,10 +65,10 @@ overrides:
     error.message,
     "no longer supported",
   );
-  assertStringIncludes(error.message, ".takosumi.yml AppSpec");
+  assertStringIncludes(error.message, "Takosumi Source install flow");
 });
 
-test("public manifest contract - raw manifest objects reject legacy build metadata", () => {
+test("public source contract - raw source objects reject legacy build metadata", () => {
   const error = assertThrows(() =>
     assertManifestInputDoesNotUseBuildMetadata({
       name: "raw-legacy-disabled-app",
@@ -91,10 +91,10 @@ test("public manifest contract - raw manifest objects reject legacy build metada
     error.message,
     "no longer supported",
   );
-  assertStringIncludes(error.message, ".takosumi.yml AppSpec");
+  assertStringIncludes(error.message, "Takosumi Source install flow");
 });
 
-test("public manifest contract - allows compute depends to reference compute entries", () => {
+test("public source contract - allows compute depends to reference compute entries", () => {
   const manifest = parseAppManifestYaml(`
 name: notes-app
 version: 0.1.0
@@ -117,7 +117,7 @@ routes:
   assertEquals(manifest.compute.api.depends, undefined);
 });
 
-test("public manifest contract - accepts explicit worker compute without build metadata", () => {
+test("public source contract - accepts explicit worker compute without build metadata", () => {
   const manifest = parseAppManifestYaml(`
 name: worker-artifact-app
 
@@ -134,7 +134,7 @@ routes:
   assertEquals(manifest.compute.web.image, undefined);
 });
 
-test("public manifest contract - parses worker with attached container and route publication", () => {
+test("public source contract - parses worker with attached container and route publication", () => {
   const manifest = parseAppManifestYaml(`
 name: notes-assistant
 version: 0.3.0
@@ -193,7 +193,7 @@ publish:
   assertEquals(manifest.publish[0]?.spec, { protocol: "streamable-http" });
 });
 
-test("public manifest contract - rejects routes targeting attached containers", () => {
+test("public source contract - rejects routes targeting attached containers", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -216,7 +216,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects duplicate route target/path entries during parse", () => {
+test("public source contract - rejects duplicate route target/path entries during parse", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -242,7 +242,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects overlapping route paths during parse", () => {
+test("public source contract - rejects overlapping route paths during parse", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -267,7 +267,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects Takos publications in app manifests during parse", () => {
+test("public source contract - rejects Takos publications in app manifests during parse", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -288,7 +288,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects invalid route timeoutMs", () => {
+test("public source contract - rejects invalid route timeoutMs", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -327,7 +327,7 @@ routes:
   );
 });
 
-test("public manifest contract - uppercases route methods during parse", () => {
+test("public source contract - uppercases route methods during parse", () => {
   const manifest = parseAppManifestYaml(`
 name: method-normalization-app
 
@@ -346,7 +346,7 @@ routes:
   assertEquals(manifest.routes[0]?.methods, ["GET", "POST"]);
 });
 
-test("public manifest contract - rejects unsupported legacy route fields", () => {
+test("public source contract - rejects unsupported legacy route fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -384,7 +384,7 @@ routes:
   );
 });
 
-test("public manifest contract - defers override route target validation to apply time", () => {
+test("public source contract - defers override route target validation to apply time", () => {
   const manifest = parseAppManifestYaml(`
 name: override-route-app
 
@@ -415,7 +415,7 @@ overrides:
   );
 });
 
-test("public manifest contract - accepts partial compute overrides and deep merges them at apply time", () => {
+test("public source contract - accepts partial compute overrides and deep merges them at apply time", () => {
   const manifest = parseAppManifestYaml(`
 name: override-compute-app
 
@@ -444,7 +444,7 @@ overrides:
   assertEquals(resolved.compute.web.scaling, { minInstances: 2 });
 });
 
-test("public manifest contract - accepts queue trigger overrides", () => {
+test("public source contract - accepts queue trigger overrides", () => {
   const manifest = parseAppManifestYaml(`
 name: override-queue-trigger-app
 
@@ -477,7 +477,7 @@ overrides:
   }]);
 });
 
-test("public manifest contract - validates compute overrides after merge", () => {
+test("public source contract - validates compute overrides after merge", () => {
   const serviceManifest = parseAppManifestYaml(`
 name: override-service-readiness-app
 
@@ -554,7 +554,7 @@ overrides:
   );
 });
 
-test("public manifest contract - rejects unnamed publish overrides", () => {
+test("public source contract - rejects unnamed publish overrides", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -590,7 +590,7 @@ overrides:
   );
 });
 
-test("public manifest contract - merges named publish overrides", () => {
+test("public source contract - merges named publish overrides", () => {
   const manifest = parseAppManifestYaml(`
 name: named-publish-override-app
 
@@ -655,7 +655,7 @@ overrides:
   ]);
 });
 
-test("public manifest contract - rejects unsupported fields in overrides", () => {
+test("public source contract - rejects unsupported fields in overrides", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -679,7 +679,7 @@ overrides:
   );
 });
 
-test("public manifest contract - rejects readiness on non-worker compute", () => {
+test("public source contract - rejects readiness on non-worker compute", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -723,7 +723,7 @@ routes:
   );
 });
 
-test("public manifest contract - requires digest-pinned image refs", () => {
+test("public source contract - requires digest-pinned image refs", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -788,7 +788,7 @@ overrides:
   );
 });
 
-test("public manifest contract - rejects non-portable compute tuning fields", () => {
+test("public source contract - rejects non-portable compute tuning fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -821,7 +821,7 @@ compute:
   );
 });
 
-test("public manifest contract - allows image-backed attached containers with dockerfile metadata", () => {
+test("public source contract - allows image-backed attached containers with dockerfile metadata", () => {
   const manifest = parseAppManifestYaml(`
 name: attached-image-dockerfile-app
 
@@ -853,7 +853,7 @@ routes:
   );
 });
 
-test("public manifest contract - allows native Cloudflare container metadata", () => {
+test("public source contract - allows native Cloudflare container metadata", () => {
   const manifest = parseAppManifestYaml(`
 name: native-cloudflare-container-app
 
@@ -891,7 +891,7 @@ routes:
   });
 });
 
-test("public manifest contract - rejects quoted Cloudflare container booleans", () => {
+test("public source contract - rejects quoted Cloudflare container booleans", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -914,7 +914,7 @@ compute:
   );
 });
 
-test("public manifest contract - parses managed resources and bindings", () => {
+test("public source contract - parses managed resources and bindings", () => {
   const manifest = parseAppManifestYaml(`
 name: resource-app
 
@@ -948,7 +948,7 @@ routes:
   }]);
 });
 
-test("public manifest contract - rejects quoted resource generate booleans", () => {
+test("public source contract - rejects quoted resource generate booleans", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -970,7 +970,7 @@ resources:
   );
 });
 
-test("public manifest contract - rejects resource bindings to unknown compute", () => {
+test("public source contract - rejects resource bindings to unknown compute", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -995,7 +995,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects dockerfile-only attached containers", () => {
+test("public source contract - rejects dockerfile-only attached containers", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1018,7 +1018,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects dockerfile-only services", () => {
+test("public source contract - rejects dockerfile-only services", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1038,7 +1038,7 @@ routes:
   );
 });
 
-test("public manifest contract - requires port on image-backed compute", () => {
+test("public source contract - requires port on image-backed compute", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1077,7 +1077,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects volumes on workers", () => {
+test("public source contract - rejects volumes on workers", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1100,7 +1100,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects build under attached containers", () => {
+test("public source contract - rejects build under attached containers", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1123,7 +1123,7 @@ routes:
   );
 });
 
-test("public manifest contract - rejects retired route and title publication aliases", () => {
+test("public source contract - rejects retired route and title publication aliases", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1184,7 +1184,7 @@ publish:
   );
 });
 
-test("public manifest contract - preserves UiSurface launcher metadata", () => {
+test("public source contract - preserves UiSurface launcher metadata", () => {
   const manifest = parseAppManifestYaml(`
 name: launcher-app
 
@@ -1227,7 +1227,7 @@ publish:
   });
 });
 
-test("public manifest contract - preserves compute publisher image icon metadata", () => {
+test("public source contract - preserves compute publisher image icon metadata", () => {
   const manifest = parseAppManifestYaml(`
 name: publisher-icon-app
 
@@ -1254,7 +1254,7 @@ publish:
   assertEquals(manifest.compute.web?.icon, "/icons/search.png");
 });
 
-test("public manifest contract - parses FileHandler publications with route refs and selector lists", () => {
+test("public source contract - parses FileHandler publications with route refs and selector lists", () => {
   const manifest = parseAppManifestYaml(`
 name: file-handler-app
 
@@ -1290,7 +1290,7 @@ publish:
   });
 });
 
-test("public manifest contract - rejects duplicate route publication publisher/route", () => {
+test("public source contract - rejects duplicate route publication publisher/route", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1326,7 +1326,7 @@ publish:
   );
 });
 
-test("public manifest contract - keeps route refs stable when overrides are applied", () => {
+test("public source contract - keeps route refs stable when overrides are applied", () => {
   const manifest = parseAppManifestYaml(`
 name: overridden-route-publication-app
 
@@ -1365,7 +1365,7 @@ overrides:
   assertEquals(resolved.publish[0]?.outputs?.url?.routeRef, "base");
 });
 
-test("public manifest contract - rejects retired FileHandler route output aliases", () => {
+test("public source contract - rejects retired FileHandler route output aliases", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1398,7 +1398,7 @@ publish:
   );
 });
 
-test("public manifest contract - rejects FileHandler publications without mimeTypes or extensions", () => {
+test("public source contract - rejects FileHandler publications without mimeTypes or extensions", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1431,7 +1431,7 @@ publish:
   );
 });
 
-test("public manifest contract - rejects unknown FileHandler spec fields", () => {
+test("public source contract - rejects unknown FileHandler spec fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1466,7 +1466,7 @@ publish:
   );
 });
 
-test("public manifest contract - rejects reserved Takos consumes", () => {
+test("public source contract - rejects reserved Takos consumes", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1508,7 +1508,7 @@ compute:
   );
 });
 
-test("public manifest contract - parses inject env and rejects retired consume env aliases", () => {
+test("public source contract - parses inject env and rejects retired consume env aliases", () => {
   const manifest = parseAppManifestYaml(`
 name: consume-inject-env-app
 
@@ -1565,7 +1565,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects unsupported top-level manifest fields", () => {
+test("public source contract - rejects unsupported top-level manifest fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1580,7 +1580,7 @@ spec:
   );
 });
 
-test("public manifest contract - rejects unsupported top-level scopes and oauth", () => {
+test("public source contract - rejects unsupported top-level scopes and oauth", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1613,7 +1613,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects unsupported storage", () => {
+test("public source contract - rejects unsupported storage", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1630,7 +1630,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects platform credential fields outside spec", () => {
+test("public source contract - rejects platform credential fields outside spec", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1650,7 +1650,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects unsupported Takos publication field", () => {
+test("public source contract - rejects unsupported Takos publication field", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1672,7 +1672,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects reserved Takos publications", () => {
+test("public source contract - rejects reserved Takos publications", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1692,7 +1692,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects legacy route fields and Takos publication fields", () => {
+test("public source contract - rejects legacy route fields and Takos publication fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1735,7 +1735,7 @@ compute:
   );
 });
 
-test("public manifest contract - rejects unsupported compute capabilities", () => {
+test("public source contract - rejects unsupported compute capabilities", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1753,7 +1753,7 @@ compute:
   );
 });
 
-test("public manifest contract - accepts queue consumer triggers", () => {
+test("public source contract - accepts queue consumer triggers", () => {
   const manifest = parseAppManifestYaml(`
 name: queue-trigger-app
 compute:
@@ -1781,7 +1781,7 @@ compute:
   }]);
 });
 
-test("public manifest contract - rejects queue triggers without binding or queue", () => {
+test("public source contract - rejects queue triggers without binding or queue", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`

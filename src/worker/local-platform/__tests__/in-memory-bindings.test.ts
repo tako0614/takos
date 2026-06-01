@@ -11,7 +11,7 @@ import {
   assertObjectMatch,
   assertRejects,
   assertThrows,
-} from "@std/assert";
+} from "@takos/test/assert";
 
 test("createInMemorySqlDatabase refuses to construct in a production environment", () => {
   const originalEnvironment = getEnv("ENVIRONMENT");

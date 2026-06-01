@@ -7,7 +7,7 @@ import { test } from "bun:test";
  * any DB access, so we can verify cancellation without provisioning the
  * full DB harness used by other tests.
  */
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects } from "@takos/test/assert";
 
 import { executeDeploymentPipeline } from "../execute.ts";
 import { DeploymentService } from "../service.ts";

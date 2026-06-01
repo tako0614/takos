@@ -1,8 +1,7 @@
 import { test } from "bun:test";
-import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@takos/test/assert";
 import { getTableName } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
-import YAML from "yaml";
 
 import type { Env } from "../../../../shared/types/index.ts";
 import {
@@ -43,55 +42,57 @@ function tableName(table: unknown): string | null {
 
 const ECOSYSTEM_ROOT = new URL("../../../../../../../", import.meta.url);
 
-const DEFAULT_APP_MANIFESTS = [
+const DEFAULT_APP_SOURCES = [
   {
     name: "takos-docs",
-    path: "takos-apps/takos-docs/.takosumi.yml",
+    path: "takos-apps/takos-docs/package.json",
+    packageName: "@takos/takos-docs",
+    sourcePath: "package.json",
     preinstall: true,
   },
   {
     name: "takos-excel",
-    path: "takos-apps/takos-excel/.takosumi.yml",
+    path: "takos-apps/takos-excel/package.json",
+    packageName: "@takos-apps/takos-excel",
+    sourcePath: "package.json",
     preinstall: true,
   },
   {
     name: "takos-slide",
-    path: "takos-apps/takos-slide/.takosumi.yml",
+    path: "takos-apps/takos-slide/package.json",
+    packageName: "takos-slide",
+    sourcePath: "package.json",
     preinstall: true,
   },
   {
     name: "takos-computer",
-    path: "takos-apps/takos-computer/.takosumi.yml",
+    path: "takos-apps/takos-computer/package.json",
+    packageName: "@takos-apps/takos-computer",
+    sourcePath: "package.json",
     preinstall: true,
   },
   {
     name: "yurucommu",
-    path: "yurucommu/.takosumi.yml",
+    path: "yurucommu/package.json",
+    packageName: "@takos/yurucommu",
+    sourcePath: "package.json",
     preinstall: true,
   },
   {
     name: "road-to-me",
-    path: "road-to-me/.takosumi.yml",
+    path: "road-to-me/backend/package.json",
+    packageName: "@takos/road-to-me-backend",
+    sourcePath: "backend/package.json",
     preinstall: false,
   },
 ] as const;
 
-type ManifestBindingSummary = {
+type PackageSummary = {
   name: string;
-  type: string;
-  required: boolean;
+  version: string;
 };
 
-type InstallableAppManifestSummary = {
-  appId: string;
-  description: string;
-  publisher: string;
-  homepage: string;
-  repositoryUrl: string;
-  bindings: ManifestBindingSummary[];
-};
-
-function manifestRecord(
+function objectRecord(
   value: unknown,
   field: string,
 ): Record<string, unknown> {
@@ -102,55 +103,19 @@ function manifestRecord(
   return value as Record<string, unknown>;
 }
 
-function manifestString(value: unknown, field: string): string {
+function requiredString(value: unknown, field: string): string {
   assert(typeof value === "string" && value.length > 0, `${field} is required`);
   return value;
 }
 
-async function readInstallableAppManifest(
+async function readInstallableAppPackage(
   path: string,
-): Promise<InstallableAppManifestSummary> {
+): Promise<PackageSummary> {
   const text = await readFile(new URL(path, ECOSYSTEM_ROOT), "utf8");
-  const parsed = manifestRecord(YAML.parse(text), path);
-  const metadata = manifestRecord(parsed.metadata, `${path}.metadata`);
-  const components = manifestRecord(parsed.components, `${path}.components`);
-  const bindings: ManifestBindingSummary[] = [];
-  for (const [name, rawComponent] of Object.entries(components)) {
-    const component = manifestRecord(
-      rawComponent,
-      `${path}.components.${name}`,
-    );
-    const kind = manifestString(
-      component.kind,
-      `${path}.components.${name}.kind`,
-    );
-    if (kind === "oidc") {
-      bindings.push({ name, type: "identity.oidc@v1", required: true });
-    } else if (kind === "object-store") {
-      bindings.push({
-        name,
-        type: "object-store.s3-compatible@v1",
-        required: true,
-      });
-    } else if (kind === "postgres") {
-      bindings.push({ name, type: "database.postgres@v1", required: true });
-    }
-  }
-  const homepage = manifestString(
-    metadata.homepage,
-    `${path}.metadata.homepage`,
-  );
-
+  const parsed = objectRecord(JSON.parse(text), path);
   return {
-    appId: manifestString(metadata.id, `${path}.metadata.id`),
-    description: manifestString(
-      metadata.description,
-      `${path}.metadata.description`,
-    ),
-    publisher: manifestString(metadata.publisher, `${path}.metadata.publisher`),
-    homepage,
-    repositoryUrl: `${homepage}.git`,
-    bindings,
+    name: requiredString(parsed.name, `${path}.name`),
+    version: requiredString(parsed.version, `${path}.version`),
   };
 }
 
@@ -190,8 +155,8 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
     "jp.takos.road-to-me",
   ]);
   assertEquals(
-    entries.every((entry) => entry.entryManifest === ".takosumi.yml"),
-    true,
+    entries.map((entry) => entry.sourcePath),
+    DEFAULT_APP_SOURCES.map((source) => source.sourcePath),
   );
   assertEquals(
     entries.filter((entry) => entry.name !== "road-to-me").every((entry) =>
@@ -225,7 +190,7 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
   );
 });
 
-test("resolveDefaultAppDistribution stays in sync with installable app manifests", async () => {
+test("resolveDefaultAppDistribution stays in sync with installable source packages", async () => {
   const entries = resolveDefaultAppDistribution(makeEnv({
     TAKOS_DEFAULT_APPS_PREINSTALL: "true",
   }));
@@ -233,31 +198,19 @@ test("resolveDefaultAppDistribution stays in sync with installable app manifests
 
   assertEquals(
     entries.map((entry) => entry.name),
-    DEFAULT_APP_MANIFESTS.map((manifest) => manifest.name),
+    DEFAULT_APP_SOURCES.map((source) => source.name),
   );
 
-  for (const manifest of DEFAULT_APP_MANIFESTS) {
-    const entry = entriesByName.get(manifest.name);
-    assert(entry, `Missing default app distribution entry: ${manifest.name}`);
+  for (const source of DEFAULT_APP_SOURCES) {
+    const entry = entriesByName.get(source.name);
+    assert(entry, `Missing default app distribution entry: ${source.name}`);
 
-    const expected = await readInstallableAppManifest(manifest.path);
-    assertEquals(entry.appId, expected.appId);
-    assertEquals(entry.description, expected.description);
-    assertEquals(entry.publisher, expected.publisher);
-    assertEquals(entry.homepage, expected.homepage);
-    assertEquals(entry.repositoryUrl, expected.repositoryUrl);
+    const expected = await readInstallableAppPackage(source.path);
+    assertEquals(expected.name, source.packageName);
+    assert(typeof expected.version === "string" && expected.version.length > 0);
+    assertEquals(entry.sourcePath, source.sourcePath);
     assertEquals(entry.refType, "tag");
-    for (const binding of expected.bindings) {
-      assert(
-        entry.bindings?.some((candidate) =>
-          candidate.name === binding.name &&
-          candidate.type === binding.type &&
-          candidate.required === binding.required
-        ),
-        `Missing default app binding for ${manifest.name}: ${binding.name}`,
-      );
-    }
-    assertEquals(entry.preinstall, manifest.preinstall);
+    assertEquals(entry.preinstall, source.preinstall);
   }
 });
 
@@ -1594,7 +1547,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
     ]);
     assertEquals(
       fetchCalls.map((call) =>
-        manifestRecord(call.body.source, "install request source").url
+        objectRecord(call.body.source, "install request source").url
       ),
       [
         "https://github.com/tako0614/takos-docs.git",
@@ -1606,7 +1559,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
     );
     assertEquals(
       fetchCalls.map((call) =>
-        manifestRecord(call.body.source, "install request source").ref
+        objectRecord(call.body.source, "install request source").ref
       ),
       [
         "v0.1.2",
@@ -1619,7 +1572,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
     assertEquals(
       fetchCalls.every((call) =>
         call.body.spaceId === "space-1" &&
-        manifestRecord(call.body.source, "install request source").kind ===
+        objectRecord(call.body.source, "install request source").kind ===
           "git" &&
         call.body.mode === "shared-cell" &&
         call.body.runtimeBaseUrl === "https://takos.example.com/"

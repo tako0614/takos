@@ -1,31 +1,37 @@
 # Takos の概念
 
-> このページでわかること: Takos の利用者として知っておくべき概念の一覧。
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-## 基本概念
+## Current Flow
 
-| 概念                                      | 説明                                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------------------- |
-| [Space](./spaces.md)                      | chat / agent / memory / installed apps をまとめる作業単位。                     |
-| [Threads and Runs](./threads-and-runs.md) | conversation と agent execution の基本モデル。                                  |
-| [Store](./store.md)                       | Takos product feature としての app discovery / catalog。                        |
-| [Bundled Apps](./default-apps.md)         | 新規 space に bundle される takos-docs / slide / excel / computer / yurucommu。 |
-| [Billing](./billing.md)                   | Takos から見える billing UX と Takosumi Accounts への接続。                     |
-| [Upgrade / Export](./upgrade-export.md)   | install 済み app の upgrade / rollback / self-host export。                     |
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-## バンドルアプリ
+## Takos Boundary
 
-- [takos-docs](./takos-docs.md)
-- [takos-slide](./takos-slide.md)
-- [takos-excel](./takos-excel.md)
-- [takos-computer](./takos-computer.md)
-- [yurucommu](./yurucommu.md)
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
 
-## 関連
+## API Shape
 
-| 内容                                                 | 詳細ドキュメント                                                                                 |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Takosumi Installation Lifecycle / Installation / runtime modes | [ecosystem platform docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
-| AppSpec / Installation / Deployment                  | [Core Specification](https://takosumi.com/docs/reference/core-spec)                              |
-| OIDC issuer / billing owner / launch token           | [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)                 |
-| `.takosumi.yml` AppSpec convention                   | [AppSpec reference](https://takosumi.com/docs/reference/manifest)                                |
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
+```
+
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+
+## References
+
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

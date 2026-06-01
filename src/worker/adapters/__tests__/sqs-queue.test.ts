@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@takos/test/assert";
 import { createSqsQueue } from "../sqs-queue.ts";
 
 // We mock the SQSClient.send by intercepting the @aws-sdk/client-sqs module's

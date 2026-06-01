@@ -1,101 +1,37 @@
 # Simple Worker
 
-> このページでわかること: worker と gateway で public app endpoint を作る最小
-> AppSpec。
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-## 完成形
+## Current Flow
 
-```text
-my-app/
-├── .takosumi.yml
-├── src/
-│   └── index.ts
-└── package.json
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
+
+## Takos Boundary
+
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+
+## API Shape
+
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-## `.takosumi.yml`
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-Short kind names are operator-profile aliases. The route list in gateway `spec`
-belongs to the adopted gateway descriptor's open `spec`. `web.spec.entrypoint`
-points to a runtime file already present in the resolved source or prepared
-archive.
+## References
 
-```yaml
-apiVersion: v1
-metadata:
-  id: example.simple-worker
-  name: Simple Worker
-  description: Minimal worker app
-  publisher: example
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/index.ts
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: web.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-          host: simple-worker.example.com
-          tls: auto
-      routes:
-        - listener: public
-          path: /
-          to: upstream
-```
-
-public app endpoint は adopted gateway/ingress component の gateway descriptor intent、launcher / health /
-capability は Takos product metadata や kind-specific spec で表現します。
-
-## Worker code
-
-```typescript
-// src/index.ts
-export default {
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/") {
-      return new Response("Hello from Takos!", {
-        headers: { "content-type": "text/plain" },
-      });
-    }
-
-    if (url.pathname === "/api/health") {
-      return Response.json({ status: "ok" });
-    }
-
-    return new Response("Not Found", { status: 404 });
-  },
-};
-```
-
-## Dry-run / apply
-
-```bash
-takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
-takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
-```
-
-## Points
-
-- `apiVersion: v1` is required (= AppSpec root discriminator).
-- `components.web.kind: worker` declares the runtime-bearing unit.
-- `components.web.spec.entrypoint` points at the runtime file in the resolved
-  source snapshot.
-- `components.web` exposes an `http` output slot through the adopted worker
-  kind.
-- `components.public` connects `web.http` and turns it into public ingress with listener /
-  gateway descriptor intent.
-
-## Next
-
-- Add data storage: [Worker + DB](/examples/worker-with-db)
-- Add a container service: [Worker + Container](/examples/worker-with-container)
-- Publish an MCP endpoint: [MCP Server](/examples/mcp-server)
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

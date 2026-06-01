@@ -1,6 +1,6 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
-import { assertSpyCalls, spy } from "@std/testing/mock";
+import { assertEquals } from "@takos/test/assert";
+import { assertSpyCalls, spy } from "@takos/test/mock";
 
 import runtimeHost from "../runtime-host.ts";
 

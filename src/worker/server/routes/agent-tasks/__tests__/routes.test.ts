@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assert, assertEquals, assertFalse } from "@std/assert";
+import { assert, assertEquals, assertFalse } from "@takos/test/assert";
 
 import {
   applyAgentTaskStatusTimestamps,

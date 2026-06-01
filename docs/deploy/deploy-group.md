@@ -1,102 +1,37 @@
 # Deployment History
 
-AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-> このページでわかること: Installation に紐づく Deployment 履歴と rollback
-> の単位。
+## Current Flow
 
-Takosumi v1 の public concept は AppSpec / Installation / Deployment の 3
-つです。複数 component の apply 結果は、Installation に紐づく 1 つの Deployment
-として履歴化されます。
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-## Installation との関係
+## Takos Boundary
 
-| 階層         | 表すもの                                                                            | 所有者                      |
-| ------------ | ----------------------------------------------------------------------------------- | --------------------------- |
-| AppSpec      | source root の `.takosumi.yml`                                                      | app author                  |
-| Installation | Space に install された app 1 件の core record                                      | Takosumi installer / kernel |
-| Deployment   | 1 回の apply 結果                                                                   | Takosumi installer / kernel |
-| Component    | AppSpec 内の runtime / resource / ingress intent。implementation は operator が選ぶ | AppSpec entry               |
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
 
-Core Installation は current Deployment pointer と core status を持ちます。
-ownership、billing、authorization、launch token は operator account-plane projection
-が持 ちます。Deployment は resolved source identity、manifest
-digest、public/non-secret outputs、apply status、audit / operation evidence
-への参照を持ちます。
+## API Shape
 
-## 何が履歴化されるか
-
-- resolved source identity / manifest digest
-- created / updated / deleted component
-- prepared archive payload digest (`source.digest` / `expected.sourceDigest`)
-- resolved publication / platform service snapshot
-- provider resource ID と output
-- apply status と observation
-- rollback audit / pointer movement の対象になった Deployment ID
-
-## AppSpec との対応
-
-```yaml
-apiVersion: v1
-metadata:
-  id: example.full-stack
-  name: Full Stack
-components:
-  api:
-    kind: worker
-    spec:
-      entrypoint: src/api.ts
-    connect:
-      db:
-        output: db.connection
-        inject: secret-env
-        prefix: DB
-  jobs:
-    kind: worker
-    spec:
-      entrypoint: src/jobs.ts
-    connect:
-      db:
-        output: db.connection
-        inject: secret-env
-        prefix: DB
-  db:
-    kind: postgres
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: api.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-          host: api.example.com
-          tls: auto
-      routes:
-        - listener: public
-          path: /
-          to: upstream
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-この AppSpec を apply すると、`api` / `jobs` / `db` の materialization が同じ
-Deployment record に保存されます。
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-## Rollback
+## References
 
-rollback は過去 Deployment を改竄せず、その retained succeeded Deployment を
-`currentDeploymentId` と public/non-secret outputs の authority として再選択する
-操作です。必要な runtime routing は retained activation evidence から再有効化しま
-す。新しい Deployment record は作らず、append-only rollback event / operation metadata として
-記録します。
-
-```bash
-takosumi rollback "$INSTALLATION_ID" --to "$DEPLOYMENT_ID"
-```
-
-## 関連ページ
-
-- [Git / Store install](/deploy/store-deploy)
-- [ロールバック](/deploy/rollback)
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
 - [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

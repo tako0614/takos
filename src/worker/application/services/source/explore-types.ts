@@ -104,7 +104,7 @@ export interface CatalogInstallableAppResponse {
   description: string | null;
   publisher: string | null;
   homepage: string | null;
-  manifest_path: string | null;
+  source_path: string | null;
   runtime_modes: string[];
   bindings: Array<{
     name: string;

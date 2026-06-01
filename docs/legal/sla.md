@@ -1,6 +1,6 @@
 # Legal: Service Level Agreement
 
-> このページでわかること: Takos / Takosumi Cloud リファレンスディストリビューションの
+> このページでわかること: Takos / Takosumi リファレンスディストリビューションの
 > サービス可用性目標、計測方法、除外事由、クレジットポリシー、請求手順。
 
 **Template — operator review required before public launch.** Availability
@@ -48,7 +48,7 @@ and operations owners before publishing.
   (事後 24 時間以内に Status Page で報告)
 - **不可抗力**: 自然災害、戦争、政府命令、大規模インターネット障害、上流クラウド事業者の
   region-wide outage
-- **顧客起因の障害**: 顧客の構成ミス、AppSpec バグ、quota 超過、不正利用に起因する障害
+- **顧客起因の障害**: 顧客の構成ミス、customer Source バグ、quota 超過、不正利用に起因する障害
 - **DDoS / 攻撃対応**: 大規模 DDoS 攻撃中の防御措置による一時的アクセス制限
 - **第三者依存**: 顧客が選択した外部 OIDC IdP / AI provider / 外部 webhook 等の障害
 

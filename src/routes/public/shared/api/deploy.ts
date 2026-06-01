@@ -1,8 +1,3 @@
-import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
-import {
-  createDeployIntentClient,
-  parseDeployIntentEnv,
-} from "@takos/deploy-intent";
 import { actorFromAuthenticatedRequest } from "./auth.ts";
 import type { ApiBindings } from "./bindings.ts";
 import {
@@ -18,7 +13,6 @@ export const APP_INSTALLATION_BINDING_KINDS = [
   "database.postgres@v1",
   "object-store.s3-compatible@v1",
   "domain.http@v1",
-  "deploy-intent.gitops@v1",
   "install-launch-token@v1",
 ] as const;
 
@@ -123,8 +117,9 @@ function appBindingSecretRefs(
 
 const RETIRED_INLINE_WORKFLOW_DEPLOY_GUIDANCE =
   'source.kind="inline" workflow artifact deploys are retired. ' +
-  "Use `takosumi init`, then `takosumi install dry-run/apply` to build and submit " +
-  "worker artifacts, or submit an AppSpec through the GitOps deploy intent API.";
+  "Use the Takosumi Source install/deploy flow: install dry-run/apply from a " +
+  "Git or prepared source, then deployment dry-run/apply with expected.commit " +
+  "and expected.planSnapshotDigest.";
 
 export function retiredInlineWorkflowDeploymentResponse(
   body: string,
@@ -155,18 +150,9 @@ export async function maybeWriteGitOpsDeploymentIntent(
       { status: 400 },
     );
   }
-  if (requestedDeployIntentMode(value) === "unmanaged") {
-    return retiredTakosDeploymentProxyResponse();
-  }
-  const requestMode = readBodyString(value, "mode") ?? "apply";
-  if (requestMode !== "apply") {
-    return retiredTakosDeploymentProxyResponse();
-  }
 
-  // Authenticate BEFORE inspecting deploy-intent configuration or validating
-  // the AppSpec, so unauthenticated callers cannot probe whether GitOps deploy
-  // is configured (503 vs 202) or learn config-shape details from validation
-  // errors. Pre-auth responses must not vary on backend configuration.
+  // Authenticate before returning the retired response so unauthenticated
+  // callers cannot probe backend deployment configuration by status code.
   const requestId = crypto.randomUUID();
   const actorResult = await actorFromAuthenticatedRequest(
     request,
@@ -176,119 +162,8 @@ export async function maybeWriteGitOpsDeploymentIntent(
   );
   if (!actorResult.ok) return actorResult.response;
 
-  let config;
-  try {
-    config = parseDeployIntentEnv(envObject());
-  } catch {
-    // Do not surface the raw parse error.message: it can echo back env-derived
-    // configuration detail. The operator finds the cause in server logs.
-    console.error(
-      `[deploy-intent] config parse failed (requestId=${requestId})`,
-    );
-    return Response.json(
-      commonError(
-        "INTERNAL_ERROR",
-        "deploy intent config is invalid",
-      ),
-      { status: 500 },
-    );
-  }
-  if (!config) {
-    return Response.json(
-      commonError(
-        "DEPLOY_INTENT_NOT_CONFIGURED",
-        "GitOps deploy intent is not configured for this Takos installation.",
-      ),
-      { status: 503 },
-    );
-  }
-
-  if (!isAppSpecEnvelope(value.appSpec)) {
-    return Response.json(
-      commonError(
-        "INVALID_ARGUMENT",
-        "gitops deploy intent requires an AppSpec (`apiVersion: v1`, `metadata`, `components`); root `kind:` field is rejected (= Wave K); legacy `apiVersion: takosumi.dev/v1` is rejected (= Wave L)",
-      ),
-      { status: 400 },
-    );
-  }
-
-  const id = `deploy-${crypto.randomUUID()}`;
-  try {
-    const result = await createDeployIntentClient({ config }).write({
-      id,
-      mode: "apply",
-      appSpec: value.appSpec,
-      metadata: {
-        requestId,
-        actorAccountId: actorResult.actor.actorAccountId,
-        ...(actorSpaceId ? { spaceId: actorSpaceId } : {}),
-        ...(readBodyString(value, "group")
-          ? { group: readBodyString(value, "group") }
-          : {}),
-        ...(readBodyString(value, "target_id")
-          ? { targetId: readBodyString(value, "target_id") }
-          : {}),
-      },
-      message: `Deploy intent ${id}`,
-    });
-    return Response.json({
-      accepted: true,
-      mode: "gitops",
-      intent: {
-        id,
-        driver: result.driver,
-        branch: result.branch,
-        path: result.path,
-        commit: result.commit,
-      },
-    }, { status: 202 });
-  } catch (error) {
-    // Do not surface the raw error.message: runGit embeds git stderr, which
-    // can echo the deploy remote URL, repo paths, and server-side git error
-    // detail. The operator finds the cause in server logs.
-    console.error(
-      `[deploy-intent] write failed (requestId=${requestId})`,
-      error,
-    );
-    return Response.json(
-      commonError("INTERNAL_ERROR", "failed to write gitops deploy intent"),
-      { status: 502 },
-    );
-  }
-}
-
-function requestedDeployIntentMode(
-  body: Record<string, unknown>,
-): "gitops" | "unmanaged" | undefined {
-  const value = body.deploy_intent ?? body.deployIntent;
-  if (!isRecord(value)) return undefined;
-  return value.mode === "gitops" || value.mode === "unmanaged"
-    ? value.mode
-    : undefined;
-}
-
-function isAppSpecEnvelope(
-  value: unknown,
-): value is Record<string, unknown> {
-  // Wave K (= AppSpec root envelope minimization): root `kind:` field is
-  // no longer accepted. `apiVersion` alone discriminates the schema.
-  // Input with `kind:` at root is rejected fail-closed (= same shape as
-  // takosumi installer parser unknown-key reject).
-  // Wave L (= apiVersion group prefix minimization): plain `v1` is the
-  // canonical literal. Legacy `takosumi.dev/v1` is rejected fail-closed
-  // (= same shape as takosumi installer parser).
-  if (
-    !isRecord(value) || value.apiVersion !== "v1" ||
-    "kind" in value
-  ) {
-    return false;
-  }
-  const metadata = value.metadata;
-  return isRecord(metadata) &&
-    typeof metadata.id === "string" &&
-    typeof metadata.name === "string" &&
-    isRecord(value.components);
+  void value;
+  return retiredTakosDeploymentProxyResponse();
 }
 
 function hasRetiredInlineWorkflowArtifact(

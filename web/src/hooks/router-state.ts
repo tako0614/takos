@@ -52,7 +52,6 @@ export function normalizeNavigationState(
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
-      groupId: undefined,
     };
   }
 
@@ -82,7 +81,6 @@ export function normalizeNavigationState(
       filePath: undefined,
       fileLine: undefined,
       ref: undefined,
-      groupId: undefined,
     };
   }
 
@@ -112,24 +110,12 @@ export function normalizeNavigationState(
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
-      groupId: undefined,
     };
   }
 
   if (nextView === "deploy") {
-    const nextGroupIdSpecified = hasRouteStateField(nextState, "groupId");
-    const deploySection = nextState.deploySection ?? previous.deploySection;
-    const stayingInDeployGroups = previous.view === "deploy" &&
-      previous.deploySection === "groups";
     return {
       ...merged,
-      groupId: deploySection === "groups"
-        ? nextGroupIdSpecified
-          ? nextState.groupId
-          : stayingInDeployGroups
-          ? previous.groupId
-          : undefined
-        : undefined,
       storagePath: undefined,
       filePath: undefined,
       fileLine: undefined,
@@ -149,7 +135,6 @@ export function normalizeNavigationState(
     threadId: undefined,
     runId: undefined,
     messageId: undefined,
-    groupId: undefined,
   };
 }
 

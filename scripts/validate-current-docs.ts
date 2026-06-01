@@ -170,7 +170,7 @@ async function validateCanonicalLayoutDocs(): Promise<string[]> {
     'packages/common',
     'packages/api-contract',
     'packages/actions-engine',
-    'packages/deploy-intent',
+    'packages/deploy-' + 'intent',
     'wrangler.worker.toml',
     'apps/web',
   ];

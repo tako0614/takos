@@ -163,17 +163,17 @@
       }
     },
     {
-      "serviceId": "takosumi-cloud",
+      "serviceId": "takosumi-accounts",
       "runtime": "container",
       "hostingTargetId": "aws",
-      "image": "ghcr.io/takos/takosumi-cloud-accounts:latest",
-      "internalUrl": "http://takosumi-cloud.takos-system.svc.cluster.local:8787",
+      "image": "ghcr.io/takos/takosumi-accounts:latest",
+      "internalUrl": "http://takosumi-accounts.takos-system.svc.cluster.local:8787",
       "publicUrl": "https://accounts.takos.example.com",
       "smoke": {
         "healthPath": "/healthz",
         "expectedStatus": 200,
         "expectedJson": {
-          "service": "takosumi-cloud"
+          "service": "takosumi-accounts"
         }
       }
     },

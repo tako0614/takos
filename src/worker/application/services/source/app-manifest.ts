@@ -34,5 +34,5 @@ export {
   buildBundlePackageData,
   buildParsedPackageFromDocs,
   extractBuildSourcesFromManifestJson,
-  selectAppManifestPathFromRepo,
+  selectInstallableSourcePathFromRepo,
 } from "./app-manifest-bundle.ts";

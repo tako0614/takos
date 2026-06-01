@@ -1,5 +1,5 @@
 import { jest, test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import { createAnalyticsEngineBinding } from "../analytics-engine-binding.ts";
 
 function useFakeTime(now: string | number | Date) {

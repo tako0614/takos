@@ -8,7 +8,7 @@ Takosumi tests で検証します。
 
 ```sh
 cd ../takosumi
-deno test --allow-all \
+bun test \
   packages/kernel/src/adapters/storage/catalog_test.ts \
   packages/kernel/src/adapters/storage/migration-runner/mod_test.ts \
   packages/kernel/src/adapters/storage/migration-runner/rollback_test.ts

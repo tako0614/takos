@@ -1,6 +1,6 @@
 # Legal: Acceptable Use Policy
 
-> このページでわかること: Takos / Takosumi Cloud リファレンスディストリビューションの
+> このページでわかること: Takos / Takosumi リファレンスディストリビューションの
 > 禁止行為、AI エージェント利用上の追加制限、違反時のエンフォースメントプロセス。
 
 **Template — operator review required before public launch.** Operators must
@@ -17,7 +17,7 @@ review and customize for jurisdiction-specific prohibitions before publishing.
 
 ## 1. 適用範囲
 
-本ポリシーは、`[OPERATOR_NAME]` (以下「当社」) が提供する Takos / Takosumi Cloud
+本ポリシーは、`[OPERATOR_NAME]` (以下「当社」) が提供する Takos / Takosumi
 リファレンスディストリビューション (以下「本サービス」) の全利用者に適用されます。
 [Terms of Service](/legal/terms-of-service) と一体として適用されます。
 

@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@takos/test/assert";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
 import {

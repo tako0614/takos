@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import { createWorker, createWorkerWithWasm } from "../workers.ts";
 import type { WfpContext } from "../wfp-contracts.ts";

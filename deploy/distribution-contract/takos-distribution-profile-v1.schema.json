@@ -13,7 +13,7 @@
         "takos-git",
         "takos-worker",
         "takosumi",
-        "takosumi-cloud"
+        "takosumi"
       ]
     }
   },
@@ -296,7 +296,7 @@
               "preinstall": {
                 "type": "boolean"
               },
-              "entryManifest": {
+              "sourcePath": {
                 "type": "string",
                 "minLength": 1
               },

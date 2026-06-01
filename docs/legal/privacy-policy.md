@@ -1,6 +1,6 @@
 # Legal: Privacy Policy
 
-> このページでわかること: Takos / Takosumi Cloud リファレンスディストリビューションの
+> このページでわかること: Takos / Takosumi リファレンスディストリビューションの
 > public-facing プライバシーポリシーテンプレート。収集データ、利用目的、法的根拠、
 > 国際移転、利用者の権利、DPO 連絡先。
 
@@ -23,7 +23,7 @@ counsel and replace all placeholder fields before publishing to end users.
 
 | Plane                          | 役割             | 説明                                                                    |
 | ------------------------------ | ---------------- | ----------------------------------------------------------------------- |
-| Takosumi Cloud (Accounts plane) | 独立 controller | アカウント識別、認証、課金、不正対策、法令遵守                          |
+| Takosumi (Accounts plane) | 独立 controller | アカウント識別、認証、課金、不正対策、法令遵守                          |
 | Takos product (app plane)       | processor       | 利用者が投入したチャット / リポジトリ / AI エージェント context を処理 |
 
 この区別は [Data Processing Agreement](/legal/data-processing-agreement) と

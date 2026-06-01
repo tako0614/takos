@@ -6,7 +6,7 @@ import type {
   CommandRunnerResult,
 } from "../command-runner.ts";
 
-import { assert, assertEquals, assertStringIncludes } from "@std/assert";
+import { assert, assertEquals, assertStringIncludes } from "@takos/test/assert";
 
 type CommandCall = {
   args: string[];

@@ -19,16 +19,16 @@ const ARCHITECTURE_ALIGNMENT_DOCS = [
   '../takosumi/docs/reference/architecture/workflow-extension-design.md',
 ];
 const PERMISSION_SCOPE_DOCS = [
-  '../takosumi-cloud/docs/architecture/app-installation.md',
+  '../takosumi/docs/architecture/app-installation.md',
 ];
 const APP_INSTALLATION_STATUS_DOCS = [
   '../docs/platform/runtime-modes.md',
-  '../takosumi-cloud/docs/architecture/app-installation.md',
+  '../takosumi/docs/architecture/app-installation.md',
   'docs/platform/upgrade-export.md',
 ];
 const RUNTIME_TARGET_DOCS = [
-  '../takosumi-cloud/docs/architecture/app-installation.md',
-  '../takosumi-cloud/docs/accounts-service.md',
+  '../takosumi/docs/architecture/app-installation.md',
+  '../takosumi/docs/accounts-service.md',
 ];
 const ACCOUNT_MODEL_DOC_PATH = 'docs/operator/account-model.md';
 const ACCOUNT_MODEL_REQUIRED_TERMS = [
@@ -275,11 +275,11 @@ async function validatePermissionScopeDocs(
   _failures: CheckFailure[],
 ): Promise<void> {
   // v1 contract reset (Wave 6): TAKOSUMI_APP_GRANT_CAPABILITIES is removed.
-  // Wave J Component contract minimization: AppSpec `permissions.requested[]`
-  // is also removed — the AppSpec contract is kind-agnostic and capability
-  // requests are modeled outside the AppSpec contract (= operator account
+  // Wave J contract minimization: source-level `permissions.requested[]`
+  // is also removed — the Source contract is kind-agnostic and capability
+  // requests are modeled outside the Source contract (= operator account
   // plane / namespace pub-sub / consumer-defined kind, per
-  // takosumi/docs/reference/app-spec.md). This validator is retained as a
+  // takosumi/docs/reference/core-spec.md). This validator is retained as a
   // no-op so the call site stays stable; delete it together with the call
   // in main() once the surrounding architecture validator is restructured.
 }

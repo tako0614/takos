@@ -1,30 +1,30 @@
-/** Deep link into Takosumi Cloud's Use Takos account-plane entry. */
-const USE_TAKOS_FALLBACK = 'https://cloud.takosumi.com/dashboard/use-takos' +
+/** Deep link into Takosumi's Use Takos account-plane entry. */
+const USE_TAKOS_FALLBACK = 'https://accounts.takosumi.com/dashboard/use-takos' +
   '?takos_url=' + encodeURIComponent('https://takos.jp');
 
-/** Takosumi Cloud dashboard home. */
-const CLOUD_HOME_FALLBACK = 'https://cloud.takosumi.com/';
+/** Takosumi dashboard home. */
+const CLOUD_HOME_FALLBACK = 'https://accounts.takosumi.com/';
 
-/** Deep link into Takosumi Cloud's install wizard with this repo pre-filled. */
-const INSTALL_FALLBACK = 'https://cloud.takosumi.com/apps/install' +
+/** Deep link into Takosumi's install wizard with this repo pre-filled. */
+const INSTALL_FALLBACK = 'https://accounts.takosumi.com/apps/install' +
   '?git=' + encodeURIComponent('https://github.com/tako0614/takos.git') +
   '&ref=main&mode=shared-cell&autodryrun=1';
 
 const LOCAL_USE_TAKOS_FALLBACK = USE_TAKOS_FALLBACK
-  .replace('cloud.takosumi.com', 'cloud.takosumi.test')
+  .replace('accounts.takosumi.com', 'accounts.takosumi.test')
   .replace(
     encodeURIComponent('https://takos.jp'),
     encodeURIComponent('https://takos.test'),
   );
 
 const LOCAL_INSTALL_FALLBACK = INSTALL_FALLBACK.replace(
-  'cloud.takosumi.com',
-  'cloud.takosumi.test',
+  'accounts.takosumi.com',
+  'accounts.takosumi.test',
 );
 
 const LOCAL_CLOUD_HOME_FALLBACK = CLOUD_HOME_FALLBACK.replace(
-  'cloud.takosumi.com',
-  'cloud.takosumi.test',
+  'accounts.takosumi.com',
+  'accounts.takosumi.test',
 );
 
 export interface CloudUrls {

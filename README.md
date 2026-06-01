@@ -33,9 +33,8 @@ bun run local:up
 ログインや課金は Takosumi Accounts (operator account plane) が担当し、 デプロイエンジンは Takosumi kernel
 (`../takosumi`) が担当します。
 
-Takos product を Takosumi に install する入口は、この source root の `.takosumi.yml` です。build command は含めず、
-Takos の runtime components、Postgres、object storage、OIDC / billing listen、public gateway だけを AppSpec
-として宣言します。
+Takos product を Takosumi に install する入口は、この source root そのものです。Takosumi v1 は Takosumi 専用 source metadata file を要求せず、
+Git URL / commit / `package.json` などの汎用 source metadata と operator PlatformService inventory から InstallPlan を作ります。
 
 ## ローカル compose
 
@@ -85,7 +84,7 @@ takos/
 | Takos プロダクト docs | `docs/` (このリポジトリ内、VitePress) |
 | プラットフォーム仕様  | `../docs/` (ecosystem root)           |
 | Takosumi kernel docs  | `../takosumi/docs/`                   |
-| Accounts / 課金 docs  | `../takosumi-cloud/docs/`             |
+| Accounts / 課金 docs  | `../takosumi/docs/`             |
 | Git installer docs    | `../takosumi/docs/`                   |
 | 運用 runbook          | `../takos-private/docs/`              |
 

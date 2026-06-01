@@ -14,7 +14,7 @@ Takosumi Account
 ```
 
 `Account → Space → Installation` の 3 階層になっています。 Installation の詳細は
-[App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/app-installation.md)
+[App Installation Ledger](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)
 を参照。
 
 ## Space の種類
@@ -65,14 +65,14 @@ Space は親 Takosumi Account の billing account
 に紐づき、プランに応じたクォータが適用される。請求主体は operator account plane (リファレンス実装: Takosumi Accounts)
 / BillingPort であり、Space 単位の usage は Takosumi Account の invoice line
 item として集計される。詳しくは [課金](/platform/billing) と
-[Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+[Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
 を参照。
 
 ## 関連ドキュメント
 
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
   — Space の親 account
-- [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/app-installation.md)
+- [App Installation Ledger](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)
   — Space に install される Installation の管理台帳
 - [Takosumi Installation Lifecycle](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
   — Takos が Space に install される形

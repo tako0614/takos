@@ -1,7 +1,7 @@
 import { test } from "bun:test";
 import { Hono } from "hono";
-import { assertEquals } from "@std/assert";
-import { assertSpyCalls, spy } from "@std/testing/mock";
+import { assertEquals } from "@takos/test/assert";
+import { assertSpyCalls, spy } from "@takos/test/mock";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
 import type { Env, User } from "../../../shared/types/index.ts";

@@ -18,11 +18,11 @@ const expectedServices = [
     valuesKey: 'takosumi',
   },
   {
-    id: 'takosumi-cloud',
-    deploymentFile: 'deployment-takosumi-cloud.yaml',
-    serviceFile: 'service-takosumi-cloud.yaml',
-    imageKey: 'takosumiCloud',
-    valuesKey: 'takosumiCloud',
+    id: 'takosumi-accounts',
+    deploymentFile: 'deployment-takosumi-accounts.yaml',
+    serviceFile: 'service-takosumi-accounts.yaml',
+    imageKey: 'takosumiAccounts',
+    valuesKey: 'takosumiAccounts',
   },
   {
     id: 'takos-git',
@@ -237,7 +237,7 @@ for (const file of templateFiles.sort()) {
 }
 
 {
-  const path = `${templateRoot}/deployment-takosumi-cloud.yaml`;
+  const path = `${templateRoot}/deployment-takosumi-accounts.yaml`;
   const text = await runtime.readTextFile(path);
   assertContains(path, text, 'initContainers:');
   assertContains(path, text, '- accounts');

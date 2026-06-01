@@ -32,6 +32,6 @@ bun run release-gate
 ```
 
 Cloudflare / AWS / GCP / Kubernetes / self-hosted の live proof は
-operator-owned evidence です。public source の distribution smoke は manifest と
+operator-owned evidence です。public source の distribution smoke は source と
 dry-run path を検証し、live URL や provider credential
 の存在までは証明しません。

@@ -1,5 +1,5 @@
 import { jest, test } from "bun:test";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@takos/test/assert";
 
 import {
   bootstrapMemory,

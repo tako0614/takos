@@ -29,8 +29,8 @@ Takos product から Takosumi 上に app を install する方法は [Deploy](/d
 ::: info OSS テンプレートと private 運用以下の `wrangler.toml` / bucket / queue
 / worker 名は OSS テンプレート例です。Takos 本体を private で運用する場合は
 `takos-private/` を管理元とします。秘密値は
-`takos-private/src/worker/.secrets/<env>` と `deno task secrets:sync:*` /
-`deno task secrets put ...` で管理します。 :::
+`takos-private/apps/control/.secrets/<env>` と `bun run secrets:sync:*` /
+`bun run control:secrets put ...` で管理します。 :::
 
 ## 統合 distribution からこの target を選ぶ
 
@@ -64,11 +64,11 @@ Cloudflare target に固有の prerequisites:
 ```bash
 # 共通手順 (5 target で同じ)
 cd takos-private
-deno task generate:keys:production --per-cloud
+bun run generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = cloudflare)
-deno task distribute:dry-run --confirm production
-deno task distribute:apply --confirm production
-cd ../takosumi-cloud
+bun run distribute:dry-run --confirm production
+bun run distribute:apply --confirm production
+cd ../takosumi
 bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.cloudflare.example.com \
   --subject tsub_admin \
@@ -82,7 +82,7 @@ bun packages/cli/src/main.ts accounts seed \
 Wrangler deploy を呼び出します。
 
 deploy 後に
-`cd takos-private && deno task e2e:smoke:real --env=production --api-url=https://takos.jp`
+`cd takos-private && bun run e2e:smoke:real --env=production --api-url=https://takos.jp`
 で full-stack smoke を実行し、`auth-smoke` の login flow / Accounts bearer /
 agent run まで確認します。これは Cloudflare target の smoke evidence
 であり、public managed offering を開くには別途 launch-readiness evidence /
@@ -125,7 +125,7 @@ secret sync では両者を混同しないでください。 :::
 
 control plane 本体の Cloudflare resource（D1 / R2 / KV / Dispatch / Queues /
 Vectorize など）は operator が事前に作成・設定します。App credential は Takosumi
-Accounts の account-plane capability record / binding material から materialize
+Accounts の account-plane capability record / binding material から発行・注入
 します。
 
 ### D1 Database
@@ -501,7 +501,7 @@ boot 時には更に SQL chain と external chain を
 mismatch を検出した場合は production / staging で fail-closed します。:::
 
 `takos-private/scripts/generate-platform-keys.ts` がこの 5 ファイルを
-`takos-private/src/worker/.secrets/<env>/` に書き出します。既存ファイルが
+`takos-private/apps/control/.secrets/<env>/` に書き出します。既存ファイルが
 ある場合は `--force` を付けない限り上書きせず exit 1 で警告します。
 
 ```bash
@@ -509,24 +509,22 @@ mismatch を検出した場合は production / staging で fail-closed します
 cd takos-private
 
 # 新しい環境用の鍵を生成
-deno task generate:keys:staging
-deno task generate:keys:production
+bun run generate:keys:staging
+bun run generate:keys:production
 
 # ローカル開発用 (.secrets/local/ に出力)
-deno task generate:keys:local
+bun run generate:keys:local
 
 # 既存ファイルを上書きする場合
-deno run --allow-read --allow-write --allow-env \
-  scripts/generate-platform-keys.ts --env=staging --force
+bun run generate:keys:staging -- --force
 
 # 出力先を変更する場合
-deno run --allow-read --allow-write --allow-env \
-  scripts/generate-platform-keys.ts --env=staging --output=/tmp/keys
+bun run generate:keys:staging -- --output=/tmp/keys
 ```
 
 生成後は次節の `secrets:sync:*` で Cloudflare Worker secret として upload
 します。 `OIDC_CLIENT_SECRET` や AI provider key などは別途
-`.secrets/<env>/<NAME>` に手で配置するか `deno task secrets put ...`
+`.secrets/<env>/<NAME>` に手で配置するか `bun run control:secrets put ...`
 で投入します。
 
 ::: warning 鍵の取り扱い `.secrets/<env>/` は `.gitignore` で git から除外
@@ -538,21 +536,21 @@ production の `PLATFORM_PRIVATE_KEY` を rotate する場合は事前に rotati
 
 ### Secrets の設定
 
-Takos 本体の private 運用では `takos-private/src/worker/.secrets/<env>`
-を基準にし、 `deno task secrets:sync:staging` /
-`deno task secrets:sync:production` で Cloudflare Worker runtime
-へ同期します。単発更新は `deno task secrets put ...` を使います。次のコマンドは
+Takos 本体の private 運用では `takos-private/apps/control/.secrets/<env>`
+を基準にし、 `bun run secrets:sync:staging` /
+`bun run secrets:sync:production` で Cloudflare Worker runtime
+へ同期します。単発更新は `bun run control:secrets put ...` を使います。次のコマンドは
 ecosystem checkout root から実行します。内部実装としては Wrangler が upload
 を担当します。
 
 ```bash
-cd takos-private/src/worker
-deno task secrets:sync:staging
-deno task secrets:sync:production
+cd takos-private
+bun run secrets:sync:staging
+bun run secrets:sync:production
 
 # 単発更新
-deno task secrets put OIDC_CLIENT_SECRET --env staging
-deno task secrets put OIDC_CLIENT_SECRET --env production
+bun run control:secrets put OIDC_CLIENT_SECRET --env staging
+bun run control:secrets put OIDC_CLIENT_SECRET --env production
 ```
 
 ### staging 環境
@@ -572,25 +570,25 @@ ROUTING_DO_PHASE = "4"
 # ... 他の環境固有の設定
 ```
 
-staging 用の secrets は `takos-private/src/worker/.secrets/staging/`
-を更新してから `deno task secrets:sync:staging` を実行します。
+staging 用の secrets は `takos-private/apps/control/.secrets/staging/`
+を更新してから `bun run secrets:sync:staging` を実行します。
 
 ## Takos product のデプロイ
 
 Takos product / API gateway 本体を Cloudflare に deploy する場合は、private
-管理元である `takos-private/src/worker` から実行します。次のコマンドは
+管理元である `takos-private/apps/control` から実行します。次のコマンドは
 ecosystem checkout root から実行します:
 
 ```bash
-cd takos-private/src/worker
-deno task deploy:staging
+cd takos-private
+bun run control:deploy:staging
 ```
 
 production:
 
 ```bash
-cd takos-private/src/worker
-deno task deploy:production
+cd takos-private
+bun run control:deploy:production
 ```
 
 ::: info app install とは別ですここでの deploy は Takos product / API gateway
@@ -599,35 +597,25 @@ deno task deploy:production
 
 ### 初期セットアップ
 
-control plane の deploy が完了したら、初期 admin account / tenant Space + Group
-/ bundled app distribution / app registry seed を **`bootstrap-initial.ts`** で
-seed します。スクリプトは idempotent で、既存 admin / tenant
-が見つかった場合は新規作成をスキップします。operator login / PAT 発行は Takosumi
-Accounts 側で行います。
+control plane の deploy が完了したら、Takosumi の account-plane seed plan
+を生成して operator account / OIDC client / Installation owner の初期状態を確認します。
+operator login / PAT 発行は Takosumi Accounts 側で行います。
 
 ```bash
-# プレビュー (DB に書き込まない)
-cd takosumi/packages/kernel
-deno task bootstrap:initial -- \
-  --admin-email=admin@takos.jp \
-  --tenant-name="Takos" \
-  --env=production \
-  --dry-run
-
-# 実行 (admin user / tenant を作成)
-deno task bootstrap:initial -- \
-  --admin-email=admin@takos.jp \
-  --tenant-name="Takos" \
-  --env=production
+cd takosumi
+bun packages/cli/src/main.ts accounts seed \
+  --issuer https://accounts.takos.example.com \
+  --subject tsub_admin \
+  --client-id takos-admin \
+  --redirect-uri https://takos.example.com/auth/oidc/callback \
+  > accounts-seed-plan.json
 ```
 
-オプションで以下の env から Takos product の bundled app distribution / app
-registry seed を seed できます:
+Takos product の bundled app distribution は Installation source として扱います:
 
 | 環境変数                              | 形式       | 用途                                                                                                                     |
 | ------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON` | JSON array | `[{ ref, digest, version?, publisher?, kind? }]` を `default_app_distribution_entries` 相当の registry descriptor に投入 |
-| `TAKOS_REGISTRY_TRUST_ROOTS_JSON`     | JSON array | Takos product app registry seed を投入する legacy compatibility env。Takosumi kernel trust model ではない                |
+| `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON` | JSON array | bundled app の Git source / ref / sourcePath / runtime mode を operator 側で上書きする |
 
 実行後、stdout に以下が出力されます:
 
@@ -660,7 +648,7 @@ generation, control deploy, DB migration, bootstrap) を **dry-run**
 
 ```bash
 cd takos-private
-deno task staging:integration-test
+bun run e2e:smoke:dry-run
 ```
 
 各 step は独立して `success | fail | skip` を返し、レポート末尾に集計が
@@ -679,7 +667,7 @@ summary: 4 success, 0 skip, 0 fail
 ```
 
 このとき step 1 の secret 出力先は `/tmp/takos-test-secrets/<env>/` に
-固定されており、`takos-private/src/worker/.secrets/staging/` の本物の secret
+固定されており、`takos-private/apps/control/.secrets/staging/` の本物の secret
 を **絶対に上書きしません**。
 
 **2. real run (operator 専用、credentials 要)**:
@@ -689,12 +677,12 @@ API は呼ばない) まで含めて連続実行する場合:
 
 ```bash
 cd takos-private
-deno task staging:integration-test:real
+bun run e2e:smoke:real
 ```
 
 `--real` を付けると:
 
-- step 2 が `deno task deploy:staging --dry-run` を invoke する (predeploy
+- step 2 が `bun run control:deploy:staging --dry-run` を invoke する (predeploy
   verify + secrets check + wrangler dry-run)。
 - credentials (`.secrets/staging/` の 5 secret file) が不在の場合は step 2 が
   `[SKIP]` を返し、警告を表示するだけでテスト全体は完走する (fail
@@ -703,7 +691,7 @@ deno task staging:integration-test:real
 
 **完全な real staging deploy** を行うには integration test ではなく
 [Takos product のデプロイ](#takos-product-のデプロイ) の手順
-(`deno task deploy:staging`) を `--dry-run` 無しで使ってください。 integration
+(`bun run control:deploy:staging`) を `--dry-run` 無しで使ってください。 integration
 test はあくまで pipeline の連続性を確認するスモークです。
 
 ## Workers-for-Platforms backend (optional)
@@ -719,8 +707,8 @@ namespace の作成:
 wrangler dispatch-namespace create my-namespace
 ```
 
-AppSpec author は namespace を意識する必要はありません。operator profile の
-runtime binding が backend-specific placement として namespace に materialize します。
+Source author は namespace を意識する必要はありません。operator profile の
+runtime binding が backend-specific placement として namespace を選択します。
 
 ## Durable Objects
 
@@ -809,7 +797,7 @@ secret に流します。 :::
 
 ## Cloudflare 固有の機能
 
-tracked reference Workers backend で Cloudflare managed service に materialize
+tracked reference Workers backend で Cloudflare managed service に接続
 される機能。他環境では backend-specific backing service または Takos-managed
 runtime で同じ public contract を実現する。
 
@@ -833,8 +821,8 @@ control plane のステート管理に使われる。Cloudflare では Durable O
 Takos product runtime / executor は tracked reference Workers backend では同一
 `takos` Worker script 内の Cloudflare Containers Durable Object class として
 host します。tenant app の image-backed `services` / `containers` は operator
-profile の workload adapter で解決し、他環境では Docker / k8s / ECS / Cloud Run
-などに materialize できます。ECS / Cloud Run は Takos product hosting target
+profile の workload connector で解決し、他環境では Docker / k8s / ECS / Cloud Run
+などに配置できます。ECS / Cloud Run は Takos product hosting target
 そのものではありません。
 
 image-backed workload を使う場合は `OCI_ORCHESTRATOR_URL` が必要で、認証付き
@@ -925,8 +913,8 @@ runbook script です。
 
 ```bash
 cd takos-private
-deno task auth:smoke:dry-run                  # default --env=staging
-deno task auth:smoke:dry-run -- --env=production
+bun run auth:smoke:dry-run                  # default --env=staging
+bun run auth:smoke:dry-run -- --env=production
 ```
 
 未配置の secret は `[SKIP]` として report され、exit code は 0 のままです （CI
@@ -937,7 +925,7 @@ deno task auth:smoke:dry-run -- --env=production
 実環境に対する live smoke。実行前に以下を済ませてください:
 
 1. Takosumi Accounts で Takos runtime / bundled app 用の OIDC client を発行し、
-   `takos-private/src/worker/.secrets/<env>/` に `OIDC_CLIENT_SECRET` /
+   `takos-private/apps/control/.secrets/<env>/` に `OIDC_CLIENT_SECRET` /
    `OPENAI_API_KEY` を配置する。`OIDC_ISSUER_URL` / `OIDC_CLIENT_ID` /
    `OIDC_REDIRECT_URI` は `wrangler.toml` の env vars または secret sync
    対象に設定する
@@ -948,7 +936,7 @@ deno task auth:smoke:dry-run -- --env=production
 ```bash
 export TAKOS_ACCOUNTS_TOKEN=takpat_...       # Takosumi Accounts で得た bearer
 cd takos-private
-deno task auth:smoke:real -- \
+bun run auth:smoke:real -- \
   --env=staging \
   --api-url=https://staging.takos.example.com
 ```
@@ -965,20 +953,20 @@ run check は OpenAI API の課金対象なので、production では運用 wind
 
 #### staging 統合との関係
 
-[`staging:integration-test`](#staging-integration-test) が deploy pipeline の
+[`e2e:smoke:dry-run`](#staging-integration-test) が deploy pipeline の
 dry-run を扱うのに対し、`auth:smoke:*` は **deploy 完了後の auth surface**
 を確認します。production 投入直前の最後の手順として順に走らせる想定です:
 
 ```bash
-deno task staging:integration-test            # deploy pipeline dry-run
-deno task auth:smoke:dry-run                  # auth surface shape validation
-deno task auth:smoke:real -- --api-url=...    # live smoke
+bun run e2e:smoke:dry-run       # deploy pipeline dry-run
+bun run auth:smoke:dry-run      # auth surface shape validation
+bun run auth:smoke:real -- --api-url=...    # live smoke
 ```
 
 ## マルチクラウド対応
 
 takos オペレーターが takos をどのクラウドにホストするかは distribution
-設定で決まります。app author は `.takosumi.yml` と app source を書き、provider
+設定で決まります。app author は source input と app source を書き、provider
 selection は operator config に任せます:
 
 ```bash
@@ -1015,7 +1003,7 @@ adapter profile 設定、runtime-agent placement は
 - [Deploy](/deploy/) --- install / Deployment apply の整理
 - [OIDC Consumer](/apps/oidc-consumer) --- Takos が要求する OIDC env / route
   の詳細
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
   --- OIDC issuer / client 発行の詳細
 - [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [Multi-cloud](/hosting/multi-cloud) --- 4 cloud 横断 runbook

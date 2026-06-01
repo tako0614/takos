@@ -17,9 +17,9 @@ images:
     repository: takos/takosumi
     tag: "latest"
     pullPolicy: IfNotPresent
-  takosumiCloud:
+  takosumiAccounts:
     registry: ghcr.io
-    repository: takos/takosumi-cloud-accounts
+    repository: takos/takosumi-accounts
     tag: "latest"
     pullPolicy: IfNotPresent
   takosGit:
@@ -97,7 +97,7 @@ services:
         memory: 2Gi
   takosumi:
     replicaCount: 3
-  takosumiCloud:
+  takosumiAccounts:
     replicaCount: 2
   takosGit:
     replicaCount: 2

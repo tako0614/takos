@@ -1,72 +1,37 @@
 # Multi-Service 構成
 
-> このページでわかること: API + background Worker + DB を 1 つの AppSpec
-> にまとめるサンプル。
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-Short kind names are operator-profile aliases. The route list in gateway `spec`
-belongs to the adopted gateway descriptor's open `spec`. Worker
-`spec.entrypoint` values point to runtime files already present in the resolved
-source or prepared archive.
+## Current Flow
 
-```yaml
-apiVersion: v1
-metadata:
-  id: example.full-stack
-  name: Full Stack App
-components:
-  api:
-    kind: worker
-    spec:
-      entrypoint: src/api.ts
-    connect:
-      db:
-        output: db.connection
-        inject: secret-env
-        prefix: DB
-  jobs:
-    kind: worker
-    spec:
-      entrypoint: src/jobs.ts
-    connect:
-      db:
-        output: db.connection
-        inject: secret-env
-        prefix: DB
-  db:
-    kind: postgres
-    spec:
-      class: standard
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: api.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-          host: api.example.com
-          tls: auto
-      routes:
-        - listener: public
-          path: /
-          to: upstream
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
+
+## Takos Boundary
+
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+
+## API Shape
+
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-background job を cron で起動したい場合、schedule は AppSpec の current public
-surface ではなく、operator / app layer の上位設定として扱います。Takosumi kernel
-は workflow / cron / scheduler surface を public concept にしません。
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-ポイント:
+## References
 
-- 複数 workload は `components` に複数 component として並べる
-- shared database は `db.connection` output を `api` / `jobs` が
-  `connect` で受け取る
-- HTTP entrypoint は `gateway` component の listener / gateway descriptor intent で表現する
-
-関連:
-
-- [AppSpec](https://takosumi.com/docs/reference/manifest)
-- [環境変数](/deploy/environment)
-- [Worker + DB](/examples/worker-with-db)
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

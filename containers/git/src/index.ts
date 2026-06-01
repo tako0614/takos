@@ -532,7 +532,6 @@ app.post(TAKOS_GIT_INTERNAL_PATHS.sourceSnapshot, async (c) => {
     defaultBranch: repository?.defaultBranch ?? "main",
     sourceRef: request.sourceRef,
     path: request.path,
-    manifestPath: request.manifestPath,
   });
   if (!snapshot.ok) return c.json(snapshot.body, snapshot.status);
   return c.json(snapshot.response);

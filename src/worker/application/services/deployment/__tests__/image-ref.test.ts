@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import { isDigestPinnedImageRef } from "../image-ref.ts";
 
 test("isDigestPinnedImageRef accepts 64-hex digest refs", () => {

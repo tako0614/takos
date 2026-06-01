@@ -105,7 +105,7 @@ feature:
 - workspace and access data: organization, space, role, membership, invitation,
   API token, session, and audit metadata
 - repository and deployment data: repository metadata, commit metadata, source
-  artifacts, deployment manifests, environment variable names, build logs, and
+  artifacts, deployment records, environment variable names, build logs, and
   runtime logs
 - agent and application data: prompts, messages, tool inputs / outputs, uploaded
   files, generated artifacts, and Customer application data

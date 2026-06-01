@@ -61,21 +61,8 @@ export const common = {
   primaryNavigation: "メインナビゲーション",
   storage: "ストレージ",
   deployNav: "デプロイ",
-  groups: "グループ",
-  groupsDescription: "デプロイで管理されるグループを確認します。",
 
   // Workspaces
-  createGroup: "グループを作成",
-  groupName: "グループ名",
-  groupNamePlaceholder: "my-app-production",
-  groupCreated: "グループを作成しました",
-  failedToCreateGroup: "グループの作成に失敗しました",
-  failedToLoadGroups: "グループの読み込みに失敗しました",
-  searchGroups: "グループを検索",
-  noGroups: "グループがありません",
-  noGroupsDescription:
-    "manifest からデプロイされたアプリは group としてここに表示されます。",
-  noGroupSelected: "グループを選択してください",
   desiredState: "Desired State",
   noDesiredState: "Desired state はまだありません",
   inventory: "インベントリ",

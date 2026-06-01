@@ -9,18 +9,18 @@
 1. **AWS 単独 hosting (EKS Helm)** ― `takos/deploy/helm/takos/values-aws.yaml`
    overlay。Kubernetes ベースで control plane / runtime / executor を運用する
    path。
-2. **AWS reference provider adapter client** ― ECS Fargate / RDS / S3 / SQS /
-   KMS / Secrets Manager の adapter を takosumi.com reference implementation
+2. **AWS reference runtime connector** ― ECS Fargate / RDS / S3 / SQS /
+   KMS / Secrets Manager の inventory / evidence connector を takosumi.com reference implementation
    の配線として呼び出す path。Cloudflare control plane + AWS tenant runtime
    (`composite.cf-control-aws-tenant@v1`) や AWS 単独 profile
    (`profiles/aws.example.json`) で使う。
 
 ::: tip 対象範囲 section 1 (Helm overlay) は ECS / Fargate への kernel 直接
 deploy、DynamoDB を control-plane storage として使う構成、Terraform / CDK
-overlay を扱いません。 section 2 (reference provider adapter client) は provider
-materialization までを扱います。 :::
+overlay を扱いません。 section 2 (reference runtime connector) は operator-owned infra workflow
+が作った PlatformService inventory と Deployment evidence の接続までを扱います。 :::
 
-Takosumi 上に AppSpec を install し、Installation / Deployment を管理する方法は [Deploy](/deploy/)
+Takosumi 上で Source から Installation を作り、Deployment を管理する方法は [Deploy](/deploy/)
 を参照してください。 5 target 横断 runbook は
 [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
@@ -67,11 +67,11 @@ AWS EKS target に固有の prerequisites:
 ```bash
 # 共通手順 (5 target で同じ)
 cd takos-private
-deno task generate:keys:production --per-cloud
+bun run generate:keys:production --per-cloud
 # distribution.yml を編集 (kernel_host.target = aws)
-deno task distribute:dry-run --confirm production
-deno task distribute:apply --confirm production
-cd ../takosumi-cloud
+bun run distribute:dry-run --confirm production
+bun run distribute:apply --confirm production
+cd ../takosumi
 bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.aws.example.com \
   --subject tsub_admin \
@@ -109,7 +109,7 @@ bun packages/cli/src/main.ts accounts seed \
 | runtime config  | `runtimeConfig.environment=production`、implementation binding selector は fail-closed empty |
 | ingress         | ALB ingress class と ALB annotation を使う                                     |
 | service account | IRSA 用 annotation を受け取る                                                  |
-| workloads       | `takos-worker` / `takosumi` / `takosumi-cloud` / `takos-git` / `takos-agent`      |
+| workloads       | `takos-worker` / `takosumi` / `takosumi` / `takos-git` / `takos-agent`      |
 
 overlay は generated artifact です。distribution profile を更新したら:
 
@@ -125,7 +125,7 @@ bun run helm:check-overlays
 - ALB Ingress Controller
 - External Secrets Operator / Sealed Secrets などの secret 管理、または Helm
   values で secret を作成する運用
-- Takosumi reference provider adapter が参照する AWS managed-service credentials
+- operator-owned AWS workflow / runtime connector が参照する AWS managed-service credentials
 
 Terraform apply 後の DB endpoint / Redis URL / SQS URL / S3 bucket 名は
 `bun run terraform:helm-values` で generated values に変換し、base overlay の
@@ -167,18 +167,18 @@ certificate ARN を設定します。
 
 ---
 
-## Section 2: AWS reference provider adapter
+## Section 2: AWS reference runtime connector
 
 ### 構成
 
-Takosumi reference implementation の AWS profile は次の adapter clients
+Takosumi reference implementation の AWS profile は次の runtime connector clients
 を使います:
 
-| provider client              | 用途                          | 参照クラス                             |
+| connector client             | 用途                          | 参照クラス                             |
 | ---------------------------- | ----------------------------- | -------------------------------------- |
 | `aws-control-plane`          | ECS Fargate task / service    | `src/providers/aws/ecs_fargate.ts`     |
 | `aws-rds-postgres`           | RDS Postgres provisioning     | `src/providers/aws/rds.ts`             |
-| `aws-s3-artifacts`           | S3 bucket lifecycle           | `src/providers/aws/s3.ts`              |
+| `aws-s3-artifacts`           | S3 bucket provisioning        | `src/providers/aws/s3.ts`              |
 | `aws-sqs-control-plane`      | SQS queue / DLQ               | `src/providers/aws/sqs.ts`             |
 | `aws-kms`                    | KMS key + grant boundary      | `src/providers/aws/kms.ts`             |
 | `aws-secrets-manager`        | Secrets Manager rotation      | `src/providers/aws/secrets_manager.ts` |
@@ -186,22 +186,22 @@ Takosumi reference implementation の AWS profile は次の adapter clients
 | `aws-runtime-agent-registry` | runtime-agent endpoint config | `src/providers/aws/gateway.ts`         |
 
 profile JSON (`profiles/aws.example.json`) で `clients.*` を上記 client
-名に向けると、takosumi.com reference implementation の provider adapter wiring
-が AWS resource lifecycle を実行します。
+名に向けると、takosumi.com reference implementation は operator-owned AWS
+workflow の PlatformService inventory と Deployment evidence を読み書きします。
 
-### Operator が手動でやること / reference binding が行うこと
+### Operator workflow がやること / reference connector が記録すること
 
-| step                                                               | operator               | reference binding |
+| step                                                               | operator workflow      | reference connector |
 | ------------------------------------------------------------------ | ---------------------- | --------------- |
 | AWS account / IAM role 作成                                        | yes                    | no              |
 | IAM policy attach (ECS / RDS / S3 / SQS / KMS / Secrets / Route53) | yes                    | no              |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` 入手                 | yes                    | no              |
 | Cloudflare Worker secret として injection                          | yes (operator-managed) | no              |
-| RDS / S3 / SQS / KMS / Secrets resource の lifecycle               | no                     | yes (provider)  |
-| ECS task definition apply / desired count 調整                     | no                     | yes (provider)  |
-| ALB listener rule + Route53 record 同期                            | no                     | yes (provider)  |
+| RDS / S3 / SQS / KMS / Secrets resource provisioning               | yes                    | records evidence |
+| ECS task definition apply / desired count 調整                     | yes                    | records evidence |
+| ALB listener rule + Route53 record 同期                            | yes                    | records evidence |
 | runtime-agent HTTP lifecycle endpoint                              | yes (process deploy)   | yes (lifecycle RPC) |
-| drift 検出 / rollback                                              | no                     | yes (provider)  |
+| drift 検出 / rollback                                              | yes                    | records evidence |
 
 ### IAM role / policy 設計
 
@@ -290,18 +290,18 @@ profile JSON (`profiles/aws.example.json`) で `clients.*` を上記 client
 
 ### Credential injection 方式
 
-provider adapter への credential 経路は 2 通りあります:
+runtime connector への credential 経路は 2 通りあります:
 
 #### A. Cloudflare Worker secret (Cloudflare control + AWS tenant の場合)
 
-Cloudflare 上の Takosumi kernel から AWS provider adapter を呼ぶ場合、Worker
+Cloudflare 上の Takosumi kernel から AWS runtime connector を呼ぶ場合、Worker
 secret として AWS credentials を inject します:
 
 ```bash
-cd takos-private/src/worker
-echo "AKIA..." | deno task secrets put AWS_ACCESS_KEY_ID --env production
-echo "..." | deno task secrets put AWS_SECRET_ACCESS_KEY --env production
-echo "ap-northeast-1" | deno task secrets put AWS_REGION --env production
+cd takos-private
+echo "AKIA..." | bun run control:secrets put AWS_ACCESS_KEY_ID --env production
+echo "..." | bun run control:secrets put AWS_SECRET_ACCESS_KEY --env production
+echo "ap-northeast-1" | bun run control:secrets put AWS_REGION --env production
 ```
 
 profile (`profiles/cloudflare-aws.example.json`) で
@@ -310,7 +310,7 @@ profile (`profiles/cloudflare-aws.example.json`) で
 
 #### B. operator-managed gateway URL (kernel が AWS の外にある場合)
 
-provider adapter は SDK を直接 import せず、operator が用意する HTTP gateway
+runtime connector は SDK を直接 import せず、operator が用意する HTTP gateway
 を介して呼ぶ前提です。`src/providers/aws/gateway.ts` の URL 構成は profile の
 `pluginConfig.operator.takosumi.aws.gatewayUrl` で上書きできます:
 
@@ -423,7 +423,7 @@ describe / verify envelope を受け、ECS / RDS / S3 / SQS / KMS / Secrets ops 
 
 ### ALB routing の DNS 設定
 
-`aws-alb-route53-router` provider client は次を materialize します:
+`aws-alb-route53-router` connector は次の lifecycle を扱います:
 
 1. ALB target group (tenant ECS service を attach)
 2. ALB listener rule (host header / path matcher)
@@ -454,14 +454,14 @@ kernel がやること:
 - ECS は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - DynamoDB / SQS / Secrets Manager を app resource backend として自動
-  provisioning する contract (※ section 2 の provider adapter はこれを担う)
+  provisioning する contract (※ section 2 は operator-owned workflow の inventory / evidence 接続を扱う)
 - Terraform / CDK による AWS resource 作成手順
-- AWS 固有 adapter 名を AppSpec author 向けの public surface として固定
+- AWS 固有 connector 名を app author 向けの public surface として固定
   する contract
 
-必要なら operator が追加 adapter / provider implementation
+必要なら operator が追加 connector / inventory importer
 を構成できますが、このページは Takos product/operator distribution の Helm
-overlay と reference provider adapter で実際に表現されている範囲だけを runbook
+overlay と reference runtime connector で実際に表現されている範囲だけを runbook
 として扱います。
 
 ## 次に読むページ

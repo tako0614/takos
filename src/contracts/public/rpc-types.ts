@@ -1,12 +1,16 @@
 import type { Hono } from "hono";
 import type {
-  DeployIntentAcceptedResponse,
   DeploymentCreateRequest,
+  RetiredDeploymentCreateResponse,
 } from "./public-api.ts";
 
 export type ApiVariables = Record<string, unknown>;
 
-type JsonEndpoint<Input, Output, Status extends 200 | 201 | 202 = 200> = {
+type JsonEndpoint<
+  Input,
+  Output,
+  Status extends 200 | 201 | 202 | 410 = 200,
+> = {
   input: Input;
   output: Output;
   outputFormat: "json";
@@ -202,8 +206,8 @@ type ApiRouteSchema = {
   "/public/v1/deployments": {
     $post: JsonEndpoint<
       ApiRouteJson<DeploymentCreateRequest>,
-      DeployIntentAcceptedResponse,
-      202
+      RetiredDeploymentCreateResponse,
+      410
     >;
   };
   "/public/stores/:storeSlug": {

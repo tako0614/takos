@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "takos.fullname" . }}-takosumi-accounts
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+    takos.io/service-id: takosumi-accounts
+    app.kubernetes.io/component: takosumi-accounts
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.services.takosumiAccounts.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/component: takosumi-accounts
+    {{- include "takos.selectorLabels" . | nindent 4 }}

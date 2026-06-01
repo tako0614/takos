@@ -11,7 +11,7 @@ import { test } from "bun:test";
  * client-side timeout fired.
  */
 
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects } from "@takos/test/assert";
 
 import { WfpClient } from "../client.ts";
 import { WFPService } from "../service.ts";

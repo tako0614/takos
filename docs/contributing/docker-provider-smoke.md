@@ -8,7 +8,7 @@ Takos product の Docker proof は local Compose と self-host distribution smok
 ```sh
 cd takos
 bun run local:config
-bun run distribution:smoke --manifest deploy/distributions/selfhosted.json
+bun run distribution:smoke --source deploy/distributions/selfhosted.json
 ```
 
 実 Docker 起動を伴う proof は operator local evidence です。

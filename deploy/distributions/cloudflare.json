@@ -21,11 +21,11 @@
     },
     {
       "kind": "wrangler",
-      "ref": "../takosumi-cloud/deploy/cloudflare/wrangler.toml"
+      "ref": "../takosumi/deploy/accounts-cloudflare/wrangler.toml"
     },
     {
       "kind": "operator",
-      "ref": "../takosumi-cloud/deploy/cloudflare"
+      "ref": "../takosumi/deploy/accounts-cloudflare"
     }
   ],
   "providerProof": {
@@ -181,17 +181,17 @@
       }
     },
     {
-      "serviceId": "takosumi-cloud",
+      "serviceId": "takosumi-accounts",
       "runtime": "worker",
       "hostingTargetId": "cloudflare",
-      "artifactRef": "worker:takosumi-cloud-accounts",
-      "internalUrl": "https://takosumi-cloud.internal.takos.example",
+      "artifactRef": "worker:takosumi-accounts",
+      "internalUrl": "https://takosumi-accounts.internal.takos.example",
       "publicUrl": "https://accounts.takos.example.com",
       "smoke": {
         "healthPath": "/healthz",
         "expectedStatus": 200,
         "expectedJson": {
-          "service": "takosumi-cloud"
+          "service": "takosumi-accounts"
         }
       }
     },

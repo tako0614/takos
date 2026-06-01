@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@takos/test/assert";
 
 import { CapabilityRegistry } from "../../capability-registry.ts";
 import type { CapabilityDescriptor } from "../../capability-types.ts";

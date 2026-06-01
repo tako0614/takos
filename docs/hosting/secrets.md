@@ -5,7 +5,7 @@
 Takos product shell (`takos/`) は distribution profile、Terraform composition、
 Helm chart、機密でない managed resource id を持ちます。実環境の secret 値、
 deploy credential、state backend credential、ローテーション手順は
-`takos-private` で管理します。Takosumi kernel は secret 値を直接見ず、manifest
+`takos-private` で管理します。Takosumi kernel は secret 値を直接見ず、source
 と runtime には secret reference または platform secret binding だけを渡します。
 
 ## Ownership
@@ -51,7 +51,7 @@ Keycloak / Authentik / Auth0 / 自前 OIDC issuer は upstream IdP として
 ## Auth-related runtime secrets
 
 Takos runtime に渡す auth 関連 secret の最低集合は以下です。値は
-`takos-private/src/worker/.secrets/<env>/` に配置し、`secrets:sync:*` /
+`takos-private/apps/control/.secrets/<env>/` に配置し、`secrets:sync:*` /
 `wrangler secret put` で deploy target に流します。
 
 | name                 | 由来                                    | 用途                                                                     |
@@ -99,10 +99,10 @@ managed / self-host いずれも次の順序で進めます:
 1. rotation owner (managed / self-host Takosumi Accounts) 側で新
    `OIDC_CLIENT_SECRET` を発行する (launch token は都度 opaque token
    を発行するため、rotation 対象ではない)
-2. `takos-private/src/worker/.secrets/<env>/` の対応 file を更新する
-3. `cd takos-private/src/worker && deno task secrets:sync:<env>` で Worker
+2. `takos-private/apps/control/.secrets/<env>/` の対応 file を更新する
+3. `cd takos-private && bun run secrets:sync:<env>` で Worker
    secret / k8s Secret を同期する (単発更新は
-   `deno task secrets put OIDC_CLIENT_SECRET --env <env>`)
+   `bun run control:secrets put OIDC_CLIENT_SECRET --env <env>`)
 4. rotated-out secret を rotation owner 側で revoke する
 
 managed mode では 1 と 2 の間に Takosumi Accounts が binding material /
@@ -181,11 +181,11 @@ PR / release review では次を確認します:
 
 ## 次に読むページ
 
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
   --- OIDC client を発行し、launch token の `/consume` を提供する account plane
-- [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi-cloud/blob/main/docs/ja/apps/launch-token.md)
+- [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi/blob/main/docs/ja/apps/launch-token.md)
   --- one-shot opaque token と `/_takosumi/launch` → Accounts `/consume` redeem
   の仕様
-- [Takosumi Cloud Launch Token](https://github.com/tako0614/takos-ecosystem/blob/main/takosumi-cloud/docs/ja/apps/launch-token.md)
-  --- `TAKOSUMI_ACCOUNTS_INTERNAL_URL` / `INSTALL_LAUNCH_*` env を materialize する Cloud
+- [Takosumi Launch Token](https://github.com/tako0614/takos-ecosystem/blob/main/takosumi/docs/ja/apps/launch-token.md)
+  --- `TAKOSUMI_ACCOUNTS_INTERNAL_URL` / `INSTALL_LAUNCH_*` env を注入する Cloud
   launch-token projection / binding profile

@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import { SKILL_CREATE, SKILL_UPDATE } from "../space-skills.ts";
 

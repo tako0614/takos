@@ -1,6 +1,6 @@
 import { test } from "bun:test";
 import { Hono } from "hono";
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@takos/test/assert";
 
 import type { Env, User } from "../../../../shared/types/index.ts";
 import privacy, { privacyRouteDeps } from "../privacy.ts";

@@ -1,6 +1,6 @@
 import { test } from "bun:test";
-import { assertEquals, assertObjectMatch, assertRejects } from "@std/assert";
-import { spy } from "@std/testing/mock";
+import { assertEquals, assertObjectMatch, assertRejects } from "@takos/test/assert";
+import { spy } from "@takos/test/mock";
 
 import {
   createDeploymentBackend,

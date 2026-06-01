@@ -110,7 +110,7 @@ Takosumi internal URL
 Takosumi Accounts internal URL
 */}}
 {{- define "takos.accountsUrl" -}}
-{{- printf "http://%s-takosumi-cloud:%v" (include "takos.fullname" .) (int .Values.services.takosumiCloud.port) }}
+{{- printf "http://%s-takosumi-accounts:%v" (include "takos.fullname" .) (int .Values.services.takosumiAccounts.port) }}
 {{- end }}
 
 {{/*

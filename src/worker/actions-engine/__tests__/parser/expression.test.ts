@@ -12,7 +12,7 @@ import {
   interpolateString,
 } from "../../parser/expression.ts";
 
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@takos/test/assert";
 import process from "node:process";
 
 function createContext(): ExecutionContext {

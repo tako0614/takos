@@ -8,7 +8,7 @@ Self-host static proof uses the distribution profile:
 ```sh
 cd takos
 bun run validate:distributions
-bun run distribution:smoke --manifest deploy/distributions/selfhosted.json
+bun run distribution:smoke --source deploy/distributions/selfhosted.json
 ```
 
 実 Docker Compose proof は operator-owned local evidence です。

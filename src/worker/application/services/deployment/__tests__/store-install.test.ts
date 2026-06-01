@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@takos/test/assert";
 
 import { compareSemver, getUpdateType } from "../store-install.ts";
 

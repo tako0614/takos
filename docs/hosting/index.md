@@ -6,7 +6,7 @@
 [Deploy](/deploy/) を参照してください。
 
 Takos product/operator distribution は 5 つのホスティング target runbook を持ちます。 `takos-private/distribution.yml`
-でターゲットを選び、`deno task distribute:apply` を実行すると対応するバックエンド (wrangler / Helm / docker-compose)
+でターゲットを選び、`bun run distribute:apply` を実行すると対応するバックエンド (wrangler / Helm / docker-compose)
 にディスパッチされます。target ごとの production parity は operator evidence で確認する必要があります。このページの
 runbook だけで全 target の live readiness を保証しません。
 
@@ -43,20 +43,20 @@ target 固有 prerequisites / live evidence です:
 ```bash
 # 1. operator/Takosumi runtime secret 5 個 + per-cloud encryption key を発行
 cd takos-private
-deno task generate:keys:production --per-cloud
+bun run generate:keys:production --per-cloud
 
 # 2. distribution.yml を編集 (kernel_host.target を決める)
 cp distribution.yml.example distribution.yml
 $EDITOR distribution.yml
 
 # 3. dry-run で plan を確認
-deno task distribute:dry-run --confirm production
+bun run distribute:dry-run --confirm production
 
 # 4. 本番へ apply (wrangler / Helm / compose のいずれかに dispatch される)
-deno task distribute:apply --confirm production
+bun run distribute:apply --confirm production
 
 # 5. Operator account-plane seed plan を生成 (identity / billing / Installation owner)
-cd ../takosumi-cloud
+cd ../takosumi
 bun packages/cli/src/main.ts accounts seed \
   --issuer https://accounts.example.com \
   --subject tsub_admin \
@@ -97,11 +97,11 @@ multi-cloud 構成を作れます:
 
 | area                         | gate / proof                                                   | default gate |
 | ---------------------------- | -------------------------------------------------------------- | ------------ |
-| Manifest parsing / dispatch  | `takos-private` `deno task distribute:test`                    | yes          |
+| Source distribution dispatch  | `takos-private` `bun run distribute:test`                    | yes          |
 | Cloudflare reference backend | private `distribute:dry-run` + Cloudflare deploy dry-run       | opt-in       |
 | AWS / GCP / Kubernetes Helm  | private `distribute:dry-run` preflight + Helm chart validation | opt-in       |
 | Selfhosted compose packaging | private `distribute:dry-run` preflight + compose config        | opt-in       |
-| Provider materialization     | provider binding dry-runs / live smoke scripts                 | opt-in       |
+| Operator infrastructure lifecycle | PlatformService binding dry-runs / live smoke scripts      | opt-in       |
 
 Provider proof は operator が明示的に実行する opt-in proof です。CI / release gate に入れる場合も、各 provider の
 credential / cluster / account が揃った環境で gate-backed に実行してください。default docs build や kernel gate は
@@ -115,9 +115,9 @@ provider 実環境の proof を要求しません。
 次に読む target page:
 
 - [Cloudflare](/hosting/cloudflare) --- Cloudflare Workers backend
-- [AWS](/hosting/aws) --- EKS Helm overlay + AWS reference provider adapter
-- [GCP](/hosting/gcp) --- GKE Helm overlay + GCP reference provider adapter
-- [Kubernetes](/hosting/kubernetes) --- base Helm chart + k8s reference provider adapter
+- [AWS](/hosting/aws) --- EKS Helm overlay + AWS operator binding profile
+- [GCP](/hosting/gcp) --- GKE Helm overlay + GCP operator binding profile
+- [Kubernetes](/hosting/kubernetes) --- base Helm chart + k8s runtime-agent connector
 - [Self-hosted](/hosting/self-hosted) --- docker-compose + selfhosted reference adapter
 - [Multi-cloud](/hosting/multi-cloud) --- 5 target 横断 runbook
 - [Target Parity](/hosting/target-parity) --- target ごとの readiness status

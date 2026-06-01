@@ -1,120 +1,37 @@
 # 環境変数
 
-AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-> このページでわかること: AppSpec の connect/listen と Installation
-> materialization で runtime env を渡す方法。
+## Current Flow
 
-runtime env は operator / provider が Deployment apply 時に materialize
-します。アプリ author は `.takosumi.yml` の component dependency を
-same-AppSpec `connect` と platform service `listen` で構造的に宣言します。
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-env の主な入力元:
+## Takos Boundary
 
-1. sibling component の `component.output` を `connect.<binding>.output` で受ける
-   (`inject: secret-env` / `inject: env` + `prefix:`)。`env` は public/non-secret field
-   用、secret refs を含む material は `secret-env` など operator-approved
-   projection を使う
-2. takosumi-cloud が offer する `identity.primary.oidc` を `listen` する
-3. operator account plane (リファレンス実装: Takosumi Accounts) が発行する launch / Installation metadata
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
 
-## DB connection
+## API Shape
 
-```yaml
-apiVersion: v1
-metadata:
-  id: example.notes
-  name: Notes
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/worker/index.ts
-    connect:
-      db:
-        output: db.connection
-        inject: secret-env
-        prefix: DB
-  db:
-    kind: postgres
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-`db.connection` output を `web` が `connect` し、provider が作った
-connection string / secret reference が `DB_URL` などとして worker に inject
-されます。 `prefix:` を省略すれば flat key (e.g. `URL` / `HOST`)
-で展開されます。
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-## Object store prefix
+## References
 
-```yaml
-apiVersion: v1
-metadata:
-  id: example.media
-  name: Media
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/worker/index.ts
-    connect:
-      blob:
-        output: media.bucket
-        inject: secret-env
-        prefix: BLOB
-  media:
-    kind: object-store
-```
-
-`connect` の `prefix:` は object store の output を `BLOB_*` env
-として展開します。
-
-## OIDC consumer
-
-```yaml
-apiVersion: v1
-metadata:
-  id: example.portal
-  name: Portal
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/worker/index.ts
-    listen:
-      oidc:
-        path: identity.primary.oidc
-        kind: identity.oidc@v1
-        inject: secret-env
-        prefix: OIDC
-        required: true
-```
-
-`listen.oidc.path: identity.primary.oidc` を宣言すると、takosumi-cloud (operator account
-plane) が per-Installation OIDC client を発行します。`OIDC_ISSUER_URL` /
-`OIDC_CLIENT_ID` / `OIDC_REDIRECT_URI` は grant から materialize される
-non-secret runtime config です。 `OIDC_CLIENT_SECRET` は `secretRef` /
-`secret-env` 経由で注入されます。Deployment outputs や export bundle には
-non-secret config または refs だけを含め、raw secret value は入れません。
-
-## Collision Rule
-
-同じ component に materialize される env 名は一意でなければなりません。複数の
-`listen` entry / operator metadata が同じ env 名を生成する場合は dry-run で
-invalid になります。collision は `400 invalid_argument` で報告されます。
-
-## Takos Runtime Env
-
-| env                              | 由来例                 | 説明                               |
-| -------------------------------- | ---------------------- | ---------------------------------- |
-| `TAKOS_INSTALLATION_ID`          | Installation metadata  | app-local session と audit 用 ID   |
-| `TAKOSUMI_ACCOUNTS_INTERNAL_URL` | operator account plane | launch token consume 用の internal base |
-| `TAKOSUMI_ACCOUNTS_URL`          | operator account plane | public account-plane base |
-| `INSTALL_LAUNCH_INSTALLATION_ID` | launch materialization | launch token consume 対象          |
-| `OIDC_ISSUER_URL`                | `listen.oidc.path`     | OIDC issuer                        |
-| `OIDC_CLIENT_ID`                 | `listen.oidc.path`     | per-Installation OIDC client ID    |
-| `OIDC_CLIENT_SECRET`             | `listen.oidc.path`     | provider secret reference          |
-
-## 次に読むページ
-
-- [OIDC consumer](/apps/oidc-consumer)
-- [AppSpec](https://takosumi.com/docs/reference/manifest)
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

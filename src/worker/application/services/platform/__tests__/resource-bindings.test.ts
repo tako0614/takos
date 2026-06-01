@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import type { ServiceBindingRow } from "../desired-state-types.ts";
 import { toPublicResourceType } from "../../resources/capabilities.ts";

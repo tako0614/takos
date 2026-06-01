@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import { readRunBootstrapInstallationContext } from "../executor-run-state.ts";
 
 test("readRunBootstrapInstallationContext extracts install namespace context", () => {

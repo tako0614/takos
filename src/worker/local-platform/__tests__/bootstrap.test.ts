@@ -28,8 +28,8 @@ import {
   assertObjectMatch,
   assertRejects,
   assertStringIncludes,
-} from "@std/assert";
-import { assertSpyCalls, stub } from "@std/testing/mock";
+} from "@takos/test/assert";
+import { assertSpyCalls, stub } from "@takos/test/mock";
 
 const queueMocks = {
   sqsSend: () => Promise.resolve(undefined),
