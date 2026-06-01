@@ -19,12 +19,13 @@ interface GitUrlInstallModalProps {
 }
 
 interface InstallDryRunResponse {
-  appSpec?: {
-    metadata?: {
+  installPlan?: {
+    repo?: {
       id?: string;
       name?: string;
     };
   };
+  planSnapshotDigest?: string;
   source?: {
     url?: string;
     ref?: string;
@@ -32,7 +33,8 @@ interface InstallDryRunResponse {
   };
   expected?: {
     commit?: string;
-    manifestDigest?: string;
+    planSnapshotDigest?: string;
+    currentDeploymentId?: string | null;
   };
   changes?: Array<{
     op?: string;
@@ -59,7 +61,7 @@ interface InstallCatalogDryRunResponse {
     git?: string;
     ref?: string;
     commit?: string;
-    manifestPath?: string;
+    sourcePath?: string;
   };
   runtime?: {
     modes?: string[];
@@ -82,6 +84,12 @@ interface InstallCatalogDryRunResponse {
 }
 
 interface RevisionPreviewResponse {
+  expected?: {
+    commit?: string;
+    planSnapshotDigest?: string;
+    currentDeploymentId?: string | null;
+  };
+  planSnapshotDigest?: string;
   preview: {
     operation: "upgrade" | "rollback";
     next: {
@@ -139,8 +147,8 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
         t("unknownApp");
     }
     const dryRun = currentPreview as InstallDryRunResponse;
-    return dryRun.appSpec?.metadata?.name ??
-      dryRun.appSpec?.metadata?.id ?? t("unknownApp");
+    return dryRun.installPlan?.repo?.name ??
+      dryRun.installPlan?.repo?.id ?? t("unknownApp");
   };
 
   const previewSourceLabel = (
@@ -270,9 +278,12 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
         ? currentPreview.preview.next.source.commit
         : currentPreview.source?.commit;
       const expected = isRevisionPreview(currentPreview) ||
-          !("expected" in currentPreview)
-        ? undefined
-        : currentPreview.expected;
+          "expected" in currentPreview
+        ? currentPreview.expected
+        : undefined;
+      const planSnapshotDigest = "planSnapshotDigest" in currentPreview
+        ? currentPreview.planSnapshotDigest
+        : expected?.planSnapshotDigest;
       const requestBody = revision
         ? {
           git_url: gitUrl().trim(),
@@ -280,6 +291,14 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           installation_id: revision.installationId,
           operation: revision.operation,
           ...(sourceCommit ? { source_commit: sourceCommit } : {}),
+          ...(revision.operation === "upgrade"
+            ? {
+              expected_commit: expected?.commit ?? sourceCommit,
+              expected_plan_snapshot_digest: planSnapshotDigest,
+              expected_current_deployment_id:
+                expected?.currentDeploymentId ?? null,
+            }
+            : {}),
         }
         : isRevisionPreview(currentPreview)
         ? null
@@ -288,7 +307,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           ref: ref().trim(),
           ...(mode() ? { mode: mode() } : {}),
           expected_commit: expected?.commit ?? sourceCommit,
-          expected_manifest_digest: expected?.manifestDigest,
+          expected_plan_snapshot_digest: planSnapshotDigest,
           cost_ack: true,
         };
       if (!requestBody) return;

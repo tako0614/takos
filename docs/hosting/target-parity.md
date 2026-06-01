@@ -25,7 +25,7 @@ cluster / アカウント / public URL が必要な proof は operator 所有の
 | `kubernetes` | `smoke-only`  | schema validation / Helm chart ref / provider fixture proof / dry-run service smoke                                           | `helm template`、kind / k3d インストール smoke、provider live proof、service live smoke                               |
 | `selfhosted` | `smoke-only`  | schema validation / compose ref / provider fixture proof / dry-run service smoke                                              | self-host compose deploy proof、`distribution:smoke --live`、provider live proof、secret rotation runbook の evidence |
 | `local`      | `unsupported` | local compose は開発用 runtime。本番ディストリビューションには含めない                                                        | bare metal / VM 本番には `selfhosted` を使う                                                                          |
-| `azure`      | `unsupported` | Takosumi 側に provider 開発用の fixture はあるが、Takos プロダクトのディストリビューションは未整備                            | `deploy/distributions/azure.json` / artifact ref / runbook / validator / provider proof を整備した上で promotion      |
+| `azure`      | `unsupported` | Takosumi 側に provider 開発用の fixture はあるが、Takos プロダクトのディストリビューションは未整備                            | `deploy/distributions/azure.json` / artifact ref / runbook / validator / operator proof を整備した上で promotion      |
 
 ## Evidence コマンド
 
@@ -33,7 +33,7 @@ cluster / アカウント / public URL が必要な proof は operator 所有の
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ |
 | schema + artifact validation    | `cd takos && bun run validate:distributions`                                                                                                                                                                           | yes          |
 | dry-run service smoke metadata  | `cd takos && bun run distribution:smoke --all`                                                                                                                                                                         | yes          |
-| ターゲット別 live service smoke | `cd takos && bun run distribution:smoke --manifest deploy/distributions/<target>.json --live`                                                                                                                          | no           |
+| ターゲット別 live service smoke | `cd takos && bun run distribution:smoke --source deploy/distributions/<target>.json --live`                                                                                                                          | no           |
 | provider fixture proof          | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json bun run live-provisioning-smoke`                                      | no           |
 | provider live proof             | `cd takosumi && TAKOSUMI_PLUGIN_LIVE_PROVIDER=<target> TAKOSUMI_PLUGIN_LIVE_PROOF_MODE=live TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json bun run live-provisioning-smoke` | no           |
 

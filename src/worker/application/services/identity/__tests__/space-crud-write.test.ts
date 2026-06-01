@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals, assertExists } from "@takos/test/assert";
 
 import type { Env } from "../../../../shared/types/index.ts";
 import { spaceCrudDeps } from "../space-crud-shared.ts";

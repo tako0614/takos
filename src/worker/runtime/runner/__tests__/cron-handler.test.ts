@@ -1,6 +1,6 @@
 import { test } from "bun:test";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@takos/test/assert";
 
 import {
   reenqueueStaleRunningRuns,

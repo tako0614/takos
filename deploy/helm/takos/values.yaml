@@ -28,9 +28,9 @@ images:
     repository: takos/takosumi
     tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
-  takosumiCloud:
+  takosumiAccounts:
     registry: ghcr.io
-    repository: takos/takosumi-cloud-accounts
+    repository: takos/takosumi-accounts
     tag: ""  # Set by CI release pipeline. Do not use "latest" in production.
     pullPolicy: IfNotPresent
   takosGit:
@@ -105,7 +105,7 @@ services:
         cpu: 2
         memory: 2Gi
 
-  takosumiCloud:
+  takosumiAccounts:
     replicaCount: 1
     port: 8787
     healthPath: /healthz

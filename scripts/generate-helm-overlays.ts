@@ -42,7 +42,7 @@ const targets: OverlayTarget[] = [
 const serviceValueKeys: Record<string, string> = {
   'takos-worker': 'takosWorker',
   takosumi: 'takosumi',
-  'takosumi-cloud': 'takosumiCloud',
+  'takosumi-accounts': 'takosumiAccounts',
   'takos-git': 'takosGit',
   'takos-agent': 'takosAgent',
 };
@@ -194,7 +194,7 @@ function generateOverlay(
     '        memory: 2Gi',
     '  takosumi:',
     '    replicaCount: 3',
-    '  takosumiCloud:',
+    '  takosumiAccounts:',
     '    replicaCount: 2',
     '  takosGit:',
     '    replicaCount: 2',

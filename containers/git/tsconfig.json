@@ -19,15 +19,6 @@
     "strict": true,
     "skipLibCheck": true,
     "paths": {
-      "@std/assert": [
-        "./shims/std/assert.ts"
-      ],
-      "@std/fmt/colors": [
-        "./shims/std/colors.ts"
-      ],
-      "@std/testing/mock": [
-        "./shims/std/mock.ts"
-      ],
       "takosumi-contract/internal/rpc": [
         "../../../takosumi/src/contract/internal-rpc.ts"
       ],

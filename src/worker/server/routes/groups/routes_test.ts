@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
@@ -121,6 +121,38 @@ test("groups routes do not expose direct rollback routes", async () => {
       const response = await createApp().request(
         path,
         { method: "POST" },
+        { DB: {} } as Env,
+      );
+      assertEquals(response.status, 404);
+    }
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("groups routes are read-only inventory routes", async () => {
+  routeAuthDeps.requireSpaceAccess = async () =>
+    ({ space: { id: "space-1" } }) as never;
+  try {
+    for (
+      const request of [
+        { path: "/spaces/space-1/groups", method: "POST" },
+        { path: "/spaces/space-1/groups/group-1/metadata", method: "PATCH" },
+        { path: "/spaces/space-1/groups/group-1/desired", method: "PUT" },
+        { path: "/spaces/space-1/groups/plan", method: "POST" },
+        { path: "/spaces/space-1/groups/apply", method: "POST" },
+        { path: "/spaces/space-1/groups/group-1/plan", method: "POST" },
+        { path: "/spaces/space-1/groups/group-1/apply", method: "POST" },
+        { path: "/spaces/space-1/groups/group-1", method: "DELETE" },
+      ]
+    ) {
+      const response = await createApp().request(
+        request.path,
+        {
+          method: request.method,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        },
         { DB: {} } as Env,
       );
       assertEquals(response.status, 404);

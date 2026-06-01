@@ -1,6 +1,6 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
-import { assertSpyCalls, stub } from "@std/testing/mock";
+import { assertEquals } from "@takos/test/assert";
+import { assertSpyCalls, stub } from "@takos/test/mock";
 import { createDispatchWorker, type DispatchEnv } from "../../dispatch.ts";
 import {
   selectDeploymentTargetFromRoutingTarget,

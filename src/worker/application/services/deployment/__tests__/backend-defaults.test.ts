@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import type { DeploymentEnv } from "../models.ts";
 import { resolveDefaultDeploymentBackendName } from "../backend-defaults.ts";

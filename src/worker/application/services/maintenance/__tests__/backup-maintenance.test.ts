@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import type { ObjectStoreBinding } from "../../../../shared/types/bindings.ts";
 import { UnsupportedOperationError } from "../../../../shared/utils/unsupported-operation.ts";

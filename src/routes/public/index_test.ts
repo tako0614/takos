@@ -1,8 +1,4 @@
 import { deepStrictEqual, ok } from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { test } from 'bun:test';
 import app from './index.ts';
 import { isGitSmartHttpPath } from './shared/api/forwarding.ts';
@@ -48,7 +44,7 @@ test('isGitSmartHttpPath matches only structured Git Smart HTTP service paths', 
   deepStrictEqual(isGitSmartHttpPath('/api/explore/catalog'), false);
 });
 
-test('public v3 deployment create requires GitOps deploy intent config', async () => {
+test('public v3 deployment create is retired after authentication', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiFetch(calls, { unexpected: true }, 500);
   try {
@@ -63,32 +59,27 @@ test('public v3 deployment create requires GitOps deploy intent config', async (
         mode: 'apply',
         space_id: 'space_1',
         group: 'docs',
-        appSpec: {
-          apiVersion: 'v1',
-          metadata: { id: 'example.docs', name: 'Example Docs' },
-          components: {},
-        },
+        source: { kind: 'git', url: 'https://example.test/app.git', ref: 'main' },
       }),
     });
     const body = await response.json() as {
       error: { code: string; message: string };
     };
 
-    deepStrictEqual(response.status, 503);
+    deepStrictEqual(response.status, 410);
     deepStrictEqual(calls.length, 0);
-    deepStrictEqual(body.error.code, 'DEPLOY_INTENT_NOT_CONFIGURED');
+    deepStrictEqual(body.error.code, 'GONE');
   } finally {
     restore();
   }
 });
 
-test('public v3 deployment create authenticates before disclosing deploy-intent config', async () => {
+test('public v3 deployment create authenticates before disclosing backend retirement', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const restore = stubTakosumiFetch(calls, { unexpected: true }, 500);
   try {
     // No auth headers: an unauthenticated caller must NOT be able to probe
-    // whether GitOps deploy intent is configured (would otherwise leak via the
-    // 503 DEPLOY_INTENT_NOT_CONFIGURED response). Auth runs first -> 401.
+    // deployment backend configuration. Auth runs first -> 401.
     const response = await app.request(TAKOS_PUBLIC_API_PATHS.deployments, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -96,11 +87,7 @@ test('public v3 deployment create authenticates before disclosing deploy-intent 
         mode: 'apply',
         space_id: 'space_1',
         group: 'docs',
-        appSpec: {
-          apiVersion: 'v1',
-          metadata: { id: 'example.docs', name: 'Example Docs' },
-          components: {},
-        },
+        source: { kind: 'git', url: 'https://example.test/app.git', ref: 'main' },
       }),
     });
     const body = await response.json() as {
@@ -114,98 +101,8 @@ test('public v3 deployment create authenticates before disclosing deploy-intent 
   }
 });
 
-test('public v3 deployment create writes GitOps deploy intent when configured', async () => {
-  const repo = await createLocalDeploymentRepo();
+test('public v3 deployment create remains retired for apply requests', async () => {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
-  const originalFetch = globalThis.fetch;
-  const restoreDeployIntentEnv = setEnv({
-    DEPLOY_INTENT_DRIVER: 'gitops',
-    DEPLOY_INTENT_REMOTE: repo.remote,
-    DEPLOY_INTENT_TOKEN: 'local-token',
-    DEPLOY_INTENT_BRANCH: 'main',
-    DEPLOY_INTENT_AUTHOR_NAME: 'Takos Bot',
-    DEPLOY_INTENT_AUTHOR_EMAIL: 'bot@example.test',
-    TAKOS_INTERNAL_API_SECRET: 'trusted-proxy-secret',
-  });
-  globalThis.fetch = (input, init) => {
-    calls.push({
-      url: input instanceof Request ? input.url : String(input),
-      method: input instanceof Request ? input.method : requestInitMethod(init),
-      body: {},
-    });
-    return Promise.resolve(
-      Response.json({ unexpected: true }, { status: 500 }),
-    );
-  };
-  try {
-    const response = await app.request(TAKOS_PUBLIC_API_PATHS.deployments, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-takos-internal-secret': 'trusted-proxy-secret',
-        'x-takos-account-id': 'acct_1',
-      },
-      body: JSON.stringify({
-        mode: 'apply',
-        space_id: 'space_1',
-        group: 'docs',
-        appSpec: {
-          apiVersion: 'v1',
-          metadata: { id: 'example.docs', name: 'Example Docs' },
-          components: {},
-        },
-      }),
-    });
-    const body = await response.json() as {
-      accepted: boolean;
-      mode: string;
-      intent: { id: string; path: string; branch: string; commit: string };
-    };
-    const intentText = await gitShow(
-      repo.root,
-      repo.remote,
-      `main:${body.intent.path}`,
-    );
-    const intent = JSON.parse(intentText) as Record<string, unknown>;
-
-    deepStrictEqual(response.status, 202);
-    deepStrictEqual(calls.length, 0);
-    deepStrictEqual(body.accepted, true);
-    deepStrictEqual(body.mode, 'gitops');
-    deepStrictEqual(body.intent.branch, 'main');
-    deepStrictEqual(body.intent.path.startsWith('deployments/deploy-'), true);
-    deepStrictEqual(typeof body.intent.commit, 'string');
-    deepStrictEqual(intent.kind, 'takos.deploy-intent@v1');
-    deepStrictEqual(intent.id, body.intent.id);
-    deepStrictEqual(intent.mode, 'apply');
-    deepStrictEqual(intent.appSpec, {
-      apiVersion: 'v1',
-      metadata: { id: 'example.docs', name: 'Example Docs' },
-      components: {},
-    });
-    deepStrictEqual(
-      (intent.metadata as Record<string, unknown>).spaceId,
-      'space_1',
-    );
-    deepStrictEqual((intent.metadata as Record<string, unknown>).group, 'docs');
-    deepStrictEqual(
-      (intent.metadata as Record<string, unknown>).actorAccountId,
-      'acct_1',
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-    restoreDeployIntentEnv();
-    await rm(repo.root, { recursive: true });
-  }
-});
-
-test('public v3 deployment create rejects unmanaged direct deploy when GitOps is configured', async () => {
-  const calls: Array<{ url: string; method: string; body: unknown }> = [];
-  const restoreDeployIntentEnv = setEnv({
-    DEPLOY_INTENT_DRIVER: 'gitops',
-    DEPLOY_INTENT_REMOTE: 'https://git.example.test/inst/deploy.git',
-    DEPLOY_INTENT_TOKEN: 'secret-token',
-  });
   const restore = stubTakosumiFetch(calls, { unexpected: true }, 500);
   try {
     const response = await app.request(TAKOS_PUBLIC_API_PATHS.deployments, {
@@ -217,10 +114,9 @@ test('public v3 deployment create rejects unmanaged direct deploy when GitOps is
       },
       body: JSON.stringify({
         mode: 'apply',
-        deploy_intent: { mode: 'unmanaged' },
         space_id: 'space_1',
         group: 'docs',
-        appSpec: { name: 'docs' },
+        source: { kind: 'git', url: 'https://example.test/app.git', ref: 'main' },
       }),
     });
     const body = await response.json() as {
@@ -232,7 +128,6 @@ test('public v3 deployment create rejects unmanaged direct deploy when GitOps is
     deepStrictEqual(calls.length, 0);
   } finally {
     restore();
-    restoreDeployIntentEnv();
   }
 });
 
@@ -255,19 +150,6 @@ test('public v3 deployment create rejects retired inline workflow deploys', asyn
         mode: 'apply',
         space_id: 'space_1',
         group: 'docs',
-        manifest: {
-          name: 'docs',
-          compute: {
-            gateway: {
-              build: {
-                fromWorkflow: {
-                  path: '.takos/workflows/deploy.yml',
-                  job: 'bundle',
-                },
-              },
-            },
-          },
-        },
         source: {
           kind: 'inline',
           artifacts: [{
@@ -288,11 +170,9 @@ test('public v3 deployment create rejects retired inline workflow deploys', asyn
     deepStrictEqual(response.status, 400);
     deepStrictEqual(calls.length, 0);
     deepStrictEqual(body.error.code, 'INVALID_ARGUMENT');
-    ok(body.error.message, 'source.kind="inline"');
-    ok(body.error.message, 'takosumi init');
-    ok(body.error.message, 'takosumi install dry-run/apply');
-    ok(body.error.message, 'AppSpec');
-    ok(body.error.message, 'GitOps deploy intent');
+    ok(body.error.message.includes('source.kind="inline"'));
+    ok(body.error.message.includes('Takosumi Source install/deploy flow'));
+    ok(body.error.message.includes('expected.planSnapshotDigest'));
   } finally {
     restore();
   }
@@ -6293,51 +6173,6 @@ function setEnv(
   return () => {
     for (const [key, value] of previous) restoreEnv(key, value);
   };
-}
-
-function makeTempDir(
-  options: string | { prefix?: string } = {},
-): Promise<string> {
-  const prefix = typeof options === 'string'
-    ? options
-    : options.prefix ?? 'takos-';
-  return mkdtemp(join(tmpdir(), prefix));
-}
-
-async function createLocalDeploymentRepo(): Promise<{
-  root: string;
-  remote: string;
-}> {
-  const root = await makeTempDir({ prefix: 'takos-worker-deploy-intent-' });
-  const remote = `${root}/remote.git`;
-  const seed = `${root}/seed`;
-  await runGit(['init', '--bare', remote], root);
-  await runGit(['clone', remote, seed], root);
-  await runGit(['checkout', '-b', 'main'], seed);
-  await runGit(['config', 'user.name', 'Takos Test'], seed);
-  await runGit(['config', 'user.email', 'test@example.test'], seed);
-  await writeFile(`${seed}/README.md`, 'seed\n');
-  await runGit(['add', 'README.md'], seed);
-  await runGit(['commit', '-m', 'seed'], seed);
-  await runGit(['push', 'origin', 'main'], seed);
-  return { root, remote };
-}
-
-async function gitShow(
-  cwd: string,
-  gitDir: string,
-  ref: string,
-): Promise<string> {
-  return await runGit(['--git-dir', gitDir, 'show', ref], cwd);
-}
-
-async function runGit(args: readonly string[], cwd: string): Promise<string> {
-  try {
-    return execFileSync('git', [...args], { cwd, encoding: 'utf8' });
-  } catch (error) {
-    const stderr = (error as { stderr?: string }).stderr ?? '';
-    throw new Error(`git ${args.join(' ')} failed: ${stderr}`);
-  }
 }
 
 function requestInitMethod(init: unknown): string {

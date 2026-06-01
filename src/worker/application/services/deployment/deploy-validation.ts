@@ -11,7 +11,7 @@
  * entry point `runDeployValidations` runs them all and `assertDeployValid`
  * throws if anything failed.
  *
- * Validators implemented (per AppSpec/publication docs and
+ * Validators implemented (per Takosumi Source/publication docs and
  * `architecture/app-publications.md`):
  *
  *   1. validateAttachedNotRouteTarget    — `route.target` references an

@@ -17,7 +17,6 @@ import {
 } from "../../../types/index.ts";
 import { WorkersTab } from "../../workers/tabs/WorkersTab.tsx";
 import { ResourcesTab } from "../../workers/tabs/ResourcesTab.tsx";
-import { GroupsPage } from "../../groups/GroupsPage.tsx";
 import { WorkerDetailContainer } from "../../workers/detail/WorkerDetailContainer.tsx";
 import { ResourceDetailContainer } from "../../workers/detail/ResourceDetailContainer.tsx";
 import { CreateResourceModal } from "../../workers/modals/CreateResourceModal.tsx";
@@ -28,9 +27,7 @@ interface DeployPanelProps {
   spaceId: string;
   spaces?: Space[];
   activeSection: DeploySection;
-  groupId?: string;
   onSectionChange?: (section: DeploySection) => void;
-  onGroupSelect?: (groupId: string | null) => void;
   onClose?: () => void;
   user: User | null;
   userSettings: UserSettings | null;
@@ -50,7 +47,6 @@ const DEPLOY_SECTION_META: Record<
     icon: <Icons.Database class="w-3.5 h-3.5" />,
     labelKey: "resources",
   },
-  groups: { icon: <Icons.Users class="w-3.5 h-3.5" />, labelKey: "groups" },
 };
 
 const SECTIONS: {
@@ -189,16 +185,6 @@ export function DeployPanel(rawProps: DeployPanelProps) {
               />
             )}
           </>
-        );
-
-      case "groups":
-        return (
-          <GroupsPage
-            spaceId={props.spaceId}
-            groupId={props.groupId}
-            embedded
-            onGroupSelect={props.onGroupSelect}
-          />
         );
 
       default:

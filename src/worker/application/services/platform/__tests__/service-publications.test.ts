@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@takos/test/assert";
 
 import {
   assertManifestPublicationPrerequisites,

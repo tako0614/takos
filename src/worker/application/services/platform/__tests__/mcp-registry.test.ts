@@ -1,6 +1,6 @@
 import { test } from "bun:test";
-import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
-import { stub } from "@std/testing/mock";
+import { assertEquals, assertRejects, assertStringIncludes } from "@takos/test/assert";
+import { stub } from "@takos/test/mock";
 
 import {
   listMcpServers,

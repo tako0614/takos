@@ -1,69 +1,37 @@
 # ロールバック
 
-> このページでわかること: インストール済みアプリを以前のバージョンに戻す方法。
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-ロールバックは Installation のバージョンを戻す操作です。
+## Current Flow
 
-## Installation rollback
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-install された app は resolved source identity、`.takosumi.yml` AppSpec digest、
-Deployment record を Installation ledger に pin しています。source identity は
-git source なら commit、prepared source なら prepared archive payload digest
-(`source.digest` / dry-run guard の `expected.sourceDigest`) です。rollback は
-以前の pinned Deployment を選び、Installation の current pointer をその retained
-Deployment へ戻します。新しい Deployment record は作りません。source の再 fetch
-/ rebuild は行わず、retained activation/materialization snapshot を使って
-runtime pointer / routing assignment を target に戻します。provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません。
+## Takos Boundary
 
-```bash
-takosumi rollback inst_abc dep_previous
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+
+## API Shape
+
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-成功すると Installation の `currentDeploymentId` が target Deployment を指し、
-ledger に rollback event が残ります。
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-## Kernel rollback
+## References
 
-rollback は retained Deployment を入力に、Installation の current pointer を
-過去の `succeeded` Deployment へ戻します。operation metadata / audit は
-append-only ですが、Deployment は追加しません。internal activation / routing
-details は reference architecture の実装メモです。
-
-## 戻るもの
-
-- retained Deployment の runtime pointer / routing assignment
-- retained Deployment の public/non-secret outputs
-- AppSpec の `publish` / `listen` declaration から materialize された runtime
-  binding
-- retained source identity / manifest digest / retained evidence refs
-
-## 戻らないもの
-
-- provider resource contents and schema state
-- database の data
-- object store / key-value の data
-- migration result
-- 外部 API で発生した副作用
-- Accounts 側で現在有効な issuer / billing / authorization policy
-
-DB migration は expand-only にし、destructive change は段階的に進めます。
-
-## Retention requirements
-
-rollback target には次が残っている必要があります。
-
-- manifest snapshot
-- resolved source identity
-- retained succeeded Deployment
-- source identity (`commit` or prepared archive payload digest)
-- `Deployment.status == "succeeded"`
-- public/non-secret outputs
-- retained activation evidence / exposure health summary
-
-これらが GC された Deployment は rollback target にできません。
-
-## Next
-
-- [Deployment Group](/deploy/deploy-group)
-- [Git / Store install](/deploy/store-deploy)
-- [トラブルシューティング](/deploy/troubleshooting)
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

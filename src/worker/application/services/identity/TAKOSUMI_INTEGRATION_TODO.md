@@ -43,7 +43,7 @@ handling.
 ### Billing export
 
 App-local metering exists in `schema-app-usage.ts`. Old billing routes return
-410 Gone. `.takosumi.yml` declares
+410 Gone. `package.json` declares
 `listen.billing.path: billing.primary.default` (optional). No export of usage
 data to Takosumi Accounts billing surfaces exists yet.
 

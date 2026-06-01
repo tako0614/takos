@@ -14,9 +14,9 @@
 Takos の app-local profile (chat / memory / preferences) は `takos` が
 所有します。一方で **Takosumi Account の identity-level privacy (OIDC subject /
 authentication / billing identity) は operator account plane (リファレンス実装: Takosumi Accounts) が所有**します。
-Takosumi kernel は generic PaaS の AppSpec / Deployment / resource graph /
-operator execution surface、takosumi は installer / Deployment lifecycle
-であり、Takos の個人データ access / export / deletion handler は Takos Web / API
+Takosumi kernel は generic PaaS の Source / Installation / Deployment /
+PlatformService ledger surface であり、infra provisioning は operator
+distribution workflow が所有します。Takos の個人データ access / export / deletion handler は Takos Web / API
 の app-local boundary を扱い、identity-level の data subject request は operator
 account plane へ forward します。
 

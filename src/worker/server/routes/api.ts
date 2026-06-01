@@ -371,7 +371,7 @@ export function createApiRouter({
   apiRouter.route("/events", createEventsRouter()); // SSE route at /api/events for space lifecycle events (auth handled internally)
   apiRouter.route("/", pullRequests); // Pull request routes for code review
   apiRouter.route("/", appInstallationsRouter); // Installation-backed app install routes
-  apiRouter.route("/", groupsRouter); // Group management routes at /api/spaces/:id/groups
+  apiRouter.route("/", groupsRouter); // Read-only runtime group inventory at /api/spaces/:id/groups
   // ================================================================
   // 7. Auth routes (login is public, others require auth)
   // ================================================================

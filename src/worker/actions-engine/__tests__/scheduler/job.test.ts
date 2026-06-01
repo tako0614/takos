@@ -14,7 +14,7 @@ import {
   StepRunner,
 } from "../../scheduler/step.ts";
 
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@takos/test/assert";
 
 function expectStoredAndEventResultSnapshots(
   eventResult: JobResult | undefined,

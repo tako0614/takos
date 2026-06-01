@@ -26,7 +26,6 @@ export const DEFAULT_APP_BINDING_TYPES: readonly DefaultAppBindingType[] = [
   "database.postgres@v1",
   "object-store.s3-compatible@v1",
   "domain.http@v1",
-  "deploy-intent.gitops@v1",
   "install-launch-token@v1",
 ];
 
@@ -287,13 +286,13 @@ export function assertValidHomepage(homepage: string): void {
   }
 }
 
-export function assertValidEntryManifest(entryManifest: string): void {
+export function assertValidSourcePath(sourcePath: string): void {
   if (
-    entryManifest.startsWith("/") ||
-    entryManifest.split("/").some((part) => part === "..")
+    sourcePath.startsWith("/") ||
+    sourcePath.split("/").some((part) => part === "..")
   ) {
     throw new Error(
-      `default app distribution entry.entryManifest must be a repository-relative path: ${entryManifest}`,
+      `default app distribution entry.sourcePath must be a repository-relative path: ${sourcePath}`,
     );
   }
 }
@@ -374,9 +373,9 @@ export function normalizeEntry(
     maxItems: 10,
     label: "tag",
   });
-  const entryManifest = readOptionalString(record, "entryManifest") ??
-    readOptionalString(record, "entry_manifest");
-  if (entryManifest) assertValidEntryManifest(entryManifest);
+  const sourcePath = readOptionalString(record, "sourcePath") ??
+    readOptionalString(record, "source_path");
+  if (sourcePath) assertValidSourcePath(sourcePath);
   const runtimeModes = normalizeRuntimeModes(
     record.runtimeModes ?? record.runtime_modes,
   );
@@ -406,7 +405,7 @@ export function normalizeEntry(
       record.refType ?? defaults.refType,
       "entry.refType",
     ),
-    ...(entryManifest ? { entryManifest } : {}),
+    ...(sourcePath ? { sourcePath } : {}),
     ...(runtimeModes ? { runtimeModes } : {}),
     ...(bindings ? { bindings } : {}),
     preinstall,

@@ -10,7 +10,7 @@ import {
   assertNotEquals,
   assertObjectMatch,
   assertRejects,
-} from "@std/assert";
+} from "@takos/test/assert";
 
 const tempDirs: string[] = [];
 

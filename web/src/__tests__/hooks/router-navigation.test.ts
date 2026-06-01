@@ -33,7 +33,6 @@ test("normalizeNavigationState - clears stale storage state when entering storag
     {
       view: "storage",
       spaceId: "ws-2",
-      groupId: undefined,
       storagePath: "/docs",
       filePath: undefined,
       fileLine: undefined,
@@ -94,7 +93,6 @@ test("normalizeNavigationState - preserves explicit clears while staying in chat
     {
       view: "chat",
       spaceId: "ws-1",
-      groupId: undefined,
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
@@ -156,7 +154,6 @@ test("normalizeNavigationState - preserves explicit clears while staying in stor
     {
       view: "storage",
       spaceId: "ws-1",
-      groupId: undefined,
       storagePath: "/docs",
       filePath: undefined,
       fileLine: undefined,

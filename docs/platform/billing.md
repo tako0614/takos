@@ -7,7 +7,7 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
 はオペレーターの請求書に含まれる形で課金されます。
 
 - 契約・支払い方法は
-  [Takosumi Account](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+  [Takosumi Account](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
   に紐づく
 - Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort
   に報告する立場
@@ -15,7 +15,7 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
 
 ::: warning Public paid access このページの Plus / Pay As You Go と Stripe
 Checkout は operator account plane (リファレンス実装: Takosumi Accounts) の current contract
-を説明するものです。`takosumi-cloud` reference implementation の public paid
+を説明するものです。`takosumi` reference implementation の public paid
 checkout は、managed offering launch-readiness evidence、`acceptedReady: true`
 topology reports、`ready: true` public summary、saved live audit、 canonical
 digest、separate operator approval、sanitized public summary
@@ -37,7 +37,7 @@ Billed by <operator>
 | Product name       | Takos Plus                                   |
 | Contract owner     | operator account plane / BillingPort         |
 | Product usage      | Takos plan / Takos product usage             |
-| Invoice issuer     | operator (managed example は Takosumi Cloud) |
+| Invoice issuer     | operator (managed example は Takosumi) |
 | Billing line items | Takos plan + compute / storage / model usage |
 
 ## プラン
@@ -48,7 +48,7 @@ Billed by <operator>
 | **Plus**          | `plan_plus` | サブスクリプション | operator が public paid access を開いた後に Stripe Checkout で契約     |
 | **Pay As You Go** | `plan_payg` | プリペイド残高     | operator が paid checkout を開いた後にクレジットを購入して残高から消費 |
 
-プランは課金アカウントごとに 1 つです。takosumi-cloud Accounts では、operator が
+プランは課金アカウントごとに 1 つです。takosumi Accounts では、operator が
 managed offering gate を開いた場合に Takosumi Accounts の Stripe checkout
 endpoint からサブスクリプション / 支払い checkout session を作成し、Stripe
 webhook で billing 状態を更新します。
@@ -204,7 +204,7 @@ curl -X POST "$ACCOUNTS_BILLING_ENDPOINT/v1/billing/stripe/checkout" \
 
 ## Topup Packs
 
-takosumi-cloud Accounts は top-up pack catalog の public `GET` endpoint を
+takosumi Accounts は top-up pack catalog の public `GET` endpoint を
 公開していません。オペレーターの dashboard / install UI で top-up SKU を表示
 する場合は、operator 側の catalog config から Stripe の `priceId` を選び、
 `/v1/billing/stripe/checkout` に `mode: "payment"` と metadata (例:
@@ -332,7 +332,7 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 
 ## API 一覧
 
-current `takosumi-cloud` Accounts reference implementation の billing HTTP
+current `takosumi` Accounts reference implementation の billing HTTP
 surface は、Stripe checkout / webhook と Installation scoped usage report ingest
 です。
 
@@ -352,11 +352,11 @@ hardening として扱います。
 
 ## 関連ドキュメント
 
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
   —契約主体 / billing owner / OIDC issuer の詳細
 - [Takosumi Installation Lifecycle](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
   — Takos app installation と billing の関係
-- [App Installation Ledger](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/app-installation.md)
+- [App Installation Ledger](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)
   — installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize /
   export 時の billing 再紐付け

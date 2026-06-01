@@ -1,145 +1,37 @@
 # はじめてのアプリ
 
-AppSpec examples in this page use short kind names such as `worker`, `gateway`,
-`postgres`, and `object-store` as operator-profile aliases. URI kind values are
-also valid. Gateway `listeners` and `routes` live inside the adopted gateway
-descriptor `spec`; they are not AppSpec core fields.
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-> このページでわかること: シンプルな Worker アプリを作って Takos
-> にデプロイするまでの手順。所要時間 10 分。
+## Current Flow
 
-## 作るもの
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-- HTTP で "Hello" を返すシンプルな Worker アプリ
-- Takosumi Accounts の OIDC material を受け取る AppSpec wiring を確認する
+## Takos Boundary
 
-## 前提
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
 
-- `takosumi` CLI がインストール済み
-- Takosumi Accounts の PAT (Personal Access Token) を設定済み
+## API Shape
 
-## 1. プロジェクトを作る
-
-```bash
-mkdir my-first-app && cd my-first-app
-npm init -y
-mkdir -p src
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-## 2. Worker のコードを書く
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-```typescript
-// src/worker/index.ts
-export default {
-  async fetch(
-    request: Request,
-    env: {
-      OIDC_ISSUER_URL?: string;
-      OIDC_CLIENT_ID?: string;
-      OIDC_CLIENT_SECRET?: string;
-      OIDC_REDIRECT_URI?: string;
-      TAKOS_INSTALLATION_ID?: string;
-    },
-  ): Promise<Response> {
-    return new Response(
-      `Hello from Takos! (installation=${env.TAKOS_INSTALLATION_ID ?? "n/a"})`,
-      { headers: { "content-type": "text/plain" } },
-    );
-  },
-};
-```
+## References
 
-AppSpec は `identity.primary.oidc` の listen を宣言します。operator account
-plane が OIDC binding material を払い出し、provider / operator projection が
-`OIDC_*` runtime env として worker に渡します。この tutorial の worker は public
-hello endpoint だけを実装し、OIDC login / callback / launch consume handler は
-実装しません。認証付きアプリでは標準的な OIDC client ライブラリで
-`OIDC_ISSUER_URL` を使います。
-
-## 3. マニフェストを書く
-
-```yaml
-# .takosumi.yml
-apiVersion: v1
-metadata:
-  id: examples.my-first-app
-  name: my-first-app
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/worker/index.ts
-    listen:
-      oidc:
-        path: identity.primary.oidc
-        kind: identity.oidc@v1
-        inject: secret-env
-        prefix: OIDC
-        required: true
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: web.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-          host: my-first-app.example.com
-          tls: auto
-      routes:
-        - listener: public
-          path: /
-          to: upstream
-```
-
-adopted gateway/ingress component は public endpoint を作ります。launcher や
-health の runtime path は worker 実装と Takos product metadata で扱います。
-
-## 4. runtime file を確認
-
-この tutorial の `--source .` は local/demo 用で、kernel process から同じ
-filesystem path が見える場合だけ使います。AppSpec の `spec.entrypoint` は
-resolved source 内に既に存在する runtime file を指します。managed operator に送
-る場合は build service / CI が必要な runtime file を含む prepared source archive
-を作り、その archive URL と archive payload `source.digest` を Installer API に
-渡します。dry-run response の `expected.sourceDigest` は Installer が取得
-payload から計算した resolved digest で、apply 時の TOCTOU guard です。
-
-## 5. Install dry-run と apply
-
-```bash
-# インストール内容の dry-run
-takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
-
-# デプロイ
-takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
-```
-
-成功すると Installation が作成され、最初の Deployment が記録されます。
-
-## 認証付きアプリに進む場合
-
-この tutorial のコードは認証 handler を実装していません。認証付きアプリでは:
-
-- **通常ログイン**: app が `/auth/oidc/login` などの route から Takosumi
-  Accounts にリダイレクトされ、コールバックでセッションが作られます
-- **初回インストール直後**: launch token を app の launch consume handler が
-  Accounts `/consume` で redeem します
-
-OIDC の設定 (clientId, clientSecret 等) は AppSpec で
-`listen.oidc.path: identity.primary.oidc` を宣言するだけで、 takosumi-cloud
-(operator account plane、リファレンス実装: Takosumi Accounts)
-がインストール時に自動で払い出します。 worker は secretRef-mediated `OIDC_*` env
-を読みます。
-
-詳しくは [OIDC consumer](/apps/oidc-consumer) を参照。
-
-## 次のステップ
-
-- [プロジェクト構成](/get-started/project-structure) — `.takosumi.yml` の全体像
-- [Worker + Database](/examples/worker-with-db) — DB を追加する
-- [Worker + Container](/examples/worker-with-container) — Docker
-  コンテナと組み合わせる
-- [サンプル集](/examples/) —その他のサンプル
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

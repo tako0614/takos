@@ -6,7 +6,7 @@ import {
   TAKOS_API_URL_ENV_NAME,
 } from "../takos-managed.ts";
 
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@takos/test/assert";
 
 test("takos-managed constants are stable", () => {
   assertEquals(TAKOS_API_URL_ENV_NAME, "TAKOS_API_URL");

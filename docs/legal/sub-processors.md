@@ -1,6 +1,6 @@
 # Legal: Sub-processors (Public Launch Baseline)
 
-> このページでわかること: Takosumi Cloud リファレンスディストリビューションが
+> このページでわかること: Takosumi リファレンスディストリビューションが
 > public launch 時に利用する operator-side sub-processor の概要、用途、変更通知ポリシー。
 
 **Template — operator review required before public launch.** 各 operator は
@@ -16,12 +16,12 @@ sub-processor 一覧 (DPA 添付資料) は [Sub-processors](/legal/subprocessor
 | ------------- | ---------------------------------------------------- |
 | Owner         | Operator data protection owner                       |
 | Last reviewed | `[EFFECTIVE_DATE]`                                   |
-| Scope         | Takosumi Cloud reference distribution (public launch) |
+| Scope         | Takosumi reference distribution (public launch) |
 | Status        | Template — pre-public-launch baseline                |
 
 ## 1. リファレンスディストリビューションの sub-processor
 
-`[OPERATOR_NAME]` が運用する Takosumi Cloud リファレンスディストリビューションは、
+`[OPERATOR_NAME]` が運用する Takosumi リファレンスディストリビューションは、
 以下の sub-processor を利用します:
 
 | Provider                          | 役割                              | 用途                                            | Data category                            |
@@ -51,7 +51,7 @@ sub-processor 一覧 (DPA 添付資料) は [Sub-processors](/legal/subprocessor
 
 ## 3. オペレーター固有 sub-processor の差異
 
-> **Note**: 本ページは Takosumi Cloud リファレンスディストリビューションの sub-processor
+> **Note**: 本ページは Takosumi リファレンスディストリビューションの sub-processor
 > 一覧です。**Alternative operator distribution (self-hosted / on-prem / 別 SaaS)
 > は異なる sub-processor 構成を持つ場合があります**。
 >

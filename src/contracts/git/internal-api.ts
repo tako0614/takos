@@ -293,7 +293,6 @@ export interface GitSourceSnapshotRequest {
   repositoryId: string;
   sourceRef: string;
   path?: string;
-  manifestPath?: string;
 }
 
 export interface GitSourceSnapshotFile {
@@ -312,13 +311,6 @@ export interface GitSourceSnapshotResponse {
   commitSha: string;
   digest: string;
   path: string;
-  manifestPath: string;
-  manifest?: {
-    path: string;
-    objectId: string;
-    digest: string;
-    content: string;
-  };
   files: GitSourceSnapshotFile[];
   capturedAt: string;
 }

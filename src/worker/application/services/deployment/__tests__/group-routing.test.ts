@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects } from "@takos/test/assert";
 
 import { reconcileGroupRouting } from "../group-routing.ts";
 import type { GroupDesiredState, ObservedGroupState } from "../group-state.ts";

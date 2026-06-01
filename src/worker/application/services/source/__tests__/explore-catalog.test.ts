@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import type { Env } from "../../../../shared/types/index.ts";
 import { listCatalogItems } from "../explore-catalog.ts";
@@ -66,7 +66,7 @@ async function withDeployManifestAvailability<T>(
   fn: () => Promise<T>,
 ): Promise<T> {
   return await withDeployManifestPath(
-    available ? ".takosumi.yml" : null,
+    available ? "package.json" : null,
     fn,
   );
 }
@@ -349,7 +349,7 @@ test("listCatalogItems marks repository packages installed from Accounts ledger 
   });
 });
 
-test("listCatalogItems requires .takosumi.yml when git objects are available", async () => {
+test("listCatalogItems requires package.json when git objects are available", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -397,7 +397,7 @@ test("listCatalogItems requires .takosumi.yml when git objects are available", a
   });
 });
 
-test("listCatalogItems accepts .takosumi.yml when git objects are available", async () => {
+test("listCatalogItems accepts package.json when git objects are available", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -432,7 +432,7 @@ test("listCatalogItems accepts .takosumi.yml when git objects are available", as
     deployments: [],
   });
 
-  await withDeployManifestPath(".takosumi.yml", async () => {
+  await withDeployManifestPath("package.json", async () => {
     const deployable = await listCatalogItems(db, {
       sort: "stars",
       limit: 20,
@@ -457,11 +457,11 @@ test("filterDeployablePackageReleases keeps only manifest-backed releases", asyn
     listDirectory:
       (async (_bucket: unknown, treeSha: string, path = "") =>
         path === "" && treeSha === "tree-1"
-          ? [{ name: ".takosumi.yml", mode: "100644", sha: "blob-1" }]
+          ? [{ name: "package.json", mode: "100644", sha: "blob-1" }]
           : []) as typeof sourceServiceDeps.gitStore.listDirectory,
     getBlobAtPath:
       (async (_bucket: unknown, treeSha: string, filePath: string) =>
-        treeSha === "tree-1" && filePath === ".takosumi.yml"
+        treeSha === "tree-1" && filePath === "package.json"
           ? new Uint8Array([1])
           : null) as typeof sourceServiceDeps.gitStore.getBlobAtPath,
   };
@@ -560,7 +560,7 @@ test("listCatalogItems includes default app distribution entries in the catalog"
       repositoryUrl: "https://github.com/tako0614/takos-docs.git",
       ref: "main",
       refType: "branch",
-      entryManifest: ".takosumi.yml",
+      sourcePath: "package.json",
       runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
       bindings: [
         { name: "auth", type: "identity.oidc@v1", required: true },
@@ -591,7 +591,7 @@ test("listCatalogItems includes default app distribution entries in the catalog"
     description: "Rich text document editor",
     publisher: "takos",
     homepage: "https://github.com/tako0614/takos-docs",
-    manifest_path: ".takosumi.yml",
+    source_path: "package.json",
     runtime_modes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },
@@ -635,7 +635,7 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
       repositoryUrl: "https://github.com/tako0614/road-to-me.git",
       ref: "v0.1.0",
       refType: "tag",
-      entryManifest: ".takosumi.yml",
+      sourcePath: "backend/package.json",
       runtimeModes: ["dedicated", "self-hosted"],
       bindings: [
         { name: "auth", type: "identity.oidc@v1", required: true },
@@ -659,7 +659,7 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
     description: "AI goal planning app for reverse timeline planning.",
     publisher: "takos",
     homepage: "https://github.com/tako0614/road-to-me",
-    manifest_path: ".takosumi.yml",
+    source_path: "backend/package.json",
     runtime_modes: ["dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },

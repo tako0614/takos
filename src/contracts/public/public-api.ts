@@ -9,24 +9,27 @@ export type DeploymentMode = 'apply';
 
 export interface DeploymentCreateRequest {
   mode: DeploymentMode;
-  appSpec: unknown;
+  source?: {
+    kind: 'git' | 'prepared' | 'local';
+    url: string;
+    ref?: string;
+    digest?: string;
+  };
+  expected?: {
+    commit?: string;
+    sourceDigest?: string;
+    planSnapshotDigest: string;
+    currentDeploymentId?: string | null;
+  };
   target_id?: string;
   group?: string;
   env?: string;
   space_id?: string;
-  deploy_intent?: {
-    mode?: 'gitops';
-  };
 }
 
-export interface DeployIntentAcceptedResponse {
-  accepted: true;
-  mode: 'gitops';
-  intent: {
-    id: string;
-    driver: 'gitops';
-    path: string;
-    branch: string;
-    commit: string;
+export interface RetiredDeploymentCreateResponse {
+  error: {
+    code: 'GONE';
+    message: string;
   };
 }

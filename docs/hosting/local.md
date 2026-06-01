@@ -58,16 +58,16 @@ clone、主要 service の疎通を確認する CI 用 smoke です。
 | サービス      | ポート  | 役割                                        |
 | ------------- | ------- | ------------------------------------------- |
 | `takos-worker` | `8787`  | OIDC consumer / Web UI / public API / queue / scheduled Worker |
-| `takosumi`    | `8788`  | AppSpec install / Deployment apply engine   |
+| `takosumi`    | `8788`  | Source resolution / Installation / Deployment ledger engine |
 | `takos-agent` | `8789`  | agent execution service                     |
 | `takos-git`   | `8790`  | Git hosting service                         |
 | `postgres`    | `15432` | PostgreSQL                                  |
 | `redis`       | `16379` | Redis（queue/cache backing）                |
 
 local での user-defined app workload 実行は Takosumi installer / kernel と
-provider/runtime-agent connector 経由で扱います。AppSpec の source
-fetch、`publish` / `listen` resolution、Installation materialization は
-`takosumi`、build は build service / CI、Git hosting は `takos-git`、agent
+runtime-agent connector 経由で扱います。Source resolution、PlatformService inventory
+binding resolution、Deployment evidence recording は `takosumi`、infra provisioning
+は operator-owned workflow、build は build service / CI、Git hosting は `takos-git`、agent
 実行は `takos-agent` の責務です。
 
 private server stack の基準は `takos-private/`

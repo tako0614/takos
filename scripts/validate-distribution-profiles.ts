@@ -21,7 +21,7 @@ const requiredServices = [
   'takos-git',
   'takos-worker',
   'takosumi',
-  'takosumi-cloud',
+  'takosumi-accounts',
 ] as const;
 const optionalServices = [] as const;
 const expectedServices = [...requiredServices, ...optionalServices] as const;
@@ -53,8 +53,8 @@ const expectedArtifacts: Record<ExpectedTargetId, readonly ExpectedArtifact[]> =
   cloudflare: [
     { kind: 'wrangler', ref: '../takosumi/deploy/cloudflare/wrangler.toml' },
     { kind: 'operator', ref: '../takosumi/deploy/cloudflare' },
-    { kind: 'wrangler', ref: '../takosumi-cloud/deploy/cloudflare/wrangler.toml' },
-    { kind: 'operator', ref: '../takosumi-cloud/deploy/cloudflare' },
+    { kind: 'wrangler', ref: '../takosumi/deploy/accounts-cloudflare/wrangler.toml' },
+    { kind: 'operator', ref: '../takosumi/deploy/accounts-cloudflare' },
   ],
   gcp: [
     { kind: 'terraform', ref: 'deploy/terraform/environments/gcp-prod' },
@@ -108,11 +108,11 @@ const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, E
       artifact: 'worker:takosumi',
       internalUrl: 'https://takosumi.internal.takos.example',
     },
-    'takosumi-cloud': {
+    'takosumi-accounts': {
       runtime: 'worker',
       artifactField: 'artifactRef',
-      artifact: 'worker:takosumi-cloud-accounts',
-      internalUrl: 'https://takosumi-cloud.internal.takos.example',
+      artifact: 'worker:takosumi-accounts',
+      internalUrl: 'https://takosumi-accounts.internal.takos.example',
       publicUrl: 'https://accounts.takos.example.com',
     },
     'takos-git': {
@@ -316,11 +316,11 @@ function kubernetesLikeServiceSpecs(
       artifact: 'ghcr.io/takos/takosumi:latest',
       internalUrl: 'http://takosumi.takos-system.svc.cluster.local:8080',
     },
-    'takosumi-cloud': {
+    'takosumi-accounts': {
       runtime,
       artifactField: 'image',
-      artifact: 'ghcr.io/takos/takosumi-cloud-accounts:latest',
-      internalUrl: 'http://takosumi-cloud.takos-system.svc.cluster.local:8787',
+      artifact: 'ghcr.io/takos/takosumi-accounts:latest',
+      internalUrl: 'http://takosumi-accounts.takos-system.svc.cluster.local:8787',
       publicUrl: 'https://accounts.takos.example.com',
     },
     'takos-git': {
@@ -353,11 +353,11 @@ function processServiceSpecs(): Record<ExpectedServiceId, ExpectedServiceSpec> {
       artifact: 'ghcr.io/takos/takosumi:latest',
       internalUrl: 'http://takosumi:8080',
     },
-    'takosumi-cloud': {
+    'takosumi-accounts': {
       runtime: 'process',
       artifactField: 'image',
-      artifact: 'ghcr.io/takos/takosumi-cloud-accounts:latest',
-      internalUrl: 'http://takosumi-cloud:8787',
+      artifact: 'ghcr.io/takos/takosumi-accounts:latest',
+      internalUrl: 'http://takosumi-accounts:8787',
       publicUrl: 'https://accounts.takos.example.internal',
     },
     'takos-git': {
@@ -549,7 +549,7 @@ function validateServices(services: readonly unknown[], label: string, targetId:
       return;
     }
     const smokeRecord = smoke as JsonRecord;
-    const expectedHealthPath = serviceId === 'takosumi-cloud' ? '/healthz' : '/health';
+    const expectedHealthPath = serviceId === 'takosumi-accounts' ? '/healthz' : '/health';
     expectString(
       stringAt(smokeRecord, 'healthPath', `${label}.services[${index}].smoke`),
       expectedHealthPath,

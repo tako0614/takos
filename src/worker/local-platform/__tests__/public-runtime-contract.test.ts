@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
-import { assert, assertEquals, assertRejects, assertStringIncludes } from '@std/assert';
+import { assert, assertEquals, assertRejects, assertStringIncludes } from '@takos/test/assert';
 
 const controlRoot = import.meta.dirname!;
 const takosRoot = path.resolve(controlRoot, '../../../..');

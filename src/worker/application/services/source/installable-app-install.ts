@@ -62,7 +62,7 @@ export type InstallableAppApplyInput = InstallableAppSourceInput & {
   runtimeBaseUrl?: string;
   sourceCommit?: string;
   expectedCommit?: string;
-  expectedManifestDigest?: string;
+  expectedPlanSnapshotDigest?: string;
   costAck?: boolean;
 };
 
@@ -73,6 +73,9 @@ export type InstallableAppRevisionInput = InstallableAppSourceInput & {
   operation: InstallableAppRevisionOperation;
   sourceCommit?: string;
   reason?: string;
+  expectedCommit?: string;
+  expectedPlanSnapshotDigest?: string;
+  expectedCurrentDeploymentId?: string | null;
 };
 
 export type InstallableAppUpstreamResponse = {
@@ -391,11 +394,11 @@ export async function applyInstallableAppInstallation(
       ref: input.ref,
       ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
     },
-    ...(input.expectedCommit && input.expectedManifestDigest
+    ...(input.expectedCommit && input.expectedPlanSnapshotDigest
       ? {
         expected: {
           commit: input.expectedCommit,
-          manifestDigest: input.expectedManifestDigest,
+          planSnapshotDigest: input.expectedPlanSnapshotDigest,
         },
       }
       : {}),
@@ -435,6 +438,10 @@ export async function applyInstallableAppRevision(
   const url = input.operation === "rollback"
     ? rollbackUrl(config, input.installationId)
     : deploymentApplyUrl(config, input.installationId);
+  const hasExpectedCurrentDeploymentId = Object.prototype.hasOwnProperty.call(
+    input,
+    "expectedCurrentDeploymentId",
+  );
   return await postInstallableAppJson(url, {
     ...(input.operation === "rollback" ? { deploymentId: input.ref } : {
       source: {
@@ -443,6 +450,16 @@ export async function applyInstallableAppRevision(
         ref: input.ref,
         ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
       },
+      ...(input.expectedCommit && input.expectedPlanSnapshotDigest &&
+          hasExpectedCurrentDeploymentId
+        ? {
+          expected: {
+            commit: input.expectedCommit,
+            planSnapshotDigest: input.expectedPlanSnapshotDigest,
+            currentDeploymentId: input.expectedCurrentDeploymentId ?? null,
+          },
+        }
+        : {}),
     }),
     ...(input.reason ? { reason: input.reason } : {}),
   }, token);

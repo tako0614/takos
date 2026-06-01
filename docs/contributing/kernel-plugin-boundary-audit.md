@@ -33,7 +33,7 @@ Takosumi のドキュメントを kernel-only
 - Docker、Cloudflare、Postgres、Redis、S3、KMS、secret backend を「kernel
   の完了に必要な作業」として記述すること。
 - self-host / cloud deploy proof を kernel release gate に含めること。
-- provider / backend / adapter の選択を public manifest や public deploy API
+- provider / backend / adapter の選択を public source や public deploy API
   に露出させること。
 - `takos-deploy` / `takos-runtime` を PaaS internal domain ではなく default の
   top-level service 境界として書くこと。

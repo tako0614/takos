@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import type { AppManifest } from "../../source/app-manifest-types.ts";
 import { compileGroupDesiredState } from "../group-state.ts";

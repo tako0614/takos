@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { combineSignals, throwIfAborted } from "../abort.ts";
 import { AppError } from "../errors.ts";
 
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@takos/test/assert";
 
 // ---------------------------------------------------------------------------
 // throwIfAborted

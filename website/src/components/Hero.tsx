@@ -48,13 +48,14 @@ export default function Hero() {
               # どこにでも install できるが、 一番速いのは Use Takos。
             </span>
             {'\n'}
-            <span class='k'>$</span> open https://cloud.takosumi.com/dashboard/use-takos{'\n'}
+            <span class='k'>$</span> open https://accounts.takosumi.com/dashboard/use-takos{'\n'}
             <span class='k'>$</span>&nbsp;&nbsp;&nbsp;→ Account / Space / launch{'\n'}
             <span class='c'>
-              # 自前 substrate では AppSpec を install lifecycle に渡す:
+              # 自前 substrate では Git source を install lifecycle に渡す:
             </span>
             {'\n'}
-            <span class='k'>$</span> takosumi install --source . --space my-space{'\n'}
+            <span class='k'>$</span> bun x @takosjp/takosumi install dry-run \{'\n'}
+            <span class='k'>$</span>&nbsp;&nbsp;--source git:https://github.com/you/takos#main --space my-space{'\n'}
             <span class='c'>✓ takos-worker → http://your-takos.example/</span>
             {'\n'}
             <span class='c'>✓ takos-git → docs / files / agents</span>

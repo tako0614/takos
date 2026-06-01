@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertStringIncludes } from "@std/assert";
+import { assertStringIncludes } from "@takos/test/assert";
 import { createPollingRunObservationStream } from "../observation.ts";
 
 test("run SSE polling stream emits buffered events and closes on terminal status", async () => {

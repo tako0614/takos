@@ -19,7 +19,7 @@ import {
   assertEquals,
   assertObjectMatch,
   assertStringIncludes,
-} from "@std/assert";
+} from "@takos/test/assert";
 
 function createFakeContainerBackend(): ContainerBackend {
   type FakeContainerState = {

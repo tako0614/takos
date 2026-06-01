@@ -15,11 +15,11 @@ const expectedServices = [
     valuesKey: 'takosumi',
   },
   {
-    id: 'takosumi-cloud',
-    deploymentFile: 'deployment-takosumi-cloud.yaml',
-    serviceFile: 'service-takosumi-cloud.yaml',
-    imageKey: 'takosumiCloud',
-    valuesKey: 'takosumiCloud',
+    id: 'takosumi-accounts',
+    deploymentFile: 'deployment-takosumi-accounts.yaml',
+    serviceFile: 'service-takosumi-accounts.yaml',
+    imageKey: 'takosumiAccounts',
+    valuesKey: 'takosumiAccounts',
   },
   {
     id: 'takos-git',

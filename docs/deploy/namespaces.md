@@ -7,7 +7,7 @@ Takos product 自体は単一の public/control Worker (`takos-worker`) と Clou
 しません。
 
 Workers for Platforms の dispatch namespace は、operator が tenant workload を Cloudflare Workers backend に
-明示的に載せたい場合だけ使う backend-specific option です。AppSpec には書きません。
+明示的に載せたい場合だけ使う backend-specific option です。public Source v1 の入力には書きません。
 
 ## 役割
 
@@ -25,7 +25,7 @@ wrangler dispatch-namespace create takos-staging-tenants
 ```
 
 作成した namespace は Cloudflare target の operator config から control plane に接続します。local / self-host / AWS /
-GCP / Kubernetes target では同じ概念を manifest に露出しません。
+GCP / Kubernetes target では同じ概念を source に露出しません。
 
 ## Group との違い
 

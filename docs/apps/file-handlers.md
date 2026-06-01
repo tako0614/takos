@@ -1,124 +1,37 @@
 # File Handlers
 
-AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-> このページでわかること: ファイルタイプに応じてアプリで開く仕組み。
+## Current Flow
 
-File handler はストレージ UI からファイルを対応アプリで開くための仕組みです。
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-## AppSpec
+## Takos Boundary
 
-handler UI 自体は普通の HTTP workload として deploy します。
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
 
-```yaml
-apiVersion: v1
-metadata:
-  id: com.example.docs-handler
-  name: Docs Handler
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/worker/index.ts
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: web.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-          host: docs.example.com
-          tls: auto
-      routes:
-        - listener: public
-          path: /
-          to: upstream
+## API Shape
+
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-Takosumi installer は `.takosumi.yml` から gateway descriptor spec と source file
-reference を解決して Deployment record を作ります。build が必要な source は
-prepared source snapshot として Installer API に渡します。
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-launcher endpoint は gateway descriptor spec と Takos product 内部 metadata layer (= app launcher registry、AppSpec
-contract とは別) で表現します。
+## References
 
-## App Metadata
-
-Storage UI に handler として見せる情報は app metadata / registry entry として管理します。metadata は deploy 後の
-resource output を参照できます。
-
-```yaml
-fileHandlers:
-  - name: markdown
-    title: Markdown
-    endpoint:
-      from: public.public
-      pathTemplate: /files/:id
-    mimeTypes: [text/markdown]
-    extensions: [.md]
-```
-
-`endpoint.pathTemplate` の `:id` は URL encode された file ID に置換されます。 `:id` は path segment
-として必須です。storage UI は起動時に `space_id` query parameter も付けます。
-
-この metadata は App metadata、Takos app catalog、または runtime registration に
-置き、Storage の file handler registry に materialize します。
-
-## 複数ハンドラー
-
-同じ app は複数 handler を登録できます。
-
-```yaml
-fileHandlers:
-  - name: markdown
-    title: Markdown
-    endpoint:
-      from: public.public
-      pathTemplate: /files/:id
-    mimeTypes: [text/markdown]
-    extensions: [.md]
-  - name: image
-    title: Images
-    endpoint:
-      from: public.public
-      pathTemplate: /viewer/:id
-    mimeTypes: [image/png, image/jpeg, image/gif]
-    extensions: [.png, .jpg, .jpeg, .gif]
-```
-
-metadata 内で handler name は app installation 内一意にします。
-
-## フィールド
-
-| field        | required    | 説明                                                                           |
-| ------------ | ----------- | ------------------------------------------------------------------------------ |
-| `name`       | yes         | handler の stable name                                                         |
-| `title`      | no          | UI 表示名。省略時は `name`                                                     |
-| `endpoint`   | yes         | Deployment output reference + handler path template。`:id` path segment が必須 |
-| `mimeTypes`  | conditional | 対応する MIME type のリスト                                                    |
-| `extensions` | conditional | 対応するファイル拡張子のリスト                                                 |
-
-`mimeTypes` と `extensions` は少なくとも一方が必須です。両方を指定することもできます。
-
-## Discovery API Selection Ranking
-
-`GET /api/spaces/:spaceId/storage/file-handlers?mime=...&ext=...` で複数の handler が match した場合、以下の order で
-sort されます。
-
-| rank | 条件                             |
-| ---- | -------------------------------- |
-| 0    | mime + ext 両方が exact match    |
-| 1    | mime のみ match (ext 不問)       |
-| 2    | extension のみ match (mime 不問) |
-| 3    | filter 無し (no params)          |
-
-同 rank 内では registry 登録順で tie-break します。
-
-## 次のステップ
-
-- [MCP Server](/apps/mcp) --- MCP Server の公開方法
-- [App Integration Metadata Boundary](/architecture/app-publications)
-- [Takos AppSpec examples](/deploy/manifest) --- 全体像
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

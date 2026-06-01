@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import { resolveHostnameRouting } from "../../application/services/routing/service.ts";
 import type { RoutingBindings } from "../../application/services/routing/routing-models.ts";
 

@@ -206,7 +206,7 @@ function mapDefaultAppInstallableApp(
     description: entry.description ?? null,
     publisher: entry.publisher ?? null,
     homepage: entry.homepage ?? null,
-    manifest_path: entry.entryManifest ?? null,
+    source_path: entry.sourcePath ?? null,
     runtime_modes: entry.runtimeModes ? [...entry.runtimeModes] : [],
     bindings: entry.bindings
       ? entry.bindings.map((binding) => ({ ...binding }))

@@ -7,7 +7,7 @@ Takos product docs からは、次の Takosumi tests を参照します。
 
 ```sh
 cd ../takosumi
-deno test --allow-all \
+bun test \
   packages/kernel/src/api/runtime_agent_routes_test.ts \
   packages/runtime-agent/src/server_test.ts \
   packages/all/tests/e2e_deploy_test.ts

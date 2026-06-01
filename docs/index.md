@@ -1,54 +1,37 @@
----
-layout: home
+# index
 
-hero:
-  name: Takos
-  text: AI エージェントによるソフトウェアの民主化
-  tagline: AI と会話してソフトウェアを作る。自分のサーバーで、自分のデータで。
-  actions:
-    - theme: brand
-      text: はじめる
-      link: /get-started/
-    - theme: alt
-      text: Takos の全体像
-      link: /overview/
-    - theme: alt
-      text: Install paths
-      link: /apps/install-paths
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-features:
-  - icon: 💬
-    title: AI チャット & エージェント
-    details: "AI エージェントと会話しながらソフトウェアを作成・編集。Git に自動コミットされるので、すべての変更が追跡可能"
-    link: /overview/
-  - icon: 📦
-    title: アプリをかんたんインストール
-    details: "Git URL install と bundled app auto-install の current contract。public managed signup / install apply は managed-offering:status が canOpenManagedOffering:true になるまで closed"
-    link: /apps/install-paths
-  - icon: 🏠
-    title: セルフホスト対応
-    details: "自分のサーバーにデプロイして operator / data / account plane の境界を自分で管理"
-    link: /hosting/
-  - icon: 📚
-    title: リファレンス
-    details: "API、マニフェスト仕様、用語集など"
-    link: /reference/
----
+## Current Flow
 
-## ドキュメントの読み方
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-このサイトは Takos プロダクトのドキュメントです。
+## Takos Boundary
 
-| 目的                       | 読む場所                                                                          |
-| -------------------------- | --------------------------------------------------------------------------------- |
-| Takos で何ができるか       | [全体像](/overview/)                                                              |
-| 使い始める                 | [はじめる](/get-started/)                                                         |
-| アプリのインストール方法   | [Install paths](/apps/install-paths)                                              |
-| デプロイの設定             | [Deploy](/deploy/)                                                                |
-| ホスティングと運用         | [Hosting](/hosting/)                                                              |
-| API リファレンス           | [Reference](/reference/)                                                          |
-| プラットフォーム全体の仕様 | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs)    |
-| Takosumi の読む順序        | [Takosumi reading paths](https://takosumi.com/docs/getting-started/reading-paths) |
-| Takosumi core の仕様       | [Core Specification](https://takosumi.com/docs/reference/core-spec)               |
-| Accounts・課金・ログイン   | [Takosumi Cloud entry point](https://takosumi.com/docs/reference/takosumi-cloud)  |
-| `.takosumi.yml` AppSpec    | [AppSpec reference](https://takosumi.com/docs/reference/manifest)                 |
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+
+## API Shape
+
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
+```
+
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+
+## References
+
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

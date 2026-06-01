@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertFalse } from "@std/assert";
+import { assertEquals, assertFalse } from "@takos/test/assert";
 import { readFile } from "node:fs/promises";
 import { handleRunConfig, handleRunEvent } from "../executor-control-rpc.ts";
 

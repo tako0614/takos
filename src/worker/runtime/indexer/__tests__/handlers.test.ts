@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assert, assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@takos/test/assert";
 
 import { handleIndexJobDlq, handleMemoryBuildPaths } from "../handlers.ts";
 

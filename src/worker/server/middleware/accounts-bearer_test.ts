@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import { expandTakosumiAccountsPatScopes } from "./accounts-bearer.ts";
 
 test("expandTakosumiAccountsPatScopes maps read bucket to read-only API scopes", () => {

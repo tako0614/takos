@@ -75,12 +75,12 @@ chat 開始
 ```
 
 `accounts.example.com` は operator が選ぶ Takosumi Accounts host、`takos.example.com` は launch 先の Takos host
-の例。特定の `accounts.takosumi.cloud` hostname に依存しない。
+の例。特定の `accounts.takosumi.com` hostname に依存しない。
 
 ### 2.3 Materialize / export contract
 
 operator-opened `Use Takos` で作られた Space の bundled / third-party app installation も同じ Installation contract
-に乗ります。 `takosumi-cloud accounts installations materialize/export` は current account-plane contract / rehearsal
+に乗ります。 `takosumi accounts installations materialize/export` は current account-plane contract / rehearsal
 対象であり、 operator-opened flow で live data portability を保証するものではありません。
 
 ## 3. Install from Git
@@ -135,7 +135,7 @@ fork した派生版を配る場合も同じ形。`git=` と `ref=` を fork 側
 
 Managed install UI は production install を tag か commit に pin する policy を推奨する。core Installer API は branch /
 tag / commit ref を受け取り、dry-run 時に immutable commit へ解決し、apply 時に `expected.commit` と
-`expected.manifestDigest` で reviewed-source drift を防ぐ。operator UI は必要に応じて `ref=main` / `ref=latest` のような移動 ref
+`expected.planSnapshotDigest` で reviewed-source drift を防ぐ。operator UI は必要に応じて `ref=main` / `ref=latest` のような移動 ref
 を拒否できる。
 
 ```txt
@@ -178,8 +178,8 @@ takosumi install ./my-app --ref v1.2.3 --accounts-url https://my-takosumi.exampl
 または既存 installation を export してから:
 
 ```bash
-takosumi-cloud accounts installations export inst_abc --output takos-export.tar.zst
-takosumi-cloud accounts installations import ./takos-export.tar.zst \
+takosumi accounts installations export inst_abc --output takos-export.tar.zst
+takosumi accounts installations import ./takos-export.tar.zst \
   --to https://my-takosumi.example.com \
   --account-id acct_self_host \
   --space-id space_self_host \
@@ -208,13 +208,13 @@ takosumi-cloud accounts installations import ./takos-export.tar.zst \
 | 試したいだけ / 一般ユーザー                     | public signup が開いている operator の `Use Takos`           |
 | 開発者で source を読んでから install したい     | `Install from Git`                                           |
 | fork や派生版を install したい                  | `Install from Git`                                           |
-| 専有 runtime / 高負荷耐性が要る                 | `Install from Git` (mode=dedicated) または後から materialize |
+| 専有 runtime / 高負荷耐性が要る                 | `Install from Git` (mode=dedicated) または後から runtime mode を変更 |
 | 企業 / コンプライアンス要件で自社境界に置きたい | `Self-host`                                                  |
-| Takosumi Cloud 依存を完全に切りたい             | `Self-host`                                                  |
+| Takosumi 依存を完全に切りたい             | `Self-host`                                                  |
 
 3 path は同じ ownership model に収束する設計です。ただし current docs では environment cutover や dedicated runtime
-採用を約束する案内として扱いません。live data portability は provider adapter と launch-readiness evidence が揃った
-operator だけが宣言できます。
+採用を約束する案内として扱いません。live data portability は operator-owned export / restore workflow と
+launch-readiness evidence が揃った operator だけが宣言できます。
 
 ## 6. 既存 "はじめる" への導線
 
@@ -232,7 +232,7 @@ operator だけが宣言できます。
   が着地する `shared-cell` / `dedicated` / `self-hosted` の物理構造。
 - [Installer Pipeline](https://takosumi.com/docs/reference/installer-api)
   `Install from Git` で実行される 13 step の pipeline。
-- [.takosumi.yml spec](https://takosumi.com/docs/reference/manifest) install 対象 repo
-  に置く installer-bound manifest。
+- [Source](https://takosumi.com/docs/reference/core-spec)
+  Git URL / commit / tag / package metadata などの汎用 repo metadata から resolve される install input。
 - [はじめる](/get-started/) path 選択後の最初の作業。
 - [Upgrade / Export](/platform/upgrade-export) path 間の乗り換えと export bundle の運用。

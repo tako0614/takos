@@ -8,7 +8,7 @@
 | ---------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
 | account identity       | Takosumi Accounts       | user / organization / OIDC subject / account profile                               |
 | billing                | Takosumi Accounts       | BillingPort / Stripe customer マッピング                                           |
-| Installation ledger    | Takosumi Accounts       | source identity / app manifest digest / retained evidence refs / grants / bindings |
+| Installation ledger    | Takosumi Accounts       | source identity / app plan snapshot digest / retained evidence refs / grants / bindings |
 | deployment 記録        | Takosumi kernel         | Deployment / activation pointer / provider observation / operation journal         |
 | Git リポジトリ         | Takos Git hosting       | リポジトリ metadata / refs / object storage 参照                                   |
 | agent run              | Takos agent / Takos app | プロダクト agent ワークフロー状態                                                  |
@@ -20,13 +20,13 @@
 - Takos app は account / billing / Installation ledger テーブルを所有しません。
 - Takosumi kernel はプロダクトユーザーのプロファイルや billing
   テーブルを所有しません。
-- `takos-private/` は publish 済みパッケージ・image・API・manifest
+- `takos-private/` は publish 済みパッケージ・image・API・source
   経由で接続します。
 - サービス間の wire shape は所有サービスの contract パッケージから取得します。
 
 ## 参考
 
 - [API Reference](/reference/api)
-- [Takosumi Accounts](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
 - [Takosumi kernel storage schema](https://github.com/tako0614/takosumi/blob/main/docs/reference/storage-schema.md)
-- [Installation ledger](https://github.com/tako0614/takosumi-cloud/blob/main/docs/architecture/app-installation.md)
+- [Installation ledger](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)

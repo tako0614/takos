@@ -17,7 +17,7 @@ export default function Home() {
       <Meta property='og:title' content='Takos — AI-first chat & agent, your own server.' />
       <Meta
         property='og:description'
-        content='AI-first chat product。 1-click で Takosumi Cloud に install、 自前 substrate にも .takosumi.yml AppSpec で install。'
+        content='AI-first chat product。 1-click で Takosumi に install、 自前 substrate では Git / prepared source から install。'
       />
       <Meta property='og:url' content='https://takos.jp/' />
       <Meta property='og:type' content='website' />

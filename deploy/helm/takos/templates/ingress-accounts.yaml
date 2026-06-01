@@ -30,7 +30,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "takos.fullname" . }}-takosumi-cloud
+                name: {{ include "takos.fullname" . }}-takosumi-accounts
                 port:
-                  number: {{ .Values.services.takosumiCloud.port }}
+                  number: {{ .Values.services.takosumiAccounts.port }}
 {{- end }}

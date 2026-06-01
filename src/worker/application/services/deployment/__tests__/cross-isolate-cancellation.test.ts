@@ -14,7 +14,7 @@ import { test } from "bun:test";
  * pointing both sides at the same shared state simulates the
  * cross-isolate contract per the spec.
  */
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects } from "@takos/test/assert";
 
 import { executeDeploymentPipeline } from "../execute.ts";
 import type { DeploymentEnv } from "../models.ts";

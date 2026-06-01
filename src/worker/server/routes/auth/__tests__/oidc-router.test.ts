@@ -3,14 +3,14 @@ import { Hono } from "hono";
 import * as jose from "jose";
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { assertEquals, assertExists, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertExists, assertStringIncludes } from "@takos/test/assert";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { createEphemeralAccountsHandler } from "../../../../../../../takosumi-cloud/packages/accounts-service/src/mod.ts";
+import { createEphemeralAccountsHandler } from "../../../../../../../takosumi/packages/accounts-service/src/mod.ts";
 import * as schema from "../../../../infra/db/schema.ts";
 import { accounts, authIdentities } from "../../../../infra/db/schema.ts";
 import { generateCodeChallenge } from "../../../../application/services/identity/oidc-pkce.ts";

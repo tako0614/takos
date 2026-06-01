@@ -1,86 +1,37 @@
 # takos-slide
 
-AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-> このページでわかること: バンドルアプリ takos-slide の概要。
+## Current Flow
 
-プレゼンテーションエディタ with a Streamable HTTP MCP server。
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-## 役割
+## Takos Boundary
 
-- スライドの作成・編集・閲覧
-- agent が直接使える published MCP tool surface
-- Cloudflare Workers backend
-- Takosumi Accounts OIDC consumer
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
 
-## AppSpec (`.takosumi.yml`)
+## API Shape
 
-`spec.entrypoint` points to a runtime file inside the resolved source. Managed
-install uses the prepared source produced by the build service when that file is
-generated; direct Git/local apply is valid only when the file is already present
-in the source snapshot.
-
-```yaml
-apiVersion: v1
-
-# Short kind names are operator-profile aliases. Gateway listeners/routes are
-# gateway descriptor spec fields, not AppSpec core fields.
-metadata:
-  id: jp.takos.slide
-  name: Takos Slide
-  description: Presentation editor with a Streamable HTTP MCP server.
-  publisher: takos
-  homepage: https://github.com/tako0614/takos-slide
-
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: dist/worker.js
-    connect:
-      presentations:
-        output: presentations.bucket
-        inject: secret-env
-        prefix: BLOB
-    listen:
-      oidc:
-        path: identity.primary.oidc
-        kind: identity.oidc@v1
-        inject: secret-env
-        prefix: OIDC
-        required: true
-
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: web.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-      routes:
-        - listener: public
-          path: /
-          to: upstream
-
-  presentations:
-    kind: object-store
-    spec:
-      name: takos-slide-presentations
-
-publish:
-  public:
-    output: public.public
-    path: takos-slide.http.public
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-gateway は public endpoint を作り、worker が app runtime path
-を処理します。Takos product metadata は launcher / MCP registry / capability
-request を登録します。
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-## 関連ページ
+## References
 
-- [AppSpec spec](https://takosumi.com/docs/reference/manifest)
-- [OIDC Consumer](/apps/oidc-consumer)
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 import { RolloutService, type RolloutState } from "../rollout.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 

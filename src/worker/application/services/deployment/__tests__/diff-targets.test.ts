@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import { compileGroupDesiredState } from "../group-state.ts";
 import { validateTargetsAgainstDesiredState } from "../diff.ts";

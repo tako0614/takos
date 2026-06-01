@@ -13,7 +13,7 @@ import { test } from "bun:test";
  * - 失敗したら deploy fail-fast (workload は起動扱いされず、routing は更新されない)
  */
 
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@takos/test/assert";
 
 import {
   buildProbeUrl,

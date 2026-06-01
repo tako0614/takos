@@ -1,7 +1,7 @@
 import { test } from "bun:test";
 import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 
-import { assertEquals, assertNotEquals } from "@std/assert";
+import { assertEquals, assertNotEquals } from "@takos/test/assert";
 
 import {
   createSkill,

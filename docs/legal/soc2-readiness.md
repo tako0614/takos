@@ -55,7 +55,7 @@ Out of scope for the first readiness pass:
 - Quarterly risk review meeting is scheduled.
 - Installation ledger and Takosumi Account billing model are listed in the data
   protection owner audit checklist (Takosumi Installation Lifecycle: identity / billing
-  owner = the operator-selected account plane, managed example: takosumi-cloud
+  owner = the operator-selected account plane, managed example: takosumi
   の Takosumi Accounts; Installation 台帳 = ownership primitive).
 
 ### Access Control

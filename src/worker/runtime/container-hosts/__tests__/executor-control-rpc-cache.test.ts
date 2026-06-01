@@ -1,5 +1,5 @@
 import { jest, test } from "bun:test";
-import { assertEquals, assertFalse } from "@std/assert";
+import { assertEquals, assertFalse } from "@takos/test/assert";
 import {
   __remoteToolExecutorHasForTesting,
   __remoteToolExecutorsSizeForTesting,

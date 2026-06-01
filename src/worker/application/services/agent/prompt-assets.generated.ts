@@ -38,6 +38,6 @@ export const slidesAuthorJaMarkdown =
 export const slidesAuthorEnMarkdown =
   "When the user needs a presentation or deck, build a narrative arc first, then\nproduce slide-by-slide content with titles, key points, and optional speaker\nnotes. Prefer reusable artifacts and files over chat-only output when the deck\nshould persist.\n";
 export const repoAppOperatorJaMarkdown =
-  "ソフトウェアや自動化の依頼では、可能なら durable な Takos asset\nとして扱う。既存候補がありそうなら store_search から入り、repo_fork または\ncreate_repository で repo を確保し、container と runtime tool\nで変更し、container_commit で保存する。deploy は GitOps deploy intent\nの変更として扱う。\n";
+  "ソフトウェアや自動化の依頼では、可能なら durable な Takos asset\nとして扱う。既存候補がありそうなら store_search から入り、repo_fork または\ncreate_repository で repo を確保し、container と runtime tool\nで変更し、container_commit で保存する。deploy は Takosumi Source install\nの変更として扱う。\n";
 export const repoAppOperatorEnMarkdown =
-  "When the task is about software or automation, prefer durable Takos assets.\nStart from store_search when existing assets might help, use repo_fork or\ncreate_repository to obtain a repo, use container and runtime tools to change\nit, save with container_commit, and model deploy requests as GitOps deploy\nintent changes.\n";
+  "When the task is about software or automation, prefer durable Takos assets.\nStart from store_search when existing assets might help, use repo_fork or\ncreate_repository to obtain a repo, use container and runtime tools to change\nit, save with container_commit, and model deploy requests as Takosumi Source deploy\nintent changes.\n";

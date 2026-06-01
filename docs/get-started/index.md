@@ -1,178 +1,45 @@
 # はじめる
 
-AppSpec examples in this page use short kind names such as `worker`, `gateway`, `postgres`, and `object-store` as operator-profile aliases. URI kind values are also valid. Gateway `listeners` and `routes` live inside the adopted gateway descriptor `spec`; they are not AppSpec core fields.
+This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
 
-> このページでわかること: Takos を使い始めるための 3
-> つの方法と、最初のセットアップ手順。
+## Current Flow
 
-Takos は AI
-エージェントと会話しながらソフトウェアを作成・編集できるセルフホスト型のプロダクトです。
+1. Choose a Git URL/ref or a prepared source archive.
+2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
+3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
+4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
-## 3 つの始め方
+## Takos Boundary
 
-ユースケースに合わせて選んでください。
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
 
-### 1. Use Takos —すぐに使いたい人向け
+## API Shape
 
-operator が public signup を開いている場合の最速の方法です。Account と Space
-を作成するだけで、バンドルアプリが
-自動インストールされ、チャットを始められます。
-
-::: warning Public managed offering gate この flow は local / operator-owned
-rehearsal では実装済みですが、public managed signup は private readiness
-bundle、`acceptedReady: true` topology reports、`ready: true` public
-summary、saved live audit、 separate approval が揃い、`managed-offering:status`
-が `canOpenManagedOffering: true` を返すまで closed です。公開された operator
-から案内された URL 以外では、まず Self-host または開発用 local stack
-を使ってください。 :::
-
-```text
-[Use Takos] → Account / Space 作成→バンドルアプリ自動インストール→チャット開始
+```json
+{
+  "spaceId": "space_1",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/example/app.git",
+    "ref": "main"
+  }
+}
 ```
 
-- operator が開いている shared-cell モードならビルド不要で使える
-- バンドルアプリ (docs, slide, excel, computer, yurucommu) が最初から利用可能
+Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
-詳しくは [Install paths § Use Takos](/apps/install-paths) を参照。
+## References
 
-### 2. Install from Git —開発者向け
+- [Deploy overview](/deploy/)
+- [Install paths](/apps/install-paths)
+- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)
 
-Git URL
-とバージョンタグを指定して、アプリリポジトリからインストールする方法です。
-ソースコードがコミット単位で追跡されるため、透明性と再現性を重視する開発者に向いています。
+## Public Managed Offering Gate
 
-```text
-https://<OPERATOR_INSTALL_HOST>/install?git=https://github.com/example/my-app&ref=v1.2.3
-```
-
-`<OPERATOR_INSTALL_HOST>` は、operator が public managed gate を開いた場合は
-managed install host、gate が closed の間は self-host / local operator URL
-を指します。
-
-- dry-run で ref は immutable commit に解決され、apply は expected guard
-  で固定される
-- インストール内容がすべて記録されるため、あとから監査可能
-
-詳しくは [Install paths § Install from Git](/apps/install-paths) を参照。
-
-### 3. Self-host —自前運用したい人向け
-
-Takos
-をまるごと自分のサーバーにデプロイし、データ・ログイン・課金すべてを自分で管理する方法です。
-Installation export/import は contract / API と local proof があり、production
-provider ごとの full restore は launch-readiness evidence の対象です。
-
-```bash
-# アプリのエクスポート
-takosumi-cloud accounts installations export inst_abc --output takos-export.tar.zst
-
-# 自前環境へのインポート
-takosumi-cloud accounts installations import ./takos-export.tar.zst \
-  --to https://my-takosumi.example.com \
-  --account-id acct_self_host \
-  --space-id space_self_host \
-  --subject tsub_owner
-```
-
-Keycloak、Authentik、Auth0 などの IdP も接続できます。
-
-詳しくは [Install paths § Self-host](/apps/install-paths) と
-[ホスティングガイド](/hosting/) を参照。
-
----
-
-## はじめてのデプロイ (開発者向け)
-
-ここからは、自分のアプリを Takos にデプロイしたい開発者向けの手順です。 operator
-が public signup を開いている場合に「Use
-Takos」ですぐに使いたいだけの方は、上の方法 1 に従ってください。
-
-### 1. Takos にログインする
-
-```text
-https://<YOUR_DOMAIN>/
-```
-
-ログインは Takosumi Accounts の OIDC で行います。 operator bootstrap の詳細は
-[Bootstrap](/operator/bootstrap) を参照。
-
-### 2. API トークンを発行する
-
-Takosumi Accounts の `Account Settings → Personal Access Tokens` で PAT
-を発行します。
-
-```bash
-curl -fsS \
-  -H "Authorization: Bearer $TAKOS_PAT" \
-  https://<YOUR_DOMAIN>/api/me
-```
-
-### 3. プロジェクトを用意する
-
-プロジェクトのルートに `.takosumi.yml` を作成します。
-
-```yaml
-# .takosumi.yml
-apiVersion: v1
-metadata:
-  id: com.example.my-app
-  name: my-app
-components:
-  web:
-    kind: worker
-    spec:
-      entrypoint: src/worker/index.ts
-  public:
-    kind: gateway
-    connect:
-      upstream:
-        output: web.http
-        inject: upstream
-    spec:
-      listeners:
-        public:
-          protocol: https
-          host: my-app.example.com
-          tls: auto
-      routes:
-        - listener: public
-          path: /
-          to: upstream
-```
-
-public app endpoint は adopted gateway/ingress component の gateway descriptor intent、launcher metadata は
-Takos product 内部 app metadata (= AppSpec contract とは別 layer) で表現します。
-
-### 4. runtime file を用意する
-
-```bash
-mkdir -p src
-cat > src/worker/index.ts <<'EOF'
-export default {
-  fetch() {
-    return new Response("hello from Takos");
-  },
-};
-EOF
-```
-
-### 5. デプロイする
-
-```bash
-takosumi install dry-run --source . --space "$TAKOSUMI_SPACE_ID" --json
-takosumi install --source . --space "$TAKOSUMI_SPACE_ID"
-```
-
-Takosumi installer が `.takosumi.yml` と source snapshot を読み、Deployment
-を記録します。build が必要な場合は、build service / CI が必要な runtime file
-を含む prepared source archive を Installer API に渡します。
-
-## 次のステップ
-
-- [はじめてのアプリ](/get-started/your-first-app)
-  —実際にアプリを作ってデプロイするチュートリアル
-- [プロジェクト構成](/get-started/project-structure) — `.takosumi.yml` の構成
-- [ローカル開発](/get-started/local-development) —ローカル環境のセットアップ
-- [Deploy 構成](/apps/) —マニフェストとアプリ設定のガイド
-- [サンプル集](/examples/) —コピペで始められるサンプル
-- [Takos の全体像](/overview/) —基本概念の整理
+Public managed offering gate status is checked from `takos-private` with
+`managed-offering:status`. Public signup stays `closed` until that read-only
+status reports `canOpenManagedOffering: true`; install links should use
+`https://<OPERATOR_INSTALL_HOST>/install?...` rather than a fixed production
+host while the gate is closed.

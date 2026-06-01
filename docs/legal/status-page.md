@@ -1,6 +1,6 @@
 # Legal: Status Page
 
-> このページでわかること: Takos / Takosumi Cloud リファレンスディストリビューションの
+> このページでわかること: Takos / Takosumi リファレンスディストリビューションの
 > 公開ステータスページ URL、障害分類、購読方法、障害報告連絡先。
 
 **Template — operator review required before public launch.** 公開 status page
@@ -40,7 +40,7 @@ URL と購読基盤を確定してから公開してください。
 
 ## 3. 過去の可用性
 
-ステータスページは過去 12 ヶ月分の **月次可用性** を component ごとに公開します:
+ステータスページは過去 12 ヶ月分の **月次可用性** を planned service ごとに公開します:
 
 - Takos Web / API
 - Takos Git
@@ -49,7 +49,7 @@ URL と購読基盤を確定してから公開してください。
 - OIDC issuer
 - Billing portal
 
-各 component の SLA target との比較は [SLA](/legal/sla) §1 を参照。
+各 planned service の SLA target との比較は [SLA](/legal/sla) §1 を参照。
 
 ## 4. 更新の購読
 

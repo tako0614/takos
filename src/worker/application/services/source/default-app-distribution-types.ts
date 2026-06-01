@@ -21,7 +21,6 @@ export type DefaultAppBindingType =
   | "database.postgres@v1"
   | "object-store.s3-compatible@v1"
   | "domain.http@v1"
-  | "deploy-intent.gitops@v1"
   | "install-launch-token@v1";
 
 export interface DefaultAppBindingSummary {
@@ -43,7 +42,7 @@ export interface DefaultAppDistributionEntry {
   repositoryUrl: string;
   ref: string;
   refType: DefaultAppRefType;
-  entryManifest?: string;
+  sourcePath?: string;
   runtimeModes?: DefaultAppRuntimeMode[];
   bindings?: DefaultAppBindingSummary[];
   preinstall: boolean;

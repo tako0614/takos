@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals, assertObjectMatch } from "@std/assert";
+import { assertEquals, assertObjectMatch } from "@takos/test/assert";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
@@ -326,12 +326,15 @@ test("app-installations route proxies Git URL install dry-run", async () => {
         ref: "v1.2.3",
         commit: "1111111111111111111111111111111111111111",
       },
-      manifestDigest: "sha256:abc",
-      appSpec: { metadata: { id: "example.app" }, components: {} },
+      planSnapshotDigest: "sha256:abc",
+      installPlan: {
+        repo: { id: "example.app", name: "Example App" },
+        changes: [],
+      },
       changes: [],
       expected: {
         commit: "1111111111111111111111111111111111111111",
-        manifestDigest: "sha256:abc",
+        planSnapshotDigest: "sha256:abc",
       },
     });
   };
@@ -358,7 +361,7 @@ test("app-installations route proxies Git URL install dry-run", async () => {
 
     assertEquals(response.status, 200);
     assertObjectMatch(body, {
-      manifestDigest: "sha256:abc",
+      planSnapshotDigest: "sha256:abc",
     });
     assertEquals(calls, [
       {
@@ -430,7 +433,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
           ref: "v1.2.3",
           mode: "shared-cell",
           expected_commit: "1111111111111111111111111111111111111111",
-          expected_manifest_digest: "sha256:abc",
+          expected_plan_snapshot_digest: "sha256:abc",
           cost_ack: true,
         }),
       },
@@ -476,7 +479,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
           },
           expected: {
             commit: "1111111111111111111111111111111111111111",
-            manifestDigest: "sha256:abc",
+            planSnapshotDigest: "sha256:abc",
           },
           mode: "shared-cell",
           costAck: true,
@@ -719,7 +722,7 @@ test("app-installations route requires Git URL install approval evidence", async
       error: {
         code: "BAD_REQUEST",
         message:
-          "expected_commit and expected_manifest_digest are required after install dry-run approval",
+          "expected_commit and expected_plan_snapshot_digest are required after install dry-run approval",
       },
     });
   } finally {

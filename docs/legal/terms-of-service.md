@@ -1,6 +1,6 @@
 # Legal: Terms of Service
 
-> このページでわかること: Takos / Takosumi Cloud のリファレンスディストリビューションを
+> このページでわかること: Takos / Takosumi のリファレンスディストリビューションを
 > public launch するオペレーター向けの Terms of Service (利用規約) テンプレート。
 > 契約上の counter-party、利用制限、責任制限、解約、準拠法。
 
@@ -21,12 +21,12 @@ counsel and replace all placeholder fields before publishing to end users.
 ## 1. 定義
 
 本利用規約 (以下「本規約」) は、`[OPERATOR_NAME]` (以下「当社」) が提供する Takos /
-Takosumi Cloud リファレンスディストリビューション (以下「本サービス」) の利用に関する条件を
+Takosumi リファレンスディストリビューション (以下「本サービス」) の利用に関する条件を
 定めるものです。
 
 - **「利用者」**: 本サービスを利用するために Takosumi Account を作成した自然人または法人
 - **「アカウント保有者」**: Takosumi Account の所有者であり、契約上の counter-party
-- **「Installation」**: Takosumi が `.takosumi.yml` を読み取って Space に作成する deployment unit
+- **「Installation」**: Takosumi が source input を読み取って Space に作成する deployment unit
 - **「Customer Personal Data」**: 利用者が本サービスに投入した個人データ
   ([Data Processing Agreement](/legal/data-processing-agreement) を参照)
 

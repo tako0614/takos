@@ -400,55 +400,6 @@ function ReposRoute() {
   );
 }
 
-function GroupsRoute() {
-  const auth = useAuth();
-  const navigation = useNavigation();
-  const route = createMemo(() => navigation.route);
-  const groupId = createMemo(() => route().groupId);
-  const groupsSpaceId = createMemo(() =>
-    navigation.routeSpaceId ?? navigation.selectedSpaceId ??
-      navigation.preferredSpaceId
-  );
-  const guard = useSpaceRouteGuard(() => {
-    const spaceId = groupsSpaceId();
-    return spaceId
-      ? { view: "deploy", spaceId, deploySection: "groups", groupId: groupId() }
-      : null;
-  }, route);
-  const redirectHref = createMemo(() => {
-    const spaceId = groupsSpaceId();
-    return buildPath({
-      view: "deploy",
-      spaceId: spaceId ?? undefined,
-      deploySection: "groups",
-      groupId: groupId(),
-    });
-  });
-
-  return (
-    <Switch>
-      <Match when={guard.canonicalHref()}>
-        {(href) => <Navigate href={href()} />}
-      </Match>
-      <Match when={guard.isPending()}>
-        <LoadingScreen />
-      </Match>
-      <Match when={guard.hasInvalidSpaceRoute()}>
-        <SpaceNotFoundMessage />
-      </Match>
-      <Match when={!groupsSpaceId() && !auth.spacesLoaded}>
-        <LoadingScreen />
-      </Match>
-      <Match when={!groupsSpaceId()}>
-        <NoSpaceAvailableMessage />
-      </Match>
-      <Match when={groupsSpaceId()}>
-        <Navigate href={redirectHref()} />
-      </Match>
-    </Switch>
-  );
-}
-
 function DeployRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
@@ -456,9 +407,6 @@ function DeployRoute() {
   const route = createMemo(() => navigation.route);
   const currentDeploySection = createMemo(() =>
     navigation.route.deploySection || "workers"
-  );
-  const groupId = createMemo(() =>
-    currentDeploySection() === "groups" ? route().groupId : undefined
   );
   const deploySpaceId = createMemo(() =>
     navigation.routeSpaceId ?? navigation.selectedSpaceId ??
@@ -468,7 +416,6 @@ function DeployRoute() {
     view: "deploy",
     spaceId: deploySpaceId() ?? undefined,
     deploySection: currentDeploySection(),
-    groupId: groupId(),
   }), route);
 
   return (
@@ -496,22 +443,13 @@ function DeployRoute() {
                 spaceId={spaceId()}
                 spaces={auth.spaces}
                 activeSection={currentDeploySection()}
-                groupId={groupId()}
                 onSectionChange={(section: DeploySection) => {
                   navigation.navigate({
                     view: "deploy",
                     spaceId: spaceId(),
                     deploySection: section,
-                    groupId: undefined,
                   });
                 }}
-                onGroupSelect={(nextGroupId) =>
-                  navigation.navigate({
-                    view: "deploy",
-                    spaceId: spaceId(),
-                    deploySection: "groups",
-                    groupId: nextGroupId ?? undefined,
-                  })}
                 user={auth.user}
                 userSettings={auth.userSettings}
                 onSettingsChange={(settings: UserSettings) =>
@@ -791,7 +729,6 @@ const ROUTE_COMPONENTS: Record<AppRouteComponentKey, () => JSX.Element> = {
   repo: RepoRoute,
   chat: ChatRoute,
   repos: ReposRoute,
-  groups: GroupsRoute,
   storage: StorageRoute,
   apps: AppsRoute,
   deploy: DeployRoute,

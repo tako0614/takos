@@ -2,7 +2,7 @@ import { test } from "bun:test";
 import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 
-import { assert, assertEquals, assertNotEquals } from "@std/assert";
+import { assert, assertEquals, assertNotEquals } from "@takos/test/assert";
 
 import { hashAuditIp, writeCommonEnvAuditLog } from "../audit.ts";
 

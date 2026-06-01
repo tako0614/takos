@@ -20,7 +20,7 @@ import {
   assertNotEquals,
   assertRejects,
   assertThrows,
-} from "@std/assert";
+} from "@takos/test/assert";
 
 const env = {
   ENCRYPTION_KEY:

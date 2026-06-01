@@ -26,9 +26,9 @@ raw データは `scripts/load-test/load-test-results.json` と
 | 指標                                                  | ターゲット    | 備考                                |
 | ----------------------------------------------------- | ------------- | ----------------------------------- |
 | `resolveDeployment` p50 (in-process)                  | < 50 ms       | 単一 deployment、N=10               |
-| `applyDeployment` p50 (in-process)                    | < 200 ms      | synthetic provider adapter          |
+| `applyDeployment` p50 (in-process)                    | < 200 ms      | synthetic implementation binding    |
 | HTTP API スループット (installer dry-run)             | > 500 req/sec | loopback / single isolate           |
-| Cloudflare Workers CPU 時間 / resolve (100 component) | < 30,000 ms   | Workers Free / Paid 上限 (CPU time) |
+| Cloudflare Workers CPU 時間 / resolve (100 planned service) | < 30,000 ms   | Workers Free / Paid 上限 (CPU time) |
 | HTTP エラー率 (実環境、k6)                            | < 1 %         | k6 threshold                        |
 | HTTP p95 latency (実環境、k6)                         | < 500 ms      | k6 threshold                        |
 
@@ -58,17 +58,17 @@ raw データは `scripts/load-test/load-test-results.json` と
 
 ### 2. Cloudflare Workers CPU バジェット (resolveDeployment)
 
-N 個の worker component と N 個の adopted gateway/ingress component を持つ component graph の
+N 個の worker planned service と N 個の adopted gateway/ingress planned service を持つ planned service graph の
 resolve 時間を計測しています。gateway descriptor intent は gateway の kind-specific `spec`
 に含まれます。
 
-| component 数 | 所要 (ms) | Cloudflare Workers 上限 (30,000 ms) |
+| planned service 数 | 所要 (ms) | Cloudflare Workers 上限 (30,000 ms) |
 | -----------: | --------: | ----------------------------------- |
 |           10 |      2.91 | OK (約 0.01 % 消費)                 |
 |           50 |      3.02 | OK (約 0.01 % 消費)                 |
 |          100 |      6.18 | OK (約 0.02 % 消費)                 |
 
-判定: 100 component の manifest でも Workers CPU time 30 秒制限の **0.02 %
+判定: 100 planned service の source でも Workers CPU time 30 秒制限の **0.02 %
 未満** で完了します。Workers 上で resolveDeployment を直接走らせても
 実用上の問題はありません。
 
@@ -105,7 +105,7 @@ in-process ベースライン + クラウド側トランスポートのオーバ
 | Kubernetes (in-cluster) |              ~5-15 ms |         ~3-8 秒[^1] | Postgres in-cluster + kubectl apply |
 | Self-hosted             |              ~5-10 ms |        ~3-10 秒[^1] | ローカル Postgres + provider RPC    |
 
-[^1]: `applyDeployment` の latency は provider 側の materialize 時間が支配的で、
+[^1]: `applyDeployment` の latency は operator-owned infrastructure lifecycle と runtime-agent connector の時間が支配的で、
     kernel オーケストレーションのコスト (in-process baseline) は ~100 ms
     以下に収まります。実環境のクラウドでは Workers / Lambda / Cloud Run
     のデプロイ / route attach に数秒~数十秒かかります。
@@ -182,7 +182,7 @@ repo に値を commit しないでください。
 | resolveDeployment p50 < 50 ms (N=10)         | **OK** (3.86 ms)       |
 | applyDeployment p50 < 200 ms (N=10)          | **OK** (1.65 ms)       |
 | HTTP API スループット > 500 req/sec          | **OK** (3,556 req/sec) |
-| Cloudflare Workers CPU < 30s (100 component) | **OK** (6.18 ms)       |
+| Cloudflare Workers CPU < 30s (100 planned service) | **OK** (6.18 ms)       |
 | `bun run load-test` 完走                   | **OK**                 |
 | in-process テスト 2 + k6 スクリプト 1        | **OK**                 |
 | baseline-metrics.md 完成                     | **OK**                 |

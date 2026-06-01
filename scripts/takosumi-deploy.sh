@@ -7,7 +7,7 @@
 #   TAKOSUMI_INSTALLER_TOKEN — Bearer token for Installer API
 #
 # This script:
-# 1. Packages the source as a prepared tar archive
+# 1. Packages the source tree as a prepared tar archive
 # 2. Computes the sha256 digest
 # 3. Calls POST /v1/installations (or /v1/installations/{id}/deployments)
 
@@ -39,7 +39,13 @@ fi
 # Package source as tar
 echo "Packaging source..."
 ARCHIVE=$(mktemp /tmp/takosumi-source-XXXXXX.tar)
-tar cf "$ARCHIVE" -C "$(pwd)" .takosumi.yml $(find . -name '*.ts' -o -name '*.json' -o -name '*.yml' | head -1000)
+tar cf "$ARCHIVE" -C "$(pwd)" $(
+  find . \
+    \( -path './node_modules' -o -path './.git' -o -path './dist' \) -prune -o \
+    -type f \
+    \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.json' -o -name '*.yml' -o -name '*.toml' \) \
+    -print | head -1000
+)
 DIGEST="sha256:$(sha256sum "$ARCHIVE" | cut -d' ' -f1)"
 echo "Source digest: $DIGEST"
 

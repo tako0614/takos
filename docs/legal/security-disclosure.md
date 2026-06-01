@@ -13,9 +13,9 @@
 
 Takos の customer-facing security disclosure surface は Takos Web / API +
 Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi kernel
-は generic PaaS の AppSpec / Deployment / resource graph / provider
-materialization surface、takosumi は installer / Deployment lifecycle
-であり、Takos managed service として影響する場合は Takos security intake
+は generic PaaS の Source / Installation / Deployment / PlatformService
+ledger surface であり、infra provisioning は operator distribution workflow
+が所有します。Takos managed service として影響する場合は Takos security intake
 が受け付け、必要に応じて Takosumi Accounts (identity / billing owner) を含む
 owning product root へ triage します。
 

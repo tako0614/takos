@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 

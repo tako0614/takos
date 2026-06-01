@@ -1,6 +1,6 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
-import { assertSpyCallArgs, assertSpyCalls, stub } from "@std/testing/mock";
+import { assertEquals } from "@takos/test/assert";
+import { assertSpyCallArgs, assertSpyCalls, stub } from "@takos/test/mock";
 
 import type { Env } from "../../../../types.ts";
 import { runCommonEnvScheduledMaintenance } from "../maintenance.ts";

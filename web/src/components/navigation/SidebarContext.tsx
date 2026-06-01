@@ -6,7 +6,6 @@ export interface SidebarCallbacks {
   onNewChat: () => void;
   onNavigateStorage: () => void;
   onNavigateDeploy: () => void;
-  onNavigateGroups: () => void;
   onNavigateApps: () => void;
   onNavigateStore: () => void;
   onNavigateRepos: () => void;
@@ -18,7 +17,6 @@ export interface SidebarCallbacks {
   onNavigateSpaceChat: () => void;
   onNavigateSpaceStorage: () => void;
   onNavigateSpaceDeploy: () => void;
-  onNavigateSpaceGroups: () => void;
   onNavigateSpaceRepos: () => void;
   onNavigateSpaceApps: () => void;
   onNavigateSpaceSettings: () => void;

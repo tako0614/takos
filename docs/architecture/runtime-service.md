@@ -15,12 +15,12 @@ Worker はデプロイしません。
 | ---------------------- | ----------------------------------------------------------------------------------------------- |
 | `takos-worker`         | public/control entrypoint、agent run orchestration、container dispatch、Containers host callback |
 | `takos-agent` container | エージェントの実行と Takos 固有の Rust wrapper                                                  |
-| Takosumi kernel        | デプロイのライフサイクル、plan/apply/status、provider 調整                                      |
-| implementation binding | ターゲット別のリソース materialize。takosumi.com reference implementation では provider adapter |
+| Takosumi kernel        | Source / Installation / Deployment の ledger、plan/apply/status、binding evidence 記録          |
+| implementation binding | ターゲット別の PlatformService 解決。実インフラ lifecycle は operator / runtime-agent が所有     |
 | runtime-agent          | ワークロードホストのライフサイクルと実装 RPC                                                    |
 
 Takos のコードは、Worker と containers の wire shape を `src/contracts`
-経由で呼び出します。component 間で型を generic
+経由で呼び出します。planned service 間で型を generic
 な共通パッケージに複製しません。
 
 Cloudflare profile では `src/worker/index.ts` が Hono routes と Containers DO

@@ -7,13 +7,13 @@ port と deployment tests で検証します。
 
 ```sh
 cd ../takosumi
-deno test --allow-all \
+bun test \
   packages/contract/src/plugin-sdk_test.ts \
   packages/kernel/src/domains/deploy/plan_apply_test.ts
 ```
 
 Takos product 側の distribution profile は次で、routing / binding metadata
-を含む official manifests を検証します。
+を含む official distribution artifacts を検証します。
 
 ```sh
 cd takos

@@ -1,5 +1,5 @@
 import { test } from "bun:test";
-import { assertEquals } from "@std/assert";
+import { assertEquals } from "@takos/test/assert";
 
 import type { Env } from "../shared/types/index.ts";
 import { runScheduledFamilyMaintenance } from "../application/services/maintenance/scheduled-cron.ts";

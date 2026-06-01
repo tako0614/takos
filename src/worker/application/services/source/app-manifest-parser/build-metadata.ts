@@ -1,8 +1,7 @@
 export function buildMetadataDisabledMessage(field: string): string {
   return `${field} is no longer supported by the Takos app manifest parser; ` +
-    `resolve artifacts upstream with the Takosumi installer (for example: ` +
-    `takosumi init, then takosumi install dry-run/apply) and submit a ` +
-    `.takosumi.yml AppSpec through the GitOps deploy-intent API.`;
+    `resolve artifacts upstream with the Takosumi Source install flow and ` +
+    `apply the reviewed expected guard returned by dry-run.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

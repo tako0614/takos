@@ -70,7 +70,7 @@ export function retiredTakosDeploymentProxyResponse(): Response {
   return Response.json(
     commonError(
       "GONE",
-      "Takos app no longer proxies direct Takosumi deployment APIs. Write a GitOps deploy intent from Takos, or use takosumi deploy for unmanaged kernel deploys.",
+      "Takos app no longer proxies direct Takosumi deployment APIs. Use Takosumi Source install/deploy APIs or Takosumi account-plane install flows.",
     ),
     { status: 410 },
   );

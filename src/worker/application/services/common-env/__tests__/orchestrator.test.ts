@@ -3,7 +3,7 @@ import { CommonEnvOrchestrator } from "../orchestrator.ts";
 import type { CommonEnvReconcileJobRow } from "../reconcile-jobs.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@takos/test/assert";
 
 type QueryKind = "first" | "all" | "run" | "raw";
 

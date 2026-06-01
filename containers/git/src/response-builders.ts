@@ -31,7 +31,6 @@ import { getEnv } from "./runtime.ts";
 
 const DEFAULT_MAX_BLOB_BYTES = 1024 * 1024;
 const DEFAULT_MAX_SOURCE_SNAPSHOT_FILES = 5000;
-const DEFAULT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES = 256 * 1024;
 
 export const textDecoder = new TextDecoder();
 // Strict decoder used to probe whether a NUL-free blob is genuinely valid
@@ -63,14 +62,6 @@ export function configuredSourceSnapshotFileLimit(): number {
   return envIntegerOr(
     "TAKOS_GIT_MAX_SOURCE_SNAPSHOT_FILES",
     DEFAULT_MAX_SOURCE_SNAPSHOT_FILES,
-    0,
-  );
-}
-
-export function configuredSourceSnapshotManifestByteLimit(): number {
-  return envIntegerOr(
-    "TAKOS_GIT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES",
-    DEFAULT_MAX_SOURCE_SNAPSHOT_MANIFEST_BYTES,
     0,
   );
 }
@@ -741,7 +732,6 @@ export async function buildSourceSnapshot(input: {
   defaultBranch: string;
   sourceRef: string;
   path?: string;
-  manifestPath?: string;
 }): Promise<
   | { ok: true; response: GitSourceSnapshotResponse }
   | {
@@ -791,13 +781,12 @@ export async function buildSourceSnapshot(input: {
     };
   }
   const snapshotPath = input.path?.trim() || ".";
-  const manifestPath = input.manifestPath?.trim() || "takos.json";
-  if (!isSafeTreePath(snapshotPath) || !isSafeTreePath(manifestPath)) {
+  if (!isSafeTreePath(snapshotPath)) {
     return {
       ok: false,
       status: 400,
       body: {
-        error: "path and manifestPath must be safe repository-relative paths",
+        error: "path must be a safe repository-relative path",
         code: "invalid_git_tree_path",
         repositoryId: input.repositoryId,
       },
@@ -827,34 +816,12 @@ export async function buildSourceSnapshot(input: {
     };
   }
 
-  const manifestFile = filesResult.files.find((file) =>
-    file.path === manifestPath
-  );
-  const maxManifestBytes = configuredSourceSnapshotManifestByteLimit();
-  if (manifestFile && manifestFile.size > maxManifestBytes) {
-    return {
-      ok: false,
-      status: 422,
-      body: {
-        error: "source snapshot manifest exceeds configured byte limit",
-        code: "git_source_snapshot_manifest_too_large",
-        repositoryId: input.repositoryId,
-        sourceRef: input.sourceRef,
-        objectId: manifestFile.objectId,
-      },
-    };
-  }
-  const manifest = manifestFile
-    ? await readManifest(repositoryPath, manifestFile)
-    : undefined;
   const digest = await snapshotDigest({
     repositoryId: input.repositoryId,
     sourceRef: input.sourceRef,
     commitSha,
     path: snapshotPath,
-    manifestPath,
     files: filesResult.files,
-    manifestDigest: manifest?.digest,
   });
   return {
     ok: true,
@@ -866,8 +833,6 @@ export async function buildSourceSnapshot(input: {
       commitSha,
       digest,
       path: snapshotPath,
-      manifestPath,
-      manifest,
       files: filesResult.files,
       capturedAt: new Date().toISOString(),
     },
@@ -927,34 +892,11 @@ async function readTreeFiles(
   return { ok: true, files };
 }
 
-async function readManifest(
-  repositoryPath: string,
-  file: GitSourceSnapshotFile,
-): Promise<GitSourceSnapshotResponse["manifest"]> {
-  const output = await runGit([
-    "--git-dir",
-    repositoryPath,
-    "cat-file",
-    "-p",
-    file.objectId,
-  ]);
-  if (!output.success) return undefined;
-  const content = textDecoder.decode(output.stdout);
-  return {
-    path: file.path,
-    objectId: file.objectId,
-    digest: await sha256Hex(content),
-    content,
-  };
-}
-
 async function snapshotDigest(input: {
   repositoryId: string;
   sourceRef: string;
   commitSha: string;
   path: string;
-  manifestPath: string;
-  manifestDigest?: string;
   files: GitSourceSnapshotFile[];
 }): Promise<string> {
   return await sha256Hex(JSON.stringify({

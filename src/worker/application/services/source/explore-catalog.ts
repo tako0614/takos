@@ -7,7 +7,7 @@ import {
 } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { toReleaseAssets } from "./repo-release-assets.ts";
-import { selectAppManifestPathFromRepo } from "./app-manifest-bundle.ts";
+import { selectInstallableSourcePathFromRepo } from "./app-manifest-bundle.ts";
 import type {
   CatalogDeploySourceResponse,
   CatalogItemResponse,
@@ -56,7 +56,7 @@ function isDirectoryEntry(entry: { mode: string }): boolean {
   return entry.mode === "040000" || entry.mode === "40000";
 }
 
-async function listRepoManifestPaths(
+async function listRepoSourcePaths(
   gitObjects: ObjectStoreBinding,
   treeSha: string,
 ): Promise<string[] | null> {
@@ -113,19 +113,19 @@ export async function hasDeployManifestForRelease(
     );
     if (!commit?.tree) return false;
 
-    const manifestPath = selectAppManifestPathFromRepo(
-      await listRepoManifestPaths(gitObjects, commit.tree) ?? [],
+    const sourcePath = selectInstallableSourcePathFromRepo(
+      await listRepoSourcePaths(gitObjects, commit.tree) ?? [],
     );
-    if (!manifestPath) return false;
+    if (!sourcePath) return false;
 
-    const manifestBlob = await sourceServiceDeps.gitStore.getBlobAtPath(
+    const sourceBlob = await sourceServiceDeps.gitStore.getBlobAtPath(
       gitObjects,
       commit.tree,
-      manifestPath,
+      sourcePath,
     );
-    return !!manifestBlob;
+    return !!sourceBlob;
   } catch (error) {
-    sourceServiceDeps.logWarn("Failed to verify release manifest for catalog", {
+    sourceServiceDeps.logWarn("Failed to verify release source for catalog", {
       repoId: release.repoId,
       tag: release.tag,
       error: error instanceof Error ? error.message : String(error),
