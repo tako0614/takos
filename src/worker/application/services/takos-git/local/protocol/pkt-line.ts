@@ -23,10 +23,6 @@ export function flushPkt(): Uint8Array {
   return TEXT_ENCODER.encode("0000");
 }
 
-export function delimPkt(): Uint8Array {
-  return TEXT_ENCODER.encode("0001");
-}
-
 export interface PktLine {
   type: "data" | "flush" | "delim";
   data?: Uint8Array;
@@ -76,25 +72,4 @@ export function pktLineText(line: PktLine): string {
   // Strip trailing newline
   if (text.endsWith("\n")) text = text.slice(0, -1);
   return text;
-}
-
-/**
- * Build a response from multiple pkt-line segments.
- */
-export function buildPktLineResponse(...segments: Uint8Array[]): Uint8Array {
-  return concatBytes(...segments);
-}
-
-/**
- * Encode a side-band-64k frame.
- * Channel 1 = pack data, Channel 2 = progress, Channel 3 = error
- */
-export function encodeSideBandData(
-  channel: number,
-  data: Uint8Array,
-): Uint8Array {
-  const payload = new Uint8Array(1 + data.length);
-  payload[0] = channel;
-  payload.set(data, 1);
-  return encodePktLine(payload);
 }

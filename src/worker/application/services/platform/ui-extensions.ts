@@ -4,21 +4,13 @@
  * bundle deployment による UI 拡張の管理
  */
 
-import { getDb as realGetDb, uiExtensions } from "../../../infra/db/index.ts";
-import { and, asc, count as drizzleCount, eq } from "drizzle-orm";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import type { ObjectStoreBinding } from "../../../shared/types/bindings.ts";
-import { textDate } from "../../../shared/utils/db-guards.ts";
 import {
   isPublicationType,
   listPublications,
   type PublicationRecord,
   publicationResolvedUrl,
 } from "./service-publications.ts";
-
-export const uiExtensionDeps = {
-  getDb: realGetDb,
-};
 
 export interface UIExtension {
   id: string;
@@ -37,10 +29,6 @@ export interface UIExtension {
   createdAt: string;
 }
 
-export interface UIExtensionWithBundle extends UIExtension {
-  bundleUrl?: string;
-}
-
 type UISidebarItem = {
   label: string;
   icon: string;
@@ -48,19 +36,6 @@ type UISidebarItem = {
   url?: string;
   extensionId: string;
 };
-
-function parseSidebarJson(json: string): UIExtension["sidebar"] | undefined {
-  try {
-    const parsed = JSON.parse(json);
-    if (typeof parsed !== "object" || parsed === null) return undefined;
-    if (typeof parsed.label !== "string" || typeof parsed.icon !== "string") {
-      return undefined;
-    }
-    return parsed as UIExtension["sidebar"];
-  } catch {
-    return undefined;
-  }
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -103,106 +78,6 @@ function sidebarItemFromUiSurfacePublication(
   };
 }
 
-function mapUIExtension(ext: {
-  id: string;
-  accountId: string;
-  path: string;
-  label: string;
-  icon: string | null;
-  bundleR2Key: string;
-  sidebarJson: string | null;
-  bundleDeploymentId: string | null;
-  createdAt: Date | string;
-}): UIExtension {
-  return {
-    id: ext.id,
-    spaceId: ext.accountId,
-    path: ext.path,
-    label: ext.label,
-    icon: ext.icon || undefined,
-    bundleR2Key: ext.bundleR2Key,
-    sidebar: ext.sidebarJson ? parseSidebarJson(ext.sidebarJson) : undefined,
-    bundleDeploymentId: ext.bundleDeploymentId || undefined,
-    createdAt: textDate(ext.createdAt),
-  };
-}
-
-function mapUIExtensionPersistenceRow(ext: {
-  id: string;
-  accountId: string;
-  path: string;
-  label: string;
-  icon: string | null;
-  bundleR2Key: string;
-  sidebarJson: string | null;
-  bundleDeploymentId: string | null;
-  createdAt: Date | string;
-}) {
-  return {
-    ...ext,
-    bundleDeploymentId: ext.bundleDeploymentId,
-  };
-}
-
-/**
- * List all UI extensions for a workspace
- */
-export async function listUIExtensions(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-): Promise<UIExtension[]> {
-  const drizzle = uiExtensionDeps.getDb(db);
-
-  const extensions = await drizzle.select().from(uiExtensions).where(
-    eq(uiExtensions.accountId, spaceId),
-  ).orderBy(asc(uiExtensions.path)).all();
-
-  return extensions.map((ext) =>
-    mapUIExtension(mapUIExtensionPersistenceRow(ext))
-  );
-}
-
-/**
- * Get a single UI extension by path
- */
-export async function getUIExtensionByPath(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-  path: string,
-): Promise<UIExtension | null> {
-  const drizzle = uiExtensionDeps.getDb(db);
-
-  const ext = await drizzle.select().from(uiExtensions).where(
-    and(eq(uiExtensions.accountId, spaceId), eq(uiExtensions.path, path)),
-  ).get();
-
-  if (!ext) return null;
-  return mapUIExtension(mapUIExtensionPersistenceRow(ext));
-}
-
-/**
- * Get UI extension bundle content from object store
- */
-export async function getUIExtensionBundle(
-  db: SqlDatabaseBinding,
-  storage: ObjectStoreBinding,
-  spaceId: string,
-  path: string,
-): Promise<{ content: ArrayBuffer; contentType: string } | null> {
-  const ext = await getUIExtensionByPath(db, spaceId, path);
-
-  if (!ext) return null;
-
-  const object = await storage.get(ext.bundleR2Key);
-
-  if (!object) return null;
-
-  return {
-    content: await object.arrayBuffer(),
-    contentType: object.httpMetadata?.contentType || "application/javascript",
-  };
-}
-
 /**
  * Get sidebar items for workspace from UiSurface route publications.
  */
@@ -218,38 +93,4 @@ export async function getUISidebarItems(
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   return publicationItems;
-}
-
-/**
- * Check if a path is registered as a UI extension
- */
-export async function isUIExtensionPath(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-  path: string,
-): Promise<boolean> {
-  const drizzle = uiExtensionDeps.getDb(db);
-
-  const result = await drizzle.select({ count: drizzleCount() }).from(
-    uiExtensions,
-  ).where(and(eq(uiExtensions.accountId, spaceId), eq(uiExtensions.path, path)))
-    .get();
-
-  return (result?.count ?? 0) > 0;
-}
-
-/**
- * Get all registered extension paths for a workspace
- */
-export async function getUIExtensionPaths(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-): Promise<string[]> {
-  const drizzle = uiExtensionDeps.getDb(db);
-
-  const extensions = await drizzle.select({ path: uiExtensions.path }).from(
-    uiExtensions,
-  ).where(eq(uiExtensions.accountId, spaceId)).all();
-
-  return extensions.map((ext) => ext.path);
 }

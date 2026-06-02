@@ -33,29 +33,6 @@ function deriveToolTags(tool: ToolDefinition): string[] {
   return [...new Set(tags)];
 }
 
-export function applyPolicyForRole(
-  descriptors: CapabilityDescriptor[],
-  role?: string,
-  capabilities?: string[],
-): CapabilityDescriptor[] {
-  return descriptors.map((d) => {
-    let { discoverable, selectable } = d;
-
-    if (role === "viewer" && d.risk_level === "high") {
-      discoverable = false;
-      selectable = false;
-    }
-
-    if (capabilities && !capabilities.includes("egress.http")) {
-      if (d.namespace === "web") {
-        selectable = false;
-      }
-    }
-
-    return { ...d, discoverable, selectable };
-  });
-}
-
 /** Convert a ToolDefinition to a CapabilityDescriptor. */
 export function buildToolDescriptor(
   tool: ToolDefinition,
@@ -171,63 +148,6 @@ export function buildCustomSkillDescriptor(skill: {
     discoverable: true,
     selectable: false,
   };
-}
-
-export interface McpToolMeta {
-  serverName: string;
-  sourceType: "managed" | "external";
-}
-
-/** Max length for MCP tool descriptions to prevent prompt pollution / injection. */
-const MAX_MCP_SUMMARY_LENGTH = 500;
-const MAX_MCP_NAME_LENGTH = 100;
-
-/** Sanitize untrusted MCP metadata to prevent prompt injection. */
-function sanitizeMcpString(s: string, maxLen: number): string {
-  let sanitized = "";
-  for (let i = 0; i < s.length; i++) {
-    const code = s.charCodeAt(i);
-    if (code >= 0x00 && code <= 0x1f) continue;
-    sanitized += s[i];
-  }
-  return sanitized.trim().slice(0, maxLen);
-}
-
-/** Build a descriptor for MCP-sourced tools. */
-export function buildMcpToolDescriptor(
-  tool: ToolDefinition,
-  meta?: McpToolMeta,
-): CapabilityDescriptor {
-  const rawServer = meta?.serverName ?? inferServerName(tool.name);
-  const isManaged = meta?.sourceType === "managed";
-  const safeName = sanitizeMcpString(tool.name, MAX_MCP_NAME_LENGTH);
-  const safeServer = sanitizeMcpString(rawServer, 50);
-
-  return {
-    id: `tool:${safeName}`,
-    kind: "tool",
-    namespace: "mcp",
-    name: safeName,
-    summary: sanitizeMcpString(tool.description, MAX_MCP_SUMMARY_LENGTH),
-    tags: ["mcp", `mcp.${safeServer}`, tool.category],
-    family: `mcp.${safeServer}`,
-    risk_level: isManaged ? "low" : "medium",
-    side_effects: true,
-    required_roles: tool.required_roles,
-    required_capabilities: tool.required_capabilities,
-    source: "mcp",
-    discoverable: true,
-    selectable: true,
-  };
-}
-
-/**
- * Infer server name from namespaced tool name pattern `servername__toolname`.
- * Falls back to 'external' if no prefix detected.
- */
-function inferServerName(toolName: string): string {
-  const idx = toolName.indexOf("__");
-  return idx > 0 ? toolName.slice(0, idx) : "external";
 }
 
 function categoryToNamespace(category?: string): CapabilityNamespace {

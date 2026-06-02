@@ -56,13 +56,6 @@ export function isConsumableQueue(
     typeof candidate.receive === "function";
 }
 
-export function isLocalQueue(value: unknown): value is LocalQueue<unknown> {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<LocalQueue<unknown>>;
-  return typeof candidate.queueName === "string" &&
-    typeof candidate.receive === "function";
-}
-
 export function buildLocalMessageBatch<T>(
   queueName: string,
   record: LocalQueueRecord<T>,

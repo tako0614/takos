@@ -34,24 +34,6 @@ export function resolveRequestId(
   return req.header(REQUEST_ID_HEADER) ?? crypto.randomUUID();
 }
 
-/**
- * Builds a closed error `Response` with the canonical envelope shape and the
- * `x-request-id` correlation header. Centralizing this keeps the
- * code/message/requestId contract identical across route helpers, the auth
- * layer, and the global error boundary.
- */
-export function commonErrorResponse(
-  code: string,
-  message: string,
-  status: number,
-  requestId: string,
-): Response {
-  return Response.json(commonError(code, message), {
-    status,
-    headers: { [REQUEST_ID_HEADER]: requestId },
-  });
-}
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -171,13 +153,6 @@ export function parseRunEventCursor(
 ): number | null {
   const parsed = Number.parseInt(value ?? "0", 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-export function pathMatchesPrefix(
-  pathname: string,
-  prefix: string,
-): boolean {
-  return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
 export function constantTimeEqual(
