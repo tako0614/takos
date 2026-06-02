@@ -37,7 +37,7 @@
 
    d) For production deployments, review and configure:
       - secrets.existingSecrets (use an external secrets operator)
-      - runtimeConfig.plugins (select operator-registered non-reference plugins)
+      - runtimeConfig.operatorProfile (select operator-owned OpenTofu/native implementations)
       - Resource limits and autoscaling settings
 
 ===========================================================

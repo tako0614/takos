@@ -89,7 +89,7 @@ bun packages/cli/src/main.ts accounts seed \
 | 状況                                                                | 推奨 path             |
 | ------------------------------------------------------------------- | --------------------- |
 | 自分の k8s クラスタに Takosumi kernel 全体を置きたい                | section 1 (Helm)      |
-| Cloudflare で kernel を動かしつつ tenant workload を k8s に置きたい | section 2 (plugin)    |
+| Cloudflare で kernel を動かしつつ tenant workload を k8s に置きたい | section 2 (operator profile)    |
 | k8s 上で kernel + tenant workload を組む                            | section 1 + section 2 |
 
 ---
@@ -289,7 +289,7 @@ kubectl get secret -n takos-system takos-provider-token -o json \
 ```
 
 profile (`profiles/cloudflare-kubernetes.example.json`) の
-`pluginConfig.operator.takosumi.cloudflare-kubernetes.clusterName`
+`operatorConfig.operator.takosumi.cloudflare-kubernetes.clusterName`
 を合わせます。
 
 #### B. operator-managed gateway URL
@@ -299,7 +299,7 @@ k8s API server が internet-facing でない場合、bastion host に kubectl pr
 
 ```jsonc
 {
-  "pluginConfig": {
+  "operatorConfig": {
     "operator.takosumi.cloudflare-kubernetes": {
       "clients": { "...": "..." },
       "clusterName": "takos-prod",
@@ -347,7 +347,7 @@ operator がやること:
 - Ingress controller deploy (nginx / traefik / Istio Gateway)
 - cert-manager + ClusterIssuer (Let's Encrypt) deploy
 - external-dns + DNS provider credential 設定
-- profile の `pluginConfig.operator.takosumi.cloudflare-kubernetes.routerConfig`
+- profile の `operatorConfig.operator.takosumi.cloudflare-kubernetes.routerConfig`
   に `ingressClass` / `clusterIssuer` / `externalDnsZone` を設定
 
 kernel がやること:

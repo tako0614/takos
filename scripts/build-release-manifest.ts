@@ -762,7 +762,7 @@ async function collectDistributionManifests(): Promise<JsonValue> {
       const parsed = JSON.parse(text) as Record<string, unknown>;
       const target = asRecord(parsed.target);
       const routing = asRecord(parsed.routing);
-      const providerProfile = asRecord(parsed.providerProfile);
+      const operatorProfile = asRecord(parsed.operatorProfile);
       const providerProof = asRecord(parsed.providerProof);
       manifests.push({
         path,
@@ -770,11 +770,11 @@ async function collectDistributionManifests(): Promise<JsonValue> {
         targetId: jsonString(target?.id),
         environment: jsonString(parsed.environment),
         profile: jsonString(parsed.profile),
-        providerProfile: providerProfile
+        operatorProfile: operatorProfile
           ? {
-            bundle: jsonString(providerProfile.bundle),
-            profileId: jsonString(providerProfile.profileId),
-            pluginIds: jsonStringArray(providerProfile.pluginIds),
+            distribution: jsonString(operatorProfile.distribution),
+            profileId: jsonString(operatorProfile.profileId),
+            implementationIds: jsonStringArray(operatorProfile.implementationIds),
           }
           : null,
         services: Array.isArray(parsed.services)
@@ -917,7 +917,7 @@ function collectServiceObservations(
 }
 
 async function collectDomainDirs(): Promise<JsonValue> {
-  const domainRoot = '../takosumi/packages/kernel/src/domains';
+  const domainRoot = '../takosumi/src/service/domains';
   const dirs: Array<{ name: string; path: string; files: string[] }> = [];
 
   try {

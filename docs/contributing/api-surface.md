@@ -3,7 +3,7 @@
 > このページでわかること: Takosumi reference kernel の route snapshot と公開
 > Installer API の境界。
 
-`../takosumi/packages/kernel/src/api/openapi.ts` が Takosumi reference kernel の
+`../takosumi/src/service/api/openapi.ts` が Takosumi reference service の
 route snapshot を保持します。Takosumi public conformance surface は
 `POST /v1/installations/dry-run`、`POST /v1/installations`、
 `POST /v1/installations/{id}/deployments/dry-run`、

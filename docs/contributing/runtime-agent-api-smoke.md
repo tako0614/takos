@@ -8,9 +8,8 @@ Takos product docs からは、次の Takosumi tests を参照します。
 ```sh
 cd ../takosumi
 bun test \
-  packages/kernel/src/api/runtime_agent_routes_test.ts \
-  packages/runtime-agent/src/server_test.ts \
-  packages/all/tests/e2e_deploy_test.ts
+  src/service/api/runtime_agent_routes_test.ts \
+  src/runtime-agent/server_test.ts
 ```
 
 Takos product の agent 実行面は `takos/containers/agent` と `takos-agent-engine` の tests

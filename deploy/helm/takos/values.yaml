@@ -48,7 +48,7 @@ images:
 ## Runtime configuration
 ## -----------------------------------------------------------------
 ## These bundled values are local/reference defaults. Staging/production
-## overlays must replace every plugin id with trusted non-reference selections.
+## overlays must select an operator-owned OpenTofu/native implementation profile.
 runtimeConfig:
   environment: local
   publicRoutesEnabled: false
@@ -62,20 +62,11 @@ runtimeConfig:
     installSubject: ""
     installMode: ""
     installRuntimeBaseUrl: ""
-  plugins:
-    auth: takos.kernel.reference
-    notification: takos.kernel.reference
-    operator-config: takos.kernel.reference
-    storage: takos.kernel.reference
-    source: takos.kernel.reference
-    provider: takos.kernel.reference
-    queue: takos.kernel.reference
-    object-storage: takos.kernel.reference
-    kms: takos.kernel.reference
-    secret-store: takos.kernel.reference
-    router-config: takos.kernel.reference
-    observability: takos.kernel.reference
-    runtime-agent: takos.kernel.reference
+  operatorProfile:
+    distribution: "takosumi"
+    profileId: "operator.takosumi.local"
+    implementationIds:
+      - "operator.takosumi.local"
 
 ## -----------------------------------------------------------------
 ## Runtime stack workloads

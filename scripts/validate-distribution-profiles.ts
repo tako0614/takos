@@ -25,7 +25,7 @@ const requiredServices = [
 ] as const;
 const optionalServices = [] as const;
 const expectedServices = [...requiredServices, ...optionalServices] as const;
-const officialProviderBundle = '@takos/takosumi-plugins';
+const operatorDistribution = 'takosumi';
 type ExpectedTargetId = typeof expectedTargets[number];
 type ExpectedServiceId = typeof expectedServices[number];
 type ExpectedArtifact = { kind: string; ref: string };
@@ -245,7 +245,7 @@ async function validateDistribution(path: string): Promise<void> {
   const targetId = stringAt(target, 'id', `${label}.target`);
   const expectedTarget = requireExpectedTargetId(basename(path, '.json'), `${label} filename target`);
   if (!expectedTarget) return;
-  const providerProfile = recordAt(profile, 'providerProfile', label);
+  const operatorProfile = recordAt(profile, 'operatorProfile', label);
   const providerProof = recordAt(profile, 'providerProof', label);
   const metadata = maybeRecord(profile.metadata);
 
@@ -254,7 +254,7 @@ async function validateDistribution(path: string): Promise<void> {
   expectString(profile.environment, 'production', `${label}.environment`);
   expectString(targetId, expectedTarget, `${label}.target.id`);
 
-  validateProviderProfile(profile, providerProfile, target, label, expectedTarget);
+  validateOperatorProfile(profile, operatorProfile, target, label, expectedTarget);
   validateArtifacts(arrayAt(profile, 'artifacts', label), label, expectedTarget);
   validateProviderProof(providerProof, label, expectedTarget);
   validateServices(arrayAt(profile, 'services', label), label, targetId);
@@ -263,41 +263,40 @@ async function validateDistribution(path: string): Promise<void> {
   validateMetadataCommands(metadata, label);
 }
 
-function validateProviderProfile(
+function validateOperatorProfile(
   profile: JsonRecord,
-  providerProfile: JsonRecord,
+  operatorProfile: JsonRecord,
   target: JsonRecord,
   label: string,
   targetId: ExpectedTargetId,
 ): void {
-  const expectedProfile = `${officialProviderBundle}/profiles/${targetId}`;
-  const expectedPluginId = `operator.takosumi.${targetId}`;
+  const expectedProfile = `operator.takosumi.${targetId}`;
   expectString(
     stringAt(profile, 'profile', label),
     expectedProfile,
     `${label}.profile`,
   );
   expectString(
-    stringAt(providerProfile, 'bundle', `${label}.providerProfile`),
-    officialProviderBundle,
-    `${label}.providerProfile.bundle`,
+    stringAt(operatorProfile, 'distribution', `${label}.operatorProfile`),
+    operatorDistribution,
+    `${label}.operatorProfile.distribution`,
   );
   expectString(
-    stringAt(providerProfile, 'profileId', `${label}.providerProfile`),
-    expectedPluginId,
-    `${label}.providerProfile.profileId`,
+    stringAt(operatorProfile, 'profileId', `${label}.operatorProfile`),
+    expectedProfile,
+    `${label}.operatorProfile.profileId`,
   );
-  const pluginIds = stringArray(
-    arrayAt(providerProfile, 'pluginIds', `${label}.providerProfile`),
+  const implementationIds = stringArray(
+    arrayAt(operatorProfile, 'implementationIds', `${label}.operatorProfile`),
   );
-  if (pluginIds.join(',') !== expectedPluginId) {
-    errors.push(`${label}.providerProfile.pluginIds must be exactly ${expectedPluginId}`);
+  if (implementationIds.join(',') !== expectedProfile) {
+    errors.push(`${label}.operatorProfile.implementationIds must be exactly ${expectedProfile}`);
   }
   const targetMetadata = recordAt(target, 'metadata', `${label}.target`);
   expectString(
-    stringAt(targetMetadata, 'providerBundle', `${label}.target.metadata`),
-    officialProviderBundle,
-    `${label}.target.metadata.providerBundle`,
+    stringAt(targetMetadata, 'operatorProfile', `${label}.target.metadata`),
+    expectedProfile,
+    `${label}.target.metadata.operatorProfile`,
   );
 }
 
@@ -425,7 +424,7 @@ function validateProviderProof(
 ): void {
   const fixturePath = stringAt(providerProof, 'fixturePath', `${label}.providerProof`);
   const liveEnvPrefix = stringAt(providerProof, 'liveEnvPrefix', `${label}.providerProof`);
-  const expectedPrefix = `TAKOSUMI_PLUGIN_${targetId.toUpperCase()}`;
+  const expectedPrefix = `TAKOSUMI_PROVIDER_${targetId.toUpperCase()}`;
   expectString(liveEnvPrefix, expectedPrefix, `${label}.providerProof.liveEnvPrefix`);
   assertPathExists(fixturePath, `${label}.providerProof.fixturePath`);
 
@@ -471,34 +470,34 @@ function validateProviderCommand(input: {
   }
   assertConfiguredTask(takosumiTaskConfig, parsed.taskName, input.field);
   expectString(
-    parsed.env.TAKOSUMI_PLUGIN_LIVE_PROVIDER,
+    parsed.env.TAKOSUMI_PROVIDER_LIVE_PROVIDER,
     input.targetId,
-    `${input.field} TAKOSUMI_PLUGIN_LIVE_PROVIDER`,
+    `${input.field} TAKOSUMI_PROVIDER_LIVE_PROVIDER`,
   );
   expectString(
-    parsed.env.TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE,
+    parsed.env.TAKOSUMI_PROVIDER_LIVE_PROOF_FIXTURE_FILE,
     input.fixturePath,
-    `${input.field} TAKOSUMI_PLUGIN_LIVE_PROOF_FIXTURE_FILE`,
+    `${input.field} TAKOSUMI_PROVIDER_LIVE_PROOF_FIXTURE_FILE`,
   );
   checkedProviderCommands += 1;
 
   if (input.mode === 'fixture') {
-    if (parsed.env.TAKOSUMI_PLUGIN_LIVE_PROOF_MODE) {
+    if (parsed.env.TAKOSUMI_PROVIDER_LIVE_PROOF_MODE) {
       errors.push(`${input.field} must not force live mode for read-only fixture proof`);
     }
     return;
   }
 
   expectString(
-    parsed.env.TAKOSUMI_PLUGIN_LIVE_PROOF_MODE,
+    parsed.env.TAKOSUMI_PROVIDER_LIVE_PROOF_MODE,
     'live',
-    `${input.field} TAKOSUMI_PLUGIN_LIVE_PROOF_MODE`,
+    `${input.field} TAKOSUMI_PROVIDER_LIVE_PROOF_MODE`,
   );
   if (input.mode === 'cleanup') {
     expectString(
-      parsed.env.TAKOSUMI_PLUGIN_LIVE_CLEANUP_ONLY,
+      parsed.env.TAKOSUMI_PROVIDER_LIVE_CLEANUP_ONLY,
       '1',
-      `${input.field} TAKOSUMI_PLUGIN_LIVE_CLEANUP_ONLY`,
+      `${input.field} TAKOSUMI_PROVIDER_LIVE_CLEANUP_ONLY`,
     );
   }
 }
