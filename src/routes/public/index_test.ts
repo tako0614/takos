@@ -633,7 +633,7 @@ test('thread run create route is served by src/routes/public write model', async
         body: JSON.stringify({
           agent_type: 'default',
           input: { prompt: 'hello' },
-          model: 'gpt-5.4-mini',
+          model: 'gpt-5.5',
         }),
       },
       { DB: db, RUN_QUEUE: runQueue },
@@ -697,7 +697,7 @@ test('thread run create route is served by src/routes/public write model', async
     deepStrictEqual(JSON.parse(body.run.input), { prompt: 'hello' });
     deepStrictEqual(queueMessages.length, 1);
     deepStrictEqual(queueMessages[0].runId, body.run.id);
-    deepStrictEqual(queueMessages[0].model, 'gpt-5.4-mini');
+    deepStrictEqual(queueMessages[0].model, 'gpt-5.5');
     deepStrictEqual(invalid.status, 400);
     deepStrictEqual(forbidden.status, 404);
     deepStrictEqual(missingQueue.status, 503);
@@ -705,6 +705,135 @@ test('thread run create route is served by src/routes/public write model', async
   } finally {
     restore();
     restoreEnv();
+  }
+});
+
+test('single Worker route split serves chat, memory tools, agent queue, and Git proxy', async () => {
+  const gitCalls: Array<{ url: string; method: string; headers: Headers }> = [];
+  const restoreGit = stubGitFetch(gitCalls, JSON.stringify({ refs: [] }));
+  const queueMessages: Array<Record<string, unknown>> = [];
+  const runQueue = {
+    send(message: Record<string, unknown>) {
+      queueMessages.push(message);
+      return Promise.resolve();
+    },
+    sendBatch() {
+      return Promise.resolve();
+    },
+  };
+  const db = fakeApiDb({
+    actorAccountId: 'acct_1',
+    membershipRole: 'editor',
+    runId: 'seed_run',
+    threadId: 'thread_1',
+    spaceId: 'space_1',
+    messages: [],
+  });
+
+  try {
+    const createdThread = await app.request(
+      '/api/spaces/space_1/threads',
+      trustedJsonInit('POST', { title: 'Runtime proof', locale: 'ja' }),
+      { DB: db },
+    );
+    const createdThreadBody = await createdThread.json() as {
+      thread: { id: string; title: string };
+    };
+
+    const message = await app.request(
+      `/api/threads/${createdThreadBody.thread.id}/messages`,
+      trustedJsonInit('POST', {
+        role: 'user',
+        content: 'remember this local runtime proof',
+      }),
+      { DB: db },
+    );
+    const messages = await app.request(
+      `/api/threads/${createdThreadBody.thread.id}/messages`,
+      trustedGetInit(),
+      { DB: db },
+    );
+    const tools = await app.request(
+      '/api/spaces/space_1/tools',
+      trustedGetInit(),
+      { DB: db },
+    );
+    const rememberTool = await app.request(
+      '/api/spaces/space_1/tools/remember',
+      trustedGetInit(),
+      { DB: db },
+    );
+    const run = await app.request(
+      `/api/threads/${createdThreadBody.thread.id}/runs`,
+      trustedJsonInit('POST', {
+        agent_type: 'default',
+        input: { prompt: 'use the memory tool' },
+        model: 'gpt-5.5',
+      }),
+      { DB: db, RUN_QUEUE: runQueue },
+    );
+    const gitRefs = await app.request(
+      '/api/repositories/repo_1/refs?spaceId=space_1',
+      trustedGetInit(),
+      { DB: db },
+    );
+
+    const messageBody = await message.json() as {
+      message: { thread_id: string; content: string };
+    };
+    const messagesBody = await messages.json() as {
+      messages: Array<{ content: string }>;
+    };
+    const toolsBody = await tools.json() as {
+      data: Array<{ name: string; inputSchema: unknown }>;
+    };
+    const rememberToolBody = await rememberTool.json() as {
+      data: { name: string; inputSchema: { properties: Record<string, unknown> } };
+    };
+    const runBody = await run.json() as {
+      run: { id: string; thread_id: string; status: string; agent_type: string };
+    };
+
+    deepStrictEqual(createdThread.status, 201);
+    deepStrictEqual(createdThreadBody.thread.title, 'Runtime proof');
+    deepStrictEqual(message.status, 201);
+    deepStrictEqual(messageBody.message.thread_id, createdThreadBody.thread.id);
+    deepStrictEqual(
+      messageBody.message.content,
+      'remember this local runtime proof',
+    );
+    deepStrictEqual(messages.status, 200);
+    deepStrictEqual(messagesBody.messages.length, 1);
+    deepStrictEqual(tools.status, 200);
+    deepStrictEqual(
+      toolsBody.data.some((tool) => tool.name === 'remember'),
+      true,
+    );
+    deepStrictEqual(rememberTool.status, 200);
+    deepStrictEqual(rememberToolBody.data.name, 'remember');
+    deepStrictEqual(
+      Object.hasOwn(rememberToolBody.data.inputSchema.properties, 'content'),
+      true,
+    );
+    deepStrictEqual(run.status, 201);
+    deepStrictEqual(runBody.run.thread_id, createdThreadBody.thread.id);
+    deepStrictEqual(runBody.run.status, 'queued');
+    deepStrictEqual(runBody.run.agent_type, 'default');
+    deepStrictEqual(queueMessages.length, 1);
+    deepStrictEqual(queueMessages[0].runId, runBody.run.id);
+    deepStrictEqual(queueMessages[0].model, 'gpt-5.5');
+    deepStrictEqual(gitRefs.status, 200);
+    deepStrictEqual(gitCalls.length, 1);
+    deepStrictEqual(
+      new URL(gitCalls[0].url).pathname,
+      '/internal/repositories/repo_1/refs',
+    );
+    deepStrictEqual(
+      gitCalls[0].headers.get('x-takosumi-audience'),
+      'takos-git',
+    );
+  } finally {
+    restoreGit();
   }
 });
 

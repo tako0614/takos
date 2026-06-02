@@ -1,0 +1,4 @@
+# Copy to opentofu.tfvars and source secret values from takos-private.
+project_id  = "takos-prod"
+region      = "asia-northeast1"
+db_password = "replace-with-takos-private-secret"

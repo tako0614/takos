@@ -248,7 +248,8 @@ for (const file of templateFiles.sort()) {
   assertContains(path, text, 'takos.accountsDatabaseSecretName');
 }
 
-for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
+const checkedOverlays = ['values-aws.yaml', 'values-gcp.yaml', 'values-selfhosted.yaml'];
+for (const overlay of checkedOverlays) {
   const path = `${chartRoot}/${overlay}`;
   const text = await runtime.readTextFile(path);
   if (!text.includes('environment: production')) {
@@ -262,8 +263,17 @@ for (const overlay of ['values-aws.yaml', 'values-gcp.yaml']) {
   if (/takos\.kernel\.reference/.test(text)) {
     errors.push(`${path} must not select the reference plugin in production`);
   }
-  for (const service of expectedServices) {
-    assertContains(path, text, `${service.valuesKey}:`);
+  if (overlay === 'values-selfhosted.yaml') {
+    assertContains(path, text, '  create: false');
+    assertContains(path, text, '  className: "caddy"');
+    assertContains(path, text, '    preinstallEnabled: false');
+    if (/^images:/m.test(text)) {
+      errors.push(`${path} must not hard-code images; operator/CI must supply image tags`);
+    }
+  } else {
+    for (const service of expectedServices) {
+      assertContains(path, text, `${service.valuesKey}:`);
+    }
   }
   assertNoStaleWorkloadSurface(path, text);
 }
@@ -290,7 +300,7 @@ console.log(
     ok: true,
     checkedTemplates: templateFiles.length,
     checkedServiceSet: expectedServices.map((service) => service.id),
-    checkedOverlays: ['values-aws.yaml', 'values-gcp.yaml'],
+    checkedOverlays,
   }),
 );
 

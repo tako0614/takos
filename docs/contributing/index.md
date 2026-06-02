@@ -16,7 +16,7 @@
   kernel と plugin-backed infrastructure の境界を docs /
   実装間で揃えるためのチェックリスト。
 - reference implementation binding 境界:
-  `../takosumi/packages/contract/src/plugin.ts` は `KernelPlugin` binding
+  `../takosumi/packages/contract/src/plugin.ts` は `TakosumiPlugin` binding
   shape、 `../takosumi/packages/kernel/src/plugins/` は registry・module
   loader・no-I/O reference adapter を持ちます。これは takosumi.com reference
   kernel の配線で、 Takosumi public spec ではありません。

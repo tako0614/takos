@@ -12,8 +12,8 @@
   },
   "artifacts": [
     {
-      "kind": "terraform",
-      "ref": "deploy/terraform/environments/aws-prod"
+      "kind": "opentofu",
+      "ref": "deploy/opentofu/environments/aws-prod"
     },
     {
       "kind": "helm",
@@ -46,7 +46,7 @@
     "route53ZoneId": "Z00000000000000000000",
     "metadata": {
       "providerBundle": "@takos/takosumi-plugins",
-      "terraform": "deploy/terraform/environments/aws-prod",
+      "opentofu": "deploy/opentofu/environments/aws-prod",
       "helmOverlay": "deploy/helm/takos/values-aws.yaml"
     }
   },

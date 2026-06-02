@@ -1,4 +1,0 @@
-# Copy to terraform.tfvars and source secret values from takos-private.
-project_id  = "takos-staging"
-region      = "asia-northeast1"
-db_password = "replace-with-takos-private-secret"

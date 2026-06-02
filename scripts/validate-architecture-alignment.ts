@@ -6,29 +6,29 @@ type CheckFailure = {
 
 const README_PATH = 'README.md';
 const CURRENT_STATE_PATH = 'docs/contributing/current-state.md';
-const KERNEL_ARCHITECTURE_PATH = '../takosumi/docs/reference/architecture/kernel.md';
-const DOMAIN_ROOT = '../takosumi/src/kernel/domains';
+const TAKOSUMI_SERVICE_ARCHITECTURE_PATH = '../takosumi/docs/reference/architecture/takosumi-service.md';
+const DOMAIN_ROOT = '../takosumi/src/service/domains';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
-const REQUIRED_KERNEL_PLUGIN_DOCS = [CURRENT_STATE_PATH];
+const REQUIRED_SERVICE_PLUGIN_DOCS = [CURRENT_STATE_PATH];
 const ARCHITECTURE_ALIGNMENT_DOCS = [
   README_PATH,
   CURRENT_STATE_PATH,
-  KERNEL_ARCHITECTURE_PATH,
+  TAKOSUMI_SERVICE_ARCHITECTURE_PATH,
   '../takosumi/docs/reference/architecture/operator-boundaries.md',
   '../takosumi/docs/reference/architecture/workflow-extension-design.md',
 ];
 const PERMISSION_SCOPE_DOCS = [
-  '../takosumi/docs/architecture/app-installation.md',
+  '../takosumi/docs/accounts/architecture/app-installation.md',
 ];
 const APP_INSTALLATION_STATUS_DOCS = [
   '../docs/platform/runtime-modes.md',
-  '../takosumi/docs/architecture/app-installation.md',
+  '../takosumi/docs/accounts/architecture/app-installation.md',
   'docs/platform/upgrade-export.md',
 ];
 const RUNTIME_TARGET_DOCS = [
-  '../takosumi/docs/architecture/app-installation.md',
-  '../takosumi/docs/accounts-service.md',
+  '../takosumi/docs/accounts/architecture/app-installation.md',
+  '../takosumi/docs/accounts/accounts-service.md',
 ];
 const ACCOUNT_MODEL_DOC_PATH = 'docs/operator/account-model.md';
 const ACCOUNT_MODEL_REQUIRED_TERMS = [
@@ -68,9 +68,11 @@ const FORBIDDEN_RUNTIME_BINDING_TARGET_PATTERNS = [
   },
 ];
 const REQUIRED_DOMAIN_DIRS = [
-  'core',
+  'space',
+  'binding',
   'deploy',
   'runtime',
+  'installer',
   'resources',
   'routing',
   'network',
@@ -108,8 +110,8 @@ const SAFE_DRIFT_TERMS = [
   'legacy',
 ];
 
-const KERNEL_PLUGIN_REQUIRED_TERMS = [
-  'kernel',
+const SERVICE_PLUGIN_REQUIRED_TERMS = [
+  'service',
   'plugin',
   'self-host',
   'cloud',
@@ -119,11 +121,11 @@ const FORBIDDEN_CURRENT_BOUNDARY_PATTERNS = [
   {
     pattern: /Implement local Docker\/single-node only first/i,
     message:
-      'Runtime/routing milestones must describe kernel ports/projections first; Docker/self-host belongs to plugins.',
+      'Runtime/routing milestones must describe service ports/projections first; Docker/self-host belongs to plugins.',
   },
   {
-    pattern: /real backend[^.\n]*(kernel release|release gate|criterion|criteria)/i,
-    message: 'Real backend proofs must not be described as kernel release criteria.',
+    pattern: /real backend[^.\n]*(service release|release gate|criterion|criteria)/i,
+    message: 'Real backend proofs must not be described as service release criteria.',
   },
 ];
 
@@ -182,8 +184,8 @@ function validateInternalDomainMentions(
   const mentionsInternalDomains = lowerText.includes('internal domain') ||
     lowerText.includes('internal domains') ||
     lowerText.includes('domain modules') ||
-    lowerText.includes('src/kernel/domains') ||
-    lowerText.includes('packages/kernel/src/domains');
+    lowerText.includes('src/service/domains') ||
+    lowerText.includes('src/service/domains');
   const mentionsDeployRuntimeDomains = lowerText.includes('domains/deploy') ||
     lowerText.includes('domains/runtime') ||
     (lowerText.includes('deploy') && lowerText.includes('runtime'));
@@ -194,22 +196,22 @@ function validateInternalDomainMentions(
     failures.push({
       path,
       message:
-        'Expected README/current-state docs to describe takosumi internal domains, including deploy/runtime as domains inside the Takosumi kernel.',
+        'Expected README/current-state docs to describe takosumi internal domains, including deploy/runtime as domains inside the Takosumi service.',
     });
   }
 }
 
-function validateKernelPluginBoundaryMentions(
+function validateTakosumiPluginBoundaryMentions(
   path: string,
   text: string,
   failures: CheckFailure[],
 ): void {
   const lowerText = text.toLowerCase();
-  for (const term of KERNEL_PLUGIN_REQUIRED_TERMS) {
+  for (const term of SERVICE_PLUGIN_REQUIRED_TERMS) {
     if (lowerText.includes(term)) continue;
     failures.push({
       path,
-      message: `Expected kernel/plugin boundary docs to mention "${term}" explicitly.`,
+      message: `Expected service/plugin boundary docs to mention "${term}" explicitly.`,
     });
   }
 }
@@ -265,7 +267,7 @@ async function validateDomainDirs(failures: CheckFailure[]): Promise<void> {
     if (!(await pathExists(domainPath))) {
       failures.push({
         path: domainPath,
-        message: 'Required takosumi core domain directory is missing.',
+        message: 'Required Takosumi domain directory is missing.',
       });
     }
   }
@@ -358,9 +360,9 @@ async function main(): Promise<void> {
     validateInternalDomainMentions(path, text, failures);
   }
 
-  for (const path of REQUIRED_KERNEL_PLUGIN_DOCS) {
+  for (const path of REQUIRED_SERVICE_PLUGIN_DOCS) {
     const text = await readText(path, failures);
-    validateKernelPluginBoundaryMentions(path, text, failures);
+    validateTakosumiPluginBoundaryMentions(path, text, failures);
   }
 
   const markdownFiles = ARCHITECTURE_ALIGNMENT_DOCS;

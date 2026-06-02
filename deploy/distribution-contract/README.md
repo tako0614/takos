@@ -13,7 +13,7 @@ This directory owns the Takos product distribution profile contract.
 
 ## Artifact Ownership
 
-AWS and GCP distribution artifacts are the Takos product Terraform
+AWS and GCP distribution artifacts are the Takos product OpenTofu
 environments plus Helm overlays under `takos/deploy/`. The README-only
 `../takosumi/deploy/aws` and `../takosumi/deploy/gcp` directories are Takosumi
 provider runbooks, not Takos product distribution artifact directories.

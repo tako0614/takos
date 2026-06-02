@@ -1,0 +1,581 @@
+#!/usr/bin/env -S bun
+import * as runtime from "./runtime.ts";
+
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+type JsonRecord = { [key: string]: JsonValue };
+type TargetId = 'aws' | 'gcp';
+
+type OpenTofuOutput = {
+  sensitive?: boolean;
+  type?: JsonValue;
+  value?: JsonValue;
+};
+
+type OpenTofuOutputs = Record<string, OpenTofuOutput>;
+
+type Args = {
+  check: boolean;
+  checkFixtures: boolean;
+  inputPath: string | null;
+  opentofuBin: string;
+  outputPath: string | null;
+  stdout: boolean;
+  target: TargetId | null;
+  opentofuDir: string;
+};
+
+type GenerateOptions = {
+  source: string;
+  target: TargetId | null;
+};
+
+const fixtureCases = [
+  {
+    target: 'aws' as const,
+    inputPath: 'deploy/opentofu/testdata/helm-values/aws-output.json',
+    expectedPath: 'deploy/opentofu/testdata/helm-values/aws-values.yaml',
+  },
+  {
+    target: 'gcp' as const,
+    inputPath: 'deploy/opentofu/testdata/helm-values/gcp-output.json',
+    expectedPath: 'deploy/opentofu/testdata/helm-values/gcp-values.yaml',
+  },
+];
+
+const queueKeys = ['runs', 'index', 'workflow', 'deployment'] as const;
+const objectStorageKeys = [
+  'gitObjects',
+  'offload',
+  'tenantSource',
+  'workerBundles',
+  'tenantBuilds',
+  'uiBundles',
+] as const;
+
+const args = parseArgs(runtime.args);
+
+if (args.checkFixtures) {
+  await checkFixtures();
+  runtime.exit(0);
+}
+
+const opentofuOutputText = args.inputPath
+  ? await runtime.readTextFile(args.inputPath)
+  : await opentofuOutputJson(args.opentofuDir);
+const source = args.inputPath ?? `${args.opentofuBin} -chdir=${args.opentofuDir} output -json`;
+const generated = generateHelmValues(parseOpenTofuOutputs(opentofuOutputText, source), {
+  source,
+  target: args.target,
+});
+
+if (args.stdout) {
+  console.log(generated.trimEnd());
+} else if (!args.outputPath) {
+  console.error(usage());
+  runtime.exit(2);
+} else if (args.check) {
+  const current = await runtime.readTextFile(args.outputPath);
+  if (current !== generated) {
+    console.error(
+      `OpenTofu Helm values drift detected for ${args.outputPath}. Re-run the generation command.`,
+    );
+    runtime.exit(1);
+  }
+  console.log(JSON.stringify({ ok: true, check: true, outputPath: args.outputPath }, null, 2));
+} else {
+  await runtime.writeTextFile(args.outputPath, generated);
+  console.log(JSON.stringify({ ok: true, written: args.outputPath }, null, 2));
+}
+
+async function checkFixtures(): Promise<void> {
+  const results = [];
+  let hasDrift = false;
+
+  for (const fixture of fixtureCases) {
+    const input = await runtime.readTextFile(fixture.inputPath);
+    const generated = generateHelmValues(parseOpenTofuOutputs(input, fixture.inputPath), {
+      source: fixture.inputPath,
+      target: fixture.target,
+    });
+    const expected = await runtime.readTextFile(fixture.expectedPath);
+    const matches = generated === expected;
+    results.push({
+      target: fixture.target,
+      inputPath: fixture.inputPath,
+      expectedPath: fixture.expectedPath,
+      status: matches ? 'in-sync' : 'drift',
+    });
+    if (!matches) hasDrift = true;
+  }
+
+  const summary = { ok: !hasDrift, checkFixtures: true, results };
+  console.log(JSON.stringify(summary, null, 2));
+  if (hasDrift) runtime.exit(1);
+}
+
+function generateHelmValues(outputs: OpenTofuOutputs, options: GenerateOptions): string {
+  const target = options.target ?? targetOutput(outputs) ?? inferTarget(outputs);
+  const databaseEndpoint = requiredStringOutput(outputs, ['database_endpoint', 'database_connection_name']);
+  const redisUrl = requiredStringOutput(outputs, ['redis_url']);
+  const queues = queueBindings(outputs, target);
+  const objectStorage = objectStorageBuckets(outputs, target);
+  const network = optionalCanonicalMap(outputs, 'network', {
+    vpc_id: 'vpcId',
+    private_subnet_ids: 'privateSubnetIds',
+    public_subnet_ids: 'publicSubnetIds',
+    subnet_id: 'subnetId',
+  });
+  const workloadIdentity = optionalCanonicalMap(outputs, 'workload_identity', {
+    ecs_task_execution_role_arn: 'ecsTaskExecutionRoleArn',
+    ecs_task_role_arn: 'ecsTaskRoleArn',
+    service_account_email: 'serviceAccountEmail',
+  });
+
+  const managedResources: JsonRecord = {
+    target,
+    database: {
+      endpoint: databaseEndpoint,
+    },
+    redis: {
+      url: redisUrl,
+    },
+    queues,
+    objectStorage,
+  };
+
+  if (Object.keys(network).length > 0) {
+    managedResources.network = network;
+  }
+  if (Object.keys(workloadIdentity).length > 0) {
+    managedResources.workloadIdentity = workloadIdentity;
+  }
+
+  const values: JsonRecord = {
+    runtimeConfig: {
+      managedResources,
+    },
+  };
+
+  const annotations = serviceAccountAnnotations(target, workloadIdentity);
+  if (Object.keys(annotations).length > 0) {
+    values.serviceAccount = { annotations };
+  }
+
+  return [
+    '# Generated by scripts/opentofu-output-to-helm-values.ts.',
+    `# Source: ${options.source}`,
+    '# Contains only non-sensitive OpenTofu outputs. Secrets stay in takos-private or external secrets.',
+    ...renderYamlObject(values, 0),
+    '',
+  ].join('\n');
+}
+
+function queueBindings(outputs: OpenTofuOutputs, target: TargetId): JsonRecord {
+  const common = optionalStringMapOutput(outputs, 'queue_bindings');
+  if (common) {
+    return requireMappedKeys(common, queueKeys, 'queue_bindings');
+  }
+
+  const fallback = target === 'aws'
+    ? {
+      runs: optionalStringOutput(outputs, ['sqs_runs_queue_url', 'sqs_run_queue_url']),
+      index: optionalStringOutput(outputs, ['sqs_index_jobs_queue_url', 'sqs_index_queue_url']),
+      workflow: optionalStringOutput(outputs, ['sqs_workflow_jobs_queue_url', 'sqs_workflow_queue_url']),
+      deployment: optionalStringOutput(outputs, ['sqs_deployment_jobs_queue_url', 'sqs_deployment_queue_url']),
+    }
+    : {
+      runs: optionalStringOutput(outputs, ['pubsub_topic_runs', 'pubsub_run_topic']),
+      index: optionalStringOutput(outputs, ['pubsub_topic_index_jobs', 'pubsub_index_topic']),
+      workflow: optionalStringOutput(outputs, ['pubsub_topic_workflow_jobs', 'pubsub_workflow_topic']),
+      deployment: optionalStringOutput(outputs, ['pubsub_topic_deployment_jobs', 'pubsub_deployment_topic']),
+    };
+
+  return requireConcreteStrings(fallback, queueKeys, `${target} queue outputs`);
+}
+
+function objectStorageBuckets(outputs: OpenTofuOutputs, target: TargetId): JsonRecord {
+  const common = optionalCanonicalMap(outputs, 'object_storage_buckets', {
+    git_objects: 'gitObjects',
+    offload: 'offload',
+    tenant_source: 'tenantSource',
+    worker_bundles: 'workerBundles',
+    tenant_builds: 'tenantBuilds',
+    ui_bundles: 'uiBundles',
+  });
+  if (Object.keys(common).length > 0) {
+    return requireMappedKeys(common, objectStorageKeys, 'object_storage_buckets');
+  }
+
+  const prefix = target === 'aws' ? 's3' : 'gcs';
+  const fallback = {
+    gitObjects: optionalStringOutput(outputs, [`${prefix}_git_objects_bucket`, `${prefix}_bucket_git_objects`]),
+    offload: optionalStringOutput(outputs, [`${prefix}_offload_bucket`, `${prefix}_bucket_offload`]),
+    tenantSource: optionalStringOutput(outputs, [
+      `${prefix}_tenant_source_bucket`,
+      `${prefix}_bucket_tenant_source`,
+    ]),
+    workerBundles: optionalStringOutput(outputs, [
+      `${prefix}_worker_bundles_bucket`,
+      `${prefix}_bucket_worker_bundles`,
+    ]),
+    tenantBuilds: optionalStringOutput(outputs, [
+      `${prefix}_tenant_builds_bucket`,
+      `${prefix}_bucket_tenant_builds`,
+    ]),
+    uiBundles: optionalStringOutput(outputs, [`${prefix}_ui_bundles_bucket`, `${prefix}_bucket_ui_bundles`]),
+  };
+
+  return requireConcreteStrings(fallback, objectStorageKeys, `${target} object storage outputs`);
+}
+
+function serviceAccountAnnotations(target: TargetId, workloadIdentity: JsonRecord): JsonRecord {
+  if (target === 'gcp') {
+    const email = jsonString(workloadIdentity.serviceAccountEmail);
+    return email ? { 'iam.gke.io/gcp-service-account': email } : {};
+  }
+
+  const irsaRoleArn = jsonString(workloadIdentity.eksRoleArn) ?? jsonString(workloadIdentity.irsaRoleArn);
+  return irsaRoleArn ? { 'eks.amazonaws.com/role-arn': irsaRoleArn } : {};
+}
+
+function parseOpenTofuOutputs(text: string, source: string): OpenTofuOutputs {
+  const parsed = JSON.parse(text) as unknown;
+  if (!isJsonRecord(parsed)) {
+    throw new Error(`${source} must be an OpenTofu output JSON object`);
+  }
+
+  const outputs: OpenTofuOutputs = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!isJsonRecord(value)) {
+      throw new Error(`${source}.${key} must be an OpenTofu output record`);
+    }
+    outputs[key] = {
+      sensitive: typeof value.sensitive === 'boolean' ? value.sensitive : false,
+      type: value.type,
+      value: value.value,
+    };
+  }
+  return outputs;
+}
+
+function targetOutput(outputs: OpenTofuOutputs): TargetId | null {
+  const value = optionalStringOutput(outputs, ['target']);
+  if (!value) return null;
+  if (value === 'aws' || value === 'gcp') return value;
+  throw new Error(`OpenTofu output target must be aws or gcp, got ${value}`);
+}
+
+function inferTarget(outputs: OpenTofuOutputs): TargetId {
+  if (
+    outputs.sqs_run_queue_url ||
+    outputs.sqs_runs_queue_url ||
+    outputs.s3_git_objects_bucket
+  ) {
+    return 'aws';
+  }
+  if (
+    outputs.pubsub_run_topic ||
+    outputs.pubsub_topic_runs ||
+    outputs.gcs_bucket_git_objects ||
+    outputs.database_connection_name
+  ) {
+    return 'gcp';
+  }
+  throw new Error('Unable to infer target. Pass --target aws or --target gcp.');
+}
+
+function requiredStringOutput(outputs: OpenTofuOutputs, keys: readonly string[]): string {
+  const value = optionalStringOutput(outputs, keys);
+  if (value) return value;
+
+  if (keys.includes('database_endpoint') && outputs.database_url?.sensitive) {
+    throw new Error(
+      'OpenTofu output database_endpoint is required. Refusing to bridge sensitive database_url into Helm values.',
+    );
+  }
+
+  throw new Error(`Missing required OpenTofu output: ${keys.join(' or ')}`);
+}
+
+function optionalStringOutput(outputs: OpenTofuOutputs, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = outputValue(outputs, key);
+    if (value === null) continue;
+    const string = jsonString(value);
+    if (string === null) {
+      throw new Error(`OpenTofu output ${key} must be a string`);
+    }
+    return string;
+  }
+  return null;
+}
+
+function optionalStringMapOutput(outputs: OpenTofuOutputs, key: string): JsonRecord | null {
+  const value = outputValue(outputs, key);
+  if (value === null) return null;
+  if (!isJsonRecord(value)) {
+    throw new Error(`OpenTofu output ${key} must be an object`);
+  }
+
+  const result: JsonRecord = {};
+  for (const [entryKey, entryValue] of Object.entries(value)) {
+    const string = jsonString(entryValue);
+    if (string === null) {
+      throw new Error(`OpenTofu output ${key}.${entryKey} must be a string`);
+    }
+    result[entryKey] = string;
+  }
+  return result;
+}
+
+function optionalCanonicalMap(
+  outputs: OpenTofuOutputs,
+  key: string,
+  keyMap: Record<string, string>,
+): JsonRecord {
+  const value = outputValue(outputs, key);
+  if (value === null) return {};
+  if (!isJsonRecord(value)) {
+    throw new Error(`OpenTofu output ${key} must be an object`);
+  }
+
+  const result: JsonRecord = {};
+  for (const [opentofuKey, helmKey] of Object.entries(keyMap)) {
+    const entry = value[opentofuKey];
+    if (entry === undefined || entry === null) continue;
+    result[helmKey] = canonicalOutputValue(entry, `${key}.${opentofuKey}`);
+  }
+  return result;
+}
+
+function outputValue(outputs: OpenTofuOutputs, key: string): JsonValue | null {
+  const output = outputs[key];
+  if (!output) return null;
+  if (output.sensitive) {
+    throw new Error(`OpenTofu output ${key} is sensitive and cannot be written to Helm values`);
+  }
+  return output.value ?? null;
+}
+
+function canonicalOutputValue(value: JsonValue, label: string): JsonValue {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item !== 'string') {
+        throw new Error(`OpenTofu output ${label} must contain only strings`);
+      }
+    }
+    return value;
+  }
+  throw new Error(`OpenTofu output ${label} must be a string or string array`);
+}
+
+function requireConcreteStrings(
+  values: Record<string, string | null>,
+  keys: readonly string[],
+  label: string,
+): JsonRecord {
+  const result: JsonRecord = {};
+  for (const key of keys) {
+    const value = values[key];
+    if (!value) {
+      throw new Error(`Missing required ${label}.${key}`);
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+function requireMappedKeys(values: JsonRecord, keys: readonly string[], label: string): JsonRecord {
+  const result: JsonRecord = {};
+  for (const key of keys) {
+    const value = values[key];
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error(`Missing required ${label}.${key}`);
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+async function opentofuOutputJson(opentofuDir: string): Promise<string> {
+  const output = await runtime.runCommand(args.opentofuBin, {
+    args: [`-chdir=${opentofuDir}`, 'output', '-json'],
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+
+  if (!output.success) {
+    const stderr = new TextDecoder().decode(output.stderr).trimEnd();
+    throw new Error(`${args.opentofuBin} output -json failed in ${opentofuDir}:\n${stderr}`);
+  }
+
+  return new TextDecoder().decode(output.stdout);
+}
+
+function renderYamlObject(value: JsonRecord, indent: number): string[] {
+  const lines: string[] = [];
+  const padding = ' '.repeat(indent);
+  for (const [key, entry] of Object.entries(value)) {
+    const renderedKey = yamlKey(key);
+    if (isJsonRecord(entry)) {
+      const keys = Object.keys(entry);
+      if (keys.length === 0) {
+        lines.push(`${padding}${renderedKey}: {}`);
+      } else {
+        lines.push(`${padding}${renderedKey}:`);
+        lines.push(...renderYamlObject(entry, indent + 2));
+      }
+    } else if (Array.isArray(entry)) {
+      if (entry.length === 0) {
+        lines.push(`${padding}${renderedKey}: []`);
+      } else {
+        lines.push(`${padding}${renderedKey}:`);
+        lines.push(...renderYamlArray(entry, indent + 2));
+      }
+    } else {
+      lines.push(`${padding}${renderedKey}: ${yamlScalar(entry)}`);
+    }
+  }
+  return lines;
+}
+
+function renderYamlArray(values: JsonValue[], indent: number): string[] {
+  const lines: string[] = [];
+  const padding = ' '.repeat(indent);
+  for (const value of values) {
+    if (isJsonRecord(value)) {
+      lines.push(`${padding}-`);
+      lines.push(...renderYamlObject(value, indent + 2));
+    } else if (Array.isArray(value)) {
+      lines.push(`${padding}-`);
+      lines.push(...renderYamlArray(value, indent + 2));
+    } else {
+      lines.push(`${padding}- ${yamlScalar(value)}`);
+    }
+  }
+  return lines;
+}
+
+function yamlKey(key: string): string {
+  return /^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stringify(key);
+}
+
+function yamlScalar(value: JsonValue): string {
+  if (value === null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  throw new Error('Objects and arrays must be rendered by their parent');
+}
+
+function jsonString(value: JsonValue | undefined): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseArgs(values: readonly string[]): Args {
+  const parsed: Args = {
+    check: false,
+    checkFixtures: false,
+    inputPath: null,
+    opentofuBin: runtime.env.get('TAKOS_OPENTOFU_BIN') ?? 'tofu',
+    outputPath: null,
+    stdout: false,
+    target: null,
+    opentofuDir: 'deploy/opentofu',
+  };
+
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    switch (value) {
+      case '--check':
+        parsed.check = true;
+        break;
+      case '--check-fixtures':
+        parsed.checkFixtures = true;
+        break;
+      case '--':
+        break;
+      case '--input':
+        parsed.inputPath = requiredArgValue(values, index, value);
+        index += 1;
+        break;
+      case '--output':
+        parsed.outputPath = requiredArgValue(values, index, value);
+        index += 1;
+        break;
+      case '--stdout':
+        parsed.stdout = true;
+        break;
+      case '--target': {
+        const target = requiredArgValue(values, index, value);
+        if (target !== 'aws' && target !== 'gcp') {
+          console.error(`--target must be aws or gcp, got ${target}`);
+          runtime.exit(2);
+        }
+        parsed.target = target;
+        index += 1;
+        break;
+      }
+      case '--opentofu-dir':
+        parsed.opentofuDir = requiredArgValue(values, index, value);
+        index += 1;
+        break;
+      case '--help':
+      case '-h':
+        console.log(usage());
+        runtime.exit(0);
+        break;
+      default:
+        console.error(`Unknown argument: ${value}`);
+        console.error(usage());
+        runtime.exit(2);
+    }
+  }
+
+  if (parsed.checkFixtures) {
+    return parsed;
+  }
+  if (parsed.inputPath && parsed.opentofuDir !== 'deploy/opentofu') {
+    console.error('--input and --opentofu-dir cannot be used together');
+    runtime.exit(2);
+  }
+  if (parsed.check && !parsed.outputPath) {
+    console.error('--check requires --output');
+    runtime.exit(2);
+  }
+  if (parsed.stdout && parsed.outputPath) {
+    console.error('--stdout and --output cannot be used together');
+    runtime.exit(2);
+  }
+
+  return parsed;
+}
+
+function requiredArgValue(values: readonly string[], index: number, flag: string): string {
+  const value = values[index + 1];
+  if (!value || value.startsWith('--')) {
+    console.error(`${flag} requires a value`);
+    runtime.exit(2);
+  }
+  return value;
+}
+
+function usage(): string {
+  return [
+    'Usage:',
+    '  bun run opentofu:helm-values --target aws --opentofu-dir deploy/opentofu/environments/aws-staging --output deploy/helm/takos/values-aws-staging.generated.yaml',
+    '  bun run opentofu:helm-values --target gcp --input opentofu-output.json --stdout',
+    '  bun run opentofu:helm-values:check',
+  ].join('\n');
+}

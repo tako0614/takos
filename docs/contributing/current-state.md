@@ -8,11 +8,30 @@ This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, p
 2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
 3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
 4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
 ## Takos Boundary
 
 Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+
+## Canonical Layout
+
+- `src/worker`: Takos Worker source owner and Hono route composition.
+- `web`: browser UI.
+- `containers/git`: Git hosting container.
+- `containers/agent`: agent execution container.
+- `deploy/opentofu`, `deploy/helm`, and `deploy/distributions`: product distribution artifacts.
+
+## Takosumi Service Boundary
+
+Takosumi implementation detail stays inside `../takosumi/src/service`. Its
+internal domains include `src/service/domains/deploy` and
+`src/service/domains/runtime`; those are domain modules inside the Takosumi
+service, not standalone Takos product services.
+
+Optional backend adapter and runtime-agent connector work belongs to
+`takosumi-plugins`. The service/plugin boundary must stay valid for both
+self-host and cloud operator distributions.
 
 ## API Shape
 
@@ -33,7 +52,7 @@ Apply requests add the expected guard returned by dry-run. Takos product routes 
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/takosumi-v1)
 - [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)
 
 ## Current Exit Criteria

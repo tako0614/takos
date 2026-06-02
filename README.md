@@ -56,7 +56,7 @@ takos/
   containers/
     git/        -> Git hosting container
     agent/      -> agent execution container
-  deploy/       -> デプロイ用アーティファクト (Helm / Terraform / distribution)
+  deploy/       -> デプロイ用アーティファクト (Helm / OpenTofu / distribution)
   docs/         -> プロダクトドキュメント (VitePress site → docs.takos.jp)
 ```
 

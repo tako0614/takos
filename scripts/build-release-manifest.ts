@@ -659,16 +659,16 @@ function validationCommands(): CommandManifest[] {
       command: ['bun', 'run', 'helm:check-overlays'],
     },
     {
-      name: 'terraform-helm-values',
-      command: ['bun', 'run', 'terraform:helm-values:check'],
+      name: 'opentofu-helm-values',
+      command: ['bun', 'run', 'opentofu:helm-values:check'],
     },
     {
-      name: 'terraform-plan-gate',
-      command: ['bun', 'run', 'terraform:plan-gate'],
+      name: 'opentofu-plan-gate',
+      command: ['bun', 'run', 'opentofu:plan-gate'],
     },
     {
-      name: 'terraform-secret-policy',
-      command: ['bun', 'run', 'validate:terraform-secrets'],
+      name: 'opentofu-secret-policy',
+      command: ['bun', 'run', 'validate:opentofu-secrets'],
     },
     {
       name: 'validate-release-promotion',
@@ -718,9 +718,9 @@ function assertRequiredValidationCommands(
     'service-set-validator': ['bun', 'run', 'validate:service-set'],
     'validate-helm': ['bun', 'run', 'validate:helm'],
     'helm-overlay-generator': ['bun', 'run', 'helm:check-overlays'],
-    'terraform-helm-values': ['bun', 'run', 'terraform:helm-values:check'],
-    'terraform-plan-gate': ['bun', 'run', 'terraform:plan-gate'],
-    'terraform-secret-policy': ['bun', 'run', 'validate:terraform-secrets'],
+    'opentofu-helm-values': ['bun', 'run', 'opentofu:helm-values:check'],
+    'opentofu-plan-gate': ['bun', 'run', 'opentofu:plan-gate'],
+    'opentofu-secret-policy': ['bun', 'run', 'validate:opentofu-secrets'],
     'validate-release-promotion': [
       'bun',
       'run',

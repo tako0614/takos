@@ -10,22 +10,14 @@ export type ModelOption = {
 
 export const OPENAI_MODELS: ReadonlyArray<ModelOption> = [
   {
-    id: "gpt-5.4-nano",
-    name: "GPT-5.4 Nano",
-    description: "Fast and affordable",
+    id: "gpt-5.5",
+    name: "GPT-5.5",
+    description: "Default Takos agent model",
   },
-  {
-    id: "gpt-5.4-mini",
-    name: "GPT-5.4 Mini",
-    description: "Balanced performance",
-  },
-  { id: "gpt-5.4", name: "GPT-5.4", description: "Most capable OpenAI model" },
 ];
 
 export const SUPPORTED_MODEL_IDS = [
-  "gpt-5.4-nano",
-  "gpt-5.4-mini",
-  "gpt-5.4",
+  "gpt-5.5",
 ] as const;
 export type SupportedModelId = (typeof SUPPORTED_MODEL_IDS)[number];
 
@@ -56,9 +48,7 @@ export function getModelBackend(model: string): ModelBackend {
 
 /** Max input token limits per model (used to dynamically size conversation history) */
 export const MODEL_TOKEN_LIMITS: Readonly<Record<string, number>> = {
-  "gpt-5.4-nano": 32_768,
-  "gpt-5.4-mini": 128_000,
-  "gpt-5.4": 128_000,
+  "gpt-5.5": 128_000,
 };
 
 const DEFAULT_TOKEN_LIMIT = 32_768;
@@ -72,7 +62,7 @@ export function getModelTokenLimit(model: string): number {
 
 /**
  * Resolve the token budget available for conversation history.
- * `envOverrides` is a JSON string like `{"gpt-5.4":200000}` from env var MODEL_CONTEXT_WINDOWS.
+ * `envOverrides` is a JSON string like `{"gpt-5.5":200000}` from env var MODEL_CONTEXT_WINDOWS.
  */
 export function resolveHistoryTokenBudget(
   model: string,

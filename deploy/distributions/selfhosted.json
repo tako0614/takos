@@ -12,6 +12,14 @@
   },
   "artifacts": [
     {
+      "kind": "opentofu",
+      "ref": "deploy/opentofu/environments/selfhosted"
+    },
+    {
+      "kind": "helm",
+      "ref": "deploy/helm/takos/values-selfhosted.yaml"
+    },
+    {
       "kind": "compose",
       "ref": "../takos-private/compose.server.yml"
     }

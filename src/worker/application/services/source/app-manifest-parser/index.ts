@@ -727,13 +727,7 @@ function parseOverrides(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-export function parseAppManifestYaml(
-  raw: string,
-  _options: ParseAppManifestOptions = {},
-): AppManifest {
-  const parsed = YAML.parse(raw);
-  const record = asRecord(parsed);
-
+export function parseAppManifestRecord(record: Record<string, unknown>): AppManifest {
   assertAllowedTopLevelFields(record);
 
   // --- Top-level scalars ---
@@ -778,6 +772,17 @@ export function parseAppManifestYaml(
     env,
     ...(overrides ? { overrides } : {}),
   };
+}
+
+export function parseAppManifestObject(raw: unknown): AppManifest {
+  return parseAppManifestRecord(asRecord(raw));
+}
+
+export function parseAppManifestYaml(
+  raw: string,
+  _options: ParseAppManifestOptions = {},
+): AppManifest {
+  return parseAppManifestObject(YAML.parse(raw));
 }
 
 export const parseAppManifestText = parseAppManifestYaml;

@@ -1,7 +1,11 @@
 import { test } from "bun:test";
 import { assert, assertEquals, assertRejects, assertThrows } from "@takos/test/assert";
 import { getTableName } from "drizzle-orm";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { GitRunner } from "takosumi-contract/reference/runtime-capability";
+import { InstallerPipeline } from "../../../../../../../takosumi/src/service/domains/installer/mod.ts";
 
 import type { Env } from "../../../../shared/types/index.ts";
 import {
@@ -47,42 +51,42 @@ const DEFAULT_APP_SOURCES = [
     name: "takos-docs",
     path: "takos-apps/takos-docs/package.json",
     packageName: "@takos/takos-docs",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     preinstall: true,
   },
   {
     name: "takos-excel",
     path: "takos-apps/takos-excel/package.json",
     packageName: "@takos-apps/takos-excel",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     preinstall: true,
   },
   {
     name: "takos-slide",
     path: "takos-apps/takos-slide/package.json",
     packageName: "takos-slide",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     preinstall: true,
   },
   {
     name: "takos-computer",
     path: "takos-apps/takos-computer/package.json",
     packageName: "@takos-apps/takos-computer",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     preinstall: true,
   },
   {
     name: "yurucommu",
     path: "yurucommu/package.json",
     packageName: "@takos/yurucommu",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     preinstall: true,
   },
   {
     name: "road-to-me",
     path: "road-to-me/backend/package.json",
     packageName: "@takos/road-to-me-backend",
-    sourcePath: "backend/package.json",
+    sourcePath: "outputs.tf",
     preinstall: false,
   },
 ] as const;
@@ -1586,6 +1590,120 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
   }
 });
 
+test("preinstallDefaultAppsForSpace installs OpenTofu-only Git source through Takosumi InstallerPipeline", async () => {
+  const originalGetDb = defaultAppDistributionDeps.getDb;
+  const originalFetch = defaultAppDistributionDeps.fetch;
+  clearDefaultAppDistributionCache();
+  const workdir = await mkdtemp(join(tmpdir(), "takos-default-app-opentofu-"));
+  const sourceUrl = "https://github.com/tako0614/opentofu-only-fixture.git";
+  const fixture = await createOpenTofuOnlyGitFixture(workdir);
+  const pipeline = new InstallerPipeline({
+    gitRunner: rewriteGitCloneUrl(sourceUrl, fixture.repo),
+    providers: {
+      async apply(context) {
+        assertEquals(context.source.kind, "git");
+        assertEquals(context.source.commit, fixture.commit);
+        assertEquals(await pathExists(`${context.sourceDirectory}/outputs.tf`), true);
+        assertEquals(await pathExists(`${context.sourceDirectory}/.takosumi`), false);
+        assertEquals(
+          await pathExists(`${context.sourceDirectory}/.takosumi.yml`),
+          false,
+        );
+        return {
+          outputs: {
+            public: {
+              launcher: { url: "https://opentofu-only.fixture.test/" },
+            },
+          },
+        };
+      },
+    },
+  });
+  const appliedInstallations: unknown[] = [];
+
+  defaultAppDistributionDeps.getDb = (() => ({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            all: async () => [],
+          }),
+          get: async () => undefined,
+        }),
+      }),
+    }),
+  })) as any;
+  defaultAppDistributionDeps.fetch = async (input, init) => {
+    assertEquals(String(input), "https://installer.internal/v1/installations");
+    assertEquals(new Headers(init?.headers).get("authorization"), "Bearer install-token");
+    const body = objectRecord(
+      JSON.parse(String(init?.body)),
+      "Installation apply request",
+    );
+    assertEquals(body.spaceId, "space-1");
+    assertEquals(body.mode, "shared-cell");
+    assertEquals(body.runtimeBaseUrl, "https://takos.example.com/");
+    assertEquals(body.source, {
+      kind: "git",
+      url: sourceUrl,
+      ref: "HEAD",
+    });
+
+    const applied = await pipeline.installationApply(body as never);
+    appliedInstallations.push(applied);
+    return Response.json(applied, { status: 202 });
+  };
+
+  try {
+    const installed = await preinstallDefaultAppsForSpace(
+      makeEnv({
+        TAKOS_DEFAULT_APPS_PREINSTALL: "true",
+        TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([{
+          name: "opentofu-only-fixture",
+          title: "OpenTofu Only Fixture",
+          repositoryUrl: sourceUrl,
+          ref: "HEAD",
+          sourcePath: "outputs.tf",
+          preinstall: true,
+        }]),
+        TAKOS_DEFAULT_APP_INSTALL_URL:
+          "https://installer.internal/v1/installations",
+        TAKOS_DEFAULT_APP_INSTALL_TOKEN: "install-token",
+        TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_operator",
+        TAKOS_DEFAULT_APP_INSTALL_MODE: "shared-cell",
+        TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL: "https://takos.example.com",
+      }),
+      {
+        spaceId: "space-1",
+        createdByAccountId: "acct-1",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      },
+    );
+
+    assertEquals(installed.map((entry) => entry.name), [
+      "opentofu-only-fixture",
+    ]);
+    assertEquals(appliedInstallations.length, 1);
+    const applied = objectRecord(appliedInstallations[0], "applied installation");
+    const deployment = objectRecord(applied.deployment, "deployment");
+    const source = objectRecord(deployment.source, "deployment.source");
+    assertEquals(source.kind, "git");
+    assertEquals(source.url, sourceUrl);
+    assertEquals(source.ref, "HEAD");
+    assertEquals(source.commit, fixture.commit);
+    assertEquals(
+      objectRecord(objectRecord(deployment.outputs, "deployment.outputs").public, "public")
+        .launcher,
+      { url: "https://opentofu-only.fixture.test/" },
+    );
+  } finally {
+    clearDefaultAppDistributionCache();
+    defaultAppDistributionDeps.getDb = originalGetDb;
+    defaultAppDistributionDeps.fetch = originalFetch;
+    await rm(workdir, { recursive: true, force: true });
+  }
+});
+
 test("preinstallDefaultAppsForSpace skips database work when preinstall is disabled", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
@@ -1797,3 +1915,86 @@ test("clearDefaultAppDistributionEntries invalidates the cache before reseeding 
     defaultAppDistributionDeps.getDb = originalGetDb;
   }
 });
+
+async function createOpenTofuOnlyGitFixture(
+  root: string,
+): Promise<{ repo: string; commit: string }> {
+  const repo = join(root, "opentofu-only-origin");
+  await mkdir(repo, { recursive: true });
+  await writeFile(
+    `${repo}/package.json`,
+    JSON.stringify(
+      {
+        name: "@takos-fixtures/opentofu-only-app",
+        version: "0.1.0",
+        private: true,
+        type: "module",
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(
+    `${repo}/outputs.tf`,
+    `output "takos_app_manifest" {
+  value = {
+    name    = "opentofu-only-app"
+    version = "0.1.0"
+  }
+}
+`,
+  );
+  assertEquals(await pathExists(`${repo}/.takosumi`), false);
+  assertEquals(await pathExists(`${repo}/.takosumi.yml`), false);
+
+  runGit(["init"], repo);
+  runGit(["config", "user.email", "fixture@example.test"], repo);
+  runGit(["config", "user.name", "Takos Fixture"], repo);
+  runGit(["add", "package.json", "outputs.tf"], repo);
+  runGit(["commit", "-m", "Add OpenTofu-only app fixture"], repo);
+
+  return { repo, commit: runGit(["rev-parse", "HEAD"], repo).trim() };
+}
+
+function rewriteGitCloneUrl(sourceUrl: string, localRepo: string): GitRunner {
+  return {
+    async run(args, cwd) {
+      const rewritten = args.map((arg) => arg === sourceUrl ? localRepo : arg);
+      const result = Bun.spawnSync(["git", ...rewritten], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      return {
+        ok: result.exitCode === 0,
+        stdout: result.stdout.toString(),
+        stderr: result.stderr.toString(),
+      };
+    },
+  };
+}
+
+function runGit(args: string[], cwd: string): string {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed with exit ${result.exitCode}\nstdout:\n${
+        result.stdout.toString()
+      }\nstderr:\n${result.stderr.toString()}`,
+    );
+  }
+  return result.stdout.toString();
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}

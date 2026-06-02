@@ -16,7 +16,7 @@
    (`profiles/aws.example.json`) で使う。
 
 ::: tip 対象範囲 section 1 (Helm overlay) は ECS / Fargate への kernel 直接
-deploy、DynamoDB を control-plane storage として使う構成、Terraform / CDK
+deploy、DynamoDB を control-plane storage として使う構成、OpenTofu / CDK
 overlay を扱いません。 section 2 (reference runtime connector) は operator-owned infra workflow
 が作った PlatformService inventory と Deployment evidence の接続までを扱います。 :::
 
@@ -127,13 +127,13 @@ bun run helm:check-overlays
   values で secret を作成する運用
 - operator-owned AWS workflow / runtime connector が参照する AWS managed-service credentials
 
-Terraform apply 後の DB endpoint / Redis URL / SQS URL / S3 bucket 名は
-`bun run terraform:helm-values` で generated values に変換し、base overlay の
+OpenTofu apply 後の DB endpoint / Redis URL / SQS URL / S3 bucket 名は
+`bun run opentofu:helm-values` で generated values に変換し、base overlay の
 後に重ねます。生成 values は non-secret resource id だけを
 `runtimeConfig.managedResources` へ入れ、secret は `takos-private` / external
 secrets 側に残します。
 
-Terraform live tfvars、provider credential、DB password の扱いは
+OpenTofu live tfvars、provider credential、DB password の扱いは
 [Hosting Secret Policy](/hosting/secrets) に従います。`takos/` に committed する
 tfvars は CI plan fixture だけで、production / staging の raw secret は
 `takos-private` から注入します。
@@ -455,7 +455,7 @@ kernel がやること:
   経由で使う対象であり、 kernel hosting surface ではない
 - DynamoDB / SQS / Secrets Manager を app resource backend として自動
   provisioning する contract (※ section 2 は operator-owned workflow の inventory / evidence 接続を扱う)
-- Terraform / CDK による AWS resource 作成手順
+- OpenTofu / CDK による AWS resource 作成手順
 - AWS 固有 connector 名を app author 向けの public surface として固定
   する contract
 

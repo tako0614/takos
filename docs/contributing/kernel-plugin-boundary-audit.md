@@ -13,7 +13,7 @@ Takosumi のドキュメントを kernel-only
   internal RPC、plan / apply、activation truth、resource、routing
   projection、publication、event、audit、security policy。
 - `../takosumi/packages/contract/src/plugin.ts` は takosumi.com reference kernel
-  の `KernelPlugin` implementation binding shape を所有。
+  の `TakosumiPlugin` implementation binding shape を所有。
 - `../takosumi/packages/kernel/src/plugins/` は reference implementation の
   registry・env module loader・no-I/O reference adapter を所有。
 - self-host、cloud provider、database、queue、object-storage、KMS、secret

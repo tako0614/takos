@@ -188,6 +188,10 @@ for (const file of externalTextFiles) {
   validateTextIncludes(file.path, file.expected, { missing: 'warn' });
 }
 
+if (failures.length === 0) {
+  await validateReleaseManifestImageDigestFixture();
+}
+
 if (failures.length > 0) {
   for (const warning of warnings) console.warn(warning);
   for (const failure of failures) console.error(failure);
@@ -231,4 +235,121 @@ function exists(path: string): boolean {
     if (error instanceof runtime.errors.NotFound) return false;
     throw error;
   }
+}
+
+async function validateReleaseManifestImageDigestFixture(): Promise<void> {
+  const tempDir = await runtime.makeTempDir({
+    prefix: 'takos-release-digest-proof-',
+  });
+  try {
+    const imageDigestDir = `${tempDir}/image-digests`;
+    const output = `${tempDir}/release-manifest.json`;
+    await runtime.mkdir(imageDigestDir, { recursive: true });
+    const owner = await githubOwnerForReleaseFixture();
+    const commit = await gitOutput(['rev-parse', 'HEAD']);
+    const shortCommit = await gitOutput(['rev-parse', '--short', 'HEAD']);
+    const version = releaseVersion();
+    const images = ['takos-worker', 'takos-git', 'takos-agent'];
+
+    for (const [index, image] of images.entries()) {
+      const repository = `ghcr.io/${owner}/${image}`;
+      const digest = `sha256:${String(index + 1).repeat(64)}`;
+      await runtime.writeTextFile(
+        `${imageDigestDir}/${image}.json`,
+        `${JSON.stringify({
+          name: image,
+          image: repository,
+          digest,
+          digestRef: `${repository}@${digest}`,
+          tags: [
+            `${repository}:${version}`,
+            `${repository}:sha-${shortCommit ?? 'unknown'}`,
+          ],
+          ...(commit ? { commit } : {}),
+          workflowRun: 'https://github.com/takos/takos/actions/runs/fixture',
+          sbom: true,
+          provenance: true,
+        }, null, 2)}\n`,
+      );
+    }
+
+    const result = await runtime.runCommand('bun', {
+      args: [
+        'scripts/build-release-manifest.ts',
+        '--image-digest-dir',
+        imageDigestDir,
+        '--require-image-digests',
+        '--output',
+        output,
+      ],
+    });
+    if (!result.success) {
+      failures.push(
+        `release manifest digest fixture failed:\n${decode(result.stdout)}${
+          decode(result.stderr)
+        }`,
+      );
+      return;
+    }
+
+    const manifest = JSON.parse(
+      await runtime.readTextFile(output),
+    ) as {
+      officialImages?: {
+        complete?: boolean;
+        images?: Array<{ name?: string; digestRef?: string | null }>;
+      };
+    };
+    if (manifest.officialImages?.complete !== true) {
+      failures.push('release manifest digest fixture did not mark officialImages complete');
+    }
+    const byName = new Map(
+      (manifest.officialImages?.images ?? []).map((image) => [
+        image.name,
+        image.digestRef,
+      ]),
+    );
+    for (const image of ['takos-git', 'takos-agent']) {
+      const digestRef = byName.get(image);
+      if (!digestRef || !/@sha256:[a-f0-9]{64}$/.test(digestRef)) {
+        failures.push(`${image}: release manifest must contain a digest-pinned digestRef`);
+      }
+    }
+  } finally {
+    await runtime.remove(tempDir, { recursive: true });
+  }
+}
+
+function releaseVersion(): string {
+  const parsed = JSON.parse(runtime.readTextFileSync('package.json')) as {
+    version?: string;
+    takosRelease?: { version?: string };
+  };
+  const version = parsed.takosRelease?.version ?? parsed.version;
+  if (!version) {
+    failures.push('package.json: release version is required');
+    return '0.0.0';
+  }
+  return version;
+}
+
+async function githubOwnerForReleaseFixture(): Promise<string> {
+  const remote = await gitOutput(['config', '--get', 'remote.origin.url']);
+  if (!remote) return '<owner>';
+  const httpsMatch = /^https:\/\/github\.com\/([^/]+)\//.exec(remote);
+  if (httpsMatch) return httpsMatch[1];
+  const sshMatch = /^git@github\.com:([^/]+)\//.exec(remote);
+  if (sshMatch) return sshMatch[1];
+  return '<owner>';
+}
+
+async function gitOutput(args: string[]): Promise<string | null> {
+  const result = await runtime.runCommand('git', { args });
+  if (!result.success) return null;
+  const value = decode(result.stdout).trim();
+  return value.length > 0 ? value : null;
+}
+
+function decode(bytes: Uint8Array): string {
+  return new TextDecoder().decode(bytes);
 }

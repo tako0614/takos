@@ -20,8 +20,8 @@ cluster / アカウント / public URL が必要な proof は operator 所有の
 | ターゲット   | status        | proof                                                                                                                         | promotion gate                                                                                                        |
 | ------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `cloudflare` | `beta`        | schema validation / artifact ref / provider fixture proof / dry-run service smoke                                             | takos-private の wrangler 分割、staging deploy proof、`distribution:smoke --live`、provider live proof                |
-| `aws`        | `smoke-only`  | schema validation / Terraform / Helm ref / credential-free staging plan gate / provider fixture proof / dry-run service smoke | `values-aws.yaml` での `helm template`、provider live proof、service live smoke                                       |
-| `gcp`        | `smoke-only`  | schema validation / Terraform / Helm ref / credential-free staging plan gate / provider fixture proof / dry-run service smoke | `values-gcp.yaml` での `helm template`、provider live proof、service live smoke                                       |
+| `aws`        | `smoke-only`  | schema validation / OpenTofu / Helm ref / credential-free staging plan gate / provider fixture proof / dry-run service smoke | `values-aws.yaml` での `helm template`、provider live proof、service live smoke                                       |
+| `gcp`        | `smoke-only`  | schema validation / OpenTofu / Helm ref / credential-free staging plan gate / provider fixture proof / dry-run service smoke | `values-gcp.yaml` での `helm template`、provider live proof、service live smoke                                       |
 | `kubernetes` | `smoke-only`  | schema validation / Helm chart ref / provider fixture proof / dry-run service smoke                                           | `helm template`、kind / k3d インストール smoke、provider live proof、service live smoke                               |
 | `selfhosted` | `smoke-only`  | schema validation / compose ref / provider fixture proof / dry-run service smoke                                              | self-host compose deploy proof、`distribution:smoke --live`、provider live proof、secret rotation runbook の evidence |
 | `local`      | `unsupported` | local compose は開発用 runtime。本番ディストリビューションには含めない                                                        | bare metal / VM 本番には `selfhosted` を使う                                                                          |
@@ -40,7 +40,7 @@ cluster / アカウント / public URL が必要な proof は operator 所有の
 ## Artifact の所有
 
 Takos プロダクトのディストリビューション artifact は `takos/deploy/`
-配下が所有します。AWS と GCP は `takos/deploy/terraform/environments/*-prod` と
+配下が所有します。AWS と GCP は `takos/deploy/opentofu/environments/*-prod` と
 `takos/deploy/helm/takos` の overlay を使います。`takosumi/deploy/aws` /
 `takosumi/deploy/gcp` は README のみで、Takosumi の provider runbook
 用途であり、Takos プロダクトの artifact ディレクトリではありません。

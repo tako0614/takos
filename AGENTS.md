@@ -1,7 +1,7 @@
 # AGENTS.md — takos (Takos product shell)
 
 `takos` は **Takos product shell** で、単一の Takos Worker (`src/worker`)、UI (`web`)、Cloudflare Containers /
-self-host container 実装 (`containers/git` / `containers/agent`) と shell-owned distribution artifacts (Helm / Terraform /
+self-host container 実装 (`containers/git` / `containers/agent`) と shell-owned distribution artifacts (Helm / OpenTofu /
 distribution manifests / validator) を集約する。Takosumi / Takos の identity と vocabulary
 は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
@@ -26,7 +26,7 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
 - Takos Worker の source owner (`src/worker` / `src/routes` / `src/contracts`)
 - UI source owner (`web`)
 - Git / agent container implementation owner (`containers/git`、 `containers/agent`)
-- shell-owned distribution artifacts (`deploy/distributions/`、 `deploy/helm/`、 `deploy/terraform/`)
+- shell-owned distribution artifacts (`deploy/distributions/`、 `deploy/helm/`、 `deploy/opentofu/`)
 - shell-owned planning docs (`docs/contributing/`、 旧 `plan/`)
 - product validator scripts (release-gate / validate:helm / validate:distributions 等)
 
@@ -40,7 +40,7 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
 
 ## 隣接 product との contract
 
-- **Upstream platform**: `../takosumi/` (kernel + installer)、 `../takosumi/` (Accounts)
+- **Upstream platform**: `../takosumi/` (service + installer + Accounts)
 - **Downstream**: `../takos-private/` (deployment artifact 消費)、 bundled apps (`../takos-apps/*`、 `../yurucommu/`、
   `../road-to-me/`)
 - **Internal**: `src/worker` (public/control Worker)、 `web` (UI)、 `containers/git` (Git hosting container)、
@@ -84,9 +84,8 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
   manifests.
 - Provider plugins must depend on the published Takosumi plugin package (`@takosjp/takosumi-plugins`) and Takosumi
   contracts/SDK, not on kernel implementation paths.
-- The PaaS kernel implementation lives in the standalone Takosumi repository (`../takosumi/`,
-  `jsr:@takos/takosumi-kernel`). `deploy/` here only carries Takos-specific deploy artifacts that wrap the upstream
-  kernel.
+- The Takosumi service implementation lives in the standalone Takosumi repository (`../takosumi/`). `deploy/` here only
+  carries Takos-specific deploy artifacts that consume the upstream service and operator distribution.
 - The official provider bundle is `../takosumi-plugins/` and publishes as `@takosjp/takosumi-plugins`.
 - Hosting target ids are an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`.
 

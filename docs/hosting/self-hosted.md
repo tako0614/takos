@@ -367,7 +367,7 @@ services:
 | `takos-agent`    | Takos agent execution service                               |
 
 Source resolution、PlatformService inventory binding resolution、Deployment apply evidence は
-`takosumi`、infra provisioning は operator-owned Terraform / OpenTofu / Helm / runtime-agent workflow、build は
+`takosumi`、infra provisioning は operator-owned OpenTofu / Helm / runtime-agent workflow、build は
 build service / CI、Installation / OIDC / billing は self-host operator の Takosumi Accounts (`takosumi`) が担当します。
 
 ### ネットワーク構成

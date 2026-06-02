@@ -64,11 +64,9 @@ type RateLimit = {
 
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_RUN_NESTING_DEPTH = 5;
-const DEFAULT_MODEL_ID = "gpt-5.4-nano";
+const DEFAULT_MODEL_ID = "gpt-5.5";
 const SUPPORTED_MODEL_IDS = new Set([
-  "gpt-5.4-nano",
-  "gpt-5.4-mini",
-  "gpt-5.4",
+  "gpt-5.5",
 ]);
 const TOP_LEVEL_RUN_RATE_LIMIT: RateLimit = {
   maxRunsPerMinute: 30,

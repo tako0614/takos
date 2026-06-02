@@ -12,8 +12,8 @@
   },
   "artifacts": [
     {
-      "kind": "terraform",
-      "ref": "deploy/terraform/environments/gcp-prod"
+      "kind": "opentofu",
+      "ref": "deploy/opentofu/environments/gcp-prod"
     },
     {
       "kind": "helm",
@@ -46,7 +46,7 @@
     "cloudDnsZone": "takos-zone",
     "metadata": {
       "providerBundle": "@takos/takosumi-plugins",
-      "terraform": "deploy/terraform/environments/gcp-prod",
+      "opentofu": "deploy/opentofu/environments/gcp-prod",
       "helmOverlay": "deploy/helm/takos/values-gcp.yaml"
     }
   },
