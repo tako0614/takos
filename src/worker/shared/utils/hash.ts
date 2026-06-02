@@ -21,14 +21,6 @@ export async function computeSHA256(
   return bytesToHex(new Uint8Array(hashBuffer));
 }
 
-export async function verifyBundleHash(
-  content: string | ArrayBuffer,
-  expectedHash: string,
-): Promise<boolean> {
-  const actualHash = await computeSHA256(content);
-  return constantTimeEqual(actualHash, expectedHash);
-}
-
 export function constantTimeEqual(a: string, b: string): boolean {
   const encoder = new TextEncoder();
   const bufA = encoder.encode(a);

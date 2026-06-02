@@ -1,8 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "include": [
-    "shims/**/*.d.ts",
-    "shims/**/*.ts",
     "src/worker/platform-utils/**/*.ts",
     "src/contracts/public/**/*.ts",
     "src/worker/actions-engine/**/*.ts",

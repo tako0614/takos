@@ -1,5 +1,4 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import { z } from "zod";
 import type { Env } from "../../../shared/types/index.ts";
 import {
   getDb,
@@ -23,37 +22,6 @@ import {
   type NotificationPreferenceMatrix,
   type NotificationType,
 } from "./notification-models.ts";
-
-// ── Zod schemas for API input validation ──
-
-export const updateNotificationPreferencesSchema = z.object({
-  updates: z.array(
-    z.object({
-      type: z.enum(NOTIFICATION_TYPES),
-      channel: z.enum(NOTIFICATION_CHANNELS),
-      enabled: z.boolean(),
-    }),
-  ).min(1).max(NOTIFICATION_TYPES.length * NOTIFICATION_CHANNELS.length),
-});
-
-export const setMutedUntilSchema = z.object({
-  muted_until: z
-    .string()
-    .refine((v) => Number.isFinite(Date.parse(v)), {
-      message: "muted_until must be a valid datetime",
-    })
-    .nullable(),
-});
-
-export const listNotificationsQuerySchema = z.object({
-  limit: z.coerce.number().int().positive().max(50).optional(),
-  before: z
-    .string()
-    .refine((v) => Number.isFinite(Date.parse(v)), {
-      message: "before must be a valid datetime",
-    })
-    .optional(),
-});
 
 export type NotificationDto = {
   id: string;
@@ -121,41 +89,6 @@ async function emitNotificationCreated(
     }),
   });
   await stub.fetch(request);
-}
-
-export async function ensureNotificationSettings(
-  dbBinding: SqlDatabaseBinding,
-  userId: string,
-): Promise<void> {
-  const db = getDb(dbBinding);
-  const ts = new Date().toISOString();
-  try {
-    const existingSettings = await db.select().from(notificationSettings)
-      .where(eq(notificationSettings.accountId, userId)).get();
-    if (!existingSettings) {
-      try {
-        await db.insert(notificationSettings).values({
-          accountId: userId,
-          mutedUntil: null,
-          createdAt: ts,
-          updatedAt: ts,
-        });
-      } catch (err) {
-        logWarn(
-          "Insert notification settings skipped (non-critical, likely race condition)",
-          {
-            module: "notifications",
-            error: err instanceof Error ? err.message : String(err),
-          },
-        );
-      }
-    }
-  } catch (err) {
-    if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, "notification_settings");
-    }
-    throw err;
-  }
 }
 
 export async function getNotificationsMutedUntil(

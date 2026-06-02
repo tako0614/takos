@@ -19,10 +19,6 @@ export const WORKSPACE_SERVICE_LIMITS = {
   maxServices: MAX_SERVICES,
 };
 
-export const WORKSPACE_WORKER_LIMITS = {
-  maxWorkers: MAX_SERVICES,
-};
-
 export const workerServiceDeps = {
   getDb: realGetDb,
   generateId: realGenerateId,
@@ -76,8 +72,6 @@ export function slugifyServiceName(name: string): string {
     .replace(/^-|-$/g, "")
     .slice(0, 32);
 }
-
-export const slugifyWorkerName = slugifyServiceName;
 
 function toApiService(row: {
   id: string;
@@ -207,28 +201,6 @@ export async function listServicesForSpace(
   return serviceRows.map((service) => toApiService(service));
 }
 
-export async function getServiceById(
-  d1: SqlDatabaseBinding,
-  serviceId: string,
-) {
-  const db = workerServiceDeps.getDb(d1);
-  const service = await db.select({
-    id: services.id,
-    accountId: services.accountId,
-    groupId: services.groupId,
-    workerType: services.workerType,
-    status: services.status,
-    config: services.config,
-    hostname: services.hostname,
-    routeRef: services.routeRef,
-    slug: services.slug,
-    createdAt: services.createdAt,
-    updatedAt: services.updatedAt,
-  }).from(services).where(eq(services.id, serviceId)).get();
-  if (!service) return null;
-  return toApiService(service);
-}
-
 export async function getServiceRouteRecord(
   d1: SqlDatabaseBinding,
   serviceId: string,
@@ -247,16 +219,6 @@ export async function getServiceRouteRecord(
     .where(eq(services.id, serviceId))
     .get();
   return service ? normalizeServiceRouteRecord(service) : null;
-}
-
-export async function getServiceRouteRecordForSpace(
-  d1: SqlDatabaseBinding,
-  spaceId: string,
-  serviceId: string,
-): Promise<ServiceRouteRecord | null> {
-  const service = await getServiceRouteRecord(d1, serviceId);
-  if (!service || service.accountId !== spaceId) return null;
-  return service;
 }
 
 export async function resolveServiceReferenceRecord(
@@ -291,14 +253,6 @@ export async function resolveServiceReferenceRecord(
   return service ? normalizeServiceRouteRecord(service) : null;
 }
 
-export async function resolveServiceRouteReference(
-  d1: SqlDatabaseBinding,
-  spaceId: string,
-  reference: string,
-): Promise<ServiceRouteRecord | null> {
-  return resolveServiceReferenceRecord(d1, spaceId, reference);
-}
-
 export async function listServiceRouteRecordsByIds(
   d1: SqlDatabaseBinding,
   serviceIds: string[],
@@ -320,30 +274,6 @@ export async function listServiceRouteRecordsByIds(
   return rows.map(normalizeServiceRouteRecord);
 }
 
-export async function getServiceRouteSummary(
-  d1: SqlDatabaseBinding,
-  serviceId: string,
-  spaceId?: string,
-): Promise<ServiceRouteSummary | null> {
-  const db = workerServiceDeps.getDb(d1);
-  const conditions = [eq(services.id, serviceId)];
-  if (spaceId) {
-    conditions.push(eq(services.accountId, spaceId));
-  }
-
-  const service = await db.select({
-    id: services.id,
-    accountId: services.accountId,
-    hostname: services.hostname,
-    routeRef: services.routeRef,
-    slug: services.slug,
-  }).from(services)
-    .where(and(...conditions))
-    .get();
-
-  return service ?? null;
-}
-
 export async function resolveServiceRouteSummaryForSpace(
   d1: SqlDatabaseBinding,
   spaceId: string,
@@ -358,14 +288,6 @@ export async function resolveServiceRouteSummaryForSpace(
     routeRef: service.routeRef,
     slug: service.slug,
   };
-}
-
-export async function findServiceRouteSummaryInSpace(
-  d1: SqlDatabaseBinding,
-  spaceId: string,
-  reference: string,
-): Promise<ServiceRouteSummary | null> {
-  return resolveServiceRouteSummaryForSpace(d1, spaceId, reference);
 }
 
 export async function listSpaceServiceRouteCleanupRecords(
@@ -383,13 +305,6 @@ export async function listSpaceServiceRouteCleanupRecords(
   }).from(services)
     .where(eq(services.accountId, spaceId))
     .all();
-}
-
-export async function listServiceRouteCleanupRecordsForSpace(
-  d1: SqlDatabaseBinding,
-  spaceId: string,
-): Promise<ServiceRouteCleanupRecord[]> {
-  return listSpaceServiceRouteCleanupRecords(d1, spaceId);
 }
 
 export async function getServiceForUser(

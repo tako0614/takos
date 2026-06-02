@@ -207,6 +207,7 @@ let checkedServiceSpecs = 0;
 let checkedProviderCommands = 0;
 let checkedServiceSmokes = 0;
 let checkedDefaultApps = 0;
+let canonicalDefaultApps: { label: string; block: JsonRecord } | null = null;
 
 if (distributionFiles.length === 0) {
   errors.push('no distribution manifests matched the requested filter');
@@ -652,6 +653,16 @@ function bindingKey(binding: ExpectedBinding): string {
 }
 
 function validateDefaultApps(defaultApps: JsonRecord, label: string): void {
+  if (canonicalDefaultApps === null) {
+    canonicalDefaultApps = { label, block: defaultApps };
+  } else if (
+    !jsonValuesEqual(defaultApps as JsonValue, canonicalDefaultApps.block as JsonValue)
+  ) {
+    errors.push(
+      `${label}.defaultApps must be deep-equal to the canonical defaultApps block in ${canonicalDefaultApps.label}.defaultApps`,
+    );
+  }
+
   const entries = arrayAt(defaultApps, 'entries', `${label}.defaultApps`)
     .map((entry, index) => defaultAppEntryFromRecord(entry, `${label}.defaultApps.entries[${index}]`));
   const actualNames = entries.map((entry) => entry.name).sort();
@@ -973,7 +984,7 @@ async function distributionManifestFiles(filter: string | null): Promise<string[
   if (filter) return [normalize(filter)];
   const files: string[] = [];
   for await (const entry of runtime.readDir(resolve(takosRoot, distributionDir))) {
-    if (entry.isFile && entry.name.endsWith('.json') && entry.name !== 'default-apps.json') {
+    if (entry.isFile && entry.name.endsWith('.json')) {
       files.push(join(distributionDir, entry.name));
     }
   }
