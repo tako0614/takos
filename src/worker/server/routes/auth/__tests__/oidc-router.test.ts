@@ -124,7 +124,7 @@ async function createAuthTestDb(dbPath: string) {
       setup_completed INTEGER NOT NULL DEFAULT 0,
       default_repository_id TEXT,
       head_snapshot_id TEXT,
-      ai_model TEXT DEFAULT 'gpt-5.4-nano',
+      ai_model TEXT DEFAULT 'gpt-5.5',
       model_backend TEXT DEFAULT 'openai',
       security_posture TEXT NOT NULL DEFAULT 'standard',
       owner_account_id TEXT,

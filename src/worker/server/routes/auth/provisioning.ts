@@ -203,7 +203,7 @@ export async function provisionOidcUser(
     // site (`identity/space-crud-write.ts`). The DB-level default is a legacy
     // literal that is not present in the model catalog and must not be relied
     // on. See schema-accounts.ts.
-    aiModel: "gpt-5.4-nano",
+    aiModel: "gpt-5.5",
     createdAt: timestamp,
     updatedAt: timestamp,
   });

@@ -8,11 +8,11 @@ This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, p
 2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
 3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
 4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
 ## Release Gates
 
-The root `CI` / `Release Gate` workflows own multi-cloud verification. Terraform is pinned to Terraform 1.9.8 for the current gate, and the required command is `bun run terraform:plan-gate`. That gate must prove `terraform plan -refresh=false` for each supported target before a release artifact is treated as promotable.
+The root `CI` / `Release Gate` workflows own multi-cloud verification. OpenTofu is pinned to OpenTofu 1.12.1 for the current gate, and the required command is `bun run opentofu:plan-gate`. That gate must prove `tofu plan -refresh=false` for each supported target before a release artifact is treated as promotable.
 
 ## Takos Boundary
 
@@ -37,5 +37,5 @@ Apply requests add the expected guard returned by dry-run. Takos product routes 
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
 - [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

@@ -47,7 +47,7 @@ type ExpectedDefaultAppEntry = {
 };
 const expectedArtifacts: Record<ExpectedTargetId, readonly ExpectedArtifact[]> = {
   aws: [
-    { kind: 'terraform', ref: 'deploy/terraform/environments/aws-prod' },
+    { kind: 'opentofu', ref: 'deploy/opentofu/environments/aws-prod' },
     { kind: 'helm', ref: 'deploy/helm/takos/values-aws.yaml' },
   ],
   cloudflare: [
@@ -57,13 +57,15 @@ const expectedArtifacts: Record<ExpectedTargetId, readonly ExpectedArtifact[]> =
     { kind: 'operator', ref: '../takosumi/deploy/accounts-cloudflare' },
   ],
   gcp: [
-    { kind: 'terraform', ref: 'deploy/terraform/environments/gcp-prod' },
+    { kind: 'opentofu', ref: 'deploy/opentofu/environments/gcp-prod' },
     { kind: 'helm', ref: 'deploy/helm/takos/values-gcp.yaml' },
   ],
   kubernetes: [
     { kind: 'helm', ref: 'deploy/helm/takos' },
   ],
   selfhosted: [
+    { kind: 'opentofu', ref: 'deploy/opentofu/environments/selfhosted' },
+    { kind: 'helm', ref: 'deploy/helm/takos/values-selfhosted.yaml' },
     { kind: 'compose', ref: '../takos-private/compose.server.yml' },
   ],
 };

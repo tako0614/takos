@@ -56,6 +56,10 @@ const gates: GateCommand[] = [
     command: ['bun', 'run', 'validate:distributions'],
   },
   {
+    name: 'validate-default-app-opentofu',
+    command: ['bun', 'run', 'validate:default-app-opentofu'],
+  },
+  {
     name: 'validate-observability',
     command: ['bun', 'run', 'validate:observability'],
   },
@@ -84,12 +88,12 @@ const gates: GateCommand[] = [
     command: ['bun', 'run', 'helm:check-overlays'],
   },
   {
-    name: 'terraform-helm-values',
-    command: ['bun', 'run', 'terraform:helm-values:check'],
+    name: 'opentofu-helm-values',
+    command: ['bun', 'run', 'opentofu:helm-values:check'],
   },
   {
-    name: 'terraform-secret-policy',
-    command: ['bun', 'run', 'validate:terraform-secrets'],
+    name: 'opentofu-secret-policy',
+    command: ['bun', 'run', 'validate:opentofu-secrets'],
   },
   {
     name: 'release-manifest',

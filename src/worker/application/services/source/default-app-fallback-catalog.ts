@@ -22,7 +22,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     repositoryEnvKey: "TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL",
     ref: "v0.1.2",
     refType: "tag",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },
@@ -50,7 +50,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     repositoryEnvKey: "TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL",
     ref: "v0.1.2",
     refType: "tag",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },
@@ -77,7 +77,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     repositoryEnvKey: "TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL",
     ref: "v0.1.2",
     refType: "tag",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },
@@ -105,7 +105,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     repositoryEnvKey: "TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL",
     ref: "v2.1.2",
     refType: "tag",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },
@@ -128,7 +128,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     repositoryEnvKey: "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
     ref: "v1.2.6",
     refType: "tag",
-    sourcePath: "package.json",
+    sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },
@@ -156,7 +156,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     repositoryEnvKey: "TAKOS_DEFAULT_ROAD_TO_ME_APP_REPOSITORY_URL",
     ref: "v0.1.0",
     refType: "tag",
-    sourcePath: "backend/package.json",
+    sourcePath: "outputs.tf",
     runtimeModes: ["dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc@v1", required: true },

@@ -8,7 +8,7 @@ This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, p
 2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
 3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
 4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
+5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
 
 ## Takos Boundary
 
@@ -29,9 +29,12 @@ Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app lau
 
 Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
+provider data copy / schema migration の巻き戻しは rollback の current guarantee ではありません。Rollback は Installation の
+current Deployment pointer を retained successful Deployment に戻す control-plane 操作です。
+
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/takosumi-v1)
 - [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

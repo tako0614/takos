@@ -16,7 +16,7 @@
    (`profiles/gcp.example.json`) で使う。
 
 ::: tip 対象範囲 section 1 (Helm overlay) は Cloud Run への kernel 直接
-deploy、Firestore を control-plane storage として使う構成、Terraform overlay
+deploy、Firestore を control-plane storage として使う構成、OpenTofu overlay
 を扱いません。 section 2 (reference runtime connector) は operator-owned infra workflow
 が作った PlatformService inventory と Deployment evidence の接続までを扱います。 :::
 
@@ -128,13 +128,13 @@ bun run helm:check-overlays
   を作成する運用
 - operator-owned GCP workflow / runtime connector が参照する GCP managed-service credentials
 
-Terraform apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic / GCS
-bucket 名は `bun run terraform:helm-values` で generated values に変換し、
+OpenTofu apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic / GCS
+bucket 名は `bun run opentofu:helm-values` で generated values に変換し、
 base overlay の後に重ねます。生成 values は non-secret resource id だけを
 `runtimeConfig.managedResources` へ入れ、secret は `takos-private` / external
 secrets 側に残します。
 
-Terraform live tfvars、provider credential、DB password の扱いは
+OpenTofu live tfvars、provider credential、DB password の扱いは
 [Hosting Secret Policy](/hosting/secrets) に従います。`takos/` に committed する
 tfvars は CI plan fixture だけで、production / staging の raw secret は
 `takos-private` から注入します。
@@ -401,7 +401,7 @@ kernel がやること:
   経由で使う対象であり、 kernel hosting surface ではない
 - Firestore / Pub/Sub / Secret Manager を app resource backend として自動
   provisioning する contract (※ section 2 は operator-owned workflow の inventory / evidence 接続を扱う)
-- Terraform による GCP resource 作成手順
+- OpenTofu による GCP resource 作成手順
 - GCP 固有 connector 名を app author 向けの public surface として固定
   する contract
 

@@ -151,7 +151,7 @@ function generateOverlay(
     '  plugins:',
     ...pluginKeys.map((key) => `    ${key}: ""`),
     '',
-    `# ${provider.label} managed-resource identifiers can be supplied by the Terraform`,
+    `# ${provider.label} managed-resource identifiers can be supplied by the OpenTofu`,
     '# bridge values overlay. Credentials and secret material stay in takos-private',
     '# or external secrets, not in generated Helm values.',
     '',

@@ -5,9 +5,7 @@ export type ModelSelectOption = {
 };
 
 const OPENAI_MODEL_OPTIONS: ReadonlyArray<ModelSelectOption> = [
-  { id: "gpt-5.4-nano", label: "GPT-5.4 Nano" },
-  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
-  { id: "gpt-5.4", label: "GPT-5.4" },
+  { id: "gpt-5.5", label: "GPT-5.5" },
 ];
 
 export const DEFAULT_MODEL_ID = OPENAI_MODEL_OPTIONS[0].id;

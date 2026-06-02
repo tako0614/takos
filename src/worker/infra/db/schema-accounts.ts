@@ -228,7 +228,7 @@ export const accountStorageFiles = sqliteTable("account_storage_files", {
 // with `DEFAULT 'gpt-5-mini'`. SQLite cannot retroactively change a column
 // default without a full table rebuild, so the drizzle declaration mirrors
 // the baseline literal to keep the schema diff empty. The application-level
-// convention for newly created accounts is `'gpt-5.4-nano'` and every insert
+// convention for newly created accounts is `'gpt-5.5'` and every insert
 // site (`identity/space-crud-write.ts`, `auth/provisioning.ts`) is
 // responsible for setting that value explicitly;
 // callers MUST NOT rely on the DB-level default for the runtime model id.

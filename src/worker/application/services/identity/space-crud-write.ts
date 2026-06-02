@@ -128,7 +128,7 @@ async function createSpaceBundle(
       slug,
       description: description || null,
       ownerAccountId: ownerUserId,
-      aiModel: "gpt-5.4-nano",
+      aiModel: "gpt-5.5",
       modelBackend: "openai",
       securityPosture: "standard",
       createdAt: timestamp,

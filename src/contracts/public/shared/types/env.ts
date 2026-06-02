@@ -57,7 +57,7 @@ export interface AgentConfigEnv {
   APP_DEPLOY_REMOTE_MAX_DELTA_RESULT_BYTES?: string;
   APP_DEPLOY_REMOTE_MAX_DELTA_CHAIN_DEPTH?: string;
   APP_DEPLOY_REMOTE_MAX_ARCHIVE_BYTES?: string;
-  /** JSON object mapping model IDs to context window sizes, e.g. {"gpt-5.4":200} */
+  /** JSON object mapping model IDs to context window sizes, e.g. {"gpt-5.5":200} */
   MODEL_CONTEXT_WINDOWS?: string;
 }
 

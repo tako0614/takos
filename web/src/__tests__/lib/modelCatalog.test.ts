@@ -8,23 +8,17 @@ import {
 import { test } from "bun:test";
 
 test("frontend model catalog - keeps fallback options on OpenAI models only", () => {
-  assertEquals(DEFAULT_MODEL_ID, "gpt-5.4-nano");
+  assertEquals(DEFAULT_MODEL_ID, "gpt-5.5");
   assertEquals(FALLBACK_MODELS.map((model) => model.id), [
-    "gpt-5.4-nano",
-    "gpt-5.4-mini",
-    "gpt-5.4",
+    "gpt-5.5",
   ]);
 });
 test("frontend model catalog - lists all supported models", () => {
   assertEquals(MODEL_OPTIONS.map((m) => m.id), [
-    "gpt-5.4-nano",
-    "gpt-5.4-mini",
-    "gpt-5.4",
+    "gpt-5.5",
   ]);
 });
 test("frontend model catalog - returns model labels", () => {
-  assertEquals(getModelLabel("gpt-5.4-nano"), "GPT-5.4 Nano");
-  assertEquals(getModelLabel("gpt-5.4-mini"), "GPT-5.4 Mini");
-  assertEquals(getModelLabel("gpt-5.4"), "GPT-5.4");
+  assertEquals(getModelLabel("gpt-5.5"), "GPT-5.5");
   assertEquals(getModelLabel("unknown-model"), "unknown-model");
 });

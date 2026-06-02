@@ -1,0 +1,10 @@
+environment        = "production"
+admin_domain       = "admin.takos.example.internal"
+tenant_base_domain = "app.takos.example.internal"
+accounts_domain    = "accounts.takos.example.internal"
+ingress_class_name = "caddy"
+tls_secret_name    = "takos-tls"
+
+platform_secret_name = "takos-platform"
+auth_secret_name     = "takos-auth"
+llm_secret_name      = "takos-llm"

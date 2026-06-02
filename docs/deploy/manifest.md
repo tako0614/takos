@@ -1,37 +1,82 @@
-# Takos Source input 例
+# OpenTofu App Source
 
-This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
+Takos app source is OpenTofu-native. A repository does not need `.takosumi` or
+another Takos-specific manifest file. The app exposes deploy intent through
+OpenTofu outputs, and Takos reads the evaluated JSON from `tofu output -json`.
 
-## Current Flow
+## Canonical Output
 
-1. Choose a Git URL/ref or a prepared source archive.
-2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
-3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
-4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, Terraform/OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution; Takosumi records the resulting Deployment and binding evidence.
+Use an `output "takos_app_manifest"` block:
 
-## Takos Boundary
+```hcl
+output "takos_app_manifest" {
+  value = {
+    name    = "notes"
+    version = "1.0.0"
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+    compute = {
+      web = {
+        kind  = "worker"
+        image = "ghcr.io/example/notes@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    }
 
-## API Shape
+    routes = [
+      {
+        id     = "root"
+        target = "web"
+        path   = "/"
+      }
+    ]
 
-```json
-{
-  "spaceId": "space_1",
-  "source": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
+    publish = [
+      {
+        name      = "ui"
+        publisher = "web"
+        type      = "takos.ui-surface.v1"
+        outputs = {
+          url = {
+            kind     = "url"
+            routeRef = "root"
+          }
+        }
+      }
+    ]
+
+    env = {}
   }
 }
 ```
 
-Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+`takos_app` is accepted as a short alias, but new sources should use
+`takos_app_manifest`.
+
+## Source Detection
+
+Takos treats these files as installable OpenTofu source signals, in order:
+
+- `main.tf`
+- `outputs.tf`
+- `takos.tf`
+- `opentofu/main.tf`
+- `opentofu/outputs.tf`
+- `infra/main.tf`
+- `infra/outputs.tf`
+- `package.json` as the legacy fallback
+
+OpenTofu modules may use variables, locals, and modules. Takos only consumes the
+evaluated output JSON, not raw HCL.
+
+## Boundary
+
+OpenTofu state, provider credentials, resource apply, OIDC clients, billing,
+domains, PlatformService inventory, and implementation bindings belong to the
+operator distribution or `takos-private`. Takos consumes the app output and
+Takosumi records Source / Installation / Deployment / PlatformService evidence.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi core specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi v1](https://takosumi.com/docs/reference/takosumi-v1)
 - [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

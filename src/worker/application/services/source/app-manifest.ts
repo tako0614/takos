@@ -18,9 +18,16 @@ export type {
 // Re-export parsing
 export {
   assertManifestInputDoesNotUseBuildMetadata,
+  parseAppManifestObject,
+  parseAppManifestRecord,
   parseAppManifestText,
   parseAppManifestYaml,
 } from "./app-manifest-parser/index.ts";
+
+export {
+  APP_MANIFEST_OUTPUT_KEYS,
+  parseOpenTofuAppManifestOutputs,
+} from "./opentofu-app-manifest.ts";
 
 // Re-export validation
 export {

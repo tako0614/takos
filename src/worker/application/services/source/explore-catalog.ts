@@ -67,19 +67,18 @@ async function listRepoSourcePaths(
   if (!rootEntries) return null;
 
   const paths = rootEntries.map((entry) => entry.name);
-  const takosumiDir = rootEntries.find((entry) =>
-    entry.name === ".takosumi" && isDirectoryEntry(entry)
-  );
-  if (takosumiDir) {
-    const takosumiEntries = await sourceServiceDeps.gitStore.listDirectory(
+  for (const dirName of ["opentofu", "infra"]) {
+    const dir = rootEntries.find((entry) =>
+      entry.name === dirName && isDirectoryEntry(entry)
+    );
+    if (!dir) continue;
+    const entries = await sourceServiceDeps.gitStore.listDirectory(
       gitObjects,
       treeSha,
-      ".takosumi",
+      dirName,
     );
-    if (takosumiEntries) {
-      paths.push(
-        ...takosumiEntries.map((entry) => `.takosumi/${entry.name}`),
-      );
+    if (entries) {
+      paths.push(...entries.map((entry) => `${dirName}/${entry.name}`));
     }
   }
 
