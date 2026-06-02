@@ -4,15 +4,26 @@
 > にホストし、必要な managed resources を接続する構成と設定。
 
 このページは **Takos product / API gateway を Cloudflare Workers
-にホストする方法**を説明します。Takos オペレーター向けです。Cloudflare target の
-control path は Worker-first で、D1 / R2 / KV / Queues / Durable Objects などの
-managed resource を binding します。Cloudflare Containers は API gateway や
-Takosumi Accounts の critical path ではなく、image-backed workload が必要な
-場合に限って OCI deployment adapter の背後で使う任意の tenant workload substrate
-です。この構成は Takos operation の tracked reference deployment/backend
-であり、 Takosumi service の特権プロバイダではありません。 Cloudflare
-に関する詳細はこのページで扱い、`architecture/` 章では collapsible
-節に簡略版を置きます。
+にホストする方法**を説明します。Takos オペレーター向けです。Takos の deploy
+topology (worker / Durable Objects / egress・runtime-host・executor service /
+container execution / binding / route) は [`deploy/opentofu`](https://github.com/tako0614/takos/tree/main/deploy/opentofu)
+の OpenTofu module であり、これを **Takosumi が install / apply** します
+(Installation → PlanRun → ApplyRun → Deployment)。`cloudflare` target が D1 / KV /
+R2 / Queues などの backing resource を provision し、Worker-script layer は
+その binding map を consume します。provider allowlist / credential / state
+backend / Cloudflare Container execution は **RunnerProfile** が所有し、deploy
+結果の non-secret endpoint は **DeploymentOutput** に記録されます。Cloudflare
+control path は Worker-first です。Cloudflare Containers は API gateway や
+Takosumi Accounts の critical path ではなく、任意の tenant workload substrate
+です。
+Cloudflare
+Containers は API gateway や Takosumi Accounts の critical path ではなく、
+image-backed workload が必要な場合に限って OCI deployment adapter の背後で使う
+任意の tenant workload substrate です。この構成は Takos operation の tracked
+reference deployment/backend であり、 Takosumi service の特権プロバイダでは
+ありません。 Cloudflare に関する詳細はこのページで扱い、`architecture/` 章では
+collapsible 節に簡略版を置きます。詳細は
+[内部トラストバウンダリ](/architecture/internal-trust-boundaries) を参照してください。
 
 source-controlled gate が証明するのは `takos-worker` / Takosumi service / Takosumi
 Accounts の Cloudflare distribution profile、wrangler template、 binding
@@ -58,8 +69,11 @@ Cloudflare target に固有の prerequisites:
 ## deploy 実行
 
 5 target 共通の quick runbook です。target ごとの差は `distribution.yml` の
-`takosumi_service_host.target` だけで、`distribute:apply` が target 固有 backend (wrangler
-/ Helm / docker-compose) に dispatch します:
+`takosumi_service_host.target` だけで、`distribute:apply` は同じ deploy topology
+の interim runner として target 固有 backend (wrangler / Helm / docker-compose)
+を呼び出します。正本は `deploy/opentofu` module の Takosumi ApplyRun であり、
+`distribute:apply` はその topology を converge させる interim materialization
+です:
 
 ```bash
 # 共通手順 (5 target で同じ)
@@ -79,7 +93,9 @@ bun packages/cli/src/main.ts accounts seed \
 
 `distribute:apply` は `takosumi_service_host.target=cloudflare` を見て内部で
 `scripts/control/deploy.mjs` と `deploy/cloudflare/wrangler*.toml` を使った
-Wrangler deploy を呼び出します。
+Wrangler deploy を呼び出します。これは `deploy/opentofu` の `cloudflare` target
+が表現するのと同じ binding/route topology を materialize する interim path で
+あり、Takosumi run-ledger model では PlanRun / ApplyRun が正本となります。
 
 deploy 後に
 `cd takos-private && bun run e2e:smoke:real --env=production --api-url=https://takos.jp`
@@ -121,12 +137,17 @@ export CLOUDFLARE_API_TOKEN="your-api-token"
 から参照される secret / binding 名は `CF_API_TOKEN` です。`wrangler.toml` や
 secret sync では両者を混同しないでください。 :::
 
-## リソースの手動作成
+## リソースの手動作成 (interim materialization)
 
 control plane 本体の Cloudflare resource（D1 / R2 / KV / Dispatch / Queues /
-Vectorize など）は operator が事前に作成・設定します。App credential は Takosumi
-Accounts の account-plane capability record / binding material から発行・注入
-します。
+Vectorize など）は本来 `deploy/opentofu` の `cloudflare` target が provision
+し、Takosumi の ApplyRun がその backing resource を materialize します。以下の
+`wrangler ... create` 手順と次節の `wrangler.toml` は、その同じ topology の
+**interim reference materialization** であり、deploy の正本ではありません
+(provider credential / state backend は RunnerProfile が所有します)。interim
+path を使う operator のために、手動作成手順を残します。App credential は
+Takosumi Accounts の account-plane capability record / binding material から
+発行・注入します。
 
 ### D1 Database
 
@@ -229,9 +250,13 @@ wrangler vectorize create takos-embeddings \
   --metric cosine
 ```
 
-## wrangler.toml の設定例
+## wrangler.toml の設定例 (interim materialization)
 
-以下は実際の staging 設定をベースにした例。シークレットは除いてある。
+以下は実際の staging 設定をベースにした例。シークレットは除いてある。この
+`wrangler.toml` は `deploy/opentofu` の `cloudflare` target が表現する binding /
+route topology の interim reference materialization であり、deploy の正本では
+ありません。Takosumi の ApplyRun が同じ topology を converge させ、`wrangler.toml`
+を別個の source of truth として扱わないでください。
 
 ```toml
 # in takos/deploy/cloudflare/wrangler.toml
@@ -575,9 +600,14 @@ staging 用の secrets は `takos-private/.secrets/staging/`
 
 ## Takos product のデプロイ
 
-Takos product / API gateway 本体を Cloudflare に deploy する場合は、private
-管理元である `takos-private` から実行します。次のコマンドは
-ecosystem checkout root から実行します:
+Takos product / API gateway 本体の deploy は、model 上は **Takosumi の
+Installation** です。`deploy/opentofu` の Takos module を Takosumi が install /
+apply し (PlanRun → ApplyRun)、成功した ApplyRun が Deployment / DeploymentOutput
+を更新します。下記の `control:deploy:*` は、その同じ topology を materialize
+する **interim runner** であり、provider credential / Cloudflare Container
+execution は RunnerProfile が所有します。実行は private 管理元である
+`takos-private` から行います。次のコマンドは ecosystem checkout root から
+実行します:
 
 ```bash
 cd takos-private
@@ -757,7 +787,7 @@ binding material 経由で Takos runtime に注入されます。Takos worker
 
 | 変数                                                      | 用途                                                                                                                       |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `OIDC_ISSUER_URL`                                         | OIDC issuer URL。`identity.primary.oidc` platform service / OIDC discovery から得た operator-selected hostname             |
+| `OIDC_ISSUER_URL`                                         | OIDC issuer URL。Takosumi Accounts の binding material / OIDC discovery から得た operator-selected hostname                |
 | `OIDC_CLIENT_ID`                                          | Takosumi Accounts が installation 単位に発行する OIDC client id                                                            |
 | `OIDC_CLIENT_SECRET`                                      | 同 client secret。binding material 経由で注入され、Cloudflare には Worker secret として配置                                |
 | `OIDC_REDIRECT_URI`                                       | `/auth/oidc/callback` の絶対 URL                                                                                           |
@@ -780,13 +810,13 @@ login flow の Worker route は次の 3 つです。詳細は
 
 ::: tip self-host での issuer 解決 Takos 自身は OIDC consumer です。 Takosumi
 installation lifecycle App Model では self-host でも Takosumi Accounts
-を運用し、 `identity.primary.oidc` / OIDC discovery で得た issuer URL を
-`OIDC_ISSUER_URL` に注入します。Keycloak / Authentik / Auth0 などは Takosumi
-Accounts の upstream IdP として接続します。
+を運用し、 Takosumi Accounts の binding material / OIDC discovery で得た issuer
+URL を `OIDC_ISSUER_URL` に注入します。Keycloak / Authentik / Auth0 などは
+Takosumi Accounts の upstream IdP として接続します。
 
 ```bash
 # Managed or self-hosted Takosumi Accounts. The operator chooses the hostname;
-# apps discover the issuer through identity.primary.oidc / OIDC discovery.
+# apps discover the issuer through Takosumi Accounts binding material / OIDC discovery.
 OIDC_ISSUER_URL=https://<ACCOUNTS_ISSUER_HOST>
 ```
 

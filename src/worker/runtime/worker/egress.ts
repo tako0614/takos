@@ -235,12 +235,15 @@ export default {
     // or graceful no-op path, so there is nothing to validate at boot.
     const startedAt = Date.now();
 
-    // Service binding callers set X-Takos-Internal-Marker: 1 — required for all requests
-    const isInternal = request.headers.get("X-Takos-Internal-Marker") === "1";
-
-    if (!isInternal) {
-      return errorJsonResponse("Unauthorized", 401);
-    }
+    // Trust boundary = the service binding. This egress worker is deployed
+    // binding-only (DEPLOY INVARIANT: its service MUST have workers_dev = false
+    // and no public route — see takos-private apps/control/cloudflare/
+    // wrangler.worker.toml, and docs/architecture/internal-trust-boundaries.md
+    // tier 1). Only the worker's own code holds the TAKOS_EGRESS binding, so no
+    // header marker/secret is required — the previous X-Takos-Internal-Marker
+    // was forgeable and provided no real protection. Outbound safety still rests
+    // on the SSRF guards below (private-IP / port / protocol / redirect /
+    // credential blocking).
 
     let url: URL;
     try {

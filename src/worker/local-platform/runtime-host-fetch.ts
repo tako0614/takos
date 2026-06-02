@@ -1,24 +1,14 @@
 import { createLocalExecutionContext } from "./execution-context.ts";
 import type {
-  LocalBinding,
   LocalFetch,
   LocalRuntimeGatewayStub,
 } from "./runtime-types.ts";
 import type { DurableNamespaceBinding } from "../shared/types/bindings.ts";
-import { jsonResponse, readBearerToken } from "./runtime-http.ts";
+import { jsonResponse } from "./runtime-http.ts";
 
 type LocalRuntimeHostEnv = {
   RUNTIME_CONTAINER: DurableNamespaceBinding<LocalRuntimeGatewayStub>;
-  TAKOS_WORKER?: LocalBinding;
 };
-
-function errorResponse(
-  code: string,
-  message: string,
-  status: number,
-): Response {
-  return jsonResponse({ error: { code, message } }, status);
-}
 
 function getLocalRuntimeGatewayStub(
   env: LocalRuntimeHostEnv,
@@ -64,93 +54,6 @@ async function buildLocalRuntimeHostRequest(
   });
 }
 
-function buildApiProxyWebRequest(
-  request: Request,
-  url: URL,
-  spaceId: string,
-  sessionId: string,
-): Request {
-  const apiPath = url.pathname.replace("/forward/api-proxy", "");
-  return new Request(`http://takos${apiPath}${url.search}`, {
-    method: request.method,
-    headers: {
-      "X-Takos-Internal-Marker": "1",
-      "X-Takos-Session-Id": sessionId,
-      "X-Takos-Space-Id": spaceId,
-      "Content-Type": request.headers.get("Content-Type") ||
-        "application/json",
-    },
-    body: request.body,
-    redirect: request.redirect,
-  });
-}
-
-async function handleLocalRuntimeForward(
-  request: Request,
-  env: LocalRuntimeHostEnv,
-  stub: LocalRuntimeGatewayStub,
-  url: URL,
-): Promise<Response | null> {
-  if (!url.pathname.startsWith("/forward/")) return null;
-
-  const token = readBearerToken(request.headers.get("Authorization"));
-  if (!token) {
-    return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
-  }
-
-  const tokenInfo = await stub.verifyProxyToken(token);
-  if (!tokenInfo) {
-    return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
-  }
-
-  if (url.pathname.startsWith("/forward/api-proxy/")) {
-    const sessionId = request.headers.get("X-Takos-Session-Id");
-    if (!sessionId) {
-      return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
-    }
-    if (tokenInfo.sessionId !== sessionId) {
-      return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
-    }
-    if (!env.TAKOS_WORKER) {
-      return errorResponse(
-        "INTERNAL_ERROR",
-        "Internal configuration error",
-        500,
-      );
-    }
-    return await env.TAKOS_WORKER.fetch(
-      buildApiProxyWebRequest(request, url, tokenInfo.spaceId, sessionId),
-    );
-  }
-
-  if (url.pathname.startsWith("/forward/heartbeat/")) {
-    const sessionId = url.pathname.replace("/forward/heartbeat/", "");
-    if (!sessionId || tokenInfo.sessionId !== sessionId) {
-      return errorResponse("UNAUTHORIZED", "Unauthorized", 401);
-    }
-    if (!env.TAKOS_WORKER) {
-      return errorResponse(
-        "INTERNAL_ERROR",
-        "Internal configuration error",
-        500,
-      );
-    }
-    return await env.TAKOS_WORKER.fetch(
-      new Request(`http://takos/api/sessions/${sessionId}/heartbeat`, {
-        method: "POST",
-        headers: {
-          "X-Takos-Internal-Marker": "1",
-          "X-Takos-Session-Id": sessionId,
-          "X-Takos-Space-Id": tokenInfo.spaceId,
-          "Content-Type": "application/json",
-        },
-      }),
-    );
-  }
-
-  return errorResponse("NOT_FOUND", "Not found", 404);
-}
-
 export async function buildLocalRuntimeHostFetch(
   env: LocalRuntimeHostEnv,
 ): Promise<LocalFetch> {
@@ -160,13 +63,6 @@ export async function buildLocalRuntimeHostFetch(
     if (url.pathname === "/health" && request.method === "GET") {
       return jsonResponse({ status: "ok", service: "takos-runtime-host" });
     }
-    const forwardResponse = await handleLocalRuntimeForward(
-      request,
-      env,
-      stub,
-      url,
-    );
-    if (forwardResponse) return forwardResponse;
     return stub.fetch(await buildLocalRuntimeHostRequest(request));
   };
 }

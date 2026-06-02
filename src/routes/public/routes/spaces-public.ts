@@ -8,6 +8,7 @@ import type { ApiBindings } from "../shared/api/bindings.ts";
 import {
   commonError,
   isJsonObject,
+  isRecord,
   parsePositiveLimit,
   parsePositiveOffset,
   readJsonBody,
@@ -236,7 +237,14 @@ export function registerSpacesPublicRoutes(
   });
 
   app.post("/api/spaces", async (c) => {
-    const body = await c.req.json<{ name?: string; metadata?: unknown }>();
+    const body = await readJsonBody(c.req);
+    if (!isRecord(body)) {
+      return c.json(
+        commonError("INVALID_ARGUMENT", "request body must be a JSON object"),
+        400,
+      );
+    }
+    const name = typeof body.name === "string" ? body.name : undefined;
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
       crypto.randomUUID(),
@@ -246,7 +254,7 @@ export function registerSpacesPublicRoutes(
     const actor = actorResult.actor;
     const payload: InternalSpaceRequest = {
       actor,
-      name: body.name,
+      name,
       metadata: isJsonObject(body.metadata) ? body.metadata : undefined,
     };
     const response = await forwardTakosumiInternalRequest({

@@ -9,6 +9,10 @@ export default createHandler(() => (
           <meta charset='utf-8' />
           <meta name='viewport' content='width=device-width, initial-scale=1' />
           <link rel='icon' href='/brand/favicon.svg' />
+          <link rel='apple-touch-icon' href='/brand/favicon.svg' />
+          {/* Render-blocking, CSP-safe (script-src 'self'): restores theme +
+              marks JS-enabled before first paint to avoid FOUC. */}
+          <script src='/theme-init.js'></script>
           {assets}
         </head>
         <body>

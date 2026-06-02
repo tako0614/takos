@@ -188,6 +188,68 @@ test("OIDC login route rejects missing config", async () => {
   );
 });
 
+test("OIDC callback rejects when the state cookie is missing or mismatched", async () => {
+  const baseConfig = {
+    oidcIssuerUrl: "https://accounts.example.test/",
+    oidcDiscoveryUrl: "http://accounts.internal:8787",
+    oidcClientId: "takos-client",
+    oidcClientSecret: "client-secret",
+    oidcRedirectUri: "https://takos.example.test/auth/oidc/callback",
+  };
+
+  // No state cookie at all: a callback this browser never initiated.
+  const missingStates: StoredOidcState[] = [{
+    state: "state-csrf",
+    nonce: "nonce-csrf",
+    code_verifier: "verifier-csrf",
+    return_to: "/",
+    expires_at: Date.now() + 60_000,
+  }];
+  const missingSessions: CreatedSession[] = [];
+  const missingResponse = await createApp().fetch(
+    new Request(
+      "https://takos.example.test/auth/oidc/callback?code=auth-code&state=state-csrf",
+    ),
+    createEnv({
+      states: missingStates,
+      createdSessions: missingSessions,
+      sqlBinding: {},
+      ...baseConfig,
+    }),
+  );
+  assertEquals(missingResponse.status, 400);
+  assertStringIncludes(await missingResponse.text(), "Invalid OIDC state.");
+  assertEquals(missingSessions.length, 0);
+  // Server-side state must not be consumed by an unbound callback.
+  assertEquals(missingStates.length, 1);
+
+  // Cookie present but bound to a different flow than the returned state.
+  const mismatchStates: StoredOidcState[] = [{
+    state: "state-victim",
+    nonce: "nonce-victim",
+    code_verifier: "verifier-victim",
+    return_to: "/",
+    expires_at: Date.now() + 60_000,
+  }];
+  const mismatchSessions: CreatedSession[] = [];
+  const mismatchResponse = await createApp().fetch(
+    new Request(
+      "https://takos.example.test/auth/oidc/callback?code=auth-code&state=state-victim",
+      { headers: { Cookie: "__Host-tp_oidc_state=state-attacker" } },
+    ),
+    createEnv({
+      states: mismatchStates,
+      createdSessions: mismatchSessions,
+      sqlBinding: {},
+      ...baseConfig,
+    }),
+  );
+  assertEquals(mismatchResponse.status, 400);
+  assertStringIncludes(await mismatchResponse.text(), "Invalid OIDC state.");
+  assertEquals(mismatchSessions.length, 0);
+  assertEquals(mismatchStates.length, 1);
+});
+
 test("OIDC callback exchanges code, verifies id_token, provisions app-local user, and creates a session", async () => {
   const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/control.sqlite`);
@@ -265,7 +327,12 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
     const response = await createApp().fetch(
       new Request(
         "https://takos.example.test/auth/oidc/callback?code=auth-code-1&state=state-1",
-        { headers: { "User-Agent": "deno-test" } },
+        {
+          headers: {
+            "User-Agent": "deno-test",
+            Cookie: "__Host-tp_oidc_state=state-1",
+          },
+        },
       ),
       createEnv({
         states,
@@ -281,9 +348,18 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
 
     assertEquals(response.status, 302);
     assertEquals(response.headers.get("location"), "/setup");
-    assertStringIncludes(
-      response.headers.get("set-cookie") ?? "",
-      "__Host-tp_session=",
+    const setCookies = response.headers.getSetCookie();
+    assertEquals(
+      setCookies.some((cookie) => cookie.startsWith("__Host-tp_session=")),
+      true,
+    );
+    // The single-use state cookie is cleared on the successful callback.
+    assertEquals(
+      setCookies.some((cookie) =>
+        cookie.startsWith("__Host-tp_oidc_state=;") &&
+        cookie.includes("Max-Age=0")
+      ),
+      true,
     );
     assertEquals(states.length, 0);
     assertEquals(createdSessions.length, 1);
@@ -468,6 +544,7 @@ test("regression: OIDC callback links an existing Takos account by verified emai
     const response = await createApp().fetch(
       new Request(
         "https://takos.example.test/auth/oidc/callback?code=auth-code-legacy&state=state-legacy",
+        { headers: { Cookie: "__Host-tp_oidc_state=state-legacy" } },
       ),
       createEnv({
         states,
@@ -650,6 +727,20 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
       `${redirect.origin}${redirect.pathname}`,
       "https://accounts.example.test/oauth/authorize",
     );
+
+    // Login initiation binds the OAuth state to this browser via a short-lived
+    // HttpOnly cookie whose value equals the `state` query param.
+    const stateCookie = response.headers.getSetCookie().find((cookie) =>
+      cookie.startsWith("__Host-tp_oidc_state=")
+    );
+    assertExists(stateCookie);
+    assertStringIncludes(
+      stateCookie,
+      `__Host-tp_oidc_state=${redirect.searchParams.get("state")}`,
+    );
+    assertStringIncludes(stateCookie, "HttpOnly");
+    assertStringIncludes(stateCookie, "Secure");
+    assertStringIncludes(stateCookie, "SameSite=Lax");
     assertEquals(redirect.searchParams.get("response_type"), "code");
     assertEquals(redirect.searchParams.get("client_id"), "takos-client");
     assertEquals(

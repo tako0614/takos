@@ -11,16 +11,17 @@
    path。
 2. **GCP operator implementation evidence** ― Cloud Run / Cloud SQL / GCS /
    Pub/Sub / Cloud KMS / Secret Manager の output を operator runtime handler が
-   PlatformService inventory / Deployment evidence として記録する path。Cloudflare control plane + GCP
+   ApplyRun を経て Deployment / DeploymentOutput として記録する path。Cloudflare control plane + GCP
    tenant runtime (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
    (`profiles/gcp.example.json`) で使う。
 
 ::: tip 対象範囲 section 1 (Helm overlay) は Cloud Run への kernel 直接
 deploy、Firestore を control-plane storage として使う構成、OpenTofu overlay
 を扱いません。 section 2 (operator implementation evidence) は operator-owned infra workflow
-が作った PlatformService inventory と Deployment evidence の接続までを扱います。 :::
+が作った Deployment / DeploymentOutput の接続までを扱います。 :::
 
-Takosumi 上で Source から Installation を作り、Deployment を管理する方法は [Deploy](/deploy/)
+Takosumi が OpenTofu module を install して Installation → PlanRun → ApplyRun → Deployment →
+DeploymentOutput を記録する方法は [Deploy](/deploy/)
 を参照してください。 5 target 横断 runbook は
 [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
@@ -177,11 +178,11 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 GCP profile は operator-owned OpenTofu / native workflow が Cloud Run、Cloud SQL
 Postgres、GCS、Pub/Sub、Cloud KMS、Secret Manager、HTTP(S) LB / Cloud DNS の
-output を作成し、PlatformService inventory と Deployment evidence に接続する構成です。
+output を作成し、ApplyRun の Deployment / DeploymentOutput に接続する構成です。
 Takosumi core はこれらの provider state や runtime handler implementation を所有しません。
 
 profile JSON (`profiles/gcp.example.json`) は operator-owned GCP workflow が
-作った PlatformService inventory と Deployment evidence を Takosumi に渡す
+作った Deployment / DeploymentOutput を Takosumi に渡す
 ための operator configuration です。
 
 ### Operator workflow がやること / operator runtime handler が記録すること
@@ -391,12 +392,12 @@ kernel がやること:
 - Cloud Run は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - Firestore / Pub/Sub / Secret Manager を app resource backend として自動
-  provisioning する contract (※ section 2 は operator-owned workflow の inventory / evidence 接続を扱う)
+  provisioning する contract (※ section 2 は operator-owned workflow の Deployment / DeploymentOutput 接続を扱う)
 - OpenTofu による GCP resource 作成手順
 - GCP 固有 runtime handler identifier を app author 向けの public surface として固定
   する contract
 
-必要なら operator が追加 runtime handler / inventory importer
+必要なら operator が追加 runtime handler / DeploymentOutput importer
 を構成できますが、このページは Takos product/operator distribution の Helm
 overlay と operator implementation evidence で実際に表現されている範囲だけを runbook
 として扱います。

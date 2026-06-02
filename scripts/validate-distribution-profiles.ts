@@ -51,10 +51,10 @@ const expectedArtifacts: Record<ExpectedTargetId, readonly ExpectedArtifact[]> =
     { kind: 'helm', ref: 'deploy/helm/takos/values-aws.yaml' },
   ],
   cloudflare: [
+    { kind: 'opentofu', ref: 'deploy/opentofu/environments/cloudflare-prod' },
     { kind: 'wrangler', ref: '../takosumi/deploy/cloudflare/wrangler.toml' },
-    { kind: 'operator', ref: '../takosumi/deploy/cloudflare' },
-    { kind: 'wrangler', ref: '../takosumi/deploy/accounts-cloudflare/wrangler.toml' },
     { kind: 'operator', ref: '../takosumi/deploy/accounts-cloudflare' },
+    { kind: 'wrangler', ref: '../takosumi/deploy/accounts-cloudflare/wrangler.toml' },
   ],
   gcp: [
     { kind: 'opentofu', ref: 'deploy/opentofu/environments/gcp-prod' },

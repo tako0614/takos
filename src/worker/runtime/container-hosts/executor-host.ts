@@ -54,6 +54,7 @@ import {
   isAgentControlRpcPath,
   isControlRpcPath,
   parseExecutorTier,
+  proxyScopesForRunKind,
   recordProxyUsage,
   resolveContainerNamespace,
   resolveExecutorTierCapacity,
@@ -70,6 +71,7 @@ import type {
 import {
   claimsMatchRequestBody,
   getRequiredProxyCapability,
+  isProxyRequestAuthorized,
 } from "./executor-auth.ts";
 
 // ---------------------------------------------------------------------------
@@ -207,7 +209,11 @@ function createExecutorContainerClass(
         tokens.set(controlConfig.controlRpcToken, {
           runId: body.runId,
           serviceId,
-          capability: "control",
+          // Mint the least-privilege scope SET for this run kind. Agent runs
+          // get the full scope set; workflow runs get the reduced set (no
+          // conversation / memory / skills). Defaults to the agent set when
+          // runKind is unset (back-compat).
+          capability: proxyScopesForRunKind(body.runKind),
           executorTier: tier,
           executorContainerId,
           startedAt: now,
@@ -526,12 +532,16 @@ export default {
         return unauthorized();
       }
 
-      // Build claims-equivalent object for existing validation logic
+      // Build claims-equivalent object for existing validation logic. The
+      // capability may be a scope array, a single scope, or the legacy
+      // "control" alias — normalize to a flat scope list for the claims view.
       const claims: Record<string, unknown> = {
         run_id: tokenInfo.runId,
         service_id: tokenInfo.serviceId,
         worker_id: tokenInfo.serviceId,
-        proxy_capabilities: [tokenInfo.capability],
+        proxy_capabilities: Array.isArray(tokenInfo.capability)
+          ? tokenInfo.capability
+          : [tokenInfo.capability],
       };
 
       if (request.method !== "POST" && request.method !== "GET") {
@@ -556,8 +566,12 @@ export default {
       if (!claimsMatchRequestBody(claims, body)) {
         return unauthorized();
       }
-      const requiredCapability = getRequiredProxyCapability(path);
-      if (!requiredCapability || requiredCapability !== tokenInfo.capability) {
+      // Membership check: the endpoint's required scope must be present in the
+      // token's scope set (expanded from tokenInfo.capability, which may be a
+      // scope array, a single scope, or the legacy "control" full-agent alias).
+      // A workflow token therefore cannot reach conversation / memory / skill
+      // endpoints it was not granted.
+      if (!isProxyRequestAuthorized(path, tokenInfo.capability)) {
         return unauthorized();
       }
 

@@ -1,10 +1,10 @@
 variable "target" {
-  description = "Cloud target to compose. Supported values: aws, gcp."
+  description = "Cloud target to compose. Supported values: aws, gcp, cloudflare."
   type        = string
 
   validation {
-    condition     = contains(["aws", "gcp"], var.target)
-    error_message = "target must be one of: aws, gcp."
+    condition     = contains(["aws", "gcp", "cloudflare"], var.target)
+    error_message = "target must be one of: aws, gcp, cloudflare."
   }
 }
 
@@ -27,9 +27,15 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "PostgreSQL master password. Production secrets are supplied by the operator environment."
+  description = "PostgreSQL master password (aws/gcp only). Production secrets are supplied by the operator environment. Not used by the cloudflare target (D1 has no master password)."
   type        = string
   sensitive   = true
+  default     = ""
+
+  validation {
+    condition     = var.target == "cloudflare" || var.db_password != ""
+    error_message = "db_password must be set when target is aws or gcp."
+  }
 }
 
 variable "opentofu_plan_mode" {
@@ -74,5 +80,18 @@ variable "gcp" {
   validation {
     condition     = var.target != "gcp" || var.gcp.project_id != "takos-placeholder"
     error_message = "gcp.project_id must be set when target is gcp."
+  }
+}
+
+variable "cloudflare" {
+  description = "Cloudflare-specific backing-resource settings (provisioned by Takosumi ApplyRun)."
+  type = object({
+    account_id = optional(string, "takos-placeholder")
+  })
+  default = {}
+
+  validation {
+    condition     = var.target != "cloudflare" || var.cloudflare.account_id != "takos-placeholder"
+    error_message = "cloudflare.account_id must be set when target is cloudflare."
   }
 }

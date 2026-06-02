@@ -3,7 +3,7 @@ import type { TakosumiActorContext } from "takosumi-contract-v2/internal/rpc";
 import { TAKOSUMI_RUNTIME_INTERNAL_PATHS } from "takosumi-contract-v2/internal/api";
 import { actorFromAuthenticatedRequest } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
-import { commonError, isRecord } from "../shared/api/common.ts";
+import { commonError, isRecord, readJsonBody } from "../shared/api/common.ts";
 import {
   forwardRuntimeGatewayRequest,
   forwardRuntimeInternalRequest,
@@ -107,8 +107,15 @@ export function registerRuntimeGatewayPublicRoutes(
       return c.json(response, 500);
     });
     app.post(route.publicPath, async (c) => {
-      const body = await c.req.json<{ spaceId?: string; payload?: unknown }>();
-      const spaceId = body.spaceId?.trim() || "";
+      const body = await readJsonBody(c.req);
+      if (!isRecord(body)) {
+        return c.json(
+          commonError("INVALID_ARGUMENT", "request body must be a JSON object"),
+          400,
+        );
+      }
+      const spaceId =
+        (typeof body.spaceId === "string" ? body.spaceId : "").trim() || "";
       if (!spaceId) {
         return c.json(
           commonError("INVALID_ARGUMENT", "spaceId is required"),
@@ -207,7 +214,13 @@ export function registerRuntimeGatewayPublicRoutes(
 
   app.post("/api/spaces/:spaceId/resources", async (c) => {
     const spaceId = c.req.param("spaceId");
-    const body = await c.req.json<{ payload?: unknown }>();
+    const body = await readJsonBody(c.req);
+    if (!isRecord(body)) {
+      return c.json(
+        commonError("INVALID_ARGUMENT", "request body must be a JSON object"),
+        400,
+      );
+    }
     const auth = await requireSpaceMembership(c, spaceId);
     if (!auth.ok) return auth.response;
     const actor = auth.actor;
@@ -228,7 +241,13 @@ export function registerRuntimeGatewayPublicRoutes(
 
   app.post("/api/spaces/:spaceId/sessions", async (c) => {
     const spaceId = c.req.param("spaceId");
-    const body = await c.req.json<{ payload?: unknown }>();
+    const body = await readJsonBody(c.req);
+    if (!isRecord(body)) {
+      return c.json(
+        commonError("INVALID_ARGUMENT", "request body must be a JSON object"),
+        400,
+      );
+    }
     const auth = await requireSpaceMembership(c, spaceId);
     if (!auth.ok) return auth.response;
     const actor = auth.actor;

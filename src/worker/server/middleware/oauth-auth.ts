@@ -5,6 +5,7 @@ import {
   getSessionIdFromCookie,
 } from "../../application/services/identity/session.ts";
 import { getCachedUser } from "../../application/services/identity/user-cache.ts";
+import { isSessionRevoked } from "../../application/services/identity/session-revocation.ts";
 import { validateTakosumiAccountsBearer } from "./accounts-bearer.ts";
 import {
   isRetiredAppLocalBearerToken,
@@ -25,6 +26,7 @@ export const oauthAuthDeps = {
   getSession,
   getSessionIdFromCookie,
   getCachedUser,
+  isSessionRevoked,
   validateTakosumiAccountsBearer,
   getPlatformServices,
   getPlatformConfig,
@@ -153,6 +155,14 @@ export function requireAnyAuth(
       c.req.header("Cookie") ?? null,
     );
     if (sessionId && sessionStore) {
+      // Phase 18.2 H11: mirror requireAuth's server-side blacklist check so a
+      // revoked session ID cannot authenticate via the requireAnyAuth cookie
+      // path. Fail-closed; guard on dbBinding to preserve behavior when no SQL
+      // binding is configured (mirrors auth.ts).
+      const dbBinding = oauthAuthDeps.getPlatformServices(c).sql?.binding;
+      if (dbBinding && await oauthAuthDeps.isSessionRevoked(dbBinding, sessionId)) {
+        throw new AuthenticationError("Session revoked");
+      }
       const session = await oauthAuthDeps.getSession(sessionStore, sessionId);
       if (session) {
         const user = await oauthAuthDeps.getCachedUser(c, session.user_id);

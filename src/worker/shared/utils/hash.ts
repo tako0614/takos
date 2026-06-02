@@ -26,16 +26,6 @@ export function constantTimeEqual(a: string, b: string): boolean {
   const bufA = encoder.encode(a);
   const bufB = encoder.encode(b);
   if (bufA.byteLength !== bufB.byteLength) return false;
-  // Use crypto.subtle.timingSafeEqual if available in the runtime.
-  if (
-    typeof crypto !== "undefined" && "subtle" in crypto &&
-    "timingSafeEqual" in crypto.subtle
-  ) {
-    return (crypto.subtle as {
-      timingSafeEqual(a: ArrayBuffer, b: ArrayBuffer): boolean;
-    }).timingSafeEqual(bufA.buffer, bufB.buffer);
-  }
-  // Fallback for environments without timingSafeEqual
   let result = 0;
   for (let i = 0; i < bufA.byteLength; i++) {
     result |= bufA[i] ^ bufB[i];

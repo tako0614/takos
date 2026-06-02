@@ -171,8 +171,8 @@ test('public v3 deployment create rejects retired inline workflow deploys', asyn
     deepStrictEqual(calls.length, 0);
     deepStrictEqual(body.error.code, 'INVALID_ARGUMENT');
     ok(body.error.message.includes('source.kind="inline"'));
-    ok(body.error.message.includes('Takosumi Source install/deploy flow'));
-    ok(body.error.message.includes('expected.planSnapshotDigest'));
+    ok(body.error.message.includes('Deploy via Takosumi'));
+    ok(body.error.message.includes('PlanRun/ApplyRun'));
   } finally {
     restore();
   }

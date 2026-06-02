@@ -21,7 +21,7 @@ export default function InkdropMark(props: Props): JSX.Element {
       viewBox='0 0 48 48'
       fill='none'
       role='img'
-      aria-label={props.title ?? 'Takosumi logo'}
+      aria-label={props.title ?? 'Takos'}
       class={props.class}
     >
       <defs>

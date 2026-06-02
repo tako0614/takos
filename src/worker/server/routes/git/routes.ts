@@ -12,6 +12,7 @@ import { GitService } from "../../../application/services/source/git.ts";
 import {
   BadRequestError,
   InternalError,
+  isAppError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -55,7 +56,6 @@ git.post("/spaces/:spaceId/git/commit", async (c) => {
   }
 
   const gitService = resolveGitService(c);
-  if (gitService instanceof Response) return gitService;
 
   try {
     const commit = await gitService.commit(
@@ -86,7 +86,6 @@ git.get("/spaces/:spaceId/git/log", async (c) => {
   const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
-  if (gitService instanceof Response) return gitService;
 
   try {
     const commits = await gitService.log(access.space.id, {
@@ -111,7 +110,6 @@ git.get("/spaces/:spaceId/git/commits/:commitId", async (c) => {
   const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
-  if (gitService instanceof Response) return gitService;
 
   try {
     const commit = await gitService.getCommit(commitId);
@@ -127,6 +125,7 @@ git.get("/spaces/:spaceId/git/commits/:commitId", async (c) => {
 
     return c.json({ commit, changes });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError("Git show error", err, { module: "routes/git" });
     throw new InternalError("Failed to get commit");
   }
@@ -141,7 +140,6 @@ git.get("/spaces/:spaceId/git/diff/:commitId", async (c) => {
   const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
-  if (gitService instanceof Response) return gitService;
 
   try {
     const commit = await gitService.getCommit(commitId);
@@ -161,6 +159,7 @@ git.get("/spaces/:spaceId/git/diff/:commitId", async (c) => {
 
     return c.json({ commit, diffs });
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError("Git diff error", err, { module: "routes/git" });
     throw new InternalError("Failed to get diff");
   }
@@ -192,7 +191,6 @@ git.post("/spaces/:spaceId/git/restore", async (c) => {
   }
 
   const gitService = resolveGitService(c);
-  if (gitService instanceof Response) return gitService;
 
   try {
     const result = await gitService.restore(
@@ -207,6 +205,7 @@ git.post("/spaces/:spaceId/git/restore", async (c) => {
 
     return c.json(result);
   } catch (err) {
+    if (isAppError(err)) throw err;
     logError("Git restore error", err, { module: "routes/git" });
     throw new InternalError("Restore failed");
   }
@@ -222,7 +221,6 @@ git.get("/spaces/:spaceId/git/history/:path", async (c) => {
   const access = await requireSpaceAccess(c, spaceId, user.id);
 
   const gitService = resolveGitService(c);
-  if (gitService instanceof Response) return gitService;
 
   try {
     const commits = await gitService.log(access.space.id, {

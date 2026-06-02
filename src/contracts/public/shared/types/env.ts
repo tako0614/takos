@@ -78,6 +78,13 @@ export interface ContainerHostEnv {
   EXECUTOR_CONTAINER_TIER3?: ContainerHostBinding;
   TAKOS_WORKER?: FetchBinding;
   PROXY_BASE_URL?: string;
+  /**
+   * Worker-mediated egress proxy URL handed to the workflow/actions container.
+   * SECURITY INVARIANT: when set, it MUST resolve to the per-run, SSRF-gated
+   * egress endpoint (proxying through `runtime/worker/egress.ts`), never an open
+   * or transparent proxy. Distinct from `PROXY_BASE_URL` (control back-channel).
+   */
+  TAKOS_EGRESS_PROXY_URL?: string;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
   /**
    * Egress proxy used by the web tool (`application/tools/custom/web.ts`) and

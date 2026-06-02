@@ -3,10 +3,7 @@ import type { SqlDatabaseBinding } from "../../../../shared/types/bindings.ts";
 import { getDb, sessions } from "../../../../infra/db/index.ts";
 import { eq } from "drizzle-orm";
 import { callRuntimeRequest } from "../../../services/execution/runtime-request-handler.ts";
-import {
-  HEARTBEAT_TIMEOUT_MS,
-  STARTUP_GRACE_MS,
-} from "../../../../shared/constants/index.ts";
+import { HEARTBEAT_TIMEOUT_MS } from "../../../../shared/constants/index.ts";
 
 export async function callSessionApi(
   context: ToolContext,
@@ -69,16 +66,16 @@ export async function checkSessionHealth(
   }
 
   const now = Date.now();
-  const createdAt = new Date(session.created_at).getTime();
   const lastHeartbeat = session.last_heartbeat
     ? new Date(session.last_heartbeat).getTime()
     : null;
 
+  // No writer currently stamps `sessions.lastHeartbeat` (interactive git-mode
+  // sessions do not post heartbeats), so a null heartbeat means "liveness not
+  // tracked via heartbeat", not "dead". A running session is only reported dead
+  // when a heartbeat was recorded and then went stale.
   if (!lastHeartbeat) {
-    if (now - createdAt < STARTUP_GRACE_MS) {
-      return { isHealthy: true, session };
-    }
-    return { isHealthy: false, session, reason: "heartbeat_timeout" };
+    return { isHealthy: true, session };
   }
 
   if (now - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {

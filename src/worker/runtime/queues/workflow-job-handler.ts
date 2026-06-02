@@ -16,6 +16,7 @@ import {
   runtimeJson,
 } from "./workflow-runtime-client.ts";
 import {
+  collectReferencedSecretNames,
   collectReferencedSecretNamesFromEnv,
   resolveSecretValues,
 } from "./workflow-secrets.ts";
@@ -46,7 +47,6 @@ export async function handleWorkflowJob(
     jobKey,
     jobDefinition,
     env: jobEnv,
-    secretIds,
   } = message;
 
   const bucket = env.GIT_OBJECTS;
@@ -142,10 +142,17 @@ export async function handleWorkflowJob(
     const referencedJobEnvSecretNames = collectReferencedSecretNamesFromEnv(
       effectiveJobEnv,
     );
+    // Resolve only the secrets the job actually references (env + every step),
+    // never the whole repo's secrets — the map is forwarded to the user-code
+    // execution container.
+    const referencedSecretNames = collectReferencedSecretNames(
+      jobDefinition,
+      effectiveJobEnv,
+    );
     const secrets = await resolveSecretValues(
       env.DB,
       repoId,
-      secretIds,
+      referencedSecretNames,
       encryptionKey,
       referencedJobEnvSecretNames,
     );

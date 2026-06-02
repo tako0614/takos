@@ -6,7 +6,7 @@
  */
 
 import { getDb } from "../../infra/db/index.ts";
-import { runEvents, runs } from "../../infra/db/schema.ts";
+import { runEvents, runs, threads } from "../../infra/db/schema.ts";
 import { and, eq } from "drizzle-orm";
 import { logError, logWarn } from "../../shared/utils/logger.ts";
 import { type TtlMs, ttlMs } from "@takos/worker-platform-utils/ttl";
@@ -270,24 +270,43 @@ export async function handleRunConfig(
   });
 }
 
+/**
+ * Resolve the authoritative tenant + thread for a control RPC from the
+ * token-bound run, never from caller-supplied body fields. executor-host
+ * overwrites body.runId with the verified per-run proxy token, so runId is
+ * trustworthy; the run row is the authority for accountId/threadId. This blocks
+ * a compromised container from setting threadId/spaceId to a victim tenant's.
+ */
+export async function resolveRunThreadTenant(
+  env: Env,
+  runId: string,
+): Promise<{ spaceId: string; threadId: string } | null> {
+  const run = await getDb(env.DB).select({
+    accountId: runs.accountId,
+    threadId: runs.threadId,
+  }).from(runs).where(eq(runs.id, runId)).get();
+  if (!run || !run.threadId) return null;
+  return { spaceId: run.accountId, threadId: run.threadId };
+}
+
 export async function handleConversationHistory(
   body: Record<string, unknown>,
   env: Env,
 ): Promise<Response> {
   const {
     runId,
-    threadId,
-    spaceId,
     aiModel,
   } = body as {
     runId?: string;
-    threadId?: string;
-    spaceId?: string;
     aiModel?: string;
   };
-  if (!runId || !threadId || !spaceId || !aiModel) {
-    return err("Missing runId, threadId, spaceId, or aiModel", 400);
+  if (!runId || !aiModel) {
+    return err("Missing runId or aiModel", 400);
   }
+
+  const tenant = await resolveRunThreadTenant(env, runId);
+  if (!tenant) return err("Run not found", 404);
+  const { spaceId, threadId } = tenant;
 
   try {
     const history = await buildConversationHistory({
@@ -312,28 +331,28 @@ export async function handleSkillPlan(
 ): Promise<Response> {
   const {
     runId,
-    threadId,
-    spaceId,
     agentType,
     history,
     availableToolNames,
   } = body as {
     runId?: string;
-    threadId?: string;
-    spaceId?: string;
     agentType?: string;
     history?: AgentMessage[];
     availableToolNames?: string[];
   };
   if (
-    !runId || !threadId || !spaceId || !agentType || !Array.isArray(history) ||
+    !runId || !agentType || !Array.isArray(history) ||
     !Array.isArray(availableToolNames)
   ) {
     return err(
-      "Missing runId, threadId, spaceId, agentType, history, or availableToolNames",
+      "Missing runId, agentType, history, or availableToolNames",
       400,
     );
   }
+
+  const tenant = await resolveRunThreadTenant(env, runId);
+  if (!tenant) return err("Run not found", 404);
+  const { spaceId, threadId } = tenant;
 
   try {
     const result = await resolveSkillPlanForRun(env.DB, {
@@ -358,28 +377,28 @@ export async function handleSkillCatalog(
 ): Promise<Response> {
   const {
     runId,
-    threadId,
-    spaceId,
     agentType,
     history,
     availableToolNames,
   } = body as {
     runId?: string;
-    threadId?: string;
-    spaceId?: string;
     agentType?: string;
     history?: AgentMessage[];
     availableToolNames?: string[];
   };
   if (
-    !runId || !threadId || !spaceId || !agentType || !Array.isArray(history) ||
+    !runId || !agentType || !Array.isArray(history) ||
     !Array.isArray(availableToolNames)
   ) {
     return err(
-      "Missing runId, threadId, spaceId, agentType, history, or availableToolNames",
+      "Missing runId, agentType, history, or availableToolNames",
       400,
     );
   }
+
+  const tenant = await resolveRunThreadTenant(env, runId);
+  if (!tenant) return err("Run not found", 404);
+  const { spaceId, threadId } = tenant;
 
   try {
     const resolutionContext = await buildSkillResolutionContext(
@@ -441,24 +460,24 @@ export async function handleSkillRuntimeContext(
 ): Promise<Response> {
   const {
     runId,
-    threadId,
-    spaceId,
     agentType,
     history,
     availableToolNames,
   } = body as {
     runId?: string;
-    threadId?: string;
-    spaceId?: string;
     agentType?: string;
     history?: AgentMessage[];
     availableToolNames?: string[];
   };
   if (
-    !runId || !threadId || !spaceId || !agentType || !Array.isArray(history)
+    !runId || !agentType || !Array.isArray(history)
   ) {
-    return err("Missing runId, threadId, spaceId, agentType, or history", 400);
+    return err("Missing runId, agentType, or history", 400);
   }
+
+  const tenant = await resolveRunThreadTenant(env, runId);
+  if (!tenant) return err("Run not found", 404);
+  const { spaceId, threadId } = tenant;
 
   try {
     const resolutionContext = await buildSkillResolutionContext(
@@ -533,8 +552,16 @@ export async function handleMemoryActivation(
   body: Record<string, unknown>,
   env: Env,
 ): Promise<Response> {
-  const { spaceId } = body as { spaceId?: string };
-  if (!spaceId) return err("Missing spaceId", 400);
+  const { runId } = body as { runId?: string };
+  if (!runId) return err("Missing runId", 400);
+
+  // Tenant must come from the token-bound run, never from a caller-supplied
+  // spaceId. The proxy host overwrites body.runId with the verified token's
+  // runId, so the run record is the authoritative owner of this request.
+  const activationRun = await getDb(env.DB).select({ accountId: runs.accountId })
+    .from(runs).where(eq(runs.id, runId)).get();
+  if (!activationRun) return err("Run not found", 404);
+  const spaceId = activationRun.accountId;
 
   try {
     const claims = await getActiveClaims(env.DB, spaceId, 50);
@@ -579,26 +606,32 @@ export async function handleMemoryFinalize(
 ): Promise<Response> {
   const {
     runId,
-    spaceId,
     claims,
     evidence,
   } = body as {
     runId?: string;
-    spaceId?: string;
     claims?: Array<Record<string, unknown>>;
     evidence?: Array<Record<string, unknown>>;
   };
   if (
-    !runId || !spaceId || !Array.isArray(claims) || !Array.isArray(evidence)
+    !runId || !Array.isArray(claims) || !Array.isArray(evidence)
   ) {
-    return err("Missing runId, spaceId, claims, or evidence", 400);
+    return err("Missing runId, claims, or evidence", 400);
   }
+
+  // Tenant is derived from the token-bound run, not from caller-supplied
+  // spaceId / per-claim accountId, so a compromised container cannot write
+  // claims or evidence into another tenant's memory graph.
+  const finalizeRun = await getDb(env.DB).select({ accountId: runs.accountId })
+    .from(runs).where(eq(runs.id, runId)).get();
+  if (!finalizeRun) return err("Run not found", 404);
+  const spaceId = finalizeRun.accountId;
 
   try {
     for (const claim of claims) {
       await upsertClaim(env.DB, {
         id: String(claim.id),
-        accountId: String(claim.accountId ?? spaceId),
+        accountId: spaceId,
         claimType: claim.claimType as
           | "fact"
           | "preference"
@@ -624,7 +657,7 @@ export async function handleMemoryFinalize(
     for (const item of evidence) {
       await insertEvidence(env.DB, {
         id: String(item.id),
-        accountId: String(item.accountId ?? spaceId),
+        accountId: spaceId,
         claimId: String(item.claimId),
         kind: item.kind as "supports" | "contradicts" | "context",
         sourceType: item.sourceType as
@@ -665,18 +698,20 @@ export async function handleAddMessage(
   env: Env,
 ): Promise<Response> {
   const {
+    runId,
     threadId,
     message,
     metadata,
     idempotencyKey,
   } = body as {
+    runId?: string;
     threadId?: string;
     message?: AgentMessage;
     metadata?: Record<string, unknown>;
     idempotencyKey?: string;
   };
-  if (!threadId || !message || typeof message !== "object") {
-    return err("Missing threadId or message", 400);
+  if (!runId || !threadId || !message || typeof message !== "object") {
+    return err("Missing runId, threadId or message", 400);
   }
   if (
     (message.role !== "user" && message.role !== "assistant" &&
@@ -684,6 +719,18 @@ export async function handleAddMessage(
     typeof message.content !== "string"
   ) {
     return err("Invalid message payload", 400);
+  }
+
+  // Bind the target thread to the token's run: the thread must belong to the
+  // same account as the run, so a compromised container cannot inject messages
+  // into another tenant's threads.
+  const messageRun = await getDb(env.DB).select({ accountId: runs.accountId })
+    .from(runs).where(eq(runs.id, runId)).get();
+  if (!messageRun) return err("Run not found", 404);
+  const targetThread = await getDb(env.DB).select({ accountId: threads.accountId })
+    .from(threads).where(eq(threads.id, threadId)).get();
+  if (!targetThread || targetThread.accountId !== messageRun.accountId) {
+    return err("Thread not found", 404);
   }
 
   try {

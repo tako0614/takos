@@ -130,7 +130,9 @@ export function containerName(spaceId: string, routeRef: string): string {
 }
 
 export function logPathFor(spaceId: string, routeRef: string): string {
-  return path.join(resolveDataDir(), "logs", `${spaceId}-${routeRef}.log`);
+  const safeSpaceId = spaceId.replace(/[^a-zA-Z0-9_.-]/g, "-");
+  const safeRouteRef = routeRef.replace(/[^a-zA-Z0-9_.-]/g, "-");
+  return path.join(resolveDataDir(), "logs", `${safeSpaceId}-${safeRouteRef}.log`);
 }
 
 function statePath(): string {

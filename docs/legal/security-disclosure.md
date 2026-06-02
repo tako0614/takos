@@ -12,12 +12,13 @@
 ## Scope
 
 Takos の customer-facing security disclosure surface は Takos Web / API +
-Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi kernel
-は generic PaaS の Source / Installation / Deployment / PlatformService
-ledger surface であり、infra provisioning は operator distribution workflow
-が所有します。Takos managed service として影響する場合は Takos security intake
-が受け付け、必要に応じて Takosumi Accounts (identity / billing owner) を含む
-owning product root へ triage します。
+Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi は
+OpenTofu-native deploy control plane であり、Installation / PlanRun / ApplyRun /
+Deployment / DeploymentOutput を記録し、RunnerProfile が provider allowlist /
+credential / state backend / Cloudflare Container execution を所有します。Takos
+managed service として影響する場合は Takos security intake が受け付け、必要に
+応じて Takosumi Accounts (identity / billing owner) を含む owning product root
+へ triage します。
 
 In scope:
 

@@ -70,13 +70,13 @@ evaluated output JSON, not raw HCL.
 ## Boundary
 
 OpenTofu state, provider credentials, resource apply, OIDC clients, billing,
-domains, PlatformService inventory, and implementation bindings belong to the
-operator distribution or `takos-private`. Takos consumes the app output and
-Takosumi records Source / Installation / Deployment / PlatformService evidence.
+domains, and the provider allowlist belong to a Takosumi RunnerProfile, the
+operator distribution, or `takos-private`. Takos consumes the app output, and
+Takosumi records the run ledger — Installation → PlanRun → ApplyRun →
+Deployment → DeploymentOutput — for each plan and apply.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Takosumi v1](https://takosumi.com/docs/reference/takosumi-v1)
-- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

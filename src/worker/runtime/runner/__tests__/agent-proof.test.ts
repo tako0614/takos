@@ -352,7 +352,14 @@ function selectFirst(
       usage: state.run.usage,
       output: state.run.output,
       error: state.run.error,
+      accountId: state.run.accountId,
+      threadId: state.run.threadId,
     };
+  }
+  if (table === "threads") {
+    // The run's thread belongs to the run's account (the control-RPC handlers
+    // bind tenant/thread to the token-bound run).
+    return { accountId: state.run.accountId };
   }
   if (table === "messages") {
     if (fields && "maxSeq" in fields) {

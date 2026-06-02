@@ -80,9 +80,7 @@ async function getNotifierBufferedEvents(
   const stub = namespace.get(id);
   const res = await fetchWithTimeout(
     stub,
-    new Request(`https://internal.do/events?after=${afterEventId}`, {
-      headers: { "X-Takos-Internal-Marker": "1" },
-    }),
+    new Request(`https://internal.do/events?after=${afterEventId}`, {}),
   );
   if (!res.ok) return [];
   const json = await res.json() as {

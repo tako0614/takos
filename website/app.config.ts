@@ -6,12 +6,12 @@ export default defineConfig({
   server: {
     preset: 'static',
     prerender: {
-      // landing は 1 page で、 docs/cloud などへの外向き link は
-      // 同一 origin の別 server (Caddy handle_path /docs/* で別 root に
-      // route) が serve する。 crawler に追わせると fallback HTML が
-      // .output/public/docs/ 配下に出来てしまうので無効化。
+      // landing は ja (`/`) と en (`/en/`) の 2 route。 docs/cloud などへの
+      // 外向き link は同一 origin の別 server (Caddy handle_path /docs/* で別
+      // root に route) が serve する。 crawler に追わせると fallback HTML が
+      // .output/public/docs/ 配下に出来てしまうので無効化し、route は明示する。
       crawlLinks: false,
-      routes: ['/'],
+      routes: ['/', '/en'],
     },
   },
 });

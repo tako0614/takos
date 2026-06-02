@@ -1,7 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
-import { and, eq } from "drizzle-orm";
 import type { Env, Session, User } from "../../shared/types/index.ts";
-import { getDb, sessions } from "../../infra/db/index.ts";
 import {
   getSession,
   getSessionIdFromCookie,
@@ -72,61 +70,6 @@ export const authDeps = {
   shouldRotateSession,
 };
 
-async function validateContainerAuth(c: AuthContext): Promise<User | null> {
-  const services = authDeps.getPlatformServices(c);
-  const dbBinding = services.sql?.binding;
-  const sessionStore = services.notifications.sessionStore;
-  const rawTakosSessionId = c.req.header("X-Takos-Session-Id");
-  if (!rawTakosSessionId) return null;
-  const takosSessionId = authDeps.normalizeSessionId(rawTakosSessionId);
-  if (!takosSessionId) {
-    authDeps.logWarn(
-      "Container auth attempted with invalid session ID format",
-      { module: "middleware/auth" },
-    );
-    return null;
-  }
-
-  // Internal requests from service binding (runtime-host /forward/* proxy).
-  // The marker header is separate from the unrelated `X-Takos-Internal`
-  // shared-secret header consumed by `runtime/executor-proxy-api.ts`.
-  const isInternal = c.req.header("X-Takos-Internal-Marker") === "1";
-  if (isInternal) {
-    const spaceId = c.req.header("X-Takos-Space-Id");
-
-    if (!dbBinding || !sessionStore) {
-      return null;
-    }
-    const db = getDb(dbBinding);
-    const containerSession = await db.select({
-      userAccountId: sessions.userAccountId,
-      accountId: sessions.accountId,
-    }).from(sessions)
-      .where(
-        and(eq(sessions.id, takosSessionId), eq(sessions.status, "running")),
-      )
-      .get();
-
-    if (!containerSession) return null;
-    if (spaceId && spaceId !== containerSession.accountId) {
-      authDeps.logWarn("Container auth failed: space_id header mismatch", {
-        module: "middleware/auth",
-      });
-      return null;
-    }
-    if (!containerSession.userAccountId) {
-      authDeps.logWarn("Container auth failed: session has no bound user", {
-        module: "middleware/auth",
-      });
-      return null;
-    }
-
-    return await authDeps.getCachedUser(c, containerSession.userAccountId);
-  }
-
-  return null;
-}
-
 interface ResolveAuthOptions {
   rejectInvalidBearer: boolean;
   rejectInvalidSession: boolean;
@@ -148,10 +91,6 @@ async function resolveRequestUser(
   const config = authDeps.getPlatformConfig(c);
   const dbBinding = services.sql?.binding;
   const sessionStore = services.notifications.sessionStore;
-  const containerUser = await validateContainerAuth(c);
-  if (containerUser) {
-    return { user: containerUser };
-  }
 
   const sessionId = authDeps.getSessionIdFromCookie(c.req.header("Cookie"));
   const cookieSessionId = sessionId;
@@ -331,8 +270,7 @@ function applyRotatedSessionCookie(
   );
 }
 
-// Supports cookie auth (browser), Takosumi Accounts Bearer tokens, and
-// X-Takos-Internal-Marker + X-Takos-Session-Id (container API proxy via service binding)
+// Supports cookie auth (browser) and Takosumi Accounts Bearer tokens.
 export const requireAuth: AuthMiddleware = async (
   c,
   next,

@@ -309,8 +309,7 @@ export class ServiceDesiredStateService {
     }
     const timestamp = new Date().toISOString();
 
-    await this.env.DB.prepare("BEGIN IMMEDIATE").run();
-    try {
+    const replaceRows = async () => {
       await this.db.delete(physicalServiceBindings)
         .where(eq(physicalServiceBindings.serviceId, serviceId));
 
@@ -326,7 +325,23 @@ export class ServiceDesiredStateService {
             createdAt: timestamp,
           })));
       }
+    };
 
+    // Prefer the binding's explicit transaction primitive (DQ1 fix): it runs the
+    // whole unit on one dedicated connection under an exclusive gate, so no
+    // concurrent query can leak into this BEGIN. Drizzle ops above close over the
+    // same binding, so they are routed onto the transaction's dedicated client.
+    // Real Cloudflare D1 does not implement `withTransaction`; fall back to the
+    // manual BEGIN/COMMIT path there (non-composing against real D1, but
+    // unchanged from prior behaviour).
+    if (typeof this.env.DB.withTransaction === "function") {
+      await this.env.DB.withTransaction(() => replaceRows());
+      return;
+    }
+
+    await this.env.DB.prepare("BEGIN IMMEDIATE").run();
+    try {
+      await replaceRows();
       await this.env.DB.prepare("COMMIT").run();
     } catch (error) {
       try {

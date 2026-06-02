@@ -79,7 +79,6 @@ async function emitNotificationCreated(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Takos-Internal-Marker": "1",
     },
     body: JSON.stringify({
       type: "notification.new",

@@ -23,6 +23,14 @@ export { authSessions, sessionsRevoked } from "./schema.ts";
 // App usage
 export { appUsageEvents, appUsageRollups } from "./schema.ts";
 
+// Memory graph
+export {
+  memoryClaimEdges,
+  memoryClaims,
+  memoryEvidence,
+  memoryPaths,
+} from "./schema.ts";
+
 // Repos
 export {
   blobs,
@@ -81,6 +89,7 @@ export { mcpOauthPending, mcpServers } from "./schema.ts";
 
 // Platform
 export {
+  apDeliveryQueue,
   apFollowers,
   defaultAppDistributionConfig,
   defaultAppDistributionEntries,
@@ -91,6 +100,7 @@ export {
   fileHandlers,
   infraEndpointRoutes,
   infraEndpoints,
+  infraWorkers,
   moderationAuditLogs,
   nodes,
   notificationPreferences,
@@ -149,4 +159,12 @@ export {
   serviceRuntimeFlags,
   serviceRuntimeLimits,
   serviceRuntimeSettings,
+  workerBindings,
+  workerCommonEnvLinks,
+  workerEnvVars,
+  workerMcpEndpoints,
+  workerRuntimeFlags,
+  workerRuntimeLimits,
+  workerRuntimeSettings,
+  workers,
 } from "./schema.ts";

@@ -77,6 +77,9 @@ export function isPrivateIP(ip: string): boolean {
   }
 
   // IPv6 のプライベートレンジ
+  // 未指定アドレス（::, 0:0:0:0:0:0:0:0）
+  const ipNorm = ip.toLowerCase().trim();
+  if (ipNorm === "::" || /^(0:){7}0$/.test(ipNorm)) return true; // 未指定アドレス
   if (ip.startsWith("::1")) return true; // ループバック
   if (ip.startsWith("fe80:")) return true; // リンクローカル
   if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // ユニークローカル
@@ -90,6 +93,27 @@ export function isPrivateIP(ip: string): boolean {
       return isPrivateIP(rest);
     }
     // 16進表記を処理: ::ffff:c0a8:0101 → ドット10進へ変換
+    const hexParts = rest.split(":");
+    if (hexParts.length === 2) {
+      const hi = parseInt(hexParts[0], 16);
+      const lo = parseInt(hexParts[1], 16);
+      if (!isNaN(hi) && !isNaN(lo)) {
+        const dotted = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${
+          lo & 0xff
+        }`;
+        return isPrivateIP(dotted);
+      }
+    }
+  }
+
+  // NAT64 表記（64:ff9b::/96）: 末尾 32bit に IPv4 を埋め込む
+  if (ipLower.startsWith("64:ff9b::")) {
+    const rest = ipLower.slice("64:ff9b::".length);
+    // ドット10進表記を処理: 64:ff9b::192.168.1.1
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(rest)) {
+      return isPrivateIP(rest);
+    }
+    // 16進表記を処理: 64:ff9b::c0a8:0101 → ドット10進へ変換
     const hexParts = rest.split(":");
     if (hexParts.length === 2) {
       const hi = parseInt(hexParts[0], 16);

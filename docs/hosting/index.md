@@ -5,10 +5,18 @@
 このセクションは Takosumi kernel をセルフホストするオペレーター向けです。アプリをデプロイする開発者は
 [Deploy](/deploy/) を参照してください。
 
+**前提: Takos は Takosumi 上で動く product です。** Takos の deploy topology は OpenTofu module であり、Takosumi が
+それを **install して apply** します (Installation → PlanRun → ApplyRun → Deployment)。provider allowlist / credentials /
+state backend / Cloudflare Container execution は **RunnerProfile** が所有し、結果の non-secret endpoint は
+**DeploymentOutput** に記録されます。canonical な deploy model は
+[Internal Trust Boundaries](/architecture/internal-trust-boundaries) を正本とします。
+
 Takos product/operator distribution は 5 つのホスティング target runbook を持ちます。 `takos-private/distribution.yml`
 でターゲットを選び、`bun run distribute:apply` を実行すると対応するバックエンド (wrangler / Helm / docker-compose)
-にディスパッチされます。target ごとの production parity は operator evidence で確認する必要があります。このページの
-runbook だけで全 target の live readiness を保証しません。
+が materialize されます。この `distribute:apply` pipeline は Takosumi が apply する OpenTofu module と同じ topology の
+**interim materialization** であり、deploy authority の正本ではありません (両者は同一 topology に収束します)。target
+ごとの production parity は operator evidence で確認する必要があります。このページの runbook だけで全 target の live
+readiness を保証しません。
 
 ## 想定読者
 
@@ -97,11 +105,11 @@ multi-cloud 構成を作れます:
 
 | area                         | gate / proof                                                   | default gate |
 | ---------------------------- | -------------------------------------------------------------- | ------------ |
-| Source distribution dispatch  | `takos-private` `bun run distribute:test`                    | yes          |
+| Distribution materialization | `takos-private` `bun run distribute:test`                      | yes          |
 | Cloudflare reference backend | private `distribute:dry-run` + Cloudflare deploy dry-run       | opt-in       |
 | AWS / GCP / Kubernetes Helm  | private `distribute:dry-run` preflight + Helm chart validation | opt-in       |
 | Selfhosted compose packaging | private `distribute:dry-run` preflight + compose config        | opt-in       |
-| Operator infrastructure lifecycle | PlatformService binding dry-runs / live smoke scripts      | opt-in       |
+| Takosumi run ledger          | RunnerProfile-scoped PlanRun / ApplyRun (tofu plan / apply) + DeploymentOutput 検証 | opt-in       |
 
 Provider proof は operator が明示的に実行する opt-in proof です。CI / release gate に入れる場合も、各 provider の
 credential / cluster / account が揃った環境で gate-backed に実行してください。default docs build や kernel gate は

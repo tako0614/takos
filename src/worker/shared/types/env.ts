@@ -78,6 +78,17 @@ export interface ContainerHostEnv {
   EXECUTOR_CONTAINER_TIER3?: ContainerHostBinding;
   TAKOS_WORKER?: FetchBinding;
   PROXY_BASE_URL?: string;
+  /**
+   * Worker-mediated egress proxy URL handed to the workflow/actions container
+   * (`runtime/container-hosts/runtime-host.ts` `buildRuntimeContainerEnv`).
+   * SECURITY INVARIANT: when set, it MUST resolve to the per-run, SSRF-gated
+   * egress endpoint (proxying through `runtime/worker/egress.ts`), never an open
+   * or transparent proxy. Distinct from `PROXY_BASE_URL` (the control
+   * back-channel). Unset by default — the container then gets no worker-mediated
+   * egress proxy and container-direct outbound must be denied by the infra-layer
+   * Cloudflare Container network policy.
+   */
+  TAKOS_EGRESS_PROXY_URL?: string;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
   /**
    * Egress proxy used by the web tool (`application/tools/custom/web.ts`) and
@@ -215,10 +226,6 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_RESULT_MAX_BYTES?: string;
   TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_CHAIN_MAX_DEPTH?: string;
   TAKOS_APP_DEPLOY_REMOTE_ARCHIVE_MAX_BYTES?: string;
-  /** Takosumi Installer API base URL for Space-Installation dual-write. */
-  TAKOSUMI_INSTALLER_URL?: string;
-  /** Bearer token for Takosumi Installer API. */
-  TAKOSUMI_INSTALLER_TOKEN?: string;
   /** Operator-replaceable default app distribution JSON; wins over DB config. */
   TAKOS_DEFAULT_APP_DISTRIBUTION_JSON?: string;
   /** Operator-replaceable default app repository list JSON; wins over DB config. */

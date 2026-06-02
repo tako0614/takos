@@ -288,9 +288,7 @@ async function getNotifierBufferedEvents(
   const stub = namespace.get(id);
   const response = await fetchWithTimeout(
     stub,
-    new Request(`https://internal.do/events?after=${afterEventId}`, {
-      headers: { "X-Takos-Internal-Marker": "1" },
-    }),
+    new Request(`https://internal.do/events?after=${afterEventId}`, {}),
   );
   if (!response.ok) return [];
   const json = await response.json() as {
@@ -383,12 +381,14 @@ async function getRunEventsAfterFromR2(
     Math.floor(Math.max(0, afterEventId) / RUN_EVENT_SEGMENT_SIZE) + 1;
   const segmentIndexes = (await listRunEventSegmentIndexes(bucket, runId))
     .filter((index) => index >= startSegment);
-  const segments = await Promise.all(
-    segmentIndexes.map((index) => readRunEventSegment(bucket, runId, index)),
-  );
 
+  // Read segments sequentially in ascending order and stop as soon as we have
+  // `limit` events. This avoids fanning out reads (and decompressing) every
+  // remaining segment when only the first one or two are needed. Order and
+  // filter match the previous fan-out + post-loop exactly.
   const events: PersistedRunEvent[] = [];
-  for (const segment of segments) {
+  for (const index of segmentIndexes) {
+    const segment = await readRunEventSegment(bucket, runId, index);
     if (!segment) continue;
     for (const event of segment) {
       if (event.event_id <= afterEventId) continue;

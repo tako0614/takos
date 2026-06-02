@@ -5,20 +5,20 @@
   "profile": "operator.takosumi.cloudflare",
   "artifacts": [
     {
+      "kind": "opentofu",
+      "ref": "deploy/opentofu/environments/cloudflare-prod"
+    },
+    {
       "kind": "wrangler",
       "ref": "../takosumi/deploy/cloudflare/wrangler.toml"
     },
     {
       "kind": "operator",
-      "ref": "../takosumi/deploy/cloudflare"
+      "ref": "../takosumi/deploy/accounts-cloudflare"
     },
     {
       "kind": "wrangler",
       "ref": "../takosumi/deploy/accounts-cloudflare/wrangler.toml"
-    },
-    {
-      "kind": "operator",
-      "ref": "../takosumi/deploy/accounts-cloudflare"
     }
   ],
   "providerProof": {

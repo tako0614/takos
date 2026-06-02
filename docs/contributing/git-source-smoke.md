@@ -1,37 +1,37 @@
 # Git Source Proof
 
-This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
+This page has been reset for Takosumi v1. Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module repo as an **Installation**, then records a **PlanRun** for each plan and an **ApplyRun** for each apply/destroy. A successful apply updates the **Deployment** and its **DeploymentOutput**. Repo metadata comes from generic information such as Git URL, ref, commit, tag, and module path.
 
 ## Current Flow
 
-1. Choose a Git URL/ref or a prepared source archive.
-2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
-3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
-4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
+1. Register the Git URL/ref of the OpenTofu module repo as an Installation.
+2. Plan the module. Takosumi records a `PlanRun` with the proposed changes, warnings, and the resolved commit.
+3. Apply the reviewed plan. Takosumi records an `ApplyRun`; on success it updates the `Deployment` and `DeploymentOutput`.
+4. Destroy is also recorded as an `ApplyRun` against the same Installation.
+5. The provider allowlist, credential references, state backend, and Cloudflare Container execution belong to the `RunnerProfile`. Credentials, OIDC clients, billing, domains, and account-plane policy belong to the operator distribution.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takos itself is deployed by Takosumi as an installed-and-applied OpenTofu module (`deploy/opentofu`, with `var.target` ∈ `aws` | `gcp` | `cloudflare`; the `cloudflare` target provisions D1/KV/R2/Queues backing resources). Takosumi records Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput state. Takosumi or another operator distribution owns account-plane policy, billing, and OIDC.
 
 ## API Shape
 
 ```json
 {
   "spaceId": "space_1",
-  "source": {
-    "kind": "git",
+  "repo": {
     "url": "https://github.com/example/app.git",
-    "ref": "main"
+    "ref": "main",
+    "modulePath": "."
   }
 }
 ```
 
-Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+An Installation points at a Git URL/ref and module path; plan and apply are recorded as PlanRun and ApplyRun against it. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
-- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)
+- [Takosumi deploy control API](https://takosumi.com/docs/reference/installer-api)

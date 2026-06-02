@@ -379,3 +379,43 @@ export function getSessionIdFromCookie(
   }
   return null;
 }
+
+// Browser-bound OIDC state cookie. The OAuth `state` is also stored server-side
+// (see createOIDCState), but that store proves nothing about *which* browser
+// started the flow. Binding the same `state` to a short-lived HttpOnly cookie
+// lets the callback require that the browser completing the flow is the one that
+// initiated it, closing login CSRF / session fixation (state must match cookie).
+//
+// SameSite=Lax (not Strict) is required: the callback is a top-level navigation
+// arriving from the external OIDC issuer, and Strict would drop the cookie on
+// that cross-site redirect. Lax still sends the cookie on top-level GET
+// navigations while blocking it from cross-site subrequests.
+export const OIDC_STATE_COOKIE_NAME = "__Host-tp_oidc_state";
+
+// Mirror the OAuth `state` charset (generateRandomString -> base64url alphabet).
+const OIDC_STATE_COOKIE_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
+
+export function setOIDCStateCookie(state: string, maxAgeSeconds: number): string {
+  return `${OIDC_STATE_COOKIE_NAME}=${state}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
+}
+
+export function clearOIDCStateCookie(): string {
+  return `${OIDC_STATE_COOKIE_NAME}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
+export function getOIDCStateFromCookie(
+  cookieHeader: string | null | undefined,
+): string | null {
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(";").map((c) => c.trim());
+  for (const cookie of cookies) {
+    const separatorIndex = cookie.indexOf("=");
+    if (separatorIndex <= 0) continue;
+    const name = cookie.slice(0, separatorIndex);
+    const value = cookie.slice(separatorIndex + 1);
+    if (name === OIDC_STATE_COOKIE_NAME) {
+      return OIDC_STATE_COOKIE_PATTERN.test(value) ? value : null;
+    }
+  }
+  return null;
+}

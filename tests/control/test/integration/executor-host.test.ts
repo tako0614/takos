@@ -1,126 +1,75 @@
 import { getRequiredProxyCapability } from "@/runtime/container-hosts/executor-host.ts";
+import { AGENT_PROXY_SCOPES } from "@/runtime/container-hosts/executor-utils.ts";
 
 import { strict as assert } from "node:assert";
 import { test } from "bun:test";
 
-test("executor-host proxy capability boundaries - maps current control paths to control capability", () => {
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/db/first"), null);
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/runtime/fetch"), null);
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/unknown/fetch"), null);
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/heartbeat"), null);
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/heartbeat"),
-    "control",
-  );
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/run/reset"), null);
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/run-reset"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/run-record"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/run-bootstrap"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/run-bootstrap",
-    ),
-    "control",
-  );
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/api-keys"), null);
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/api-keys"),
-    "control",
-  );
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/run/usage"), null);
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/run-usage"),
-    "control",
-  );
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/billing/run-usage"), null);
-  assert.deepStrictEqual(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/billing-run-usage",
-    ),
-    null,
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/run-context"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/no-llm-complete",
-    ),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/conversation-history",
-    ),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/skill-plan"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/memory-activation",
-    ),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/memory-finalize",
-    ),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/add-message"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability(
-      "/api/internal/v1/agent-control/update-run-status",
-    ),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/current-session"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/is-cancelled"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/tool-catalog"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/tool-execute"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/tool-execute"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/tool-cleanup"),
-    "control",
-  );
-  assert.deepStrictEqual(
-    getRequiredProxyCapability("/api/internal/v1/agent-control/run-event"),
-    "control",
-  );
+const CONTROL = "/api/internal/v1/agent-control/";
+
+// Capability-split: the single coarse "control" scope was replaced by
+// least-privilege per-endpoint scopes. Each control-RPC path resolves to exactly
+// one scope, and an agent run (which holds the full AGENT_PROXY_SCOPES set) can
+// still reach every control endpoint.
+const EXPECTED_SCOPES: Record<string, string> = {
+  "heartbeat": "run-lifecycle",
+  "run-reset": "run-lifecycle",
+  "run-record": "run-lifecycle",
+  "run-bootstrap": "run-lifecycle",
+  "run-usage": "run-lifecycle",
+  "run-context": "run-lifecycle",
+  "no-llm-complete": "run-lifecycle",
+  "update-run-status": "run-lifecycle",
+  "is-cancelled": "run-lifecycle",
+  "run-event": "run-lifecycle",
+  "current-session": "conversation",
+  "conversation-history": "conversation",
+  "add-message": "conversation",
+  "memory-activation": "memory",
+  "memory-finalize": "memory",
+  "skill-plan": "skills",
+  "tool-catalog": "tools",
+  "tool-execute": "tools",
+  "tool-cleanup": "tools",
+  "api-keys": "provider-keys",
+};
+
+test("executor-host proxy capability boundaries - each control path maps to its least-privilege scope (reachable by an agent run)", () => {
+  for (const [endpoint, scope] of Object.entries(EXPECTED_SCOPES)) {
+    const required = getRequiredProxyCapability(`${CONTROL}${endpoint}`);
+    assert.strictEqual(
+      required,
+      scope,
+      `${endpoint} should require scope ${scope}`,
+    );
+    // An agent run holds the full scope set, so every control endpoint stays
+    // reachable for agent runs (no regression vs the old coarse "control").
+    assert.ok(
+      required !== null && AGENT_PROXY_SCOPES.includes(required),
+      `${endpoint} scope ${required} must be in AGENT_PROXY_SCOPES`,
+    );
+  }
 });
 
-test("executor-host proxy capability boundaries - rejects unknown proxy paths", () => {
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/unknown"), null);
-  assert.deepStrictEqual(getRequiredProxyCapability("/proxy/token/refresh"), null);
+test("executor-host proxy capability boundaries - binding-proxy, billing and unknown paths are not control-RPC (null = fail closed)", () => {
+  for (
+    const path of [
+      "/proxy/db/first",
+      "/proxy/runtime/fetch",
+      "/proxy/unknown/fetch",
+      "/proxy/heartbeat",
+      "/proxy/run/reset",
+      "/proxy/api-keys",
+      "/proxy/run/usage",
+      "/proxy/billing/run-usage",
+      "/api/internal/v1/agent-control/billing-run-usage",
+      "/proxy/unknown",
+      "/proxy/token/refresh",
+    ]
+  ) {
+    assert.strictEqual(
+      getRequiredProxyCapability(path),
+      null,
+      `${path} must not resolve to a control-RPC scope`,
+    );
+  }
 });

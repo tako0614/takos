@@ -48,7 +48,7 @@ function AttachmentImage(props: {
     >
       {(() => {
         const src =
-          `/api/spaces/${props.spaceId}/storage/download/${props.attachment.file_id}`;
+          `/api/spaces/${encodeURIComponent(props.spaceId)}/storage/download/${encodeURIComponent(props.attachment.file_id ?? "")}`;
         return (
           <a href={src} target="_blank" rel="noopener noreferrer" class="block">
             <img

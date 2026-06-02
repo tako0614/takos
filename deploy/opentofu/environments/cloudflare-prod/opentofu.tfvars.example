@@ -1,0 +1,3 @@
+# Copy to opentofu.tfvars and source secret values from takos-private.
+# api_token is supplied by the Takosumi RunnerProfile at ApplyRun time.
+account_id = "replace-with-cloudflare-account-id"

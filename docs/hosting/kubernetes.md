@@ -10,11 +10,12 @@
    を直接使う、または AWS / GCP overlay と組み合わせる path。
 2. **k8s operator implementation evidence** ― namespace / Deployment / Service
    / Ingress / Secret / ConfigMap を operator-owned workflow で作成し、
-   PlatformService inventory と Deployment evidence に接続する path。Cloudflare control plane + k8s tenant runtime
+   ApplyRun / Deployment / DeploymentOutput の run ledger に接続する path。Cloudflare control plane + k8s tenant runtime
    (`composite.cf-control-k8s-tenant@v1`) や k8s 単独 profile
    (`profiles/cloudflare-kubernetes.example.json`) で使う。
 
-Takosumi 上に Source を install し、Installation / Deployment を管理する方法は
+Takosumi 上に OpenTofu module を install し、Installation / PlanRun / ApplyRun /
+Deployment / DeploymentOutput を管理する方法は
 [Deploy](/deploy/) を参照してください。 5 target 横断 runbook は
 [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
@@ -103,7 +104,7 @@ base chart は次の workload を Kubernetes 上に作ります:
 | service ID    | kind                 | default role                                         |
 | ------------- | -------------------- | ---------------------------------------------------- |
 | `takos-worker`   | Deployment + Service | Web UI / public API / browser and API-client gateway |
-| `takosumi`    | Deployment + Service | Source install / Deployment apply engine                     |
+| `takosumi`    | Deployment + Service | OpenTofu plan / apply control plane / run ledger             |
 | `takos-git`   | Deployment + Service | Git Smart HTTP / refs / repository storage           |
 | `takos-agent` | Deployment + Service | agent execution service                              |
 
@@ -215,8 +216,8 @@ workload は作りません。
 
 Takosumi operator binding profile の k8s path は、operator-owned OpenTofu /
 Helm / native workflow が namespace、Deployment、Service、Ingress、Secret、
-ConfigMap、runtime endpoint の output を作成し、PlatformService inventory と
-Deployment evidence に接続する構成です。Takosumi core は k8s provider state
+ConfigMap、runtime endpoint の output を作成し、ApplyRun / Deployment /
+DeploymentOutput の run ledger に接続する構成です。Takosumi core は k8s provider state
 や runtime handler implementation を所有しません。
 
 ### Operator が手動でやること / reference binding が行うこと
@@ -238,18 +239,22 @@ Deployment evidence に接続する構成です。Takosumi core は k8s provider
 
 provider 用 ServiceAccount + Role:
 
-```json
-{
-  "source": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  },
-  "expected": {
-    "commit": "<reviewed-commit>",
-    "planSnapshotDigest": "sha256:<reviewed-plan>"
-  }
-}
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: takos-provider
+  namespace: takos-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: takos-provider
+  namespace: takos-system
+rules:
+  - apiGroups: ["", "apps", "networking.k8s.io"]
+    resources: ["deployments", "services", "ingresses", "secrets", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ```
 
 token 取得 (k8s 1.24+ では `kubectl create token`):
@@ -302,18 +307,22 @@ k8s API server が internet-facing でない場合、bastion host に kubectl pr
 
 ### runtime-agent を k8s に置く
 
-```json
-{
-  "source": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  },
-  "expected": {
-    "commit": "<reviewed-commit>",
-    "planSnapshotDigest": "sha256:<reviewed-plan>"
-  }
-}
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: takos-runtime-agent
+  namespace: takos-system
+spec:
+  replicas: 1
+  template:
+    spec:
+      serviceAccountName: takos-provider
+      containers:
+        - name: runtime-agent
+          image: registry.example.com/takos/runtime-agent:latest
+          ports:
+            - containerPort: 8080
 ```
 
 runtime-agent は bearer 保護の lifecycle HTTP API で kernel からの apply / destroy /
@@ -353,9 +362,9 @@ kernel がやること:
 - cloud ごとの app resource backend 自動 provisioning (※ AWS / GCP operator
   binding profile と組み合わせると配置可能)
 - DynamoDB / Firestore / SQS / Pub/Sub / cloud secret manager の provider matrix
-- Source から各 provider service を自動 provisioning
+- OpenTofu module から各 provider service を自動 provisioning
   する保証
-- provider 固有 adapter 名を Source author 向け public surface として固定する
+- provider 固有 adapter 名を module author 向け public surface として固定する
   contract
 
 ## 次に読むページ

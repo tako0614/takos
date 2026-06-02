@@ -8,7 +8,7 @@
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { authSessions, getDb } from "../../../infra/db/index.ts";
-import { and, desc, eq, gt, notInArray } from "drizzle-orm";
+import { and, desc, eq, notInArray } from "drizzle-orm";
 import { logInfo } from "../../../shared/utils/logger.ts";
 import { bytesToHex } from "../../../shared/utils/encoding-utils.ts";
 
@@ -145,7 +145,12 @@ export function generateSessionToken(): string {
 }
 
 /**
- * Create a SQL store-based auth session (for service API token validation)
+ * Create a SQL store-based auth session.
+ *
+ * This records an audit/device session row whose token is intentionally NOT
+ * handed to clients and NOT used for request validation. Request auth is
+ * handled by the OIDC session / Takosumi Accounts bearer middleware; this
+ * table backs privacy-rights export/deletion and device bookkeeping only.
  */
 export async function createAuthSession(
   d1: SqlDatabaseBinding,
@@ -171,38 +176,6 @@ export async function createAuthSession(
   });
 
   return { token, expiresAt };
-}
-
-/**
- * Validate a SQL store-based auth session
- */
-export async function validateAuthSession(
-  d1: SqlDatabaseBinding,
-  token: string,
-): Promise<{ valid: boolean; userId?: string; expiresAt?: string }> {
-  const tokenHash = await hashToken(token);
-  const db = getDb(d1);
-
-  const session = await db.select({
-    accountId: authSessions.accountId,
-    expiresAt: authSessions.expiresAt,
-  })
-    .from(authSessions)
-    .where(and(
-      eq(authSessions.tokenHash, tokenHash),
-      gt(authSessions.expiresAt, new Date().toISOString()),
-    ))
-    .get();
-
-  if (!session) {
-    return { valid: false };
-  }
-
-  return {
-    valid: true,
-    userId: session.accountId,
-    expiresAt: session.expiresAt,
-  };
 }
 
 /**

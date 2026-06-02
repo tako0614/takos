@@ -80,7 +80,10 @@ export function createGcpSecretStore(config: GcpSecretStoreConfig) {
 
   async function getAuth(): Promise<GoogleAuth> {
     if (!authPromise) {
-      authPromise = buildAuth(config);
+      authPromise = buildAuth(config).catch((e) => {
+        authPromise = null;
+        throw e;
+      });
     }
     return authPromise;
   }

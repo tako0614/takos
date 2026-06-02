@@ -279,7 +279,7 @@ const deploymentTable = sqliteTable("deployments", {
   targetJson: text("target_json").notNull().default("{}"),
   backendStateJson: text("backend_state_json").notNull().default("{}"),
   artifactKind: text("artifact_kind").notNull().default("worker-bundle"),
-  idempotencyKey: text("idempotency_key").unique(),
+  idempotencyKey: text("idempotency_key"),
   isRollback: integer("is_rollback", { mode: "boolean" }).notNull().default(
     false,
   ),
@@ -297,6 +297,16 @@ const deploymentTable = sqliteTable("deployments", {
   uniqServiceVersion: uniqueIndex("idx_deployments_service_version").on(
     table.serviceId,
     table.version,
+  ),
+  // Idempotency keys are scoped per service, not globally unique. A global
+  // unique on idempotency_key let a key reused by one service block an
+  // unrelated service's deploy. SQLite treats each NULL as distinct, so the
+  // many null keys are unaffected.
+  uniqServiceIdempotencyKey: uniqueIndex(
+    "idx_deployments_service_idempotency_key",
+  ).on(
+    table.serviceId,
+    table.idempotencyKey,
   ),
   idxServiceRouting: index("idx_deployments_service_routing_status").on(
     table.serviceId,

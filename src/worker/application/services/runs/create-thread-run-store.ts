@@ -171,7 +171,14 @@ async function checkRunRateLimitsFallback(
       fallbackError,
       { module: "services/runs/create-thread-run-store" },
     );
-    return { allowed: true };
+    // Fail closed: when the rate-limit lookup itself is unavailable we cannot
+    // confirm the actor is under their limit, so we must deny rather than allow
+    // unbounded runs. Allowing here would let a database/storage outage bypass
+    // every per-actor and per-workspace run cap.
+    return {
+      allowed: false,
+      reason: "Rate limit check unavailable, please retry shortly",
+    };
   }
 }
 

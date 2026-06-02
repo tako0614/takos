@@ -357,7 +357,19 @@ export class RunNotifierDO extends NotifierBase {
       try {
         await this.flushR2Segment(this.r2SegmentIndex, this.r2SegmentBuffer);
         this.r2SegmentBuffer = [];
-        this.r2SegmentIndex = segmentIndexForEventId(eventId + 1);
+        // Advance the live segment index past the segment we just flushed so
+        // post-terminal events are not trapped in an already-flushed segment.
+        // A terminal event can land mid-segment (e.g. event 150 in segment 2),
+        // in which case segmentIndexForEventId(eventId + 1) still resolves to
+        // the same segment. Reusing that index would route later events into a
+        // buffer whose flushR2Segment is permanently skipped by the
+        // `segmentIndex <= r2LastFlushedSegmentIndex` guard, silently dropping
+        // them from the archive. Always move at least one segment past the
+        // last flushed index.
+        this.r2SegmentIndex = Math.max(
+          segmentIndexForEventId(eventId + 1),
+          this.r2LastFlushedSegmentIndex + 1,
+        );
       } catch (err) {
         logWarn("Object-store boundary/terminal flush failed", {
           module: "runnotifierdo",

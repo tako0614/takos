@@ -246,7 +246,12 @@ mcpRoutes.get(
         }
       }
     }
-    const client = new McpClient(server.url, accessToken, server.name);
+    const client = new McpClient(
+      server.url,
+      accessToken,
+      server.name,
+      c.env.TAKOS_EGRESS,
+    );
     try {
       await client.connect();
       const tools = await client.listTools();

@@ -1101,6 +1101,83 @@ export async function runGit(
 }
 
 /**
+ * Run a `git` invocation while bounding how large `gitDir` may grow on disk.
+ *
+ * Used by external import / fetch so a hostile or runaway remote cannot fill
+ * the disk via an unbounded pack: while git streams the pack into the bare
+ * repo, we poll the directory's apparent size every `pollIntervalMs` (default
+ * 500ms) and, once a sample exceeds `maxBytes`, SIGTERM the process and report
+ * `exceededSizeCap`. This is a periodic SOFT cap, not an instantaneous one: a
+ * fetch can overshoot `maxBytes` by up to roughly one poll interval of write
+ * throughput before the next sample fires, so size `maxBytes` to leave that
+ * headroom. It fails closed — the partial repo is left for the caller to clean
+ * up. Normal repos under the cap are unaffected (the poll just observes a size
+ * below the cap and the command completes exactly as `runGit` would). The same
+ * scrubbed env / protocol-allowlist hardening as `runGit` is applied.
+ */
+export async function runGitWithDirectorySizeCap(
+  args: string[],
+  gitDir: string,
+  maxBytes: number,
+  options: { pollIntervalMs?: number } = {},
+): Promise<{ output: CommandOutput; exceededSizeCap: boolean }> {
+  const scrubbedEnv = buildScrubbedGitEnv(undefined);
+  const child = spawnCommand("git", {
+    args,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: scrubbedEnv,
+  });
+
+  let exceededSizeCap = false;
+  let stopped = false;
+  const pollIntervalMs = options.pollIntervalMs ?? 500;
+  const poll = (async () => {
+    while (!stopped) {
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      if (stopped) break;
+      const size = await directoryApparentSize(gitDir);
+      if (size !== undefined && size > maxBytes) {
+        exceededSizeCap = true;
+        try {
+          child.kill("SIGTERM");
+        } catch (_error) {
+          // process may already have exited
+        }
+        break;
+      }
+    }
+  })();
+
+  const output = await child.output();
+  stopped = true;
+  await poll.catch(() => {});
+  return { output, exceededSizeCap };
+}
+
+/**
+ * Apparent on-disk byte size of `path` via `du -sb`. Returns undefined when the
+ * measurement cannot be taken (e.g. the directory does not yet exist or `du`
+ * fails), so the caller treats an unmeasurable size as "not over the cap" and
+ * relies on the next poll / process exit rather than aborting a healthy fetch.
+ */
+async function directoryApparentSize(path: string): Promise<number | undefined> {
+  try {
+    const result = await spawnCommand("du", {
+      args: ["-sb", path],
+      stdout: "pipe",
+      stderr: "pipe",
+    }).output();
+    if (!result.success) return undefined;
+    const first = textDecoder.decode(result.stdout).trimStart().split(/\s+/, 1)[0];
+    const parsed = Number(first);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Apply HARDENED_BARE_REPO_CONFIG to an existing bare repository.
  *
  * Used by the startup backfill migration so that bare repositories

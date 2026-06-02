@@ -120,7 +120,13 @@ export default new Hono<SpaceAccessRouteEnv>()
       roles: ["owner", "admin"],
       message: "Space not found or insufficient permissions",
     }),
-    zValidator("json", z.object({ email: z.string(), role: z.string() })),
+    zValidator(
+      "json",
+      z.object({
+        email: z.string(),
+        role: z.enum(["admin", "editor", "viewer"]),
+      }),
+    ),
     async (c) => {
       const user = c.get("user");
       const access = c.get("access");
@@ -134,6 +140,9 @@ export default new Hono<SpaceAccessRouteEnv>()
         throw new BadRequestError(
           "Cannot add owner role",
         );
+      }
+      if (access.membership.role === "admin" && body.role === "admin") {
+        throw new AuthorizationError("Only owner can promote to admin");
       }
 
       const targetUser = requireFound(
@@ -198,7 +207,10 @@ export default new Hono<SpaceAccessRouteEnv>()
       roles: ["owner", "admin"],
       message: "Space not found or insufficient permissions",
     }),
-    zValidator("json", z.object({ role: z.string() })),
+    zValidator(
+      "json",
+      z.object({ role: z.enum(["owner", "admin", "editor", "viewer"]) }),
+    ),
     async (c) => {
       const access = c.get("access");
       const targetUsername = c.req.param("username");

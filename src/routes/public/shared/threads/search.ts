@@ -210,7 +210,7 @@ async function searchSpaceThreadsKeyword(
     JOIN threads t ON t.id = m.thread_id
     WHERE t.account_id = ?
       AND t.status != 'deleted'
-      AND m.content LIKE ?
+      AND m.content LIKE ? ESCAPE '\'
     ORDER BY m.created_at DESC
     LIMIT ?
     OFFSET ?
@@ -236,7 +236,7 @@ async function searchThreadMessagesKeyword(
       created_at AS createdAt
     FROM messages
     WHERE thread_id = ?
-      AND content LIKE ?
+      AND content LIKE ? ESCAPE '\'
     ORDER BY sequence ASC
     LIMIT ?
     OFFSET ?
@@ -476,8 +476,12 @@ function buildSnippet(
   };
 }
 
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
 function likePattern(value: string): string {
-  return `%${value}%`;
+  return `%${escapeLike(value)}%`;
 }
 
 function metadataString(metadata: unknown, key: string): string | null {

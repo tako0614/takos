@@ -7,7 +7,7 @@ import {
 import type { TakosumiActorContext } from "takosumi-contract-v2/internal/rpc";
 import { actorFromAuthenticatedRequest } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
-import { commonError, isRecord } from "../shared/api/common.ts";
+import { commonError, isRecord, readJsonBody } from "../shared/api/common.ts";
 import {
   actorSpaceIdFromPublicJsonBody,
   forwardGitInternalRequest,
@@ -128,12 +128,15 @@ export function registerRepositoriesPublicRoutes(
   });
 
   app.post("/api/source/resolve", async (c) => {
-    const body = await c.req.json<{
-      repositoryId: string;
-      sourceRef: string;
-      spaceId?: string;
-    }>();
-    const spaceId = body.spaceId?.trim() || "";
+    const body = await readJsonBody(c.req);
+    if (!isRecord(body)) {
+      return c.json(
+        commonError("INVALID_ARGUMENT", "request body must be a JSON object"),
+        400,
+      );
+    }
+    const spaceId =
+      (typeof body.spaceId === "string" ? body.spaceId : "").trim() || "";
     if (!spaceId) {
       return c.json(
         commonError("INVALID_ARGUMENT", "spaceId is required"),
@@ -144,8 +147,10 @@ export function registerRepositoriesPublicRoutes(
     if (!guard.ok) return guard.response;
     const actor = guard.actor;
     const payload: GitResolveSourceRequest = {
-      repositoryId: body.repositoryId,
-      sourceRef: body.sourceRef,
+      repositoryId: typeof body.repositoryId === "string"
+        ? body.repositoryId
+        : "",
+      sourceRef: typeof body.sourceRef === "string" ? body.sourceRef : "",
     };
     const response = await forwardGitInternalRequest({
       request: c.req.raw,

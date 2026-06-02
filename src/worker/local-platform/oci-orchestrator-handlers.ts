@@ -77,10 +77,34 @@ export interface OciOrchestratorRouteDeps {
 
 function createAuthMiddleware() {
   const token = getEnv("OCI_ORCHESTRATOR_TOKEN")?.trim();
-  return async (c: Context, next: Next) => {
-    if (!token) {
-      return next();
+
+  // Fail closed when no shared token is configured: the node-fetch server binds
+  // all interfaces (0.0.0.0), so an unauthenticated orchestrator would expose
+  // deploy/remove/logs/proxy to anything that can reach the port. We mirror the
+  // env-signal convention used elsewhere in local-platform (e.g. in-memory-d1.ts):
+  // allow silently under the test runner, hard-refuse every request in a
+  // production-shaped environment, and warn loudly in any other unconfigured
+  // case so a stray open orchestrator is never silent.
+  if (!token) {
+    const underTest = getEnv("VITEST") !== undefined;
+    const isProduction = getEnv("ENVIRONMENT") === "production";
+    if (!underTest && isProduction) {
+      return async (c: Context) =>
+        c.text(
+          "Unauthorized: OCI_ORCHESTRATOR_TOKEN is not configured",
+          401,
+        );
     }
+    if (!underTest) {
+      logWarn(
+        "OCI orchestrator is running WITHOUT an OCI_ORCHESTRATOR_TOKEN; all routes (deploy/remove/logs/proxy) are unauthenticated. Set OCI_ORCHESTRATOR_TOKEN for any network-reachable deployment.",
+        { module: "oci-orchestrator" },
+      );
+    }
+    return async (_c: Context, next: Next) => next();
+  }
+
+  return async (c: Context, next: Next) => {
     const auth = c.req.header("Authorization")?.trim();
     if (auth !== `Bearer ${token}`) {
       return c.text("Unauthorized", 401);

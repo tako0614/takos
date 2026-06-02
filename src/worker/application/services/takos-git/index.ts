@@ -59,7 +59,4 @@ export {
   setDefaultBranch,
   updateBranch,
 } from "./local/index.ts";
-export { fetchPackFromRemote } from "./local/client/fetch-pack.ts";
-export { fetchRemoteRefs } from "./local/client/fetch-refs.ts";
-export { readPackfileAsync } from "./local/protocol/packfile-reader.ts";
 export * from "./client.ts";

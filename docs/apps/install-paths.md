@@ -17,7 +17,7 @@ summary が揃い、 `managed-offering:status` が `canOpenManagedOffering: true
 ::: tip 関連ページ Runtime mode の詳細は
 [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)、
 インストールの内部処理は
-[Installer Pipeline](https://takosumi.com/docs/reference/installer-api)
+[Takosumi deploy control plane](https://takosumi.com/docs/reference/core-spec)
 を参照してください。 :::
 
 ## 1. 3 path 一覧
@@ -25,7 +25,7 @@ summary が揃い、 `managed-offering:status` が `canOpenManagedOffering: true
 | path               | target user                       | runtime mode                     | install 入口                                                                 | UX                                                            |
 | ------------------ | --------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `Use Takos`        | 一般ユーザー / 試したい人         | `shared-cell`                    | operator Accounts の `/start?takos_url=...` ボタン                           | public signup open 後に Account / Space 作成→ chat           |
-| `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (`https://<OPERATOR_INSTALL_HOST>/install?...`) | prepare/build if needed → installer dry-run → approve → apply |
+| `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (`https://<OPERATOR_INSTALL_HOST>/install?...`) | Installation 作成 → PlanRun → reviewed plan を approve → ApplyRun |
 | `Self-host`        | 退出 / 企業 / 主権重視            | `self-hosted`                    | operator deploy + app export/import                                          | 自前 takosumi で運用                                          |
 
 `Install from Git` と app export/import は同じ Installation contract 上に設計されています。現時点で verified な path は
@@ -96,20 +96,20 @@ https://<OPERATOR_INSTALL_HOST>/install?git=...&ref=v1.2.3
   ↓
 Takosumi Account 作成 / login
   ↓
-install dry-run を表示
-  - resolved source identity / publisher verification
+Installation 作成 → PlanRun
+  - resolved Git commit / module path
   - requested bindings / authorization records
-  - estimated cost
-  ↓ approve
-Takosumi installer の 5 endpoint lifecycle
+  - plan diff / estimated cost
+  ↓ reviewed plan を approve
+ApplyRun → Deployment / DeploymentOutput
   ↓
 Installation ready
   ↓
 launch token → chat
 ```
 
-dry-run / apply の詳細は
-[Installer API](https://takosumi.com/docs/reference/installer-api) を参照。
+PlanRun / ApplyRun の詳細は
+[Takosumi deploy control plane](https://takosumi.com/docs/reference/core-spec) を参照。
 
 ### 3.2 ボタン例
 
@@ -133,9 +133,9 @@ fork した派生版を配る場合も同じ形。`git=` と `ref=` を fork 側
 
 ### 3.3 ref pin policy
 
-Managed install UI は production install を tag か commit に pin する policy を推奨する。core Installer API は branch /
-tag / commit ref を受け取り、dry-run 時に immutable commit へ解決し、apply 時に `expected.commit` と
-`expected.planSnapshotDigest` で reviewed-source drift を防ぐ。operator UI は必要に応じて `ref=main` / `ref=latest` のような移動 ref
+Managed install UI は production install を tag か commit に pin する policy を推奨する。Takosumi deploy control plane は branch /
+tag / commit ref を受け取り、PlanRun 時に immutable commit へ解決し、ApplyRun は PlanRun で review された
+commit を適用する。operator UI は必要に応じて `ref=main` / `ref=latest` のような移動 ref
 を拒否できる。
 
 ```txt
@@ -152,16 +152,16 @@ operator policy で制限しやすい:
 
 理由:
 
-- Installation 行に resolved source identity を記録するため、ref が動いても「install
+- Installation 行に resolved Git commit を記録するため、ref が動いても「install
   したものの正体」を後から説明できる。
 - supply chain attack 検知 (突然 commit が変わったら incident) が pin なしでは成立しない。
 - upgrade / rollback 時に「何から何へ移ったか」が pin なしでは曖昧になる。
 
 正規化の振る舞い:
 
-- tag を渡すと installer は SHA に解決し、Installation 行に `sourceRef: v1.2.3` と resolved commit を source identity
-  として保存する。
-- 同じ tag を後から force-push されても installation は影響を受けない (resolved source identity で pin されているため)。
+- tag を渡すと Takosumi は SHA に解決し、Installation 行に requested ref `v1.2.3` と resolved commit を
+  記録する。
+- 同じ tag を後から force-push されても installation は影響を受けない (resolved commit で pin されているため)。
 
 ## 4. Self-host
 
@@ -230,9 +230,8 @@ launch-readiness evidence が揃った operator だけが宣言できます。
 
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md) 各 path
   が着地する `shared-cell` / `dedicated` / `self-hosted` の物理構造。
-- [Installer Pipeline](https://takosumi.com/docs/reference/installer-api)
-  `Install from Git` で実行される 13 step の pipeline。
-- [Source](https://takosumi.com/docs/reference/core-spec)
-  Git URL / commit / tag / package metadata などの汎用 repo metadata から resolve される install input。
+- [Takosumi deploy control plane](https://takosumi.com/docs/reference/core-spec)
+  `Install from Git` が記録する Installation → PlanRun → ApplyRun → Deployment → DeploymentOutput の run ledger と、
+  Git URL / commit / tag / well-known OpenTofu outputs などの汎用 repo metadata から resolve される install input。
 - [はじめる](/get-started/) path 選択後の最初の作業。
 - [Upgrade / Export](/platform/upgrade-export) path 間の乗り換えと export bundle の運用。

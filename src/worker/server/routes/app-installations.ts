@@ -207,6 +207,42 @@ function readRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function listInstallationIds(body: Record<string, unknown> | null): string[] {
+  const installations = body?.installations;
+  if (!Array.isArray(installations)) return [];
+  const ids: string[] = [];
+  for (const item of installations) {
+    const record = readRecord(item);
+    if (!record) continue;
+    const id = readString(record.id) ??
+      readString(record.installation_id) ??
+      readString(record.installationId);
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+/**
+ * Confirm the supplied installationId belongs to the authorized space before
+ * proxying a revision/delete to upstream. Without this, a member of space A
+ * could drive deployments/rollbacks/deletes against an Installation owned by
+ * space B by supplying its installationId. Resolves the authorized space's
+ * Installations and rejects unknown ids with 404.
+ */
+async function assertInstallationBelongsToSpace(
+  c: Context<SpaceAccessRouteEnv>,
+  spaceId: string,
+  installationId: string,
+): Promise<void> {
+  const list = await appInstallationsRouteDeps.listInstallableAppInstallations(
+    spaceId,
+    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+  );
+  if (!listInstallationIds(list.body).includes(installationId)) {
+    throw new NotFoundError("Installable app");
+  }
+}
+
 function readPathString(
   value: unknown,
   path: string[],
@@ -433,6 +469,7 @@ appInstallationsRouter.post(
   "/spaces/:spaceId/app-installations/git-url/revision/dry-run",
   spaceAccess({ roles: ["owner", "admin", "editor"] }),
   async (c) => {
+    const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
     if (body === null) {
       throw new BadRequestError("Invalid JSON body");
@@ -450,6 +487,7 @@ appInstallationsRouter.post(
         "Third-party Installation deployment dry-run is not configured",
       );
     }
+    await assertInstallationBelongsToSpace(c, space.id, installationId);
     const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
     const upstream = await appInstallationsRouteDeps
@@ -468,6 +506,7 @@ appInstallationsRouter.post(
   "/spaces/:spaceId/app-installations/git-url/revision/apply",
   spaceAccess({ roles: ["owner", "admin", "editor"] }),
   async (c) => {
+    const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
     if (body === null) {
       throw new BadRequestError("Invalid JSON body");
@@ -485,6 +524,7 @@ appInstallationsRouter.post(
         "Third-party Installation deployment apply is not configured",
       );
     }
+    await assertInstallationBelongsToSpace(c, space.id, installationId);
     const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
     const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
@@ -579,10 +619,12 @@ appInstallationsRouter.delete(
   "/spaces/:spaceId/app-installations/:installationId",
   spaceAccess({ roles: ["owner", "admin", "editor"] }),
   async (c) => {
+    const { space } = c.get("access");
     const installationId = readString(c.req.param("installationId"));
     if (!installationId) {
       throw new BadRequestError("installation_id is required");
     }
+    await assertInstallationBelongsToSpace(c, space.id, installationId);
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
     const reason = body === null ? undefined : readString(body.reason) ??
       undefined;

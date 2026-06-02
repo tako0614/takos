@@ -14,18 +14,18 @@ const SECRET_REFERENCE_PATTERN =
 export async function resolveSecretValues(
   db: SqlDatabaseBinding,
   repoId: string,
-  secretIds: string[],
+  referencedSecretNames: string[],
   encryptionKey?: string,
   requiredSecretNames: string[] = [],
 ): Promise<Record<string, string>> {
-  if (requiredSecretNames.length > 0 && !encryptionKey) {
+  if (referencedSecretNames.length > 0 && !encryptionKey) {
     throw new Error(
       "Encryption key is required to resolve referenced workflow secrets",
     );
   }
 
   if (!encryptionKey) return {};
-  if (!secretIds || secretIds.length === 0) {
+  if (referencedSecretNames.length === 0) {
     if (requiredSecretNames.length > 0) {
       throw new Error(
         `Missing referenced secrets: ${requiredSecretNames.join(", ")}`,
@@ -34,6 +34,10 @@ export async function resolveSecretValues(
     return {};
   }
 
+  // Least privilege: fetch ONLY the secrets the job actually references (by
+  // name), never every secret in the repo. The decrypted map is forwarded to
+  // the execution container, which runs user-supplied workflow code, so an
+  // unreferenced repo secret must never enter it.
   const drizzle = getDb(db);
   const secretRecords = await drizzle.select({
     id: workflowSecrets.id,
@@ -43,7 +47,7 @@ export async function resolveSecretValues(
     .from(workflowSecrets).where(
       and(
         eq(workflowSecrets.repoId, repoId),
-        inArray(workflowSecrets.id, secretIds),
+        inArray(workflowSecrets.name, referencedSecretNames),
       ),
     ).all();
 
@@ -85,6 +89,31 @@ export function collectReferencedSecretNamesFromEnv(
 
   collectSecretNamesFromEnv(jobEnv, names);
 
+  return Array.from(names).sort();
+}
+
+/**
+ * Collect every secret name referenced ANYWHERE in a workflow job — the job env
+ * and every step (run / with / env) and outputs — by deep-scanning the
+ * serialized sources for `${{ secrets.NAME }}`. Used to resolve ONLY the secrets
+ * a job actually references (least privilege) instead of the whole repo's
+ * secrets. Deep-scanning the serialized job is intentionally conservative: it
+ * cannot miss a reference location (a missed reference would strip a secret the
+ * step legitimately needs).
+ */
+export function collectReferencedSecretNames(...sources: unknown[]): string[] {
+  const names = new Set<string>();
+  for (const source of sources) {
+    if (source === undefined || source === null) continue;
+    const serialized = typeof source === "string"
+      ? source
+      : JSON.stringify(source);
+    SECRET_REFERENCE_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = SECRET_REFERENCE_PATTERN.exec(serialized)) !== null) {
+      names.add(match[1]);
+    }
+  }
   return Array.from(names).sort();
 }
 

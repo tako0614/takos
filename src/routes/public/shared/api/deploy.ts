@@ -117,9 +117,9 @@ function appBindingSecretRefs(
 
 const RETIRED_INLINE_WORKFLOW_DEPLOY_GUIDANCE =
   'source.kind="inline" workflow artifact deploys are retired. ' +
-  "Use the Takosumi Source install/deploy flow: install dry-run/apply from a " +
-  "Git or prepared source, then deployment dry-run/apply with expected.commit " +
-  "and expected.planSnapshotDigest.";
+  "Deploy via Takosumi: register the Git OpenTofu module as an Installation, " +
+  "then run plan/apply through Takosumi (PlanRun/ApplyRun); the recorded " +
+  "Deployment/DeploymentOutput is the result.";
 
 export function retiredInlineWorkflowDeploymentResponse(
   body: string,

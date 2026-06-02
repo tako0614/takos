@@ -91,7 +91,13 @@ import type {
 export interface ProxyTokenInfo {
   runId: string;
   serviceId: string;
-  capability: ProxyCapability;
+  /**
+   * The scope set this token grants. Minted as an array of least-privilege
+   * scopes (see proxyScopesForRunKind). A single value / legacy `"control"`
+   * remains accepted for already-stored tokens; expandProxyCapability resolves
+   * either form to the concrete scope set during the endpoint check.
+   */
+  capability: ProxyCapability | ProxyCapability[];
   executorTier?: ExecutorTier;
   executorContainerId?: string;
   startedAt?: number;
@@ -217,7 +223,84 @@ export interface AiRunBinding {
   run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
 }
 
-export type ProxyCapability = "control";
+/**
+ * Least-privilege proxy-token scopes. Each control-RPC endpoint maps to exactly
+ * one of these per-purpose scopes (see executor-auth.ts). A minted proxy token
+ * carries a *set* of scopes (`ProxyTokenInfo.capability` may be an array); an
+ * endpoint is reachable only if its required scope is in the token's set.
+ *
+ * `"control"` is a back-compat alias: legacy in-flight tokens were minted with
+ * the single value `"control"`, which is treated as "the full agent scope set"
+ * so already-dispatched runs keep working across a deploy.
+ */
+export type ProxyScope =
+  | "run-lifecycle"
+  | "conversation"
+  | "memory"
+  | "tools"
+  | "skills"
+  | "provider-keys";
+
+export type ProxyCapability = ProxyScope | "control";
+
+/** Full scope set granted to agent runs (and to the legacy "control" alias). */
+export const AGENT_PROXY_SCOPES: readonly ProxyScope[] = [
+  "run-lifecycle",
+  "conversation",
+  "memory",
+  "tools",
+  "skills",
+  "provider-keys",
+];
+
+/**
+ * Reduced scope set granted to workflow / actions runs. Workflow runs drive
+ * run lifecycle, execute tools, and fetch provider keys, but do NOT touch the
+ * conversation / memory / skill control-RPC surface that only agent runs need.
+ */
+export const WORKFLOW_PROXY_SCOPES: readonly ProxyScope[] = [
+  "run-lifecycle",
+  "tools",
+  "provider-keys",
+];
+
+/**
+ * Resolve the scope set a run kind is granted. Defaults to the full agent set
+ * for any unknown / unset kind (fail-open ONLY toward the broader agent set,
+ * never toward a smaller-than-intended set, so agents never regress).
+ */
+export function proxyScopesForRunKind(
+  runKind: "agent" | "workflow" | undefined,
+): ProxyScope[] {
+  return runKind === "workflow"
+    ? [...WORKFLOW_PROXY_SCOPES]
+    : [...AGENT_PROXY_SCOPES];
+}
+
+/**
+ * Expand a stored token capability into the concrete scope set it grants.
+ * Accepts the new array form, a single scope, or the legacy `"control"` alias
+ * (which expands to the full agent scope set). Unknown values yield an empty
+ * set (fail-closed: an endpoint check against it will reject).
+ */
+export function expandProxyCapability(
+  capability: ProxyCapability | ProxyCapability[] | undefined,
+): Set<ProxyScope> {
+  const out = new Set<ProxyScope>();
+  const add = (value: ProxyCapability) => {
+    if (value === "control") {
+      for (const scope of AGENT_PROXY_SCOPES) out.add(scope);
+      return;
+    }
+    out.add(value);
+  };
+  if (Array.isArray(capability)) {
+    for (const value of capability) add(value);
+  } else if (capability) {
+    add(capability);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Response helpers

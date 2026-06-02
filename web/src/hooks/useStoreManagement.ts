@@ -200,10 +200,12 @@ export function useStoreInventory(
     if (!currentSpaceId || !currentStoreSlug) {
       throw new Error(t("missingStoreContext"));
     }
-    await rpc.spaces[":spaceId"].stores[":storeSlug"].inventory[":itemId"]
+    const res = await rpc.spaces[":spaceId"].stores[":storeSlug"]
+      .inventory[":itemId"]
       .$delete({
         param: { spaceId: currentSpaceId, storeSlug: currentStoreSlug, itemId },
       });
+    await rpcJson(res);
     if (currentSpaceId === spaceId() && currentStoreSlug === storeSlug()) {
       setItems((prev) => prev.filter((i) => i.id !== itemId));
       setTotal((prev) => prev - 1);

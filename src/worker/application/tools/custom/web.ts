@@ -289,7 +289,6 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
       "User-Agent": "Mozilla/5.0 (compatible; TakosBot/1.0)",
       "Accept":
         "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "X-Takos-Internal-Marker": "1",
       "X-Takos-Space-Id": context.spaceId,
       "X-Takos-User-Id": context.userId,
       "X-Takos-Run-Id": context.runId,

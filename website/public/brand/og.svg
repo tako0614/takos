@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none" role="img" aria-label="Takos — AI-first chat &amp; agent, your own server.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0a0a0a"/>
+      <stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.85" cy="0.1" r="0.7">
+      <stop offset="0" stop-color="#dc2626" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#dc2626" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ink" x1="600" y1="150" x2="600" y2="470" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fafafa"/>
+      <stop offset="1" stop-color="#dc2626"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- dot grid -->
+  <g fill="#ffffff" opacity="0.05">
+    <rect x="0" y="0" width="1200" height="630" fill="none"/>
+  </g>
+
+  <!-- inkdrop mark -->
+  <g transform="translate(96, 232) scale(3.6)">
+    <path d="M24 4 C18 16, 8 22, 8 31 C8 39, 15 44, 24 44 C33 44, 40 39, 40 31 C40 22, 30 16, 24 4 Z" fill="url(#ink)"/>
+    <path d="M30 30 a6 6 0 1 1 -10 -3 a4 4 0 1 1 7 1.5" stroke="#0a0a0a" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.92"/>
+  </g>
+
+  <!-- wordmark + tagline -->
+  <text x="288" y="300" font-family="'Bricolage Grotesque', system-ui, sans-serif" font-size="118" font-weight="800" fill="#fafafa" letter-spacing="-4">Takos</text>
+  <text x="292" y="372" font-family="'Bricolage Grotesque', system-ui, sans-serif" font-size="40" font-weight="600" fill="#a3a3a3">AI-first chat &amp; agent, your own server.</text>
+
+  <!-- eyebrow chip -->
+  <g transform="translate(292, 410)">
+    <rect x="0" y="0" width="470" height="46" rx="23" fill="#dc2626" fill-opacity="0.14" stroke="#dc2626" stroke-opacity="0.4"/>
+    <text x="24" y="30" font-family="'JetBrains Mono', monospace" font-size="22" font-weight="700" fill="#ff8a7a" letter-spacing="3">CHAT · AGENT · MEMORY · SPACE</text>
+  </g>
+
+  <!-- footer line -->
+  <text x="96" y="566" font-family="'JetBrains Mono', monospace" font-size="26" fill="#6b6b6b">self-hostable · open source · AGPL · takos.jp</text>
+</svg>

@@ -1,24 +1,31 @@
-import { createSignal, onMount } from 'solid-js';
+import { For } from 'solid-js';
 import Wordmark from './brand/Wordmark';
-import { resolveCloudUrls } from '~/lib/cloud-url';
+import LangToggle from './LangToggle';
+import { useCloudUrls } from '~/lib/cloud';
+import { useT } from '~/lib/i18n';
 
 export default function Footer() {
-  const [cloudUrls, setCloudUrls] = createSignal(resolveCloudUrls(''));
-  onMount(() => setCloudUrls(resolveCloudUrls()));
+  const t = useT();
+  const cloud = useCloudUrls();
+
+  const hrefFor = (link: { href: string; cloud?: boolean }) => (link.cloud ? cloud().home : link.href);
 
   return (
     <footer class='site'>
       <div class='container'>
-        <div style='display: flex; align-items: center; gap: 12px;'>
-          <Wordmark variant='inkdrop' size={20} />
-          <span class='copy'>© Takos contributors — AGPL · Powered by Takosumi.</span>
+        <div class='footer-brand'>
+          <Wordmark variant='inkdrop' size={22} />
+          <p class='footer-tagline'>{t.footer.tagline}</p>
+          <span class='copy'>{t.footer.copyright}</span>
         </div>
-        <nav aria-label='Footer'>
-          <a href='https://docs.takos.jp/' rel='external'>Docs</a>
-          <a href='https://github.com/tako0614/takos' rel='noopener'>GitHub</a>
-          <a href='https://takosumi.com/' rel='external'>Takosumi</a>
-          <a href={cloudUrls().home} rel='noopener'>Cloud</a>
-        </nav>
+        <div class='footer-meta'>
+          <nav aria-label='Footer'>
+            <For each={t.footer.links}>
+              {(l) => <a href={hrefFor(l)} rel={l.external ? 'external' : 'noopener'}>{l.label}</a>}
+            </For>
+          </nav>
+          <LangToggle />
+        </div>
       </div>
     </footer>
   );
