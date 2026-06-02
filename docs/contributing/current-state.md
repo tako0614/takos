@@ -29,7 +29,7 @@ internal domains include `src/service/domains/deploy` and
 `src/service/domains/runtime`; those are domain modules inside the Takosumi
 service, not standalone Takos product services.
 
-Backend adapter and runtime-agent connector work belongs to the operator
+Backend adapter and runtime-agent handler work belongs to the operator
 distribution that owns the OpenTofu / Helm / native controller stack. Takos
 keeps only product distribution artifacts and PlatformService inventory
 contracts.

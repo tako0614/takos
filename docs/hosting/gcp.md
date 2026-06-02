@@ -9,15 +9,15 @@
 1. **GCP 単独 hosting (GKE Helm)** ― `takos/deploy/helm/takos/values-gcp.yaml`
    overlay。Kubernetes ベースで control plane / runtime / executor を運用する
    path。
-2. **GCP reference runtime connector** ― Cloud Run / Cloud SQL / GCS /
-   Pub/Sub / Cloud KMS / Secret Manager の inventory / evidence connector を takosumi.com reference
-   implementation の配線として呼び出す path。Cloudflare control plane + GCP
+2. **GCP operator implementation evidence** ― Cloud Run / Cloud SQL / GCS /
+   Pub/Sub / Cloud KMS / Secret Manager の output を operator runtime handler が
+   PlatformService inventory / Deployment evidence として記録する path。Cloudflare control plane + GCP
    tenant runtime (`composite.cf-control-gcp-tenant@v1`) や GCP 単独 profile
    (`profiles/gcp.example.json`) で使う。
 
 ::: tip 対象範囲 section 1 (Helm overlay) は Cloud Run への kernel 直接
 deploy、Firestore を control-plane storage として使う構成、OpenTofu overlay
-を扱いません。 section 2 (reference runtime connector) は operator-owned infra workflow
+を扱いません。 section 2 (operator implementation evidence) は operator-owned infra workflow
 が作った PlatformService inventory と Deployment evidence の接続までを扱います。 :::
 
 Takosumi 上で Source から Installation を作り、Deployment を管理する方法は [Deploy](/deploy/)
@@ -47,7 +47,7 @@ GCP GKE target に固有の prerequisites:
 
 - GCP project + billing account link
 - GKE cluster (Standard / Autopilot)
-- Cloud SQL PostgreSQL + Cloud SQL Auth Proxy or connector
+- Cloud SQL PostgreSQL + Cloud SQL Auth Proxy or language driver integration
 - Memorystore for Redis endpoint
 - GCS bucket with HMAC interoperability access
 - GCE Ingress / static external IP
@@ -126,7 +126,7 @@ bun run helm:check-overlays
 - GCE Ingress
 - External Secrets Operator などの secret 管理、または Helm values で secret
   を作成する運用
-- operator-owned GCP workflow / runtime connector が参照する GCP managed-service credentials
+- operator-owned GCP workflow / runtime handler が参照する GCP managed-service credentials
 
 OpenTofu apply 後の Cloud SQL connection name / Redis URL / Pub/Sub topic / GCS
 bucket 名は `bun run opentofu:helm-values` で generated values に変換し、
@@ -171,31 +171,22 @@ ManagedCertificate を使う場合や domain 構成を変える場合は
 
 ---
 
-## Section 2: GCP reference runtime connector
+## Section 2: GCP operator implementation evidence
 
 ### 構成
 
-Takosumi reference implementation の GCP profile は次の runtime connector clients
-を使います:
+GCP profile は operator-owned OpenTofu / native workflow が Cloud Run、Cloud SQL
+Postgres、GCS、Pub/Sub、Cloud KMS、Secret Manager、HTTP(S) LB / Cloud DNS の
+output を作成し、PlatformService inventory と Deployment evidence に接続する構成です。
+Takosumi core はこれらの provider state や runtime handler implementation を所有しません。
 
-| connector client              | 用途                          | 参照クラス                            |
-| ----------------------------- | ----------------------------- | ------------------------------------- |
-| `gcp-control-plane`           | Cloud Run service / revision  | `src/providers/gcp/cloud_run.ts`      |
-| `gcp-cloud-sql-postgres`      | Cloud SQL Postgres lifecycle  | `src/providers/gcp/cloud_sql.ts`      |
-| `gcp-cloud-storage-artifacts` | GCS bucket provisioning       | `src/providers/gcp/gcs.ts`            |
-| `gcp-pubsub-control-plane`    | Pub/Sub topic / consumer binding | `src/providers/gcp/pubsub.ts`      |
-| `gcp-cloud-kms`               | Cloud KMS key + version       | `src/providers/gcp/kms.ts`            |
-| `gcp-secret-manager`          | Secret Manager rotation       | `src/providers/gcp/secret_manager.ts` |
-| `gcp-load-balancer-router`    | HTTP(S) LB + Cloud DNS        | `src/providers/gcp/load_balancer.ts`  |
-| `gcp-runtime-agent-registry`  | runtime-agent endpoint config | `src/providers/gcp/gateway.ts`        |
+profile JSON (`profiles/gcp.example.json`) は operator-owned GCP workflow が
+作った PlatformService inventory と Deployment evidence を Takosumi に渡す
+ための operator configuration です。
 
-profile JSON (`profiles/gcp.example.json`) で `clients.*` を上記 client
-名に向けると、takosumi.com reference implementation は operator-owned GCP
-workflow の PlatformService inventory と Deployment evidence を読み書きします。
+### Operator workflow がやること / operator runtime handler が記録すること
 
-### Operator workflow がやること / reference connector が記録すること
-
-| step                                                                       | operator workflow      | reference connector |
+| step                                                                       | operator workflow      | operator runtime handler |
 | -------------------------------------------------------------------------- | ---------------------- | --------------- |
 | GCP project 作成 / billing account link                                    | yes                    | no              |
 | service account JSON / Workload Identity 設定                              | yes                    | no              |
@@ -267,7 +258,7 @@ echo "takos-prod" | bun run control:secrets put GOOGLE_CLOUD_PROJECT --env produ
 echo "asia-northeast1" | bun run control:secrets put GCP_REGION --env production
 ```
 
-runtime connector は base64 decode して `google-auth-library` 互換 OAuth2 token
+runtime handler は base64 decode して `google-auth-library` 互換 OAuth2 token
 を発行します。
 
 #### B. operator-managed gateway URL
@@ -368,7 +359,7 @@ Secret ops を実行して結果を返します。
 
 ### GCP LB routing の DNS 設定
 
-`gcp-load-balancer-router` connector は次の lifecycle を扱います:
+`gcp-load-balancer-router` runtime handler は次の lifecycle を扱います:
 
 1. Backend service (tenant Cloud Run service / NEG を attach)
 2. URL map / host rule (per-tenant host header matcher)
@@ -402,12 +393,12 @@ kernel がやること:
 - Firestore / Pub/Sub / Secret Manager を app resource backend として自動
   provisioning する contract (※ section 2 は operator-owned workflow の inventory / evidence 接続を扱う)
 - OpenTofu による GCP resource 作成手順
-- GCP 固有 connector 名を app author 向けの public surface として固定
+- GCP 固有 runtime handler identifier を app author 向けの public surface として固定
   する contract
 
-必要なら operator が追加 connector / inventory importer
+必要なら operator が追加 runtime handler / inventory importer
 を構成できますが、このページは Takos product/operator distribution の Helm
-overlay と reference runtime connector で実際に表現されている範囲だけを runbook
+overlay と operator implementation evidence で実際に表現されている範囲だけを runbook
 として扱います。
 
 ## 次に読むページ

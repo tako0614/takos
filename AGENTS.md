@@ -6,7 +6,7 @@ distribution manifests / validator) を集約する。Takosumi / Takos の ident
 は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
 
-> **Takos is a self-hostable product running on Takosumi PaaS, with _democratization of software through AI agents_ as
+> **Takos is a self-hostable product running on the Takosumi source-to-deployment substrate, with _democratization of software through AI agents_ as
 > its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps (`takos-docs`
 > / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation as a
 > user-facing convenience.** **Takosumi** is a generic manifestless PaaS substrate for Source installation,
@@ -65,7 +65,7 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
 
 ## Substitutability
 
-- **Takos product 自体**: Takosumi PaaS 上で動作する self-hostable product。 AI agents / Git / chat / spaces / memory /
+- **Takos product 自体**: Takosumi source-to-deployment substrate 上で動作する self-hostable product。 AI agents / Git / chat / spaces / memory /
   tools を駆使してソフトウェアの民主化を体現。 層 (layer) ではないが、 architectural 特権 framing も使わない (App
   consumer side)。
 - **Takosumi への依存**: kernel + installer / operator account plane は substitutable (詳細は

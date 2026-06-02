@@ -51,7 +51,7 @@ Takos の実装は単一の `takos-worker` 入口 (`src/worker`)、UI (`web`)、
   - **Deployment record / apply guard / rollback pointer / binding evidence** →
     `takosumi kernel`
   - **routing / infrastructure lifecycle / resource provisioning** →
-    operator distribution / runtime-agent connector
+    operator distribution / runtime-agent handler
   - **account / 課金 / OIDC issuer / Installation 台帳** → Takosumi Accounts
 - shell compose にスタンドアロンの deploy/runtime サービスを足さないでください
 - 本番・staging の deploy 設定は `takos-private` が管理します。この shell は

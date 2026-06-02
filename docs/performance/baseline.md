@@ -105,7 +105,7 @@ in-process ベースライン + クラウド側トランスポートのオーバ
 | Kubernetes (in-cluster) |              ~5-15 ms |         ~3-8 秒[^1] | Postgres in-cluster + kubectl apply |
 | Self-hosted             |              ~5-10 ms |        ~3-10 秒[^1] | ローカル Postgres + provider RPC    |
 
-[^1]: `applyDeployment` の latency は operator-owned infrastructure lifecycle と runtime-agent connector の時間が支配的で、
+[^1]: `applyDeployment` の latency は operator-owned infrastructure lifecycle と runtime-agent handler の時間が支配的で、
     kernel オーケストレーションのコスト (in-process baseline) は ~100 ms
     以下に収まります。実環境のクラウドでは Workers / Lambda / Cloud Run
     のデプロイ / route attach に数秒~数十秒かかります。
