@@ -78,9 +78,14 @@ artifacts for GA.
 ### Live Evidence
 
 - [ ] Browser proof: signup -> Use Takos -> first Space -> bundled apps.
-- [ ] Source proof: Git repo -> `tofu output -json` -> Takosumi install ->
+- [x] Local source proof: Git repo -> `tofu output -json` -> Takosumi install ->
       Takos launcher.
-- [ ] Agent proof: chat -> agent execution container -> memory/audit record.
+- [ ] Live source proof: public app source -> `tofu output -json` -> Takosumi
+      install -> Takos launcher.
+- [x] Local agent proof: queued run -> agent execution container ->
+      memory/audit record.
+- [ ] Live agent proof: browser chat -> agent execution container ->
+      memory/audit record.
 - [ ] Self-host proof: OpenTofu + Helm deployment without managed-only
       credentials.
 
