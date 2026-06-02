@@ -117,7 +117,7 @@ provider 実環境の proof を要求しません。
 - [Cloudflare](/hosting/cloudflare) --- Cloudflare Workers backend
 - [AWS](/hosting/aws) --- EKS Helm overlay + AWS operator binding profile
 - [GCP](/hosting/gcp) --- GKE Helm overlay + GCP operator binding profile
-- [Kubernetes](/hosting/kubernetes) --- base Helm chart + k8s runtime-agent connector
+- [Kubernetes](/hosting/kubernetes) --- base Helm chart + k8s runtime-agent handler
 - [Self-hosted](/hosting/self-hosted) --- docker-compose + selfhosted reference adapter
 - [Multi-cloud](/hosting/multi-cloud) --- 5 target 横断 runbook
 - [Target Parity](/hosting/target-parity) --- target ごとの readiness status

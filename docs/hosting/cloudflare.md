@@ -821,7 +821,7 @@ control plane のステート管理に使われる。Cloudflare では Durable O
 Takos product runtime / executor は tracked reference Workers backend では同一
 `takos` Worker script 内の Cloudflare Containers Durable Object class として
 host します。tenant app の image-backed `services` / `containers` は operator
-profile の workload connector で解決し、他環境では Docker / k8s / ECS / Cloud Run
+profile の workload runtime handler で解決し、他環境では Docker / k8s / ECS / Cloud Run
 などに配置できます。ECS / Cloud Run は Takos product hosting target
 そのものではありません。
 

@@ -16,7 +16,7 @@
   Takos product と operator-owned infrastructure の境界を docs /
   実装間で揃えるためのチェックリスト。
 - operator boundary:
-  OpenTofu state、cloud credential、runtime-agent connector wiring は operator
+  OpenTofu state、cloud credential、runtime-agent handler wiring は operator
   distribution が所有します。Takos は PlatformService inventory と deployment
   outputs を消費します。
 

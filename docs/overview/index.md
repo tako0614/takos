@@ -3,7 +3,7 @@
 > このページでわかること: Takos が何をするプロダクトで、どんな概念で構成されているか。
 
 Takos は AI エージェントと会話しながらソフトウェアを作成・編集できるセルフホスト型のプロダクトです。チャット、AI
-エージェント、メモリ、スペースの 4 つを中心機能として持ち、 Takosumi PaaS の上で動作します。
+エージェント、メモリ、スペースの 4 つを中心機能として持ち、 Takosumi の source-to-deployment substrate 上で動作します。
 
 バンドルアプリ (`takos-docs`, `takos-slide`, `takos-excel`, `takos-computer`, `yurucommu`) は新しい Space
 を作成すると自動的にインストールされます。不要なアプリはいつでもアンインストールできます。

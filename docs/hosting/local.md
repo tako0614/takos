@@ -65,7 +65,7 @@ clone、主要 service の疎通を確認する CI 用 smoke です。
 | `redis`       | `16379` | Redis（queue/cache backing）                |
 
 local での user-defined app workload 実行は Takosumi installer / kernel と
-runtime-agent connector 経由で扱います。Source resolution、PlatformService inventory
+runtime-agent handler 経由で扱います。Source resolution、PlatformService inventory
 binding resolution、Deployment evidence recording は `takosumi`、infra provisioning
 は operator-owned workflow、build は build service / CI、Git hosting は `takos-git`、agent
 実行は `takos-agent` の責務です。
@@ -137,7 +137,7 @@ Wrangler の local D1 backend を単体で使う場合だけ、`db/migrations-co
 - backend 固有の queue consumer / scheduler / workflow
   セマンティクスは完全には再現できません。 queue binding
   の基本配信は動作しますが、backend 固有のトリガー動作はターゲットの runtime
-  connector の制約に従います
+  runtime handler の制約に従います
 - vectorize binding には PostgreSQL + pgvector が必要です
   (`PGVECTOR_ENABLED=true`)
 - Durable Object binding は永続的なローカルランタイムで利用できますが、 tracked

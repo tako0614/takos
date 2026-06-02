@@ -457,30 +457,28 @@ bun run server:smoke
 
 k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes) を参照。
 
-## selfhosted reference runtime connector
+## self-hosted operator implementation evidence
 
-bare metal / Docker Compose / VM 上の resource を Takosumi kernel から
-takosumi.com reference implementation の配線として呼び出したい場合は
-**selfhosted reference runtime connector**
-を使います。`profiles/selfhosted.example.json` で
-`clients.provider: "local-container-provider"` を選ぶ構成です。
+bare metal / Docker Compose / VM 上の resource は operator-owned OpenTofu / Helm
+/ local workflow が作成し、PlatformService inventory と Deployment evidence に
+接続します。Takosumi core は self-host provider state や runtime handler implementation を
+所有しません。
 
 ### 構成
 
-| runtime connector                  | 用途                                    | 参照クラス                                   |
-| ---------------------------------- | --------------------------------------- | -------------------------------------------- |
-| `local-container-provider`         | Docker / OCI container deploy           | `src/providers/selfhosted/process.ts`        |
-| `local-runtime-agent-registry`     | runtime-agent endpoint config           | `src/providers/selfhosted/provider.ts`       |
-| `selfhosted-postgres`              | Postgres lifecycle (psql)               | `src/providers/selfhosted/postgres.ts`       |
-| `selfhosted-postgres-coordination` | coordination via Postgres advisory lock | `src/providers/selfhosted/sql.ts`            |
-| `filesystem-artifacts`             | filesystem object-storage               | `src/providers/selfhosted/object_storage.ts` |
-| `selfhosted-queue`                 | Postgres / file-backed queue            | `src/providers/selfhosted/queue.ts`          |
-| `local-secret-store`               | filesystem secret rotation              | `src/providers/selfhosted/secrets.ts`        |
-| `selfhosted-router-config`         | reverse proxy config (Caddy / nginx)    | `src/providers/selfhosted/router.ts`         |
+| operator evidence area | 用途 |
+| --- | --- |
+| container runtime | Docker / OCI container deploy |
+| runtime endpoint | runtime-agent or local execution endpoint config |
+| postgres | Postgres lifecycle and advisory-lock coordination |
+| object storage | filesystem object-storage |
+| queue | Postgres / file-backed queue |
+| secret store | filesystem secret rotation |
+| router | reverse proxy config (Caddy / nginx) |
 
-### Operator workflow がやること / reference connector が記録すること
+### Operator workflow がやること / operator runtime handler が記録すること
 
-| step                                                                | operator workflow    | reference connector |
+| step                                                                | operator workflow    | operator runtime handler |
 | ------------------------------------------------------------------- | -------------------- | --------------- |
 | Postgres / MinIO / Docker host / reverse proxy 用意                 | yes                  | no              |
 | systemd service / supervisor 設定                                   | yes                  | no              |
@@ -494,7 +492,7 @@ takosumi.com reference implementation の配線として呼び出したい場合
 
 ### runtime-agent on bare metal
 
-selfhosted reference runtime connector と一緒に runtime-agent を bare metal
+self-hosted operator implementation と一緒に runtime-agent を bare metal
 に置く例 (systemd):
 
 ```ini
@@ -533,7 +531,7 @@ Docker socket access は Docker group 経由で許可します。
 
 ### routing layer (selfhosted) の設定
 
-`selfhosted-router-config` connector は Caddy / nginx の config file lifecycle を
+`selfhosted-router-config` runtime handler は Caddy / nginx の config file lifecycle を
 扱います。operator がやること:
 
 - Caddy or nginx を install / systemd service として常駐
