@@ -8,8 +8,7 @@ port と deployment tests で検証します。
 ```sh
 cd ../takosumi
 bun test \
-  packages/contract/src/plugin-sdk_test.ts \
-  packages/kernel/src/domains/deploy/plan_apply_test.ts
+  src/service/domains/deploy/plan_apply_test.ts
 ```
 
 Takos product 側の distribution profile は次で、routing / binding metadata

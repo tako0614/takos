@@ -7,7 +7,7 @@ smoke. Run:
 
 ```sh
 cd takos
-bun run test:control
+bun run test
 ```
 
 For the composed product stack, use:

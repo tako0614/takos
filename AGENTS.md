@@ -82,11 +82,10 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
 - Rust agent execution wrapper belongs in `containers/agent`; reusable engine code stays in `../takos-agent-engine`.
 - `deploy/` must not import product implementation source paths; connect through published packages, images, APIs, and
   manifests.
-- Provider plugins must depend on the published Takosumi plugin package (`@takosjp/takosumi-plugins`) and Takosumi
-  contracts/SDK, not on kernel implementation paths.
+- Provider-specific infrastructure wiring belongs to operator OpenTofu / Helm / native controller stacks and their
+  PlatformService inventory exports, not to a Takos product-side implementation bundle.
 - The Takosumi service implementation lives in the standalone Takosumi repository (`../takosumi/`). `deploy/` here only
   carries Takos-specific deploy artifacts that consume the upstream service and operator distribution.
-- The official provider bundle is `../takosumi-plugins/` and publishes as `@takosjp/takosumi-plugins`.
 - Hosting target ids are an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`.
 
 ## Workflow

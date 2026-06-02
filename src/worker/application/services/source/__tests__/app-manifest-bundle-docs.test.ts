@@ -146,7 +146,7 @@ test("buildBundleDocs emits image-backed attached container workloads with docke
   assertEquals(docs[1]?.config?.type, "takos.worker");
   assertEquals(docs[2]?.config, {
     type: "container",
-    pluginConfig: {
+    runtimeConfig: {
       imageRef:
         "ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
       dockerfile: "containers/sandbox.Dockerfile",

@@ -10,8 +10,8 @@ data:
   {{ if .Values.runtimeConfig.allowUnsafeProductionDefaults }}
   TAKOS_ALLOW_UNSAFE_PRODUCTION_DEFAULTS: "1"
   {{ end }}
-  {{ with .Values.runtimeConfig.plugins }}
-  TAKOS_KERNEL_PLUGIN_SELECTIONS: {{ toJson . | quote }}
+  {{ with .Values.runtimeConfig.operatorProfile }}
+  TAKOS_OPERATOR_PROFILE_JSON: {{ toJson . | quote }}
   {{ end }}
   {{ with .Values.runtimeConfig.managedResources }}
   TAKOS_MANAGED_RESOURCES_JSON: {{ toJson . | quote }}

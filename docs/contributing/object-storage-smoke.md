@@ -9,9 +9,8 @@ Takosumi tests.
 ```sh
 cd ../takosumi
 bun test \
-  packages/contract/src/plugin-sdk_test.ts \
-  packages/kernel/src/adapters/object-storage/memory_test.ts \
-  packages/kernel/src/api/artifact_routes_test.ts
+  src/service/adapters/object-storage/memory_test.ts \
+  src/service/api/artifact_routes_test.ts
 ```
 
 Takosumi Accounts Cloudflare Worker stores metadata-only export artifacts in R2

@@ -251,10 +251,7 @@ test(
 
     assertStringIncludes(compose, "command: ['bun', 'run', 'dev']");
     assertStringIncludes(compose, "command: ['bun', 'run', 'dev']");
-    assertStringIncludes(
-      compose,
-      "command: ['deno', 'task', '--cwd', 'packages/kernel', 'start']",
-    );
+    assertStringIncludes(compose, "command: ['bun', 'src/all/server.ts']");
     assertStringIncludes(compose, 'context: ..');
     assertStringIncludes(compose, 'dockerfile: takos/containers/agent/Dockerfile');
     assert(!compose.includes('dev:local:web'));

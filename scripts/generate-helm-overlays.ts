@@ -3,6 +3,11 @@ type DistributionManifest = {
   target?: {
     id?: string;
   };
+  operatorProfile?: {
+    distribution?: string;
+    profileId?: string;
+    implementationIds?: string[];
+  };
   routing?: {
     adminBaseUrl?: string;
     accountsBaseUrl?: string;
@@ -46,22 +51,6 @@ const serviceValueKeys: Record<string, string> = {
   'takos-git': 'takosGit',
   'takos-agent': 'takosAgent',
 };
-
-const pluginKeys = [
-  'auth',
-  'notification',
-  'operator-config',
-  'storage',
-  'source',
-  'provider',
-  'queue',
-  'object-storage',
-  'kms',
-  'secret-store',
-  'router-config',
-  'observability',
-  'runtime-agent',
-];
 
 const check = runtime.args.includes('--check');
 const unknownArgs = runtime.args.filter((arg) => arg !== '--check');
@@ -131,14 +120,14 @@ function generateOverlay(
   const tenantBase = tenantBaseDomain(manifest.routing?.wildcardDomain);
   const images = collectImages(target, manifest);
   const provider = providerConfig(target.targetId);
+  const operatorProfile = profileConfig(target, manifest);
 
   const lines = [
     `# ${provider.label} fail-closed overlay template.`,
     `# Generated from ${target.manifestPath} by scripts/generate-helm-overlays.ts.`,
     '# Re-run `bun run helm:generate-overlays` after editing the distribution profile.',
-    '# This file is not a complete production profile by itself: every empty',
-    '# runtimeConfig.plugins entry must be replaced by a trusted, non-reference',
-    '# kernel plugin id supplied by the operator/plugin bundle.',
+    '# This file is not a complete production profile by itself: the operator',
+    '# must provide implementationIds through OpenTofu/operator-owned values.',
     `# Usage: helm install takos . -f values.yaml -f ${basename(target.outputPath)}`,
     '',
     'images:',
@@ -146,10 +135,12 @@ function generateOverlay(
     '',
     'runtimeConfig:',
     '  environment: production',
-    '  # Empty plugin ids intentionally fail runtime config validation. Override',
-    '  # every plugin id with trusted non-reference plugins.',
-    '  plugins:',
-    ...pluginKeys.map((key) => `    ${key}: ""`),
+    '  operatorProfile:',
+    `    distribution: ${quote(operatorProfile.distribution)}`,
+    `    profileId: ${quote(operatorProfile.profileId)}`,
+    '    # Empty implementationIds keep this overlay fail-closed until the',
+    '    # operator/OpenTofu values select concrete provider implementations.',
+    '    implementationIds: []',
     '',
     `# ${provider.label} managed-resource identifiers can be supplied by the OpenTofu`,
     '# bridge values overlay. Credentials and secret material stay in takos-private',
@@ -209,6 +200,24 @@ function generateOverlay(
   ];
 
   return `${lines.join('\n')}\n`;
+}
+
+function profileConfig(
+  target: OverlayTarget,
+  manifest: DistributionManifest,
+): { distribution: string; profileId: string } {
+  const operatorProfile = manifest.operatorProfile;
+  const expected = `operator.takosumi.${target.targetId}`;
+  if (operatorProfile?.distribution !== 'takosumi') {
+    throw new Error(`${target.manifestPath} operatorProfile.distribution must be takosumi`);
+  }
+  if (operatorProfile.profileId !== expected) {
+    throw new Error(`${target.manifestPath} operatorProfile.profileId must be ${expected}`);
+  }
+  return {
+    distribution: operatorProfile.distribution,
+    profileId: operatorProfile.profileId,
+  };
 }
 
 function collectImages(

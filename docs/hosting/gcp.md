@@ -91,7 +91,7 @@ bun packages/cli/src/main.ts accounts seed \
 | 状況                                                                    | 推奨 path          |
 | ----------------------------------------------------------------------- | ------------------ |
 | Takosumi kernel 全体を GCP の k8s に置く                                | section 1 (Helm)   |
-| Cloudflare で kernel を動かしつつ tenant runtime / DB を GCP に置きたい | section 2 (plugin) |
+| Cloudflare で kernel を動かしつつ tenant runtime / DB を GCP に置きたい | section 2 (operator profile) |
 | GCP のみで tenant runtime + control-plane provider を組む               | section 2 + Helm   |
 
 ---
@@ -277,7 +277,7 @@ Cloudflare Worker から GCP API を直接呼べない場合 (request size / aut
 
 ```jsonc
 {
-  "pluginConfig": {
+  "operatorConfig": {
     "operator.takosumi.gcp": {
       "clients": { "...": "..." },
       "region": "asia-northeast1",
@@ -382,7 +382,7 @@ operator がやること:
 - static external IP 取得 (`gcloud compute addresses create takos-worker --global`)
 - Google-managed SSL cert または独自 cert を target proxy に attach (wildcard
   推奨: `*.app.takos.example.com`)
-- profile の `pluginConfig.operator.takosumi.gcp.routerConfig` に `urlMapName` /
+- profile の `operatorConfig.operator.takosumi.gcp.routerConfig` に `urlMapName` /
   `dnsZoneName` / `staticIpName` / `sslCertificateName` を設定
 
 kernel がやること:

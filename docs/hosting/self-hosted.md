@@ -538,7 +538,7 @@ Docker socket access は Docker group 経由で許可します。
 
 - Caddy or nginx を install / systemd service として常駐
 - TLS cert (Let's Encrypt + certbot) を自動更新する仕組みを設定
-- profile の `pluginConfig.operator.takosumi.selfhosted.routerConfig` に
+- profile の `operatorConfig.operator.takosumi.selfhosted.routerConfig` に
   `configPath` (例: `/etc/caddy/Caddyfile.d/takos.conf`) と `reloadCommand` (例:
   `systemctl reload caddy`) を設定
 

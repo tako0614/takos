@@ -8,18 +8,17 @@
   API・ドメイン・プロセス役割・adapter・storage・production-safety
   チェックの実装スナップショット。
 - [`api-surface.md`](./api-surface.md) —
-  `takosumi/packages/kernel/src/api/openapi.ts` が source of truth
+  `takosumi/src/service/api/openapi.ts` が source of truth
   として保持する OpenAPI 風の route 一覧。
 - [`deploy-topology-notes.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/deploy-topology-notes.md)
   — Compose / Helm 向けの Takos サービス構成メモ。
-- [`kernel-plugin-boundary-audit.md`](./kernel-plugin-boundary-audit.md) —
-  kernel と plugin-backed infrastructure の境界を docs /
+- [`operator-boundary-audit.md`](./operator-boundary-audit.md) —
+  Takos product と operator-owned infrastructure の境界を docs /
   実装間で揃えるためのチェックリスト。
-- reference implementation binding 境界:
-  `../takosumi/packages/contract/src/plugin.ts` は `TakosumiPlugin` binding
-  shape、 `../takosumi/packages/kernel/src/plugins/` は registry・module
-  loader・no-I/O reference adapter を持ちます。これは takosumi.com reference
-  kernel の配線で、 Takosumi public spec ではありません。
+- operator boundary:
+  OpenTofu state、cloud credential、runtime-agent connector wiring は operator
+  distribution が所有します。Takos は PlatformService inventory と deployment
+  outputs を消費します。
 
 ## 検証
 
@@ -75,7 +74,7 @@
   [`deploy-topology-notes.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/deploy-topology-notes.md)
   で管理。
 
-## Plugin-backed infrastructure
+## Operator-owned infrastructure
 
 self-host / cloud 接続は Takos product source checks と live operator proof
 を分けます。 source-controlled な current proof は

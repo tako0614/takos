@@ -40,14 +40,14 @@ function emitPackageDoc(manifest: AppManifest, docs: BundleDoc[]): void {
 function computeToWorkloadSpec(
   compute: AppCompute,
 ): Record<string, unknown> {
-  const pluginConfig: Record<string, unknown> = {};
-  if (compute.image) pluginConfig.imageRef = compute.image;
-  if (compute.dockerfile) pluginConfig.dockerfile = compute.dockerfile;
-  if (compute.port != null) pluginConfig.port = compute.port;
+  const runtimeConfig: Record<string, unknown> = {};
+  if (compute.image) runtimeConfig.imageRef = compute.image;
+  if (compute.dockerfile) runtimeConfig.dockerfile = compute.dockerfile;
+  if (compute.port != null) runtimeConfig.port = compute.port;
 
   const spec: Record<string, unknown> = {
     type: computeKindToDocType(compute.kind),
-    pluginConfig,
+    runtimeConfig,
   };
   if (compute.env) spec.env = compute.env;
   if (compute.consume) spec.consume = compute.consume;

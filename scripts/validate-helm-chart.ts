@@ -111,6 +111,11 @@ assertContains(
 assertContains(
   `${templateRoot}/configmap-global.yaml`,
   globalConfigMapText,
+  'TAKOS_OPERATOR_PROFILE_JSON: {{ toJson . | quote }}',
+);
+assertContains(
+  `${templateRoot}/configmap-global.yaml`,
+  globalConfigMapText,
   'TAKOS_MANAGED_RESOURCES_JSON: {{ toJson . | quote }}',
 );
 assertContains(
@@ -255,13 +260,13 @@ for (const overlay of checkedOverlays) {
   if (!text.includes('environment: production')) {
     errors.push(`${path} must set production environment`);
   }
-  if (!text.includes('auth: ""') || !text.includes('runtime-agent: ""')) {
+  if (!text.includes('operatorProfile:') || !text.includes('implementationIds: []')) {
     errors.push(
-      `${path} must keep production plugin ids empty/fail-closed by default`,
+      `${path} must keep production operator implementationIds empty/fail-closed by default`,
     );
   }
   if (/takos\.kernel\.reference/.test(text)) {
-    errors.push(`${path} must not select the reference plugin in production`);
+    errors.push(`${path} must not select the reference implementation in production`);
   }
   if (overlay === 'values-selfhosted.yaml') {
     assertContains(path, text, '  create: false');

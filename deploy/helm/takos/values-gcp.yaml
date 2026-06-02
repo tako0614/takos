@@ -1,9 +1,8 @@
 # GCP fail-closed overlay template.
 # Generated from deploy/distributions/gcp.json by scripts/generate-helm-overlays.ts.
 # Re-run `bun run helm:generate-overlays` after editing the distribution profile.
-# This file is not a complete production profile by itself: every empty
-# runtimeConfig.plugins entry must be replaced by a trusted, non-reference
-# kernel plugin id supplied by the operator/plugin bundle.
+# This file is not a complete production profile by itself: the operator
+# must provide implementationIds through OpenTofu/operator-owned values.
 # Usage: helm install takos . -f values.yaml -f values-gcp.yaml
 
 images:
@@ -35,22 +34,12 @@ images:
 
 runtimeConfig:
   environment: production
-  # Empty plugin ids intentionally fail runtime config validation. Override
-  # every plugin id with trusted non-reference plugins.
-  plugins:
-    auth: ""
-    notification: ""
-    operator-config: ""
-    storage: ""
-    source: ""
-    provider: ""
-    queue: ""
-    object-storage: ""
-    kms: ""
-    secret-store: ""
-    router-config: ""
-    observability: ""
-    runtime-agent: ""
+  operatorProfile:
+    distribution: "takosumi"
+    profileId: "operator.takosumi.gcp"
+    # Empty implementationIds keep this overlay fail-closed until the
+    # operator/OpenTofu values select concrete provider implementations.
+    implementationIds: []
 
 # GCP managed-resource identifiers can be supplied by the OpenTofu
 # bridge values overlay. Credentials and secret material stay in takos-private

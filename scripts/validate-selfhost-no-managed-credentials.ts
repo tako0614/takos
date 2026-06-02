@@ -23,21 +23,6 @@ const requiredArtifacts = new Set([
   "helm:deploy/helm/takos/values-selfhosted.yaml",
   "compose:../takos-private/compose.server.yml",
 ]);
-const requiredPluginKeys = [
-  "auth",
-  "notification",
-  "operator-config",
-  "storage",
-  "source",
-  "provider",
-  "queue",
-  "object-storage",
-  "kms",
-  "secret-store",
-  "router-config",
-  "observability",
-  "runtime-agent",
-] as const;
 const imageKeys = [
   "takosWorker",
   "takosumi",
@@ -110,10 +95,10 @@ async function checkDistribution(): Promise<void> {
   ].join("\n");
   checks.push({
     name: "selfhost-provider-proof-prefix",
-    ok: commandText.includes("TAKOSUMI_PLUGIN_SELFHOSTED") &&
-      commandText.includes("TAKOSUMI_PLUGIN_LIVE_PROVIDER=selfhosted") &&
+    ok: commandText.includes("TAKOSUMI_PROVIDER_SELFHOSTED") &&
+      commandText.includes("TAKOSUMI_PROVIDER_LIVE_PROVIDER=selfhosted") &&
       !hasManagedCredential(commandText),
-    detail: "self-hosted provider proof uses TAKOSUMI_PLUGIN_SELFHOSTED and no managed provider credential variables",
+    detail: "self-hosted provider proof uses TAKOSUMI_PROVIDER_SELFHOSTED and no managed provider credential variables",
   });
 }
 
@@ -190,7 +175,10 @@ async function checkHelmOverlay(): Promise<void> {
   const overlay = parseYamlRecord(text, helmOverlayPath);
   const runtimeConfig = record(overlay.runtimeConfig);
   const defaultApps = record(runtimeConfig.defaultApps);
-  const plugins = record(runtimeConfig.plugins);
+  const operatorProfile = record(runtimeConfig.operatorProfile);
+  const implementationIds = Array.isArray(operatorProfile.implementationIds)
+    ? operatorProfile.implementationIds
+    : [];
   const secrets = record(overlay.secrets);
   const existingSecrets = record(secrets.existingSecrets);
   const ingress = record(overlay.ingress);
@@ -205,10 +193,14 @@ async function checkHelmOverlay(): Promise<void> {
   if (defaultApps.preinstallEnabled !== false) {
     blockers.push("self-host overlay must keep defaultApps.preinstallEnabled=false");
   }
-  for (const key of requiredPluginKeys) {
-    if (plugins[key] !== "") {
-      blockers.push(`self-host overlay runtimeConfig.plugins.${key} must be an empty fail-closed value`);
-    }
+  if (operatorProfile.distribution !== "takosumi") {
+    blockers.push("self-host overlay runtimeConfig.operatorProfile.distribution must be takosumi");
+  }
+  if (operatorProfile.profileId !== "operator.takosumi.selfhosted") {
+    blockers.push("self-host overlay runtimeConfig.operatorProfile.profileId must be operator.takosumi.selfhosted");
+  }
+  if (implementationIds.length !== 0) {
+    blockers.push("self-host overlay runtimeConfig.operatorProfile.implementationIds must remain empty/fail-closed");
   }
   if (secrets.create !== false) {
     blockers.push("self-host overlay must set secrets.create=false");

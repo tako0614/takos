@@ -10,7 +10,7 @@ const TAKOSUMI_SERVICE_ARCHITECTURE_PATH = '../takosumi/docs/reference/architect
 const DOMAIN_ROOT = '../takosumi/src/service/domains';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
-const REQUIRED_SERVICE_PLUGIN_DOCS = [CURRENT_STATE_PATH];
+const REQUIRED_OPERATOR_BOUNDARY_DOCS = [CURRENT_STATE_PATH];
 const ARCHITECTURE_ALIGNMENT_DOCS = [
   README_PATH,
   CURRENT_STATE_PATH,
@@ -110,18 +110,18 @@ const SAFE_DRIFT_TERMS = [
   'legacy',
 ];
 
-const SERVICE_PLUGIN_REQUIRED_TERMS = [
+const OPERATOR_BOUNDARY_REQUIRED_TERMS = [
   'service',
-  'plugin',
-  'self-host',
-  'cloud',
+  'operator',
+  'opentofu',
+  'platformservice',
 ];
 
 const FORBIDDEN_CURRENT_BOUNDARY_PATTERNS = [
   {
     pattern: /Implement local Docker\/single-node only first/i,
     message:
-      'Runtime/routing milestones must describe service ports/projections first; Docker/self-host belongs to plugins.',
+      'Runtime/routing milestones must describe service ports/projections first; Docker/self-host belongs to operator-owned implementation wiring.',
   },
   {
     pattern: /real backend[^.\n]*(service release|release gate|criterion|criteria)/i,
@@ -201,17 +201,17 @@ function validateInternalDomainMentions(
   }
 }
 
-function validateTakosumiPluginBoundaryMentions(
+function validateOperatorBoundaryMentions(
   path: string,
   text: string,
   failures: CheckFailure[],
 ): void {
   const lowerText = text.toLowerCase();
-  for (const term of SERVICE_PLUGIN_REQUIRED_TERMS) {
+  for (const term of OPERATOR_BOUNDARY_REQUIRED_TERMS) {
     if (lowerText.includes(term)) continue;
     failures.push({
       path,
-      message: `Expected service/plugin boundary docs to mention "${term}" explicitly.`,
+      message: `Expected operator boundary docs to mention "${term}" explicitly.`,
     });
   }
 }
@@ -360,9 +360,9 @@ async function main(): Promise<void> {
     validateInternalDomainMentions(path, text, failures);
   }
 
-  for (const path of REQUIRED_SERVICE_PLUGIN_DOCS) {
+  for (const path of REQUIRED_OPERATOR_BOUNDARY_DOCS) {
     const text = await readText(path, failures);
-    validateTakosumiPluginBoundaryMentions(path, text, failures);
+    validateOperatorBoundaryMentions(path, text, failures);
   }
 
   const markdownFiles = ARCHITECTURE_ALIGNMENT_DOCS;
