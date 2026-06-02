@@ -59,6 +59,11 @@ const cases: HelmCase[] = [
     release: 'takos-smoke-gcp',
     valuesFile: `${chartRoot}/values-gcp.yaml`,
   },
+  {
+    name: 'selfhosted-install',
+    release: 'takos-smoke-selfhosted',
+    valuesFile: `${chartRoot}/values-selfhosted.yaml`,
+  },
 ];
 
 const version = await runHelm(['version', '--short']);
