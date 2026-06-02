@@ -478,7 +478,7 @@ export async function ensureSqliteDeploymentsTableShape(
         "target_json" TEXT NOT NULL DEFAULT '{}',
         "backend_state_json" TEXT NOT NULL DEFAULT '{}',
         "artifact_kind" TEXT NOT NULL DEFAULT 'worker-bundle',
-        "idempotency_key" TEXT UNIQUE,
+        "idempotency_key" TEXT,
         "is_rollback" INTEGER NOT NULL DEFAULT 0,
         "rollback_from_version" INTEGER,
         "rolled_back_at" TEXT,
@@ -513,6 +513,10 @@ export async function ensureSqliteDeploymentsTableShape(
 
   await client.execute(
     `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`,
+  );
+  // Idempotency keys are unique per service, not globally (see migration 0080).
+  await client.execute(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_idempotency_key" ON "deployments"("service_id", "idempotency_key");`,
   );
   await client.execute(
     `CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`,
@@ -869,7 +873,7 @@ export async function ensurePostgresDeploymentsTableShape(
         "target_json" TEXT NOT NULL DEFAULT '{}',
         "backend_state_json" TEXT NOT NULL DEFAULT '{}',
         "artifact_kind" TEXT NOT NULL DEFAULT 'worker-bundle',
-        "idempotency_key" TEXT UNIQUE,
+        "idempotency_key" TEXT,
         "is_rollback" BOOLEAN NOT NULL DEFAULT false,
         "rollback_from_version" INTEGER,
         "rolled_back_at" TIMESTAMPTZ,
@@ -884,6 +888,10 @@ export async function ensurePostgresDeploymentsTableShape(
 
   await pool.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`,
+  );
+  // Idempotency keys are unique per service, not globally (see migration 0080).
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_idempotency_key" ON "deployments"("service_id", "idempotency_key");`,
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`,

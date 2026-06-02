@@ -1,10 +1,13 @@
 import { Hono } from "hono";
 import * as jose from "jose";
 import {
+  clearOIDCStateCookie,
   createOIDCState,
   createSession,
   deleteOIDCState,
   getOIDCState,
+  getOIDCStateFromCookie,
+  setOIDCStateCookie,
   setSessionCookie,
 } from "../../../application/services/identity/session.ts";
 import {
@@ -38,6 +41,9 @@ import {
 export const authOidcRouter = new Hono<OptionalAuthRouteEnv>();
 
 const OIDC_STATE_TTL_MS: TtlMs = ttlMs(10 * 60 * 1000);
+// Browser-bound state cookie lifetime. Matches the server-side state TTL so the
+// cookie never outlives the stored state it guards.
+const OIDC_STATE_COOKIE_MAX_AGE_SECONDS: TtlSeconds = ttlSeconds(10 * 60);
 const SESSION_MAX_AGE_SECONDS: TtlSeconds = ttlSeconds(7 * 24 * 60 * 60);
 // OIDC discovery/token/JWKS/userinfo all run on the interactive login path.
 // Cap each upstream call at 10s so login fails fast rather than hanging.
@@ -150,7 +156,19 @@ authOidcRouter.get("/oidc/login", async (c) => {
   authorizationUrl.searchParams.set("code_challenge", codeChallenge);
   authorizationUrl.searchParams.set("code_challenge_method", "S256");
 
-  return c.redirect(authorizationUrl.toString());
+  // Bind this login flow to the initiating browser: the same `state` goes into
+  // a short-lived HttpOnly cookie, and the callback rejects any `state` that
+  // does not match it. Closes login CSRF / session fixation (A2).
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "Location": authorizationUrl.toString(),
+      "Set-Cookie": setOIDCStateCookie(
+        state,
+        OIDC_STATE_COOKIE_MAX_AGE_SECONDS,
+      ),
+    },
+  });
 });
 
 // SECURITY: No per-route rate limit. The callback performs token exchange,
@@ -174,6 +192,12 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const code = c.req.query("code");
   const state = c.req.query("state") ?? "";
   const error = c.req.query("error");
+  const cookieState = getOIDCStateFromCookie(c.req.header("Cookie"));
+
+  // The single-use state cookie is consumed on every callback exit. Setting it
+  // here means each c.html(...) error response below also clears it; the success
+  // path clears it explicitly alongside the session cookie.
+  c.header("Set-Cookie", clearOIDCStateCookie());
 
   if (error) {
     await auditLog("oidc_error", { error });
@@ -182,6 +206,19 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   if (!code || !state) {
     return c.html(
       errorPage("OIDC Error", "Missing OIDC code or state.", "/", "Back"),
+      400,
+    );
+  }
+  // Browser-binding check (A2): the `state` returned by the issuer must equal
+  // the value bound to this browser at login initiation. A missing or mismatched
+  // cookie means this callback was not started by this browser (login CSRF /
+  // session fixation), so reject before any token exchange or DB write.
+  if (!cookieState || cookieState !== state) {
+    await auditLog("oidc_state_cookie_mismatch", {
+      hasCookie: Boolean(cookieState),
+    });
+    return c.html(
+      errorPage("OIDC Error", "Invalid OIDC state.", "/", "Back"),
       400,
     );
   }
@@ -381,14 +418,22 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   await cleanupUserSessions(dbBinding, user.id, 5);
   await auditLog("oidc_success", { userId: user.id, subject });
 
+  const successHeaders = new Headers({
+    "Location": user.setup_completed
+      ? sanitizeReturnTo(oidcState.return_to)
+      : "/setup",
+  });
+  // Clear the single-use state cookie and install the session cookie. A raw
+  // Response bypasses the c.header(...) clear set above, so append it here.
+  successHeaders.append("Set-Cookie", clearOIDCStateCookie());
+  successHeaders.append(
+    "Set-Cookie",
+    setSessionCookie(session.id, SESSION_MAX_AGE_SECONDS),
+  );
+
   return new Response(null, {
     status: 302,
-    headers: {
-      "Location": user.setup_completed
-        ? sanitizeReturnTo(oidcState.return_to)
-        : "/setup",
-      "Set-Cookie": setSessionCookie(session.id, SESSION_MAX_AGE_SECONDS),
-    },
+    headers: successHeaders,
   });
 });
 

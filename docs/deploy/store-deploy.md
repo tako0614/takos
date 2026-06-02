@@ -18,48 +18,48 @@ browser / dashboard から始める場合も、最終的には同じ install lif
 ```text
 User
   -> Store / install UI
-  -> Takosumi installer: POST /v1/installations/dry-run
-  -> user approval
-  -> Takosumi installer: POST /v1/installations
-  -> Takosumi: Source resolution / reviewed InstallPlan snapshot / operator-selected apply
-  -> Deployment record
+  -> Takosumi: Installation 作成 (plain OpenTofu module を解決)
+  -> PlanRun (planned changes / policy decision を記録)
+  -> reviewed plan を approve
+  -> ApplyRun
+  -> Deployment / DeploymentOutput 更新
 ```
 
 ## Store の責務
 
 - repository を検索・発見する
-- publisher、version、tag、source URL を表示する
-- source input がある repository を install candidate として扱う
-- install dry-run へ進むための source metadata を渡す
+- publisher、version、tag、Git URL を表示する
+- plain OpenTofu module がある repository を install candidate として扱う
+- Installation 作成へ進むための module metadata (Git URL / ref / commit / tag / well-known OpenTofu outputs) を渡す
 
-Store は deploy 実行主体ではありません。Source resolution、guard verification、
-InstallPlan snapshot 作成、Deployment record 作成は Takosumi installer / kernel、ownership と
+Store は deploy 実行主体ではありません。Installation 作成、PlanRun / ApplyRun 実行、
+Deployment / DeploymentOutput 更新は Takosumi deploy control plane、ownership と
 approval は operator account plane (reference impl: Takosumi Accounts)
-が担当します。build / prepared-source handling は Installer API
-の前段で行い、optional operator extensions は Store contract の外に置きます。
+が担当します。provider allowlist / credential / state backend / Cloudflare Container execution は
+RunnerProfile が所有し、Store contract の外に置きます。
 
-## Install dry-run
+## PlanRun review
 
-install dry-run は mutate しない確認 step です。少なくとも次を表示します。
+PlanRun は mutate しない確認 step です。少なくとも次を表示します。
 
-- source Git URL / ref / resolved commit
-- publisher metadata / homepage / source policy status
-- `planSnapshotDigest`、prepared source では `sourceDigest`
-- requested bindings
-- requested binding / policy authorization records
+- module Git URL / ref / resolved commit
+- publisher metadata / homepage
+- planned changes / policy decision
 - runtime mode
 - estimated cost
 - data exportability
 
-user approval 後に Installation が作成され、resolved source
-identity、source input digest、Deployment evidence、runtime mode / public
-outputs が ledger に記録されます。
+reviewed plan を approve すると ApplyRun が実行され、成功した apply が
+Deployment と DeploymentOutput を更新します。Installation / PlanRun /
+ApplyRun / Deployment / DeploymentOutput と audit trail は ledger
+に記録されます。
 
 ## Version pinning
 
 install は tag または commit SHA に pin します。mutable branch を production
-install の identity として扱いません。upgrade は新しい ref で dry-run
-を作り直し、 approval 後に新しい Deployment を Installation に記録します。
+install の identity として扱いません。upgrade は新しい ref で PlanRun
+を作り直し、 reviewed plan を approve した ApplyRun が新しい Deployment を
+Installation に記録します。
 
 ## 関連ページ
 

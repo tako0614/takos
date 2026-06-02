@@ -116,6 +116,32 @@ export class D1TransactionManager {
       return await fn();
     }
 
+    // Safe path (DQ1 fix): when the underlying binding exposes an explicit
+    // transaction primitive (postgres / local-sqlite adapters), route through it
+    // so the whole callback runs on one dedicated connection under an exclusive
+    // gate. This avoids the flag-routed BEGIN/COMMIT path, which could leak
+    // concurrent non-transactional queries into an open transaction. Real
+    // Cloudflare D1 does not implement `withTransaction`, so it falls through to
+    // the historical BEGIN/COMMIT/SAVEPOINT behaviour below (already guarded by
+    // the `"d1"` / `"d1-compensated"` modes for production correctness).
+    //
+    // `fn` closes over the same binding, so its inner statements are routed onto
+    // the transaction's dedicated client by the adapter; nesting is naturally a
+    // no-op extra `withTransaction` (the gate is re-entrant-safe only across
+    // distinct transactions, so we only delegate at the top level and keep
+    // savepoint nesting for inner scopes).
+    if (
+      this.transactionDepth === 0 &&
+      typeof this.db.withTransaction === "function"
+    ) {
+      this.transactionDepth += 1;
+      try {
+        return await this.db.withTransaction(() => fn());
+      } finally {
+        this.transactionDepth -= 1;
+      }
+    }
+
     if (this.transactionDepth === 0) {
       this.transactionDepth += 1;
       await this.db.prepare("BEGIN IMMEDIATE").run();

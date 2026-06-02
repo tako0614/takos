@@ -43,6 +43,10 @@ function getR2Key(spaceId: string, fileId: string): string {
   return `spaces/${spaceId}/files/${fileId}`;
 }
 
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
 function toSpaceFile(f: {
   id: string;
   accountId: string;
@@ -104,9 +108,12 @@ export async function searchWorkspace(params: {
           const fileIds = semanticResultsTyped.map((sr) => sr.fileId);
           const fileRows = await db.select().from(files)
             .where(
-              sql`${files.id} IN (${
-                sql.join(fileIds.map((id) => sql`${id}`), sql`, `)
-              })`,
+              and(
+                eq(files.accountId, spaceId),
+                sql`${files.id} IN (${
+                  sql.join(fileIds.map((id) => sql`${id}`), sql`, `)
+                })`,
+              ),
             )
             .all();
 
@@ -188,7 +195,7 @@ export async function quickSearchPaths(
       and(
         eq(files.accountId, spaceId),
         ne(files.origin, "system"),
-        like(files.path, `%${query}%`),
+        sql`${files.path} LIKE ${"%" + escapeLike(query) + "%"} ESCAPE '\\'`,
       ),
     )
     .orderBy(desc(files.updatedAt))
@@ -208,7 +215,7 @@ export async function searchFilenames(
   const conditions = [
     eq(files.accountId, spaceId),
     ne(files.origin, "system"),
-    like(files.path, `%${query}%`),
+    sql`${files.path} LIKE ${"%" + escapeLike(query) + "%"} ESCAPE '\'`,
   ];
 
   if (fileTypes && fileTypes.length > 0) {

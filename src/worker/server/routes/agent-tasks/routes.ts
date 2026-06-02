@@ -160,7 +160,21 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         new Date().toISOString(),
       );
 
+      const db = agentTaskRouteDeps.getDb(c.env.DB);
+
       let threadId = body.thread_id ?? null;
+      if (threadId) {
+        const thread = await db.select({ id: threads.id }).from(threads)
+          .where(
+            and(
+              eq(threads.id, threadId),
+              eq(threads.accountId, spaceId),
+            ),
+          ).get();
+        if (!thread) {
+          throw new NotFoundError("Thread");
+        }
+      }
       if (!threadId && body.create_thread !== false) {
         const thread = await createThread(c.env.DB, spaceId, {
           title: body.title.trim(),
@@ -178,7 +192,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const taskId = generateId();
       const timestamp = new Date().toISOString();
 
-      const db = agentTaskRouteDeps.getDb(c.env.DB);
       const created = await db.insert(agentTasks).values({
         id: taskId,
         accountId: spaceId,

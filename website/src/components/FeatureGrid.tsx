@@ -1,23 +1,23 @@
 import { For } from 'solid-js';
-import { FEATURES } from '~/content/features';
+import Section from './Section';
+import { useT } from '~/lib/i18n';
+import { reveal } from '~/lib/interactions';
 
 export default function FeatureGrid() {
+  const t = useT();
+  void reveal;
   return (
-    <section id='features'>
-      <div class='container'>
-        <span class='eyebrow'>features</span>
-        <h2>Manifest 1 本でできること。</h2>
-        <div class='features'>
-          <For each={FEATURES}>
-            {(f) => (
-              <article class='feature'>
-                <h4>{f.title}</h4>
-                <p>{f.body}</p>
-              </article>
-            )}
-          </For>
-        </div>
+    <Section splat id='features' eyebrow={t.features.eyebrow} title={t.features.title} lede={t.features.lede}>
+      <div class='features'>
+        <For each={t.features.items}>
+          {(f, i) => (
+            <article class='feature reveal' use:reveal={i() * 60}>
+              <h4>{f.title}</h4>
+              <p>{f.body}</p>
+            </article>
+          )}
+        </For>
       </div>
-    </section>
+    </Section>
   );
 }

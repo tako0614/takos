@@ -242,6 +242,7 @@ export async function proxyGitSmartHttpRequest(
     method: request.method,
     headers,
     body: bodyBytes.byteLength > 0 ? bodyBytes : undefined,
+    redirect: "manual",
   });
   return new Response(response.body, {
     status: response.status,

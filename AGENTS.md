@@ -6,18 +6,19 @@ distribution manifests / validator) を集約する。Takosumi / Takos の ident
 は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
 
-> **Takos is a self-hostable product running on the Takosumi source-to-deployment substrate, with _democratization of software through AI agents_ as
+> **Takos is a self-hostable product deployed by Takosumi, the OpenTofu-native deploy control plane, with _democratization of software through AI agents_ as
 > its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps (`takos-docs`
 > / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation as a
-> user-facing convenience.** **Takosumi** is a generic manifestless PaaS substrate for Source installation,
-> Installation / Deployment records, and operator PlatformService binding snapshots; it is not Takos-specific.
+> user-facing convenience.** **Takosumi** installs a plain OpenTofu module and records the run ledger
+> (`Installation` / `PlanRun` / `ApplyRun` / `Deployment` / `DeploymentOutput`), with a `RunnerProfile` owning the
+> provider allowlist / credentials / state backend / Cloudflare Container execution; it is not Takos-specific.
 > `takosumi` is a replaceable operator distribution / deployment, not a privileged Takosumi layer.
 
 Takos の constituent (AI agents / Git / memory / spaces / tools) と「ソフトウェアの民主化」 core concept の formal
 definition は [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) §0 を参照。
 
 曖昧 / 旧 wording (「Takos は通常の App ではない」 だけの表現等) を増やさず、 root docs の vocabulary に統一する (=
-Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformService` の 4 つだけ)。
+Takosumi 公開概念は `Installation` / `PlanRun` / `ApplyRun` / `Deployment` / `DeploymentOutput` / `RunnerProfile` の 6 つだけ)。
 
 ## 責務
 
@@ -40,7 +41,7 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
 
 ## 隣接 product との contract
 
-- **Upstream platform**: `../takosumi/` (service + installer + Accounts)
+- **Upstream platform**: `../takosumi/` (deploy control plane + deploy control API (plan/apply/destroy run ledger) + Accounts)
 - **Downstream**: `../takos-private/` (deployment artifact 消費)、 bundled apps (`../takos-apps/*`、 `../yurucommu/`、
   `../road-to-me/`)
 - **Internal**: `src/worker` (public/control Worker)、 `web` (UI)、 `containers/git` (Git hosting container)、
@@ -65,10 +66,10 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
 
 ## Substitutability
 
-- **Takos product 自体**: Takosumi source-to-deployment substrate 上で動作する self-hostable product。 AI agents / Git / chat / spaces / memory /
+- **Takos product 自体**: Takosumi (OpenTofu-native deploy control plane) によって deploy される self-hostable product。 AI agents / Git / chat / spaces / memory /
   tools を駆使してソフトウェアの民主化を体現。 層 (layer) ではないが、 architectural 特権 framing も使わない (App
   consumer side)。
-- **Takosumi への依存**: kernel + installer / operator account plane は substitutable (詳細は
+- **Takosumi への依存**: deploy control plane / operator account plane は substitutable (詳細は
   [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §「Layering Principle: Substitutability」)。
 
 ## Layer rules
@@ -82,8 +83,9 @@ Takosumi 公開概念は `Source` / `Installation` / `Deployment` / `PlatformSer
 - Rust agent execution wrapper belongs in `containers/agent`; reusable engine code stays in `../takos-agent-engine`.
 - `deploy/` must not import product implementation source paths; connect through published packages, images, APIs, and
   manifests.
-- Provider-specific infrastructure wiring belongs to operator OpenTofu / Helm / native controller stacks and their
-  PlatformService inventory exports, not to a Takos product-side implementation bundle.
+- Provider-specific infrastructure wiring belongs to operator OpenTofu / Helm / native controller stacks governed by the
+  RunnerProfile-owned provider allowlist, surfaced through DeploymentOutput records, not to a Takos product-side
+  implementation bundle.
 - The Takosumi service implementation lives in the standalone Takosumi repository (`../takosumi/`). `deploy/` here only
   carries Takos-specific deploy artifacts that consume the upstream service and operator distribution.
 - Hosting target ids are an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`.

@@ -271,11 +271,11 @@ export async function runCustomDomainReverification(
       }
     } catch (err) {
       summary.errors += 1;
-      logError("Reverification error", {
+      logError("Reverification error", err, {
+        module: "custom-domain-maintenance",
         domainId: domain.id,
         domain: domain.domain,
-        error: err instanceof Error ? err.message : String(err),
-      }, { module: "custom-domain-maintenance" });
+      });
     }
   }
 
@@ -395,11 +395,11 @@ export async function reconcileStuckDomains(
       }
     } catch (err) {
       summary.errors += 1;
-      logError("Stuck domain reconciliation error", {
+      logError("Stuck domain reconciliation error", err, {
+        module: "custom-domain-maintenance",
         domainId: domain.id,
         domain: domain.domain,
-        error: err instanceof Error ? err.message : String(err),
-      }, { module: "custom-domain-maintenance" });
+      });
     }
   }
 

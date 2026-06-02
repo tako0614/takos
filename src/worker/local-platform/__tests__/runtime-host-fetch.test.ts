@@ -13,7 +13,28 @@ function createRuntimeNamespace(stub: LocalRuntimeGatewayStub) {
   };
 }
 
-test("local runtime-host rejects JWT-looking /forward/api-proxy requests without a valid proxy token", async () => {
+test("local runtime-host serves /health without touching the container", async () => {
+  const runtimeFetch = spy(async (_request: Request) =>
+    new Response("unexpected runtime fetch", { status: 500 })
+  );
+  const stub: LocalRuntimeGatewayStub = {
+    fetch: runtimeFetch,
+    verifyProxyToken: async () => null,
+    revokeSessionProxyTokens: async () => 0,
+  };
+  const fetch = await buildLocalRuntimeHostFetch({
+    RUNTIME_CONTAINER: createRuntimeNamespace(stub) as never,
+  });
+
+  const response = await fetch(
+    new Request("http://runtime-host/health", { method: "GET" }),
+  );
+
+  assertEquals(response.status, 200);
+  assertSpyCalls(runtimeFetch, 0);
+});
+
+test("local runtime-host forwards non-health requests to the container stub", async () => {
   const runtimeFetch = spy(async (_request: Request) =>
     new Response(JSON.stringify({ ok: true }), { status: 200 })
   );
@@ -27,128 +48,39 @@ test("local runtime-host rejects JWT-looking /forward/api-proxy requests without
   });
 
   const response = await fetch(
-    new Request(
-      "http://runtime-host/forward/api-proxy/api/repos/repo-1/status?ref=main",
-      {
-        method: "GET",
-        headers: {
-          Authorization: "Bearer header.payload.signature",
-          "X-Takos-Session-Id": "session-id",
-          "X-Takos-Space-Id": "space-a",
-        },
-      },
-    ),
-  );
-
-  assertEquals(response.status, 401);
-  assertSpyCalls(runtimeFetch, 0);
-});
-
-test("local runtime-host keeps proxy-token /forward/api-proxy requests on the control API path", async () => {
-  const runtimeFetch = spy(async (_request: Request) =>
-    new Response("unexpected runtime fetch", { status: 500 })
-  );
-  const takosWebFetch = spy(async (_request: Request) =>
-    new Response(JSON.stringify({ ok: true }), { status: 200 })
-  );
-  const stub: LocalRuntimeGatewayStub = {
-    fetch: runtimeFetch,
-    verifyProxyToken: async (token: string) =>
-      token === "proxy-token"
-        ? { sessionId: "session-id", spaceId: "space-a" }
-        : null,
-    revokeSessionProxyTokens: async () => 0,
-  };
-  const fetch = await buildLocalRuntimeHostFetch({
-    RUNTIME_CONTAINER: createRuntimeNamespace(stub) as never,
-    TAKOS_WORKER: { fetch: takosWebFetch },
-  });
-
-  const response = await fetch(
-    new Request(
-      "http://runtime-host/forward/api-proxy/api/repos/repo-1/status",
-      {
-        method: "GET",
-        headers: {
-          Authorization: "Bearer proxy-token",
-          "X-Takos-Session-Id": "session-id",
-        },
-      },
-    ),
+    new Request("http://runtime-host/session/init", { method: "POST" }),
   );
 
   assertEquals(response.status, 200);
-  assertSpyCalls(runtimeFetch, 0);
-  assertSpyCalls(takosWebFetch, 1);
-  const forwarded = takosWebFetch.calls[0]!.args[0] as Request;
-  assertEquals(forwarded.url, "http://takos/api/repos/repo-1/status");
-  assertEquals(forwarded.headers.get("X-Takos-Internal-Marker"), "1");
-  assertEquals(forwarded.headers.get("X-Takos-Session-Id"), "session-id");
-  assertEquals(forwarded.headers.get("X-Takos-Space-Id"), "space-a");
+  assertSpyCalls(runtimeFetch, 1);
 });
 
-test("local runtime-host rejects proxy-token /forward/api-proxy when session header does not match token", async () => {
-  const takosWebFetch = spy(async (_request: Request) =>
-    new Response(JSON.stringify({ ok: true }), { status: 200 })
-  );
+test("local runtime-host injects a proxy token on /sessions creation", async () => {
+  let forwarded: Request | undefined;
+  const runtimeFetch = spy(async (request: Request) => {
+    forwarded = request;
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  });
   const stub: LocalRuntimeGatewayStub = {
-    fetch: async () =>
-      new Response("unexpected runtime fetch", { status: 500 }),
-    verifyProxyToken: async (token: string) =>
-      token === "proxy-token"
-        ? { sessionId: "session-id", spaceId: "space-a" }
-        : null,
+    fetch: runtimeFetch,
+    verifyProxyToken: async () => null,
     revokeSessionProxyTokens: async () => 0,
   };
   const fetch = await buildLocalRuntimeHostFetch({
     RUNTIME_CONTAINER: createRuntimeNamespace(stub) as never,
-    TAKOS_WORKER: { fetch: takosWebFetch },
   });
 
-  const response = await fetch(
-    new Request(
-      "http://runtime-host/forward/api-proxy/api/repos/repo-1/status",
-      {
-        method: "GET",
-        headers: {
-          Authorization: "Bearer proxy-token",
-          "X-Takos-Session-Id": "other-session-id",
-        },
-      },
-    ),
-  );
-
-  assertEquals(response.status, 401);
-  assertSpyCalls(takosWebFetch, 0);
-});
-
-test("local runtime-host rejects proxy-token /forward/heartbeat when path session does not match token", async () => {
-  const takosWebFetch = spy(async (_request: Request) =>
-    new Response(JSON.stringify({ ok: true }), { status: 200 })
-  );
-  const stub: LocalRuntimeGatewayStub = {
-    fetch: async () =>
-      new Response("unexpected runtime fetch", { status: 500 }),
-    verifyProxyToken: async (token: string) =>
-      token === "proxy-token"
-        ? { sessionId: "session-id", spaceId: "space-a" }
-        : null,
-    revokeSessionProxyTokens: async () => 0,
-  };
-  const fetch = await buildLocalRuntimeHostFetch({
-    RUNTIME_CONTAINER: createRuntimeNamespace(stub) as never,
-    TAKOS_WORKER: { fetch: takosWebFetch },
-  });
-
-  const response = await fetch(
-    new Request("http://runtime-host/forward/heartbeat/other-session-id", {
+  await fetch(
+    new Request("http://runtime-host/sessions", {
       method: "POST",
-      headers: {
-        Authorization: "Bearer proxy-token",
-      },
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: "session-id", space_id: "space-a" }),
     }),
   );
 
-  assertEquals(response.status, 401);
-  assertSpyCalls(takosWebFetch, 0);
+  assertSpyCalls(runtimeFetch, 1);
+  assertEquals(
+    typeof forwarded?.headers.get("X-Takos-Proxy-Token"),
+    "string",
+  );
 });

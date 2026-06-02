@@ -52,8 +52,63 @@ import {
   ok,
   parseExecutorRpcBody,
 } from "./container-hosts/executor-utils.ts";
+import { getDb } from "../infra/db/index.ts";
+import { runs } from "../infra/db/schema.ts";
+import { eq } from "drizzle-orm";
 
 const APP_AGENT_CONTROL_BACKEND_CAPABILITY = "app.agent-control.backend";
+
+// Terminal run statuses: a run in any of these states must not be handed
+// deployment-global provider keys. Mirrors isTerminalRunStatus in
+// container-hosts/executor-host.ts (the proxy-token revocation gate).
+const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+/**
+ * Least-privilege gate for the deployment-global provider key handout.
+ *
+ * The caller is already authenticated as the run bound to `body.runId` (the
+ * executor-host overwrites this field from the verified proxy token, and the
+ * signed-backend bridge derives it from the token-bound actor — see
+ * forwardToTakosumiAgentControl). This check adds a freshness requirement: the
+ * token-bound run must still be active. A run that has gone terminal (or no
+ * longer exists) must not be able to keep pulling shared provider credentials,
+ * even though its proxy token may not yet have been revoked.
+ *
+ * Returns `null` when the run is active (caller may proceed), otherwise the
+ * rejection Response. Identity stays token-bound: we read the run by the
+ * `runId` the token authorized, never by an attacker-chosen target.
+ */
+async function rejectApiKeysIfRunInactive(
+  body: Record<string, unknown>,
+  env: Env,
+): Promise<Response | null> {
+  const runId = typeof body.runId === "string" && body.runId.length > 0
+    ? body.runId
+    : null;
+  if (!runId) {
+    return err("Missing runId", 400);
+  }
+  let status: string | null;
+  try {
+    const db = getDb(env.DB);
+    const row = await db.select({ status: runs.status })
+      .from(runs)
+      .where(eq(runs.id, runId))
+      .get();
+    status = row?.status ?? null;
+  } catch (e) {
+    logError("api-keys run-active check failed", e, {
+      module: "executor-proxy-api",
+    });
+    return err("Run lookup failed", 503);
+  }
+  // Missing run or terminal run: deny. Only an in-flight run (queued / running)
+  // may receive the shared provider keys.
+  if (status === null || TERMINAL_RUN_STATUSES.has(status)) {
+    return err("Run is not active", 403);
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Auth middleware: validate internal service binding token
@@ -270,6 +325,12 @@ function createExecutorHandlersRouter() {
   // --- API keys ---
 
   router.post("/api-keys", async (c) => {
+    const parsed = await parseExecutorRpcBody(c.req);
+    if (!parsed.ok) return parsed.response;
+    // Only hand out the deployment-global provider keys while the token-bound
+    // run is still active; a missing/terminal run is rejected.
+    const inactive = await rejectApiKeysIfRunInactive(parsed.value, c.env);
+    if (inactive) return inactive;
     return ok({
       openai: c.env.OPENAI_API_KEY ?? null,
       anthropic: c.env.ANTHROPIC_API_KEY ?? null,

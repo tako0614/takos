@@ -33,6 +33,7 @@ export interface Session {
   user_id: string;
   expires_at: number;
   created_at: number;
+  last_rotated_at?: number;
 }
 
 export interface OIDCState {

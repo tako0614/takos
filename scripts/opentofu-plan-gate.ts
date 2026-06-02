@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 import * as runtime from "./runtime.ts";
 
-type TargetId = 'aws' | 'gcp';
+type TargetId = 'aws' | 'gcp' | 'cloudflare';
 
 type Args = {
   outDir: string;
@@ -36,6 +36,10 @@ const planCases: Record<TargetId, { label: string; varFile: string }> = {
   gcp: {
     label: 'gcp-staging',
     varFile: 'plan/gcp-staging.tfvars',
+  },
+  cloudflare: {
+    label: 'cloudflare-staging',
+    varFile: 'plan/cloudflare-staging.tfvars',
   },
 };
 
@@ -207,7 +211,7 @@ function relativeToRoot(path: string): string {
 function parseArgs(values: readonly string[]): Args {
   const parsed: Args = {
     outDir: '.opentofu-plan',
-    targets: ['aws', 'gcp'],
+    targets: ['aws', 'gcp', 'cloudflare'],
     opentofuBin: runtime.env.get('TAKOS_OPENTOFU_BIN') ?? 'tofu',
   };
 
@@ -222,8 +226,8 @@ function parseArgs(values: readonly string[]): Args {
         break;
       case '--target': {
         const target = requiredArgValue(values, index, value);
-        if (target !== 'aws' && target !== 'gcp') {
-          console.error(`--target must be aws or gcp, got ${target}`);
+        if (target !== 'aws' && target !== 'gcp' && target !== 'cloudflare') {
+          console.error(`--target must be aws, gcp, or cloudflare, got ${target}`);
           runtime.exit(2);
         }
         parsed.targets = [target];

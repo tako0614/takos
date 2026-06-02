@@ -51,7 +51,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new NotFoundError("Repository");
       }
 
-      if (sourceRepoData.visibility === "private") {
+      if (sourceRepoData.visibility !== "public") {
         await requireSpaceAccess(
           c,
           sourceRepoData.accountId,
@@ -72,7 +72,6 @@ export default new Hono<AuthenticatedRouteEnv>()
           ["owner", "admin", "editor"],
           "Target workspace not found or insufficient permissions",
         );
-        if (targetAccess instanceof Response) return targetAccess;
         resolvedTargetSpaceId = targetAccess.space.id;
       } else {
         // Default to user's own account

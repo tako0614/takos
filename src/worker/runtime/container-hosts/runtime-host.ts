@@ -12,8 +12,11 @@ import type {
  * Express server running inside the container.
  *
  * Container → host communication uses DO-local random tokens (same pattern as
- * executor). The container calls /forward/* endpoints on this worker,
- * which verifies the token via DO RPC and proxies to takos via service binding.
+ * executor): on runtime session creation the host mints a per-session proxy
+ * token (RUNTIME_PROXY_TOKEN_HEADER) and the container presents it back when it
+ * calls the host. There is no public /forward/* re-entry into the worker — that
+ * forgeable-marker proxy path was removed; the DO stub / service binding is the
+ * trust boundary.
  */
 
 import { HostContainerRuntime } from "./container-runtime.ts";
@@ -52,17 +55,44 @@ export interface RuntimeHostEnv {
   RUNTIME_CONTAINER: ContainerNamespace;
   ADMIN_DOMAIN: string;
   PROXY_BASE_URL: string;
-  TAKOS_WORKER?: { fetch(request: Request): Promise<Response> };
   PLATFORM_PUBLIC_KEY?: string;
+  /**
+   * Optional worker-mediated egress proxy URL handed to the workflow/actions
+   * container. SECURITY INVARIANT: when set, this MUST point at the per-run,
+   * SSRF-gated egress endpoint (the value that proxies through
+   * `runtime/worker/egress.ts` — private-IP / port / protocol / redirect /
+   * credential blocking + per-run rate limiting), NOT the open internet and NOT
+   * a direct/transparent proxy. `buildRuntimeContainerEnv` will only ever emit
+   * this as the container's egress proxy; it never derives an egress proxy from
+   * `PROXY_BASE_URL` (which is the control back-channel, not an outbound gate).
+   *
+   * This is the worker-side wiring point for the tracked "gate
+   * workflow-container egress deny-by-default" hardening
+   * (docs/architecture/internal-trust-boundaries.md §2). Until the infra layer
+   * (a) routes this URL through the SSRF guard and (b) applies a Cloudflare
+   * Container network policy that denies container-direct outbound, the
+   * container can still reach the internet directly — see the module note below.
+   */
+  TAKOS_EGRESS_PROXY_URL?: string;
 }
 
 // Local shorthand used by this module's internal helpers.
 type Env = RuntimeHostEnv;
 
+/**
+ * Env var name the workflow/actions container is expected to honor for its
+ * outbound HTTP egress proxy. Centralized here so the only value ever assigned
+ * to it is the gated egress URL (never an open/direct proxy).
+ */
+export const CONTAINER_EGRESS_PROXY_ENV = "TAKOS_EGRESS_PROXY_URL";
+
 export function buildRuntimeContainerEnv(
   env: Pick<
     Env,
-    "ADMIN_DOMAIN" | "PLATFORM_PUBLIC_KEY" | "PROXY_BASE_URL"
+    | "ADMIN_DOMAIN"
+    | "PLATFORM_PUBLIC_KEY"
+    | "PROXY_BASE_URL"
+    | "TAKOS_EGRESS_PROXY_URL"
   >,
 ): Record<string, string> {
   const containerEnv: Record<string, string> = {
@@ -77,7 +107,50 @@ export function buildRuntimeContainerEnv(
     containerEnv.JWT_PUBLIC_KEY = env.PLATFORM_PUBLIC_KEY;
   }
 
+  // Egress proxy: only ever the gated, per-run, SSRF-guarded endpoint. We
+  // deliberately do NOT fall back to PROXY_BASE_URL or any direct URL here — a
+  // workflow/actions container runs untrusted user code, so handing it an open
+  // or transparent proxy would defeat the egress SSRF gate. When the gated URL
+  // is absent we emit nothing (the container has no worker-mediated egress
+  // proxy), leaving container-direct outbound to be denied by the infra-layer
+  // network policy that still has to be applied (see TAKOS_EGRESS_PROXY_URL doc
+  // and the proposed Cloudflare Container network policy).
+  const gatedEgressProxyUrl = normalizeGatedEgressProxyUrl(
+    env.TAKOS_EGRESS_PROXY_URL,
+  );
+  if (gatedEgressProxyUrl) {
+    containerEnv[CONTAINER_EGRESS_PROXY_ENV] = gatedEgressProxyUrl;
+  }
+
   return containerEnv;
+}
+
+/**
+ * Defensively normalize the configured egress proxy URL before it is handed to
+ * an untrusted container. Fails closed (returns null, so the var is omitted)
+ * rather than forwarding a value that is malformed, non-HTTP(S), or carries
+ * embedded credentials. This does NOT by itself make the endpoint gated — that
+ * is an operator/infra responsibility (the URL must terminate at the SSRF-
+ * guarded egress) — it only refuses to propagate an obviously-unsafe value.
+ */
+export function normalizeGatedEgressProxyUrl(
+  value: string | undefined,
+): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return null;
+  }
+  if (parsed.username || parsed.password) {
+    return null;
+  }
+  return parsed.toString();
 }
 
 /** Token metadata stored alongside each random proxy token. */
@@ -331,10 +404,6 @@ async function revokeRuntimeTokenAfterDestroy(
   }
 }
 
-function unauthorized(): Response {
-  return errorJsonResponse("Unauthorized", 401);
-}
-
 // Cached environment validation guard.
 const envGuard = createEnvGuard(validateRuntimeHostEnv);
 
@@ -353,79 +422,6 @@ export default {
 
     if (path === "/health" && request.method === "GET") {
       return jsonResponse({ status: "ok", service: "takos-runtime-host" });
-    }
-
-    // /forward/* — proxy endpoints called by the runtime container
-    if (path.startsWith("/forward/")) {
-      const authHeader = request.headers.get("Authorization");
-      const token = authHeader?.startsWith("Bearer ")
-        ? authHeader.slice(7).trim() || null
-        : null;
-      if (!token) return unauthorized();
-
-      const stub = env.RUNTIME_CONTAINER.getByName("singleton");
-
-      // Verify container proxy tokens via DO RPC.
-      const tokenInfo = await stub.verifyProxyToken(token);
-      if (!tokenInfo) return unauthorized();
-
-      if (!env.TAKOS_WORKER) {
-        logError("TAKOS_WORKER service binding not configured", undefined, {
-          module: "runtime-host",
-        });
-        return errorJsonResponse("Internal configuration error", 500);
-      }
-
-      // /forward/api-proxy/* — API proxy requests from the container
-      if (path.startsWith("/forward/api-proxy/")) {
-        const sessionId = request.headers.get("X-Takos-Session-Id");
-        if (!sessionId) return unauthorized();
-        if (tokenInfo.sessionId !== sessionId) return unauthorized();
-
-        const apiPath = path.replace("/forward/api-proxy", "");
-        const search = url.search;
-        return env.TAKOS_WORKER.fetch(
-          new Request(`https://takos${apiPath}${search}`, {
-            method: request.method,
-            headers: {
-              // X-Takos-Internal-Marker: sentinel that tells the edge auth
-              // middleware (`server/middleware/auth.ts`) this call originated
-              // from the runtime-host /forward/* proxy. Distinct from
-              // X-Takos-Internal, which is a shared secret consumed only by
-              // `runtime/executor-proxy-api.ts` with a constant-time compare.
-              // See docs/architecture/container-hosts.md.
-              "X-Takos-Internal-Marker": "1",
-              "X-Takos-Session-Id": sessionId,
-              "X-Takos-Space-Id": tokenInfo.spaceId,
-              "Content-Type": request.headers.get("Content-Type") ||
-                "application/json",
-            },
-            body: request.body,
-          }),
-        );
-      }
-
-      // /forward/heartbeat/:sessionId — heartbeat from the container
-      if (path.startsWith("/forward/heartbeat/")) {
-        const sessionId = path.replace("/forward/heartbeat/", "");
-        if (!sessionId) return unauthorized();
-        if (tokenInfo.sessionId !== sessionId) return unauthorized();
-
-        return env.TAKOS_WORKER.fetch(
-          new Request(`https://takos/api/sessions/${sessionId}/heartbeat`, {
-            method: "POST",
-            headers: {
-              // See note above on /forward/api-proxy/*.
-              "X-Takos-Internal-Marker": "1",
-              "X-Takos-Session-Id": sessionId,
-              "X-Takos-Space-Id": tokenInfo.spaceId,
-              "Content-Type": "application/json",
-            },
-          }),
-        );
-      }
-
-      return errorJsonResponse("Not found", 404);
     }
 
     // Route all other requests to the singleton runtime container instance.

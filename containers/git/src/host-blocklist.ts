@@ -180,7 +180,7 @@ export function parseIpv6(value: string): readonly number[] | null {
       ((octets[0] << 8) | octets[1]) & 0xffff,
       ((octets[2] << 8) | octets[3]) & 0xffff,
     ];
-    head = addr.slice(0, lastColon + 1); // keep trailing ':' for splitting
+    head = addr.slice(0, lastColon); // drop the embedded IPv4 and its leading ':'
   }
 
   const doubleColon = head.indexOf("::");

@@ -229,6 +229,7 @@ export async function loadMcpTools(
                 server.url,
                 accessToken,
                 server.name,
+                env.TAKOS_EGRESS,
               );
               await callClient.connect();
               try {
@@ -314,7 +315,12 @@ async function createLoadClient(
     drizzle,
     server,
   );
-  const client = new McpClient(server.url, accessToken, server.name);
+  const client = new McpClient(
+    server.url,
+    accessToken,
+    server.name,
+    env.TAKOS_EGRESS,
+  );
   await client.connect();
   return client;
 }

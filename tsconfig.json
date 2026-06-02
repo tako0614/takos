@@ -30,20 +30,11 @@
       "takosumi-contract": [
         "../takosumi/src/contract/mod.ts"
       ],
-      "takosumi-contract/installer-api": [
-        "../takosumi/src/contract/installer-api.ts"
-      ],
       "takosumi-contract/internal/api": [
         "../takosumi/src/contract/internal-api.ts"
       ],
       "takosumi-contract/internal/rpc": [
         "../takosumi/src/contract/internal-rpc.ts"
-      ],
-      "@takos/takosumi-installer": [
-        "../takosumi/src/installer/mod.ts"
-      ],
-      "@takos/takosumi-installer/deploy-client": [
-        "../takosumi/src/installer/deploy-client.ts"
       ],
       "takosumi-contract-v2": [
         "../takosumi/src/contract/mod.ts"

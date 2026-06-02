@@ -8,12 +8,7 @@ import {
   startSession,
   stopSession,
 } from "./lifecycle.ts";
-import { getSessionHealth, heartbeatSession } from "./heartbeat.ts";
-import {
-  authenticateServiceRequest,
-  serviceAuthError,
-  toJwtHeartbeatPayload,
-} from "./auth.ts";
+import { getSessionHealth } from "./heartbeat.ts";
 import type { BaseVariables } from "../route-auth.ts";
 
 const sessions = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
@@ -39,14 +34,6 @@ sessions.post(
 
 sessions.post("/sessions/:sessionId/resume", resumeSession);
 sessions.post("/sessions/:sessionId/discard", discardSession);
-
-sessions.post("/sessions/:sessionId/heartbeat", async (c) => {
-  const payload = await authenticateServiceRequest(c);
-  if (!payload) {
-    return serviceAuthError(c);
-  }
-  return heartbeatSession(c, toJwtHeartbeatPayload(payload));
-});
 
 sessions.get("/sessions/:sessionId/health", getSessionHealth);
 

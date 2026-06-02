@@ -180,7 +180,10 @@ export function createK8sSecretStore(config: K8sSecretStoreConfig = {}) {
 
   async function getApiConfig(): Promise<K8sApiConfig> {
     if (!apiConfigPromise) {
-      apiConfigPromise = resolveApiConfig(config);
+      apiConfigPromise = resolveApiConfig(config).catch((e) => {
+        apiConfigPromise = null;
+        throw e;
+      });
     }
     return apiConfigPromise;
   }

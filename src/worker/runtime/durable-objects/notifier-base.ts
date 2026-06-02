@@ -240,24 +240,16 @@ export abstract class NotifierBase {
   /**
    * Check whether an HTTP request (non-WebSocket) is authorized.
    *
-   * The service binding is the real trust boundary: this DO is only reachable
-   * via a binding stub, and only trusted code that sanitizes inbound headers
-   * (buildSanitizedDOHeaders in do-header-utils.ts strips X-Takos-Internal /
-   * X-Takos-Internal-Marker / X-WS-* before re-injecting them) can set these.
-   * The header checks below are therefore a SOFT secondary signal, not an
-   * independent authn layer — if the sanitizer ever stops stripping the marker,
-   * this becomes a header-spoof hole. The do-header-utils test asserts the
-   * stripping so this assumption cannot silently rot.
-   * - X-WS-Auth-Validated: set server-side after user auth verification
-   * - X-Takos-Internal-Marker: set by the dispatch/route layer for internal calls
+   * The service binding IS the trust boundary: this Durable Object is only
+   * reachable through its binding stub (env.*_NOTIFIER.get(id).fetch), which
+   * only the worker's own code holds. External clients cannot obtain a DO stub,
+   * so no header-based marker/secret is required — every request that reaches
+   * here already came from trusted in-worker code.
    *
-   * Subclasses may override to tighten or relax as needed.
+   * Subclasses may override to tighten as needed.
    */
-  protected isAuthorizedHttp(request: Request): boolean {
-    const wsAuthValidated =
-      request.headers.get("X-WS-Auth-Validated") === "true";
-    const internalCall = request.headers.get("X-Takos-Internal-Marker") === "1";
-    return wsAuthValidated || internalCall;
+  protected isAuthorizedHttp(_request: Request): boolean {
+    return true;
   }
 
   /**

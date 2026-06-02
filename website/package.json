@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vinxi dev --port 4322",
     "build": "vinxi build",
+    "postbuild": "node scripts/postbuild.mjs",
     "preview": "vinxi start --port 4322",
     "version": "vinxi version"
   },

@@ -21,7 +21,6 @@ export async function emitRunUsageEvent(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Takos-Internal-Marker": "1",
     },
     body: JSON.stringify({
       runId: input.runId,

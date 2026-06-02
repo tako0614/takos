@@ -66,7 +66,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
     }
 
     const repo = toApiRepositoryFromDb(repoData);
-    const access = await requireSpaceAccess(
+    await requireSpaceAccess(
       c,
       repo.space_id,
       user.id,
@@ -74,9 +74,6 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       "Permission denied",
       403,
     );
-    if (access instanceof Response) {
-      return access;
-    }
 
     if (!repo.forked_from_id) {
       throw new BadRequestError("Repository is not a fork");

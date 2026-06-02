@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 5.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.0"
+    }
   }
 }
 
@@ -24,6 +28,13 @@ provider "google" {
   project      = var.gcp.project_id
   region       = var.gcp.region
   access_token = var.opentofu_plan_mode ? "mock-token-for-plan-only" : null
+}
+
+provider "cloudflare" {
+  # Real credential is supplied by Takosumi's RunnerProfile (CLOUDFLARE_API_TOKEN);
+  # plan mode uses a deterministic 40-char placeholder for credential-free
+  # PlanRun review (the provider validates token shape, not auth, at configure).
+  api_token = var.opentofu_plan_mode ? "abcdef0123456789abcdef0123456789abcdef01" : null
 }
 
 module "aws" {
@@ -82,4 +93,14 @@ module "gcp" {
     },
     var.gcp.labels,
   )
+}
+
+module "cloudflare" {
+  count  = var.target == "cloudflare" ? 1 : 0
+  source = "./modules/cloudflare"
+
+  account_id   = var.cloudflare.account_id
+  project_name = var.project_name
+  environment  = var.environment
+  plan_mode    = var.opentofu_plan_mode
 }

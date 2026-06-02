@@ -70,7 +70,7 @@ export function retiredTakosDeploymentProxyResponse(): Response {
   return Response.json(
     commonError(
       "GONE",
-      "Takos app no longer proxies direct Takosumi deployment APIs. Use Takosumi Source install/deploy APIs or Takosumi account-plane install flows.",
+      "Takos app no longer proxies direct Takosumi deployment APIs. Deploy via Takosumi: register the OpenTofu module as an Installation and run plan/apply (PlanRun/ApplyRun), or use the account-plane install flow.",
     ),
     { status: 410 },
   );

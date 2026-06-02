@@ -1,37 +1,46 @@
 # アプリメタデータの境界
 
-This page has been reset for Takosumi v1. Takosumi installs a **Source** (Git, prepared archive, or local source) and records an **Installation** plus append-only **Deployment** entries. Source display metadata comes from generic repository information such as Git URL, ref, commit, tag, and package metadata.
+> このページでわかること: アプリ表示・配置に関わるメタデータを Takos と Takosumi の
+> どちらが持つか。
 
-## Current Flow
+**前提: Takos は Takosumi 上で動く product。** Takosumi は OpenTofu-native な deploy control
+plane で、plain OpenTofu module を install / apply し、run ledger
+(**Installation → PlanRun → ApplyRun → Deployment → DeploymentOutput**) を記録します。provider
+allowlist / credential / state backend / Cloudflare Container execution は **RunnerProfile**
+が所有します。この 6 概念が Takosumi の public surface であり、アプリの「メタデータ」自体は
+Takosumi の関心ではありません。
 
-1. Choose a Git URL/ref or a prepared source archive.
-2. Run install dry-run and review the returned InstallPlan, changes, warnings, and `planSnapshotDigest`.
-3. Apply with the reviewed expected guard. Git sources use `expected.commit` + `expected.planSnapshotDigest`; prepared sources use `expected.sourceDigest` + `expected.planSnapshotDigest`.
-4. Deployment dry-run/apply uses the same source guard plus `expected.currentDeploymentId` to prevent stale approvals.
-5. Infrastructure lifecycle, credentials, OIDC clients, billing, domains, OpenTofu/Helm state, PlatformService inventory, and implementation bindings belong to the operator distribution.
+## Takos が持つメタデータ
 
-## Takos Boundary
+Takos は product として、ユーザーに見えるアプリ情報を所有します。
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Source / Installation / Deployment state and binding evidence. Takosumi or another operator distribution owns account-plane policy, PlatformService inventory, and implementation bindings.
+- bundled app の launcher metadata（新規 space 作成時に auto-install される 1st-party App の表示情報）
+- file-handler metadata（どのファイル種別をどのアプリで開くか）
+- MCP-facing な product metadata
+- chat / agent / memory / space に紐づくアプリ内データ
 
-## API Shape
+これらは Takos product の DB / UI に閉じており、デプロイ経路を経由しません。bundled app は通常の
+AppInstallation として記録され、ユーザーが uninstall できます。
 
-```json
-{
-  "spaceId": "space_1",
-  "source": {
-    "kind": "git",
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
+## Takosumi が記録すること
 
-Apply requests add the expected guard returned by dry-run. Takos product routes should call the Takosumi installer or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+アプリの「実体」をどこに materialize するかは、Takosumi の run ledger 側の関心です。
+
+- どの OpenTofu module をどの Git URL / commit / tag / module path で install したか（Installation）
+- plan / apply / destroy の run（PlanRun / ApplyRun）と、適用後の Deployment / DeploymentOutput
+- RunnerProfile に紐づく provider allowlist / state backend / execution 境界
+
+Takos の deploy topology 自体も `deploy/opentofu` の OpenTofu module
+(`var.target` ∈ `aws | gcp | cloudflare`) として Takosumi が install / apply し、cloudflare target
+では backing resource (D1 / KV / R2 / Queues) を provision します。`wrangler` / `helm` /
+distribute pipeline はこの同じ topology の **interim materialization** であり、別の source of
+truth ではありません。
+
+account-plane policy（account / billing / OIDC / dashboard）は operator distribution /
+Takosumi Accounts が持ちます。
 
 ## References
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
+- [内部トラスト境界](./internal-trust-boundaries.md)
+- [システムアーキテクチャ](./system-architecture.md)
 - [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
-- [Takosumi installer API](https://takosumi.com/docs/reference/installer-api)

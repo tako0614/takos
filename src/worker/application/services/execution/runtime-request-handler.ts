@@ -140,9 +140,9 @@ export async function callRuntimeRequest(
     signal,
     clock = systemClock,
   } = options;
-  const headers: Record<string, string> = {
-    "X-Takos-Internal-Marker": "1",
-  };
+  // The runtime-host is reached only through the RUNTIME_HOST service binding
+  // (the binding is the trust boundary), so no internal marker is needed.
+  const headers: Record<string, string> = {};
 
   if (body) {
     headers["Content-Type"] = "application/json";

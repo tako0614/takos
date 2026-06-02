@@ -1,6 +1,19 @@
 ## OSS-safe deployment template.
 ## Replace placeholder domains, account IDs, namespace IDs, and resource IDs
 ## before deploying.
+##
+## SOURCE OF TRUTH: This file is the INTERIM reference materialization of the
+## Takos deploy topology, not its authority. Takos is a product DEPLOYED BY
+## Takosumi (the OpenTofu-native deploy control plane): the canonical topology
+## is the OpenTofu module at ../opentofu (var.target = cloudflare), which
+## Takosumi installs and applies — Installation -> PlanRun -> ApplyRun ->
+## Deployment — recording the non-secret endpoints / binding map as
+## DeploymentOutput. A Takosumi RunnerProfile owns the provider allowlist,
+## credentials, state backend, and Cloudflare Container execution. The bindings,
+## containers, routes, and resources declared below converge onto that
+## Takosumi-applied module and must stay in sync with it; do not treat this
+## wrangler.toml as a separate source of truth.
+## See ../../docs/architecture/internal-trust-boundaries.md for the deploy invariant.
 
 name = "takos"
 main = "src/worker/index.ts"

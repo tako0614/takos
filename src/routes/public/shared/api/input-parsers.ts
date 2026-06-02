@@ -168,6 +168,19 @@ export function parseCreateThreadShareInput(
 
   const password = optionalStringField(body, "password");
   if (!password.ok) return password;
+  // Reject a password supplied without selecting password mode. Otherwise the
+  // share would silently be created as a public (unprotected) share even though
+  // the caller intended to protect it.
+  if (
+    modeValue !== "password" &&
+    password.value !== undefined &&
+    password.value.length > 0
+  ) {
+    return {
+      ok: false,
+      message: 'mode must be "password" when a password is supplied',
+    };
+  }
   const expiresAt = optionalStringField(body, "expires_at");
   if (!expiresAt.ok) return expiresAt;
 

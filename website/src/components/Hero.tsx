@@ -1,69 +1,75 @@
+import { createSignal, For } from 'solid-js';
 import CodeBlock from './CodeBlock';
-import InkSplash from './brand/InkSplash';
-import { createSignal, onMount } from 'solid-js';
-import { resolveCloudUrls } from '~/lib/cloud-url';
+import SplatField from './SplatField';
+import { useCloudUrls } from '~/lib/cloud';
+import { useT } from '~/lib/i18n';
+import RichText from './RichText';
+import { copyText, useParallax } from '~/lib/interactions';
+
+const INSTALL_CMD =
+  'bunx @takosjp/takosumi install dry-run --source git:https://github.com/you/takos#main --space my-space';
 
 export default function Hero() {
-  const [cloudUrls, setCloudUrls] = createSignal(resolveCloudUrls(''));
-  onMount(() => setCloudUrls(resolveCloudUrls()));
+  const t = useT();
+  const cloud = useCloudUrls();
+  let splashRef: HTMLDivElement | undefined;
+  const [copied, setCopied] = createSignal(false);
+
+  useParallax(() => splashRef, 0.16);
+
+  const onCopy = async () => {
+    if (await copyText(INSTALL_CMD)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    }
+  };
 
   return (
     <section class='hero'>
-      <InkSplash class='hero-splash' variant={1} />
+      <div ref={splashRef} class='hero-splat-wrap' aria-hidden='true'>
+        <SplatField density='hero' />
+      </div>
       <div class='container hero-grid'>
         <div class='hero-copy'>
-          <span class='eyebrow'>墨 · open source · AI-first</span>
+          <span class='eyebrow'>{t.hero.eyebrow}</span>
           <h1>
-            <span class='hero-line'>AI と話す場所は、</span>
-            <span class='hero-line grad-text'>あなたの</span>
-            <span class='hero-line'>サーバーで。</span>
+            <For each={t.hero.title}>
+              {(line) => <span class='hero-line' classList={{ 'grad-text': line.grad }}>{line.t}</span>}
+            </For>
           </h1>
           <p class='lede'>
-            Chat / agent / memory / space を core に持つ、 self-hostable な AI chat product。 <code>takos-docs</code> や
-            {' '}
-            <code>yurucommu</code>{' '}
-            なんかの bundled apps は新規 space 作成と同時に auto-install される。 history も memory も自分の VM
-            の外に出ない。
+            <RichText value={t.hero.lede} />
           </p>
           <div class='cta-row'>
-            <a
-              class='btn btn-primary'
-              href={cloudUrls().useTakos}
-              rel='noopener'
-            >
-              Use Takos →
+            <a class='btn btn-primary' href={cloud().useTakos} rel='noopener'>
+              {t.hero.useTakos} →
             </a>
-            <a
-              class='btn btn-secondary'
-              href={cloudUrls().install}
-              rel='noopener'
-            >
-              Git から install
+            <a class='btn btn-secondary' href={cloud().install} rel='noopener'>
+              {t.hero.gitInstall}
             </a>
           </div>
         </div>
         <div class='hero-terminal'>
           <CodeBlock terminal>
-            <span class='c'>
-              # どこにでも install できるが、 一番速いのは Use Takos。
-            </span>
+            <button type='button' class='code-copy' onClick={onCopy} aria-label={copied() ? t.hero.copied : t.hero.copy}>
+              {copied() ? t.hero.copied : t.hero.copy}
+            </button>
+            <span class='c'>{t.hero.termComment1}</span>
             {'\n'}
             <span class='k'>$</span> open https://accounts.takosumi.com/dashboard/use-takos{'\n'}
             <span class='k'>$</span>&nbsp;&nbsp;&nbsp;→ Account / Space / launch{'\n'}
-            <span class='c'>
-              # 自前 substrate では Git source を install lifecycle に渡す:
-            </span>
+            <span class='c'>{t.hero.termComment2}</span>
             {'\n'}
-            <span class='k'>$</span> bun x @takosjp/takosumi install dry-run \{'\n'}
+            <span class='k'>$</span> bunx @takosjp/takosumi install dry-run \{'\n'}
             <span class='k'>$</span>&nbsp;&nbsp;--source git:https://github.com/you/takos#main --space my-space{'\n'}
-            <span class='c'>✓ takos-worker → http://your-takos.example/</span>
+            <span class='c'>{t.hero.termOk1}</span>
             {'\n'}
-            <span class='c'>✓ takos-git → docs / files / agents</span>
+            <span class='c'>{t.hero.termOk2}</span>
           </CodeBlock>
         </div>
       </div>
-      <div class='hero-scroll' aria-hidden='true'>
-        scroll
+      <a class='hero-scroll' href='#why' aria-label={t.hero.scroll}>
+        {t.hero.scroll}
         <svg
           viewBox='0 0 24 24'
           fill='none'
@@ -71,10 +77,11 @@ export default function Hero() {
           stroke-width='2'
           stroke-linecap='round'
           stroke-linejoin='round'
+          aria-hidden='true'
         >
           <path d='M6 9l6 6 6-6' />
         </svg>
-      </div>
+      </a>
     </section>
   );
 }

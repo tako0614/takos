@@ -12,6 +12,7 @@ import {
   services,
 } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, inArray, isNotNull, lt, max } from "drizzle-orm";
+import { ConflictError } from "@takos/worker-platform-utils/errors";
 import type { ArtifactKind, Deployment, DeploymentEvent } from "./models.ts";
 import { normalizeDeploymentBackendName } from "./models.ts";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
@@ -106,10 +107,27 @@ export async function createDeploymentWithVersion(
       return { deployment: toApiDeployment(deployment), version };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      if (
-        message.includes("UNIQUE constraint failed") ||
-        message.includes("unique constraint")
-      ) {
+      const isUniqueViolation = message.includes("UNIQUE constraint failed") ||
+        message.includes("unique constraint");
+      if (isUniqueViolation) {
+        // After migration 0080 the only insert-time unique collisions on
+        // `deployments` are (service_id, version) and (service_id,
+        // idempotency_key). Same-service same-key is already short-circuited by
+        // getDeploymentByIdempotencyKey upstream, and cross-service same-key is
+        // now allowed, so a key collision here means a concurrent insert of the
+        // same idempotent request raced past that check. Bumping the version
+        // and retrying cannot resolve a key collision (it re-fires every
+        // attempt), so narrow the retry to the version race and surface a key
+        // collision as a distinct conflict instead of exhausting retries with a
+        // misleading "failed to allocate version" error. The collision message
+        // names the failing columns (SQLite) or index (Postgres,
+        // idx_deployments_service_idempotency_key).
+        if (message.includes("idempotency_key")) {
+          throw new ConflictError(
+            "Deployment idempotency key conflict for this service",
+            { serviceId, cause: message },
+          );
+        }
         if (attempt < MAX_VERSION_RETRIES - 1) continue;
       }
       throw err;

@@ -5,55 +5,89 @@
 
 import {
   agentControlRpcPath,
+  expandProxyCapability,
   isAgentControlRpcPath,
   type ProxyCapability,
+  type ProxyScope,
 } from "./executor-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Proxy capability resolution
 // ---------------------------------------------------------------------------
 
+/**
+ * Per-endpoint least-privilege scope map. Every control-RPC endpoint maps to
+ * exactly one scope. Agent runs hold every scope here; workflow runs hold only
+ * the run-lifecycle / tools / provider-keys subset (see proxyScopesForRunKind),
+ * so a workflow token cannot reach conversation / memory / skill endpoints.
+ */
+const CONTROL_RPC_ENDPOINT_SCOPES: Record<string, ProxyScope> = {
+  // run lifecycle / status
+  "heartbeat": "run-lifecycle",
+  "run-status": "run-lifecycle",
+  "run-record": "run-lifecycle",
+  "run-bootstrap": "run-lifecycle",
+  "run-fail": "run-lifecycle",
+  "run-reset": "run-lifecycle",
+  "run-usage": "run-lifecycle",
+  "run-context": "run-lifecycle",
+  "run-config": "run-lifecycle",
+  "no-llm-complete": "run-lifecycle",
+  "update-run-status": "run-lifecycle",
+  "is-cancelled": "run-lifecycle",
+  "run-event": "run-lifecycle",
+  // conversation / session / messages
+  "current-session": "conversation",
+  "conversation-history": "conversation",
+  "add-message": "conversation",
+  // memory
+  "memory-activation": "memory",
+  "memory-finalize": "memory",
+  // skills
+  "skill-runtime-context": "skills",
+  "skill-catalog": "skills",
+  "skill-plan": "skills",
+  // tools
+  "tool-catalog": "tools",
+  "tool-execute": "tools",
+  "tool-cleanup": "tools",
+  // provider keys
+  "api-keys": "provider-keys",
+};
+
+const CONTROL_RPC_ENDPOINTS = new Set(
+  Object.keys(CONTROL_RPC_ENDPOINT_SCOPES),
+);
+
+/**
+ * Resolve the scope a control-RPC path requires. Returns null for any path that
+ * is not a recognized control-RPC endpoint (callers MUST treat null as
+ * unauthorized — fail closed).
+ */
 export function getRequiredProxyCapability(
   path: string,
-): ProxyCapability | null {
-  if (
-    isAgentControlRpcPath(path) &&
-    CONTROL_RPC_ENDPOINTS.has(path.slice(agentControlRpcPath("").length))
-  ) {
-    return "control";
-  }
-
-  // Unknown proxy/control paths must be rejected; null signals unauthorized.
-  return null;
+): ProxyScope | null {
+  if (!isAgentControlRpcPath(path)) return null;
+  const endpoint = path.slice(agentControlRpcPath("").length);
+  return CONTROL_RPC_ENDPOINT_SCOPES[endpoint] ?? null;
 }
 
-const CONTROL_RPC_ENDPOINTS = new Set([
-  "heartbeat",
-  "run-status",
-  "run-record",
-  "run-bootstrap",
-  "run-fail",
-  "run-reset",
-  "api-keys",
-  "run-usage",
-  "run-context",
-  "run-config",
-  "no-llm-complete",
-  "conversation-history",
-  "skill-runtime-context",
-  "skill-catalog",
-  "skill-plan",
-  "memory-activation",
-  "memory-finalize",
-  "add-message",
-  "update-run-status",
-  "current-session",
-  "is-cancelled",
-  "tool-catalog",
-  "tool-execute",
-  "tool-cleanup",
-  "run-event",
-]);
+/**
+ * Membership check used by the executor host: a request to `path` is authorized
+ * iff the path maps to a known scope AND the token's scope set (expanded from
+ * its stored capability, including the legacy `"control"` full-agent alias)
+ * contains that scope. Fail-closed for unknown paths / empty scope sets.
+ */
+export function isProxyRequestAuthorized(
+  path: string,
+  capability: ProxyCapability | ProxyCapability[] | undefined,
+): boolean {
+  const required = getRequiredProxyCapability(path);
+  if (!required) return false;
+  return expandProxyCapability(capability).has(required);
+}
+
+export { CONTROL_RPC_ENDPOINTS };
 
 // ---------------------------------------------------------------------------
 // Claims / body matching

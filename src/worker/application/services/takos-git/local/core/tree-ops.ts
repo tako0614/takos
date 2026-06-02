@@ -227,11 +227,22 @@ export async function flattenTree(
     if (depth > maxDepth) {
       throw new Error(`Tree flatten depth limit exceeded (max ${maxDepth})`);
     }
-    if (visited.has(currentTreeSha)) return; // Prevent circular reference loops
+    // Path-scoped cycle guard: a tree SHA is only treated as "seen" while it is
+    // an active ancestor on the current walk path. Trees are content-addressed,
+    // so two distinct directories can share a tree SHA (byte-identical content);
+    // a walk-global guard would skip the second occurrence and silently drop its
+    // files. We add before recursing into children and delete on return so that
+    // sibling/disjoint subtrees with the same SHA are still flattened, while a
+    // genuine self-referential cycle (the same SHA re-entered along its own
+    // ancestor chain) is still short-circuited.
+    if (visited.has(currentTreeSha)) return;
     visited.add(currentTreeSha);
 
     const entries = await getTreeEntries(bucket, currentTreeSha);
-    if (!entries) return;
+    if (!entries) {
+      visited.delete(currentTreeSha);
+      return;
+    }
 
     for (const entry of entries) {
       counters.entries++;
@@ -258,6 +269,8 @@ export async function flattenTree(
         files.push({ path: fullPath, sha: entry.sha, mode: entry.mode });
       }
     }
+
+    visited.delete(currentTreeSha);
   }
 
   await walk(treeSha, basePath, 0);

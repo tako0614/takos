@@ -45,6 +45,21 @@ export type SqlDatabaseSessionBinding = {
   ): Promise<SqlResultBinding<T>[]>;
   getBookmark(): string | null;
 };
+/**
+ * Statement surface that runs exclusively on a transaction's dedicated
+ * connection, handed to the callback of {@link SqlDatabaseBinding.withTransaction}.
+ *
+ * This is the subset transactional callers need (prepare / batch / exec). Every
+ * statement issued through it lands on the single client the transaction owns,
+ * so it never leaks onto the pool or into another caller's session.
+ */
+export type SqlTransactionSessionBinding = {
+  prepare(query: string): SqlPreparedStatementBinding;
+  batch<T = Record<string, unknown>>(
+    statements: SqlPreparedStatementBinding[],
+  ): Promise<SqlResultBinding<T>[]>;
+  exec(query: string): Promise<{ count: number; duration: number }>;
+};
 export type SqlDatabaseBinding = {
   prepare(query: string): SqlPreparedStatementBinding;
   batch<T = Record<string, unknown>>(
@@ -53,6 +68,22 @@ export type SqlDatabaseBinding = {
   exec(query: string): Promise<{ count: number; duration: number }>;
   withSession(bookmark?: string): SqlDatabaseSessionBinding;
   dump(): Promise<ArrayBuffer>;
+  /**
+   * Run `cb` inside an atomic transaction bound to a single dedicated
+   * connection. The binding holds an exclusive serialization gate for the whole
+   * callback, so no concurrent caller can interleave statements into the open
+   * transaction (the isolation/atomicity guarantee the flag-routed path could
+   * not provide). On any throw the transaction is rolled back and the error is
+   * rethrown.
+   *
+   * Optional: real Cloudflare D1 cannot compose BEGIN/COMMIT across its
+   * stateless prepared-statement round-trips, so it does not implement this.
+   * Callers must feature-detect (`typeof db.withTransaction === "function"`)
+   * and fall back to their compensation / batch strategy when it is absent.
+   */
+  withTransaction?<T>(
+    cb: (tx: SqlTransactionSessionBinding) => Promise<T>,
+  ): Promise<T>;
 };
 export type ExecutionContext = HonoExecutionContext;
 export type Fetcher = {

@@ -14,7 +14,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Pool, type PoolClient, type QueryResult } from "pg";
-import type { SqlPreparedStatementBinding } from "../shared/types/bindings.ts";
+import type {
+  SqlPreparedStatementBinding,
+  SqlTransactionSessionBinding,
+} from "../shared/types/bindings.ts";
 import type {
   Client as LibsqlClient,
   createClient as createLibsqlClient,
@@ -26,6 +29,7 @@ import {
   classifyTransactionSql,
   isExactTransactionControlSql,
   normalizePostgresSql,
+  type PostgresRunner,
   type ServerSqlDatabase,
 } from "./d1-shared.ts";
 import { logWarn } from "../shared/utils/logger.ts";
@@ -470,6 +474,70 @@ export async function createPostgresSqlDatabase(
     },
   };
 
+  // Explicit transaction entry point (DQ1 fix, Option A). Unlike the flag-based
+  // `runQuery` routing, this acquires the serialization gate EXCLUSIVELY for the
+  // whole callback and runs BEGIN / the callback / COMMIT on one dedicated
+  // `PoolClient`. Because the gate is held for the entire transaction, no other
+  // caller can observe or join the open transaction: concurrent BEGINs and
+  // non-transactional queries park in the gate queue until COMMIT/ROLLBACK.
+  //
+  // `activeTransactionClient` is also set so statements issued against this same
+  // adapter binding from inside the callback (e.g. via a drizzle client wrapping
+  // `db.prepare(...)`) are routed to the dedicated client by the existing
+  // `runQuery` path. Those statements never release the gate, so the critical
+  // section stays exclusive end-to-end.
+  async function withTransaction<T>(
+    cb: (tx: SqlTransactionSessionBinding) => Promise<T>,
+  ): Promise<T> {
+    const release = await gate.acquire();
+    if (activeTransactionClient) {
+      release();
+      throw new Error(
+        "transaction_in_progress: a transaction client is still bound while withTransaction acquired the gate on this Postgres adapter",
+      );
+    }
+    const client = await pool.connect();
+    activeTransactionClient = client;
+    releaseGate = release;
+    const txRunner: PostgresRunner = {
+      query: (queryText, values = []) =>
+        client.query(normalizePostgresSql(queryText), values),
+    };
+    const txRunStatement = <T = Record<string, unknown>>(
+      statement: SqlPreparedStatementBinding,
+    ) => statement.run<T>();
+    const tx: SqlTransactionSessionBinding = {
+      prepare(query: string) {
+        return createPostgresPreparedStatement(txRunner, query);
+      },
+      batch: createSequentialBatch(txRunStatement),
+      async exec(query: string) {
+        const startedAt = Date.now();
+        await txRunner.query(query);
+        return { count: 0, duration: Date.now() - startedAt };
+      },
+    };
+    try {
+      await client.query("BEGIN");
+      const result = await cb(tx);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch((e: unknown) => {
+        logWarn("ROLLBACK failed after withTransaction error (non-critical)", {
+          module: "persistent-d1",
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
+      throw error;
+    } finally {
+      activeTransactionClient = null;
+      releaseGate = null;
+      client.release();
+      release();
+    }
+  }
+
   const db: ServerSqlDatabase = {
     prepare(query: string) {
       return createPostgresPreparedStatement({ query: runQuery }, query);
@@ -483,6 +551,7 @@ export async function createPostgresSqlDatabase(
     withSession() {
       return session;
     },
+    withTransaction,
     async dump() {
       throw new UnsupportedOperationError(
         "dump",
@@ -623,6 +692,71 @@ export async function createSchemaScopedPostgresSqlDatabase(
     },
   };
 
+  // Schema-scoped variant of the DQ1 fix. Identical exclusive-gate model to
+  // createPostgresSqlDatabase, with `search_path` pinned to the scoped schema on
+  // the dedicated client before BEGIN so transactional statements resolve
+  // against the same schema as the non-transactional path.
+  async function withTransaction<T>(
+    cb: (tx: SqlTransactionSessionBinding) => Promise<T>,
+  ): Promise<T> {
+    const release = await gate.acquire();
+    if (activeTransactionClient) {
+      release();
+      throw new Error(
+        "transaction_in_progress: a transaction client is still bound while withTransaction acquired the gate on this schema-scoped Postgres adapter",
+      );
+    }
+    const client = await pool.connect();
+    activeTransactionClient = client;
+    releaseGate = release;
+    const txRunner: PostgresRunner = {
+      query: (queryText, values = []) =>
+        client.query(normalizePostgresSql(queryText), values),
+    };
+    const txRunStatement = <T = Record<string, unknown>>(
+      statement: SqlPreparedStatementBinding,
+    ) => statement.run<T>();
+    const tx: SqlTransactionSessionBinding = {
+      prepare(query: string) {
+        return createPostgresPreparedStatement(
+          txRunner,
+          query,
+          [],
+          `portable-postgres:${schemaName}`,
+        );
+      },
+      batch: createSequentialBatch(txRunStatement),
+      async exec(query: string) {
+        const startedAt = Date.now();
+        await txRunner.query(query);
+        return { count: 0, duration: Date.now() - startedAt };
+      },
+    };
+    try {
+      await client.query(`SET search_path TO ${quotedSchema}, public`);
+      await client.query("BEGIN");
+      const result = await cb(tx);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch((e: unknown) => {
+        logWarn(
+          "ROLLBACK failed after schema-scoped withTransaction error (non-critical)",
+          {
+            module: "persistent-d1",
+            error: e instanceof Error ? e.message : String(e),
+          },
+        );
+      });
+      throw error;
+    } finally {
+      activeTransactionClient = null;
+      releaseGate = null;
+      client.release();
+      release();
+    }
+  }
+
   const db: ServerSqlDatabase = {
     prepare(query: string) {
       return createPostgresPreparedStatement(
@@ -641,6 +775,7 @@ export async function createSchemaScopedPostgresSqlDatabase(
     withSession() {
       return session;
     },
+    withTransaction,
     async dump() {
       throw new UnsupportedOperationError(
         "dump",

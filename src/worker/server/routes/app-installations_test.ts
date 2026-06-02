@@ -502,6 +502,19 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
   };
   installableAppInstallDeps.fetch = async (input, init) => {
     const inputUrl = String(input);
+    if (init?.method === "GET") {
+      const url = new URL(inputUrl);
+      calls.push({
+        kind: "fetch",
+        input: `${url.origin}${url.pathname}`,
+        method: "GET",
+        authorization: new Headers(init?.headers).get("authorization"),
+        body: null,
+      });
+      return Response.json({
+        installations: [{ id: "inst_1", app_id: "jp.takos.docs" }],
+      });
+    }
     const isMutation = inputUrl.endsWith("/deployments") ||
       inputUrl.endsWith("/rollback");
     calls.push({
@@ -526,6 +539,8 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
       TAKOS_APP_INSTALLATIONS_URL:
         "https://installer.internal/v1/installations",
       TAKOS_APP_INSTALL_TOKEN: "install-token",
+      TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
+      TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
     } as Env;
 
     const dryRunResponse = await app.request(
@@ -570,6 +585,13 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
       },
       {
         kind: "fetch",
+        input: "https://accounts.internal/v1/installations",
+        method: "GET",
+        authorization: "Bearer accounts-token",
+        body: null,
+      },
+      {
+        kind: "fetch",
         input:
           "https://installer.internal/v1/installations/inst_1/deployments/dry-run",
         method: "POST",
@@ -587,6 +609,13 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
         spaceId: "space-alias",
         userId: "user-1",
         roles: ["owner", "admin", "editor"],
+      },
+      {
+        kind: "fetch",
+        input: "https://accounts.internal/v1/installations",
+        method: "GET",
+        authorization: "Bearer accounts-token",
+        body: null,
       },
       {
         kind: "fetch",
@@ -685,6 +714,14 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
+        pathname: "/v1/installations",
+        spaceId: "space-1",
+        method: "GET",
+        authorization: "Bearer accounts-token",
+        body: null,
+      },
+      {
+        kind: "fetch",
         pathname: "/v1/installations/inst_1",
         spaceId: null,
         method: "DELETE",
@@ -692,6 +729,62 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
         body: { reason: "user removed app" },
       },
     ]);
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("app-installations route rejects cross-space installation_id with 404", async () => {
+  const calls: unknown[] = [];
+  routeAuthDeps.requireSpaceAccess = async () =>
+    ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
+  // The authorized space owns no Installation matching the supplied id.
+  appInstallationsRouteDeps.listInstallableAppInstallations = async (
+    spaceId,
+  ) => {
+    calls.push({ kind: "list", spaceId });
+    return {
+      status: 200,
+      body: { installations: [{ id: "inst_other_space" }] },
+    };
+  };
+  installableAppInstallDeps.fetch = async () => {
+    calls.push({ kind: "fetch" });
+    return Response.json({ ok: true });
+  };
+
+  try {
+    const env = {
+      DB: {},
+      TAKOS_APP_INSTALLATIONS_URL:
+        "https://installer.internal/v1/installations",
+      TAKOS_APP_INSTALL_TOKEN: "install-token",
+      TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
+      TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
+    } as Env;
+
+    const response = await createApp().request(
+      "/spaces/space-alias/app-installations/git-url/revision/apply",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "rollback",
+          installation_id: "inst_victim",
+          git_url: "https://github.com/example/app.git",
+          ref: "v1.2.3",
+        }),
+      },
+      env,
+    );
+    const body = await response.json() as Record<PropertyKey, unknown>;
+
+    assertEquals(response.status, 404);
+    assertObjectMatch(body, {
+      error: { code: "NOT_FOUND" },
+    });
+    // The upstream revision fetch must not have run.
+    assertEquals(calls, [{ kind: "list", spaceId: "space-1" }]);
   } finally {
     restoreDeps();
   }

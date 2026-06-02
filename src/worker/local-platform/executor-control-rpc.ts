@@ -651,17 +651,16 @@ async function localHandleExecutorControlRpc(
     : Object.fromEntries(new URL(request.url).searchParams.entries());
 
   if (typeof body === "object" && body !== null) {
-    const bodyRunId =
-      typeof (body as Record<string, unknown>).runId === "string"
-        ? (body as Record<string, unknown>).runId as string
-        : null;
     const bodyServiceId = readRunServiceId(body as Record<string, unknown>);
-    if (bodyRunId && bodyRunId !== tokenInfo.runId) {
-      return localExecutorUnauthorized();
-    }
     if (bodyServiceId && bodyServiceId !== tokenInfo.serviceId) {
       return localExecutorUnauthorized();
     }
+    // Bind runId to the verified proxy token (mirrors the worker proxy host).
+    // Overwriting — rather than merely comparing — closes the hole where a body
+    // that omitted runId bypassed per-run scoping; run-scoped handlers
+    // (memory-activation / memory-finalize / add-message) derive their tenant
+    // from this trusted runId.
+    (body as Record<string, unknown>).runId = tokenInfo.runId;
   }
 
   recordLocalExecutorProxyUsage(path);

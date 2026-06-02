@@ -232,11 +232,15 @@ export const runtimeStatusHandler: ToolHandler = async (args, context) => {
     throw new Error("RUNTIME_HOST binding is required for runtime_status");
   }
 
-  const response = await callRuntimeRequest(env, `/status/${runtimeId}`, {
-    method: "GET",
-    timeoutMs: 30000,
-    signal: context.abortSignal,
-  });
+  const response = await callRuntimeRequest(
+    env,
+    `/status/${encodeURIComponent(runtimeId)}`,
+    {
+      method: "GET",
+      timeoutMs: 30000,
+      signal: context.abortSignal,
+    },
+  );
 
   if (response.status === 404) {
     return `Runtime process not found: ${runtimeId}`;

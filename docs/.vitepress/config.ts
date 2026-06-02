@@ -223,5 +223,5 @@ export default defineConfig({
     lightModeSwitchTitle: 'ライトモード',
     darkModeSwitchTitle: 'ダークモード',
   },
-  head: [['meta', { name: 'theme-color', content: '#0f766e' }]],
+  head: [['meta', { name: 'theme-color', content: '#dc2626' }]],
 });

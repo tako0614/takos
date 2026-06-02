@@ -14,9 +14,9 @@
 Takos の app-local profile (chat / memory / preferences) は `takos` が
 所有します。一方で **Takosumi Account の identity-level privacy (OIDC subject /
 authentication / billing identity) は operator account plane (リファレンス実装: Takosumi Accounts) が所有**します。
-Takosumi kernel は generic PaaS の Source / Installation / Deployment /
-PlatformService ledger surface であり、infra provisioning は operator
-distribution workflow が所有します。Takos の個人データ access / export / deletion handler は Takos Web / API
+Takosumi は OpenTofu-native deploy control plane として Installation / PlanRun /
+ApplyRun / Deployment / DeploymentOutput の run ledger を記録し、infra
+provisioning は RunnerProfile policy と operator distribution workflow が所有します。Takos の個人データ access / export / deletion handler は Takos Web / API
 の app-local boundary を扱い、identity-level の data subject request は operator
 account plane へ forward します。
 
@@ -48,8 +48,8 @@ profile が定める primary region 内でのみ data を回収します。cross
 replication は profile の例外 ([data-residency](/legal/data-residency) 参照)
 として記録され、export bundle は Installation の primary region
 で生成されます。 Takosumi Account level の identity export は
-`identity.primary.oidc` platform service で resolve される Takosumi Accounts
-側の別 SAR endpoint で処理されます。
+operator account plane (Takosumi Accounts) の OIDC issuer が所有する別 SAR
+endpoint で処理されます。
 
 ## Export Redaction Rules
 

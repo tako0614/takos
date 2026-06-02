@@ -138,12 +138,13 @@ export async function getRunEventsAfterFromR2(
   const segmentIndexes = (await listRunEventSegmentIndexes(bucket, runId))
     .filter((n) => n >= startSegment);
 
-  const segments = await Promise.all(
-    segmentIndexes.map((idx) => readRunEventSegmentFromR2(bucket, runId, idx)),
-  );
-
+  // Read segments sequentially in ascending order and stop as soon as we have
+  // `limit` events. This avoids fanning out reads (and decompressing) every
+  // remaining segment when only the first one or two are needed. Order and
+  // filter match the previous fan-out + post-loop exactly.
   const out: PersistedRunEvent[] = [];
-  for (const segment of segments) {
+  for (const idx of segmentIndexes) {
+    const segment = await readRunEventSegmentFromR2(bucket, runId, idx);
     if (!segment) continue;
     for (const e of segment) {
       if (e.event_id <= afterEventId) continue;

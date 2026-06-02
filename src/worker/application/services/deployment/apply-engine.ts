@@ -1,8 +1,12 @@
 /**
- * Canonical group reconciler for the control plane.
+ * In-worker desired-state reconciler (internal helper — NOT the deploy authority).
  *
- * The current deploy manifest is compiled into `GroupDesiredState`, diffed against
- * canonical resources/services state, then reconciled through backend ops.
+ * Takos itself is deployed by Takosumi: its infrastructure is an OpenTofu module
+ * Takosumi installs and applies (Installation → PlanRun → ApplyRun → Deployment),
+ * with a RunnerProfile owning provider credentials and execution. This reconciler
+ * only compiles in-app desired state, diffs it against current resources/services
+ * state, and reconciles through backend ops. See
+ * docs/architecture/internal-trust-boundaries.md.
  */
 
 import { eq, inArray } from "drizzle-orm";

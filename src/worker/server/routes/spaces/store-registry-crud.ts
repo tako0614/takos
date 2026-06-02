@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   BadRequestError,
   InternalError,
+  isAppError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
@@ -154,6 +155,7 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
         );
         return c.json({ store: formatEntry(entry) });
       } catch (error) {
+        if (isAppError(error)) throw error;
         logError("Failed to update store", error, {
           module: "routes/store-registry",
         });

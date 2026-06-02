@@ -1,7 +1,7 @@
 # takos
 
 Takos はセルフホスト可能な AI-first chat & agent プロダクトです。AI エージェントとの会話を通じて
-ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。Takosumi PaaS の上で動作します。
+ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。Takosumi (OpenTofu-native な deploy control plane) の上で動作します。
 
 Takos product の実行実装とスクリプトは Bun を前提としており、`src/worker` / `web` /
 `containers/git` / `scripts` のローカル実行は `bun` コマンドで行います。
@@ -30,11 +30,12 @@ bun run local:up
 | `takos-git`     | Git hosting container (Smart HTTP、リポジトリ、refs、object store) |
 | `takos-agent`   | agent execution container                                           |
 
-ログインや課金は Takosumi Accounts (operator account plane) が担当し、 デプロイエンジンは Takosumi kernel
-(`../takosumi`) が担当します。
+ログインや課金は Takosumi Accounts (operator account plane) が担当し、デプロイ制御は Takosumi
+(`../takosumi`) の OpenTofu-native Deploy Control API が担当します。
 
 Takos product を Takosumi に install する入口は、この source root そのものです。Takosumi v1 は Takosumi 専用 source metadata file を要求せず、
-Git URL / commit / `package.json` などの汎用 source metadata と operator PlatformService inventory から InstallPlan を作ります。
+Git URL / commit / module path / `package.json` などの汎用 metadata と OpenTofu module から PlanRun を作り、ApplyRun
+成功後に Deployment と DeploymentOutput を記録します。
 
 ## ローカル compose
 
@@ -83,7 +84,7 @@ takos/
 | --------------------- | ------------------------------------- |
 | Takos プロダクト docs | `docs/` (このリポジトリ内、VitePress) |
 | プラットフォーム仕様  | `../docs/` (ecosystem root)           |
-| Takosumi kernel docs  | `../takosumi/docs/`                   |
+| Takosumi docs         | `../takosumi/docs/`                   |
 | Accounts / 課金 docs  | `../takosumi/docs/`             |
 | Git installer docs    | `../takosumi/docs/`                   |
 | 運用 runbook          | `../takos-private/docs/`              |

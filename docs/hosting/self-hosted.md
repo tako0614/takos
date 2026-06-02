@@ -5,8 +5,8 @@
 このページは **Takosumi kernel
 をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
 
-Takosumi 上で Source から Installation を作り、Deployment を管理する方法は [Deploy](/deploy/)
-を参照してください。
+Takosumi 上で plain OpenTofu module の Installation を作り、PlanRun / ApplyRun から
+Deployment / DeploymentOutput を管理する方法は [Deploy](/deploy/) を参照してください。
 
 ::: danger このページのサンプルはローカル開発向けデフォルトを含みます
 このページに掲載されている
@@ -361,14 +361,14 @@ services:
 | Service          | 役割                                                        |
 | ---------------- | ----------------------------------------------------------- |
 | `takos-worker`      | OIDC consumer / Web UI / public API gateway                 |
-| `takosumi`       | Source resolution / Installation / Deployment ledger engine         |
+| `takosumi`       | Installation / PlanRun / ApplyRun / Deployment ledger engine         |
 | `takosumi` | Takosumi Accounts / Installation ledger / billing dashboard |
 | `takos-git`      | Git Smart HTTP / refs / objects / source resolution         |
 | `takos-agent`    | Takos agent execution service                               |
 
-Source resolution、PlatformService inventory binding resolution、Deployment apply evidence は
+Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput の記録は
 `takosumi`、infra provisioning は operator-owned OpenTofu / Helm / runtime-agent workflow、build は
-build service / CI、Installation / OIDC / billing は self-host operator の Takosumi Accounts (`takosumi`) が担当します。
+build service / CI、account-plane Installation / OIDC / billing は self-host operator の Takosumi Accounts (`takosumi`) が担当します。
 
 ### ネットワーク構成
 
@@ -460,8 +460,8 @@ k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes)
 ## self-hosted operator implementation evidence
 
 bare metal / Docker Compose / VM 上の resource は operator-owned OpenTofu / Helm
-/ local workflow が作成し、PlatformService inventory と Deployment evidence に
-接続します。Takosumi core は self-host provider state や runtime handler implementation を
+/ local workflow が作成し、その結果を Deployment / DeploymentOutput と audit ledger に
+記録します。Takosumi core は self-host provider state や runtime handler implementation を
 所有しません。
 
 ### 構成

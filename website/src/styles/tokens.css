@@ -1,30 +1,40 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  /* ===== Palette — Pure neutral black + white + 朱 red accent =====
-   * No warm cream, no cool blue, no violet tint. Just black, white, red.
+  /* ===== Palette — dark-only. Black base + 朱 red UI accent. =====
+   * No light mode. Decorative blue/red ink lives in --tg-ink-* (used only by
+   * InkSplash / SplatField) and is separate from the red UI accent.
+   * Canonical source: docs/reference/design-language.md
    */
 
-  --tg-bg: #ffffff;
-  --tg-bg-elev: #ffffff;
-  --tg-bg-subtle: #f5f5f5;
-  --tg-fg: #0a0a0a;
-  --tg-fg-muted: #525252;
-  --tg-fg-subtle: #8a8a8a;
-  --tg-line: #e5e5e5;
-  --tg-line-strong: #cccccc;
-  --tg-code-bg: #f5f5f5;
-  --tg-code-fg: #0a0a0a;
+  --tg-bg: #0a0a0a;
+  --tg-bg-elev: #141414;
+  --tg-bg-subtle: #1a1a1a;
+  --tg-fg: #fafafa;
+  --tg-fg-muted: #a3a3a3;
+  --tg-fg-subtle: #6b6b6b;
+  --tg-line: #262626;
+  --tg-line-strong: #3f3f3f;
+  --tg-code-bg: #141414;
+  --tg-code-fg: #fafafa;
 
-  --tg-accent: #dc2626; /* 朱 red */
-  --tg-accent-hover: #b91c1c;
-  --tg-accent-fg: #ffffff;
-  --tg-accent-soft: #fef2f2;
+  --tg-accent: #ef4444; /* 朱 red — UI accent */
+  --tg-accent-hover: #f87171;
+  --tg-accent-fg: #0a0a0a;
+  --tg-accent-soft: #2a0a0a;
+  /* Accent TEXT (small) on the dark base. */
+  --tg-accent-text: #fca5a5;
 
-  /* Gradient — pure black to red, for text accents only */
-  --tg-grad-from: #0a0a0a;
-  --tg-grad-mid: #7c1010;
+  --tg-grad-from: #fafafa;
+  --tg-grad-mid: #ef4444;
   --tg-grad-to: #dc2626;
+
+  /* Decorative ink — pure decoration, NOT role-bound. InkSplash / SplatField only.
+   * main blob = -deep, droplets = bright (two-tone depth without blur). */
+  --tg-ink-blue: #3b82f6;
+  --tg-ink-blue-deep: #2563eb;
+  --tg-ink-red: #ff3b3b;
+  --tg-ink-red-deep: #dc2626;
 
   --tg-success: #16a34a;
   --tg-warn: #ea580c;
@@ -71,10 +81,10 @@
   --tg-lh-snug: 1.35;
   --tg-lh-body: 1.7;
 
-  /* Shadows — pure neutral, no tint */
-  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08);
-  --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12);
+  /* Shadows — neutral, dark base */
+  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
+  --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
 
   /* Radii */
   --tg-r-sm: 6px;
@@ -86,55 +96,4 @@
   /* Layout */
   --tg-container: 1120px;
   --tg-nav-h: 64px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --tg-bg: #0a0a0a;
-    --tg-bg-elev: #141414;
-    --tg-bg-subtle: #1a1a1a;
-    --tg-fg: #fafafa;
-    --tg-fg-muted: #a3a3a3;
-    --tg-fg-subtle: #6b6b6b;
-    --tg-line: #262626;
-    --tg-line-strong: #3f3f3f;
-    --tg-code-bg: #141414;
-    --tg-code-fg: #fafafa;
-
-    --tg-accent: #ef4444;
-    --tg-accent-hover: #f87171;
-    --tg-accent-fg: #0a0a0a;
-    --tg-accent-soft: #2a0a0a;
-
-    --tg-grad-from: #fafafa;
-    --tg-grad-mid: #ef4444;
-    --tg-grad-to: #dc2626;
-
-    --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-    --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
-    --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
-  }
-}
-
-[data-theme='dark'] {
-  --tg-bg: #0a0a0a;
-  --tg-bg-elev: #141414;
-  --tg-bg-subtle: #1a1a1a;
-  --tg-fg: #fafafa;
-  --tg-fg-muted: #a3a3a3;
-  --tg-fg-subtle: #6b6b6b;
-  --tg-line: #262626;
-  --tg-line-strong: #3f3f3f;
-  --tg-code-bg: #141414;
-  --tg-code-fg: #fafafa;
-  --tg-accent: #ef4444;
-  --tg-accent-hover: #f87171;
-  --tg-accent-fg: #0a0a0a;
-  --tg-accent-soft: #2a0a0a;
-  --tg-grad-from: #fafafa;
-  --tg-grad-mid: #ef4444;
-  --tg-grad-to: #dc2626;
-  --tg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --tg-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.55);
-  --tg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.65);
 }

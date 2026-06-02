@@ -4,6 +4,7 @@ import {
   isSafeRepositoryId,
   notImplemented,
   runGit,
+  runGitWithDirectorySizeCap,
 } from "./git.ts";
 import { classifyHost } from "./host-blocklist.ts";
 import { textDecoder } from "./response-builders.ts";
@@ -14,6 +15,21 @@ import { type CommandOutput, getEnv, removePath } from "./runtime.ts";
 // or git@ SSH shorthand; this env var is only honored in dev / test.
 function devAllowLocalRemoteUrl(): boolean {
   return getEnv("TAKOS_GIT_DEV_ALLOW_LOCAL_REMOTE_URL") === "true";
+}
+
+// Default cap on how large an externally-imported / fetched repository may
+// grow on disk = 2 GiB. Operators can raise/lower via TAKOS_GIT_MAX_IMPORT_SIZE
+// (bytes). The fetch is aborted (fail closed) the moment the bare repo exceeds
+// this size, so a hostile or runaway remote cannot exhaust disk via an
+// unbounded clone / pack.
+const DEFAULT_MAX_IMPORT_SIZE = 2 * 1024 * 1024 * 1024;
+
+function configuredMaxImportSize(): number {
+  const raw = getEnv("TAKOS_GIT_MAX_IMPORT_SIZE")?.trim();
+  if (!raw) return DEFAULT_MAX_IMPORT_SIZE;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_IMPORT_SIZE;
+  return Math.floor(parsed);
 }
 
 export type RemoteUrlValidationError = {
@@ -243,17 +259,50 @@ export async function importExternalRemoteIntoConfiguredRepository(input: {
   const commitCountBefore = await countConfiguredRepositoryCommits(
     repositoryPath,
   );
-  const fetch = await runGit([
-    "--git-dir",
+  const maxImportSize = configuredMaxImportSize();
+  const { output: fetch, exceededSizeCap } = await runGitWithDirectorySizeCap(
+    [
+      "--git-dir",
+      repositoryPath,
+      ...gitAuthConfigArgs(input.authHeader),
+      "fetch",
+      "--prune",
+      "--no-recurse-submodules",
+      input.remoteUrl,
+      "+refs/heads/*:refs/heads/*",
+      "+refs/tags/*:refs/tags/*",
+    ],
     repositoryPath,
-    ...gitAuthConfigArgs(input.authHeader),
-    "fetch",
-    "--prune",
-    "--no-recurse-submodules",
-    input.remoteUrl,
-    "+refs/heads/*:refs/heads/*",
-    "+refs/tags/*:refs/tags/*",
-  ]);
+    maxImportSize,
+  );
+  if (exceededSizeCap) {
+    // The size-cap SIGTERM leaves the aborted pack as unreachable objects in the
+    // bare repo (refs were not advanced). Reclaim them best-effort so repeated
+    // over-cap attempts cannot accumulate partial packs on disk. Committed
+    // objects/refs are reachable and untouched. On the initial-import path the
+    // caller additionally removes the whole repo dir, so this is a no-op there.
+    try {
+      await runGit([
+        "--git-dir",
+        repositoryPath,
+        "gc",
+        "--prune=now",
+        "--quiet",
+      ]);
+    } catch {
+      // best-effort; the next successful fetch / git auto-gc reclaims the rest
+    }
+    return {
+      ok: false,
+      status: 422,
+      body: {
+        error:
+          `external repository exceeds TAKOS_GIT_MAX_IMPORT_SIZE (${maxImportSize} bytes)`,
+        code: "git_external_import_too_large",
+        repositoryId: input.repositoryId,
+      },
+    };
+  }
   if (!fetch.success) {
     return {
       ok: false,
