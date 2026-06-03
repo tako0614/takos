@@ -7,75 +7,9 @@ import {
   parseFloatValue,
   parseIntValue,
 } from "@takos/worker-platform-utils/env-parse";
-import {
-  AGENT_ITERATION_TIMEOUT_MS,
-  AGENT_LANGGRAPH_TIMEOUT_MS,
-  AGENT_TOOL_EXECUTION_TIMEOUT_MS,
-  AGENT_TOTAL_TIMEOUT_MS,
-} from "../../../shared/config/timeouts.ts";
 
 const DEFAULT_MAX_ITERATIONS = 10000;
 const DEFAULT_TEMPERATURE = 0.5;
-// Default timeouts — these apply when running in platform runtime (15-min message queue consumer limit).
-// When running inside a runtime container (executor), AGENT_TOTAL_TIMEOUT env var is set
-// to 86400000 (24h) and the 15-min cap is not enforced.
-export const DEFAULT_ITERATION_TIMEOUT = AGENT_ITERATION_TIMEOUT_MS; // 2 min per LLM call
-export const DEFAULT_TOTAL_TIMEOUT = AGENT_TOTAL_TIMEOUT_MS; // 15 min total (platform runtime message queue limit)
-const DEFAULT_TOOL_EXECUTION_TIMEOUT = AGENT_TOOL_EXECUTION_TIMEOUT_MS; // 5 min per tool (e.g. build commands)
-const DEFAULT_LANGGRAPH_TIMEOUT = AGENT_LANGGRAPH_TIMEOUT_MS; // 15 min for LangGraph (platform runtime)
-
-export function getTimeoutConfig(env?: AgentConfigEnv): {
-  iterationTimeout: number;
-  totalTimeout: number;
-  toolExecutionTimeout: number;
-  langGraphTimeout: number;
-} {
-  const warn = (msg: string) =>
-    logWarn(msg, { module: "services/agent/runner-config" });
-
-  const MIN_TIMEOUT = 1000;
-  // In runtime container mode, AGENT_TOTAL_TIMEOUT env var sets a higher limit (up to 24h).
-  // In platform runtime message queue mode, cap at 15 min (message queue consumer hard limit).
-  const MAX_TIMEOUT = env?.AGENT_TOTAL_TIMEOUT
-    ? Math.min(
-      parseIntValue("AGENT_TOTAL_TIMEOUT", env.AGENT_TOTAL_TIMEOUT, 900000, {
-        min: MIN_TIMEOUT,
-        max: 86400000,
-        warn,
-      }),
-      86400000,
-    )
-    : 900000; // default cap: 15 min (platform runtime message queue consumer limit)
-
-  const parseOpts = { min: MIN_TIMEOUT, max: MAX_TIMEOUT, warn };
-
-  return {
-    iterationTimeout: parseIntValue(
-      "AGENT_ITERATION_TIMEOUT",
-      env?.AGENT_ITERATION_TIMEOUT,
-      DEFAULT_ITERATION_TIMEOUT,
-      parseOpts,
-    ),
-    totalTimeout: parseIntValue(
-      "AGENT_TOTAL_TIMEOUT",
-      env?.AGENT_TOTAL_TIMEOUT,
-      DEFAULT_TOTAL_TIMEOUT,
-      parseOpts,
-    ),
-    toolExecutionTimeout: parseIntValue(
-      "TOOL_EXECUTION_TIMEOUT",
-      env?.TOOL_EXECUTION_TIMEOUT,
-      DEFAULT_TOOL_EXECUTION_TIMEOUT,
-      parseOpts,
-    ),
-    langGraphTimeout: parseIntValue(
-      "LANGGRAPH_TIMEOUT",
-      env?.LANGGRAPH_TIMEOUT,
-      DEFAULT_LANGGRAPH_TIMEOUT,
-      parseOpts,
-    ),
-  };
-}
 
 export function getAgentConfig(
   agentType: string,

@@ -15,7 +15,7 @@ import type { AgentMessage } from "../../application/services/agent/agent-models
 import {
   buildConversationHistory,
   updateRunStatusImpl,
-} from "../../application/services/agent/runner.ts";
+} from "../../application/services/agent/runner-history.ts";
 import { getAgentConfig } from "../../application/services/agent/runner-config.ts";
 import {
   buildSkillResolutionContext,

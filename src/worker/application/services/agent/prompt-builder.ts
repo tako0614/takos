@@ -11,11 +11,6 @@ import {
   toolRuntimeRulesMarkdown,
 } from "./prompt-assets.generated.ts";
 
-type PromptToolSummary = {
-  name: string;
-  description: string;
-};
-
 const TOOL_RUNTIME_RULES = toolRuntimeRulesMarkdown.trim();
 const RESPONSE_GUIDELINES = responseGuidelinesMarkdown.trim();
 
@@ -50,60 +45,4 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   planner: [DEFAULT_CORE_PROMPT, modePlannerMarkdown.trim()].join("\n\n"),
 };
 
-function buildRuntimeToolCatalog(tools: PromptToolSummary[]): string {
-  const sorted = [...tools].sort((a, b) => a.name.localeCompare(b.name));
-  if (sorted.length === 0) {
-    return `
-
-## Runtime Tool Catalog
-
-No tools are available in this run.`;
-  }
-
-  const hasCapabilitySearch = sorted.some((tool) =>
-    tool.name === "capability_search"
-  );
-  const hasCapabilityFamilies = sorted.some((tool) =>
-    tool.name === "capability_families"
-  );
-  const hasCapabilityDescribe = sorted.some((tool) =>
-    tool.name === "capability_describe"
-  );
-  const hasToolbox = sorted.some((tool) => tool.name === "toolbox");
-  const toolLines = sorted.map((tool) =>
-    `- \`${tool.name}\`: ${tool.description}`
-  );
-  const discoveryHint = hasToolbox
-    ? "\n\nUse direct tools for obvious built-in operations. If the direct surface does not obviously cover the task, use `toolbox` early for manuals, extension tools, and less common capabilities: action=`search`, then `describe`, then `call`. Skip that search for routine direct-tool work."
-    : hasCapabilitySearch || hasCapabilityFamilies
-    ? `\n\nIf you are unsure which tool fits or whether a capability exists, use \`capability_search\` to find relevant tools by natural language or \`capability_families\` to inspect the available capability surface.${
-      hasCapabilityDescribe
-        ? " Use `capability_describe` to inspect input schemas before invoking discovered tools."
-        : ""
-    }`
-    : "";
-  return `
-
-## Runtime Tool Catalog
-
-The following tools are available in this run:
-${toolLines.join("\n")}${discoveryHint}`;
-}
-
-export function buildToolCatalogContent(tools: PromptToolSummary[]): string {
-  return buildRuntimeToolCatalog(tools);
-}
-
-export function buildAvailableToolsPrompt(
-  basePrompt: string,
-  tools: PromptToolSummary[],
-): string {
-  return basePrompt + buildRuntimeToolCatalog(tools);
-}
-
-export {
-  DEFAULT_CORE_PROMPT,
-  RESPONSE_GUIDELINES,
-  SYSTEM_PROMPTS,
-  TOOL_RUNTIME_RULES,
-};
+export { SYSTEM_PROMPTS };
