@@ -92,6 +92,10 @@ impl Embedder for RustHashEmbedder {
 pub struct UsageSnapshot {
     pub input_tokens: usize,
     pub output_tokens: usize,
+    /// Subset of `input_tokens` served from the provider's prompt cache (OpenAI
+    /// automatic prefix caching). Reported so the run ledger can price cache
+    /// reads at the discounted rate and surface cache effectiveness.
+    pub cached_input_tokens: usize,
 }
 
 #[derive(Debug, Default)]
@@ -100,10 +104,11 @@ pub struct UsageTracker {
 }
 
 impl UsageTracker {
-    pub fn record(&self, input_tokens: usize, output_tokens: usize) {
+    pub fn record(&self, input_tokens: usize, output_tokens: usize, cached_input_tokens: usize) {
         let mut guard = lock_usage_snapshot(&self.inner);
         guard.input_tokens += input_tokens;
         guard.output_tokens += output_tokens;
+        guard.cached_input_tokens += cached_input_tokens;
     }
 
     pub fn snapshot(&self) -> UsageSnapshot {

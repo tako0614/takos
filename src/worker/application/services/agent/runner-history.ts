@@ -6,7 +6,7 @@
  */
 
 import type { Env, RunStatus } from "../../../shared/types/index.ts";
-import type { AgentMessage, ToolCall } from "./agent-models.ts";
+import type { AgentMessage, AgentUsage, ToolCall } from "./agent-models.ts";
 import { getDb, messages, runs, threads } from "../../../infra/db/index.ts";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { resolveHistoryTokenBudget } from "./model-catalog.ts";
@@ -38,7 +38,7 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 export async function updateRunStatusImpl(
   db: SqlDatabaseBinding,
   runId: string,
-  totalUsage: { inputTokens: number; outputTokens: number },
+  totalUsage: AgentUsage,
   status: RunStatus,
   output?: string,
   error?: string,
