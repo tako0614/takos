@@ -309,6 +309,27 @@ section > .container {
   position: relative;
   z-index: 1;
 }
+
+/* ===== Simple centered hero (login / signup focused) ===== */
+.hero-simple .hero-center {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--tg-s-5);
+  padding: var(--tg-s-8) 0;
+}
+.hero-simple .hero-center .lede {
+  max-width: 48ch;
+  margin: 0 auto;
+}
+.hero-simple .cta-row {
+  justify-content: center;
+}
 .hero-grid {
   position: relative;
   display: grid;

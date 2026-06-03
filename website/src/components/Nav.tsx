@@ -56,8 +56,8 @@ export default function Nav() {
             </svg>
           </a>
           <LangToggle class='nav-icon-desk' />
-          <a class='btn btn-primary nav-cta' href={cloud().install} rel='noopener'>
-            {t.nav.install}
+          <a class='btn btn-primary nav-cta' href={cloud().signup} rel='noopener'>
+            {t.hero.signup}
           </a>
           <button
             type='button'
