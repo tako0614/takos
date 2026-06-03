@@ -101,33 +101,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "readOnlySmokeTask",
-        "provisioningSmokeTask",
-        "cleanupTask",
-        "fixturePath",
-        "liveEnvPrefix"
+        "liveEnvPrefix",
+        "deployControlProofTask"
       ],
       "properties": {
-        "readOnlySmokeTask": {
-          "type": "string",
-          "minLength": 1
-        },
-        "provisioningSmokeTask": {
-          "type": "string",
-          "minLength": 1
-        },
-        "cleanupTask": {
-          "type": "string",
-          "minLength": 1
-        },
-        "fixturePath": {
-          "type": "string",
-          "minLength": 1
-        },
         "liveEnvPrefix": {
           "type": "string",
           "minLength": 1,
           "pattern": "^TAKOSUMI_PROVIDER_[A-Z0-9_]+$"
+        },
+        "deployControlProofTask": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -516,18 +501,13 @@
       "additionalProperties": false,
       "required": [
         "official",
-        "liveSmokeTask",
-        "providerSmokeTask"
+        "liveSmokeTask"
       ],
       "properties": {
         "official": {
           "type": "boolean"
         },
         "liveSmokeTask": {
-          "type": "string",
-          "minLength": 1
-        },
-        "providerSmokeTask": {
           "type": "string",
           "minLength": 1
         }

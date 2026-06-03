@@ -34,8 +34,7 @@ cluster / アカウント / public URL が必要な proof は operator 所有の
 | schema + artifact validation    | `cd takos && bun run validate:distributions`                                                                                                                                                                           | yes          |
 | dry-run service smoke metadata  | `cd takos && bun run distribution:smoke --all`                                                                                                                                                                         | yes          |
 | ターゲット別 live service smoke | `cd takos && bun run distribution:smoke --source deploy/distributions/<target>.json --live`                                                                                                                          | no           |
-| provider fixture proof          | `cd takosumi && TAKOSUMI_PROVIDER_LIVE_PROVIDER=<target> TAKOSUMI_PROVIDER_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json bun run live-provisioning-smoke`                                      | no           |
-| provider live proof             | `cd takosumi && TAKOSUMI_PROVIDER_LIVE_PROVIDER=<target> TAKOSUMI_PROVIDER_LIVE_PROOF_MODE=live TAKOSUMI_PROVIDER_LIVE_PROOF_FIXTURE_FILE=fixtures/live-provisioning/<target>.shape-v1.json bun run live-provisioning-smoke` | no           |
+| provider provisioning proof     | `cd takosumi && bun run opentofu:live-local-proof` (local deploy-control proof; per-provider provisioning は plan / apply / destroy run + RunnerProfile で証明)                                                          | no           |
 
 ## Artifact の所有
 

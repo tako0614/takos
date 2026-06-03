@@ -801,12 +801,8 @@ async function collectDistributionManifests(): Promise<JsonValue> {
           : null,
         providerProof: providerProof
           ? {
-            readOnlySmokeTask: jsonString(providerProof.readOnlySmokeTask),
-            provisioningSmokeTask: jsonString(
-              providerProof.provisioningSmokeTask,
-            ),
-            cleanupTask: jsonString(providerProof.cleanupTask),
-            fixturePath: jsonString(providerProof.fixturePath),
+            liveEnvPrefix: jsonString(providerProof.liveEnvPrefix),
+            deployControlProofTask: jsonString(providerProof.deployControlProofTask),
           }
           : null,
       });

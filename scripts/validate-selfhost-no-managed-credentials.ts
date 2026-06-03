@@ -87,16 +87,12 @@ async function checkDistribution(): Promise<void> {
 
   const providerProof = record(distribution.providerProof);
   const commandText = [
-    providerProof.readOnlySmokeTask,
-    providerProof.provisioningSmokeTask,
-    providerProof.cleanupTask,
-    providerProof.fixturePath,
     providerProof.liveEnvPrefix,
+    providerProof.deployControlProofTask,
   ].join("\n");
   checks.push({
     name: "selfhost-provider-proof-prefix",
     ok: commandText.includes("TAKOSUMI_PROVIDER_SELFHOSTED") &&
-      commandText.includes("TAKOSUMI_PROVIDER_LIVE_PROVIDER=selfhosted") &&
       !hasManagedCredential(commandText),
     detail: "self-hosted provider proof uses TAKOSUMI_PROVIDER_SELFHOSTED and no managed provider credential variables",
   });
