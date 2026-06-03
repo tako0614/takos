@@ -1,14 +1,18 @@
 /** Deep link into Takosumi's Use Takos account-plane entry. */
-const USE_TAKOS_FALLBACK = 'https://accounts.takosumi.com/dashboard/use-takos' +
+const USE_TAKOS_FALLBACK = 'https://accounts.takosumi.com/takos/start' +
   '?takos_url=' + encodeURIComponent('https://takos.jp');
 
 /** Takosumi dashboard home. */
 const CLOUD_HOME_FALLBACK = 'https://accounts.takosumi.com/';
 
-/** Deep link into Takosumi's install wizard with this repo pre-filled. */
-const INSTALL_FALLBACK = 'https://accounts.takosumi.com/apps/install' +
+/**
+ * Takos rides on Takosumi's official install-by-URL entry: open
+ * accounts.takosumi.com/install?git=<repo>&ref=&mode=&autoplan=1 and Takosumi
+ * pre-fills the wizard and runs the PlanRun. Takos is just one such repo.
+ */
+const INSTALL_FALLBACK = 'https://accounts.takosumi.com/install' +
   '?git=' + encodeURIComponent('https://github.com/tako0614/takos.git') +
-  '&ref=main&mode=shared-cell&autodryrun=1';
+  '&ref=main&mode=shared-cell&autoplan=1';
 
 const LOCAL_USE_TAKOS_FALLBACK = USE_TAKOS_FALLBACK
   .replace('accounts.takosumi.com', 'accounts.takosumi.test')
@@ -27,18 +31,10 @@ const LOCAL_CLOUD_HOME_FALLBACK = CLOUD_HOME_FALLBACK.replace(
   'accounts.takosumi.test',
 );
 
-/** Account-plane sign-up / log-in entries (Takosumi Accounts). */
-const SIGNUP_FALLBACK = 'https://accounts.takosumi.com/signup';
-const LOGIN_FALLBACK = 'https://accounts.takosumi.com/login';
-const LOCAL_SIGNUP_FALLBACK = SIGNUP_FALLBACK.replace('accounts.takosumi.com', 'accounts.takosumi.test');
-const LOCAL_LOGIN_FALLBACK = LOGIN_FALLBACK.replace('accounts.takosumi.com', 'accounts.takosumi.test');
-
 export interface CloudUrls {
   readonly home: string;
   readonly useTakos: string;
   readonly install: string;
-  readonly signup: string;
-  readonly login: string;
 }
 
 export function resolveCloudUrls(hostname = browserHostname()): CloudUrls {
@@ -46,21 +42,7 @@ export function resolveCloudUrls(hostname = browserHostname()): CloudUrls {
     home: resolveCloudHomeUrl(hostname),
     useTakos: resolveCloudUseTakosUrl(hostname),
     install: resolveCloudInstallUrl(hostname),
-    signup: resolveCloudSignupUrl(hostname),
-    login: resolveCloudLoginUrl(hostname),
   };
-}
-
-export function resolveCloudSignupUrl(hostname = browserHostname()): string {
-  const configured = import.meta.env.VITE_CLOUD_SIGNUP_URL as string | undefined;
-  if (configured) return configured;
-  return isLocalSubstrateHost(hostname) ? LOCAL_SIGNUP_FALLBACK : SIGNUP_FALLBACK;
-}
-
-export function resolveCloudLoginUrl(hostname = browserHostname()): string {
-  const configured = import.meta.env.VITE_CLOUD_LOGIN_URL as string | undefined;
-  if (configured) return configured;
-  return isLocalSubstrateHost(hostname) ? LOCAL_LOGIN_FALLBACK : LOGIN_FALLBACK;
 }
 
 export function resolveCloudHomeUrl(hostname = browserHostname()): string {

@@ -31,7 +31,7 @@ Selecting a target moves the Installation through a PlanRun and ApplyRun until t
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
 
 ## Public Managed Offering Gate

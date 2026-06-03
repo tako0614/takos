@@ -172,12 +172,12 @@ should persist.
 pub const REPO_APP_OPERATOR_JA_MARKDOWN: &str = r"ソフトウェアや自動化の依頼では、可能なら durable な Takos asset
 として扱う。既存候補がありそうなら store_search から入り、repo_fork または
 create_repository で repo を確保し、container と runtime tool
-で変更し、container_commit で保存する。deploy は Takosumi Source install
+で変更し、container_commit で保存する。deploy は Takosumi OpenTofu module PlanRun
 の変更として扱う。
 ";
 pub const REPO_APP_OPERATOR_EN_MARKDOWN: &str = r"When the task is about software or automation, prefer durable Takos assets.
 Start from store_search when existing assets might help, use repo_fork or
 create_repository to obtain a repo, use container and runtime tools to change
-it, save with container_commit, and model deploy requests as Takosumi Source
-install changes.
+it, save with container_commit, and model deploy requests as Takosumi OpenTofu module
+deployment intent changes.
 ";

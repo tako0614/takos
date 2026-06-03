@@ -50,7 +50,7 @@ export type InstallableAppSourceInput = {
   ref: string;
 };
 
-export type InstallableAppDryRunInput = InstallableAppSourceInput & {
+export type InstallableAppPlanInput = InstallableAppSourceInput & {
   spaceId: string;
 };
 
@@ -62,7 +62,7 @@ export type InstallableAppApplyInput = InstallableAppSourceInput & {
   runtimeBaseUrl?: string;
   sourceCommit?: string;
   expectedCommit?: string;
-  expectedPlanSnapshotDigest?: string;
+  expectedPlanDigest?: string;
   costAck?: boolean;
 };
 
@@ -74,7 +74,7 @@ export type InstallableAppRevisionInput = InstallableAppSourceInput & {
   sourceCommit?: string;
   reason?: string;
   expectedCommit?: string;
-  expectedPlanSnapshotDigest?: string;
+  expectedPlanDigest?: string;
   expectedCurrentDeploymentId?: string | null;
 };
 
@@ -126,17 +126,17 @@ function appendInstallationsPath(
   return url.toString();
 }
 
-function installDryRunUrl(config: InstallableAppInstallConfig): string {
-  return appendInstallationsPath(requireInstallationsUrl(config), "/dry-run");
+function installPlanRunUrl(config: InstallableAppInstallConfig): string {
+  return appendInstallationsPath(requireInstallationsUrl(config), "/plan-runs");
 }
 
-function deploymentDryRunUrl(
+function deploymentPlanRunUrl(
   config: InstallableAppInstallConfig,
   installationId: string,
 ): string {
   return appendInstallationsPath(
     requireInstallationsUrl(config),
-    `/${encodeURIComponent(installationId)}/deployments/dry-run`,
+    `/${encodeURIComponent(installationId)}/deployments/plan-runs`,
   );
 }
 
@@ -307,7 +307,7 @@ async function postInstallableAppJson(
       body: JSON.stringify(body),
     });
   } catch {
-    throw new BadGatewayError("Failed to reach Takosumi installer API");
+    throw new BadGatewayError("Failed to reach Takosumi Deploy Control facade");
   }
   return {
     status: response.status,
@@ -367,11 +367,11 @@ export async function deleteInstallableAppInstallation(
   );
 }
 
-export async function dryRunInstallableAppInstallation(
-  input: InstallableAppDryRunInput,
+export async function planInstallableAppInstallation(
+  input: InstallableAppPlanInput,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
-  return await postInstallableAppJson(installDryRunUrl(config), {
+  return await postInstallableAppJson(installPlanRunUrl(config), {
     spaceId: input.spaceId,
     source: {
       kind: "git",
@@ -394,11 +394,11 @@ export async function applyInstallableAppInstallation(
       ref: input.ref,
       ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
     },
-    ...(input.expectedCommit && input.expectedPlanSnapshotDigest
+    ...(input.expectedCommit && input.expectedPlanDigest
       ? {
         expected: {
           commit: input.expectedCommit,
-          planSnapshotDigest: input.expectedPlanSnapshotDigest,
+          planDigest: input.expectedPlanDigest,
         },
       }
       : {}),
@@ -408,12 +408,12 @@ export async function applyInstallableAppInstallation(
   }, token);
 }
 
-export async function dryRunInstallableAppRevision(
+export async function planInstallableAppRevision(
   input: InstallableAppRevisionInput,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
   return await postInstallableAppJson(
-    deploymentDryRunUrl(
+    deploymentPlanRunUrl(
       config,
       input.installationId,
     ),
@@ -450,12 +450,12 @@ export async function applyInstallableAppRevision(
         ref: input.ref,
         ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
       },
-      ...(input.expectedCommit && input.expectedPlanSnapshotDigest &&
+      ...(input.expectedCommit && input.expectedPlanDigest &&
           hasExpectedCurrentDeploymentId
         ? {
           expected: {
             commit: input.expectedCommit,
-            planSnapshotDigest: input.expectedPlanSnapshotDigest,
+            planDigest: input.expectedPlanDigest,
             currentDeploymentId: input.expectedCurrentDeploymentId ?? null,
           },
         }

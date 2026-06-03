@@ -218,5 +218,5 @@ function isClusterUnreachable(stderr: string): boolean {
 }
 
 function installDryRunSkipReason(): string {
-  return 'Kubernetes cluster unreachable; install dry-run skipped because TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN is not set to 1.';
+  return 'Kubernetes cluster unreachable; Helm dry-run install skipped because TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN is not set to 1.';
 }

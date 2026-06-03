@@ -35,4 +35,4 @@ Plan and apply requests reference the Installation and the reviewed `PlanRun`. T
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)

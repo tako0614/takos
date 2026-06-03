@@ -31,7 +31,7 @@ routes:
     error.message,
     "no longer supported",
   );
-  assertStringIncludes(error.message, "Takosumi Source install flow");
+  assertStringIncludes(error.message, "Takosumi OpenTofu module PlanRun flow");
 });
 
 test("public source contract - rejects override build.fromWorkflow", () => {
@@ -65,7 +65,7 @@ overrides:
     error.message,
     "no longer supported",
   );
-  assertStringIncludes(error.message, "Takosumi Source install flow");
+  assertStringIncludes(error.message, "Takosumi OpenTofu module PlanRun flow");
 });
 
 test("public source contract - raw source objects reject legacy build metadata", () => {
@@ -91,7 +91,7 @@ test("public source contract - raw source objects reject legacy build metadata",
     error.message,
     "no longer supported",
   );
-  assertStringIncludes(error.message, "Takosumi Source install flow");
+  assertStringIncludes(error.message, "Takosumi OpenTofu module PlanRun flow");
 });
 
 test("public source contract - allows compute depends to reference compute entries", () => {

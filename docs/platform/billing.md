@@ -7,7 +7,7 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
 はオペレーターの請求書に含まれる形で課金されます。
 
 - 契約・支払い方法は
-  [Takosumi Account](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
+  [Takosumi Account](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
   に紐づく
 - Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort
   に報告する立場
@@ -352,11 +352,11 @@ hardening として扱います。
 
 ## 関連ドキュメント
 
-- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
   —契約主体 / billing owner / OIDC issuer の詳細
 - [Takosumi Installation Lifecycle](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
   — Takos app installation と billing の関係
-- [App Installation Ledger](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)
+- [App Installation Ledger](https://takosumi.com/docs/reference/model)
   — installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize /
   export 時の billing 再紐付け

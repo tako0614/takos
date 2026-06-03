@@ -64,4 +64,4 @@ account-plane policy: account, billing, OIDC, and dashboard.
 
 - [Deploy overview](/deploy/)
 - [Internal trust boundaries](./internal-trust-boundaries.md)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)

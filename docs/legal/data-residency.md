@@ -25,10 +25,10 @@ Takos is delivered through the Takosumi Installation Lifecycle. Account,
 authentication, contract, and billing are owned by **Takosumi Accounts** (the
 Takosumi Account home region applies). Takos `takos` provides the public API
 / UI surface and stores app-local profile derived from the Takosumi Accounts
-subject in the same residency profile. Takosumi kernel is the generic PaaS
-ledger substrate and takosumi owns Source install / Deployment records and binding evidence; they
-inherit residency requirements only when Takos uses them to operate a customer
-space or deployment.
+subject in the same residency profile. Takosumi kernel is the generic
+deploy-control ledger substrate and records Installation / PlanRun / ApplyRun /
+Deployment / DeploymentOutput evidence; it inherits residency requirements only
+when Takos uses it to operate a customer space or deployment.
 
 Residency decisions attach to the customer space / deployment profile, not to a
 local client convention.

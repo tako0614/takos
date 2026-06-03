@@ -34,4 +34,4 @@ A plan produces a `PlanRun`, and the reviewed plan is applied as an `ApplyRun`. 
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)

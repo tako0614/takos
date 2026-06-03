@@ -12,7 +12,7 @@ Takos is a product that runs on **Takosumi**, the OpenTofu-native deploy control
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records the Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput run ledger and owns the RunnerProfile execution boundary. Account-plane policy (account / billing / OIDC / dashboard) belongs to the operator distribution.
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records the Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput run ledger. The operator-owned RunnerProfile supplies the provider allowlist, credentials, state backend, and execution substrate. Account-plane policy (account / billing / OIDC / dashboard) belongs to the operator distribution.
 
 The hand-maintained `wrangler` / Helm / distribute pipeline (`takos-private/cloudflare/wrangler.*.toml`) is the interim materialization of the same OpenTofu topology — not a separate source of truth.
 
@@ -21,4 +21,4 @@ The hand-maintained `wrangler` / Helm / distribute pipeline (`takos-private/clou
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Internal trust boundaries](/architecture/internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)

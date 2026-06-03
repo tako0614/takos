@@ -33,5 +33,5 @@ An apply targets a reviewed PlanRun and records an ApplyRun against the Installa
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/installer-api)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)
+- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

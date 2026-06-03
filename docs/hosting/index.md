@@ -106,7 +106,7 @@ multi-cloud 構成を作れます:
 | area                         | gate / proof                                                   | default gate |
 | ---------------------------- | -------------------------------------------------------------- | ------------ |
 | Distribution materialization | `takos-private` `bun run distribute:test`                      | yes          |
-| Cloudflare reference backend | private `distribute:dry-run` + Cloudflare deploy dry-run       | opt-in       |
+| Cloudflare reference backend | private `distribute:dry-run` + Cloudflare deployment dry-run   | opt-in       |
 | AWS / GCP / Kubernetes Helm  | private `distribute:dry-run` preflight + Helm chart validation | opt-in       |
 | Selfhosted compose packaging | private `distribute:dry-run` preflight + compose config        | opt-in       |
 | Takosumi run ledger          | RunnerProfile-scoped PlanRun / ApplyRun (tofu plan / apply) + DeploymentOutput 検証 | opt-in       |

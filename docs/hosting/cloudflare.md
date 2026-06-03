@@ -1033,7 +1033,7 @@ adapter profile 設定、runtime-agent placement は
 - [Deploy](/deploy/) --- install / Deployment apply の整理
 - [OIDC Consumer](/apps/oidc-consumer) --- Takos が要求する OIDC env / route
   の詳細
-- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
   --- OIDC issuer / client 発行の詳細
 - [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [Multi-cloud](/hosting/multi-cloud) --- 4 cloud 横断 runbook
