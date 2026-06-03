@@ -18,8 +18,9 @@ Then choose the matching live path:
   `bun run local:smoke`, `bun run local:down`
 - Cloudflare / AWS / GCP / Kubernetes / self-hosted distribution:
   `bun run distribution:smoke --source deploy/distributions/<target>.json --live`
-- Takosumi operator binding fixture:
-  `cd ../takosumi && TAKOSUMI_PROVIDER_LIVE_PROVIDER=<target> TAKOSUMI_PROVIDER_LIVE_PROOF_FIXTURE_FILE=<fixture> bun run live-provisioning-smoke`
+- Takosumi deploy-control proof: `cd ../takosumi && bun run opentofu:live-local-proof`
+  (local plan/apply proof; per-provider provisioning is proven by the deploy-control
+  plan/apply/destroy run against the operator RunnerProfile)
 - Public managed Takos:
   `cd ../takos-private && bun run managed-offering:status -- --environment <env> --date <YYYY-MM-DD>`
 

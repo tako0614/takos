@@ -134,7 +134,10 @@ const expectedServiceSpecs: Record<ExpectedTargetId, Record<ExpectedServiceId, E
   kubernetes: kubernetesLikeServiceSpecs('kubernetes-deployment'),
   selfhosted: processServiceSpecs(),
 };
-const providerTaskName = 'live-provisioning-smoke';
+// Provider provisioning is proven through the Takosumi deploy-control plan/apply/
+// destroy run (RunnerProfile), not a bespoke per-provider smoke. Distribution
+// profiles point operators at this deploy-control proof task.
+const deployControlProofTaskName = 'opentofu:live-local-proof';
 const expectedDefaultAppEntries: readonly ExpectedDefaultAppEntry[] = [
   {
     name: 'takos-docs',
@@ -423,84 +426,22 @@ function validateProviderProof(
   label: string,
   targetId: string,
 ): void {
-  const fixturePath = stringAt(providerProof, 'fixturePath', `${label}.providerProof`);
   const liveEnvPrefix = stringAt(providerProof, 'liveEnvPrefix', `${label}.providerProof`);
   const expectedPrefix = `TAKOSUMI_PROVIDER_${targetId.toUpperCase()}`;
   expectString(liveEnvPrefix, expectedPrefix, `${label}.providerProof.liveEnvPrefix`);
-  assertPathExists(fixturePath, `${label}.providerProof.fixturePath`);
 
-  const takosumiFixturePath = pathRelativeToTakosumi(fixturePath);
-  validateProviderCommand({
-    command: stringAt(providerProof, 'readOnlySmokeTask', `${label}.providerProof`),
-    field: `${label}.providerProof.readOnlySmokeTask`,
-    targetId,
-    fixturePath: takosumiFixturePath,
-    mode: 'fixture',
-  });
-  validateProviderCommand({
-    command: stringAt(providerProof, 'provisioningSmokeTask', `${label}.providerProof`),
-    field: `${label}.providerProof.provisioningSmokeTask`,
-    targetId,
-    fixturePath: takosumiFixturePath,
-    mode: 'live',
-  });
-  validateProviderCommand({
-    command: stringAt(providerProof, 'cleanupTask', `${label}.providerProof`),
-    field: `${label}.providerProof.cleanupTask`,
-    targetId,
-    fixturePath: takosumiFixturePath,
-    mode: 'cleanup',
-  });
-}
-
-function validateProviderCommand(input: {
-  command: string;
-  field: string;
-  targetId: string;
-  fixturePath: string;
-  mode: 'fixture' | 'live' | 'cleanup';
-}): void {
-  const parsed = parseSimpleShellCommand(input.command, input.field);
+  const proofTask = stringAt(providerProof, 'deployControlProofTask', `${label}.providerProof`);
+  const parsed = parseSimpleShellCommand(proofTask, `${label}.providerProof.deployControlProofTask`);
   if (!parsed) return;
-
-  const cdPath = parsed.cdPath;
-  expectString(cdPath, '../takosumi', `${input.field} cd target`);
-  assertPathExists(cdPath, `${input.field} cd target`);
-  if (parsed.taskName !== providerTaskName) {
-    errors.push(`${input.field} must run bun run ${providerTaskName}`);
-  }
-  assertConfiguredTask(takosumiTaskConfig, parsed.taskName, input.field);
+  expectString(parsed.cdPath, '../takosumi', `${label}.providerProof.deployControlProofTask cd target`);
+  assertPathExists(parsed.cdPath, `${label}.providerProof.deployControlProofTask cd target`);
   expectString(
-    parsed.env.TAKOSUMI_PROVIDER_LIVE_PROVIDER,
-    input.targetId,
-    `${input.field} TAKOSUMI_PROVIDER_LIVE_PROVIDER`,
+    parsed.taskName,
+    deployControlProofTaskName,
+    `${label}.providerProof.deployControlProofTask`,
   );
-  expectString(
-    parsed.env.TAKOSUMI_PROVIDER_LIVE_PROOF_FIXTURE_FILE,
-    input.fixturePath,
-    `${input.field} TAKOSUMI_PROVIDER_LIVE_PROOF_FIXTURE_FILE`,
-  );
+  assertConfiguredTask(takosumiTaskConfig, parsed.taskName, `${label}.providerProof.deployControlProofTask`);
   checkedProviderCommands += 1;
-
-  if (input.mode === 'fixture') {
-    if (parsed.env.TAKOSUMI_PROVIDER_LIVE_PROOF_MODE) {
-      errors.push(`${input.field} must not force live mode for read-only fixture proof`);
-    }
-    return;
-  }
-
-  expectString(
-    parsed.env.TAKOSUMI_PROVIDER_LIVE_PROOF_MODE,
-    'live',
-    `${input.field} TAKOSUMI_PROVIDER_LIVE_PROOF_MODE`,
-  );
-  if (input.mode === 'cleanup') {
-    expectString(
-      parsed.env.TAKOSUMI_PROVIDER_LIVE_CLEANUP_ONLY,
-      '1',
-      `${input.field} TAKOSUMI_PROVIDER_LIVE_CLEANUP_ONLY`,
-    );
-  }
 }
 
 function validateServices(services: readonly unknown[], label: string, targetId: string): void {
@@ -766,18 +707,6 @@ function validateMetadataCommands(metadata: JsonRecord | null, label: string): v
       assertConfiguredTask(takosTaskConfig, parsed.taskName, `${label}.metadata.liveSmokeTask`);
     }
   }
-  const providerSmokeTask = maybeString(metadata.providerSmokeTask);
-  if (providerSmokeTask) {
-    const targetId = basename(label, '.json');
-    const fixturePath = `fixtures/live-provisioning/${targetId}.shape-v1.json`;
-    validateProviderCommand({
-      command: providerSmokeTask,
-      field: `${label}.metadata.providerSmokeTask`,
-      targetId,
-      fixturePath,
-      mode: 'fixture',
-    });
-  }
 }
 
 function validateJsonSchema(value: unknown, schema: JsonRecord, label: string): void {
@@ -973,11 +902,6 @@ function assertPathExists(ref: string, field: string): void {
   } catch {
     errors.push(`${field} does not exist: ${ref}`);
   }
-}
-
-function pathRelativeToTakosumi(ref: string): string {
-  const path = resolve(takosRoot, ref);
-  return relative(resolve(takosRoot, '../takosumi'), path);
 }
 
 async function distributionManifestFiles(filter: string | null): Promise<string[]> {
