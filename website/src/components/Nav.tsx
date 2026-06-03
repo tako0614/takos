@@ -37,7 +37,6 @@ export default function Nav() {
     { href: '#features', label: t.nav.features },
     { href: '#apps', label: t.nav.apps },
     { href: 'https://docs.takos.jp/', label: t.nav.docs, external: true },
-    { href: cloud().home, label: t.nav.cloud, external: true },
   ];
 
   return (
@@ -56,8 +55,8 @@ export default function Nav() {
             </svg>
           </a>
           <LangToggle class='nav-icon-desk' />
-          <a class='btn btn-primary nav-cta' href={cloud().signup} rel='noopener'>
-            {t.hero.signup}
+          <a class='btn btn-primary nav-cta' href={cloud().install} rel='noopener'>
+            {t.hero.useTakos}
           </a>
           <button
             type='button'

@@ -17,7 +17,7 @@ summary が揃い、 `managed-offering:status` が `canOpenManagedOffering: true
 ::: tip 関連ページ Runtime mode の詳細は
 [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)、
 インストールの内部処理は
-[Takosumi deploy control plane](https://takosumi.com/docs/reference/core-spec)
+[Takosumi deploy control plane](https://takosumi.com/docs/reference/model)
 を参照してください。 :::
 
 ## 1. 3 path 一覧
@@ -109,7 +109,7 @@ launch token → chat
 ```
 
 PlanRun / ApplyRun の詳細は
-[Takosumi deploy control plane](https://takosumi.com/docs/reference/core-spec) を参照。
+[Takosumi deploy control plane](https://takosumi.com/docs/reference/model) を参照。
 
 ### 3.2 ボタン例
 
@@ -230,7 +230,7 @@ launch-readiness evidence が揃った operator だけが宣言できます。
 
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md) 各 path
   が着地する `shared-cell` / `dedicated` / `self-hosted` の物理構造。
-- [Takosumi deploy control plane](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi deploy control plane](https://takosumi.com/docs/reference/model)
   `Install from Git` が記録する Installation → PlanRun → ApplyRun → Deployment → DeploymentOutput の run ledger と、
   Git URL / commit / tag / well-known OpenTofu outputs などの汎用 repo metadata から resolve される install input。
 - [はじめる](/get-started/) path 選択後の最初の作業。

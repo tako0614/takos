@@ -1,5 +1,5 @@
 apiVersion: v2
 name: takos-helm-smoke-crds
-description: Test-only CRDs required by Helm install dry-run smoke cases.
+description: Test-only CRDs required by Helm dry-run install smoke cases.
 type: application
 version: 0.1.0

@@ -32,5 +32,5 @@ Takosumi resolves the requested ref to an immutable commit at PlanRun time, and 
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
-- [Takosumi deploy control plane](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)
+- [Takosumi deploy control plane](https://takosumi.com/docs/reference/model)

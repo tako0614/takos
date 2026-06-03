@@ -34,4 +34,4 @@ deployment proxy を expose せず、Takosumi の deploy control API 経由で p
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Internal trust boundaries](/architecture/internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)

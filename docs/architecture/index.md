@@ -16,9 +16,9 @@
 
 | 内容                                                 | 詳細ドキュメント                                                                        |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Takosumi Installation Lifecycle / Installation / runtime modes | [ecosystem docs](https://github.com/tako0614/takos-ecosystem/tree/master/docs/platform) |
-| Takosumi Accounts / billing / OIDC issuer            | [Takosumi entry point](https://takosumi.com/docs/reference/takosumi)        |
-| takosumi kernel / Source / installer API                     | [Core Specification](https://takosumi.com/docs/reference/core-spec)                     |
+| Takosumi Installation / PlanRun / ApplyRun model      | [Takosumi model](https://takosumi.com/docs/reference/model)                          |
+| Takosumi Accounts / billing / OIDC issuer             | [operator account-plane contract](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md) |
+| Takosumi deploy-control API                           | [Deploy Control API](https://takosumi.com/docs/reference/deploy-control-api)         |
 | production deploy runbook / secrets                  | [takos-private docs](https://github.com/tako0614/takos-private/tree/master/docs)        |
 
 Takos docs から外部仕様を説明するときは、ここに概要だけ置き、詳細は owning docs

@@ -27,6 +27,6 @@
 ## 参考
 
 - [API Reference](/reference/api)
-- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
 - [Takosumi kernel storage schema](https://github.com/tako0614/takosumi/blob/main/docs/reference/storage-schema.md)
-- [Installation ledger](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)
+- [Installation ledger](https://takosumi.com/docs/reference/model)

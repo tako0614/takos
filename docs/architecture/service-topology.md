@@ -17,7 +17,7 @@ Takos の実装は単一の `takos-worker` 入口 (`src/worker`)、UI (`web`)、
 | ------------------------- | ------: | -------------------- | -------------------------------------------------------------------------------------------- |
 | `takos-worker`            |  `8787` | `src/worker`         | OIDC consumer、app-local profile、Web/API ゲートウェイ                                       |
 | Takos UI                  |  `5173` | `web/`               | browser UI development server                                                                |
-| `takosumi kernel`         |  `8788` | `../takosumi/`       | Source install / Deployment apply エンジン。runtime routing は operator data plane が担当            |
+| `takosumi kernel`         |  `8788` | `../takosumi/`       | OpenTofu-native deploy-control / run ledger。runtime routing は operator data plane が担当            |
 | `takosumi accounts` | `8787+` | `../takosumi/` | account plane のリファレンス実装。OIDC issuer / identity broker / BillingPort / Installation |
 | `takos-agent`             |  `8789` | `containers/agent/`  | エージェント実行 container                                                                   |
 | `takos-git`               |  `8790` | `containers/git/`    | Git ホスティング、Smart HTTP、refs、objects                                                  |

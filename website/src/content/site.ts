@@ -68,7 +68,6 @@ export interface Strings {
     readonly features: string;
     readonly apps: string;
     readonly docs: string;
-    readonly cloud: string;
     readonly install: string;
     readonly openMenu: string;
     readonly closeMenu: string;
@@ -86,8 +85,6 @@ export interface Strings {
     readonly termOk2: string;
     readonly copy: string;
     readonly copied: string;
-    readonly signup: string;
-    readonly login: string;
   };
   readonly why: {
     readonly eyebrow: string;
@@ -154,7 +151,6 @@ const ja: Strings = {
     features: '特徴',
     apps: 'Bundled apps',
     docs: 'Docs',
-    cloud: 'Cloud',
     install: 'Install',
     openMenu: 'メニューを開く',
     closeMenu: 'メニューを閉じる',
@@ -170,7 +166,7 @@ const ja: Strings = {
       { t: '自分のサーバーの中で', em: true },
       { t: '。ログインしてすぐ始められます。' },
     ],
-    useTakos: 'Use Takos',
+    useTakos: 'Takos を使う',
     gitInstall: 'Git から install',
     scroll: 'scroll',
     termComment1: '# どこにでも install できるが、一番速いのは Use Takos。',
@@ -179,8 +175,6 @@ const ja: Strings = {
     termOk2: '✓ takos-git → docs / files / agents',
     copy: 'コピー',
     copied: 'コピーしました',
-    signup: '新規登録',
-    login: 'ログイン',
   },
   why: {
     eyebrow: 'why takos',
@@ -324,7 +318,7 @@ const ja: Strings = {
       {
         kind: 'git',
         title: 'Install from Git',
-        body: 'ボタンを押すと accounts.takosumi.com の install wizard が開き、git URL + ref が pre-fill された状態で dry-run → install できる。source を確認したい人・fork を使う人向け。',
+        body: 'ボタンを押すと accounts.takosumi.com の install wizard が開き、git URL + ref が pre-fill された状態で plan を確認して install できる。source を確認したい人・fork を使う人向け。',
         cta: 'Git から install',
       },
       {
@@ -361,7 +355,6 @@ const en: Strings = {
     features: 'Features',
     apps: 'Bundled apps',
     docs: 'Docs',
-    cloud: 'Cloud',
     install: 'Install',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
@@ -386,8 +379,6 @@ const en: Strings = {
     termOk2: '✓ takos-git → docs / files / agents',
     copy: 'Copy',
     copied: 'Copied',
-    signup: 'Sign up',
-    login: 'Log in',
   },
   why: {
     eyebrow: 'why takos',
@@ -531,7 +522,7 @@ const en: Strings = {
       {
         kind: 'git',
         title: 'Install from Git',
-        body: 'The button opens the install wizard at accounts.takosumi.com with the git URL + ref pre-filled, ready to dry-run then install. For people who want to review the source or use a fork.',
+        body: 'The button opens the install wizard at accounts.takosumi.com with the git URL + ref pre-filled, ready to review the plan then install. For people who want to review the source or use a fork.',
         cta: 'Install from Git',
       },
       {

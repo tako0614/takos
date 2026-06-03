@@ -181,7 +181,7 @@ PR / release review では次を確認します:
 
 ## 次に読むページ
 
-- [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
+- [Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
   --- OIDC client を発行し、launch token の `/consume` を提供する account plane
 - [Launch Token (opaque + /consume)](https://github.com/tako0614/takosumi/blob/main/docs/ja/apps/launch-token.md)
   --- one-shot opaque token と `/_takosumi/launch` → Accounts `/consume` redeem

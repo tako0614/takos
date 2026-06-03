@@ -17,8 +17,8 @@ import {
   applyInstallableAppInstallation,
   applyInstallableAppRevision,
   deleteInstallableAppInstallation,
-  dryRunInstallableAppInstallation,
-  dryRunInstallableAppRevision,
+  planInstallableAppInstallation,
+  planInstallableAppRevision,
   type InstallableAppRevisionOperation,
   type InstallableAppUpstreamResponse,
   listInstallableAppInstallations,
@@ -41,7 +41,7 @@ type InstallableAppApplyBody = {
   runtime_base_url?: unknown;
   source_commit?: unknown;
   expected_commit?: unknown;
-  expected_plan_snapshot_digest?: unknown;
+  expected_plan_digest?: unknown;
   expected_current_deployment_id?: unknown;
   expected?: unknown;
   installation_id?: unknown;
@@ -74,9 +74,9 @@ export const appInstallationsRouteDeps = {
   resolveTakosumiSubject,
   listInstallableAppInstallations,
   deleteInstallableAppInstallation,
-  dryRunInstallableAppInstallation,
+  planInstallableAppInstallation,
   applyInstallableAppInstallation,
-  dryRunInstallableAppRevision,
+  planInstallableAppRevision,
   applyInstallableAppRevision,
 };
 
@@ -261,11 +261,11 @@ function readBodyExpectedCommit(body: InstallableAppApplyBody): string | null {
     readPathString(body.expected, ["commit"]);
 }
 
-function readBodyExpectedPlanSnapshotDigest(
+function readBodyExpectedPlanDigest(
   body: InstallableAppApplyBody,
 ): string | null {
-  return readString(body.expected_plan_snapshot_digest) ??
-    readPathString(body.expected, ["planSnapshotDigest"]);
+  return readString(body.expected_plan_digest) ??
+    readPathString(body.expected, ["planDigest"]);
 }
 
 function readBodyExpectedCurrentDeploymentId(
@@ -377,7 +377,7 @@ appInstallationsRouter.get(
 );
 
 appInstallationsRouter.post(
-  "/spaces/:spaceId/app-installations/git-url/dry-run",
+  "/spaces/:spaceId/app-installations/git-url/plan",
   spaceAccess({ roles: ["owner", "admin", "editor"] }),
   async (c) => {
     const { space } = c.get("access");
@@ -393,11 +393,11 @@ appInstallationsRouter.post(
       .resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Installation dry-run is not configured",
+        "Third-party Installation PlanRun is not configured",
       );
     }
     const upstream = await appInstallationsRouteDeps
-      .dryRunInstallableAppInstallation({
+      .planInstallableAppInstallation({
         ...source,
         spaceId: space.id,
       }, installConfig);
@@ -422,12 +422,12 @@ appInstallationsRouter.post(
 
     const costAck = readOptionalBodyBoolean(body, "cost_ack");
     const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
-    const expectedPlanSnapshotDigest = readBodyExpectedPlanSnapshotDigest(
+    const expectedPlanDigest = readBodyExpectedPlanDigest(
       body,
     ) ?? undefined;
-    if (!expectedCommit || !expectedPlanSnapshotDigest) {
+    if (!expectedCommit || !expectedPlanDigest) {
       throw new BadRequestError(
-        "expected_commit and expected_plan_snapshot_digest are required after install dry-run approval",
+        "expected_commit and expected_plan_digest are required after install PlanRun approval",
       );
     }
 
@@ -458,7 +458,7 @@ appInstallationsRouter.post(
         ...(mode ? { mode } : {}),
         ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
         ...(expectedCommit ? { expectedCommit } : {}),
-        ...(expectedPlanSnapshotDigest ? { expectedPlanSnapshotDigest } : {}),
+        ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
         ...(costAck === undefined ? {} : { costAck }),
       }, installConfig);
     return jsonFromUpstream(c, upstream);
@@ -466,7 +466,7 @@ appInstallationsRouter.post(
 );
 
 appInstallationsRouter.post(
-  "/spaces/:spaceId/app-installations/git-url/revision/dry-run",
+  "/spaces/:spaceId/app-installations/git-url/revision/plan",
   spaceAccess({ roles: ["owner", "admin", "editor"] }),
   async (c) => {
     const { space } = c.get("access");
@@ -484,14 +484,14 @@ appInstallationsRouter.post(
       .resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Installation deployment dry-run is not configured",
+        "Third-party Installation deployment PlanRun is not configured",
       );
     }
     await assertInstallationBelongsToSpace(c, space.id, installationId);
     const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
     const upstream = await appInstallationsRouteDeps
-      .dryRunInstallableAppRevision({
+      .planInstallableAppRevision({
         ...source,
         installationId,
         operation,
@@ -528,7 +528,7 @@ appInstallationsRouter.post(
     const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
     const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
-    const expectedPlanSnapshotDigest = readBodyExpectedPlanSnapshotDigest(
+    const expectedPlanDigest = readBodyExpectedPlanDigest(
       body,
     ) ?? undefined;
     const expectedCurrentDeploymentId = readBodyExpectedCurrentDeploymentId(
@@ -536,11 +536,11 @@ appInstallationsRouter.post(
     );
     if (
       operation === "upgrade" &&
-      (!expectedCommit || !expectedPlanSnapshotDigest ||
+      (!expectedCommit || !expectedPlanDigest ||
         !expectedCurrentDeploymentId.provided)
     ) {
       throw new BadRequestError(
-        "expected.commit, expected.planSnapshotDigest, and expected.currentDeploymentId are required after deployment dry-run approval",
+        "expected.commit, expected.planDigest, and expected.currentDeploymentId are required after deployment PlanRun approval",
       );
     }
     const upstream = await appInstallationsRouteDeps
@@ -551,7 +551,7 @@ appInstallationsRouter.post(
         ...(sourceCommit ? { sourceCommit } : {}),
         ...(reason ? { reason } : {}),
         ...(expectedCommit ? { expectedCommit } : {}),
-        ...(expectedPlanSnapshotDigest ? { expectedPlanSnapshotDigest } : {}),
+        ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
         ...(expectedCurrentDeploymentId.provided
           ? { expectedCurrentDeploymentId: expectedCurrentDeploymentId.value }
           : {}),

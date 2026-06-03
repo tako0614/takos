@@ -23,5 +23,5 @@ The hand-maintained `takos-private/cloudflare/wrangler.*.toml` (and the helm / d
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Internal trust boundaries](./internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

@@ -25,9 +25,10 @@ Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app lau
 ## Takosumi Service Boundary
 
 Takosumi implementation detail stays inside `../takosumi/src/service`. Its
-internal domains include `src/service/domains/deploy` and
-`src/service/domains/runtime`; those are domain modules inside the Takosumi
-service, not standalone Takos product services.
+internal domains include `src/service/domains/deploy-control`,
+`src/service/domains/deploy-records`, and `src/service/domains/runtime`; those
+are domain modules inside the Takosumi service, not standalone Takos product
+services.
 
 Backend adapter and runtime-agent handler work belongs to the operator
 distribution that owns the OpenTofu / Helm / native controller stack. Takos

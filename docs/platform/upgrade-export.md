@@ -171,7 +171,7 @@ takosumi accounts installations export inst_abc --output takos-export.tar.zst
 ```
 
 Takosumi Accounts lifecycle API 経由なら
-[`POST /v1/installations/{id}/export`](https://github.com/tako0614/takosumi/blob/main/docs/accounts-service.md#_5-post-v1-installations-id-export)。
+[`POST /v1/installations/{id}/export`](https://takosumi.com/docs/reference/operator)。
 
 ### 3.2 Bundle 構造 {#export-bundle}
 
@@ -322,7 +322,7 @@ issuer 切替時の制約:
 - export 時の `pairwiseSubject` は **新 issuer では再計算される**ため、
   installation 内の Takos profile レコードは新 subject に再 mapping される。
   詳細は self-host 側
-  [Takosumi Accounts](https://github.com/tako0614/takosumi/blob/main/docs/architecture/takosumi-accounts.md)
+  [Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
   docs を参照
 
 ### 4.3 Import 後の確認
@@ -360,17 +360,17 @@ install ──► ready ──┬─► upgrading ──► ready (new ref)
 ```
 
 各遷移は
-[`InstallationEvent`](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)
+[`InstallationEvent`](https://takosumi.com/docs/reference/model)
 として append-only に記録される。
 
 ## 次に読むページ
 
-- [Takosumi Accounts lifecycle API](https://github.com/tako0614/takosumi/blob/main/docs/accounts-service.md)
+- [Takosumi operator account-plane contract](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
   — upgrade / rollback / export を駆動する operator account-plane REST endpoint
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
   — `materialize` で遷移する shared-cell / dedicated / self-hosted の比較
-- [Installation 台帳](https://github.com/tako0614/takosumi/blob/main/docs/architecture/app-installation.md)
+- [Installation 台帳](https://takosumi.com/docs/reference/model)
   —過去世代を保存する record と event ledger
-- [RunnerProfile / DeploymentOutput](https://takosumi.com/docs/reference/core-spec)
+- [RunnerProfile / DeploymentOutput](https://takosumi.com/docs/reference/model)
   —provisioning template / output の export 時の扱い (template / secret 除外)
 - [Install paths](/apps/install-paths) — 3 path のうち self-host への遷移

@@ -32,5 +32,5 @@ The Installation references a plain OpenTofu module by Git URL/ref; runs against
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

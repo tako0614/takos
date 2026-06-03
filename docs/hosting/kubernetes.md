@@ -176,7 +176,7 @@ GCP values の `helm template` と `helm install --dry-run=client` を
 `TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN=1 TAKOS_HELM_INSTALL_TEST_CRDS=1`
 を付けます。 test CRD は kind 上で GCP `ManagedCertificate` resource mapping
 を検査するためだけに入れます。ローカルで kubeconfig がない場合、この task は
-template smoke を必須とし、install dry-run は cluster unreachable として skip
+template smoke を必須とし、Helm install の dry-run は cluster unreachable として skip
 します。
 
 同じ ecosystem root workflows は kind cluster 上で

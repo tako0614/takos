@@ -18,14 +18,14 @@ interface GitUrlInstallModalProps {
   onApplied?: () => void | Promise<void>;
 }
 
-interface InstallDryRunResponse {
+interface InstallPlanResponse {
   installPlan?: {
     repo?: {
       id?: string;
       name?: string;
     };
   };
-  planSnapshotDigest?: string;
+  planDigest?: string;
   source?: {
     url?: string;
     ref?: string;
@@ -33,7 +33,7 @@ interface InstallDryRunResponse {
   };
   expected?: {
     commit?: string;
-    planSnapshotDigest?: string;
+    planDigest?: string;
     currentDeploymentId?: string | null;
   };
   changes?: Array<{
@@ -46,7 +46,7 @@ interface InstallDryRunResponse {
   };
 }
 
-interface InstallCatalogDryRunResponse {
+interface InstallCatalogPlanResponse {
   app?: {
     id?: string;
     name?: string;
@@ -83,13 +83,13 @@ interface InstallCatalogDryRunResponse {
   };
 }
 
-interface RevisionPreviewResponse {
+interface RevisionPlanResponse {
   expected?: {
     commit?: string;
-    planSnapshotDigest?: string;
+    planDigest?: string;
     currentDeploymentId?: string | null;
   };
-  planSnapshotDigest?: string;
+  planDigest?: string;
   preview: {
     operation: "upgrade" | "rollback";
     next: {
@@ -115,13 +115,13 @@ interface RevisionPreviewResponse {
 }
 
 type GitUrlPreviewResponse =
-  | InstallDryRunResponse
-  | InstallCatalogDryRunResponse
-  | RevisionPreviewResponse;
+  | InstallPlanResponse
+  | InstallCatalogPlanResponse
+  | RevisionPlanResponse;
 
 function isRevisionPreview(
   value: GitUrlPreviewResponse,
-): value is RevisionPreviewResponse {
+): value is RevisionPlanResponse {
   return "preview" in value;
 }
 
@@ -146,9 +146,9 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       return currentPreview.app?.name ?? currentPreview.app?.id ??
         t("unknownApp");
     }
-    const dryRun = currentPreview as InstallDryRunResponse;
-    return dryRun.installPlan?.repo?.name ??
-      dryRun.installPlan?.repo?.id ?? t("unknownApp");
+    const planRun = currentPreview as InstallPlanResponse;
+    return planRun.installPlan?.repo?.name ??
+      planRun.installPlan?.repo?.id ?? t("unknownApp");
   };
 
   const previewSourceLabel = (
@@ -165,7 +165,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       ? currentPreview.preview.operation
       : "risk" in currentPreview
       ? currentPreview.risk?.level ?? "low"
-      : "dry-run";
+      : "PlanRun";
 
   const previewBindingLabels = (
     currentPreview: GitUrlPreviewResponse,
@@ -216,7 +216,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
     props.onClose();
   };
 
-  const dryRunInstall = async (
+  const planInstall = async (
     event: Event & { currentTarget: HTMLFormElement },
   ) => {
     event.preventDefault();
@@ -231,7 +231,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       const response = await fetch(
         `/api/spaces/${encodeURIComponent(spaceId)}/app-installations/git-url${
           revision ? "/revision" : ""
-        }/dry-run`,
+        }/plan`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -260,7 +260,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
         "error",
         err instanceof Error && err.message
           ? err.message
-          : t("installDryRunFailed"),
+          : t("installPlanFailed"),
       );
     } finally {
       setPreviewing(false);
@@ -281,9 +281,9 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           "expected" in currentPreview
         ? currentPreview.expected
         : undefined;
-      const planSnapshotDigest = "planSnapshotDigest" in currentPreview
-        ? currentPreview.planSnapshotDigest
-        : expected?.planSnapshotDigest;
+      const planDigest = "planDigest" in currentPreview
+        ? currentPreview.planDigest
+        : expected?.planDigest;
       const requestBody = revision
         ? {
           git_url: gitUrl().trim(),
@@ -294,7 +294,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           ...(revision.operation === "upgrade"
             ? {
               expected_commit: expected?.commit ?? sourceCommit,
-              expected_plan_snapshot_digest: planSnapshotDigest,
+              expected_plan_digest: planDigest,
               expected_current_deployment_id:
                 expected?.currentDeploymentId ?? null,
             }
@@ -307,7 +307,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           ref: ref().trim(),
           ...(mode() ? { mode: mode() } : {}),
           expected_commit: expected?.commit ?? sourceCommit,
-          expected_plan_snapshot_digest: planSnapshotDigest,
+          expected_plan_digest: planDigest,
           cost_ack: true,
         };
       if (!requestBody) return;
@@ -348,7 +348,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       title={t("installFromGitUrl")}
       size="lg"
     >
-      <form onSubmit={dryRunInstall} class="space-y-4">
+      <form onSubmit={planInstall} class="space-y-4">
         <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_9rem]">
           <label class="block space-y-1.5">
             <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -405,7 +405,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
               <Show
                 when={!isRevisionPreview(currentPreview()) &&
                   "runtime" in currentPreview() &&
-                  ((currentPreview() as InstallCatalogDryRunResponse).runtime
+                  ((currentPreview() as InstallCatalogPlanResponse).runtime
                       ?.modes?.length ?? 0) > 0}
               >
                 <label class="mt-4 block space-y-1.5">
@@ -418,7 +418,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                     class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
                   >
                     <For
-                      each={(currentPreview() as InstallCatalogDryRunResponse)
+                      each={(currentPreview() as InstallCatalogPlanResponse)
                         .runtime?.modes ?? []}
                     >
                       {(runtimeMode) => (
@@ -468,7 +468,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                   class="mt-0.5 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
                 />
                 <span class="text-sm text-zinc-700 dark:text-zinc-300">
-                  {t("approveGitUrlDryRun")}
+                  {t("approveGitUrlPlan")}
                 </span>
               </label>
             </div>
@@ -488,7 +488,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 disabled={!gitUrl().trim() || !ref().trim()}
                 leftIcon={<Icons.Search class="h-4 w-4" />}
               >
-                {t("dryRunInstall")}
+                {t("planInstall")}
               </Button>
             }
           >

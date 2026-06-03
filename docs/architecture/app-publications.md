@@ -43,4 +43,4 @@ Takosumi Accounts が持ちます。
 
 - [内部トラスト境界](./internal-trust-boundaries.md)
 - [システムアーキテクチャ](./system-architecture.md)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)

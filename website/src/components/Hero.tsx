@@ -27,11 +27,8 @@ export default function Hero() {
           <RichText value={t.hero.lede} />
         </p>
         <div class='cta-row'>
-          <a class='btn btn-primary' href={cloud().signup} rel='noopener'>
-            {t.hero.signup}
-          </a>
-          <a class='btn btn-secondary' href={cloud().login} rel='noopener'>
-            {t.hero.login}
+          <a class='btn btn-primary' href={cloud().install} rel='noopener'>
+            {t.hero.useTakos}
           </a>
         </div>
       </div>

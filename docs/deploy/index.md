@@ -34,5 +34,5 @@ target を選ぶと、PlanRun / ApplyRun を経て Deployment が更新され、
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
 - [Internal trust boundaries](/architecture/internal-trust-boundaries)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

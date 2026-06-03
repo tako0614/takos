@@ -33,5 +33,5 @@ An Installation starts a PlanRun; approving the recorded plan starts an ApplyRun
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/core-spec)
+- [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

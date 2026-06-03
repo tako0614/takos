@@ -6,7 +6,8 @@ type CheckFailure = {
 
 const README_PATH = 'README.md';
 const CURRENT_STATE_PATH = 'docs/contributing/current-state.md';
-const TAKOSUMI_SERVICE_ARCHITECTURE_PATH = '../takosumi/docs/reference/architecture/takosumi-service.md';
+const TAKOSUMI_MODEL_PATH = '../takosumi/docs/reference/model.md';
+const TAKOSUMI_OPERATOR_PATH = '../takosumi/docs/reference/operator.md';
 const DOMAIN_ROOT = '../takosumi/src/service/domains';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
@@ -14,21 +15,20 @@ const REQUIRED_OPERATOR_BOUNDARY_DOCS = [CURRENT_STATE_PATH];
 const ARCHITECTURE_ALIGNMENT_DOCS = [
   README_PATH,
   CURRENT_STATE_PATH,
-  TAKOSUMI_SERVICE_ARCHITECTURE_PATH,
-  '../takosumi/docs/reference/architecture/operator-boundaries.md',
-  '../takosumi/docs/reference/architecture/workflow-extension-design.md',
+  TAKOSUMI_MODEL_PATH,
+  TAKOSUMI_OPERATOR_PATH,
 ];
 const PERMISSION_SCOPE_DOCS = [
-  '../takosumi/docs/accounts/architecture/app-installation.md',
+  TAKOSUMI_OPERATOR_PATH,
 ];
-const APP_INSTALLATION_STATUS_DOCS = [
+const TAKOSUMI_MODEL_DOCS = [
   '../docs/platform/runtime-modes.md',
-  '../takosumi/docs/accounts/architecture/app-installation.md',
+  TAKOSUMI_MODEL_PATH,
   'docs/platform/upgrade-export.md',
 ];
 const RUNTIME_TARGET_DOCS = [
-  '../takosumi/docs/accounts/architecture/app-installation.md',
-  '../takosumi/docs/accounts/accounts-service.md',
+  TAKOSUMI_MODEL_PATH,
+  TAKOSUMI_OPERATOR_PATH,
 ];
 const ACCOUNT_MODEL_DOC_PATH = 'docs/operator/account-model.md';
 const ACCOUNT_MODEL_REQUIRED_TERMS = [
@@ -55,24 +55,24 @@ const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
 ];
 const FORBIDDEN_RUNTIME_BINDING_TARGET_PATTERNS = [
   {
-    pattern: /"targetId":\s*"tokyo-cell-[^"]*"/,
-    message: 'shared-cell targetId examples must include the per-installation namespace URI.',
+    pattern: /shared-cell:\/\//,
+    message: 'Runtime target docs must use RunnerProfile / Workers for Platforms wording, not shared-cell target URIs.',
   },
   {
     pattern: /"target_id":\s*"tokyo-cell-[^"]*"/,
-    message: 'shared-cell target_id examples must include the per-installation namespace URI.',
+    message: 'Runtime target docs must not use old shared-cell target_id examples.',
   },
   {
     pattern: /runtime binding:\s*tokyo-cell-[^\n]*/i,
-    message: 'shared-cell runtime binding examples must use the namespace URI, not only a cell id.',
+    message: 'Runtime target docs must not use old cell-only binding examples.',
   },
 ];
 const REQUIRED_DOMAIN_DIRS = [
   'space',
   'binding',
-  'deploy',
+  'deploy-control',
+  'deploy-records',
   'runtime',
-  'installer',
   'resources',
   'routing',
   'network',
@@ -98,6 +98,7 @@ const SAFE_DRIFT_TERMS = [
   'internal domains',
   'domain modules',
   'domains/deploy',
+  'domains/deploy-control',
   'domains/runtime',
   'inside `takosumi`',
   'inside takosumi',
@@ -114,7 +115,7 @@ const OPERATOR_BOUNDARY_REQUIRED_TERMS = [
   'service',
   'operator',
   'opentofu',
-  'platformservice',
+  'runnerprofile',
 ];
 
 const FORBIDDEN_CURRENT_BOUNDARY_PATTERNS = [
@@ -186,9 +187,9 @@ function validateInternalDomainMentions(
     lowerText.includes('domain modules') ||
     lowerText.includes('src/service/domains') ||
     lowerText.includes('src/service/domains');
-  const mentionsDeployRuntimeDomains = lowerText.includes('domains/deploy') ||
+  const mentionsDeployRuntimeDomains = lowerText.includes('domains/deploy-control') ||
     lowerText.includes('domains/runtime') ||
-    (lowerText.includes('deploy') && lowerText.includes('runtime'));
+    (lowerText.includes('deploy control') && lowerText.includes('runtime'));
 
   if (
     !mentionsPaas || !mentionsInternalDomains || !mentionsDeployRuntimeDomains
@@ -281,20 +282,29 @@ async function validatePermissionScopeDocs(
   // is also removed — the Source contract is kind-agnostic and capability
   // requests are modeled outside the Source contract (= operator account
   // plane / namespace pub-sub / consumer-defined kind, per
-  // takosumi/docs/reference/core-spec.md). This validator is retained as a
+  // takosumi/docs/reference/model.md). This validator is retained as a
   // no-op so the call site stays stable; delete it together with the call
   // in main() once the surrounding architecture validator is restructured.
 }
 
-async function validateAppInstallationStatusDocs(
+async function validateTakosumiModelDocs(
   failures: CheckFailure[],
 ): Promise<void> {
-  for (const path of APP_INSTALLATION_STATUS_DOCS) {
+  const requiredTerms = [
+    'Installation',
+    'PlanRun',
+    'ApplyRun',
+    'Deployment',
+    'DeploymentOutput',
+    'RunnerProfile',
+  ];
+  for (const path of TAKOSUMI_MODEL_DOCS) {
     const text = await readText(path, failures);
-    if (!text.includes('canonical 5')) {
+    for (const term of requiredTerms) {
+      if (text.includes(term)) continue;
       failures.push({
         path,
-        message: 'Expected AppInstallation status docs to explicitly mention the canonical 5 public statuses.',
+        message: `Expected Takosumi model docs to mention "${term}".`,
       });
     }
     for (const rule of FORBIDDEN_PUBLIC_STATUS_PATTERNS) {
@@ -313,11 +323,11 @@ async function validateRuntimeTargetDocs(
 ): Promise<void> {
   for (const path of RUNTIME_TARGET_DOCS) {
     const text = await readText(path, failures);
-    if (!text.includes('shared-cell://')) {
+    if (!text.includes('Workers for Platforms')) {
       failures.push({
         path,
         message:
-          'Expected shared-cell runtime target docs to show shared-cell://<cell>/namespaces/<installation> target ids.',
+          'Expected runtime target docs to describe Workers for Platforms as the tenant/user Worker ingress boundary.',
       });
     }
     for (const rule of FORBIDDEN_RUNTIME_BINDING_TARGET_PATTERNS) {
@@ -374,7 +384,7 @@ async function main(): Promise<void> {
 
   await validateDomainDirs(failures);
   await validatePermissionScopeDocs(failures);
-  await validateAppInstallationStatusDocs(failures);
+  await validateTakosumiModelDocs(failures);
   await validateRuntimeTargetDocs(failures);
   await validateAccountModelDocs(failures);
 
@@ -395,7 +405,7 @@ async function main(): Promise<void> {
     `Verified permission scope docs in ${PERMISSION_SCOPE_DOCS.length} files.`,
   );
   console.log(
-    `Verified AppInstallation status docs in ${APP_INSTALLATION_STATUS_DOCS.length} files.`,
+    `Verified Takosumi model docs in ${TAKOSUMI_MODEL_DOCS.length} files.`,
   );
   console.log(
     `Verified runtime target docs in ${RUNTIME_TARGET_DOCS.length} files.`,

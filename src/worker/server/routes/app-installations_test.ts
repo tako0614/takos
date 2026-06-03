@@ -301,7 +301,7 @@ test("app-installations route rejects camelCase request aliases", async () => {
   }
 });
 
-test("app-installations route proxies Git URL install dry-run", async () => {
+test("app-installations route proxies Git URL install PlanRun", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -326,7 +326,7 @@ test("app-installations route proxies Git URL install dry-run", async () => {
         ref: "v1.2.3",
         commit: "1111111111111111111111111111111111111111",
       },
-      planSnapshotDigest: "sha256:abc",
+      planDigest: "sha256:abc",
       installPlan: {
         repo: { id: "example.app", name: "Example App" },
         changes: [],
@@ -334,14 +334,14 @@ test("app-installations route proxies Git URL install dry-run", async () => {
       changes: [],
       expected: {
         commit: "1111111111111111111111111111111111111111",
-        planSnapshotDigest: "sha256:abc",
+        planDigest: "sha256:abc",
       },
     });
   };
 
   try {
     const response = await createApp().request(
-      "/spaces/space-alias/app-installations/git-url/dry-run",
+      "/spaces/space-alias/app-installations/git-url/plan",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -361,7 +361,7 @@ test("app-installations route proxies Git URL install dry-run", async () => {
 
     assertEquals(response.status, 200);
     assertObjectMatch(body, {
-      planSnapshotDigest: "sha256:abc",
+      planDigest: "sha256:abc",
     });
     assertEquals(calls, [
       {
@@ -372,7 +372,7 @@ test("app-installations route proxies Git URL install dry-run", async () => {
       },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/installations/dry-run",
+        input: "https://installer.internal/v1/installations/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -433,7 +433,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
           ref: "v1.2.3",
           mode: "shared-cell",
           expected_commit: "1111111111111111111111111111111111111111",
-          expected_plan_snapshot_digest: "sha256:abc",
+          expected_plan_digest: "sha256:abc",
           cost_ack: true,
         }),
       },
@@ -479,7 +479,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
           },
           expected: {
             commit: "1111111111111111111111111111111111111111",
-            planSnapshotDigest: "sha256:abc",
+            planDigest: "sha256:abc",
           },
           mode: "shared-cell",
           costAck: true,
@@ -491,7 +491,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
   }
 });
 
-test("app-installations route proxies Git URL deployment dry-run and apply", async () => {
+test("app-installations route proxies Git URL deployment PlanRun and apply", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -528,7 +528,7 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
       ok: true,
       kind: isMutation
         ? "takosumi.deployment-apply@v1"
-        : "takosumi.deployment-dry-run@v1",
+        : "takosumi.deployment-PlanRun@v1",
     }, { status: isMutation ? 202 : 200 });
   };
 
@@ -543,8 +543,8 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
       TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
     } as Env;
 
-    const dryRunResponse = await app.request(
-      "/spaces/space-alias/app-installations/git-url/revision/dry-run",
+    const planResponse = await app.request(
+      "/spaces/space-alias/app-installations/git-url/revision/plan",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -574,7 +574,7 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
       env,
     );
 
-    assertEquals(dryRunResponse.status, 200);
+    assertEquals(planResponse.status, 200);
     assertEquals(applyResponse.status, 202);
     assertEquals(calls, [
       {
@@ -593,7 +593,7 @@ test("app-installations route proxies Git URL deployment dry-run and apply", asy
       {
         kind: "fetch",
         input:
-          "https://installer.internal/v1/installations/inst_1/deployments/dry-run",
+          "https://installer.internal/v1/installations/inst_1/deployments/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -815,7 +815,7 @@ test("app-installations route requires Git URL install approval evidence", async
       error: {
         code: "BAD_REQUEST",
         message:
-          "expected_commit and expected_plan_snapshot_digest are required after install dry-run approval",
+          "expected_commit and expected_plan_digest are required after install PlanRun approval",
       },
     });
   } finally {

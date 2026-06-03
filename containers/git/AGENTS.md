@@ -2,8 +2,8 @@
 
 `takos-git` は Takos の **Git hosting service** で、 Git Smart HTTP / repository
 metadata / refs / object storage / source resolution / repository API contracts
-を所有する。 ecosystem sibling の `takosumi` (Git URL / prepared source install
-と Installer API の canonical implementation) とは別物。
+を所有する。 ecosystem sibling の `takosumi` (Git URL / prepared source provenance
+と OpenTofu-native deploy control の canonical implementation) とは別物。
 
 ## 責務
 

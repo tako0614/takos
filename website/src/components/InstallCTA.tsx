@@ -37,9 +37,10 @@ export default function InstallCTA() {
                 when={c.kind !== 'self'}
                 fallback={
                   <CodeBlock terminal>
-                    <span class='k'>$</span> bunx @takosjp/takosumi install dry-run \{'\n'}
+                    <span class='k'>$</span> bunx @takosjp/takosumi plan \{'\n'}
                     &nbsp;&nbsp;--source git:https://github.com/you/takos#main --space my-space{'\n'}
-                    <span class='k'>$</span> bunx @takosjp/takosumi install apply --expected reviewed.json
+                    <span class='k'>$</span> bunx @takosjp/takosumi install \{'\n'}
+                    &nbsp;&nbsp;--source git:https://github.com/you/takos#main --space my-space
                   </CodeBlock>
                 }
               >

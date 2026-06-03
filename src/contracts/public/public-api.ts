@@ -18,7 +18,7 @@ export interface DeploymentCreateRequest {
   expected?: {
     commit?: string;
     sourceDigest?: string;
-    planSnapshotDigest: string;
+    planDigest: string;
     currentDeploymentId?: string | null;
   };
   target_id?: string;
