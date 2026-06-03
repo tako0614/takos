@@ -3,7 +3,12 @@
  * Supports OpenAI, Anthropic Claude, and Google Gemini
  */
 
-import type { AgentMessage, AgentTool, ToolCall } from "./agent-models.ts";
+import type {
+  AgentMessage,
+  AgentTool,
+  AgentUsage,
+  ToolCall,
+} from "./agent-models.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import { getModelBackend, type ModelBackend } from "./model-catalog.ts";
 export { DEFAULT_MODEL_ID } from "./model-catalog.ts";
@@ -23,7 +28,7 @@ export interface LLMResponse {
   content: string;
   toolCalls?: ToolCall[];
   stopReason: "stop" | "tool_calls" | "length";
-  usage: { inputTokens: number; outputTokens: number };
+  usage: AgentUsage;
 }
 
 export interface LLMBackend {
@@ -55,6 +60,38 @@ function extractSystem(
     else rest.push(m);
   }
   return { system, rest };
+}
+
+/**
+ * Split system messages into a STABLE block (everything up to and including the
+ * last system message marked `cacheControl: "ephemeral"`) and a DYNAMIC block
+ * (system messages after it). The stable block is the prompt-cache prefix; the
+ * dynamic block (activated memory, thread context) is appended uncached after the
+ * cache breakpoint. When no system message is marked, everything is dynamic
+ * (caching off) — so this is a no-op until the agent emits a marked stable block.
+ */
+function extractSystemBlocks(
+  msgs: AgentMessage[],
+): { stableSystem: string; dynamicSystem: string; rest: AgentMessage[] } {
+  const rest: AgentMessage[] = [];
+  const systems: AgentMessage[] = [];
+  for (const m of msgs) {
+    if (m.role === "system") systems.push(m);
+    else rest.push(m);
+  }
+  let lastStableIdx = -1;
+  for (let i = 0; i < systems.length; i++) {
+    if (systems[i].cacheControl === "ephemeral") lastStableIdx = i;
+  }
+  const join = (from: number, to: number) =>
+    systems.slice(from, to).map((m) => m.content).filter(Boolean).join("\n\n");
+  return {
+    stableSystem: lastStableIdx >= 0 ? join(0, lastStableIdx + 1) : "",
+    dynamicSystem: lastStableIdx >= 0
+      ? join(lastStableIdx + 1, systems.length)
+      : join(0, systems.length),
+    rest,
+  };
 }
 
 /** Generic POST + JSON-parse with error sanitization. */
@@ -102,19 +139,27 @@ function parseToolCalls(
   return out;
 }
 
-/** Assemble a normalised LLMResponse. */
+/**
+ * Assemble a normalised LLMResponse. `inTok` MUST be the TOTAL prompt tokens
+ * (cached + uncached); `cacheRead` / `cacheWrite` are the cached subset.
+ */
 function respond(
   content: string,
   toolCalls: ToolCall[],
   stopReason: string,
   inTok: number,
   outTok: number,
+  cacheRead = 0,
+  cacheWrite = 0,
 ): LLMResponse {
+  const usage: AgentUsage = { inputTokens: inTok, outputTokens: outTok };
+  if (cacheRead) usage.cacheReadTokens = cacheRead;
+  if (cacheWrite) usage.cacheWriteTokens = cacheWrite;
   return {
     content,
     toolCalls: toolCalls.length ? toolCalls : undefined,
     stopReason: stopReason as LLMResponse["stopReason"],
-    usage: { inputTokens: inTok, outputTokens: outTok },
+    usage,
   };
 }
 
@@ -198,7 +243,12 @@ class OpenAIBackend implements LLMBackend {
         };
         finish_reason: string;
       }[];
-      usage: { prompt_tokens: number; completion_tokens: number };
+      usage: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        // OpenAI automatic prefix caching reports the cached subset here.
+        prompt_tokens_details?: { cached_tokens?: number };
+      };
     };
     const d = await llmFetch<Res>(
       "https://api.openai.com/v1/chat/completions",
@@ -212,6 +262,9 @@ class OpenAIBackend implements LLMBackend {
     }
 
     const c = d.choices[0];
+    // `prompt_tokens` is the TOTAL (cached + uncached); cached_tokens is the
+    // discounted subset (OpenAI auto-caches stable prefixes ≥1024 tokens — no
+    // explicit cache_control needed, so the agent just keeps the prefix stable).
     return respond(
       c.message.content || "",
       parseToolCalls(
@@ -224,6 +277,8 @@ class OpenAIBackend implements LLMBackend {
       c.finish_reason,
       d.usage.prompt_tokens,
       d.usage.completion_tokens,
+      d.usage.prompt_tokens_details?.cached_tokens ?? 0,
+      0,
     );
   }
 }
@@ -238,12 +293,29 @@ class AnthropicBackend implements LLMBackend {
     tools?: AgentTool[],
     signal?: AbortSignal,
   ): Promise<LLMResponse> {
-    const { system, rest } = extractSystem(messages);
+    const { stableSystem, dynamicSystem, rest } = extractSystemBlocks(messages);
     const converted: { role: string; content: unknown }[] = [];
 
+    // Tag the last block of a content value with a cache_control breakpoint so
+    // Anthropic caches the conversation prefix up to and including this message.
+    const tagCache = (blocks: Record<string, unknown>[]): unknown => {
+      if (!blocks.length) return blocks;
+      blocks[blocks.length - 1] = {
+        ...blocks[blocks.length - 1],
+        cache_control: { type: "ephemeral" },
+      };
+      return blocks;
+    };
+
     for (const m of rest) {
+      const mark = m.cacheControl === "ephemeral";
       if (m.role === "user") {
-        converted.push({ role: "user", content: m.content });
+        converted.push({
+          role: "user",
+          content: mark
+            ? tagCache([{ type: "text", text: m.content }])
+            : m.content,
+        });
       } else if (m.role === "assistant") {
         if (m.tool_calls?.length) {
           const parts: Record<string, unknown>[] = [];
@@ -256,16 +328,25 @@ class AnthropicBackend implements LLMBackend {
               input: tc.arguments,
             });
           }
-          converted.push({ role: "assistant", content: parts });
+          converted.push({
+            role: "assistant",
+            content: mark ? tagCache(parts) : parts,
+          });
         } else {
-          converted.push({ role: "assistant", content: m.content });
+          converted.push({
+            role: "assistant",
+            content: mark
+              ? tagCache([{ type: "text", text: m.content }])
+              : m.content,
+          });
         }
       } else if (m.role === "tool") {
-        const block = {
+        const block: Record<string, unknown> = {
           type: "tool_result",
           tool_use_id: m.tool_call_id ?? "",
           content: m.content,
         };
+        if (mark) block.cache_control = { type: "ephemeral" };
         const last = converted[converted.length - 1];
         if (last?.role === "user" && Array.isArray(last.content)) {
           (last.content as Record<string, unknown>[]).push(block);
@@ -278,7 +359,24 @@ class AnthropicBackend implements LLMBackend {
       max_tokens: this.cfg.maxTokens || 4096,
       messages: converted,
     };
-    if (system) body.system = system;
+    // System as content blocks. A breakpoint on the stable block caches the whole
+    // tools → system prefix (Anthropic orders the cached prefix tools-then-system),
+    // so no separate tool breakpoint is needed. The dynamic block (activated
+    // memory / thread context) follows uncached. When the agent has not marked a
+    // stable block, `stableSystem` is empty → no cache_control → behaviour
+    // unchanged.
+    if (stableSystem || dynamicSystem) {
+      const sys: Record<string, unknown>[] = [];
+      if (stableSystem) {
+        sys.push({
+          type: "text",
+          text: stableSystem,
+          cache_control: { type: "ephemeral" },
+        });
+      }
+      if (dynamicSystem) sys.push({ type: "text", text: dynamicSystem });
+      body.system = sys;
+    }
     if (tools?.length) {
       body.tools = tools.map((t) => ({
         name: t.name,
@@ -296,7 +394,14 @@ class AnthropicBackend implements LLMBackend {
         input?: unknown;
       }[];
       stop_reason: string;
-      usage: { input_tokens: number; output_tokens: number };
+      usage: {
+        input_tokens: number;
+        output_tokens: number;
+        // Present only when a cache breakpoint matched; Anthropic excludes these
+        // from `input_tokens`, so total prompt tokens = input + read + creation.
+        cache_creation_input_tokens?: number;
+        cache_read_input_tokens?: number;
+      };
     };
     const d = await llmFetch<Res>(
       "https://api.anthropic.com/v1/messages",
@@ -321,12 +426,16 @@ class AnthropicBackend implements LLMBackend {
         });
       }
     }
+    const cacheRead = d.usage.cache_read_input_tokens ?? 0;
+    const cacheWrite = d.usage.cache_creation_input_tokens ?? 0;
     return respond(
       text,
       tc,
       d.stop_reason === "tool_use" ? "tool_calls" : d.stop_reason,
-      d.usage.input_tokens,
+      d.usage.input_tokens + cacheRead + cacheWrite,
       d.usage.output_tokens,
+      cacheRead,
+      cacheWrite,
     );
   }
 }
@@ -408,7 +517,12 @@ class GoogleBackend implements LLMBackend {
         };
         finishReason: string;
       }[];
-      usageMetadata: { promptTokenCount: number; candidatesTokenCount: number };
+      usageMetadata: {
+        promptTokenCount: number;
+        candidatesTokenCount: number;
+        // Gemini implicit/explicit context caching reports the cached subset.
+        cachedContentTokenCount?: number;
+      };
     };
     const d = await llmFetch<Res>(
       `https://generativelanguage.googleapis.com/v1beta/models/${this.cfg.model}:generateContent`,
@@ -446,6 +560,8 @@ class GoogleBackend implements LLMBackend {
       cand.finishReason === "STOP" ? "stop" : tc.length ? "tool_calls" : "stop",
       d.usageMetadata?.promptTokenCount || 0,
       d.usageMetadata?.candidatesTokenCount || 0,
+      d.usageMetadata?.cachedContentTokenCount ?? 0,
+      0,
     );
   }
 }
