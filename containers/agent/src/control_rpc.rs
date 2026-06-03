@@ -298,12 +298,7 @@ impl ControlRpcClient {
     }
 
     fn idempotency_hash(value: &str) -> String {
-        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-        for byte in value.as_bytes() {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-        }
-        format!("{hash:x}")
+        crate::hash::fnv1a_hex(value)
     }
 
     pub async fn run_bootstrap(&self) -> AppResult<RunBootstrap> {

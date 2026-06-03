@@ -141,9 +141,8 @@ function createExecutorContainerClass(
       this.cachedTokens = tokens;
     }
 
-    private async pruneStaleTokens(
-      tokens: Map<string, ProxyTokenInfo>,
-    ): Promise<Map<string, ProxyTokenInfo>> {
+    /** Remove tokens past STALE_PROXY_TOKEN_MS in place; true if any removed. */
+    private removeStaleTokens(tokens: Map<string, ProxyTokenInfo>): boolean {
       const now = Date.now();
       let changed = false;
       for (const [token, info] of tokens) {
@@ -156,7 +155,13 @@ function createExecutorContainerClass(
           changed = true;
         }
       }
-      if (changed) await this.persistTokenMap(tokens);
+      return changed;
+    }
+
+    private async pruneStaleTokens(
+      tokens: Map<string, ProxyTokenInfo>,
+    ): Promise<Map<string, ProxyTokenInfo>> {
+      if (this.removeStaleTokens(tokens)) await this.persistTokenMap(tokens);
       return tokens;
     }
 
@@ -279,6 +284,9 @@ function createExecutorContainerClass(
       const info = tokens.get(token);
       if (!info) return;
       tokens.set(token, { ...info, lastHeartbeatAt: Date.now() });
+      // Reap stale tokens on the heartbeat path so GC no longer depends on
+      // dispatch traffic. This path already persists, so it adds no extra write.
+      this.removeStaleTokens(tokens);
       await this.persistTokenMap(tokens);
     }
 
@@ -297,7 +305,17 @@ function createExecutorContainerClass(
 
 /** Tier 1 — lite instances, always-on, low concurrency */
 export const ExecutorContainerTier1 = createExecutorContainerClass(1, "10m");
-/** Tier 2 — basic instances, scale-out */
+/**
+ * Tier 2 — basic instances. RESERVED / currently unused: the managed pool
+ * (`selectExecutorPoolSlot`) routes tier 1 → tier 3 and never selects tier 2,
+ * and no caller requests tier 2 via `resolveContainerNamespace`, so this class
+ * receives no traffic today. It is kept (not deleted) because retiring a Durable
+ * Object class requires a wrangler `deleted_classes` migration in the deploy
+ * config (takos-private). To fully remove it: drop the class + the
+ * `EXECUTOR_CONTAINER_TIER2` binding + add the `deleted_classes` migration. To
+ * put it back in rotation: add tier-2 pool sizing and select it in
+ * `selectExecutorPoolSlot`.
+ */
 export const ExecutorContainerTier2 = createExecutorContainerClass(2, "5m");
 /** Tier 3 — large instances, max memory */
 export const ExecutorContainerTier3 = createExecutorContainerClass(3, "3m");
@@ -387,6 +405,9 @@ async function selectExecutorPoolSlot(env: Env): Promise<
     if (load.active < load.capacity) return { tier: 1, containerId, stub };
   }
 
+  // Tier 2 is intentionally skipped: it has no pool sizing and receives no
+  // managed traffic (reserved tier — see ExecutorContainerTier2). The pool
+  // scales tier 1 → tier 3 only.
   if (!env.EXECUTOR_CONTAINER_TIER3) return null;
 
   let best:

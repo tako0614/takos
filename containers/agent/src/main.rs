@@ -1,5 +1,6 @@
 mod control_rpc;
 mod engine_support;
+mod hash;
 mod internal_rpc;
 mod managed_skills;
 mod model;

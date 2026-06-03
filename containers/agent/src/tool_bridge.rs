@@ -388,16 +388,7 @@ fn stable_tool_call_id(sequence: u64, name: &str, arguments: &serde_json::Value)
         "name": name,
         "arguments": arguments,
     });
-    format!("rust-tool-{}", hash_string(&payload.to_string()))
-}
-
-fn hash_string(value: &str) -> String {
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in value.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    format!("{hash:x}")
+    format!("rust-tool-{}", crate::hash::fnv1a_hex(&payload.to_string()))
 }
 
 fn tool_call_event(

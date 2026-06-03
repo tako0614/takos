@@ -51,7 +51,9 @@ type RunTerminalStatus = Extract<
   "completed" | "failed" | "cancelled"
 >;
 
-const TERMINAL_RUN_STATUSES: ReadonlySet<RunTerminalStatus> = new Set([
+// Single source of truth for terminal run statuses (also consumed by the
+// WS event handlers via the existing timeline → wsEventHandlers import edge).
+export const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set([
   "completed",
   "failed",
   "cancelled",

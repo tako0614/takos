@@ -6,7 +6,9 @@ use async_trait::async_trait;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use takos_agent_engine::model::{ModelInput, ModelOutput, ModelRunner, ToolCallRequest};
+use takos_agent_engine::model::{
+    ModelInput, ModelOutput, ModelRunner, ModelUsage, ToolCallRequest,
+};
 
 use crate::control_rpc::{ToolDefinition, UsagePayload};
 use crate::engine_support::UsageTracker;
@@ -148,6 +150,7 @@ impl TakosModelRunner {
                             "top_k": 4
                         }),
                     }],
+                    usage: None,
                 });
             }
 
@@ -162,6 +165,7 @@ impl TakosModelRunner {
                             "limit": 8
                         }),
                     }],
+                    usage: None,
                 });
             }
 
@@ -174,6 +178,7 @@ impl TakosModelRunner {
                         name,
                         arguments: args,
                     }],
+                    usage: None,
                 });
             }
         }
@@ -200,6 +205,7 @@ impl TakosModelRunner {
         Ok(ModelOutput {
             assistant_message: Some(lines.join("\n")),
             tool_calls: Vec::new(),
+            usage: None,
         })
     }
 
@@ -305,16 +311,23 @@ impl TakosModelRunner {
             .next()
             .ok_or_else(|| io::Error::other("OpenAI returned no choices"))?;
 
-        if let Some(usage) = body.usage {
-            // prompt_tokens is the TOTAL prompt tokens (cached + uncached);
-            // prompt_tokens_details.cached_tokens is the cached subset.
+        // prompt_tokens is the TOTAL prompt tokens (cached + uncached);
+        // prompt_tokens_details.cached_tokens is the cached subset. Record it for
+        // billing AND surface it on ModelOutput so the engine can reconcile its
+        // token estimate against ground truth.
+        let model_usage = body.usage.as_ref().map(|usage| {
             let cached = usage
                 .prompt_tokens_details
-                .map(|details| details.cached_tokens)
-                .unwrap_or(0);
+                .as_ref()
+                .map_or(0, |details| details.cached_tokens);
             self.usage_tracker
                 .record(usage.prompt_tokens, usage.completion_tokens, cached);
-        }
+            ModelUsage {
+                input_tokens: usage.prompt_tokens as u32,
+                output_tokens: usage.completion_tokens as u32,
+                cached_input_tokens: cached as u32,
+            }
+        });
 
         let tool_calls = choice
             .message
@@ -340,6 +353,7 @@ impl TakosModelRunner {
         Ok(ModelOutput {
             assistant_message,
             tool_calls,
+            usage: model_usage,
         })
     }
 }
