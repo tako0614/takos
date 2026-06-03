@@ -17,6 +17,28 @@ export interface AgentMessage {
   content: string;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  /**
+   * Marks this message as a stable prompt-cache boundary. The LLM backend places
+   * a provider cache breakpoint here (Anthropic `cache_control:{type:ephemeral}`);
+   * OpenAI / Gemini ignore it and rely on automatic prefix caching. Set it on the
+   * stable system block (base prompt + tools + skills) and optionally on the last
+   * completed conversation turn so the growing history is cached incrementally.
+   * Everything AFTER a boundary (e.g. activated memory, thread context) is treated
+   * as the dynamic, uncached tail.
+   */
+  cacheControl?: "ephemeral";
+}
+
+/**
+ * Token accounting for an agent run. `inputTokens` is the TOTAL prompt tokens
+ * (cached + uncached); `cacheReadTokens` / `cacheWriteTokens` break out the
+ * cached portion so billing can price reads/writes at the provider's cache rate.
+ */
+export interface AgentUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface AgentTool {

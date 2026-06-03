@@ -5,7 +5,12 @@
  * when no LLM API key is configured.
  */
 
-import type { AgentConfig, AgentEvent, AgentMessage } from "./agent-models.ts";
+import type {
+  AgentConfig,
+  AgentEvent,
+  AgentMessage,
+  AgentUsage,
+} from "./agent-models.ts";
 import type {
   RunTerminalPayload,
   RunTerminalStatus,
@@ -44,7 +49,7 @@ export interface SimpleLoopDeps {
   spaceId: string;
   abortSignal?: AbortSignal;
   toolExecutions: ToolExecution[];
-  totalUsage: { inputTokens: number; outputTokens: number };
+  totalUsage: AgentUsage;
   toolCallCount: number;
   totalToolCalls: number;
   memoryRuntime?: AgentMemoryRuntime;
@@ -155,6 +160,15 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
 
     deps.totalUsage.inputTokens += response.usage.inputTokens;
     deps.totalUsage.outputTokens += response.usage.outputTokens;
+    if (response.usage.cacheReadTokens) {
+      deps.totalUsage.cacheReadTokens = (deps.totalUsage.cacheReadTokens ?? 0) +
+        response.usage.cacheReadTokens;
+    }
+    if (response.usage.cacheWriteTokens) {
+      deps.totalUsage.cacheWriteTokens =
+        (deps.totalUsage.cacheWriteTokens ?? 0) +
+        response.usage.cacheWriteTokens;
+    }
 
     if (response.toolCalls && response.toolCalls.length > 0) {
       const assistantMsg: AgentMessage = {
