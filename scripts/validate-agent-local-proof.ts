@@ -24,7 +24,6 @@ const steps: readonly ProofStepConfig[] = [
     command: [
       "bun",
       "test",
-      "src/worker/application/services/agent/__tests__/memory-manager.test.ts",
       "src/worker/application/services/agent/__tests__/run-lifecycle.test.ts",
       "src/worker/application/services/memory-graph/__tests__/memory-graph-runtime.test.ts",
       "src/worker/runtime/container-hosts/__tests__/executor-control-rpc.test.ts",

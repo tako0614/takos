@@ -300,9 +300,6 @@
       "takos-worker/agent": [
         "./src/worker/application/services/agent/index.ts"
       ],
-      "takos-worker/agent/public-runner": [
-        "./src/worker/application/services/agent/runner.ts"
-      ],
       "takos-worker/git/source": [
         "./src/worker/application/services/source/index.ts"
       ],

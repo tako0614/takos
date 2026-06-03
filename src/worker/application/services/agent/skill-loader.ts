@@ -163,7 +163,7 @@ async function loadEquippedSkillsWithAvailability(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logError("Failed to load equipped skills", errorMessage, {
-      module: "services/agent/runner",
+      module: "services/agent/skill-loader",
     });
     return { ...defaultResult, error: errorMessage };
   }
@@ -221,7 +221,7 @@ export async function buildSkillResolutionContext(
     }
   } catch (error) {
     logWarn("Failed to parse run input for skill resolution", {
-      module: "services/agent/runner",
+      module: "services/agent/skill-loader",
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -236,7 +236,7 @@ export async function buildSkillResolutionContext(
     }
   } catch (error) {
     logWarn("Failed to parse thread key points for skill resolution", {
-      module: "services/agent/runner",
+      module: "services/agent/skill-loader",
       error: error instanceof Error ? error.message : String(error),
     });
   }
