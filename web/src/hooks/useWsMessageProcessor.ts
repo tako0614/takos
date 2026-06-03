@@ -324,11 +324,20 @@ export function useWsMessageProcessor({
       if (eventId > previous) {
         runEventCursorRef.current.set(runId, eventId);
       }
-      // Prevent unbounded growth of cursor map
+      // Bound the cursor map WITHOUT dropping a still-active run's cursor.
+      // Map keys are insertion-ordered, so evicting the oldest-inserted entry
+      // could drop a long-lived active run while keeping short idle ones; its
+      // cursor would then fall back to `?? 0` and replay the run's entire event
+      // history on the next event/reconnect. Evict only runs no longer present on
+      // the timeline (the current run is always kept).
       if (runEventCursorRef.current.size > 100) {
-        const oldest = runEventCursorRef.current.keys().next().value;
-        if (oldest !== undefined) {
-          runEventCursorRef.current.delete(oldest);
+        const active = new Set(timelineEntries().map((e) => e.runId));
+        active.add(runId);
+        for (const cursorRunId of runEventCursorRef.current.keys()) {
+          if (runEventCursorRef.current.size <= 100) break;
+          if (!active.has(cursorRunId)) {
+            runEventCursorRef.current.delete(cursorRunId);
+          }
         }
       }
     }

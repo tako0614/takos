@@ -7,6 +7,7 @@ import type {
 import {
   getTerminalRunStatusFromTimelineEvent,
   parseEventData,
+  TERMINAL_RUN_STATUSES,
 } from "./timeline.ts";
 
 export interface PersistentRunActivityGroup {
@@ -22,11 +23,6 @@ const ACTIVE_RUN_STATUSES: ReadonlySet<Run["status"]> = new Set([
   "running",
 ]);
 
-const TERMINAL_RUN_STATUSES: ReadonlySet<Run["status"]> = new Set([
-  "completed",
-  "failed",
-  "cancelled",
-]);
 
 const PERSISTED_ACTIVITY_TYPES: ReadonlySet<ChatTimelineEventType> = new Set([
   "thinking",

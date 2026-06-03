@@ -1,5 +1,6 @@
 import type { AgentExecutorControlConfig } from "./executor-dispatch.ts";
 import { base64UrlEncode } from "../../shared/utils/encoding-utils.ts";
+import { logError, logWarn } from "../../shared/utils/logger.ts";
 
 export interface AgentExecutorProxyConfigEnv {
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
@@ -7,6 +8,8 @@ export interface AgentExecutorProxyConfigEnv {
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
+  /** Deployment environment label (e.g. "production" / "development"). */
+  ENVIRONMENT?: string;
   /**
    * Opt-in escape hatch for injecting the durable provider keys directly into
    * every executor container's env. Defaults to OFF (proxy mode): the agent
@@ -83,6 +86,23 @@ export function buildAgentExecutorContainerEnvVars(
   if (
     shouldInjectProviderKeysDirect(env.EXECUTOR_INJECT_PROVIDER_KEYS_DIRECT)
   ) {
+    // This durable, cross-tenant key exposure must never be silent. Log it on
+    // every build; escalate to CRITICAL outside an explicit dev environment so a
+    // production deploy that flips it on is loud in logs/audit.
+    const environment = (env.ENVIRONMENT ?? "").trim().toLowerCase();
+    const isDev = environment === "development" || environment === "dev" ||
+      environment === "local" || environment === "test";
+    const message =
+      "EXECUTOR_INJECT_PROVIDER_KEYS_DIRECT is ON: durable provider keys are " +
+      "injected into every pooled executor container env and are shared across " +
+      "all tenants on the pool — use only on isolated/single-tenant deployments.";
+    const ctx = {
+      module: "container-hosts/executor-proxy-config",
+      environment: environment || "unset",
+    };
+    if (isDev) logWarn(message, ctx);
+    else logError(message, undefined, { ...ctx, severity: "critical" });
+
     copyOptionalEnvVar(vars, "OPENAI_API_KEY", env.OPENAI_API_KEY);
     copyOptionalEnvVar(vars, "ANTHROPIC_API_KEY", env.ANTHROPIC_API_KEY);
     copyOptionalEnvVar(vars, "GOOGLE_API_KEY", env.GOOGLE_API_KEY);

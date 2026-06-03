@@ -14,6 +14,7 @@
 
 pub mod control_rpc;
 pub mod engine_support;
+pub mod hash;
 pub mod internal_rpc;
 pub mod managed_skills;
 pub mod model;

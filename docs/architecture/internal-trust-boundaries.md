@@ -36,6 +36,16 @@ no signature is required or wanted.** Adding header auth here is theater that in
   SSRF guards (private-IP / port / protocol / redirect / credential blocking) carry outbound safety. The only remaining
   `X-Takos-Internal-Marker` references are defensive inbound strips (`dispatch.ts:79`, header strip-lists) — nothing reads
   it as trust.
+- **ACCEPTED RESIDUAL RISK — egress DNS-rebinding TOCTOU.** `egress.ts` resolves the target via DoH and rejects
+  private/internal IPs, but the subsequent `fetch()` re-resolves the hostname through the Workers platform resolver and is
+  **not pinned** to the validated IP — the Workers runtime offers no portable way to pin a fetch to a literal IP while
+  preserving correct Host/SNI. A hostname that answers a public IP to the DoH probe and a private IP (or a short-TTL flip)
+  to the edge resolver could therefore bypass the private-IP gate. Both lookups traverse Cloudflare's own resolver, which
+  narrows this to a short-TTL-flip race rather than a wide-open hole. **Mitigations in place:** the private-IP gate on the
+  DoH result, `redirect: 'manual'`, and per-space egress rate limiting (shrinks the rebinding window). **Operator
+  mitigation (required for hard isolation):** deploy egress behind a network egress DMZ / firewall that itself blocks RFC1918
+  + link-local + metadata-endpoint destinations, so a rebind cannot reach internal addresses even if the in-worker gate is
+  raced. Revisit the in-worker pinning if/when Workers exposes IP-pinned fetch for arbitrary hostnames.
 - **DEPLOY INVARIANT — Takos runs on Takosumi.** Takos is a product **deployed by Takosumi**, the OpenTofu-native deploy
   control plane: its deploy topology is an OpenTofu module that Takosumi **installs and applies** (Installation → PlanRun →
   ApplyRun → Deployment), with a **RunnerProfile** owning the provider allowlist, credentials, state backend, and

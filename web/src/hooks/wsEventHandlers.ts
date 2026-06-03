@@ -1,8 +1,15 @@
 import type { Setter } from "solid-js";
 import type { Run } from "../types/index.ts";
 import type { WebSocketEventPayload } from "../views/chat/timeline.ts";
-import { parseTimelineEventId } from "../views/chat/timeline.ts";
+import {
+  parseTimelineEventId,
+  TERMINAL_RUN_STATUSES,
+} from "../views/chat/timeline.ts";
 import type { TranslationKey } from "../store/i18n.ts";
+
+// Re-exported for back-compat: other hooks import TERMINAL_RUN_STATUSES from here.
+// The single definition now lives in timeline.ts (the existing dependency edge).
+export { TERMINAL_RUN_STATUSES };
 
 type MutableRefObject<T> = { current: T };
 
@@ -19,12 +26,6 @@ export const ACTIVE_RUN_STATUSES: Set<string> = new Set([
   "pending",
   "queued",
   "running",
-]);
-
-export const TERMINAL_RUN_STATUSES: Set<string> = new Set([
-  "completed",
-  "failed",
-  "cancelled",
 ]);
 
 export function getRunStatusFromPayload(
