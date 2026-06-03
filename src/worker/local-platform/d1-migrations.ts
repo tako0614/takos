@@ -515,6 +515,15 @@ export async function ensureSqliteDeploymentsTableShape(
     `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`,
   );
   // Idempotency keys are unique per service, not globally (see migration 0080).
+  // NOTE (dev-only edge): a fresh table created above declares `idempotency_key`
+  // without inline UNIQUE, so this composite index is the only uniqueness. A dev
+  // DB bootstrapped by an OLDER version of this helper (which used
+  // `idempotency_key TEXT UNIQUE`) carries an implicit `sqlite_autoindex`
+  // enforcing GLOBAL uniqueness that migration 0080's named DROP cannot target,
+  // and that this CREATE ... IF NOT EXISTS does not remove. Such a legacy dev DB
+  // self-heals only on recreation; production control-plane DBs (created by the
+  // 0001 baseline, dropped by 0080) are unaffected. We intentionally do not
+  // table-rebuild here — too risky for a dev-only, self-healing case.
   await client.execute(
     `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_idempotency_key" ON "deployments"("service_id", "idempotency_key");`,
   );
