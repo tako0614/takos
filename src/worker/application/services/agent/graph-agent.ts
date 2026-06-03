@@ -18,6 +18,7 @@ import {
   ToolMessage,
 } from "@langchain/core/messages";
 import { RunCancelledError } from "./run-lifecycle.ts";
+import type { AgentUsage } from "./agent-models.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 
 // Public exports from the split modules.
@@ -68,6 +69,7 @@ export async function runLangGraph(options: RunLangGraphOptions): Promise<{
   response: string;
   messages: BaseMessage[];
   iterations: number;
+  usage: AgentUsage;
 }> {
   const {
     agent,
@@ -100,6 +102,10 @@ export async function runLangGraph(options: RunLangGraphOptions): Promise<{
 
   let finalState = initialState;
   let lastIteration = 0;
+  // ChatOpenAI reports per-call token usage (incl. OpenAI automatic prefix-cache
+  // reads) on each agent-node AIMessage; accumulate it so the run records usage
+  // and cache hits (previously dropped — LangGraph runs logged zero tokens).
+  const usage: AgentUsage = { inputTokens: 0, outputTokens: 0 };
 
   const calculatedLimit = (agent.maxIterations * 2) + 5;
   const recursionLimit = Math.min(calculatedLimit, 1000);
@@ -120,6 +126,18 @@ export async function runLangGraph(options: RunLangGraphOptions): Promise<{
 
       if (nodeName === "agent" && output.messages) {
         const lastMsg = output.messages[output.messages.length - 1];
+
+        const um = (lastMsg as AIMessage)?.usage_metadata;
+        if (um) {
+          // input_tokens is the TOTAL prompt tokens (cached + uncached);
+          // input_token_details.cache_read is the cached subset.
+          usage.inputTokens += um.input_tokens ?? 0;
+          usage.outputTokens += um.output_tokens ?? 0;
+          const cacheRead = um.input_token_details?.cache_read ?? 0;
+          if (cacheRead) {
+            usage.cacheReadTokens = (usage.cacheReadTokens ?? 0) + cacheRead;
+          }
+        }
 
         if (lastMsg && "tool_calls" in lastMsg) {
           const aiMsg = lastMsg as AIMessage;
@@ -205,6 +223,7 @@ export async function runLangGraph(options: RunLangGraphOptions): Promise<{
     response,
     messages: finalState.messages,
     iterations: lastIteration,
+    usage,
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   AgentContext,
   AgentEvent,
   AgentMessage,
+  AgentUsage,
 } from "./agent-models.ts";
 import { addToolExecution, type ToolExecution } from "./runner-utils.ts";
 import type { LLMClient, ModelBackend } from "./llm.ts";
@@ -70,6 +71,8 @@ type LangGraphRunOptions = {
   shouldCancel?: () => boolean | Promise<boolean>;
   abortSignal?: AbortSignal;
   memoryRuntime?: AgentMemoryRuntime;
+  /** Run-level accumulator; the run's token + cache usage is added here. */
+  totalUsage?: AgentUsage;
 };
 
 export async function runLangGraphRunner(
@@ -210,6 +213,21 @@ export async function runLangGraphRunner(
   throwIfAborted(options.abortSignal, "langgraph-complete");
   if (options.shouldCancel && await options.shouldCancel()) {
     throw new RunCancelledError();
+  }
+
+  // Record token + cache usage for the run (LangGraph previously logged none).
+  if (options.totalUsage && result.usage) {
+    options.totalUsage.inputTokens += result.usage.inputTokens;
+    options.totalUsage.outputTokens += result.usage.outputTokens;
+    if (result.usage.cacheReadTokens) {
+      options.totalUsage.cacheReadTokens =
+        (options.totalUsage.cacheReadTokens ?? 0) + result.usage.cacheReadTokens;
+    }
+    if (result.usage.cacheWriteTokens) {
+      options.totalUsage.cacheWriteTokens =
+        (options.totalUsage.cacheWriteTokens ?? 0) +
+        result.usage.cacheWriteTokens;
+    }
   }
 
   await options.updateRunStatus(
@@ -354,6 +372,7 @@ async function executeLangGraphEngine(
     shouldCancel: deps.checkCancellation,
     abortSignal: deps.abortSignal,
     memoryRuntime: deps.memoryRuntime,
+    totalUsage: deps.totalUsage,
   });
 }
 
