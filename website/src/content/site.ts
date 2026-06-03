@@ -86,6 +86,8 @@ export interface Strings {
     readonly termOk2: string;
     readonly copy: string;
     readonly copied: string;
+    readonly signup: string;
+    readonly login: string;
   };
   readonly why: {
     readonly eyebrow: string;
@@ -160,16 +162,13 @@ const ja: Strings = {
   hero: {
     eyebrow: '墨 · OPEN SOURCE · AI-FIRST',
     title: [
-      { t: 'AI と話す場所は、' },
-      { t: 'あなたの', grad: true },
-      { t: 'サーバーで。' },
+      { t: 'AI agent' },
+      { t: 'for me', grad: true },
     ],
     lede: [
-      { t: 'Chat / agent / memory / space を core に持つ、self-hostable な AI chat product。' },
-      { t: 'takos-docs', code: true },
-      { t: ' や ' },
-      { t: 'yurucommu', code: true },
-      { t: ' などの bundled apps は新規 space 作成と同時に auto-install。history も memory も、自分の VM の外に出ません。' },
+      { t: '自分のための AI agent。chat / agent / memory / space を、' },
+      { t: '自分のサーバーの中で', em: true },
+      { t: '。ログインしてすぐ始められます。' },
     ],
     useTakos: 'Use Takos',
     gitInstall: 'Git から install',
@@ -180,6 +179,8 @@ const ja: Strings = {
     termOk2: '✓ takos-git → docs / files / agents',
     copy: 'コピー',
     copied: 'コピーしました',
+    signup: '新規登録',
+    login: 'ログイン',
   },
   why: {
     eyebrow: 'why takos',
@@ -368,16 +369,13 @@ const en: Strings = {
   hero: {
     eyebrow: '墨 · OPEN SOURCE · AI-FIRST',
     title: [
-      { t: 'The place you talk to AI' },
-      { t: 'is your own', grad: true },
-      { t: 'server.' },
+      { t: 'AI agent' },
+      { t: 'for me', grad: true },
     ],
     lede: [
-      { t: 'A self-hostable AI chat product with chat / agent / memory / space at its core. Bundled apps like ' },
-      { t: 'takos-docs', code: true },
-      { t: ' and ' },
-      { t: 'yurucommu', code: true },
-      { t: ' auto-install with every new space. Your history and memory never leave your VM.' },
+      { t: 'Your own AI agent — chat, agent, memory, and space, ' },
+      { t: 'on a server you own', em: true },
+      { t: '. Log in and start in seconds.' },
     ],
     useTakos: 'Use Takos',
     gitInstall: 'Install from Git',
@@ -388,6 +386,8 @@ const en: Strings = {
     termOk2: '✓ takos-git → docs / files / agents',
     copy: 'Copy',
     copied: 'Copied',
+    signup: 'Sign up',
+    login: 'Log in',
   },
   why: {
     eyebrow: 'why takos',
