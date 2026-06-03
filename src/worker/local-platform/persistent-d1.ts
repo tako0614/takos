@@ -378,6 +378,11 @@ export async function createPostgresSqlDatabase(
   const gate = createSerializationGate();
   let activeTransactionClient: PoolClient | null = null;
   let releaseGate: (() => void) | null = null;
+  // True only while an explicit `withTransaction()` scope owns the gate + client.
+  // In that window the callback MUST issue statements via the `tx` binding; raw
+  // transaction-control SQL routed through the outer adapter (`runQuery`) would
+  // corrupt the manual BEGIN/COMMIT bracket, so `runQuery` rejects it (below).
+  let inExplicitTx = false;
 
   async function beginTransaction(
     normalized: string,
@@ -393,7 +398,16 @@ export async function createPostgresSqlDatabase(
         "transaction_in_progress: a transaction client is still bound while a new BEGIN acquired the gate on this Postgres adapter",
       );
     }
-    const client = await pool.connect();
+    // Release the serialization gate if acquiring a connection fails — otherwise
+    // the gate (taken just above) leaks and the whole adapter deadlocks: every
+    // later runQuery/withTransaction/beginTransaction blocks forever on acquire().
+    let client: PoolClient;
+    try {
+      client = await pool.connect();
+    } catch (error) {
+      release();
+      throw error;
+    }
     activeTransactionClient = client;
     releaseGate = release;
     try {
@@ -421,6 +435,18 @@ export async function createPostgresSqlDatabase(
     const transactionKind = isExactTransactionControlSql(normalized)
       ? classifyTransactionSql(normalized)
       : null;
+
+    // An explicit withTransaction() scope owns the gate + dedicated client; raw
+    // transaction-control SQL routed through the adapter here would self-deadlock
+    // (a BEGIN re-acquires the already-held gate) or double-release (a COMMIT/
+    // ROLLBACK frees the client + gate the bracket still owns). Fail loudly — the
+    // callback must issue statements via the `tx` binding, not the outer adapter.
+    if (inExplicitTx && transactionKind !== null) {
+      throw new Error(
+        `transaction_control_in_explicit_tx: ${transactionKind} is not allowed ` +
+          `through the adapter inside withTransaction(); use the tx binding`,
+      );
+    }
 
     if (transactionKind === "begin") {
       return beginTransaction(normalized, values);
@@ -496,7 +522,16 @@ export async function createPostgresSqlDatabase(
         "transaction_in_progress: a transaction client is still bound while withTransaction acquired the gate on this Postgres adapter",
       );
     }
-    const client = await pool.connect();
+    // Release the serialization gate if acquiring a connection fails — otherwise
+    // the gate (taken just above) leaks and the whole adapter deadlocks: every
+    // later runQuery/withTransaction/beginTransaction blocks forever on acquire().
+    let client: PoolClient;
+    try {
+      client = await pool.connect();
+    } catch (error) {
+      release();
+      throw error;
+    }
     activeTransactionClient = client;
     releaseGate = release;
     const txRunner: PostgresRunner = {
@@ -517,6 +552,7 @@ export async function createPostgresSqlDatabase(
         return { count: 0, duration: Date.now() - startedAt };
       },
     };
+    inExplicitTx = true;
     try {
       await client.query("BEGIN");
       const result = await cb(tx);
@@ -531,6 +567,7 @@ export async function createPostgresSqlDatabase(
       });
       throw error;
     } finally {
+      inExplicitTx = false;
       activeTransactionClient = null;
       releaseGate = null;
       client.release();
@@ -581,6 +618,9 @@ export async function createSchemaScopedPostgresSqlDatabase(
   const gate = createSerializationGate();
   let activeTransactionClient: PoolClient | null = null;
   let releaseGate: (() => void) | null = null;
+  // See createPostgresSqlDatabase: true only inside an explicit withTransaction()
+  // scope, where `runQuery` must reject raw transaction-control SQL.
+  let inExplicitTx = false;
 
   async function beginTransaction(
     normalized: string,
@@ -593,7 +633,16 @@ export async function createSchemaScopedPostgresSqlDatabase(
         "transaction_in_progress: a transaction client is still bound while a new BEGIN acquired the gate on this schema-scoped Postgres adapter",
       );
     }
-    const client = await pool.connect();
+    // Release the serialization gate if acquiring a connection fails — otherwise
+    // the gate (taken just above) leaks and the whole adapter deadlocks: every
+    // later runQuery/withTransaction/beginTransaction blocks forever on acquire().
+    let client: PoolClient;
+    try {
+      client = await pool.connect();
+    } catch (error) {
+      release();
+      throw error;
+    }
     activeTransactionClient = client;
     releaseGate = release;
     try {
@@ -634,6 +683,18 @@ export async function createSchemaScopedPostgresSqlDatabase(
     const transactionKind = isExactTransactionControlSql(normalized)
       ? classifyTransactionSql(normalized)
       : null;
+
+    // An explicit withTransaction() scope owns the gate + dedicated client; raw
+    // transaction-control SQL routed through the adapter here would self-deadlock
+    // (a BEGIN re-acquires the already-held gate) or double-release (a COMMIT/
+    // ROLLBACK frees the client + gate the bracket still owns). Fail loudly — the
+    // callback must issue statements via the `tx` binding, not the outer adapter.
+    if (inExplicitTx && transactionKind !== null) {
+      throw new Error(
+        `transaction_control_in_explicit_tx: ${transactionKind} is not allowed ` +
+          `through the adapter inside withTransaction(); use the tx binding`,
+      );
+    }
 
     if (transactionKind === "begin") {
       return beginTransaction(normalized, values);
@@ -706,7 +767,16 @@ export async function createSchemaScopedPostgresSqlDatabase(
         "transaction_in_progress: a transaction client is still bound while withTransaction acquired the gate on this schema-scoped Postgres adapter",
       );
     }
-    const client = await pool.connect();
+    // Release the serialization gate if acquiring a connection fails — otherwise
+    // the gate (taken just above) leaks and the whole adapter deadlocks: every
+    // later runQuery/withTransaction/beginTransaction blocks forever on acquire().
+    let client: PoolClient;
+    try {
+      client = await pool.connect();
+    } catch (error) {
+      release();
+      throw error;
+    }
     activeTransactionClient = client;
     releaseGate = release;
     const txRunner: PostgresRunner = {
@@ -732,6 +802,7 @@ export async function createSchemaScopedPostgresSqlDatabase(
         return { count: 0, duration: Date.now() - startedAt };
       },
     };
+    inExplicitTx = true;
     try {
       await client.query(`SET search_path TO ${quotedSchema}, public`);
       await client.query("BEGIN");
@@ -750,6 +821,7 @@ export async function createSchemaScopedPostgresSqlDatabase(
       });
       throw error;
     } finally {
+      inExplicitTx = false;
       activeTransactionClient = null;
       releaseGate = null;
       client.release();

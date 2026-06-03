@@ -27,8 +27,10 @@ function createDeps(
         markedDead: 1,
         cutoffTime: "2026-01-01T00:00:00.000Z",
         startupCutoff: "2026-01-01T00:00:00.000Z",
+        maxAgeCutoff: "2026-01-01T00:00:00.000Z",
         heartbeatTimeoutMs: 120000,
         startupGraceMs: 30000,
+        maxSessionAgeMs: 86400000,
       };
     },
     reconcileStuckDomains: async () => {

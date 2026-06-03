@@ -31,6 +31,13 @@ const INSERT_CLAIM_SQL =
   `INSERT INTO memory_claims (id, account_id, claim_type, subject, predicate, object, confidence, status, superseded_by, source_run_id, created_at, updated_at)
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
+// The claim `id` is caller-supplied (it arrives in the control-RPC body from the
+// untrusted execution container). `account_id` is forced to the token-bound run's
+// tenant upstream, so the conflict-update is scoped to `account_id = excluded.account_id`:
+// a guessed/forged id that belongs to a DIFFERENT tenant's claim hits the conflict
+// but the WHERE fails, so the foreign row is left untouched instead of being
+// overwritten (and re-homed) into the attacker's tenant. Same-tenant re-finalize of
+// the same id still updates; a brand-new id still inserts.
 const UPSERT_CLAIM_SQL = `${INSERT_CLAIM_SQL}
    ON CONFLICT(id) DO UPDATE SET
      claim_type = excluded.claim_type,
@@ -41,7 +48,8 @@ const UPSERT_CLAIM_SQL = `${INSERT_CLAIM_SQL}
      status = excluded.status,
      superseded_by = excluded.superseded_by,
      source_run_id = excluded.source_run_id,
-     updated_at = excluded.updated_at`;
+     updated_at = excluded.updated_at
+   WHERE memory_claims.account_id = excluded.account_id`;
 
 export async function insertClaim(
   db: SqlDatabaseBinding,
