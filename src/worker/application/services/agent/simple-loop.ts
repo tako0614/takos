@@ -95,8 +95,13 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
     deps.spaceId,
   );
 
+  // `enhancedPrompt` (base prompt + tool catalog + skills) is built once and
+  // never mutated during the loop, so it is the stable prompt-cache prefix:
+  // mark it as the cache boundary. Activated memory is injected below as a
+  // SEPARATE system message after this one, so it forms the uncached dynamic
+  // tail and its per-iteration refresh never busts the cached prefix.
   const messages: AgentMessage[] = [
-    { role: "system", content: enhancedPrompt },
+    { role: "system", content: enhancedPrompt, cacheControl: "ephemeral" },
     ...history,
   ];
 
