@@ -243,6 +243,8 @@ pub struct UsagePayload {
     pub input_tokens: usize,
     #[serde(rename = "outputTokens")]
     pub output_tokens: usize,
+    #[serde(rename = "cachedInputTokens")]
+    pub cached_input_tokens: usize,
 }
 
 #[derive(Clone)]

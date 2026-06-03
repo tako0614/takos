@@ -732,6 +732,7 @@ async fn handle_success(
                 "usage": {
                     "inputTokens": usage.input_tokens,
                     "outputTokens": usage.output_tokens,
+                    "cachedInputTokens": usage.cached_input_tokens,
                 }
             }),
         )
@@ -794,6 +795,7 @@ async fn handle_failure(
                 "usage": {
                     "inputTokens": usage.input_tokens,
                     "outputTokens": usage.output_tokens,
+                    "cachedInputTokens": usage.cached_input_tokens,
                 }
             }),
         )

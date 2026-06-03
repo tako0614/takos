@@ -772,7 +772,11 @@ export async function handleUpdateRunStatus(
       | "completed"
       | "failed"
       | "cancelled";
-    usage?: { inputTokens?: number; outputTokens?: number };
+    usage?: {
+      inputTokens?: number;
+      outputTokens?: number;
+      cachedInputTokens?: number;
+    };
     output?: string;
     error?: string;
   };
@@ -793,6 +797,12 @@ export async function handleUpdateRunStatus(
       {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
+        // Map the container's cached-prompt-token count onto the shared
+        // AgentUsage `cacheReadTokens` field so runs.usage has one shape
+        // regardless of execution path.
+        ...(typeof usage.cachedInputTokens === "number"
+          ? { cacheReadTokens: usage.cachedInputTokens }
+          : {}),
       },
       status,
       output,

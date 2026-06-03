@@ -103,6 +103,7 @@ impl TakosModelRunner {
         UsagePayload {
             input_tokens: snapshot.input_tokens,
             output_tokens: snapshot.output_tokens,
+            cached_input_tokens: snapshot.cached_input_tokens,
         }
     }
 
@@ -193,7 +194,8 @@ impl TakosModelRunner {
         let prompt_tokens =
             estimate_tokens(&input.system_prompt) + estimate_tokens(&input.user_message);
         let output_tokens = lines.iter().map(|line| estimate_tokens(line)).sum();
-        self.usage_tracker.record(prompt_tokens, output_tokens);
+        // Local/smoke estimate path: no provider usage, so no cached tokens.
+        self.usage_tracker.record(prompt_tokens, output_tokens, 0);
 
         Ok(ModelOutput {
             assistant_message: Some(lines.join("\n")),
@@ -304,8 +306,14 @@ impl TakosModelRunner {
             .ok_or_else(|| io::Error::other("OpenAI returned no choices"))?;
 
         if let Some(usage) = body.usage {
+            // prompt_tokens is the TOTAL prompt tokens (cached + uncached);
+            // prompt_tokens_details.cached_tokens is the cached subset.
+            let cached = usage
+                .prompt_tokens_details
+                .map(|details| details.cached_tokens)
+                .unwrap_or(0);
             self.usage_tracker
-                .record(usage.prompt_tokens, usage.completion_tokens);
+                .record(usage.prompt_tokens, usage.completion_tokens, cached);
         }
 
         let tool_calls = choice
@@ -511,6 +519,15 @@ struct OpenAiToolFunction {
 struct OpenAiUsage {
     prompt_tokens: usize,
     completion_tokens: usize,
+    // OpenAI automatic prefix caching reports the cached subset of prompt_tokens.
+    #[serde(default)]
+    prompt_tokens_details: Option<OpenAiPromptTokensDetails>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct OpenAiPromptTokensDetails {
+    #[serde(default)]
+    cached_tokens: usize,
 }
 
 #[cfg(test)]
