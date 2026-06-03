@@ -69,6 +69,7 @@ async function checkTrackedOpenTofuSecretFiles(): Promise<void> {
   const allowedTfvars = new Set([
     'deploy/opentofu/plan/aws-staging.tfvars',
     'deploy/opentofu/plan/gcp-staging.tfvars',
+    'deploy/opentofu/plan/cloudflare-staging.tfvars',
   ]);
   const forbidden = tracked.filter((path) => {
     if (allowedTfvars.has(path)) return false;
@@ -87,18 +88,31 @@ async function checkTrackedOpenTofuSecretFiles(): Promise<void> {
 }
 
 async function checkPlanFixtures(): Promise<void> {
-  const fixturePaths = [
+  // DB-backed targets (aws/gcp) prove CI-only status via the placeholder db_password.
+  const dbPasswordFixtures = [
     'deploy/opentofu/plan/aws-staging.tfvars',
     'deploy/opentofu/plan/gcp-staging.tfvars',
   ];
   const failures: string[] = [];
-  for (const path of fixturePaths) {
+  for (const path of dbPasswordFixtures) {
     const text = await readText(path);
     if (!text.includes('opentofu_plan_mode = true')) {
       failures.push(`${path} missing opentofu_plan_mode = true`);
     }
     if (!text.includes('ci-plan-placeholder-not-a-secret')) {
       failures.push(`${path} missing CI placeholder password`);
+    }
+  }
+  // Cloudflare has no DB password; its only identity-like value is account_id,
+  // which must stay the all-zero placeholder rather than a real account id.
+  {
+    const path = 'deploy/opentofu/plan/cloudflare-staging.tfvars';
+    const text = await readText(path);
+    if (!text.includes('opentofu_plan_mode = true')) {
+      failures.push(`${path} missing opentofu_plan_mode = true`);
+    }
+    if (!text.includes('account_id = "00000000000000000000000000000000"')) {
+      failures.push(`${path} cloudflare account_id must be the all-zero CI placeholder`);
     }
   }
   checks.push({
