@@ -26,9 +26,9 @@ export function isRetiredAppLocalBearerToken(token: string): boolean {
  * Whether the token is plausibly a JWT: three non-empty base64url segments whose
  * header decodes to a JSON object declaring an `alg`. This is stricter than a
  * bare `split(".").length === 3`, which classified arbitrary `a.b.c` strings as
- * accounts bearers and steered them into the accounts introspection endpoint
- * (a free traffic-amplification / enumeration primitive). Introspection still
- * validates the signature; this just stops junk from reaching it.
+ * accounts bearers and steered them into the in-process self-issued
+ * verification path. The JWKS verifier still validates the signature; this just
+ * stops junk from reaching it.
  */
 function looksLikeJwt(token: string): boolean {
   const parts = token.split(".");

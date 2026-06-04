@@ -43,9 +43,6 @@ function ctxWithAuthHeader(value: string | undefined): Context<{
 const fakeServices = { sql: { binding: {} } } as never;
 const fakeConfig = {
   oidcIssuerUrl: "https://accounts.test",
-  oidcDiscoveryUrl: undefined,
-  oidcClientId: "cid",
-  oidcClientSecret: "secret",
 } as never;
 
 function bearerDeps(
@@ -57,12 +54,12 @@ function bearerDeps(
     isValidUserId: (id: unknown): id is string =>
       typeof id === "string" && id.length > 0,
     getCachedUser: async () => USER,
-    validateTakosumiAccountsBearer: async () => ({
+    resolveSelfIssuedBearer: async () => ({
+      kind: "ok" as const,
+      user: USER,
       userId: "user-1",
-      scopes: ["profile"],
-      tokenKind: "takosumi_accounts" as const,
-      issuer: "https://accounts.test",
       subject: "sub",
+      scopes: ["profile"],
     }),
     ...over,
   } as AccountsBearerResolverDeps;
@@ -102,10 +99,10 @@ test("resolveAccountsBearer: accounts candidate without SQL binding -> no-db", a
   assertEquals(r.kind, "no-db");
 });
 
-test("resolveAccountsBearer: validate rejects -> invalid", async () => {
+test("resolveAccountsBearer: self-issued verification rejects -> invalid", async () => {
   const r = await resolveAccountsBearer(
     ctxWithAuthHeader("Bearer takpat_x"),
-    bearerDeps({ validateTakosumiAccountsBearer: async () => null }),
+    bearerDeps({ resolveSelfIssuedBearer: async () => ({ kind: "invalid" }) }),
   );
   assertEquals(r.kind, "invalid");
 });

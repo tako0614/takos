@@ -99,6 +99,24 @@ database_id = "51138f7c-f298-4f60-8528-37acc85daa4d"
 binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
 bucket_name = "takosumi-accounts-exports"
 
+# Deploy-control D1 (in-process Takosumi deploy-control plane). Separate DB from
+# the product `DB` and from `TAKOSUMI_ACCOUNTS_DB`: the OpenTofu run ledger has
+# its own schema. No migrations_dir — d1_opentofu_store.ts + d1_deploy_stores.ts
+# self-create their namespaced key/value + run tables lazily. Create with
+# `wrangler d1 create takosumi-deploy`. Binding name is read verbatim by the
+# takosumi deploy handler (bindings.ts TAKOS_D1) and does not collide with takos
+# names.
+[[d1_databases]]
+binding = "TAKOS_D1"
+database_name = "takosumi-deploy"
+database_id = "replace-with-takosumi-deploy-d1-database-id"
+
+# Deploy-control R2 (OpenTofu plan artifacts). Default bucket name expected by
+# opentofu_runner_container.ts (DEFAULT_PLAN_ARTIFACT_BUCKET = "takos-artifacts").
+[[r2_buckets]]
+binding = "TAKOS_ARTIFACTS"
+bucket_name = "takos-artifacts"
+
 # KV for hostname routing
 [[kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
@@ -149,6 +167,18 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
+# Deploy-control Durable Objects (in-process Takosumi deploy-control plane).
+# Binding names are read verbatim by the takosumi deploy handler (bindings.ts:
+# TAKOS_COORDINATION, TAKOS_OPENTOFU_RUNNER). The class_name values must match
+# the DO classes re-exported from src/worker/index.ts.
+[[durable_objects.bindings]]
+name = "TAKOS_COORDINATION"
+class_name = "TakosCoordinationObject"
+
+[[durable_objects.bindings]]
+name = "TAKOS_OPENTOFU_RUNNER"
+class_name = "TakosumiOpenTofuRunner"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SessionDO"]
@@ -178,6 +208,17 @@ new_sqlite_classes = [
   "ExecutorContainerTier3",
 ]
 
+# Deploy-control Durable Objects — appended as the NEXT tags after takos v6 (do
+# NOT reuse the takosumi v1/v2 tags; renumbering corrupts existing DO migration
+# state). Both DOs use SQLite storage (matches takosumi's new_sqlite_classes).
+[[migrations]]
+tag = "v7"
+new_sqlite_classes = ["TakosCoordinationObject"]
+
+[[migrations]]
+tag = "v8"
+new_sqlite_classes = ["TakosumiOpenTofuRunner"]
+
 [[containers]]
 class_name = "TakosRuntimeContainer"
 image = "ghcr.io/takos/runtime-service:latest"
@@ -202,6 +243,17 @@ class_name = "ExecutorContainerTier3"
 image = "your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
+
+# Deploy-control OpenTofu run executor (in-process Takosumi deploy-control
+# plane). The embedded deploy service drives this container-backed DO through its
+# OpenTofu runner adapter. image / image_build_context are takosumi-relative;
+# rewritten here to reach takosumi/deploy/cloudflare from takos/deploy/cloudflare.
+[[containers]]
+class_name = "TakosumiOpenTofuRunner"
+image = "../../../takosumi/deploy/cloudflare/runner/Dockerfile"
+image_build_context = "../../../takosumi/deploy/cloudflare"
+instance_type = "basic"
+max_instances = 10
 
 # R2 Bucket for worker bundles (optional - for production)
 [[r2_buckets]]
@@ -260,6 +312,16 @@ bucket_name = "takos-offload"
 # - TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET: launch-token pairwise HMAC secret
 # - TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET: signs /__takosumi/exports/* download URLs
 # - TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_TOKEN: optional bearer for deploy-control calls
+# Deploy-control plane (in-process Takosumi deploy-control handler) handshake —
+# push via `wrangler secret put`:
+# - TAKOSUMI_DEPLOY_CONTROL_TOKEN: REQUIRED to enable the in-process deploy-control
+#   routes. The embedded deploy service gates `authorizeDeployControl` on this
+#   secret (404 "deploy control routes disabled" when unset), and the accounts
+#   deploy-control proxy sends the SAME value as `Authorization: Bearer`. In this
+#   single worker it is an internal handshake — generate one shared secret and set
+#   it once; install/plan/apply silently fail without it. Must ship in the same
+#   deploy as the TAKOS_D1 binding (bootstrap fail-closes in prod when the routes
+#   are exposed but no durable deploy store is bound).
 # Optional account-plane integrations (push only when enabled):
 # - TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY / _STRIPE_WEBHOOK_SECRET: Stripe billing
 # - TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_ID / _CLIENT_SECRET: upstream GitHub OAuth
@@ -286,6 +348,22 @@ binding = "WORKFLOW_QUEUE"
 [[queues.producers]]
 queue = "takos-deployment-jobs"
 binding = "DEPLOY_QUEUE"
+
+# Deploy-control plane queues (in-process Takosumi deploy-control plane). Binding
+# names are read verbatim by the takosumi deploy handler (bindings.ts: TAKOS_QUEUE
+# coordination control-plane, TAKOS_OPENTOFU_RUN_QUEUE OpenTofu run dispatch).
+# Only producer bindings are wired: the in-process CloudflareContainerOpenTofuRunner
+# adapter dispatches runs synchronously to the TAKOS_OPENTOFU_RUNNER container DO
+# (handler.ts #runContainer), so no separate queue consumer is required here. If a
+# future async-via-queue dispatch model is adopted, add matching [[queues.consumers]]
+# blocks and teach the takos queue() handler the takosumi.opentofu-run@v1 kind.
+[[queues.producers]]
+queue = "takosumi-control-plane"
+binding = "TAKOS_QUEUE"
+
+[[queues.producers]]
+queue = "takosumi-opentofu-runs"
+binding = "TAKOS_OPENTOFU_RUN_QUEUE"
 
 [[queues.consumers]]
 queue = "takos-runs"
@@ -400,6 +478,19 @@ database_id = "replace-with-staging-takosumi-accounts-d1-database-id"
 binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
 bucket_name = "takosumi-accounts-exports-staging"
 
+# Deploy-control D1 (staging). Separate takosumi-deploy staging DB — create with
+# `wrangler d1 create takosumi-deploy-staging` and fill the id. No migrations_dir
+# (stores self-create their tables). See the production [[d1_databases]] note.
+[[env.staging.d1_databases]]
+binding = "TAKOS_D1"
+database_name = "takosumi-deploy-staging"
+database_id = "replace-with-staging-takosumi-deploy-d1-database-id"
+
+# Deploy-control R2 (staging) for OpenTofu plan artifacts.
+[[env.staging.r2_buckets]]
+binding = "TAKOS_ARTIFACTS"
+bucket_name = "takos-artifacts-staging"
+
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
 id = "replace-with-staging-kv-namespace-id"
@@ -444,6 +535,15 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
+# Deploy-control Durable Objects (staging). Binding/class names mirror production.
+[[env.staging.durable_objects.bindings]]
+name = "TAKOS_COORDINATION"
+class_name = "TakosCoordinationObject"
+
+[[env.staging.durable_objects.bindings]]
+name = "TAKOS_OPENTOFU_RUNNER"
+class_name = "TakosumiOpenTofuRunner"
+
 [[env.staging.containers]]
 class_name = "TakosRuntimeContainer"
 image = "ghcr.io/takos/runtime-service:latest"
@@ -468,6 +568,14 @@ class_name = "ExecutorContainerTier3"
 image = "your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
+
+# Deploy-control OpenTofu run executor (staging). Paths mirror production.
+[[env.staging.containers]]
+class_name = "TakosumiOpenTofuRunner"
+image = "../../../takosumi/deploy/cloudflare/runner/Dockerfile"
+image_build_context = "../../../takosumi/deploy/cloudflare"
+instance_type = "basic"
+max_instances = 5
 
 [[env.staging.r2_buckets]]
 binding = "WORKER_BUNDLES"
@@ -504,6 +612,16 @@ binding = "WORKFLOW_QUEUE"
 [[env.staging.queues.producers]]
 queue = "takos-deployment-jobs-staging"
 binding = "DEPLOY_QUEUE"
+
+# Deploy-control plane queues (staging). Producer-only; see the production note —
+# the in-process runner adapter dispatches synchronously to the container DO.
+[[env.staging.queues.producers]]
+queue = "takosumi-control-plane-staging"
+binding = "TAKOS_QUEUE"
+
+[[env.staging.queues.producers]]
+queue = "takosumi-opentofu-runs-staging"
+binding = "TAKOS_OPENTOFU_RUN_QUEUE"
 
 [[env.staging.queues.consumers]]
 queue = "takos-runs-staging"

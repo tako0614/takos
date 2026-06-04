@@ -104,6 +104,74 @@ const SharedThreadPage = lazy(() =>
     default: module.SharedThreadPage,
   }))
 );
+
+// ---------------------------------------------------------------------------
+// Account / Installations screens (folded from the takosumi dashboard SPA).
+//
+// These screens self-gate on the account-plane cookie session via their ported
+// `<Page>` / `<AuthGuard>` wrapper (distinct from the takos product
+// `ProtectedRouteLayout`, which gates on `useAuth()`), and drive navigation with
+// `@solidjs/router` `useParams` / `useNavigate` directly rather than the takos
+// navigation-context. They are therefore registered as plain `<Route>` elements
+// appended in `AppRoutes()` (see `ACCOUNT_PLANE_ROUTES`) that bypass the
+// schema/navigation-context system, so no `View` union / `RouteState` change is
+// needed. `/sign-in` and `/sign-in/callback` are public; the rest redirect to
+// `/sign-in` themselves when there is no account-plane session.
+// ---------------------------------------------------------------------------
+const AccountHubView = lazy(() =>
+  import("./views/account/AccountHubView.tsx").then((module) => ({
+    default: module.AccountHubView,
+  }))
+);
+const AccountProfileView = lazy(() =>
+  import("./views/account/AccountHubView.tsx").then((module) => ({
+    default: module.AccountProfileView,
+  }))
+);
+const AccountSessionsView = lazy(() =>
+  import("./views/account/AccountHubView.tsx").then((module) => ({
+    default: module.AccountSessionsView,
+  }))
+);
+const InstallationsListView = lazy(() =>
+  import("./views/installations/InstallationsListView.tsx")
+);
+const InstallationDetailView = lazy(() =>
+  import("./views/installations/InstallationDetailView.tsx")
+);
+const InstallationDangerView = lazy(() =>
+  import("./views/installations/InstallationDangerView.tsx")
+);
+const InstallByUrlView = lazy(() =>
+  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+    default: module.InstallByUrlView,
+  }))
+);
+const SignInView = lazy(() =>
+  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+    default: module.SignInView,
+  }))
+);
+const SignInCallbackView = lazy(() =>
+  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+    default: module.SignInCallbackView,
+  }))
+);
+const TakosStartView = lazy(() =>
+  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+    default: module.TakosStartView,
+  }))
+);
+const AccountHomeView = lazy(() =>
+  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+    default: module.HomeView,
+  }))
+);
+const NotificationsView = lazy(() =>
+  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+    default: module.NotificationsView,
+  }))
+);
 function HomeRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
@@ -762,6 +830,43 @@ function renderRouteSchemaGroup(
   });
 }
 
+/**
+ * Account / Installations routes folded from the takosumi dashboard SPA.
+ *
+ * Registered as plain `<Route>` elements (no schema entry, no
+ * `ProtectedRouteLayout`) because each view owns its own account-plane session
+ * gate. Patterns mirror the dashboard paths so the dashboard's own deep-links
+ * keep working; static segments (`/install`, `/installations`, `/account/...`)
+ * out-rank the schema's `/:username/:repoName` and `*rest` fallbacks in the
+ * @solidjs/router specificity match.
+ */
+function AccountPlaneRoutes() {
+  return (
+    <>
+      {/* Public — no session required. */}
+      <Route path="/sign-in" component={SignInView} />
+      <Route path="/sign-in/callback" component={SignInCallbackView} />
+
+      {/* Self-gated (redirect to /sign-in when no account-plane session). */}
+      <Route path="/home" component={AccountHomeView} />
+      <Route path="/notifications" component={NotificationsView} />
+      <Route path="/account" component={AccountHubView} />
+      <Route path="/account/profile" component={AccountProfileView} />
+      <Route path="/account/sessions" component={AccountSessionsView} />
+
+      <Route path="/install" component={InstallByUrlView} />
+      <Route path="/installations" component={InstallationsListView} />
+      <Route path="/installations/:id" component={InstallationDetailView} />
+      <Route
+        path="/installations/:id/danger"
+        component={InstallationDangerView}
+      />
+
+      <Route path="/takos/start" component={TakosStartView} />
+    </>
+  );
+}
+
 export function AppRoutes() {
   return (
     <>
@@ -770,6 +875,8 @@ export function AppRoutes() {
       <Route path="/" component={ProtectedRouteLayout}>
         {renderRouteSchemaGroup(PROTECTED_APP_ROUTE_SCHEMAS)}
       </Route>
+
+      {AccountPlaneRoutes()}
 
       {renderRouteSchemaGroup(FALLBACK_APP_ROUTE_SCHEMAS)}
     </>

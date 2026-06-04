@@ -48,6 +48,9 @@
       "@takosjp/takosumi-accounts-worker": [
         "../takosumi/deploy/accounts-cloudflare/src/handler.ts"
       ],
+      "@takosjp/takosumi-deploy-worker": [
+        "../takosumi/deploy/cloudflare/src/handler.ts"
+      ],
       "takos-git-contract": [
         "./src/contracts/git/index.ts"
       ],

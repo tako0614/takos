@@ -167,15 +167,15 @@ function restoreOauthAuthDeps() {
 }
 
 test("protected API denies Accounts bearer tokens missing the route family read scope", async () => {
-  const validateTakosumiAccountsBearerSpy = spy(async () => ({
+  const resolveSelfIssuedBearerSpy = spy(async () => ({
+    kind: "ok" as const,
+    user: resolvedUser,
     userId: "user-1",
-    scopes: ["profile"],
-    tokenKind: "takosumi_accounts" as const,
-    issuer: "https://accounts.test",
     subject: "acct_subject",
+    scopes: ["profile"],
   }));
-  oauthAuthDeps.validateTakosumiAccountsBearer =
-    validateTakosumiAccountsBearerSpy as typeof oauthAuthDeps.validateTakosumiAccountsBearer;
+  oauthAuthDeps.resolveSelfIssuedBearer =
+    resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
 
   try {
     const response = await createApp().fetch(
@@ -193,7 +193,7 @@ test("protected API denies Accounts bearer tokens missing the route family read 
         message: "Required scopes: threads:read",
       },
     });
-    assertSpyCalls(validateTakosumiAccountsBearerSpy, 1);
+    assertSpyCalls(resolveSelfIssuedBearerSpy, 1);
   } finally {
     restoreOauthAuthDeps();
   }
@@ -258,13 +258,13 @@ test("protected API does not treat legacy tak_pat as scoped API auth", async () 
 });
 
 test("protected API allows Accounts bearer tokens with the route family scope", async () => {
-  oauthAuthDeps.validateTakosumiAccountsBearer = spy(async () => ({
+  oauthAuthDeps.resolveSelfIssuedBearer = spy(async () => ({
+    kind: "ok" as const,
+    user: resolvedUser,
     userId: "user-1",
-    scopes: ["profile"],
-    tokenKind: "takosumi_accounts" as const,
-    issuer: "https://accounts.test",
     subject: "acct_subject",
-  })) as typeof oauthAuthDeps.validateTakosumiAccountsBearer;
+    scopes: ["profile"],
+  })) as typeof oauthAuthDeps.resolveSelfIssuedBearer;
   oauthAuthDeps.getCachedUser = spy(
     async () => resolvedUser,
   ) as typeof oauthAuthDeps.getCachedUser;
@@ -287,15 +287,15 @@ test("protected API allows Accounts bearer tokens with the route family scope", 
 });
 
 test("billing API is not mounted before PAT scope checks", async () => {
-  const validateTakosumiAccountsBearerSpy = spy(async () => ({
+  const resolveSelfIssuedBearerSpy = spy(async () => ({
+    kind: "ok" as const,
+    user: resolvedUser,
     userId: "user-1",
-    scopes: ["profile"],
-    tokenKind: "takosumi_accounts" as const,
-    issuer: "https://accounts.test",
     subject: "acct_subject",
+    scopes: ["profile"],
   }));
-  oauthAuthDeps.validateTakosumiAccountsBearer =
-    validateTakosumiAccountsBearerSpy as typeof oauthAuthDeps.validateTakosumiAccountsBearer;
+  oauthAuthDeps.resolveSelfIssuedBearer =
+    resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
 
   try {
     const response = await createApp().fetch(
@@ -308,22 +308,22 @@ test("billing API is not mounted before PAT scope checks", async () => {
 
     assertEquals(response.status, 404);
     assertEquals(response.headers.get("location"), null);
-    assertSpyCalls(validateTakosumiAccountsBearerSpy, 0);
+    assertSpyCalls(resolveSelfIssuedBearerSpy, 0);
   } finally {
     restoreOauthAuthDeps();
   }
 });
 
 test("publications API is not mounted before PAT scope checks", async () => {
-  const validateTakosumiAccountsBearerSpy = spy(async () => ({
+  const resolveSelfIssuedBearerSpy = spy(async () => ({
+    kind: "ok" as const,
+    user: resolvedUser,
     userId: "user-1",
-    scopes: ["profile"],
-    tokenKind: "takosumi_accounts" as const,
-    issuer: "https://accounts.test",
     subject: "acct_subject",
+    scopes: ["profile"],
   }));
-  oauthAuthDeps.validateTakosumiAccountsBearer =
-    validateTakosumiAccountsBearerSpy as typeof oauthAuthDeps.validateTakosumiAccountsBearer;
+  oauthAuthDeps.resolveSelfIssuedBearer =
+    resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
 
   try {
     const response = await createApp().fetch(
@@ -336,7 +336,7 @@ test("publications API is not mounted before PAT scope checks", async () => {
 
     assertEquals(response.status, 404);
     assertEquals(response.headers.get("location"), null);
-    assertSpyCalls(validateTakosumiAccountsBearerSpy, 0);
+    assertSpyCalls(resolveSelfIssuedBearerSpy, 0);
   } finally {
     restoreOauthAuthDeps();
   }
@@ -368,11 +368,11 @@ test("billing API is not mounted before retired bearer auth fallback", async () 
 });
 
 test("billing API is not mounted before browser auth fallback", async () => {
-  const validateTakosumiAccountsBearerSpy = spy(
-    oauthAuthDeps.validateTakosumiAccountsBearer,
+  const resolveSelfIssuedBearerSpy = spy(
+    oauthAuthDeps.resolveSelfIssuedBearer,
   );
-  oauthAuthDeps.validateTakosumiAccountsBearer =
-    validateTakosumiAccountsBearerSpy as typeof oauthAuthDeps.validateTakosumiAccountsBearer;
+  oauthAuthDeps.resolveSelfIssuedBearer =
+    resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
   const requireAuthSpy = spy(
     async (
       c: Parameters<ApiRequireAuth>[0],
@@ -392,18 +392,18 @@ test("billing API is not mounted before browser auth fallback", async () => {
     assertEquals(response.status, 404);
     assertEquals(response.headers.get("location"), null);
     assertSpyCalls(requireAuthSpy, 0);
-    assertSpyCalls(validateTakosumiAccountsBearerSpy, 0);
+    assertSpyCalls(resolveSelfIssuedBearerSpy, 0);
   } finally {
     restoreOauthAuthDeps();
   }
 });
 
 test("protected API keeps browser sessions at full access without token scopes", async () => {
-  const validateTakosumiAccountsBearerSpy = spy(
-    oauthAuthDeps.validateTakosumiAccountsBearer,
+  const resolveSelfIssuedBearerSpy = spy(
+    oauthAuthDeps.resolveSelfIssuedBearer,
   );
-  oauthAuthDeps.validateTakosumiAccountsBearer =
-    validateTakosumiAccountsBearerSpy as typeof oauthAuthDeps.validateTakosumiAccountsBearer;
+  oauthAuthDeps.resolveSelfIssuedBearer =
+    resolveSelfIssuedBearerSpy as typeof oauthAuthDeps.resolveSelfIssuedBearer;
   try {
     const response = await createApp(async (c, next) => {
       assertEquals(
@@ -423,7 +423,7 @@ test("protected API keeps browser sessions at full access without token scopes",
     assertEquals(response.status, 200);
     const body = await response.json() as { username: string };
     assertEquals(body.username, "user1");
-    assertSpyCalls(validateTakosumiAccountsBearerSpy, 0);
+    assertSpyCalls(resolveSelfIssuedBearerSpy, 0);
   } finally {
     restoreOauthAuthDeps();
   }
