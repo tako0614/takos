@@ -2,8 +2,11 @@
 
 `takos` は **Takos product shell** で、単一の Takos Worker (`src/worker`)、UI (`web`)、Cloudflare Container 実装
 (`containers/git` / `containers/agent`) と shell-owned Cloudflare deploy artifacts (`deploy/cloudflare` /
-`deploy/opentofu/modules/cloudflare` / `deploy/distributions/cloudflare.json` / validator) を集約する。この単一 Worker は
-`app.takosumi.com` の origin root で動き、Takos product に加えて Takosumi Accounts plane と Takosumi deploy-control plane を
+`deploy/opentofu/modules/cloudflare` / `deploy/distributions/cloudflare.json` / validator) を集約する。この Takos product
+Worker は **公式にはどこにもデプロイされない**: ユーザーが Takosumi で自分のインフラに Installation として deploy する
+self-hostable artifact であり、self-host された worker は **自分の origin** で動き、embedded accounts plane により自分が
+OIDC issuer になる (`app.takosumi.com` は operator の Takosumi platform worker の origin であって Takos product worker の
+origin ではない)。self-host deploy では Takos product に加えて Takosumi Accounts plane と Takosumi deploy-control plane を
 **in-process** で同居させる (詳細は後述 [`§ 単一 Worker のトポロジ`](#単一-worker-のトポロジ))。Takosumi / Takos の
 identity と vocabulary は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
@@ -14,9 +17,10 @@ identity と vocabulary は root docs [`../docs/reference/design-principles.md`]
 > user-facing convenience.** **Takosumi** installs a plain OpenTofu module and records the run ledger
 > (`Installation` / `PlanRun` / `ApplyRun` / `Deployment` / `DeploymentOutput`), with a `RunnerProfile` owning the
 > provider allowlist / credentials / state backend / Cloudflare Container execution; it is not Takos-specific.
-> deploy-control and the Accounts plane run **in-process inside this one Takos worker** at `app.takosumi.com`; they are
-> implementation source owned by `../takosumi/`, imported via tsconfig alias — not a separate service and not a privileged
-> layer above the product.
+> In a self-host deployment, deploy-control and the Accounts plane run **in-process inside this Takos product worker at the
+> self-hoster's own origin** (the embedded accounts plane is that instance's OIDC issuer); they are implementation source
+> owned by `../takosumi/`, imported via tsconfig alias — not a separate service and not a privileged layer above the
+> product. `app.takosumi.com` is the operator's Takosumi platform worker, a separate build target, not this product worker.
 
 Takos の constituent (AI agents / Git / memory / spaces / tools) と「ソフトウェアの民主化」 core concept の formal
 definition は [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) §0 を参照。
@@ -49,14 +53,15 @@ Takosumi 公開概念は `Installation` / `PlanRun` / `ApplyRun` / `Deployment` 
 
 ## 単一 Worker のトポロジ
 
-current reality は **single operator / single Cloudflare worker / two domains** (`takosumi.com` landing /
-`app.takosumi.com` everything)。multi-operator / multi-cloud / 分離 sub-service の機構は retired (下記
-[`§ Naming history`](#naming-history))。
+current reality は **operator が運用するのは Takosumi platform worker (`app.takosumi.com`) だけ**で、Takos product worker は
+公式にはデプロイされず self-host される (`takosumi.com` landing / `takos.jp` 紹介サイト)。multi-operator / multi-cloud /
+分離 sub-service の機構は retired (下記 [`§ Naming history`](#naming-history))。以下は self-host された Takos product worker の
+in-process トポロジ (operator の platform worker も同じ accounts plane / deploy-control source を別 build target で compose する)。
 
-- **product + Accounts plane + deploy-control が 1 worker に in-process 同居**する。`app.takosumi.com` がそのまま OIDC
-  issuer (bare origin) であり、Accounts plane は origin root prefix (`/.well-known/*`、 `/oauth/*`、 `/v1/*`、 `/start`、
-  `/__takosumi/*`) を `src/worker/server/routes/accounts/mount.ts` で所有する。Takos product はこれら root prefix を持た
-  ないので衝突しない。
+- **product + Accounts plane + deploy-control が 1 worker に in-process 同居**する。self-host された worker は **自分の origin**
+  がそのまま OIDC issuer (bare origin) であり (`app.takosumi.com` ではなく self-hoster 自身の hostname)、Accounts plane は
+  origin root prefix (`/.well-known/*`、 `/oauth/*`、 `/v1/*`、 `/start`、 `/__takosumi/*`) を
+  `src/worker/server/routes/accounts/mount.ts` で所有する。Takos product はこれら root prefix を持たないので衝突しない。
 - **deploy-control は public route を一切持たない**。`src/worker/server/routes/deploy/mount.ts` が
   `@takosjp/takosumi-deploy-worker` (= `../takosumi/deploy/cloudflare/src/handler.ts` の tsconfig alias) を in-process で
   立ち上げ、Accounts facade が in-process fetch seam (`deployControl.fetch`) 経由で叩く。`/v1/installations/...` の
@@ -146,11 +151,11 @@ env var / CI task / docs は `takosumi` / `TAKOSUMI_*` を使う。
 
 root 統合で retired した topology 名 (current source / config / docs に再導入しない):
 
-- 分離 sub-domain `accounts.takosumi.com` / `deploy-control.takosumi.com` — 両 plane は `app.takosumi.com` の単一 worker
-  に in-process 統合済み。
+- 分離 sub-domain `accounts.takosumi.com` / `deploy-control.takosumi.com` — 両 plane は同居 worker (operator の Takosumi
+  platform worker は `app.takosumi.com`、self-host された Takos product worker は自分の origin) に in-process 統合済み。
 - multi-cloud deploy artifacts (`deploy/helm`、 `deploy/opentofu/modules/{aws,gcp}`、
   `deploy/distributions/{aws,gcp,kubernetes,selfhosted}.json`)、operator-distribution / substitutability framing、
-  multi-operator 機構 — 単一 operator / 単一 Cloudflare worker が現実。
+  multi-operator 機構 — operator が運用するのは 1 つの Takosumi platform worker が現実。
 
 これらの旧名は naming history として この section でのみ言及し、current docs に old-name carry-over instructions として
 再導入しない。

@@ -119,56 +119,56 @@ const SharedThreadPage = lazy(() =>
 // `/sign-in` themselves when there is no account-plane session.
 // ---------------------------------------------------------------------------
 const AccountHubView = lazy(() =>
-  import("./views/account/AccountHubView.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountHubView.tsx").then((module) => ({
     default: module.AccountHubView,
   }))
 );
 const AccountProfileView = lazy(() =>
-  import("./views/account/AccountHubView.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountHubView.tsx").then((module) => ({
     default: module.AccountProfileView,
   }))
 );
 const AccountSessionsView = lazy(() =>
-  import("./views/account/AccountHubView.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountHubView.tsx").then((module) => ({
     default: module.AccountSessionsView,
   }))
 );
 const InstallationsListView = lazy(() =>
-  import("./views/installations/InstallationsListView.tsx")
+  import("@takosumi/dashboard/views/installations/InstallationsListView.tsx")
 );
 const InstallationDetailView = lazy(() =>
-  import("./views/installations/InstallationDetailView.tsx")
+  import("@takosumi/dashboard/views/installations/InstallationDetailView.tsx")
 );
 const InstallationDangerView = lazy(() =>
-  import("./views/installations/InstallationDangerView.tsx")
+  import("@takosumi/dashboard/views/installations/InstallationDangerView.tsx")
 );
 const InstallByUrlView = lazy(() =>
-  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountMiscViews.tsx").then((module) => ({
     default: module.InstallByUrlView,
   }))
 );
 const SignInView = lazy(() =>
-  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountMiscViews.tsx").then((module) => ({
     default: module.SignInView,
   }))
 );
 const SignInCallbackView = lazy(() =>
-  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountMiscViews.tsx").then((module) => ({
     default: module.SignInCallbackView,
   }))
 );
 const TakosStartView = lazy(() =>
-  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountMiscViews.tsx").then((module) => ({
     default: module.TakosStartView,
   }))
 );
 const AccountHomeView = lazy(() =>
-  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountMiscViews.tsx").then((module) => ({
     default: module.HomeView,
   }))
 );
 const NotificationsView = lazy(() =>
-  import("./views/account/AccountMiscViews.tsx").then((module) => ({
+  import("@takosumi/dashboard/views/account/AccountMiscViews.tsx").then((module) => ({
     default: module.NotificationsView,
   }))
 );

@@ -22,12 +22,15 @@ main = "../../src/worker/index.ts"
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
 
-# Single public hostname for the unified worker (Takos product + in-process
-# Takosumi accounts plane at the origin root + in-process deploy-control).
+# Single public hostname for the self-hosted Takos product worker (Takos product
+# + in-process embedded accounts plane at the origin root + in-process
+# deploy-control). The self-hoster sets THEIR OWN hostname here; this worker is
+# its own OIDC issuer at that origin. (app.takosumi.com is the operator's
+# Takosumi platform worker — a separate build target — not this product worker.)
 # custom_domain provisions the DNS record + TLS cert automatically on deploy.
-[[routes]]
-pattern = "app.takosumi.com"
-custom_domain = true
+# [[routes]]
+# pattern = "app.your-domain.example"
+# custom_domain = true
 
 [observability]
 enabled = true
@@ -36,31 +39,34 @@ enabled = true
 head_sampling_rate = 0.1
 
 [vars]
-# Non-sensitive configuration only
-ADMIN_DOMAIN = "app.takosumi.com"
-TENANT_BASE_DOMAIN = "app.takosumi.com"
-AUTH_PUBLIC_BASE_URL = "https://app.takosumi.com"
-PROXY_BASE_URL = "https://app.takosumi.com"
-TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://app.takosumi.com"
+# Non-sensitive configuration only. Replace the example.* placeholders with the
+# self-hoster's own hostname.
+ADMIN_DOMAIN = "app.your-domain.example"
+TENANT_BASE_DOMAIN = "app.your-domain.example"
+AUTH_PUBLIC_BASE_URL = "https://app.your-domain.example"
+PROXY_BASE_URL = "https://app.your-domain.example"
+TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://app.your-domain.example"
 # TODO: AUTH_ALLOWED_REDIRECT_DOMAINS is defined but never consumed by application code.
 # It should be used for OIDC redirect URI validation (restrict redirect targets to
 # known domains). Remove this comment and implement validation, or remove the var entirely.
-# AUTH_ALLOWED_REDIRECT_DOMAINS = "app.example.com"
-# Root-unified single app: the account plane runs in-process and Takos is its
-# own OIDC issuer at the bare origin (no /accounts suffix). The accounts handler
-# derives all discovery + OIDC endpoints from the issuer, so these put discovery
-# and the OAuth endpoints at the root.
-TAKOSUMI_ACCOUNTS_ISSUER = "https://app.takosumi.com"
-OIDC_ISSUER_URL = "https://app.takosumi.com"
+# AUTH_ALLOWED_REDIRECT_DOMAINS = "app.your-domain.example"
+# Root-unified single app: the embedded account plane runs in-process and this
+# self-hosted Takos worker is its OWN OIDC issuer at the bare origin (no /accounts
+# suffix). The accounts handler derives all discovery + OIDC endpoints from the
+# issuer, so these put discovery and the OAuth endpoints at the root.
+# self-host: this instance's own origin (the embedded accounts plane is the issuer).
+TAKOSUMI_ACCOUNTS_ISSUER = "https://app.your-domain.example"
+OIDC_ISSUER_URL = "https://app.your-domain.example"
 OIDC_CLIENT_ID = "takos-worker-installation-client"
-OIDC_REDIRECT_URI = "https://app.takosumi.com/auth/oidc/callback"
-# Account-plane (in-process Takosumi Accounts handler) non-secret config. The
+OIDC_REDIRECT_URI = "https://app.your-domain.example/auth/oidc/callback"
+# Account-plane (in-process embedded Accounts handler) non-secret config. The
 # handler reads these directly from env (handler.ts); var names mirror
 # takosumi/deploy/accounts-cloudflare/wrangler.toml. Secrets are pushed via
 # `wrangler secret put` (see the secrets block below), never committed here.
-TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_takosumi_prod"
-TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-private-production"
-TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://app.takosumi.com/auth/oidc/callback"
+TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_subject"
+TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-selfhost-installation-client"
+# self-host: this instance's own origin (the embedded accounts plane is the issuer).
+TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://app.your-domain.example/auth/oidc/callback"
 TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS = "closed"
 TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
@@ -68,7 +74,7 @@ TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
 OCI_ORCHESTRATOR_URL = ""
 # RoutingDO rollout phase (1-4). Node/local platform defaults to 1; CF Workers should set 4.
 ROUTING_DO_PHASE = "4"
-CF_ACCOUNT_ID = "a10162d23653f1ad1193dabf520a5dd0"
+CF_ACCOUNT_ID = "replace-with-account-id"
 CF_ZONE_ID = "replace-with-zone-id"
 
 [triggers]
@@ -86,39 +92,39 @@ run_worker_first = true
 [[d1_databases]]
 binding = "DB"
 database_name = "takos-control-db"
-database_id = "96bd80be-9b0b-498a-81ad-52cf61ffdef0"
+database_id = "replace-with-d1-database-id"
 migrations_dir = "../../db/migrations-control/migrations"
 
-# Account-plane D1 (in-process Takosumi Accounts handler). Separate D1 from the
+# Account-plane D1 (in-process embedded Accounts handler). Separate D1 from the
 # product `DB`: the schemas are namespace-incompatible (accounts = document-store
 # buckets; product = relational tables), so they stay as two bindings in this one
 # worker. No migrations_dir: the accounts schema is applied by the accounts
 # `migrate-d1` runner and the in-process handler fail-closes on schema-version
-# drift (handler.ts ensureD1SchemaVersion). Reuses the existing
-# takosumi-accounts D1 created for the standalone accounts worker.
+# drift (handler.ts ensureD1SchemaVersion). Create your own with
+# `wrangler d1 create takos-accounts` and fill the id.
 [[d1_databases]]
 binding = "TAKOSUMI_ACCOUNTS_DB"
-database_name = "takosumi-accounts"
-database_id = "51138f7c-f298-4f60-8528-37acc85daa4d"
+database_name = "takos-accounts"
+database_id = "replace-with-accounts-d1-database-id"
 
 # Account-plane R2 (metadata-only Installation export download artifacts served
-# from `/__takosumi/exports/*`). Reuses the existing takosumi-accounts-exports
-# bucket created for the standalone accounts worker.
+# from `/__takosumi/exports/*`). Create your own with
+# `wrangler r2 bucket create takos-accounts-exports`.
 [[r2_buckets]]
 binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
-bucket_name = "takosumi-accounts-exports"
+bucket_name = "takos-accounts-exports"
 
-# Deploy-control D1 (in-process Takosumi deploy-control plane). Separate DB from
+# Deploy-control D1 (in-process embedded deploy-control plane). Separate DB from
 # the product `DB` and from `TAKOSUMI_ACCOUNTS_DB`: the OpenTofu run ledger has
 # its own schema. No migrations_dir — d1_opentofu_store.ts + d1_deploy_stores.ts
 # self-create their namespaced key/value + run tables lazily. Create with
-# `wrangler d1 create takosumi-deploy`. Binding name is read verbatim by the
+# `wrangler d1 create takos-deploy`. Binding name is read verbatim by the
 # takosumi deploy handler (bindings.ts TAKOS_D1) and does not collide with takos
 # names.
 [[d1_databases]]
 binding = "TAKOS_D1"
-database_name = "takosumi-deploy"
-database_id = "a82de2de-60cb-45c0-8ad4-921cd2aa1aaa"
+database_name = "takos-deploy"
+database_id = "replace-with-deploy-d1-database-id"
 
 # Deploy-control R2 (OpenTofu plan artifacts). Default bucket name expected by
 # opentofu_runner_container.ts (DEFAULT_PLAN_ARTIFACT_BUCKET = "takos-artifacts").
@@ -129,14 +135,14 @@ bucket_name = "takos-artifacts"
 # KV for hostname routing
 [[kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
-id = "daca6062c8a34cc7bd1bf1bee654be3b"
+id = "replace-with-hostname-routing-kv-namespace-id"
 
 # KV for rollout health check (optional — enables canary error-rate gating).
 # When unbound, advanceStage() skips health checks and proceeds unconditionally.
 # See ../../src/worker/application/services/platform/rollout.ts:117-129
 [[kv_namespaces]]
 binding = "ROLLOUT_HEALTH_KV"
-id = "1c8125e0dbf64ae88918b3ee3bfd9019"
+id = "replace-with-rollout-health-kv-namespace-id"
 
 # Durable Objects
 [[durable_objects.bindings]]
@@ -228,34 +234,31 @@ new_sqlite_classes = ["TakosCoordinationObject"]
 tag = "v8"
 new_sqlite_classes = ["TakosumiOpenTofuRunner"]
 
-# Runtime / executor images build locally from the takos-private app Dockerfiles
-# (COPY dist — run `bun build.mjs` in each app dir before deploying so dist/ is
-# fresh). Paths are wrangler-config-relative: ../../../ = ecosystem root.
+# Runtime / executor images: self-hosters supply their own. Set `image` to a
+# published registry ref (e.g. "your-runtime-image:tag" / "your-executor-image:tag")
+# OR to a local Dockerfile path with `image_build_context` (wrangler-config-relative).
+# These are NOT shipped by the OSS template — takos-private is private.
 [[containers]]
 class_name = "TakosRuntimeContainer"
-image = "../../../takos-private/apps/runtime/Dockerfile"
-image_build_context = "../../../takos-private/apps/runtime"
+image = "your-runtime-image:tag"
 instance_type = "standard-2"
 max_instances = 25
 
 [[containers]]
 class_name = "ExecutorContainerTier1"
-image = "../../../takos-private/apps/executor/Dockerfile"
-image_build_context = "../../../takos-private/apps/executor"
+image = "your-executor-image:tag"
 instance_type = "lite"
 max_instances = 20
 
 [[containers]]
 class_name = "ExecutorContainerTier2"
-image = "../../../takos-private/apps/executor/Dockerfile"
-image_build_context = "../../../takos-private/apps/executor"
+image = "your-executor-image:tag"
 instance_type = "basic"
 max_instances = 200
 
 [[containers]]
 class_name = "ExecutorContainerTier3"
-image = "../../../takos-private/apps/executor/Dockerfile"
-image_build_context = "../../../takos-private/apps/executor"
+image = "your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
 
@@ -456,16 +459,18 @@ TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://staging-admin.example.com"
 # AUTH_ALLOWED_REDIRECT_DOMAINS = "staging-app.example.com"
 # Root-unified single app: bare-origin issuer (no /accounts suffix). See the
 # production [vars] note above.
-TAKOSUMI_ACCOUNTS_ISSUER = "https://staging-app.takosumi.com"
-OIDC_ISSUER_URL = "https://staging-app.takosumi.com"
-OIDC_CLIENT_ID = "takos-staging-app-installation-client"
+# self-host: this instance's own origin (the embedded accounts plane is the issuer).
+TAKOSUMI_ACCOUNTS_ISSUER = "https://staging-app.your-domain.example"
+OIDC_ISSUER_URL = "https://staging-app.your-domain.example"
+OIDC_CLIENT_ID = "takos-staging-installation-client"
 OIDC_REDIRECT_URI = "https://staging-admin.example.com/auth/oidc/callback"
-# Account-plane (in-process Takosumi Accounts handler) non-secret config —
+# Account-plane (in-process embedded Accounts handler) non-secret config —
 # staging mirror of the production [vars] block. Secrets via `wrangler secret
 # put --env staging`.
-TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_takosumi_staging"
-TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-private-staging"
-TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://staging-app.takosumi.com/auth/oidc/callback"
+TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_staging_subject"
+TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-selfhost-staging-client"
+# self-host: this instance's own origin (the embedded accounts plane is the issuer).
+TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://staging-app.your-domain.example/auth/oidc/callback"
 TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS = "closed"
 TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
@@ -479,27 +484,27 @@ database_name = "takos-control-staging-db"
 database_id = "replace-with-staging-d1-database-id"
 migrations_dir = "../../db/migrations-control/migrations"
 
-# Account-plane D1 (staging). Separate takosumi-accounts staging D1 — create
-# with `wrangler d1 create takosumi-accounts-staging` and fill the id. No
+# Account-plane D1 (staging). Separate takos-accounts staging D1 — create
+# with `wrangler d1 create takos-accounts-staging` and fill the id. No
 # migrations_dir (applied by the accounts migrate-d1 runner; handler fail-closes
 # on schema drift). See the production [[d1_databases]] note above.
 [[env.staging.d1_databases]]
 binding = "TAKOSUMI_ACCOUNTS_DB"
-database_name = "takosumi-accounts-staging"
-database_id = "replace-with-staging-takosumi-accounts-d1-database-id"
+database_name = "takos-accounts-staging"
+database_id = "replace-with-staging-accounts-d1-database-id"
 
 # Account-plane R2 (staging) for /__takosumi/exports/* download artifacts.
 [[env.staging.r2_buckets]]
 binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
-bucket_name = "takosumi-accounts-exports-staging"
+bucket_name = "takos-accounts-exports-staging"
 
-# Deploy-control D1 (staging). Separate takosumi-deploy staging DB — create with
-# `wrangler d1 create takosumi-deploy-staging` and fill the id. No migrations_dir
+# Deploy-control D1 (staging). Separate takos-deploy staging DB — create with
+# `wrangler d1 create takos-deploy-staging` and fill the id. No migrations_dir
 # (stores self-create their tables). See the production [[d1_databases]] note.
 [[env.staging.d1_databases]]
 binding = "TAKOS_D1"
-database_name = "takosumi-deploy-staging"
-database_id = "replace-with-staging-takosumi-deploy-d1-database-id"
+database_name = "takos-deploy-staging"
+database_id = "replace-with-staging-deploy-d1-database-id"
 
 # Deploy-control R2 (staging) for OpenTofu plan artifacts.
 [[env.staging.r2_buckets]]
@@ -559,31 +564,30 @@ class_name = "TakosCoordinationObject"
 name = "TAKOS_OPENTOFU_RUNNER"
 class_name = "TakosumiOpenTofuRunner"
 
+# Runtime / executor images (staging): self-hosters supply their own — set a
+# registry ref ("your-runtime-image:tag" / "your-executor-image:tag") or a local
+# Dockerfile path + image_build_context. Not shipped by the OSS template.
 [[env.staging.containers]]
 class_name = "TakosRuntimeContainer"
-image = "../../../takos-private/apps/runtime/Dockerfile"
-image_build_context = "../../../takos-private/apps/runtime"
+image = "your-runtime-image:tag"
 instance_type = "standard-2"
 max_instances = 5
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
-image = "../../../takos-private/apps/executor/Dockerfile"
-image_build_context = "../../../takos-private/apps/executor"
+image = "your-executor-image:tag"
 instance_type = "lite"
 max_instances = 20
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier2"
-image = "../../../takos-private/apps/executor/Dockerfile"
-image_build_context = "../../../takos-private/apps/executor"
+image = "your-executor-image:tag"
 instance_type = "basic"
 max_instances = 100
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier3"
-image = "../../../takos-private/apps/executor/Dockerfile"
-image_build_context = "../../../takos-private/apps/executor"
+image = "your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
 
