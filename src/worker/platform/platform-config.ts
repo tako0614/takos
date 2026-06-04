@@ -31,64 +31,7 @@ export type WorkersDispatchDeployBackendConfig = {
   };
 };
 
-export type OciDeployBackendConfig = {
-  name: "oci";
-  config: {
-    orchestratorUrl: string;
-    orchestratorToken?: string;
-  };
-};
-
-export type EcsDeployBackendConfig = {
-  name: "ecs";
-  config: {
-    region: string;
-    clusterArn: string;
-    taskDefinitionFamily: string;
-    serviceArn?: string;
-    serviceName?: string;
-    containerName?: string;
-    subnetIds?: string[];
-    securityGroupIds?: string[];
-    assignPublicIp?: boolean;
-    launchType?: string;
-    desiredCount?: number;
-    baseUrl?: string;
-    healthUrl?: string;
-    ecrRepositoryUri?: string;
-  };
-};
-
-export type CloudRunDeployBackendConfig = {
-  name: "cloud-run";
-  config: {
-    projectId: string;
-    region: string;
-    serviceId?: string;
-    serviceAccount?: string;
-    ingress?: string;
-    allowUnauthenticated?: boolean;
-    baseUrl?: string;
-    deleteOnRemove?: boolean;
-    artifactRegistryRepo?: string;
-  };
-};
-
-export type K8sDeployBackendConfig = {
-  name: "k8s";
-  config: {
-    namespace: string;
-    deploymentName?: string;
-    imageRegistry?: string;
-  };
-};
-
-export type PlatformDeployBackendConfig =
-  | WorkersDispatchDeployBackendConfig
-  | OciDeployBackendConfig
-  | EcsDeployBackendConfig
-  | CloudRunDeployBackendConfig
-  | K8sDeployBackendConfig;
+export type PlatformDeployBackendConfig = WorkersDispatchDeployBackendConfig;
 
 export type PlatformDeployBackendRegistry = {
   defaultName: PlatformDeployBackendConfig["name"];

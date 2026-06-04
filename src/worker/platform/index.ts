@@ -8,11 +8,7 @@ export type { PlatformContext, PlatformContextVariables } from "./context.ts";
 export { getPlatformContext, setPlatformContext } from "./context.ts";
 
 export type {
-  CloudRunDeployBackendConfig,
   ControlPlatform,
-  EcsDeployBackendConfig,
-  K8sDeployBackendConfig,
-  OciDeployBackendConfig,
   PlatformConfig,
   PlatformDeployBackendConfig,
   PlatformDeployBackendRegistry,

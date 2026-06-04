@@ -1,9 +1,11 @@
 # AGENTS.md — takos (Takos product shell)
 
-`takos` は **Takos product shell** で、単一の Takos Worker (`src/worker`)、UI (`web`)、Cloudflare Containers /
-self-host container 実装 (`containers/git` / `containers/agent`) と shell-owned distribution artifacts (Helm / OpenTofu /
-distribution manifests / validator) を集約する。Takosumi / Takos の identity と vocabulary
-は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
+`takos` は **Takos product shell** で、単一の Takos Worker (`src/worker`)、UI (`web`)、Cloudflare Container 実装
+(`containers/git` / `containers/agent`) と shell-owned Cloudflare deploy artifacts (`deploy/cloudflare` /
+`deploy/opentofu/modules/cloudflare` / `deploy/distributions/cloudflare.json` / validator) を集約する。この単一 Worker は
+`app.takosumi.com` の origin root で動き、Takos product に加えて Takosumi Accounts plane と Takosumi deploy-control plane を
+**in-process** で同居させる (詳細は後述 [`§ 単一 Worker のトポロジ`](#単一-worker-のトポロジ))。Takosumi / Takos の
+identity と vocabulary は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
 
 > **Takos is a self-hostable product deployed by Takosumi, the OpenTofu-native deploy control plane, with _democratization of software through AI agents_ as
@@ -12,7 +14,9 @@ distribution manifests / validator) を集約する。Takosumi / Takos の ident
 > user-facing convenience.** **Takosumi** installs a plain OpenTofu module and records the run ledger
 > (`Installation` / `PlanRun` / `ApplyRun` / `Deployment` / `DeploymentOutput`), with a `RunnerProfile` owning the
 > provider allowlist / credentials / state backend / Cloudflare Container execution; it is not Takos-specific.
-> `takosumi` is a replaceable operator distribution / deployment, not a privileged Takosumi layer.
+> deploy-control and the Accounts plane run **in-process inside this one Takos worker** at `app.takosumi.com`; they are
+> implementation source owned by `../takosumi/`, imported via tsconfig alias — not a separate service and not a privileged
+> layer above the product.
 
 Takos の constituent (AI agents / Git / memory / spaces / tools) と「ソフトウェアの民主化」 core concept の formal
 definition は [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) §0 を参照。
@@ -27,25 +31,52 @@ Takosumi 公開概念は `Installation` / `PlanRun` / `ApplyRun` / `Deployment` 
 - Takos Worker の source owner (`src/worker` / `src/routes` / `src/contracts`)
 - UI source owner (`web`)
 - Git / agent container implementation owner (`containers/git`、 `containers/agent`)
-- shell-owned distribution artifacts (`deploy/distributions/`、 `deploy/opentofu/`)
+- in-process Accounts plane / deploy-control mount glue (`src/worker/server/routes/accounts/mount.ts` /
+  `src/worker/server/routes/deploy/mount.ts`) と folded dashboard UI (`web/src/views/account`、
+  `web/src/views/installations`)
+- shell-owned Cloudflare deploy artifacts (`deploy/cloudflare`、 `deploy/opentofu` (cloudflare module)、
+  `deploy/distributions/cloudflare.json`)
 - shell-owned planning docs (`docs/contributing/`、 旧 `plan/`)
 - product validator scripts (release-gate / validate:opentofu-secrets / validate:patch-management 等)
 
 ### 持たない
 
-- Takosumi substrate / account-plane implementation code
-- standalone runtime service split repositories for Takos app / Git / agent
-- standalone deploy / runtime service (`../takosumi/` の lifecycle ownership)
+- Takosumi service / Accounts plane / deploy-control の **実装 source** (`../takosumi/` が source owner)。`takos` は
+  tsconfig alias 経由でその handler を in-process import するだけで、実装を fork しない
+- standalone runtime service split repositories for Takos app / Git / agent (single worker に統合済み)
 - production / staging deploy 実行 (`../takos-private/` の責務)
 - generic `common` package (service-local helper のみ許可)
 
+## 単一 Worker のトポロジ
+
+current reality は **single operator / single Cloudflare worker / two domains** (`takosumi.com` landing /
+`app.takosumi.com` everything)。multi-operator / multi-cloud / 分離 sub-service の機構は retired (下記
+[`§ Naming history`](#naming-history))。
+
+- **product + Accounts plane + deploy-control が 1 worker に in-process 同居**する。`app.takosumi.com` がそのまま OIDC
+  issuer (bare origin) であり、Accounts plane は origin root prefix (`/.well-known/*`、 `/oauth/*`、 `/v1/*`、 `/start`、
+  `/__takosumi/*`) を `src/worker/server/routes/accounts/mount.ts` で所有する。Takos product はこれら root prefix を持た
+  ないので衝突しない。
+- **deploy-control は public route を一切持たない**。`src/worker/server/routes/deploy/mount.ts` が
+  `@takosjp/takosumi-deploy-worker` (= `../takosumi/deploy/cloudflare/src/handler.ts` の tsconfig alias) を in-process で
+  立ち上げ、Accounts facade が in-process fetch seam (`deployControl.fetch`) 経由で叩く。`/v1/installations/...` の
+  namespace 衝突はこの private backend 化で回避している。bearer-gated handshake は単一 worker 内の内部 secret
+  (`TAKOSUMI_DEPLOY_CONTROL_TOKEN`)。
+- **dashboard は product SPA に fold 済み**。account / installation 画面は `web/src/views/account` /
+  `web/src/views/installations` の SPA view で、`/v1/*` を fetch する (旧 `dashboard-ui` package は削除済み)。
+- **`/internal/*` HTTP route は opentofu-runner / executor container callback 専用に reserved**。account-plane internals は
+  in-process call であり `/internal` を使わない。
+- **bearer は session cookie + in-process JWKS (`auth/in-process-bearer.ts`) の 2 経路のみ**。remote introspection は使わ
+  ない。
+
 ## 隣接 product との contract
 
-- **Upstream platform**: `../takosumi/` (deploy control plane + deploy control API (plan/apply/destroy run ledger) + Accounts)
-- **Downstream**: `../takos-private/` (deployment artifact 消費)、 bundled apps (`../takos-apps/*`、 `../yurucommu/`、
+- **Upstream source owner**: `../takosumi/` — deploy-control + Accounts plane の **実装 source owner**。`takos` worker は
+  その handler を tsconfig alias で in-process import する (別 service として network 越しに呼ばない)。
+- **Downstream**: `../takos-private/` (deploy artifact / secret 消費)、 bundled apps (`../takos-apps/*`、 `../yurucommu/`、
   `../road-to-me/`)
-- **Internal**: `src/worker` (public/control Worker)、 `web` (UI)、 `containers/git` (Git hosting container)、
-  `containers/agent` (agent execution container)
+- **Internal**: `src/worker` (single worker: product + Accounts plane + deploy-control を in-process 同居)、 `web` (UI、
+  folded dashboard 含む)、 `containers/git` (Git hosting container)、 `containers/agent` (agent execution container)
 
 ## Terminology
 
@@ -64,31 +95,35 @@ Takosumi 公開概念は `Installation` / `PlanRun` / `ApplyRun` / `Deployment` 
 - Takos product の core feature (= Worker/domain/container 内部 feature) を指すとき: "**Takos product core feature**" (Agent / Chat / Git
   / Storage / Store)
 
-## Substitutability
+## Layering doctrine
 
-- **Takos product 自体**: Takosumi (OpenTofu-native deploy control plane) によって deploy される self-hostable product。 AI agents / Git / chat / spaces / memory /
-  tools を駆使してソフトウェアの民主化を体現。 層 (layer) ではないが、 architectural 特権 framing も使わない (App
-  consumer side)。
-- **Takosumi への依存**: deploy control plane / operator account plane は substitutable (詳細は
-  [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §「Layering Principle: Substitutability」)。
+route → service → db の purity layer は **要求しない**。speculative な抽象化層を作らないことを優先する。
+
+- **route は infra / db に直接アクセスしてよい**。1 route の中で完結するロジックは、わざわざ service にくり出さない。
+- **service を切り出すのは次のいずれかのときだけ**: (a) 同じロジックを **2 つ以上の route** が共有する、 (b) **transaction
+  境界をまたぐ** (複数 route / job から呼ばれる atomic な書き込み)。
+- 「いつか分離 service になるかも」 / 「層を揃えるため」 だけの speculative な service / adapter / interface 層は作らない。
+  単一 worker / 単一 operator が現実なので、複数実装を想定した抽象は使われない死コードになる。
+- 既存コードの churn を doctrine 適合のためだけに発生させない。新規・改修コードでこの基準を満たす。
+
+この doctrine は `../ARCHITECTURE.md` と整合する。physical な source-owner 境界 (下記 `§ Layer rules`) は引き続き有効で、
+これは「層の純度」 ではなく「どの root が何の source owner か」 の境界。
 
 ## Layer rules
 
-- `src/worker` is the only public/control Worker source owner. Hono route shards live in `src/routes`; Worker-local
-  product logic stays under `src/worker`; shared wire shapes live in `src/contracts`.
-- `web/` may call public APIs and consume generated/client contracts, but must not import Worker implementation internals.
+- `src/worker` is the only public/control Worker source owner; it hosts the Takos product, the in-process Accounts plane,
+  and the in-process deploy-control plane in one worker. Hono route shards live in `src/routes`; Worker-local product
+  logic stays under `src/worker`; shared wire shapes live in `src/contracts`.
+- `web/` (folded dashboard を含む) may call public / `/v1/*` APIs and consume generated/client contracts, but must not
+  import Worker implementation internals.
 - `containers/git/` and `containers/agent/` are container implementation roots. They may consume `src/contracts/*` but must
   not import Worker route/domain implementation.
 - Git CLI / bare repo filesystem / SQLite / Smart HTTP backend code belongs in `containers/git`, not in the Worker.
 - Rust agent execution wrapper belongs in `containers/agent`; reusable engine code stays in `../takos-agent-engine`.
-- `deploy/` must not import product implementation source paths; connect through published packages, images, APIs, and
-  manifests.
-- Provider-specific infrastructure wiring belongs to operator OpenTofu / Helm / native controller stacks governed by the
-  RunnerProfile-owned provider allowlist, surfaced through DeploymentOutput records, not to a Takos product-side
-  implementation bundle.
-- The Takosumi service implementation lives in the standalone Takosumi repository (`../takosumi/`). `deploy/` here only
-  carries Takos-specific deploy artifacts that consume the upstream service and operator distribution.
-- Hosting target ids are an open enum backed by `registerHostingTarget(...)` from `takosumi-contract/hosting`.
+- Accounts plane / deploy-control の **実装** は `../takosumi/` が source owner。`takos` worker は handler を tsconfig
+  alias で in-process import するだけ — そのソースを `takos/` に fork / copy しない。
+- `deploy/` (Cloudflare のみ) は product implementation source path を import しない。`deploy/cloudflare` の wrangler /
+  worker bootstrap、`deploy/opentofu/modules/cloudflare`、`deploy/distributions/cloudflare.json` を所有する。
 
 ## Workflow
 
@@ -107,8 +142,18 @@ bun run docs:deploy     # Cloudflare Pages
 ## Naming history
 
 `takos-paas`、 `TAKOS_PAAS_*`、 `deployment-paas-*`、 `dev:paas` は pre-split 名。 current source path / service id /
-Helm resource / env var / CI task / docs は `takosumi` / `TAKOSUMI_*` を使う。これらの旧名は naming history として この
-section でのみ言及し、current docs に old-name carry-over instructions として再導入しない。
+env var / CI task / docs は `takosumi` / `TAKOSUMI_*` を使う。
+
+root 統合で retired した topology 名 (current source / config / docs に再導入しない):
+
+- 分離 sub-domain `accounts.takosumi.com` / `deploy-control.takosumi.com` — 両 plane は `app.takosumi.com` の単一 worker
+  に in-process 統合済み。
+- multi-cloud deploy artifacts (`deploy/helm`、 `deploy/opentofu/modules/{aws,gcp}`、
+  `deploy/distributions/{aws,gcp,kubernetes,selfhosted}.json`)、operator-distribution / substitutability framing、
+  multi-operator 機構 — 単一 operator / 単一 Cloudflare worker が現実。
+
+これらの旧名は naming history として この section でのみ言及し、current docs に old-name carry-over instructions として
+再導入しない。
 
 ## 関連 docs
 

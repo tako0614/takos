@@ -178,9 +178,14 @@ app.use("*", async (c, next) => {
   return corsMiddleware(c, next);
 });
 
-// HTTPS enforcement middleware for production edge/proxy runtimes.
-// Check X-Forwarded-Proto header for HTTPS
+// HTTPS enforcement (pre-next gate) + S28 security headers (post-next).
+// Single middleware: the relative order of the HTTPS gate (before next) and the
+// header mutation (after next) matches the previous two adjacent `app.use("*")`
+// blocks, so a rejected (non-HTTPS) request still short-circuits without
+// receiving security headers, exactly as before.
 app.use("*", async (c, next): Promise<Response | void> => {
+  // HTTPS enforcement middleware for production edge/proxy runtimes.
+  // Check X-Forwarded-Proto header for HTTPS.
   const proto = c.req.header("X-Forwarded-Proto");
 
   // Use operator-controlled env var instead of client-controlled Host header
@@ -200,12 +205,8 @@ app.use("*", async (c, next): Promise<Response | void> => {
   }
 
   await next();
-});
 
-// S28: Security headers middleware (CSP, X-Frame-Options, etc.)
-app.use("*", async (c, next) => {
-  await next();
-
+  // S28: Security headers (CSP, X-Frame-Options, etc.)
   // Add security headers to all responses
   const response = c.res;
   const headers = response.headers;

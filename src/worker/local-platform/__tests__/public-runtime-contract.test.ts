@@ -36,10 +36,6 @@ test(
       'local-platform/worker.ts',
       sourcePackageRoot,
     );
-    const sourceOciOrchestrator = await read(
-      'local-platform/oci-orchestrator.ts',
-      sourcePackageRoot,
-    );
     const sourceIndex = await read(
       'local-platform/index.ts',
       sourcePackageRoot,
@@ -53,7 +49,6 @@ test(
       const source of [
         sourceRuntime,
         sourceWorker,
-        sourceOciOrchestrator,
         sourceIndex,
         sourceUnifiedEntrypoint,
       ]

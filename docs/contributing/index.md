@@ -11,14 +11,14 @@
   `takosumi/src/service/api/openapi.ts` が source of truth
   として保持する OpenAPI 風の route 一覧。
 - [`deploy-topology-notes.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/deploy-topology-notes.md)
-  — Compose / Helm 向けの Takos サービス構成メモ。
+  — single Cloudflare worker (`app.takosumi.com`) 向けの Takos 構成メモ。
 - [`operator-boundary-audit.md`](./operator-boundary-audit.md) —
   Takos product と operator-owned infrastructure の境界を docs /
   実装間で揃えるためのチェックリスト。
-- operator boundary:
-  OpenTofu state backend、cloud credential、RunnerProfile / runtime-agent handler
-  wiring は operator distribution と Takosumi の RunnerProfile が所有します。Takos
-  は Takosumi の Deployment / DeploymentOutput を消費します。
+- runner boundary:
+  OpenTofu state backend、Cloudflare credential、RunnerProfile / runtime-agent handler
+  wiring は in-process deploy-control plane の RunnerProfile が所有します。Takos
+  product route は Takosumi の Deployment / DeploymentOutput を消費します。
 
 ## 検証
 
