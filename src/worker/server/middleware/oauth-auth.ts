@@ -9,10 +9,8 @@ import {
   isValidUserId,
 } from "../../application/services/identity/user-cache.ts";
 import { isSessionRevoked } from "../../application/services/identity/session-revocation.ts";
-import {
-  resolveAccountsBearer,
-  validateTakosumiAccountsBearer,
-} from "./accounts-bearer.ts";
+import { resolveAccountsBearer } from "./accounts-bearer.ts";
+import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
 import { resolveCookieSession } from "./session-auth.ts";
 
 import {
@@ -31,7 +29,7 @@ export const oauthAuthDeps = {
   getCachedUser,
   isValidUserId,
   isSessionRevoked,
-  validateTakosumiAccountsBearer,
+  resolveSelfIssuedBearer,
   getPlatformServices,
   getPlatformConfig,
 };

@@ -17,10 +17,8 @@ import {
   getCachedUser,
   isValidUserId,
 } from "../../application/services/identity/user-cache.ts";
-import {
-  resolveAccountsBearer,
-  validateTakosumiAccountsBearer,
-} from "./accounts-bearer.ts";
+import { resolveAccountsBearer } from "./accounts-bearer.ts";
+import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
 import { resolveCookieSession } from "./session-auth.ts";
 
 import {
@@ -58,7 +56,7 @@ export const authDeps = {
   normalizeSessionId,
   getCachedUser,
   isValidUserId,
-  validateTakosumiAccountsBearer,
+  resolveSelfIssuedBearer,
   logError,
   logWarn,
   getPlatformServices,

@@ -21,6 +21,14 @@ export {
   ExecutorContainerTier3,
   TakosAgentExecutorContainer,
 } from "./runtime/container-hosts/executor-host.ts";
+// Deploy-control Durable Objects, backing the in-process Takosumi deploy-control
+// plane (coordination leases/alarms + the OpenTofu Container runner). The
+// wrangler `[[durable_objects.bindings]]` class_name + migration
+// new_sqlite_classes values must match these exported names.
+export {
+  TakosCoordinationObject,
+  TakosumiOpenTofuRunner,
+} from "@takosjp/takosumi-deploy-worker";
 
 export function createTakosWorker() {
   const web = createWebWorker();
