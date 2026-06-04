@@ -6,7 +6,7 @@
 
 This list is the public baseline for the Takos DPA template. It is not a
 complete vendor risk file; private vendor security reviews, contract records,
-and billing evidence stay in `takos-private` or the approved private evidence
+and billing evidence stay in the operator's approved private evidence
 store.
 
 ## Status

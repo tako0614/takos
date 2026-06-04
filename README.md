@@ -87,7 +87,7 @@ takos/
 | Takosumi docs         | `../takosumi/docs/`                   |
 | Accounts / 課金 docs  | `../takosumi/docs/`             |
 | Git installer docs    | `../takosumi/docs/`                   |
-| 運用 runbook          | `../takos-private/docs/`              |
+| 運用 runbook          | `../takosumi/docs/operations/`        |
 
 ## 関連
 

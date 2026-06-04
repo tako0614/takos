@@ -48,7 +48,6 @@ import {
 
 import {
   err,
-  forwardToControlPlane,
   getExecutorPoolConfig,
   getProxyUsageSnapshot,
   isAgentControlRpcPath,
@@ -60,6 +59,7 @@ import {
   resolveExecutorTierCapacity,
   unauthorized,
 } from "./executor-utils.ts";
+import { dispatchControlRpc } from "../executor-proxy-api.ts";
 import type {
   AgentExecutorEnv,
   Env,
@@ -311,7 +311,7 @@ export const ExecutorContainerTier1 = createExecutorContainerClass(1, "10m");
  * and no caller requests tier 2 via `resolveContainerNamespace`, so this class
  * receives no traffic today. It is kept (not deleted) because retiring a Durable
  * Object class requires a wrangler `deleted_classes` migration in the deploy
- * config (takos-private). To fully remove it: drop the class + the
+ * config (the retired operator control plane). To fully remove it: drop the class + the
  * `EXECUTOR_CONTAINER_TIER2` binding + add the `deleted_classes` migration. To
  * put it back in rotation: add tier-2 pool sizing and select it in
  * `selectExecutorPoolSlot`.
@@ -599,10 +599,14 @@ export default {
       recordProxyUsage(path);
 
       if (isControlRpcPath(path)) {
-        const forwarded = await forwardToControlPlane(path, body, env);
-        if (!forwarded) {
+        // Dispatch in-process: takos / takosumi / the executor-host share this
+        // worker isolate, so there is no service-binding hop. The proxy token +
+        // scope are already verified and body.runId/serviceId are token-bound.
+        const dispatched = dispatchControlRpc(path, body, env);
+        if (!dispatched) {
           return err(`Unknown control RPC path: ${path}`, 404);
         }
+        const forwarded = await dispatched;
         if (
           path === "/api/internal/v1/agent-control/heartbeat" && forwarded.ok
         ) {
