@@ -34,8 +34,26 @@ export function resolveRequestId(
   return req.header(REQUEST_ID_HEADER) ?? crypto.randomUUID();
 }
 
+/**
+ * {@link resolveRequestId} for call sites that only hold a raw `Headers`/
+ * `Request` (e.g. the internal forwarders), which expose `headers.get()` rather
+ * than Hono's `.header()`. Same contract: honor a caller-supplied
+ * `x-request-id`, otherwise mint a fresh UUID.
+ */
+export function resolveRequestIdFromHeaders(headers: Headers): string {
+  return headers.get(REQUEST_ID_HEADER) ?? crypto.randomUUID();
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Returns `value` typed as `Record<string, unknown>` when it is a non-null,
+ * non-array object, otherwise `null`.
+ */
+export function asRecord(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
 }
 
 export function parseJsonObjectOrNull(

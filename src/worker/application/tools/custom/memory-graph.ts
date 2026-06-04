@@ -11,6 +11,10 @@ export const MEMORY_GRAPH_RECALL: ToolDefinition = {
   description:
     'Search structured memory claims, paths between claims, or evidence supporting a claim. Use mode "claims" to find facts, "path_search" to discover relationships, "evidence" to see supporting/contradicting references.',
   category: "memory",
+  namespace: "memory",
+  family: "memory.graph",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

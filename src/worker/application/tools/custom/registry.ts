@@ -74,104 +74,6 @@ export const CUSTOM_HANDLERS: Record<string, ToolHandler> = {
   ...MEMORY_GRAPH_HANDLERS,
 };
 
-export const TOOL_CATEGORIES = {
-  container: [
-    "container_start",
-    "container_status",
-    "container_commit",
-    "container_stop",
-    "create_repository",
-    "repo_list",
-    "repo_status",
-    "repo_switch",
-  ],
-  file: [
-    "file_read",
-    "file_write",
-    "file_write_binary",
-    "file_list",
-    "file_delete",
-    "file_mkdir",
-    "file_rename",
-    "file_copy",
-    "space_files_list",
-    "space_files_read",
-    "space_files_write",
-    "space_files_create",
-    "space_files_mkdir",
-    "space_files_delete",
-    "space_files_rename",
-    "space_files_move",
-  ],
-  deploy: [
-    "deploy_frontend",
-    "service_list",
-    "service_create",
-    "service_delete",
-    "deployment_history",
-    "deployment_get",
-    "deployment_rollback",
-    "service_env_get",
-    "service_env_set",
-    "service_runtime_get",
-    "service_runtime_set",
-    "domain_list",
-    "domain_add",
-    "domain_verify",
-    "domain_remove",
-  ],
-  runtime: ["runtime_exec", "runtime_status"],
-  storage: [
-    "key_value_get",
-    "key_value_put",
-    "key_value_delete",
-    "key_value_list",
-    "sql_query",
-    "sql_tables",
-    "sql_describe",
-    "object_store_upload",
-    "object_store_download",
-    "object_store_list",
-    "object_store_delete",
-    "object_store_info",
-    "create_sql",
-    "create_key_value",
-    "create_object_store",
-    "list_resources",
-  ],
-  space: [
-    "skill_list",
-    "skill_get",
-    "skill_create",
-    "skill_update",
-    "skill_toggle",
-    "skill_delete",
-    "skill_context",
-    "skill_catalog",
-    "skill_describe",
-    "store_search",
-    "repo_fork",
-  ],
-  memory: [
-    "remember",
-    "recall",
-    "set_reminder",
-    "info_unit_search",
-    "repo_graph_search",
-    "repo_graph_neighbors",
-    "repo_graph_lineage",
-  ],
-  web: ["web_fetch"],
-  artifact: ["create_artifact", "search"],
-  agent: ["spawn_agent", "wait_agent"],
-  mcp: [
-    "mcp_add_server",
-    "mcp_list_servers",
-    "mcp_update_server",
-    "mcp_remove_server",
-  ],
-} as const;
-
 export function getCustomTool(name: string): ToolDefinition | undefined {
   return CUSTOM_TOOLS.find((t) => t.name === name);
 }
@@ -182,11 +84,4 @@ export function getCustomHandler(name: string): ToolHandler | undefined {
 
 export function isCustomTool(name: string): boolean {
   return name in CUSTOM_HANDLERS;
-}
-
-export function getToolsByCategory(
-  category: keyof typeof TOOL_CATEGORIES,
-): ToolDefinition[] {
-  const names = new Set<string>(TOOL_CATEGORIES[category]);
-  return CUSTOM_TOOLS.filter((t) => names.has(t.name));
 }

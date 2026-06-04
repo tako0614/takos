@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
 import { getContentTypeFromPath } from "../../../shared/utils/content-type.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
 import {
   encodeBase64,
   readableCommitErrorResponse,
@@ -19,6 +18,7 @@ import { requireFound, requireParam } from "../validation-utils.ts";
 import {
   type RepoContext,
   requireBucket,
+  requireRepoRead,
   throwIfTreeFlattenLimit,
   warnDegradedCommit,
 } from "./git-shared.ts";
@@ -31,12 +31,7 @@ async function handleRepoTreeRequest(c: RepoContext) {
   const queryPath = c.req.query("path") || "";
   const path = (wildcardPath || queryPath).replace(/^\/+/, "");
 
-  requireFound(
-    await checkRepoAccess(c.env, repoId, user?.id, undefined, {
-      allowPublicRead: true,
-    }),
-    "Repository",
-  );
+  await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
   try {
     const bucket = toGitBucket(requireBucket(c));
@@ -90,12 +85,7 @@ async function handleRepoBlobRequest(c: RepoContext) {
     throw new BadRequestError("File path is required");
   }
 
-  requireFound(
-    await checkRepoAccess(c.env, repoId, user?.id, undefined, {
-      allowPublicRead: true,
-    }),
-    "Repository",
-  );
+  await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
   try {
     const bucket = toGitBucket(requireBucket(c));
@@ -162,12 +152,7 @@ const gitFiles = new Hono<AuthenticatedRouteEnv>()
 
     const [, base, , head] = match;
 
-    requireFound(
-      await checkRepoAccess(c.env, repoId, user?.id, undefined, {
-        allowPublicRead: true,
-      }),
-      "Repository",
-    );
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     try {
       const bucket = toGitBucket(requireBucket(c));

@@ -16,6 +16,10 @@ export const REMEMBER: ToolDefinition = {
   description:
     "Store important information in memory for future reference. Use this to save facts, procedures, or experiences that should be remembered.",
   category: "memory",
+  namespace: "memory",
+  family: "memory.core",
+  risk_level: "none",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -48,6 +52,10 @@ export const RECALL: ToolDefinition = {
   description:
     "Search memories for relevant information. Returns matching memories based on query.",
   category: "memory",
+  namespace: "memory",
+  family: "memory.core",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -74,6 +82,10 @@ export const SET_REMINDER: ToolDefinition = {
   description:
     "Set a reminder for future. Can be time-based, condition-based, or context-based.",
   category: "memory",
+  namespace: "memory",
+  family: "memory.core",
+  risk_level: "none",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {

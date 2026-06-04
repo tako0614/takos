@@ -13,7 +13,7 @@ import { generateId as realGenerateId } from "../../../shared/utils/index.ts";
 import { computeSHA256 as realComputeSHA256 } from "../../../shared/utils/hash.ts";
 import {
   files,
-  getDb as realGetDb,
+  resolveDb,
   sessionFiles,
 } from "../../../infra/db/index.ts";
 import { and, asc, eq, ne } from "drizzle-orm";
@@ -37,18 +37,13 @@ export interface FileContent {
 }
 
 export interface SessionFilesDeps {
-  getDb: (db: Parameters<typeof realGetDb>[0]) => ReturnType<typeof realGetDb>;
+  getDb: typeof resolveDb;
   computeSHA256: typeof realComputeSHA256;
   generateId: typeof realGenerateId;
 }
 
 export const sessionFilesDeps: SessionFilesDeps = {
-  getDb: (db) => {
-    if (db && typeof (db as { select?: unknown }).select === "function") {
-      return db as ReturnType<typeof realGetDb>;
-    }
-    return realGetDb(db);
-  },
+  getDb: resolveDb,
   computeSHA256: realComputeSHA256,
   generateId: realGenerateId,
 };

@@ -19,6 +19,7 @@ import {
   deleteSession,
   getSessionIdFromCookie,
 } from "../../application/services/identity/session.ts";
+import { extractBearerToken } from "../middleware/bearer-token-classification.ts";
 import { getPlatformServices } from "../../platform/accessors.ts";
 
 import {
@@ -181,10 +182,7 @@ authApi.post("/logout", async (c) => {
     await deleteSession(sessionStore, sessionId);
   }
 
-  const authHeader = c.req.header("Authorization");
-  const token = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7).trim() || null
-    : null;
+  const token = extractBearerToken(c.req.header("Authorization"));
   if (token) {
     await deleteAuthSession(c.env.DB, token);
   }

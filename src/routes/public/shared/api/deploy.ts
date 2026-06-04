@@ -5,6 +5,7 @@ import {
   isRecord,
   parseJsonObjectOrNull,
   readBodyString,
+  resolveRequestIdFromHeaders,
 } from "./common.ts";
 import { retiredTakosDeploymentProxyResponse } from "./retired.ts";
 
@@ -153,10 +154,9 @@ export async function maybeWriteGitOpsDeploymentIntent(
 
   // Authenticate before returning the retired response so unauthenticated
   // callers cannot probe backend deployment configuration by status code.
-  const requestId = crypto.randomUUID();
   const actorResult = await actorFromAuthenticatedRequest(
     request,
-    requestId,
+    resolveRequestIdFromHeaders(request.headers),
     actorSpaceId,
     { env },
   );

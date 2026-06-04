@@ -4,7 +4,7 @@ import type { AuthenticatedRouteEnv } from "../../route-auth.ts";
 import { parsePagination } from "../../../../shared/utils/index.ts";
 import { BadRequestError, ErrorCodes } from "@takos/worker-platform-utils/errors";
 import { zValidator } from "../../zod-validator.ts";
-import { checkRepoAccess } from "../../../../application/services/source/repos.ts";
+import { requireRepoRead, requireRepoWrite } from "../git-shared.ts";
 import {
   getWorkflowRunDetail,
   getWorkflowRunJobs,
@@ -56,16 +56,9 @@ export default new Hono<AuthenticatedRouteEnv>()
         offset: offsetRaw,
       });
 
-      const repoAccess = await checkRepoAccess(
-        c.env,
-        repoId,
-        user?.id,
-        undefined,
-        { allowPublicRead: true },
-      );
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      await requireRepoRead(c.env, repoId, user?.id, {
+        allowPublicRead: true,
+      });
 
       return c.json(
         await listWorkflowRuns(c.env.DB, {
@@ -99,14 +92,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("workflow path is required");
       }
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-        "owner",
-        "admin",
-        "editor",
-      ]);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoWrite(c.env, repoId, user.id);
 
       const refName = body.ref || repoAccess.repo.default_branch || "main";
       const result = await dispatchWorkflowRun(c.env, {
@@ -137,16 +123,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
     const runId = c.req.param("runId");
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     const run = await getWorkflowRunDetail(c.env.DB, repoId, runId);
     if (!run) {
@@ -159,16 +136,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const runId = c.req.param("runId");
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
     return connectWorkflowRunStream(c.env, {
       repoId,
       runId,
@@ -180,14 +148,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
     const runId = c.req.param("runId");
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoWrite(c.env, repoId, user.id);
     const result = await cancelWorkflowRun(c.env, { repoId, runId });
     if (!result.ok) {
       throw new AppError(
@@ -202,14 +163,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
     const runId = c.req.param("runId");
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoWrite(c.env, repoId, user.id);
     const result = await rerunWorkflowRun(c.env, {
       repoId,
       runId,
@@ -234,16 +188,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
     const runId = c.req.param("runId");
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     const jobs = await getWorkflowRunJobs(c.env.DB, repoId, runId);
     if (!jobs) {

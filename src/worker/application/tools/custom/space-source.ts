@@ -17,6 +17,10 @@ export const STORE_SEARCH: ToolDefinition = {
   description:
     "Search the Takos store/catalog for public repositories and deployable apps.",
   category: "space",
+  namespace: "repo",
+  family: "repo.search",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -74,6 +78,12 @@ export const REPO_FORK: ToolDefinition = {
   description:
     "Fork a Takos repository into the current space so it becomes an owned code asset.",
   category: "space",
+  namespace: "repo",
+  family: "repo.manage",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "repo.fork",
   parameters: {
     type: "object",
     properties: {

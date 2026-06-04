@@ -75,6 +75,13 @@ function assertAllowedFields(
   }
 }
 
+function requireObject(raw: unknown, field: string): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`${field} must be an object`);
+  }
+  return raw as Record<string, unknown>;
+}
+
 function parseBindingName(raw: unknown, field: string): string {
   const value = asRequiredString(raw, field).trim();
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
@@ -256,6 +263,27 @@ function assertResourceBindingTargets(
       );
     }
   }
+}
+
+/**
+ * Parse resource *deltas* for an environment override. The override contract
+ * keeps resource patches loose (they are re-validated by {@link parseResources}
+ * after merging onto the base manifest at apply time), so this only enforces the
+ * top-level field allowlist and that each entry is an object.
+ */
+export function parseResourcesOverride(
+  raw: unknown,
+): Record<string, Record<string, unknown>> {
+  if (raw == null) return {};
+  const record = requireObject(raw, "overrides.resources");
+  const result: Record<string, Record<string, unknown>> = {};
+  for (const [name, value] of Object.entries(record)) {
+    const prefix = `overrides.resources.${name}`;
+    const resourceRecord = requireObject(value, prefix);
+    assertAllowedFields(resourceRecord, prefix, RESOURCE_FIELDS);
+    result[name] = resourceRecord;
+  }
+  return result;
 }
 
 export function parseResources(

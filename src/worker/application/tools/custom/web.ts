@@ -17,6 +17,10 @@ export const WEB_FETCH: ToolDefinition = {
   name: "web_fetch",
   description: "Fetch content from a URL. Returns the page content as text.",
   category: "web",
+  namespace: "web",
+  family: "web.fetch",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {

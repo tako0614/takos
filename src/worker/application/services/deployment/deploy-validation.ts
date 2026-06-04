@@ -51,6 +51,7 @@ import {
 } from "../platform/service-publications.ts";
 import { RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE } from "../identity/takos-access-tokens.ts";
 import { isDigestPinnedImageRef } from "./image-ref.ts";
+import { normalizeEnvName } from "../common-env/crypto.ts";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -196,17 +197,6 @@ type ValidatedPublicationEntry = PublicationEntry & {
 
 function isReservedTakosPublicationSource(source: string): boolean {
   return source.trim().startsWith("takos.");
-}
-
-function normalizeEnvName(name: string): string {
-  const normalized = String(name || "").trim();
-  if (!normalized) {
-    throw new Error("Environment variable name is required");
-  }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
-    throw new Error(`Invalid environment variable name: ${normalized}`);
-  }
-  return normalized.toUpperCase();
 }
 
 function collectPublications(manifest: ParsedManifest): PublicationEntry[] {

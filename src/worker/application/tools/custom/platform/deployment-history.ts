@@ -9,6 +9,12 @@ export const DEPLOYMENT_HISTORY: ToolDefinition = {
   name: "deployment_history",
   description: "List deployment history for a service.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.release",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "deployment.history",
   parameters: {
     type: "object",
     properties: {
@@ -29,6 +35,13 @@ export const DEPLOYMENT_GET: ToolDefinition = {
   name: "deployment_get",
   description: "Get a deployment and its masked env/binding details.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.release",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "deployment.get",
+  sensitive_read_policy: "masked",
   parameters: {
     type: "object",
     properties: {
@@ -50,6 +63,12 @@ export const DEPLOYMENT_ROLLBACK: ToolDefinition = {
   description:
     "Rollback a service to the previous deployment or to a target version.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.release",
+  risk_level: "high",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "deployment.rollback",
   parameters: {
     type: "object",
     properties: {

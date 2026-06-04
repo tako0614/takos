@@ -14,6 +14,7 @@ import type {
 import {
   createBindingFingerprint,
   decryptCommonEnvValue,
+  normalizeEnvName,
 } from "../common-env/crypto.ts";
 import {
   listServiceLinks,
@@ -21,17 +22,6 @@ import {
 } from "../common-env/repository.ts";
 import { groupLinkRowsByEnvName } from "../common-env/link-state.ts";
 import type { ReconcileUpdate } from "../common-env/repository.ts";
-
-function normalizeEnvName(name: string): string {
-  const normalized = String(name || "").trim();
-  if (!normalized) {
-    throw new Error("Environment variable name is required");
-  }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
-    throw new Error(`Invalid environment variable name: ${normalized}`);
-  }
-  return normalized.toUpperCase();
-}
 
 export function requireEncryptionKey(env: DesiredStateEnv): string {
   const key = env.ENCRYPTION_KEY || "";

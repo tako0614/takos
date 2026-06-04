@@ -1,11 +1,12 @@
 import type { Context, Hono } from "hono";
-import { actorFromAuthenticatedRequest } from "../shared/api/auth.ts";
+import { actorFromAuthenticatedRequest, requireDbAndActor } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
 import {
   commonError,
   parsePositiveLimit,
   parsePositiveOffset,
   readJsonBody,
+  resolveRequestId,
 } from "../shared/api/common.ts";
 import {
   parseCreateRunInput,
@@ -47,23 +48,14 @@ async function handleThreadArchive(
   c: Context<{ Bindings: ApiBindings }>,
   archived: boolean,
 ) {
-  const db = c.env?.DB;
-  if (!db) {
-    return c.json(commonError("INTERNAL_ERROR", "database is not configured"), {
-      status: 500,
-    });
-  }
-  const actorResult = await actorFromAuthenticatedRequest(
-    c.req.raw,
-    crypto.randomUUID(),
-    { env: c.env },
-  );
-  if (!actorResult.ok) return actorResult.response;
+  const resolved = await requireDbAndActor(c);
+  if (!resolved.ok) return resolved.response;
+  const { db, actor } = resolved;
 
   const updated = await setThreadArchived(
     db,
     c.req.param("threadId"),
-    actorResult.actor.actorAccountId,
+    actor.actorAccountId,
     archived,
   );
   if (!updated) {
@@ -79,24 +71,14 @@ export function registerThreadsPublicRoutes(
   app: Hono<{ Bindings: ApiBindings }>,
 ): void {
   app.get("/api/threads/:threadId", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const access = await readThreadAccess(
       db,
       c.req.param("threadId"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!access) {
       return c.json(commonError("NOT_FOUND", "Thread not found"), {
@@ -127,7 +109,7 @@ export function registerThreadsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -148,24 +130,14 @@ export function registerThreadsPublicRoutes(
   });
 
   app.delete("/api/threads/:threadId", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const deleted = await deleteThread(
       db,
       c.req.param("threadId"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!deleted) {
       return c.json(commonError("NOT_FOUND", "Thread not found"), {
@@ -187,25 +159,15 @@ export function registerThreadsPublicRoutes(
   );
 
   app.get("/api/threads/:threadId/runs", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     try {
       const result = await listThreadRuns(
         db,
         c.req.param("threadId"),
-        actorResult.actor.actorAccountId,
+        actor.actorAccountId,
         {
           activeOnly: c.req.query("active_only") === "1",
           limit: parsePositiveLimit(c.req.query("limit"), 50, 200),
@@ -245,7 +207,7 @@ export function registerThreadsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -298,19 +260,9 @@ export function registerThreadsPublicRoutes(
   });
 
   app.get("/api/threads/:threadId/history", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const result = await getThreadHistory(
       {
@@ -318,7 +270,7 @@ export function registerThreadsPublicRoutes(
         TAKOS_OFFLOAD: c.env?.TAKOS_OFFLOAD,
       },
       c.req.param("threadId"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
       {
         limit: parsePositiveLimit(c.req.query("limit"), 100, 200),
         offset: parsePositiveOffset(c.req.query("offset")),
@@ -336,24 +288,14 @@ export function registerThreadsPublicRoutes(
   });
 
   app.get("/api/threads/:threadId/export", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const response = await exportThread(
       db,
       c.req.param("threadId"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
       {
         format: c.req.query("format")?.toLowerCase() || "markdown",
         includeInternal: c.req.query("include_internal") === "1",
@@ -369,24 +311,14 @@ export function registerThreadsPublicRoutes(
   });
 
   app.get("/api/threads/:threadId/messages", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const result = await listThreadMessages(
       db,
       c.req.param("threadId"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
       {
         limit: parsePositiveLimit(c.req.query("limit"), 100, 200),
         offset: parsePositiveOffset(c.req.query("offset")),
@@ -418,7 +350,7 @@ export function registerThreadsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -464,7 +396,7 @@ export function registerThreadsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -486,24 +418,14 @@ export function registerThreadsPublicRoutes(
   });
 
   app.get("/api/threads/:threadId/shares", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const shares = await listThreadSharesWithLinks(
       db,
       c.req.param("threadId"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
       new URL(c.req.url).origin,
     );
     if (!shares) {
@@ -532,7 +454,7 @@ export function registerThreadsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -568,25 +490,15 @@ export function registerThreadsPublicRoutes(
   });
 
   app.post("/api/threads/:threadId/shares/:shareId/revoke", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const revoked = await revokeThreadShare(
       db,
       c.req.param("threadId"),
       c.req.param("shareId"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (revoked === null) {
       return c.json(commonError("NOT_FOUND", "Thread not found"), {

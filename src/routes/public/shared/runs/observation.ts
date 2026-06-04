@@ -4,6 +4,7 @@ import type {
   RunStatus,
   SqlDatabaseBinding,
 } from "takos-api-contract/shared/types";
+import { asRecord } from "../api/common.ts";
 
 export type FormattedRunEvent = {
   id: number;
@@ -520,12 +521,6 @@ function isPersistedRunEvent(value: unknown): value is PersistedRunEvent {
     typeof row.type === "string" &&
     typeof row.data === "string" &&
     typeof row.created_at === "string";
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
 }
 
 function numberField(

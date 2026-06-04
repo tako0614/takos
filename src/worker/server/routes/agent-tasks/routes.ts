@@ -16,7 +16,7 @@ import { zValidator } from "../zod-validator.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
 import { createThread } from "../../../application/services/threads/thread-service.ts";
-import { analyzeTask } from "../../../application/services/agent/workflow.ts";
+import { analyzeTask } from "../../../application/services/agent/task-analysis.ts";
 import {
   DEFAULT_MODEL_ID,
   filterAgentAllowedToolNames,

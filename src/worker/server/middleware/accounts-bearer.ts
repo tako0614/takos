@@ -1,8 +1,24 @@
 import { and, eq } from "drizzle-orm";
+import type { Context } from "hono";
+import type { Env, User } from "../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
 import { ALL_API_BEARER_SCOPES } from "../../shared/types/api-scopes.ts";
 import { accounts, authIdentities, getDb } from "../../infra/db/index.ts";
 import { provisionOidcUser } from "../routes/auth/provisioning.ts";
+import {
+  getCachedUser,
+  isValidUserId,
+} from "../../application/services/identity/user-cache.ts";
+import {
+  getPlatformConfig,
+  getPlatformServices,
+} from "../../platform/accessors.ts";
+import {
+  extractBearerToken,
+  isRetiredAppLocalBearerToken,
+  isTakosumiAccountsBearerCandidate,
+} from "./bearer-token-classification.ts";
+import { resolveSelfIssuedBearer } from "../routes/auth/in-process-bearer.ts";
 
 type AccountsDiscoveryDocument = {
   issuer?: string;
@@ -134,6 +150,22 @@ function normalizeConfiguredUrl(value: string | undefined): string | undefined {
     return url.toString().replace(/\/+$/, "");
   } catch {
     return undefined;
+  }
+}
+
+function requestOrigin(requestUrl: string): string | undefined {
+  try {
+    return new URL(requestUrl).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function sameHost(a: string, b: string): boolean {
+  try {
+    return new URL(a).host === new URL(b).host;
+  } catch {
+    return false;
   }
 }
 
@@ -270,6 +302,121 @@ export function expandTakosumiAccountsPatScopes(scopes: string[]): string[] {
     for (const scope of readCompatibleScopes) expanded.add(scope);
   }
   return [...expanded];
+}
+
+/**
+ * Dependency seam for the shared Bearer pipeline. `auth.ts`'s `authDeps` and
+ * `oauth-auth.ts`'s `oauthAuthDeps` both expose these members so tests can
+ * override them; `resolveAccountsBearer` reads them through the passed `deps`
+ * object rather than the module bindings so those overrides take effect.
+ */
+export interface AccountsBearerResolverDeps {
+  validateTakosumiAccountsBearer: typeof validateTakosumiAccountsBearer;
+  getCachedUser: typeof getCachedUser;
+  isValidUserId: typeof isValidUserId;
+  getPlatformServices: typeof getPlatformServices;
+  getPlatformConfig: typeof getPlatformConfig;
+}
+
+export type ResolveAccountsBearerResult =
+  /** No `Bearer` token on the request. */
+  | { kind: "no-bearer" }
+  /** Token carries a retired app-local prefix (`tak_pat_` / `tak_oat_`). */
+  | { kind: "retired" }
+  /** Token is a Bearer but is not a Takosumi Accounts candidate. */
+  | { kind: "not-accounts" }
+  /** Accounts candidate but no SQL binding is configured. */
+  | { kind: "no-db" }
+  /** Introspection rejected the token (inactive / expired / scope-short). */
+  | { kind: "invalid" }
+  /** Token valid but missing one of `requiredScopes`. */
+  | { kind: "scope-insufficient"; scopes: string[] }
+  /** Token valid but the resolved user id has no cached user record. */
+  | { kind: "user-not-found" }
+  /** Token valid and the cached user resolved. */
+  | { kind: "ok"; user: User; userId: string; scopes: string[] };
+
+/**
+ * Single-sourced Takosumi Accounts Bearer pipeline: extraction → retired/
+ * candidate classification → 4-config introspection plumbing → validate →
+ * `getCachedUser` (+ optional scope gate). Both `resolveRequestUser`
+ * (cookie-or-bearer) and `requireOAuthAuth` (bearer-only, scoped) consume this
+ * and map the returned `kind` to their own status codes / response shapes.
+ */
+export async function resolveAccountsBearer(
+  c: Context<{ Bindings: Env; Variables: object }>,
+  deps: AccountsBearerResolverDeps,
+  options: { requiredScopes?: string[] } = {},
+): Promise<ResolveAccountsBearerResult> {
+  const bearer = extractBearerToken(c.req.header("Authorization"));
+  if (!bearer) return { kind: "no-bearer" };
+
+  if (isRetiredAppLocalBearerToken(bearer)) return { kind: "retired" };
+
+  if (!isTakosumiAccountsBearerCandidate(bearer)) return { kind: "not-accounts" };
+
+  const dbBinding = deps.getPlatformServices(c).sql?.binding;
+  if (!dbBinding) return { kind: "no-db" };
+
+  const config = deps.getPlatformConfig(c);
+
+  // Self-issuer short-circuit: when the configured issuer host is this worker's
+  // own origin (app.takosumi.com is its own OIDC issuer), the token can be
+  // verified in-process against the local JWKS instead of a remote
+  // /oauth/introspect call. The accounts handler that serves the JWKS runs in
+  // the same worker.
+  const issuer = normalizeConfiguredUrl(config.oidcIssuerUrl);
+  const origin = requestOrigin(c.req.url);
+  if (issuer && origin && sameHost(issuer, origin)) {
+    const selfBearer = await resolveSelfIssuedBearer({
+      authorizationHeader: c.req.header("Authorization"),
+      origin,
+      issuer,
+      db: dbBinding,
+      env: c.env,
+    });
+    if (selfBearer.kind !== "ok") return { kind: "invalid" };
+
+    const scopes = expandTakosumiAccountsPatScopes(selfBearer.scopes);
+    if (!deps.isValidUserId(selfBearer.userId)) return { kind: "invalid" };
+    if (
+      options.requiredScopes?.length &&
+      !options.requiredScopes.every((required) => scopes.includes(required))
+    ) {
+      return { kind: "scope-insufficient", scopes };
+    }
+
+    const user = await deps.getCachedUser(c, selfBearer.userId);
+    if (!user) return { kind: "user-not-found" };
+    return { kind: "ok", user, userId: selfBearer.userId, scopes };
+  }
+
+  const validated = await deps.validateTakosumiAccountsBearer({
+    db: dbBinding,
+    token: bearer,
+    issuerUrl: config.oidcIssuerUrl,
+    discoveryUrl: config.oidcDiscoveryUrl,
+    clientId: config.oidcClientId,
+    clientSecret: config.oidcClientSecret,
+    requiredScopes: options.requiredScopes,
+  });
+  if (!validated || !deps.isValidUserId(validated.userId)) {
+    return { kind: "invalid" };
+  }
+
+  if (
+    options.requiredScopes?.length &&
+    !options.requiredScopes.every((required) =>
+      validated.scopes.includes(required)
+    )
+  ) {
+    return { kind: "scope-insufficient", scopes: validated.scopes };
+  }
+
+  const user = await deps.getCachedUser(c, validated.userId);
+  if (!user) return { kind: "user-not-found" };
+
+  return { kind: "ok", user, userId: validated.userId, scopes: validated.scopes };
 }
 
 async function resolveAccountsBearerUser(input: {

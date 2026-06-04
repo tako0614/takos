@@ -48,6 +48,7 @@ import {
 
 import { recordRunUsageBatch } from "../application/services/app-usage/usage-recorder.ts";
 import {
+  CONTROL_RPC_ENDPOINTS,
   err,
   ok,
   parseExecutorRpcBody,
@@ -161,150 +162,64 @@ export function createAgentControlBackendRouter() {
   return router;
 }
 
+/**
+ * Generic control-RPC handlers, keyed by endpoint slug. Every handler takes the
+ * parsed body and env and returns a Response; tool-cleanup is normalized to the
+ * same shape (it ignores env). The two bespoke endpoints (run-usage, api-keys)
+ * are NOT here — they carry extra metering / least-privilege logic and are
+ * registered directly below.
+ */
+const CONTROL_RPC_HANDLERS: Record<
+  string,
+  (body: Record<string, unknown>, env: Env) => Response | Promise<Response>
+> = {
+  // run lifecycle / status
+  "heartbeat": handleHeartbeat,
+  "run-status": handleRunStatus,
+  "run-record": handleRunRecord,
+  "run-bootstrap": handleRunBootstrap,
+  "run-fail": handleRunFail,
+  "run-reset": handleRunReset,
+  "run-context": handleRunContext,
+  "run-config": handleRunConfig,
+  "no-llm-complete": handleNoLlmComplete,
+  "current-session": handleCurrentSession,
+  "is-cancelled": handleIsCancelled,
+  "update-run-status": handleUpdateRunStatus,
+  "run-event": handleRunEvent,
+  // conversation / session / messages
+  "conversation-history": handleConversationHistory,
+  "add-message": handleAddMessage,
+  // memory
+  "memory-activation": handleMemoryActivation,
+  "memory-finalize": handleMemoryFinalize,
+  // skills
+  "skill-runtime-context": handleSkillRuntimeContext,
+  "skill-catalog": handleSkillCatalog,
+  "skill-plan": handleSkillPlan,
+  // tools
+  "tool-catalog": handleToolCatalog,
+  "tool-execute": handleToolExecute,
+  "tool-cleanup": (body) => handleToolCleanup(body),
+};
+
 function createExecutorHandlersRouter() {
   const router = new Hono<{ Bindings: Env }>();
 
-  // --- Run lifecycle ---
-
-  router.post("/heartbeat", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleHeartbeat(parsed.value, c.env);
-  });
-
-  router.post("/run-status", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunStatus(parsed.value, c.env);
-  });
-
-  router.post("/run-record", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunRecord(parsed.value, c.env);
-  });
-
-  router.post("/run-bootstrap", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunBootstrap(parsed.value, c.env);
-  });
-
-  router.post("/run-fail", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunFail(parsed.value, c.env);
-  });
-
-  router.post("/run-reset", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunReset(parsed.value, c.env);
-  });
-
-  router.post("/run-context", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunContext(parsed.value, c.env);
-  });
-
-  router.post("/run-config", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunConfig(parsed.value, c.env);
-  });
-
-  router.post("/no-llm-complete", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleNoLlmComplete(parsed.value, c.env);
-  });
-
-  router.post("/current-session", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleCurrentSession(parsed.value, c.env);
-  });
-
-  router.post("/is-cancelled", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleIsCancelled(parsed.value, c.env);
-  });
-
-  // --- Control RPC ---
-
-  router.post("/conversation-history", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleConversationHistory(parsed.value, c.env);
-  });
-
-  router.post("/skill-runtime-context", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleSkillRuntimeContext(parsed.value, c.env);
-  });
-
-  router.post("/skill-catalog", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleSkillCatalog(parsed.value, c.env);
-  });
-
-  router.post("/skill-plan", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleSkillPlan(parsed.value, c.env);
-  });
-
-  router.post("/memory-activation", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleMemoryActivation(parsed.value, c.env);
-  });
-
-  router.post("/memory-finalize", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleMemoryFinalize(parsed.value, c.env);
-  });
-
-  router.post("/add-message", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleAddMessage(parsed.value, c.env);
-  });
-
-  router.post("/update-run-status", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleUpdateRunStatus(parsed.value, c.env);
-  });
-
-  router.post("/tool-catalog", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleToolCatalog(parsed.value, c.env);
-  });
-
-  router.post("/tool-execute", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleToolExecute(parsed.value, c.env);
-  });
-
-  router.post("/tool-cleanup", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleToolCleanup(parsed.value);
-  });
-
-  router.post("/run-event", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    return handleRunEvent(parsed.value, c.env);
-  });
+  // --- Generic control-RPC routes (parse + dispatch), derived from the single
+  // CONTROL_RPC_ENDPOINTS registry so route / scope / forward coverage stays in
+  // lockstep. Bespoke endpoints (run-usage, api-keys) are skipped here and
+  // registered below. A registry entry without a handler is a build/boot bug,
+  // so we fail loudly rather than silently 404. ---
+  for (const { name } of CONTROL_RPC_ENDPOINTS) {
+    const handler = CONTROL_RPC_HANDLERS[name];
+    if (!handler) continue; // bespoke (run-usage / api-keys) — see below
+    router.post(`/${name}`, async (c) => {
+      const parsed = await parseExecutorRpcBody(c.req);
+      if (!parsed.ok) return parsed.response;
+      return handler(parsed.value, c.env);
+    });
+  }
 
   // --- Run usage metering ---
 

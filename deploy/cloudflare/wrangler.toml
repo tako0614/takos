@@ -37,9 +37,24 @@ TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://admin.example.com"
 # It should be used for OIDC redirect URI validation (restrict redirect targets to
 # known domains). Remove this comment and implement validation, or remove the var entirely.
 # AUTH_ALLOWED_REDIRECT_DOMAINS = "app.example.com"
-OIDC_ISSUER_URL = "https://accounts.example.com"
+# Root-unified single app: the account plane runs in-process and Takos is its
+# own OIDC issuer at the bare origin (no /accounts suffix). The accounts handler
+# derives all discovery + OIDC endpoints from the issuer, so these put discovery
+# and the OAuth endpoints at the root.
+TAKOSUMI_ACCOUNTS_ISSUER = "https://app.takosumi.com"
+OIDC_ISSUER_URL = "https://app.takosumi.com"
 OIDC_CLIENT_ID = "takos-worker-installation-client"
 OIDC_REDIRECT_URI = "https://admin.example.com/auth/oidc/callback"
+# Account-plane (in-process Takosumi Accounts handler) non-secret config. The
+# handler reads these directly from env (handler.ts); var names mirror
+# takosumi/deploy/accounts-cloudflare/wrangler.toml. Secrets are pushed via
+# `wrangler secret put` (see the secrets block below), never committed here.
+TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_takosumi_prod"
+TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-private-production"
+TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://app.takosumi.com/auth/oidc/callback"
+TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS = "closed"
+TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
+TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
 # OCI deployment adapter for image-backed services / containers.
 OCI_ORCHESTRATOR_URL = ""
 # RoutingDO rollout phase (1-4). Node/local platform defaults to 1; CF Workers should set 4.
@@ -64,6 +79,25 @@ binding = "DB"
 database_name = "takos-control-db"
 database_id = "replace-with-d1-database-id"
 migrations_dir = "db/migrations-control/migrations"
+
+# Account-plane D1 (in-process Takosumi Accounts handler). Separate D1 from the
+# product `DB`: the schemas are namespace-incompatible (accounts = document-store
+# buckets; product = relational tables), so they stay as two bindings in this one
+# worker. No migrations_dir: the accounts schema is applied by the accounts
+# `migrate-d1` runner and the in-process handler fail-closes on schema-version
+# drift (handler.ts ensureD1SchemaVersion). Reuses the existing
+# takosumi-accounts D1 created for the standalone accounts worker.
+[[d1_databases]]
+binding = "TAKOSUMI_ACCOUNTS_DB"
+database_name = "takosumi-accounts"
+database_id = "51138f7c-f298-4f60-8528-37acc85daa4d"
+
+# Account-plane R2 (metadata-only Installation export download artifacts served
+# from `/__takosumi/exports/*`). Reuses the existing takosumi-accounts-exports
+# bucket created for the standalone accounts worker.
+[[r2_buckets]]
+binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
+bucket_name = "takosumi-accounts-exports"
 
 # KV for hostname routing
 [[kv_namespaces]]
@@ -216,6 +250,22 @@ bucket_name = "takos-offload"
 # Cloudflare API:
 # - CF_API_TOKEN: optional Cloudflare API token for Workers-for-Platforms
 #   workload deployment when that backend is explicitly enabled.
+#
+# Account-plane (in-process Takosumi Accounts handler) secrets — var names
+# mirror takosumi/deploy/accounts-cloudflare/wrangler.toml; push via
+# `wrangler secret put`:
+# - TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK: ES256 private JWK for OIDC token signing
+# - TAKOSUMI_ACCOUNTS_ES256_KEY_ID: optional kid for the signing key
+# - TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET: pairwise OIDC subject HMAC secret
+# - TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET: launch-token pairwise HMAC secret
+# - TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET: signs /__takosumi/exports/* download URLs
+# - TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_TOKEN: optional bearer for deploy-control calls
+# Optional account-plane integrations (push only when enabled):
+# - TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY / _STRIPE_WEBHOOK_SECRET: Stripe billing
+# - TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_ID / _CLIENT_SECRET: upstream GitHub OAuth
+# - TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_ID / _CLIENT_SECRET: upstream Google OAuth
+# - TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_ID / _CLIENT_SECRET: upstream generic OIDC
+# - TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID / _PASSKEY_RP_NAME / _PASSKEY_ORIGIN: passkey auth
 
 # Queue for agent run execution
 [[queues.producers]]
@@ -311,9 +361,21 @@ PROXY_BASE_URL = "https://staging-admin.example.com"
 TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://staging-admin.example.com"
 # TODO: AUTH_ALLOWED_REDIRECT_DOMAINS — see production [vars] comment.
 # AUTH_ALLOWED_REDIRECT_DOMAINS = "staging-app.example.com"
-OIDC_ISSUER_URL = "https://staging-accounts.example.com"
+# Root-unified single app: bare-origin issuer (no /accounts suffix). See the
+# production [vars] note above.
+TAKOSUMI_ACCOUNTS_ISSUER = "https://staging-app.takosumi.com"
+OIDC_ISSUER_URL = "https://staging-app.takosumi.com"
 OIDC_CLIENT_ID = "takos-staging-app-installation-client"
 OIDC_REDIRECT_URI = "https://staging-admin.example.com/auth/oidc/callback"
+# Account-plane (in-process Takosumi Accounts handler) non-secret config —
+# staging mirror of the production [vars] block. Secrets via `wrangler secret
+# put --env staging`.
+TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_takosumi_staging"
+TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-private-staging"
+TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://staging-app.takosumi.com/auth/oidc/callback"
+TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS = "closed"
+TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
+TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
 ROUTING_DO_PHASE = "4"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"
@@ -323,6 +385,20 @@ binding = "DB"
 database_name = "takos-control-staging-db"
 database_id = "replace-with-staging-d1-database-id"
 migrations_dir = "db/migrations-control/migrations"
+
+# Account-plane D1 (staging). Separate takosumi-accounts staging D1 — create
+# with `wrangler d1 create takosumi-accounts-staging` and fill the id. No
+# migrations_dir (applied by the accounts migrate-d1 runner; handler fail-closes
+# on schema drift). See the production [[d1_databases]] note above.
+[[env.staging.d1_databases]]
+binding = "TAKOSUMI_ACCOUNTS_DB"
+database_name = "takosumi-accounts-staging"
+database_id = "replace-with-staging-takosumi-accounts-d1-database-id"
+
+# Account-plane R2 (staging) for /__takosumi/exports/* download artifacts.
+[[env.staging.r2_buckets]]
+binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
+bucket_name = "takosumi-accounts-exports-staging"
 
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"

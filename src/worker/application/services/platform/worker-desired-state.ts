@@ -53,20 +53,10 @@ import {
 
 import { getRuntimeConfig, saveRuntimeConfig } from "./runtime-config.ts";
 import { getPortableSecretValue } from "../resources/portable-runtime.ts";
+import { normalizeEnvName } from "../common-env/crypto.ts";
 
 // Re-export resolveServiceCommonEnvState for external consumers
 export { resolveServiceCommonEnvState } from "./env-state-resolution.ts";
-
-function normalizeEnvName(name: string): string {
-  const normalized = String(name || "").trim();
-  if (!normalized) {
-    throw new Error("Environment variable name is required");
-  }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
-    throw new Error(`Invalid environment variable name: ${normalized}`);
-  }
-  return normalized.toUpperCase();
-}
 
 export class ServiceDesiredStateService {
   private readonly encryptionKey: string;

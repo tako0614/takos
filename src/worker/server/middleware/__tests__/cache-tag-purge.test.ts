@@ -1,12 +1,7 @@
 import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
-import { Hono } from "hono";
 
-import {
-  _resetCacheTagIndexForTests,
-  invalidateCache,
-  withCache,
-} from "../cache.ts";
+import { invalidateCache } from "../cache.ts";
 
 type CacheEntry = { body: string; headers: Headers; status: number };
 
@@ -54,45 +49,7 @@ function uninstallFakeCachesDefault(): void {
   });
 }
 
-test("invalidateCache - tag-based purge deletes URLs stored under the tag", async () => {
-  _resetCacheTagIndexForTests();
-  const { deleted, map } = installFakeCachesDefault();
-  try {
-    const app = new Hono();
-    app.use(
-      "/explore/*",
-      withCache({ ttl: 60, cacheTag: "explore" }),
-    );
-    app.get("/explore/a", (c) => c.text("alpha"));
-    app.get("/explore/b", (c) => c.text("beta"));
-
-    // Prime the cache for two URLs sharing the same Cache-Tag.
-    await app.request("https://example.com/explore/a");
-    await app.request("https://example.com/explore/b");
-    assertEquals(map.size, 2);
-
-    await invalidateCache({ tags: ["explore"] });
-
-    // Both URLs should have been deleted from the cache.
-    assertEquals(deleted.sort(), [
-      "https://example.com/explore/a",
-      "https://example.com/explore/b",
-    ]);
-    assertEquals(map.size, 0);
-
-    // Subsequent purge for the same tag must not re-delete anything; the
-    // index entry was consumed on the first call.
-    deleted.length = 0;
-    await invalidateCache({ tags: ["explore"] });
-    assertEquals(deleted, []);
-  } finally {
-    _resetCacheTagIndexForTests();
-    uninstallFakeCachesDefault();
-  }
-});
-
-test("invalidateCache - URL[] form keeps deleting explicit URLs", async () => {
-  _resetCacheTagIndexForTests();
+test("invalidateCache - URL[] form deletes explicit URLs", async () => {
   const { deleted } = installFakeCachesDefault();
   try {
     await invalidateCache([
@@ -104,48 +61,36 @@ test("invalidateCache - URL[] form keeps deleting explicit URLs", async () => {
       "https://example.com/b",
     ]);
   } finally {
-    _resetCacheTagIndexForTests();
     uninstallFakeCachesDefault();
   }
 });
 
-test("invalidateCache - mixed urls + tags purge dedupes by URL", async () => {
-  _resetCacheTagIndexForTests();
-  const { deleted, map } = installFakeCachesDefault();
+test("invalidateCache - single-string form deletes one URL", async () => {
+  const { deleted } = installFakeCachesDefault();
   try {
-    const app = new Hono();
-    app.use("/x", withCache({ ttl: 60, cacheTag: "tag-x" }));
-    app.get("/x", (c) => c.text("x"));
-    await app.request("https://example.com/x");
-    assertEquals(map.size, 1);
+    await invalidateCache("https://example.com/single");
+    assertEquals(deleted, ["https://example.com/single"]);
+  } finally {
+    uninstallFakeCachesDefault();
+  }
+});
 
+test("invalidateCache - { urls } form dedupes by URL", async () => {
+  const { deleted } = installFakeCachesDefault();
+  try {
     await invalidateCache({
-      urls: ["https://example.com/x"],
-      tags: ["tag-x"],
+      urls: [
+        "https://example.com/x",
+        "https://example.com/x",
+        "https://example.com/y",
+      ],
     });
-    // Even though both inputs reference the same URL, it is deleted exactly
-    // once (Set-based dedup).
-    assertEquals(deleted, ["https://example.com/x"]);
+    // Each distinct URL is deleted exactly once (Set-based dedup).
+    assertEquals(deleted.sort(), [
+      "https://example.com/x",
+      "https://example.com/y",
+    ]);
   } finally {
-    _resetCacheTagIndexForTests();
-    uninstallFakeCachesDefault();
-  }
-});
-
-test("invalidateCache - comma-separated Cache-Tag header registers each tag", async () => {
-  _resetCacheTagIndexForTests();
-  const { deleted, map } = installFakeCachesDefault();
-  try {
-    const app = new Hono();
-    app.use("/multi", withCache({ ttl: 60, cacheTag: "tag-a, tag-b" }));
-    app.get("/multi", (c) => c.text("multi"));
-    await app.request("https://example.com/multi");
-    assertEquals(map.size, 1);
-
-    await invalidateCache({ tags: ["tag-b"] });
-    assertEquals(deleted, ["https://example.com/multi"]);
-  } finally {
-    _resetCacheTagIndexForTests();
     uninstallFakeCachesDefault();
   }
 });

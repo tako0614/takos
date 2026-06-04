@@ -9,6 +9,10 @@ export const CREATE_ARTIFACT: ToolDefinition = {
   description:
     "Create an artifact (code, document, report, etc.) as output of this run. Artifacts are displayed to the user and can be downloaded.",
   category: "artifact",
+  namespace: "artifact",
+  family: "artifact.create",
+  risk_level: "none",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -34,6 +38,10 @@ export const SEARCH: ToolDefinition = {
   name: "search",
   description: "Search for files and content in the space",
   category: "artifact",
+  namespace: "artifact",
+  family: "artifact.search",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

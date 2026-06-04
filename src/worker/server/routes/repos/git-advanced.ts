@@ -6,7 +6,7 @@ import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { zValidator } from "../zod-validator.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
+import { requireRepoRead } from "./git-shared.ts";
 import {
   getTreeFlattenLimitError,
   readableCommitErrorResponse,
@@ -115,16 +115,9 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("q must be at least 2 characters");
       }
 
-      const repoAccess = await checkRepoAccess(
-        c.env,
-        repoId,
-        user?.id,
-        undefined,
-        { allowPublicRead: true },
-      );
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+        allowPublicRead: true,
+      });
 
       const bucket = c.env.GIT_OBJECTS;
       if (!bucket) {
@@ -275,16 +268,7 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError("q is required");
     }
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     const embeddingsService = createEmbeddingsService(c.env);
     if (!embeddingsService) {
@@ -304,10 +288,7 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
     const embeddingsService = createEmbeddingsService(c.env);
     if (!embeddingsService) {
@@ -451,12 +432,7 @@ async function handleFileHistoryRequest(c: Context<AuthenticatedRouteEnv>) {
     );
   }
 
-  const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, {
-    allowPublicRead: true,
-  });
-  if (!repoAccess) {
-    throw new NotFoundError("Repository");
-  }
+  await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {
@@ -552,12 +528,7 @@ async function handleBlameRequest(c: Context<AuthenticatedRouteEnv>) {
     );
   }
 
-  const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, {
-    allowPublicRead: true,
-  });
-  if (!repoAccess) {
-    throw new NotFoundError("Repository");
-  }
+  await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
   const bucket = c.env.GIT_OBJECTS;
   if (!bucket) {

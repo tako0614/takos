@@ -14,10 +14,7 @@ import {
   resolveRequestId,
 } from "./shared/api/common.ts";
 import { csrfMiddleware } from "./shared/api/csrf.ts";
-import {
-  forwardAccountControlRequest,
-  isAccountControlPath,
-} from "./routes/account/index.ts";
+import { CONTROL_FORWARDERS } from "./routes/control-forwarders.ts";
 import { registerDeploymentsPublicRoutes } from "./routes/deployments-public.ts";
 import { registerExplorePublicRoutes } from "./routes/explore-public.ts";
 import { registerRepositoriesPublicRoutes } from "./routes/repositories-public.ts";
@@ -25,30 +22,6 @@ import { registerRunsPublicRoutes } from "./routes/runs-public.ts";
 import { registerRuntimeGatewayPublicRoutes } from "./routes/runtime-gateway-public.ts";
 import { registerSpacesPublicRoutes } from "./routes/spaces-public.ts";
 import { registerThreadsPublicRoutes } from "./routes/threads-public.ts";
-import {
-  forwardProfileControlRequest,
-  isProfileControlPath,
-} from "./routes/profile/index.ts";
-import {
-  forwardRunsControlRequest,
-  isRunsControlPath,
-} from "./routes/runs/index.ts";
-import {
-  forwardSetupControlRequest,
-  isSetupControlPath,
-} from "./routes/setup/index.ts";
-import {
-  forwardAppInstallationsControlRequest,
-  isAppInstallationsControlPath,
-} from "./routes/app-installations/index.ts";
-import {
-  forwardSpaceToolsControlRequest,
-  isSpaceToolsControlPath,
-} from "./routes/space-tools/index.ts";
-import {
-  forwardThreadsControlRequest,
-  isThreadsControlPath,
-} from "./routes/threads/index.ts";
 import {
   isGitSmartHttpPath,
   proxyGitSmartHttpRequest,
@@ -274,34 +247,11 @@ app.all("*", async (c, next) => {
   if (isRetiredTakosPublicationsPath(pathname)) {
     return retiredTakosPublicationsResponse();
   }
-  if (isAccountControlPath(pathname)) {
-    return await forwardAccountControlRequest(c.req.raw, c.env, executionCtx);
-  }
-  if (isAppInstallationsControlPath(pathname)) {
-    return await forwardAppInstallationsControlRequest(
-      c.req.raw,
-      c.env,
-      executionCtx,
-    );
-  }
-  if (isProfileControlPath(pathname)) {
-    return await forwardProfileControlRequest(c.req.raw, c.env, executionCtx);
-  }
-  if (isSetupControlPath(pathname)) {
-    return await forwardSetupControlRequest(c.req.raw, c.env, executionCtx);
-  }
-  if (isRunsControlPath(pathname, c.req.raw.method)) {
-    return await forwardRunsControlRequest(c.req.raw, c.env, executionCtx);
-  }
-  if (isSpaceToolsControlPath(pathname, c.req.raw.method)) {
-    return await forwardSpaceToolsControlRequest(
-      c.req.raw,
-      c.env,
-      executionCtx,
-    );
-  }
-  if (isThreadsControlPath(pathname, c.req.raw.method)) {
-    return await forwardThreadsControlRequest(c.req.raw, c.env, executionCtx);
+  const method = c.req.raw.method;
+  for (const forwarder of CONTROL_FORWARDERS) {
+    if (forwarder.matches(pathname, method)) {
+      return await forwarder.forward(c.req.raw, c.env, executionCtx);
+    }
   }
   return await next();
 });
@@ -323,12 +273,10 @@ registerRuntimeGatewayPublicRoutes(app);
 app.all("*", async (c, next) => {
   const pathname = new URL(c.req.raw.url).pathname;
   if (!isGitSmartHttpPath(pathname)) return await next();
-  const response = await proxyGitSmartHttpRequest(c.req.raw, {
+  return await proxyGitSmartHttpRequest(c.req.raw, {
     env: c.env,
     executionCtx: maybeExecutionCtx(c),
   });
-  if (response instanceof Response) return response;
-  return c.json(response, 500);
 });
 
 // Global error boundary. Hono's default uncaught-exception handler returns a

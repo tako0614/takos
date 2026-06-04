@@ -2,10 +2,9 @@ import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-uti
 import type { Context } from "hono";
 import type { PlatformExecutionContext } from "takos-worker/shared/types";
 import {
-  signTakosumiInternalRequest as signTakosInternalRequest,
-  TakosumiInternalClient as TakosInternalClient,
-} from "takosumi-contract/internal/rpc";
-import { TakosumiInternalClient } from "takosumi-contract-v2/internal/rpc";
+  signTakosumiInternalRequest,
+  TakosumiInternalClient,
+} from "takosumi-contract-v2/internal/rpc";
 import { TAKOS_GIT_CAPABILITIES } from "takos-git-contract";
 import type { TakosumiActorContext } from "takosumi-contract-v2/internal/rpc";
 import { actorFromAuthenticatedRequest } from "./auth.ts";
@@ -16,6 +15,7 @@ import {
   copyHeaderIfPresent,
   isRecord,
   readBodyString,
+  resolveRequestIdFromHeaders,
 } from "./common.ts";
 
 export type ForwardInput = {
@@ -52,7 +52,20 @@ export function resolveInternalServiceEndpoint(
   return { serviceId, audience: serviceId, url };
 }
 
-export async function forwardTakosumiInternalRequest(input: ForwardInput) {
+/**
+ * Wraps the closed `commonError` envelope in a 500 `Response` so forwarders can
+ * return `Response` uniformly. Callers used to repeat `if (response instanceof
+ * Response) return response; return c.json(response, 500);` at every site; the
+ * forwarder now owns that 500 framing for the 'internal client not configured'
+ * case so handlers can `return await forward...(...)` directly.
+ */
+function internalErrorResponse(envelope: CommonErrorEnvelope): Response {
+  return Response.json(envelope, { status: 500 });
+}
+
+export async function forwardTakosumiInternalRequest(
+  input: ForwardInput,
+): Promise<Response> {
   return await forwardTakosumiRequest({
     ...input,
     serviceName: "Takosumi",
@@ -61,8 +74,10 @@ export async function forwardTakosumiInternalRequest(input: ForwardInput) {
   });
 }
 
-export async function forwardGitInternalRequest(input: ForwardInput) {
-  return await forwardTakosInternalRequest({
+export async function forwardGitInternalRequest(
+  input: ForwardInput,
+): Promise<Response> {
+  return await forwardTakosumiRequest({
     ...input,
     serviceName: "Git",
     serviceId: "takos-git",
@@ -70,7 +85,9 @@ export async function forwardGitInternalRequest(input: ForwardInput) {
   });
 }
 
-export async function forwardRuntimeInternalRequest(input: ForwardInput) {
+export async function forwardRuntimeInternalRequest(
+  input: ForwardInput,
+): Promise<Response> {
   return await forwardTakosumiRequest({
     ...input,
     serviceName: "Runtime",
@@ -85,7 +102,7 @@ export async function forwardRuntimeGatewayRequest(
   internalBasePath: string,
   pathSpaceId?: string,
   actor?: TakosumiActorContext,
-): Promise<Response | CommonErrorEnvelope> {
+): Promise<Response> {
   const pathname = new URL(c.req.raw.url).pathname;
   const suffix = pathname.startsWith(publicBasePath)
     ? pathname.slice(publicBasePath.length)
@@ -115,22 +132,24 @@ async function forwardTakosumiRequest(
     serviceId: string;
     audience: string;
   },
-): Promise<Response | CommonErrorEnvelope> {
+): Promise<Response> {
   const secret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
   const endpoint = resolveInternalServiceEndpoint(input.serviceId);
   const actorResult = input.actor
     ? ({ ok: true, actor: input.actor } as const)
     : await actorFromAuthenticatedRequest(
       input.request,
-      crypto.randomUUID(),
+      resolveRequestIdFromHeaders(input.request.headers),
       input.actorSpaceId ?? "",
       { env: input.env, executionCtx: input.executionCtx },
     );
   if (!actorResult.ok) return actorResult.response;
   if (!secret || !endpoint) {
-    return commonError(
-      "INTERNAL_ERROR",
-      `internal ${input.serviceName} client is not configured`,
+    return internalErrorResponse(
+      commonError(
+        "INTERNAL_ERROR",
+        `internal ${input.serviceName} client is not configured`,
+      ),
     );
   }
   const actor = actorResult.actor;
@@ -154,73 +173,30 @@ async function forwardTakosumiRequest(
   });
 }
 
-async function forwardTakosInternalRequest(
-  input: ForwardInput & {
-    serviceName: string;
-    serviceId: string;
-    audience: string;
-  },
-): Promise<Response | CommonErrorEnvelope> {
-  const secret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
-  const endpoint = resolveInternalServiceEndpoint(input.serviceId);
-  const actorResult = input.actor
-    ? ({ ok: true, actor: input.actor } as const)
-    : await actorFromAuthenticatedRequest(
-      input.request,
-      crypto.randomUUID(),
-      input.actorSpaceId ?? "",
-      { env: input.env, executionCtx: input.executionCtx },
-    );
-  if (!actorResult.ok) return actorResult.response;
-  if (!secret || !endpoint) {
-    return commonError(
-      "INTERNAL_ERROR",
-      `internal ${input.serviceName} client is not configured`,
-    );
-  }
-  const actor = actorResult.actor;
-  const client = new TakosInternalClient({
-    caller: "takos-worker",
-    audience: input.audience,
-    baseUrl: endpoint.url,
-    secret,
-  });
-  const response = await client.request({
-    method: input.method,
-    path: input.path,
-    search: input.search,
-    body: input.body,
-    actor,
-    capabilities: input.capabilities,
-  });
-  return new Response(response.body, {
-    status: response.status,
-    headers: response.headers,
-  });
-}
-
 export async function proxyGitSmartHttpRequest(
   request: Request,
   options: { env?: ApiBindings; executionCtx?: PlatformExecutionContext } = {},
-): Promise<Response | CommonErrorEnvelope> {
+): Promise<Response> {
   const secret = getEnv("TAKOS_INTERNAL_SERVICE_SECRET");
   const endpoint = resolveInternalServiceEndpoint("takos-git");
   if (!secret || !endpoint) {
-    return commonError(
-      "INTERNAL_ERROR",
-      "internal Git client is not configured",
+    return internalErrorResponse(
+      commonError(
+        "INTERNAL_ERROR",
+        "internal Git client is not configured",
+      ),
     );
   }
   const url = new URL(request.url);
   const actorResult = await actorFromAuthenticatedRequest(
     request,
-    crypto.randomUUID(),
+    resolveRequestIdFromHeaders(request.headers),
     gitSpaceIdFromPath(url.pathname),
     options,
   );
   if (!actorResult.ok) return actorResult.response;
   const bodyBytes = new Uint8Array(await request.arrayBuffer());
-  const signed = await signTakosInternalRequest({
+  const signed = await signTakosumiInternalRequest({
     method: request.method,
     path: url.pathname,
     query: url.search,

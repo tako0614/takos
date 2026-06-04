@@ -106,6 +106,68 @@ export function commonError(code: string, message: string): ErrorEnvelope {
   return { error: { code, message } };
 }
 
+/**
+ * Resolves the in-process control backend path for an incoming request, or
+ * `null` when the path is not owned by this forwarder. The same matcher backs
+ * both the `matches` predicate (used by the dispatch loop) and the `forward`
+ * 404 guard, so the membership decision and the rewrite live in one place.
+ */
+export type ControlMatchTarget = (
+  pathname: string,
+  method: string,
+) => string | null;
+
+export type ControlForwarder = {
+  /** Stable identifier; also the registry key for the dispatch loop. */
+  name: string;
+  /** True when this forwarder owns the request path/method. */
+  matches: (pathname: string, method: string) => boolean;
+  /** Forwards to the in-process control backend (404 if no longer owned). */
+  forward: (
+    request: Request,
+    env?: ApiBindings,
+    executionCtx?: PlatformExecutionContext,
+  ) => Promise<Response>;
+};
+
+/**
+ * Builds one control-path forwarder from a path matcher. Every forwarder shares
+ * the identical skeleton — `matches` delegating to `matchTarget`, and `forward`
+ * resolving the target then either returning a `NOT_FOUND` envelope or proxying
+ * the request to the in-process control web app — so only the `name` (404 label)
+ * and `matchTarget` (path/method rule) vary per registry entry.
+ */
+export function defineControlForwarder(descriptor: {
+  name: string;
+  matchTarget: ControlMatchTarget;
+}): ControlForwarder {
+  const { name, matchTarget } = descriptor;
+  return {
+    name,
+    matches(pathname: string, method = "GET"): boolean {
+      return matchTarget(pathname, method) !== null;
+    },
+    async forward(
+      request: Request,
+      env?: ApiBindings,
+      executionCtx?: PlatformExecutionContext,
+    ): Promise<Response> {
+      const requestUrl = new URL(request.url);
+      const targetPath = matchTarget(requestUrl.pathname, request.method);
+      if (!targetPath) {
+        return Response.json(
+          commonError("NOT_FOUND", `${name} route not found`),
+          { status: 404 },
+        );
+      }
+      return await forwardInProcessControlRequest(request, targetPath, {
+        env,
+        executionCtx,
+      });
+    },
+  };
+}
+
 function controlRequestEnv(env: ApiBindings | undefined): ControlRequestEnv {
   const bindings = { ...(env ?? {}) } as ControlRequestEnv;
   bindings.TAKOS_INTERNAL_API_SECRET ??= getEnv(

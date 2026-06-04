@@ -29,6 +29,10 @@ export const TOOLBOX: ToolDefinition = {
   description:
     "Search and use the full tool/manual catalog. Use this proactively when the direct tools do not obviously cover the task: action=search to find tools or manuals, describe to inspect schemas or instructions, call to execute a tool, and families to list capability groups.",
   category: "space",
+  namespace: "discovery",
+  family: "discovery.toolbox",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -72,6 +76,10 @@ export const CAPABILITY_SEARCH: ToolDefinition = {
   description:
     "Search for tools or manuals by capability or intent. Use this early when you need to find the right tool quickly or verify whether a broader capability exists.",
   category: "space",
+  namespace: "discovery",
+  family: "discovery.search",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -98,6 +106,10 @@ export const CAPABILITY_FAMILIES: ToolDefinition = {
   description:
     "List all tool/skill families and their sizes. Use this to explore what categories of capabilities are available.",
   category: "space",
+  namespace: "discovery",
+  family: "discovery.search",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {},
@@ -113,6 +125,10 @@ export const CAPABILITY_INVOKE: ToolDefinition = {
   description:
     "Execute a tool discovered via capability_search or described via capability_describe. The tool is resolved and executed with the same permission checks as direct calls.",
   category: "space",
+  namespace: "discovery",
+  family: "discovery.invoke",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -136,6 +152,10 @@ export const CAPABILITY_DESCRIBE: ToolDefinition = {
   description:
     "Get full descriptions and input schemas for tools discovered via capability_search. Use this before capability_invoke when arguments are not obvious.",
   category: "space",
+  namespace: "discovery",
+  family: "discovery.describe",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

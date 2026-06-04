@@ -159,6 +159,34 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
   TAKOSUMI_ACCOUNTS_URL?: string;
   TAKOSUMI_ACCOUNTS_TOKEN?: string;
+  // ---------------------------------------------------------------------------
+  // Account-plane (in-process Takosumi Accounts handler) bindings + config.
+  // The unified Takos worker runs the Takosumi Accounts handler in-process at
+  // the origin root; these are read by the handler (handler.ts) via the env it
+  // receives. Optional here because non-web entrypoints (queue/executor
+  // workers) do not bind them. Var names mirror
+  // takosumi/deploy/accounts-cloudflare/wrangler.toml.
+  // ---------------------------------------------------------------------------
+  /** Account-plane D1 (document-store buckets). Separate from the product `DB`. */
+  TAKOSUMI_ACCOUNTS_DB?: SqlDatabaseBinding;
+  /** Account-plane R2 for /__takosumi/exports/* download artifacts. */
+  TAKOSUMI_ACCOUNTS_EXPORTS?: ObjectStoreBinding;
+  /** OIDC issuer for the in-process account plane (= bare origin, no /accounts). */
+  TAKOSUMI_ACCOUNTS_ISSUER?: string;
+  TAKOSUMI_ACCOUNTS_SUBJECT?: string;
+  TAKOSUMI_ACCOUNTS_CLIENT_ID?: string;
+  TAKOSUMI_ACCOUNTS_REDIRECT_URIS?: string;
+  TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS?: string;
+  TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS?: string;
+  TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL?: string;
+  // Account-plane secrets (wrangler secret put). The handler reads these; they
+  // are never committed as vars.
+  TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK?: string;
+  TAKOSUMI_ACCOUNTS_ES256_KEY_ID?: string;
+  TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET?: string;
+  TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET?: string;
+  TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET?: string;
+  TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_TOKEN?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
   /**

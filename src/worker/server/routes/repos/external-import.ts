@@ -14,9 +14,7 @@ import {
 } from "../../../application/services/source/external-import.ts";
 import { buildAuthHeader } from "../../../application/services/source/external-import-utils.ts";
 import { createTakosGitClient } from "../../../application/services/takos-git/client.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
-import { requireFound } from "../validation-utils.ts";
-import { WRITE_ROLES } from "./git-shared.ts";
+import { requireRepoWrite, WRITE_ROLES } from "./git-shared.ts";
 import { getDb, repositories } from "../../../infra/db/index.ts";
 import { eq } from "drizzle-orm";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -151,10 +149,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     // remote fetch (closes the IDOR where any authenticated caller could
     // re-fetch / overwrite refs on an arbitrary repo). Returns 404 for both
     // missing repos and non-members, avoiding an existence leak.
-    const access = requireFound(
-      await checkRepoAccess(c.env, repoId, user.id, [...WRITE_ROLES]),
-      "Repository",
-    );
+    const access = await requireRepoWrite(c.env, repoId, user.id);
 
     // The access-shaped Repository does not expose remote_clone_url, so keep
     // the targeted column select for the BadRequest presence check.

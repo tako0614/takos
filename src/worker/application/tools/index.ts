@@ -18,9 +18,7 @@ export {
   CUSTOM_TOOLS,
   getCustomHandler,
   getCustomTool,
-  getToolsByCategory,
   isCustomTool,
-  TOOL_CATEGORIES,
 } from "./custom/index.ts";
 
 export { ToolExecutor } from "./executor.ts";
@@ -57,7 +55,6 @@ export {
   canRoleAccessOperation,
   canRoleAccessTool,
   CUSTOM_DOMAIN_OPS,
-  CUSTOM_TOOL_POLICY_METADATA,
   DEPLOYMENT_OPS,
   filterAgentAllowedToolNames,
   filterToolsForRole,

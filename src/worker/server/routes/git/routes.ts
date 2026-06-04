@@ -16,8 +16,8 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { logError } from "../../../shared/utils/logger.ts";
+import { WRITE_ROLES } from "../repos/git-shared.ts";
 
-const WRITE_ROLES = ["owner", "admin", "editor"] as const;
 const WRITE_DENIED_MESSAGE = "Workspace not found or insufficient permissions";
 
 const git = new Hono<SpaceAccessRouteEnv>();

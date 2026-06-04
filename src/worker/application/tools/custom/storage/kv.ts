@@ -9,6 +9,10 @@ export const KEY_VALUE_GET: ToolDefinition = {
   name: "key_value_get",
   description: "Get a value from a key-value namespace",
   category: "storage",
+  namespace: "storage",
+  family: "storage.key_value",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -29,6 +33,10 @@ export const KEY_VALUE_PUT: ToolDefinition = {
   name: "key_value_put",
   description: "Store a value in a key-value namespace",
   category: "storage",
+  namespace: "storage",
+  family: "storage.key_value",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -57,6 +65,10 @@ export const KEY_VALUE_DELETE: ToolDefinition = {
   name: "key_value_delete",
   description: "Delete a key from a key-value namespace",
   category: "storage",
+  namespace: "storage",
+  family: "storage.key_value",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -77,6 +89,10 @@ export const KEY_VALUE_LIST: ToolDefinition = {
   name: "key_value_list",
   description: "List keys in a key-value namespace with optional prefix filter",
   category: "storage",
+  namespace: "storage",
+  family: "storage.key_value",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

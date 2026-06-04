@@ -674,6 +674,47 @@ function detectComputeKind(
   );
 }
 
+// Partial (override delta) variant: validate whatever determines kind, but
+// allow it to stay unresolved when the delta omits `kind`/`image`. The base
+// manifest supplies the missing fields and the full guards re-run after the
+// merge at apply time.
+function detectPartialComputeKind(
+  prefix: string,
+  record: Record<string, unknown>,
+  parentKind: ComputeKind | null,
+): ComputeKind | undefined {
+  const explicitKind = asString(record.kind, `${prefix}.kind`) as
+    | ComputeKind
+    | undefined;
+  if (
+    explicitKind &&
+    !["worker", "service", "attached-container"].includes(explicitKind)
+  ) {
+    throw new Error(
+      `${prefix}.kind must be worker, service, or attached-container`,
+    );
+  }
+  const hasBuild = record.build != null;
+  const hasImage = record.image != null;
+  if (hasBuild) {
+    if (parentKind === "worker") {
+      throw new Error(
+        `${prefix}.build is not supported for attached container compute; use digest-pinned image instead.`,
+      );
+    }
+    if (hasImage) {
+      throw new Error(
+        `${prefix} must not define both 'build' and 'image' (choose one)`,
+      );
+    }
+    throw new Error(buildMetadataDisabledMessage(`${prefix}.build`));
+  }
+  if (explicitKind) return explicitKind;
+  if (parentKind === "worker" && hasImage) return "attached-container";
+  if (hasImage) return "service";
+  return undefined;
+}
+
 // ============================================================
 // Compute entry parser
 // ============================================================
@@ -684,15 +725,21 @@ function parseComputeEntry(
   parentKind: ComputeKind | null,
   options: ParseComputeOptions,
 ): AppCompute {
+  const partial = options.partial === true;
   const record = asRecord(raw);
   assertAllowedFields(
     record,
     prefix,
     options.allowInternalKind ? INTERNAL_COMPUTE_FIELDS : COMPUTE_FIELDS,
   );
-  const kind = detectComputeKind(prefix, record, parentKind);
+  // In partial (override delta) mode the entry may omit `kind`/`image`, so kind
+  // can only be detected when it is unambiguous; the deferred cross-field guards
+  // re-run after the delta is merged onto the base at apply time.
+  const kind = partial
+    ? detectPartialComputeKind(prefix, record, parentKind)
+    : detectComputeKind(prefix, record, parentKind);
   const cloudflare = parseCloudflareConfig(prefix, record.cloudflare);
-  if (cloudflare?.container && kind !== "attached-container") {
+  if (!partial && cloudflare?.container && kind !== "attached-container") {
     throw new Error(
       `${prefix}.cloudflare.container is only supported for attached container compute`,
     );
@@ -711,7 +758,7 @@ function parseComputeEntry(
       return value;
     })()
     : undefined;
-  if (kind !== "worker" && port == null) {
+  if (!partial && kind !== "worker" && port == null) {
     throw new Error(
       `${prefix}.port is required for ${describeComputeKind(kind)}`,
     );
@@ -719,7 +766,7 @@ function parseComputeEntry(
   const env = asStringMap(record.env, `${prefix}.env`);
   const readiness = record.readiness != null
     ? (() => {
-      if (kind !== "worker") {
+      if (!partial && kind !== "worker") {
         throw new Error(
           `${prefix}.readiness is not supported for ${
             describeComputeKind(kind)
@@ -734,7 +781,7 @@ function parseComputeEntry(
     : undefined;
   const scaling = validateServiceScaling(record.scaling, `${prefix}.scaling`);
   const volumes = parseVolumeMounts(prefix, record.volumes);
-  if (kind === "worker" && volumes) {
+  if (!partial && kind === "worker" && volumes) {
     throw new Error(
       `${prefix}.volumes is not supported for worker compute`,
     );
@@ -746,7 +793,7 @@ function parseComputeEntry(
 
   // Health check only applies to service / attached compute
   let healthCheck: HealthCheck | undefined;
-  if (kind !== "worker") {
+  if (partial || kind !== "worker") {
     healthCheck = parseHealthCheckFlat(prefix, record.healthCheck);
   } else if (record.healthCheck != null) {
     throw new Error(
@@ -757,7 +804,7 @@ function parseComputeEntry(
   // Nested attached containers (worker-only)
   let nested: Record<string, AppCompute> | undefined;
   if (record.containers != null) {
-    if (kind !== "worker") {
+    if (!partial && kind !== "worker") {
       throw new Error(
         `${prefix}.containers is only supported for worker compute`,
       );
@@ -778,14 +825,14 @@ function parseComputeEntry(
   }
 
   // Triggers are only meaningful on workers (schedule/queue drive workers).
-  if (kind !== "worker" && triggers) {
+  if (!partial && kind !== "worker" && triggers) {
     throw new Error(
       `${prefix}.triggers is only supported for worker compute`,
     );
   }
 
   return {
-    kind,
+    ...(kind != null ? { kind } : {}),
     ...(icon ? { icon } : {}),
     ...(image ? { image } : {}),
     ...(port != null ? { port } : {}),
@@ -800,7 +847,7 @@ function parseComputeEntry(
     ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
     ...(consume ? { consume } : {}),
     ...(cloudflare ? { cloudflare } : {}),
-  };
+  } as AppCompute;
 }
 
 // ============================================================
@@ -809,6 +856,14 @@ function parseComputeEntry(
 
 export type ParseComputeOptions = {
   allowInternalKind?: boolean;
+  /**
+   * Partial mode parses compute *deltas* (e.g. environment overrides) where
+   * required fields like `kind`/`image`/`port` may be omitted because they are
+   * inherited from the base compute entry and merged at apply time. Cross-field
+   * guards that depend on the resolved `kind` are deferred to the post-merge
+   * re-parse; only field-shape and image/build validation run here.
+   */
+  partial?: boolean;
 };
 
 export function parseCompute(
@@ -822,6 +877,29 @@ export function parseCompute(
   const result: Record<string, AppCompute> = {};
   for (const [name, value] of Object.entries(computeRecord)) {
     result[name] = parseComputeEntry(`compute.${name}`, value, null, options);
+  }
+  return result;
+}
+
+/**
+ * Parse compute *deltas* for an environment override. Each entry is a partial
+ * patch keyed by compute name; required fields are validated only for shape and
+ * may be omitted because they are inherited from the matching base compute entry
+ * at apply-time merge. The merged result is re-parsed with the full guards.
+ */
+export function parseComputeOverride(
+  raw: unknown,
+): Record<string, AppCompute> {
+  if (raw == null) return {};
+  const record = asRecord(raw);
+  const result: Record<string, AppCompute> = {};
+  for (const [name, value] of Object.entries(record)) {
+    result[name] = parseComputeEntry(
+      `overrides.compute.${name}`,
+      value,
+      null,
+      { partial: true },
+    );
   }
   return result;
 }

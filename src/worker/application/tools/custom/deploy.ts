@@ -5,6 +5,12 @@ export const DEPLOY_FRONTEND: ToolDefinition = {
   name: "deploy_frontend",
   description: "Deploy a frontend build to /apps/{name}/ from space files",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.release",
+  risk_level: "high",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "deploy.frontend",
   parameters: {
     type: "object",
     properties: {

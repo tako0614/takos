@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { generateExploreInvalidationUrls } from "./routes.ts";
+import { requireRepoRead } from "./git-shared.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { accounts, repositories, repoStars } from "../../../infra/db/schema.ts";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -10,7 +10,6 @@ import { parsePagination } from "../../../shared/utils/index.ts";
 import {
   AuthenticationError,
   BadRequestError,
-  NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
@@ -23,10 +22,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repoId = c.req.param("repoId");
       const db = getDb(c.env.DB);
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      await requireRepoRead(c.env, repoId, user.id);
 
       const timestamp = new Date().toISOString();
 
@@ -69,10 +65,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repoId = c.req.param("repoId");
       const db = getDb(c.env.DB);
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      await requireRepoRead(c.env, repoId, user.id);
 
       const existingStar = await db.select()
         .from(repoStars)
@@ -190,16 +183,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     if (!user?.id) {
       return c.json({ starred: false });

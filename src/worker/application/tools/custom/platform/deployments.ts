@@ -22,6 +22,12 @@ export const WORKER_LIST: ToolDefinition = {
   name: "service_list",
   description: "List service slots in the space.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.services",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "service.list",
   parameters: {
     type: "object",
     properties: {
@@ -44,6 +50,12 @@ export const WORKER_CREATE: ToolDefinition = {
   description:
     "Create a new service slot (app or service). Deployments are created separately from this slot.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.services",
+  risk_level: "high",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "service.create",
   parameters: {
     type: "object",
     properties: {
@@ -81,6 +93,12 @@ export const WORKER_DELETE: ToolDefinition = {
   name: "service_delete",
   description: "Delete a service slot and clean up its deployment artifacts.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.services",
+  risk_level: "high",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "service.delete",
   parameters: {
     type: "object",
     properties: {

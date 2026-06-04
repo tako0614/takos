@@ -5,6 +5,10 @@ export const CONTAINER_START: ToolDefinition = {
   description:
     "Start a development container for file editing and command execution. You MUST call this before using file_read, file_write, runtime_exec, or any file operations. The container provides an isolated environment where you can safely make changes. If no repository exists, use create_repository first.",
   category: "container",
+  namespace: "container",
+  family: "container.lifecycle",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -63,6 +67,10 @@ export const CONTAINER_STATUS: ToolDefinition = {
   description:
     "Check if a container is running and list files in the container. Shows the current state of the development environment.",
   category: "container",
+  namespace: "container",
+  family: "container.lifecycle",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {},
@@ -75,6 +83,10 @@ export const CONTAINER_COMMIT: ToolDefinition = {
   description:
     "Apply all changes to the space and stop the container. This saves all file modifications you made. Use this when you are done making changes and want to save them.",
   category: "container",
+  namespace: "container",
+  family: "container.lifecycle",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -98,6 +110,10 @@ export const CONTAINER_STOP: ToolDefinition = {
   description:
     "Stop the container and discard ALL changes. Use this if you want to abandon all modifications. Warning: All unsaved work will be lost!",
   category: "container",
+  namespace: "container",
+  family: "container.lifecycle",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -115,6 +131,12 @@ export const CREATE_REPOSITORY: ToolDefinition = {
   description:
     "Create a new Git-initialized repository for the space. Use this before container_start if no repository exists yet. Returns the repository ID which can be used with container_start.",
   category: "container",
+  namespace: "repo",
+  family: "repo.manage",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "repo.create",
   parameters: {
     type: "object",
     properties: {

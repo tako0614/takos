@@ -3,7 +3,7 @@ import type {
   SqlDatabaseBinding,
 } from "../../../shared/types/bindings.ts";
 import { CloudflareApiClient } from "../cloudflare/api-client.ts";
-import { sha256Hex } from "../../../shared/utils/encoding-utils.ts";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
 import { UnsupportedOperationError } from "../../../shared/utils/unsupported-operation.ts";
 
 type BackupEnv = {
@@ -272,7 +272,7 @@ export async function runD1DailyBackup(
 
     body = await download.arrayBuffer();
     bytes = body.byteLength;
-    sha256 = await sha256Hex(body);
+    sha256 = await computeSHA256(body);
     ext = ".sql";
     backupKind = "d1_export_sql";
     exportFilename = exportResult.filename;
@@ -291,7 +291,7 @@ export async function runD1DailyBackup(
       throw err;
     }
     bytes = body.byteLength;
-    sha256 = await sha256Hex(body);
+    sha256 = await computeSHA256(body);
     ext = ".sqlite";
     backupKind = "d1_dump";
   }
@@ -483,7 +483,7 @@ export async function runD1BackupIntegrityCheck(
   }
 
   const body = await obj.arrayBuffer();
-  const sha256 = await sha256Hex(body);
+  const sha256 = await computeSHA256(body);
   const expected = obj.customMetadata?.sha256 || undefined;
 
   if (expected && expected !== sha256) {

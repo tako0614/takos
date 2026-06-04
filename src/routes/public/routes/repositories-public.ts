@@ -4,31 +4,21 @@ import {
   TAKOS_GIT_CAPABILITIES,
   TAKOS_GIT_INTERNAL_PATHS,
 } from "takos-git-contract";
-import type { TakosumiActorContext } from "takosumi-contract-v2/internal/rpc";
-import { actorFromAuthenticatedRequest } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
 import { commonError, isRecord, readJsonBody } from "../shared/api/common.ts";
 import {
   actorSpaceIdFromPublicJsonBody,
   forwardGitInternalRequest,
 } from "../shared/api/forwarding.ts";
-import { readSpaceMembershipRole } from "../shared/spaces/access.ts";
-
-type MembershipGuardSuccess = {
-  ok: true;
-  actor: TakosumiActorContext;
-  spaceId: string;
-};
-
-type MembershipGuardFailure = {
-  ok: false;
-  response: Response;
-};
+import {
+  requireSpaceMembership,
+  type SpaceMembershipGuardResult,
+} from "../shared/spaces/access.ts";
 
 /**
  * Resolves the caller's actor identity and confirms they are a member of the
- * space identified by the `spaceId` query/body parameter. The previous code
- * passed `c.req.query("spaceId")` straight through to takos-git, which let any
+ * space identified by the `spaceId` query parameter. The previous code passed
+ * `c.req.query("spaceId")` straight through to takos-git, which let any
  * authenticated caller spoof a tenant boundary by attaching an arbitrary
  * spaceId — IDOR. We now require a spaceId AND verify membership against
  * `account_memberships` before forwarding so the caller's actor context is
@@ -36,7 +26,7 @@ type MembershipGuardFailure = {
  */
 async function requireSpaceMembershipFromQuery(
   c: Context<{ Bindings: ApiBindings }>,
-): Promise<MembershipGuardSuccess | MembershipGuardFailure> {
+): Promise<SpaceMembershipGuardResult> {
   const spaceId = c.req.query("spaceId")?.trim() || "";
   if (!spaceId) {
     return {
@@ -48,41 +38,6 @@ async function requireSpaceMembershipFromQuery(
     };
   }
   return await requireSpaceMembership(c, spaceId);
-}
-
-async function requireSpaceMembership(
-  c: Context<{ Bindings: ApiBindings }>,
-  spaceId: string,
-): Promise<MembershipGuardSuccess | MembershipGuardFailure> {
-  const actorResult = await actorFromAuthenticatedRequest(
-    c.req.raw,
-    crypto.randomUUID(),
-    spaceId,
-    { env: c.env },
-  );
-  if (!actorResult.ok) return { ok: false, response: actorResult.response };
-  const db = c.env?.DB;
-  if (!db) {
-    return {
-      ok: false,
-      response: c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        500,
-      ),
-    };
-  }
-  const role = await readSpaceMembershipRole(
-    db,
-    spaceId,
-    actorResult.actor.actorAccountId,
-  );
-  if (!role) {
-    return {
-      ok: false,
-      response: c.json(commonError("FORBIDDEN", "forbidden"), 403),
-    };
-  }
-  return { ok: true, actor: actorResult.actor, spaceId };
 }
 
 function spaceIdFromMutationBody(
@@ -107,8 +62,7 @@ export function registerRepositoriesPublicRoutes(
       actorSpaceId: guard.spaceId,
       capabilities: [TAKOS_GIT_CAPABILITIES.repoRead],
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.get("/api/repositories/:repositoryId", async (c) => {
@@ -123,8 +77,7 @@ export function registerRepositoriesPublicRoutes(
       actorSpaceId: guard.spaceId,
       capabilities: [TAKOS_GIT_CAPABILITIES.repoRead],
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.post("/api/source/resolve", async (c) => {
@@ -160,8 +113,7 @@ export function registerRepositoriesPublicRoutes(
       actor,
       capabilities: [TAKOS_GIT_CAPABILITIES.refResolve],
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   for (
@@ -210,8 +162,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.repoRead],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     });
   }
 
@@ -231,8 +182,7 @@ export function registerRepositoriesPublicRoutes(
       actorSpaceId: guard.spaceId,
       capabilities: [TAKOS_GIT_CAPABILITIES.repoRead],
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.get("/api/repositories/:repositoryId/pull-requests", async (c) => {
@@ -248,8 +198,7 @@ export function registerRepositoriesPublicRoutes(
       actorSpaceId: guard.spaceId,
       capabilities: [TAKOS_GIT_CAPABILITIES.prRead],
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.post("/api/repositories/:repositoryId/pull-requests", async (c) => {
@@ -272,8 +221,7 @@ export function registerRepositoriesPublicRoutes(
       actorSpaceId: guard.spaceId,
       capabilities: [TAKOS_GIT_CAPABILITIES.prWrite],
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.get(
@@ -293,8 +241,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prRead],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     },
   );
 
@@ -315,7 +262,6 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prRead],
       });
-      if (!(response instanceof Response)) return c.json(response, 500);
       if (!response.ok) return response;
       const data = await response.json().catch(() => null) as unknown;
       const pullRequest = isRecord(data) && isRecord(data.pullRequest)
@@ -348,7 +294,6 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prRead],
       });
-      if (!(response instanceof Response)) return c.json(response, 500);
       if (!response.ok) return response;
       const data = await response.json().catch(() => null) as unknown;
       const pullRequest = isRecord(data) && isRecord(data.pullRequest)
@@ -381,8 +326,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prRead],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     },
   );
 
@@ -416,8 +360,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prWrite],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     },
   );
 
@@ -447,8 +390,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prWrite],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     },
   );
 
@@ -478,8 +420,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prWrite],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     },
   );
 
@@ -509,8 +450,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prWrite],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     },
   );
 
@@ -545,8 +485,7 @@ export function registerRepositoriesPublicRoutes(
         actorSpaceId: guard.spaceId,
         capabilities: [TAKOS_GIT_CAPABILITIES.prMerge],
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     },
   );
 }

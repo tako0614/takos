@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { checkRepoAccess } from "../../../../application/services/source/repos.ts";
+import { requireRepoRead } from "../git-shared.ts";
 import type { AuthenticatedRouteEnv } from "../../route-auth.ts";
 import { getDb } from "../../../../infra/db/index.ts";
 import {
@@ -21,16 +21,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const jobId = c.req.param("jobId");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     // Join workflowJobs with workflowRuns to filter by repoId
     const jobResult = await db.select({
@@ -100,16 +91,9 @@ export default new Hono<AuthenticatedRouteEnv>()
       const { offset, limit } = c.req.valid("query");
       const range = parseLogRange(offset, limit);
 
-      const repoAccess = await checkRepoAccess(
-        c.env,
-        repoId,
-        user?.id,
-        undefined,
-        { allowPublicRead: true },
-      );
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      await requireRepoRead(c.env, repoId, user?.id, {
+        allowPublicRead: true,
+      });
 
       const db = getDb(c.env.DB);
 

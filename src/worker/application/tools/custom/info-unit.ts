@@ -16,6 +16,10 @@ export const INFO_UNIT_SEARCH: ToolDefinition = {
   description:
     "Search session-level agent info units (agent run logs summarized as memory).",
   category: "memory",
+  namespace: "memory",
+  family: "memory.search",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -43,6 +47,10 @@ export const REPO_GRAPH_SEARCH: ToolDefinition = {
   description:
     "Search info units and graph memory, optionally scoped to specific repositories.",
   category: "memory",
+  namespace: "memory",
+  family: "memory.graph",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -77,6 +85,10 @@ export const REPO_GRAPH_NEIGHBORS: ToolDefinition = {
   name: "repo_graph_neighbors",
   description: "List neighboring graph nodes from a given node or info unit.",
   category: "memory",
+  namespace: "memory",
+  family: "memory.graph",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -102,6 +114,10 @@ export const REPO_GRAPH_LINEAGE: ToolDefinition = {
   description:
     "Show lineage edges (generated_from/references) for a given info unit.",
   category: "memory",
+  namespace: "memory",
+  family: "memory.graph",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

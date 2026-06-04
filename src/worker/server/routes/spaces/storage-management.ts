@@ -1,9 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  type AuthenticatedRouteEnv,
-  requireSpaceAccess,
-} from "../route-auth.ts";
+import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import {
   bulkDeleteStorageItems,
@@ -35,7 +32,6 @@ import {
 } from "../../../application/services/platform/service-publications.ts";
 
 export const storageManagementRouteDeps = {
-  requireSpaceAccess,
   listStorageFiles,
   getStorageItem,
   createFolder,
@@ -55,11 +51,7 @@ export function buildFileHandlerOpenUrl(
   if (!fileHandlerPathHasIdTemplate(openPath)) {
     throw new Error("FileHandler path must include :id");
   }
-  return buildPublicUrl(
-    serviceHostname,
-    openPath,
-    { id: fileId },
-  );
+  return buildPublicUrl(serviceHostname, openPath, { id: fileId });
 }
 
 export type ProjectedFileHandler = {
@@ -75,8 +67,10 @@ export type ProjectedFileHandler = {
 export function fileHandlerPathHasIdTemplate(
   path: string | undefined,
 ): boolean {
-  return typeof path === "string" &&
-    path.split("/").some((segment) => segment === ":id");
+  return (
+    typeof path === "string" &&
+    path.split("/").some((segment) => segment === ":id")
+  );
 }
 
 function readStringList(value: unknown): string[] {
@@ -99,7 +93,8 @@ export function projectFileHandlerPublication(
   if (
     record.publicationType !== "FileHandler" &&
     record.publicationType !== "takos.file-handler.v1"
-  ) return null;
+  )
+    return null;
   const openUrl = publicationResolvedUrl(record);
   if (!openUrl) return null;
   const path = (() => {
@@ -113,7 +108,7 @@ export function projectFileHandlerPublication(
 
   const spec = record.publication.spec ?? {};
   const mimeTypes = readStringList(spec.mimeTypes).map((value) =>
-    value.toLowerCase()
+    value.toLowerCase(),
   );
   const extensions = readStringList(spec.extensions).map(
     normalizeHandlerExtension,
@@ -133,7 +128,7 @@ export function projectFileHandlerPublication(
   };
 }
 
-const app = new Hono<AuthenticatedRouteEnv>()
+const app = new Hono<SpaceAccessRouteEnv>()
   .use("/:spaceId/storage/bulk-delete", storageBulkLimiter.middleware())
   .use("/:spaceId/storage/bulk-move", storageBulkLimiter.middleware())
   .use("/:spaceId/storage/bulk-rename", storageBulkLimiter.middleware())
@@ -141,6 +136,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .get(
     "/:spaceId/storage/file-handlers",
     requireOAuthScope("files:read"),
+    spaceAccess(),
     zValidator(
       "query",
       z.object({
@@ -149,28 +145,23 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }),
     ),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
       const { mime, ext } = c.req.valid("query");
 
       // ext を normalize (`.md` も `md` も受ける)
       const normalizedExt = ext
-        ? (ext.startsWith(".") ? ext.toLowerCase() : `.${ext.toLowerCase()}`)
+        ? ext.startsWith(".")
+          ? ext.toLowerCase()
+          : `.${ext.toLowerCase()}`
         : undefined;
       const normalizedMime = mime?.toLowerCase();
 
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-      );
+      const access = c.get("access");
 
-      const projected =
-        (await listPublications({ DB: c.env.DB }, access.space.id))
-          .map(projectFileHandlerPublication)
-          .filter((handler): handler is ProjectedFileHandler =>
-            handler !== null
-          );
+      const projected = (
+        await listPublications({ DB: c.env.DB }, access.space.id)
+      )
+        .map(projectFileHandlerPublication)
+        .filter((handler): handler is ProjectedFileHandler => handler !== null);
 
       // filter: mime と ext のいずれかが指定されたら、そのいずれかにマッチするものを残す
       const filtered = projected.filter((p) => {
@@ -226,18 +217,13 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .get(
     "/:spaceId/storage",
     requireOAuthScope("files:read"),
+    spaceAccess(),
     zValidator("query", z.object({ path: z.string().optional() })),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
       const { path: queryPath } = c.req.valid("query");
       const path = queryPath || "/";
 
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-      );
+      const access = c.get("access");
 
       const result = await storageManagementRouteDeps.listStorageFiles(
         c.env.DB,
@@ -252,21 +238,14 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .post(
     "/:spaceId/storage/folders",
     requireOAuthScope("files:write"),
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
     zValidator(
       "json",
       z.object({ name: z.string(), parent_path: z.string().optional() }),
     ),
     async (c) => {
       const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
-
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
-      );
+      const access = c.get("access");
 
       const body = c.req.valid("json");
       if (!body.name) {
@@ -293,16 +272,11 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .get(
     "/:spaceId/storage/:fileId",
     requireOAuthScope("files:read"),
+    spaceAccess(),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
       const fileId = c.req.param("fileId");
 
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-      );
+      const access = c.get("access");
 
       const file = await storageManagementRouteDeps.getStorageItem(
         c.env.DB,
@@ -320,22 +294,19 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .delete(
     "/:spaceId/storage/:fileId",
     requireOAuthScope("files:write"),
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
       const fileId = c.req.param("fileId");
 
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
-      );
+      const access = c.get("access");
 
       try {
-        const r2KeysToDelete = await storageManagementRouteDeps
-          .deleteStorageItem(c.env.DB, access.space.id, fileId);
+        const r2KeysToDelete =
+          await storageManagementRouteDeps.deleteStorageItem(
+            c.env.DB,
+            access.space.id,
+            fileId,
+          );
 
         if (r2KeysToDelete.length > 0 && c.env.GIT_OBJECTS) {
           try {
@@ -361,6 +332,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .patch(
     "/:spaceId/storage/:fileId",
     requireOAuthScope("files:write"),
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
     zValidator(
       "json",
       z.object({
@@ -369,17 +341,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }),
     ),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
       const fileId = c.req.param("fileId");
 
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
-      );
+      const access = c.get("access");
 
       const body = c.req.valid("json");
 
@@ -430,18 +394,10 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-delete",
     requireOAuthScope("files:write"),
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
     zValidator("json", z.object({ file_ids: z.array(z.string()) })),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
-
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
-      );
+      const access = c.get("access");
 
       const body = c.req.valid("json");
       if (!Array.isArray(body.file_ids) || body.file_ids.length === 0) {
@@ -454,8 +410,12 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const bulkDeleteResult = await storageManagementRouteDeps
-          .bulkDeleteStorageItems(c.env.DB, access.space.id, body.file_ids);
+        const bulkDeleteResult =
+          await storageManagementRouteDeps.bulkDeleteStorageItems(
+            c.env.DB,
+            access.space.id,
+            body.file_ids,
+          );
 
         if (bulkDeleteResult.r2Keys.length > 0 && c.env.GIT_OBJECTS) {
           try {
@@ -483,21 +443,13 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-move",
     requireOAuthScope("files:write"),
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
     zValidator(
       "json",
       z.object({ file_ids: z.array(z.string()), parent_path: z.string() }),
     ),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
-
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
-      );
+      const access = c.get("access");
 
       const body = c.req.valid("json");
       if (!Array.isArray(body.file_ids) || body.file_ids.length === 0) {
@@ -544,6 +496,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
   .post(
     "/:spaceId/storage/bulk-rename",
     requireOAuthScope("files:write"),
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
     zValidator(
       "json",
       z.object({
@@ -551,16 +504,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }),
     ),
     async (c) => {
-      const user = c.get("user");
-      const spaceId = c.req.param("spaceId");
-
-      const access = await storageManagementRouteDeps.requireSpaceAccess(
-        c,
-        spaceId,
-        user.id,
-        ["owner", "admin", "editor"],
-        "Workspace not found or insufficient permissions",
-      );
+      const access = c.get("access");
 
       const body = c.req.valid("json");
       if (!Array.isArray(body.renames) || body.renames.length === 0) {
@@ -577,7 +521,8 @@ const app = new Hono<AuthenticatedRouteEnv>()
 
       for (const item of body.renames) {
         if (
-          !item || typeof item.file_id !== "string" ||
+          !item ||
+          typeof item.file_id !== "string" ||
           typeof item.name !== "string"
         ) {
           continue;

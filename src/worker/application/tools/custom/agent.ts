@@ -56,6 +56,10 @@ export const SPAWN_AGENT: ToolDefinition = {
     "Spawn a sub-agent to execute an independent delegated task concurrently in a dedicated child thread. " +
     "Prefer using this early for meaningful parallel side work, then use wait_agent when the parent run needs the child result.",
   category: "agent",
+  namespace: "agent",
+  family: "agent.spawn",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -128,6 +132,10 @@ export const WAIT_AGENT: ToolDefinition = {
   description: "Wait for a child sub-agent run spawned by the current run. " +
     "Returns terminal status and summarized results when complete, or a timeout status if still running.",
   category: "agent",
+  namespace: "agent",
+  family: "agent.spawn",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

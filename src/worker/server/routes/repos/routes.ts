@@ -14,11 +14,11 @@ import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
 import {
-  checkRepoAccess,
   createRepository,
   listRepositoriesBySpace,
   RepositoryCreationError,
 } from "../../../application/services/source/repos.ts";
+import { requireRepoAdmin, requireRepoRead } from "./git-shared.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import {
   accounts,
@@ -196,16 +196,9 @@ export default new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const db = getDb(c.env.DB);
 
-    const repoAccess = requireFound(
-      await checkRepoAccess(
-        c.env,
-        repoId,
-        user?.id,
-        undefined,
-        { allowPublicRead: true },
-      ),
-      "Repository",
-    );
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const repoResult = requireFound(
       await db.select().from(repositories).where(eq(repositories.id, repoId))
@@ -284,10 +277,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repoId = c.req.param("repoId");
       const body = c.req.valid("json");
 
-      requireFound(
-        await checkRepoAccess(c.env, repoId, user.id, ["owner", "admin"]),
-        "Repository",
-      );
+      await requireRepoAdmin(c.env, repoId, user.id);
 
       const db = getDb(c.env.DB);
       const data: Record<string, string | number> = {};
@@ -350,10 +340,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repoId = c.req.param("repoId");
       const db = getDb(c.env.DB);
 
-      const repoAccess = requireFound(
-        await checkRepoAccess(c.env, repoId, user.id, ["owner", "admin"]),
-        "Repository",
-      );
+      const repoAccess = await requireRepoAdmin(c.env, repoId, user.id);
 
       const repoObjectCandidates = c.env.GIT_OBJECTS
         ? await collectCleanupCandidates(c.env.DB, c.env.GIT_OBJECTS, repoId)

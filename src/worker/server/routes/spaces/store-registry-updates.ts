@@ -4,7 +4,7 @@ import {
   BadRequestError,
   InternalError,
 } from "@takos/worker-platform-utils/errors";
-import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import type { SpaceAccessRouteEnv } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { zValidator } from "../zod-validator.ts";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -20,7 +20,7 @@ const markSeenSchema = z.object({
   all: z.boolean().optional(),
 });
 
-type StoreRegistryRouter = Hono<AuthenticatedRouteEnv>;
+type StoreRegistryRouter = Hono<SpaceAccessRouteEnv>;
 
 export function registerStoreRegistryUpdateRoutes(app: StoreRegistryRouter) {
   app.get("/:spaceId/store-registry/updates", async (c) => {

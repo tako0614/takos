@@ -3775,6 +3775,42 @@ test('direct bearer credentials are verified in-process before forwarding', asyn
   }
 });
 
+test('forwarded actor requestId is seeded from the inbound x-request-id', async () => {
+  // Regression guard for the dropped-correlation-id divergence: route handlers
+  // used to mint a fresh crypto.randomUUID() for the actor requestId, so the
+  // forwarded actor.requestId never matched the x-request-id echoed on the
+  // response. requireDbAndActor / resolveRequestId now seed the actor from the
+  // caller-supplied x-request-id, so both sides correlate.
+  const authCalls: AuthValidationCall[] = [];
+  const calls: SignedCall[] = [];
+  const restore = stubAuthVerifiedTakosumiFetch(authCalls, calls, {
+    spaces: [],
+  });
+  const env = directAuthEnv();
+  const inboundRequestId = 'req_corr_12345';
+  try {
+    const response = await app.request(
+      TAKOS_PUBLIC_API_PATHS.spaces,
+      {
+        headers: {
+          authorization: 'Bearer takpat_direct',
+          'x-request-id': inboundRequestId,
+        },
+      },
+      env,
+    );
+    const actor = actorFromSignedHeaders(calls[0].headers);
+
+    deepStrictEqual(response.status, 200);
+    // The actor forwarded to the signed RPC carries the inbound correlation id.
+    deepStrictEqual(actor.requestId, inboundRequestId);
+    // The response echoes the same id, so client and server logs correlate.
+    deepStrictEqual(response.headers.get('x-request-id'), inboundRequestId);
+  } finally {
+    restore();
+  }
+});
+
 for (
   const [name, credential] of [
     ['tak_oat', 'tak_oat_direct'],

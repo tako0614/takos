@@ -34,6 +34,10 @@ export const CREATE_SQL: ToolDefinition = {
   name: "create_sql",
   description: "Create a new SQL database resource",
   category: "storage",
+  namespace: "storage",
+  family: "storage.create",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -54,6 +58,10 @@ export const CREATE_KEY_VALUE: ToolDefinition = {
   name: "create_key_value",
   description: "Create a new key-value resource",
   category: "storage",
+  namespace: "storage",
+  family: "storage.create",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -70,6 +78,10 @@ export const CREATE_OBJECT_STORE: ToolDefinition = {
   name: "create_object_store",
   description: "Create a new object-store resource",
   category: "storage",
+  namespace: "storage",
+  family: "storage.create",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -86,6 +98,10 @@ export const LIST_RESOURCES: ToolDefinition = {
   name: "list_resources",
   description: "List SQL, key-value, and object-store resources in the space",
   category: "storage",
+  namespace: "platform",
+  family: "platform.resources",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

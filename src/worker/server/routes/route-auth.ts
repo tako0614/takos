@@ -228,6 +228,15 @@ export function spaceAccess(
     ? { roles: options }
     : (options ?? {});
 
+  // Default access-failure message. When a role gate is present the failure may
+  // be either "space missing" or "caller lacks the role", so the message is
+  // phrased to cover both. Routes no longer hand-repeat this literal.
+  const message =
+    opts.message ??
+    (opts.roles && opts.roles.length > 0
+      ? "Space not found or insufficient permissions"
+      : undefined);
+
   return async (c, next) => {
     const user = c.get("user");
     if (!user) {
@@ -244,7 +253,7 @@ export function spaceAccess(
       spaceIdentifier,
       user.id,
       opts.roles,
-      opts.message,
+      message,
       opts.status,
     );
 

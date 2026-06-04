@@ -41,10 +41,13 @@ import mcpRoutes from "./mcp/index.ts";
 import groupsRouter from "./groups.ts";
 import appInstallationsRouter from "./app-installations.ts";
 import { createRunSseRouter } from "./runs/sse.ts";
-import { createNotificationSseRouter } from "./notifications-sse.ts";
+import { createNotificationSseRouter } from "./notifications/index.ts";
 import { createEventsRouter } from "./events/routes.ts";
 import { workersSpaceRoutes } from "./workers/routes.ts";
-import { isTakosumiAccountsBearerCandidate } from "../middleware/bearer-token-classification.ts";
+import {
+  extractBearerToken,
+  isTakosumiAccountsBearerCandidate,
+} from "../middleware/bearer-token-classification.ts";
 import { requireAnyAuth } from "../middleware/oauth-auth.ts";
 // Local type to mirror app Variables
 export type ApiVariables = {
@@ -170,9 +173,7 @@ function requiredApiScopesForRequest(
 }
 
 function getBearerToken(c: Parameters<ApiAuthMiddleware>[0]): string | null {
-  const authorization = c.req.header("Authorization");
-  if (!authorization?.startsWith("Bearer ")) return null;
-  return authorization.slice(7).trim() || null;
+  return extractBearerToken(c.req.header("Authorization"));
 }
 
 function createScopedApiAuth(

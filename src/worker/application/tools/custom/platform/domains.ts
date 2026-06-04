@@ -65,6 +65,12 @@ export const DOMAIN_LIST: ToolDefinition = {
   name: "domain_list",
   description: "List custom domains for a service",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.domains",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "custom_domain.list",
   parameters: {
     type: "object",
     properties: {
@@ -82,6 +88,12 @@ export const DOMAIN_ADD: ToolDefinition = {
   description:
     "Add a custom domain to a service. Returns DNS records to configure.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.domains",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "custom_domain.add",
   parameters: {
     type: "object",
     properties: {
@@ -102,6 +114,12 @@ export const DOMAIN_VERIFY: ToolDefinition = {
   name: "domain_verify",
   description: "Verify DNS configuration for a custom domain",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.domains",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "custom_domain.verify",
   parameters: {
     type: "object",
     properties: {
@@ -122,6 +140,12 @@ export const DOMAIN_REMOVE: ToolDefinition = {
   name: "domain_remove",
   description: "Remove a custom domain from a service",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.domains",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "custom_domain.delete",
   parameters: {
     type: "object",
     properties: {

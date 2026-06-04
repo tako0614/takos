@@ -8,26 +8,19 @@ import {
   storageManagementRouteDeps,
 } from "../storage-management.ts";
 import storageManagement from "../storage-management.ts";
+import { routeAuthDeps } from "../../route-auth.ts";
 import type { PublicationRecord } from "../../../../application/services/platform/service-publications.ts";
 
 test("buildFileHandlerOpenUrl replaces :id placeholders", () => {
   assertEquals(
-    buildFileHandlerOpenUrl(
-      "files.example.com",
-      "/files/:id",
-      "file-123",
-    ),
+    buildFileHandlerOpenUrl("files.example.com", "/files/:id", "file-123"),
     "https://files.example.com/files/file-123",
   );
 });
 
 test("buildFileHandlerOpenUrl URL-encodes file ids", () => {
   assertEquals(
-    buildFileHandlerOpenUrl(
-      "files.example.com",
-      "/files/:id",
-      "file 123",
-    ),
+    buildFileHandlerOpenUrl("files.example.com", "/files/:id", "file 123"),
     "https://files.example.com/files/file%20123",
   );
 });
@@ -67,94 +60,87 @@ test("projectFileHandlerPublication keeps only :id-templated handlers", () => {
   assertEquals(projectFileHandlerPublication(legacy, 1), null);
 });
 
-test(
-  "PATCH storage with move and rename does not fall back to a partial move when rename fails",
-  async () => {
-    const originalRequireSpaceAccess =
-      storageManagementRouteDeps.requireSpaceAccess;
-    const originalMoveAndRenameStorageItem =
-      storageManagementRouteDeps.moveAndRenameStorageItem;
-    const originalMoveStorageItem = storageManagementRouteDeps.moveStorageItem;
-    const originalRenameStorageItem =
-      storageManagementRouteDeps.renameStorageItem;
+test("PATCH storage with move and rename does not fall back to a partial move when rename fails", async () => {
+  const originalRequireSpaceAccess = routeAuthDeps.requireSpaceAccess;
+  const originalMoveAndRenameStorageItem =
+    storageManagementRouteDeps.moveAndRenameStorageItem;
+  const originalMoveStorageItem = storageManagementRouteDeps.moveStorageItem;
+  const originalRenameStorageItem =
+    storageManagementRouteDeps.renameStorageItem;
 
-    const calls = {
-      combined: 0,
-      move: 0,
-      rename: 0,
+  const calls = {
+    combined: 0,
+    move: 0,
+    rename: 0,
+  };
+
+  const app = new Hono<{
+    Bindings: { DB: unknown };
+    Variables: {
+      user: { id: string; principal_id: string };
+    };
+  }>();
+
+  app.use("*", async (c, next) => {
+    c.set("user", {
+      id: "user-1",
+      principal_id: "principal-1",
+    });
+    await next();
+  });
+  app.onError(() => new Response(null, { status: 500 }));
+  app.route("/", storageManagement as never);
+
+  try {
+    routeAuthDeps.requireSpaceAccess = async () =>
+      ({ space: { id: "space-1" } }) as never;
+    storageManagementRouteDeps.moveAndRenameStorageItem = async () => {
+      calls.combined += 1;
+      throw new Error("rename failed");
+    };
+    storageManagementRouteDeps.moveStorageItem = async () => {
+      calls.move += 1;
+      throw new Error("move should not be called");
+    };
+    storageManagementRouteDeps.renameStorageItem = async () => {
+      calls.rename += 1;
+      throw new Error("rename should not be called");
     };
 
-    const app = new Hono<{
-      Bindings: { DB: unknown };
-      Variables: {
-        user: { id: string; principal_id: string };
-      };
-    }>();
-
-    app.use("*", async (c, next) => {
-      c.set("user", {
-        id: "user-1",
-        principal_id: "principal-1",
-      });
-      await next();
-    });
-    app.onError(() => new Response(null, { status: 500 }));
-    app.route("/", storageManagement as never);
-
-    try {
-      storageManagementRouteDeps.requireSpaceAccess =
-        async () => ({ space: { id: "space-1" } } as never);
-      storageManagementRouteDeps.moveAndRenameStorageItem = async () => {
-        calls.combined += 1;
-        throw new Error("rename failed");
-      };
-      storageManagementRouteDeps.moveStorageItem = async () => {
-        calls.move += 1;
-        throw new Error("move should not be called");
-      };
-      storageManagementRouteDeps.renameStorageItem = async () => {
-        calls.rename += 1;
-        throw new Error("rename should not be called");
-      };
-
-      const response = await app.request(
-        "/space-1/storage/file-1",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            parent_path: "/archive",
-            name: "renamed-file",
-          }),
+    const response = await app.request(
+      "/space-1/storage/file-1",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
         },
-        { DB: {} },
-      );
+        body: JSON.stringify({
+          parent_path: "/archive",
+          name: "renamed-file",
+        }),
+      },
+      { DB: {} },
+    );
 
-      assertEquals(response.status >= 400, true);
-      assertEquals(calls.combined, 1);
-      assertEquals(calls.move, 0);
-      assertEquals(calls.rename, 0);
-    } finally {
-      storageManagementRouteDeps.requireSpaceAccess =
-        originalRequireSpaceAccess;
-      storageManagementRouteDeps.moveAndRenameStorageItem =
-        originalMoveAndRenameStorageItem;
-      storageManagementRouteDeps.moveStorageItem = originalMoveStorageItem;
-      storageManagementRouteDeps.renameStorageItem = originalRenameStorageItem;
-    }
-  },
-);
+    assertEquals(response.status >= 400, true);
+    assertEquals(calls.combined, 1);
+    assertEquals(calls.move, 0);
+    assertEquals(calls.rename, 0);
+  } finally {
+    routeAuthDeps.requireSpaceAccess = originalRequireSpaceAccess;
+    storageManagementRouteDeps.moveAndRenameStorageItem =
+      originalMoveAndRenameStorageItem;
+    storageManagementRouteDeps.moveStorageItem = originalMoveStorageItem;
+    storageManagementRouteDeps.renameStorageItem = originalRenameStorageItem;
+  }
+});
 
-function createPublicationRecord(
-  options: {
-    id: string;
-    name: string;
-    path: string;
-    url: string;
-  },
-): PublicationRecord {
+function createPublicationRecord(options: {
+  id: string;
+  name: string;
+  path: string;
+  url: string;
+}): PublicationRecord {
   return {
     id: options.id,
     name: options.name,

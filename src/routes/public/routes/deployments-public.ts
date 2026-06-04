@@ -2,7 +2,7 @@ import type { Hono } from 'hono';
 import { TAKOS_PUBLIC_API_PATHS } from 'takos-api-contract';
 import { actorFromAuthenticatedRequest, hasTrustedActorHeaderSource } from '../shared/api/auth.ts';
 import type { ApiBindings } from '../shared/api/bindings.ts';
-import { commonError, isRecord, readBodyString, readJsonBody } from '../shared/api/common.ts';
+import { commonError, isRecord, readBodyString, readJsonBody, resolveRequestId } from '../shared/api/common.ts';
 import {
   maybeWriteGitOpsDeploymentIntent,
   normalizeAppInstallationBindings,
@@ -74,7 +74,7 @@ export function registerDeploymentsPublicRoutes(
     if (retiredWorkflowResponse) {
       const actorResult = await actorFromAuthenticatedRequest(
         c.req.raw,
-        crypto.randomUUID(),
+        resolveRequestId(c.req),
         actorSpaceId ?? '',
         { env: c.env },
       );

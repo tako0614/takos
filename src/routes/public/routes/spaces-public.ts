@@ -3,7 +3,7 @@ import {
   type InternalSpaceRequest,
   TAKOSUMI_INTERNAL_PATHS,
 } from "takosumi-contract-v2/internal/api";
-import { actorFromAuthenticatedRequest } from "../shared/api/auth.ts";
+import { actorFromAuthenticatedRequest, requireDbAndActor } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
 import {
   commonError,
@@ -12,6 +12,7 @@ import {
   parsePositiveLimit,
   parsePositiveOffset,
   readJsonBody,
+  resolveRequestId,
 } from "../shared/api/common.ts";
 import { forwardTakosumiInternalRequest } from "../shared/api/forwarding.ts";
 import { parseCreateThreadInput } from "../shared/api/input-parsers.ts";
@@ -25,26 +26,15 @@ export function registerSpacesPublicRoutes(
   app: Hono<{ Bindings: ApiBindings }>,
 ): void {
   app.get("/api/spaces/:spaceId/tools", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
     const spaceId = c.req.param("spaceId");
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      spaceId,
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c, spaceId);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const role = await readSpaceMembershipRole(
       db,
       spaceId,
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!role) {
       return c.json(commonError("NOT_FOUND", "Space not found"), {
@@ -56,26 +46,15 @@ export function registerSpacesPublicRoutes(
   });
 
   app.get("/api/spaces/:spaceId/tools/:toolName", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
     const spaceId = c.req.param("spaceId");
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      spaceId,
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c, spaceId);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const role = await readSpaceMembershipRole(
       db,
       spaceId,
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!role) {
       return c.json(commonError("NOT_FOUND", "Space not found"), {
@@ -94,26 +73,15 @@ export function registerSpacesPublicRoutes(
   });
 
   app.get("/api/spaces/:spaceId/threads", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
     const spaceId = c.req.param("spaceId");
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      spaceId,
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c, spaceId);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const threads = await listSpaceThreads(
       db,
       spaceId,
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
       { status: c.req.query("status") ?? undefined },
     );
     if (!threads) {
@@ -142,7 +110,7 @@ export function registerSpacesPublicRoutes(
     const spaceId = c.req.param("spaceId");
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       spaceId,
       { env: c.env },
     );
@@ -190,7 +158,7 @@ export function registerSpacesPublicRoutes(
     const spaceId = c.req.param("spaceId");
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       spaceId,
       { env: c.env },
     );
@@ -221,7 +189,7 @@ export function registerSpacesPublicRoutes(
     // receiving a cross-tenant list.
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -232,8 +200,7 @@ export function registerSpacesPublicRoutes(
       body: "",
       actor: actorResult.actor,
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.post("/api/spaces", async (c) => {
@@ -247,7 +214,7 @@ export function registerSpacesPublicRoutes(
     const name = typeof body.name === "string" ? body.name : undefined;
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -264,7 +231,6 @@ export function registerSpacesPublicRoutes(
       body: JSON.stringify(payload),
       actor,
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 }

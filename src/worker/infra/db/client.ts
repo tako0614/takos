@@ -46,3 +46,20 @@ export function getDb(db: SqlDatabaseBinding | Database): Database {
   clientCache.set(db, client);
   return client;
 }
+
+/**
+ * Single home for the "already-drizzle-ish or raw-binding" guard that several
+ * services used to copy-paste inline: if `db` already exposes a `select`
+ * method it is treated as a usable `Database` and returned as-is, otherwise it
+ * is wrapped via {@link getDb}. This is intentionally a looser check than
+ * `getDb`'s internal `isDrizzleLikeDb` (which also requires insert/update/
+ * delete): callers and tests inject partial drizzle-shaped doubles that only
+ * implement `select`, and the folded-out copies all keyed off `select` alone.
+ * Import this instead of re-deriving the guard.
+ */
+export function resolveDb(db: SqlDatabaseBinding | Database): Database {
+  if (db && typeof (db as { select?: unknown }).select === "function") {
+    return db as Database;
+  }
+  return getDb(db);
+}

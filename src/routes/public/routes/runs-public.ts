@@ -1,10 +1,11 @@
 import type { Hono } from "hono";
-import { actorFromAuthenticatedRequest } from "../shared/api/auth.ts";
+import { actorFromAuthenticatedRequest, requireDbAndActor } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
 import {
   commonError,
   parseRunEventCursor,
   readJsonBody,
+  resolveRequestId,
 } from "../shared/api/common.ts";
 import { buildRunNotifierHeaders } from "../shared/api/forwarding.ts";
 import { parseCreateRunArtifactInput } from "../shared/api/input-parsers.ts";
@@ -27,24 +28,14 @@ export function registerRunsPublicRoutes(
   app: Hono<{ Bindings: ApiBindings }>,
 ): void {
   app.get("/api/runs/:id", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const access = await readRunAccess(
       db,
       c.req.param("id"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!access) {
       return c.json(commonError("NOT_FOUND", "Run not found"), { status: 404 });
@@ -72,7 +63,7 @@ export function registerRunsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -120,7 +111,7 @@ export function registerRunsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -151,24 +142,14 @@ export function registerRunsPublicRoutes(
   });
 
   app.get("/api/runs/:id/ws", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const access = await readRunAccess(
       db,
       c.req.param("id"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!access) {
       return c.json(commonError("NOT_FOUND", "Run not found"), { status: 404 });
@@ -192,7 +173,7 @@ export function registerRunsPublicRoutes(
     const stub = namespace.get(id);
     const headers = buildRunNotifierHeaders(c.req.raw.headers, {
       "X-WS-Auth-Validated": "true",
-      "X-WS-User-Id": actorResult.actor.actorAccountId,
+      "X-WS-User-Id": actor.actorAccountId,
     });
     return await stub.fetch(
       new Request(c.req.raw.url, {
@@ -223,7 +204,7 @@ export function registerRunsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -257,19 +238,9 @@ export function registerRunsPublicRoutes(
   });
 
   app.post("/api/runs/:id/cancel", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     try {
       const cancelled = await cancelRun(
@@ -279,7 +250,7 @@ export function registerRunsPublicRoutes(
           RUN_NOTIFIER: c.env?.RUN_NOTIFIER,
         },
         c.req.param("id"),
-        actorResult.actor.actorAccountId,
+        actor.actorAccountId,
       );
       if (!cancelled) {
         return c.json(commonError("NOT_FOUND", "Run not found"), {
@@ -298,24 +269,14 @@ export function registerRunsPublicRoutes(
   });
 
   app.get("/api/runs/:id/artifacts", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const artifacts = await listRunArtifacts(
       db,
       c.req.param("id"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!artifacts) {
       return c.json(commonError("NOT_FOUND", "Run not found"), { status: 404 });
@@ -341,7 +302,7 @@ export function registerRunsPublicRoutes(
     }
     const actorResult = await actorFromAuthenticatedRequest(
       c.req.raw,
-      crypto.randomUUID(),
+      resolveRequestId(c.req),
       { env: c.env },
     );
     if (!actorResult.ok) return actorResult.response;
@@ -360,24 +321,14 @@ export function registerRunsPublicRoutes(
   });
 
   app.get("/api/artifacts/:id", async (c) => {
-    const db = c.env?.DB;
-    if (!db) {
-      return c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        { status: 500 },
-      );
-    }
-    const actorResult = await actorFromAuthenticatedRequest(
-      c.req.raw,
-      crypto.randomUUID(),
-      { env: c.env },
-    );
-    if (!actorResult.ok) return actorResult.response;
+    const resolved = await requireDbAndActor(c);
+    if (!resolved.ok) return resolved.response;
+    const { db, actor } = resolved;
 
     const artifact = await readArtifactAccess(
       db,
       c.req.param("id"),
-      actorResult.actor.actorAccountId,
+      actor.actorAccountId,
     );
     if (!artifact) {
       return c.json(commonError("NOT_FOUND", "Artifact not found"), {

@@ -1,81 +1,36 @@
-import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { Accessor } from "solid-js";
 import type { ProfileRepo } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useI18n } from "../store/i18n.ts";
+import { createPaginatedListResource } from "./createPaginatedListResource.ts";
 
 interface ReposResponse {
   repos: ProfileRepo[];
   has_more: boolean;
 }
 
-const ITEMS_PER_PAGE = 20;
-
 export function useUserRepos(username: Accessor<string>) {
   const { t } = useI18n();
-  const [repos, setRepos] = createSignal<ProfileRepo[]>([]);
-  const [offset, setOffset] = createSignal(0);
-  const [hasMore, setHasMore] = createSignal(true);
-  const [loading, setLoading] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
-
-  const fetch_ = async (reset = false) => {
-    const currentUsername = username();
-    if (!currentUsername) return;
-    if (!reset && !hasMore()) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const currentOffset = reset ? 0 : offset();
+  const resource = createPaginatedListResource<ProfileRepo>({
+    source: username,
+    initialError: t("failedToLoadRepositories"),
+    fetchPage: async ({ source, offset, limit }) => {
       const res = await rpc.users[":username"].repos.$get({
-        param: { username: currentUsername },
-        query: { limit: String(ITEMS_PER_PAGE), offset: String(currentOffset) },
+        param: { username: source },
+        query: { limit: String(limit), offset: String(offset) },
       });
       const data = await rpcJson<ReposResponse>(res);
-      if (currentUsername !== username()) return;
-      if (reset) {
-        setRepos(data.repos);
-        setOffset(ITEMS_PER_PAGE);
-      } else {
-        setRepos((prev) => [...prev, ...data.repos]);
-        setOffset((prev) => prev + ITEMS_PER_PAGE);
-      }
-      setHasMore(data.has_more);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("failedToLoadRepositories"),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const reset = () => {
-    setRepos([]);
-    setOffset(0);
-    setHasMore(true);
-    setError(null);
-  };
-
-  // Reset when username changes
-  createEffect(on(
-    username,
-    () => {
-      reset();
+      return { items: data.repos, hasMore: data.has_more };
     },
-  ));
-
-  const updateRepo = (updater: (repo: ProfileRepo) => ProfileRepo) => {
-    setRepos((prev) => prev.map(updater));
-  };
+  });
 
   return {
-    repos,
-    loading,
-    hasMore,
-    error,
-    fetch: fetch_,
-    reset,
-    updateRepo,
+    repos: resource.items,
+    loading: resource.loading,
+    hasMore: resource.hasMore,
+    error: resource.error,
+    fetch: resource.fetch,
+    reset: resource.reset,
+    updateRepo: resource.updateItems,
   };
 }

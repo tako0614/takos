@@ -7,15 +7,11 @@ import type {
 } from "./tool-policy-types.ts";
 import {
   AGENT_DISABLED_TOOL_SET,
-  CUSTOM_TOOL_POLICY_METADATA,
   SPACE_OPERATION_POLICIES,
   type ToolPolicyMetadata,
 } from "./tool-policy.ts";
-import { TOOL_NAMESPACE_MAP } from "./namespace-map.ts";
 
-function inferDefaultToolClass(_toolName: string): ToolClass {
-  return "agent_native";
-}
+const DEFAULT_TOOL_CLASS: ToolClass = "agent_native";
 
 export function getSpaceOperationPolicy(
   operationId: SpaceOperationId,
@@ -26,38 +22,27 @@ export function getSpaceOperationPolicy(
 export function getToolPolicyMetadata(
   tool: ToolDefinition | string,
 ): ToolPolicyMetadata {
-  const name = typeof tool === "string" ? tool : tool.name;
-  const registered = CUSTOM_TOOL_POLICY_METADATA[name];
-
   if (typeof tool === "string") {
-    return registered || {
-      tool_class: inferDefaultToolClass(name),
-    };
+    return { tool_class: DEFAULT_TOOL_CLASS };
   }
 
   return {
-    tool_class: tool.tool_class ?? registered?.tool_class ??
-      inferDefaultToolClass(name),
-    operation_id: tool.operation_id ?? registered?.operation_id,
-    composed_operations: tool.composed_operations ??
-      registered?.composed_operations,
-    sensitive_read_policy: tool.sensitive_read_policy ??
-      registered?.sensitive_read_policy,
+    tool_class: tool.tool_class ?? DEFAULT_TOOL_CLASS,
+    operation_id: tool.operation_id,
+    composed_operations: tool.composed_operations,
+    sensitive_read_policy: tool.sensitive_read_policy,
   };
 }
 
+/**
+ * Normalize a tool definition's policy metadata by applying the tool_class
+ * default. All namespace / risk / operation metadata is now authored directly
+ * on the ToolDefinition literal, so this only fills in the inferred default.
+ */
 export function applyToolPolicyMetadata(tool: ToolDefinition): ToolDefinition {
-  const metadata = getToolPolicyMetadata(tool);
-  const nsMeta = TOOL_NAMESPACE_MAP[tool.name];
   return {
     ...tool,
-    ...metadata,
-    sensitive_read_policy: metadata.sensitive_read_policy ??
-      tool.sensitive_read_policy,
-    namespace: tool.namespace ?? nsMeta?.namespace,
-    family: tool.family ?? nsMeta?.family,
-    risk_level: tool.risk_level ?? nsMeta?.risk_level,
-    side_effects: tool.side_effects ?? nsMeta?.side_effects,
+    tool_class: tool.tool_class ?? DEFAULT_TOOL_CLASS,
   };
 }
 

@@ -4,7 +4,6 @@ import { parseJsonBody } from "../route-auth.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
 import { toGitBucket } from "./routes.ts";
 import {
   AuthorizationError,
@@ -15,7 +14,12 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { logError } from "../../../shared/utils/logger.ts";
-import { getCommitSha, sigTimestampToIso, WRITE_ROLES } from "./git-shared.ts";
+import {
+  getCommitSha,
+  requireRepoRead,
+  requireRepoWrite,
+  sigTimestampToIso,
+} from "./git-shared.ts";
 
 const gitRefs = new Hono<AuthenticatedRouteEnv>()
   .get(
@@ -32,16 +36,9 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
       const { include_commits } = c.req.valid("query");
       const includeCommits = include_commits === "true";
 
-      const repoAccess = await checkRepoAccess(
-        c.env,
-        repoId,
-        user?.id,
-        undefined,
-        { allowPublicRead: true },
-      );
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+        allowPublicRead: true,
+      });
 
       try {
         const branches = await gitStore.listBranches(c.env.DB, repoId);
@@ -120,12 +117,7 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError("Invalid JSON body");
     }
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      ...WRITE_ROLES,
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoWrite(c.env, repoId, user.id);
 
     if (typeof body.name !== "string" || typeof body.source !== "string") {
       throw new BadRequestError("name and source are required");
@@ -183,10 +175,7 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const branchName = c.req.param("branchName");
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
     if (repoAccess.role !== "owner" && repoAccess.role !== "admin") {
       throw new AuthorizationError("Admin access required");
@@ -212,10 +201,7 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const branchName = c.req.param("branchName");
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
     if (repoAccess.role !== "owner" && repoAccess.role !== "admin") {
       throw new AuthorizationError("Admin access required");

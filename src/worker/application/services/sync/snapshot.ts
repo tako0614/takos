@@ -10,7 +10,7 @@ import { computeSHA256 as realComputeSHA256 } from "../../../shared/utils/hash.t
 import {
   blobs,
   files,
-  getDb as realGetDb,
+  resolveDb,
   snapshots,
 } from "../../../infra/db/index.ts";
 import { and, eq, inArray, lte, ne, sql } from "drizzle-orm";
@@ -35,7 +35,7 @@ function extractTreeHashes(tree: SnapshotTree): string[] {
 
 /** Parse a JSON-encoded parent ID array, returning [] on failure. */
 export interface SnapshotDeps {
-  getDb: (db: Parameters<typeof realGetDb>[0]) => ReturnType<typeof realGetDb>;
+  getDb: typeof resolveDb;
   generateId: typeof realGenerateId;
   computeSHA256: typeof realComputeSHA256;
   logError: typeof realLogError;
@@ -44,12 +44,7 @@ export interface SnapshotDeps {
 }
 
 export const snapshotDeps: SnapshotDeps = {
-  getDb: (db) => {
-    if (db && typeof (db as { select?: unknown }).select === "function") {
-      return db as ReturnType<typeof realGetDb>;
-    }
-    return realGetDb(db);
-  },
+  getDb: resolveDb,
   generateId: realGenerateId,
   computeSHA256: realComputeSHA256,
   logError: realLogError,

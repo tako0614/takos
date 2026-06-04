@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { z } from "zod";
 import { BadRequestError } from "@takos/worker-platform-utils/errors";
-import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import type { SpaceAccessRouteEnv } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { zValidator } from "../zod-validator.ts";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -18,7 +18,7 @@ const installSchema = z.object({
   local_name: z.string().optional(),
 });
 
-type StoreRegistryRouter = Hono<AuthenticatedRouteEnv>;
+type StoreRegistryRouter = Hono<SpaceAccessRouteEnv>;
 
 export function registerStoreRegistryRepositoryRoutes(
   app: StoreRegistryRouter,
@@ -95,8 +95,8 @@ export function registerStoreRegistryRepositoryRoutes(
       try {
         const page = parseRoutePage(c.req.query("page"));
         const { limit } = parsePagination(c.req.query());
-        const collection = await storeRegistryRouteDeps
-          .searchRemoteRepositories(
+        const collection =
+          await storeRegistryRouteDeps.searchRemoteRepositories(
             entry.searchUrl,
             query,
             { page, limit, expand: true },
@@ -134,8 +134,8 @@ export function registerStoreRegistryRepositoryRoutes(
       const body = c.req.valid("json");
 
       try {
-        const result = await storeRegistryRouteDeps
-          .importRepositoryFromRemoteStore(
+        const result =
+          await storeRegistryRouteDeps.importRepositoryFromRemoteStore(
             c.env.DB,
             access.space.id,
             {
@@ -145,15 +145,18 @@ export function registerStoreRegistryRepositoryRoutes(
             },
           );
 
-        return c.json({
-          repository: {
-            id: result.repositoryId,
-            name: result.name,
-            clone_url: result.cloneUrl,
-            remote_store_url: result.remoteStoreUrl,
-            remote_browse_url: result.remoteBrowseUrl,
+        return c.json(
+          {
+            repository: {
+              id: result.repositoryId,
+              name: result.name,
+              clone_url: result.cloneUrl,
+              remote_store_url: result.remoteStoreUrl,
+              remote_browse_url: result.remoteBrowseUrl,
+            },
           },
-        }, 201);
+          201,
+        );
       } catch (error) {
         logError("Failed to import repository from remote store", error, {
           module: "routes/store-registry",

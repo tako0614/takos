@@ -4,7 +4,11 @@ import {
   optionalActorAccountId,
 } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
-import { commonError, parsePositiveLimit } from "../shared/api/common.ts";
+import {
+  commonError,
+  parsePositiveLimit,
+  resolveRequestId,
+} from "../shared/api/common.ts";
 import {
   ExploreCatalogInputError,
   listExploreCatalog,
@@ -69,7 +73,7 @@ export function registerExplorePublicRoutes(
     if (spaceId) {
       const actorResult = await actorFromAuthenticatedRequest(
         c.req.raw,
-        crypto.randomUUID(),
+        resolveRequestId(c.req),
         { env: c.env },
       );
       if (!actorResult.ok) return actorResult.response;
@@ -127,7 +131,7 @@ export function registerExplorePublicRoutes(
         { status: 500 },
       );
     }
-    const actor = await optionalActorAccountId(c.req.raw, crypto.randomUUID(), {
+    const actor = await optionalActorAccountId(c.req.raw, resolveRequestId(c.req), {
       env: c.env,
     });
     try {
@@ -154,7 +158,7 @@ export function registerExplorePublicRoutes(
         { status: 500 },
       );
     }
-    const actor = await optionalActorAccountId(c.req.raw, crypto.randomUUID(), {
+    const actor = await optionalActorAccountId(c.req.raw, resolveRequestId(c.req), {
       env: c.env,
     });
     try {
@@ -179,7 +183,7 @@ export function registerExplorePublicRoutes(
         { status: 500 },
       );
     }
-    const actor = await optionalActorAccountId(c.req.raw, crypto.randomUUID(), {
+    const actor = await optionalActorAccountId(c.req.raw, resolveRequestId(c.req), {
       env: c.env,
     });
     try {
@@ -204,7 +208,7 @@ export function registerExplorePublicRoutes(
         { status: 500 },
       );
     }
-    const actor = await optionalActorAccountId(c.req.raw, crypto.randomUUID(), {
+    const actor = await optionalActorAccountId(c.req.raw, resolveRequestId(c.req), {
       env: c.env,
     });
     try {
@@ -229,7 +233,7 @@ export function registerExplorePublicRoutes(
         { status: 500 },
       );
     }
-    const actor = await optionalActorAccountId(c.req.raw, crypto.randomUUID(), {
+    const actor = await optionalActorAccountId(c.req.raw, resolveRequestId(c.req), {
       env: c.env,
     });
     try {
@@ -254,7 +258,7 @@ export function registerExplorePublicRoutes(
         { status: 500 },
       );
     }
-    const actor = await optionalActorAccountId(c.req.raw, crypto.randomUUID(), {
+    const actor = await optionalActorAccountId(c.req.raw, resolveRequestId(c.req), {
       env: c.env,
     });
     try {
@@ -282,7 +286,7 @@ export function registerExplorePublicRoutes(
         { status: 500 },
       );
     }
-    const actor = await optionalActorAccountId(c.req.raw, crypto.randomUUID(), {
+    const actor = await optionalActorAccountId(c.req.raw, resolveRequestId(c.req), {
       env: c.env,
     });
     try {

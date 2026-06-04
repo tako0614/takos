@@ -655,6 +655,109 @@ overrides:
   ]);
 });
 
+test("public source contract - canonicalizes publish override standard types", () => {
+  const manifest = parseAppManifestYaml(`
+name: override-publish-canonical-app
+
+compute:
+  web:
+    kind: worker
+
+routes:
+  - id: files
+    target: web
+    path: /files
+
+publish:
+  - name: notes
+    type: McpServer
+    publisher: web
+    outputs:
+      url:
+        kind: url
+        routeRef: files
+
+overrides:
+  production:
+    publish:
+      - name: handler
+        type: FileHandler
+        publisher: web
+        outputs:
+          url:
+            kind: url
+            routeRef: files
+        spec:
+          extensions:
+            - .md
+`);
+
+  // The override delta is parsed by the canonical parser in partial mode, so the
+  // standard short type name is expanded just like a top-level publication.
+  assertEquals(manifest.publish[0]?.type, "takos.mcp-server.v1");
+  assertEquals(
+    manifest.overrides?.production?.publish?.[0]?.type,
+    "takos.file-handler.v1",
+  );
+});
+
+test("public source contract - validates FileHandler publish overrides", () => {
+  // The override copy of the publish parser used to skip FileHandler spec
+  // validation; it now runs uniformly, so a FileHandler override without
+  // mimeTypes/extensions is rejected the same way a top-level one is.
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: override-file-handler-app
+
+compute:
+  web:
+    kind: worker
+
+routes:
+  - target: web
+    path: /files
+
+overrides:
+  production:
+    publish:
+      - name: handler
+        type: FileHandler
+`),
+    Error,
+    "overrides.publish[0].spec.mimeTypes or overrides.publish[0].spec.extensions is required for FileHandler",
+  );
+});
+
+test("public source contract - validates publish override outputs", () => {
+  // Outputs supplied in an override delta go through the canonical strong
+  // output validator (routeRef required), which the old override copy skipped.
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: override-output-app
+
+compute:
+  web:
+    kind: worker
+
+routes:
+  - target: web
+    path: /mcp
+
+overrides:
+  production:
+    publish:
+      - name: notes
+        outputs:
+          url:
+            kind: url
+`),
+    Error,
+    "overrides.publish[0].outputs.url.routeRef is required",
+  );
+});
+
 test("public source contract - rejects unsupported fields in overrides", () => {
   assertThrows(
     () =>
