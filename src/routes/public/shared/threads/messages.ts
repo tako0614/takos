@@ -7,6 +7,7 @@ import type {
 } from "takos-api-contract/shared/types";
 import { asRunRow, runRowToApi } from "takos-api-contract/shared/types/runs";
 import { generateId } from "@takos/worker-platform-utils/id";
+import { isRecord } from "../api/common.ts";
 import { readThreadAccess } from "./read-model.ts";
 
 export type ListThreadMessagesOptions = {
@@ -362,10 +363,6 @@ function asMessageRow(row: Record<string, unknown>): MessageRow {
     sequence: numberField(row, "sequence"),
     createdAt: dateField(row, "createdAt"),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringField(row: Record<string, unknown>, key: string): string {

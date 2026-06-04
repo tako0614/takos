@@ -5,10 +5,38 @@ import {
   listCustomDomains,
   verifyCustomDomain,
 } from "../../../services/platform/custom-domains.ts";
+import { getDb, services } from "../../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
 
 type ListedCustomDomain = Awaited<ReturnType<typeof listCustomDomains>>[
   "domains"
 ][number];
+
+/**
+ * SECURITY (tenant binding): the underlying custom-domain service authorizes by
+ * the user's membership of the SERVICE's own account, ignoring the active space.
+ * Without this guard an agent run scoped to space A could manage custom domains
+ * on a service that lives in space B (a confused deputy / cross-space write,
+ * including tearing down space B's live routing). Bind every custom-domain tool
+ * to the run's current space, mirroring the sibling platform tools
+ * (ensureServiceInWorkspace / resolveWorkerRef).
+ */
+async function assertServiceInSpace(
+  serviceId: string,
+  context: Parameters<ToolHandler>[1],
+): Promise<void> {
+  const db = getDb(context.db);
+  const owned = await db.select({ id: services.id })
+    .from(services)
+    .where(and(
+      eq(services.id, serviceId),
+      eq(services.accountId, context.spaceId),
+    ))
+    .get();
+  if (!owned) {
+    throw new Error(`Service not found: ${serviceId}`);
+  }
+}
 
 function findDomainByName(
   domains: ListedCustomDomain[],
@@ -112,6 +140,7 @@ export const DOMAIN_REMOVE: ToolDefinition = {
 
 export const domainListHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
+  await assertServiceInSpace(serviceId, context);
 
   const { domains } = await listCustomDomains(
     context.env,
@@ -138,6 +167,7 @@ export const domainListHandler: ToolHandler = async (args, context) => {
 export const domainAddHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
   const domain = args.domain as string;
+  await assertServiceInSpace(serviceId, context);
   const result = await addCustomDomain(context.env, serviceId, context.userId, {
     domain,
     verification_method: "cname",
@@ -160,6 +190,7 @@ export const domainAddHandler: ToolHandler = async (args, context) => {
 export const domainVerifyHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
   const domain = args.domain as string;
+  await assertServiceInSpace(serviceId, context);
 
   const { domains } = await listCustomDomains(
     context.env,
@@ -195,6 +226,7 @@ export const domainVerifyHandler: ToolHandler = async (args, context) => {
 export const domainRemoveHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
   const domain = args.domain as string;
+  await assertServiceInSpace(serviceId, context);
 
   const { domains } = await listCustomDomains(
     context.env,

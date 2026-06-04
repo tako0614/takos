@@ -5,7 +5,7 @@ import {
   services as servicesTable,
   shortcuts as shortcutsTable,
 } from "../../../infra/db/index.ts";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import { bytesToHex } from "../../../shared/utils/encoding-utils.ts";
 
@@ -138,23 +138,40 @@ export async function listShortcuts(
     }
   }
 
-  // Batch fetch services
+  // Batch fetch services. SECURITY (cross-tenant IDOR): scope the enrichment to
+  // the current space — resourceId is stored verbatim from the create request and
+  // is NOT validated against the tenant, so without this filter a shortcut whose
+  // resourceId points at another tenant's service id would leak that service's
+  // hostname/status to the requester.
   const services = serviceIds.length > 0
     ? await drizzle.select({
       id: servicesTable.id,
       hostname: servicesTable.hostname,
       status: servicesTable.status,
-    }).from(servicesTable).where(inArray(servicesTable.id, serviceIds)).all()
+    }).from(servicesTable).where(
+      and(
+        inArray(servicesTable.id, serviceIds),
+        eq(servicesTable.accountId, spaceId),
+      ),
+    ).all()
     : [];
   const serviceMap = new Map(services.map((service) => [service.id, service]));
 
-  // Batch fetch resources
+  // Batch fetch resources — same tenant-scoping requirement as services above.
   const resources = resourceIds.length > 0
     ? await drizzle.select({
       id: resourcesTable.id,
       name: resourcesTable.name,
       type: resourcesTable.type,
-    }).from(resourcesTable).where(inArray(resourcesTable.id, resourceIds)).all()
+    }).from(resourcesTable).where(
+      and(
+        inArray(resourcesTable.id, resourceIds),
+        or(
+          eq(resourcesTable.ownerAccountId, spaceId),
+          eq(resourcesTable.accountId, spaceId),
+        ),
+      ),
+    ).all()
     : [];
   const resourceMap = new Map(resources.map((r) => [r.id, r]));
 

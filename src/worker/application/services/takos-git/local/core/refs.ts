@@ -7,7 +7,7 @@
 import type { SqlDatabaseBinding } from "../../../../../shared/types/bindings.ts";
 import type { SelectOf } from "../../../../../shared/types/drizzle-utils.ts";
 import type { GitBranch, GitTag, RefUpdateResult } from "../git-objects.ts";
-import { branches, getDb, tags } from "../../../../../infra/db/index.ts";
+import { branches, commits, getDb, tags } from "../../../../../infra/db/index.ts";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { generateId } from "../../../../../shared/utils/index.ts";
 import {
@@ -541,7 +541,19 @@ export async function resolveRef(
     return t?.commit_sha || null;
   }
 
-  if (isValidCommitSha(ref)) return ref;
+  // SECURITY (cross-tenant IDOR): a bare commit SHA must be bound to THIS repo.
+  // Without this check any 40/64-hex string resolves verbatim, and getCommit()
+  // falls through to the global, content-addressed object store (object keys are
+  // NOT repo/tenant-prefixed), letting a caller read another tenant's private
+  // commit/tree/blob by SHA. Only accept a raw SHA present in this repo's commit
+  // index; branch/tag refs (resolved above) retain full degradation tolerance.
+  if (isValidCommitSha(ref)) {
+    const db = getDb(dbBinding);
+    const indexed = await db.select({ sha: commits.sha }).from(commits)
+      .where(and(eq(commits.repoId, repoId), eq(commits.sha, ref)))
+      .get();
+    return indexed ? ref : null;
+  }
   return null;
 }
 

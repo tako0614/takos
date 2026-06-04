@@ -7,10 +7,10 @@ import { isAbsolute, relative, resolve } from "node:path";
 
 import { MAX_FROM_JSON_SIZE } from "../constants.ts";
 import type { ExecutionContext } from "../workflow-models.ts";
+import { globMatch } from "../glob-match.ts";
 import process from "node:process";
 
 const GLOB_PATTERN_CHARS = /[*?[\]]/;
-const REGEXP_META_CHARS = /[|\\{}()[\]^$+?.]/g;
 
 function normalizePathLike(value: string): string {
   return value.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
@@ -18,35 +18,6 @@ function normalizePathLike(value: string): string {
 
 function containsGlobPattern(pattern: string): boolean {
   return GLOB_PATTERN_CHARS.test(pattern);
-}
-
-function globToRegExp(pattern: string): RegExp {
-  const normalized = normalizePathLike(pattern);
-  let regex = "^";
-
-  for (let i = 0; i < normalized.length; i++) {
-    const char = normalized[i];
-
-    if (char === "*") {
-      if (normalized[i + 1] === "*") {
-        regex += ".*";
-        i++;
-      } else {
-        regex += "[^/]*";
-      }
-      continue;
-    }
-
-    if (char === "?") {
-      regex += "[^/]";
-      continue;
-    }
-
-    regex += char.replace(REGEXP_META_CHARS, "\\$&");
-  }
-
-  regex += "$";
-  return new RegExp(regex);
 }
 
 function isInsideWorkspace(workspace: string, targetPath: string): boolean {
@@ -288,9 +259,9 @@ function collectMatchedHashFiles(
   const applyPattern = (pattern: string, include: boolean): void => {
     if (containsGlobPattern(pattern)) {
       workspaceFiles ??= collectWorkspaceFiles(workspace);
-      const regexp = globToRegExp(pattern);
+      const normalizedPattern = normalizePathLike(pattern);
       for (const file of workspaceFiles) {
-        if (regexp.test(file)) {
+        if (globMatch(normalizedPattern, file)) {
           if (include) {
             matchedFiles.add(file);
           } else {

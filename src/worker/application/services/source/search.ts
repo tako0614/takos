@@ -215,7 +215,7 @@ export async function searchFilenames(
   const conditions = [
     eq(files.accountId, spaceId),
     ne(files.origin, "system"),
-    sql`${files.path} LIKE ${"%" + escapeLike(query) + "%"} ESCAPE '\'`,
+    sql`${files.path} LIKE ${"%" + escapeLike(query) + "%"} ESCAPE '\\'`,
   ];
 
   if (fileTypes && fileTypes.length > 0) {

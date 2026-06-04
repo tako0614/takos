@@ -1,7 +1,8 @@
-import type {
-  BranchFilter,
-  Workflow,
-  WorkflowTrigger,
+import {
+  type BranchFilter,
+  globMatch,
+  type Workflow,
+  type WorkflowTrigger,
 } from "takos-actions-engine";
 
 export function getTriggerConfig<K extends keyof WorkflowTrigger>(
@@ -69,35 +70,13 @@ export function matchesPathFilters(
 }
 
 export function matchesAnyPattern(value: string, patterns: string[]): boolean {
-  return patterns.some((pattern) => globToRegExp(pattern).test(value));
+  // SECURITY (ReDoS): both `value` (a changed-file path) and `patterns` (globs
+  // from attacker-controlled .takos/workflows/*.yml) are untrusted. We use the
+  // linear-time globMatch instead of a backtracking RegExp so an adversarial
+  // pattern like `a*a*a*...*a` cannot pin the Worker CPU via catastrophic
+  // backtracking.
+  return patterns.some((pattern) => globMatch(pattern, value));
 }
-
-const GLOB_CACHE_MAX_ENTRIES = 2048;
-const globCache = new Map<string, RegExp>();
-export function globToRegExp(glob: string): RegExp {
-  const cached = globCache.get(glob);
-  if (cached) return cached;
-  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(
-    /\*\*/g,
-    "___DOUBLE_STAR___",
-  ).replace(/\*/g, "[^/]*").replace(/\?/g, "[^/]").replace(
-    /___DOUBLE_STAR___/g,
-    ".*",
-  );
-  const regex = new RegExp(`^${escaped}$`);
-  if (globCache.size >= GLOB_CACHE_MAX_ENTRIES) {
-    globCache.clear();
-  }
-  globCache.set(glob, regex);
-  return regex;
-}
-
-/** @internal Test-only: inspect / clear the glob cache. */
-export const __globCacheInternals = {
-  size: () => globCache.size,
-  clear: () => globCache.clear(),
-  maxEntries: GLOB_CACHE_MAX_ENTRIES,
-};
 
 export function uniqueRefs(values: Array<string | null | undefined>): string[] {
   return Array.from(

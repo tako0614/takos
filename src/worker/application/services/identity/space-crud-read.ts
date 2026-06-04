@@ -6,6 +6,12 @@ import {
 } from "../../../infra/db/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { Env, Repository, Space } from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+
+export type InitDefaultRepositoryResult = {
+  created: boolean;
+  repository: Repository | null;
+};
 import {
   accountToWorkspace,
   type RepoSummary,
@@ -90,6 +96,56 @@ export async function getRepositoryById(
     .get();
 
   return repo ? toRepository(repo) : null;
+}
+
+/**
+ * Initialize the default `main` repository for a workspace.
+ *
+ * Idempotent: when the space already has a repository, returns the most
+ * recently updated one with `created: false`. Otherwise inserts the default
+ * repository and returns it with `created: true`.
+ */
+export async function initDefaultRepository(
+  db: SqlDatabaseBinding,
+  spaceId: string,
+): Promise<InitDefaultRepositoryResult> {
+  const drizzle = spaceCrudDeps.getDb(db);
+
+  const existing = await drizzle
+    .select()
+    .from(repositories)
+    .where(eq(repositories.accountId, spaceId))
+    .orderBy(desc(repositories.updatedAt))
+    .limit(1)
+    .get() ?? null;
+
+  if (existing) {
+    return {
+      created: false,
+      repository: await getRepositoryById(db, existing.id),
+    };
+  }
+
+  const repoId = generateId();
+  const timestamp = new Date().toISOString();
+
+  await drizzle.insert(repositories).values({
+    id: repoId,
+    accountId: spaceId,
+    name: "main",
+    description: "Default repository for workspace",
+    visibility: "private",
+    defaultBranch: "main",
+    stars: 0,
+    forks: 0,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  });
+
+  return {
+    created: true,
+    repository: await getRepositoryById(db, repoId),
+  };
 }
 
 export async function listWorkspacesForUser(

@@ -9,6 +9,8 @@ export {
   getRepositoryById,
   getWorkspaceByIdOrSlug,
   getWorkspaceWithRepository,
+  initDefaultRepository,
+  type InitDefaultRepositoryResult,
   listWorkspacesForUser,
   loadSpaceById,
   updateWorkspace,

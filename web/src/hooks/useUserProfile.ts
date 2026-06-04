@@ -6,6 +6,7 @@ import type {
   UserProfile,
 } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import { useUserRepos } from "./useUserRepos.ts";
 import { useUserStars } from "./useUserStars.ts";
 import { useUserFollowers } from "./useUserFollowers.ts";
@@ -46,7 +47,7 @@ export function useUserProfile(username: Accessor<string>) {
   const [starringRepo, setStarringRepo] = createSignal<string | null>(null);
   const [blockLoading, setBlockLoading] = createSignal(false);
   const [muteLoading, setMuteLoading] = createSignal(false);
-  let profileRequestVersion = 0;
+  const latestProfile = createLatestRequest();
   const currentUsername = () => username();
 
   // Compose sub-hooks
@@ -75,7 +76,9 @@ export function useUserProfile(username: Accessor<string>) {
       setLoading(false);
       return;
     }
-    const requestVersion = ++profileRequestVersion;
+    const claim = latestProfile.claim(() =>
+      requestedUsername === currentUsername()
+    );
     setLoading(true);
     setError(null);
     try {
@@ -89,22 +92,13 @@ export function useUserProfile(username: Accessor<string>) {
         throw new Error(t("failedToLoadProfile"));
       }
       const data = await rpcJson<UserProfileResponse>(res);
-      if (
-        requestVersion !== profileRequestVersion ||
-        requestedUsername !== currentUsername()
-      ) return;
+      if (!claim.won()) return;
       setProfile(data.user);
     } catch (err) {
-      if (
-        requestVersion !== profileRequestVersion ||
-        requestedUsername !== currentUsername()
-      ) return;
+      if (!claim.won()) return;
       setError(err instanceof Error ? err.message : t("unknownError"));
     } finally {
-      if (
-        requestVersion === profileRequestVersion &&
-        requestedUsername === currentUsername()
-      ) {
+      if (claim.won()) {
         setLoading(false);
       }
     }
@@ -113,7 +107,7 @@ export function useUserProfile(username: Accessor<string>) {
   createEffect(on(
     currentUsername,
     () => {
-      ++profileRequestVersion;
+      latestProfile.next();
       setProfile(null);
       setError(null);
       setActiveTab("repositories");

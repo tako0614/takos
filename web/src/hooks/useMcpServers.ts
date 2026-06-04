@@ -3,6 +3,7 @@ import { useToast } from "../store/toast.ts";
 import { useI18n } from "../store/i18n.ts";
 import { getErrorMessage } from "@takos/worker-platform-utils/errors";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import type { McpServerRecord } from "../types/index.ts";
 
 interface UseMcpServersOptions {
@@ -18,17 +19,18 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     `/api/mcp/servers?spaceId=${encodeURIComponent(currentSpaceId())}`;
   const [servers, setServers] = createSignal<McpServerRecord[]>([]);
   const [loading, setLoading] = createSignal(true);
-  let refreshSeq = 0;
+  const latestRefresh = createLatestRequest();
 
   const refresh = async () => {
     const targetSpaceId = currentSpaceId();
-    const seq = ++refreshSeq;
     if (!targetSpaceId) {
+      latestRefresh.next();
       setServers([]);
       setLoading(false);
       return;
     }
 
+    const claim = latestRefresh.claim(() => targetSpaceId === currentSpaceId());
     setLoading(true);
     try {
       const res = await fetch(
@@ -36,13 +38,13 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       );
       if (!res.ok) throw new Error(t("failedToFetchMcpServers"));
       const data = await res.json();
-      if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
+      if (!claim.won()) return;
       setServers(data.data || []);
     } catch {
-      if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
+      if (!claim.won()) return;
       setServers([]);
     } finally {
-      if (seq === refreshSeq && targetSpaceId === currentSpaceId()) {
+      if (claim.won()) {
         setLoading(false);
       }
     }

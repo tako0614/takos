@@ -18,6 +18,27 @@ import type {
 } from "../workflow-models.ts";
 
 /**
+ * Hard cap on the number of matrix combinations a single job may expand to,
+ * mirroring GitHub Actions' documented 256-job limit. SECURITY (DoS): the
+ * cartesian product is materialized synchronously on the Worker event loop, so
+ * an attacker-controlled workflow YAML (e.g. several keys each with 100+ values
+ * → 10^6 combinations) would otherwise pin CPU / exhaust memory before the run
+ * even starts. We reject BEFORE building the explosion rather than after.
+ */
+const MAX_MATRIX_COMBINATIONS = 256;
+
+/** Thrown when a strategy.matrix would expand past {@link MAX_MATRIX_COMBINATIONS}. */
+export class MatrixExpansionLimitError extends Error {
+  constructor(attempted: number) {
+    super(
+      `Matrix expansion exceeds the limit of ${MAX_MATRIX_COMBINATIONS} ` +
+        `combinations (attempted ${attempted}). Reduce the matrix size.`,
+    );
+    this.name = "MatrixExpansionLimitError";
+  }
+}
+
+/**
  * マトリクス展開の結果（展開された組み合わせ 1 件）
  */
 export interface MatrixExpansion {
@@ -111,6 +132,13 @@ function buildCartesianProduct(
     const rawValues = matrix[key];
     if (!Array.isArray(rawValues) || rawValues.length === 0) {
       continue;
+    }
+
+    // DoS guard: reject before materializing the next generation so we never
+    // allocate a combinatorial explosion.
+    const projected = combinations.length * rawValues.length;
+    if (projected > MAX_MATRIX_COMBINATIONS) {
+      throw new MatrixExpansionLimitError(projected);
     }
 
     const next: MatrixContext[] = [];
@@ -252,6 +280,11 @@ export function expandMatrix(
   const includeEntries = Array.isArray(matrix.include)
     ? (matrix.include as Record<string, unknown>[])
     : [];
+  // DoS guard: applyIncludeEntries scans the full combination set once per
+  // include entry (quadratic), so bound the include count before processing.
+  if (includeEntries.length > MAX_MATRIX_COMBINATIONS) {
+    throw new MatrixExpansionLimitError(includeEntries.length);
+  }
   const combinationsWithIncludes = applyIncludeEntries(
     filteredCombinations,
     includeEntries,
@@ -269,6 +302,12 @@ export function expandMatrix(
   // 有効な組み合わせが 1 件も無ければ空（単発実行扱いに退化する）
   if (combinationsWithIncludes.length === 0) {
     return [];
+  }
+
+  // Final guard: include entries can also add standalone combinations, so cap
+  // the post-include total as well.
+  if (combinationsWithIncludes.length > MAX_MATRIX_COMBINATIONS) {
+    throw new MatrixExpansionLimitError(combinationsWithIncludes.length);
   }
 
   const failFast = strategy["fail-fast"] ?? true;

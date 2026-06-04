@@ -10,6 +10,8 @@ import type {
   ResourceType,
 } from "../../../shared/types/index.ts";
 import {
+  normalizeResourceBackend,
+  type ResourceBackend,
   resolveResourceDriver,
   resolveResourceImplementation,
   toPublicResourceType,
@@ -21,7 +23,7 @@ import {
 } from "./portable-runtime.ts";
 import { resolveGoogleCloudProject } from "../../../platform/gcp-project.ts";
 
-type ManagedResourceBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
+type ManagedResourceBackend = ResourceBackend;
 
 export type ProvisionManagedResourceInput = {
   id?: string;
@@ -38,10 +40,6 @@ export type ProvisionManagedResourceInput = {
   persist?: boolean;
   config?: Record<string, unknown>;
   recordFailure?: boolean;
-  vectorize?: {
-    dimensions: number;
-    metric: "cosine" | "euclidean" | "dot-product";
-  };
   vectorIndex?: {
     dimensions: number;
     metric: "cosine" | "euclidean" | "dot-product";
@@ -49,17 +47,8 @@ export type ProvisionManagedResourceInput = {
   queue?: {
     deliveryDelaySeconds?: number;
   };
-  analyticsEngine?: {
-    dataset?: string;
-  };
   analyticsStore?: {
     dataset?: string;
-  };
-  workflow?: {
-    service: string;
-    export: string;
-    timeoutMs?: number;
-    maxRetries?: number;
   };
   workflowRuntime?: {
     service: string;
@@ -73,20 +62,7 @@ export type ProvisionManagedResourceInput = {
   };
 };
 
-function normalizeManagedResourceBackend(
-  backendName?: string | null,
-): ManagedResourceBackend {
-  switch (backendName) {
-    case "local":
-    case "aws":
-    case "gcp":
-    case "k8s":
-      return backendName;
-    case "cloudflare":
-    default:
-      return "cloudflare";
-  }
-}
+const normalizeManagedResourceBackend = normalizeResourceBackend;
 
 function readEnvString(env: object, key: string): string | undefined {
   const value = Reflect.get(env, key);
@@ -179,7 +155,6 @@ export async function provisionManagedResource(
   const persist = input.persist ?? true;
   const backingResourceName = input.backingResourceName ??
     `${input.type}-${id}`;
-  const workflow = input.workflow ?? input.workflowRuntime;
   const implementation = resolveResourceImplementation(semanticType) ??
     (input.type as CloudflareManagedResourceType);
 
@@ -231,14 +206,14 @@ export async function provisionManagedResource(
       implementation as CloudflareManagedResourceType,
       backingResourceName,
       {
-        ...(input.vectorize || input.vectorIndex
-          ? { vectorize: input.vectorize ?? input.vectorIndex }
-          : {}),
+        // Translate the canonical resource option names to the
+        // Cloudflare-specific names expected by the Cloudflare backend.
+        ...(input.vectorIndex ? { vectorize: input.vectorIndex } : {}),
         ...(input.queue ? { queue: input.queue } : {}),
-        ...(input.analyticsEngine || input.analyticsStore
-          ? { analyticsEngine: input.analyticsEngine ?? input.analyticsStore }
+        ...(input.analyticsStore
+          ? { analyticsEngine: input.analyticsStore }
           : {}),
-        ...(workflow ? { workflow } : {}),
+        ...(input.workflowRuntime ? { workflow: input.workflowRuntime } : {}),
       },
     );
     const createdBackingResourceId = created.backingResourceId;

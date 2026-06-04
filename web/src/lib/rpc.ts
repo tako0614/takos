@@ -1,7 +1,8 @@
 import { hc } from "hono/client";
 import type { ClientResponse } from "hono/client";
 import type { ApiRoutes } from "takos-api-contract/rpc-types";
-import { getTranslation, type Language, type TranslationKey } from "../i18n.ts";
+import { getTranslation, type TranslationKey } from "../i18n.ts";
+import { detectLanguage } from "./locale.ts";
 import type {
   Branch,
   Commit,
@@ -15,19 +16,8 @@ import { withTimeout } from "./withTimeout.ts";
 export const rpc = hc<ApiRoutes>("/api");
 const DEFAULT_API_TIMEOUT_MS = 15000;
 
-function currentLanguage(): Language {
-  try {
-    const stored = globalThis.localStorage?.getItem("takos-lang");
-    if (stored === "ja" || stored === "en") return stored;
-  } catch {
-    // localStorage may be unavailable in tests or privacy-restricted contexts.
-  }
-  const browserLang = globalThis.navigator?.language?.toLowerCase();
-  return browserLang?.startsWith("ja") ? "ja" : "en";
-}
-
 function fallbackMessage(key: TranslationKey): string {
-  return getTranslation(currentLanguage(), key);
+  return getTranslation(detectLanguage(), key);
 }
 
 // ---------------------------------------------------------------------------

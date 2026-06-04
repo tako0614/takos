@@ -5,23 +5,13 @@ import {
   type TranslationKey,
   type TranslationParams,
 } from "../i18n.ts";
+import { detectLanguage, LANGUAGE_STORAGE_KEY } from "../lib/locale.ts";
 
 export type { TranslationKey, TranslationParams };
 
-const STORAGE_KEY = "takos-lang";
-
-function detectInitialLanguage(): Language {
-  const storage = globalThis.localStorage;
-  if (!storage) return "en";
-  const stored = storage.getItem(STORAGE_KEY);
-  if (stored === "ja" || stored === "en") return stored;
-  const browserLang = globalThis.navigator.language.toLowerCase();
-  return browserLang.startsWith("ja") ? "ja" : "en";
-}
-
 const [language, setLanguage] = createPersistedSignal<Language>(
-  STORAGE_KEY,
-  detectInitialLanguage(),
+  LANGUAGE_STORAGE_KEY,
+  detectLanguage(),
 );
 
 const translate = (

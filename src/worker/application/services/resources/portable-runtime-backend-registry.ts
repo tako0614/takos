@@ -12,6 +12,10 @@ import type {
   ObjectStoreBinding,
 } from "../../../shared/types/bindings.ts";
 import type { ResourceCapability } from "../../../shared/types/index.ts";
+import {
+  normalizePortableResourceBackend,
+  type PortableResourceBackend,
+} from "./capabilities.ts";
 import { createAwsSecretsStore } from "../../../adapters/aws-secrets-store.ts";
 import { createDynamoKvStore } from "../../../adapters/dynamo-kv-store.ts";
 import { createFirestoreKvStore } from "../../../adapters/firestore-kv-store.ts";
@@ -31,7 +35,7 @@ import type {
   PortableResourceResolution,
 } from "./portable-runtime.ts";
 
-export type PortableBackend = "local" | "aws" | "gcp" | "k8s";
+export type PortableBackend = PortableResourceBackend;
 
 export type PortableSecretStore = {
   getSecretValue(name: string): Promise<string>;
@@ -602,15 +606,7 @@ const PORTABLE_BACKEND_REGISTRY: Record<
 export function normalizePortableBackend(
   backendName?: string | null,
 ): PortableBackend {
-  switch (backendName) {
-    case "aws":
-    case "gcp":
-    case "k8s":
-      return backendName;
-    case "local":
-    default:
-      return "local";
-  }
+  return normalizePortableResourceBackend(backendName);
 }
 
 export function getPortableBackendResolution(

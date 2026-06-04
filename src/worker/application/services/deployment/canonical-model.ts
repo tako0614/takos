@@ -1,15 +1,20 @@
+import type {
+  ResourceCapability,
+  ResourcePublicType,
+} from "../../../shared/types/index.ts";
+import {
+  CANONICAL_RESOURCE_CAPABILITIES,
+  resourcePublicTypeFromCapability,
+} from "../resources/capabilities.ts";
 import type { ArtifactKind } from "./models.ts";
 
-export type CanonicalManifestResourceType =
-  | "sql"
-  | "object-store"
-  | "key-value"
-  | "queue"
-  | "vector-index"
-  | "secret"
-  | "analytics-engine"
-  | "workflow"
-  | "durable-object";
+/**
+ * The canonical manifest resource type is exactly the backend-independent
+ * public resource type vocabulary owned by `resources/capabilities.ts`. It is
+ * aliased (not re-declared) so the resource type set has a single source of
+ * truth.
+ */
+export type CanonicalManifestResourceType = ResourcePublicType;
 
 export type CanonicalManifestResourceSpec = {
   type: CanonicalManifestResourceType;
@@ -36,16 +41,11 @@ export type CanonicalManifestResourceSpec = {
   };
 };
 
-export type CanonicalResourceClass =
-  | "sql"
-  | "object_store"
-  | "kv"
-  | "queue"
-  | "vector_index"
-  | "analytics_store"
-  | "secret"
-  | "workflow_runtime"
-  | "durable_namespace";
+/**
+ * The canonical resource class is exactly the resource capability vocabulary
+ * owned by `resources/capabilities.ts`.
+ */
+export type CanonicalResourceClass = ResourceCapability;
 
 export type CanonicalResourceBacking =
   | "d1"
@@ -86,82 +86,62 @@ export interface CanonicalWorkloadDescriptor {
 }
 
 /**
- * Map the backend-independent flat storage type to the canonical resource
- * descriptor. The flat schema uses backend-independent names
- * (sql / object-store / key-value / ...), so this table mirrors those.
+ * Canonical-model-owned vocabularies, keyed by resource capability. `backing`
+ * and `bindingType` differ from the capability / implementation names owned by
+ * `resources/capabilities.ts` (e.g. kv → `kv_namespace`, secret → `secret_text`)
+ * so they stay declared here, but the resource type set itself is derived from
+ * the capability list rather than re-listed.
+ */
+const RESOURCE_BACKING_BY_CAPABILITY: Record<
+  CanonicalResourceClass,
+  CanonicalResourceBacking
+> = {
+  sql: "d1",
+  object_store: "r2",
+  kv: "kv_namespace",
+  queue: "queue",
+  vector_index: "vectorize",
+  analytics_store: "analytics_engine",
+  secret: "secret_ref",
+  workflow_runtime: "workflow_binding",
+  durable_namespace: "durable_object_namespace",
+};
+
+const RESOURCE_BINDING_TYPE_BY_CAPABILITY: Record<
+  CanonicalResourceClass,
+  CanonicalBindingContract
+> = {
+  sql: "sql",
+  object_store: "object_store",
+  kv: "kv",
+  queue: "queue",
+  vector_index: "vector_index",
+  analytics_store: "analytics_store",
+  secret: "secret_text",
+  workflow_runtime: "workflow_runtime",
+  durable_namespace: "durable_namespace",
+};
+
+/**
+ * The canonical descriptor table is derived from the capability list owned by
+ * `resources/capabilities.ts`. The flat schema uses backend-independent names
+ * (sql / object-store / key-value / ...), so each manifest type maps to its
+ * capability and the canonical-model-owned `backing` / `bindingType` for it.
  */
 const RESOURCE_DESCRIPTORS: Record<
   CanonicalManifestResourceType,
   CanonicalResourceDescriptor
-> = {
-  sql: {
-    manifestType: "sql",
-    resourceClass: "sql",
-    backing: "d1",
-    bindingType: "sql",
-  },
-  "object-store": {
-    manifestType: "object-store",
-    resourceClass: "object_store",
-    backing: "r2",
-    bindingType: "object_store",
-  },
-  "key-value": {
-    manifestType: "key-value",
-    resourceClass: "kv",
-    backing: "kv_namespace",
-    bindingType: "kv",
-  },
-  secret: {
-    manifestType: "secret",
-    resourceClass: "secret",
-    backing: "secret_ref",
-    bindingType: "secret_text",
-  },
-  "vector-index": {
-    manifestType: "vector-index",
-    resourceClass: "vector_index",
-    backing: "vectorize",
-    bindingType: "vector_index",
-  },
-  queue: {
-    manifestType: "queue",
-    resourceClass: "queue",
-    backing: "queue",
-    bindingType: "queue",
-  },
-  "analytics-engine": {
-    manifestType: "analytics-engine",
-    resourceClass: "analytics_store",
-    backing: "analytics_engine",
-    bindingType: "analytics_store",
-  },
-  workflow: {
-    manifestType: "workflow",
-    resourceClass: "workflow_runtime",
-    backing: "workflow_binding",
-    bindingType: "workflow_runtime",
-  },
-  "durable-object": {
-    manifestType: "durable-object",
-    resourceClass: "durable_namespace",
-    backing: "durable_object_namespace",
-    bindingType: "durable_namespace",
-  },
-};
-
-const CANONICAL_RESOURCE_TYPES: Record<string, CanonicalManifestResourceType> =
-  {
-    sql: "sql",
-    "object-store": "object-store",
-    "key-value": "key-value",
-    secret: "secret",
-    "vector-index": "vector-index",
-    queue: "queue",
-    "analytics-engine": "analytics-engine",
-    workflow: "workflow",
-    "durable-object": "durable-object",
-  };
+> = Object.fromEntries(
+  CANONICAL_RESOURCE_CAPABILITIES.map((capability) => {
+    const manifestType = resourcePublicTypeFromCapability(capability);
+    return [manifestType, {
+      manifestType,
+      resourceClass: capability,
+      backing: RESOURCE_BACKING_BY_CAPABILITY[capability],
+      bindingType: RESOURCE_BINDING_TYPE_BY_CAPABILITY[capability],
+    }] as const;
+  }),
+) as Record<CanonicalManifestResourceType, CanonicalResourceDescriptor>;
 
 const WORKLOAD_DESCRIPTORS: Record<
   ManifestWorkloadKind,
@@ -198,9 +178,9 @@ export function getCanonicalResourceDescriptor(
 export function inferCanonicalResourceDescriptor(
   manifestType: string,
 ): CanonicalResourceDescriptor | null {
-  const normalizedType = CANONICAL_RESOURCE_TYPES[manifestType];
-  if (!normalizedType) return null;
-  return RESOURCE_DESCRIPTORS[normalizedType] ?? null;
+  return Object.prototype.hasOwnProperty.call(RESOURCE_DESCRIPTORS, manifestType)
+    ? RESOURCE_DESCRIPTORS[manifestType as CanonicalManifestResourceType]
+    : null;
 }
 
 export function getCanonicalWorkloadDescriptor(

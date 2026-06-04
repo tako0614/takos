@@ -1,5 +1,6 @@
 import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import { useI18n } from "../store/i18n.ts";
 
 export interface StoreItem {
@@ -47,7 +48,7 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
   const [stores, setStores] = createSignal<StoreItem[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  let storesRequestSeq = 0;
+  const latestStores = createLatestRequest();
 
   const fetchStores = async () => {
     const currentSpaceId = spaceId();
@@ -58,7 +59,7 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
       return;
     }
 
-    const requestId = ++storesRequestSeq;
+    const claim = latestStores.claim(() => spaceId() === currentSpaceId);
     setLoading(true);
     setError(null);
     try {
@@ -66,15 +67,13 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
         param: { spaceId: currentSpaceId },
       });
       const data = await rpcJson<{ stores: StoreItem[] }>(res);
-      if (requestId !== storesRequestSeq) return;
-      if (spaceId() !== currentSpaceId) return;
+      if (!claim.won()) return;
       setStores(data.stores);
     } catch (err) {
-      if (requestId !== storesRequestSeq) return;
-      if (spaceId() !== currentSpaceId) return;
+      if (!claim.won()) return;
       setError(err instanceof Error ? err.message : t("failedToLoadStores"));
     } finally {
-      if (requestId === storesRequestSeq && spaceId() === currentSpaceId) {
+      if (claim.won()) {
         setLoading(false);
       }
     }
@@ -125,7 +124,7 @@ export function useStoreInventory(
   const [total, setTotal] = createSignal(0);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  let itemsRequestSeq = 0;
+  const latestItems = createLatestRequest();
 
   const fetchItems = async () => {
     const currentSpaceId = spaceId();
@@ -138,7 +137,9 @@ export function useStoreInventory(
       return;
     }
 
-    const requestId = ++itemsRequestSeq;
+    const claim = latestItems.claim(() =>
+      spaceId() === currentSpaceId && storeSlug() === currentStoreSlug
+    );
     setLoading(true);
     setError(null);
     try {
@@ -156,24 +157,14 @@ export function useStoreInventory(
       const data = await rpcJson<{ total: number; items: InventoryItem[] }>(
         res,
       );
-      if (requestId !== itemsRequestSeq) return;
-      if (spaceId() !== currentSpaceId || storeSlug() !== currentStoreSlug) {
-        return;
-      }
+      if (!claim.won()) return;
       setItems(data.items);
       setTotal(data.total);
     } catch (err) {
-      if (requestId !== itemsRequestSeq) return;
-      if (spaceId() !== currentSpaceId || storeSlug() !== currentStoreSlug) {
-        return;
-      }
+      if (!claim.won()) return;
       setError(err instanceof Error ? err.message : t("failedToLoadInventory"));
     } finally {
-      if (
-        requestId === itemsRequestSeq &&
-        spaceId() === currentSpaceId &&
-        storeSlug() === currentStoreSlug
-      ) {
+      if (claim.won()) {
         setLoading(false);
       }
     }
@@ -224,7 +215,7 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
   const [entries, setEntries] = createSignal<RegistryEntry[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  let entriesRequestSeq = 0;
+  const latestEntries = createLatestRequest();
 
   const fetchEntries = async () => {
     const currentSpaceId = spaceId();
@@ -235,7 +226,7 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
       return;
     }
 
-    const requestId = ++entriesRequestSeq;
+    const claim = latestEntries.claim(() => spaceId() === currentSpaceId);
     setLoading(true);
     setError(null);
     try {
@@ -244,17 +235,15 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
           param: { spaceId: currentSpaceId },
         });
       const data = await rpcJson<{ stores: RegistryEntry[] }>(res);
-      if (requestId !== entriesRequestSeq) return;
-      if (spaceId() !== currentSpaceId) return;
+      if (!claim.won()) return;
       setEntries(data.stores);
     } catch (err) {
-      if (requestId !== entriesRequestSeq) return;
-      if (spaceId() !== currentSpaceId) return;
+      if (!claim.won()) return;
       setError(
         err instanceof Error ? err.message : t("failedToLoadRemoteStores"),
       );
     } finally {
-      if (requestId === entriesRequestSeq && spaceId() === currentSpaceId) {
+      if (claim.won()) {
         setLoading(false);
       }
     }
