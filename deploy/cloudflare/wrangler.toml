@@ -75,8 +75,6 @@ TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
 # OCI deployment adapter for image-backed services / containers.
 OCI_ORCHESTRATOR_URL = ""
-# RoutingDO rollout phase (1-4). Node/local platform defaults to 1; CF Workers should set 4.
-ROUTING_DO_PHASE = "4"
 CF_ACCOUNT_ID = "replace-with-account-id"
 CF_ZONE_ID = "replace-with-zone-id"
 
@@ -237,31 +235,36 @@ new_sqlite_classes = ["TakosCoordinationObject"]
 tag = "v8"
 new_sqlite_classes = ["TakosumiOpenTofuRunner"]
 
-# Runtime / executor images: self-hosters supply their own. Set `image` to a
-# published registry ref (e.g. "your-runtime-image:tag" / "your-executor-image:tag")
-# OR to a local Dockerfile path with `image_build_context` (wrangler-config-relative).
-# These are NOT shipped by the OSS template — takos-private is private.
+# Runtime / executor images build from this repo's Dockerfiles. image /
+# image_build_context are wrangler-config-relative (resolved from
+# takos/deploy/cloudflare). Before deploying, build each container's dist/ so
+# the image COPY succeeds: run `bun build.mjs` in containers/runtime and
+# containers/executor (or `bun run build` in each dir).
 [[containers]]
 class_name = "TakosRuntimeContainer"
-image = "registry.example.com/your-runtime-image:tag"
+image = "../../containers/runtime/Dockerfile"
+image_build_context = "../../containers/runtime"
 instance_type = "standard-2"
 max_instances = 25
 
 [[containers]]
 class_name = "ExecutorContainerTier1"
-image = "registry.example.com/your-executor-image:tag"
+image = "../../containers/executor/Dockerfile"
+image_build_context = "../../containers/executor"
 instance_type = "lite"
 max_instances = 20
 
 [[containers]]
 class_name = "ExecutorContainerTier2"
-image = "registry.example.com/your-executor-image:tag"
+image = "../../containers/executor/Dockerfile"
+image_build_context = "../../containers/executor"
 instance_type = "basic"
 max_instances = 200
 
 [[containers]]
 class_name = "ExecutorContainerTier3"
-image = "registry.example.com/your-executor-image:tag"
+image = "../../containers/executor/Dockerfile"
+image_build_context = "../../containers/executor"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
 
@@ -477,7 +480,6 @@ TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://staging-app.your-domain.example/auth/
 TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS = "closed"
 TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
-ROUTING_DO_PHASE = "4"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"
 
@@ -567,30 +569,34 @@ class_name = "TakosCoordinationObject"
 name = "TAKOS_OPENTOFU_RUNNER"
 class_name = "TakosumiOpenTofuRunner"
 
-# Runtime / executor images (staging): self-hosters supply their own — set a
-# registry ref ("your-runtime-image:tag" / "your-executor-image:tag") or a local
-# Dockerfile path + image_build_context. Not shipped by the OSS template.
+# Runtime / executor images (staging) build from this repo's Dockerfiles, same
+# as production. Build each container's dist/ (`bun build.mjs` in
+# containers/runtime and containers/executor) before deploying.
 [[env.staging.containers]]
 class_name = "TakosRuntimeContainer"
-image = "registry.example.com/your-runtime-image:tag"
+image = "../../containers/runtime/Dockerfile"
+image_build_context = "../../containers/runtime"
 instance_type = "standard-2"
 max_instances = 5
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
-image = "registry.example.com/your-executor-image:tag"
+image = "../../containers/executor/Dockerfile"
+image_build_context = "../../containers/executor"
 instance_type = "lite"
 max_instances = 20
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier2"
-image = "registry.example.com/your-executor-image:tag"
+image = "../../containers/executor/Dockerfile"
+image_build_context = "../../containers/executor"
 instance_type = "basic"
 max_instances = 100
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier3"
-image = "registry.example.com/your-executor-image:tag"
+image = "../../containers/executor/Dockerfile"
+image_build_context = "../../containers/executor"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
 

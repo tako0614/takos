@@ -237,7 +237,7 @@ export default {
 
     // Trust boundary = the service binding. This egress worker is deployed
     // binding-only (DEPLOY INVARIANT: its service MUST have workers_dev = false
-    // and no public route — see takos-private apps/control/cloudflare/
+    // and no public route — a pattern from the retired operator control plane
     // wrangler.worker.toml, and docs/architecture/internal-trust-boundaries.md
     // tier 1). Only the worker's own code holds the TAKOS_EGRESS binding, so no
     // header marker/secret is required — the previous X-Takos-Internal-Marker

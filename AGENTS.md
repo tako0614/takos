@@ -53,7 +53,8 @@ Takosumi 公開概念は `Installation` / `PlanRun` / `ApplyRun` / `Deployment` 
 - Takosumi service / Accounts plane / deploy-control の **実装 source** (`../takosumi/` が source owner)。`takos` は
   tsconfig alias 経由でその handler を in-process import するだけで、実装を fork しない
 - standalone runtime service split repositories for Takos app / Git / agent (single worker に統合済み)
-- production / staging deploy 実行 (`../takos-private/` の責務)
+- operator config / secrets の保管 (repo の外、例: `~/.takos-secrets/<env>/` に置く)。production / staging deploy は
+  self-hoster / operator が自分の infra に対して wrangler + tofu で実行する
 - generic `common` package (service-local helper のみ許可)
 
 ## 単一 Worker のトポロジ
@@ -84,7 +85,8 @@ in-process トポロジ (operator の platform worker も同じ accounts plane /
 
 - **Upstream source owner**: `../takosumi/` — deploy-control + Accounts plane の **実装 source owner**。`takos` worker は
   その handler を tsconfig alias で in-process import する (別 service として network 越しに呼ばない)。
-- **Downstream**: `../takos-private/` (deploy artifact / secret 消費)、 bundled apps (`../takos-apps/*`、 `../yurucommu/`、
+- **Downstream**: self-host / operator deploy (この repo を自分の infra に build & deploy し、secret は repo の外で管理)、
+  bundled apps (`../takos-apps/*`、 `../yurucommu/`、
   `../road-to-me/`)
 - **Internal**: `src/worker` (single worker: product + Accounts plane + deploy-control を in-process 同居)、 `web` (UI、
   folded dashboard 含む)、 `containers/git` (Git hosting container)、 `containers/agent` (agent execution container)

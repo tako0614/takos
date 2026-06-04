@@ -26,12 +26,12 @@ test("handleIndexJobDlq persists the actual queue name", async () => {
       }),
     } as never,
     3,
-    "takos-private-index-jobs-dlq-staging",
+    "takos-selfhost-index-jobs-dlq-staging",
   );
 
   const row = persisted[0];
   if (!row) throw new Error("expected DLQ row to be persisted");
-  assertEquals(row.queue, "takos-private-index-jobs-dlq-staging");
+  assertEquals(row.queue, "takos-selfhost-index-jobs-dlq-staging");
   assertEquals(row.retryCount, 3);
 });
 
