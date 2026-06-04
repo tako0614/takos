@@ -7,7 +7,7 @@ import {
 } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { toReleaseAssets } from "./repo-release-assets.ts";
-import { selectInstallableSourcePathFromRepo } from "./app-manifest-bundle.ts";
+import { selectInstallableSourcePathFromRepo } from "./opentofu-app-manifest.ts";
 import type {
   CatalogDeploySourceResponse,
   CatalogItemResponse,

@@ -84,7 +84,6 @@ function buildTenantHeaders(request: Request, hostname: string): Headers {
 export interface DispatchEnv {
   HOSTNAME_ROUTING?: KvStoreBinding;
   ROUTING_DO?: DurableNamespaceBinding;
-  ROUTING_DO_PHASE?: string;
   ROUTING_STORE?: RoutingStore;
   DISPATCHER: DispatchNamespace;
   ADMIN_DOMAIN: string;

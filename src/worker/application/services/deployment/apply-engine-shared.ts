@@ -10,11 +10,6 @@ import {
   type GroupDesiredState,
 } from "./group-state.ts";
 import {
-  assertTranslationSupported,
-  buildTranslationContextFromEnv,
-  buildTranslationReport,
-} from "./translation-report.ts";
-import {
   createResource,
   deleteResource,
   listResources,
@@ -68,7 +63,7 @@ export type ApplyWorkerArtifact = {
 export type ApplyContainerArtifact = {
   kind: "container_image";
   imageRef: string;
-  backend?: "oci" | "ecs" | "cloud-run" | "k8s";
+  backend?: "oci";
   deployMessage?: string;
 };
 
@@ -83,7 +78,7 @@ export type WorkerDirectArtifact = {
 export type ImageDirectArtifact = {
   kind: "image";
   imageRef: string;
-  backend?: "oci" | "ecs" | "cloud-run" | "k8s";
+  backend?: "oci";
 };
 
 export const applyEngineDeps = {
@@ -108,9 +103,6 @@ export const applyEngineDeps = {
   syncGroupManagedDesiredState,
   syncGroupPublicationDesiredState,
   reconcileGroupRouting,
-  buildTranslationReport,
-  buildTranslationContextFromEnv,
-  assertTranslationSupported,
   compileGroupDesiredState,
 };
 

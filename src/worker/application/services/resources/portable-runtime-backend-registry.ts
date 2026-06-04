@@ -1,12 +1,3 @@
-import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
-import {
-  CreateQueueCommand,
-  DeleteQueueCommand,
-  GetQueueUrlCommand,
-  SQSClient,
-} from "@aws-sdk/client-sqs";
-import type { PubSub } from "@google-cloud/pubsub";
-import { createClient } from "redis";
 import type {
   KvStoreBinding,
   ObjectStoreBinding,
@@ -16,20 +7,10 @@ import {
   normalizePortableResourceBackend,
   type PortableResourceBackend,
 } from "./capabilities.ts";
-import { createAwsSecretsStore } from "../../../adapters/aws-secrets-store.ts";
-import { createDynamoKvStore } from "../../../adapters/dynamo-kv-store.ts";
-import { createFirestoreKvStore } from "../../../adapters/firestore-kv-store.ts";
-import { createGcsObjectStore } from "../../../adapters/gcs-object-store.ts";
-import { createGcpSecretStore } from "../../../adapters/gcp-secret-store.ts";
-import { createK8sSecretStore } from "../../../adapters/k8s-secret-store.ts";
-import { createS3ObjectStore } from "../../../adapters/s3-object-store.ts";
-import { createRedisQueue } from "../../../local-platform/redis-bindings.ts";
 import {
   optionalEnv,
   resolvePostgresUrl,
-  resolveRedisUrl,
 } from "../../../node-platform/resolvers/env-utils.ts";
-import { resolveGoogleCloudProjectFromProcess } from "../../../platform/gcp-project.ts";
 import type {
   PortableResourceRef,
   PortableResourceResolution,
@@ -68,8 +49,6 @@ type PortableBackendDefinition = {
   queue?: PortableQueueBackendRuntime;
 };
 
-let portablePubSubPromise: Promise<PubSub> | undefined;
-
 export function sanitizeName(name: string): string {
   const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
@@ -84,178 +63,21 @@ function resolvePortableQueueName(resource: PortableResourceRef): string {
   return sanitizeName(resource.backing_resource_name ?? resource.id);
 }
 
-function resolvePortablePubSubSubscriptionName(
-  resource: PortableResourceRef,
-): string {
-  return `${resolvePortableQueueName(resource)}-subscription`;
-}
-
-function isNotFoundError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /not found|404|NoSuchEntity|ResourceNotFound/i.test(message);
-}
-
-function missingPortablePostgresRequirements(): string[] {
-  return resolvePostgresUrl() ? [] : ["POSTGRES_URL or DATABASE_URL"];
-}
-
 function missingPortablePgVectorRequirements(): string[] {
-  const missing = missingPortablePostgresRequirements();
+  const missing: string[] = [];
+  if (!resolvePostgresUrl()) {
+    missing.push("POSTGRES_URL or DATABASE_URL");
+  }
   if (optionalEnv("PGVECTOR_ENABLED") !== "true") {
     missing.push("PGVECTOR_ENABLED=true");
   }
   return missing;
 }
 
-function missingPortableK8sSecretRequirements(): string[] {
-  return [
-    ...(optionalEnv("K8S_API_SERVER") || getEnv("KUBERNETES_SERVICE_HOST")
-      ? []
-      : ["K8S_API_SERVER or in-cluster Kubernetes service env"]),
-    ...(optionalEnv("K8S_BEARER_TOKEN") ||
-        getEnv("KUBERNETES_SERVICE_HOST")
-      ? []
-      : ["K8S_BEARER_TOKEN or in-cluster service account token"]),
-    ...(optionalEnv("K8S_NAMESPACE") || getEnv("KUBERNETES_SERVICE_HOST")
-      ? []
-      : ["K8S_NAMESPACE or in-cluster service account namespace"]),
-  ];
-}
-
-function resolveAwsRegion(): string {
-  return optionalEnv("AWS_REGION") ?? "us-east-1";
-}
-
-function createPortableSqsClient(): SQSClient {
-  const accessKeyId = optionalEnv("AWS_ACCESS_KEY_ID");
-  const secretAccessKey = optionalEnv("AWS_SECRET_ACCESS_KEY");
-  return new SQSClient({
-    region: resolveAwsRegion(),
-    ...(accessKeyId && secretAccessKey
-      ? {
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-      }
-      : {}),
-  });
-}
-
-async function ensurePortableAwsQueue(
-  resource: PortableResourceRef,
-): Promise<string> {
-  const client = createPortableSqsClient();
-  const queueName = resolvePortableQueueName(resource);
-  const attributes: Record<string, string> = {};
-  const config = resource.config && typeof resource.config === "object"
-    ? resource.config as Record<string, unknown>
-    : {};
-  const queueConfig = config.queue && typeof config.queue === "object"
-    ? config.queue as Record<string, unknown>
-    : {};
-  if (typeof queueConfig.deliveryDelaySeconds === "number") {
-    attributes.DelaySeconds = String(
-      Math.max(0, Math.floor(queueConfig.deliveryDelaySeconds)),
-    );
-  }
-  const created = await client.send(
-    new CreateQueueCommand({
-      QueueName: queueName,
-      ...(Object.keys(attributes).length > 0 ? { Attributes: attributes } : {}),
-    }),
-  );
-  if (created.QueueUrl) {
-    return created.QueueUrl;
-  }
-  const existing = await client.send(
-    new GetQueueUrlCommand({ QueueName: queueName }),
-  );
-  if (!existing.QueueUrl) {
-    throw new Error(`Unable to resolve SQS queue URL for "${queueName}"`);
-  }
-  return existing.QueueUrl;
-}
-
-async function deletePortableAwsQueue(
-  resource: PortableResourceRef,
-): Promise<void> {
-  const client = createPortableSqsClient();
-  const queueUrl = resource.backing_resource_id ||
-    await ensurePortableAwsQueue(resource);
-  await client.send(
-    new DeleteQueueCommand({
-      QueueUrl: queueUrl,
-    }),
-  );
-}
-
-async function createPortablePubSubClient(): Promise<PubSub> {
-  if (!portablePubSubPromise) {
-    portablePubSubPromise = (async () => {
-      const { PubSub } = await import("@google-cloud/pubsub");
-      const projectId = resolveGoogleCloudProjectFromProcess();
-      return new PubSub({
-        ...(projectId ? { projectId } : {}),
-        ...(optionalEnv("GOOGLE_APPLICATION_CREDENTIALS")
-          ? { keyFilename: optionalEnv("GOOGLE_APPLICATION_CREDENTIALS") }
-          : {}),
-      });
-    })();
-  }
-  return portablePubSubPromise;
-}
-
-async function ensurePortableGcpQueue(
-  resource: PortableResourceRef,
-): Promise<string> {
-  const pubsub = await createPortablePubSubClient();
-  const topicName = resolvePortableQueueName(resource);
-  const subscriptionName = resolvePortablePubSubSubscriptionName(resource);
-  const [topic] = await pubsub.topic(topicName).get({ autoCreate: true });
-  const [subscriptionExists] = await pubsub.subscription(subscriptionName)
-    .exists();
-  if (!subscriptionExists) {
-    await topic.createSubscription(subscriptionName);
-  }
-  return subscriptionName;
-}
-
-async function deletePortableGcpQueue(
-  resource: PortableResourceRef,
-): Promise<void> {
-  const pubsub = await createPortablePubSubClient();
-  const topicName = resolvePortableQueueName(resource);
-  const subscriptionName = resolvePortablePubSubSubscriptionName(resource);
-  try {
-    await pubsub.subscription(subscriptionName).delete();
-  } catch (error) {
-    if (!isNotFoundError(error)) {
-      throw error;
-    }
-  }
-  try {
-    await pubsub.topic(topicName).delete();
-  } catch (error) {
-    if (!isNotFoundError(error)) {
-      throw error;
-    }
-  }
-}
-
-async function clearPortableRedisQueue(
-  resource: PortableResourceRef,
-): Promise<void> {
-  const redisUrl = resolveRedisUrl();
-  if (!redisUrl) return;
-  const client = await createClient({ url: redisUrl }).connect();
-  try {
-    await client.del(`takos:local:queue:${resolvePortableQueueName(resource)}`);
-  } finally {
-    await client.close().catch(() => undefined);
-  }
-}
-
+// Multi-cloud materialization (aws/gcp/k8s: DynamoDB/Firestore/S3/GCS/SQS/PubSub
+// secret managers) is operator-substrate scope owned by OpenTofu RunnerProfiles,
+// not the Takos worker. Only the native `cloudflare` backend and the portable
+// self-hosted `local` backend are provisioned in-worker.
 const PORTABLE_BACKEND_REGISTRY: Record<
   PortableBackend,
   PortableBackendDefinition
@@ -314,291 +136,6 @@ const PORTABLE_BACKEND_REGISTRY: Record<
     },
     missingRequirements: {
       vector_index: missingPortablePgVectorRequirements,
-    },
-  },
-  aws: {
-    resolutions: {
-      sql: {
-        mode: "backend-backed",
-        backend: "postgres-schema-d1-adapter",
-        requirements: ["POSTGRES_URL or DATABASE_URL"],
-      },
-      object_store: {
-        mode: "backend-backed",
-        backend: "s3-object-store",
-        requirements: [],
-      },
-      kv: {
-        mode: "backend-backed",
-        backend: "dynamo-kv-store",
-        requirements: [
-          "AWS_DYNAMO_KV_TABLE or AWS_DYNAMO_HOSTNAME_ROUTING_TABLE",
-        ],
-      },
-      queue: {
-        mode: "backend-backed",
-        backend: "sqs-queue",
-        requirements: [],
-      },
-      vector_index: {
-        mode: "backend-backed",
-        backend: "pgvector-store",
-        requirements: ["POSTGRES_URL or DATABASE_URL", "PGVECTOR_ENABLED=true"],
-      },
-      analytics_store: {
-        mode: "takos-runtime",
-        backend: "analytics-engine-binding",
-        requirements: [],
-      },
-      workflow_runtime: {
-        mode: "takos-runtime",
-        backend: "workflow-binding",
-        requirements: [],
-      },
-      durable_namespace: {
-        mode: "takos-runtime",
-        backend: "persistent-durable-objects",
-        requirements: [],
-      },
-      secret: {
-        mode: "backend-backed",
-        backend: "aws-secrets-manager",
-        requirements: [],
-      },
-    },
-    missingRequirements: {
-      sql: missingPortablePostgresRequirements,
-      kv: () =>
-        optionalEnv("AWS_DYNAMO_KV_TABLE") ||
-          optionalEnv("AWS_DYNAMO_HOSTNAME_ROUTING_TABLE")
-          ? []
-          : ["AWS_DYNAMO_KV_TABLE or AWS_DYNAMO_HOSTNAME_ROUTING_TABLE"],
-      vector_index: missingPortablePgVectorRequirements,
-    },
-    createSecretStore: () =>
-      createAwsSecretsStore({
-        region: resolveAwsRegion(),
-        accessKeyId: optionalEnv("AWS_ACCESS_KEY_ID"),
-        secretAccessKey: optionalEnv("AWS_SECRET_ACCESS_KEY"),
-      }),
-    createObjectStoreAdapter: (resource) => {
-      const bucketName = resource.backing_resource_name;
-      if (!bucketName) return null;
-      return createS3ObjectStore({
-        region: resolveAwsRegion(),
-        bucket: bucketName,
-        accessKeyId: optionalEnv("AWS_ACCESS_KEY_ID"),
-        secretAccessKey: optionalEnv("AWS_SECRET_ACCESS_KEY"),
-        endpoint: optionalEnv("AWS_S3_ENDPOINT"),
-      });
-    },
-    createKvStoreAdapter: (resource, createPrefixedKvNamespace) => {
-      const tableName = optionalEnv("AWS_DYNAMO_KV_TABLE") ??
-        optionalEnv("AWS_DYNAMO_HOSTNAME_ROUTING_TABLE");
-      if (!tableName) return null;
-      const base = createDynamoKvStore({
-        region: resolveAwsRegion(),
-        tableName,
-        accessKeyId: optionalEnv("AWS_ACCESS_KEY_ID"),
-        secretAccessKey: optionalEnv("AWS_SECRET_ACCESS_KEY"),
-      });
-      return createPrefixedKvNamespace(
-        base,
-        sanitizeName(resource.backing_resource_name ?? resource.id),
-      );
-    },
-    queue: {
-      ensure: async (resource) => {
-        await ensurePortableAwsQueue(resource);
-      },
-      delete: deletePortableAwsQueue,
-      resolveReferenceId: ensurePortableAwsQueue,
-    },
-  },
-  gcp: {
-    resolutions: {
-      sql: {
-        mode: "backend-backed",
-        backend: "postgres-schema-d1-adapter",
-        requirements: ["POSTGRES_URL or DATABASE_URL"],
-      },
-      object_store: {
-        mode: "backend-backed",
-        backend: "gcs-object-store",
-        requirements: [],
-      },
-      kv: {
-        mode: "backend-backed",
-        backend: "firestore-kv-store",
-        requirements: ["GCP_FIRESTORE_KV_COLLECTION"],
-      },
-      queue: {
-        mode: "backend-backed",
-        backend: "pubsub-queue",
-        requirements: [],
-      },
-      vector_index: {
-        mode: "backend-backed",
-        backend: "pgvector-store",
-        requirements: ["POSTGRES_URL or DATABASE_URL", "PGVECTOR_ENABLED=true"],
-      },
-      analytics_store: {
-        mode: "takos-runtime",
-        backend: "analytics-engine-binding",
-        requirements: [],
-      },
-      workflow_runtime: {
-        mode: "takos-runtime",
-        backend: "workflow-binding",
-        requirements: [],
-      },
-      durable_namespace: {
-        mode: "takos-runtime",
-        backend: "persistent-durable-objects",
-        requirements: [],
-      },
-      secret: {
-        mode: "backend-backed",
-        backend: "gcp-secret-manager",
-        requirements: [],
-      },
-    },
-    missingRequirements: {
-      sql: missingPortablePostgresRequirements,
-      kv: () =>
-        optionalEnv("GCP_FIRESTORE_KV_COLLECTION")
-          ? []
-          : ["GCP_FIRESTORE_KV_COLLECTION"],
-      vector_index: missingPortablePgVectorRequirements,
-    },
-    createSecretStore: () =>
-      createGcpSecretStore({
-        projectId: resolveGoogleCloudProjectFromProcess(),
-        keyFilePath: optionalEnv("GOOGLE_APPLICATION_CREDENTIALS"),
-      }),
-    createObjectStoreAdapter: (resource) => {
-      const bucketName = resource.backing_resource_name;
-      if (!bucketName) return null;
-      return createGcsObjectStore({
-        bucket: bucketName,
-        projectId: resolveGoogleCloudProjectFromProcess(),
-        keyFilePath: optionalEnv("GOOGLE_APPLICATION_CREDENTIALS"),
-      });
-    },
-    createKvStoreAdapter: (resource, createPrefixedKvNamespace) => {
-      const collectionName = optionalEnv("GCP_FIRESTORE_KV_COLLECTION");
-      if (!collectionName) return null;
-      const base = createFirestoreKvStore({
-        projectId: resolveGoogleCloudProjectFromProcess(),
-        keyFilePath: optionalEnv("GOOGLE_APPLICATION_CREDENTIALS"),
-        collectionName,
-      });
-      return createPrefixedKvNamespace(
-        base,
-        sanitizeName(resource.backing_resource_name ?? resource.id),
-      );
-    },
-    queue: {
-      ensure: async (resource) => {
-        await ensurePortableGcpQueue(resource);
-      },
-      delete: deletePortableGcpQueue,
-      resolveReferenceId: async (resource) =>
-        await ensurePortableGcpQueue(resource),
-    },
-  },
-  k8s: {
-    resolutions: {
-      sql: {
-        mode: "backend-backed",
-        backend: "postgres-schema-d1-adapter",
-        requirements: ["POSTGRES_URL or DATABASE_URL"],
-      },
-      object_store: {
-        mode: "backend-backed",
-        backend: "s3-compatible-object-store",
-        requirements: [],
-      },
-      kv: {
-        mode: "takos-runtime",
-        backend: "persistent-kv-namespace",
-        requirements: [],
-      },
-      queue: {
-        mode: "backend-backed",
-        backend: "redis-queue",
-        requirements: ["REDIS_URL"],
-      },
-      vector_index: {
-        mode: "backend-backed",
-        backend: "pgvector-store",
-        requirements: ["POSTGRES_URL or DATABASE_URL", "PGVECTOR_ENABLED=true"],
-      },
-      analytics_store: {
-        mode: "takos-runtime",
-        backend: "analytics-engine-binding",
-        requirements: [],
-      },
-      workflow_runtime: {
-        mode: "takos-runtime",
-        backend: "workflow-binding",
-        requirements: [],
-      },
-      durable_namespace: {
-        mode: "takos-runtime",
-        backend: "persistent-durable-objects",
-        requirements: [],
-      },
-      secret: {
-        mode: "backend-backed",
-        backend: "k8s-secret",
-        requirements: [
-          "K8S_API_SERVER or in-cluster Kubernetes service env",
-          "K8S_BEARER_TOKEN or in-cluster service account token",
-          "K8S_NAMESPACE or in-cluster service account namespace",
-        ],
-      },
-    },
-    missingRequirements: {
-      sql: missingPortablePostgresRequirements,
-      queue: () => resolveRedisUrl() ? [] : ["REDIS_URL"],
-      vector_index: missingPortablePgVectorRequirements,
-      secret: missingPortableK8sSecretRequirements,
-    },
-    createSecretStore: () =>
-      createK8sSecretStore({
-        apiServer: optionalEnv("K8S_API_SERVER"),
-        namespace: optionalEnv("K8S_NAMESPACE"),
-        bearerToken: optionalEnv("K8S_BEARER_TOKEN"),
-        caFilePath: optionalEnv("K8S_CA_CERT_FILE"),
-      }),
-    createObjectStoreAdapter: (resource) => {
-      const bucketName = resource.backing_resource_name;
-      if (!bucketName) return null;
-      return createS3ObjectStore({
-        region: resolveAwsRegion(),
-        bucket: bucketName,
-        accessKeyId: optionalEnv("AWS_ACCESS_KEY_ID"),
-        secretAccessKey: optionalEnv("AWS_SECRET_ACCESS_KEY"),
-        endpoint: optionalEnv("AWS_S3_ENDPOINT"),
-      });
-    },
-    queue: {
-      ensure: async (resource) => {
-        const redisUrl = resolveRedisUrl();
-        if (!redisUrl) {
-          throw new Error(
-            "portable redis queue invariant violated: REDIS_URL must be set",
-          );
-        }
-        createRedisQueue(
-          redisUrl,
-          resolvePortableQueueName(resource),
-        );
-      },
-      delete: clearPortableRedisQueue,
-      resolveReferenceId: async (resource) =>
-        resolvePortableQueueName(resource),
     },
   },
 };
@@ -694,7 +231,6 @@ export async function resolvePortableQueueReferenceId(
 }
 
 export function resetPortableBackendRuntimeCachesForTests(): void {
-  portablePubSubPromise = undefined;
 }
 
 export function getPortableQueueBackendOps(

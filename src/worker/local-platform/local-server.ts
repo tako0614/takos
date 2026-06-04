@@ -12,9 +12,6 @@ import type { LocalFetch } from "./runtime-types.ts";
 import { serveNodeFetch } from "./fetch-server.ts";
 import { logInfo } from "../shared/utils/logger.ts";
 import {
-  createLocalDispatchFetch,
-  createLocalExecutorHostFetch,
-  createLocalRuntimeHostFetch,
   createLocalWebFetch,
   DEFAULT_LOCAL_PORTS,
 } from "./runtime.ts";
@@ -51,29 +48,5 @@ export async function startLocalWebServer(): Promise<void> {
     service: "takos",
     defaultPort: DEFAULT_LOCAL_PORTS.web,
     createFetch: createLocalWebFetch,
-  });
-}
-
-export async function startLocalDispatchServer(): Promise<void> {
-  await startCanonicalLocalServer({
-    service: "takos-dispatch",
-    defaultPort: DEFAULT_LOCAL_PORTS.dispatch,
-    createFetch: createLocalDispatchFetch,
-  });
-}
-
-export async function startLocalRuntimeHostServer(): Promise<void> {
-  await startCanonicalLocalServer({
-    service: "takos-runtime-host",
-    defaultPort: DEFAULT_LOCAL_PORTS.runtimeHost,
-    createFetch: createLocalRuntimeHostFetch,
-  });
-}
-
-export async function startLocalExecutorHostServer(): Promise<void> {
-  await startCanonicalLocalServer({
-    service: "takos-executor-host",
-    defaultPort: DEFAULT_LOCAL_PORTS.executorHost,
-    createFetch: createLocalExecutorHostFetch,
   });
 }

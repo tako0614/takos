@@ -1,17 +1,15 @@
 /**
- * Executor RPC Proxy API
+ * Executor RPC dispatch
  *
- * Exposes /internal/executor-rpc/* endpoints on the main takos worker.
- * The executor-host (thin proxy) forwards container Control RPC requests here
- * via its TAKOS_WORKER service binding, keeping all DB/service access within
- * the main control-plane worker.
- *
- * Authentication: validates X-Takos-Internal header (shared secret between
- * executor-host and main worker via env var).
+ * The executor-host verifies the per-run proxy token + scope, then dispatches
+ * each container Control RPC into the matching handler IN-PROCESS via
+ * `dispatchControlRpc` below. takos / takosumi / the executor-host all live in
+ * the same worker isolate, so there is no service-binding hop: the request body
+ * is already a parsed record, the run is already token-bound, and the handlers
+ * read DB / services directly. All handlers keep their original behavior; only
+ * the redundant self-HTTP round-trip + internal-token recheck are gone.
  */
 
-import { Hono } from "hono";
-import { verifyTakosumiInternalRequestFromHeaders as verifyTakosInternalRequestFromHeaders } from "takosumi-contract/internal/rpc";
 import type { Env } from "../shared/types/index.ts";
 import { logError } from "../shared/utils/logger.ts";
 
@@ -48,16 +46,14 @@ import {
 
 import { recordRunUsageBatch } from "../application/services/app-usage/usage-recorder.ts";
 import {
+  agentControlRpcPath,
   CONTROL_RPC_ENDPOINTS,
   err,
   ok,
-  parseExecutorRpcBody,
 } from "./container-hosts/executor-utils.ts";
 import { getDb } from "../infra/db/index.ts";
 import { runs } from "../infra/db/schema.ts";
 import { eq } from "drizzle-orm";
-
-const APP_AGENT_CONTROL_BACKEND_CAPABILITY = "app.agent-control.backend";
 
 // Terminal run statuses: a run in any of these states must not be handed
 // deployment-global provider keys. Mirrors isTerminalRunStatus in
@@ -67,10 +63,9 @@ const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 /**
  * Least-privilege gate for the deployment-global provider key handout.
  *
- * The caller is already authenticated as the run bound to `body.runId` (the
- * executor-host overwrites this field from the verified proxy token, and the
- * signed-backend bridge derives it from the token-bound actor — see
- * forwardToTakosumiAgentControl). This check adds a freshness requirement: the
+ * The caller is already authenticated as the run bound to `body.runId`: the
+ * executor-host overwrites this field from the verified proxy token before
+ * dispatching here in-process. This check adds a freshness requirement: the
  * token-bound run must still be active. A run that has gone terminal (or no
  * longer exists) must not be able to keep pulling shared provider credentials,
  * even though its proxy token may not yet have been revoked.
@@ -112,62 +107,15 @@ async function rejectApiKeysIfRunInactive(
 }
 
 // ---------------------------------------------------------------------------
-// Auth middleware: validate internal service binding token
+// In-process control-RPC dispatch
 // ---------------------------------------------------------------------------
-
-function validateInternalToken(request: Request, env: Env): boolean {
-  const token = request.headers.get("X-Takos-Internal");
-  if (!token) return false;
-  const expected = env.EXECUTOR_PROXY_SECRET;
-  if (!expected || typeof expected !== "string") return false;
-  // Constant-time comparison
-  if (token.length !== expected.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < token.length; i++) {
-    mismatch |= token.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
-
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
-
-export function createExecutorProxyRouter() {
-  const router = new Hono<{ Bindings: Env }>();
-
-  // Auth guard for all routes
-  router.use("*", async (c, next): Promise<void | Response> => {
-    if (!validateInternalToken(c.req.raw, c.env)) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-    await next();
-  });
-  router.route("/", createExecutorHandlersRouter());
-
-  return router;
-}
-
-export function createAgentControlBackendRouter() {
-  const router = new Hono<{ Bindings: Env }>();
-
-  router.use("*", async (c, next): Promise<void | Response> => {
-    if (!await validateSignedBackendRequest(c.req.raw, c.env)) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-    await next();
-  });
-  router.route("/", createExecutorHandlersRouter());
-
-  return router;
-}
 
 /**
  * Generic control-RPC handlers, keyed by endpoint slug. Every handler takes the
  * parsed body and env and returns a Response; tool-cleanup is normalized to the
  * same shape (it ignores env). The two bespoke endpoints (run-usage, api-keys)
  * are NOT here — they carry extra metering / least-privilege logic and are
- * registered directly below.
+ * dispatched directly below.
  */
 const CONTROL_RPC_HANDLERS: Record<
   string,
@@ -203,77 +151,87 @@ const CONTROL_RPC_HANDLERS: Record<
   "tool-cleanup": (body) => handleToolCleanup(body),
 };
 
-function createExecutorHandlersRouter() {
-  const router = new Hono<{ Bindings: Env }>();
+// --- Bespoke endpoint handlers (run-usage, api-keys) ---
+//
+// These two carry extra metering / least-privilege logic and so are not in the
+// generic CONTROL_RPC_HANDLERS map. Each takes the already-parsed body + env
+// and returns a Response, matching the generic handler shape.
 
-  // --- Generic control-RPC routes (parse + dispatch), derived from the single
-  // CONTROL_RPC_ENDPOINTS registry so route / scope / forward coverage stays in
-  // lockstep. Bespoke endpoints (run-usage, api-keys) are skipped here and
-  // registered below. A registry entry without a handler is a build/boot bug,
-  // so we fail loudly rather than silently 404. ---
-  for (const { name } of CONTROL_RPC_ENDPOINTS) {
-    const handler = CONTROL_RPC_HANDLERS[name];
-    if (!handler) continue; // bespoke (run-usage / api-keys) — see below
-    router.post(`/${name}`, async (c) => {
-      const parsed = await parseExecutorRpcBody(c.req);
-      if (!parsed.ok) return parsed.response;
-      return handler(parsed.value, c.env);
+async function handleRunUsage(
+  body: Record<string, unknown>,
+  env: Env,
+): Promise<Response> {
+  const runId = typeof body.runId === "string" ? body.runId : undefined;
+  if (!runId) return err("Missing runId", 400);
+  try {
+    await recordRunUsageBatch(env, runId);
+    return ok({ recorded: true });
+  } catch (usageErr) {
+    logError(`Usage recording failed for run ${runId}`, usageErr, {
+      module: "executor-proxy-api",
     });
+    return ok({ recorded: false, error: "usage_recording_failed" });
   }
-
-  // --- Run usage metering ---
-
-  router.post("/run-usage", async (c) => {
-    const body = await c.req.json() as { runId?: string };
-    if (!body.runId) return err("Missing runId", 400);
-    try {
-      await recordRunUsageBatch(c.env, body.runId);
-      return ok({ recorded: true });
-    } catch (usageErr) {
-      logError(`Usage recording failed for run ${body.runId}`, usageErr, {
-        module: "executor-proxy-api",
-      });
-      return ok({ recorded: false, error: "usage_recording_failed" });
-    }
-  });
-
-  // --- API keys ---
-
-  router.post("/api-keys", async (c) => {
-    const parsed = await parseExecutorRpcBody(c.req);
-    if (!parsed.ok) return parsed.response;
-    // Only hand out the deployment-global provider keys while the token-bound
-    // run is still active; a missing/terminal run is rejected.
-    const inactive = await rejectApiKeysIfRunInactive(parsed.value, c.env);
-    if (inactive) return inactive;
-    return ok({
-      openai: c.env.OPENAI_API_KEY ?? null,
-      anthropic: c.env.ANTHROPIC_API_KEY ?? null,
-      google: c.env.GOOGLE_API_KEY ?? null,
-    });
-  });
-
-  return router;
 }
 
-async function validateSignedBackendRequest(
-  request: Request,
+async function handleApiKeys(
+  body: Record<string, unknown>,
   env: Env,
-): Promise<boolean> {
-  const secret = env.TAKOS_INTERNAL_SERVICE_SECRET;
-  if (!secret) return false;
-  const url = new URL(request.url);
-  const body = await request.clone().text();
-  const verified = await verifyTakosInternalRequestFromHeaders({
-    method: request.method,
-    path: url.pathname,
-    query: url.search,
-    body,
-    secret,
-    headers: request.headers,
-    expectedCaller: "takosumi",
-    expectedAudience: "takos-worker",
-    requiredCapabilities: [APP_AGENT_CONTROL_BACKEND_CAPABILITY],
+): Promise<Response> {
+  // Only hand out the deployment-global provider keys while the token-bound
+  // run is still active; a missing/terminal run is rejected.
+  const inactive = await rejectApiKeysIfRunInactive(body, env);
+  if (inactive) return inactive;
+  return ok({
+    openai: env.OPENAI_API_KEY ?? null,
+    anthropic: env.ANTHROPIC_API_KEY ?? null,
+    google: env.GOOGLE_API_KEY ?? null,
   });
-  return verified !== undefined;
+}
+
+/**
+ * Lookup from the agent-control RPC path the executor-host already verified
+ * (`/api/internal/v1/agent-control/<name>`) to the in-process handler. Derived
+ * from the single CONTROL_RPC_ENDPOINTS registry so route / scope / dispatch
+ * coverage stays in lockstep: every registry entry resolves either to a generic
+ * handler or to one of the two bespoke handlers, and a registry entry that
+ * resolves to neither is a build/boot bug.
+ */
+const CONTROL_RPC_DISPATCH: ReadonlyMap<
+  string,
+  (body: Record<string, unknown>, env: Env) => Response | Promise<Response>
+> = new Map(
+  CONTROL_RPC_ENDPOINTS.map(({ name }) => {
+    const handler = CONTROL_RPC_HANDLERS[name] ??
+      (name === "run-usage"
+        ? handleRunUsage
+        : name === "api-keys"
+        ? handleApiKeys
+        : undefined);
+    if (!handler) {
+      throw new Error(`No control-RPC handler registered for "${name}"`);
+    }
+    return [agentControlRpcPath(name), handler] as const;
+  }),
+);
+
+/**
+ * Dispatch a verified container Control RPC to its handler IN-PROCESS.
+ *
+ * The executor-host has already verified the per-run proxy token, overwritten
+ * runId/serviceId from the token, and checked endpoint scope, so `body` is a
+ * parsed, token-bound record. We map the agent-control path to its handler and
+ * invoke it directly — no service-binding hop, no internal-token recheck.
+ *
+ * Returns `null` only when `path` is not a mapped control-RPC path, so the
+ * caller can surface a 404 for an unknown endpoint.
+ */
+export function dispatchControlRpc(
+  path: string,
+  body: Record<string, unknown>,
+  env: Env,
+): Response | Promise<Response> | null {
+  const handler = CONTROL_RPC_DISPATCH.get(path);
+  if (!handler) return null;
+  return handler(body, env);
 }

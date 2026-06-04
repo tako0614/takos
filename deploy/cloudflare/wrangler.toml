@@ -316,8 +316,9 @@ bucket_name = "takos-offload"
 #   runtime container as JWT_PUBLIC_KEY.
 #
 # Internal executor RPC:
-# - EXECUTOR_PROXY_SECRET: Shared secret accepted by /internal/executor-rpc/*
-#   and by the in-process executor container host.
+# - EXECUTOR_PROXY_SECRET: Shared secret carried into the in-process executor
+#   container host env. Container Control RPC is dispatched in-process after the
+#   per-run proxy token + scope are verified (no service-binding hop).
 #
 # OCI deployment adapter:
 # - OCI_ORCHESTRATOR_TOKEN: optional auth token for image-backed services /

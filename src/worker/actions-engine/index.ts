@@ -1,37 +1,32 @@
 /**
  * takos-actions-engine
  *
- * GitHub Actions 互換ワークフローの parser / validator / planner ライブラリ。
+ * GitHub Actions 互換ワークフローの in-process な parser / validator / planner。
  *
- * NOTE: in-process な実行レイヤ (JobScheduler / StepRunner / shell executor /
- * 実行コンテキストビルダー) は提供しない。Takos の control plane は queue 分散・
- * remote-runtime な独自 executor を実装しており、この package を runnable engine
- * としては consume しない。公開するのは parser / validator と実行計画の算出のみ。
+ * NOTE: runnable な式評価エンジン (tokenizer / evaluator / 実行コンテキストビルダー)
+ * は提供しない。Takos の control plane は queue 分散・remote-runtime な独自 executor
+ * を実装しており、step の `if:` 条件評価は worker runtime 側の
+ * `src/worker/runtime/queues/workflow-expressions.ts` が担う (always/success/failure/
+ * cancelled と限定的な `${{ ... }}` lookup のみをサポートする subset)。この module が
+ * 公開するのは workflow の parse / validate と dependency / matrix 展開を踏まえた
+ * 実行計画の算出のみ。
  */
 
 // 公開型
 export type {
-  ActionResolver,
   // トリガー型
   BranchFilter,
   Conclusion,
   ConcurrencyConfig,
   ContainerConfig,
   DiagnosticSeverity,
-  ExecutionContext,
   ExecutionPlan,
-  // コンテキスト型
-  GitHubContext,
-  InputsContext,
   Job,
-  JobContext,
   JobDefaults,
   JobOutputs,
-  JobResult,
   JobStrategy,
   MatrixConfig,
   MatrixContext,
-  NeedsContext,
   // パーサー / スケジューラー型
   ParsedWorkflow,
   PermissionLevel,
@@ -39,15 +34,9 @@ export type {
   PullRequestEventType,
   PullRequestTriggerConfig,
   RepositoryDispatchConfig,
-  RunnerContext,
-  // 実行状態型
-  RunStatus,
   ScheduleTriggerConfig,
   // ステップ / ジョブ / ワークフロー型
   Step,
-  StepExecutor,
-  StepResult,
-  StepsContext,
   StrategyContext,
   Workflow,
   WorkflowCallConfig,
@@ -57,7 +46,6 @@ export type {
   WorkflowDiagnostic,
   WorkflowDispatchConfig,
   WorkflowDispatchInput,
-  WorkflowResult,
   WorkflowTrigger,
 } from "./workflow-models.ts";
 

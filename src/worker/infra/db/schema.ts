@@ -36,8 +36,6 @@ export {
   chunks,
   commits,
   files,
-  gitCommits,
-  gitFileChanges,
   indexJobs,
   prComments,
   prReviews,

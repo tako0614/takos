@@ -10,7 +10,6 @@ import type {
 } from "../workflow-models.ts";
 import type { DependencyGraph } from "./dependency.ts";
 import { buildMatrixJobId, expandMatrix } from "./matrix.ts";
-import { conditionInvokesStatusFunction } from "../parser/expression.ts";
 
 // --- needsInput 正規化 ---
 
@@ -138,18 +137,4 @@ export function buildExpandedDependencyGraph(
   }
 
   return { nodes, edges, reverseEdges };
-}
-
-/**
- * `always()` / `failure()` / `cancelled()` を関数として呼び出している if 条件は
- * 依存スキップ / after-failure skip の早期 return を抑制する必要がある。
- *
- * 生文字列への正規表現マッチは `env.X == 'always('` のような文字列リテラルを
- * 誤検出するため、トークン列上で「識別子 + `(`」を判定する
- * conditionInvokesStatusFunction に委譲する。
- */
-export function shouldSuppressDependencySkip(
-  condition: string | undefined,
-): boolean {
-  return conditionInvokesStatusFunction(condition);
 }

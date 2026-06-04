@@ -90,7 +90,7 @@ untrusted party, so it keeps a real credential:
 
 ### 3. Cross-service (operator / account-plane) → worker → ONE signed-envelope
 
-`/internal/auth/*`, `/internal/scheduled`, `/internal/default-app-distribution`, `/api/internal/v1/default-apps/status`,
+`/internal/scheduled`, `/internal/default-app-distribution`, `/api/internal/v1/default-apps/status`,
 and the agent-control backend are called by a **different service / trust domain** (the operator distribution / takosumi
 account-plane, or a scheduler). These cross a real trust boundary and legitimately need a credential.
 
@@ -99,8 +99,8 @@ account-plane, or a scheduler). These cross a real trust boundary and legitimate
   `capabilities` / nonce / timestamp (replay-protected). It already backs `/internal/executor-rpc` (signed-backend mode)
   and `/api/internal/v1/agent-control-backend`.
 - **Decision:** the signed envelope is the ONE cross-service primitive. The ad-hoc plain-secret gates —
-  `validateInternalApiAccess` (hostname + `X-Takos-Internal-Secret`), `validateAuthProxyAccess`
-  (`X-Takos-Auth-Proxy-Secret`), and the executor-proxy plain `EXECUTOR_PROXY_SECRET` mode — are **legacy** and converge
+  `validateInternalApiAccess` (hostname + `X-Takos-Internal-Secret`) and the executor-proxy plain
+  `EXECUTOR_PROXY_SECRET` mode — are **legacy** and converge
   onto it. They are load-bearing today (the plain secret is the only gate against Host-spoof/DNS-rebind), so removal is
   gated on the callers (operator distribution, in `takosumi/` / `takos-private/`) sending the signed envelope.
 

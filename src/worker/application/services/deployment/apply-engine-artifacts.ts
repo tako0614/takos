@@ -18,7 +18,7 @@ export type ApplyWorkerArtifact = {
 export type ApplyContainerArtifact = {
   kind: "container_image";
   imageRef: string;
-  backend?: "oci" | "ecs" | "cloud-run" | "k8s";
+  backend?: "oci";
   deployMessage?: string;
 };
 
@@ -58,12 +58,7 @@ export function parseApplyArtifact(input: unknown): ApplyArtifactInput | null {
     return {
       kind: "container_image",
       imageRef: parsed.imageRef,
-      ...(
-        backend === "oci" || backend === "ecs" ||
-          backend === "cloud-run" || backend === "k8s"
-          ? { backend }
-          : {}
-      ),
+      ...(backend === "oci" ? { backend } : {}),
       ...(typeof parsed.deployMessage === "string"
         ? { deployMessage: parsed.deployMessage }
         : {}),

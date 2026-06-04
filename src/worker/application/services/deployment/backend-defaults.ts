@@ -4,7 +4,6 @@ import type {
   DeploymentBackendRef,
   DeploymentEnv,
 } from "./models.ts";
-import { resolveGoogleCloudProject } from "../../../platform/gcp-project.ts";
 
 function hasText(value: string | undefined): boolean {
   return !!value?.trim();
@@ -15,21 +14,6 @@ function hasWorkersDispatchEnv(env: DeploymentEnv): boolean {
     hasText(env.WFP_DISPATCH_NAMESPACE);
 }
 
-function hasEcsEnv(env: DeploymentEnv): boolean {
-  return hasText(env.AWS_ECS_CLUSTER_ARN) &&
-    hasText(env.AWS_ECS_TASK_DEFINITION_FAMILY) &&
-    (hasText(env.AWS_ECS_REGION) || hasText(env.AWS_REGION));
-}
-
-function hasCloudRunEnv(env: DeploymentEnv): boolean {
-  return hasText(resolveGoogleCloudProject(env)) &&
-    (hasText(env.GCP_CLOUD_RUN_REGION) || hasText(env.GCP_REGION));
-}
-
-function hasK8sEnv(env: DeploymentEnv): boolean {
-  return hasText(env.K8S_NAMESPACE);
-}
-
 export function resolveDefaultDeploymentBackendName(
   env: DeploymentEnv,
   artifactKind: ArtifactKind,
@@ -38,9 +22,7 @@ export function resolveDefaultDeploymentBackendName(
     return hasWorkersDispatchEnv(env) ? "workers-dispatch" : "runtime-host";
   }
 
-  if (hasEcsEnv(env)) return "ecs";
-  if (hasCloudRunEnv(env)) return "cloud-run";
-  if (hasK8sEnv(env)) return "k8s";
+  // Container-image workloads are realized through the OCI orchestrator.
   return "oci";
 }
 

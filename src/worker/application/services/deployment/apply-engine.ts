@@ -33,7 +33,6 @@ import {
   validateTargetsAgainstDesiredState,
 } from "./diff.ts";
 import { topologicalSortApplyEntries } from "./apply-order.ts";
-import type { TranslationReport } from "./translation-report.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import { computeSHA256 } from "../../../shared/utils/hash.ts";
 import { buildManifestPlan } from "./apply-engine-plan.ts";
@@ -67,14 +66,12 @@ export interface ApplyResult {
   applied: ApplyEntryResult[];
   skipped: string[];
   diff: DiffResult;
-  translationReport: TranslationReport;
 }
 
 export type SafeApplyResult = ApplyResult;
 
 export interface PlanResult {
   diff: DiffResult;
-  translationReport: TranslationReport;
 }
 
 export interface ApplyDesiredStateOpts {
@@ -88,6 +85,29 @@ function summarizeDiffEntries(entries: DiffEntry[]): DiffResult["summary"] {
   const summary = { create: 0, update: 0, delete: 0, unchanged: 0 };
   for (const entry of entries) summary[entry.action]++;
   return summary;
+}
+
+/**
+ * Image-backed (container / service) workloads are realized through the OCI
+ * orchestrator, so they require `OCI_ORCHESTRATOR_URL` to be configured. Worker
+ * workloads need no extra precondition. This is the single deploy-time gate that
+ * replaced the always-compatible translation report.
+ */
+function assertOciOrchestratorConfigured(
+  desiredState: GroupDesiredState,
+  env: Env,
+): void {
+  const hasImageBackedWorkload = Object.values(desiredState.workloads).some(
+    (workload) =>
+      workload.category !== "worker" &&
+      typeof workload.spec.image === "string" &&
+      workload.spec.image.trim().length > 0,
+  );
+  if (!hasImageBackedWorkload) return;
+  if (env.OCI_ORCHESTRATOR_URL?.trim()) return;
+  throw new Error(
+    "Tenant runtime translation is not supported: OCI_ORCHESTRATOR_URL is required",
+  );
 }
 
 export async function applyArtifactChangesToDiff(
@@ -483,9 +503,7 @@ export async function applyDesiredState(
     groupId,
     manifest: scopedPublicationManifest,
   });
-  applyEngineDeps.assertTranslationSupported(plan.translationReport, {
-    ...applyEngineDeps.buildTranslationContextFromEnv(env),
-  });
+  assertOciOrchestratorConfigured(plan.desiredState, env);
 
   const artifactAwareDiff = await applyArtifactChangesToDiff(
     plan.diff,
@@ -502,7 +520,6 @@ export async function applyDesiredState(
     applied: [],
     skipped: [],
     diff,
-    translationReport: plan.translationReport,
   };
   const routeEntries = ordered.filter((entry) =>
     entry.category === "route" && entry.action !== "unchanged"
@@ -740,6 +757,5 @@ export async function planManifest(
 
   return {
     diff: filterDiffByTargets(plan.diff, opts.target),
-    translationReport: plan.translationReport,
   };
 }

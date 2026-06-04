@@ -19,10 +19,6 @@ import type {
   IndexJobQueueMessage,
   StorageEnv,
 } from "../../shared/types/index.ts";
-import {
-  signTakosumiInternalRequest as signTakosInternalRequest,
-  type TakosumiActorContext as TakosActorContext,
-} from "takosumi-contract/internal/rpc";
 
 // ---------------------------------------------------------------------------
 // Environment types
@@ -48,17 +44,16 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_CONTAINER: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER2?: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER3?: ContainerNamespace;
-  /** Service binding to main takos worker for control RPC forwarding. */
+  /**
+   * Legacy service binding to the main takos worker. Control RPC is now
+   * dispatched in-process (dispatchControlRpc), so this binding is no longer on
+   * the control-RPC path; it is retained for env-shape compatibility with the
+   * unified container-host env (withUnifiedContainerHostEnv).
+   */
   TAKOS_WORKER: {
     fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   };
-  /** Preferred service binding to takosumi for canonical agent-control RPC. */
-  TAKOSUMI?: {
-    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  };
-  TAKOSUMI_INTERNAL_URL?: string;
-  TAKOS_INTERNAL_SERVICE_SECRET?: string;
-  /** Shared secret for authenticating forwarded requests to the main worker. */
+  /** Shared secret carried into the unified container-host env. */
   EXECUTOR_PROXY_SECRET: string;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
@@ -534,126 +529,13 @@ export const CONTROL_RPC_ENDPOINTS: readonly ControlRpcEndpoint[] = [
   { name: "api-keys", scope: "provider-keys" },
 ];
 
-const CONTROL_RPC_PATH_MAP: Record<string, string> = Object.fromEntries(
-  CONTROL_RPC_ENDPOINTS.map(({ name }) => [
-    agentControlRpcPath(name),
-    `/internal/executor-rpc/${name}`,
-  ]),
+const CONTROL_RPC_PATHS: ReadonlySet<string> = new Set(
+  CONTROL_RPC_ENDPOINTS.map(({ name }) => agentControlRpcPath(name)),
 );
 
 /**
- * Check if a path should be forwarded to the control plane.
+ * Check if a path is a control-RPC endpoint that dispatchControlRpc handles.
  */
 export function isControlRpcPath(path: string): boolean {
-  return path in CONTROL_RPC_PATH_MAP;
-}
-
-/**
- * Forward a control RPC request to the main takos worker.
- * Returns null only when the path is not a mapped control RPC path.
- */
-export async function forwardToControlPlane(
-  path: string,
-  body: Record<string, unknown>,
-  env: Env,
-): Promise<Response | null> {
-  const targetPath = CONTROL_RPC_PATH_MAP[path];
-  if (!targetPath) return null;
-
-  try {
-    const takosumiResponse = await forwardToTakosumiAgentControl(
-      targetPath,
-      body,
-      env,
-    );
-    if (takosumiResponse) return takosumiResponse;
-  } catch (e) {
-    return err(
-      `Takosumi agent-control forwarding failed: ${
-        e instanceof Error ? e.message : String(e)
-      }`,
-      502,
-    );
-  }
-
-  const controlBinding = env.TAKOS_WORKER;
-  if (!controlBinding) {
-    return err("TAKOS_WORKER service binding not configured", 503);
-  }
-
-  try {
-    return await controlBinding.fetch(
-      new Request(`https://internal${targetPath}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Takos-Internal": env.EXECUTOR_PROXY_SECRET,
-        },
-        body: JSON.stringify(body),
-      }),
-    );
-  } catch (e) {
-    return err(
-      `Control plane forwarding failed: ${
-        e instanceof Error ? e.message : String(e)
-      }`,
-      502,
-    );
-  }
-}
-
-async function forwardToTakosumiAgentControl(
-  appExecutorRpcPath: string,
-  body: Record<string, unknown>,
-  env: Env,
-): Promise<Response | null> {
-  const secret = env.TAKOS_INTERNAL_SERVICE_SECRET;
-  const takosumiBinding = env.TAKOSUMI;
-  const takosumiBaseUrl =
-    (env.TAKOSUMI_INTERNAL_URL ?? "https://takosumi.internal")
-      .replace(/\/+$/, "");
-  if (!secret || !takosumiBinding) return null;
-
-  const endpoint = appExecutorRpcPath.replace(
-    /^\/internal\/executor-rpc\//,
-    "",
-  );
-  const targetPath = agentControlRpcPath(endpoint);
-  const bodyText = JSON.stringify(body);
-  const signed = await signTakosInternalRequest({
-    method: "POST",
-    path: targetPath,
-    body: bodyText,
-    actor: createAgentControlActor(body),
-    caller: "takos-worker",
-    audience: "takosumi",
-    capabilities: ["agent-control.invoke"],
-    timestamp: new Date().toISOString(),
-    secret,
-  });
-  return await takosumiBinding.fetch(
-    new Request(`${takosumiBaseUrl}${targetPath}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...signed.headers,
-      },
-      body: bodyText,
-    }),
-  );
-}
-
-function createAgentControlActor(
-  body: Record<string, unknown>,
-): TakosActorContext {
-  const runId = typeof body.runId === "string" ? body.runId : "unknown";
-  const spaceId = typeof body.spaceId === "string" ? body.spaceId : undefined;
-  return {
-    actorAccountId: "takos-worker",
-    roles: ["service"],
-    requestId: `agent-control-${runId}-${crypto.randomUUID()}`,
-    principalKind: "service",
-    serviceId: "takos-worker",
-    ...(spaceId ? { spaceId } : {}),
-  };
+  return CONTROL_RPC_PATHS.has(path);
 }

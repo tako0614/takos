@@ -1,15 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { Workflow } from "../../workflow-models.ts";
 import { validateWorkflow } from "../../parser/validator.ts";
-import {
-  parseWorkflow,
-  parseWorkflowFile,
-  stringifyWorkflow,
-} from "../../parser/workflow.ts";
+import { parseWorkflow } from "../../parser/workflow.ts";
 
 test("workflow validation - reports unknown dependency diagnostics for string and array needs inputs", () => {
   const workflows: Workflow[] = [
@@ -102,25 +95,6 @@ test("workflow parser - normalizes string trigger and needs field while preservi
   expect(parsed.workflow.on).toEqual({ push: null });
   expect(parsed.workflow.jobs.build.needs).toEqual(["setup"]);
   expect(parsed.workflow.jobs.build.steps.length).toEqual(1);
-});
-test("workflow parser - roundtrips workflow objects through stringifyWorkflow and parseWorkflow", () => {
-  const workflow: Workflow = {
-    name: "roundtrip",
-    on: { push: null },
-    jobs: {
-      build: {
-        "runs-on": "ubuntu-latest",
-        steps: [{ run: "echo build" }],
-      },
-    },
-  };
-
-  const yaml = stringifyWorkflow(workflow);
-  const parsed = parseWorkflow(yaml);
-
-  expect(parsed.workflow.name).toEqual("roundtrip");
-  expect(parsed.workflow.jobs.build.steps[0]?.run).toEqual("echo build");
-  expect(parsed.workflow.on).toEqual({ push: null });
 });
 test("workflow parser - normalizes single object schedule into array form", () => {
   const yaml = [
@@ -229,29 +203,4 @@ test("workflow validation - accepts all GitHub Actions pull_request types includ
 
   const result = validateWorkflow(workflow);
   expect(result.valid).toEqual(true);
-});
-test("workflow parser - parses workflow files from disk", async () => {
-  const tempDir = await mkdtemp(join(tmpdir(), "actions-engine-workflow-"));
-  const filePath = join(tempDir, "workflow.yml");
-  const yaml = [
-    "on: [push, pull_request]",
-    "jobs:",
-    "  test:",
-    "    runs-on: ubuntu-latest",
-    "    steps:",
-    "      - run: echo test",
-  ].join("\n");
-
-  try {
-    await writeFile(filePath, yaml, "utf8");
-    const parsed = await parseWorkflowFile(filePath);
-
-    expect(parsed.workflow.on).toEqual({
-      push: null,
-      pull_request: null,
-    });
-    expect(parsed.workflow.jobs.test.steps[0]?.run).toEqual("echo test");
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
-  }
 });

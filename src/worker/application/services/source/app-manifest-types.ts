@@ -252,23 +252,3 @@ export type AppManifest = {
   env: Record<string, string>;
   overrides?: Record<string, AppManifestOverride>;
 };
-
-// ============================================================
-// Supporting types for the bundle pipeline
-// ============================================================
-
-export type AppManifestBuildSource = {
-  service_name: string;
-  artifact_path: string;
-};
-
-export type BundleDoc = {
-  type: string;
-  name: string;
-  labels?: Record<string, string>;
-  config: Record<string, unknown>;
-};
-
-export const BUILD_SOURCE_LABELS = {
-  artifactPath: "artifact_path",
-} as const;

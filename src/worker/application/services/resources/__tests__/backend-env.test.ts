@@ -5,36 +5,25 @@ import type { Env } from "../../../../shared/types/index.ts";
 import { inferDefaultManagedResourceBackend } from "../lifecycle.ts";
 import { inferResourceBackend } from "../../../../server/routes/resources/route-helpers.ts";
 
-test("resource backend inference only activates k8s on K8S_NAMESPACE", () => {
-  const k8sOnlyOptionalConfig = {
-    K8S_DEPLOYMENT_NAME: "takos-worker",
-    K8S_IMAGE_REGISTRY: "ghcr.io/takos",
-  };
+// Multi-cloud materialization (aws/gcp/k8s) is operator-substrate scope owned by
+// OpenTofu RunnerProfiles, not the Takos worker. The worker provisions only the
+// native `cloudflare` backend and the portable self-hosted `local` backend, so
+// cloud-specific envs no longer select an aws/gcp/k8s in-worker backend.
 
-  assertEquals(
-    inferDefaultManagedResourceBackend(
-      k8sOnlyOptionalConfig as Partial<Env>,
-    ),
-    "local",
-  );
-  assertEquals(
-    inferResourceBackend(k8sOnlyOptionalConfig as never),
-    "local",
-  );
-
-  const k8sActivated = {
+test("k8s namespace env no longer selects an in-worker k8s backend", () => {
+  const k8sEnv = {
     K8S_NAMESPACE: "takos",
     K8S_DEPLOYMENT_NAME: "takos-worker",
     K8S_IMAGE_REGISTRY: "ghcr.io/takos",
   };
 
   assertEquals(
-    inferDefaultManagedResourceBackend(k8sActivated as Partial<Env>),
-    "k8s",
+    inferDefaultManagedResourceBackend(k8sEnv as Partial<Env>),
+    "local",
   );
   assertEquals(
-    inferResourceBackend(k8sActivated as never),
-    "k8s",
+    inferResourceBackend(k8sEnv as never),
+    "local",
   );
 });
 
@@ -55,50 +44,53 @@ test("resource backend inference ignores generic AWS region and S3 envs", () => 
   );
 });
 
-test("resource backend inference lets k8s win over AWS service envs", () => {
-  const k8sWithAwsServices = {
-    K8S_NAMESPACE: "takos",
+test("AWS service envs no longer select an in-worker aws backend", () => {
+  const dynamoEnv = {
     AWS_REGION: "ap-northeast-1",
     AWS_DYNAMO_KV_TABLE: "takos-kv",
     AWS_SQS_RUN_QUEUE_URL: "https://sqs.example.test/run",
   };
 
   assertEquals(
-    inferDefaultManagedResourceBackend(k8sWithAwsServices as Partial<Env>),
-    "k8s",
-  );
-  assertEquals(
-    inferResourceBackend(k8sWithAwsServices as never),
-    "k8s",
-  );
-});
-
-test("resource backend inference activates AWS from explicit backend or strong AWS service envs", () => {
-  assertEquals(
-    inferDefaultManagedResourceBackend({
-      TAKOS_RESOURCE_BACKEND: "aws",
-      AWS_REGION: "ap-northeast-1",
-    } as Partial<Env>),
-    "aws",
-  );
-  assertEquals(
-    inferResourceBackend({
-      TAKOS_RESOURCE_BACKEND: "aws",
-      AWS_REGION: "ap-northeast-1",
-    } as never),
-    "aws",
-  );
-
-  const dynamoEnv = {
-    AWS_REGION: "ap-northeast-1",
-    AWS_DYNAMO_KV_TABLE: "takos-kv",
-  };
-  assertEquals(
     inferDefaultManagedResourceBackend(dynamoEnv as Partial<Env>),
-    "aws",
+    "local",
   );
   assertEquals(
     inferResourceBackend(dynamoEnv as never),
-    "aws",
+    "local",
+  );
+});
+
+test("explicit retired multi-cloud backend names normalize to the portable local backend", () => {
+  for (const retired of ["aws", "gcp", "k8s"] as const) {
+    assertEquals(
+      inferDefaultManagedResourceBackend({
+        TAKOS_RESOURCE_BACKEND: retired,
+        AWS_REGION: "ap-northeast-1",
+      } as Partial<Env>),
+      "local",
+    );
+    assertEquals(
+      inferResourceBackend({
+        TAKOS_RESOURCE_BACKEND: retired,
+        AWS_REGION: "ap-northeast-1",
+      } as never),
+      "local",
+    );
+  }
+});
+
+test("cloudflare credentials still select the native cloudflare backend", () => {
+  const cfEnv = {
+    CF_ACCOUNT_ID: "acc",
+    CF_API_TOKEN: "tok",
+  };
+  assertEquals(
+    inferDefaultManagedResourceBackend(cfEnv as Partial<Env>),
+    "cloudflare",
+  );
+  assertEquals(
+    inferResourceBackend(cfEnv as never),
+    "cloudflare",
   );
 });

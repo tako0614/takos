@@ -46,10 +46,7 @@ export type ActiveRoutingStatus = Exclude<RoutingStatus, "archived">;
 export type DeploymentBackendName =
   | "workers-dispatch"
   | "runtime-host"
-  | "oci"
-  | "ecs"
-  | "cloud-run"
-  | "k8s";
+  | "oci";
 
 export function normalizeDeploymentBackendName(
   backendName: string | null | undefined,
@@ -58,9 +55,6 @@ export function normalizeDeploymentBackendName(
     case "workers-dispatch":
     case "runtime-host":
     case "oci":
-    case "ecs":
-    case "cloud-run":
-    case "k8s":
       return backendName;
     default:
       return null;
