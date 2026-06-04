@@ -1,4 +1,4 @@
-import { getDb as realGetDb } from "../../../infra/db/index.ts";
+import { resolveDb } from "../../../infra/db/index.ts";
 import {
   generateId as realGenerateId,
   sanitizeRepoName as realSanitizeRepoName,
@@ -17,12 +17,7 @@ import { checkSpaceAccess as realCheckSpaceAccess } from "../identity/space-acce
 import * as gitStore from "../takos-git/index.ts";
 
 export const sourceServiceDeps = {
-  getDb: (db: Parameters<typeof realGetDb>[0]) => {
-    if (db && typeof (db as { select?: unknown }).select === "function") {
-      return db as ReturnType<typeof realGetDb>;
-    }
-    return realGetDb(db);
-  },
+  getDb: resolveDb,
   generateId: realGenerateId,
   sanitizeRepoName: realSanitizeRepoName,
   createEmbeddingsService: realCreateEmbeddingsService,

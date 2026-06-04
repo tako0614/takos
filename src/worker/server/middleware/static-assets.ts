@@ -49,7 +49,11 @@ export const staticAssetsMiddleware: MiddlewareHandler<
   if (
     path.startsWith("/api/") || path.startsWith("/auth/") ||
     path === "/oauth" ||
-    path.startsWith("/oauth/")
+    path.startsWith("/oauth/") ||
+    path.startsWith("/v1/") ||
+    path === "/start" ||
+    path.startsWith("/.well-known/") ||
+    path.startsWith("/__takosumi/")
   ) {
     return next();
   }

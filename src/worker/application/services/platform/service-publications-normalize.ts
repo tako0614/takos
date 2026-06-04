@@ -3,6 +3,9 @@ import type {
   AppConsume,
   AppPublication,
 } from "../source/app-manifest-types.ts";
+import { normalizeEnvName } from "../common-env/crypto.ts";
+
+export { normalizeEnvName };
 
 export interface PublicationOutputDescriptor {
   name: string;
@@ -116,17 +119,6 @@ export function consumeLocalName(
     consume.as ?? consume.publication,
     "consume.as",
   );
-}
-
-export function normalizeEnvName(name: string): string {
-  const normalized = String(name || "").trim();
-  if (!normalized) {
-    throw new Error("Environment variable name is required");
-  }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
-    throw new Error(`Invalid environment variable name: ${normalized}`);
-  }
-  return normalized.toUpperCase();
 }
 
 export type ConsumeEntry = {

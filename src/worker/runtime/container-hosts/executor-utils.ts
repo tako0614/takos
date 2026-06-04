@@ -480,44 +480,66 @@ export function getProxyUsageSnapshot(): Record<string, number> {
 // ---------------------------------------------------------------------------
 
 /**
- * Map from executor-host paths to the proxy API endpoint names.
+ * Single source of truth for the control-RPC endpoint inventory.
+ *
+ * Each entry is `{ name, scope }`: `name` is the endpoint slug (used to derive
+ * the executor-host path, the proxy-API forward target, and the proxy-API
+ * route), and `scope` is the least-privilege ProxyScope the endpoint requires.
+ *
+ * Every consumer (forward-target map, scope map, endpoint Set, proxy-API route
+ * loop) derives from this one array, so a new endpoint cannot be reachable
+ * without a scope, mapped without a route, or vice versa — scope-vs-endpoint
+ * coverage is structurally total. The two bespoke endpoints (`run-usage`,
+ * `api-keys`) still appear here for the forward/scope inventory; only their
+ * proxy-API route bodies are hand-written.
  */
-const CONTROL_RPC_ENDPOINT_MAP: Record<string, string> = {
-  "heartbeat": "/internal/executor-rpc/heartbeat",
-  "run-status": "/internal/executor-rpc/run-status",
-  "run-record": "/internal/executor-rpc/run-record",
-  "run-bootstrap": "/internal/executor-rpc/run-bootstrap",
-  "run-fail": "/internal/executor-rpc/run-fail",
-  "run-reset": "/internal/executor-rpc/run-reset",
-  "run-context": "/internal/executor-rpc/run-context",
-  "run-config": "/internal/executor-rpc/run-config",
-  "no-llm-complete": "/internal/executor-rpc/no-llm-complete",
-  "current-session": "/internal/executor-rpc/current-session",
-  "is-cancelled": "/internal/executor-rpc/is-cancelled",
-  "conversation-history": "/internal/executor-rpc/conversation-history",
-  "skill-runtime-context": "/internal/executor-rpc/skill-runtime-context",
-  "skill-catalog": "/internal/executor-rpc/skill-catalog",
-  "skill-plan": "/internal/executor-rpc/skill-plan",
-  "memory-activation": "/internal/executor-rpc/memory-activation",
-  "memory-finalize": "/internal/executor-rpc/memory-finalize",
-  "add-message": "/internal/executor-rpc/add-message",
-  "update-run-status": "/internal/executor-rpc/update-run-status",
-  "tool-catalog": "/internal/executor-rpc/tool-catalog",
-  "tool-execute": "/internal/executor-rpc/tool-execute",
-  "tool-cleanup": "/internal/executor-rpc/tool-cleanup",
-  "run-event": "/internal/executor-rpc/run-event",
-  "run-usage": "/internal/executor-rpc/run-usage",
-  "api-keys": "/internal/executor-rpc/api-keys",
-};
+export interface ControlRpcEndpoint {
+  /** Endpoint slug, e.g. "heartbeat". */
+  name: string;
+  /** Least-privilege scope this endpoint requires. */
+  scope: ProxyScope;
+}
 
-const CONTROL_RPC_PATH_MAP: Record<string, string> = {
-  ...Object.fromEntries(
-    Object.entries(CONTROL_RPC_ENDPOINT_MAP).map(([endpoint, target]) => [
-      agentControlRpcPath(endpoint),
-      target,
-    ]),
-  ),
-};
+export const CONTROL_RPC_ENDPOINTS: readonly ControlRpcEndpoint[] = [
+  // run lifecycle / status
+  { name: "heartbeat", scope: "run-lifecycle" },
+  { name: "run-status", scope: "run-lifecycle" },
+  { name: "run-record", scope: "run-lifecycle" },
+  { name: "run-bootstrap", scope: "run-lifecycle" },
+  { name: "run-fail", scope: "run-lifecycle" },
+  { name: "run-reset", scope: "run-lifecycle" },
+  { name: "run-context", scope: "run-lifecycle" },
+  { name: "run-config", scope: "run-lifecycle" },
+  { name: "no-llm-complete", scope: "run-lifecycle" },
+  { name: "is-cancelled", scope: "run-lifecycle" },
+  { name: "update-run-status", scope: "run-lifecycle" },
+  { name: "run-event", scope: "run-lifecycle" },
+  { name: "run-usage", scope: "run-lifecycle" },
+  // conversation / session / messages
+  { name: "current-session", scope: "conversation" },
+  { name: "conversation-history", scope: "conversation" },
+  { name: "add-message", scope: "conversation" },
+  // memory
+  { name: "memory-activation", scope: "memory" },
+  { name: "memory-finalize", scope: "memory" },
+  // skills
+  { name: "skill-runtime-context", scope: "skills" },
+  { name: "skill-catalog", scope: "skills" },
+  { name: "skill-plan", scope: "skills" },
+  // tools
+  { name: "tool-catalog", scope: "tools" },
+  { name: "tool-execute", scope: "tools" },
+  { name: "tool-cleanup", scope: "tools" },
+  // provider keys
+  { name: "api-keys", scope: "provider-keys" },
+];
+
+const CONTROL_RPC_PATH_MAP: Record<string, string> = Object.fromEntries(
+  CONTROL_RPC_ENDPOINTS.map(({ name }) => [
+    agentControlRpcPath(name),
+    `/internal/executor-rpc/${name}`,
+  ]),
+);
 
 /**
  * Check if a path should be forwarded to the control plane.

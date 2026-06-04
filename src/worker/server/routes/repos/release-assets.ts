@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { generateId } from "../../../shared/utils/index.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
+import { requireRepoRead } from "./git-shared.ts";
 import { generateExploreInvalidationUrls, hasWriteRole } from "./routes.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { repoReleaseAssets, repoReleases } from "../../../infra/db/schema.ts";
@@ -125,10 +125,7 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
       const tag = c.req.param("tag");
       const db = getDb(c.env.DB);
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
       if (!hasWriteRole(repoAccess.role)) {
         throw new AuthorizationError();
@@ -259,16 +256,9 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
     const assetId = c.req.param("assetId");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const releaseData = await db.select().from(repoReleases)
       .where(and(eq(repoReleases.repoId, repoId), eq(repoReleases.tag, tag)))
@@ -333,10 +323,7 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
       const assetId = c.req.param("assetId");
       const db = getDb(c.env.DB);
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
       if (!hasWriteRole(repoAccess.role)) {
         throw new AuthorizationError();
@@ -382,16 +369,9 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
     const tag = c.req.param("tag");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const releaseData = await db.select().from(repoReleases)
       .where(and(eq(repoReleases.repoId, repoId), eq(repoReleases.tag, tag)))

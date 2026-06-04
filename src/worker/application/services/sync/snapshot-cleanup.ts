@@ -4,7 +4,7 @@ import type { SnapshotTree } from "./models.ts";
 import {
   accounts,
   blobs,
-  getDb as realGetDb,
+  resolveDb,
   sessionFiles,
   sessions,
   snapshots,
@@ -13,13 +13,6 @@ import { and, eq, inArray, lt, lte } from "drizzle-orm";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import type { SnapshotManager } from "./snapshot.ts";
-
-function getDb(db: Parameters<typeof realGetDb>[0]) {
-  if (db && typeof (db as { select?: unknown }).select === "function") {
-    return db as ReturnType<typeof realGetDb>;
-  }
-  return realGetDb(db);
-}
 
 /** Extract non-empty blob hashes from a snapshot tree. */
 function extractTreeHashes(tree: SnapshotTree): string[] {
@@ -46,7 +39,7 @@ export async function cleanupPendingSnapshots(
   maxAgeMinutes: number = 30,
   clock: Clock = systemClock,
 ): Promise<number> {
-  const db = getDb(env.DB);
+  const db = resolveDb(env.DB);
   const cutoff = new Date(clock.now() - maxAgeMinutes * 60 * 1000)
     .toISOString();
 
@@ -81,7 +74,7 @@ export async function getReachableSnapshots(
   spaceId: string,
   headSnapshotId: string,
 ): Promise<Set<string>> {
-  const db = getDb(env.DB);
+  const db = resolveDb(env.DB);
   const reachable = new Set<string>();
   let toFetch = [headSnapshotId];
 
@@ -149,7 +142,7 @@ export async function runGC(
     deletedSessionFiles: number;
   }
 > {
-  const db = getDb(env.DB);
+  const db = resolveDb(env.DB);
   let deletedBlobs = 0;
   let deletedSnapshots = 0;
   let deletedSessionFiles = 0;

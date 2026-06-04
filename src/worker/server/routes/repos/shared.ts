@@ -4,6 +4,7 @@
 import type { Context } from "hono";
 import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import type { ResolveReadableCommitResult } from "../../../application/services/takos-git/index.ts";
+import { WRITE_ROLES } from "./git-shared.ts";
 
 // ---------------------------------------------------------------------------
 // Re-exports
@@ -71,7 +72,7 @@ export function encodeBase64(data: Uint8Array): string {
 }
 
 export function hasWriteRole(role: string | null | undefined): boolean {
-  return role === "owner" || role === "admin" || role === "editor";
+  return role != null && (WRITE_ROLES as readonly string[]).includes(role);
 }
 
 // ---------------------------------------------------------------------------

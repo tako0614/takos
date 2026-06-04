@@ -2,6 +2,20 @@ const RETIRED_APP_LOCAL_BEARER_PREFIXES = ["tak_pat_", "tak_oat_"] as const;
 const TAKOSUMI_ACCOUNTS_BEARER_PREFIX = "takpat_";
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * Canonical `Authorization: Bearer <token>` extractor. Returns the trimmed
+ * token, or `null` when the header is absent, not a `Bearer ` header, or only
+ * whitespace after the scheme. Single-sources the `slice(7).trim() || null`
+ * idiom that was previously inlined across the auth middlewares.
+ */
+export function extractBearerToken(
+  authorizationHeader: string | null | undefined,
+): string | null {
+  return authorizationHeader?.startsWith("Bearer ")
+    ? authorizationHeader.slice(7).trim() || null
+    : null;
+}
+
 export function isRetiredAppLocalBearerToken(token: string): boolean {
   return RETIRED_APP_LOCAL_BEARER_PREFIXES.some((prefix) =>
     token.startsWith(prefix)

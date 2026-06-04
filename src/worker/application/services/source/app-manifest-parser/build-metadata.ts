@@ -1,11 +1,9 @@
+import { isRecord } from "../../../../shared/utils/guards.ts";
+
 export function buildMetadataDisabledMessage(field: string): string {
   return `${field} is no longer supported by the Takos app manifest parser; ` +
     `resolve artifacts upstream with the Takosumi OpenTofu module PlanRun flow and ` +
     `apply the reviewed expected guard returned by PlanRun.`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function assertComputeInputDoesNotUseBuildMetadata(

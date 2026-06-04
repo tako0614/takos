@@ -1,9 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  type AuthenticatedRouteEnv,
-  requireSpaceAccess,
-} from "../route-auth.ts";
+import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import {
   BadRequestError,
   NotFoundError,
@@ -33,7 +30,6 @@ const storeBodySchema = z.object({
 });
 
 export const spacesStoresRouteDeps = {
-  requireSpaceAccess,
   listStoresForWorkspace,
   createStore,
   updateStore,
@@ -44,18 +40,15 @@ export const spacesStoresRouteDeps = {
   findInventoryItemById,
 };
 
-export default new Hono<AuthenticatedRouteEnv>()
-  .get("/:spaceId/stores", async (c) => {
-    const user = c.get("user");
-    const access = await spacesStoresRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-    );
+export default new Hono<SpaceAccessRouteEnv>()
+  .get("/:spaceId/stores", spaceAccess(), async (c) => {
+    const access = c.get("access");
 
     try {
-      const stores = await spacesStoresRouteDeps
-        .listStoresForWorkspace(c.env.DB, access.space.id);
+      const stores = await spacesStoresRouteDeps.listStoresForWorkspace(
+        c.env.DB,
+        access.space.id,
+      );
       return c.json({
         stores: stores.map((store) => ({
           slug: store.slug,
@@ -74,63 +67,60 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new InternalError("Failed to list stores");
     }
   })
-  .post("/:spaceId/stores", zValidator("json", storeBodySchema), async (c) => {
-    const user = c.get("user");
-    const access = await spacesStoresRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-      ["owner", "admin"],
-    );
-
-    const body = c.req.valid("json");
-    if (!body.slug?.trim()) {
-      throw new BadRequestError("slug is required");
-    }
-
-    try {
-      const store = await spacesStoresRouteDeps.createStore(
-        c.env.DB,
-        access.space.id,
-        {
-          slug: body.slug,
-          name: body.name,
-          summary: body.summary,
-          iconUrl: body.icon_url,
-        },
-      );
-      return c.json({
-        store: {
-          slug: store.slug,
-          name: store.name,
-          summary: store.summary,
-          icon_url: store.iconUrl,
-          is_default: store.isDefault,
-          created_at: store.createdAt,
-          updated_at: store.updatedAt,
-        },
-      }, 201);
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new BadRequestError(error.message);
-      }
-      logError("Failed to create workspace store", error, {
-        module: "routes/spaces/stores",
-      });
-      throw new InternalError("Failed to create store");
-    }
-  })
-  .patch(
-    "/:spaceId/stores/:storeSlug",
+  .post(
+    "/:spaceId/stores",
+    spaceAccess({ roles: ["owner", "admin"] }),
     zValidator("json", storeBodySchema),
     async (c) => {
-      const user = c.get("user");
-      const access = await spacesStoresRouteDeps.requireSpaceAccess(
-        c,
-        c.req.param("spaceId"),
-        user.id,
-        ["owner", "admin"],
-      );
+      const access = c.get("access");
+
+      const body = c.req.valid("json");
+      if (!body.slug?.trim()) {
+        throw new BadRequestError("slug is required");
+      }
+
+      try {
+        const store = await spacesStoresRouteDeps.createStore(
+          c.env.DB,
+          access.space.id,
+          {
+            slug: body.slug,
+            name: body.name,
+            summary: body.summary,
+            iconUrl: body.icon_url,
+          },
+        );
+        return c.json(
+          {
+            store: {
+              slug: store.slug,
+              name: store.name,
+              summary: store.summary,
+              icon_url: store.iconUrl,
+              is_default: store.isDefault,
+              created_at: store.createdAt,
+              updated_at: store.updatedAt,
+            },
+          },
+          201,
+        );
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new BadRequestError(error.message);
+        }
+        logError("Failed to create workspace store", error, {
+          module: "routes/spaces/stores",
+        });
+        throw new InternalError("Failed to create store");
+      }
+    },
+  )
+  .patch(
+    "/:spaceId/stores/:storeSlug",
+    spaceAccess({ roles: ["owner", "admin"] }),
+    zValidator("json", storeBodySchema),
+    async (c) => {
+      const access = c.get("access");
 
       const body = c.req.valid("json");
 
@@ -171,44 +161,37 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
     },
   )
-  .delete("/:spaceId/stores/:storeSlug", async (c) => {
-    const user = c.get("user");
-    const access = await spacesStoresRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-      ["owner", "admin"],
-    );
+  .delete(
+    "/:spaceId/stores/:storeSlug",
+    spaceAccess({ roles: ["owner", "admin"] }),
+    async (c) => {
+      const access = c.get("access");
 
-    try {
-      const deleted = await spacesStoresRouteDeps.deleteStore(
-        c.env.DB,
-        access.space.id,
-        c.req.param("storeSlug"),
-      );
-      if (!deleted) {
-        throw new NotFoundError("Store");
+      try {
+        const deleted = await spacesStoresRouteDeps.deleteStore(
+          c.env.DB,
+          access.space.id,
+          c.req.param("storeSlug"),
+        );
+        if (!deleted) {
+          throw new NotFoundError("Store");
+        }
+        return c.json({ success: true });
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new BadRequestError(error.message);
+        }
+        logError("Failed to delete workspace store", error, {
+          module: "routes/spaces/stores",
+        });
+        throw new InternalError("Failed to delete store");
       }
-      return c.json({ success: true });
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new BadRequestError(error.message);
-      }
-      logError("Failed to delete workspace store", error, {
-        module: "routes/spaces/stores",
-      });
-      throw new InternalError("Failed to delete store");
-    }
-  })
+    },
+  )
   // --- Store Inventory ---
 
-  .get("/:spaceId/stores/:storeSlug/inventory", async (c) => {
-    const user = c.get("user");
-    const access = await spacesStoresRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-    );
+  .get("/:spaceId/stores/:storeSlug/inventory", spaceAccess(), async (c) => {
+    const access = c.get("access");
     const { limit, offset } = parsePagination(c.req.query());
 
     const result = await spacesStoresRouteDeps.listInventoryItems(
@@ -238,35 +221,29 @@ export default new Hono<AuthenticatedRouteEnv>()
   })
   .post(
     "/:spaceId/stores/:storeSlug/inventory",
+    spaceAccess({ roles: ["owner", "admin"] }),
     zValidator(
       "json",
-      z.object({
-        repository_url: z.string().min(1).optional(),
-        clone_url: z.string().optional(),
-        browse_url: z.string().optional(),
-        default_branch: z.string().optional(),
-        default_branch_hash: z.string().optional(),
-        label: z.string().optional(),
-        repo_name: z.string().optional(),
-        repo_summary: z.string().optional(),
-        repo_owner_slug: z.string().optional(),
-        local_repo_id: z.string().optional(),
-      }).refine(
-        (v) => !!v.repository_url,
-        {
+      z
+        .object({
+          repository_url: z.string().min(1).optional(),
+          clone_url: z.string().optional(),
+          browse_url: z.string().optional(),
+          default_branch: z.string().optional(),
+          default_branch_hash: z.string().optional(),
+          label: z.string().optional(),
+          repo_name: z.string().optional(),
+          repo_summary: z.string().optional(),
+          repo_owner_slug: z.string().optional(),
+          local_repo_id: z.string().optional(),
+        })
+        .refine((v) => !!v.repository_url, {
           message: "repository_url is required",
           path: ["repository_url"],
-        },
-      ),
+        }),
     ),
     async (c) => {
-      const user = c.get("user");
-      const access = await spacesStoresRouteDeps.requireSpaceAccess(
-        c,
-        c.req.param("spaceId"),
-        user.id,
-        ["owner", "admin"],
-      );
+      const access = c.get("access");
       const body = c.req.valid("json");
 
       try {
@@ -287,20 +264,23 @@ export default new Hono<AuthenticatedRouteEnv>()
           localRepoId: body.local_repo_id,
         });
 
-        return c.json({
-          item: {
-            id: item.id,
-            repository_url: item.repositoryUrl,
-            label: item.repoName,
-            clone_url: item.repoCloneUrl,
-            browse_url: item.repoBrowseUrl,
-            default_branch: item.repoDefaultBranch,
-            default_branch_hash: item.repoDefaultBranchHash,
-            package_icon: item.packageIcon,
-            created_at: item.createdAt,
-            repo_name: item.repoName,
+        return c.json(
+          {
+            item: {
+              id: item.id,
+              repository_url: item.repositoryUrl,
+              label: item.repoName,
+              clone_url: item.repoCloneUrl,
+              browse_url: item.repoBrowseUrl,
+              default_branch: item.repoDefaultBranch,
+              default_branch_hash: item.repoDefaultBranchHash,
+              package_icon: item.packageIcon,
+              created_at: item.createdAt,
+              repo_name: item.repoName,
+            },
           },
-        }, 201);
+          201,
+        );
       } catch (error) {
         if (error instanceof Error) {
           throw new BadRequestError(error.message);
@@ -309,36 +289,34 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
     },
   )
-  .delete("/:spaceId/stores/:storeSlug/inventory/:itemId", async (c) => {
-    const user = c.get("user");
-    const access = await spacesStoresRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-      ["owner", "admin"],
-    );
+  .delete(
+    "/:spaceId/stores/:storeSlug/inventory/:itemId",
+    spaceAccess({ roles: ["owner", "admin"] }),
+    async (c) => {
+      const access = c.get("access");
 
-    const storeSlug = c.req.param("storeSlug");
-    const itemId = c.req.param("itemId");
+      const storeSlug = c.req.param("storeSlug");
+      const itemId = c.req.param("itemId");
 
-    // Resolve the entry by id (scoped to this space + store) so deletion can
-    // target the stored repository URL without scanning the full inventory.
-    const item = await spacesStoresRouteDeps.findInventoryItemById(
-      c.env.DB,
-      access.space.id,
-      storeSlug,
-      itemId,
-    );
-    if (!item) {
-      throw new NotFoundError("Inventory item");
-    }
+      // Resolve the entry by id (scoped to this space + store) so deletion can
+      // target the stored repository URL without scanning the full inventory.
+      const item = await spacesStoresRouteDeps.findInventoryItemById(
+        c.env.DB,
+        access.space.id,
+        storeSlug,
+        itemId,
+      );
+      if (!item) {
+        throw new NotFoundError("Inventory item");
+      }
 
-    await spacesStoresRouteDeps.removeFromInventory(
-      c.env.DB,
-      access.space.id,
-      storeSlug,
-      item.repositoryUrl,
-    );
+      await spacesStoresRouteDeps.removeFromInventory(
+        c.env.DB,
+        access.space.id,
+        storeSlug,
+        item.repositoryUrl,
+      );
 
-    return c.json({ deleted: true, success: true });
-  });
+      return c.json({ deleted: true, success: true });
+    },
+  );

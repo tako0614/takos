@@ -14,6 +14,10 @@ export const OBJECT_STORE_UPLOAD: ToolDefinition = {
   description:
     "Upload a file from the space working tree to an object store bucket",
   category: "storage",
+  namespace: "storage",
+  family: "storage.object_store",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -43,6 +47,10 @@ export const OBJECT_STORE_DOWNLOAD: ToolDefinition = {
   name: "object_store_download",
   description: "Download an object from an object store bucket to a space file",
   category: "storage",
+  namespace: "storage",
+  family: "storage.object_store",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -68,6 +76,10 @@ export const OBJECT_STORE_LIST: ToolDefinition = {
   description:
     "List objects in an object store bucket with optional prefix filter",
   category: "storage",
+  namespace: "storage",
+  family: "storage.object_store",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -93,6 +105,10 @@ export const OBJECT_STORE_DELETE: ToolDefinition = {
   name: "object_store_delete",
   description: "Delete an object from an object store bucket",
   category: "storage",
+  namespace: "storage",
+  family: "storage.object_store",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -114,6 +130,10 @@ export const OBJECT_STORE_INFO: ToolDefinition = {
   description:
     "Get metadata about an object in an object store bucket (size, content-type, etc.)",
   category: "storage",
+  namespace: "storage",
+  family: "storage.object_store",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

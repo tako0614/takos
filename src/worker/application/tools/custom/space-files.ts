@@ -65,6 +65,12 @@ export const SPACE_FILES_LIST: ToolDefinition = {
   description:
     "List files and folders in the space storage. Space storage is a shared file store for the space (separate from the container filesystem). Use this to browse uploaded files, documents, and assets.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.list",
   parameters: {
     type: "object",
     properties: {
@@ -82,6 +88,12 @@ export const SPACE_FILES_READ: ToolDefinition = {
   description:
     "Read the content of a file from space storage. Returns text content for text files, or base64-encoded content for binary files. Supports reading by file ID or by path. Max file size: 50MB.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.read",
   parameters: {
     type: "object",
     properties: {
@@ -102,6 +114,12 @@ export const SPACE_FILES_WRITE: ToolDefinition = {
   name: "space_files_write",
   description: "Replace the content of an existing space storage file.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.write",
   parameters: {
     type: "object",
     properties: {
@@ -130,6 +148,12 @@ export const SPACE_FILES_CREATE: ToolDefinition = {
   name: "space_files_create",
   description: "Create a new space storage file with content.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.create",
   parameters: {
     type: "object",
     properties: {
@@ -154,6 +178,12 @@ export const SPACE_FILES_MKDIR: ToolDefinition = {
   name: "space_files_mkdir",
   description: "Create a space storage folder.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "none",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.create",
   parameters: {
     type: "object",
     properties: {
@@ -170,6 +200,12 @@ export const SPACE_FILES_DELETE: ToolDefinition = {
   name: "space_files_delete",
   description: "Delete a space storage file or folder by ID or path.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.delete",
   parameters: {
     type: "object",
     properties: {
@@ -191,6 +227,12 @@ export const SPACE_FILES_RENAME: ToolDefinition = {
   name: "space_files_rename",
   description: "Rename a space storage file or folder.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.rename",
   parameters: {
     type: "object",
     properties: {
@@ -217,6 +259,12 @@ export const SPACE_FILES_MOVE: ToolDefinition = {
   name: "space_files_move",
   description: "Move a space storage file or folder into another folder.",
   category: "file",
+  namespace: "space.files",
+  family: "space.files.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "space_storage.move",
   parameters: {
     type: "object",
     properties: {

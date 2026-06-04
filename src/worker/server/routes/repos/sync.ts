@@ -4,10 +4,8 @@ import { parseJsonBody, requireSpaceAccess } from "../route-auth.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
-import {
-  checkRepoAccess,
-  toApiRepositoryFromDb,
-} from "../../../application/services/source/repos.ts";
+import { toApiRepositoryFromDb } from "../../../application/services/source/repos.ts";
+import { requireRepoRead } from "./git-shared.ts";
 import { getTreeFlattenLimitError } from "./routes.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { repositories } from "../../../infra/db/schema.ts";
@@ -492,12 +490,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
 
     const repo = toApiRepositoryFromDb(repoData);
 
-    const access = await checkRepoAccess(c.env, repoId, user?.id, undefined, {
-      allowPublicRead: true,
-    });
-    if (!access) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     if (!repo.forked_from_id) {
       throw new BadRequestError("Repository is not a fork");

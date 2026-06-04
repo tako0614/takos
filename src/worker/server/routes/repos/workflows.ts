@@ -10,8 +10,12 @@ import {
 } from "../../../shared/utils/index.ts";
 import { parseJsonBody } from "../route-auth.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
 import type { RepoAccess } from "../../../application/services/source/repos.ts";
+import {
+  requireRepoAdmin,
+  requireRepoRead,
+  requireRepoWrite,
+} from "./git-shared.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import type { Database } from "../../../infra/db/index.ts";
@@ -186,16 +190,9 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     const branch = c.req.query("branch");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const workflowsData = await db.select().from(workflows)
       .where(eq(workflows.repoId, repoId))
@@ -245,16 +242,9 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     const branch = c.req.query("branch");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const cached = await db.select().from(workflows)
       .where(and(eq(workflows.repoId, repoId), eq(workflows.path, path)))
@@ -325,14 +315,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     const body = await parseJsonBody<{ branch?: string }>(c, {});
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoWrite(c.env, repoId, user.id);
 
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
@@ -390,14 +373,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     const body = await parseJsonBody<{ branch?: string }>(c, {});
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoWrite(c.env, repoId, user.id);
 
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
@@ -472,13 +448,7 @@ const workflowsRouter = new Hono<AuthenticatedRouteEnv>()
     const path = c.req.param("path");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoAdmin(c.env, repoId, user.id);
 
     const existing = await db.select({ id: workflows.id })
       .from(workflows)

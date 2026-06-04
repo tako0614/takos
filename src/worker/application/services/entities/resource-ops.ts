@@ -13,6 +13,7 @@ import { groups } from "../../../infra/db/schema-groups.ts";
 import { resources } from "../../../infra/db/schema-platform-resources.ts";
 import { serviceBindings } from "../../../infra/db/schema-services.ts";
 import type { Env } from "../../../shared/types/env.ts";
+import { asRecord } from "../../../shared/utils/guards.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import {
   resolveResourceDriver,
@@ -82,12 +83,6 @@ function resourceBackendName(
 
 function generateResourceId(): string {
   return crypto.randomUUID();
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
 }
 
 function sanitizeBindingName(name: string): string {

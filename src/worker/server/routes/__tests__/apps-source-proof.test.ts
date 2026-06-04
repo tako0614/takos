@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
 import { parseOpenTofuAppManifestOutputs } from "../../../application/services/source/opentofu-app-manifest.ts";
-import { appsRouteDeps, registerAppApiRoutes } from "../apps.ts";
+import { appsRouteDeps, registerAppApiRoutes } from "../apps/index.ts";
 
 type PublicationAppRow = {
   id: string;

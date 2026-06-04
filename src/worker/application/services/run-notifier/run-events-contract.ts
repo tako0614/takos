@@ -1,4 +1,5 @@
 import type { RunStatus } from "../../../shared/types/index.ts";
+import { asRecord } from "../../../shared/utils/guards.ts";
 
 export type RunTerminalEventType =
   | "completed"
@@ -84,13 +85,6 @@ export function isRunTerminalStatus(
 ): status is RunTerminalStatus {
   return status === "completed" || status === "failed" ||
     status === "cancelled";
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
 }
 
 export function parseRunEventPayload(

@@ -1,5 +1,7 @@
 import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import type { Context } from "hono";
 import type { TakosumiActorContext } from "takosumi-contract-v2/internal/rpc";
+import type { SqlDatabaseBinding } from "takos-api-contract/shared/types";
 import type { PlatformExecutionContext } from "takos-worker/shared/types";
 import { forwardInProcessControlJsonRequest } from "../../routes/in-process-control-routes.ts";
 import type { ApiBindings } from "./bindings.ts";
@@ -8,6 +10,7 @@ import {
   constantTimeEqual,
   copyHeaderIfPresent,
   isRecord,
+  resolveRequestId,
 } from "./common.ts";
 
 export type ActorExtractionResult =
@@ -18,6 +21,55 @@ export type AuthRuntimeOptions = {
   env?: ApiBindings;
   executionCtx?: PlatformExecutionContext;
 };
+
+/**
+ * Result of {@link requireDbAndActor}: on success, the `DB` binding (proven
+ * non-null) plus the authenticated actor; on failure, a prepared error
+ * `Response` the handler returns directly.
+ */
+export type RequireDbAndActorResult =
+  | { ok: true; db: SqlDatabaseBinding; actor: TakosumiActorContext }
+  | { ok: false; response: Response };
+
+/**
+ * Folds the DB-guard + actor-resolution preamble repeated across every public
+ * route handler into one call.
+ *
+ * 1. Asserts the `DB` binding is configured (500 `INTERNAL_ERROR` otherwise).
+ * 2. Seeds the actor `requestId` from {@link resolveRequestId} — honoring the
+ *    caller-supplied `x-request-id` — instead of minting a throwaway UUID. The
+ *    global middleware in `index.ts` echoes that same id on the response, so the
+ *    forwarded `actor.requestId` now correlates with the `x-request-id` header
+ *    and server logs (previously the two never matched).
+ * 3. Runs {@link actorFromAuthenticatedRequest}, folding an auth failure into
+ *    its prepared `Response`.
+ *
+ * Pass `spaceId` for `/api/spaces/:spaceId/*` routes so the signed actor context
+ * carries the space binding.
+ */
+export async function requireDbAndActor(
+  c: Context<{ Bindings: ApiBindings }>,
+  spaceId?: string,
+): Promise<RequireDbAndActorResult> {
+  const db = c.env?.DB;
+  if (!db) {
+    return {
+      ok: false,
+      response: c.json(
+        commonError("INTERNAL_ERROR", "database is not configured"),
+        { status: 500 },
+      ),
+    };
+  }
+  const actorResult = await actorFromAuthenticatedRequest(
+    c.req.raw,
+    resolveRequestId(c.req),
+    spaceId,
+    { env: c.env },
+  );
+  if (!actorResult.ok) return { ok: false, response: actorResult.response };
+  return { ok: true, db, actor: actorResult.actor };
+}
 
 export async function actorFromAuthenticatedRequest(
   request: Request,

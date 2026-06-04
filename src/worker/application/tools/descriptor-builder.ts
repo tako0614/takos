@@ -5,7 +5,6 @@ import type {
 } from "./capability-types.ts";
 import type { LocalizedManagedSkill } from "../services/agent/managed-skills.ts";
 import type { SkillExecutionContract } from "../services/agent/skill-contracts.ts";
-import { TOOL_NAMESPACE_MAP } from "./namespace-map.ts";
 
 const HIDDEN_DISCOVERY_COMPAT_TOOLS = new Set([
   "skill_context",
@@ -22,11 +21,6 @@ function deriveToolTags(tool: ToolDefinition): string[] {
   if (tool.family) {
     tags.push(tool.family);
   }
-  const meta = TOOL_NAMESPACE_MAP[tool.name];
-  if (meta) {
-    tags.push(meta.namespace);
-    if (meta.family) tags.push(meta.family);
-  }
   if (tool.required_capabilities) {
     tags.push(...tool.required_capabilities);
   }
@@ -37,18 +31,11 @@ function deriveToolTags(tool: ToolDefinition): string[] {
 export function buildToolDescriptor(
   tool: ToolDefinition,
 ): CapabilityDescriptor {
-  const meta = TOOL_NAMESPACE_MAP[tool.name];
-
   const namespace = (tool.namespace as CapabilityNamespace | undefined) ??
-    meta?.namespace ??
     (tool.category as CapabilityNamespace);
-  const family = tool.family ?? meta?.family;
-  const risk_level = tool.risk_level ??
-    meta?.risk_level ??
-    "none";
-  const side_effects = tool.side_effects ??
-    meta?.side_effects ??
-    false;
+  const family = tool.family;
+  const risk_level = tool.risk_level ?? "none";
+  const side_effects = tool.side_effects ?? false;
   const visible = !HIDDEN_DISCOVERY_COMPAT_TOOLS.has(tool.name);
 
   return {

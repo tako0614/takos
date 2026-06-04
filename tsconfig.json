@@ -30,14 +30,14 @@
       "takosumi-contract": [
         "../takosumi/src/contract/mod.ts"
       ],
+      "takosumi-contract/deploy-control-api": [
+        "../takosumi/src/contract/deploy-control-api.ts"
+      ],
       "takosumi-contract/internal/api": [
         "../takosumi/src/contract/internal-api.ts"
       ],
       "takosumi-contract/internal/rpc": [
         "../takosumi/src/contract/internal-rpc.ts"
-      ],
-      "takosumi-contract-v2": [
-        "../takosumi/src/contract/mod.ts"
       ],
       "takosumi-contract-v2/internal/api": [
         "../takosumi/src/contract/internal-api.ts"
@@ -47,6 +47,12 @@
       ],
       "@takosjp/takosumi-accounts-contract": [
         "../takosumi/packages/accounts-contract/src/mod.ts"
+      ],
+      "@takosjp/takosumi-accounts-service": [
+        "../takosumi/packages/accounts-service/src/mod.ts"
+      ],
+      "@takosjp/takosumi-accounts-worker": [
+        "../takosumi/deploy/accounts-cloudflare/src/handler.ts"
       ],
       "takos-git-contract": [
         "./src/contracts/git/index.ts"
@@ -273,9 +279,6 @@
       "takosumi-contract/*": [
         "../takosumi/src/contract/*"
       ],
-      "takosumi-contract-v2/*": [
-        "../takosumi/src/contract/*"
-      ],
       "takos-worker/core": [
         "./src/worker/index.ts"
       ],
@@ -392,9 +395,6 @@
       ],
       "takos-worker/platform/backends/node/pdf-render": [
         "./src/worker/platform/backends/node/pdf-render.ts"
-      ],
-      "takos-worker/bindings": [
-        "./src/worker/adapters/index.ts"
       ]
     }
   },

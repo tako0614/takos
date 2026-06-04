@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
-import type { Env, Session, User } from "../../shared/types/index.ts";
+import type { Env, User } from "../../shared/types/index.ts";
 import {
   getSession,
   getSessionIdFromCookie,
@@ -17,11 +17,11 @@ import {
   getCachedUser,
   isValidUserId,
 } from "../../application/services/identity/user-cache.ts";
-import { validateTakosumiAccountsBearer } from "./accounts-bearer.ts";
 import {
-  isRetiredAppLocalBearerToken,
-  isTakosumiAccountsBearerCandidate,
-} from "./bearer-token-classification.ts";
+  resolveAccountsBearer,
+  validateTakosumiAccountsBearer,
+} from "./accounts-bearer.ts";
+import { resolveCookieSession } from "./session-auth.ts";
 
 import {
   AppError,
@@ -88,7 +88,6 @@ async function resolveRequestUser(
   rotatedSessionId?: string;
 }> {
   const services = authDeps.getPlatformServices(c);
-  const config = authDeps.getPlatformConfig(c);
   const dbBinding = services.sql?.binding;
   const sessionStore = services.notifications.sessionStore;
 
@@ -96,12 +95,14 @@ async function resolveRequestUser(
   const cookieSessionId = sessionId;
 
   if (!sessionId) {
-    const authHeader = c.req.header("Authorization");
-    const bearer = authHeader?.startsWith("Bearer ")
-      ? authHeader.slice(7).trim() || null
-      : null;
-    if (bearer) {
-      if (isRetiredAppLocalBearerToken(bearer)) {
+    // Bearer-only path: extract → classify → Accounts introspection.
+    const bearer = await resolveAccountsBearer(c, authDeps);
+    switch (bearer.kind) {
+      case "no-bearer":
+        return { user: null };
+      case "retired":
+        // A retired app-local bearer is never acceptable; reject regardless of
+        // rejectInvalidBearer (matches pre-refactor behavior).
         return {
           user: null,
           errorResponse: authenticationErrorResponse(
@@ -109,63 +110,24 @@ async function resolveRequestUser(
             "Invalid or expired bearer token",
           ),
         };
-      }
-
-      if (isTakosumiAccountsBearerCandidate(bearer)) {
-        if (!dbBinding) {
-          return { user: null };
+      case "no-db":
+        return { user: null };
+      case "invalid":
+      case "user-not-found":
+      case "not-accounts":
+        if (options.rejectInvalidBearer) {
+          return {
+            user: null,
+            errorResponse: authenticationErrorResponse(
+              c,
+              "Invalid or expired bearer token",
+            ),
+          };
         }
-        const tokenResult = await authDeps.validateTakosumiAccountsBearer({
-          db: dbBinding,
-          token: bearer,
-          issuerUrl: config.oidcIssuerUrl,
-          discoveryUrl: config.oidcDiscoveryUrl,
-          clientId: config.oidcClientId,
-          clientSecret: config.oidcClientSecret,
-        });
-        if (!tokenResult || !authDeps.isValidUserId(tokenResult.userId)) {
-          if (options.rejectInvalidBearer) {
-            return {
-              user: null,
-              errorResponse: authenticationErrorResponse(
-                c,
-                "Invalid or expired bearer token",
-              ),
-            };
-          }
-          return { user: null };
-        }
-        const bearerUser = await authDeps.getCachedUser(c, tokenResult.userId);
-        if (!bearerUser) {
-          if (options.rejectInvalidBearer) {
-            return {
-              user: null,
-              errorResponse: authenticationErrorResponse(
-                c,
-                "Invalid or expired bearer token",
-              ),
-            };
-          }
-          return { user: null };
-        }
-        return { user: bearerUser };
-      }
-
-      if (options.rejectInvalidBearer) {
-        return {
-          user: null,
-          errorResponse: authenticationErrorResponse(
-            c,
-            "Invalid or expired bearer token",
-          ),
-        };
-      }
-      return { user: null };
+        return { user: null };
+      case "ok":
+        return { user: bearer.user };
     }
-  }
-
-  if (!sessionId) {
-    return { user: null };
   }
 
   if (!sessionStore) {
@@ -175,36 +137,35 @@ async function resolveRequestUser(
     return { user: null };
   }
 
-  // Phase 18.2 H11: server-side blacklist check. A session ID present in
-  // sessions_revoked is rejected unconditionally — even if the underlying
-  // Durable Object still has the row (race window between logout and DO
-  // delete). This is the primary defense against token hijacking after
-  // logout / rotation.
-  if (dbBinding) {
-    const revoked = await authDeps.isSessionRevoked(dbBinding, sessionId);
-    if (revoked) {
-      if (options.rejectInvalidSession) {
-        throw new AuthenticationError("Session revoked");
-      }
-      return { user: null };
+  // Phase 18.2 H11: server-side blacklist check + session/user load via the
+  // shared cookie-session resolver. A session ID present in sessions_revoked is
+  // rejected unconditionally — even if the underlying Durable Object still has
+  // the row (race window between logout and DO delete). This is the primary
+  // defense against token hijacking after logout / rotation.
+  const resolution = await resolveCookieSession(c, authDeps, {
+    sessionId,
+    sessionStore,
+    dbBinding,
+  });
+  if (resolution.kind === "revoked") {
+    if (options.rejectInvalidSession) {
+      throw new AuthenticationError("Session revoked");
     }
+    return { user: null };
   }
-
-  const session = await authDeps.getSession(sessionStore, sessionId);
-  if (!session || !authDeps.isValidUserId(session.user_id)) {
+  if (resolution.kind === "no-session") {
     if (options.rejectInvalidSession) {
       throw new AuthenticationError("Session expired");
     }
     return { user: null };
   }
-
-  const user = await authDeps.getCachedUser(c, session.user_id);
-  if (!user) {
+  if (resolution.kind === "user-not-found") {
     if (options.rejectInvalidSession) {
       throw new AuthenticationError("User not found");
     }
     return { user: null };
   }
+  const { user, session } = resolution;
 
   // Phase 18.2 H11: rotate the session ID at the configured cadence. We
   // only rotate when the request actually arrived via the cookie path.
@@ -216,12 +177,12 @@ async function resolveRequestUser(
     cookieSessionId === sessionId &&
     dbBinding &&
     sessionStore &&
-    authDeps.shouldRotateSession(session as Session)
+    authDeps.shouldRotateSession(session)
   ) {
     try {
       const next = await authDeps.rotateSession(
         sessionStore,
-        session as Session,
+        session,
       );
       // Add the previous session ID to the blacklist so a stolen pre-rotation
       // cookie cannot be replayed. The blacklist row's expires_at matches the

@@ -103,6 +103,13 @@ export const WORKER_ENV_GET: ToolDefinition = {
   description:
     "Get environment variables for a service slot or deployment artifact",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.service.config",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "service.env.read",
+  sensitive_read_policy: "masked",
   parameters: {
     type: "object",
     properties: {
@@ -120,6 +127,13 @@ export const WORKER_ENV_SET: ToolDefinition = {
   description:
     "Replace environment variables for a service slot. Applies on the next deployment.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.service.config",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "service.env.write",
+  sensitive_read_policy: "write_only",
   parameters: {
     type: "object",
     properties: {
@@ -158,6 +172,12 @@ export const WORKER_RUNTIME_GET: ToolDefinition = {
   description:
     "Get runtime configuration for a service slot or deployment artifact",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.service.config",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "service.runtime.read",
   parameters: {
     type: "object",
     properties: {
@@ -175,6 +195,12 @@ export const WORKER_RUNTIME_SET: ToolDefinition = {
   description:
     "Set runtime configuration for a service slot. Applies on the next deployment.",
   category: "deploy",
+  namespace: "deploy",
+  family: "deploy.service.config",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "service.runtime.write",
   parameters: {
     type: "object",
     properties: {

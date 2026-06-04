@@ -18,6 +18,27 @@ test("classifyHost blocks IPv4 literals in private/metadata ranges", async () =>
     "0.0.0.0",
     "100.64.0.1",
     "224.0.0.1",
+    // Special-use ranges shared from the canonical classifier (previously
+    // missed by this copy before the collapse onto ip-classification.ts).
+    "192.0.0.1", // IETF protocol assignments
+    "192.0.2.5", // TEST-NET-1
+    "198.18.0.1", // benchmarking
+    "198.51.100.7", // TEST-NET-2
+    "203.0.113.9", // TEST-NET-3
+    "255.255.255.255", // limited broadcast
+  ];
+  for (const host of blocked) {
+    const result = await classifyHost(host);
+    assert.equal(result.ok, false, `${host} should be blocked`);
+  }
+});
+
+test("classifyHost blocks 6to4 / IPv4-compatible IPv6 wrapping metadata", async () => {
+  const blocked = [
+    "ff02::1", // multicast
+    "2002:a9fe:a9fe::1", // 6to4 wrapping 169.254.169.254
+    "::a9fe:a9fe", // deprecated IPv4-compatible 169.254.169.254
+    "64:ff9b::169.254.169.254", // NAT64 dotted form
   ];
   for (const host of blocked) {
     const result = await classifyHost(host);

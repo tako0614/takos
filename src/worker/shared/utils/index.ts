@@ -6,6 +6,10 @@
  * (e.g. `./logger`, `./hash`, `./domain-validation`).
  */
 
+// --- Record guards ---
+
+export { asRecord, isRecord } from "./guards.ts";
+
 // --- Naming ---
 
 export { sanitizeRepoName, slugifyName } from "./naming-utils.ts";

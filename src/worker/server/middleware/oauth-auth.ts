@@ -4,13 +4,16 @@ import {
   getSession,
   getSessionIdFromCookie,
 } from "../../application/services/identity/session.ts";
-import { getCachedUser } from "../../application/services/identity/user-cache.ts";
-import { isSessionRevoked } from "../../application/services/identity/session-revocation.ts";
-import { validateTakosumiAccountsBearer } from "./accounts-bearer.ts";
 import {
-  isRetiredAppLocalBearerToken,
-  isTakosumiAccountsBearerCandidate,
-} from "./bearer-token-classification.ts";
+  getCachedUser,
+  isValidUserId,
+} from "../../application/services/identity/user-cache.ts";
+import { isSessionRevoked } from "../../application/services/identity/session-revocation.ts";
+import {
+  resolveAccountsBearer,
+  validateTakosumiAccountsBearer,
+} from "./accounts-bearer.ts";
+import { resolveCookieSession } from "./session-auth.ts";
 
 import {
   AuthenticationError,
@@ -26,6 +29,7 @@ export const oauthAuthDeps = {
   getSession,
   getSessionIdFromCookie,
   getCachedUser,
+  isValidUserId,
   isSessionRevoked,
   validateTakosumiAccountsBearer,
   getPlatformServices,
@@ -48,85 +52,59 @@ export function requireOAuthAuth(
   requiredScopes?: string[],
 ): MiddlewareHandler<{ Bindings: Env; Variables: Variables }> {
   return async (c, next): Promise<Response | void> => {
-    const dbBinding = oauthAuthDeps.getPlatformServices(c).sql?.binding;
-    const config = oauthAuthDeps.getPlatformConfig(c);
-    const authorizationHeader = c.req.header("Authorization");
-    const token = authorizationHeader?.startsWith("Bearer ")
-      ? authorizationHeader.slice(7).trim() || null
-      : null;
-
-    if (!token) {
-      return c.json(
-        new AuthenticationError("Missing or invalid Authorization header")
-          .toResponse(),
-        401,
-      );
-    }
-
-    // App-local managed tokens are retired. Human, automation, and service
-    // credentials are Takosumi Accounts bearer/AppGrant credentials.
-    if (isRetiredAppLocalBearerToken(token)) {
-      return c.json(
-        new AuthenticationError("Unsupported bearer token").toResponse(),
-        401,
-      );
-    }
-
-    if (isTakosumiAccountsBearerCandidate(token)) {
-      if (!dbBinding) {
+    const result = await resolveAccountsBearer(c, oauthAuthDeps, {
+      requiredScopes,
+    });
+    switch (result.kind) {
+      case "no-bearer":
+        return c.json(
+          new AuthenticationError("Missing or invalid Authorization header")
+            .toResponse(),
+          401,
+        );
+      // App-local managed tokens are retired, and any non-Accounts bearer is
+      // unsupported. Human, automation, and service credentials are Takosumi
+      // Accounts bearer/AppGrant credentials.
+      case "retired":
+      case "not-accounts":
+        return c.json(
+          new AuthenticationError("Unsupported bearer token").toResponse(),
+          401,
+        );
+      case "no-db":
         return c.json(
           new InternalError("Database binding unavailable").toResponse(),
           500,
         );
-      }
-      const validated = await oauthAuthDeps.validateTakosumiAccountsBearer({
-        db: dbBinding,
-        token,
-        issuerUrl: config.oidcIssuerUrl,
-        discoveryUrl: config.oidcDiscoveryUrl,
-        clientId: config.oidcClientId,
-        clientSecret: config.oidcClientSecret,
-        requiredScopes,
-      });
-      if (!validated) {
+      case "invalid":
         return c.json(
           new AuthenticationError("Invalid or expired bearer token")
             .toResponse(),
           401,
         );
-      }
-      if (
-        requiredScopes?.length &&
-        !requiredScopes.every((required) => validated.scopes.includes(required))
-      ) {
+      case "scope-insufficient":
         return c.json(
-          new AuthorizationError(`Required scopes: ${requiredScopes.join(" ")}`)
-            .toResponse(),
+          new AuthorizationError(
+            `Required scopes: ${(requiredScopes ?? []).join(" ")}`,
+          ).toResponse(),
           403,
         );
-      }
-      const user = await oauthAuthDeps.getCachedUser(c, validated.userId);
-      if (!user) {
+      case "user-not-found":
         return c.json(
           new AuthenticationError("User not found").toResponse(),
           401,
         );
-      }
-      c.set("oauth", {
-        clientId: "takosumi_accounts",
-        scope: validated.scopes.join(" "),
-        scopes: validated.scopes,
-        userId: validated.userId,
-      });
-      c.set("user", user);
-      await next();
-      return;
+      case "ok":
+        c.set("oauth", {
+          clientId: "takosumi_accounts",
+          scope: result.scopes.join(" "),
+          scopes: result.scopes,
+          userId: result.userId,
+        });
+        c.set("user", result.user);
+        await next();
+        return;
     }
-
-    return c.json(
-      new AuthenticationError("Unsupported bearer token").toResponse(),
-      401,
-    );
   };
 }
 
@@ -143,38 +121,42 @@ export function requireAnyAuth(
   requiredScopes?: string[],
 ): MiddlewareHandler<{ Bindings: Env; Variables: Variables }> {
   return async (c, next) => {
-    const sessionStore =
-      oauthAuthDeps.getPlatformServices(c).notifications.sessionStore;
+    const services = oauthAuthDeps.getPlatformServices(c);
+    const sessionStore = services.notifications.sessionStore;
     if (c.get("user")) {
       await next();
       return;
     }
 
-    // Session auth path — full access, no scope check (see design note above)
+    // Session auth path — full access, no scope check (see design note above).
+    // Phase 18.2 H11: routed through the same resolveCookieSession helper as
+    // requireAuth so the server-side revocation blacklist check cannot drift.
+    // Fail-closed; the helper's dbBinding guard preserves behavior when no SQL
+    // binding is configured.
     const sessionId = oauthAuthDeps.getSessionIdFromCookie(
       c.req.header("Cookie") ?? null,
     );
     if (sessionId && sessionStore) {
-      // Phase 18.2 H11: mirror requireAuth's server-side blacklist check so a
-      // revoked session ID cannot authenticate via the requireAnyAuth cookie
-      // path. Fail-closed; guard on dbBinding to preserve behavior when no SQL
-      // binding is configured (mirrors auth.ts).
-      const dbBinding = oauthAuthDeps.getPlatformServices(c).sql?.binding;
-      if (dbBinding && await oauthAuthDeps.isSessionRevoked(dbBinding, sessionId)) {
+      const resolution = await resolveCookieSession(c, oauthAuthDeps, {
+        sessionId,
+        sessionStore,
+        dbBinding: services.sql?.binding,
+      });
+      if (resolution.kind === "revoked") {
         throw new AuthenticationError("Session revoked");
       }
-      const session = await oauthAuthDeps.getSession(sessionStore, sessionId);
-      if (session) {
-        const user = await oauthAuthDeps.getCachedUser(c, session.user_id);
-        if (user) {
-          c.set("user", user);
-          await next();
-          return;
-        }
+      if (resolution.kind === "ok") {
+        c.set("user", resolution.user);
+        await next();
+        return;
       }
+      // no-session / user-not-found: fall through to the bearer path.
     }
 
-    // Bearer path — scopes enforced by requireOAuthAuth
+    // Bearer path — scopes enforced by requireOAuthAuth. The presence gate is
+    // intentionally `startsWith("Bearer ")` (not extractBearerToken): a header
+    // with an empty token still delegates so requireOAuthAuth surfaces its
+    // "Missing or invalid Authorization header" 401 rather than "Unauthorized".
     if (c.req.header("Authorization")?.startsWith("Bearer ")) {
       return requireOAuthAuth(requiredScopes)(c, next);
     }

@@ -5,6 +5,7 @@
 
 import {
   agentControlRpcPath,
+  CONTROL_RPC_ENDPOINTS as CONTROL_RPC_ENDPOINT_REGISTRY,
   expandProxyCapability,
   isAgentControlRpcPath,
   type ProxyCapability,
@@ -16,47 +17,20 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * Per-endpoint least-privilege scope map. Every control-RPC endpoint maps to
- * exactly one scope. Agent runs hold every scope here; workflow runs hold only
- * the run-lifecycle / tools / provider-keys subset (see proxyScopesForRunKind),
- * so a workflow token cannot reach conversation / memory / skill endpoints.
+ * Per-endpoint least-privilege scope map, derived from the single
+ * CONTROL_RPC_ENDPOINTS registry (executor-utils.ts). Every control-RPC
+ * endpoint maps to exactly one scope. Agent runs hold every scope here;
+ * workflow runs hold only the run-lifecycle / tools / provider-keys subset
+ * (see proxyScopesForRunKind), so a workflow token cannot reach conversation /
+ * memory / skill endpoints.
  */
-const CONTROL_RPC_ENDPOINT_SCOPES: Record<string, ProxyScope> = {
-  // run lifecycle / status
-  "heartbeat": "run-lifecycle",
-  "run-status": "run-lifecycle",
-  "run-record": "run-lifecycle",
-  "run-bootstrap": "run-lifecycle",
-  "run-fail": "run-lifecycle",
-  "run-reset": "run-lifecycle",
-  "run-usage": "run-lifecycle",
-  "run-context": "run-lifecycle",
-  "run-config": "run-lifecycle",
-  "no-llm-complete": "run-lifecycle",
-  "update-run-status": "run-lifecycle",
-  "is-cancelled": "run-lifecycle",
-  "run-event": "run-lifecycle",
-  // conversation / session / messages
-  "current-session": "conversation",
-  "conversation-history": "conversation",
-  "add-message": "conversation",
-  // memory
-  "memory-activation": "memory",
-  "memory-finalize": "memory",
-  // skills
-  "skill-runtime-context": "skills",
-  "skill-catalog": "skills",
-  "skill-plan": "skills",
-  // tools
-  "tool-catalog": "tools",
-  "tool-execute": "tools",
-  "tool-cleanup": "tools",
-  // provider keys
-  "api-keys": "provider-keys",
-};
+const CONTROL_RPC_ENDPOINT_SCOPES: Record<string, ProxyScope> = Object
+  .fromEntries(
+    CONTROL_RPC_ENDPOINT_REGISTRY.map(({ name, scope }) => [name, scope]),
+  );
 
 const CONTROL_RPC_ENDPOINTS = new Set(
-  Object.keys(CONTROL_RPC_ENDPOINT_SCOPES),
+  CONTROL_RPC_ENDPOINT_REGISTRY.map(({ name }) => name),
 );
 
 /**

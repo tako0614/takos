@@ -12,6 +12,10 @@ export const REPO_LIST: ToolDefinition = {
   name: "repo_list",
   description: "List repositories mounted in the current container session.",
   category: "container",
+  namespace: "repo",
+  family: "repo.manage",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {},
@@ -23,6 +27,10 @@ export const REPO_STATUS: ToolDefinition = {
   name: "repo_status",
   description: "Show the active repository for the current container session.",
   category: "container",
+  namespace: "repo",
+  family: "repo.manage",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {},
@@ -34,6 +42,10 @@ export const REPO_SWITCH: ToolDefinition = {
   name: "repo_switch",
   description: "Switch the active repository in the current container session.",
   category: "container",
+  namespace: "repo",
+  family: "repo.manage",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {

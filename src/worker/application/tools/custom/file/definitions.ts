@@ -5,6 +5,10 @@ export const FILE_READ: ToolDefinition = {
   description:
     "Read the contents of a file in the space. Supports text files, images (returns base64), and PDFs.",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -32,6 +36,10 @@ export const FILE_WRITE: ToolDefinition = {
   description:
     "Write content to a file in the space. Creates the file if it does not exist, updates if it exists.",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -63,6 +71,10 @@ export const FILE_WRITE_BINARY: ToolDefinition = {
   description:
     "Write binary content (base64 encoded) to a file. Use this for images, fonts, and other binary files.",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -93,6 +105,10 @@ export const FILE_LIST: ToolDefinition = {
   name: "file_list",
   description: "List files and directories in a path",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
@@ -120,6 +136,10 @@ export const FILE_DELETE: ToolDefinition = {
   name: "file_delete",
   description: "Delete a file from the space",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -146,6 +166,10 @@ export const FILE_MKDIR: ToolDefinition = {
   name: "file_mkdir",
   description: "Create a directory in the space.",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "none",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -172,6 +196,10 @@ export const FILE_RENAME: ToolDefinition = {
   name: "file_rename",
   description: "Rename or move a file/directory to a new path",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "low",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -202,6 +230,10 @@ export const FILE_COPY: ToolDefinition = {
   name: "file_copy",
   description: "Copy a file to a new location",
   category: "file",
+  namespace: "file",
+  family: "file.ops",
+  risk_level: "none",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {

@@ -112,6 +112,12 @@ export const SKILL_LIST: ToolDefinition = {
   name: "skill_list",
   description: "List custom skills configured for this space.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "skill.list",
   parameters: {
     type: "object",
     properties: {},
@@ -122,6 +128,12 @@ export const SKILL_GET: ToolDefinition = {
   name: "skill_get",
   description: "Get a custom skill in this space by id.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "skill.get",
   parameters: {
     type: "object",
     properties: {
@@ -138,6 +150,12 @@ export const SKILL_CREATE: ToolDefinition = {
   name: "skill_create",
   description: "Create a new custom skill in this space.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "skill.create",
   parameters: {
     type: "object",
     properties: {
@@ -171,6 +189,12 @@ export const SKILL_UPDATE: ToolDefinition = {
   name: "skill_update",
   description: "Update an existing custom skill in this space by id.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "skill.update",
   parameters: {
     type: "object",
     properties: {
@@ -212,6 +236,12 @@ export const SKILL_TOGGLE: ToolDefinition = {
   name: "skill_toggle",
   description: "Enable or disable a custom skill in this space by id.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "low",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "skill.toggle",
   parameters: {
     type: "object",
     properties: {
@@ -232,6 +262,12 @@ export const SKILL_DELETE: ToolDefinition = {
   name: "skill_delete",
   description: "Delete a custom skill in this space by id.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "skill.delete",
   parameters: {
     type: "object",
     properties: {
@@ -249,6 +285,12 @@ export const SKILL_CONTEXT: ToolDefinition = {
   description:
     "List the agent-visible skill catalog, including managed skills and enabled custom skills.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "skill.context",
   parameters: {
     type: "object",
     properties: {
@@ -267,6 +309,12 @@ export const SKILL_CATALOG: ToolDefinition = {
   description:
     "List the full agent-visible skill catalog, including managed skills and enabled custom skills.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "skill.catalog",
   parameters: {
     type: "object",
     properties: {
@@ -284,6 +332,12 @@ export const SKILL_DESCRIBE: ToolDefinition = {
   name: "skill_describe",
   description: "Describe one managed or custom skill in detail.",
   category: "space",
+  namespace: "space.skills",
+  family: "space.skills.ops",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "skill.describe",
   parameters: {
     type: "object",
     properties: {

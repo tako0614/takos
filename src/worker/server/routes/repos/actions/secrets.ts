@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { parseJsonBody } from "../../route-auth.ts";
 import type { AuthenticatedRouteEnv } from "../../route-auth.ts";
 import { BadRequestError } from "@takos/worker-platform-utils/errors";
-import { checkRepoAccess } from "../../../../application/services/source/repos.ts";
+import { requireRepoAdmin } from "../git-shared.ts";
 import { getDb } from "../../../../infra/db/index.ts";
 import { workflowSecrets } from "../../../../infra/db/schema.ts";
 import { and, eq } from "drizzle-orm";
@@ -16,13 +16,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, [
-      "owner",
-      "admin",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoAdmin(c.env, repoId, user?.id);
 
     const secrets = await db.select({
       id: workflowSecrets.id,
@@ -61,13 +55,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       );
     }
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoAdmin(c.env, repoId, user.id);
 
     if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
       throw new BadRequestError(
@@ -142,13 +130,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const name = c.req.param("name");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoAdmin(c.env, repoId, user.id);
 
     const result = await db.delete(workflowSecrets)
       .where(and(

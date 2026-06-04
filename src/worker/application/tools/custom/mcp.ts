@@ -28,6 +28,12 @@ export const MCP_ADD_SERVER: ToolDefinition = {
     "If the server requires OAuth authentication, this tool will return an auth_url that the user must visit to grant access. " +
     "Once authorized, the server's tools will be available in the next conversation turn.",
   category: "mcp",
+  namespace: "mcp",
+  family: "mcp.manage",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "mcp_server.create",
   parameters: {
     type: "object",
     properties: {
@@ -82,6 +88,12 @@ export const MCP_LIST_SERVERS: ToolDefinition = {
   description:
     "List all registered MCP servers for this space, including their status.",
   category: "mcp",
+  namespace: "mcp",
+  family: "mcp.manage",
+  risk_level: "none",
+  side_effects: false,
+  tool_class: "space_mapped",
+  operation_id: "mcp_server.list",
   parameters: {
     type: "object",
     properties: {},
@@ -123,6 +135,12 @@ export const MCP_REMOVE_SERVER: ToolDefinition = {
   name: "mcp_remove_server",
   description: "Remove a registered MCP server from this space by id.",
   category: "mcp",
+  namespace: "mcp",
+  family: "mcp.manage",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "mcp_server.delete",
   parameters: {
     type: "object",
     properties: {
@@ -182,6 +200,12 @@ export const MCP_UPDATE_SERVER: ToolDefinition = {
   name: "mcp_update_server",
   description: "Rename or enable/disable a registered MCP server.",
   category: "mcp",
+  namespace: "mcp",
+  family: "mcp.manage",
+  risk_level: "medium",
+  side_effects: true,
+  tool_class: "space_mapped",
+  operation_id: "mcp_server.update",
   parameters: {
     type: "object",
     properties: {

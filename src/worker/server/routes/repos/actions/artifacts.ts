@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { checkRepoAccess } from "../../../../application/services/source/repos.ts";
+import { requireRepoRead, requireRepoWrite } from "../git-shared.ts";
 import type { AuthenticatedRouteEnv } from "../../route-auth.ts";
 import {
   GoneError,
@@ -18,16 +18,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
     const runId = c.req.param("runId");
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     const artifacts = await listWorkflowArtifactsForRun(c.env, repoId, runId);
     if (!artifacts) {
@@ -49,16 +40,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
     const artifactId = c.req.param("artifactId");
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     const artifact = await getWorkflowArtifactById(c.env, repoId, artifactId);
 
@@ -99,14 +81,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
     const artifactId = c.req.param("artifactId");
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      "owner",
-      "admin",
-      "editor",
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoWrite(c.env, repoId, user.id);
 
     const artifact = await deleteWorkflowArtifactById(
       c.env,

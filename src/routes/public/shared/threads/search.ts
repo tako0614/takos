@@ -4,6 +4,7 @@ import type {
   ThreadStatus,
   VectorIndexBinding,
 } from "takos-api-contract/shared/types";
+import { asRecord } from "../api/common.ts";
 import { readSpaceMembershipRole } from "../spaces/access.ts";
 import { readThreadAccess } from "./read-model.ts";
 
@@ -522,12 +523,6 @@ function asMessageSearchRow(row: Record<string, unknown>): MessageSearchRow {
     sequence: numberField(row, "sequence"),
     createdAt: dateField(row, "createdAt"),
   };
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
 }
 
 function stringField(row: Record<string, unknown>, key: string): string {

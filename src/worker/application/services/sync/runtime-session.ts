@@ -15,7 +15,7 @@ import type {
   SqlDatabaseBinding,
 } from "../../../shared/types/bindings.ts";
 import type { Env } from "../../../shared/types/index.ts";
-import { getDb as realGetDb, sessions } from "../../../infra/db/index.ts";
+import { resolveDb, sessions } from "../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 import { callRuntimeRequest as realCallRuntimeRequest } from "../execution/runtime-request-handler.ts";
 import { logError as realLogError } from "../../../shared/utils/logger.ts";
@@ -77,7 +77,7 @@ export type RuntimeSessionManagerEnv = Pick<
 >;
 
 export interface RuntimeSessionDeps {
-  getDb: (db: Parameters<typeof realGetDb>[0]) => ReturnType<typeof realGetDb>;
+  getDb: typeof resolveDb;
   callRuntimeRequest: typeof realCallRuntimeRequest;
   logError: typeof realLogError;
   extractResponseError: typeof realExtractResponseError;
@@ -86,12 +86,7 @@ export interface RuntimeSessionDeps {
 }
 
 export const runtimeSessionDeps: RuntimeSessionDeps = {
-  getDb: (db) => {
-    if (db && typeof (db as { select?: unknown }).select === "function") {
-      return db as ReturnType<typeof realGetDb>;
-    }
-    return realGetDb(db);
-  },
+  getDb: resolveDb,
   callRuntimeRequest: realCallRuntimeRequest,
   logError: realLogError,
   extractResponseError: realExtractResponseError,

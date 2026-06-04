@@ -27,6 +27,7 @@ import {
   type ObservedGroupState,
   resolveWorkloadBaseUrl,
 } from "./group-state.ts";
+import { normalizeEnvName } from "../common-env/crypto.ts";
 
 function buildInjectedEnv(
   desiredState: GroupDesiredState,
@@ -44,17 +45,6 @@ function generateSecretToken(bytes = 32): string {
   return Array.from(buffer, (byte) => byte.toString(16).padStart(2, "0")).join(
     "",
   );
-}
-
-function normalizeEnvName(name: string): string {
-  const normalized = String(name || "").trim();
-  if (!normalized) {
-    throw new Error("Environment variable name is required");
-  }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
-    throw new Error(`Invalid environment variable name: ${normalized}`);
-  }
-  return normalized.toUpperCase();
 }
 
 type DesiredEnvVar = { name: string; value: string; secret: boolean };

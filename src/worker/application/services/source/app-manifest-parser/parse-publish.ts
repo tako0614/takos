@@ -179,26 +179,43 @@ function validateFileHandlerPublication(
   }
 }
 
+export type ParsePublicationOptions = {
+  /**
+   * Partial mode parses publication *deltas* (e.g. environment overrides) where
+   * `type` and `outputs` may be omitted because they are inherited from the base
+   * publication and merged at apply time. `name` stays required so the delta can
+   * be matched to its base. Canonicalization and FileHandler validation still run
+   * for whatever fields are present, so override entries are validated with the
+   * same rules as top-level publications.
+   */
+  partial?: boolean;
+  prefixBase?: string;
+};
+
 export function parsePublicationEntry(
   index: number,
   raw: unknown,
-  prefixBase = "publish",
+  options: ParsePublicationOptions = {},
 ): AppPublication {
+  const { partial = false, prefixBase = "publish" } = options;
   const prefix = `${prefixBase}[${index}]`;
   const record = asRecord(raw);
   assertAllowedFields(record, prefix, PUBLICATION_FIELDS);
 
   const name = asRequiredString(record.name, `${prefix}.name`);
-  const type = canonicalPublicationType(
-    asRequiredString(record.type, `${prefix}.type`),
-  );
+  const rawType = partial
+    ? asString(record.type, `${prefix}.type`)
+    : asRequiredString(record.type, `${prefix}.type`);
+  const type = rawType != null ? canonicalPublicationType(rawType) : undefined;
   const publisher = asString(record.publisher, `${prefix}.publisher`);
   if (publisher === "takos") {
     throw new Error(
       `${prefix}.publisher 'takos' is not supported in app manifests; use AppGrant/AppBinding credentials from Takosumi Accounts instead`,
     );
   }
-  const outputs = parsePublicationOutputs(prefix, record.outputs);
+  const outputs = partial && record.outputs == null
+    ? undefined
+    : parsePublicationOutputs(prefix, record.outputs);
   const display = parseOptionalDisplay(prefix, record.display);
   const spec = parseOptionalSpec(prefix, record.spec);
   const auth = parseOptionalAuth(prefix, record.auth);
@@ -207,15 +224,18 @@ export function parsePublicationEntry(
     validateFileHandlerPublication(prefix, spec);
   }
 
+  // In partial (override delta) mode `type` and `outputs` may be omitted; the
+  // base publication supplies them at apply-time merge. The cast keeps the
+  // shared `AppPublication` return type for both modes.
   return {
     name,
     ...(publisher ? { publisher } : {}),
-    type,
-    outputs,
+    ...(type != null ? { type } : {}),
+    ...(outputs ? { outputs } : {}),
     ...(display ? { display } : {}),
     ...(auth ? { auth } : {}),
     ...(spec ? { spec } : {}),
-  };
+  } as AppPublication;
 }
 
 function validateUniqueness(entries: AppPublication[]): void {
@@ -253,8 +273,28 @@ export function parsePublish(
     throw new Error(`${field} must be an array`);
   }
   const entries = raw.map((entry, index) =>
-    parsePublicationEntry(index, entry, field)
+    parsePublicationEntry(index, entry, { prefixBase: field })
   );
   validateUniqueness(entries);
   return entries;
+}
+
+/**
+ * Parse publication *deltas* for an environment override. Each entry is a
+ * partial patch (only `name` is required); `type`/`outputs` are inherited from
+ * the matching base publication at apply-time merge. Canonicalization and
+ * FileHandler validation run on whatever fields are present, so override
+ * entries are checked with the same rules as top-level publications.
+ */
+export function parsePublishOverride(raw: unknown): AppPublication[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("overrides.publish must be an array");
+  }
+  return raw.map((entry, index) =>
+    parsePublicationEntry(index, entry, {
+      partial: true,
+      prefixBase: "overrides.publish",
+    })
+  );
 }

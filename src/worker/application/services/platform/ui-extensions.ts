@@ -5,6 +5,7 @@
  */
 
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import { asRecord } from "../../../shared/utils/guards.ts";
 import {
   isPublicationType,
   listPublications,
@@ -36,12 +37,6 @@ type UISidebarItem = {
   url?: string;
   extensionId: string;
 };
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
 
 function readOptionalString(
   record: Record<string, unknown> | null,

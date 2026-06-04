@@ -37,17 +37,6 @@ export function base64ToBytes(base64: string): Uint8Array {
   return bytes;
 }
 
-// --- Hash helpers ---
-
-/** Compute SHA-256 of a string or ArrayBuffer and return the hex digest. */
-export async function sha256Hex(data: string | ArrayBuffer): Promise<string> {
-  const input = typeof data === "string"
-    ? new TextEncoder().encode(data)
-    : data;
-  const digest = await crypto.subtle.digest("SHA-256", input);
-  return bytesToHex(new Uint8Array(digest));
-}
-
 // --- Base64URL encoding utilities ---
 
 export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {

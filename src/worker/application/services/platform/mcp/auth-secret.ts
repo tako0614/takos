@@ -16,23 +16,13 @@ import type { PublicationRecord } from "../service-publications.ts";
 import { toResourceCapability } from "../../resources/capabilities.ts";
 import { getPortableSecretValue } from "../../resources/portable-runtime.ts";
 import { getResourceById } from "../../resources/store.ts";
+import { normalizeEnvName } from "../../common-env/crypto.ts";
 
 export const mcpAuthSecretDeps = {
   getDb,
   getResourceById,
   getPortableSecretValue,
 };
-
-function normalizeEnvName(name: string): string {
-  const normalized = String(name || "").trim();
-  if (!normalized) {
-    throw new Error("Environment variable name is required");
-  }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
-    throw new Error(`Invalid environment variable name: ${normalized}`);
-  }
-  return normalized.toUpperCase();
-}
 
 function nonEmptyToken(value: string | null | undefined): string | null {
   return value && value.length > 0 ? value : null;

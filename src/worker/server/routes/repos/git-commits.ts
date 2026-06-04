@@ -4,7 +4,6 @@ import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { zValidator } from "../zod-validator.ts";
 import * as gitStore from "../../../application/services/takos-git/index.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
 import {
   encodeBase64,
   readableCommitErrorResponse,
@@ -19,16 +18,16 @@ import {
   BadRequestError,
   InternalError,
   isAppError,
-  NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import { logError } from "../../../shared/utils/logger.ts";
 import {
   getCommitParents,
   getCommitSha,
   requireBucket,
+  requireRepoRead,
+  requireRepoWrite,
   sigTimestampToIso,
   throwIfTreeFlattenLimit,
-  WRITE_ROLES,
 } from "./git-shared.ts";
 
 /**
@@ -82,16 +81,9 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
       const page = Math.max(1, parseInt(pageRaw || "1", 10) || 1);
       const offset = (page - 1) * limit;
 
-      const repoAccess = await checkRepoAccess(
-        c.env,
-        repoId,
-        user?.id,
-        undefined,
-        { allowPublicRead: true },
-      );
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+        allowPublicRead: true,
+      });
 
       try {
         const bucket = toGitBucket(requireBucket(c));
@@ -166,12 +158,7 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      ...WRITE_ROLES,
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoWrite(c.env, repoId, user.id);
 
     const bucketBinding = requireBucket(c);
 
@@ -230,16 +217,9 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const bucket = toGitBucket(requireBucket(c));
 
@@ -284,16 +264,9 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const bucket = toGitBucket(requireBucket(c));
 
@@ -335,16 +308,9 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const bucket = toGitBucket(requireBucket(c));
 
@@ -396,12 +362,7 @@ const gitCommits = new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
     const repoId = c.req.param("repoId");
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
-      ...WRITE_ROLES,
-    ]);
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoWrite(c.env, repoId, user.id);
 
     const bucketBinding = requireBucket(c);
 

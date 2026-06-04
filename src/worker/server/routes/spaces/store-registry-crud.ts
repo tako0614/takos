@@ -6,7 +6,7 @@ import {
   isAppError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
-import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import {
@@ -27,16 +27,11 @@ const updateStoreSchema = z.object({
   subscription_enabled: z.boolean().optional(),
 });
 
-type StoreRegistryRouter = Hono<AuthenticatedRouteEnv>;
+type StoreRegistryRouter = Hono<SpaceAccessRouteEnv>;
 
 export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
-  app.get("/:spaceId/store-registry", async (c) => {
-    const user = c.get("user");
-    const access = await storeRegistryRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-    );
+  app.get("/:spaceId/store-registry", spaceAccess(), async (c) => {
+    const access = c.get("access");
 
     try {
       const entries = await storeRegistryRouteDeps.listRegisteredStores(
@@ -54,15 +49,10 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
 
   app.post(
     "/:spaceId/store-registry",
+    spaceAccess({ roles: ["owner", "admin"] }),
     zValidator("json", addStoreSchema),
     async (c) => {
-      const user = c.get("user");
-      const access = await storeRegistryRouteDeps.requireSpaceAccess(
-        c,
-        c.req.param("spaceId"),
-        user.id,
-        ["owner", "admin"],
-      );
+      const access = c.get("access");
       const body = c.req.valid("json");
 
       try {
@@ -87,44 +77,37 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
     },
   );
 
-  app.delete("/:spaceId/store-registry/:entryId", async (c) => {
-    const user = c.get("user");
-    const access = await storeRegistryRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-      ["owner", "admin"],
-    );
+  app.delete(
+    "/:spaceId/store-registry/:entryId",
+    spaceAccess({ roles: ["owner", "admin"] }),
+    async (c) => {
+      const access = c.get("access");
 
-    try {
-      const deleted = await storeRegistryRouteDeps.removeRemoteStore(
-        c.env.DB,
-        access.space.id,
-        c.req.param("entryId"),
-      );
-      if (!deleted) {
-        throw new NotFoundError("Store registry entry");
+      try {
+        const deleted = await storeRegistryRouteDeps.removeRemoteStore(
+          c.env.DB,
+          access.space.id,
+          c.req.param("entryId"),
+        );
+        if (!deleted) {
+          throw new NotFoundError("Store registry entry");
+        }
+        return c.json({ success: true });
+      } catch (error) {
+        logError("Failed to remove store", error, {
+          module: "routes/store-registry",
+        });
+        throw new InternalError("Failed to remove store");
       }
-      return c.json({ success: true });
-    } catch (error) {
-      logError("Failed to remove store", error, {
-        module: "routes/store-registry",
-      });
-      throw new InternalError("Failed to remove store");
-    }
-  });
+    },
+  );
 
   app.patch(
     "/:spaceId/store-registry/:entryId",
+    spaceAccess({ roles: ["owner", "admin"] }),
     zValidator("json", updateStoreSchema),
     async (c) => {
-      const user = c.get("user");
-      const access = await storeRegistryRouteDeps.requireSpaceAccess(
-        c,
-        c.req.param("spaceId"),
-        user.id,
-        ["owner", "admin"],
-      );
+      const access = c.get("access");
       const body = c.req.valid("json");
       const entryId = c.req.param("entryId");
 
@@ -164,32 +147,30 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
     },
   );
 
-  app.post("/:spaceId/store-registry/:entryId/refresh", async (c) => {
-    const user = c.get("user");
-    const access = await storeRegistryRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-      ["owner", "admin"],
-    );
+  app.post(
+    "/:spaceId/store-registry/:entryId/refresh",
+    spaceAccess({ roles: ["owner", "admin"] }),
+    async (c) => {
+      const access = c.get("access");
 
-    try {
-      const entry = await storeRegistryRouteDeps.refreshRemoteStore(
-        c.env.DB,
-        access.space.id,
-        c.req.param("entryId"),
-      );
-      if (!entry) {
-        throw new NotFoundError("Store registry entry");
+      try {
+        const entry = await storeRegistryRouteDeps.refreshRemoteStore(
+          c.env.DB,
+          access.space.id,
+          c.req.param("entryId"),
+        );
+        if (!entry) {
+          throw new NotFoundError("Store registry entry");
+        }
+        return c.json({ store: formatEntry(entry) });
+      } catch (error) {
+        logError("Failed to refresh store", error, {
+          module: "routes/store-registry",
+        });
+        throw new BadRequestError(
+          safeErrorMessage(error, "Failed to refresh store"),
+        );
       }
-      return c.json({ store: formatEntry(entry) });
-    } catch (error) {
-      logError("Failed to refresh store", error, {
-        module: "routes/store-registry",
-      });
-      throw new BadRequestError(
-        safeErrorMessage(error, "Failed to refresh store"),
-      );
-    }
-  });
+    },
+  );
 }

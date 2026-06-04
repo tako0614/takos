@@ -3,7 +3,7 @@ import { z } from "zod";
 import { generateId, parsePagination } from "../../../shared/utils/index.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
-import { checkRepoAccess } from "../../../application/services/source/repos.ts";
+import { requireRepoRead } from "./git-shared.ts";
 import { generateExploreInvalidationUrls, hasWriteRole } from "./routes.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import {
@@ -31,16 +31,9 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
     const includeDrafts = c.req.query("include_drafts") === "true";
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const canSeeDrafts = hasWriteRole(repoAccess.role);
     const showDrafts = includeDrafts && canSeeDrafts;
@@ -111,16 +104,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
     const repoId = c.req.param("repoId");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    await requireRepoRead(c.env, repoId, user?.id, { allowPublicRead: true });
 
     const releaseData = await db.select().from(repoReleases)
       .where(and(
@@ -183,16 +167,9 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
     const tag = c.req.param("tag");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(
-      c.env,
-      repoId,
-      user?.id,
-      undefined,
-      { allowPublicRead: true },
-    );
-    if (!repoAccess) {
-      throw new NotFoundError("Repository");
-    }
+    const repoAccess = await requireRepoRead(c.env, repoId, user?.id, {
+      allowPublicRead: true,
+    });
 
     const releaseData = await db.select().from(repoReleases)
       .where(and(eq(repoReleases.repoId, repoId), eq(repoReleases.tag, tag)))
@@ -275,10 +252,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("Tag is required");
       }
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
       if (!hasWriteRole(repoAccess.role)) {
         throw new AuthorizationError();
@@ -361,10 +335,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
       const body = c.req.valid("json");
       const db = getDb(c.env.DB);
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
       if (!hasWriteRole(repoAccess.role)) {
         throw new AuthorizationError();
@@ -452,10 +423,7 @@ const releaseCrud = new Hono<AuthenticatedRouteEnv>()
       const tag = c.req.param("tag");
       const db = getDb(c.env.DB);
 
-      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-      if (!repoAccess) {
-        throw new NotFoundError("Repository");
-      }
+      const repoAccess = await requireRepoRead(c.env, repoId, user.id);
 
       if (!hasWriteRole(repoAccess.role)) {
         throw new AuthorizationError();

@@ -6,6 +6,10 @@ export const SQL_QUERY: ToolDefinition = {
   description:
     "Execute a SQL query on a SQL database. Use with caution - prefer read-only queries unless modification is explicitly needed.",
   category: "storage",
+  namespace: "storage",
+  family: "storage.sql",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -27,6 +31,10 @@ export const SQL_TABLES: ToolDefinition = {
   name: "sql_tables",
   description: "List tables in the SQL database",
   category: "storage",
+  namespace: "storage",
+  family: "storage.sql",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {},
@@ -37,6 +45,10 @@ export const SQL_DESCRIBE: ToolDefinition = {
   name: "sql_describe",
   description: "Describe a table schema in the SQL database",
   category: "storage",
+  namespace: "storage",
+  family: "storage.sql",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {

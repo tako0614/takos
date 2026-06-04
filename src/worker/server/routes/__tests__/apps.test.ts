@@ -3,7 +3,7 @@ import { assertEquals } from "@takos/test/assert";
 import { Hono } from "hono";
 import { isAppError } from "@takos/worker-platform-utils/errors";
 
-import { appsRouteDeps, registerAppApiRoutes } from "../apps.ts";
+import { appsRouteDeps, registerAppApiRoutes } from "../apps/index.ts";
 
 type PreparedRecord = {
   sql: string;

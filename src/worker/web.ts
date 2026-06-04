@@ -12,6 +12,10 @@ import { RateLimiters } from "./shared/utils/rate-limiter.ts";
 import { authSessionRouter } from "./server/routes/auth/session.ts";
 import { authOidcRouter } from "./server/routes/auth/oidc.ts";
 import { registerProfileRoutes } from "./server/routes/profiles/register.ts";
+import {
+  type CloudflareWorkerEnv,
+  handleAccountsPlaneRequest,
+} from "./server/routes/accounts/mount.ts";
 import { runCommonEnvScheduledMaintenance } from "./application/services/common-env/index.ts";
 import { dispatchScheduledComputeTriggers } from "./application/services/deployment/scheduled-triggers.ts";
 import { triggerScheduledWorkflows } from "./application/services/actions/actions-triggers.ts";
@@ -66,6 +70,7 @@ import {
   normalizeIssuerUrl,
   provisionLaunchSessionUser,
 } from "./server/routes/auth/launch-session.ts";
+import { resolveSelfIssuedBearer } from "./server/routes/auth/in-process-bearer.ts";
 import {
   createAgentControlBackendRouter,
   createExecutorProxyRouter,
@@ -281,6 +286,25 @@ app.use("*", staticAssetsMiddleware);
 app.get("/health", (c) => c.json({ status: "ok" }));
 
 // ============================================================================
+// Takosumi Accounts plane (in-process, at the ORIGIN ROOT — no /accounts prefix)
+// ============================================================================
+// app.takosumi.com IS the OIDC issuer. The account plane owns these root prefixes
+// in-process; everything else is the Takos product. The product has no root
+// /oauth or /.well-known handler, so there is no collision. `/internal/*` is NOT
+// delegated here: account-plane internals are in-process calls, and `/internal`
+// HTTP routes are reserved for opentofu-runner / executor container callbacks.
+app.all("/.well-known/*", (c) =>
+  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+app.all("/oauth/*", (c) =>
+  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+app.all("/v1/*", (c) =>
+  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+app.all("/start", (c) =>
+  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+app.all("/__takosumi/*", (c) =>
+  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+
+// ============================================================================
 // Unified container-host callbacks
 // ============================================================================
 // Cloudflare Containers live as Durable Object classes exported by this same
@@ -330,10 +354,33 @@ app.post("/internal/auth/verify", async (c) => {
     }, access.status);
   }
 
-  const authResponse = await requireAuth(c, async () => {});
-  if (authResponse) return authResponse;
+  // Session path first. `requireAuth` resolves the cookie session (or a remote
+  // Accounts bearer) and short-circuits with a 401 when neither is present.
+  // Since app.takosumi.com is now its own OIDC issuer, a self-issued Bearer can
+  // be verified in-process instead — so only honour the 401 when there is no
+  // Bearer to try locally.
+  const authorizationHeader = c.req.header("Authorization");
+  let user = c.get("user");
+  if (!user) {
+    const authResponse = await requireAuth(c, async () => {});
+    user = c.get("user");
+    if (!user && authResponse && !authorizationHeader) return authResponse;
+  }
 
-  const user = c.get("user");
+  if (!user && authorizationHeader) {
+    const selfBearer = await resolveSelfIssuedBearer({
+      authorizationHeader,
+      origin: new URL(c.req.url).origin,
+      issuer: normalizeIssuerUrl(getPlatformConfig(c).oidcIssuerUrl),
+      db: getPlatformServices(c).sql?.binding,
+      env: c.env,
+    });
+    if (selfBearer.kind === "ok") {
+      user = selfBearer.user;
+      c.set("user", user);
+    }
+  }
+
   if (!user) {
     return c.json({
       error: {
@@ -770,7 +817,10 @@ app.notFound(async (c) => {
     path.startsWith("/git/") ||
     path.startsWith("/ap/") ||
     path.startsWith("/ns/") ||
-    path.startsWith("/.well-known/")
+    path.startsWith("/.well-known/") ||
+    path.startsWith("/v1/") ||
+    path === "/start" ||
+    path.startsWith("/__takosumi/")
   ) {
     return c.json({
       error: {

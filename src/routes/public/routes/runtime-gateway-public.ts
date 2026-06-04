@@ -1,7 +1,5 @@
-import type { Context, Hono } from "hono";
-import type { TakosumiActorContext } from "takosumi-contract-v2/internal/rpc";
+import type { Hono } from "hono";
 import { TAKOSUMI_RUNTIME_INTERNAL_PATHS } from "takosumi-contract-v2/internal/api";
-import { actorFromAuthenticatedRequest } from "../shared/api/auth.ts";
 import type { ApiBindings } from "../shared/api/bindings.ts";
 import { commonError, isRecord, readJsonBody } from "../shared/api/common.ts";
 import {
@@ -10,53 +8,7 @@ import {
   normalizedRuntimeSearch,
   runtimeSpaceIdFromRequest,
 } from "../shared/api/forwarding.ts";
-import { readSpaceMembershipRole } from "../shared/spaces/access.ts";
-
-/**
- * Authenticate the caller and verify they have at least viewer-level
- * membership in the target space. Used by `/api/spaces/:spaceId/*` runtime
- * gateway routes and by the non-spaced `/api/services|resources|sessions`
- * routes — without this gate any authenticated account could read or mutate
- * runtime state in spaces they don't belong to.
- */
-async function requireSpaceMembership(
-  c: Context<{ Bindings: ApiBindings }>,
-  spaceId: string,
-): Promise<
-  | { ok: true; actor: TakosumiActorContext }
-  | { ok: false; response: Response }
-> {
-  const actorResult = await actorFromAuthenticatedRequest(
-    c.req.raw,
-    crypto.randomUUID(),
-    spaceId,
-    { env: c.env },
-  );
-  if (!actorResult.ok) return { ok: false, response: actorResult.response };
-
-  const db = c.env?.DB;
-  if (!db) {
-    return {
-      ok: false,
-      response: c.json(
-        commonError("INTERNAL_ERROR", "database is not configured"),
-        500,
-      ),
-    };
-  }
-  const role = await readSpaceMembershipRole(
-    db,
-    spaceId,
-    actorResult.actor.actorAccountId,
-  );
-  if (!role) {
-    return {
-      ok: false,
-      response: c.json(commonError("FORBIDDEN", "forbidden"), 403),
-    };
-  }
-  return { ok: true, actor: actorResult.actor };
-}
+import { requireSpaceMembership } from "../shared/spaces/access.ts";
 
 export function registerRuntimeGatewayPublicRoutes(
   app: Hono<{ Bindings: ApiBindings }>,
@@ -103,8 +55,7 @@ export function registerRuntimeGatewayPublicRoutes(
         actor: auth.actor,
         actorSpaceId: spaceId,
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     });
     app.post(route.publicPath, async (c) => {
       const body = await readJsonBody(c.req);
@@ -136,8 +87,7 @@ export function registerRuntimeGatewayPublicRoutes(
         }),
         actor,
       });
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     });
     app.all(`${route.publicPath}/*`, async (c) => {
       const spaceId = runtimeSpaceIdFromRequest(c.req.raw)?.trim() || "";
@@ -156,8 +106,7 @@ export function registerRuntimeGatewayPublicRoutes(
         spaceId,
         auth.actor,
       );
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     });
   }
 
@@ -174,8 +123,7 @@ export function registerRuntimeGatewayPublicRoutes(
       actor: auth.actor,
       actorSpaceId: spaceId,
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.get("/api/spaces/:spaceId/sessions", async (c) => {
@@ -191,8 +139,7 @@ export function registerRuntimeGatewayPublicRoutes(
       actor: auth.actor,
       actorSpaceId: spaceId,
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.get("/api/spaces/:spaceId/resources", async (c) => {
@@ -208,8 +155,7 @@ export function registerRuntimeGatewayPublicRoutes(
       actor: auth.actor,
       actorSpaceId: spaceId,
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.post("/api/spaces/:spaceId/resources", async (c) => {
@@ -235,8 +181,7 @@ export function registerRuntimeGatewayPublicRoutes(
       }),
       actor,
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   app.post("/api/spaces/:spaceId/sessions", async (c) => {
@@ -262,8 +207,7 @@ export function registerRuntimeGatewayPublicRoutes(
       }),
       actor,
     });
-    if (response instanceof Response) return response;
-    return c.json(response, 500);
+    return response;
   });
 
   for (
@@ -293,8 +237,7 @@ export function registerRuntimeGatewayPublicRoutes(
         spaceId,
         auth.actor,
       );
-      if (response instanceof Response) return response;
-      return c.json(response, 500);
+      return response;
     });
   }
 }

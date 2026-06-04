@@ -26,6 +26,10 @@ export const RUNTIME_EXEC: ToolDefinition = {
   description:
     "Execute commands in takos-runtime (npm, esbuild, git, etc.). Commands are executed sequentially. Files persist in session directory.",
   category: "runtime",
+  namespace: "runtime",
+  family: "runtime.exec",
+  risk_level: "medium",
+  side_effects: true,
   parameters: {
     type: "object",
     properties: {
@@ -57,6 +61,10 @@ export const RUNTIME_STATUS: ToolDefinition = {
   name: "runtime_status",
   description: "Check the status of a running runtime process",
   category: "runtime",
+  namespace: "runtime",
+  family: "runtime.exec",
+  risk_level: "none",
+  side_effects: false,
   parameters: {
     type: "object",
     properties: {
