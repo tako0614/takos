@@ -2,17 +2,20 @@
 ## Replace placeholder domains, account IDs, namespace IDs, and resource IDs
 ## before deploying.
 ##
-## SOURCE OF TRUTH: This file is the INTERIM reference materialization of the
-## Takos deploy topology, not its authority. Takos is a product DEPLOYED BY
-## Takosumi (the OpenTofu-native deploy control plane): the canonical topology
-## is the OpenTofu module at ../opentofu (var.target = cloudflare), which
-## Takosumi installs and applies — Installation -> PlanRun -> ApplyRun ->
-## Deployment — recording the non-secret endpoints / binding map as
-## DeploymentOutput. A Takosumi RunnerProfile owns the provider allowlist,
-## credentials, state backend, and Cloudflare Container execution. The bindings,
-## containers, routes, and resources declared below converge onto that
-## Takosumi-applied module and must stay in sync with it; do not treat this
-## wrangler.toml as a separate source of truth.
+## SOURCE OF TRUTH: Takos is complete as a plain OpenTofu module — no Takosumi is
+## required to self-host. The canonical topology for all DURABLE infra is the
+## OpenTofu module at ../opentofu (var.target = cloudflare); `tofu apply`
+## provisions it and publishes the non-secret endpoints / binding map. This
+## wrangler.toml is the WORKER-ARTIFACT HALF of that same deploy: the part the
+## Terraform/OpenTofu provider cannot express (the worker script entry, ASSETS,
+## container images, Durable Object migrations, routes, and binding wiring). It
+## reads the module's outputs and must stay in sync with the module; it is not a
+## competing source of truth for the durable infra. Running the same module
+## through Takosumi is OPTIONAL and only adds the Installation -> PlanRun ->
+## ApplyRun -> Deployment / DeploymentOutput ledger, policy decisions, and
+## dashboard (a Takosumi RunnerProfile then owns the provider allowlist,
+## credentials, state backend, and Cloudflare Container execution); Takos has no
+## special coupling to Takosumi.
 ## See ../../docs/architecture/internal-trust-boundaries.md for the deploy invariant.
 
 # NOTE: all relative paths in this file resolve from THIS config file's
@@ -240,25 +243,25 @@ new_sqlite_classes = ["TakosumiOpenTofuRunner"]
 # These are NOT shipped by the OSS template — takos-private is private.
 [[containers]]
 class_name = "TakosRuntimeContainer"
-image = "your-runtime-image:tag"
+image = "registry.example.com/your-runtime-image:tag"
 instance_type = "standard-2"
 max_instances = 25
 
 [[containers]]
 class_name = "ExecutorContainerTier1"
-image = "your-executor-image:tag"
+image = "registry.example.com/your-executor-image:tag"
 instance_type = "lite"
 max_instances = 20
 
 [[containers]]
 class_name = "ExecutorContainerTier2"
-image = "your-executor-image:tag"
+image = "registry.example.com/your-executor-image:tag"
 instance_type = "basic"
 max_instances = 200
 
 [[containers]]
 class_name = "ExecutorContainerTier3"
-image = "your-executor-image:tag"
+image = "registry.example.com/your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
 
@@ -376,11 +379,11 @@ binding = "DEPLOY_QUEUE"
 # future async-via-queue dispatch model is adopted, add matching [[queues.consumers]]
 # blocks and teach the takos queue() handler the takosumi.opentofu-run@v1 kind.
 [[queues.producers]]
-queue = "takosumi-control-plane"
+queue = "takos-control-plane"
 binding = "TAKOS_QUEUE"
 
 [[queues.producers]]
-queue = "takosumi-opentofu-runs"
+queue = "takos-opentofu-runs"
 binding = "TAKOS_OPENTOFU_RUN_QUEUE"
 
 [[queues.consumers]]
@@ -569,25 +572,25 @@ class_name = "TakosumiOpenTofuRunner"
 # Dockerfile path + image_build_context. Not shipped by the OSS template.
 [[env.staging.containers]]
 class_name = "TakosRuntimeContainer"
-image = "your-runtime-image:tag"
+image = "registry.example.com/your-runtime-image:tag"
 instance_type = "standard-2"
 max_instances = 5
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
-image = "your-executor-image:tag"
+image = "registry.example.com/your-executor-image:tag"
 instance_type = "lite"
 max_instances = 20
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier2"
-image = "your-executor-image:tag"
+image = "registry.example.com/your-executor-image:tag"
 instance_type = "basic"
 max_instances = 100
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier3"
-image = "your-executor-image:tag"
+image = "registry.example.com/your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
 
@@ -638,11 +641,11 @@ binding = "DEPLOY_QUEUE"
 # Deploy-control plane queues (staging). Producer-only; see the production note —
 # the in-process runner adapter dispatches synchronously to the container DO.
 [[env.staging.queues.producers]]
-queue = "takosumi-control-plane-staging"
+queue = "takos-control-plane-staging"
 binding = "TAKOS_QUEUE"
 
 [[env.staging.queues.producers]]
-queue = "takosumi-opentofu-runs-staging"
+queue = "takos-opentofu-runs-staging"
 binding = "TAKOS_OPENTOFU_RUN_QUEUE"
 
 [[env.staging.queues.consumers]]

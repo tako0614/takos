@@ -15,6 +15,21 @@ output "cloudflare_d1_database_id" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null
 }
 
+output "cloudflare_accounts_d1_database_id" {
+  description = "D1 database ID for the TAKOSUMI_ACCOUNTS_DB binding (cloudflare target)."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].accounts_d1_database_id : null
+}
+
+output "cloudflare_deploy_d1_database_id" {
+  description = "D1 database ID for the TAKOS_D1 binding (cloudflare target)."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].deploy_d1_database_id : null
+}
+
+output "cloudflare_d1_database_ids" {
+  description = "All D1 database IDs by logical binding: db, accounts, deploy (cloudflare target)."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_ids : null
+}
+
 output "cloudflare_kv_namespace_ids" {
   description = "KV namespace IDs by logical binding (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].kv_namespace_ids : null
