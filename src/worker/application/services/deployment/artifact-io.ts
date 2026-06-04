@@ -12,10 +12,8 @@ import {
   type EncryptedData,
   maskEnvVars,
 } from "../../../shared/utils/crypto.ts";
-import {
-  computeSHA256,
-  constantTimeEqual,
-} from "../../../shared/utils/hash.ts";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
+import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
 import type { Deployment, DeploymentEnv } from "./models.ts";
 import {
   InternalError,
@@ -45,7 +43,7 @@ export async function verifyBundleIntegrity(
 ): Promise<void> {
   if (deployment.bundle_hash) {
     const actual = await computeSHA256(bundleContent);
-    if (!constantTimeEqual(actual, deployment.bundle_hash)) {
+    if (!constantTimeEqualsString(actual, deployment.bundle_hash)) {
       throw new ValidationError(
         `Bundle hash mismatch: expected ${deployment.bundle_hash}, got ${actual}`,
       );

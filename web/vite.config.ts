@@ -24,6 +24,13 @@ export default defineConfig(({ mode }) => {
           __dirname,
           '../../takosumi/dashboard/src',
         ),
+        // The folded dashboard SPA imports the account-plane contract (path
+        // builders, DTO/enum types, the materialize permission-digest builder)
+        // via this specifier; resolve it for the in-process web build too.
+        '@takosjp/takosumi-accounts-contract': resolve(
+          __dirname,
+          '../../takosumi/packages/accounts-contract/src/mod.ts',
+        ),
         'takos-api-contract/shared/types': resolve(
           __dirname,
           '../src/contracts/public/shared/types/index.ts',
