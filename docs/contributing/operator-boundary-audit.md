@@ -4,25 +4,25 @@
 > infrastructure の境界を崩していないか確認するチェックリスト。
 
 Takos は Takosumi に Installation / PlanRun / ApplyRun / Deployment /
-DeploymentOutput として deploy される product です。OpenTofu state、cloud
-credential、native controller、runtime-agent runtime handler、RunnerProfile が
-所有する provider allowlist は operator distribution の責務です。
+DeploymentOutput として deploy される product です。OpenTofu state、Cloudflare
+credential、runtime-agent runtime handler、RunnerProfile が所有する provider
+allowlist は in-process deploy-control plane の RunnerProfile の責務です。
 
 ## Source of truth
 
 - `../takosumi` は Takosumi public contract、OpenTofu-native deploy control
   API、Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput の run
-  ledger を所有する。
-- `takos/deploy/opentofu`、`takos/deploy/helm`、`takos/deploy/distributions`
-  は Takos product distribution の template を所有する。
-- `takos-private` または operator distribution が concrete provider
-  credential、OpenTofu state、runtime-agent handler wiring、live proof evidence
-  を所有する。
+  ledger の **実装 source owner**。単一 Takos worker が in-process import する。
+- `takos/deploy/cloudflare`、`takos/deploy/opentofu` (Cloudflare module)、
+  `takos/deploy/distributions/cloudflare.json` は Takos product の Cloudflare
+  deploy artifacts を所有する。
+- `takos-private` が concrete Cloudflare credential、OpenTofu state、
+  runtime-agent handler wiring、live proof evidence を所有する。
 
 ## Takos docs に書いてよいこと
 
 - Takos product service、Hono route、UI、Git container、agent container の構成。
-- Takos distribution が必要とする backing resource topology、Helm values、
+- Takos distribution が必要とする backing resource topology、Cloudflare
   OpenTofu output bridge、provider proof task。
 - self-host / cloud proof を source-controlled plan review と live operator
   evidence (ApplyRun / DeploymentOutput) に分けること。

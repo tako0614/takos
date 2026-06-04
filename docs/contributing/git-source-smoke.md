@@ -8,11 +8,11 @@ This page has been reset for Takosumi v1. Takosumi is an OpenTofu-native deploy 
 2. Plan the module. Takosumi records a `PlanRun` with the proposed changes, warnings, and the resolved commit.
 3. Apply the reviewed plan. Takosumi records an `ApplyRun`; on success it updates the `Deployment` and `DeploymentOutput`.
 4. Destroy is also recorded as an `ApplyRun` against the same Installation.
-5. The provider allowlist, credential references, state backend, and Cloudflare Container execution belong to the `RunnerProfile`. Credentials, OIDC clients, billing, domains, and account-plane policy belong to the operator distribution.
+5. The provider allowlist, credential references, state backend, and Cloudflare Container execution belong to the `RunnerProfile`. OIDC clients, billing, domains, and account-plane policy belong to the in-process Accounts plane in the single Takos worker.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takos itself is deployed by Takosumi as an installed-and-applied OpenTofu module (`deploy/opentofu`, with `var.target` ∈ `aws` | `gcp` | `cloudflare`; the `cloudflare` target provisions D1/KV/R2/Queues backing resources). Takosumi records Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput state. Takosumi or another operator distribution owns account-plane policy, billing, and OIDC.
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takos itself is deployed by Takosumi as an installed-and-applied OpenTofu module (`deploy/opentofu`, Cloudflare module; it provisions D1/KV/R2/Queues backing resources). Takosumi records Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput state. Account-plane policy, billing, and OIDC are owned by the in-process Accounts plane in the single Takos worker.
 
 ## API Shape
 
