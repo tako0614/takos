@@ -75,9 +75,15 @@ import {
 
 /**
  * Default signal used when callers do not pass one. Never aborts — keeps
- * existing call sites behavior-preserving.
+ * existing call sites behavior-preserving. Lazily created: workerd disallows
+ * constructing AbortController in module global scope (I/O-context-bound),
+ * so eager init fails Cloudflare upload validation.
  */
-const NEVER_ABORT_SIGNAL: AbortSignal = new AbortController().signal;
+let neverAbortSignal: AbortSignal | undefined;
+function getNeverAbortSignal(): AbortSignal {
+  neverAbortSignal ??= new AbortController().signal;
+  return neverAbortSignal;
+}
 
 /**
  * Interval between DB polls for the `cancellation_requested_at` flag, in ms.
@@ -317,7 +323,7 @@ export async function executeDeploymentPipeline(
   env: DeploymentEnv,
   encryptionKey: string,
   deploymentId: string,
-  signal: AbortSignal = NEVER_ABORT_SIGNAL,
+  signal: AbortSignal = getNeverAbortSignal(),
 ): Promise<Deployment> {
   // Phase boundary: lock — check cancellation before any work.
   throwIfAborted(signal, `deployment-pipeline:lock:${deploymentId}`);

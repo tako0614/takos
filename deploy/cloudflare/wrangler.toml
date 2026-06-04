@@ -15,10 +15,19 @@
 ## wrangler.toml as a separate source of truth.
 ## See ../../docs/architecture/internal-trust-boundaries.md for the deploy invariant.
 
+# NOTE: all relative paths in this file resolve from THIS config file's
+# directory (takos/deploy/cloudflare/), per wrangler semantics.
 name = "takos"
-main = "src/worker/index.ts"
+main = "../../src/worker/index.ts"
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
+
+# Single public hostname for the unified worker (Takos product + in-process
+# Takosumi accounts plane at the origin root + in-process deploy-control).
+# custom_domain provisions the DNS record + TLS cert automatically on deploy.
+[[routes]]
+pattern = "app.takosumi.com"
+custom_domain = true
 
 [observability]
 enabled = true
@@ -28,11 +37,11 @@ head_sampling_rate = 0.1
 
 [vars]
 # Non-sensitive configuration only
-ADMIN_DOMAIN = "admin.example.com"
-TENANT_BASE_DOMAIN = "app.example.com"
-AUTH_PUBLIC_BASE_URL = "https://admin.example.com"
-PROXY_BASE_URL = "https://admin.example.com"
-TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://admin.example.com"
+ADMIN_DOMAIN = "app.takosumi.com"
+TENANT_BASE_DOMAIN = "app.takosumi.com"
+AUTH_PUBLIC_BASE_URL = "https://app.takosumi.com"
+PROXY_BASE_URL = "https://app.takosumi.com"
+TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://app.takosumi.com"
 # TODO: AUTH_ALLOWED_REDIRECT_DOMAINS is defined but never consumed by application code.
 # It should be used for OIDC redirect URI validation (restrict redirect targets to
 # known domains). Remove this comment and implement validation, or remove the var entirely.
@@ -44,7 +53,7 @@ TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://admin.example.com"
 TAKOSUMI_ACCOUNTS_ISSUER = "https://app.takosumi.com"
 OIDC_ISSUER_URL = "https://app.takosumi.com"
 OIDC_CLIENT_ID = "takos-worker-installation-client"
-OIDC_REDIRECT_URI = "https://admin.example.com/auth/oidc/callback"
+OIDC_REDIRECT_URI = "https://app.takosumi.com/auth/oidc/callback"
 # Account-plane (in-process Takosumi Accounts handler) non-secret config. The
 # handler reads these directly from env (handler.ts); var names mirror
 # takosumi/deploy/accounts-cloudflare/wrangler.toml. Secrets are pushed via
@@ -59,7 +68,7 @@ TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
 OCI_ORCHESTRATOR_URL = ""
 # RoutingDO rollout phase (1-4). Node/local platform defaults to 1; CF Workers should set 4.
 ROUTING_DO_PHASE = "4"
-CF_ACCOUNT_ID = "replace-with-account-id"
+CF_ACCOUNT_ID = "a10162d23653f1ad1193dabf520a5dd0"
 CF_ZONE_ID = "replace-with-zone-id"
 
 [triggers]
@@ -69,7 +78,7 @@ crons = ["3,18,33,48 * * * *", "5 * * * *"]
 # - OIDC_CLIENT_SECRET: Takosumi Accounts OIDC client secret (required)
 # Static assets (routed through Worker for hostname-based routing)
 [assets]
-directory = "./dist"
+directory = "../../dist"
 binding = "ASSETS"
 run_worker_first = true
 
@@ -77,8 +86,8 @@ run_worker_first = true
 [[d1_databases]]
 binding = "DB"
 database_name = "takos-control-db"
-database_id = "replace-with-d1-database-id"
-migrations_dir = "db/migrations-control/migrations"
+database_id = "96bd80be-9b0b-498a-81ad-52cf61ffdef0"
+migrations_dir = "../../db/migrations-control/migrations"
 
 # Account-plane D1 (in-process Takosumi Accounts handler). Separate D1 from the
 # product `DB`: the schemas are namespace-incompatible (accounts = document-store
@@ -109,7 +118,7 @@ bucket_name = "takosumi-accounts-exports"
 [[d1_databases]]
 binding = "TAKOS_D1"
 database_name = "takosumi-deploy"
-database_id = "replace-with-takosumi-deploy-d1-database-id"
+database_id = "a82de2de-60cb-45c0-8ad4-921cd2aa1aaa"
 
 # Deploy-control R2 (OpenTofu plan artifacts). Default bucket name expected by
 # opentofu_runner_container.ts (DEFAULT_PLAN_ARTIFACT_BUCKET = "takos-artifacts").
@@ -120,14 +129,14 @@ bucket_name = "takos-artifacts"
 # KV for hostname routing
 [[kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
-id = "replace-with-kv-namespace-id"
+id = "daca6062c8a34cc7bd1bf1bee654be3b"
 
 # KV for rollout health check (optional — enables canary error-rate gating).
 # When unbound, advanceStage() skips health checks and proceeds unconditionally.
 # See ../../src/worker/application/services/platform/rollout.ts:117-129
 [[kv_namespaces]]
 binding = "ROLLOUT_HEALTH_KV"
-id = "replace-with-rollout-health-kv-namespace-id"
+id = "1c8125e0dbf64ae88918b3ee3bfd9019"
 
 # Durable Objects
 [[durable_objects.bindings]]
@@ -219,28 +228,34 @@ new_sqlite_classes = ["TakosCoordinationObject"]
 tag = "v8"
 new_sqlite_classes = ["TakosumiOpenTofuRunner"]
 
+# Runtime / executor images build locally from the takos-private app Dockerfiles
+# (COPY dist — run `bun build.mjs` in each app dir before deploying so dist/ is
+# fresh). Paths are wrangler-config-relative: ../../../ = ecosystem root.
 [[containers]]
 class_name = "TakosRuntimeContainer"
-image = "ghcr.io/takos/runtime-service:latest"
-image_build_context = "../../.."
+image = "../../../takos-private/apps/runtime/Dockerfile"
+image_build_context = "../../../takos-private/apps/runtime"
 instance_type = "standard-2"
 max_instances = 25
 
 [[containers]]
 class_name = "ExecutorContainerTier1"
-image = "your-executor-image:tag"
+image = "../../../takos-private/apps/executor/Dockerfile"
+image_build_context = "../../../takos-private/apps/executor"
 instance_type = "lite"
 max_instances = 20
 
 [[containers]]
 class_name = "ExecutorContainerTier2"
-image = "your-executor-image:tag"
+image = "../../../takos-private/apps/executor/Dockerfile"
+image_build_context = "../../../takos-private/apps/executor"
 instance_type = "basic"
 max_instances = 200
 
 [[containers]]
 class_name = "ExecutorContainerTier3"
-image = "your-executor-image:tag"
+image = "../../../takos-private/apps/executor/Dockerfile"
+image_build_context = "../../../takos-private/apps/executor"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
 
@@ -462,7 +477,7 @@ CF_ZONE_ID = "replace-with-staging-zone-id"
 binding = "DB"
 database_name = "takos-control-staging-db"
 database_id = "replace-with-staging-d1-database-id"
-migrations_dir = "db/migrations-control/migrations"
+migrations_dir = "../../db/migrations-control/migrations"
 
 # Account-plane D1 (staging). Separate takosumi-accounts staging D1 — create
 # with `wrangler d1 create takosumi-accounts-staging` and fill the id. No
@@ -546,26 +561,29 @@ class_name = "TakosumiOpenTofuRunner"
 
 [[env.staging.containers]]
 class_name = "TakosRuntimeContainer"
-image = "ghcr.io/takos/runtime-service:latest"
-image_build_context = "../../.."
+image = "../../../takos-private/apps/runtime/Dockerfile"
+image_build_context = "../../../takos-private/apps/runtime"
 instance_type = "standard-2"
 max_instances = 5
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
-image = "your-executor-image:tag"
+image = "../../../takos-private/apps/executor/Dockerfile"
+image_build_context = "../../../takos-private/apps/executor"
 instance_type = "lite"
 max_instances = 20
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier2"
-image = "your-executor-image:tag"
+image = "../../../takos-private/apps/executor/Dockerfile"
+image_build_context = "../../../takos-private/apps/executor"
 instance_type = "basic"
 max_instances = 100
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier3"
-image = "your-executor-image:tag"
+image = "../../../takos-private/apps/executor/Dockerfile"
+image_build_context = "../../../takos-private/apps/executor"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
 
