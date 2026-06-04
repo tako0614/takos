@@ -16,6 +16,14 @@ export default defineConfig(({ mode }) => {
     root: resolve(__dirname),
     resolve: {
       alias: {
+        // Takosumi dashboard SPA (account plane + installations screens) lives
+        // in takosumi/dashboard and is consumed in-process by this build via
+        // the `@takosumi/dashboard` specifier. See app-routes.tsx
+        // AccountPlaneRoutes for the consuming route registrations.
+        '@takosumi/dashboard': resolve(
+          __dirname,
+          '../../takosumi/dashboard/src',
+        ),
         'takos-api-contract/shared/types': resolve(
           __dirname,
           '../src/contracts/public/shared/types/index.ts',

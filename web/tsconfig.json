@@ -17,6 +17,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "@takosumi/dashboard/*": ["../../takosumi/dashboard/src/*"],
       "takos-api-contract/rpc-types": [
         "../src/contracts/public/rpc-types.ts"
       ],
