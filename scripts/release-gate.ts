@@ -48,18 +48,6 @@ const gates: GateCommand[] = [
     command: ['bun', 'run', 'lint:docs'],
   },
   {
-    name: 'service-set-validator',
-    command: ['bun', 'run', 'validate:service-set'],
-  },
-  {
-    name: 'validate-distributions',
-    command: ['bun', 'run', 'validate:distributions'],
-  },
-  {
-    name: 'validate-default-app-opentofu',
-    command: ['bun', 'run', 'validate:default-app-opentofu'],
-  },
-  {
     name: 'validate-observability',
     command: ['bun', 'run', 'validate:observability'],
   },
@@ -74,22 +62,6 @@ const gates: GateCommand[] = [
   {
     name: 'validate-legal-docs',
     command: ['bun', 'run', 'validate:legal-docs'],
-  },
-  {
-    name: 'validate-release-promotion',
-    command: ['bun', 'run', 'validate:release-promotion'],
-  },
-  {
-    name: 'validate-helm',
-    command: ['bun', 'run', 'validate:helm'],
-  },
-  {
-    name: 'helm-overlay-generator',
-    command: ['bun', 'run', 'helm:check-overlays'],
-  },
-  {
-    name: 'opentofu-helm-values',
-    command: ['bun', 'run', 'opentofu:helm-values:check'],
   },
   {
     name: 'opentofu-secret-policy',

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S bun
 import * as runtime from "./runtime.ts";
 
-type TargetId = 'aws' | 'gcp' | 'cloudflare';
+type TargetId = 'cloudflare';
 
 type Args = {
   outDir: string;
@@ -29,14 +29,6 @@ type PlanResult = {
 };
 
 const planCases: Record<TargetId, { label: string; varFile: string }> = {
-  aws: {
-    label: 'aws-staging',
-    varFile: 'plan/aws-staging.tfvars',
-  },
-  gcp: {
-    label: 'gcp-staging',
-    varFile: 'plan/gcp-staging.tfvars',
-  },
   cloudflare: {
     label: 'cloudflare-staging',
     varFile: 'plan/cloudflare-staging.tfvars',
@@ -136,11 +128,6 @@ async function opentofu(input: OpenTofuCommand): Promise<CommandOutput> {
     stderr: 'pipe',
     env: {
       TF_DATA_DIR: tfDataDir,
-      AWS_ACCESS_KEY_ID: 'mock',
-      AWS_SECRET_ACCESS_KEY: 'mock',
-      AWS_REGION: 'ap-northeast-1',
-      AWS_EC2_METADATA_DISABLED: 'true',
-      GOOGLE_OAUTH_ACCESS_TOKEN: 'mock',
     },
   });
 
@@ -211,7 +198,7 @@ function relativeToRoot(path: string): string {
 function parseArgs(values: readonly string[]): Args {
   const parsed: Args = {
     outDir: '.opentofu-plan',
-    targets: ['aws', 'gcp', 'cloudflare'],
+    targets: ['cloudflare'],
     opentofuBin: runtime.env.get('TAKOS_OPENTOFU_BIN') ?? 'tofu',
   };
 
@@ -226,8 +213,8 @@ function parseArgs(values: readonly string[]): Args {
         break;
       case '--target': {
         const target = requiredArgValue(values, index, value);
-        if (target !== 'aws' && target !== 'gcp' && target !== 'cloudflare') {
-          console.error(`--target must be aws, gcp, or cloudflare, got ${target}`);
+        if (target !== 'cloudflare') {
+          console.error(`--target must be cloudflare, got ${target}`);
           runtime.exit(2);
         }
         parsed.targets = [target];
@@ -266,7 +253,7 @@ function usage(): string {
   return [
     'Usage:',
     '  bun run opentofu:plan-gate',
-    '  bun run opentofu:plan-gate --target aws --out-dir .opentofu-plan',
+    '  bun run opentofu:plan-gate --target cloudflare --out-dir .opentofu-plan',
     '  TAKOS_OPENTOFU_BIN=/path/to/tofu bun run opentofu:plan-gate',
   ].join('\n');
 }

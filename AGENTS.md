@@ -27,9 +27,9 @@ Takosumi 公開概念は `Installation` / `PlanRun` / `ApplyRun` / `Deployment` 
 - Takos Worker の source owner (`src/worker` / `src/routes` / `src/contracts`)
 - UI source owner (`web`)
 - Git / agent container implementation owner (`containers/git`、 `containers/agent`)
-- shell-owned distribution artifacts (`deploy/distributions/`、 `deploy/helm/`、 `deploy/opentofu/`)
+- shell-owned distribution artifacts (`deploy/distributions/`、 `deploy/opentofu/`)
 - shell-owned planning docs (`docs/contributing/`、 旧 `plan/`)
-- product validator scripts (release-gate / validate:helm / validate:distributions 等)
+- product validator scripts (release-gate / validate:opentofu-secrets / validate:patch-management 等)
 
 ### 持たない
 
@@ -97,8 +97,6 @@ cd takos
 bun run doctor
 bun run local:up        # local stack
 bun run local:e2e
-bun run validate:helm
-bun run validate:distributions
 bun run lint:agent-docs
 bun run validate:architecture
 bun run release-gate

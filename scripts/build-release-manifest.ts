@@ -639,55 +639,12 @@ function validationCommands(): CommandManifest[] {
       command: ['bun', 'run', 'lint:docs'],
     },
     {
-      name: 'service-set-validator',
-      command: [
-        'bun',
-        'run',
-        'validate:service-set',
-      ],
-    },
-    {
-      name: 'validate-distributions',
-      command: ['bun', 'run', 'validate:distributions'],
-    },
-    {
-      name: 'validate-helm',
-      command: ['bun', 'run', 'validate:helm'],
-    },
-    {
-      name: 'helm-overlay-generator',
-      command: ['bun', 'run', 'helm:check-overlays'],
-    },
-    {
-      name: 'opentofu-helm-values',
-      command: ['bun', 'run', 'opentofu:helm-values:check'],
-    },
-    {
       name: 'opentofu-plan-gate',
       command: ['bun', 'run', 'opentofu:plan-gate'],
     },
     {
       name: 'opentofu-secret-policy',
       command: ['bun', 'run', 'validate:opentofu-secrets'],
-    },
-    {
-      name: 'validate-release-promotion',
-      command: ['bun', 'run', 'validate:release-promotion'],
-    },
-    {
-      name: 'helm-template-smoke',
-      command: ['bun', 'run', 'helm:template-smoke'],
-      env: {
-        TAKOS_HELM_REQUIRE_INSTALL_DRY_RUN: '1',
-        TAKOS_HELM_INSTALL_TEST_CRDS: '1',
-      },
-    },
-    {
-      name: 'helm-install-smoke',
-      command: ['bun', 'run', 'helm:install-smoke'],
-      env: {
-        TAKOS_HELM_INSTALL_TEST_CRDS: '1',
-      },
     },
     {
       name: 'release-gate',
@@ -714,20 +671,8 @@ function assertRequiredValidationCommands(
   const required: Record<string, readonly string[]> = {
     'lint:agent-docs': ['bun', 'run', 'lint:agent-docs'],
     'validate-architecture': ['bun', 'run', 'validate:architecture'],
-    'validate-distributions': ['bun', 'run', 'validate:distributions'],
-    'service-set-validator': ['bun', 'run', 'validate:service-set'],
-    'validate-helm': ['bun', 'run', 'validate:helm'],
-    'helm-overlay-generator': ['bun', 'run', 'helm:check-overlays'],
-    'opentofu-helm-values': ['bun', 'run', 'opentofu:helm-values:check'],
     'opentofu-plan-gate': ['bun', 'run', 'opentofu:plan-gate'],
     'opentofu-secret-policy': ['bun', 'run', 'validate:opentofu-secrets'],
-    'validate-release-promotion': [
-      'bun',
-      'run',
-      'validate:release-promotion',
-    ],
-    'helm-template-smoke': ['bun', 'run', 'helm:template-smoke'],
-    'helm-install-smoke': ['bun', 'run', 'helm:install-smoke'],
     'lint:docs': ['bun', 'run', 'lint:docs'],
   };
   const errors: string[] = [];
@@ -854,35 +799,7 @@ async function collectServiceSet(): Promise<JsonValue> {
     'takos-git',
     'takos-agent',
   ];
-  const targets: string[] = [];
-  const helmDir = 'deploy/helm/takos/templates';
-
-  try {
-    for await (const entry of runtime.readDir(helmDir)) {
-      if (entry.isFile && /\.(ya?ml|tpl|txt)$/.test(entry.name)) {
-        targets.push(`${helmDir}/${entry.name}`);
-      }
-    }
-  } catch {
-    // Helm templates are optional for manifest generation.
-  }
-
-  const observations: Array<{
-    serviceId: string;
-    kind: 'label';
-    file: string;
-    line: number;
-  }> = [];
-
-  for (const file of targets.sort()) {
-    const text = await readTextIfExists(file);
-    if (text === null) continue;
-    observations.push(...collectServiceObservations(file, text));
-  }
-
-  const observed = [...new Set(observations.map((entry) => entry.serviceId))]
-    .sort();
-  return { expected, observed, observations };
+  return { expected };
 }
 
 function collectServiceObservations(

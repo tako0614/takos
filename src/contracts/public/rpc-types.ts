@@ -248,7 +248,7 @@ type ApiRouteSchema = {
   };
 };
 
-// The route implementation is split between src/routes/public and app-local control
-// handlers. Known families are typed above; the index signature keeps route
-// families available to hono/client while ownership continues to narrow.
+// The route implementation lives in the app-local control handlers. Known families
+// are typed above; the index signature keeps route families available to
+// hono/client while ownership continues to narrow.
 export type ApiRoutes = Hono<{ Variables: ApiVariables }, ApiRouteSchema, "/">;
