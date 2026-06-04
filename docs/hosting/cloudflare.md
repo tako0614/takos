@@ -277,7 +277,6 @@ OIDC_REDIRECT_URI = "https://admin.example.com/auth/oidc/callback"
 AUTH_PUBLIC_BASE_URL = "https://admin.example.com"
 PROXY_BASE_URL = "https://admin.example.com"
 TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://admin.example.com"
-ROUTING_DO_PHASE = "4"
 CF_ACCOUNT_ID = "replace-with-account-id"
 CF_ZONE_ID = "replace-with-zone-id"
 
@@ -591,7 +590,6 @@ workers_dev = true
 [env.staging.vars]
 ADMIN_DOMAIN = "test.takos.jp"
 TENANT_BASE_DOMAIN = "app.test.takos.jp"
-ROUTING_DO_PHASE = "4"
 # ... 他の環境固有の設定
 ```
 
@@ -774,7 +772,6 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 | `TAKOS_AGENT_CONTROL_RPC_BASE_URL`             | agent executor container の control RPC base URL                      |
 | `OCI_ORCHESTRATOR_URL`                         | image-backed services / containers 用 OCI deployment adapter の URL   |
 | `OCI_ORCHESTRATOR_TOKEN`                       | OCI deployment adapter / orchestrator 認証トークン（任意）            |
-| `ROUTING_DO_PHASE`                             | RoutingDO rollout phase。詳細は下記 [Routing phases](#routing-phases) |
 | `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` | Takos product-internal runtime signing key                            |
 
 認証系:
@@ -863,23 +860,16 @@ orchestrator を使うなら `OCI_ORCHESTRATOR_TOKEN` を設定する。
 テナント Worker workload を論理分離する Cloudflare の optional backend。他環境では
 routing / dispatch が各 target の tenant runtime path に解決される。
 
-### Routing phases
+### Routing data source
 
-`ROUTING_DO_PHASE` は hostname → service routing の data source rollout を
-gradual に切り替えるための feature flag。値は `1`-`4` のいずれかで、production
-は **`4`**、新規環境の bootstrap は `1` から始めて段階的に進める想定。
+hostname → service routing の data source は deployment runtime で決まり、追加の
+feature flag は無い:
 
-| phase | 読み取り primary                         | 書き込み primary                 | 補足                                        |
-| ----- | ---------------------------------------- | -------------------------------- | ------------------------------------------- |
-| `1`   | KV のみ                                  | KV のみ (DO は best-effort sync) | L1 cache 無し                               |
-| `2`   | DO verify (KV と差分検出時は KV refresh) | KV + DO 並行                     | DO 同時書き込み                             |
-| `3`   | L1 cache → DO primary, KV は L2 cache    | DO 必須                          | DO が unavailable なら stale KV へ fallback |
-| `4`   | phase 3 + KV TTL (`L2_KV_TTL`)           | DO 必須 + KV expirationTtl       | 通常の本番設定                              |
-
-単一の `takos-worker` (`takos/deploy/cloudflare/wrangler.toml`) で同じ値を維持する
-こと。phase を下げる方向の rollback はサポートされる (KV/DO 双方が更新されている
-ため) が、phase 1 から phase 3 以上へ jumping すると DO が空のため routing が
-壊れる。順次進めること。
+- **Cloudflare Workers**: RoutingDO を primary とし、L1 (isolate-local) cache →
+  KV を L2 cache (`L2_KV_TTL` expirationTtl) として読む。DO が unavailable なら
+  stale KV へ best-effort fallback する。書き込みは DO 必須 + KV cache 更新。
+- **Node / local platform**: `ROUTING_STORE` を bind し、routing 読み書きは
+  store 経由に short-circuit する (DO/KV path は走らない)。
 
 ### Analytics Engine
 

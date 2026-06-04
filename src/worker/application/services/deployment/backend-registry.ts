@@ -19,32 +19,6 @@ export type DeploymentBackendFactoryConfig =
   & OciDeploymentOrchestratorConfig
   & {
     cloudflareEnv?: WfpDeploymentBackendEnv;
-    awsRegion?: string;
-    awsEcsClusterArn?: string;
-    awsEcsTaskDefinitionFamily?: string;
-    awsEcsServiceArn?: string;
-    awsEcsServiceName?: string;
-    awsEcsContainerName?: string;
-    awsEcsSubnetIds?: string;
-    awsEcsSecurityGroupIds?: string;
-    awsEcsAssignPublicIp?: string;
-    awsEcsLaunchType?: string;
-    awsEcsDesiredCount?: string;
-    awsEcsBaseUrl?: string;
-    awsEcsHealthUrl?: string;
-    awsEcrRepositoryUri?: string;
-    gcpProjectId?: string;
-    gcpRegion?: string;
-    gcpCloudRunServiceId?: string;
-    gcpCloudRunServiceAccount?: string;
-    gcpCloudRunIngress?: string;
-    gcpCloudRunAllowUnauthenticated?: string;
-    gcpCloudRunBaseUrl?: string;
-    gcpCloudRunDeleteOnRemove?: string;
-    gcpArtifactRegistryRepo?: string;
-    k8sNamespace?: string;
-    k8sDeploymentName?: string;
-    k8sImageRegistry?: string;
     backendRegistry?: {
       get(
         name: DeploymentBackendName,
@@ -52,11 +26,7 @@ export type DeploymentBackendFactoryConfig =
     };
   };
 
-export type OrchestratedDeploymentBackendName =
-  | "oci"
-  | "ecs"
-  | "cloud-run"
-  | "k8s";
+export type OrchestratedDeploymentBackendName = "oci";
 
 export type OrchestratedDeploymentBackendConfig =
   & OciDeploymentOrchestratorConfig
@@ -78,20 +48,6 @@ export type ResolvedDeploymentBackendFactory =
     kind: "runtime-host";
   };
 
-function compactRecord<T extends Record<string, unknown>>(
-  value: T,
-): T | undefined {
-  const filtered = Object.entries(value).filter(([, entry]) => {
-    if (entry == null) return false;
-    if (typeof entry === "string") return entry.trim().length > 0;
-    return true;
-  });
-  if (filtered.length === 0) {
-    return undefined;
-  }
-  return Object.fromEntries(filtered) as T;
-}
-
 function readRegistryString(
   entry: DeploymentBackendRegistryEntry | undefined,
   key: string,
@@ -100,57 +56,6 @@ function readRegistryString(
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : undefined;
-}
-
-function readConfigString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
-}
-
-function readConfigBoolean(value: unknown): boolean | undefined {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "true" || normalized === "1" || normalized === "yes") {
-      return true;
-    }
-    if (normalized === "false" || normalized === "0" || normalized === "no") {
-      return false;
-    }
-  }
-  return undefined;
-}
-
-function readConfigNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number.parseInt(value.trim(), 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function readConfigStringList(value: unknown): string[] | undefined {
-  if (Array.isArray(value)) {
-    const entries = value
-      .filter((entry): entry is string => typeof entry === "string")
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
-    return entries.length > 0 ? entries : undefined;
-  }
-  if (typeof value === "string") {
-    const entries = value
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
-    return entries.length > 0 ? entries : undefined;
-  }
-  return undefined;
 }
 
 function resolveRegistryBackendConfig(
@@ -173,56 +78,6 @@ function resolveRegistryBackendConfig(
   return Object.keys(backendConfig).length > 0 ? backendConfig : undefined;
 }
 
-function resolveEnvBackendConfig(
-  backendName: OrchestratedDeploymentBackendName,
-  config: DeploymentBackendFactoryConfig,
-): Record<string, unknown> | undefined {
-  switch (backendName) {
-    case "ecs":
-      return compactRecord({
-        region: readConfigString(config.awsRegion),
-        clusterArn: readConfigString(config.awsEcsClusterArn),
-        taskDefinitionFamily: readConfigString(
-          config.awsEcsTaskDefinitionFamily,
-        ),
-        serviceArn: readConfigString(config.awsEcsServiceArn),
-        serviceName: readConfigString(config.awsEcsServiceName),
-        containerName: readConfigString(config.awsEcsContainerName),
-        subnetIds: readConfigStringList(config.awsEcsSubnetIds),
-        securityGroupIds: readConfigStringList(config.awsEcsSecurityGroupIds),
-        assignPublicIp: readConfigBoolean(config.awsEcsAssignPublicIp),
-        launchType: readConfigString(config.awsEcsLaunchType),
-        desiredCount: readConfigNumber(config.awsEcsDesiredCount),
-        baseUrl: readConfigString(config.awsEcsBaseUrl),
-        healthUrl: readConfigString(config.awsEcsHealthUrl),
-        ecrRepositoryUri: readConfigString(config.awsEcrRepositoryUri),
-      });
-    case "cloud-run":
-      return compactRecord({
-        projectId: readConfigString(config.gcpProjectId),
-        region: readConfigString(config.gcpRegion),
-        serviceId: readConfigString(config.gcpCloudRunServiceId),
-        serviceAccount: readConfigString(config.gcpCloudRunServiceAccount),
-        ingress: readConfigString(config.gcpCloudRunIngress),
-        allowUnauthenticated: readConfigBoolean(
-          config.gcpCloudRunAllowUnauthenticated,
-        ),
-        baseUrl: readConfigString(config.gcpCloudRunBaseUrl),
-        deleteOnRemove: readConfigBoolean(config.gcpCloudRunDeleteOnRemove),
-        artifactRegistryRepo: readConfigString(config.gcpArtifactRegistryRepo),
-      });
-    case "k8s":
-      return compactRecord({
-        namespace: readConfigString(config.k8sNamespace),
-        deploymentName: readConfigString(config.k8sDeploymentName),
-        imageRegistry: readConfigString(config.k8sImageRegistry),
-      });
-    case "oci":
-    default:
-      return undefined;
-  }
-}
-
 export function resolveDeploymentBackendFactory(
   backendName: DeploymentBackendName,
   hasImageRef: boolean,
@@ -242,9 +97,6 @@ export function resolveDeploymentBackendFactory(
   const registryBackendConfig = resolveRegistryBackendConfig(registryEntry);
 
   switch (normalizedBackendName) {
-    case "ecs":
-    case "cloud-run":
-    case "k8s":
     case "oci":
       if (
         hasImageRef &&
@@ -255,9 +107,8 @@ export function resolveDeploymentBackendFactory(
       return {
         kind: "orchestrated",
         config: {
-          backendName: normalizedBackendName,
-          backendConfig: registryBackendConfig ??
-            resolveEnvBackendConfig(normalizedBackendName, config),
+          backendName: "oci",
+          backendConfig: registryBackendConfig,
           orchestratorUrl: registryOrchestratorUrl ?? config.orchestratorUrl,
           orchestratorToken: registryOrchestratorToken ??
             config.orchestratorToken,

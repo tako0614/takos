@@ -46,8 +46,9 @@ const REQUIRED_KEYS = {
     "TENANT_BASE_DOMAIN",
     "PLATFORM_PRIVATE_KEY",
     "PLATFORM_PUBLIC_KEY",
-    // Required by /internal/executor-rpc/*, which validates forwarded
-    // executor-host requests using this shared secret.
+    // Shared secret carried into the in-process container-host env
+    // (withUnifiedContainerHostEnv); kept required so the executor-host env
+    // shape stays populated at boot.
     "EXECUTOR_PROXY_SECRET",
     // Required at runtime by common-env crypto helpers (`getCommonEnvSecret`
     // throws if unset). Fail fast at boot rather than deferring to first use.

@@ -87,7 +87,6 @@ export type WorkerEnv = DbEnv & {
   K8S_IMAGE_REGISTRY?: string;
   HOSTNAME_ROUTING: KvStoreBinding;
   ROUTING_DO?: DurableObjectNamespace;
-  ROUTING_DO_PHASE?: string;
   SERVICE_INTERNAL_JWT_ISSUER?: string;
   WORKFLOW_QUEUE?: MessageQueueBinding<WorkflowJobQueueMessage>;
   DEPLOY_QUEUE?: MessageQueueBinding<DeploymentQueueMessage>;

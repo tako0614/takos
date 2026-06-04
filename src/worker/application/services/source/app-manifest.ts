@@ -3,12 +3,10 @@ export type {
   AppCompute,
   AppConsume,
   AppManifest,
-  AppManifestBuildSource,
   AppManifestOverride,
   AppPublication,
   AppRoute,
   AppTriggers,
-  BundleDoc,
   ComputeKind,
   HealthCheck,
   ScheduleTrigger,
@@ -27,6 +25,7 @@ export {
 export {
   APP_MANIFEST_OUTPUT_KEYS,
   parseOpenTofuAppManifestOutputs,
+  selectInstallableSourcePathFromRepo,
 } from "./opentofu-app-manifest.ts";
 
 // Re-export validation
@@ -34,12 +33,3 @@ export {
   parseAndValidateWorkflowYaml,
   validateDeployProducerJob,
 } from "./app-manifest-validation.ts";
-
-// Re-export bundle generation and packaging
-export {
-  appManifestToBundleDocs,
-  buildBundlePackageData,
-  buildParsedPackageFromDocs,
-  extractBuildSourcesFromManifestJson,
-  selectInstallableSourcePathFromRepo,
-} from "./app-manifest-bundle.ts";

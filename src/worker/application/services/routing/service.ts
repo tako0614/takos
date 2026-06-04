@@ -27,8 +27,6 @@ export {
   selectRouteRefFromRoutingTarget,
 } from "./resolver.ts";
 
-export { getRoutingPhase } from "./phase.ts";
-
 import { normalizeHostname, parseRoutingValue } from "./resolver.ts";
 import {
   buildKVPayload,
@@ -47,7 +45,6 @@ import {
   runBackground,
   shouldUseKvValue,
 } from "./cache.ts";
-import { getRoutingPhase } from "./phase.ts";
 
 export async function resolveHostnameRouting(options: {
   env: RoutingBindings;
@@ -57,13 +54,10 @@ export async function resolveHostnameRouting(options: {
   clock?: Clock;
 }): Promise<ResolvedRouting> {
   const hostname = normalizeHostname(options.hostname);
-  const phase = getRoutingPhase(options.env);
   const nowMs = (options.clock ?? systemClock).now();
 
-  if (phase >= 3) {
-    const l1 = getL1(hostname, nowMs);
-    if (l1) return { ...l1, source: "l1" };
-  }
+  const l1 = getL1(hostname, nowMs);
+  if (l1) return { ...l1, source: "l1" };
 
   if (hasRoutingStore(options.env)) {
     const record = await options.env.ROUTING_STORE.getRecord(hostname);
@@ -75,9 +69,7 @@ export async function resolveHostnameRouting(options: {
       source: "store",
       record,
     };
-    if (phase >= 3) {
-      putL1(hostname, resolved, nowMs);
-    }
+    putL1(hostname, resolved, nowMs);
     return resolved;
   }
 
@@ -89,15 +81,6 @@ export async function resolveHostnameRouting(options: {
   const kv = parseRoutingValue(kvRaw);
   const kvTombstone = typeof kv.tombstoneUntil === "number" &&
     kv.tombstoneUntil > nowMs;
-
-  if (phase === 1) {
-    return {
-      target: kvTombstone ? null : kv.target,
-      tombstone: kvTombstone,
-      source: "kv",
-      kv,
-    };
-  }
 
   const envWithDo = hasRoutingDO(options.env) ? options.env : null;
   const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT;
@@ -133,79 +116,7 @@ export async function resolveHostnameRouting(options: {
     }
   };
 
-  // Phase 2: kv store primary + DO verify (trust DO when available)
-  if (phase === 2) {
-    const resolved = await maybeResolveFromDo();
-
-    // DO miss: use kv store, and opportunistically backfill DO.
-    if (resolved && !resolved.record && kv.target && envWithDo) {
-      const task = doPutRecord(envWithDo, hostname, kv.target, nowMs, timeoutMs)
-        .catch((err) => {
-          logWarn(
-            `${ROUTING_LOG_PREFIX} DO backfill put failed for ${hostname}`,
-            { module: "services/routing", detail: err },
-          );
-        });
-      options.executionCtx?.waitUntil?.(task);
-      return {
-        target: kv.target,
-        tombstone: false,
-        source: "kv",
-        kv,
-        record: null,
-      };
-    }
-
-    // DO hit: compare and refresh kv store cache if mismatched.
-    if (resolved?.record) {
-      const doTarget = resolved.tombstone ? null : resolved.record.target;
-      const mismatch = JSON.stringify(kv.target) !== JSON.stringify(doTarget);
-      if (mismatch) {
-        logWarn(`${ROUTING_LOG_PREFIX} verify mismatch for ${hostname}`, {
-          module: "services/routing",
-          detail: {
-            kv: kvRaw ? String(kvRaw).slice(0, 200) : null,
-            do: resolved.record,
-          },
-        });
-
-        // Refresh kv store to DO truth (best-effort).
-        const payload = buildKVPayload({
-          target: doTarget,
-          updatedAt: nowMs,
-          version: resolved.record.version,
-          tombstoneUntil: resolved.record.tombstoneUntil,
-        });
-
-        const task = options.env.HOSTNAME_ROUTING.put(hostname, payload).catch(
-          (err: unknown) => {
-            logWarn(`${ROUTING_LOG_PREFIX} KV refresh failed for ${hostname}`, {
-              module: "services/routing",
-              detail: err,
-            });
-          },
-        );
-        options.executionCtx?.waitUntil?.(task);
-      }
-
-      if (phase >= 3) {
-        putL1(hostname, resolved, nowMs);
-      }
-
-      // Trust DO.
-      return resolved;
-    }
-
-    // No DO available (or error): kv store only.
-    return {
-      target: kvTombstone ? null : kv.target,
-      tombstone: kvTombstone,
-      source: "kv",
-      kv,
-    };
-  }
-
-  // Phase 3/4: caches + DO primary fallback
+  // DO-primary with L1 + KV (L2) cache.
   if (kvTombstone) {
     const tombstone: ResolvedRouting = {
       target: null,
@@ -239,9 +150,7 @@ export async function resolveHostnameRouting(options: {
         version: resolved.record.version,
         tombstoneUntil: resolved.record.tombstoneUntil,
       });
-      const kvOpts = phase >= 4
-        ? { expirationTtl: L2_KV_TTL }
-        : undefined;
+      const kvOpts = { expirationTtl: L2_KV_TTL };
       const task = options.env.HOSTNAME_ROUTING.put(hostname, payload, kvOpts)
         .catch((err: unknown) => {
           logWarn(
@@ -284,7 +193,6 @@ export async function upsertHostnameRouting(options: {
   clock?: Clock;
 }): Promise<void> {
   const hostname = normalizeHostname(options.hostname);
-  const phase = getRoutingPhase(options.env);
   const nowMs = (options.clock ?? systemClock).now();
   const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT;
   deleteL1(hostname);
@@ -298,40 +206,20 @@ export async function upsertHostnameRouting(options: {
     throw new Error("HOSTNAME_ROUTING is not configured");
   }
 
-  const kvPayload = buildKVPayload({
-    target: options.target,
-    updatedAt: nowMs,
-  });
-  const kvOpts = phase >= 4 ? { expirationTtl: L2_KV_TTL } : undefined;
-
-  if (phase < 3) {
-    await options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, kvOpts);
-    if (hasRoutingDO(options.env)) {
-      const task = doPutRecord(
-        options.env,
-        hostname,
-        options.target,
-        nowMs,
-        timeoutMs,
-      ).catch((err) => {
-        logWarn(`${ROUTING_LOG_PREFIX} DO put failed for ${hostname}`, {
-          module: "services/routing",
-          detail: err,
-        });
-      });
-      await runBackground(options.executionCtx, task);
-    }
-    return;
-  }
-
-  // Phase 3/4: DO primary (required)
+  // DO primary (required) + KV (L2) cache.
   if (!hasRoutingDO(options.env)) {
     throw new Error("ROUTING_DO is not configured");
   }
 
   await doPutRecord(options.env, hostname, options.target, nowMs, timeoutMs);
 
-  const kvTask = options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, kvOpts)
+  const kvPayload = buildKVPayload({
+    target: options.target,
+    updatedAt: nowMs,
+  });
+  const kvTask = options.env.HOSTNAME_ROUTING.put(hostname, kvPayload, {
+    expirationTtl: L2_KV_TTL,
+  })
     .catch((err: unknown) => {
       logWarn(`${ROUTING_LOG_PREFIX} KV put failed for ${hostname}`, {
         module: "services/routing",
@@ -350,7 +238,6 @@ export async function deleteHostnameRouting(options: {
   clock?: Clock;
 }): Promise<void> {
   const hostname = normalizeHostname(options.hostname);
-  const phase = getRoutingPhase(options.env);
   const nowMs = (options.clock ?? systemClock).now();
   const tombstoneTtlMs = options.tombstoneTtlMs ?? DEFAULT_TOMBSTONE_TTL;
   const timeoutMs = options.timeoutMs ?? DEFAULT_DO_TIMEOUT;
@@ -367,26 +254,6 @@ export async function deleteHostnameRouting(options: {
 
   if (!options.env.HOSTNAME_ROUTING) {
     throw new Error("HOSTNAME_ROUTING is not configured");
-  }
-
-  if (phase < 3) {
-    await options.env.HOSTNAME_ROUTING.delete(hostname);
-    if (hasRoutingDO(options.env)) {
-      const task = doDeleteRecord(
-        options.env,
-        hostname,
-        tombstoneTtlMs,
-        nowMs,
-        timeoutMs,
-      ).catch((err) => {
-        logWarn(`${ROUTING_LOG_PREFIX} DO delete failed for ${hostname}`, {
-          module: "services/routing",
-          detail: err,
-        });
-      });
-      await runBackground(options.executionCtx, task);
-    }
-    return;
   }
 
   if (!hasRoutingDO(options.env)) {

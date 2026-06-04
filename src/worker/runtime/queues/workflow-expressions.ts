@@ -16,8 +16,9 @@ import { logWarn } from '../../shared/utils/logger.ts';
 // arithmetic, composite expressions) is **NOT supported** and will quietly
 // evaluate to `false` after a warning log. Workflow authors copy-pasting a
 // real-world GH Actions workflow should expect non-trivial `if:` conditions to
-// silently skip the step. See `src/worker/actions-engine/` for the full
-// compatibility table.
+// silently skip the step. The actions-engine package only parses/validates
+// workflows; it does not provide a richer runtime evaluator, so the subset
+// above is the runner's full `if:` capability.
 export function evaluateCondition(
   expression: string,
   context: ConditionContext,
@@ -58,7 +59,7 @@ export function evaluateCondition(
 
   // Unrecognized expression — log a warning so workflow authors notice that
   // their `if:` is being silently skipped instead of evaluated. (See the
-  // README compatibility table for the supported subset.)
+  // module-level comment above for the supported subset.)
   logWarn(
     `Unrecognized workflow expression — evaluated as false. Only a subset of GitHub Actions expression syntax is supported.`,
     { module: 'workflow-expressions', detail: { expression: expr } },

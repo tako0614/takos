@@ -6,7 +6,6 @@ import type { RoutingBindings } from "../../application/services/routing/routing
 test("routing service keeps kv store tombstones authoritative in cache phases", async () => {
   const tombstoneUntil = Date.now() + 60_000;
   const env: RoutingBindings = {
-    ROUTING_DO_PHASE: "4",
     HOSTNAME_ROUTING: {
       async get() {
         return JSON.stringify({

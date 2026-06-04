@@ -24,7 +24,6 @@ import services from "./workers/index.ts";
 import customDomains from "./custom-domains.ts";
 import resources from "./resources/index.ts";
 import sessions from "./sessions/index.ts";
-import git from "./git/index.ts";
 import repos from "./repos/index.ts";
 import pullRequests from "./pull-requests/index.ts";
 import notifications from "./notifications/index.ts";
@@ -125,7 +124,6 @@ function requiredApiScopesForRequest(
   }
   if (
     pathMatches(pathname, "/repos") ||
-    pathMatches(pathname, "/git") ||
     isSpaceScopedFamily(pathname, "repos") ||
     isSpaceScopedFamily(pathname, "repositories")
   ) {
@@ -322,8 +320,6 @@ export function createApiRouter({
   apiRouter.use("/sessions/*", scopedApiAuth);
   apiRouter.use("/repos", scopedApiAuth);
   apiRouter.use("/repos/*", scopedApiAuth);
-  apiRouter.use("/git", scopedApiAuth);
-  apiRouter.use("/git/*", scopedApiAuth);
   apiRouter.use("/agent-tasks", scopedApiAuth);
   apiRouter.use("/agent-tasks/*", scopedApiAuth);
   apiRouter.use("/setup", scopedApiAuth);
@@ -364,7 +360,6 @@ export function createApiRouter({
   apiRouter.route("/", memories); // Memory routes for memories and reminders
   apiRouter.route("/", skills); // Skills routes
   apiRouter.route("/", sessions); // Session routes for Space File Sync
-  apiRouter.route("/", git); // Git routes for version control
   apiRouter.route("/", repos); // Repository management routes
   apiRouter.route("/", agentTasks); // Agent task routes
   apiRouter.route("/", notifications); // Notifications routes at /api/notifications

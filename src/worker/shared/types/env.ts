@@ -144,7 +144,6 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   // guard with truthiness checks; `rollout.ts` needs an explicit assertion
   // before reach because it dereferences directly.
   ROUTING_DO?: DurableNamespaceBinding;
-  ROUTING_DO_PHASE?: string;
   // Queues
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;

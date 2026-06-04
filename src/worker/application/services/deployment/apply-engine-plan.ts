@@ -5,10 +5,6 @@ import {
   applyManifestOverrides,
   type GroupDesiredState,
 } from "./group-state.ts";
-import type {
-  TranslationContext,
-  TranslationReport,
-} from "./translation-report.ts";
 
 export type ApplyEnginePlanGroup = {
   id: string;
@@ -22,11 +18,6 @@ export type ApplyEnginePlannerDeps = {
     manifest: AppManifest,
     options: { groupName: string; backend: string; envName: string },
   ) => GroupDesiredState;
-  buildTranslationReport: (
-    desiredState: GroupDesiredState,
-    context: TranslationContext,
-  ) => TranslationReport;
-  buildTranslationContextFromEnv: (env: Env) => TranslationContext;
 };
 
 export type BuildManifestPlanInput<TGroup extends ApplyEnginePlanGroup> = {
@@ -48,7 +39,6 @@ export type ManifestPlan = {
   desiredState: GroupDesiredState;
   currentState: GroupState | null;
   diff: DiffResult;
-  translationReport: TranslationReport;
 };
 
 export async function buildManifestPlan<TGroup extends ApplyEnginePlanGroup>(
@@ -77,17 +67,11 @@ export async function buildManifestPlan<TGroup extends ApplyEnginePlanGroup>(
   const currentState = input.groupId
     ? await input.getCurrentState(input.groupId)
     : null;
-  const translationContext = deps.buildTranslationContextFromEnv(input.env);
-  const translationReport = deps.buildTranslationReport(
-    desiredState,
-    translationContext,
-  );
 
   return {
     effectiveManifest,
     desiredState,
     currentState,
     diff: computeDiff(desiredState, currentState),
-    translationReport,
   };
 }

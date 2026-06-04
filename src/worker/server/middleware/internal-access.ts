@@ -1,27 +1,27 @@
-// Access validators for internal-only HTTP endpoints exposed by the web
-// worker (see takos/../../web.ts).
+// Access gate for the `/internal/*` HTTP endpoints exposed by the web worker
+// (see takos/../../web.ts).
 //
-// These are TIER 3 (cross-service) gates per the canonical mechanism in
-// docs/architecture/internal-trust-boundaries.md: they authenticate a separate
-// trust domain (the operator distribution / account-plane), so they keep a
-// credential. They are the LEGACY plain-shared-secret form; the canonical
-// cross-service primitive is the `takos-internal-v3` signed envelope
-// (verifyTakosumiInternalRequestFromHeaders), onto which these converge once the
-// cross-repo callers send it. Do NOT use these for intra-worker (tier 1) calls —
-// those rely on the binding/DO-stub transport as the trust boundary, no header.
+// The worker, account-plane, and executor run in ONE process; intra-worker calls
+// use the binding/DO-stub transport as their trust boundary and send no header.
+// The only HTTP entry that crosses into the worker from outside is an EXTERNAL
+// SCHEDULER callback (a k8s CronJob / EventBridge / Cloud Scheduler hitting
+// `/internal/scheduled` and the default-app-distribution endpoints). That is the
+// one gate here: the request must originate from loopback, or from an
+// authenticated cluster-internal hostname presenting the shared
+// `X-Takos-Internal-Secret`. The shared secret is the only defense against
+// Host-spoof / DNS-rebind reaching a cluster-internal hostname; it is not a
+// cross-trust-domain credential.
 //
 // - isSelfHostLoopback / isSelfHostInternalHostname: hostname classifiers
 //   for self-host loopback addresses and cluster-internal hostnames
 // - isAllowedOrigin: CORS allow-list helper for the admin domain
 // - validateInternalApiAccess: gate for /internal/* endpoints (loopback or
 //   cluster-internal hostname + X-Takos-Internal-Secret header)
-// - validateAuthProxyAccess: gate for the auth proxy endpoints
-//   (X-Takos-Auth-Proxy-Secret header)
 import type { Env } from "../../shared/types/index.ts";
 import { constantTimeEqual } from "../../shared/utils/hash.ts";
 
 /**
- * Shared tier-3 secret check: the request must present `headerName` matching the
+ * Shared secret check: the request must present `headerName` matching the
  * configured internal secret (constant-time). Returns a 403 result when the
  * secret is unconfigured or the header is missing/wrong.
  */
@@ -84,11 +84,4 @@ export function validateInternalApiAccess(
     return { ok: false, status: 403, message: "forbidden" };
   }
   return checkInternalSecretHeader(env, getHeader, "X-Takos-Internal-Secret");
-}
-
-export function validateAuthProxyAccess(
-  env: Env,
-  getHeader: (name: string) => string | undefined,
-): { ok: true } | { ok: false; status: 403; message: string } {
-  return checkInternalSecretHeader(env, getHeader, "X-Takos-Auth-Proxy-Secret");
 }

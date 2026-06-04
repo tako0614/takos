@@ -125,9 +125,7 @@ function resolveWorkloadDeploymentBackend(
   if (artifact?.kind === "container_image" && artifact.backend) {
     return artifact.backend;
   }
-  if (backend === "aws") return "ecs";
-  if (backend === "gcp") return "cloud-run";
-  if (backend === "k8s") return "k8s";
+  // Container / service workloads are realized through the OCI orchestrator.
   return "oci";
 }
 

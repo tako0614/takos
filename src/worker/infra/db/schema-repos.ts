@@ -120,54 +120,6 @@ export const files = sqliteTable("files", {
   idxAccount: index("idx_files_account_id").on(table.accountId),
 }));
 
-// 39. GitCommit
-export const gitCommits = sqliteTable("git_commits", {
-  id: text("id").primaryKey(),
-  accountId: text("account_id").notNull().references(() => accounts.id),
-  message: text("message").notNull(),
-  authorAccountId: text("author_account_id").notNull().references(() =>
-    accounts.id
-  ),
-  authorName: text("author_name").notNull(),
-  parentId: text("parent_id"),
-  filesChanged: integer("files_changed").notNull().default(0),
-  insertions: integer("insertions").notNull().default(0),
-  deletions: integer("deletions").notNull().default(0),
-  treeHash: text("tree_hash").notNull(),
-  ...createdAtColumn,
-}, (table) => ({
-  idxParent: index("idx_git_commits_parent_id").on(table.parentId),
-  // Baseline SQL creates `git_commits_created_at_idx` with DESC order
-  // (`created_at DESC`). Drizzle cannot express column-level ASC/DESC inside
-  // `index()`, so the physical order is determined by the migration.
-  idxCreatedAt: index("idx_git_commits_created_at").on(table.createdAt),
-  idxAuthor: index("idx_git_commits_author_account_id").on(
-    table.authorAccountId,
-  ),
-  idxAccount: index("idx_git_commits_account_id").on(table.accountId),
-}));
-
-// 40. GitFileChange
-export const gitFileChanges = sqliteTable("git_file_changes", {
-  id: text("id").primaryKey(),
-  // FK to commits.id is declared by baseline migration 0001 with the same
-  // ON DELETE semantics as the SQL; the drizzle thunk only mirrors that fact
-  // so drizzle introspection can resolve the relationship.
-  commitId: text("commit_id").notNull().references(() => commits.id),
-  fileId: text("file_id"),
-  path: text("path").notNull(),
-  changeType: text("change_type").notNull(),
-  oldPath: text("old_path"),
-  oldHash: text("old_hash"),
-  newHash: text("new_hash"),
-  insertions: integer("insertions").notNull().default(0),
-  deletions: integer("deletions").notNull().default(0),
-}, (table) => ({
-  idxPath: index("idx_git_file_changes_path").on(table.path),
-  idxFile: index("idx_git_file_changes_file_id").on(table.fileId),
-  idxCommit: index("idx_git_file_changes_commit_id").on(table.commitId),
-}));
-
 // 41. IndexJob
 export const indexJobs = sqliteTable("index_jobs", {
   id: text("id").primaryKey(),

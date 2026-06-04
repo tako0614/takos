@@ -74,9 +74,11 @@ test(
 
     assertStringIncludes(sourceLocalServer, 'startCanonicalLocalServer');
     assertStringIncludes(sourceLocalServer, 'startLocalWebServer');
-    assertStringIncludes(sourceLocalServer, 'startLocalDispatchServer');
-    assertStringIncludes(sourceLocalServer, 'startLocalRuntimeHostServer');
-    assertStringIncludes(sourceLocalServer, 'startLocalExecutorHostServer');
+    // The live local stack is ONE worker (unified-entrypoint.ts): the separate
+    // dispatch / runtime-host / executor-host process starters are retired.
+    assert(!sourceLocalServer.includes('startLocalDispatchServer'));
+    assert(!sourceLocalServer.includes('startLocalRuntimeHostServer'));
+    assert(!sourceLocalServer.includes('startLocalExecutorHostServer'));
     assertStringIncludes(sourceLocalServer, 'runtime: "node"');
     assertStringIncludes(sourceLocalServer, 'from "./fetch-server.ts"');
     assertStringIncludes(sourceIndex, 'export * from "./runtime.ts"');
@@ -246,7 +248,7 @@ test(
 
     assertStringIncludes(compose, "command: ['bun', 'run', 'dev']");
     assertStringIncludes(compose, "command: ['bun', 'run', 'dev']");
-    assertStringIncludes(compose, "command: ['bun', 'src/all/server.ts']");
+    assertStringIncludes(compose, "command: ['bun', 'src/service/index.ts']");
     assertStringIncludes(compose, 'context: ..');
     assertStringIncludes(compose, 'dockerfile: takos/containers/agent/Dockerfile');
     assert(!compose.includes('dev:local:web'));

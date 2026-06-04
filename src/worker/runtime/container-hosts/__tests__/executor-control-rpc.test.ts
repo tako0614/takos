@@ -38,13 +38,6 @@ test("executor run-config source does not reintroduce snake_case response fields
         label: "../executor-control-rpc.ts",
         url: new URL("../executor-control-rpc.ts", import.meta.url),
       },
-      {
-        label: "../../../local-platform/executor-control-rpc.ts",
-        url: new URL(
-          "../../../local-platform/executor-control-rpc.ts",
-          import.meta.url,
-        ),
-      },
     ]
   ) {
     const source = await readFile(sourceFile.url, "utf8");

@@ -1,15 +1,13 @@
 /**
  * Main entry point for local-platform runtime.
  *
- * Re-exports the public API that was originally in this single 974-line file,
- * now split across focused modules:
+ * The live local stack is ONE worker (see unified-entrypoint.ts): the web fetch
+ * and the queue worker loop run in a single process, and the production runtime
+ * / executor container-host handlers are mounted in-process by web.ts. This
+ * module provides the web / dispatch fetch factories that the single-worker
+ * entrypoint and the bootstrap tests build on.
  *
- *   runtime-types.ts          – shared types and constants
- *   runtime-http.ts           – HTTP utilities (forwarding, JSON response, etc.)
- *   runtime-gateway-stubs.ts  – in-process gateway stub factories
- *   runtime-host-fetch.ts     – runtime-host fetch builder
- *   executor-control-rpc.ts   – executor control RPC handlers + executor-host fetch builder
- *   runtime-env.ts            – environment construction for production and tests
+ *   runtime-types.ts  – shared types and constants
  */
 
 import { loadLocalDispatchEnv, loadLocalWebEnv } from "./load-adapter.ts";
@@ -23,19 +21,7 @@ import {
 export { DEFAULT_LOCAL_PORTS } from "./runtime-types.ts";
 export type { LocalFetch } from "./runtime-types.ts";
 
-// Re-export sub-modules for advanced consumers.
-export { buildLocalRuntimeHostFetch } from "./runtime-host-fetch.ts";
-export { buildLocalExecutorHostFetch } from "./executor-control-rpc.ts";
-
 import type { LocalFetch } from "./runtime-types.ts";
-import { buildLocalRuntimeHostFetch } from "./runtime-host-fetch.ts";
-import { buildLocalExecutorHostFetch } from "./executor-control-rpc.ts";
-import {
-  createExecutorHostEnv,
-  createExecutorHostEnvForTests,
-  createRuntimeHostEnv,
-  createRuntimeHostEnvForTests,
-} from "./runtime-env.ts";
 
 // ---------------------------------------------------------------------------
 // Web / Dispatch fetch factories
@@ -71,38 +57,4 @@ export async function createLocalDispatchFetchForTests(): Promise<LocalFetch> {
   const dispatchWorker = createDispatchWorker(buildNodeDispatchPlatform);
   return (request, executionContext = createLocalExecutionContext()) =>
     dispatchWorker.fetch(request, env, executionContext);
-}
-
-// ---------------------------------------------------------------------------
-// Host fetch factories – production
-// ---------------------------------------------------------------------------
-
-export async function createLocalRuntimeHostFetch(): Promise<LocalFetch> {
-  const env = await createRuntimeHostEnv();
-  return buildLocalRuntimeHostFetch(env);
-}
-
-export async function createLocalExecutorHostFetch(): Promise<LocalFetch> {
-  const env = await createExecutorHostEnv();
-  return buildLocalExecutorHostFetch(env);
-}
-
-// ---------------------------------------------------------------------------
-// Host fetch factories – tests
-// ---------------------------------------------------------------------------
-
-export async function createLocalRuntimeHostFetchForTests(): Promise<
-  LocalFetch
-> {
-  const webFetch = await createLocalWebFetchForTests();
-  const env = await createRuntimeHostEnvForTests({ webFetch });
-  return buildLocalRuntimeHostFetch(env);
-}
-
-export async function createLocalExecutorHostFetchForTests(): Promise<
-  LocalFetch
-> {
-  const runtimeFetch = await createLocalRuntimeHostFetchForTests();
-  const env = await createExecutorHostEnvForTests({ runtimeFetch });
-  return buildLocalExecutorHostFetch(env);
 }

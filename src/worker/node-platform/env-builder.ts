@@ -99,16 +99,6 @@ export const LOCAL_DEV_DEFAULTS = {
   EXECUTOR_PROXY_SECRET: "local-executor-proxy-secret",
 } as const;
 
-/**
- * Default ROUTING_DO_PHASE for the Node / local platform.
- *
- * Local dev uses phase 1 (basic kv-store-only routing) for simplicity.
- * Production (wrangler.toml) uses phase 4 (full DO-based routing).
- * This difference is intentional -- phase 4 requires Durable Object
- * bindings that are only available in the Cloudflare provider runtime.
- */
-const DEFAULT_ROUTING_DO_PHASE = "1";
-
 // ---------------------------------------------------------------------------
 // Shared state (lazy singleton)
 // ---------------------------------------------------------------------------
@@ -118,7 +108,6 @@ type SharedState = Awaited<ReturnType<typeof buildSharedState>>;
 type NodeDispatchEnv = {
   HOSTNAME_ROUTING?: KvStoreBinding;
   ROUTING_DO?: DurableNamespaceBinding;
-  ROUTING_DO_PHASE?: string;
   ROUTING_STORE?: RoutingStore;
   DISPATCHER: {
     get(name: string): { fetch(request: Request): Promise<Response> };
@@ -272,8 +261,6 @@ function buildBaseConfig(isLocal: boolean) {
       "takos-node",
     ENVIRONMENT: optionalEnv("ENVIRONMENT") ??
       (isLocal ? "development" : "production"),
-    ROUTING_DO_PHASE: optionalEnv("ROUTING_DO_PHASE") ??
-      DEFAULT_ROUTING_DO_PHASE,
     TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: optionalJsonArrayEnv(
       "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON",
     ),
@@ -484,7 +471,6 @@ export async function createNodeWebEnv(): Promise<Env> {
     DB: shared.db,
     HOSTNAME_ROUTING: shared.hostnameRouting,
     ROUTING_DO: shared.routingDo,
-    ROUTING_DO_PHASE: config.ROUTING_DO_PHASE,
     ROUTING_STORE: shared.routingStore,
     SESSION_DO: shared.sessionDo,
     RUN_NOTIFIER: shared.runNotifier,
@@ -628,7 +614,6 @@ export async function createNodeDispatchEnv(): Promise<NodeDispatchEnv> {
   return {
     HOSTNAME_ROUTING: shared.hostnameRouting,
     ROUTING_DO: shared.routingDo,
-    ROUTING_DO_PHASE: config.ROUTING_DO_PHASE,
     ROUTING_STORE: shared.routingStore,
     ADMIN_DOMAIN: config.ADMIN_DOMAIN,
     DISPATCHER: dispatcher,

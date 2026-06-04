@@ -9,7 +9,6 @@ export * from "./search.ts";
 export * from "./skills.ts";
 export * from "./skill-search.ts";
 export * from "./fork.ts";
-export * from "./git.ts";
 export * from "./external-import.ts";
 export * from "./app-manifest.ts";
 export * from "./space-storage.ts";

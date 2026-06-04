@@ -36,7 +36,6 @@ import {
   isAllowedOrigin,
   isSelfHostInternalHostname,
   isSelfHostLoopback,
-  validateAuthProxyAccess,
   validateInternalApiAccess,
 } from "./server/middleware/internal-access.ts";
 import { isInvalidArrayBufferError } from "./shared/utils/db-guards.ts";
@@ -51,34 +50,8 @@ import {
   getPlatformConfig,
   getPlatformServices,
 } from "./platform/accessors.ts";
-import {
-  createSession,
-  setSessionCookie,
-} from "./application/services/identity/session.ts";
-import {
-  auditLog,
-  cleanupUserSessions,
-  createAuthSession,
-} from "./application/services/identity/auth-utils.ts";
-import { getDb } from "./infra/db/index.ts";
-import { authIdentities } from "./infra/db/schema.ts";
-import { sanitizeReturnTo } from "./server/routes/auth/provisioning.ts";
-import {
-  ensureLaunchSessionSpace,
-  isLaunchSessionRequest,
-  launchSessionUser,
-  normalizeIssuerUrl,
-  provisionLaunchSessionUser,
-} from "./server/routes/auth/launch-session.ts";
-import { resolveSelfIssuedBearer } from "./server/routes/auth/in-process-bearer.ts";
-import {
-  createAgentControlBackendRouter,
-  createExecutorProxyRouter,
-} from "./runtime/executor-proxy-api.ts";
 import runtimeHostHandler from "./runtime/container-hosts/runtime-host.ts";
 import executorHostHandler from "./runtime/container-hosts/executor-host.ts";
-import { and, eq } from "drizzle-orm";
-import { type TtlSeconds, ttlSeconds } from "@takos/worker-platform-utils/ttl";
 
 // Durable Object exports for wrangler.toml bindings.
 export { SessionDO } from "./runtime/durable-objects/session.ts";
@@ -97,7 +70,6 @@ type Variables = {
 };
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
-const SESSION_MAX_AGE_SECONDS: TtlSeconds = ttlSeconds(7 * 24 * 60 * 60);
 
 app.use("*", async (c, next) => {
   const platform = getPlatformContext(c);
@@ -340,237 +312,6 @@ app.all("/api/internal/v1/agent-control/*", async (c) => {
   auth.route("/", authOidcRouter);
   app.route("/auth", auth);
 }
-
-app.post("/internal/auth/verify", async (c) => {
-  const access = validateAuthProxyAccess(
-    c.env,
-    (name) => c.req.header(name),
-  );
-  if (!access.ok) {
-    return c.json({
-      error: {
-        code: "FORBIDDEN",
-        message: access.message,
-      },
-    }, access.status);
-  }
-
-  // Session path first. `requireAuth` resolves the cookie session (or a remote
-  // Accounts bearer) and short-circuits with a 401 when neither is present.
-  // Since app.takosumi.com is now its own OIDC issuer, a self-issued Bearer can
-  // be verified in-process instead — so only honour the 401 when there is no
-  // Bearer to try locally.
-  const authorizationHeader = c.req.header("Authorization");
-  let user = c.get("user");
-  if (!user) {
-    const authResponse = await requireAuth(c, async () => {});
-    user = c.get("user");
-    if (!user && authResponse && !authorizationHeader) return authResponse;
-  }
-
-  if (!user && authorizationHeader) {
-    const selfBearer = await resolveSelfIssuedBearer({
-      authorizationHeader,
-      origin: new URL(c.req.url).origin,
-      issuer: normalizeIssuerUrl(getPlatformConfig(c).oidcIssuerUrl),
-      db: getPlatformServices(c).sql?.binding,
-      env: c.env,
-    });
-    if (selfBearer.kind === "ok") {
-      user = selfBearer.user;
-      c.set("user", user);
-    }
-  }
-
-  if (!user) {
-    return c.json({
-      error: {
-        code: "UNAUTHORIZED",
-        message: "authentication required",
-      },
-    }, 401);
-  }
-
-  const body = await c.req.json().catch(() => ({})) as {
-    requestId?: unknown;
-    spaceId?: unknown;
-  };
-  const requestId = typeof body.requestId === "string" && body.requestId.trim()
-    ? body.requestId.trim()
-    : crypto.randomUUID();
-  const spaceId = typeof body.spaceId === "string" && body.spaceId.trim()
-    ? body.spaceId.trim()
-    : undefined;
-
-  return c.json({
-    actor: {
-      actorAccountId: user.id,
-      roles: ["member"],
-      requestId,
-      ...(spaceId ? { spaceId } : {}),
-    },
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      name: user.name,
-      principal_kind: user.principal_kind ?? "user",
-    },
-  });
-});
-
-app.post("/internal/auth/launch-session", async (c) => {
-  const access = validateAuthProxyAccess(
-    c.env,
-    (name) => c.req.header(name),
-  );
-  if (!access.ok) {
-    return c.json({
-      error: {
-        code: "FORBIDDEN",
-        message: access.message,
-      },
-    }, access.status);
-  }
-
-  const body = await c.req.json().catch(() => null) as unknown;
-  if (!isLaunchSessionRequest(body)) {
-    return c.json({
-      error: {
-        code: "INVALID_ARGUMENT",
-        message: "issuer, subject, and installation_id are required",
-      },
-    }, 400);
-  }
-
-  const services = getPlatformServices(c);
-  const dbBinding = services.sql?.binding;
-  const sessionStore = services.notifications.sessionStore;
-  if (!dbBinding || !sessionStore) {
-    return c.json({
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "launch session dependencies are not configured",
-      },
-    }, 500);
-  }
-
-  const configuredIssuer = normalizeIssuerUrl(
-    getPlatformConfig(c).oidcIssuerUrl,
-  );
-  if (configuredIssuer && configuredIssuer !== body.issuer) {
-    return c.json({
-      error: {
-        code: "UNAUTHORIZED",
-        message: "launch token issuer mismatch",
-      },
-    }, 401);
-  }
-
-  const db = getDb(dbBinding);
-  const providerSub = `${body.issuer}#${body.subject}`;
-  const identity = await db.select({
-    userId: authIdentities.userId,
-  }).from(authIdentities).where(
-    and(
-      eq(authIdentities.provider, "oidc"),
-      eq(authIdentities.providerSub, providerSub),
-    ),
-  ).get();
-
-  const user = identity
-    ? await launchSessionUser(db, identity.userId)
-    : await provisionLaunchSessionUser({
-      dbBinding,
-      subject: body.subject,
-      providerSub,
-    });
-  if (!user) {
-    return c.json({
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "failed to resolve launch session user",
-      },
-    }, 500);
-  }
-  if (user.status !== "active") {
-    return c.json({
-      error: {
-        code: "FORBIDDEN",
-        message: "account is not active",
-      },
-    }, 403);
-  }
-  let launchReturnTo: string | null = null;
-  try {
-    launchReturnTo = await ensureLaunchSessionSpace({
-      env: c.env,
-      userId: user.id,
-      body,
-    });
-  } catch (error) {
-    logError("Failed to bootstrap launch session space", error, {
-      module: "auth/launch-session",
-      userId: user.id,
-      installationId: body.installationId,
-      spaceId: body.spaceId,
-    });
-    return c.json({
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "failed to bootstrap launch session space",
-      },
-    }, 500);
-  }
-  if (identity) {
-    await db.update(authIdentities).set({
-      lastLoginAt: new Date().toISOString(),
-    }).where(
-      and(
-        eq(authIdentities.provider, "oidc"),
-        eq(authIdentities.providerSub, providerSub),
-      ),
-    );
-  }
-
-  const session = await createSession(sessionStore, user.id);
-  const userAgent = c.req.header("User-Agent");
-  const ipAddress = c.req.header("CF-Connecting-IP");
-  await createAuthSession(dbBinding, user.id, userAgent, ipAddress);
-  await cleanupUserSessions(dbBinding, user.id, 5);
-  await auditLog("launch_token_success", {
-    userId: user.id,
-    subject: body.subject,
-    installationId: body.installationId,
-    appId: body.appId,
-    spaceId: body.spaceId,
-  });
-
-  return new Response(null, {
-    status: 302,
-    headers: {
-      "Location": user.setupCompleted
-        ? launchReturnTo ?? sanitizeReturnTo(body.returnTo)
-        : "/setup",
-      "Referrer-Policy": "no-referrer",
-      "Set-Cookie": setSessionCookie(
-        session.id,
-        SESSION_MAX_AGE_SECONDS,
-        "Lax",
-      ),
-    },
-  });
-});
-
-// ============================================================================
-// Internal Executor RPC Proxy (service-binding only, no public access)
-// ============================================================================
-
-app.route("/internal/executor-rpc", createExecutorProxyRouter());
-app.route(
-  "/api/internal/v1/agent-control-backend",
-  createAgentControlBackendRouter(),
-);
 
 // ============================================================================
 // Internal Scheduled Trigger (for k8s CronJob / EventBridge / Cloud Scheduler)

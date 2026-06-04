@@ -4,8 +4,10 @@ import { cp, mkdtemp, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { selectInstallableSourcePathFromRepo } from "../app-manifest-bundle.ts";
-import { parseOpenTofuAppManifestOutputs } from "../opentofu-app-manifest.ts";
+import {
+  parseOpenTofuAppManifestOutputs,
+  selectInstallableSourcePathFromRepo,
+} from "../opentofu-app-manifest.ts";
 
 const fixtureRoot = new URL("../__fixtures__/opentofu-only-app/", import.meta.url);
 

@@ -1,11 +1,6 @@
 import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
-import {
-  signTakosumiInternalRequest as signTakosInternalRequest,
-  TAKOSUMI_INTERNAL_AUDIENCE_HEADER as TAKOS_INTERNAL_AUDIENCE_HEADER,
-  TAKOSUMI_INTERNAL_CALLER_HEADER as TAKOS_INTERNAL_CALLER_HEADER,
-} from "takosumi-contract/internal/rpc";
-import { createAgentControlBackendRouter } from "../../executor-proxy-api.ts";
+import { dispatchControlRpc } from "../../executor-proxy-api.ts";
 import {
   claimsMatchRequestBody,
   CONTROL_RPC_ENDPOINTS,
@@ -15,7 +10,6 @@ import {
 import {
   AGENT_PROXY_SCOPES,
   agentControlRpcPath,
-  forwardToControlPlane,
   isControlRpcPath,
   proxyScopesForRunKind,
   WORKFLOW_PROXY_SCOPES,
@@ -296,61 +290,33 @@ function createRunStatusDb(status: string | null): unknown {
   return { select: noop, insert: noop, update: noop, delete: noop };
 }
 
-async function signedApiKeysRequest(
-  router: ReturnType<typeof createAgentControlBackendRouter>,
-  secret: string,
-  body: string,
+// The executor-host verifies the per-run proxy token + scope, then dispatches
+// the api-keys RPC in-process. These tests exercise that in-process dispatch
+// directly with an already-token-bound body, mirroring the executor-host call.
+function apiKeysDispatch(
+  body: Record<string, unknown>,
   env: Record<string, unknown>,
 ): Promise<Response> {
-  const signed = await signTakosInternalRequest({
-    method: "POST",
-    path: "/api-keys",
+  const dispatched = dispatchControlRpc(
+    agentControlRpcPath("api-keys"),
     body,
-    timestamp: new Date().toISOString(),
-    actor: {
-      actorAccountId: "takosumi",
-      roles: ["service"],
-      requestId: "req_backend_bridge",
-      principalKind: "service",
-      serviceId: "takosumi",
-    },
-    caller: "takosumi",
-    audience: "takos-worker",
-    capabilities: ["app.agent-control.backend"],
-    secret,
-  });
-  return await router.request(
-    "/api-keys",
-    {
-      method: "POST",
-      headers: { ...signed.headers, "content-type": "application/json" },
-      body,
-    },
     env as never,
   );
+  if (!dispatched) throw new Error("api-keys path is not a control-RPC path");
+  return Promise.resolve(dispatched);
 }
 
-test("agent-control backend bridge requires signed Takosumi internal auth", async () => {
-  const router = createAgentControlBackendRouter();
-  const secret = "backend-secret";
-  const body = JSON.stringify({ runId: "run_1" });
-  const unsigned = await router.request(
-    "/api-keys",
-    { method: "POST", body },
+test("api-keys hands out provider keys for an active token-bound run", async () => {
+  const res = await apiKeysDispatch(
+    { runId: "run_1" },
     {
-      TAKOS_INTERNAL_SERVICE_SECRET: secret,
+      OPENAI_API_KEY: "openai-test-key",
+      DB: createRunStatusDb("running"),
     },
   );
-  assertEquals(unsigned.status, 401);
 
-  const authorized = await signedApiKeysRequest(router, secret, body, {
-    TAKOS_INTERNAL_SERVICE_SECRET: secret,
-    OPENAI_API_KEY: "openai-test-key",
-    DB: createRunStatusDb("running"),
-  });
-
-  assertEquals(authorized.status, 200);
-  assertEquals(await authorized.json(), {
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), {
     openai: "openai-test-key",
     anthropic: null,
     google: null,
@@ -358,78 +324,36 @@ test("agent-control backend bridge requires signed Takosumi internal auth", asyn
 });
 
 test("api-keys rejects a terminal token-bound run", async () => {
-  const router = createAgentControlBackendRouter();
-  const secret = "backend-secret";
-  const body = JSON.stringify({ runId: "run_term" });
   for (const status of ["completed", "failed", "cancelled"]) {
-    const res = await signedApiKeysRequest(router, secret, body, {
-      TAKOS_INTERNAL_SERVICE_SECRET: secret,
-      OPENAI_API_KEY: "openai-test-key",
-      DB: createRunStatusDb(status),
-    });
+    const res = await apiKeysDispatch(
+      { runId: "run_term" },
+      {
+        OPENAI_API_KEY: "openai-test-key",
+        DB: createRunStatusDb(status),
+      },
+    );
     assertEquals(res.status, 403);
   }
 });
 
 test("api-keys rejects a missing token-bound run", async () => {
-  const router = createAgentControlBackendRouter();
-  const secret = "backend-secret";
-  const body = JSON.stringify({ runId: "run_gone" });
-  const res = await signedApiKeysRequest(router, secret, body, {
-    TAKOS_INTERNAL_SERVICE_SECRET: secret,
-    OPENAI_API_KEY: "openai-test-key",
-    DB: createRunStatusDb(null),
-  });
+  const res = await apiKeysDispatch(
+    { runId: "run_gone" },
+    {
+      OPENAI_API_KEY: "openai-test-key",
+      DB: createRunStatusDb(null),
+    },
+  );
   assertEquals(res.status, 403);
 });
 
 test("api-keys rejects when the body omits the token-bound runId", async () => {
-  const router = createAgentControlBackendRouter();
-  const secret = "backend-secret";
-  const body = JSON.stringify({});
-  const res = await signedApiKeysRequest(router, secret, body, {
-    TAKOS_INTERNAL_SERVICE_SECRET: secret,
-    OPENAI_API_KEY: "openai-test-key",
-    DB: createRunStatusDb("running"),
-  });
-  assertEquals(res.status, 400);
-});
-
-test("executor host forwards mapped control RPC to Takosumi canonical agent-control when binding is configured", async () => {
-  const requests: Request[] = [];
-  const response = await forwardToControlPlane(
-    "/api/internal/v1/agent-control/heartbeat",
-    { runId: "run_1", spaceId: "space_1" },
+  const res = await apiKeysDispatch(
+    {},
     {
-      TAKOS_INTERNAL_SERVICE_SECRET: "takosumi-secret",
-      TAKOSUMI_INTERNAL_URL: "https://takosumi.internal/",
-      TAKOSUMI: {
-        fetch(input: RequestInfo | URL, init?: RequestInit) {
-          requests.push(new Request(input, init));
-          return Promise.resolve(Response.json({ ok: true }));
-        },
-      },
-      TAKOS_WORKER: {
-        fetch() {
-          throw new Error("legacy fallback must not be used");
-        },
-      },
-      EXECUTOR_PROXY_SECRET: "legacy-secret",
-    } as never,
+      OPENAI_API_KEY: "openai-test-key",
+      DB: createRunStatusDb("running"),
+    },
   );
-
-  assertEquals(response?.status, 200);
-  assertEquals(requests.length, 1);
-  assertEquals(
-    requests[0].url,
-    "https://takosumi.internal/api/internal/v1/agent-control/heartbeat",
-  );
-  assertEquals(
-    requests[0].headers.get(TAKOS_INTERNAL_CALLER_HEADER),
-    "takos-worker",
-  );
-  assertEquals(
-    requests[0].headers.get(TAKOS_INTERNAL_AUDIENCE_HEADER),
-    "takosumi",
-  );
+  assertEquals(res.status, 400);
 });

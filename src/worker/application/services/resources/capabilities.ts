@@ -5,10 +5,15 @@ import type {
 
 /**
  * The single backend axis for managed resources. `cloudflare` is the native
- * backend; the remaining members are the portable backends (see
+ * backend; `local` is the self-hosted portable backend (see
  * {@link PortableResourceBackend}).
+ *
+ * Multi-cloud materialization (aws/gcp/k8s) is operator-substrate scope owned
+ * by OpenTofu RunnerProfiles, not the Takos worker. The aws/gcp/k8s backend
+ * arms were retired from the worker; legacy stored `backend_name` values for
+ * those are normalized to `local`.
  */
-export type ResourceBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
+export type ResourceBackend = "cloudflare" | "local";
 
 /**
  * The portable backend axis is the resource backend axis minus the native
@@ -21,10 +26,12 @@ export function normalizeResourceBackend(
 ): ResourceBackend {
   switch (backendName) {
     case "local":
+    // Legacy multi-cloud backends are retired; map them to the portable
+    // self-hosted backend rather than the native cloudflare backend.
     case "aws":
     case "gcp":
     case "k8s":
-      return backendName;
+      return "local";
     case "cloudflare":
     default:
       return "cloudflare";
@@ -32,17 +39,9 @@ export function normalizeResourceBackend(
 }
 
 export function normalizePortableResourceBackend(
-  backendName?: string | null,
+  _backendName?: string | null,
 ): PortableResourceBackend {
-  switch (backendName) {
-    case "aws":
-    case "gcp":
-    case "k8s":
-      return backendName;
-    case "local":
-    default:
-      return "local";
-  }
+  return "local";
 }
 
 export type ResourceImplementation =
@@ -163,21 +162,6 @@ const LOCAL_RESOURCE_DRIVER_BY_CAPABILITY: Record<
   durable_namespace: "takos-local-durable-runtime",
 };
 
-const PORTABLE_RESOURCE_DRIVER_BY_CAPABILITY: Record<
-  ResourceCapability,
-  ResourceDriver
-> = {
-  sql: "takos-sql",
-  object_store: "takos-object-store",
-  kv: "takos-kv",
-  queue: "takos-queue",
-  vector_index: "takos-vector-store",
-  analytics_store: "takos-analytics-store",
-  secret: "takos-secret",
-  workflow_runtime: "takos-workflow-runtime",
-  durable_namespace: "takos-durable-runtime",
-};
-
 const RESOURCE_PUBLIC_TYPE_BY_CAPABILITY: Record<
   ResourceCapability,
   ResourcePublicType
@@ -272,10 +256,6 @@ export function resolveResourceDriver(
       return RESOURCE_DRIVER_BY_CAPABILITY[capability];
     case "local":
       return LOCAL_RESOURCE_DRIVER_BY_CAPABILITY[capability];
-    case "aws":
-    case "gcp":
-    case "k8s":
-      return PORTABLE_RESOURCE_DRIVER_BY_CAPABILITY[capability];
     default:
       return null;
   }

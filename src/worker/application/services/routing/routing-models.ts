@@ -30,7 +30,6 @@ export type RoutingKvNamespace = KvStoreBinding;
 export type RoutingBindings = {
   HOSTNAME_ROUTING?: RoutingKvNamespace;
   ROUTING_DO?: RoutingDurableObjectNamespace;
-  ROUTING_DO_PHASE?: string;
   ROUTING_STORE?: RoutingStore;
 };
 

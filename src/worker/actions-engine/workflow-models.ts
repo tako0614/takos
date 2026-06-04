@@ -358,214 +358,22 @@ export interface Workflow {
 }
 
 // =============================================================================
-// 実行状態型
+// 実行結果の結論型
 // =============================================================================
-
-/**
- * GitHub Actions ワークフロー実行ステータス
- *
- * これは *Actions* ドメインのステータスで、src/worker 側の
- * Agent RunStatus（'pending'|'queued'|'running'|'completed'|'failed'|'cancelled'）と
- * 意図的に異なる形式。
- * Web UI action status types mirror this contract in takos-worker.
- * concurrency ブロック中表示用に 'waiting' を追加している。
- */
-export type RunStatus = "queued" | "in_progress" | "completed" | "cancelled";
 
 /**
  * 実行結果
  */
 export type Conclusion = "success" | "failure" | "cancelled" | "skipped";
 
-/**
- * ステップ実行結果
- */
-export interface StepResult {
-  /** ステップ ID */
-  id?: string;
-  /** ステップ名 */
-  name?: string;
-  /** 実行状態 */
-  status: RunStatus;
-  /** 最終結果 */
-  conclusion?: Conclusion;
-  /** `steps.<id>.outcome` 互換用。現状は `conclusion` と同じ値。 */
-  outcome?: Conclusion;
-  /** ステップ出力 */
-  outputs: Record<string, string>;
-  /** 開始時刻 */
-  startedAt?: Date;
-  /** 終了時刻 */
-  completedAt?: Date;
-  /** 失敗時のエラーメッセージ */
-  error?: string;
-}
-
-/**
- * ジョブ実行結果
- */
-export interface JobResult {
-  /** ジョブ ID */
-  id: string;
-  /** ジョブ名 */
-  name?: string;
-  /** 実行状態 */
-  status: RunStatus;
-  /** 最終結果 */
-  conclusion?: Conclusion;
-  /** ステップ結果 */
-  steps: StepResult[];
-  /** ジョブ出力 */
-  outputs: Record<string, string>;
-  /** 開始時刻 */
-  startedAt?: Date;
-  /** 終了時刻 */
-  completedAt?: Date;
-  /** マトリクス実行時の値 */
-  matrix?: Record<string, unknown>;
-}
-
-/**
- * ワークフロー実行結果
- */
-export interface WorkflowResult {
-  /** 実行 ID */
-  id: string;
-  /** ワークフロー名 */
-  name?: string;
-  /** 実行状態 */
-  status: RunStatus;
-  /** 最終結果 */
-  conclusion?: Conclusion;
-  /** ジョブ結果 */
-  jobs: Record<string, JobResult>;
-  /** トリガーイベント */
-  event: string;
-  /** 開始時刻 */
-  startedAt?: Date;
-  /** 終了時刻 */
-  completedAt?: Date;
-}
-
 // =============================================================================
-// コンテキスト型（式評価用）
+// スケジューラー展開コンテキスト型
 // =============================================================================
-
-/**
- * GitHub コンテキスト
- */
-export interface GitHubContext {
-  /** ワークフローを起動したイベント名 */
-  event_name: string;
-  /** イベントペイロード */
-  event: Record<string, unknown>;
-  /** Git リファレンス（ブランチ/タグ） */
-  ref: string;
-  /** リファレンス名（ブランチまたはタグ名） */
-  ref_name: string;
-  /** Git SHA（コミットハッシュ） */
-  sha: string;
-  /** リポジトリ所有者とリポジトリ名 */
-  repository: string;
-  /** リポジトリ所有者 */
-  repository_owner: string;
-  /** 実行者 */
-  actor: string;
-  /** ワークフロー名 */
-  workflow: string;
-  /** ジョブ名 */
-  job: string;
-  /** 実行 ID */
-  run_id: string;
-  /** 実行番号 */
-  run_number: number;
-  /** 再試行回数 */
-  run_attempt: number;
-  /** サーバー URL */
-  server_url: string;
-  /** API の URL */
-  api_url: string;
-  /** GraphQL の URL */
-  graphql_url: string;
-  /** ワークスペースパス */
-  workspace: string;
-  /** アクション名 */
-  action: string;
-  /** アクションパス */
-  action_path: string;
-  /** トークン */
-  token: string;
-  /** PR ヘッド参照 */
-  head_ref?: string;
-  /** PR ベース参照 */
-  base_ref?: string;
-}
-
-/**
- * Runner コンテキスト
- */
-export interface RunnerContext {
-  /** ランナー名 */
-  name: string;
-  /** ランナー OS */
-  os: "Linux" | "Windows" | "macOS";
-  /** ランナーアーキテクチャ */
-  arch: "X86" | "X64" | "ARM" | "ARM64";
-  /** テンポラリディレクトリ */
-  temp: string;
-  /** ツールキャッシュディレクトリ */
-  tool_cache: string;
-  /** デバッグモード */
-  debug: string;
-}
-
-/**
- * ジョブコンテキスト
- */
-export interface JobContext {
-  /** ジョブステータス */
-  status: "success" | "failure" | "cancelled";
-  /** コンテナ情報 */
-  container?: {
-    id: string;
-    network: string;
-  };
-  /** サービスコンテナ */
-  services?: Record<
-    string,
-    {
-      id: string;
-      network: string;
-      ports: Record<string, string>;
-    }
-  >;
-}
-
-/**
- * Steps コンテキスト（直前ステップの結果）
- */
-export type StepsContext = Record<
-  string,
-  {
-    outputs: Record<string, string>;
-    outcome: "success" | "failure" | "cancelled" | "skipped";
-    conclusion: "success" | "failure" | "cancelled" | "skipped";
-  }
->;
-
-/**
- * Needs コンテキスト（依存ジョブの結果）
- */
-export type NeedsContext = Record<
-  string,
-  {
-    outputs: Record<string, string>;
-    result: "success" | "failure" | "cancelled" | "skipped";
-  }
->;
 
 /**
  * Strategy コンテキスト
+ *
+ * matrix 展開時に scheduler が組み立てる strategy メタ情報。
  */
 export interface StrategyContext {
   "fail-fast": boolean;
@@ -576,30 +384,10 @@ export interface StrategyContext {
 
 /**
  * Matrix コンテキスト
+ *
+ * matrix 展開された 1 組み合わせの値マップ。
  */
 export type MatrixContext = Record<string, unknown>;
-
-/**
- * Inputs コンテキスト（workflow_dispatch 入力）
- */
-export type InputsContext = Record<string, string | boolean | number>;
-
-/**
- * 実行コンテキスト
- */
-export interface ExecutionContext {
-  github: GitHubContext;
-  env: Record<string, string>;
-  vars: Record<string, string>;
-  secrets: Record<string, string>;
-  runner: RunnerContext;
-  job: JobContext;
-  steps: StepsContext;
-  needs: NeedsContext;
-  strategy?: StrategyContext;
-  matrix?: MatrixContext;
-  inputs?: InputsContext;
-}
 
 // =============================================================================
 // パーサー / スケジューラー型
@@ -643,18 +431,3 @@ export interface ExecutionPlan {
   /** 実行フェーズごとのジョブ群（同一フェーズは並列実行） */
   phases: string[][];
 }
-
-/**
- * ステップ実行関数の型
- */
-export type StepExecutor = (
-  step: Step,
-  context: ExecutionContext,
-) => Promise<StepResult>;
-
-/**
- * アクション解決関数の型
- */
-export type ActionResolver = (
-  uses: string,
-) => Promise<{ run: StepExecutor } | null>;

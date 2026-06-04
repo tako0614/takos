@@ -28,7 +28,7 @@
         "./src/worker/testing/mock.ts"
       ],
       "takosumi-contract": [
-        "../takosumi/src/contract/mod.ts"
+        "../takosumi/src/contract/index.ts"
       ],
       "takosumi-contract/deploy-control-api": [
         "../takosumi/src/contract/deploy-control-api.ts"

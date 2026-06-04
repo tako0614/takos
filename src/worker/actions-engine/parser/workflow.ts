@@ -1,11 +1,7 @@
 /**
  * YAML ワークフローパーサー
  */
-import {
-  parse as parseYaml,
-  stringify as stringifyYaml,
-  YAMLParseError,
-} from "yaml";
+import { parse as parseYaml, YAMLParseError } from "yaml";
 import type {
   ParsedWorkflow,
   Workflow,
@@ -178,32 +174,4 @@ export function parseWorkflow(content: string): ParsedWorkflow {
 
     throw new WorkflowParseError("Failed to parse workflow", diagnostics);
   }
-}
-
-/**
- * ファイルパスからワークフローを解析する（Node.js 環境用）
- *
- * @param filePath - ワークフロー YAML のパス
- * @returns 解析済みワークフロー
- */
-export async function parseWorkflowFile(
-  filePath: string,
-): Promise<ParsedWorkflow> {
-  // Node.js の fs は動的 import を使用
-  const { readFile } = await import("node:fs/promises");
-  const content = await readFile(filePath, "utf-8");
-  return parseWorkflow(content);
-}
-
-/**
- * ワークフローを YAML 文字列に戻す
- *
- * @param workflow - ワークフローオブジェクト
- * @returns YAML 文字列
- */
-export function stringifyWorkflow(workflow: Workflow): string {
-  return stringifyYaml(workflow, {
-    indent: 2,
-    lineWidth: 0,
-  });
 }

@@ -134,7 +134,6 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   NOTIFICATION_NOTIFIER?: DurableNamespaceBinding;
   RATE_LIMITER_DO?: DurableNamespaceBinding;
   ROUTING_DO: DurableNamespaceBinding;
-  ROUTING_DO_PHASE?: string;
   // Queues
   RUN_QUEUE: MessageQueueBinding<RunQueueMessage>;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;

@@ -83,4 +83,24 @@ export function parseOpenTofuAppManifestOutputs(
   return parseAppManifestObject(manifestValue);
 }
 
+export function selectInstallableSourcePathFromRepo(
+  entries: ReadonlyArray<string>,
+): string | null {
+  for (
+    const candidate of [
+      "main.tf",
+      "outputs.tf",
+      "takos.tf",
+      "opentofu/main.tf",
+      "opentofu/outputs.tf",
+      "infra/main.tf",
+      "infra/outputs.tf",
+    ]
+  ) {
+    if (entries.includes(candidate)) return candidate;
+  }
+  if (entries.includes("package.json")) return "package.json";
+  return null;
+}
+
 export { APP_MANIFEST_OUTPUT_KEYS };
