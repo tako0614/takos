@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer used for dry-run Helm packaging on manual runs'
+        description: 'SemVer used for the dry-run release manifest on manual runs'
         required: false
         default: '0.0.0-dev'
         type: string
       publish:
-        description: 'Publish OCI images and Helm chart instead of dry-run build only'
+        description: 'Publish OCI images instead of dry-run build only'
         required: false
         default: false
         type: boolean
@@ -44,10 +44,6 @@ jobs:
         with:
           bun-version: latest
 
-      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # pinned: v5.0.0 (2026)
-        with:
-          version: v3.15.4
-
       - name: Cache Bun deps
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
         with:
@@ -58,10 +54,6 @@ jobs:
 
       - run: bun install --frozen-lockfile
       - run: bun run check
-      - run: bun run validate:release-promotion
-      - run: bun run validate:helm
-      - run: bun run helm:check-overlays
-      - run: bun run helm:template-smoke
 
   oci-images:
     name: OCI image (${{ matrix.image }})
@@ -165,73 +157,11 @@ jobs:
           path: dist/image-digests/${{ matrix.image }}.json
           if-no-files-found: error
 
-  helm-chart:
-    name: Helm chart
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [validate, oci-images]
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
-        with:
-          persist-credentials: false
-
-      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # pinned: v5.0.0 (2026)
-        with:
-          version: v3.15.4
-
-      - name: Resolve chart version
-        id: version
-        shell: bash
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            version="${GITHUB_REF_NAME#v}"
-          else
-            version="${VERSION}"
-          fi
-          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid SemVer chart version: ${version}" >&2
-            exit 1
-          fi
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
-      - name: Package Helm chart
-        run: |
-          set -euo pipefail
-          mkdir -p dist/helm
-          helm package deploy/helm/takos \
-            --version "${{ steps.version.outputs.version }}" \
-            --app-version "${GITHUB_SHA}" \
-            --destination dist/helm
-
-      - name: Login to GHCR for Helm
-        if: github.event_name == 'push' || inputs.publish == true
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | \
-            helm registry login ghcr.io \
-              --username "${{ github.actor }}" \
-              --password-stdin
-
-      - name: Publish Helm chart
-        if: github.event_name == 'push' || inputs.publish == true
-        run: helm push dist/helm/takos-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
-
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
-        with:
-          name: takos-helm-chart
-          path: dist/helm/*.tgz
-          if-no-files-found: error
-
   release-manifest:
     name: Release manifest
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [validate, oci-images, helm-chart]
+    needs: [validate, oci-images]
     if: github.event_name == 'push' || inputs.publish == true
     permissions:
       contents: read

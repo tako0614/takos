@@ -39,12 +39,6 @@
       "takosumi-contract/internal/rpc": [
         "../takosumi/src/contract/internal-rpc.ts"
       ],
-      "takosumi-contract-v2/internal/api": [
-        "../takosumi/src/contract/internal-api.ts"
-      ],
-      "takosumi-contract-v2/internal/rpc": [
-        "../takosumi/src/contract/internal-rpc.ts"
-      ],
       "@takosjp/takosumi-accounts-contract": [
         "../takosumi/packages/accounts-contract/src/mod.ts"
       ],

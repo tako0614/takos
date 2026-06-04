@@ -1,6 +1,0 @@
-apiVersion: v2
-name: takos
-description: Takos AI platform - multi-tenant agent runtime
-type: application
-version: 0.1.0
-appVersion: "1.0.0"

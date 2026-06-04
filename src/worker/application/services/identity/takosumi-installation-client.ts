@@ -12,8 +12,7 @@
 // been removed. This module keeps the call surface used by space create/delete
 // as a no-op stub so the dormant dual-write can be re-wired to the
 // OpenTofu-native deploy control API later without reintroducing the retired
-// Installer client. See the retired deploy proxy
-// (`src/routes/public/shared/api/retired.ts`, HTTP 410) for the migration pointer.
+// Installer client.
 import type { Env } from "../../../shared/types/index.ts";
 
 export interface TakosumiInstallationResult {

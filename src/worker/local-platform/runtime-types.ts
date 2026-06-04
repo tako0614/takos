@@ -17,7 +17,6 @@ import type {
  *   - .env.self-host                            (TAKOS_WORKER_PORT etc.)
  *   - apps/runtime/.env.example                 (TAKOS_API_URL port)
  *   - scripts/local-smoke.mjs                   (defaults object)
- *   - deploy/helm/takos/values.yaml             (port fields)
  */
 export const DEFAULT_LOCAL_PORTS = {
   web: 8787,

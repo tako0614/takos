@@ -13,8 +13,6 @@ await checkRequiredDocs();
 await checkGitignorePolicy();
 await checkTrackedOpenTofuSecretFiles();
 await checkPlanFixtures();
-await checkOpenTofuSensitiveOutputs();
-await checkHelmBridgeGuard();
 
 const failed = checks.filter((check) => !check.ok);
 if (failed.length > 0) {
@@ -31,10 +29,6 @@ async function checkRequiredDocs(): Promise<void> {
   const required = [
     'takos-private',
     'opentofu_plan_mode = true',
-    'runtimeConfig.managedResources',
-    'secrets.create: false',
-    'database_endpoint',
-    'database_url',
     'opentofu.tfvars',
     'validate:opentofu-secrets',
   ];
@@ -67,8 +61,6 @@ async function checkGitignorePolicy(): Promise<void> {
 async function checkTrackedOpenTofuSecretFiles(): Promise<void> {
   const tracked = await gitLsFiles('deploy/opentofu');
   const allowedTfvars = new Set([
-    'deploy/opentofu/plan/aws-staging.tfvars',
-    'deploy/opentofu/plan/gcp-staging.tfvars',
     'deploy/opentofu/plan/cloudflare-staging.tfvars',
   ]);
   const forbidden = tracked.filter((path) => {
@@ -88,21 +80,7 @@ async function checkTrackedOpenTofuSecretFiles(): Promise<void> {
 }
 
 async function checkPlanFixtures(): Promise<void> {
-  // DB-backed targets (aws/gcp) prove CI-only status via the placeholder db_password.
-  const dbPasswordFixtures = [
-    'deploy/opentofu/plan/aws-staging.tfvars',
-    'deploy/opentofu/plan/gcp-staging.tfvars',
-  ];
   const failures: string[] = [];
-  for (const path of dbPasswordFixtures) {
-    const text = await readText(path);
-    if (!text.includes('opentofu_plan_mode = true')) {
-      failures.push(`${path} missing opentofu_plan_mode = true`);
-    }
-    if (!text.includes('ci-plan-placeholder-not-a-secret')) {
-      failures.push(`${path} missing CI placeholder password`);
-    }
-  }
   // Cloudflare has no DB password; its only identity-like value is account_id,
   // which must stay the all-zero placeholder rather than a real account id.
   {
@@ -119,43 +97,6 @@ async function checkPlanFixtures(): Promise<void> {
     name: 'ci-plan-fixtures',
     ok: failures.length === 0,
     detail: failures.length === 0 ? 'plan fixtures are CI-only placeholders' : failures.join('; '),
-  });
-}
-
-async function checkOpenTofuSensitiveOutputs(): Promise<void> {
-  const rootOutputs = await readText('deploy/opentofu/outputs.tf');
-  const awsOutputs = await readText('deploy/opentofu/modules/aws/outputs.tf');
-  const gcpOutputs = await readText('deploy/opentofu/modules/gcp/outputs.tf');
-  const failures: string[] = [];
-  for (
-    const [label, text] of [
-      ['root', rootOutputs],
-      ['aws', awsOutputs],
-      ['gcp', gcpOutputs],
-    ] as const
-  ) {
-    if (!/output\s+"database_url"\s*\{[\s\S]*?sensitive\s*=\s*true[\s\S]*?\}/.test(text)) {
-      failures.push(`${label} database_url output must remain sensitive`);
-    }
-  }
-  checks.push({
-    name: 'opentofu-sensitive-database-url',
-    ok: failures.length === 0,
-    detail: failures.length === 0 ? 'database_url outputs are sensitive' : failures.join('; '),
-  });
-}
-
-async function checkHelmBridgeGuard(): Promise<void> {
-  const bridge = await readText('scripts/opentofu-output-to-helm-values.ts');
-  const required = [
-    'OpenTofu output ${key} is sensitive and cannot be written to Helm values',
-    'Refusing to bridge sensitive database_url into Helm values',
-  ];
-  const missing = required.filter((text) => !bridge.includes(text));
-  checks.push({
-    name: 'helm-values-sensitive-output-guard',
-    ok: missing.length === 0,
-    detail: missing.length === 0 ? 'Helm bridge rejects sensitive OpenTofu outputs' : `missing ${missing.join(', ')}`,
   });
 }
 

@@ -15,7 +15,6 @@ test("platform architecture contract - canonical Takos layout is single worker p
   for (
     const requiredPath of [
       "src/worker",
-      "src/routes/public",
       "src/contracts/git",
       "src/contracts/agent",
       "web",
