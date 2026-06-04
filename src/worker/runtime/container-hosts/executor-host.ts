@@ -39,7 +39,7 @@ import {
   buildAgentExecutorProxyConfig,
 } from "./executor-proxy-config.ts";
 
-import { constantTimeEqual } from "../../shared/utils/hash.ts";
+import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
 import { logError } from "../../shared/utils/logger.ts";
 import {
   errorJsonResponse,
@@ -274,7 +274,7 @@ function createExecutorContainerClass(
     async verifyProxyToken(token: string): Promise<ProxyTokenInfo | null> {
       const tokens = await this.loadTokenMap();
       for (const [storedToken, info] of tokens) {
-        if (constantTimeEqual(token, storedToken)) return info;
+        if (constantTimeEqualsString(token, storedToken)) return info;
       }
       return null;
     }

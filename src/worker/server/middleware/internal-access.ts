@@ -18,7 +18,7 @@
 // - validateInternalApiAccess: gate for /internal/* endpoints (loopback or
 //   cluster-internal hostname + X-Takos-Internal-Secret header)
 import type { Env } from "../../shared/types/index.ts";
-import { constantTimeEqual } from "../../shared/utils/hash.ts";
+import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
 
 /**
  * Shared secret check: the request must present `headerName` matching the
@@ -39,7 +39,7 @@ function checkInternalSecretHeader(
     };
   }
   const actualSecret = getHeader(headerName);
-  if (!actualSecret || !constantTimeEqual(actualSecret, expectedSecret)) {
+  if (!actualSecret || !constantTimeEqualsString(actualSecret, expectedSecret)) {
     return { ok: false, status: 403, message: "forbidden" };
   }
   return { ok: true };

@@ -20,15 +20,3 @@ export async function computeSHA256(
   );
   return bytesToHex(new Uint8Array(hashBuffer));
 }
-
-export function constantTimeEqual(a: string, b: string): boolean {
-  const encoder = new TextEncoder();
-  const bufA = encoder.encode(a);
-  const bufB = encoder.encode(b);
-  if (bufA.byteLength !== bufB.byteLength) return false;
-  let result = 0;
-  for (let i = 0; i < bufA.byteLength; i++) {
-    result |= bufA[i] ^ bufB[i];
-  }
-  return result === 0;
-}

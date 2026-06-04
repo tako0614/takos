@@ -22,7 +22,7 @@ import type {
 import { HostContainerRuntime } from "./container-runtime.ts";
 import { generateProxyToken } from "./executor-proxy-config.ts";
 
-import { constantTimeEqual } from "../../shared/utils/hash.ts";
+import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
 import {
   createEnvGuard,
   validateRuntimeHostEnv,
@@ -252,7 +252,7 @@ export class TakosRuntimeContainer extends HostContainerRuntime<Env> {
     if (!this.cachedTokens) return null;
 
     for (const [storedToken, info] of this.cachedTokens) {
-      if (!constantTimeEqual(token, storedToken)) continue;
+      if (!constantTimeEqualsString(token, storedToken)) continue;
       if (info.expiresAt <= Date.now()) {
         this.cachedTokens.delete(storedToken);
         await this.persistProxyTokens();

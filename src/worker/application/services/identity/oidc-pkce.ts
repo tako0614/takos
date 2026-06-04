@@ -1,4 +1,4 @@
-import { constantTimeEqual } from "../../../shared/utils/hash.ts";
+import { constantTimeEqualsString } from "takosumi-contract/internal-crypto";
 import { base64UrlEncode, bytesToHex } from "../../../shared/utils/index.ts";
 
 type CodeChallengeMethod = "S256";
@@ -29,7 +29,7 @@ export async function verifyCodeChallenge(
   method: CodeChallengeMethod = "S256",
 ): Promise<boolean> {
   const computedChallenge = await generateCodeChallenge(codeVerifier, method);
-  return constantTimeEqual(computedChallenge, codeChallenge);
+  return constantTimeEqualsString(computedChallenge, codeChallenge);
 }
 
 export function isValidCodeVerifier(verifier: string): boolean {

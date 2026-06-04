@@ -2,7 +2,7 @@ import {
   createCloudflareWorker,
   type CloudflareWorkerEnv,
 } from "@takosjp/takosumi-accounts-worker";
-import { deployControlFetch } from "../deploy/mount.ts";
+import { createInProcessDeployControlFetch } from "../deploy/mount.ts";
 import type { CloudflareWorkerEnv as DeployControlWorkerEnv } from "@takosjp/takosumi-deploy-worker";
 
 // The Takosumi Accounts plane (OIDC issuer / dashboard API / installations / billing)
@@ -13,13 +13,18 @@ import type { CloudflareWorkerEnv as DeployControlWorkerEnv } from "@takosjp/tak
 // web.ts delegates exactly these root prefixes here; everything else is the Takos product.
 //
 // The Takosumi deploy-control plane runs in-process in this same worker and owns
-// no public route. The accounts facade reaches it through the in-process fetch
-// seam injected here (`deployControlFetch`): the accounts deploy-control proxy
-// (plan-runs / apply-runs / installation reads) dispatches straight into the
-// embedded deploy-control Hono app instead of an edge URL. See deploy/mount.ts.
+// no public route. The accounts facade reaches it through the in-process seam
+// injected here (`createInProcessDeployControlFetch`): the accounts deploy-control
+// proxy (plan-runs / apply-runs / installation reads) calls the embedded service's
+// typed `operations` facade directly (no Bearer handshake, no JSON round-trip),
+// with the HTTP `fetch` dispatch kept as a fallback transport. See deploy/mount.ts.
 const accountsWorker = createCloudflareWorker({
   deployControlFetch: (env) =>
-    deployControlFetch(env as unknown as DeployControlWorkerEnv),
+    createInProcessDeployControlFetch(env as unknown as DeployControlWorkerEnv)
+      .fetch,
+  deployControlOperations: (env) =>
+    createInProcessDeployControlFetch(env as unknown as DeployControlWorkerEnv)
+      .operations(),
 });
 
 export type { CloudflareWorkerEnv };
