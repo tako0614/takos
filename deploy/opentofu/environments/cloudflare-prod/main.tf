@@ -48,6 +48,18 @@ output "d1_database_name" {
   value = module.takos.d1_database_name
 }
 
+output "accounts_d1_database_id" {
+  value = module.takos.accounts_d1_database_id
+}
+
+output "deploy_d1_database_id" {
+  value = module.takos.deploy_d1_database_id
+}
+
+output "d1_database_ids" {
+  value = module.takos.d1_database_ids
+}
+
 output "kv_namespace_ids" {
   value = module.takos.kv_namespace_ids
 }

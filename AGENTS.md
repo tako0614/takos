@@ -2,25 +2,30 @@
 
 `takos` は **Takos product shell** で、単一の Takos Worker (`src/worker`)、UI (`web`)、Cloudflare Container 実装
 (`containers/git` / `containers/agent`) と shell-owned Cloudflare deploy artifacts (`deploy/cloudflare` /
-`deploy/opentofu/modules/cloudflare` / `deploy/distributions/cloudflare.json` / validator) を集約する。この Takos product
-Worker は **公式にはどこにもデプロイされない**: ユーザーが Takosumi で自分のインフラに Installation として deploy する
-self-hostable artifact であり、self-host された worker は **自分の origin** で動き、embedded accounts plane により自分が
-OIDC issuer になる (`app.takosumi.com` は operator の Takosumi platform worker の origin であって Takos product worker の
-origin ではない)。self-host deploy では Takos product に加えて Takosumi Accounts plane と Takosumi deploy-control plane を
-**in-process** で同居させる (詳細は後述 [`§ 単一 Worker のトポロジ`](#単一-worker-のトポロジ))。Takosumi / Takos の
-identity と vocabulary は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
+`deploy/opentofu/modules/cloudflare` / `deploy/distributions/cloudflare.json` / validator) を集約する。Takos は
+**plain OpenTofu module として完結する** self-hostable application で、deploy の正本は
+[`deploy/opentofu`](deploy/opentofu) module (`var.target = cloudflare`): `tofu apply` が全 durable infra を provision し、
+worker artifact (`deploy/cloudflare` の wrangler step) はその module output を読む 1 ステップで上がる。**Takosumi は不要**。
+self-host された worker は **自分の origin** で動き、embedded accounts plane により自分が OIDC issuer になる
+(`app.takosumi.com` は operator の Takosumi platform worker の origin であって Takos product worker の origin ではない)。
+統合 Takos worker は Takos product に加えて Takosumi Accounts plane と Takosumi deploy-control plane を **in-process** で
+同居させる (詳細は後述 [`§ 単一 Worker のトポロジ`](#単一-worker-のトポロジ))。Takosumi / Takos の identity と vocabulary は
+root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と
 [`../docs/reference/glossary.md`](../docs/reference/glossary.md) を正本にする。
 
-> **Takos is a self-hostable product deployed by Takosumi, the OpenTofu-native deploy control plane, with _democratization of software through AI agents_ as
-> its core concept. It leverages AI agents, Git, chat, spaces, memory, and tools, and ships 1st-party apps (`takos-docs`
-> / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) auto-installed on new space creation as a
-> user-facing convenience.** **Takosumi** installs a plain OpenTofu module and records the run ledger
-> (`Installation` / `PlanRun` / `ApplyRun` / `Deployment` / `DeploymentOutput`), with a `RunnerProfile` owning the
-> provider allowlist / credentials / state backend / Cloudflare Container execution; it is not Takos-specific.
-> In a self-host deployment, deploy-control and the Accounts plane run **in-process inside this Takos product worker at the
-> self-hoster's own origin** (the embedded accounts plane is that instance's OIDC issuer); they are implementation source
-> owned by `../takosumi/`, imported via tsconfig alias — not a separate service and not a privileged layer above the
-> product. `app.takosumi.com` is the operator's Takosumi platform worker, a separate build target, not this product worker.
+> **Takos is a self-hostable product that is complete as a plain OpenTofu module — `tofu apply` provisions all durable
+> infra and one wrangler step uploads the worker artifact that reads the module outputs, with no Takosumi required — with
+> _democratization of software through AI agents_ as its core concept. It leverages AI agents, Git, chat, spaces, memory,
+> and tools, and ships 1st-party apps (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`)
+> auto-installed on new space creation as a user-facing convenience.** **Takosumi** is an optional convenience: running
+> that same plain OpenTofu module through Takosumi installs it and records the run ledger (`Installation` / `PlanRun` /
+> `ApplyRun` / `Deployment` / `DeploymentOutput`), with a `RunnerProfile` owning the provider allowlist / credentials /
+> state backend / Cloudflare Container execution. Takos holds no special coupling to Takosumi; it is just one plain
+> OpenTofu module app among others. In a self-host deployment, deploy-control and the Accounts plane run **in-process
+> inside this Takos product worker at the self-hoster's own origin** (the embedded accounts plane is that instance's OIDC
+> issuer); they are implementation source owned by `../takosumi/`, imported via tsconfig alias — not a separate service
+> and not a privileged layer above the product. `app.takosumi.com` is the operator's Takosumi platform worker, a separate
+> build target, not this product worker.
 
 Takos の constituent (AI agents / Git / memory / spaces / tools) と「ソフトウェアの民主化」 core concept の formal
 definition は [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) §0 を参照。
@@ -53,8 +58,9 @@ Takosumi 公開概念は `Installation` / `PlanRun` / `ApplyRun` / `Deployment` 
 
 ## 単一 Worker のトポロジ
 
-current reality は **operator が運用するのは Takosumi platform worker (`app.takosumi.com`) だけ**で、Takos product worker は
-公式にはデプロイされず self-host される (`takosumi.com` landing / `takos.jp` 紹介サイト)。multi-operator / multi-cloud /
+current reality は **Takos は plain OpenTofu module として完結する self-host application** で、`tofu apply` + wrangler step 1 つ
+で Takosumi 抜きに self-host できる (`takosumi.com` landing / `takos.jp` 紹介サイト)。Takosumi を運用するかどうかは operator の
+任意で、運用する場合に動かすのは Takosumi platform worker (`app.takosumi.com`) だけ。multi-operator / multi-cloud /
 分離 sub-service の機構は retired (下記 [`§ Naming history`](#naming-history))。以下は self-host された Takos product worker の
 in-process トポロジ (operator の platform worker も同じ accounts plane / deploy-control source を別 build target で compose する)。
 
