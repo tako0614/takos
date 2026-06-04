@@ -4,6 +4,8 @@ export {
   getRepositoryById,
   getWorkspaceByIdOrSlug,
   getWorkspaceWithRepository,
+  initDefaultRepository,
+  type InitDefaultRepositoryResult,
   listWorkspacesForUser,
   loadSpaceById,
 } from "./space-crud-read.ts";

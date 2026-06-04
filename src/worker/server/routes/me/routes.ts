@@ -1,9 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../../../shared/types/index.ts";
 import { validateUsername } from "../../../shared/utils/domain-validation.ts";
-import { getDb } from "../../../infra/db/index.ts";
-import { accounts } from "../../../infra/db/schema.ts";
-import { and, eq, ne } from "drizzle-orm";
 import { type BaseVariables, parseJsonBody } from "../route-auth.ts";
 import {
   AuthorizationError,
@@ -18,16 +15,17 @@ import {
 } from "../../../application/services/identity/user-settings.ts";
 import { toUserResponse } from "../../../application/services/identity/response-formatters.ts";
 import { getOrCreatePersonalWorkspace } from "../../../application/services/identity/spaces.ts";
+import { updateUsername } from "../../../application/services/identity/user-profile.ts";
 import privacy from "./privacy.ts";
 
 export const meRouteDeps = {
-  getDb,
   validateUsername,
   ensureUserSettings,
   updateUserSettings,
   formatUserSettingsResponse,
   toUserResponse,
   getOrCreatePersonalWorkspace,
+  updateUsername,
 };
 
 function toPersonalSpaceResponse(space: {
@@ -144,22 +142,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return c.json({ success: true, username: normalizedUsername });
     }
 
-    const db = meRouteDeps.getDb(c.env.DB);
-    const existingUser = await db.select({ id: accounts.id })
-      .from(accounts)
-      .where(
-        and(eq(accounts.slug, normalizedUsername), ne(accounts.id, user.id)),
-      )
-      .limit(1)
-      .get();
-
-    if (existingUser) {
+    const result = await meRouteDeps.updateUsername(
+      c.env.DB,
+      user.id,
+      normalizedUsername,
+    );
+    if (!result.ok) {
       throw new ConflictError("This username is already taken");
     }
-    await db.update(accounts).set({
-      slug: normalizedUsername,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(accounts.id, user.id));
 
     return c.json({ success: true, username: normalizedUsername });
   })

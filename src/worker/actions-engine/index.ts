@@ -3,11 +3,10 @@
  *
  * GitHub Actions 互換ワークフローの parser / validator / planner ライブラリ。
  *
- * NOTE: 実行レイヤ (in-process JobScheduler / StepRunner / shell executor /
- * 実行コンテキストビルダー) は published surface から外してある。Takos の
- * control plane は queue 分散・remote-runtime な独自 executor を実装しており、
- * この package を runnable engine としては consume しない。実行レイヤの source
- * は参考実装として in-tree に残しているが、公開 API ではない。
+ * NOTE: in-process な実行レイヤ (JobScheduler / StepRunner / shell executor /
+ * 実行コンテキストビルダー) は提供しない。Takos の control plane は queue 分散・
+ * remote-runtime な独自 executor を実装しており、この package を runnable engine
+ * としては consume しない。公開するのは parser / validator と実行計画の算出のみ。
  */
 
 // 公開型
@@ -66,9 +65,11 @@ export type {
 export { parseWorkflow } from "./parser/workflow.ts";
 export { validateWorkflow, type ValidationResult } from "./parser/validator.ts";
 
+// 共有ユーティリティ（公開）
+export { globMatch } from "./glob-match.ts";
+
 // プランナー API（公開）
 //
-// 実行レイヤ (JobScheduler / StepRunner / ShellExecutor / createBaseContext /
-// parseGitHubEnvFile) は published surface から意図的に除外している。
-// dependency / matrix 展開を踏まえた実行計画の算出だけを公開する。
+// in-process な実行レイヤは提供せず、dependency / matrix 展開を踏まえた
+// 実行計画の算出だけを公開する。
 export { createExecutionPlan } from "./scheduler/job.ts";

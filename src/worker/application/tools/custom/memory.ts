@@ -4,9 +4,12 @@ import type {
   ReminderPriority,
   ReminderTriggerType,
 } from "../../../shared/types/index.ts";
-import { getDb, memories, reminders } from "../../../infra/db/index.ts";
-import { and, desc, eq, like, sql } from "drizzle-orm";
-import { generateId } from "../../../shared/utils/index.ts";
+import {
+  bumpMemoryAccess,
+  createMemory,
+  createReminder,
+  searchMemories,
+} from "../../services/memory/memories.ts";
 
 export const REMEMBER: ToolDefinition = {
   name: "remember",
@@ -120,24 +123,15 @@ export const rememberHandler: ToolHandler = async (args, context) => {
     );
   }
 
-  const id = generateId();
-  const now = new Date().toISOString();
-
-  const db = getDb(context.db);
-  await db.insert(memories).values({
-    id,
-    accountId: context.spaceId,
-    authorAccountId: context.userId,
+  await createMemory(context.db, {
+    spaceId: context.spaceId,
+    userId: context.userId,
     threadId: context.threadId,
     type,
     category: category || null,
     content,
     summary: content.length > 100 ? content.substring(0, 100) + "..." : content,
     importance,
-    occurredAt: now,
-    accessCount: 0,
-    createdAt: now,
-    updatedAt: now,
   });
 
   let result = `Remembered (${type}): ${content.substring(0, 50)}${
@@ -154,41 +148,21 @@ export const recallHandler: ToolHandler = async (args, context) => {
   const type = args.type as MemoryType | undefined;
   const limit = Math.min((args.limit as number) || 10, 50);
 
-  const db = getDb(context.db);
-
-  const conditions = [
-    eq(memories.accountId, context.spaceId),
-    like(memories.content, `%${query}%`),
-  ];
-  if (type) conditions.push(eq(memories.type, type));
-
-  const memoryResults = await db.select({
-    id: memories.id,
-    type: memories.type,
-    category: memories.category,
-    content: memories.content,
-    importance: memories.importance,
-    occurredAt: memories.occurredAt,
-    accessCount: memories.accessCount,
-  }).from(memories)
-    .where(and(...conditions))
-    .orderBy(desc(memories.importance), desc(memories.occurredAt))
-    .limit(limit)
-    .all();
+  const memoryResults = await searchMemories(
+    context.db,
+    context.spaceId,
+    query,
+    type,
+    limit,
+  );
 
   if (memoryResults.length === 0) {
     return `No memories found for: "${query}"`;
   }
 
-  const now = new Date().toISOString();
-  await Promise.all(
-    memoryResults.map((m) =>
-      db.update(memories).set({
-        accessCount: sql`${memories.accessCount} + 1`,
-        lastAccessedAt: now,
-        updatedAt: now,
-      }).where(eq(memories.id, m.id))
-    ),
+  await bumpMemoryAccess(
+    context.db,
+    memoryResults.map((m) => m.id),
   );
 
   const lines = memoryResults.map((m) => {
@@ -212,9 +186,6 @@ export const setReminderHandler: ToolHandler = async (args, context) => {
   const triggerValue = args.trigger_value as string;
   const priority = (args.priority as ReminderPriority) || "normal";
 
-  const id = generateId();
-  const now = new Date().toISOString();
-
   if (triggerType === "time") {
     const triggerDate = new Date(triggerValue);
     if (isNaN(triggerDate.getTime())) {
@@ -227,19 +198,13 @@ export const setReminderHandler: ToolHandler = async (args, context) => {
     }
   }
 
-  const db = getDb(context.db);
-  await db.insert(reminders).values({
-    id,
-    accountId: context.spaceId,
-    ownerAccountId: context.userId,
+  await createReminder(context.db, {
+    spaceId: context.spaceId,
+    userId: context.userId,
     content,
-    context: null,
     triggerType,
     triggerValue,
-    status: "pending",
     priority,
-    createdAt: now,
-    updatedAt: now,
   });
 
   let triggerDescription: string;

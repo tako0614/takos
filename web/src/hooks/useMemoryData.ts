@@ -6,6 +6,7 @@ import {
   type Setter,
 } from "solid-js";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
@@ -76,8 +77,8 @@ export function useMemoryData(
   const [reminders, setReminders] = createSignal<Reminder[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
-  let memoriesSeqRef = 0;
-  let remindersSeqRef = 0;
+  const latestMemories = createLatestRequest();
+  const latestReminders = createLatestRequest();
 
   const [memoryForm, setMemoryForm] = createSignal<MemoryFormState>({
     content: "",
@@ -101,7 +102,7 @@ export function useMemoryData(
       setLoading(false);
       return;
     }
-    const seq = ++memoriesSeqRef;
+    const claim = latestMemories.claim();
     setLoading(true);
     setError(null);
     try {
@@ -109,16 +110,16 @@ export function useMemoryData(
         param: { spaceId: targetSpaceId },
         query: {},
       });
-      if (seq !== memoriesSeqRef) return;
+      if (!claim.won()) return;
       const data = await rpcJson<{ memories: Memory[] }>(res);
-      if (seq !== memoriesSeqRef) return;
+      if (!claim.won()) return;
       setMemories(data.memories || []);
     } catch (err) {
-      if (seq !== memoriesSeqRef) return;
+      if (!claim.won()) return;
       setError(err instanceof Error ? err.message : t("failedToFetchMemories"));
       setMemories([]);
     } finally {
-      if (seq === memoriesSeqRef) {
+      if (claim.won()) {
         setLoading(false);
       }
     }
@@ -130,18 +131,18 @@ export function useMemoryData(
       setReminders([]);
       return;
     }
-    const seq = ++remindersSeqRef;
+    const claim = latestReminders.claim();
     try {
       const res = await rpc.spaces[":spaceId"].reminders.$get({
         param: { spaceId: targetSpaceId },
         query: {},
       });
-      if (seq !== remindersSeqRef) return;
+      if (!claim.won()) return;
       const data = await rpcJson<{ reminders: Reminder[] }>(res);
-      if (seq !== remindersSeqRef) return;
+      if (!claim.won()) return;
       setReminders(data.reminders || []);
     } catch (err) {
-      if (seq !== remindersSeqRef) return;
+      if (!claim.won()) return;
       setError(
         err instanceof Error ? err.message : t("failedToFetchReminders"),
       );
@@ -150,8 +151,8 @@ export function useMemoryData(
   };
 
   createEffect(on(spaceId, (nextSpaceId) => {
-    ++memoriesSeqRef;
-    ++remindersSeqRef;
+    latestMemories.next();
+    latestReminders.next();
     setMemories([]);
     setReminders([]);
     setError(null);

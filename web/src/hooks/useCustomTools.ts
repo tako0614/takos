@@ -2,6 +2,7 @@ import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import { getErrorMessage } from "@takos/worker-platform-utils/errors";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import type { CustomTool } from "../types/index.ts";
 
 interface UseCustomToolsOptions {
@@ -16,29 +17,30 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
 
   const [tools, setTools] = createSignal<CustomTool[]>([]);
   const [loading, setLoading] = createSignal(true);
-  let refreshSeq = 0;
+  const latestRefresh = createLatestRequest();
 
   const refresh = async () => {
     const targetSpaceId = currentSpaceId();
-    const seq = ++refreshSeq;
     if (!targetSpaceId) {
+      latestRefresh.next();
       setTools([]);
       setLoading(false);
       return;
     }
 
+    const claim = latestRefresh.claim(() => targetSpaceId === currentSpaceId());
     setLoading(true);
     try {
       const res = await fetch(`/api/spaces/${targetSpaceId}/tools`);
       if (!res.ok) throw new Error(t("failedToFetchTools"));
       const data = await res.json() as { data?: CustomTool[] };
-      if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
+      if (!claim.won()) return;
       setTools(data.data || []);
     } catch {
-      if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
+      if (!claim.won()) return;
       setTools([]);
     } finally {
-      if (seq === refreshSeq && targetSpaceId === currentSpaceId()) {
+      if (claim.won()) {
         setLoading(false);
       }
     }

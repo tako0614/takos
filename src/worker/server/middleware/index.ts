@@ -9,7 +9,6 @@ export * from "./cache.ts";
 export * from "./content-type.ts";
 export * from "./oauth-auth.ts";
 export * from "./param-validation.ts";
-export * from "./space-access.ts";
 export * from "./static-assets.ts";
 export * from "./trust-tier.ts";
 export * from "./turnstile.ts";

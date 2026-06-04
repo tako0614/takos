@@ -1,6 +1,6 @@
 import type { Env } from "../../../shared/types/index.ts";
 import { apps, files } from "../../../infra/db/index.ts";
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { sourceServiceDeps } from "./deps.ts";
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -31,6 +31,14 @@ export function normalizeDistPath(input: string): string {
     throw new Error("Invalid dist_path");
   }
   return normalized;
+}
+
+// Escape SQL LIKE meta-characters so dist_path is matched as a literal prefix.
+// Used together with an explicit `ESCAPE '\\'` clause. Without this, a
+// dist_path containing % or _ (which normalizeDistPath does not reject) would
+// be interpreted as a wildcard and over-match unintended space files.
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
 }
 
 export async function deployFrontendFromWorkspace(
@@ -75,7 +83,10 @@ export async function deployFrontendFromWorkspace(
     id: files.id,
     path: files.path,
   }).from(files).where(
-    and(eq(files.accountId, input.spaceId), like(files.path, `${distPath}/%`)),
+    and(
+      eq(files.accountId, input.spaceId),
+      sql`${files.path} LIKE ${`${escapeLike(distPath)}/%`} ESCAPE '\\'`,
+    ),
   ).all();
 
   if (fileRows.length === 0) {

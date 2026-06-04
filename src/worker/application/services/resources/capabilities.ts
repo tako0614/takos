@@ -3,6 +3,48 @@ import type {
   ResourcePublicType,
 } from "../../../shared/types/index.ts";
 
+/**
+ * The single backend axis for managed resources. `cloudflare` is the native
+ * backend; the remaining members are the portable backends (see
+ * {@link PortableResourceBackend}).
+ */
+export type ResourceBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
+
+/**
+ * The portable backend axis is the resource backend axis minus the native
+ * `cloudflare` backend, so the two stay in lockstep by construction.
+ */
+export type PortableResourceBackend = Exclude<ResourceBackend, "cloudflare">;
+
+export function normalizeResourceBackend(
+  backendName?: string | null,
+): ResourceBackend {
+  switch (backendName) {
+    case "local":
+    case "aws":
+    case "gcp":
+    case "k8s":
+      return backendName;
+    case "cloudflare":
+    default:
+      return "cloudflare";
+  }
+}
+
+export function normalizePortableResourceBackend(
+  backendName?: string | null,
+): PortableResourceBackend {
+  switch (backendName) {
+    case "aws":
+    case "gcp":
+    case "k8s":
+      return backendName;
+    case "local":
+    default:
+      return "local";
+  }
+}
+
 export type ResourceImplementation =
   | "d1"
   | "r2"
@@ -282,5 +324,44 @@ export function toPublicResourceType(
 ): ResourcePublicType | null {
   const capability = toResourceCapability(type, config);
   if (!capability) return null;
+  return RESOURCE_PUBLIC_TYPE_BY_CAPABILITY[capability];
+}
+
+/**
+ * The single source of truth for the canonical resource capability set, in the
+ * stable public ordering. Other modules (e.g. the deployment canonical model)
+ * derive their per-resource lookup tables over this list instead of
+ * re-declaring the resource vocabulary.
+ */
+export const CANONICAL_RESOURCE_CAPABILITIES: readonly ResourceCapability[] = [
+  "sql",
+  "object_store",
+  "kv",
+  "queue",
+  "vector_index",
+  "analytics_store",
+  "secret",
+  "workflow_runtime",
+  "durable_namespace",
+];
+
+/**
+ * Strict public-type → capability resolution. Unlike {@link toResourceCapability}
+ * this only accepts the backend-independent public type names
+ * (sql / object-store / key-value / ...), mirroring the manifest vocabulary.
+ */
+export function resourceCapabilityFromPublicType(
+  publicType: ResourcePublicType,
+): ResourceCapability {
+  return CURRENT_RESOURCE_CAPABILITY_BY_TYPE[publicType];
+}
+
+/**
+ * Capability → backend-independent public type. The inverse of
+ * {@link resourceCapabilityFromPublicType}.
+ */
+export function resourcePublicTypeFromCapability(
+  capability: ResourceCapability,
+): ResourcePublicType {
   return RESOURCE_PUBLIC_TYPE_BY_CAPABILITY[capability];
 }

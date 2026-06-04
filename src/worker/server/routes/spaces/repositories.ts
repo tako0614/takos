@@ -3,11 +3,7 @@ import {
   type AuthenticatedRouteEnv,
   requireSpaceAccess,
 } from "../route-auth.ts";
-import { getRepositoryById } from "../../../application/services/identity/spaces.ts";
-import { getDb } from "../../../infra/db/index.ts";
-import { desc, eq } from "drizzle-orm";
-import { repositories } from "../../../infra/db/schema.ts";
-import { generateId } from "../../../shared/utils/index.ts";
+import { initDefaultRepository } from "../../../application/services/identity/spaces.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import { InternalError } from "@takos/worker-platform-utils/errors";
 
@@ -26,46 +22,9 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const spaceId = access.space.id;
 
-    const db = getDb(c.env.DB);
-
-    const existingRepo = await db.select()
-      .from(repositories)
-      .where(eq(repositories.accountId, spaceId))
-      .orderBy(desc(repositories.updatedAt))
-      .get() ?? null;
-
-    if (existingRepo) {
-      const repository = await getRepositoryById(c.env.DB, existingRepo.id);
-      return c.json({
-        message: "Repository already exists",
-        skipped: true,
-        repository,
-      });
-    }
-
-    const repoId = generateId();
-    const timestamp = new Date().toISOString();
-
+    let result;
     try {
-      await db.insert(repositories).values({
-        id: repoId,
-        accountId: spaceId,
-        name: "main",
-        description: "Default repository for workspace",
-        visibility: "private",
-        defaultBranch: "main",
-        stars: 0,
-        forks: 0,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      });
-
-      const repository = await getRepositoryById(c.env.DB, repoId);
-
-      return c.json({
-        message: "Repository initialized successfully",
-        repository,
-      }, 201);
+      result = await initDefaultRepository(c.env.DB, spaceId);
     } catch (err) {
       logError(`Failed to init repo for workspace ${spaceId}`, err, {
         module: "routes/spaces/repositories",
@@ -74,4 +33,17 @@ export default new Hono<AuthenticatedRouteEnv>()
         err instanceof Error ? err.message : "Failed to initialize repository",
       );
     }
+
+    if (!result.created) {
+      return c.json({
+        message: "Repository already exists",
+        skipped: true,
+        repository: result.repository,
+      });
+    }
+
+    return c.json({
+      message: "Repository initialized successfully",
+      repository: result.repository,
+    }, 201);
   });

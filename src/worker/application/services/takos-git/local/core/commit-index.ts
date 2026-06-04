@@ -192,6 +192,12 @@ export async function getCommit(
   const indexed = await getCommitFromIndex(dbBinding, repoId, sha);
   if (indexed) return indexed;
   if (!isValidSha(sha)) return null;
+  // SECURITY INVARIANT: the object-store fallthrough below is content-addressed
+  // and NOT repo-scoped, so it can return any tenant's commit by SHA. Callers
+  // MUST only pass a `sha` that is already bound to `repoId` — i.e. a branch/tag
+  // head, a parent of a commit already confirmed in this repo, or a raw SHA that
+  // resolveRef() has validated against this repo's commit index. Do not pass an
+  // unvalidated, caller-supplied SHA here.
   return getCommitData(bucket, sha);
 }
 

@@ -29,15 +29,4 @@ export function getTranslation(
   return interpolate(base, params);
 }
 
-export function detectLanguage(): Language {
-  const stored = localStorage.getItem("takos-lang");
-  if (stored === "ja" || stored === "en") {
-    return stored;
-  }
-  const browserLang = navigator.language.toLowerCase();
-  return browserLang.startsWith("ja") ? "ja" : "en";
-}
-
-export function setLanguage(lang: Language): void {
-  localStorage.setItem("takos-lang", lang);
-}
+export { detectLanguage, LANGUAGE_STORAGE_KEY, setLanguage } from "./lib/locale.ts";

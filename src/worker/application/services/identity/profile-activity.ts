@@ -1,14 +1,16 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import {
   accounts,
+  accountSettings,
   commits,
   getDb as realGetDb,
   pullRequests,
   repoReleases,
   repositories,
   serviceDeployments,
+  services,
 } from "../../../infra/db/index.ts";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 import { listServiceRouteRecordsByIds as realListServiceRouteRecordsByIds } from "../platform/workers.ts";
 
 export const profileActivityDeps = {
@@ -94,9 +96,20 @@ export async function fetchProfileActivity(
     prConditions.push(lt(pullRequests.createdAt, before));
   }
 
-  // Build deployment conditions
+  // Build deployment conditions. SECURITY parity: like the commit/release/PR
+  // branches (which filter to public repositories), only surface deployment
+  // activity for services owned by a non-private account, so a public profile
+  // feed cannot disclose the hostnames/slugs of services a user deployed into a
+  // private space they merely belong to.
   const deploymentConditions = [
     eq(serviceDeployments.deployedBy, profileUserId),
+    // privateAccount lives on account_settings (left-joined below); a missing
+    // settings row means the account is public (default false), so treat NULL as
+    // public and exclude only accounts explicitly marked private.
+    or(
+      isNull(accountSettings.privateAccount),
+      eq(accountSettings.privateAccount, false),
+    ),
   ];
   if (before) {
     deploymentConditions.push(lt(serviceDeployments.createdAt, before));
@@ -164,6 +177,8 @@ export async function fetchProfileActivity(
     serviceId: serviceDeployments.serviceId,
   })
     .from(serviceDeployments)
+    .innerJoin(services, eq(serviceDeployments.serviceId, services.id))
+    .leftJoin(accountSettings, eq(services.accountId, accountSettings.accountId))
     .where(and(...deploymentConditions))
     .orderBy(desc(serviceDeployments.createdAt))
     .limit(perType)

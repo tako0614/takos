@@ -227,6 +227,16 @@ export async function createToolExecutor(
     undefined,
     toolExecutionTimeoutMs,
   );
+  // Activate the in-run idempotency guard for side-effecting tools: register the
+  // set of tool names whose definition declares `side_effects: true`. Combined
+  // with `this.db` (set from context in the ToolExecutor constructor), this makes
+  // duplicate side-effect calls within a run return the prior result / reject an
+  // in-progress duplicate instead of re-provisioning/re-deploying.
+  executor.setSideEffectTools(
+    resolver.getAvailableTools()
+      .filter((tool) => tool.side_effects === true)
+      .map((tool) => tool.name),
+  );
   const internalContext = context as ToolContext & {
     _toolExecutor?: Pick<ToolExecutor, "execute">;
   };

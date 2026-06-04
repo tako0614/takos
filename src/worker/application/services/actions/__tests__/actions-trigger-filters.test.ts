@@ -1,44 +1,35 @@
 import { test } from "bun:test";
-import { assert, assertEquals } from "@takos/test/assert";
+import { assert } from "@takos/test/assert";
 
-import {
-  __globCacheInternals,
-  globToRegExp,
-} from "../actions-trigger-filters.ts";
+import { globMatch } from "takos-actions-engine";
 
-test("globToRegExp caches compiled patterns", () => {
-  __globCacheInternals.clear();
-  const a = globToRegExp("src/**/*.ts");
-  const b = globToRegExp("src/**/*.ts");
-  assert(a === b, "expected identical RegExp reference from cache");
-  assertEquals(__globCacheInternals.size(), 1);
+test("globMatch - `*` matches a run of non-slash chars but not `/`", () => {
+  assert(globMatch("src/*.ts", "src/index.ts"));
+  assert(!globMatch("src/*.ts", "src/sub/index.ts"));
 });
 
-test("globToRegExp glob cache is bounded by max entries", () => {
-  __globCacheInternals.clear();
-  const max = __globCacheInternals.maxEntries;
-  // Fill cache up to the cap.
-  for (let i = 0; i < max; i++) {
-    globToRegExp(`pattern-${i}/*.ts`);
-  }
-  assertEquals(__globCacheInternals.size(), max);
-
-  // Inserting one more must trigger the clear-and-replace policy
-  // (mirroring l1Cache pattern in services/routing/cache.ts).
-  globToRegExp("overflow-trigger/*.ts");
-  assert(
-    __globCacheInternals.size() <= max,
-    `cache size ${__globCacheInternals.size()} must stay <= ${max}`,
-  );
-  assertEquals(__globCacheInternals.size(), 1);
+test("globMatch - `**` matches any run including `/`", () => {
+  assert(globMatch("src/**", "src/index.ts"));
+  assert(globMatch("src/**", "src/sub/deep/file.ts"));
+  assert(globMatch("src/**/*.ts", "src/sub/deep/file.ts"));
+  assert(globMatch("feat-1/**/*.ts", "feat-1/sub/file.ts"));
 });
 
-test("globToRegExp produces working regexes after overflow eviction", () => {
-  __globCacheInternals.clear();
-  const max = __globCacheInternals.maxEntries;
-  for (let i = 0; i < max + 5; i++) {
-    const re = globToRegExp(`feat-${i}/**/*.ts`);
-    assert(re.test(`feat-${i}/sub/file.ts`));
-  }
-  assert(__globCacheInternals.size() <= max);
+test("globMatch - `?` matches exactly one non-slash char", () => {
+  assert(globMatch("file-?.ts", "file-a.ts"));
+  assert(!globMatch("file-?.ts", "file-ab.ts"));
+  assert(!globMatch("file-?.ts", "file-/.ts"));
+});
+
+test("globMatch - literal special chars are matched literally", () => {
+  assert(globMatch("a.b+c.ts", "a.b+c.ts"));
+  assert(!globMatch("a.b+c.ts", "axbycz.ts"));
+});
+
+test("globMatch - is ReDoS-free on adversarial patterns", () => {
+  // A backtracking RegExp would blow up on `a*a*...a*x` vs a long `a` run that
+  // never reaches the trailing literal; the linear DP returns promptly.
+  const pattern = "a*".repeat(40) + "x";
+  const value = "a".repeat(200);
+  assert(!globMatch(pattern, value));
 });

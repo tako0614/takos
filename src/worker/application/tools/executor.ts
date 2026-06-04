@@ -160,6 +160,13 @@ export class ToolExecutor implements ToolExecutorLike {
     this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ||
       AGENT_TOOL_EXECUTION_TIMEOUT_MS;
     this.observer = null;
+    // Wire the idempotency store from the run context so the side-effect-tool
+    // de-duplication guard below is actually active. Without this `this.db`
+    // stays null and the guard is dead code (side-effecting tools — create_sql,
+    // deploy_frontend, service_create, … — would re-execute on every duplicate
+    // call within a run). The side-effect tool NAME set is populated separately
+    // via setSideEffectTools() once the resolver's available tools are known.
+    this.db = context.db ?? null;
   }
 
   setObserver(observer: ToolObserver): void {

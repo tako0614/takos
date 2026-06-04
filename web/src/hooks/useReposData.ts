@@ -13,6 +13,7 @@ import type {
   SourceTab,
 } from "../types/repos.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { createLatestRequest } from "../lib/createLatestRequest.ts";
 import { useI18n } from "../store/i18n.ts";
 
 interface UseReposDataOptions {
@@ -26,10 +27,10 @@ export function useReposData(
   const { t } = useI18n();
   const [activeTab, setActiveTab] = createSignal<SourceTab>(initialTab);
   const PAGE_SIZE = 20;
-  let myReposRequestSeq = 0;
-  let exploreRequestSeq = 0;
-  let starredRequestSeq = 0;
-  let searchRequestSeq = 0;
+  const latestMyRepos = createLatestRequest();
+  const latestExplore = createLatestRequest();
+  const latestStarred = createLatestRequest();
+  const latestSearch = createLatestRequest();
 
   const [myRepos, setMyRepos] = createSignal<SourceRepo[]>([]);
   const [myReposLoading, setMyReposLoading] = createSignal(true);
@@ -62,7 +63,9 @@ export function useReposData(
   const fetchMyRepos = async () => {
     const currentSpaceId = selectedSpaceId?.();
     if (!currentSpaceId) return;
-    const requestId = ++myReposRequestSeq;
+    const claim = latestMyRepos.claim(() =>
+      selectedSpaceId?.() === currentSpaceId
+    );
     try {
       setMyReposLoading(true);
       setMyReposError(null);
@@ -70,25 +73,20 @@ export function useReposData(
         param: { spaceId: currentSpaceId },
       });
       const data = await rpcJson<{ repositories?: SourceRepo[] }>(res);
-      if (requestId !== myReposRequestSeq) return;
-      if (selectedSpaceId?.() !== currentSpaceId) return;
+      if (!claim.won()) return;
       setMyRepos(data.repositories || []);
     } catch (err) {
-      if (requestId !== myReposRequestSeq) return;
-      if (selectedSpaceId?.() !== currentSpaceId) return;
+      if (!claim.won()) return;
       setMyReposError(err instanceof Error ? err.message : t("unknownError"));
     } finally {
-      if (
-        requestId === myReposRequestSeq &&
-        selectedSpaceId?.() === currentSpaceId
-      ) {
+      if (claim.won()) {
         setMyReposLoading(false);
       }
     }
   };
 
   const fetchExploreRepos = async (reset = false, offsetOverride?: number) => {
-    const requestId = ++exploreRequestSeq;
+    const claim = latestExplore.claim();
     try {
       setExploreLoading(true);
       const offset = typeof offsetOverride === "number"
@@ -106,7 +104,7 @@ export function useReposData(
       const data = await rpcJson<
         { repos?: SourceRepo[]; has_more?: boolean; total?: number }
       >(res);
-      if (requestId !== exploreRequestSeq) return;
+      if (!claim.won()) return;
       if (reset) {
         setExploreRepos(data.repos || []);
         setExploreOffset(0);
@@ -116,17 +114,17 @@ export function useReposData(
       setExploreHasMore(!!data.has_more);
       setExploreTotal(data.total || 0);
     } catch (err) {
-      if (requestId !== exploreRequestSeq) return;
+      if (!claim.won()) return;
       console.error("Failed to fetch explore repos:", err);
     } finally {
-      if (requestId === exploreRequestSeq) {
+      if (claim.won()) {
         setExploreLoading(false);
       }
     }
   };
 
   const fetchStarredRepos = async (reset = false, offsetOverride?: number) => {
-    const requestId = ++starredRequestSeq;
+    const claim = latestStarred.claim();
     try {
       setStarredLoading(true);
       const offset = typeof offsetOverride === "number"
@@ -140,7 +138,7 @@ export function useReposData(
       const data = await rpcJson<
         { repos?: SourceRepo[]; has_more?: boolean; total?: number }
       >(res);
-      if (requestId !== starredRequestSeq) return;
+      if (!claim.won()) return;
       if (reset) {
         setStarredRepos(data.repos || []);
         setStarredOffset(0);
@@ -150,10 +148,10 @@ export function useReposData(
       setStarredHasMore(!!data.has_more);
       setStarredTotal(data.total || 0);
     } catch (err) {
-      if (requestId !== starredRequestSeq) return;
+      if (!claim.won()) return;
       console.error("Failed to fetch starred repos:", err);
     } finally {
-      if (requestId === starredRequestSeq) {
+      if (claim.won()) {
         setStarredLoading(false);
       }
     }
@@ -164,7 +162,7 @@ export function useReposData(
     reset = false,
     offsetOverride?: number,
   ) => {
-    const requestId = ++searchRequestSeq;
+    const claim = latestSearch.claim();
     try {
       setSearching(true);
       const offset = typeof offsetOverride === "number"
@@ -184,7 +182,7 @@ export function useReposData(
       const data = await rpcJson<
         { repos?: SourceRepo[]; has_more?: boolean; total?: number }
       >(res);
-      if (requestId !== searchRequestSeq) return;
+      if (!claim.won()) return;
       if (reset) {
         setSearchResults(data.repos || []);
         setSearchOffset(0);
@@ -194,10 +192,10 @@ export function useReposData(
       setSearchHasMore(!!data.has_more);
       setSearchTotal(data.total || 0);
     } catch (err) {
-      if (requestId !== searchRequestSeq) return;
+      if (!claim.won()) return;
       console.error("Failed to search repos:", err);
     } finally {
-      if (requestId === searchRequestSeq) {
+      if (claim.won()) {
         setSearching(false);
       }
     }
@@ -248,7 +246,7 @@ export function useReposData(
     const orderVal = searchOrder();
 
     if (!q.trim()) {
-      searchRequestSeq += 1;
+      latestSearch.next();
       setSearchResults([]);
       setSearchTotal(0);
       setSearchHasMore(false);

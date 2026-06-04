@@ -1,18 +1,8 @@
+import { currentLocale } from "./locale.ts";
+
 function diffInDays(dateString: string): number {
   const diffMs = Date.now() - new Date(dateString).getTime();
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-}
-
-function currentLocale(): string {
-  try {
-    const stored = globalThis.localStorage?.getItem("takos-lang");
-    if (stored === "ja") return "ja-JP";
-    if (stored === "en") return "en-US";
-  } catch {
-    // localStorage may be unavailable in tests or privacy-restricted contexts.
-  }
-  const browserLang = globalThis.navigator?.language?.toLowerCase();
-  return browserLang?.startsWith("ja") ? "ja-JP" : "en-US";
 }
 
 function relativeFormatter(): Intl.RelativeTimeFormat {

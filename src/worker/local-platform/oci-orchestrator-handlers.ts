@@ -75,33 +75,43 @@ export interface OciOrchestratorRouteDeps {
   dockerNetwork?: string;
 }
 
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  if (!value) return false;
+  const v = value.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
 function createAuthMiddleware() {
   const token = getEnv("OCI_ORCHESTRATOR_TOKEN")?.trim();
 
   // Fail closed when no shared token is configured: the node-fetch server binds
-  // all interfaces (0.0.0.0), so an unauthenticated orchestrator would expose
-  // deploy/remove/logs/proxy to anything that can reach the port. We mirror the
-  // env-signal convention used elsewhere in local-platform (e.g. in-memory-d1.ts):
-  // allow silently under the test runner, hard-refuse every request in a
-  // production-shaped environment, and warn loudly in any other unconfigured
-  // case so a stray open orchestrator is never silent.
+  // all interfaces (0.0.0.0), so an unauthenticated orchestrator exposes
+  // deploy/remove/logs/proxy (and a docker.sock-backed host) to anything that can
+  // reach the port. SECURITY: we default to fail-closed in EVERY non-test
+  // deployment regardless of ENVIRONMENT (the previous `ENVIRONMENT === "production"`
+  // gate left staging / LAN-dev / unset-ENVIRONMENT deployments — including the
+  // shipped takos-private compose default — wide open). An unauthenticated mode
+  // is allowed ONLY under an explicit, intentional opt-in
+  // (OCI_ORCHESTRATOR_ALLOW_INSECURE), which must be paired with binding to
+  // loopback rather than 0.0.0.0.
   if (!token) {
     const underTest = getEnv("VITEST") !== undefined;
-    const isProduction = getEnv("ENVIRONMENT") === "production";
-    if (!underTest && isProduction) {
-      return async (c: Context) =>
-        c.text(
-          "Unauthorized: OCI_ORCHESTRATOR_TOKEN is not configured",
-          401,
-        );
+    if (underTest) {
+      return async (_c: Context, next: Next) => next();
     }
-    if (!underTest) {
+    const allowInsecure = isTruthyEnvFlag(getEnv("OCI_ORCHESTRATOR_ALLOW_INSECURE"));
+    if (allowInsecure) {
       logWarn(
-        "OCI orchestrator is running WITHOUT an OCI_ORCHESTRATOR_TOKEN; all routes (deploy/remove/logs/proxy) are unauthenticated. Set OCI_ORCHESTRATOR_TOKEN for any network-reachable deployment.",
+        "OCI orchestrator is running WITHOUT an OCI_ORCHESTRATOR_TOKEN because OCI_ORCHESTRATOR_ALLOW_INSECURE is set; all routes (deploy/remove/logs/proxy) are UNAUTHENTICATED. Only use this on a loopback-bound local dev instance.",
         { module: "oci-orchestrator" },
       );
+      return async (_c: Context, next: Next) => next();
     }
-    return async (_c: Context, next: Next) => next();
+    return async (c: Context) =>
+      c.text(
+        "Unauthorized: OCI_ORCHESTRATOR_TOKEN is not configured (set OCI_ORCHESTRATOR_ALLOW_INSECURE=1 only for loopback-bound local dev)",
+        401,
+      );
   }
 
   return async (c: Context, next: Next) => {
@@ -341,6 +351,12 @@ function createDeployHandler(deps: OciOrchestratorRouteDeps) {
       return { record: nextRecord, previous: priorRecord };
     });
 
+    // SECURITY (secret leakage): this log line is persisted in cleartext to
+    // <dataDir>/logs/<space>-<route>.log and re-served verbatim by the /logs
+    // endpoint. NEVER serialize runtime.env_vars (container secrets — API keys,
+    // DB DSNs) or backend.config (e.g. serviceAccount credentials) here; the
+    // canonical store keeps these encrypted-at-rest / masked-on-read. Log only
+    // non-secret metadata, recording env-var NAMES (never values) for auditing.
     await appendServiceLog(
       payload.space_id,
       routeRef,
@@ -348,9 +364,15 @@ function createDeployHandler(deps: OciOrchestratorRouteDeps) {
         JSON.stringify({
           deployment_id: payload.deployment_id,
           artifact_ref: payload.artifact_ref,
-          backend: payload.backend ?? { name: "oci" },
+          backend: { name: payload.backend?.name ?? "oci" },
           target: payload.target,
-          runtime,
+          runtime: {
+            profile: runtime.profile,
+            compatibility_date: runtime.compatibility_date ?? null,
+            compatibility_flags: runtime.compatibility_flags ?? [],
+            limits: runtime.limits ?? null,
+            env_var_keys: Object.keys(runtime.env_vars ?? {}).sort(),
+          },
         })
       }`,
     );
@@ -510,13 +532,31 @@ function createProxyHandler() {
     }
 
     const baseUrl = record.resolved_endpoint.base_url;
+    const baseOrigin = new URL(baseUrl).origin;
     const proxyPrefix = `/proxy/${spaceId}/${routeRef}`;
-    const remainingPath = c.req.path.slice(proxyPrefix.length) || "/";
+    // SECURITY (SSRF / open-proxy): the request tail must not be able to override
+    // the deployed container's host. A tail like `//evil.com/x` (or `/\evil.com`)
+    // is a protocol-relative reference that `new URL(tail, baseUrl)` would resolve
+    // to an attacker-chosen host. Normalize backslashes and collapse leading
+    // slashes so the tail is always a plain path under the container origin.
+    let remainingPath = (c.req.path.slice(proxyPrefix.length) || "/")
+      .replace(/\\/g, "/");
+    if (!remainingPath.startsWith("/")) remainingPath = "/" + remainingPath;
+    remainingPath = remainingPath.replace(/^\/+/, "/");
     const targetUrl = new URL(remainingPath, baseUrl);
     targetUrl.search = new URL(c.req.url).search;
+    // Defense in depth: never let the resolved target leave the container origin.
+    if (targetUrl.origin !== baseOrigin) {
+      return c.json({ error: "Invalid proxy path" }, 400);
+    }
 
     const headers = new Headers(c.req.raw.headers);
     headers.delete("host");
+    // SECURITY (credential exfiltration): do NOT forward the orchestrator's bearer
+    // credential (OCI_ORCHESTRATOR_TOKEN) or caller cookies to the upstream
+    // container — they authenticate the caller to the orchestrator, not upstream.
+    headers.delete("authorization");
+    headers.delete("cookie");
 
     try {
       const upstream = await fetch(targetUrl.toString(), {

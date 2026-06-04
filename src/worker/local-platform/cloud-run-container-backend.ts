@@ -28,10 +28,27 @@ function serializeGcloudEnvVars(envVars: Record<string, string>): string {
     return "";
   }
 
-  const delimiter = "@";
-  return `^${delimiter}^${
-    entries.map(([key, value]) => `${key}=${value}`).join(delimiter)
-  }`;
+  // gcloud's `^DELIM^` custom-delimiter form splits the remainder literally on
+  // DELIM and offers NO in-data escaping — its whole purpose is to let you pick a
+  // character absent from the data. A hardcoded "@" silently corrupts any value
+  // containing "@" (database DSNs, AMQP/SMTP/Redis URLs, email-shaped secrets),
+  // truncating the secret and injecting its remainder as a spurious env key.
+  // Choose the first candidate delimiter that appears in no key or value ("@"
+  // first, so behaviour is unchanged when the data is "@"-free). The trailing
+  // ASCII control chars are last-resort and effectively never occur in env data.
+  const pairs = entries.map(([key, value]) => `${key}=${value}`);
+  const haystack = pairs.join("");
+  const candidates = ["@", "#", "%", "|", "~", "^", "\x1f", "\x1e", "\x01"];
+  const delimiter = candidates.find((candidate) =>
+    !haystack.includes(candidate)
+  );
+  if (!delimiter) {
+    throw new Error(
+      "Unable to serialize Cloud Run env vars: every candidate gcloud delimiter " +
+        "appears in an env value; pass env vars via --env-vars-file instead",
+    );
+  }
+  return `^${delimiter}^${pairs.join(delimiter)}`;
 }
 
 function readString(value: unknown): string | null {

@@ -26,15 +26,6 @@ import {
 type AppEnv = { Bindings: Env; Variables: BaseVariables };
 type AppContext = Context<AppEnv>;
 
-export const customDomainsRouteDeps = {
-  addCustomDomain,
-  deleteCustomDomain,
-  getCustomDomainDetails,
-  listCustomDomains,
-  refreshSslStatus,
-  verifyCustomDomain,
-};
-
 function toStatusCode(status: number): ContentfulStatusCode {
   return status as ContentfulStatusCode;
 }
@@ -52,9 +43,7 @@ function handleCustomDomainError(err: unknown, fallbackMessage: string): never {
   throw new InternalError(fallbackMessage);
 }
 
-export function createCustomDomainsRoute(
-  deps: typeof customDomainsRouteDeps = customDomainsRouteDeps,
-) {
+export function createCustomDomainsRoute() {
   const route = new Hono<AppEnv>();
 
   route.onError((err, c) => {
@@ -73,7 +62,7 @@ export function createCustomDomainsRoute(
     if (!serviceId) throw new BadRequestError("Missing serviceId");
 
     try {
-      const data = await deps.listCustomDomains(c.env, serviceId, user.id);
+      const data = await listCustomDomains(c.env, serviceId, user.id);
       return c.json(data);
     } catch (err) {
       handleCustomDomainError(err, "Failed to list custom domains");
@@ -88,7 +77,7 @@ export function createCustomDomainsRoute(
     if (!domainId) throw new BadRequestError("Missing domainId");
 
     try {
-      const result = await deps.verifyCustomDomain(
+      const result = await verifyCustomDomain(
         c.env,
         serviceId,
         user.id,
@@ -108,7 +97,7 @@ export function createCustomDomainsRoute(
     if (!domainId) throw new BadRequestError("Missing domainId");
 
     try {
-      const data = await deps.getCustomDomainDetails(
+      const data = await getCustomDomainDetails(
         c.env,
         serviceId,
         user.id,
@@ -128,7 +117,7 @@ export function createCustomDomainsRoute(
     if (!domainId) throw new BadRequestError("Missing domainId");
 
     try {
-      const data = await deps.deleteCustomDomain(
+      const data = await deleteCustomDomain(
         c.env,
         serviceId,
         user.id,
@@ -148,7 +137,7 @@ export function createCustomDomainsRoute(
     if (!domainId) throw new BadRequestError("Missing domainId");
 
     try {
-      const data = await deps.refreshSslStatus(
+      const data = await refreshSslStatus(
         c.env,
         serviceId,
         user.id,
@@ -176,7 +165,7 @@ export function createCustomDomainsRoute(
         if (!serviceId) throw new BadRequestError("Missing serviceId");
         const body = c.req.valid("json");
         try {
-          const result = await deps.addCustomDomain(
+          const result = await addCustomDomain(
             c.env,
             serviceId,
             user.id,

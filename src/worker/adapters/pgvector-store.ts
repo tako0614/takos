@@ -112,7 +112,15 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
       vector: number[],
       options?: VectorizeQueryOptions,
     ): Promise<VectorizeMatches> {
-      const topK = options?.topK ?? 10;
+      // SECURITY (SQL injection): topK is interpolated into the LIMIT clause, so
+      // it must be a bounded positive integer — NEVER a caller-supplied string.
+      // Without this coercion a value like "1) UNION SELECT ... --" rewrites the
+      // SELECT and reads other tenants' rows (all tenant vector tables share one
+      // Postgres role on the node-postgres profile). Coerce, floor, and clamp.
+      const rawTopK = Math.floor(Number(options?.topK ?? 10));
+      const topK = Number.isFinite(rawTopK)
+        ? Math.min(Math.max(rawTopK, 1), 1000)
+        : 10;
       const returnMetadata = options?.returnMetadata !== false &&
         options?.returnMetadata !== "none";
       const returnValues = options?.returnValues === true;

@@ -45,6 +45,9 @@
       "takosumi-contract-v2/internal/rpc": [
         "../takosumi/src/contract/internal-rpc.ts"
       ],
+      "@takosjp/takosumi-accounts-contract": [
+        "../takosumi/packages/accounts-contract/src/mod.ts"
+      ],
       "takos-git-contract": [
         "./src/contracts/git/index.ts"
       ],

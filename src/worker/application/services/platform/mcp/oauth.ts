@@ -41,6 +41,31 @@ export const mcpServiceDeps = {
   getDb,
 };
 
+/**
+ * SSRF-guarded outbound fetch for MCP OAuth flows (discovery / token / refresh).
+ *
+ * Routes through the egress worker (`env.TAKOS_EGRESS`) when bound — which
+ * enforces DNS-resolved private-IP / port / protocol / credential / redirect
+ * blocking — and ALWAYS forces `redirect: "manual"` so an OAuth or metadata
+ * server cannot 3xx-redirect the request to an internal/link-local address
+ * (e.g. http://169.254.169.254/ cloud metadata). Mirrors `McpClient.egressFetch`.
+ *
+ * The hostname-string allowlist (`assertAllowedMcpEndpointUrl`) is necessary but
+ * NOT sufficient on its own — it cannot catch DNS rebinding or redirect-based
+ * bypasses — so all of these fetches must go through this boundary.
+ */
+function egressFetch(
+  env: Env,
+  url: string | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const finalInit: RequestInit = { ...init, redirect: "manual" };
+  if (env.TAKOS_EGRESS) {
+    return env.TAKOS_EGRESS.fetch(url, finalInit);
+  }
+  return fetch(url, finalInit);
+}
+
 // ---------------------------------------------------------------------------
 // OAuth Metadata Discovery
 // ---------------------------------------------------------------------------
@@ -48,12 +73,13 @@ export const mcpServiceDeps = {
 /** Fetch OAuth 2.0 server metadata from /.well-known/oauth-authorization-server */
 export async function discoverOAuthMetadata(
   serverUrl: string,
+  env: Env,
   options: McpEndpointUrlOptions = STRICT_MCP_ENDPOINT_URL_OPTIONS,
 ): Promise<OAuthMetadata> {
   const base = assertAllowedMcpEndpointUrl(serverUrl, options, "MCP server");
   const metaUrl = new URL("/.well-known/oauth-authorization-server", base);
 
-  const response = await fetch(metaUrl.toString(), {
+  const response = await egressFetch(env, metaUrl.toString(), {
     headers: { Accept: "application/json" },
     // 10-second timeout via AbortController
     signal: AbortSignal.timeout(10_000),
@@ -243,7 +269,7 @@ export async function completeMcpOAuthFlow(
     code_verifier: params.codeVerifier,
   });
 
-  const tokenResp = await fetch(params.tokenEndpoint, {
+  const tokenResp = await egressFetch(env, params.tokenEndpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -358,7 +384,11 @@ export async function refreshMcpToken(
     );
 
     // Discover token endpoint
-    const meta = await discoverOAuthMetadata(server.oauthIssuerUrl, urlOptions);
+    const meta = await discoverOAuthMetadata(
+      server.oauthIssuerUrl,
+      env,
+      urlOptions,
+    );
 
     const body = new URLSearchParams({
       grant_type: "refresh_token",
@@ -366,7 +396,7 @@ export async function refreshMcpToken(
       client_id: "takos",
     });
 
-    const tokenResp = await fetch(meta.token_endpoint, {
+    const tokenResp = await egressFetch(env, meta.token_endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",

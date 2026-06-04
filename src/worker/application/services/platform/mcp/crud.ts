@@ -248,7 +248,7 @@ export async function registerExternalMcpServer(
   }
 
   try {
-    const meta = await discoverOAuthMetadata(params.url, urlOptions);
+    const meta = await discoverOAuthMetadata(params.url, env, urlOptions);
     const redirectUri = `https://${
       env.ADMIN_DOMAIN || env.TENANT_BASE_DOMAIN || "localhost"
     }/api/mcp/oauth/callback`;
