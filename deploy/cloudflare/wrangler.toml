@@ -270,12 +270,12 @@ max_instances = 25
 
 # Deploy-control OpenTofu run executor (in-process Takosumi deploy-control
 # plane). The embedded deploy service drives this container-backed DO through its
-# OpenTofu runner adapter. image / image_build_context are takosumi-relative;
-# rewritten here to reach takosumi/deploy/cloudflare from takos/deploy/cloudflare.
+# OpenTofu runner adapter. Paths are takosumi-relative;
+# rewritten here; build context = takosumi repo root (the runner Dockerfile
 [[containers]]
 class_name = "TakosumiOpenTofuRunner"
 image = "../../../takosumi/deploy/cloudflare/runner/Dockerfile"
-image_build_context = "../../../takosumi/deploy/cloudflare"
+image_build_context = "../../../takosumi"
 instance_type = "basic"
 max_instances = 10
 
@@ -605,7 +605,7 @@ max_instances = 10
 [[env.staging.containers]]
 class_name = "TakosumiOpenTofuRunner"
 image = "../../../takosumi/deploy/cloudflare/runner/Dockerfile"
-image_build_context = "../../../takosumi/deploy/cloudflare"
+image_build_context = "../../../takosumi"
 instance_type = "basic"
 max_instances = 5
 
