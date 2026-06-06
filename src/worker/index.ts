@@ -26,8 +26,8 @@ export {
 // wrangler `[[durable_objects.bindings]]` class_name + migration
 // new_sqlite_classes values must match these exported names.
 export {
-  TakosCoordinationObject,
-  TakosumiOpenTofuRunner,
+  CoordinationObject,
+  OpenTofuRunnerObject,
 } from "@takosjp/takosumi-deploy-worker";
 
 export function createTakosWorker() {

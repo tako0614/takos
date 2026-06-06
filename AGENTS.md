@@ -70,7 +70,7 @@ in-process トポロジ (operator の platform worker も同じ accounts plane /
   origin root prefix (`/.well-known/*`、 `/oauth/*`、 `/v1/*`、 `/start`、 `/__takosumi/*`) を
   `src/worker/server/routes/accounts/mount.ts` で所有する。Takos product はこれら root prefix を持たないので衝突しない。
 - **deploy-control は public route を一切持たない**。`src/worker/server/routes/deploy/mount.ts` が
-  `@takosjp/takosumi-deploy-worker` (= `../takosumi/deploy/cloudflare/src/handler.ts` の tsconfig alias) を in-process で
+  `@takosjp/takosumi-deploy-worker` (= `../takosumi/worker/src/handler.ts` の tsconfig alias) を in-process で
   立ち上げ、Accounts facade が in-process fetch seam (`deployControl.fetch`) 経由で叩く。`/v1/installations/...` の
   namespace 衝突はこの private backend 化で回避している。bearer-gated handshake は単一 worker 内の内部 secret
   (`TAKOSUMI_DEPLOY_CONTROL_TOKEN`)。

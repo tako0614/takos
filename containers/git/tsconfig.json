@@ -20,10 +20,10 @@
     "skipLibCheck": true,
     "paths": {
       "takosumi-contract/internal/rpc": [
-        "../../../takosumi/src/contract/internal-rpc.ts"
+        "../../../takosumi/packages/schema/src/internal-rpc.ts"
       ],
       "@takos/takosumi-contract": [
-        "../../../takosumi/src/contract/index.ts"
+        "../../../takosumi/packages/schema/src/index.ts"
       ],
       "takos-git-contract": [
         "../../src/contracts/git/index.ts"
