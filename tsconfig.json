@@ -28,16 +28,16 @@
         "./src/worker/testing/mock.ts"
       ],
       "takosumi-contract": [
-        "../takosumi/src/contract/index.ts"
+        "../takosumi/packages/schema/src/index.ts"
       ],
       "takosumi-contract/deploy-control-api": [
-        "../takosumi/src/contract/deploy-control-api.ts"
+        "../takosumi/packages/schema/src/deploy-control-api.ts"
       ],
       "takosumi-contract/internal/api": [
-        "../takosumi/src/contract/internal-api.ts"
+        "../takosumi/packages/schema/src/internal-api.ts"
       ],
       "takosumi-contract/internal/rpc": [
-        "../takosumi/src/contract/internal-rpc.ts"
+        "../takosumi/packages/schema/src/internal-rpc.ts"
       ],
       "@takosjp/takosumi-accounts-contract": [
         "../takosumi/packages/accounts-contract/src/mod.ts"
@@ -49,7 +49,7 @@
         "../takosumi/deploy/accounts-cloudflare/src/handler.ts"
       ],
       "@takosjp/takosumi-deploy-worker": [
-        "../takosumi/deploy/cloudflare/src/handler.ts"
+        "../takosumi/worker/src/handler.ts"
       ],
       "takos-git-contract": [
         "./src/contracts/git/index.ts"
@@ -274,7 +274,7 @@
         "./src/worker/infra/db/client.ts"
       ],
       "takosumi-contract/*": [
-        "../takosumi/src/contract/*"
+        "../takosumi/packages/schema/src/*"
       ],
       "takos-worker/core": [
         "./src/worker/index.ts"

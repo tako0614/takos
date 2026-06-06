@@ -55,13 +55,13 @@ locals {
     # Account-plane Installation export download artifacts — binding
     # TAKOSUMI_ACCOUNTS_EXPORTS.
     accounts_exports = "${var.project_name}-accounts-exports"
-    # Deploy-control OpenTofu plan artifacts — binding TAKOS_ARTIFACTS. The
-    # runner resolves the bucket NAME from env TAKOS_ARTIFACTS_BUCKET_NAME and
+    # Deploy-control OpenTofu plan artifacts — binding R2_ARTIFACTS. The
+    # runner resolves the bucket NAME from env R2_ARTIFACTS_BUCKET_NAME and
     # falls back to the fixed default "takos-artifacts"
-    # (takosumi/deploy/cloudflare/src/opentofu_runner_container.ts
+    # (takosumi/worker/src/durable/OpenTofuRunnerObject.ts
     # DEFAULT_PLAN_ARTIFACT_BUCKET). For the default project_name "takos" this
     # expands to exactly "takos-artifacts" (the default); for a non-default
-    # project_name set TAKOS_ARTIFACTS_BUCKET_NAME to this bucket's name.
+    # project_name set R2_ARTIFACTS_BUCKET_NAME to this bucket's name.
     artifacts = "${var.project_name}-artifacts"
   }
 
@@ -72,7 +72,7 @@ locals {
   #   workflow        WORKFLOW_QUEUE     | workflow_dlq        (DLQ)
   #   deployment      DEPLOY_QUEUE       | deployment_dlq      (DLQ)
   #   control_plane   TAKOS_QUEUE              (deploy-control coordination)
-  #   opentofu_runs   TAKOS_OPENTOFU_RUN_QUEUE (deploy-control OpenTofu dispatch)
+  #   opentofu_runs   RUN_QUEUE (deploy-control OpenTofu dispatch)
   queues = {
     runs           = "${var.project_name}-runs"
     index_jobs     = "${var.project_name}-index-jobs"
@@ -107,7 +107,7 @@ resource "cloudflare_workers_kv_namespace" "this" {
 }
 
 # R2 buckets — bindings WORKER_BUNDLES, TENANT_BUILDS, TENANT_SOURCE,
-# GIT_OBJECTS, TAKOS_OFFLOAD, TAKOSUMI_ACCOUNTS_EXPORTS, TAKOS_ARTIFACTS
+# GIT_OBJECTS, TAKOS_OFFLOAD, TAKOSUMI_ACCOUNTS_EXPORTS, R2_ARTIFACTS
 resource "cloudflare_r2_bucket" "this" {
   for_each   = local.r2_buckets
   account_id = var.account_id
@@ -115,7 +115,7 @@ resource "cloudflare_r2_bucket" "this" {
 }
 
 # Queues — bindings RUN_QUEUE, INDEX_QUEUE, WORKFLOW_QUEUE, DEPLOY_QUEUE,
-# TAKOS_QUEUE, TAKOS_OPENTOFU_RUN_QUEUE, plus the four dead-letter queues
+# TAKOS_QUEUE, RUN_QUEUE, plus the four dead-letter queues
 # referenced by the run/index/workflow/deployment consumers in wrangler.toml.
 resource "cloudflare_queue" "this" {
   for_each   = local.queues

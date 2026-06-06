@@ -21,4 +21,4 @@ export {
   isPrivateIpv4,
   isPrivateIpv6Groups,
   parseIpv6,
-} from "../../../../takosumi/src/contract/reference/ip-classification.ts";
+} from "../../../../takosumi/packages/schema/src/reference/ip-classification.ts";

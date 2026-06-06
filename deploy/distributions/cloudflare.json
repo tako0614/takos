@@ -32,7 +32,7 @@
     },
     {
       "kind": "cloudflare-r2",
-      "name": "TAKOS_ARTIFACTS"
+      "name": "R2_ARTIFACTS"
     },
     {
       "kind": "cloudflare-queue",
@@ -40,7 +40,7 @@
     },
     {
       "kind": "cloudflare-durable-object",
-      "name": "TAKOS_COORDINATION"
+      "name": "COORDINATION"
     },
     {
       "kind": "cloudflare-d1",
