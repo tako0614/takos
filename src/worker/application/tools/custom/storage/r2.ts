@@ -3,6 +3,7 @@ import type {
   ToolDefinition,
   ToolHandler,
 } from "../../tool-definitions.ts";
+import { defineTools } from "../define-tools.ts";
 import { validateR2Key, validateStoragePath } from "./validators.ts";
 import { computeSHA256 } from "../../../../shared/utils/hash.ts";
 import { files, getDb } from "../../../../infra/db/index.ts";
@@ -375,18 +376,11 @@ function getR2Bucket(name: string, context: ToolContext) {
   return bucket;
 }
 
-export const OBJECT_STORE_TOOLS: ToolDefinition[] = [
-  OBJECT_STORE_UPLOAD,
-  OBJECT_STORE_DOWNLOAD,
-  OBJECT_STORE_LIST,
-  OBJECT_STORE_DELETE,
-  OBJECT_STORE_INFO,
-];
-
-export const OBJECT_STORE_HANDLERS: Record<string, ToolHandler> = {
-  object_store_upload: objectStoreUploadHandler,
-  object_store_download: objectStoreDownloadHandler,
-  object_store_list: objectStoreListHandler,
-  object_store_delete: objectStoreDeleteHandler,
-  object_store_info: objectStoreInfoHandler,
-};
+export const { tools: OBJECT_STORE_TOOLS, handlers: OBJECT_STORE_HANDLERS } =
+  defineTools([
+    [OBJECT_STORE_UPLOAD, objectStoreUploadHandler],
+    [OBJECT_STORE_DOWNLOAD, objectStoreDownloadHandler],
+    [OBJECT_STORE_LIST, objectStoreListHandler],
+    [OBJECT_STORE_DELETE, objectStoreDeleteHandler],
+    [OBJECT_STORE_INFO, objectStoreInfoHandler],
+  ]);

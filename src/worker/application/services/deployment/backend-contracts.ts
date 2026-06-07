@@ -1,4 +1,5 @@
 import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
+import { CF_COMPATIBILITY_DATE } from "../../../shared/constants/index.ts";
 import type { Deployment, DeploymentBackendName } from "./models.ts";
 
 export type DeploymentBackendDeployResult = {
@@ -87,7 +88,7 @@ export function normalizeDeployRuntime(input: DeploymentBackendDeployInput): {
     profile: runtime.profile,
     bindings: runtime.bindings ?? [],
     envVars: runtime.envVars ?? {},
-    compatibilityDate: runtime.config?.compatibility_date ?? "2024-01-01",
+    compatibilityDate: runtime.config?.compatibility_date ?? CF_COMPATIBILITY_DATE,
     compatibilityFlags: runtime.config?.compatibility_flags ?? [],
     limits: runtime.config?.limits,
   };

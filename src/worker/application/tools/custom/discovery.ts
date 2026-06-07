@@ -3,6 +3,7 @@ import type {
   ToolDefinition,
   ToolHandler,
 } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 
 export interface ToolExecutorLike {
   execute(
@@ -383,20 +384,14 @@ async function toolboxCall(
   return result.output;
 }
 
-export const DISCOVERY_TOOLS: ToolDefinition[] = [
-  TOOLBOX,
-  CAPABILITY_SEARCH,
-  CAPABILITY_FAMILIES,
-  CAPABILITY_DESCRIBE,
-  CAPABILITY_INVOKE,
-];
-export const DISCOVERY_HANDLERS: Record<string, ToolHandler> = {
-  toolbox: toolboxHandler,
-  capability_search: capabilitySearchHandler,
-  capability_families: capabilityFamiliesHandler,
-  capability_describe: capabilityDescribeHandler,
-  capability_invoke: capabilityInvokeHandler,
-};
+export const { tools: DISCOVERY_TOOLS, handlers: DISCOVERY_HANDLERS } =
+  defineTools([
+    [TOOLBOX, toolboxHandler],
+    [CAPABILITY_SEARCH, capabilitySearchHandler],
+    [CAPABILITY_FAMILIES, capabilityFamiliesHandler],
+    [CAPABILITY_DESCRIBE, capabilityDescribeHandler],
+    [CAPABILITY_INVOKE, capabilityInvokeHandler],
+  ]);
 
 function normalizeToolNames(args: Record<string, unknown>): string[] {
   const values: unknown[] = [];

@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import { deployFrontendFromWorkspace } from "../../services/source/apps.ts";
 
 export const DEPLOY_FRONTEND: ToolDefinition = {
@@ -65,7 +66,6 @@ export const deployFrontendHandler: ToolHandler = async (args, context) => {
   ].join("\n");
 };
 
-export const DEPLOY_TOOLS: ToolDefinition[] = [DEPLOY_FRONTEND];
-export const DEPLOY_HANDLERS: Record<string, ToolHandler> = {
-  deploy_frontend: deployFrontendHandler,
-};
+export const { tools: DEPLOY_TOOLS, handlers: DEPLOY_HANDLERS } = defineTools([
+  [DEPLOY_FRONTEND, deployFrontendHandler],
+]);

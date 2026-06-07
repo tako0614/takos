@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   edges,
   getDb,
@@ -525,15 +526,10 @@ export const repoGraphLineageHandler: ToolHandler = async (args, context) => {
   return lines.length > 0 ? lines.join("\n") : "No lineage edges found.";
 };
 
-export const INFO_UNIT_TOOLS = [
-  INFO_UNIT_SEARCH,
-  REPO_GRAPH_SEARCH,
-  REPO_GRAPH_NEIGHBORS,
-  REPO_GRAPH_LINEAGE,
-];
-export const INFO_UNIT_HANDLERS: Record<string, ToolHandler> = {
-  info_unit_search: infoUnitSearchHandler,
-  repo_graph_search: repoGraphSearchHandler,
-  repo_graph_neighbors: repoGraphNeighborsHandler,
-  repo_graph_lineage: repoGraphLineageHandler,
-};
+export const { tools: INFO_UNIT_TOOLS, handlers: INFO_UNIT_HANDLERS } =
+  defineTools([
+    [INFO_UNIT_SEARCH, infoUnitSearchHandler],
+    [REPO_GRAPH_SEARCH, repoGraphSearchHandler],
+    [REPO_GRAPH_NEIGHBORS, repoGraphNeighborsHandler],
+    [REPO_GRAPH_LINEAGE, repoGraphLineageHandler],
+  ]);

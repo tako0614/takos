@@ -4,8 +4,12 @@ import { spaceAccess } from "./route-auth.ts";
 import {
   SKILL_CONTEXT_ROLES,
   SKILL_DESCRIBE_ROLES,
-  skillsRouteDeps,
 } from "./skills-deps.ts";
+import {
+  getManagedSkillCatalogEntry,
+  listManagedSkillsCatalog,
+  listSkillContext,
+} from "../../application/services/source/skills.ts";
 import {
   getSkillIdParam,
   getSkillLocaleInput,
@@ -17,7 +21,7 @@ type SkillsRouter = Hono<SpaceAccessRouteEnv>;
 
 async function skillContextHandler(c: SkillsContext) {
   const { space } = c.get("access");
-  const catalog = await skillsRouteDeps.listSkillContext(
+  const catalog = await listSkillContext(
     c.env.DB,
     space.id,
     getSkillLocaleInput(c),
@@ -33,7 +37,7 @@ async function skillContextHandler(c: SkillsContext) {
 async function listManagedSkillsHandler(c: SkillsContext) {
   const { space } = c.get("access");
   return c.json(
-    await skillsRouteDeps.listManagedSkillsCatalog(
+    await listManagedSkillsCatalog(
       c.env.DB,
       space.id,
       getSkillLocaleInput(c),
@@ -43,7 +47,7 @@ async function listManagedSkillsHandler(c: SkillsContext) {
 
 async function getManagedSkillHandler(c: SkillsContext) {
   const { space } = c.get("access");
-  const skill = await skillsRouteDeps.getManagedSkillCatalogEntry(
+  const skill = await getManagedSkillCatalogEntry(
     c.env.DB,
     space.id,
     getSkillIdParam(c),

@@ -9,12 +9,10 @@ export const repository = {
   // Installed packages
   installed: "インストール済み",
   uninstall: "アンインストール",
-  install: "インストール",
   installing: "インストール中...",
   view: "表示",
   details: "詳細",
   history: "履歴",
-  source: "取得元",
   appsInstalledDescription:
     "このスペースにインストール済みのアプリを一覧・管理します",
   appsInstalledEmpty: "まだアプリがインストールされていません",
@@ -174,7 +172,6 @@ export const repository = {
   // File Viewer
   loadingFile: "ファイルを読み込み中...",
   fileNotFound: "ファイルが見つかりません",
-  goBack: "戻る",
   toggleBlame: "行注釈を切り替え",
   blame: "行注釈",
   blameLoading: "行注釈を読み込み中...",

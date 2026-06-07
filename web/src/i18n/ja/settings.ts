@@ -21,7 +21,6 @@ export const settings = {
   memberUpdated: "メンバーの役割を更新しました",
   failedToUpdate: "更新に失敗しました",
   invite: "招待",
-  remove: "削除",
   emailPlaceholder: "email@example.com",
   roleOwner: "オーナー",
   roleAdmin: "管理者",

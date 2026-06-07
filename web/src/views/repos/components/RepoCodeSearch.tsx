@@ -2,6 +2,7 @@ import { createEffect, createSignal, For, on, onCleanup, Show } from "solid-js";
 import { Icons } from "../../../lib/Icons.tsx";
 import { rpc, rpcJson } from "../../../lib/rpc.ts";
 import { useI18n } from "../../../store/i18n.ts";
+import { formatFileSize } from "../../../lib/format.ts";
 
 type SearchMatch = {
   path: string;
@@ -73,11 +74,8 @@ export function RepoCodeSearch(props: RepoCodeSearchProps) {
     },
   ));
 
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-  };
+  const formatBytes = (bytes: number) =>
+    formatFileSize(bytes, { binary: true, maxUnit: "MiB" });
 
   return (
     <div class="flex flex-col h-full bg-white dark:bg-zinc-900">

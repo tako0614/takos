@@ -1,85 +1,47 @@
-import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { Accessor } from "solid-js";
 import type { ActivityEvent } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useI18n } from "../store/i18n.ts";
+import { createPaginatedListResource } from "./createPaginatedListResource.ts";
 
 interface ActivityResponse {
   events: ActivityEvent[];
   has_more: boolean;
 }
 
-const ITEMS_PER_PAGE = 20;
-
 export function useUserActivity(username: Accessor<string>) {
   const { t } = useI18n();
-  const [events, setEvents] = createSignal<ActivityEvent[]>([]);
-  const [hasMore, setHasMore] = createSignal(true);
-  const [loading, setLoading] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
-
-  const fetch_ = async (reset = false) => {
-    const currentUsername = username();
-    if (!currentUsername) return;
-    if (!reset && !hasMore()) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const before = reset
-        ? null
-        : (events().length > 0
-          ? events()[events().length - 1].created_at
-          : null);
+  // Cursor-paginated: the activity feed merge-sorts several backend tables, so
+  // it pages by a `before` token taken from the tail event's created_at rather
+  // than a numeric offset (which cannot span the union).
+  const resource = createPaginatedListResource<ActivityEvent>({
+    mode: "cursor",
+    source: username,
+    initialError: t("failedToLoadActivity"),
+    fetchPage: async ({ source, cursor, limit }) => {
+      const before = cursor?.created_at;
       const res = await rpc.users[":username"].activity.$get({
-        param: { username: currentUsername },
+        param: { username: source },
         query: {
-          limit: String(ITEMS_PER_PAGE),
+          limit: String(limit),
           ...(before ? { before } : {}),
         },
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        setError(data.error || t("failedToLoadActivity"));
-        setHasMore(false);
-        return;
+        throw new Error(data.error || t("failedToLoadActivity"));
       }
-
       const data = await rpcJson<ActivityResponse>(res);
-      if (currentUsername !== username()) return;
-      if (reset) {
-        setEvents(data.events || []);
-      } else {
-        setEvents((prev) => [...prev, ...(data.events || [])]);
-      }
-      setHasMore(!!data.has_more);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("failedToLoadActivity"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const reset = () => {
-    setEvents([]);
-    setHasMore(true);
-    setError(null);
-  };
-
-  // Reset when username changes
-  createEffect(on(
-    username,
-    () => {
-      reset();
+      return { items: data.events || [], hasMore: !!data.has_more };
     },
-  ));
+  });
 
   return {
-    events,
-    loading,
-    hasMore,
-    error,
-    fetch: fetch_,
-    reset,
+    events: resource.items,
+    loading: resource.loading,
+    hasMore: resource.hasMore,
+    error: resource.error,
+    fetch: resource.fetch,
+    reset: resource.reset,
   };
 }

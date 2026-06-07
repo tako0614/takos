@@ -4,6 +4,11 @@
  */
 
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+} from "@takos/worker-platform-utils/errors";
 import { generateId, sanitizeRepoName } from "../../../shared/utils/index.ts";
 import { getDb, repositories } from "../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
@@ -49,16 +54,18 @@ export async function importRepositoryFromRemoteStore(
     input.registryEntryId,
   );
   if (!entry) {
-    throw new Error("Remote store not found in registry");
+    throw new NotFoundError("Remote store");
   }
 
   if (!entry.repositoriesUrl) {
-    throw new Error("Remote store does not expose an inventory endpoint");
+    throw new BadRequestError(
+      "Remote store does not expose an inventory endpoint",
+    );
   }
 
   const requestedRef = input.repositoryRefUrl;
   if (!requestedRef) {
-    throw new Error("repository_ref_url is required");
+    throw new BadRequestError("repository_ref_url is required");
   }
 
   const remoteRepo = await findRepositoryInRemoteInventory(
@@ -66,13 +73,11 @@ export async function importRepositoryFromRemoteStore(
     requestedRef,
   );
   if (!remoteRepo) {
-    throw new Error(
-      "Remote repository is not present in the selected store inventory",
-    );
+    throw new NotFoundError("Remote repository");
   }
 
   if (!remoteRepo.cloneUrl) {
-    throw new Error("Remote repository does not expose a clone URL");
+    throw new BadRequestError("Remote repository does not expose a clone URL");
   }
 
   // 3. Determine local repo name
@@ -81,7 +86,7 @@ export async function importRepositoryFromRemoteStore(
       deriveRepoName(remoteRepo.repositoryUrl || requestedRef),
   );
   if (!localName) {
-    throw new Error("Remote repository name could not be derived");
+    throw new BadRequestError("Remote repository name could not be derived");
   }
 
   // 4. Check for name collision
@@ -96,7 +101,7 @@ export async function importRepositoryFromRemoteStore(
     .get();
 
   if (existing) {
-    throw new Error(
+    throw new ConflictError(
       `A repository named "${localName}" already exists in this workspace`,
     );
   }

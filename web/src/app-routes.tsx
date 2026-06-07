@@ -289,9 +289,7 @@ function RepoRoute() {
   const { t } = useI18n();
   const currentPath = useCurrentPath();
   const route = createMemo(() => navigation.route);
-  const hasInvalidSpaceRoute = createMemo(() =>
-    Boolean(route().spaceId) && !navigation.routeSpaceId && auth.spacesLoaded
-  );
+  const guard = useSpaceRouteGuard(() => null, route);
   const backSpace = createMemo(() =>
     navigation.routeSpaceId
       ? findSpaceByIdentifier(
@@ -329,7 +327,7 @@ function RepoRoute() {
         <AuthLoadingGate />
       </Match>
       <Match
-        when={auth.authState === "authenticated" && hasInvalidSpaceRoute()}
+        when={auth.authState === "authenticated" && guard.hasInvalidSpaceRoute()}
       >
         <AuthenticatedLayout>
           <SpaceNotFoundMessage />

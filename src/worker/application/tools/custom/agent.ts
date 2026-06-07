@@ -17,6 +17,7 @@ import {
 import { getSpaceLocale } from "../../services/identity/locale.ts";
 import { buildDelegationPacket } from "../../services/agent/delegation.ts";
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 
@@ -430,12 +431,7 @@ export const waitAgentHandler: ToolHandler = async (args, context) => {
   }
 };
 
-export const AGENT_TOOLS: ToolDefinition[] = [
-  SPAWN_AGENT,
-  WAIT_AGENT,
-];
-
-export const AGENT_HANDLERS: Record<string, ToolHandler> = {
-  spawn_agent: spawnAgentHandler,
-  wait_agent: waitAgentHandler,
-};
+export const { tools: AGENT_TOOLS, handlers: AGENT_HANDLERS } = defineTools([
+  [SPAWN_AGENT, spawnAgentHandler],
+  [WAIT_AGENT, waitAgentHandler],
+]);

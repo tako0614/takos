@@ -1,5 +1,9 @@
 import type { Env } from "../../../shared/types/index.ts";
 import { sourceServiceDeps } from "./deps.ts";
+import {
+  fetchAccountsInstallationWorkloadServices,
+  type InstallableAppWorkloadServiceSummary,
+} from "./takosumi-workload-services.ts";
 
 export type CatalogAccountsInstallationsEnv = Pick<
   Env,
@@ -28,6 +32,7 @@ export type AccountsInstallationProjection = {
   sourceCommit: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  services: InstallableAppWorkloadServiceSummary[];
 };
 
 function readString(value: unknown): string | null {
@@ -118,6 +123,7 @@ function parseAccountsInstallationProjection(
     sourceCommit: source ? readString(source.commit) : null,
     createdAt: readString(record.created_at) ?? readString(record.createdAt),
     updatedAt: readString(record.updated_at) ?? readString(record.updatedAt),
+    services: [],
   };
 }
 
@@ -145,11 +151,18 @@ export async function fetchAccountsInstallationsForSpace(
     const body = await response.json() as unknown;
     const installations = readRecord(body)?.installations;
     if (!Array.isArray(installations)) return [];
-    return installations
+    const parsedInstallations = installations
       .map(parseAccountsInstallationProjection)
       .filter((installation): installation is AccountsInstallationProjection =>
         installation !== null
       );
+    return await Promise.all(parsedInstallations.map(async (installation) => ({
+      ...installation,
+      services: await fetchAccountsInstallationWorkloadServices(
+        installation.installationId,
+        config,
+      ),
+    })));
   } catch (error) {
     sourceServiceDeps.logWarn("Failed to list Installation readback", {
       url: url.toString(),

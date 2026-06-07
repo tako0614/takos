@@ -15,10 +15,6 @@ import {
 } from "./backend.ts";
 import type { DeploymentBackendQueueConsumerSyncInput } from "./backend-contracts.ts";
 import {
-  createDeploymentBackendRegistry,
-  resolveDeploymentBackendConfigsFromEnv,
-} from "../../../platform/deployment-backends.ts";
-import {
   findDeploymentByServiceVersion,
   getDeploymentById,
   getDeploymentServiceId,
@@ -49,6 +45,7 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import {
+  buildWorkersRuntime,
   parseRuntimeConfig,
   resolveDeploymentServiceId,
 } from "./artifact-refs.ts";
@@ -124,9 +121,6 @@ export async function executeRollback(
     cloudflareEnv: env,
     orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
     orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
-    backendRegistry: createDeploymentBackendRegistry(
-      resolveDeploymentBackendConfigsFromEnv(env),
-    ),
   });
 
   const isContainerRollback =
@@ -266,26 +260,9 @@ export async function executeRollback(
           previousActiveDeployment.runtime_config_snapshot_json,
         )
         : null;
-      const targetRuntime = {
-        profile: "workers" as const,
-        bindings: targetBindings,
-        config: {
-          compatibility_date: runtimeConfig.compatibility_date || "2024-01-01",
-          compatibility_flags: runtimeConfig.compatibility_flags,
-          limits: runtimeConfig.limits,
-        },
-      };
+      const targetRuntime = buildWorkersRuntime(runtimeConfig, targetBindings);
       const previousRuntime = previousRuntimeConfig
-        ? {
-          profile: "workers" as const,
-          bindings: previousBindings,
-          config: {
-            compatibility_date: previousRuntimeConfig.compatibility_date ||
-              "2024-01-01",
-            compatibility_flags: previousRuntimeConfig.compatibility_flags,
-            limits: previousRuntimeConfig.limits,
-          },
-        }
+        ? buildWorkersRuntime(previousRuntimeConfig, previousBindings)
         : null;
 
       queueConsumerRevertInput = previousActiveDeployment?.artifact_ref

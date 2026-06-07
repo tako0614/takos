@@ -4,6 +4,10 @@ import {
 } from "@takos/worker-platform-utils/errors";
 
 import type { Env } from "../../../shared/types/index.ts";
+import {
+  accountsInstallationServicesUrl,
+  sanitizeWorkloadServicesBody,
+} from "./takosumi-workload-services.ts";
 
 type InstallableAppInstallEnv = Pick<
   Env,
@@ -86,6 +90,10 @@ export type InstallableAppUpstreamResponse = {
 function readEnvString(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized || undefined;
+}
+
+function readRecordString(value: unknown): string | undefined {
+  return typeof value === "string" ? readEnvString(value) : undefined;
 }
 
 function normalizeHttpUrl(value: string, field: string): string {
@@ -346,6 +354,73 @@ export async function listInstallableAppInstallations(
   const url = accountsInstallationsUrl(accountsConfig);
   url.searchParams.set("space_id", spaceId);
   return await fetchAccountsJson(url, { method: "GET" }, accountsConfig.token);
+}
+
+export async function listInstallableAppInstallationsWithServices(
+  spaceId: string,
+  config: InstallableAppAccountsConfig | null,
+): Promise<InstallableAppUpstreamResponse> {
+  const accountsConfig = requireAccountsConfig(config);
+  const upstream = await listInstallableAppInstallations(spaceId, accountsConfig);
+  if (upstream.status >= 400) return upstream;
+  const installations = Array.isArray(upstream.body?.installations)
+    ? upstream.body.installations
+    : null;
+  if (!installations) return upstream;
+
+  const enriched = await Promise.all(installations.map(async (installation) => {
+    if (
+      !installation || typeof installation !== "object" ||
+      Array.isArray(installation)
+    ) {
+      return installation;
+    }
+    const record = installation as Record<string, unknown>;
+    const installationId = readRecordString(record.id) ??
+      readRecordString(record.installation_id) ??
+      readRecordString(record.installationId);
+    if (!installationId) return installation;
+    let services: InstallableAppUpstreamResponse;
+    try {
+      services = await listInstallableAppInstallationServices(
+        installationId,
+        accountsConfig,
+      );
+    } catch {
+      return installation;
+    }
+    if (services.status >= 400 || !Array.isArray(services.body?.services)) {
+      return installation;
+    }
+    return {
+      ...record,
+      services: services.body.services,
+    };
+  }));
+
+  return {
+    status: upstream.status,
+    body: {
+      ...upstream.body,
+      installations: enriched,
+    },
+  };
+}
+
+export async function listInstallableAppInstallationServices(
+  installationId: string,
+  config: InstallableAppAccountsConfig | null,
+): Promise<InstallableAppUpstreamResponse> {
+  const accountsConfig = requireAccountsConfig(config);
+  const result = await fetchAccountsJson(
+    accountsInstallationServicesUrl(accountsConfig.baseUrl, installationId),
+    { method: "GET" },
+    accountsConfig.token,
+  );
+  return {
+    status: result.status,
+    body: sanitizeWorkloadServicesBody(result.body),
+  };
 }
 
 export async function deleteInstallableAppInstallation(

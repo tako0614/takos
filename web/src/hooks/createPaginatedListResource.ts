@@ -8,9 +8,23 @@ export interface PaginatedPage<T> {
   hasMore: boolean;
 }
 
-export interface CreatePaginatedListResourceOptions<T> {
+interface BasePaginatedListResourceOptions {
   /** Source accessor whose change resets the resource (typically `username`). */
   source: Accessor<string>;
+  /** Fallback error message when the rejection is not an `Error`. */
+  initialError: string;
+  /** Page size. Defaults to 20. */
+  perPage?: number;
+}
+
+/**
+ * Offset-paginated variant (the default). `fetchPage` receives a numeric
+ * `offset` that advances by `perPage` each load, suiting endpoints that take
+ * `offset`/`limit` over a single ordered table.
+ */
+export interface OffsetPaginatedListResourceOptions<T>
+  extends BasePaginatedListResourceOptions {
+  mode?: "offset";
   /**
    * Fetch one page for the given source value and offset. Returns the page
    * items plus whether more pages exist. Errors are caught by the resource and
@@ -21,11 +35,28 @@ export interface CreatePaginatedListResourceOptions<T> {
     offset: number;
     limit: number;
   }) => Promise<PaginatedPage<T>>;
-  /** Fallback error message when the rejection is not an `Error`. */
-  initialError: string;
-  /** Page size. Defaults to 20. */
-  perPage?: number;
 }
+
+/**
+ * Cursor-paginated variant. `fetchPage` receives the last item of the current
+ * list as an opaque `cursor` (`undefined` on the first/reset load), suiting
+ * keyset endpoints that page by a `before`/`after` token derived from the tail
+ * item (e.g. a merge-sorted activity feed across several tables where a single
+ * numeric offset cannot span the union).
+ */
+export interface CursorPaginatedListResourceOptions<T>
+  extends BasePaginatedListResourceOptions {
+  mode: "cursor";
+  fetchPage: (args: {
+    source: string;
+    cursor: T | undefined;
+    limit: number;
+  }) => Promise<PaginatedPage<T>>;
+}
+
+export type CreatePaginatedListResourceOptions<T> =
+  | OffsetPaginatedListResourceOptions<T>
+  | CursorPaginatedListResourceOptions<T>;
 
 export interface PaginatedListResource<T> {
   items: Accessor<T[]>;
@@ -40,15 +71,22 @@ export interface PaginatedListResource<T> {
   resetPage: () => void;
   /** Map over the current items (e.g. to flip a follow/star flag). */
   updateItems: (updater: (item: T) => T) => void;
+  /** Keep only the items the predicate accepts (e.g. drop an un-starred repo). */
+  filterItems: (predicate: (item: T) => boolean) => void;
 }
 
 /**
- * createPaginatedListResource — the offset-paginated list state that was
- * hand-rolled across useUserFollowers / useUserFollowing / useUserStars /
- * useUserRepos. Owns the items/offset/hasMore/loading/error signals, the
- * fetch(reset) flow with a latest-wins stale guard, and the source-reset
- * effect. Each hook supplies only its endpoint mapping via `fetchPage` and
- * wraps the returned signals with its own named API.
+ * createPaginatedListResource — the paginated list state that was hand-rolled
+ * across useUserFollowers / useUserFollowing / useUserStars / useUserRepos
+ * (offset mode) and useUserActivity (cursor mode). Owns the
+ * items/offset/hasMore/loading/error signals, the fetch(reset) flow with a
+ * latest-wins stale guard, and the source-reset effect. Each hook supplies only
+ * its endpoint mapping via `fetchPage` and wraps the returned signals with its
+ * own named API.
+ *
+ * Offset mode (`mode: "offset"`, the default) advances a numeric offset by
+ * `perPage`. Cursor mode (`mode: "cursor"`) passes the current tail item to
+ * `fetchPage` as an opaque cursor instead, for keyset/merge-sorted endpoints.
  */
 export function createPaginatedListResource<T>(
   options: CreatePaginatedListResourceOptions<T>,
@@ -69,15 +107,27 @@ export function createPaginatedListResource<T>(
     setLoading(true);
     setError(null);
     try {
-      const currentOffset = reset ? 0 : offset();
+      const isCurrent = () => currentSource === options.source();
       const page = await latest.run(
-        () =>
-          options.fetchPage({
+        () => {
+          if (options.mode === "cursor") {
+            const current = items();
+            const cursor = reset || current.length === 0
+              ? undefined
+              : current[current.length - 1];
+            return options.fetchPage({
+              source: currentSource,
+              cursor,
+              limit: perPage,
+            });
+          }
+          return options.fetchPage({
             source: currentSource,
-            offset: currentOffset,
+            offset: reset ? 0 : offset(),
             limit: perPage,
-          }),
-        { isCurrent: () => currentSource === options.source() },
+          });
+        },
+        { isCurrent },
       );
       if (page === undefined) return;
       if (reset) {
@@ -118,6 +168,10 @@ export function createPaginatedListResource<T>(
     setItems((prev) => prev.map(updater));
   };
 
+  const filterItems = (predicate: (item: T) => boolean) => {
+    setItems((prev) => prev.filter(predicate));
+  };
+
   return {
     items,
     loading,
@@ -127,5 +181,6 @@ export function createPaginatedListResource<T>(
     reset,
     resetPage,
     updateItems,
+    filterItems,
   };
 }

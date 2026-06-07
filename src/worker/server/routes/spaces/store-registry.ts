@@ -10,6 +10,4 @@ registerStoreRegistryCrudRoutes(storeRegistryRoutes);
 registerStoreRegistryRepositoryRoutes(storeRegistryRoutes);
 registerStoreRegistryUpdateRoutes(storeRegistryRoutes);
 
-export { storeRegistryRouteDeps } from "./store-registry-helpers.ts";
-
 export default storeRegistryRoutes;

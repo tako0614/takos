@@ -10,6 +10,7 @@ import {
   buildDeploymentArtifactRef,
   resolveDeploymentArtifactBaseRef,
 } from "../deployment/artifact-refs.ts";
+import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import type {
   ArtifactKind,
   DeploymentBackendName,
@@ -91,7 +92,7 @@ export async function recordGroupManagedDeployment(
     .get();
 
   if (!service) {
-    throw new Error(`Managed service "${input.serviceId}" not found`);
+    throw new NotFoundError(`Managed service "${input.serviceId}"`);
   }
 
   const version = (service.currentVersion ?? 0) + 1;

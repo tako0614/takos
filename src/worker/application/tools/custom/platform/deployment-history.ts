@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../../tool-definitions.ts";
+import { defineTools } from "../define-tools.ts";
 import { DeploymentService } from "../../../services/deployment/index.ts";
 import { getDb, services } from "../../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
@@ -223,14 +224,11 @@ export const deploymentRollbackHandler: ToolHandler = async (args, context) => {
   );
 };
 
-export const DEPLOYMENT_HISTORY_TOOLS: ToolDefinition[] = [
-  DEPLOYMENT_HISTORY,
-  DEPLOYMENT_GET,
-  DEPLOYMENT_ROLLBACK,
-];
-
-export const DEPLOYMENT_HISTORY_HANDLERS: Record<string, ToolHandler> = {
-  deployment_history: deploymentHistoryHandler,
-  deployment_get: deploymentGetHandler,
-  deployment_rollback: deploymentRollbackHandler,
-};
+export const {
+  tools: DEPLOYMENT_HISTORY_TOOLS,
+  handlers: DEPLOYMENT_HISTORY_HANDLERS,
+} = defineTools([
+  [DEPLOYMENT_HISTORY, deploymentHistoryHandler],
+  [DEPLOYMENT_GET, deploymentGetHandler],
+  [DEPLOYMENT_ROLLBACK, deploymentRollbackHandler],
+]);

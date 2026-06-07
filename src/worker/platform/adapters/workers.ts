@@ -14,10 +14,6 @@ import type {
   ControlPlatform,
   PlatformServiceBinding,
 } from "../platform-config.ts";
-import {
-  createDeploymentBackendRegistry,
-  resolveDeploymentBackendConfigsFromEnv,
-} from "../deployment-backends.ts";
 import { resolveHostnameRouting } from "../../application/services/routing/service.ts";
 
 function serviceBindingFromEnv(
@@ -172,9 +168,6 @@ function buildWorkersPlatform<TBindings extends object>(
     },
     documents: {},
     serviceRegistry: getServiceRegistry(bindings),
-    deploymentBackends: createDeploymentBackendRegistry(
-      resolveDeploymentBackendConfigsFromEnv(bindings),
-    ),
   });
 
   return buildPlatform("workers", bindings, config, services);

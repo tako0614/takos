@@ -22,7 +22,6 @@ export const settings = {
   memberUpdated: "Member role updated",
   failedToUpdate: "Failed to update",
   invite: "Invite",
-  remove: "Remove",
   emailPlaceholder: "email@example.com",
   roleOwner: "Owner",
   roleAdmin: "Admin",

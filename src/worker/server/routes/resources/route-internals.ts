@@ -7,6 +7,8 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import type { Resource } from "../../../shared/types/index.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 import { getPlatformServices } from "../../../platform/accessors.ts";
 import {
   checkResourceAccess,
@@ -63,6 +65,47 @@ export function stripPublicResourceBackingFields<T>(value: T): T {
 
 export function toPublicResourcePayload<T>(value: T): T {
   return stripPublicResourceBackingFields(value);
+}
+
+/**
+ * Shared drizzle-`resources`-row → public `Resource` mapper.
+ *
+ * Used by the per-capability resource routes (r2 / kv / d1) which all read the
+ * same `resources` row via `db.select().from(resources).get()` and emit the
+ * same snake_case `Resource` shape. `config`/`metadata` are NOT NULL with a
+ * `'{}'` default at the schema level, so the `?? "{}"` fallbacks are defensive
+ * only; the `?? null` on the backing fields mirrors their nullable text column.
+ */
+export function toResource(row: {
+  id: string;
+  ownerAccountId: string;
+  accountId: string | null;
+  backendName?: string | null;
+  name: string;
+  type: string;
+  status: string;
+  backingResourceId?: string | null;
+  backingResourceName?: string | null;
+  config: string | null;
+  metadata: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}): Resource {
+  return {
+    id: row.id,
+    owner_id: row.ownerAccountId,
+    space_id: row.accountId,
+    ...(row.backendName !== undefined ? { backend_name: row.backendName } : {}),
+    name: row.name,
+    type: row.type as Resource["type"],
+    status: row.status as Resource["status"],
+    backing_resource_id: row.backingResourceId ?? null,
+    backing_resource_name: row.backingResourceName ?? null,
+    config: row.config ?? "{}",
+    metadata: row.metadata ?? "{}",
+    created_at: textDate(row.createdAt),
+    updated_at: textDate(row.updatedAt),
+  };
 }
 
 export function requireDbBinding(c: ResourcesContext) {

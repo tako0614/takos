@@ -260,13 +260,5 @@ export const FILE_COPY: ToolDefinition = {
   },
 };
 
-export const FILE_TOOLS: ToolDefinition[] = [
-  FILE_READ,
-  FILE_WRITE,
-  FILE_WRITE_BINARY,
-  FILE_LIST,
-  FILE_DELETE,
-  FILE_MKDIR,
-  FILE_RENAME,
-  FILE_COPY,
-];
+// FILE_TOOLS is derived in file.ts via defineTools so the tool list and
+// handler map stay paired from a single source.

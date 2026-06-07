@@ -18,6 +18,7 @@ import {
   listGroupManagedServices,
   upsertGroupManagedService,
 } from "./group-managed-services.ts";
+import { NotFoundError } from "@takos/worker-platform-utils/errors";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -202,7 +203,7 @@ export async function deleteService(
 ): Promise<void> {
   const record = await findGroupManagedService(env, groupId, name, "service");
   if (!record) {
-    throw new Error(`Service entity "${name}" not found in group ${groupId}`);
+    throw new NotFoundError(`Service entity "${name}" in group ${groupId}`);
   }
 
   const spaceId = record.row.accountId;

@@ -12,27 +12,13 @@ import {
 
 type Variables = Record<string, never>;
 
-export const publicStoreRouteDeps = {
-  getPublicStoreDocument,
-  listPublicStoreInventory,
-  findPublicStoreInventoryItem,
-  searchPublicStoreRepositories,
-  listPublicStoreFeed,
-};
-
-export function setPublicStoreRouteTestDeps(
-  overrides: Partial<typeof publicStoreRouteDeps>,
-): void {
-  Object.assign(publicStoreRouteDeps, overrides);
-}
-
 function originFromUrl(url: string): string {
   return new URL(url).origin;
 }
 
 export default new Hono<{ Bindings: Env; Variables: Variables }>()
   .get("/:storeSlug", async (c) => {
-    const store = await publicStoreRouteDeps.getPublicStoreDocument(
+    const store = await getPublicStoreDocument(
       c.env.DB,
       originFromUrl(c.req.url),
       c.req.param("storeSlug"),
@@ -45,7 +31,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       limit: 20,
       maxLimit: 100,
     });
-    const result = await publicStoreRouteDeps.listPublicStoreInventory(
+    const result = await listPublicStoreInventory(
       c.env.DB,
       originFromUrl(c.req.url),
       c.req.param("storeSlug"),
@@ -61,7 +47,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     });
   })
   .get("/:storeSlug/inventory/:referenceId", async (c) => {
-    const item = await publicStoreRouteDeps.findPublicStoreInventoryItem(
+    const item = await findPublicStoreInventoryItem(
       c.env.DB,
       originFromUrl(c.req.url),
       c.req.param("storeSlug"),
@@ -84,7 +70,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       limit: 20,
       maxLimit: 100,
     });
-    const result = await publicStoreRouteDeps.searchPublicStoreRepositories(
+    const result = await searchPublicStoreRepositories(
       c.env.DB,
       originFromUrl(c.req.url),
       c.req.param("storeSlug"),
@@ -106,7 +92,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       limit: 20,
       maxLimit: 100,
     });
-    const result = await publicStoreRouteDeps.listPublicStoreFeed(
+    const result = await listPublicStoreFeed(
       c.env.DB,
       originFromUrl(c.req.url),
       c.req.param("storeSlug"),

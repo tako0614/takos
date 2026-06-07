@@ -16,10 +16,6 @@ import type {
   PlatformSource,
 } from "../platform-config.ts";
 import { getSseNotifier } from "../sse-notifier-access.ts";
-import {
-  createDeploymentBackendRegistry,
-  resolveDeploymentBackendConfigsFromEnv,
-} from "../deployment-backends.ts";
 import { resolveHostnameRouting } from "../../application/services/routing/service.ts";
 
 function resolveSourceLabel(env: PlatformEnvIndex): PlatformSource {
@@ -109,9 +105,6 @@ async function buildNodePlatformFromEnv<TBindings extends object>(
     documents: {},
     serviceRegistry: getServiceRegistry(env),
     sseNotifier: getSseNotifier(env),
-    deploymentBackends: createDeploymentBackendRegistry(
-      resolveDeploymentBackendConfigsFromEnv(env),
-    ),
   });
 
   return buildPlatform(source, env, config, services);

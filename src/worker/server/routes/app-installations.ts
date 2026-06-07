@@ -1,6 +1,5 @@
 import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { and, desc, eq } from "drizzle-orm";
 import {
   BadRequestError,
   NotFoundError,
@@ -21,12 +20,13 @@ import {
   planInstallableAppRevision,
   type InstallableAppRevisionOperation,
   type InstallableAppUpstreamResponse,
+  listInstallableAppInstallationServices,
   listInstallableAppInstallations,
+  listInstallableAppInstallationsWithServices,
   resolveInstallableAppAccountsConfig,
   resolveInstallableAppInstallConfig,
 } from "../../application/services/source/installable-app-install.ts";
-import { authIdentities, getDb } from "../../infra/db/index.ts";
-import type { Env } from "../../shared/types/index.ts";
+import { resolveTakosumiSubject } from "../../application/services/identity/takosumi-subject.ts";
 import {
   parseJsonBody,
   spaceAccess,
@@ -78,6 +78,8 @@ export const appInstallationsRouteDeps = {
   applyInstallableAppInstallation,
   planInstallableAppRevision,
   applyInstallableAppRevision,
+  listInstallableAppInstallationsWithServices,
+  listInstallableAppInstallationServices,
 };
 
 function readString(value: unknown): string | null {
@@ -337,29 +339,6 @@ function toInstallationRecord(
   };
 }
 
-function subjectFromProviderSub(providerSub: string): string | null {
-  const marker = providerSub.lastIndexOf("#");
-  if (marker < 0 || marker === providerSub.length - 1) return null;
-  return providerSub.slice(marker + 1);
-}
-
-async function resolveTakosumiSubject(
-  env: Env,
-  userId: string,
-): Promise<string | null> {
-  const row = await getDb(env.DB).select({
-    providerSub: authIdentities.providerSub,
-  }).from(authIdentities)
-    .where(and(
-      eq(authIdentities.userId, userId),
-      eq(authIdentities.provider, "oidc"),
-    ))
-    .orderBy(desc(authIdentities.lastLoginAt))
-    .limit(1)
-    .get();
-  return row ? subjectFromProviderSub(row.providerSub) : null;
-}
-
 const appInstallationsRouter = new Hono<SpaceAccessRouteEnv>();
 
 appInstallationsRouter.get(
@@ -368,8 +347,27 @@ appInstallationsRouter.get(
   async (c) => {
     const { space } = c.get("access");
     const upstream = await appInstallationsRouteDeps
-      .listInstallableAppInstallations(
+      .listInstallableAppInstallationsWithServices(
         space.id,
+        appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+      );
+    return jsonFromUpstream(c, upstream);
+  },
+);
+
+appInstallationsRouter.get(
+  "/spaces/:spaceId/app-installations/:installationId/services",
+  spaceAccess({ roles: ["owner", "admin", "editor", "viewer"] }),
+  async (c) => {
+    const { space } = c.get("access");
+    const installationId = readString(c.req.param("installationId"));
+    if (!installationId) {
+      throw new BadRequestError("installation_id is required");
+    }
+    await assertInstallationBelongsToSpace(c, space.id, installationId);
+    const upstream = await appInstallationsRouteDeps
+      .listInstallableAppInstallationServices(
+        installationId,
         appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
       );
     return jsonFromUpstream(c, upstream);

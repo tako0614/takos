@@ -75,8 +75,38 @@ export function truncateByCodepoint(text: string, max: number): string {
   return codepoints.slice(0, max).join("") + "...";
 }
 
-export function formatFileSize(bytes: number): string {
+const DECIMAL_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
+const BINARY_UNITS = ["B", "KiB", "MiB", "GiB", "TiB"] as const;
+
+type SizeUnit = (typeof DECIMAL_UNITS)[number] | (typeof BINARY_UNITS)[number];
+
+export interface FormatFileSizeOptions {
+  /** Use IEC binary-unit labels (KiB/MiB) instead of KB/MB. Default false. */
+  binary?: boolean;
+  /** Fraction digits for scaled units. Default 1. */
+  digits?: number;
+  /** Strip trailing zeros from the scaled value (e.g. "1.5 MB" not "1.50 MB"). Default false. */
+  trimZeros?: boolean;
+  /** Largest unit to scale to. Default "MB" (values above stay expressed in MB). */
+  maxUnit?: SizeUnit;
+}
+
+export function formatFileSize(
+  bytes: number,
+  options: FormatFileSizeOptions = {},
+): string {
+  const { binary = false, digits = 1, trimZeros = false, maxUnit = "MB" } =
+    options;
+  const units = binary ? BINARY_UNITS : DECIMAL_UNITS;
+  const cap = Math.max(0, units.indexOf(maxUnit as never));
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < cap) {
+    value /= 1024;
+    unit += 1;
+  }
+  const fixed = value.toFixed(digits);
+  const text = trimZeros ? String(parseFloat(fixed)) : fixed;
+  return `${text} ${units[unit]}`;
 }

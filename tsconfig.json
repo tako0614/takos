@@ -27,6 +27,9 @@
       "@takos/test/mock": [
         "./src/worker/testing/mock.ts"
       ],
+      "@takos/test/integration": [
+        "./src/worker/testing/integration.ts"
+      ],
       "takosumi-contract": [
         "../takosumi/packages/schema/src/index.ts"
       ],
@@ -62,9 +65,6 @@
       ],
       "takos-api-contract/rpc-types": [
         "./src/contracts/public/rpc-types.ts"
-      ],
-      "takos-api-contract/shared/tools/custom-catalog": [
-        "./src/contracts/public/shared/tools/custom-catalog.ts"
       ],
       "takos-api-contract/shared/types": [
         "./src/contracts/public/shared/types/index.ts"

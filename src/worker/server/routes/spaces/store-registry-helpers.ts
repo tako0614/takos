@@ -1,45 +1,7 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { NotFoundError } from "@takos/worker-platform-utils/errors";
-import { requireSpaceAccess } from "../route-auth.ts";
-import {
-  addRemoteStore,
-  getRegistryEntry,
-  listRegisteredStores,
-  refreshRemoteStore,
-  removeRemoteStore,
-  setActiveStore,
-  setSubscription,
-} from "../../../application/services/store-network/store-registry.ts";
-import {
-  fetchRemoteRepositories,
-  RemoteStoreError,
-  searchRemoteRepositories,
-} from "../../../application/services/store-network/remote-store-client.ts";
-import { importRepositoryFromRemoteStore } from "../../../application/services/store-network/remote-install.ts";
-import {
-  getStoreUpdates,
-  markAllUpdatesSeen,
-  markUpdatesSeen,
-  pollSingleStore,
-} from "../../../application/services/store-network/store-subscription.ts";
-
-export const storeRegistryRouteDeps = {
-  requireSpaceAccess,
-  addRemoteStore,
-  getRegistryEntry,
-  listRegisteredStores,
-  refreshRemoteStore,
-  removeRemoteStore,
-  setActiveStore,
-  setSubscription,
-  fetchRemoteRepositories,
-  searchRemoteRepositories,
-  importRepositoryFromRemoteStore,
-  getStoreUpdates,
-  markAllUpdatesSeen,
-  markUpdatesSeen,
-  pollSingleStore,
-};
+import { getRegistryEntry } from "../../../application/services/store-network/store-registry.ts";
+import { RemoteStoreError } from "../../../application/services/store-network/remote-store-client.ts";
 
 export function safeErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof RemoteStoreError) return error.message;
@@ -148,7 +110,7 @@ export async function requireStoreRegistryEntry(
   spaceId: string,
   entryId: string,
 ) {
-  const entry = await storeRegistryRouteDeps.getRegistryEntry(
+  const entry = await getRegistryEntry(
     db,
     spaceId,
     entryId,

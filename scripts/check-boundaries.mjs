@@ -23,6 +23,16 @@ const checks = [
     files: /^apps\/paas\/src\/.*\.(?:ts|mjs)$/,
     pattern: /\bpackages\/paas-contract\/src\b/g,
   },
+  {
+    // The public DTO contract surface (src/contracts/public/shared/types/) must
+    // stay a thin re-export of the worker copies (src/worker/shared/types/, the
+    // runtime-type owner). Declaring a type/value here would re-introduce the
+    // ~1700-LOC byte-level twin that previously drifted out of sync. Re-export
+    // only: `export type { ... } from "...worker/shared/types/..."`.
+    name: 'contract shared/types must re-export worker copies, not redeclare',
+    files: /^src\/contracts\/public\/shared\/types\/.*\.ts$/,
+    pattern: /^export (?:interface |type [A-Za-z0-9_]+\s*=|const |function |enum |class )/gm,
+  },
 ];
 const appWrapperChecks = [];
 

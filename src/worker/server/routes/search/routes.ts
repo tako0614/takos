@@ -17,11 +17,6 @@ import { logError } from "../../../shared/utils/logger.ts";
 type SearchContext = Context<SpaceAccessRouteEnv>;
 const search = new Hono<SpaceAccessRouteEnv>();
 
-export const searchRouteDeps = {
-  searchWorkspace,
-  quickSearchPaths,
-  computeSHA256,
-};
 
 function getDefaultCache(): Cache | null {
   const cacheStorage =
@@ -40,7 +35,7 @@ async function createSearchCacheKey(
   payload: unknown,
 ): Promise<Request> {
   const url = new URL(c.req.url);
-  const hash = await searchRouteDeps.computeSHA256(JSON.stringify(payload));
+  const hash = await computeSHA256(JSON.stringify(payload));
   return new Request(`${url.origin}/__cache/search/${hash}`, { method: "GET" });
 }
 
@@ -102,7 +97,7 @@ async function storeSearchCache(
 async function createCacheableJsonResponse(body: unknown): Promise<Response> {
   const payload = JSON.stringify(body);
   const etag = `"${
-    (await searchRouteDeps.computeSHA256(payload)).substring(0, 16)
+    (await computeSHA256(payload)).substring(0, 16)
   }"`;
   return new Response(payload, {
     status: 200,
@@ -157,7 +152,7 @@ search.post("/spaces/:spaceId/search", spaceAccess(), async (c) => {
     fileTypes: normalizeFileTypesForCache(body.file_types),
     limit: body.limit || null,
   }, async () => {
-    const result = await searchRouteDeps.searchWorkspace({
+    const result = await searchWorkspace({
       env: c.env,
       spaceId: space.id,
       query: body.query,
@@ -186,7 +181,7 @@ search.get("/spaces/:spaceId/search/quick", spaceAccess(), async (c) => {
     userId: user.id,
     query,
   }, async () => {
-    const results = await searchRouteDeps.quickSearchPaths(
+    const results = await quickSearchPaths(
       c.env.DB,
       space.id,
       query,

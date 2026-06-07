@@ -1,10 +1,9 @@
-import type { ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   CONTAINER_COMMIT,
   CONTAINER_START,
   CONTAINER_STATUS,
   CONTAINER_STOP,
-  CONTAINER_TOOLS,
   CREATE_REPOSITORY,
 } from "./container/definitions.ts";
 import { containerStartHandler } from "./container/handler-start.ts";
@@ -18,7 +17,6 @@ export {
   CONTAINER_START,
   CONTAINER_STATUS,
   CONTAINER_STOP,
-  CONTAINER_TOOLS,
   CREATE_REPOSITORY,
 };
 
@@ -30,10 +28,11 @@ export {
   createRepositoryHandler,
 };
 
-export const CONTAINER_HANDLERS: Record<string, ToolHandler> = {
-  container_start: containerStartHandler,
-  container_status: containerStatusHandler,
-  container_commit: containerCommitHandler,
-  container_stop: containerStopHandler,
-  create_repository: createRepositoryHandler,
-};
+export const { tools: CONTAINER_TOOLS, handlers: CONTAINER_HANDLERS } =
+  defineTools([
+    [CONTAINER_START, containerStartHandler],
+    [CONTAINER_STATUS, containerStatusHandler],
+    [CONTAINER_COMMIT, containerCommitHandler],
+    [CONTAINER_STOP, containerStopHandler],
+    [CREATE_REPOSITORY, createRepositoryHandler],
+  ]);

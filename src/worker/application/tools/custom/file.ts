@@ -1,4 +1,4 @@
-import type { ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   FILE_COPY,
   FILE_DELETE,
@@ -6,7 +6,6 @@ import {
   FILE_MKDIR,
   FILE_READ,
   FILE_RENAME,
-  FILE_TOOLS,
   FILE_WRITE,
   FILE_WRITE_BINARY,
 } from "./file/definitions.ts";
@@ -29,7 +28,6 @@ export {
   FILE_MKDIR,
   FILE_READ,
   FILE_RENAME,
-  FILE_TOOLS,
   FILE_WRITE,
   FILE_WRITE_BINARY,
 };
@@ -45,13 +43,13 @@ export {
   fileWriteHandler,
 };
 
-export const FILE_HANDLERS: Record<string, ToolHandler> = {
-  file_read: fileReadHandler,
-  file_write: fileWriteHandler,
-  file_write_binary: fileWriteBinaryHandler,
-  file_list: fileListHandler,
-  file_delete: fileDeleteHandler,
-  file_mkdir: fileMkdirHandler,
-  file_rename: fileRenameHandler,
-  file_copy: fileCopyHandler,
-};
+export const { tools: FILE_TOOLS, handlers: FILE_HANDLERS } = defineTools([
+  [FILE_READ, fileReadHandler],
+  [FILE_WRITE, fileWriteHandler],
+  [FILE_WRITE_BINARY, fileWriteBinaryHandler],
+  [FILE_LIST, fileListHandler],
+  [FILE_DELETE, fileDeleteHandler],
+  [FILE_MKDIR, fileMkdirHandler],
+  [FILE_RENAME, fileRenameHandler],
+  [FILE_COPY, fileCopyHandler],
+]);

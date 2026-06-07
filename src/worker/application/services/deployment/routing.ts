@@ -20,10 +20,6 @@ import {
   parseDeploymentBackendConfig,
 } from "./backend.ts";
 import {
-  createDeploymentBackendRegistry,
-  resolveDeploymentBackendConfigsFromEnv,
-} from "../../../platform/deployment-backends.ts";
-import {
   type DeploymentRoutingServiceRecord,
   getDeploymentById,
   getDeploymentRoutingServiceRecord,
@@ -31,7 +27,7 @@ import {
   updateServiceDeploymentPointers,
 } from "./store.ts";
 import type { Deployment, DeploymentEnv, DeploymentTarget } from "./models.ts";
-import { parseRuntimeConfig } from "./artifact-refs.ts";
+import { buildWorkersRuntime, parseRuntimeConfig } from "./artifact-refs.ts";
 import { decryptBindings } from "./artifact-io.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
@@ -525,9 +521,6 @@ export async function promoteCanaryDeployment(
       cloudflareEnv: env,
       orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
       orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
-      backendRegistry: createDeploymentBackendRegistry(
-        resolveDeploymentBackendConfigsFromEnv(env),
-      ),
     })
     : null;
   if (queueSyncNeeded && !queueBackend?.syncQueueConsumers) {
@@ -556,29 +549,11 @@ export async function promoteCanaryDeployment(
       await queueBackend.syncQueueConsumers({
         deployment: canary,
         artifactRef: canary.artifact_ref,
-        runtime: {
-          profile: "workers",
-          bindings: canaryBindings,
-          config: {
-            compatibility_date: canaryRuntimeConfig.compatibility_date ||
-              "2024-01-01",
-            compatibility_flags: canaryRuntimeConfig.compatibility_flags,
-            limits: canaryRuntimeConfig.limits,
-          },
-        },
+        runtime: buildWorkersRuntime(canaryRuntimeConfig, canaryBindings),
         previousDeployment: previousActive,
         previousArtifactRef: previousActive?.artifact_ref ?? null,
         previousRuntime: previousRuntimeConfig
-          ? {
-            profile: "workers",
-            bindings: previousBindings,
-            config: {
-              compatibility_date: previousRuntimeConfig.compatibility_date ||
-                "2024-01-01",
-              compatibility_flags: previousRuntimeConfig.compatibility_flags,
-              limits: previousRuntimeConfig.limits,
-            },
-          }
+          ? buildWorkersRuntime(previousRuntimeConfig, previousBindings)
           : null,
       });
       queueConsumersSynced = true;
@@ -620,28 +595,10 @@ export async function promoteCanaryDeployment(
       await queueBackend.syncQueueConsumers({
         deployment: previousActive,
         artifactRef: previousActive.artifact_ref,
-        runtime: {
-          profile: "workers",
-          bindings: previousBindings,
-          config: {
-            compatibility_date: previousRuntimeConfig.compatibility_date ||
-              "2024-01-01",
-            compatibility_flags: previousRuntimeConfig.compatibility_flags,
-            limits: previousRuntimeConfig.limits,
-          },
-        },
+        runtime: buildWorkersRuntime(previousRuntimeConfig, previousBindings),
         previousDeployment: canary,
         previousArtifactRef: canary.artifact_ref,
-        previousRuntime: {
-          profile: "workers",
-          bindings: canaryBindings,
-          config: {
-            compatibility_date: canaryRuntimeConfig.compatibility_date ||
-              "2024-01-01",
-            compatibility_flags: canaryRuntimeConfig.compatibility_flags,
-            limits: canaryRuntimeConfig.limits,
-          },
-        },
+        previousRuntime: buildWorkersRuntime(canaryRuntimeConfig, canaryBindings),
       }).catch((queueRollbackError: unknown) => {
         logWarn(
           "Failed to restore queue consumers during canary promote failure",

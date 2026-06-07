@@ -10,6 +10,7 @@
 import { createCloudflareApiClient } from "../cloudflare/api-client.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import {
   buildManagedRouteRef,
   deleteGroupManagedService,
@@ -144,7 +145,7 @@ export async function deleteWorker(
 ): Promise<void> {
   const record = await findGroupManagedService(env, groupId, name, "worker");
   if (!record) {
-    throw new Error(`Service entity "${name}" not found in group ${groupId}`);
+    throw new NotFoundError(`Service entity "${name}" in group ${groupId}`);
   }
 
   const config = parseManagedServiceConfig(record.row.config) as WorkerConfig;

@@ -4,7 +4,14 @@ import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import type { Env } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
 import { zValidator } from "../zod-validator.ts";
-import { threadsRouteDeps } from "./deps.ts";
+import {
+  checkThreadAccess,
+  deleteThread,
+  updateThread,
+  updateThreadStatus,
+} from "../../../application/services/threads/thread-service.ts";
+import { exportThread } from "../../../application/services/threads/thread-export.ts";
+import { getPlatformServices } from "../../../platform/accessors.ts";
 import { buildThreadUpdates, requireThreadAccess } from "./helpers.ts";
 
 type ThreadsRouter = Hono<{ Bindings: Env; Variables: BaseVariables }>;
@@ -26,7 +33,7 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     const access = requireThreadAccess(
-      await threadsRouteDeps.checkThreadAccess(c.env.DB, threadId, user.id),
+      await checkThreadAccess(c.env.DB, threadId, user.id),
     );
 
     return c.json({
@@ -42,14 +49,14 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
       const user = c.get("user");
       const threadId = c.req.param("id");
       requireThreadAccess(
-        await threadsRouteDeps.checkThreadAccess(c.env.DB, threadId, user.id, [
+        await checkThreadAccess(c.env.DB, threadId, user.id, [
           "owner",
           "admin",
           "editor",
         ]),
       );
 
-      const thread = await threadsRouteDeps.updateThread(
+      const thread = await updateThread(
         c.env.DB,
         threadId,
         buildThreadUpdates(c.req.valid("json")),
@@ -63,13 +70,13 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await threadsRouteDeps.checkThreadAccess(c.env.DB, threadId, user.id, [
+      await checkThreadAccess(c.env.DB, threadId, user.id, [
         "owner",
         "admin",
       ]),
     );
 
-    await threadsRouteDeps.deleteThread(c.env, c.env.DB, threadId);
+    await deleteThread(c.env, c.env.DB, threadId);
     return c.json({ success: true });
   });
 
@@ -77,14 +84,14 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await threadsRouteDeps.checkThreadAccess(c.env.DB, threadId, user.id, [
+      await checkThreadAccess(c.env.DB, threadId, user.id, [
         "owner",
         "admin",
         "editor",
       ]),
     );
 
-    await threadsRouteDeps.updateThreadStatus(c.env.DB, threadId, "archived");
+    await updateThreadStatus(c.env.DB, threadId, "archived");
     return c.json({ success: true });
   });
 
@@ -92,14 +99,14 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await threadsRouteDeps.checkThreadAccess(c.env.DB, threadId, user.id, [
+      await checkThreadAccess(c.env.DB, threadId, user.id, [
         "owner",
         "admin",
         "editor",
       ]),
     );
 
-    await threadsRouteDeps.updateThreadStatus(c.env.DB, threadId, "active");
+    await updateThreadStatus(c.env.DB, threadId, "active");
     return c.json({ success: true });
   });
 
@@ -113,12 +120,12 @@ export function registerThreadCrudRoutes(app: ThreadsRouter) {
       const format = (exportQuery.format || "markdown").toLowerCase();
       const includeInternal = exportQuery.include_internal === "1";
       const access = requireThreadAccess(
-        await threadsRouteDeps.checkThreadAccess(c.env.DB, threadId, user.id),
+        await checkThreadAccess(c.env.DB, threadId, user.id),
       );
 
-      const response = await threadsRouteDeps.exportThread({
+      const response = await exportThread({
         db: c.env.DB,
-        renderPdf: threadsRouteDeps.getPlatformServices(c).documents.renderPdf,
+        renderPdf: getPlatformServices(c).documents.renderPdf,
         threadId,
         includeInternal,
         includeInternalRolesAllowed: ["owner", "admin"].includes(access.role),

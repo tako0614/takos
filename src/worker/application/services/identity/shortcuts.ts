@@ -8,6 +8,7 @@ import {
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import { bytesToHex } from "../../../shared/utils/encoding-utils.ts";
+import { BadRequestError } from "@takos/worker-platform-utils/errors";
 
 export const ALLOWED_SHORTCUT_RESOURCE_TYPES = [
   "service",
@@ -215,7 +216,9 @@ export async function createShortcut(
   input: ShortcutInput,
 ): Promise<ShortcutResponse> {
   if (!isShortcutResourceType(input.resourceType)) {
-    throw new Error(`Invalid shortcut resource type: ${input.resourceType}`);
+    throw new BadRequestError(
+      `Invalid shortcut resource type: ${input.resourceType}`,
+    );
   }
 
   const drizzle = shortcutDeps.getDb(db);

@@ -9,7 +9,12 @@ import {
 } from "@takos/worker-platform-utils/errors";
 import type { SpaceAccessRouteEnv } from "./route-auth.ts";
 import { skills as skillsTable } from "../../infra/db/schema.ts";
-import { skillsRouteDeps } from "./skills-deps.ts";
+import { getDb } from "../../infra/db/index.ts";
+import {
+  getSkill,
+  getSkillByName,
+  SkillMetadataValidationError,
+} from "../../application/services/source/skills.ts";
 
 export type SkillsContext = Context<SpaceAccessRouteEnv>;
 
@@ -69,7 +74,7 @@ export async function requireSkillByName(
   skillName: string,
 ) {
   const { space } = c.get("access");
-  const skill = await skillsRouteDeps.getSkillByName(
+  const skill = await getSkillByName(
     c.env.DB,
     space.id,
     skillName,
@@ -85,7 +90,7 @@ export async function requireSkillById(
   skillId: string,
 ) {
   const { space } = c.get("access");
-  const skill = await skillsRouteDeps.getSkill(c.env.DB, space.id, skillId);
+  const skill = await getSkill(c.env.DB, space.id, skillId);
   if (!skill) {
     throw new NotFoundError("Skill");
   }
@@ -98,7 +103,7 @@ export async function assertSkillNameAvailable(
   exceptSkillId?: string,
 ) {
   const { space } = c.get("access");
-  const db = skillsRouteDeps.getDb(c.env.DB);
+  const db = getDb(c.env.DB);
   const conditions = [
     eq(skillsTable.accountId, space.id),
     eq(skillsTable.name, name.trim()),
@@ -117,7 +122,7 @@ export async function assertSkillNameAvailable(
 }
 
 export function rethrowSkillMutationError(error: unknown): never {
-  if (error instanceof skillsRouteDeps.SkillMetadataValidationError) {
+  if (error instanceof SkillMetadataValidationError) {
     throw new BadRequestError(error.message, error.details);
   }
   throw error;

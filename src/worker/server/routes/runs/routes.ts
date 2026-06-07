@@ -23,7 +23,9 @@ import { persistAndEmitEvent } from "../../../application/services/execution/run
 import { registerRunCreateRoutes } from "./create.ts";
 import { registerRunListRoutes } from "./list.ts";
 import type { BaseVariables } from "../route-auth.ts";
-import { runsRouteDeps } from "./deps.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { checkRunAccess } from "./access.ts";
+import { loadRunObservation } from "./observation.ts";
 
 const INTERNAL_ONLY_HEADERS = [
   "X-Takos-Internal",
@@ -137,7 +139,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const runId = c.req.param("id");
 
-    const access = await runsRouteDeps.checkRunAccess(c.env.DB, runId, user.id);
+    const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
       throw new NotFoundError("Run");
     }
@@ -152,7 +154,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const runId = c.req.param("id");
 
-    const access = await runsRouteDeps.checkRunAccess(
+    const access = await checkRunAccess(
       c.env.DB,
       runId,
       user.id,
@@ -166,7 +168,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
       throw new BadRequestError("Run is already finished");
     }
 
-    const db = runsRouteDeps.getDb(c.env.DB);
+    const db = getDb(c.env.DB);
     const completedAt = new Date().toISOString();
     await db.update(runs).set({ status: "cancelled", completedAt }).where(
       eq(runs.id, runId),
@@ -207,7 +209,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
         throw new BadRequestError("Invalid last_event_id");
       }
 
-      const access = await runsRouteDeps.checkRunAccess(
+      const access = await checkRunAccess(
         c.env.DB,
         runId,
         user.id,
@@ -216,7 +218,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
         throw new NotFoundError("Run");
       }
 
-      const observation = await runsRouteDeps.loadRunObservation(
+      const observation = await loadRunObservation(
         c.env,
         runId,
         access.run.status,
@@ -233,7 +235,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const runId = c.req.param("id");
 
-    const access = await runsRouteDeps.checkRunAccess(c.env.DB, runId, user.id);
+    const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
       throw new NotFoundError("Run");
     }
@@ -273,12 +275,12 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
       throw new BadRequestError("Invalid last_event_id");
     }
 
-    const access = await runsRouteDeps.checkRunAccess(c.env.DB, runId, user.id);
+    const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
       throw new NotFoundError("Run");
     }
 
-    const observation = await runsRouteDeps.loadRunObservation(
+    const observation = await loadRunObservation(
       c.env,
       runId,
       access.run.status,
@@ -296,12 +298,12 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     const user = c.get("user");
     const runId = c.req.param("id");
 
-    const access = await runsRouteDeps.checkRunAccess(c.env.DB, runId, user.id);
+    const access = await checkRunAccess(c.env.DB, runId, user.id);
     if (!access) {
       throw new NotFoundError("Run");
     }
 
-    const db = runsRouteDeps.getDb(c.env.DB);
+    const db = getDb(c.env.DB);
     const rows = await db.select().from(artifacts).where(
       eq(artifacts.runId, runId),
     ).orderBy(asc(artifacts.createdAt)).all();
@@ -334,7 +336,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
         metadata?: Record<string, unknown>;
       };
 
-      const access = await runsRouteDeps.checkRunAccess(
+      const access = await checkRunAccess(
         c.env.DB,
         runId,
         user.id,
@@ -348,7 +350,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
         throw new BadRequestError("Invalid artifact type");
       }
 
-      const db = runsRouteDeps.getDb(c.env.DB);
+      const db = getDb(c.env.DB);
       const created = await db.insert(artifacts).values({
         id: generateId(),
         runId,
@@ -370,7 +372,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
   app.get("/artifacts/:id", async (c) => {
     const user = c.get("user");
     const artifactId = c.req.param("id");
-    const db = runsRouteDeps.getDb(c.env.DB);
+    const db = getDb(c.env.DB);
     const artifactRow = await db.select().from(artifacts).where(
       eq(artifacts.id, artifactId),
     ).get();

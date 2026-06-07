@@ -29,15 +29,6 @@ import {
   requireOAuthScope,
 } from "./storage-operations.ts";
 
-export const storageDownloadsRouteDeps = {
-  requireSpaceAccess,
-  getStorageItem,
-  getStorageItemByPath,
-  readFileContent,
-  writeFileContent,
-  escapeSqlLike,
-  getDb,
-};
 
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Content read endpoint ---
@@ -49,7 +40,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       const spaceId = c.req.param("spaceId");
       const fileId = c.req.param("fileId");
 
-      const access = await storageDownloadsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -60,7 +51,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const result = await storageDownloadsRouteDeps.readFileContent(
+        const result = await readFileContent(
           c.env.DB,
           c.env.GIT_OBJECTS,
           access.space.id,
@@ -92,7 +83,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       const spaceId = c.req.param("spaceId");
       const fileId = c.req.param("fileId");
 
-      const access = await storageDownloadsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -107,7 +98,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       const body = c.req.valid("json");
 
       try {
-        const file = await storageDownloadsRouteDeps.writeFileContent(
+        const file = await writeFileContent(
           c.env.DB,
           c.env.GIT_OBJECTS,
           access.space.id,
@@ -131,7 +122,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       const spaceId = c.req.param("spaceId");
       const fileId = c.req.param("fileId");
 
-      const access = await storageDownloadsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -141,7 +132,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         throw new InternalError("Storage not configured");
       }
 
-      const db = storageDownloadsRouteDeps.getDb(c.env.DB);
+      const db = getDb(c.env.DB);
       const fileRecord = await db.select({
         id: accountStorageFiles.id,
         name: accountStorageFiles.name,
@@ -210,13 +201,13 @@ const app = new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("file_id is required");
       }
 
-      const access = await storageDownloadsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
       );
 
-      const file = await storageDownloadsRouteDeps.getStorageItem(
+      const file = await getStorageItem(
         c.env.DB,
         access.space.id,
         fileId,
@@ -253,7 +244,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       const spaceId = c.req.param("spaceId");
       const path = c.req.valid("query").path || "/";
 
-      const access = await storageDownloadsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -265,7 +256,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
       }
 
       if (path !== "/" && path.trim() !== "") {
-        const folder = await storageDownloadsRouteDeps.getStorageItemByPath(
+        const folder = await getStorageItemByPath(
           c.env.DB,
           access.space.id,
           path,
@@ -275,7 +266,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         }
       }
 
-      const db = storageDownloadsRouteDeps.getDb(c.env.DB);
+      const db = getDb(c.env.DB);
       const normalizedPath = path.startsWith("/")
         ? path.replace(/\/+$/, "") || "/"
         : `/${path.replace(/\/+$/, "")}`;

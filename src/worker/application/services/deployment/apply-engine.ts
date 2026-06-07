@@ -10,7 +10,10 @@
  */
 
 import { eq, inArray } from "drizzle-orm";
-import { BadRequestError } from "@takos/worker-platform-utils/errors";
+import {
+  BadRequestError,
+  NotFoundError,
+} from "@takos/worker-platform-utils/errors";
 import { groups } from "../../../infra/db/schema-groups.ts";
 import { deployments } from "../../../infra/db/schema-workers.ts";
 import type { AppManifest } from "../source/app-manifest-types.ts";
@@ -437,7 +440,7 @@ export async function applyDesiredState(
 ): Promise<ApplyResult> {
   const group = await getGroupRecord(env, groupId);
   if (!group) {
-    throw new Error(`Group "${groupId}" not found`);
+    throw new NotFoundError(`Group "${groupId}"`);
   }
 
   const plan = await buildManifestPlan(applyEngineDeps, {
@@ -726,7 +729,7 @@ export async function planManifest(
 ): Promise<PlanResult> {
   const group = groupId ? await getGroupRecord(env, groupId) : null;
   if (groupId && !group) {
-    throw new Error(`Group "${groupId}" not found`);
+    throw new NotFoundError(`Group "${groupId}"`);
   }
 
   const plan = await buildManifestPlan(applyEngineDeps, {

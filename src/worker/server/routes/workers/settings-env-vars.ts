@@ -11,19 +11,13 @@ import { ServiceDesiredStateService } from "../../../application/services/platfo
 import { logError } from "../../../shared/utils/logger.ts";
 import { InternalError, NotFoundError } from "@takos/worker-platform-utils/errors";
 
-export const workersSettingsEnvVarsRouteDeps = {
-  getServiceForUser,
-  getServiceForUserWithRole,
-  createDesiredStateService: (env: AuthenticatedRouteEnv["Bindings"]) =>
-    new ServiceDesiredStateService(env),
-};
 
 const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
   .get("/:id/env", async (c) => {
     const user = c.get("user");
     const workerId = c.req.param("id");
 
-    const worker = await workersSettingsEnvVarsRouteDeps.getServiceForUser(
+    const worker = await getServiceForUser(
       c.env.DB,
       workerId,
       user.id,
@@ -34,8 +28,7 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const desiredState = workersSettingsEnvVarsRouteDeps
-        .createDesiredStateService(c.env);
+      const desiredState = new ServiceDesiredStateService(c.env);
       const envVars = await desiredState.listLocalEnvVarSummaries(
         worker.space_id,
         worker.id,
@@ -73,8 +66,7 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("variables array is required");
       }
 
-      const worker = await workersSettingsEnvVarsRouteDeps
-        .getServiceForUserWithRole(c.env.DB, workerId, user.id, [
+      const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, [
           "owner",
           "admin",
           "editor",
@@ -85,8 +77,7 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const desiredState = workersSettingsEnvVarsRouteDeps
-          .createDesiredStateService(c.env);
+        const desiredState = new ServiceDesiredStateService(c.env);
         const normalizedVariables = body.variables.map((v) => ({
           name: v.name,
           value: v.value,

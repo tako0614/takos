@@ -7,15 +7,11 @@ import { Card } from "../../../components/ui/Card.tsx";
 import { Button } from "../../../components/ui/Button.tsx";
 import { Badge } from "../../../components/ui/Badge.tsx";
 import { rpc, rpcJson, rpcPath } from "../../../lib/rpc.ts";
-import { formatDateTime } from "../../../lib/format.ts";
+import { formatDateTime, formatFileSize } from "../../../lib/format.ts";
 import type { Worker } from "../../../types/index.ts";
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  return formatFileSize(bytes, { digits: 2, trimZeros: true, maxUnit: "GB" });
 }
 
 interface Deployment {

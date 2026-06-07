@@ -9,6 +9,7 @@ import type { DefaultAppDistributionEntry } from "./default-app-distribution.ts"
 import type {
   AccountsInstallationProjection,
 } from "./explore-catalog-accounts.ts";
+import type { InstallableAppWorkloadServiceSummary } from "./takosumi-workload-services.ts";
 
 export type CatalogInstallationProjection = {
   groupId: string | null;
@@ -22,6 +23,7 @@ export type CatalogInstallationProjection = {
   runtimeMode?: string | null;
   installedAt?: string | null;
   updatedAt?: string | null;
+  services?: InstallableAppWorkloadServiceSummary[];
 };
 
 export function normalizeCatalogRepositoryUrlKey(
@@ -91,6 +93,9 @@ export function toCatalogInstallationProjection(
     runtimeMode: installation.runtimeMode,
     installedAt: installation.createdAt,
     updatedAt: installation.updatedAt,
+    ...(installation.services.length > 0
+      ? { services: installation.services }
+      : {}),
   };
 }
 
@@ -129,6 +134,9 @@ export function mapCatalogInstallationResponse(
       : {}),
     ...(installation.updatedAt !== undefined
       ? { updated_at: installation.updatedAt }
+      : {}),
+    ...(installation.services !== undefined
+      ? { services: installation.services }
       : {}),
   };
 }

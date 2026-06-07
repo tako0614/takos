@@ -41,6 +41,7 @@ export const common = {
   usernameLabel: "ユーザー名",
   loadMore: "さらに読み込む",
   remove: "削除",
+  install: "インストール",
   connect: "接続",
   disconnect: "切断",
   active: "有効",
@@ -62,17 +63,10 @@ export const common = {
   storage: "ストレージ",
   deployNav: "デプロイ",
 
-  // Workspaces
-  desiredState: "Desired State",
-  noDesiredState: "Desired state はまだありません",
+  // Inventory
   inventory: "インベントリ",
-  workloads: "ワークロード",
-  routes: "ルート",
-  environment: "環境",
-  lastApplied: "最終適用",
-  updated: "更新日時",
-  source: "ソース",
-  noItems: "項目がありません",
+
+  // Space create
   description: "説明",
   descriptionPlaceholder: "スペースの説明を入力...",
   creating: "作成中...",

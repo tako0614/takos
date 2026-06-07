@@ -180,6 +180,114 @@ test("createPaginatedListResource - reset() clears items/offset/error and re-ena
   }
 });
 
+test("createPaginatedListResource - updateItems maps and filterItems drops items in place", async () => {
+  let dispose: (() => void) | undefined;
+  try {
+    await new Promise<void>((done) => {
+      createRoot((rootDispose) => {
+        dispose = rootDispose;
+        const [source] = createSignal("alice");
+        const resource = createPaginatedListResource<string>({
+          source,
+          initialError: "boom",
+          perPage: 3,
+          fetchPage: () =>
+            Promise.resolve({ items: ["a", "b", "c"], hasMore: true }),
+        });
+
+        void (async () => {
+          await resource.fetch(true);
+          assertEquals(resource.items(), ["a", "b", "c"]);
+
+          // updateItems maps over the current page (e.g. flip a star flag).
+          resource.updateItems((item) => item === "b" ? "B" : item);
+          assertEquals(resource.items(), ["a", "B", "c"]);
+
+          // filterItems drops the matched entry without re-fetching
+          // (e.g. removing an un-starred repo from the starred list).
+          resource.filterItems((item) => item !== "B");
+          assertEquals(resource.items(), ["a", "c"]);
+          done();
+        })();
+      });
+    });
+  } finally {
+    dispose?.();
+  }
+});
+
+test("createPaginatedListResource - cursor mode passes the tail item as cursor and advances by it", async () => {
+  let dispose: (() => void) | undefined;
+  const cursors: (string | undefined)[] = [];
+  try {
+    await new Promise<void>((done) => {
+      createRoot((rootDispose) => {
+        dispose = rootDispose;
+        const [source] = createSignal("alice");
+        const resource = createPaginatedListResource<string>({
+          mode: "cursor",
+          source,
+          initialError: "boom",
+          perPage: 2,
+          fetchPage: ({ cursor }) => {
+            cursors.push(cursor);
+            // Produce deterministic ids derived from the incoming cursor.
+            const base = cursor === undefined ? 0 : Number(cursor) + 1;
+            return Promise.resolve({
+              items: [String(base), String(base + 1)],
+              hasMore: true,
+            });
+          },
+        });
+
+        void (async () => {
+          // Reset load: cursor is undefined.
+          await resource.fetch(true);
+          assertEquals(resource.items(), ["0", "1"]);
+
+          // Load more: cursor is the current tail item ("1").
+          await resource.fetch(false);
+          assertEquals(cursors, [undefined, "1"]);
+          assertEquals(resource.items(), ["0", "1", "2", "3"]);
+          done();
+        })();
+      });
+    });
+  } finally {
+    dispose?.();
+  }
+});
+
+test("createPaginatedListResource - cursor mode drops a stale settlement after the source changes", async () => {
+  let dispose: (() => void) | undefined;
+  const first = deferred<{ items: string[]; hasMore: boolean }>();
+  try {
+    await new Promise<void>((done) => {
+      createRoot((rootDispose) => {
+        dispose = rootDispose;
+        const [source, setSource] = createSignal("alice");
+        const resource = createPaginatedListResource<string>({
+          mode: "cursor",
+          source,
+          initialError: "boom",
+          fetchPage: () => first.promise,
+        });
+
+        void (async () => {
+          const inFlight = resource.fetch(true);
+          setSource("bob");
+          first.resolve({ items: ["stale"], hasMore: true });
+          await inFlight;
+          assertEquals(resource.items(), []);
+          done();
+        })();
+      });
+    });
+  } finally {
+    dispose?.();
+  }
+});
+
 test("createPaginatedListResource - resetPage() clears the page but preserves error", async () => {
   let dispose: (() => void) | undefined;
   try {

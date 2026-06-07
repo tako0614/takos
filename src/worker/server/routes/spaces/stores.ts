@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import {
+  AppError,
   BadRequestError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
@@ -29,23 +30,13 @@ const storeBodySchema = z.object({
   icon_url: z.string().optional(),
 });
 
-export const spacesStoresRouteDeps = {
-  listStoresForWorkspace,
-  createStore,
-  updateStore,
-  deleteStore,
-  addToInventory,
-  removeFromInventory,
-  listInventoryItems,
-  findInventoryItemById,
-};
 
 export default new Hono<SpaceAccessRouteEnv>()
   .get("/:spaceId/stores", spaceAccess(), async (c) => {
     const access = c.get("access");
 
     try {
-      const stores = await spacesStoresRouteDeps.listStoresForWorkspace(
+      const stores = await listStoresForWorkspace(
         c.env.DB,
         access.space.id,
       );
@@ -80,7 +71,7 @@ export default new Hono<SpaceAccessRouteEnv>()
       }
 
       try {
-        const store = await spacesStoresRouteDeps.createStore(
+        const store = await createStore(
           c.env.DB,
           access.space.id,
           {
@@ -105,6 +96,9 @@ export default new Hono<SpaceAccessRouteEnv>()
           201,
         );
       } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
         if (error instanceof Error) {
           throw new BadRequestError(error.message);
         }
@@ -125,7 +119,7 @@ export default new Hono<SpaceAccessRouteEnv>()
       const body = c.req.valid("json");
 
       try {
-        const store = await spacesStoresRouteDeps.updateStore(
+        const store = await updateStore(
           c.env.DB,
           access.space.id,
           c.req.param("storeSlug"),
@@ -151,6 +145,9 @@ export default new Hono<SpaceAccessRouteEnv>()
           },
         });
       } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
         if (error instanceof Error) {
           throw new BadRequestError(error.message);
         }
@@ -168,7 +165,7 @@ export default new Hono<SpaceAccessRouteEnv>()
       const access = c.get("access");
 
       try {
-        const deleted = await spacesStoresRouteDeps.deleteStore(
+        const deleted = await deleteStore(
           c.env.DB,
           access.space.id,
           c.req.param("storeSlug"),
@@ -178,6 +175,9 @@ export default new Hono<SpaceAccessRouteEnv>()
         }
         return c.json({ success: true });
       } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
         if (error instanceof Error) {
           throw new BadRequestError(error.message);
         }
@@ -194,7 +194,7 @@ export default new Hono<SpaceAccessRouteEnv>()
     const access = c.get("access");
     const { limit, offset } = parsePagination(c.req.query());
 
-    const result = await spacesStoresRouteDeps.listInventoryItems(
+    const result = await listInventoryItems(
       c.env.DB,
       access.space.id,
       c.req.param("storeSlug"),
@@ -250,7 +250,7 @@ export default new Hono<SpaceAccessRouteEnv>()
         const storeSlug = c.req.param("storeSlug");
         const repositoryUrl = body.repository_url as string;
         const labelOrName = body.label ?? body.repo_name;
-        const item = await spacesStoresRouteDeps.addToInventory(c.env.DB, {
+        const item = await addToInventory(c.env.DB, {
           accountId: access.space.id,
           storeSlug,
           repositoryUrl,
@@ -282,6 +282,9 @@ export default new Hono<SpaceAccessRouteEnv>()
           201,
         );
       } catch (error) {
+        if (error instanceof AppError) {
+          throw error;
+        }
         if (error instanceof Error) {
           throw new BadRequestError(error.message);
         }
@@ -300,7 +303,7 @@ export default new Hono<SpaceAccessRouteEnv>()
 
       // Resolve the entry by id (scoped to this space + store) so deletion can
       // target the stored repository URL without scanning the full inventory.
-      const item = await spacesStoresRouteDeps.findInventoryItemById(
+      const item = await findInventoryItemById(
         c.env.DB,
         access.space.id,
         storeSlug,
@@ -310,7 +313,7 @@ export default new Hono<SpaceAccessRouteEnv>()
         throw new NotFoundError("Inventory item");
       }
 
-      await spacesStoresRouteDeps.removeFromInventory(
+      await removeFromInventory(
         c.env.DB,
         access.space.id,
         storeSlug,

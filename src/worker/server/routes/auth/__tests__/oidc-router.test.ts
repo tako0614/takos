@@ -1,4 +1,5 @@
 import { test } from "bun:test";
+import { RUN_INTEGRATION_TESTS } from "@takos/test/integration";
 import { Hono } from "hono";
 import * as jose from "jose";
 import { createClient } from "@libsql/client";
@@ -406,7 +407,10 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
   }
 });
 
-test(
+// Env-coupled: starts a real Takosumi Accounts server and performs a live
+// fetch against the issued authorize URL. Skipped in the default gate; run with
+// TAKOS_INTEGRATION=1.
+test.skipIf(!RUN_INTEGRATION_TESTS)(
   "OIDC login reaches real Takosumi Accounts while default managed offering gate stays closed",
   async () => {
     const accountsServer = await startAccountsServer({

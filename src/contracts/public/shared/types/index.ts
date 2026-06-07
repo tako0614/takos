@@ -1,158 +1,69 @@
-export type { InsertOf, SelectOf } from "./drizzle-utils.ts";
-
-export {
-  DEPLOYMENT_QUEUE_MESSAGE_VERSION,
-  INDEX_QUEUE_MESSAGE_VERSION,
-  RUN_QUEUE_MESSAGE_VERSION,
-  WORKFLOW_QUEUE_MESSAGE_VERSION,
-} from "./queue-messages.ts";
-export type {
-  DeploymentQueueMessage,
-  IndexJobQueueMessage,
-  RunQueueMessage,
-  WorkerDeploymentQueueMessage,
-  WorkflowJobDefinition,
-  WorkflowJobQueueMessage,
-  WorkflowShell,
-  WorkflowStep,
-} from "./queue-messages.ts";
-
-export {
-  isValidDeploymentQueueMessage,
-  isValidIndexJobQueueMessage,
-  isValidRunQueueMessage,
-  isValidWorkflowJobQueueMessage,
-} from "./queue-message-guards.ts";
+// Public DTO contract surface consumed by the web SPA via the
+// `takos-api-contract/shared/types` alias.
+//
+// This barrel re-exports the DTO subset the browser SPA actually imports,
+// owned by the worker copies under src/worker/shared/types/ (the runtime-type
+// owner). Worker-internal runtime shapes (bindings.ts, env.ts, drizzle-utils,
+// queue internals, routing, api-scopes) are intentionally NOT re-exported here
+// so worker secrets / Cloudflare binding types never leak onto a
+// browser-consumed contract. Add a symbol below only when the SPA needs it.
 
 export type {
-  Ai,
-  AiBinding,
-  DurableNamespaceBinding,
-  DurableObjectNamespace,
-  DurableObjectStateBinding,
-  DurableObjectStorageBinding,
-  DurableObjectStub,
-  DurableObjectStubBinding,
-  ExecutionContext,
-  Fetcher,
-  KvStoreBinding,
-  KvStoreGetType,
-  KvStoreListOptions,
-  MessageQueueBatch,
-  MessageQueueBinding,
-  MessageQueueMessage,
-  MessageQueueSendOptions,
-  ObjectStoreBinding,
-  ObjectStoreHttpMetadata,
-  ObjectStoreObject,
-  ObjectStoreObjectBody,
-  PlatformExecutionContext,
-  PlatformHandler,
-  PlatformScheduledController,
-  PlatformScheduledEvent,
-  ScheduledController,
-  ScheduledEvent,
-  ServiceBindingFetcher,
-  SqlDatabaseBinding,
-  SqlDatabaseSessionBinding,
-  SqlPreparedStatementBinding,
-  SqlResultBinding,
-  SqlResultMeta,
-  VectorIndexBinding,
-  VectorizeIndex,
-  VectorizeMatch,
-} from "./bindings.ts";
-
-export type {
-  AgentConfigEnv,
-  AiEnv,
-  ContainerHostEnv,
-  DbEnv,
-  Env,
-  FetchBinding,
-  IndexerEnv,
-  RunnerEnv,
-  StorageEnv,
-} from "./env.ts";
-
-export type {
-  HttpRoute,
-  RoutingRecord,
-  RoutingStore,
-  RoutingTarget,
-  StoredHttpEndpoint,
-  WeightedDeploymentTarget,
-} from "./routing.ts";
-
-export type {
-  AgentTask,
   AgentTaskBase,
   AgentTaskPriority,
   AgentTaskResumeTarget,
   AgentTaskRunSummary,
   AgentTaskStatus,
-  App,
-  AppType,
-  Artifact,
-  ArtifactType,
-  AuthorType,
-  BindingType,
-  FileKind,
-  FileOrigin,
-  FileVisibility,
+} from "../../../../worker/shared/types/agent-tasks.ts";
+
+export type {
+  User,
+} from "../../../../worker/shared/types/identity.ts";
+
+export type {
   Memory,
-  MemoryType,
-  Message,
-  MessageRole,
-  OIDCState,
-  Principal,
-  PrincipalKind,
-  PullRequest,
-  PullRequestComment,
-  PullRequestCommentAuthorType,
-  PullRequestReview,
-  PullRequestStatus,
   Reminder,
-  ReminderPriority,
-  ReminderStatus,
-  ReminderTriggerType,
+} from "../../../../worker/shared/types/memories.ts";
+
+export type {
+  PullRequestCommentAuthorType,
+  PullRequestStatus,
   Repository,
   RepositoryVisibility,
-  Resource,
-  ResourceAccess,
-  ResourceCapability,
-  ResourcePermission,
-  ResourcePublicType,
-  ResourceStatus,
-  ResourceType,
-  ReviewerType,
   ReviewStatus,
+} from "../../../../worker/shared/types/repositories.ts";
+
+export type {
   Run,
-  RunStatus,
-  SecurityPosture,
-  Service,
-  ServiceBinding,
+  ToolExecution,
+} from "../../../../worker/shared/types/runs.ts";
+
+export type {
+  AppType,
   ServiceStatus,
   ServiceType,
-  Session,
+} from "../../../../worker/shared/types/services-resources.ts";
+
+export type {
   Space,
-  SpaceFile,
   SpaceKind,
-  SpaceMembership,
-  SpaceRole,
+} from "../../../../worker/shared/types/spaces.ts";
+
+export type {
   SpaceStorageFile,
   SpaceStorageFileType,
-  Thread,
+} from "../../../../worker/shared/types/storage.ts";
+
+export type {
   ThreadHistoryArtifactSummary,
   ThreadHistoryChildRunSummary,
   ThreadHistoryEvent,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
-  ThreadStatus,
-  ToolExecution,
-  User,
-} from "./models.ts";
+} from "../../../../worker/shared/types/thread-history.ts";
 
-export { ALL_API_BEARER_SCOPES, API_BEARER_SCOPES } from "./api-scopes.ts";
-export type { ApiBearerScope } from "./api-scopes.ts";
+export type {
+  Message,
+  Thread,
+} from "../../../../worker/shared/types/threads.ts";

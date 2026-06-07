@@ -33,6 +33,10 @@ import {
   publicationResolvedUrl,
 } from "../service-publications.ts";
 import { readPublicationAuthSecretRef } from "./auth-secret.ts";
+import {
+  BadRequestError,
+  ConflictError,
+} from "@takos/worker-platform-utils/errors";
 
 // ---------------------------------------------------------------------------
 // Managed server upsert & reconciliation
@@ -213,7 +217,7 @@ export async function registerExternalMcpServer(
   assertAllowedMcpEndpointUrl(params.url, urlOptions, "MCP server");
 
   if (!params.name || !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(params.name)) {
-    throw new Error(
+    throw new BadRequestError(
       "name must start with a letter and contain only letters, digits, underscores, or hyphens (max 64 chars)",
     );
   }
@@ -415,7 +419,7 @@ export async function deleteMcpServer(
     .get();
   if (!existing) return false;
   if (existing.sourceType !== "external") {
-    throw new Error(
+    throw new BadRequestError(
       "Managed MCP servers must be removed from their source (worker or bundle deployment)",
     );
   }
@@ -438,7 +442,7 @@ export async function updateMcpServer(
     .get();
   if (!existing) return null;
   if (existing.sourceType !== "external" && patch.name !== undefined) {
-    throw new Error(
+    throw new BadRequestError(
       "Managed MCP server names are controlled by their source declaration",
     );
   }
@@ -476,7 +480,7 @@ async function assertNoPublishedMcpServerNameCollision(
       isPublicationType(record.publicationType, "takos.mcp-server.v1")
     );
   if (publishedServers.some((record) => record.name === name)) {
-    throw new Error(
+    throw new ConflictError(
       `MCP server "${name}" already exists as a publication in this space`,
     );
   }

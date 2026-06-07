@@ -2,14 +2,20 @@ import { Hono, type Hono as HonoType } from "hono";
 import { z } from "zod";
 import {
   BadRequestError,
+  isAppError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import type { Env } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
 import type { ThreadShareMode } from "../../../application/services/threads/thread-shares.ts";
+import {
+  createThreadShare,
+  listThreadShares,
+  revokeThreadShare,
+} from "../../../application/services/threads/thread-shares.ts";
+import { checkThreadAccess } from "../../../application/services/threads/thread-service.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import { zValidator } from "../zod-validator.ts";
-import { threadSharesRouteDeps } from "./deps.ts";
 import {
   requireThreadAccess,
   resolveThreadShareInput,
@@ -39,7 +45,7 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
         expires_in_days?: number;
       };
       const access = requireThreadAccess(
-        await threadSharesRouteDeps.checkThreadAccess(
+        await checkThreadAccess(
           c.env.DB,
           threadId,
           user.id,
@@ -53,7 +59,7 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
       const shareInput = resolveThreadShareInput(body);
 
       try {
-        const created = await threadSharesRouteDeps.createThreadShare({
+        const created = await createThreadShare({
           db: c.env.DB,
           threadId,
           spaceId: access.thread.space_id,
@@ -71,6 +77,9 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
           password_required: created.passwordRequired,
         }, 201);
       } catch (err) {
+        if (isAppError(err)) {
+          throw err;
+        }
         logError("Failed to create share", err, {
           module: "routes/thread-shares",
         });
@@ -86,14 +95,14 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
     const user = c.get("user");
     const threadId = c.req.param("id");
     requireThreadAccess(
-      await threadSharesRouteDeps.checkThreadAccess(
+      await checkThreadAccess(
         c.env.DB,
         threadId,
         user.id,
       ),
     );
 
-    const shares = await threadSharesRouteDeps.listThreadShares(
+    const shares = await listThreadShares(
       c.env.DB,
       threadId,
     );
@@ -107,7 +116,7 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
     const threadId = c.req.param("id");
     const shareId = c.req.param("shareId");
     requireThreadAccess(
-      await threadSharesRouteDeps.checkThreadAccess(
+      await checkThreadAccess(
         c.env.DB,
         threadId,
         user.id,
@@ -119,7 +128,7 @@ export function registerThreadShareRoutes(app: ThreadsRouter) {
       ),
     );
 
-    const ok = await threadSharesRouteDeps.revokeThreadShare({
+    const ok = await revokeThreadShare({
       db: c.env.DB,
       threadId,
       shareId,
@@ -136,7 +145,5 @@ const threadSharesRoutes = new Hono<
   { Bindings: Env; Variables: BaseVariables }
 >();
 registerThreadShareRoutes(threadSharesRoutes);
-
-export { threadSharesRouteDeps } from "./deps.ts";
 
 export default threadSharesRoutes;

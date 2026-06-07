@@ -25,15 +25,9 @@ import {
 } from "../../../node-platform/resolvers/env-utils.ts";
 import { toResourceCapability } from "./capabilities.ts";
 import {
-  deletePortableBackendQueue,
-  ensurePortableBackendQueue,
   getPortableBackendResolution,
-  getPortableSecretStore,
   missingPortableBootstrapRequirementsForBackend,
   normalizePortableBackend,
-  resetPortableBackendRuntimeCachesForTests,
-  resolvePortableKvCloudAdapter as resolvePortableBackendKvCloudAdapter,
-  resolvePortableObjectStoreCloudAdapter,
   resolvePortableQueueReferenceId as resolvePortableBackendQueueReferenceId,
   sanitizeName,
   sanitizeSqlIdentifier,
@@ -143,11 +137,6 @@ function usesPortablePostgres(resource: PortableResourceRef): boolean {
     resource.backend_name !== "local";
 }
 
-function isNotFoundError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /not found|404|NoSuchEntity|ResourceNotFound/i.test(message);
-}
-
 export function describePortableResourceResolution(
   backendName?: string | null,
   typeOrCapability?: string | null,
@@ -248,28 +237,7 @@ async function dropPortableVectorStore(
 async function ensurePortableBackendSecret(
   resource: PortableResourceRef,
 ): Promise<string> {
-  const secretName = sanitizeName(
-    resource.backing_resource_name ?? resource.id,
-  );
-  const generatedValue = generateSecretToken();
-  const store = getPortableSecretStore(
-    normalizePortableBackend(resource.backend_name),
-  );
-
-  if (!store) {
-    return secretName;
-  }
-
-  try {
-    await store.getSecretValue(secretName);
-  } catch (error) {
-    if (!isNotFoundError(error)) {
-      throw error;
-    }
-    await store.ensureSecret(secretName, generatedValue);
-  }
-
-  return secretName;
+  return sanitizeName(resource.backing_resource_name ?? resource.id);
 }
 
 async function resolvePortableQueueReferenceId(
@@ -282,9 +250,6 @@ async function resolvePortableQueueReferenceId(
 async function ensurePortableQueueResource(
   resource: PortableResourceRef,
 ): Promise<void> {
-  if (await ensurePortableBackendQueue(resource)) {
-    return;
-  }
   await ensureJsonStateFile(
     `${resolveResourceBasePath("queue", resource)}.json`,
     { messages: [] },
@@ -294,40 +259,18 @@ async function ensurePortableQueueResource(
 async function deletePortableQueueResource(
   resource: PortableResourceRef,
 ): Promise<void> {
-  if (await deletePortableBackendQueue(resource)) {
-    return;
-  }
   await removePath(`${resolveResourceBasePath("queue", resource)}.json`);
 }
 
 async function ensurePortableObjectStoreResource(
   resource: PortableResourceRef,
 ): Promise<void> {
-  if (
-    describePortableResourceResolution(resource.backend_name, "object_store")
-      ?.mode === "backend-backed"
-  ) {
-    getPortableObjectStore(resource);
-    return;
-  }
-
-  if (!resolvePortableObjectStoreCloudAdapter(resource)) {
-    await ensureJsonStateFile(
-      `${resolveResourceBasePath("object-store", resource)}.json`,
-      {
-        objects: {},
-        uploads: {},
-      },
-    );
-  }
-}
-
-function resolvePortableKvCloudAdapter(
-  resource: PortableResourceRef,
-): KvStoreBinding | null {
-  return resolvePortableBackendKvCloudAdapter(
-    resource,
-    createPrefixedKvNamespace,
+  await ensureJsonStateFile(
+    `${resolveResourceBasePath("object-store", resource)}.json`,
+    {
+      objects: {},
+      uploads: {},
+    },
   );
 }
 
@@ -335,20 +278,10 @@ async function ensurePortableKvResource(
   resource: PortableResourceRef,
 ): Promise<void> {
   assertPortableBootstrapRequirements(resource, "kv");
-  if (
-    describePortableResourceResolution(resource.backend_name, "kv")?.mode ===
-      "backend-backed"
-  ) {
-    getPortableKvStore(resource);
-    return;
-  }
-
-  if (!resolvePortableKvCloudAdapter(resource)) {
-    await ensureJsonStateFile(
-      `${resolveResourceBasePath("kv", resource)}.json`,
-      {},
-    );
-  }
+  await ensureJsonStateFile(
+    `${resolveResourceBasePath("kv", resource)}.json`,
+    {},
+  );
 }
 
 async function deletePortableSqlResource(
@@ -373,11 +306,6 @@ async function deletePortableObjectStoreResource(
   resource: PortableResourceRef,
 ): Promise<void> {
   objectStoreCache.delete(resourceCacheKey(resource));
-  if (resolvePortableObjectStoreCloudAdapter(resource)) {
-    await clearPortableObjectStore(resource);
-    return;
-  }
-
   await removePath(`${resolveResourceBasePath("object-store", resource)}.json`);
 }
 
@@ -385,28 +313,14 @@ async function deletePortableKvResource(
   resource: PortableResourceRef,
 ): Promise<void> {
   kvStoreCache.delete(resourceCacheKey(resource));
-  if (resolvePortableKvCloudAdapter(resource)) {
-    await clearPortableKvNamespace(resource);
-    return;
-  }
-
   await removePath(`${resolveResourceBasePath("kv", resource)}.json`);
 }
 
 async function deletePortableBackendSecret(
   resource: PortableResourceRef,
 ): Promise<void> {
-  const store = getPortableSecretStore(
-    normalizePortableBackend(resource.backend_name),
-  );
-  if (!store) {
-    await removePath(
-      markerFilePath(markerKindForCapability("secret"), resource),
-    );
-    return;
-  }
-  await store.deleteSecret(
-    sanitizeName(resource.backing_resource_name ?? resource.id),
+  await removePath(
+    markerFilePath(markerKindForCapability("secret"), resource),
   );
 }
 
@@ -507,15 +421,6 @@ function markerKindForCapability(capability: ResourceCapability): string {
 export async function getPortableSecretValue(
   resource: PortableResourceRef,
 ): Promise<string> {
-  const store = getPortableSecretStore(
-    normalizePortableBackend(resource.backend_name),
-  );
-  if (store) {
-    return store.getSecretValue(
-      sanitizeName(resource.backing_resource_name ?? resource.id),
-    );
-  }
-
   const secretPath = markerFilePath("secret", resource);
   const existing = await readJsonFile<Record<string, unknown> | null>(
     secretPath,
@@ -637,10 +542,9 @@ export function getPortableObjectStore(
   const existing = objectStoreCache.get(key);
   if (existing) return existing;
 
-  const bucket = resolvePortableObjectStoreCloudAdapter(resource) ??
-    createPersistentObjectStore(
-      `${resolveResourceBasePath("object-store", resource)}.json`,
-    );
+  const bucket = createPersistentObjectStore(
+    `${resolveResourceBasePath("object-store", resource)}.json`,
+  );
   objectStoreCache.set(key, bucket);
   return bucket;
 }
@@ -652,55 +556,11 @@ export function getPortableKvStore(
   const existing = kvStoreCache.get(key);
   if (existing) return existing;
 
-  const resolution = describePortableResourceResolution(
-    resource.backend_name,
-    "kv",
+  const kv = createPersistentKvStoreBinding(
+    `${resolveResourceBasePath("kv", resource)}.json`,
   );
-  const cloudAdapter = resolvePortableKvCloudAdapter(resource);
-  if (resolution?.mode === "backend-backed" && !cloudAdapter) {
-    assertPortableBootstrapRequirements(resource, "kv");
-  }
-
-  const kv = cloudAdapter ??
-    createPersistentKvStoreBinding(
-      `${resolveResourceBasePath("kv", resource)}.json`,
-    );
   kvStoreCache.set(key, kv);
   return kv;
-}
-
-async function clearPortableObjectStore(
-  resource: PortableResourceRef,
-): Promise<void> {
-  const bucket = getPortableObjectStore(resource);
-  let cursor: string | undefined;
-
-  do {
-    const page = await bucket.list({ cursor });
-    const objects = page.objects ?? [];
-    if (objects.length === 0) break;
-    await Promise.all(
-      objects.map((object: { key: string }) => bucket.delete(object.key)),
-    );
-    cursor = page.truncated ? page.cursor ?? undefined : undefined;
-  } while (cursor);
-}
-
-async function clearPortableKvNamespace(
-  resource: PortableResourceRef,
-): Promise<void> {
-  const kv = getPortableKvStore(resource);
-  let cursor: string | undefined;
-
-  do {
-    const page = await kv.list({ cursor, limit: 1000 });
-    const keys = page.keys ?? [];
-    if (keys.length === 0) break;
-    await Promise.all(
-      keys.map((entry: { name: string }) => kv.delete(entry.name)),
-    );
-    cursor = page.list_complete ? undefined : page.cursor ?? undefined;
-  } while (cursor);
 }
 
 async function ensurePortableSqlResource(
@@ -714,13 +574,6 @@ async function ensurePortableSecretResource(
   resource: PortableResourceRef,
 ): Promise<void> {
   assertPortableBootstrapRequirements(resource, "secret");
-  if (
-    describePortableResourceResolution(resource.backend_name, "secret")
-      ?.mode === "backend-backed"
-  ) {
-    await ensurePortableBackendSecret(resource);
-    return;
-  }
   await getPortableSecretValue(resource);
 }
 
@@ -814,7 +667,6 @@ export async function deletePortableManagedResource(
 }
 
 export function resetPortableResourceRuntimeCachesForTests(): void {
-  resetPortableBackendRuntimeCachesForTests();
   sqlCache.clear();
   objectStoreCache.clear();
   kvStoreCache.clear();

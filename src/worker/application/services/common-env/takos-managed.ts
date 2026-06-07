@@ -6,7 +6,11 @@ import { normalizeEnvName } from "./crypto.ts";
 import type { SyncState } from "./repository.ts";
 import { RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE } from "../identity/takos-access-tokens.ts";
 import { accounts, getDb } from "../../../infra/db/index.ts";
-import { GoneError } from "@takos/worker-platform-utils/errors";
+import {
+  BadRequestError,
+  GoneError,
+  NotFoundError,
+} from "@takos/worker-platform-utils/errors";
 
 export const TAKOS_API_URL_ENV_NAME = "TAKOS_API_URL";
 export const TAKOS_ACCESS_TOKEN_ENV_NAME = "TAKOS_ACCESS_TOKEN";
@@ -51,11 +55,11 @@ export function normalizeTakosScopes(scopes: string[]): string[] {
     ),
   ];
   if (normalized.length === 0) {
-    throw new Error("TAKOS_ACCESS_TOKEN requires at least one scope");
+    throw new BadRequestError("TAKOS_ACCESS_TOKEN requires at least one scope");
   }
   const invalid = normalized.filter((scope) => !VALID_SCOPE_SET.has(scope));
   if (invalid.length > 0) {
-    throw new Error(`Unknown Takos scopes: ${invalid.join(", ")}`);
+    throw new BadRequestError(`Unknown Takos scopes: ${invalid.join(", ")}`);
   }
   return normalized;
 }
@@ -128,7 +132,7 @@ export async function resolveTakosTokenSubject(params: {
 > {
   const space = await loadSpaceIdentity(params.env.DB, params.spaceId);
   if (!space) {
-    throw new Error(`Space not found: ${params.spaceId}`);
+    throw new NotFoundError(`Space ${params.spaceId}`);
   }
   if (space.kind === "user") {
     return {
@@ -198,7 +202,7 @@ export async function listTakosManagedStatuses(params: {
   }
   const space = await loadSpaceIdentity(params.env.DB, params.spaceId);
   if (!space) {
-    throw new Error(`Space not found: ${params.spaceId}`);
+    throw new NotFoundError(`Space ${params.spaceId}`);
   }
   const apiUrl = resolveTakosApiUrl(params.env);
   const apiLinkState = params.linkStateByName?.get(TAKOS_API_URL_ENV_NAME) ||

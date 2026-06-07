@@ -19,20 +19,13 @@ import { textDate } from "../../../shared/utils/db-guards.ts";
 
 const profilesView = new Hono<OptionalAuthRouteEnv>();
 
-export const profilesViewRouteDeps = {
-  getDb,
-  batchStarCheck,
-  getUserByUsername,
-  getUserStats,
-  isFollowing,
-};
 
 profilesView.get(":username", async (c) => {
   const currentUser = c.get("user");
   const username = c.req.param("username");
-  const db = profilesViewRouteDeps.getDb(c.env.DB);
+  const db = getDb(c.env.DB);
 
-  const profileUser = await profilesViewRouteDeps.getUserByUsername(
+  const profileUser = await getUserByUsername(
     c.env.DB,
     username,
   );
@@ -40,11 +33,11 @@ profilesView.get(":username", async (c) => {
     throw new NotFoundError("User");
   }
 
-  const stats = await profilesViewRouteDeps.getUserStats(
+  const stats = await getUserStats(
     c.env.DB,
     profileUser.id,
   );
-  const following = await profilesViewRouteDeps.isFollowing(
+  const following = await isFollowing(
     c.env.DB,
     currentUser?.id,
     profileUser.id,
@@ -59,7 +52,7 @@ profilesView.get(":username", async (c) => {
     .limit(6)
     .all();
 
-  const starredSet = await profilesViewRouteDeps.batchStarCheck(
+  const starredSet = await batchStarCheck(
     c.env.DB,
     currentUser?.id,
     reposData.map((r) => r.id),
@@ -108,9 +101,9 @@ profilesView.get("/:username/repos", async (c) => {
   const { limit, offset } = parsePagination(c.req.query());
   const sort = c.req.query("sort") || "updated";
   const order = c.req.query("order") || "desc";
-  const db = profilesViewRouteDeps.getDb(c.env.DB);
+  const db = getDb(c.env.DB);
 
-  const profileUser = await profilesViewRouteDeps.getUserByUsername(
+  const profileUser = await getUserByUsername(
     c.env.DB,
     username,
   );
@@ -146,7 +139,7 @@ profilesView.get("/:username/repos", async (c) => {
     .offset(offset)
     .all();
 
-  const starredSet = await profilesViewRouteDeps.batchStarCheck(
+  const starredSet = await batchStarCheck(
     c.env.DB,
     currentUser?.id,
     reposData.map((r) => r.id),
@@ -178,9 +171,9 @@ profilesView.get("/:username/stars", async (c) => {
   const currentUser = c.get("user");
   const username = c.req.param("username");
   const { limit, offset } = parsePagination(c.req.query());
-  const db = profilesViewRouteDeps.getDb(c.env.DB);
+  const db = getDb(c.env.DB);
 
-  const profileUser = await profilesViewRouteDeps.getUserByUsername(
+  const profileUser = await getUserByUsername(
     c.env.DB,
     username,
   );
@@ -235,7 +228,7 @@ profilesView.get("/:username/stars", async (c) => {
   // Viewing own stars page — all are starred; otherwise batch-check
   const starredSet = (currentUser && currentUser.id === profileUser.id)
     ? new Set(starRepoIds)
-    : await profilesViewRouteDeps.batchStarCheck(
+    : await batchStarCheck(
       c.env.DB,
       currentUser?.id,
       starRepoIds,

@@ -7,6 +7,13 @@ import {
   DependencyError,
   detectCycle,
 } from "../scheduler/dependency.ts";
+import {
+  ISSUE_COMMENT_EVENT_TYPES,
+  ISSUES_EVENT_TYPES,
+  PULL_REQUEST_EVENT_TYPES,
+  RELEASE_EVENT_TYPES,
+  WATCH_EVENT_TYPES,
+} from "../workflow-models.ts";
 import type { Workflow, WorkflowDiagnostic } from "../workflow-models.ts";
 import { normalizeNeedsInput } from "../scheduler/job-expansion.ts";
 
@@ -35,29 +42,7 @@ const pushTriggerSchema = branchFilterSchema.nullable();
  * pull_request イベント種別の enum
  * GitHub Actions 互換。
  */
-const pullRequestEventTypeEnum = z.enum([
-  "assigned",
-  "unassigned",
-  "labeled",
-  "unlabeled",
-  "opened",
-  "edited",
-  "closed",
-  "reopened",
-  "synchronize",
-  "converted_to_draft",
-  "ready_for_review",
-  "locked",
-  "unlocked",
-  "review_requested",
-  "review_request_removed",
-  "auto_merge_enabled",
-  "auto_merge_disabled",
-  "milestoned",
-  "demilestoned",
-  "enqueued",
-  "dequeued",
-]);
+const pullRequestEventTypeEnum = z.enum(PULL_REQUEST_EVENT_TYPES);
 
 /**
  * pull_request トリガーのスキーマ
@@ -71,47 +56,22 @@ const pullRequestTriggerSchema = branchFilterSchema
 /**
  * issues イベント種別の enum
  */
-const issuesEventTypeEnum = z.enum([
-  "opened",
-  "edited",
-  "deleted",
-  "transferred",
-  "pinned",
-  "unpinned",
-  "closed",
-  "reopened",
-  "assigned",
-  "unassigned",
-  "labeled",
-  "unlabeled",
-  "locked",
-  "unlocked",
-  "milestoned",
-  "demilestoned",
-]);
+const issuesEventTypeEnum = z.enum(ISSUES_EVENT_TYPES);
 
 /**
  * issue_comment イベント種別の enum
  */
-const issueCommentEventTypeEnum = z.enum(["created", "edited", "deleted"]);
+const issueCommentEventTypeEnum = z.enum(ISSUE_COMMENT_EVENT_TYPES);
 
 /**
  * release イベント種別の enum
  */
-const releaseEventTypeEnum = z.enum([
-  "published",
-  "unpublished",
-  "created",
-  "edited",
-  "deleted",
-  "prereleased",
-  "released",
-]);
+const releaseEventTypeEnum = z.enum(RELEASE_EVENT_TYPES);
 
 /**
  * watch イベント種別の enum
  */
-const watchEventTypeEnum = z.enum(["started"]);
+const watchEventTypeEnum = z.enum(WATCH_EVENT_TYPES);
 
 /**
  * workflow_dispatch 入力のスキーマ

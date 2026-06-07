@@ -21,58 +21,14 @@ import { resources } from "../../../infra/db/schema.ts";
 import { and, eq, inArray } from "drizzle-orm";
 import { logError } from "../../../shared/utils/logger.ts";
 import { getResourceTypeQueryValues } from "../../../application/services/resources/capabilities.ts";
-import { textDate } from "../../../shared/utils/db-guards.ts";
-
-export const kvRouteDeps = {
-  getDb,
-  getPortableKvStore,
-  isPortableResourceBackend,
-  createOptionalCloudflareWfpBackend,
-  checkResourceAccess,
-};
-
-function toResource(data: {
-  id: string;
-  ownerAccountId: string;
-  accountId: string | null;
-  backendName?: string | null;
-  name: string;
-  type: string;
-  status: string;
-  backingResourceId?: string | null;
-  backingResourceName?: string | null;
-  config: string | null;
-  metadata: string | null;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-}): Resource {
-  const createdAt = textDate(data.createdAt);
-  const updatedAt = textDate(data.updatedAt);
-  return {
-    id: data.id,
-    owner_id: data.ownerAccountId,
-    space_id: data.accountId,
-    ...(data.backendName !== undefined
-      ? { backend_name: data.backendName }
-      : {}),
-    name: data.name,
-    type: data.type as Resource["type"],
-    status: data.status as Resource["status"],
-    backing_resource_id: data.backingResourceId,
-    backing_resource_name: data.backingResourceName,
-    config: data.config ?? "{}",
-    metadata: data.metadata ?? "{}",
-    created_at: createdAt,
-    updated_at: updatedAt,
-  };
-}
+import { toResource } from "./route-internals.ts";
 
 async function loadKvResource(
   c: Context<AuthenticatedRouteEnv>,
   resourceId: string,
   requiredPermissions?: Array<"read" | "write" | "admin">,
 ): Promise<Resource & { backing_resource_id: string }> {
-  const db = kvRouteDeps.getDb(c.env.DB);
+  const db = getDb(c.env.DB);
   const resourceData = await db.select().from(resources).where(
     and(
       eq(resources.id, resourceId),
@@ -87,7 +43,7 @@ async function loadKvResource(
   const resource = toResource(resourceData);
   const user = c.get("user");
   const hasAccess = resource.owner_id === user.id ||
-    await kvRouteDeps.checkResourceAccess(
+    await checkResourceAccess(
       c.env.DB,
       resourceId,
       user.id,
@@ -123,9 +79,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
         maxLimit: 1000,
       });
 
-      if (kvRouteDeps.isPortableResourceBackend(resource.backend_name)) {
+      if (isPortableResourceBackend(resource.backend_name)) {
         try {
-          const kv = kvRouteDeps.getPortableKvStore(resource);
+          const kv = getPortableKvStore(resource);
           const result = await kv.list({
             prefix: c.req.query("prefix") || undefined,
             cursor: c.req.query("cursor") || undefined,
@@ -144,7 +100,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const wfp = kvRouteDeps.createOptionalCloudflareWfpBackend(c.env);
+        const wfp = createOptionalCloudflareWfpBackend(c.env);
         if (!wfp) {
           throw new InternalError("platform backend not configured");
         }
@@ -172,9 +128,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     const resource = await loadKvResource(c, c.req.param("id"));
     const key = decodeURIComponent(c.req.param("key"));
 
-    if (kvRouteDeps.isPortableResourceBackend(resource.backend_name)) {
+    if (isPortableResourceBackend(resource.backend_name)) {
       try {
-        const kv = kvRouteDeps.getPortableKvStore(resource);
+        const kv = getPortableKvStore(resource);
         const value = await kv.getWithMetadata(key, "text");
         return c.json({
           key,
@@ -191,7 +147,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const wfp = kvRouteDeps.createOptionalCloudflareWfpBackend(c.env);
+      const wfp = createOptionalCloudflareWfpBackend(c.env);
       if (!wfp) {
         throw new InternalError("platform backend not configured");
       }
@@ -224,9 +180,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
       const key = decodeURIComponent(c.req.param("key"));
       const body = c.req.valid("json") as { value: string };
 
-      if (kvRouteDeps.isPortableResourceBackend(resource.backend_name)) {
+      if (isPortableResourceBackend(resource.backend_name)) {
         try {
-          const kv = kvRouteDeps.getPortableKvStore(resource);
+          const kv = getPortableKvStore(resource);
           await kv.put(key, body.value);
           return c.json({ success: true });
         } catch (err) {
@@ -238,7 +194,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const wfp = kvRouteDeps.createOptionalCloudflareWfpBackend(c.env);
+        const wfp = createOptionalCloudflareWfpBackend(c.env);
         if (!wfp) {
           throw new InternalError("platform backend not configured");
         }
@@ -259,9 +215,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     ]);
     const key = decodeURIComponent(c.req.param("key"));
 
-    if (kvRouteDeps.isPortableResourceBackend(resource.backend_name)) {
+    if (isPortableResourceBackend(resource.backend_name)) {
       try {
-        const kv = kvRouteDeps.getPortableKvStore(resource);
+        const kv = getPortableKvStore(resource);
         await kv.delete(key);
         return c.json({ success: true });
       } catch (err) {
@@ -273,7 +229,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const wfp = kvRouteDeps.createOptionalCloudflareWfpBackend(c.env);
+      const wfp = createOptionalCloudflareWfpBackend(c.env);
       if (!wfp) {
         throw new InternalError("platform backend not configured");
       }

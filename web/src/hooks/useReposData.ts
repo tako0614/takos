@@ -14,11 +14,18 @@ import type {
 } from "../types/repos.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { createLatestRequest } from "../lib/createLatestRequest.ts";
+import { createPaginatedListResource } from "./createPaginatedListResource.ts";
 import { useI18n } from "../store/i18n.ts";
 
 interface UseReposDataOptions {
   selectedSpaceId?: Accessor<string | undefined>;
   initialTab: SourceTab;
+}
+
+interface PaginatedReposResponse {
+  repos?: SourceRepo[];
+  has_more?: boolean;
+  total?: number;
 }
 
 export function useReposData(
@@ -28,35 +35,78 @@ export function useReposData(
   const [activeTab, setActiveTab] = createSignal<SourceTab>(initialTab);
   const PAGE_SIZE = 20;
   const latestMyRepos = createLatestRequest();
-  const latestExplore = createLatestRequest();
-  const latestStarred = createLatestRequest();
-  const latestSearch = createLatestRequest();
 
   const [myRepos, setMyRepos] = createSignal<SourceRepo[]>([]);
   const [myReposLoading, setMyReposLoading] = createSignal(true);
   const [myReposError, setMyReposError] = createSignal<string | null>(null);
 
-  const [exploreRepos, setExploreRepos] = createSignal<SourceRepo[]>([]);
-  const [exploreLoading, setExploreLoading] = createSignal(false);
   const [exploreSort, setExploreSort] = createSignal<ExploreSort>("trending");
-  const [exploreOffset, setExploreOffset] = createSignal(0);
-  const [exploreHasMore, setExploreHasMore] = createSignal(false);
-  const [exploreTotal, setExploreTotal] = createSignal(0);
 
-  const [starredRepos, setStarredRepos] = createSignal<SourceRepo[]>([]);
-  const [starredLoading, setStarredLoading] = createSignal(false);
-  const [starredOffset, setStarredOffset] = createSignal(0);
-  const [starredHasMore, setStarredHasMore] = createSignal(false);
+  // Explore tab is reset whenever the sort changes; the sort value doubles as
+  // the resource source so a sort change clears the list before the next fetch.
+  const explore = createPaginatedListResource<SourceRepo>({
+    source: exploreSort,
+    initialError: t("unknownError"),
+    perPage: PAGE_SIZE,
+    fetchPage: async ({ offset, limit }) => {
+      const res = await rpc.explore.repos.$get({
+        query: {
+          sort: exploreSort(),
+          limit: String(limit),
+          offset: String(offset),
+        },
+      });
+      const data = await rpcJson<PaginatedReposResponse>(res);
+      return { items: data.repos || [], hasMore: !!data.has_more };
+    },
+  });
+
+  // Starred repos have no per-source dimension, so use a constant non-empty
+  // source (the resource early-returns on an empty source).
+  const starred = createPaginatedListResource<SourceRepo>({
+    source: () => "starred",
+    initialError: t("unknownError"),
+    perPage: PAGE_SIZE,
+    fetchPage: async ({ offset, limit }) => {
+      const res = await rpc.repos.starred.$get({
+        query: { limit: String(limit), offset: String(offset) },
+      });
+      const data = await rpcJson<PaginatedReposResponse>(res);
+      return { items: data.repos || [], hasMore: !!data.has_more };
+    },
+  });
   const [starredTotal, setStarredTotal] = createSignal(0);
 
   const [searchQuery, setSearchQuery] = createSignal("");
-  const [searchResults, setSearchResults] = createSignal<SourceRepo[]>([]);
-  const [searching, setSearching] = createSignal(false);
   const [searchSort, setSearchSort] = createSignal<SearchSort>("stars");
   const [searchOrder, setSearchOrder] = createSignal<SearchOrder>("desc");
-  const [searchOffset, setSearchOffset] = createSignal(0);
-  const [searchHasMore, setSearchHasMore] = createSignal(false);
   const [searchTotal, setSearchTotal] = createSignal(0);
+
+  // Search is keyed by the query; sort/order are read at fetch time and tracked
+  // by the debounce effect so a change re-runs the search for the same query.
+  const search = createPaginatedListResource<SourceRepo>({
+    source: searchQuery,
+    initialError: t("unknownError"),
+    perPage: PAGE_SIZE,
+    fetchPage: async ({ source, offset, limit }) => {
+      const res = await rpc.explore.repos.$get({
+        query: {
+          q: source,
+          limit: String(limit),
+          offset: String(offset),
+          sort: searchSort(),
+          order: searchOrder(),
+        },
+      });
+      const data = await rpcJson<PaginatedReposResponse>(res);
+      // Only commit total for the still-current query (mirrors the resource's
+      // own latest-wins guard, which only gates items/hasMore).
+      if (source === searchQuery()) {
+        setSearchTotal(data.total || 0);
+      }
+      return { items: data.repos || [], hasMore: !!data.has_more };
+    },
+  });
 
   const [showCreateModal, setShowCreateModal] = createSignal(false);
 
@@ -85,122 +135,6 @@ export function useReposData(
     }
   };
 
-  const fetchExploreRepos = async (reset = false, offsetOverride?: number) => {
-    const claim = latestExplore.claim();
-    try {
-      setExploreLoading(true);
-      const offset = typeof offsetOverride === "number"
-        ? offsetOverride
-        : reset
-        ? 0
-        : exploreOffset();
-      const res = await rpc.explore.repos.$get({
-        query: {
-          sort: exploreSort(),
-          limit: String(PAGE_SIZE),
-          offset: String(offset),
-        },
-      });
-      const data = await rpcJson<
-        { repos?: SourceRepo[]; has_more?: boolean; total?: number }
-      >(res);
-      if (!claim.won()) return;
-      if (reset) {
-        setExploreRepos(data.repos || []);
-        setExploreOffset(0);
-      } else {
-        setExploreRepos((prev) => [...prev, ...(data.repos || [])]);
-      }
-      setExploreHasMore(!!data.has_more);
-      setExploreTotal(data.total || 0);
-    } catch (err) {
-      if (!claim.won()) return;
-      console.error("Failed to fetch explore repos:", err);
-    } finally {
-      if (claim.won()) {
-        setExploreLoading(false);
-      }
-    }
-  };
-
-  const fetchStarredRepos = async (reset = false, offsetOverride?: number) => {
-    const claim = latestStarred.claim();
-    try {
-      setStarredLoading(true);
-      const offset = typeof offsetOverride === "number"
-        ? offsetOverride
-        : reset
-        ? 0
-        : starredOffset();
-      const res = await rpc.repos.starred.$get({
-        query: { limit: String(PAGE_SIZE), offset: String(offset) },
-      });
-      const data = await rpcJson<
-        { repos?: SourceRepo[]; has_more?: boolean; total?: number }
-      >(res);
-      if (!claim.won()) return;
-      if (reset) {
-        setStarredRepos(data.repos || []);
-        setStarredOffset(0);
-      } else {
-        setStarredRepos((prev) => [...prev, ...(data.repos || [])]);
-      }
-      setStarredHasMore(!!data.has_more);
-      setStarredTotal(data.total || 0);
-    } catch (err) {
-      if (!claim.won()) return;
-      console.error("Failed to fetch starred repos:", err);
-    } finally {
-      if (claim.won()) {
-        setStarredLoading(false);
-      }
-    }
-  };
-
-  const searchRepos = async (
-    query: string,
-    reset = false,
-    offsetOverride?: number,
-  ) => {
-    const claim = latestSearch.claim();
-    try {
-      setSearching(true);
-      const offset = typeof offsetOverride === "number"
-        ? offsetOverride
-        : reset
-        ? 0
-        : searchOffset();
-      const res = await rpc.explore.repos.$get({
-        query: {
-          q: query,
-          limit: String(PAGE_SIZE),
-          offset: String(offset),
-          sort: searchSort(),
-          order: searchOrder(),
-        },
-      });
-      const data = await rpcJson<
-        { repos?: SourceRepo[]; has_more?: boolean; total?: number }
-      >(res);
-      if (!claim.won()) return;
-      if (reset) {
-        setSearchResults(data.repos || []);
-        setSearchOffset(0);
-      } else {
-        setSearchResults((prev) => [...prev, ...(data.repos || [])]);
-      }
-      setSearchHasMore(!!data.has_more);
-      setSearchTotal(data.total || 0);
-    } catch (err) {
-      if (!claim.won()) return;
-      console.error("Failed to search repos:", err);
-    } finally {
-      if (claim.won()) {
-        setSearching(false);
-      }
-    }
-  };
-
   // Fetch my repos when selectedSpaceId or activeTab changes
   createEffect(on(
     () => [selectedSpaceId?.(), activeTab()],
@@ -224,7 +158,7 @@ export function useReposData(
     () => [activeTab(), exploreSort()],
     () => {
       if (activeTab() === "explore") {
-        void fetchExploreRepos(true);
+        void explore.fetch(true);
       }
     },
   ));
@@ -234,7 +168,7 @@ export function useReposData(
     () => activeTab(),
     () => {
       if (activeTab() === "starred") {
-        void fetchStarredRepos(true);
+        void starred.fetch(true);
       }
     },
   ));
@@ -246,14 +180,12 @@ export function useReposData(
     const orderVal = searchOrder();
 
     if (!q.trim()) {
-      latestSearch.next();
-      setSearchResults([]);
+      search.reset();
       setSearchTotal(0);
-      setSearchHasMore(false);
       return;
     }
     const timer = setTimeout(() => {
-      void searchRepos(q, true);
+      void search.fetch(true);
     }, 300);
     onCleanup(() => clearTimeout(timer));
 
@@ -304,11 +236,11 @@ export function useReposData(
       };
 
       setMyRepos((prev) => prev.map(updateRepoStar));
-      setExploreRepos((prev) => prev.map(updateRepoStar));
-      setSearchResults((prev) => prev.map(updateRepoStar));
+      explore.updateItems(updateRepoStar);
+      search.updateItems(updateRepoStar);
 
       if (repo.is_starred) {
-        setStarredRepos((prev) => prev.filter((entry) => entry.id !== repo.id));
+        starred.filterItems((entry) => entry.id !== repo.id);
         setStarredTotal((prev) => Math.max(0, prev - 1));
       } else {
         setStarredTotal((prev) => prev + 1);
@@ -319,24 +251,15 @@ export function useReposData(
   };
 
   const loadMoreExplore = () => {
-    if (exploreLoading() || !exploreHasMore()) return;
-    const nextOffset = exploreOffset() + PAGE_SIZE;
-    setExploreOffset(nextOffset);
-    void fetchExploreRepos(false, nextOffset);
+    void explore.fetch(false);
   };
 
   const loadMoreStarred = () => {
-    if (starredLoading() || !starredHasMore()) return;
-    const nextOffset = starredOffset() + PAGE_SIZE;
-    setStarredOffset(nextOffset);
-    void fetchStarredRepos(false, nextOffset);
+    void starred.fetch(false);
   };
 
   const loadMoreSearch = () => {
-    if (searching() || !searchHasMore()) return;
-    const nextOffset = searchOffset() + PAGE_SIZE;
-    setSearchOffset(nextOffset);
-    void searchRepos(searchQuery(), false, nextOffset);
+    void search.fetch(false);
   };
 
   return {
@@ -345,25 +268,24 @@ export function useReposData(
     myRepos,
     myReposLoading,
     myReposError,
-    exploreRepos,
-    exploreLoading,
+    exploreRepos: explore.items,
+    exploreLoading: explore.loading,
     exploreSort,
     setExploreSort,
-    exploreHasMore,
-    exploreTotal,
-    starredRepos,
-    starredLoading,
-    starredHasMore,
+    exploreHasMore: explore.hasMore,
+    starredRepos: starred.items,
+    starredLoading: starred.loading,
+    starredHasMore: starred.hasMore,
     starredTotal,
     searchQuery,
     setSearchQuery,
-    searchResults,
-    searching,
+    searchResults: search.items,
+    searching: search.loading,
     searchSort,
     setSearchSort,
     searchOrder,
     setSearchOrder,
-    searchHasMore,
+    searchHasMore: search.hasMore,
     searchTotal,
     showCreateModal,
     setShowCreateModal,

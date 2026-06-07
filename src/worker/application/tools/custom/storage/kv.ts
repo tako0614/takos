@@ -3,6 +3,7 @@ import type {
   ToolDefinition,
   ToolHandler,
 } from "../../tool-definitions.ts";
+import { defineTools } from "../define-tools.ts";
 import { validateKVKey } from "./validators.ts";
 
 export const KEY_VALUE_GET: ToolDefinition = {
@@ -214,16 +215,10 @@ function getKVNamespace(name: string, context: ToolContext) {
   return kv;
 }
 
-export const KEY_VALUE_TOOLS: ToolDefinition[] = [
-  KEY_VALUE_GET,
-  KEY_VALUE_PUT,
-  KEY_VALUE_DELETE,
-  KEY_VALUE_LIST,
-];
-
-export const KEY_VALUE_HANDLERS: Record<string, ToolHandler> = {
-  key_value_get: keyValueGetHandler,
-  key_value_put: keyValuePutHandler,
-  key_value_delete: keyValueDeleteHandler,
-  key_value_list: keyValueListHandler,
-};
+export const { tools: KEY_VALUE_TOOLS, handlers: KEY_VALUE_HANDLERS } =
+  defineTools([
+    [KEY_VALUE_GET, keyValueGetHandler],
+    [KEY_VALUE_PUT, keyValuePutHandler],
+    [KEY_VALUE_DELETE, keyValueDeleteHandler],
+    [KEY_VALUE_LIST, keyValueListHandler],
+  ]);

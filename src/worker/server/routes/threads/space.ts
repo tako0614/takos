@@ -3,9 +3,14 @@ import { z } from "zod";
 import { BadRequestError } from "@takos/worker-platform-utils/errors";
 import type { Env, ThreadStatus } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
+import { routeAuthDeps } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { zValidator } from "../zod-validator.ts";
-import { threadsRouteDeps } from "./deps.ts";
+import {
+  createThread,
+  listThreads,
+} from "../../../application/services/threads/thread-service.ts";
+import { searchSpaceThreads } from "../../../application/services/threads/thread-search.ts";
 
 type ThreadsRouter = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 
@@ -35,12 +40,12 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
       const { status: statusQuery } = c.req.valid("query");
       const status = statusQuery as ThreadStatus | undefined;
 
-      const access = await threadsRouteDeps.requireSpaceAccess(
+      const access = await routeAuthDeps.requireSpaceAccess(
         c,
         spaceId,
         user.id,
       );
-      const threads = await threadsRouteDeps.listThreads(
+      const threads = await listThreads(
         c.env.DB,
         access.space.id,
         {
@@ -67,14 +72,14 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
         throw new BadRequestError("q is required");
       }
 
-      const access = await threadsRouteDeps.requireSpaceAccess(
+      const access = await routeAuthDeps.requireSpaceAccess(
         c,
         spaceId,
         user.id,
       );
 
       return c.json(
-        await threadsRouteDeps.searchSpaceThreads({
+        await searchSpaceThreads({
           env: c.env,
           spaceId: access.space.id,
           query: q,
@@ -99,7 +104,7 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
       const spaceId = c.req.param("spaceId");
       const body = c.req.valid("json");
 
-      const access = await threadsRouteDeps.requireSpaceAccess(
+      const access = await routeAuthDeps.requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -107,7 +112,7 @@ export function registerThreadSpaceRoutes(app: ThreadsRouter) {
         "Workspace not found or insufficient permissions",
       );
 
-      const thread = await threadsRouteDeps.createThread(
+      const thread = await createThread(
         c.env.DB,
         access.space.id,
         body,

@@ -3,6 +3,7 @@ import type {
   ToolDefinition,
   ToolHandler,
 } from "../../tool-definitions.ts";
+import { defineTools } from "../define-tools.ts";
 import { generateId } from "../../../../shared/utils/index.ts";
 import {
   apps,
@@ -406,14 +407,9 @@ export const workerDeleteHandler: ToolHandler = async (args, context) => {
   ].join("\n");
 };
 
-export const DEPLOYMENT_TOOLS: ToolDefinition[] = [
-  WORKER_LIST,
-  WORKER_CREATE,
-  WORKER_DELETE,
-];
-
-export const DEPLOYMENT_HANDLERS: Record<string, ToolHandler> = {
-  [WORKER_LIST.name]: workerListHandler,
-  [WORKER_CREATE.name]: workerCreateHandler,
-  [WORKER_DELETE.name]: workerDeleteHandler,
-};
+export const { tools: DEPLOYMENT_TOOLS, handlers: DEPLOYMENT_HANDLERS } =
+  defineTools([
+    [WORKER_LIST, workerListHandler],
+    [WORKER_CREATE, workerCreateHandler],
+    [WORKER_DELETE, workerDeleteHandler],
+  ]);

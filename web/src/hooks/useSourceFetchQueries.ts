@@ -96,6 +96,7 @@ export function useSourceFetchQueries({
           createdAt?: string | null;
           updated_at?: string | null;
           updatedAt?: string | null;
+          services?: SourceItemInstallation["services"];
           source?: {
             gitUrl?: string | null;
             git_url?: string | null;
@@ -131,6 +132,7 @@ export function useSourceFetchQueries({
           installed_at: createdAt,
           updated_at: updatedAt,
           deployed_at: null,
+          ...(pkg.services !== undefined ? { services: pkg.services } : {}),
         };
         const repoId = source?.repositoryId ?? source?.repository_id ??
           source?.resolved_repo_id ?? null;
@@ -288,6 +290,7 @@ export function useSourceFetchQueries({
             installed_at?: string | null;
             updated_at?: string | null;
             deployed_at: string | null;
+            services?: SourceItemInstallation["services"];
           };
         }>;
         total: number;
@@ -323,6 +326,9 @@ export function useSourceFetchQueries({
               ? { updated_at: item.installation.updated_at }
               : {}),
             deployed_at: item.installation.deployed_at,
+            ...(item.installation.services !== undefined
+              ? { services: item.installation.services }
+              : {}),
           }
           : undefined;
         const sourceItem: SourceItem = {

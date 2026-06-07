@@ -31,19 +31,13 @@ const consumeSchema = z.object({
   }).optional(),
 });
 
-export const workersSettingsConsumesRouteDeps = {
-  getServiceForUser,
-  getServiceForUserWithRole,
-  listServiceConsumes,
-  replaceServiceConsumes,
-};
 
 const settingsConsumes = new Hono<AuthenticatedRouteEnv>()
   .get("/:id/consumes", async (c) => {
     const user = c.get("user");
     const workerId = c.req.param("id");
 
-    const worker = await workersSettingsConsumesRouteDeps.getServiceForUser(
+    const worker = await getServiceForUser(
       c.env.DB,
       workerId,
       user.id,
@@ -54,8 +48,7 @@ const settingsConsumes = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const consumes = await workersSettingsConsumesRouteDeps
-        .listServiceConsumes(
+      const consumes = await listServiceConsumes(
           c.env,
           worker.space_id,
           worker.id,
@@ -84,8 +77,7 @@ const settingsConsumes = new Hono<AuthenticatedRouteEnv>()
       const workerId = c.req.param("id");
       const body = c.req.valid("json");
 
-      const worker = await workersSettingsConsumesRouteDeps
-        .getServiceForUserWithRole(
+      const worker = await getServiceForUserWithRole(
           c.env.DB,
           workerId,
           user.id,
@@ -97,8 +89,7 @@ const settingsConsumes = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const consumes = await workersSettingsConsumesRouteDeps
-          .replaceServiceConsumes(c.env, {
+        const consumes = await replaceServiceConsumes(c.env, {
             spaceId: worker.space_id,
             serviceId: worker.id,
             serviceName: worker.slug || worker.service_name || worker.id,

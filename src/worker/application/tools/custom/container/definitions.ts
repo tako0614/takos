@@ -153,10 +153,5 @@ export const CREATE_REPOSITORY: ToolDefinition = {
   },
 };
 
-export const CONTAINER_TOOLS: ToolDefinition[] = [
-  CONTAINER_START,
-  CONTAINER_STATUS,
-  CONTAINER_COMMIT,
-  CONTAINER_STOP,
-  CREATE_REPOSITORY,
-];
+// CONTAINER_TOOLS is derived in container.ts via defineTools so the tool list
+// and handler map stay paired from a single source.

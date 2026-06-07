@@ -13,8 +13,15 @@ import {
   formatEntry,
   requireStoreRegistryEntry,
   safeErrorMessage,
-  storeRegistryRouteDeps,
 } from "./store-registry-helpers.ts";
+import {
+  addRemoteStore,
+  listRegisteredStores,
+  refreshRemoteStore,
+  removeRemoteStore,
+  setActiveStore,
+  setSubscription,
+} from "../../../application/services/store-network/store-registry.ts";
 
 const addStoreSchema = z.object({
   identifier: z.string().min(1),
@@ -34,7 +41,7 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
     const access = c.get("access");
 
     try {
-      const entries = await storeRegistryRouteDeps.listRegisteredStores(
+      const entries = await listRegisteredStores(
         c.env.DB,
         access.space.id,
       );
@@ -56,7 +63,7 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
       const body = c.req.valid("json");
 
       try {
-        const entry = await storeRegistryRouteDeps.addRemoteStore(
+        const entry = await addRemoteStore(
           c.env.DB,
           access.space.id,
           {
@@ -67,6 +74,9 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
         );
         return c.json({ store: formatEntry(entry) }, 201);
       } catch (error) {
+        if (isAppError(error)) {
+          throw error;
+        }
         logError("Failed to add remote store", error, {
           module: "routes/store-registry",
         });
@@ -84,7 +94,7 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
       const access = c.get("access");
 
       try {
-        const deleted = await storeRegistryRouteDeps.removeRemoteStore(
+        const deleted = await removeRemoteStore(
           c.env.DB,
           access.space.id,
           c.req.param("entryId"),
@@ -94,6 +104,9 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
         }
         return c.json({ success: true });
       } catch (error) {
+        if (isAppError(error)) {
+          throw error;
+        }
         logError("Failed to remove store", error, {
           module: "routes/store-registry",
         });
@@ -115,7 +128,7 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
         await requireStoreRegistryEntry(c.env.DB, access.space.id, entryId);
 
         if (body.is_active !== undefined) {
-          await storeRegistryRouteDeps.setActiveStore(
+          await setActiveStore(
             c.env.DB,
             access.space.id,
             body.is_active ? entryId : null,
@@ -123,7 +136,7 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
         }
 
         if (body.subscription_enabled !== undefined) {
-          await storeRegistryRouteDeps.setSubscription(
+          await setSubscription(
             c.env.DB,
             access.space.id,
             entryId,
@@ -154,7 +167,7 @@ export function registerStoreRegistryCrudRoutes(app: StoreRegistryRouter) {
       const access = c.get("access");
 
       try {
-        const entry = await storeRegistryRouteDeps.refreshRemoteStore(
+        const entry = await refreshRemoteStore(
           c.env.DB,
           access.space.id,
           c.req.param("entryId"),

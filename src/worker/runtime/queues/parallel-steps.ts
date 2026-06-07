@@ -13,12 +13,12 @@ import type { JobExecutionState, JobQueueContext } from "./workflow-types.ts";
 import {
   getRunStatus,
   getStepDisplayName,
-  runtimeDelete,
 } from "./workflow-runtime-client.ts";
-import { evaluateCondition } from "./workflow-expressions.ts";
-import { emitWorkflowEvent } from "./workflow-events.ts";
-import { executeStep } from "./workflow-steps.ts";
-import { executeStepLoop } from "./workflow-job-phases.ts";
+import {
+  emitCancellation,
+  executeOneStep,
+  executeStepLoop,
+} from "./workflow-job-phases.ts";
 import { logInfo, logWarn } from "../../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ export async function executeStepLoopParallel(
   ctx: JobQueueContext,
   state: JobExecutionState,
 ): Promise<"cancelled" | void> {
-  const { jobDefinition, runId, jobId, repoId, jobKey } = ctx.message;
+  const { jobDefinition, runId } = ctx.message;
   const steps = jobDefinition.steps;
 
   // Build dependency graph
@@ -239,31 +239,7 @@ export async function executeStepLoopParallel(
     // ── Cancellation check ──────────────────────────────────────────
     const runStatus = await getRunStatus(ctx.env.DB, runId);
     if (runStatus === "cancelled") {
-      state.jobConclusion = "cancelled";
-      state.logs.push("Job cancelled (run was cancelled)");
-      state.logs.push("");
-      await ctx.engine.cancelRun(runId);
-      if (state.runtimeStarted) {
-        state.runtimeCancelled = true;
-        if (state.runtimeSpaceId) {
-          await runtimeDelete(
-            ctx.env,
-            `/actions/jobs/${jobId}`,
-            state.runtimeSpaceId,
-          );
-        }
-      }
-      await ctx.engine.storeJobLogs(jobId, state.logs.join("\n"));
-      await emitWorkflowEvent(ctx.env, runId, "workflow.job.completed", {
-        runId,
-        jobId,
-        repoId,
-        jobKey,
-        name: ctx.jobName,
-        status: "cancelled",
-        conclusion: "cancelled",
-        completedAt: new Date().toISOString(),
-      });
+      await emitCancellation(ctx, state);
       cancelled = true;
       break;
     }
@@ -290,7 +266,7 @@ export async function executeStepLoopParallel(
 
     // ── Execute batch ───────────────────────────────────────────────
     const batchPromises = readyIndices.map((i) =>
-      executeSingleStep(ctx, state, i)
+      executeOneStep(ctx, state, i)
     );
 
     const batchResults = await Promise.allSettled(batchPromises);
@@ -328,136 +304,11 @@ export async function executeStepLoopParallel(
           state.jobConclusion = "failure";
         }
       }
-      // fulfilled results are already recorded by executeSingleStep
+      // fulfilled results are already recorded by executeOneStep
     }
   }
 
   if (cancelled) {
     return "cancelled";
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Single step execution (mirrors logic in executeStepLoop)
-// ---------------------------------------------------------------------------
-
-/**
- * Execute a single step at the given index, updating shared state.
- *
- * This is extracted so it can be called from `Promise.allSettled` for
- * parallel batches. The function handles condition evaluation, skip
- * logic, step status updates, and result recording.
- */
-async function executeSingleStep(
-  ctx: JobQueueContext,
-  state: JobExecutionState,
-  stepIndex: number,
-): Promise<void> {
-  const { jobDefinition, jobId } = ctx.message;
-  const step = jobDefinition.steps[stepIndex];
-  const stepNumber = stepIndex + 1;
-  const stepName = getStepDisplayName(step, stepNumber);
-
-  state.logs.push(`--- Step ${stepNumber}: ${stepName} ---`);
-
-  // ── Condition evaluation ──────────────────────────────────────────
-  const stepEnv = { ...ctx.effectiveJobEnv, ...step.env };
-  let shouldRun = true;
-
-  if (step.if) {
-    shouldRun = evaluateCondition(step.if, {
-      env: stepEnv,
-      steps: state.stepOutputs,
-      job: {
-        status: state.jobConclusion === "success" ? "success" : "failure",
-      },
-      inputs: ctx.runContext.inputs,
-    });
-  } else if (state.jobConclusion === "failure") {
-    shouldRun = false;
-  }
-
-  if (!shouldRun) {
-    const skippedResult: WorkflowStepResult = {
-      stepNumber,
-      name: stepName,
-      status: "skipped",
-      conclusion: "skipped",
-      outputs: {},
-    };
-    state.stepResults.push(skippedResult);
-    await ctx.engine.updateStepStatus(jobId, stepNumber, "skipped", "skipped");
-    state.logs.push(
-      step.if
-        ? "Skipped (condition not met)"
-        : "Skipped (previous step failed)",
-    );
-    state.logs.push("");
-    return;
-  }
-
-  // ── Execute ───────────────────────────────────────────────────────
-  await ctx.engine.updateStepStatus(jobId, stepNumber, "in_progress");
-  const stepStartedAt = new Date().toISOString();
-
-  const spaceId = state.runtimeSpaceId;
-  if (!spaceId) {
-    throw new Error(
-      "executeSingleStep called before runtimeSpaceId was initialised",
-    );
-  }
-  const result = await executeStep(step, {
-    env: ctx.env,
-    jobId,
-    stepNumber,
-    spaceId,
-    shell: step.shell ?? jobDefinition.defaults?.run?.shell,
-    workingDirectory: step["working-directory"] ??
-      jobDefinition.defaults?.run?.["working-directory"],
-  });
-
-  const stepCompletedAt = new Date().toISOString();
-
-  const stepResult: WorkflowStepResult = {
-    stepNumber,
-    name: stepName,
-    status: "completed",
-    conclusion: result.success ? "success" : "failure",
-    exitCode: result.exitCode,
-    error: result.error,
-    outputs: result.outputs || {},
-    startedAt: stepStartedAt,
-    completedAt: stepCompletedAt,
-  };
-
-  state.stepResults.push(stepResult);
-
-  if (step.id) {
-    state.stepOutputs[step.id] = result.outputs || {};
-  }
-
-  await ctx.engine.updateStepStatus(
-    jobId,
-    stepNumber,
-    "completed",
-    stepResult.conclusion ?? undefined,
-    result.exitCode,
-    result.error,
-  );
-
-  if (result.stdout) {
-    state.logs.push(result.stdout);
-  }
-  if (result.stderr) {
-    state.logs.push(`[stderr] ${result.stderr}`);
-  }
-  if (result.error && !result.stderr) {
-    state.logs.push(`Error: ${result.error}`);
-  }
-  state.logs.push(`Exit code: ${result.exitCode ?? 0}`);
-  state.logs.push("");
-
-  if (!result.success && !step["continue-on-error"]) {
-    state.jobConclusion = "failure";
   }
 }

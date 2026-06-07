@@ -9,12 +9,10 @@ export const repository = {
   // Installed packages
   installed: "Installed",
   uninstall: "Uninstall",
-  install: "Install",
   installing: "Installing...",
   view: "View",
   details: "Details",
   history: "History",
-  source: "Source",
   appsInstalledDescription: "Manage the apps installed in this space",
   appsInstalledEmpty: "No apps installed yet",
   appsInstalledEmptyDesc: "Apps you add from the store will appear here.",
@@ -173,7 +171,6 @@ export const repository = {
   // File Viewer
   loadingFile: "Loading file...",
   fileNotFound: "File not found",
-  goBack: "Go Back",
   toggleBlame: "Toggle blame gutter",
   blame: "Blame",
   blameLoading: "Loading blame...",

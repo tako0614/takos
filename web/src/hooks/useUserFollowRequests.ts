@@ -1,7 +1,8 @@
-import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import { type Accessor, createSignal } from "solid-js";
 import type { FollowRequest } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useI18n } from "../store/i18n.ts";
+import { createPaginatedListResource } from "./createPaginatedListResource.ts";
 
 interface FollowRequestsResponse {
   requests: FollowRequest[];
@@ -14,65 +15,41 @@ interface FollowRequestAcceptResponse {
   followers_count?: number;
 }
 
-const ITEMS_PER_PAGE = 20;
-
 export function useUserFollowRequests(
   username: Accessor<string>,
   onFollowersCountUpdate?: (count: number) => void,
 ) {
   const { t } = useI18n();
-  const [requests, setRequests] = createSignal<FollowRequest[]>([]);
-  const [offset, setOffset] = createSignal(0);
-  const [hasMore, setHasMore] = createSignal(true);
-  const [loading, setLoading] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = createSignal<string | null>(
     null,
   );
+  // Action (accept/reject) errors are surfaced through the same `error`
+  // accessor as the list path. The resource owns list errors; this local
+  // signal carries action errors and is merged below.
+  const [actionError, setActionError] = createSignal<string | null>(null);
 
-  const fetch_ = async (reset = false) => {
-    const currentUsername = username();
-    if (!currentUsername) return;
-    if (!reset && !hasMore()) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const currentOffset = reset ? 0 : offset();
+  const resource = createPaginatedListResource<FollowRequest>({
+    source: username,
+    initialError: t("failedToLoadFollowRequests"),
+    fetchPage: async ({ source, offset, limit }) => {
       const res = await rpc.users[":username"]["follow-requests"].$get({
-        param: { username: currentUsername },
-        query: { limit: String(ITEMS_PER_PAGE), offset: String(currentOffset) },
+        param: { username: source },
+        query: { limit: String(limit), offset: String(offset) },
       });
-
       if (!res.ok) {
         // Private endpoint; caller may not be the profile owner.
-        setHasMore(false);
-        return;
+        return { items: [], hasMore: false };
       }
-
       const data = await rpcJson<FollowRequestsResponse>(res);
-      if (currentUsername !== username()) return;
-      if (reset) {
-        setRequests(data.requests || []);
-        setOffset(ITEMS_PER_PAGE);
-      } else {
-        setRequests((prev) => [...prev, ...(data.requests || [])]);
-        setOffset((prev) => prev + ITEMS_PER_PAGE);
-      }
-      setHasMore(!!data.has_more);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("failedToLoadFollowRequests"),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+      return { items: data.requests || [], hasMore: !!data.has_more };
+    },
+  });
 
   const accept = async (requestId: string) => {
     const currentUsername = username();
     if (!currentUsername || actionLoadingId()) return;
     setActionLoadingId(requestId);
+    setActionError(null);
     try {
       const res = await rpc.users[":username"]["follow-requests"][":id"].accept
         .$post({
@@ -80,14 +57,14 @@ export function useUserFollowRequests(
         });
       if (res.ok) {
         const data = await rpcJson<FollowRequestAcceptResponse>(res);
-        setRequests((prev) => prev.filter((r) => r.id !== requestId));
+        resource.filterItems((r) => r.id !== requestId);
         const followersCount = data.followers_count;
         if (typeof followersCount === "number" && onFollowersCountUpdate) {
           onFollowersCountUpdate(followersCount);
         }
       }
     } catch (err) {
-      setError(
+      setActionError(
         err instanceof Error ? err.message : t("failedToAcceptFollowRequest"),
       );
     } finally {
@@ -99,6 +76,7 @@ export function useUserFollowRequests(
     const currentUsername = username();
     if (!currentUsername || actionLoadingId()) return;
     setActionLoadingId(requestId);
+    setActionError(null);
     try {
       const res = await rpc.users[":username"]["follow-requests"][":id"].reject
         .$post({
@@ -106,10 +84,10 @@ export function useUserFollowRequests(
         });
       if (res.ok) {
         await rpcJson(res);
-        setRequests((prev) => prev.filter((r) => r.id !== requestId));
+        resource.filterItems((r) => r.id !== requestId);
       }
     } catch (err) {
-      setError(
+      setActionError(
         err instanceof Error ? err.message : t("failedToRejectFollowRequest"),
       );
     } finally {
@@ -118,28 +96,18 @@ export function useUserFollowRequests(
   };
 
   const reset = () => {
-    setRequests([]);
-    setOffset(0);
-    setHasMore(true);
-    setError(null);
+    resource.reset();
     setActionLoadingId(null);
+    setActionError(null);
   };
 
-  // Reset when username changes
-  createEffect(on(
-    username,
-    () => {
-      reset();
-    },
-  ));
-
   return {
-    requests,
-    loading,
-    hasMore,
-    error,
+    requests: resource.items,
+    loading: resource.loading,
+    hasMore: resource.hasMore,
+    error: () => actionError() ?? resource.error(),
     actionLoadingId,
-    fetch: fetch_,
+    fetch: resource.fetch,
     accept,
     reject,
     reset,
