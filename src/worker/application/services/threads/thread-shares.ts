@@ -1,5 +1,6 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { BadRequestError } from "@takos/worker-platform-utils/errors";
 import { base64UrlEncode } from "../../../shared/utils/index.ts";
 import { hashPassword, verifyPassword } from "../identity/auth-utils.ts";
 import { getDb, threadShares } from "../../../infra/db/index.ts";
@@ -68,7 +69,7 @@ export async function createThreadShare(params: {
   if (mode === "password") {
     const pw = (params.password || "").trim();
     if (pw.length < 8) {
-      throw new Error("Password is required (min 8 characters)");
+      throw new BadRequestError("Password is required (min 8 characters)");
     }
     passwordHash = await threadShareDeps.hashPassword(pw);
   }
@@ -77,10 +78,10 @@ export async function createThreadShare(params: {
   if (params.expiresAt) {
     const d = new Date(params.expiresAt);
     if (Number.isNaN(d.getTime())) {
-      throw new Error("Invalid expires_at");
+      throw new BadRequestError("Invalid expires_at");
     }
     if (d.getTime() <= Date.parse(threadShareDeps.now())) {
-      throw new Error("expires_at must be in the future");
+      throw new BadRequestError("expires_at must be in the future");
     }
     expiresAt = d.toISOString();
   }

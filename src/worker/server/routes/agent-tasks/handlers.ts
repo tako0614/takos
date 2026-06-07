@@ -40,9 +40,6 @@ export const DEFAULT_PRIORITY: AgentTaskPriority = "medium";
 
 export type AgentTaskRow = SelectOf<typeof agentTasks>;
 
-export const agentTaskHandlerDeps = {
-  getDb,
-};
 
 // ---------------------------------------------------------------------------
 // Conversion helpers
@@ -90,7 +87,7 @@ export async function fetchTask(
   d1: Env["DB"],
   taskId: string,
 ): Promise<AgentTaskBase | null> {
-  const db = agentTaskHandlerDeps.getDb(d1);
+  const db = getDb(d1);
   const result = await db.select().from(agentTasks).where(
     eq(agentTasks.id, taskId),
   ).get();
@@ -152,7 +149,7 @@ export async function enrichTasks(
     }));
   }
 
-  const db = agentTaskHandlerDeps.getDb(env.DB);
+  const db = getDb(env.DB);
   const threadIds = Array.from(
     new Set(
       tasks.map((task) => task.thread_id).filter((value): value is string =>

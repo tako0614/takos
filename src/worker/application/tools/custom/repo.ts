@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   getDb,
   repositories,
@@ -177,14 +178,8 @@ export const repoSwitchHandler: ToolHandler = async (args, context) => {
   } -> ${target.mountPath || "/"}`;
 };
 
-export const REPO_TOOLS: ToolDefinition[] = [
-  REPO_LIST,
-  REPO_STATUS,
-  REPO_SWITCH,
-];
-
-export const REPO_HANDLERS: Record<string, ToolHandler> = {
-  repo_list: repoListHandler,
-  repo_status: repoStatusHandler,
-  repo_switch: repoSwitchHandler,
-};
+export const { tools: REPO_TOOLS, handlers: REPO_HANDLERS } = defineTools([
+  [REPO_LIST, repoListHandler],
+  [REPO_STATUS, repoStatusHandler],
+  [REPO_SWITCH, repoSwitchHandler],
+]);

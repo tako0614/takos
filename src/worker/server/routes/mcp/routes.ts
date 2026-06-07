@@ -79,17 +79,6 @@ function serializeMcpServer(
   };
 }
 
-export const mcpRouteDeps = {
-  consumeMcpOAuthPending,
-  completeMcpOAuthFlow,
-  registerExternalMcpServer,
-  listMcpServers,
-  deleteMcpServer,
-  updateMcpServer,
-  getMcpServerWithTokens,
-  decryptAccessToken,
-  refreshMcpToken,
-};
 
 mcpRoutes.get("/oauth/callback", async (c) => {
   const code = c.req.query("code");
@@ -103,7 +92,7 @@ mcpRoutes.get("/oauth/callback", async (c) => {
   }
   let pending: Awaited<ReturnType<typeof consumeMcpOAuthPending>>;
   try {
-    pending = await mcpRouteDeps.consumeMcpOAuthPending(c.env.DB, c.env, state);
+    pending = await consumeMcpOAuthPending(c.env.DB, c.env, state);
   } catch (err) {
     logError("consumeMcpOAuthPending error", err, { module: "mcp-oauth" });
     return c.html(errorPage("Internal error processing OAuth callback"), 500);
@@ -118,7 +107,7 @@ mcpRoutes.get("/oauth/callback", async (c) => {
     "localhost";
   const redirectUri = `https://${baseHostname}/api/mcp/oauth/callback`;
   try {
-    await mcpRouteDeps.completeMcpOAuthFlow(c.env.DB, c.env, {
+    await completeMcpOAuthFlow(c.env.DB, c.env, {
       spaceId: pending.spaceId,
       serverName: pending.serverName,
       serverUrl: pending.serverUrl,
@@ -153,7 +142,7 @@ mcpRoutes.post(
         "name and url are required",
       );
     }
-    const result = await mcpRouteDeps.registerExternalMcpServer(
+    const result = await registerExternalMcpServer(
       c.env.DB,
       c.env,
       { spaceId, name: body.name, url: body.url, scope: body.scope },
@@ -171,7 +160,7 @@ mcpRoutes.post(
 );
 
 mcpRoutes.get("/servers", spaceAccess({ roles: MCP_LIST_ROLES }), async (c) => {
-  const servers = await mcpRouteDeps.listMcpServers(c.env.DB, c.get("spaceId"));
+  const servers = await listMcpServers(c.env.DB, c.get("spaceId"));
   return c.json({ data: servers.map(serializeMcpServer) });
 });
 
@@ -179,7 +168,7 @@ mcpRoutes.delete(
   "/servers/:id",
   spaceAccess({ roles: MCP_DELETE_ROLES }),
   async (c) => {
-    const deleted = await mcpRouteDeps.deleteMcpServer(
+    const deleted = await deleteMcpServer(
       c.env.DB,
       c.get("spaceId"),
       c.req.param("id"),
@@ -195,7 +184,7 @@ mcpRoutes.patch(
   zValidator("json", updateServerSchema),
   async (c) => {
     const body = c.req.valid("json");
-    const updated = await mcpRouteDeps.updateMcpServer(
+    const updated = await updateMcpServer(
       c.env.DB,
       c.get("spaceId"),
       c.req.param("id"),
@@ -212,7 +201,7 @@ mcpRoutes.get(
   async (c) => {
     const spaceId = c.get("spaceId");
     const serverId = c.req.param("id");
-    const server = await mcpRouteDeps.getMcpServerWithTokens(
+    const server = await getMcpServerWithTokens(
       c.env.DB,
       spaceId,
       serverId,
@@ -220,7 +209,7 @@ mcpRoutes.get(
     if (!server) throw new NotFoundError("MCP server");
     let accessToken: string | null = null;
     if (server.sourceType === "external") {
-      accessToken = await mcpRouteDeps.decryptAccessToken(c.env.DB, c.env, {
+      accessToken = await decryptAccessToken(c.env.DB, c.env, {
         id: server.id,
         oauthAccessToken: server.oauthAccessToken,
       });
@@ -228,18 +217,18 @@ mcpRoutes.get(
         server.oauthTokenExpiresAt &&
         new Date(server.oauthTokenExpiresAt) < new Date()
       ) {
-        await mcpRouteDeps.refreshMcpToken(c.env.DB, c.env, {
+        await refreshMcpToken(c.env.DB, c.env, {
           id: server.id,
           oauthRefreshToken: server.oauthRefreshToken,
           oauthIssuerUrl: server.oauthIssuerUrl,
         });
-        const refreshed = await mcpRouteDeps.getMcpServerWithTokens(
+        const refreshed = await getMcpServerWithTokens(
           c.env.DB,
           spaceId,
           serverId,
         );
         if (refreshed) {
-          accessToken = await mcpRouteDeps.decryptAccessToken(c.env.DB, c.env, {
+          accessToken = await decryptAccessToken(c.env.DB, c.env, {
             id: refreshed.id,
             oauthAccessToken: refreshed.oauthAccessToken,
           });

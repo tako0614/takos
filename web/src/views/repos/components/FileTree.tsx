@@ -3,6 +3,7 @@ import { Icons } from "../../../lib/Icons.tsx";
 import type { RepoFile } from "../../../types/index.ts";
 import { useI18n } from "../../../store/i18n.ts";
 import { repoTree, rpcJson } from "../../../lib/rpc.ts";
+import { formatFileSize } from "../../../lib/format.ts";
 
 interface FileTreeProps {
   repoId: string;
@@ -100,13 +101,6 @@ export function FileTree(props: FileTreeProps) {
       }
     }
     return items;
-  };
-
-  const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return "";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const formatCommitDate = (dateString?: string): string => {
@@ -256,7 +250,7 @@ export function FileTree(props: FileTreeProps) {
                         <span class="truncate">{file.name}</span>
                         <Show when={file.type === "file" && file.size}>
                           <span class="text-xs text-zinc-500 dark:text-zinc-400 flex-shrink-0">
-                            {formatFileSize(file.size)}
+                            {formatFileSize(file.size ?? 0)}
                           </span>
                         </Show>
                       </span>

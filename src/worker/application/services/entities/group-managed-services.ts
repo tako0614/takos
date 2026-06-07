@@ -10,6 +10,7 @@ import {
   getGroupAutoHostname,
   slugifyGroupHostnameSegment,
 } from "../routing/group-hostnames.ts";
+import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
@@ -331,8 +332,8 @@ export async function deleteGroupManagedService(
     componentKind,
   );
   if (!existing) {
-    throw new Error(
-      `${componentKind} "${manifestName}" not found in group ${groupId}`,
+    throw new NotFoundError(
+      `${componentKind} "${manifestName}" in group ${groupId}`,
     );
   }
 

@@ -1,39 +1,4 @@
-import { getDb } from "../../infra/db/index.ts";
-import {
-  createSkill,
-  deleteSkillByName,
-  formatSkill,
-  getManagedSkillCatalogEntry,
-  getSkill,
-  getSkillByName,
-  listManagedSkillsCatalog,
-  listSkillContext,
-  listSkills,
-  SkillMetadataValidationError,
-  updateSkill,
-  updateSkillByName,
-  updateSkillEnabled,
-  updateSkillEnabledByName,
-} from "../../application/services/source/skills.ts";
 import { getSpaceOperationPolicy } from "../../application/tools/tool-policy.ts";
-
-export const skillsRouteDeps = {
-  createSkill,
-  deleteSkillByName,
-  formatSkill,
-  getDb,
-  getSkill,
-  getManagedSkillCatalogEntry,
-  getSkillByName,
-  listManagedSkillsCatalog,
-  listSkillContext,
-  listSkills,
-  SkillMetadataValidationError,
-  updateSkill,
-  updateSkillByName,
-  updateSkillEnabled,
-  updateSkillEnabledByName,
-};
 
 export const SKILL_LIST_ROLES =
   getSpaceOperationPolicy("skill.list").allowed_roles;

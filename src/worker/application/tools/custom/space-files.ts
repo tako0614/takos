@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   createFileWithContent,
   createFolder,
@@ -514,24 +515,14 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export const SPACE_FILES_TOOLS: ToolDefinition[] = [
-  SPACE_FILES_LIST,
-  SPACE_FILES_READ,
-  SPACE_FILES_WRITE,
-  SPACE_FILES_CREATE,
-  SPACE_FILES_MKDIR,
-  SPACE_FILES_DELETE,
-  SPACE_FILES_RENAME,
-  SPACE_FILES_MOVE,
-];
-
-export const SPACE_FILES_HANDLERS: Record<string, ToolHandler> = {
-  space_files_list: spaceFilesListHandler,
-  space_files_read: spaceFilesReadHandler,
-  space_files_write: spaceFilesWriteHandler,
-  space_files_create: spaceFilesCreateHandler,
-  space_files_mkdir: spaceFilesMkdirHandler,
-  space_files_delete: spaceFilesDeleteHandler,
-  space_files_rename: spaceFilesRenameHandler,
-  space_files_move: spaceFilesMoveHandler,
-};
+export const { tools: SPACE_FILES_TOOLS, handlers: SPACE_FILES_HANDLERS } =
+  defineTools([
+    [SPACE_FILES_LIST, spaceFilesListHandler],
+    [SPACE_FILES_READ, spaceFilesReadHandler],
+    [SPACE_FILES_WRITE, spaceFilesWriteHandler],
+    [SPACE_FILES_CREATE, spaceFilesCreateHandler],
+    [SPACE_FILES_MKDIR, spaceFilesMkdirHandler],
+    [SPACE_FILES_DELETE, spaceFilesDeleteHandler],
+    [SPACE_FILES_RENAME, spaceFilesRenameHandler],
+    [SPACE_FILES_MOVE, spaceFilesMoveHandler],
+  ]);

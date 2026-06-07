@@ -38,6 +38,16 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
   const packageIconSrc = () => getPackageIconImageSrc(props.pkg.icon);
   const displaySource = () => getDisplaySource(props.item);
   const installedValue = () => formatInstalledValue(props.item.installation);
+  const serviceSummary = () => {
+    const services = props.item.installation?.services ?? [];
+    if (services.length === 0) return null;
+    const ready = services.filter((service) => service.status === "ready")
+      .length;
+    return t("platformServicesReadyCount", {
+      ready,
+      total: services.length,
+    });
+  };
 
   const ownerUsername = () =>
     props.item.owner.username || props.item.owner.name || "?";
@@ -126,6 +136,16 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
                       : t("installedVersionLabel")}:
                   </span>{" "}
                   {installed().value}
+                </p>
+              )}
+            </Show>
+            <Show when={serviceSummary()}>
+              {(summary) => (
+                <p class="truncate">
+                  <span class="font-medium text-zinc-500 dark:text-zinc-400">
+                    {t("platformServicesLabel")}:
+                  </span>{" "}
+                  {summary()}
                 </p>
               )}
             </Show>

@@ -1,6 +1,11 @@
 import { and, eq, like } from "drizzle-orm";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { accountMetadata, accounts, getDb } from "../../../infra/db/index.ts";
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+} from "@takos/worker-platform-utils/errors";
 
 const STORE_KEY_PREFIX = "activitypub_store:";
 
@@ -271,21 +276,21 @@ export async function createStore(
 ): Promise<StoreNetworkStoreDefinition> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
-    throw new Error("Workspace not found");
+    throw new NotFoundError("Workspace");
   }
 
   const slug = normalizeStoreNetworkStoreSlug(input.slug);
   if (!slug) {
-    throw new Error("slug is required");
+    throw new BadRequestError("slug is required");
   }
 
   if (slug === account.slug) {
-    throw new Error("slug conflicts with the default store");
+    throw new ConflictError("slug conflicts with the default store");
   }
 
   const existing = await findStoreBySlug(dbBinding, slug);
   if (existing) {
-    throw new Error("store slug already exists");
+    throw new ConflictError("store slug already exists");
   }
 
   const timestamp = new Date().toISOString();
@@ -313,7 +318,7 @@ export async function updateStore(
 ): Promise<StoreNetworkStoreDefinition | null> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
-    throw new Error("Workspace not found");
+    throw new NotFoundError("Workspace");
   }
 
   const slug = normalizeStoreNetworkStoreSlug(storeSlug);
@@ -370,7 +375,7 @@ export async function deleteStore(
 ): Promise<boolean> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
-    throw new Error("Workspace not found");
+    throw new NotFoundError("Workspace");
   }
 
   const slug = normalizeStoreNetworkStoreSlug(storeSlug);

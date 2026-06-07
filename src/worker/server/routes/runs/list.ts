@@ -17,7 +17,8 @@ import {
   runRowToApi,
 } from "../../../application/services/runs/run-serialization.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
-import { runsRouteDeps } from "./deps.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { checkThreadAccess } from "../../../application/services/threads/thread-service.ts";
 
 const RUN_LIST_CURSOR_DELIMITER = ",";
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
@@ -77,7 +78,7 @@ export function registerRunListRoutes(app: RunRouteApp) {
       });
       const cursor = runsQuery.cursor;
 
-      const access = await runsRouteDeps.checkThreadAccess(
+      const access = await checkThreadAccess(
         c.env.DB,
         threadId,
         user.id,
@@ -95,7 +96,7 @@ export function registerRunListRoutes(app: RunRouteApp) {
         }
       }
 
-      const db = runsRouteDeps.getDb(c.env.DB);
+      const db = getDb(c.env.DB);
       const conditions = [eq(runs.threadId, threadId)];
       if (activeOnly) {
         conditions.push(inArray(runs.status, ["pending", "queued", "running"]));

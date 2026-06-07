@@ -6,7 +6,6 @@ import {
 } from "../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 import type { SpaceRole } from "../../../shared/types/index.ts";
-import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import { resolveActorPrincipalId } from "../identity/principals.ts";
 
 export type StandardCapabilityId =
@@ -23,102 +22,6 @@ export type StandardCapabilityId =
   | "durable_object.use"
   | "billing.meter";
 
-export interface CapabilityDefinition {
-  id: StandardCapabilityId;
-  description: string;
-}
-
-export const STANDARD_CAPABILITIES: ReadonlyArray<CapabilityDefinition> = [
-  { id: "storage.read", description: "object-store / files read access" },
-  { id: "storage.write", description: "object-store / files write access" },
-  { id: "repo.read", description: "Repository read access" },
-  { id: "repo.write", description: "Repository write access" },
-  {
-    id: "egress.http",
-    description: "Outbound HTTP requests to external origins",
-  },
-  { id: "oauth.exchange", description: "OAuth token exchange / refresh" },
-  {
-    id: "vectorize.write",
-    description: "Vector DB write (embeddings / indexing)",
-  },
-  {
-    id: "queue.write",
-    description: "message queue resource binding and publishing access",
-  },
-  {
-    id: "analytics.write",
-    description: "provider analytics engine dataset access",
-  },
-  {
-    id: "workflow.invoke",
-    description: "Takos-managed workflow invocation access",
-  },
-  {
-    id: "durable_object.use",
-    description: "Durable Object namespace binding access",
-  },
-  { id: "billing.meter", description: "Usage metering / billing record" },
-] as const;
-
-export class CapabilityRegistry {
-  private defs = new Map<string, CapabilityDefinition>();
-
-  constructor(
-    defs: ReadonlyArray<CapabilityDefinition> = STANDARD_CAPABILITIES,
-  ) {
-    for (const def of defs) {
-      this.register(def);
-    }
-  }
-
-  register(def: CapabilityDefinition): void {
-    this.defs.set(def.id, def);
-  }
-
-  has(id: string): boolean {
-    return this.defs.has(id);
-  }
-
-  get(id: string): CapabilityDefinition | undefined {
-    return this.defs.get(id);
-  }
-
-  validate(
-    ids: readonly string[],
-  ): {
-    known: StandardCapabilityId[];
-    unknown: string[];
-    duplicates: string[];
-  } {
-    const seen = new Set<string>();
-    const duplicates: string[] = [];
-    const unknown: string[] = [];
-    const known: StandardCapabilityId[] = [];
-
-    for (const raw of ids) {
-      const id = String(raw || "").trim();
-      if (!id) continue;
-      if (seen.has(id)) {
-        duplicates.push(id);
-        continue;
-      }
-      seen.add(id);
-
-      if (!this.has(id)) {
-        unknown.push(id);
-        continue;
-      }
-      known.push(id as StandardCapabilityId);
-    }
-
-    return { known, unknown, duplicates };
-  }
-}
-
-export const capabilityRegistry = new CapabilityRegistry();
-
-export type TenantType = "managed" | "approved" | "third_party";
 export type SecurityPosture = "standard" | "restricted_egress";
 const WORKSPACE_ROLE_ORDER: SpaceRole[] = [
   "viewer",
@@ -130,7 +33,6 @@ const WORKSPACE_ROLE_ORDER: SpaceRole[] = [
 export interface CapabilityPolicyContext {
   role: SpaceRole;
   securityPosture: SecurityPosture;
-  tenantType: TenantType;
 }
 
 function normalizeSpaceRole(role: SpaceRole | null | undefined): SpaceRole {
@@ -224,7 +126,6 @@ export async function resolveAllowedCapabilities(params: {
   spaceId: string;
   userId: string;
   securityPosture?: SecurityPosture;
-  tenantType?: TenantType;
   minimumRole?: SpaceRole;
 }): Promise<{
   ctx: CapabilityPolicyContext;
@@ -249,107 +150,7 @@ export async function resolveAllowedCapabilities(params: {
       (workspace?.securityPosture === "restricted_egress"
         ? "restricted_egress"
         : "standard"),
-    tenantType: params.tenantType ?? "third_party",
   };
 
   return { ctx, allowed: selectAllowedCapabilities(ctx) };
-}
-
-export function requireCapability(
-  allowed: Iterable<string>,
-  required: StandardCapabilityId,
-  message?: string,
-): void {
-  const set = allowed instanceof Set ? allowed : new Set(allowed);
-  if (set.has(required)) return;
-  throw new Error(
-    message || `Permission denied: missing capability "${required}"`,
-  );
-}
-
-export function filterBindingsByCapabilities(params: {
-  bindings: WorkerBinding[];
-  allowed: Set<StandardCapabilityId>;
-}): { allowedBindings: WorkerBinding[]; deniedBindings: WorkerBinding[] } {
-  const allowedBindings: WorkerBinding[] = [];
-  const deniedBindings: WorkerBinding[] = [];
-
-  for (const binding of params.bindings) {
-    if (binding.type === "plain_text" || binding.type === "secret_text") {
-      allowedBindings.push(binding);
-      continue;
-    }
-
-    if (
-      binding.type === "d1" ||
-      binding.type === "kv_namespace" ||
-      binding.type === "r2_bucket"
-    ) {
-      if (params.allowed.has("storage.write")) {
-        allowedBindings.push(binding);
-      } else {
-        deniedBindings.push(binding);
-      }
-      continue;
-    }
-
-    if (binding.type === "queue") {
-      if (
-        params.allowed.has("queue.write") || params.allowed.has("storage.write")
-      ) {
-        allowedBindings.push(binding);
-      } else {
-        deniedBindings.push(binding);
-      }
-      continue;
-    }
-
-    if (binding.type === "analytics_engine") {
-      if (
-        params.allowed.has("analytics.write") ||
-        params.allowed.has("storage.write")
-      ) {
-        allowedBindings.push(binding);
-      } else {
-        deniedBindings.push(binding);
-      }
-      continue;
-    }
-
-    if (binding.type === "vectorize") {
-      if (params.allowed.has("vectorize.write")) {
-        allowedBindings.push(binding);
-      } else {
-        deniedBindings.push(binding);
-      }
-      continue;
-    }
-
-    if (binding.type === "workflow") {
-      if (params.allowed.has("workflow.invoke")) {
-        allowedBindings.push(binding);
-      } else {
-        deniedBindings.push(binding);
-      }
-      continue;
-    }
-
-    if (binding.type === "durable_object_namespace") {
-      if (params.allowed.has("durable_object.use")) {
-        allowedBindings.push(binding);
-      } else {
-        deniedBindings.push(binding);
-      }
-      continue;
-    }
-
-    if (binding.type === "service") {
-      allowedBindings.push(binding);
-      continue;
-    }
-
-    deniedBindings.push(binding);
-  }
-
-  return { allowedBindings, deniedBindings };
 }

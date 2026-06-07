@@ -8,6 +8,7 @@ import {
   bytesToHex,
   hexToBytes,
 } from "../../../shared/utils/encoding-utils.ts";
+import { BadRequestError } from "@takos/worker-platform-utils/errors";
 
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -46,9 +47,9 @@ async function hmacSha256Hex(secret: string, input: string): Promise<string> {
 
 export function normalizeEnvName(name: string): string {
   const trimmed = String(name || "").trim();
-  if (!trimmed) throw new Error("Environment variable name is required");
+  if (!trimmed) throw new BadRequestError("Environment variable name is required");
   if (!ENV_NAME_PATTERN.test(trimmed)) {
-    throw new Error(`Invalid environment variable name: ${trimmed}`);
+    throw new BadRequestError(`Invalid environment variable name: ${trimmed}`);
   }
   return trimmed.toUpperCase();
 }

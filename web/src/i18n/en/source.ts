@@ -91,7 +91,6 @@ export const source = {
   // Job Card
   notStarted: "Not started",
   logs: "Logs",
-  loadMore: "Load more",
 
   // Source Page
   sourceTitle: "Source",
@@ -148,6 +147,20 @@ export const source = {
   trackingCommit: "commit",
   installedVersionLabel: "Installed version",
   installedCommitLabel: "Installed commit",
+  platformServicesLabel: "Platform services",
+  platformServicesReadyCount: "{ready}/{total} ready",
+  platformServiceOidc: "OIDC identity",
+  platformServiceBilling: "Billing port",
+  platformServiceOutputs: "Deployment outputs",
+  platformServiceEvents: "Event ingest",
+  platformServiceControl: "Space control",
+  platformServiceReady: "ready",
+  platformServiceNotConfigured: "not configured",
+  platformServiceUnavailable: "unavailable",
+  platformServiceUnknown: "unknown",
+  platformServiceNoEndpoint: "no endpoint",
+  platformServiceSecretConfigured: "secret configured",
+  platformServiceTokenExpires: "expires {date}",
   storeManagementTitle: "Store Management",
   storeManagementDescription:
     "Manage your stores, inventory, and remote store connections.",

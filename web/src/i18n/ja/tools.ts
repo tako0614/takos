@@ -4,9 +4,6 @@ export const tools = {
 
   // Custom Tools
 
-  // Packages Section
-  install: "インストール",
-
   // Custom Tools Section
   noCustomToolsYet: "カスタムツールがまだありません",
   mcpServers: "MCP サーバー",

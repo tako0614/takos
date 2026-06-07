@@ -9,6 +9,7 @@ import { assertAllowedTopLevelFields } from "../source/app-manifest-parser/index
 import { parseCompute } from "../source/app-manifest-parser/parse-compute.ts";
 import { parseResources } from "../source/app-manifest-parser/parse-resources.ts";
 import { validateRouteTargets } from "../source/app-manifest-parser/parse-routes.ts";
+import { BadRequestError } from "@takos/worker-platform-utils/errors";
 
 export type GroupWorkloadCategory = "worker" | "container" | "service";
 
@@ -161,7 +162,7 @@ function mergePublishOverrides(
   patch.forEach((entry, index) => {
     const patchRecord = toPlainRecord(entry);
     if (typeof patchRecord.name !== "string" || !patchRecord.name.trim()) {
-      throw new Error(`overrides.publish[${index}].name is required`);
+      throw new BadRequestError(`overrides.publish[${index}].name is required`);
     }
     const baseIndex = result.findIndex((publication) =>
       publication.name === patchRecord.name
@@ -190,7 +191,7 @@ function validateComputeDependencies(
     if (!entry.depends) continue;
     for (const dep of entry.depends) {
       if (!computeNames.has(dep)) {
-        throw new Error(
+        throw new BadRequestError(
           `compute.${name}.depends references unknown compute: ${dep}`,
         );
       }
@@ -380,7 +381,7 @@ function validateResourceTargets(
   for (const [resourceName, resource] of Object.entries(resources ?? {})) {
     for (const binding of resource.bindings ?? []) {
       if (!compute[binding.target]) {
-        throw new Error(
+        throw new BadRequestError(
           `resources.${resourceName}.bindings references unknown compute: ${binding.target}`,
         );
       }

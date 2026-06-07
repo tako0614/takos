@@ -2,8 +2,7 @@ import { BadRequestError } from "@takos/worker-platform-utils/errors";
 import type { ThreadStatus } from "../../../shared/types/index.ts";
 import type { ThreadShareMode } from "../../../application/services/threads/thread-shares.ts";
 import { requireFound } from "../validation-utils.ts";
-
-type ThreadsRouteDeps = typeof import("./deps.ts").threadsRouteDeps;
+import type { checkThreadAccess } from "../../../application/services/threads/thread-service.ts";
 
 type ThreadUpdateInput = {
   title?: string;
@@ -20,7 +19,7 @@ type ThreadShareInput = {
 };
 
 export function requireThreadAccess(
-  access: Awaited<ReturnType<ThreadsRouteDeps["checkThreadAccess"]>>,
+  access: Awaited<ReturnType<typeof checkThreadAccess>>,
 ) {
   return requireFound(access, "Thread");
 }

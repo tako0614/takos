@@ -6,7 +6,7 @@ import { AppError, BadRequestError } from "@takos/worker-platform-utils/errors";
 
 type RunRouteApp = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 import { zValidator } from "../zod-validator.ts";
-import { runsRouteDeps } from "./deps.ts";
+import { createThreadRun } from "../../../application/services/execution/run-creation.ts";
 
 export function registerRunCreateRoutes(app: RunRouteApp) {
   app.post(
@@ -29,7 +29,7 @@ export function registerRunCreateRoutes(app: RunRouteApp) {
         parent_run_id?: string;
         model?: string;
       };
-      const result = await runsRouteDeps.createThreadRun(c.env, {
+      const result = await createThreadRun(c.env, {
         userId: user.id,
         threadId,
         agentType: body.agent_type,

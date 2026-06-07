@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import type { ArtifactType } from "../../../shared/types/index.ts";
 import { artifacts, files, getDb } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, like, ne } from "drizzle-orm";
@@ -173,12 +174,8 @@ export const searchHandler: ToolHandler = async (args, context) => {
   }
 };
 
-export const ARTIFACT_TOOLS: ToolDefinition[] = [
-  CREATE_ARTIFACT,
-  SEARCH,
-];
-
-export const ARTIFACT_HANDLERS: Record<string, ToolHandler> = {
-  create_artifact: createArtifactHandler,
-  search: searchHandler,
-};
+export const { tools: ARTIFACT_TOOLS, handlers: ARTIFACT_HANDLERS } =
+  defineTools([
+    [CREATE_ARTIFACT, createArtifactHandler],
+    [SEARCH, searchHandler],
+  ]);

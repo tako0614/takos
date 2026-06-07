@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../../tool-definitions.ts";
+import { defineTools } from "../define-tools.ts";
 import { affectedRowCount } from "../../../../shared/utils/affected-row-count.ts";
 
 export const SQL_QUERY: ToolDefinition = {
@@ -373,14 +374,8 @@ export const sqlDescribeHandler: ToolHandler = async (args, context) => {
   return output;
 };
 
-export const SQL_TOOLS: ToolDefinition[] = [
-  SQL_QUERY,
-  SQL_TABLES,
-  SQL_DESCRIBE,
-];
-
-export const SQL_HANDLERS: Record<string, ToolHandler> = {
-  sql_query: sqlQueryHandler,
-  sql_tables: sqlTablesHandler,
-  sql_describe: sqlDescribeHandler,
-};
+export const { tools: SQL_TOOLS, handlers: SQL_HANDLERS } = defineTools([
+  [SQL_QUERY, sqlQueryHandler],
+  [SQL_TABLES, sqlTablesHandler],
+  [SQL_DESCRIBE, sqlDescribeHandler],
+]);

@@ -30,73 +30,86 @@ export interface PullRequestTriggerConfig extends BranchFilter {
  *
  * GitHub Actions 互換: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request
  */
-export type PullRequestEventType =
-  | "assigned"
-  | "unassigned"
-  | "labeled"
-  | "unlabeled"
-  | "opened"
-  | "edited"
-  | "closed"
-  | "reopened"
-  | "synchronize"
-  | "converted_to_draft"
-  | "ready_for_review"
-  | "locked"
-  | "unlocked"
-  | "review_requested"
-  | "review_request_removed"
-  | "auto_merge_enabled"
-  | "auto_merge_disabled"
-  | "milestoned"
-  | "demilestoned"
-  | "enqueued"
-  | "dequeued";
+export const PULL_REQUEST_EVENT_TYPES = [
+  "assigned",
+  "unassigned",
+  "labeled",
+  "unlabeled",
+  "opened",
+  "edited",
+  "closed",
+  "reopened",
+  "synchronize",
+  "converted_to_draft",
+  "ready_for_review",
+  "locked",
+  "unlocked",
+  "review_requested",
+  "review_request_removed",
+  "auto_merge_enabled",
+  "auto_merge_disabled",
+  "milestoned",
+  "demilestoned",
+  "enqueued",
+  "dequeued",
+] as const;
+
+export type PullRequestEventType = (typeof PULL_REQUEST_EVENT_TYPES)[number];
 
 /**
  * issues イベント種別
  *
  * GitHub Actions 互換: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#issues
  */
-export type IssuesEventType =
-  | "opened"
-  | "edited"
-  | "deleted"
-  | "transferred"
-  | "pinned"
-  | "unpinned"
-  | "closed"
-  | "reopened"
-  | "assigned"
-  | "unassigned"
-  | "labeled"
-  | "unlabeled"
-  | "locked"
-  | "unlocked"
-  | "milestoned"
-  | "demilestoned";
+export const ISSUES_EVENT_TYPES = [
+  "opened",
+  "edited",
+  "deleted",
+  "transferred",
+  "pinned",
+  "unpinned",
+  "closed",
+  "reopened",
+  "assigned",
+  "unassigned",
+  "labeled",
+  "unlabeled",
+  "locked",
+  "unlocked",
+  "milestoned",
+  "demilestoned",
+] as const;
+
+export type IssuesEventType = (typeof ISSUES_EVENT_TYPES)[number];
 
 /**
  * issue_comment イベント種別
  */
-export type IssueCommentEventType = "created" | "edited" | "deleted";
+export const ISSUE_COMMENT_EVENT_TYPES = ["created", "edited", "deleted"] as const;
+
+export type IssueCommentEventType = (typeof ISSUE_COMMENT_EVENT_TYPES)[number];
 
 /**
  * release イベント種別
  */
-export type ReleaseEventType =
-  | "published"
-  | "unpublished"
-  | "created"
-  | "edited"
-  | "deleted"
-  | "prereleased"
-  | "released";
+export const RELEASE_EVENT_TYPES = [
+  "published",
+  "unpublished",
+  "created",
+  "edited",
+  "deleted",
+  "prereleased",
+  "released",
+] as const;
+
+export type ReleaseEventType = (typeof RELEASE_EVENT_TYPES)[number];
 
 /**
  * watch イベント種別
  */
-export type WatchEventType = "started";
+export const WATCH_EVENT_TYPES = ["started"] as const;
+
+export type WatchEventType = (typeof WATCH_EVENT_TYPES)[number];
 
 /**
  * workflow_dispatch 入力定義

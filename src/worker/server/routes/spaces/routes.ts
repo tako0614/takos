@@ -62,24 +62,13 @@ function resolveModelBackendAlias(
     : "__conflicting_model_backend__";
 }
 
-export const spacesRouteDeps = {
-  listWorkspacesForUser,
-  getOrCreatePersonalWorkspace,
-  createWorkspaceWithDefaultRepo,
-  getWorkspaceWithRepository,
-  getWorkspaceModelSettings,
-  updateWorkspace,
-  updateWorkspaceModel,
-  deleteWorkspace,
-  processDefaultAppPreinstallJobs,
-};
 
 function scheduleDefaultAppPreinstallTick(
   c: Context<AuthenticatedRouteEnv>,
   spaceId: string,
 ): void {
   c.executionCtx?.waitUntil(
-    spacesRouteDeps.processDefaultAppPreinstallJobs(c.env, {
+    processDefaultAppPreinstallJobs(c.env, {
       limit: 3,
       spaceId,
     }).catch((error) => {
@@ -95,13 +84,12 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get("/", async (c) => {
     const user = c.get("user");
 
-    let workspaces = await spacesRouteDeps.listWorkspacesForUser(
+    let workspaces = await listWorkspacesForUser(
       c.env,
       user.id,
     );
 
-    const personalWorkspace = await spacesRouteDeps
-      .getOrCreatePersonalWorkspace(c.env, user.id);
+    const personalWorkspace = await getOrCreatePersonalWorkspace(c.env, user.id);
     if (personalWorkspace) {
       if (
         !workspaces.some((workspace) => workspace.id === personalWorkspace.id)
@@ -138,8 +126,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const { workspace, repository } = await spacesRouteDeps
-          .createWorkspaceWithDefaultRepo(
+        const { workspace, repository } = await createWorkspaceWithDefaultRepo(
             c.env,
             user.id,
             body.name.trim(),
@@ -164,15 +151,14 @@ export default new Hono<AuthenticatedRouteEnv>()
   )
   .get("/me", async (c) => {
     const user = c.get("user");
-    if (!await spacesRouteDeps.getOrCreatePersonalWorkspace(c.env, user.id)) {
+    if (!await getOrCreatePersonalWorkspace(c.env, user.id)) {
       throw new NotFoundError("Personal space");
     }
     scheduleDefaultAppPreinstallTick(c, user.id);
 
     const access = await requireSpaceAccess(c, "me", user.id);
 
-    const { workspace, repository } = await spacesRouteDeps
-      .getWorkspaceWithRepository(c.env, access.space);
+    const { workspace, repository } = await getWorkspaceWithRepository(c.env, access.space);
 
     return c.json({
       space: toWorkspaceResponse(workspace),
@@ -183,8 +169,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get("/:spaceId", spaceAccess(), async (c) => {
     const { space, membership } = c.get("access");
 
-    const { workspace, repository } = await spacesRouteDeps
-      .getWorkspaceWithRepository(
+    const { workspace, repository } = await getWorkspaceWithRepository(
         c.env,
         space,
       );
@@ -402,7 +387,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("No valid updates provided");
       }
 
-      const workspace = await spacesRouteDeps.updateWorkspace(
+      const workspace = await updateWorkspace(
         c.env.DB,
         space.id,
         updates,
@@ -417,7 +402,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get("/:spaceId/model", spaceAccess(), async (c) => {
     const { space } = c.get("access");
 
-    const workspace = await spacesRouteDeps.getWorkspaceModelSettings(
+    const workspace = await getWorkspaceModelSettings(
       c.env.DB,
       space.id,
     );
@@ -485,7 +470,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("Model backend does not match model");
       }
 
-      await spacesRouteDeps.updateWorkspaceModel(
+      await updateWorkspaceModel(
         c.env.DB,
         space.id,
         model,
@@ -512,7 +497,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     async (c) => {
       const { space } = c.get("access");
 
-      await spacesRouteDeps.deleteWorkspace(c.env, space.id);
+      await deleteWorkspace(c.env, space.id);
 
       return c.json({ success: true });
     },

@@ -21,24 +21,6 @@ export type PlatformServiceBinding = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
-export type WorkersDispatchDeployBackendConfig = {
-  name: "workers-dispatch";
-  config: {
-    accountId: string;
-    apiToken: string;
-    dispatchNamespace: string;
-    zoneId?: string;
-  };
-};
-
-export type PlatformDeployBackendConfig = WorkersDispatchDeployBackendConfig;
-
-export type PlatformDeployBackendRegistry = {
-  defaultName: PlatformDeployBackendConfig["name"];
-  list(): PlatformDeployBackendConfig[];
-  get(name: string): PlatformDeployBackendConfig | undefined;
-};
-
 export type PlatformConfig = {
   adminDomain: string;
   tenantBaseDomain: string;
@@ -91,7 +73,6 @@ export type PlatformServices = {
   routing: PlatformRoutingService;
   routingStore?: RoutingStore;
   hostnameRouting?: KvStoreBinding;
-  deploymentBackends?: PlatformDeployBackendRegistry;
   queues: PlatformQueues;
   objects: PlatformObjects;
   notifications: {

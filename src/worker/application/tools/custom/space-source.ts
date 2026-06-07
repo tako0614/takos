@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import { checkRepoAccess } from "../../services/source/repos.ts";
 import { listCatalogItems } from "../../services/source/explore.ts";
 import { forkWithWorkflows } from "../../services/source/fork.ts";
@@ -225,12 +226,10 @@ export const repoForkHandler: ToolHandler = async (args, context) => {
   );
 };
 
-export const WORKSPACE_SOURCE_TOOLS: ToolDefinition[] = [
-  STORE_SEARCH,
-  REPO_FORK,
-];
-
-export const WORKSPACE_SOURCE_HANDLERS: Record<string, ToolHandler> = {
-  store_search: storeSearchHandler,
-  repo_fork: repoForkHandler,
-};
+export const {
+  tools: WORKSPACE_SOURCE_TOOLS,
+  handlers: WORKSPACE_SOURCE_HANDLERS,
+} = defineTools([
+  [STORE_SEARCH, storeSearchHandler],
+  [REPO_FORK, repoForkHandler],
+]);

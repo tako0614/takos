@@ -63,15 +63,6 @@ type ApiDeploymentSummary = {
   resolved_endpoint?: { kind: string; base_url: string } | null;
 };
 
-export const workersDeploymentsRouteDeps = {
-  getServiceForUser,
-  getServiceForUserWithRole,
-  createDeploymentService: (env: AuthenticatedRouteEnv["Bindings"]) =>
-    new DeploymentService(env),
-  parseDeploymentBackendConfig,
-  promoteCanaryDeployment,
-  abortCanaryDeployment,
-};
 
 const targetSchema = z.object({
   route_ref: z.string().min(1).optional(),
@@ -136,8 +127,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       const user = c.get("user");
       const workerId = c.req.param("id");
 
-      const worker = await workersDeploymentsRouteDeps
-        .getServiceForUserWithRole(c.env.DB, workerId, user.id, [
+      const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, [
           "owner",
           "admin",
           "editor",
@@ -198,8 +188,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       const idempotencyKey = c.req.header("Idempotency-Key")?.trim() ||
         undefined;
 
-      const deploymentService = workersDeploymentsRouteDeps
-        .createDeploymentService(c.env);
+      const deploymentService = new DeploymentService(c.env);
       const deployment = await deploymentService.createDeployment({
         serviceId,
         spaceId: worker.space_id,
@@ -266,7 +255,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
           status: deployment.status,
           deploy_state: deployment.deploy_state,
           artifact_kind: deployment.artifact_kind,
-          target: workersDeploymentsRouteDeps.parseDeploymentBackendConfig(
+          target: parseDeploymentBackendConfig(
             deployment,
           ),
           routing_status: deployment.routing_status,
@@ -284,7 +273,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       maxLimit: 50,
     });
 
-    const worker = await workersDeploymentsRouteDeps.getServiceForUser(
+    const worker = await getServiceForUser(
       c.env.DB,
       workerId,
       user.id,
@@ -293,8 +282,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError("Service");
     }
 
-    const deploymentService = workersDeploymentsRouteDeps
-      .createDeploymentService(c.env);
+    const deploymentService = new DeploymentService(c.env);
     const deployments = await deploymentService.getDeploymentHistory(
       workerId,
       limit,
@@ -312,7 +300,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
         routing_weight: d.routing_weight,
         bundle_hash: d.bundle_hash,
         bundle_size: d.bundle_size,
-        target: workersDeploymentsRouteDeps.parseDeploymentBackendConfig(d),
+        target: parseDeploymentBackendConfig(d),
         deployed_by: d.deployed_by,
         deploy_message: d.deploy_message,
         created_at: d.created_at,
@@ -341,8 +329,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       const user = c.get("user");
       const workerId = c.req.param("id");
 
-      const worker = await workersDeploymentsRouteDeps
-        .getServiceForUserWithRole(c.env.DB, workerId, user.id, [
+      const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, [
           "owner",
           "admin",
           "editor",
@@ -357,8 +344,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
         ? Math.floor(body.target_version)
         : undefined;
 
-      const deploymentService = workersDeploymentsRouteDeps
-        .createDeploymentService(c.env);
+      const deploymentService = new DeploymentService(c.env);
 
       const deployment = await deploymentService.rollback({
         serviceId: worker.id,
@@ -371,7 +357,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
           id: deployment.id,
           version: deployment.version,
           artifact_kind: deployment.artifact_kind,
-          target: workersDeploymentsRouteDeps.parseDeploymentBackendConfig(
+          target: parseDeploymentBackendConfig(
             deployment,
           ),
           routing_status: deployment.routing_status,
@@ -385,7 +371,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     const workerId = c.req.param("id");
     const deploymentId = c.req.param("deploymentId");
 
-    const worker = await workersDeploymentsRouteDeps.getServiceForUser(
+    const worker = await getServiceForUser(
       c.env.DB,
       workerId,
       user.id,
@@ -394,8 +380,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError("Service");
     }
 
-    const deploymentService = workersDeploymentsRouteDeps
-      .createDeploymentService(c.env);
+    const deploymentService = new DeploymentService(c.env);
     const deployment = await deploymentService.getDeploymentById(deploymentId);
     if (!deployment || deployment.service_id !== workerId) {
       throw new NotFoundError("Deployment");
@@ -443,7 +428,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     return c.json({
       deployment: {
         ...withoutDeploymentBackendFields(deployment),
-        target: workersDeploymentsRouteDeps.parseDeploymentBackendConfig(
+        target: parseDeploymentBackendConfig(
           deployment,
         ),
         error_message: deployment.step_error,
@@ -459,7 +444,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     const serviceId = c.req.param("id");
     const deploymentId = c.req.param("deploymentId");
 
-    const worker = await workersDeploymentsRouteDeps.getServiceForUserWithRole(
+    const worker = await getServiceForUserWithRole(
       c.env.DB,
       serviceId,
       user.id,
@@ -469,7 +454,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError("Service");
     }
 
-    const result = await workersDeploymentsRouteDeps.promoteCanaryDeployment(
+    const result = await promoteCanaryDeployment(
       c.env,
       {
         serviceId: worker.id,
@@ -489,7 +474,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     const serviceId = c.req.param("id");
     const deploymentId = c.req.param("deploymentId");
 
-    const worker = await workersDeploymentsRouteDeps.getServiceForUserWithRole(
+    const worker = await getServiceForUserWithRole(
       c.env.DB,
       serviceId,
       user.id,
@@ -499,7 +484,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError("Service");
     }
 
-    const result = await workersDeploymentsRouteDeps.abortCanaryDeployment(
+    const result = await abortCanaryDeployment(
       c.env,
       {
         serviceId: worker.id,
@@ -548,7 +533,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     const serviceId = c.req.param("id");
     const deploymentId = c.req.param("deploymentId");
 
-    const worker = await workersDeploymentsRouteDeps.getServiceForUserWithRole(
+    const worker = await getServiceForUserWithRole(
       c.env.DB,
       serviceId,
       user.id,

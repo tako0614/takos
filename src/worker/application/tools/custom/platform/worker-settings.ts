@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../../tool-definitions.ts";
+import { defineTools } from "../define-tools.ts";
 import { DeploymentService } from "../../../services/deployment/index.ts";
 import { ServiceDesiredStateService } from "../../../services/platform/worker-desired-state.ts";
 import { getDb, serviceDeployments } from "../../../../infra/db/index.ts";
@@ -349,16 +350,12 @@ export const workerRuntimeSetHandler: ToolHandler = async (args, context) => {
   return `Updated runtime configuration for service slot: ${workerIdentifier}. Applies on the next deployment.`;
 };
 
-export const WORKER_SETTINGS_TOOLS: ToolDefinition[] = [
-  WORKER_ENV_GET,
-  WORKER_ENV_SET,
-  WORKER_RUNTIME_GET,
-  WORKER_RUNTIME_SET,
-];
-
-export const WORKER_SETTINGS_HANDLERS: Record<string, ToolHandler> = {
-  service_env_get: workerEnvGetHandler,
-  service_env_set: workerEnvSetHandler,
-  service_runtime_get: workerRuntimeGetHandler,
-  service_runtime_set: workerRuntimeSetHandler,
-};
+export const {
+  tools: WORKER_SETTINGS_TOOLS,
+  handlers: WORKER_SETTINGS_HANDLERS,
+} = defineTools([
+  [WORKER_ENV_GET, workerEnvGetHandler],
+  [WORKER_ENV_SET, workerEnvSetHandler],
+  [WORKER_RUNTIME_GET, workerRuntimeGetHandler],
+  [WORKER_RUNTIME_SET, workerRuntimeSetHandler],
+]);

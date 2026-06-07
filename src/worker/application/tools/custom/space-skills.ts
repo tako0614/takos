@@ -3,6 +3,7 @@ import type {
   ToolHandler,
   ToolParameter,
 } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   createSkill,
   deleteSkillByName,
@@ -568,26 +569,17 @@ export const skillDescribeHandler: ToolHandler = async (args, context) => {
   );
 };
 
-export const WORKSPACE_SKILL_TOOLS: ToolDefinition[] = [
-  SKILL_LIST,
-  SKILL_GET,
-  SKILL_CREATE,
-  SKILL_UPDATE,
-  SKILL_TOGGLE,
-  SKILL_DELETE,
-  SKILL_CONTEXT,
-  SKILL_CATALOG,
-  SKILL_DESCRIBE,
-];
-
-export const WORKSPACE_SKILL_HANDLERS: Record<string, ToolHandler> = {
-  skill_list: skillListHandler,
-  skill_get: skillGetHandler,
-  skill_create: skillCreateHandler,
-  skill_update: skillUpdateHandler,
-  skill_toggle: skillToggleHandler,
-  skill_delete: skillDeleteHandler,
-  skill_context: skillContextHandler,
-  skill_catalog: skillCatalogHandler,
-  skill_describe: skillDescribeHandler,
-};
+export const {
+  tools: WORKSPACE_SKILL_TOOLS,
+  handlers: WORKSPACE_SKILL_HANDLERS,
+} = defineTools([
+  [SKILL_LIST, skillListHandler],
+  [SKILL_GET, skillGetHandler],
+  [SKILL_CREATE, skillCreateHandler],
+  [SKILL_UPDATE, skillUpdateHandler],
+  [SKILL_TOGGLE, skillToggleHandler],
+  [SKILL_DELETE, skillDeleteHandler],
+  [SKILL_CONTEXT, skillContextHandler],
+  [SKILL_CATALOG, skillCatalogHandler],
+  [SKILL_DESCRIBE, skillDescribeHandler],
+]);

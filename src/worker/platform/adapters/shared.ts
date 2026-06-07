@@ -10,7 +10,6 @@ import type {
 import type {
   ControlPlatform,
   PlatformConfig,
-  PlatformDeployBackendRegistry,
   PlatformServiceBinding,
   PlatformServices,
   PlatformSource,
@@ -67,7 +66,6 @@ type PlatformServiceInputs = {
   sqlBinding?: NonNullable<PlatformServices["sql"]>["binding"];
   routingStore?: RoutingStore;
   hostnameRouting?: PlatformServices["hostnameRouting"];
-  deploymentBackends?: PlatformDeployBackendRegistry;
   queues?: PlatformServices["queues"];
   objects?: PlatformServices["objects"];
   notifications?: PlatformServices["notifications"];
@@ -152,7 +150,6 @@ export function createPlatformServices(
     routing: input.routing,
     routingStore: input.routingStore,
     hostnameRouting: input.hostnameRouting,
-    deploymentBackends: input.deploymentBackends,
     queues: input.queues ?? {},
     objects: input.objects ?? {},
     notifications: input.notifications ?? {},

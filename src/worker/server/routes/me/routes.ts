@@ -18,15 +18,6 @@ import { getOrCreatePersonalWorkspace } from "../../../application/services/iden
 import { updateUsername } from "../../../application/services/identity/user-profile.ts";
 import privacy from "./privacy.ts";
 
-export const meRouteDeps = {
-  validateUsername,
-  ensureUserSettings,
-  updateUserSettings,
-  formatUserSettingsResponse,
-  toUserResponse,
-  getOrCreatePersonalWorkspace,
-  updateUsername,
-};
 
 function toPersonalSpaceResponse(space: {
   id: string;
@@ -60,11 +51,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   })
   .get("/", async (c) => {
     const user = c.get("user");
-    return c.json(meRouteDeps.toUserResponse(user));
+    return c.json(toUserResponse(user));
   })
   .get("/personal-space", async (c) => {
     const user = c.get("user");
-    const personalSpace = await meRouteDeps.getOrCreatePersonalWorkspace(
+    const personalSpace = await getOrCreatePersonalWorkspace(
       c.env,
       user.id,
     );
@@ -79,8 +70,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .get("/settings", async (c) => {
     const user = c.get("user");
 
-    const settings = await meRouteDeps.ensureUserSettings(c.env.DB, user.id);
-    return c.json(meRouteDeps.formatUserSettingsResponse(settings));
+    const settings = await ensureUserSettings(c.env.DB, user.id);
+    return c.json(formatUserSettingsResponse(settings));
   })
   // Update user settings
   .patch("/settings", async (c) => {
@@ -116,11 +107,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       }
     }
 
-    const settings = await meRouteDeps.updateUserSettings(c.env.DB, user.id, {
+    const settings = await updateUserSettings(c.env.DB, user.id, {
       ...body,
       activity_visibility: activityVisibility,
     });
-    return c.json(meRouteDeps.formatUserSettingsResponse(settings));
+    return c.json(formatUserSettingsResponse(settings));
   })
   // Update username
   .patch("/username", async (c) => {
@@ -133,7 +124,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const normalizedUsername = body.username.trim().replace(/^@+/, "")
       .toLowerCase();
-    const usernameError = meRouteDeps.validateUsername(normalizedUsername);
+    const usernameError = validateUsername(normalizedUsername);
     if (usernameError) {
       throw new BadRequestError(usernameError);
     }
@@ -142,7 +133,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return c.json({ success: true, username: normalizedUsername });
     }
 
-    const result = await meRouteDeps.updateUsername(
+    const result = await updateUsername(
       c.env.DB,
       user.id,
       normalizedUsername,

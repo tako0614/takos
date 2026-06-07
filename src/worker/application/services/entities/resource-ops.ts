@@ -19,6 +19,7 @@ import {
   resolveResourceDriver,
   toPublicResourceType,
 } from "../resources/capabilities.ts";
+import { NotFoundError } from "@takos/worker-platform-utils/errors";
 import {
   type CanonicalManifestResourceSpec,
   inferCanonicalResourceDescriptor,
@@ -244,7 +245,7 @@ async function resolveSpaceId(
     .get();
 
   if (!group) {
-    throw new Error(`Group "${groupId}" not found`);
+    throw new NotFoundError(`Group "${groupId}"`);
   }
 
   return group.spaceId;
@@ -389,7 +390,7 @@ export async function updateManagedResource(
     .get();
 
   if (!row) {
-    throw new Error(`Resource "${name}" not found in group ${groupId}`);
+    throw new NotFoundError(`Resource "${name}" in group ${groupId}`);
   }
 
   const current = JSON.parse(row.config) as ResourceConfig;
@@ -454,7 +455,7 @@ export async function deleteResource(
     .get();
 
   if (!row) {
-    throw new Error(`Resource entity "${name}" not found in group ${groupId}`);
+    throw new NotFoundError(`Resource entity "${name}" in group ${groupId}`);
   }
 
   const config = JSON.parse(row.config) as ResourceConfig;

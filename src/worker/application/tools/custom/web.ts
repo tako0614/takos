@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 function normalizeHostname(hostname: string): string {
   const stripped = hostname
     .trim()
@@ -520,10 +521,6 @@ function decodeHtmlEntities(text: string): string {
   return text.replace(/&[^;]+;/g, (entity) => entities[entity] || entity);
 }
 
-export const WEB_TOOLS: ToolDefinition[] = [
-  WEB_FETCH,
-];
-
-export const WEB_HANDLERS: Record<string, ToolHandler> = {
-  web_fetch: webFetchHandler,
-};
+export const { tools: WEB_TOOLS, handlers: WEB_HANDLERS } = defineTools([
+  [WEB_FETCH, webFetchHandler],
+]);

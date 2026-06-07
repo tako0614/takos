@@ -10,19 +10,13 @@ import { ServiceDesiredStateService } from "../../../application/services/platfo
 import { logError } from "../../../shared/utils/logger.ts";
 import { InternalError, NotFoundError } from "@takos/worker-platform-utils/errors";
 
-export const workersSettingsConfigRouteDeps = {
-  getServiceForUser,
-  getServiceForUserWithRole,
-  createDesiredStateService: (env: AuthenticatedRouteEnv["Bindings"]) =>
-    new ServiceDesiredStateService(env),
-};
 
 const settingsConfig = new Hono<AuthenticatedRouteEnv>()
   .get("/:id/settings", async (c) => {
     const user = c.get("user");
     const workerId = c.req.param("id");
 
-    const worker = await workersSettingsConfigRouteDeps.getServiceForUser(
+    const worker = await getServiceForUser(
       c.env.DB,
       workerId,
       user.id,
@@ -33,8 +27,7 @@ const settingsConfig = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const desiredState = workersSettingsConfigRouteDeps
-        .createDesiredStateService(c.env);
+      const desiredState = new ServiceDesiredStateService(c.env);
       const settings = await desiredState.getRuntimeConfig(
         worker.space_id,
         worker.id,
@@ -72,8 +65,7 @@ const settingsConfig = new Hono<AuthenticatedRouteEnv>()
       const workerId = c.req.param("id");
       const body = c.req.valid("json");
 
-      const worker = await workersSettingsConfigRouteDeps
-        .getServiceForUserWithRole(c.env.DB, workerId, user.id, [
+      const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, [
           "owner",
           "admin",
           "editor",
@@ -84,8 +76,7 @@ const settingsConfig = new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const desiredState = workersSettingsConfigRouteDeps
-          .createDesiredStateService(c.env);
+        const desiredState = new ServiceDesiredStateService(c.env);
         const settings = await desiredState.saveRuntimeConfig({
           spaceId: worker.space_id,
           workerId: worker.id,

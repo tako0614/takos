@@ -8,8 +8,17 @@ import {
   SKILL_LIST_ROLES,
   SKILL_TOGGLE_ROLES,
   SKILL_UPDATE_ROLES,
-  skillsRouteDeps,
 } from "./skills-deps.ts";
+import {
+  createSkill,
+  deleteSkillByName,
+  formatSkill,
+  listSkills,
+  updateSkill,
+  updateSkillByName,
+  updateSkillEnabled,
+  updateSkillEnabledByName,
+} from "../../application/services/source/skills.ts";
 import {
   assertSkillNameAvailable,
   createSkillSchema,
@@ -28,7 +37,7 @@ type SkillsRouter = Hono<SpaceAccessRouteEnv>;
 
 async function listSkillsHandler(c: SkillsContext) {
   const { space } = c.get("access");
-  const skillsList = await skillsRouteDeps.listSkills(c.env.DB, space.id);
+  const skillsList = await listSkills(c.env.DB, space.id);
   return c.json({ skills: skillsList });
 }
 
@@ -38,9 +47,9 @@ async function createSkillHandler(c: SkillsContext) {
   await assertSkillNameAvailable(c, body.name);
 
   try {
-    const skill = await skillsRouteDeps.createSkill(c.env.DB, space.id, body);
+    const skill = await createSkill(c.env.DB, space.id, body);
     return c.json(
-      { skill: skill ? skillsRouteDeps.formatSkill(skill) : null },
+      { skill: skill ? formatSkill(skill) : null },
       201,
     );
   } catch (error) {
@@ -50,12 +59,12 @@ async function createSkillHandler(c: SkillsContext) {
 
 async function getSkillByNameHandler(c: SkillsContext) {
   const skill = await requireSkillByName(c, getSkillNameParam(c));
-  return c.json({ skill: skillsRouteDeps.formatSkill(skill) });
+  return c.json({ skill: formatSkill(skill) });
 }
 
 async function getSkillByIdHandler(c: SkillsContext) {
   const skill = await requireSkillById(c, getSkillIdParam(c));
-  return c.json({ skill: skillsRouteDeps.formatSkill(skill) });
+  return c.json({ skill: formatSkill(skill) });
 }
 
 async function updateSkillByNameHandler(c: SkillsContext) {
@@ -68,14 +77,14 @@ async function updateSkillByNameHandler(c: SkillsContext) {
   }
 
   try {
-    const updatedSkill = await skillsRouteDeps.updateSkillByName(
+    const updatedSkill = await updateSkillByName(
       c.env.DB,
       c.get("access").space.id,
       skillName,
       body,
     );
     return c.json({
-      skill: updatedSkill ? skillsRouteDeps.formatSkill(updatedSkill) : null,
+      skill: updatedSkill ? formatSkill(updatedSkill) : null,
     });
   } catch (error) {
     rethrowSkillMutationError(error);
@@ -92,14 +101,14 @@ async function updateSkillByIdHandler(c: SkillsContext) {
   }
 
   try {
-    const updatedSkill = await skillsRouteDeps.updateSkill(
+    const updatedSkill = await updateSkill(
       c.env.DB,
       c.get("access").space.id,
       skillId,
       body,
     );
     return c.json({
-      skill: updatedSkill ? skillsRouteDeps.formatSkill(updatedSkill) : null,
+      skill: updatedSkill ? formatSkill(updatedSkill) : null,
     });
   } catch (error) {
     rethrowSkillMutationError(error);
@@ -112,7 +121,7 @@ async function patchSkillByNameHandler(c: SkillsContext) {
   const skill = await requireSkillByName(c, skillName);
   const enabled = body.enabled !== undefined ? body.enabled : skill.enabled;
 
-  await skillsRouteDeps.updateSkillEnabledByName(
+  await updateSkillEnabledByName(
     c.env.DB,
     c.get("access").space.id,
     skillName,
@@ -126,14 +135,14 @@ async function patchSkillByIdHandler(c: SkillsContext) {
   const skill = await requireSkillById(c, getSkillIdParam(c));
   const enabled = body.enabled !== undefined ? body.enabled : skill.enabled;
 
-  await skillsRouteDeps.updateSkillEnabled(c.env.DB, skill.id, enabled);
+  await updateSkillEnabled(c.env.DB, skill.id, enabled);
   return c.json({ success: true, enabled });
 }
 
 async function deleteSkillByNameHandler(c: SkillsContext) {
   const skillName = getSkillNameParam(c);
   await requireSkillByName(c, skillName);
-  await skillsRouteDeps.deleteSkillByName(
+  await deleteSkillByName(
     c.env.DB,
     c.get("access").space.id,
     skillName,
@@ -143,7 +152,7 @@ async function deleteSkillByNameHandler(c: SkillsContext) {
 
 async function deleteSkillByIdHandler(c: SkillsContext) {
   const skill = await requireSkillById(c, getSkillIdParam(c));
-  await skillsRouteDeps.deleteSkillByName(
+  await deleteSkillByName(
     c.env.DB,
     c.get("access").space.id,
     skill.name,

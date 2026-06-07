@@ -26,12 +26,48 @@ const CATEGORY_LABEL_KEYS: Record<string, TranslationKey> = {
   social: "categorySocial",
 };
 
+const PLATFORM_SERVICE_LABEL_KEYS: Record<string, TranslationKey> = {
+  "identity.primary.oidc": "platformServiceOidc",
+  "billing.primary.default": "platformServiceBilling",
+  "deployment.outputs.http": "platformServiceOutputs",
+  "events.webhook.default": "platformServiceEvents",
+  "takosumi.control.space": "platformServiceControl",
+};
+
 function getCategoryLabel(
   category: string,
   t: ReturnType<typeof useI18n>["t"],
 ) {
   const key = CATEGORY_LABEL_KEYS[category];
   return key ? t(key) : category;
+}
+
+function getPlatformServiceLabel(
+  id: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  const key = PLATFORM_SERVICE_LABEL_KEYS[id];
+  return key ? t(key) : id;
+}
+
+function getPlatformServiceStatusLabel(
+  status: string,
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  if (status === "ready") return t("platformServiceReady");
+  if (status === "not_configured") return t("platformServiceNotConfigured");
+  if (status === "unavailable") return t("platformServiceUnavailable");
+  return t("platformServiceUnknown");
+}
+
+function platformServiceStatusClass(status: string): string {
+  if (status === "ready") {
+    return "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300";
+  }
+  if (status === "not_configured") {
+    return "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400";
+  }
+  return "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300";
 }
 
 interface RepoDetailPanelProps {
@@ -59,6 +95,7 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
     props.item.installation?.deployed_at ??
       props.item.installation?.installed_at ??
       props.item.installation?.updated_at ?? null;
+  const platformServices = () => props.item.installation?.services ?? [];
 
   const ownerUsername = () =>
     props.item.owner.username || props.item.owner.name || "?";
@@ -281,6 +318,65 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
                 </dl>
               </div>
             )}
+          </Show>
+
+          <Show when={platformServices().length > 0}>
+            <div class="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 p-3 space-y-3">
+              <div class="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                <Icons.Link class="w-4 h-4 text-zinc-500 dark:text-zinc-400" />
+                {t("platformServicesLabel")}
+              </div>
+              <div class="space-y-2">
+                {platformServices().map((service) => (
+                  <div class="rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="text-xs font-semibold text-zinc-800 dark:text-zinc-100 truncate">
+                          {getPlatformServiceLabel(service.id, t)}
+                        </div>
+                        <div class="text-[11px] text-zinc-400 dark:text-zinc-500 truncate">
+                          {service.material_kind}
+                        </div>
+                      </div>
+                      <span
+                        class={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                          platformServiceStatusClass(service.status)
+                        }`}
+                      >
+                        {getPlatformServiceStatusLabel(service.status, t)}
+                      </span>
+                    </div>
+                    <div class="mt-1.5 space-y-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      {service.endpoint
+                        ? (
+                          <div class="truncate" title={service.endpoint}>
+                            {service.endpoint}
+                          </div>
+                        )
+                        : (
+                          <div>{t("platformServiceNoEndpoint")}</div>
+                        )}
+                      <div class="flex flex-wrap gap-1.5">
+                        {service.secret_configured && (
+                          <span class="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                            {t("platformServiceSecretConfigured")}
+                          </span>
+                        )}
+                        {service.token_expires_at && (
+                          <span class="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                            {t("platformServiceTokenExpires", {
+                              date: formatDetailedRelativeDate(
+                                service.token_expires_at,
+                              ),
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </Show>
 
           {/* Package section */}

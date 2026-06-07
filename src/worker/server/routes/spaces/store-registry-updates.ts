@@ -5,6 +5,7 @@ import {
   InternalError,
 } from "@takos/worker-platform-utils/errors";
 import type { SpaceAccessRouteEnv } from "../route-auth.ts";
+import { requireSpaceAccess } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { zValidator } from "../zod-validator.ts";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -12,8 +13,13 @@ import {
   formatStoreUpdate,
   requireStoreRegistryEntry,
   safeErrorMessage,
-  storeRegistryRouteDeps,
 } from "./store-registry-helpers.ts";
+import {
+  getStoreUpdates,
+  markAllUpdatesSeen,
+  markUpdatesSeen,
+  pollSingleStore,
+} from "../../../application/services/store-network/store-subscription.ts";
 
 const markSeenSchema = z.object({
   update_ids: z.array(z.string()).optional(),
@@ -25,7 +31,7 @@ type StoreRegistryRouter = Hono<SpaceAccessRouteEnv>;
 export function registerStoreRegistryUpdateRoutes(app: StoreRegistryRouter) {
   app.get("/:spaceId/store-registry/updates", async (c) => {
     const user = c.get("user");
-    const access = await storeRegistryRouteDeps.requireSpaceAccess(
+    const access = await requireSpaceAccess(
       c,
       c.req.param("spaceId"),
       user.id,
@@ -37,7 +43,7 @@ export function registerStoreRegistryUpdateRoutes(app: StoreRegistryRouter) {
         limit: 50,
         maxLimit: 100,
       });
-      const result = await storeRegistryRouteDeps.getStoreUpdates(
+      const result = await getStoreUpdates(
         c.env.DB,
         access.space.id,
         { unseenOnly, limit, offset },
@@ -60,7 +66,7 @@ export function registerStoreRegistryUpdateRoutes(app: StoreRegistryRouter) {
     zValidator("json", markSeenSchema),
     async (c) => {
       const user = c.get("user");
-      const access = await storeRegistryRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         c.req.param("spaceId"),
         user.id,
@@ -69,12 +75,12 @@ export function registerStoreRegistryUpdateRoutes(app: StoreRegistryRouter) {
 
       try {
         if (body.all) {
-          await storeRegistryRouteDeps.markAllUpdatesSeen(
+          await markAllUpdatesSeen(
             c.env.DB,
             access.space.id,
           );
         } else if (body.update_ids?.length) {
-          await storeRegistryRouteDeps.markUpdatesSeen(
+          await markUpdatesSeen(
             c.env.DB,
             access.space.id,
             body.update_ids,
@@ -92,7 +98,7 @@ export function registerStoreRegistryUpdateRoutes(app: StoreRegistryRouter) {
 
   app.post("/:spaceId/store-registry/:entryId/poll", async (c) => {
     const user = c.get("user");
-    const access = await storeRegistryRouteDeps.requireSpaceAccess(
+    const access = await requireSpaceAccess(
       c,
       c.req.param("spaceId"),
       user.id,
@@ -105,7 +111,7 @@ export function registerStoreRegistryUpdateRoutes(app: StoreRegistryRouter) {
     );
 
     try {
-      const newUpdates = await storeRegistryRouteDeps.pollSingleStore(
+      const newUpdates = await pollSingleStore(
         c.env.DB,
         entry,
       );

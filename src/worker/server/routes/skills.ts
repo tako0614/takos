@@ -8,5 +8,4 @@ const skills = new Hono<SpaceAccessRouteEnv>();
 registerSkillCrudRoutes(skills);
 registerSkillCatalogRoutes(skills);
 
-export { skillsRouteDeps } from "./skills-deps.ts";
 export default skills;

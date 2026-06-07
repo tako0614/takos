@@ -8,6 +8,7 @@
  */
 
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   deleteMcpServer,
   listMcpServers,
@@ -272,16 +273,9 @@ export const mcpUpdateServerHandler: ToolHandler = async (args, context) => {
 // Exports
 // ---------------------------------------------------------------------------
 
-export const MCP_TOOLS: ToolDefinition[] = [
-  MCP_ADD_SERVER,
-  MCP_LIST_SERVERS,
-  MCP_UPDATE_SERVER,
-  MCP_REMOVE_SERVER,
-];
-
-export const MCP_HANDLERS: Record<string, ToolHandler> = {
-  mcp_add_server: mcpAddServerHandler,
-  mcp_list_servers: mcpListServersHandler,
-  mcp_update_server: mcpUpdateServerHandler,
-  mcp_remove_server: mcpRemoveServerHandler,
-};
+export const { tools: MCP_TOOLS, handlers: MCP_HANDLERS } = defineTools([
+  [MCP_ADD_SERVER, mcpAddServerHandler],
+  [MCP_LIST_SERVERS, mcpListServersHandler],
+  [MCP_UPDATE_SERVER, mcpUpdateServerHandler],
+  [MCP_REMOVE_SERVER, mcpRemoveServerHandler],
+]);

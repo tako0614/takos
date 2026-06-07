@@ -5,6 +5,10 @@
 
 import { and, count, desc, eq } from "drizzle-orm";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import {
+  BadRequestError,
+  ConflictError,
+} from "@takos/worker-platform-utils/errors";
 import { getDb, storeInventoryItems } from "../../../infra/db/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { resolvePackageIconsForRepos } from "./package-icons.ts";
@@ -53,7 +57,7 @@ export async function addToInventory(
   const repositoryUrl = (input.repositoryUrl ?? input.repoActorUrl ?? "")
     .trim();
   if (!repositoryUrl) {
-    throw new Error("repository_url is required");
+    throw new BadRequestError("repository_url is required");
   }
 
   // Check for duplicate active entry
@@ -69,7 +73,7 @@ export async function addToInventory(
     .get();
 
   if (existing) {
-    throw new Error("Repository is already in this store inventory");
+    throw new ConflictError("Repository is already in this store inventory");
   }
 
   const id = generateId();

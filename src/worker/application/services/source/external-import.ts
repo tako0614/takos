@@ -18,6 +18,7 @@ import {
   tags,
 } from "../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
+import { ConflictError } from "@takos/worker-platform-utils/errors";
 import { generateId } from "../../../shared/utils/index.ts";
 import { logError, logInfo } from "../../../shared/utils/logger.ts";
 import type { TakosGitClient } from "../takos-git/client.ts";
@@ -94,7 +95,7 @@ export async function importExternalRepository(
     .get();
 
   if (existing) {
-    throw new Error(
+    throw new ConflictError(
       `Repository "${localName}" already exists in this space`,
     );
   }

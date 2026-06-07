@@ -6,7 +6,9 @@
  */
 import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
+import { CF_COMPATIBILITY_DATE } from "../../../shared/constants/index.ts";
 import type { ServiceRuntimeConfigState } from "../platform/worker-desired-state.ts";
+import type { DeploymentBackendRuntimeInput } from "./backend-contracts.ts";
 import type {
   ArtifactKind,
   CreateDeploymentInput,
@@ -87,6 +89,32 @@ export function parseRuntimeConfig(
       ? parsed.limits
       : {},
     updated_at: null,
+  };
+}
+
+/**
+ * Build the `workers` profile runtime descriptor consumed by deployment
+ * backends (`deploy` / `syncQueueConsumers`).
+ *
+ * This is the single source of truth for the descriptor shape and for the
+ * default Workers compatibility date: when the snapshot does not pin a
+ * `compatibility_date`, it falls back to {@link CF_COMPATIBILITY_DATE}. Keep
+ * every `profile: "workers"` descriptor going through here so the default
+ * lives in exactly one place and cannot drift.
+ */
+export function buildWorkersRuntime(
+  runtimeConfig: ServiceRuntimeConfigState,
+  bindings: WorkerBinding[],
+): DeploymentBackendRuntimeInput & { profile: "workers" } {
+  return {
+    profile: "workers",
+    bindings,
+    config: {
+      compatibility_date: runtimeConfig.compatibility_date ||
+        CF_COMPATIBILITY_DATE,
+      compatibility_flags: runtimeConfig.compatibility_flags,
+      limits: runtimeConfig.limits,
+    },
   };
 }
 

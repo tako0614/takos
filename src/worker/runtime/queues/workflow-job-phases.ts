@@ -76,6 +76,185 @@ export async function handleJobSkipped(
 }
 
 // ---------------------------------------------------------------------------
+// Shared: cancellation emission
+// ---------------------------------------------------------------------------
+
+/**
+ * Emit the side effects of a cancelled run: mark the conclusion, append the
+ * cancellation log lines, cancel the run, tear down the runtime job, persist
+ * the logs, and emit the `workflow.job.completed` event with
+ * `conclusion: 'cancelled'`.
+ *
+ * Shared by both the sequential ({@link executeStepLoop}) and parallel
+ * (`executeStepLoopParallel`) step loops so cancellation behaviour stays
+ * identical. The caller is responsible for stopping its loop and returning
+ * `'cancelled'`.
+ */
+export async function emitCancellation(
+  ctx: JobQueueContext,
+  state: JobExecutionState,
+): Promise<void> {
+  const { runId, jobId, repoId, jobKey } = ctx.message;
+  state.jobConclusion = "cancelled";
+  state.logs.push("Job cancelled (run was cancelled)");
+  state.logs.push("");
+  await ctx.engine.cancelRun(runId);
+  if (state.runtimeStarted) {
+    state.runtimeCancelled = true;
+    if (state.runtimeSpaceId) {
+      await runtimeDelete(
+        ctx.env,
+        `/actions/jobs/${jobId}`,
+        state.runtimeSpaceId,
+      );
+    }
+  }
+  await ctx.engine.storeJobLogs(jobId, state.logs.join("\n"));
+  await emitWorkflowEvent(ctx.env, runId, "workflow.job.completed", {
+    runId,
+    jobId,
+    repoId,
+    jobKey,
+    name: ctx.jobName,
+    status: "cancelled",
+    conclusion: "cancelled",
+    completedAt: new Date().toISOString(),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Shared: single-step execution body
+// ---------------------------------------------------------------------------
+
+/**
+ * Execute a single step at the given index, mutating shared `state`.
+ *
+ * This is the per-step body shared by the sequential ({@link executeStepLoop})
+ * and parallel (`executeStepLoopParallel`) loops. It handles condition
+ * evaluation, skip logic, the runtime-space guard, step execution, result
+ * recording, step status updates, and stdout/stderr/exit-code log emission.
+ *
+ * The push ordering into `state.logs` and `state.stepResults` is preserved
+ * exactly so both loops stay behaviourally identical.
+ */
+export async function executeOneStep(
+  ctx: JobQueueContext,
+  state: JobExecutionState,
+  stepIndex: number,
+): Promise<void> {
+  const { jobDefinition, jobId } = ctx.message;
+  const step = jobDefinition.steps[stepIndex];
+  const stepNumber = stepIndex + 1;
+  const stepName = getStepDisplayName(step, stepNumber);
+
+  state.logs.push(`--- Step ${stepNumber}: ${stepName} ---`);
+
+  const stepEnv = { ...ctx.effectiveJobEnv, ...step.env };
+  let shouldRun = true;
+
+  if (step.if) {
+    shouldRun = evaluateCondition(step.if, {
+      env: stepEnv,
+      steps: state.stepOutputs,
+      job: {
+        status: state.jobConclusion === "success" ? "success" : "failure",
+      },
+      inputs: ctx.runContext.inputs,
+    });
+  } else if (state.jobConclusion === "failure") {
+    shouldRun = false;
+  }
+
+  if (!shouldRun) {
+    const skippedResult: WorkflowStepResult = {
+      stepNumber,
+      name: stepName,
+      status: "skipped",
+      conclusion: "skipped",
+      outputs: {},
+    };
+    state.stepResults.push(skippedResult);
+    await ctx.engine.updateStepStatus(
+      jobId,
+      stepNumber,
+      "skipped",
+      "skipped",
+    );
+    state.logs.push(
+      step.if
+        ? "Skipped (condition not met)"
+        : "Skipped (previous step failed)",
+    );
+    state.logs.push("");
+    return;
+  }
+
+  await ctx.engine.updateStepStatus(jobId, stepNumber, "in_progress");
+  const stepStartedAt = new Date().toISOString();
+
+  const spaceId = state.runtimeSpaceId;
+  if (!spaceId) {
+    throw new Error(
+      "executeOneStep reached step execution before runtimeSpaceId was initialised",
+    );
+  }
+  const result = await executeStep(step, {
+    env: ctx.env,
+    jobId,
+    stepNumber,
+    spaceId,
+    shell: step.shell ?? jobDefinition.defaults?.run?.shell,
+    workingDirectory: step["working-directory"] ??
+      jobDefinition.defaults?.run?.["working-directory"],
+  });
+
+  const stepCompletedAt = new Date().toISOString();
+
+  const stepResult: WorkflowStepResult = {
+    stepNumber,
+    name: stepName,
+    status: "completed",
+    conclusion: result.success ? "success" : "failure",
+    exitCode: result.exitCode,
+    error: result.error,
+    outputs: result.outputs || {},
+    startedAt: stepStartedAt,
+    completedAt: stepCompletedAt,
+  };
+
+  state.stepResults.push(stepResult);
+
+  if (step.id) {
+    state.stepOutputs[step.id] = result.outputs || {};
+  }
+
+  await ctx.engine.updateStepStatus(
+    jobId,
+    stepNumber,
+    "completed",
+    stepResult.conclusion ?? undefined,
+    result.exitCode,
+    result.error,
+  );
+
+  if (result.stdout) {
+    state.logs.push(result.stdout);
+  }
+  if (result.stderr) {
+    state.logs.push(`[stderr] ${result.stderr}`);
+  }
+  if (result.error && !result.stderr) {
+    state.logs.push(`Error: ${result.error}`);
+  }
+  state.logs.push(`Exit code: ${result.exitCode ?? 0}`);
+  state.logs.push("");
+
+  if (!result.success && !step["continue-on-error"]) {
+    state.jobConclusion = "failure";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Job phase: step loop execution
 // ---------------------------------------------------------------------------
 
@@ -83,148 +262,16 @@ export async function executeStepLoop(
   ctx: JobQueueContext,
   state: JobExecutionState,
 ): Promise<"cancelled" | void> {
-  const { jobDefinition, runId, jobId, repoId, jobKey } = ctx.message;
+  const { jobDefinition, runId } = ctx.message;
 
   for (let i = 0; i < jobDefinition.steps.length; i++) {
     const runStatus = await getRunStatus(ctx.env.DB, runId);
     if (runStatus === "cancelled") {
-      state.jobConclusion = "cancelled";
-      state.logs.push("Job cancelled (run was cancelled)");
-      state.logs.push("");
-      await ctx.engine.cancelRun(runId);
-      if (state.runtimeStarted) {
-        state.runtimeCancelled = true;
-        if (state.runtimeSpaceId) {
-          await runtimeDelete(
-            ctx.env,
-            `/actions/jobs/${jobId}`,
-            state.runtimeSpaceId,
-          );
-        }
-      }
-      await ctx.engine.storeJobLogs(jobId, state.logs.join("\n"));
-      await emitWorkflowEvent(ctx.env, runId, "workflow.job.completed", {
-        runId,
-        jobId,
-        repoId,
-        jobKey,
-        name: ctx.jobName,
-        status: "cancelled",
-        conclusion: "cancelled",
-        completedAt: new Date().toISOString(),
-      });
+      await emitCancellation(ctx, state);
       return "cancelled";
     }
 
-    const step = jobDefinition.steps[i];
-    const stepNumber = i + 1;
-    const stepName = getStepDisplayName(step, stepNumber);
-
-    state.logs.push(`--- Step ${stepNumber}: ${stepName} ---`);
-
-    const stepEnv = { ...ctx.effectiveJobEnv, ...step.env };
-    let shouldRun = true;
-
-    if (step.if) {
-      shouldRun = evaluateCondition(step.if, {
-        env: stepEnv,
-        steps: state.stepOutputs,
-        job: {
-          status: state.jobConclusion === "success" ? "success" : "failure",
-        },
-        inputs: ctx.runContext.inputs,
-      });
-    } else if (state.jobConclusion === "failure") {
-      shouldRun = false;
-    }
-
-    if (!shouldRun) {
-      const skippedResult: WorkflowStepResult = {
-        stepNumber,
-        name: stepName,
-        status: "skipped",
-        conclusion: "skipped",
-        outputs: {},
-      };
-      state.stepResults.push(skippedResult);
-      await ctx.engine.updateStepStatus(
-        jobId,
-        stepNumber,
-        "skipped",
-        "skipped",
-      );
-      state.logs.push(
-        step.if
-          ? "Skipped (condition not met)"
-          : "Skipped (previous step failed)",
-      );
-      state.logs.push("");
-      continue;
-    }
-
-    await ctx.engine.updateStepStatus(jobId, stepNumber, "in_progress");
-    const stepStartedAt = new Date().toISOString();
-
-    const spaceId = state.runtimeSpaceId;
-    if (!spaceId) {
-      throw new Error(
-        "executeStepLoop reached step execution before runtimeSpaceId was initialised",
-      );
-    }
-    const result = await executeStep(step, {
-      env: ctx.env,
-      jobId,
-      stepNumber,
-      spaceId,
-      shell: step.shell ?? jobDefinition.defaults?.run?.shell,
-      workingDirectory: step["working-directory"] ??
-        jobDefinition.defaults?.run?.["working-directory"],
-    });
-
-    const stepCompletedAt = new Date().toISOString();
-
-    const stepResult: WorkflowStepResult = {
-      stepNumber,
-      name: stepName,
-      status: "completed",
-      conclusion: result.success ? "success" : "failure",
-      exitCode: result.exitCode,
-      error: result.error,
-      outputs: result.outputs || {},
-      startedAt: stepStartedAt,
-      completedAt: stepCompletedAt,
-    };
-
-    state.stepResults.push(stepResult);
-
-    if (step.id) {
-      state.stepOutputs[step.id] = result.outputs || {};
-    }
-
-    await ctx.engine.updateStepStatus(
-      jobId,
-      stepNumber,
-      "completed",
-      stepResult.conclusion ?? undefined,
-      result.exitCode,
-      result.error,
-    );
-
-    if (result.stdout) {
-      state.logs.push(result.stdout);
-    }
-    if (result.stderr) {
-      state.logs.push(`[stderr] ${result.stderr}`);
-    }
-    if (result.error && !result.stderr) {
-      state.logs.push(`Error: ${result.error}`);
-    }
-    state.logs.push(`Exit code: ${result.exitCode ?? 0}`);
-    state.logs.push("");
-
-    if (!result.success && !step["continue-on-error"]) {
-      state.jobConclusion = "failure";
-    }
+    await executeOneStep(ctx, state, i);
   }
 }
 

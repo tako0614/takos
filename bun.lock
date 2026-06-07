@@ -24,7 +24,7 @@
         "drizzle-orm": "^0.45.1",
         "fflate": "^0.8.2",
         "google-auth-library": "^10.6.2",
-        "hono": "^4.12.4",
+        "hono": "^4.12.9",
         "jose": "^5.9.0",
         "jszip": "^3.10.1",
         "miniflare": "^4.20260124.0",

@@ -32,13 +32,14 @@ export const common = {
   tryAgain: "Try again",
   breadcrumbLabel: "Breadcrumb",
   breadcrumbMoreItems: "Show more items",
-  goBack: "Go back",
+  goBack: "Go Back",
   noSpaceAvailable: "No space available",
   sortLabel: "Sort:",
   newest: "Newest",
   usernameLabel: "Username",
   loadMore: "Load more",
   remove: "Remove",
+  install: "Install",
   connect: "Connect",
   disconnect: "Disconnect",
   active: "Active",
@@ -60,17 +61,10 @@ export const common = {
   storage: "Storage",
   deployNav: "Deploy",
 
-  // Workspaces
-  desiredState: "Desired State",
-  noDesiredState: "No desired state yet",
+  // Inventory
   inventory: "Inventory",
-  workloads: "Workloads",
-  routes: "Routes",
-  environment: "Environment",
-  lastApplied: "Last Applied",
-  updated: "Updated",
-  source: "Source",
-  noItems: "No items",
+
+  // Space create
   description: "Description",
   descriptionPlaceholder: "Enter space description...",
   creating: "Creating...",

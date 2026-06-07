@@ -1,4 +1,4 @@
-import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { mergeDefinedTools } from "./define-tools.ts";
 import {
   WORKER_SETTINGS_HANDLERS,
   WORKER_SETTINGS_TOOLS,
@@ -53,16 +53,10 @@ export {
   deploymentRollbackHandler,
 } from "./platform/deployment-history.ts";
 
-export const PLATFORM_TOOLS: ToolDefinition[] = [
-  ...WORKER_SETTINGS_TOOLS,
-  ...DOMAIN_TOOLS,
-  ...DEPLOYMENT_TOOLS,
-  ...DEPLOYMENT_HISTORY_TOOLS,
-];
-
-export const PLATFORM_HANDLERS: Record<string, ToolHandler> = {
-  ...WORKER_SETTINGS_HANDLERS,
-  ...DOMAIN_HANDLERS,
-  ...DEPLOYMENT_HANDLERS,
-  ...DEPLOYMENT_HISTORY_HANDLERS,
-};
+export const { tools: PLATFORM_TOOLS, handlers: PLATFORM_HANDLERS } =
+  mergeDefinedTools([
+    { tools: WORKER_SETTINGS_TOOLS, handlers: WORKER_SETTINGS_HANDLERS },
+    { tools: DOMAIN_TOOLS, handlers: DOMAIN_HANDLERS },
+    { tools: DEPLOYMENT_TOOLS, handlers: DEPLOYMENT_HANDLERS },
+    { tools: DEPLOYMENT_HISTORY_TOOLS, handlers: DEPLOYMENT_HISTORY_HANDLERS },
+  ]);

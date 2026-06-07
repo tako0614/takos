@@ -1,5 +1,5 @@
 // Security: S07 (object-store space-scoped), S08 (SQL safe queries), S09 (key-value namespace-restricted)
-import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { mergeDefinedTools } from "./define-tools.ts";
 import { KEY_VALUE_HANDLERS, KEY_VALUE_TOOLS } from "./storage/kv.ts";
 import { SQL_HANDLERS, SQL_TOOLS } from "./storage/d1.ts";
 import { OBJECT_STORE_HANDLERS, OBJECT_STORE_TOOLS } from "./storage/r2.ts";
@@ -50,16 +50,10 @@ export {
   storageResourceToolDeps,
 } from "./storage/resources.ts";
 
-export const STORAGE_TOOLS: ToolDefinition[] = [
-  ...KEY_VALUE_TOOLS,
-  ...SQL_TOOLS,
-  ...OBJECT_STORE_TOOLS,
-  ...RESOURCE_TOOLS,
-];
-
-export const STORAGE_HANDLERS: Record<string, ToolHandler> = {
-  ...KEY_VALUE_HANDLERS,
-  ...SQL_HANDLERS,
-  ...OBJECT_STORE_HANDLERS,
-  ...RESOURCE_HANDLERS,
-};
+export const { tools: STORAGE_TOOLS, handlers: STORAGE_HANDLERS } =
+  mergeDefinedTools([
+    { tools: KEY_VALUE_TOOLS, handlers: KEY_VALUE_HANDLERS },
+    { tools: SQL_TOOLS, handlers: SQL_HANDLERS },
+    { tools: OBJECT_STORE_TOOLS, handlers: OBJECT_STORE_HANDLERS },
+    { tools: RESOURCE_TOOLS, handlers: RESOURCE_HANDLERS },
+  ]);

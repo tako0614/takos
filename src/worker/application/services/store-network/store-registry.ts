@@ -5,6 +5,7 @@
 
 import { and, desc, eq, or } from "drizzle-orm";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import { ConflictError } from "@takos/worker-platform-utils/errors";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import {
   getDb,
@@ -134,7 +135,9 @@ export async function addRemoteStore(
     .get();
 
   if (existing) {
-    throw new Error(`Store "${input.identifier}" is already registered`);
+    throw new ConflictError(
+      `Store "${input.identifier}" is already registered`,
+    );
   }
 
   // 3. Fetch the store document

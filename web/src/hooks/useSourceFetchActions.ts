@@ -22,6 +22,7 @@ interface AppInstallationApiRecord {
   installed_at?: string | null;
   updated_at?: string | null;
   deployed_at?: string | null;
+  services?: SourceItemInstallation["services"];
 }
 
 interface AppInstallationMutationResponse {
@@ -84,6 +85,11 @@ function toInstallationFromAppInstallation(
       ? { updated_at: installation.updated_at }
       : {}),
     deployed_at: installation.deployed_at ?? null,
+    ...(installation.services !== undefined
+      ? { services: installation.services }
+      : item.installation?.services !== undefined
+      ? { services: item.installation.services }
+      : {}),
   };
 }
 
@@ -220,6 +226,9 @@ export function useSourceFetchActions({
             installed_at: item.installation?.installed_at ?? timestamp,
             updated_at: timestamp,
             deployed_at: null,
+            ...(item.installation?.services !== undefined
+              ? { services: item.installation.services }
+              : {}),
           };
         applyInstallationUpdate(item.id, installation);
         return;

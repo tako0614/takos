@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import type {
   MemoryType,
   ReminderPriority,
@@ -240,14 +241,8 @@ export const setReminderHandler: ToolHandler = async (args, context) => {
   return result;
 };
 
-export const MEMORY_TOOLS: ToolDefinition[] = [
-  REMEMBER,
-  RECALL,
-  SET_REMINDER,
-];
-
-export const MEMORY_HANDLERS: Record<string, ToolHandler> = {
-  remember: rememberHandler,
-  recall: recallHandler,
-  set_reminder: setReminderHandler,
-};
+export const { tools: MEMORY_TOOLS, handlers: MEMORY_HANDLERS } = defineTools([
+  [REMEMBER, rememberHandler],
+  [RECALL, recallHandler],
+  [SET_REMINDER, setReminderHandler],
+]);

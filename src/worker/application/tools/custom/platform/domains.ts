@@ -5,6 +5,7 @@ import {
   listCustomDomains,
   verifyCustomDomain,
 } from "../../../services/platform/custom-domains.ts";
+import { defineTools } from "../define-tools.ts";
 import { getDb, services } from "../../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 
@@ -272,16 +273,9 @@ export const domainRemoveHandler: ToolHandler = async (args, context) => {
   return `Domain removed: ${domainRecord.domain}`;
 };
 
-export const DOMAIN_TOOLS: ToolDefinition[] = [
-  DOMAIN_LIST,
-  DOMAIN_ADD,
-  DOMAIN_VERIFY,
-  DOMAIN_REMOVE,
-];
-
-export const DOMAIN_HANDLERS: Record<string, ToolHandler> = {
-  domain_list: domainListHandler,
-  domain_add: domainAddHandler,
-  domain_verify: domainVerifyHandler,
-  domain_remove: domainRemoveHandler,
-};
+export const { tools: DOMAIN_TOOLS, handlers: DOMAIN_HANDLERS } = defineTools([
+  [DOMAIN_LIST, domainListHandler],
+  [DOMAIN_ADD, domainAddHandler],
+  [DOMAIN_VERIFY, domainVerifyHandler],
+  [DOMAIN_REMOVE, domainRemoveHandler],
+]);

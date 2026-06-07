@@ -5,6 +5,8 @@
  * for importing external Git repositories into the store.
  */
 
+import { BadRequestError } from "@takos/worker-platform-utils/errors";
+
 /**
  * Parse a Git HTTPS URL into its components.
  *
@@ -26,11 +28,11 @@ export function parseGitUrl(
   try {
     parsed = new URL(withoutGit);
   } catch {
-    throw new Error(`Invalid Git URL: ${url}`);
+    throw new BadRequestError(`Invalid Git URL: ${url}`);
   }
 
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new Error(
+    throw new BadRequestError(
       `Unsupported protocol: ${parsed.protocol} (only https:// is supported)`,
     );
   }
@@ -38,7 +40,9 @@ export function parseGitUrl(
   const pathParts = parsed.pathname.split("/").filter(Boolean);
 
   if (pathParts.length < 2) {
-    throw new Error(`Git URL must include owner and repository: ${url}`);
+    throw new BadRequestError(
+      `Git URL must include owner and repository: ${url}`,
+    );
   }
 
   const repo = pathParts[pathParts.length - 1];

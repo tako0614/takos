@@ -85,10 +85,6 @@ async function buildSharedThreadPayload(
   };
 }
 
-export const publicShareRouteDeps = {
-  verifyThreadShareAccess,
-  buildSharedThreadPayload,
-};
 
 export default new Hono<{ Bindings: Env; Variables: Variables }>()
   // GET /api/public/thread-shares/:token
@@ -96,7 +92,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
   .get("/thread-shares/:token", async (c) => {
     const token = c.req.param("token");
 
-    const access = await publicShareRouteDeps.verifyThreadShareAccess({
+    const access = await verifyThreadShareAccess({
       db: c.env.DB,
       token,
       password: null,
@@ -108,7 +104,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       throw new NotFoundError();
     }
 
-    const payload = await publicShareRouteDeps.buildSharedThreadPayload(
+    const payload = await buildSharedThreadPayload(
       c.env,
       access.threadId,
       token,
@@ -150,7 +146,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       }
       sharePasswordRateLimiter.hit(rateLimitKey);
 
-      const access = await publicShareRouteDeps.verifyThreadShareAccess({
+      const access = await verifyThreadShareAccess({
         db: c.env.DB,
         token,
         password: body.password || null,
@@ -165,7 +161,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
         throw new NotFoundError();
       }
 
-      const payload = await publicShareRouteDeps.buildSharedThreadPayload(
+      const payload = await buildSharedThreadPayload(
         c.env,
         access.threadId,
         token,

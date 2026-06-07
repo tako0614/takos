@@ -53,6 +53,16 @@ export interface SourceItemInstallation {
   installed_at?: string | null;
   updated_at?: string | null;
   deployed_at: string | null;
+  services?: SourcePlatformService[];
+}
+
+export interface SourcePlatformService {
+  id: string;
+  material_kind: string;
+  status: "ready" | "not_configured" | "unavailable" | "unknown";
+  endpoint: string | null;
+  secret_configured: boolean;
+  token_expires_at: string | null;
 }
 
 export interface SourceItem {

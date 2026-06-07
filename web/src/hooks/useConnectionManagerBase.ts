@@ -322,6 +322,93 @@ export function handleTransportClose(
   })();
 }
 
+/**
+ * Deps needed to build the run-event-dispatch handler. This is the
+ * {@link ConnectionProcessorDeps} surface plus the options-level refs/callbacks
+ * the handler reads (everything except the per-caller `closeWebSocket`, which is
+ * passed separately so each manager can bind its own transport teardown).
+ */
+export interface RunEventHandlerDeps extends ConnectionProcessorDeps {
+  isMountedRef: MutableRefObject<boolean>;
+  currentRunIdRef: MutableRefObject<string | null>;
+  lastEventIdRef: MutableRefObject<number>;
+  setError: (value: string | null) => void;
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+}
+
+/**
+ * Assign the incoming-event dispatch handler to `deps.handleWebSocketEventRef`.
+ *
+ * The handler parses the event payload, resolves the run id, upserts run meta,
+ * then dispatches to the matching {@link EVENT_DISPATCH} entry with the full
+ * handler context. `closeWebSocket` is a parameter rather than part of `deps`
+ * so the base manager can bind its own transport teardown while the fallback
+ * wrapper binds one that closes both WS and SSE — the one behavioural
+ * difference between the two managers.
+ */
+export function bindRunEventHandler(
+  deps: RunEventHandlerDeps,
+  closeWebSocket: () => void,
+): void {
+  const {
+    verifyRunStatus,
+    upsertRunMeta,
+    handleWebSocketEventRef,
+    handleRunCompletedRef,
+    setCurrentRun,
+    setStreaming,
+    setIsLoading,
+    resetStreamingState,
+    appendTimelineEntry,
+    isMountedRef,
+    currentRunIdRef,
+    lastEventIdRef,
+    setError,
+    t,
+  } = deps;
+
+  handleWebSocketEventRef.current = (
+    eventType: string,
+    data: unknown,
+    eventId?: number,
+    sourceRunId?: string,
+  ) => {
+    const payload = parseEventData(data);
+    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current ||
+      "";
+    if (!runId) return;
+    const isPrimaryRun = runId === currentRunIdRef.current;
+    if (payload.run?.id) {
+      upsertRunMeta(payload.run as Partial<Run> & { id: string });
+    }
+
+    const handler = EVENT_DISPATCH[eventType];
+    if (handler) {
+      handler({
+        payload,
+        runId,
+        eventId,
+        eventType,
+        isPrimaryRun,
+        verifyRunStatus,
+        isMountedRef,
+        currentRunIdRef,
+        lastEventIdRef,
+        handleWebSocketEventRef,
+        handleRunCompletedRef,
+        setCurrentRun,
+        setStreaming,
+        setIsLoading,
+        setError,
+        closeWebSocket,
+        resetStreamingState,
+        appendTimelineEntry,
+        t,
+      });
+    }
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Transport setup context -- kept minimal.
 // Transports receive pre-bound helpers instead of raw deps.
@@ -418,46 +505,25 @@ export function useConnectionManagerBase(
   };
 
   // Assign event handler implementations to the refs on every call.
-  handleWebSocketEventRef.current = (
-    eventType: string,
-    data: unknown,
-    eventId?: number,
-    sourceRunId?: string,
-  ) => {
-    const payload = parseEventData(data);
-    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current ||
-      "";
-    if (!runId) return;
-    const isPrimaryRun = runId === currentRunIdRef.current;
-    if (payload.run?.id) {
-      upsertRunMeta(payload.run as Partial<Run> & { id: string });
-    }
-
-    const handler = EVENT_DISPATCH[eventType];
-    if (handler) {
-      handler({
-        payload,
-        runId,
-        eventId,
-        eventType,
-        isPrimaryRun,
-        verifyRunStatus,
-        isMountedRef,
-        currentRunIdRef,
-        lastEventIdRef,
-        handleWebSocketEventRef,
-        handleRunCompletedRef,
-        setCurrentRun,
-        setStreaming,
-        setIsLoading,
-        setError,
-        closeWebSocket,
-        resetStreamingState,
-        appendTimelineEntry,
-        t,
-      });
-    }
-  };
+  bindRunEventHandler(
+    {
+      verifyRunStatus,
+      upsertRunMeta,
+      handleWebSocketEventRef,
+      handleRunCompletedRef,
+      setCurrentRun,
+      setIsLoading,
+      setStreaming,
+      resetStreamingState,
+      appendTimelineEntry,
+      isMountedRef,
+      currentRunIdRef,
+      lastEventIdRef,
+      setError,
+      t,
+    },
+    closeWebSocket,
+  );
 
   startWebSocketRef.current = (runId: string) => {
     const previousRunId = currentRunIdRef.current;

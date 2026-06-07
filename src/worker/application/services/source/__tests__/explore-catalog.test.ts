@@ -735,10 +735,30 @@ test("listCatalogItems overlays default app installation state from Accounts led
       baseUrl: "https://accounts.internal/base/",
       token: "accounts-token",
       fetch: async (input, init) => {
+        const url = input instanceof Request ? input.url : input.toString();
         requests.push({
-          url: input instanceof Request ? input.url : input.toString(),
+          url,
           authorization: new Headers(init?.headers).get("authorization"),
         });
+        if (url.endsWith("/v1/installations/inst_docs/services")) {
+          return Response.json({
+            installation_id: "inst_docs",
+            services: [{
+              id: "identity.primary.oidc",
+              material_kind: "identity.oidc@v1",
+              status: "ready",
+              endpoint: "https://accounts.internal/base",
+            }, {
+              id: "events.webhook.default",
+              material_kind: "events.webhook@v1",
+              status: "ready",
+              endpoint:
+                "https://accounts.internal/base/v1/installations/inst_docs/events/ingest",
+              secret_ref: "secret://inst_docs/events",
+              token_expires_at: "2026-05-01T00:00:00.000Z",
+            }],
+          });
+        }
         return Response.json({
           installations: [{
             id: "inst_docs",
@@ -769,6 +789,10 @@ test("listCatalogItems overlays default app installation state from Accounts led
     requests[0]?.authorization,
     "Bearer accounts-token",
   );
+  assertEquals(
+    requests[1]?.url,
+    "https://accounts.internal/base/v1/installations/inst_docs/services",
+  );
   assertEquals(result.items[0]?.installation, {
     installed: true,
     installation_id: "inst_docs",
@@ -782,5 +806,21 @@ test("listCatalogItems overlays default app installation state from Accounts led
     deployed_at: null,
     installed_at: "2026-04-22T01:00:00.000Z",
     updated_at: "2026-04-22T01:05:00.000Z",
+    services: [{
+      id: "identity.primary.oidc",
+      material_kind: "identity.oidc@v1",
+      status: "ready",
+      endpoint: "https://accounts.internal/base",
+      secret_configured: false,
+      token_expires_at: null,
+    }, {
+      id: "events.webhook.default",
+      material_kind: "events.webhook@v1",
+      status: "ready",
+      endpoint:
+        "https://accounts.internal/base/v1/installations/inst_docs/events/ingest",
+      secret_configured: true,
+      token_expires_at: "2026-05-01T00:00:00.000Z",
+    }],
   });
 });

@@ -1,5 +1,4 @@
-import type { Run } from "../types/index.ts";
-import { EVENT_DISPATCH, parseEventData } from "./useWsMessageProcessor.ts";
+import { bindRunEventHandler } from "./useConnectionManagerBase.ts";
 import type {
   UseWsConnectionManagerOptions,
   UseWsConnectionManagerResult,
@@ -82,58 +81,19 @@ export function useConnectionManagerWithFallback(
     setError,
     t,
   } = options;
-  const {
-    verifyRunStatus,
-    upsertRunMeta,
-    handleWebSocketEventRef,
-    handleRunCompletedRef,
-    setCurrentRun,
-    setStreaming,
-    setIsLoading,
-    resetStreamingState,
-    appendTimelineEntry,
-  } = processor;
-
-  handleWebSocketEventRef.current = (
-    eventType: string,
-    data: unknown,
-    eventId?: number,
-    sourceRunId?: string,
-  ) => {
-    const payload = parseEventData(data);
-    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current ||
-      "";
-    if (!runId) return;
-    const isPrimaryRun = runId === currentRunIdRef.current;
-    if (payload.run?.id) {
-      upsertRunMeta(payload.run as Partial<Run> & { id: string });
-    }
-
-    const handler = EVENT_DISPATCH[eventType];
-    if (handler) {
-      handler({
-        payload,
-        runId,
-        eventId,
-        eventType,
-        isPrimaryRun,
-        verifyRunStatus,
-        isMountedRef,
-        currentRunIdRef,
-        lastEventIdRef,
-        handleWebSocketEventRef,
-        handleRunCompletedRef,
-        setCurrentRun,
-        setStreaming,
-        setIsLoading,
-        setError,
-        closeWebSocket,
-        resetStreamingState,
-        appendTimelineEntry,
-        t,
-      });
-    }
-  };
+  bindRunEventHandler(
+    {
+      ...processor,
+      isMountedRef,
+      currentRunIdRef,
+      lastEventIdRef,
+      setError,
+      t,
+    },
+    // The wrapper's own closeWebSocket, which closes BOTH transports — this is
+    // the sole reason the fallback wrapper rebinds the handler.
+    closeWebSocket,
+  );
 
   const switchToSse = (runId: string): void => {
     activeTransportRef.current = "sse";

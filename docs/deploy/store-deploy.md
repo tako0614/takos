@@ -38,6 +38,17 @@ approval は operator account plane (reference impl: Takosumi Accounts)
 が担当します。provider allowlist / credential / state backend / Cloudflare Container execution は
 RunnerProfile が所有し、Store contract の外に置きます。
 
+## Platform services projection
+
+Store は Space の Installation readback を Takosumi Accounts から読み、installed state と一緒に
+Workload Services の非 secret summary を表示します。対象は OIDC identity、billing port、
+DeploymentOutput、event ingest、same-space control などの account-plane / operator-owned
+services です。
+
+Takos が保持・表示するのは service id、material kind、status、endpoint、secret 設定済みかどうか、
+token expiry までです。token 本体、provider credential、state backend、secret output は Store に渡さず、
+Takosumi Accounts / RunnerProfile / operator secret store の責務に残します。
+
 ## PlanRun review
 
 PlanRun は mutate しない確認 step です。少なくとも次を表示します。

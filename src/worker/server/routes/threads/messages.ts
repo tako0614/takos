@@ -9,7 +9,13 @@ import type { BaseVariables } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 import { zValidator } from "../zod-validator.ts";
-import { threadMessagesRouteDeps } from "./deps.ts";
+import {
+  checkThreadAccess,
+  createMessage,
+} from "../../../application/services/threads/thread-service.ts";
+import { searchThreadMessages } from "../../../application/services/threads/thread-search.ts";
+import { getThreadTimeline } from "../../../application/services/threads/thread-timeline.ts";
+import { getThreadHistory } from "../../../application/services/threads/thread-history.ts";
 import { requireThreadAccess } from "./helpers.ts";
 
 type ThreadsRouter = HonoType<{ Bindings: Env; Variables: BaseVariables }>;
@@ -54,7 +60,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       });
 
       requireThreadAccess(
-        await threadMessagesRouteDeps.checkThreadAccess(
+        await checkThreadAccess(
           c.env.DB,
           threadId,
           user.id,
@@ -62,7 +68,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       );
 
       return c.json(
-        await threadMessagesRouteDeps.getThreadTimeline(
+        await getThreadTimeline(
           c.env,
           threadId,
           limit,
@@ -89,7 +95,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       });
 
       requireThreadAccess(
-        await threadMessagesRouteDeps.checkThreadAccess(
+        await checkThreadAccess(
           c.env.DB,
           threadId,
           user.id,
@@ -97,7 +103,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       );
 
       return c.json(
-        await threadMessagesRouteDeps.getThreadHistory(c.env, threadId, {
+        await getThreadHistory(c.env, threadId, {
           limit,
           offset,
           includeMessages: includeMessagesParam !== "0",
@@ -123,7 +129,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       }
 
       const access = requireThreadAccess(
-        await threadMessagesRouteDeps.checkThreadAccess(
+        await checkThreadAccess(
           c.env.DB,
           threadId,
           user.id,
@@ -131,7 +137,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       );
 
       return c.json(
-        await threadMessagesRouteDeps.searchThreadMessages({
+        await searchThreadMessages({
           env: c.env,
           spaceId: access.thread.space_id,
           threadId,
@@ -152,7 +158,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       const threadId = c.req.param("id");
       const body = c.req.valid("json");
       const access = requireThreadAccess(
-        await threadMessagesRouteDeps.checkThreadAccess(
+        await checkThreadAccess(
           c.env.DB,
           threadId,
           user.id,
@@ -173,7 +179,7 @@ export function registerThreadMessageRoutes(app: ThreadsRouter) {
       }
 
       try {
-        const message = await threadMessagesRouteDeps.createMessage(
+        const message = await createMessage(
           c.env,
           c.env.DB,
           access.thread,
@@ -199,7 +205,5 @@ const threadMessagesRoutes = new Hono<
   { Bindings: Env; Variables: BaseVariables }
 >();
 registerThreadMessageRoutes(threadMessagesRoutes);
-
-export { threadMessagesRouteDeps } from "./deps.ts";
 
 export default threadMessagesRoutes;

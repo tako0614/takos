@@ -1,5 +1,5 @@
-export { asRunRow, runRowToApi } from "takos-api-contract/shared/types/runs";
-export type { RunRow } from "takos-api-contract/shared/types/runs";
+export { asRunRow, runRowToApi } from "../../../shared/types/runs.ts";
+export type { RunRow } from "../../../shared/types/runs.ts";
 
 export type RunHierarchyNode = {
   id: string;

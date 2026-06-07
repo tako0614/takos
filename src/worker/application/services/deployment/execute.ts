@@ -13,10 +13,6 @@ import {
   parseDeploymentBackendConfig,
 } from "./backend.ts";
 import type { DeploymentBackendQueueConsumerSyncInput } from "./backend-contracts.ts";
-import {
-  createDeploymentBackendRegistry,
-  resolveDeploymentBackendConfigsFromEnv,
-} from "../../../platform/deployment-backends.ts";
 import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import {
   getDeploymentById,
@@ -50,6 +46,7 @@ import {
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import {
+  buildWorkersRuntime,
   extractErrorMessage,
   parseRuntimeConfig,
   resolveDeploymentArtifactRef,
@@ -256,27 +253,9 @@ async function buildQueueConsumerSyncPlan(input: {
   const previousRuntimeConfig = previousDeployment
     ? parseRuntimeConfig(previousDeployment.runtime_config_snapshot_json)
     : null;
-  const currentRuntime = {
-    profile: "workers" as const,
-    bindings,
-    config: {
-      compatibility_date: runtimeConfig.compatibility_date ||
-        CF_COMPATIBILITY_DATE,
-      compatibility_flags: runtimeConfig.compatibility_flags,
-      limits: runtimeConfig.limits,
-    },
-  };
+  const currentRuntime = buildWorkersRuntime(runtimeConfig, bindings);
   const previousRuntime = previousRuntimeConfig
-    ? {
-      profile: "workers" as const,
-      bindings: previousBindings,
-      config: {
-        compatibility_date: previousRuntimeConfig.compatibility_date ||
-          CF_COMPATIBILITY_DATE,
-        compatibility_flags: previousRuntimeConfig.compatibility_flags,
-        limits: previousRuntimeConfig.limits,
-      },
-    }
+    ? buildWorkersRuntime(previousRuntimeConfig, previousBindings)
     : null;
 
   return {
@@ -414,14 +393,10 @@ export async function executeDeploymentPipeline(
     });
 
     const deployArtifactRef = deploymentArtifactRef;
-    const backendRegistry = createDeploymentBackendRegistry(
-      resolveDeploymentBackendConfigsFromEnv(env),
-    );
     const backend = createDeploymentBackend(deployment, {
       cloudflareEnv: env,
       orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
       orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
-      backendRegistry,
     });
     queueConsumerRollbackBackend = backend;
 
@@ -891,9 +866,6 @@ export async function executeDeploymentPipeline(
         cloudflareEnv: env,
         orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
         orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
-        backendRegistry: createDeploymentBackendRegistry(
-          resolveDeploymentBackendConfigsFromEnv(env),
-        ),
       }),
     });
 

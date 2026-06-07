@@ -1,4 +1,5 @@
 import type { ToolDefinition, ToolHandler } from "../../tool-definitions.ts";
+import { defineTools } from "../define-tools.ts";
 import { generateId } from "../../../../shared/utils/index.ts";
 import { getDb, resources } from "../../../../infra/db/index.ts";
 import { and, asc, eq, ne } from "drizzle-orm";
@@ -289,16 +290,10 @@ export const listResourcesHandler: ToolHandler = async (args, context) => {
     (filtered.length > 50 ? `\n... and ${filtered.length - 50} more` : "");
 };
 
-export const RESOURCE_TOOLS: ToolDefinition[] = [
-  CREATE_SQL,
-  CREATE_KEY_VALUE,
-  CREATE_OBJECT_STORE,
-  LIST_RESOURCES,
-];
-
-export const RESOURCE_HANDLERS: Record<string, ToolHandler> = {
-  create_sql: createSqlHandler,
-  create_key_value: createKeyValueHandler,
-  create_object_store: createObjectStoreHandler,
-  list_resources: listResourcesHandler,
-};
+export const { tools: RESOURCE_TOOLS, handlers: RESOURCE_HANDLERS } =
+  defineTools([
+    [CREATE_SQL, createSqlHandler],
+    [CREATE_KEY_VALUE, createKeyValueHandler],
+    [CREATE_OBJECT_STORE, createObjectStoreHandler],
+    [LIST_RESOURCES, listResourcesHandler],
+  ]);

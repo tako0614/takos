@@ -1,5 +1,6 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type { ToolDefinition, ToolHandler } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import {
   getEvidenceForClaim,
   getPathsForClaim,
@@ -129,8 +130,7 @@ async function handleEvidenceMode(
   return `Found ${evidence.length} evidence:\n\n${lines.join("\n")}`;
 }
 
-export const MEMORY_GRAPH_TOOLS: ToolDefinition[] = [MEMORY_GRAPH_RECALL];
-
-export const MEMORY_GRAPH_HANDLERS: Record<string, ToolHandler> = {
-  memory_graph_recall: memoryGraphRecallHandler,
-};
+export const { tools: MEMORY_GRAPH_TOOLS, handlers: MEMORY_GRAPH_HANDLERS } =
+  defineTools([
+    [MEMORY_GRAPH_RECALL, memoryGraphRecallHandler],
+  ]);

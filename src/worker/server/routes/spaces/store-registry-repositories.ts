@@ -1,7 +1,11 @@
 import type { Hono } from "hono";
 import { z } from "zod";
-import { BadRequestError } from "@takos/worker-platform-utils/errors";
+import {
+  BadRequestError,
+  isAppError,
+} from "@takos/worker-platform-utils/errors";
 import type { SpaceAccessRouteEnv } from "../route-auth.ts";
+import { requireSpaceAccess } from "../route-auth.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { zValidator } from "../zod-validator.ts";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -10,8 +14,12 @@ import {
   parseRoutePage,
   requireStoreRegistryEntry,
   safeErrorMessage,
-  storeRegistryRouteDeps,
 } from "./store-registry-helpers.ts";
+import {
+  fetchRemoteRepositories,
+  searchRemoteRepositories,
+} from "../../../application/services/store-network/remote-store-client.ts";
+import { importRepositoryFromRemoteStore } from "../../../application/services/store-network/remote-install.ts";
 
 const installSchema = z.object({
   repository_ref_url: z.string().min(1),
@@ -25,7 +33,7 @@ export function registerStoreRegistryRepositoryRoutes(
 ) {
   app.get("/:spaceId/store-registry/:entryId/repositories", async (c) => {
     const user = c.get("user");
-    const access = await storeRegistryRouteDeps.requireSpaceAccess(
+    const access = await requireSpaceAccess(
       c,
       c.req.param("spaceId"),
       user.id,
@@ -45,7 +53,7 @@ export function registerStoreRegistryRepositoryRoutes(
     try {
       const page = parseRoutePage(c.req.query("page"));
       const { limit } = parsePagination(c.req.query());
-      const collection = await storeRegistryRouteDeps.fetchRemoteRepositories(
+      const collection = await fetchRemoteRepositories(
         entry.repositoriesUrl,
         { page, limit, expand: true },
       );
@@ -70,7 +78,7 @@ export function registerStoreRegistryRepositoryRoutes(
     "/:spaceId/store-registry/:entryId/repositories/search",
     async (c) => {
       const user = c.get("user");
-      const access = await storeRegistryRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         c.req.param("spaceId"),
         user.id,
@@ -96,7 +104,7 @@ export function registerStoreRegistryRepositoryRoutes(
         const page = parseRoutePage(c.req.query("page"));
         const { limit } = parsePagination(c.req.query());
         const collection =
-          await storeRegistryRouteDeps.searchRemoteRepositories(
+          await searchRemoteRepositories(
             entry.searchUrl,
             query,
             { page, limit, expand: true },
@@ -125,7 +133,7 @@ export function registerStoreRegistryRepositoryRoutes(
     zValidator("json", installSchema),
     async (c) => {
       const user = c.get("user");
-      const access = await storeRegistryRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         c.req.param("spaceId"),
         user.id,
@@ -135,7 +143,7 @@ export function registerStoreRegistryRepositoryRoutes(
 
       try {
         const result =
-          await storeRegistryRouteDeps.importRepositoryFromRemoteStore(
+          await importRepositoryFromRemoteStore(
             c.env.DB,
             access.space.id,
             {
@@ -158,6 +166,9 @@ export function registerStoreRegistryRepositoryRoutes(
           201,
         );
       } catch (error) {
+        if (isAppError(error)) {
+          throw error;
+        }
         logError("Failed to import repository from remote store", error, {
           module: "routes/store-registry",
         });

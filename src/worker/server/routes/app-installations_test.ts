@@ -657,6 +657,25 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
         installation: { id: "inst_1", status: "suspended" },
       });
     }
+    if (url.pathname.endsWith("/services")) {
+      return Response.json({
+        installation_id: "inst_1",
+        services: [{
+          id: "identity.primary.oidc",
+          material_kind: "identity.oidc@v1",
+          status: "ready",
+          endpoint: "https://accounts.internal",
+          material: { client_id: "client_1" },
+        }, {
+          id: "events.webhook.default",
+          material_kind: "events.webhook@v1",
+          status: "ready",
+          endpoint: "https://accounts.internal/v1/installations/inst_1/events/ingest",
+          secret_ref: "secret://inst_1/events",
+          token_expires_at: "2026-05-01T00:00:00.000Z",
+        }],
+      });
+    }
     return Response.json({
       installations: [{
         id: "inst_1",
@@ -691,6 +710,25 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
 
     assertEquals(listResponse.status, 200);
     assertEquals(deleteResponse.status, 200);
+    const listBody = await listResponse.json() as {
+      installations: Array<{ services?: unknown }>;
+    };
+    assertEquals(listBody.installations[0]?.services, [{
+      id: "identity.primary.oidc",
+      material_kind: "identity.oidc@v1",
+      status: "ready",
+      endpoint: "https://accounts.internal",
+      secret_configured: false,
+      token_expires_at: null,
+    }, {
+      id: "events.webhook.default",
+      material_kind: "events.webhook@v1",
+      status: "ready",
+      endpoint:
+        "https://accounts.internal/v1/installations/inst_1/events/ingest",
+      secret_configured: true,
+      token_expires_at: "2026-05-01T00:00:00.000Z",
+    }]);
     assertEquals(calls, [
       {
         kind: "access",
@@ -702,6 +740,14 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
         kind: "fetch",
         pathname: "/v1/installations",
         spaceId: "space-1",
+        method: "GET",
+        authorization: "Bearer accounts-token",
+        body: null,
+      },
+      {
+        kind: "fetch",
+        pathname: "/v1/installations/inst_1/services",
+        spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
         body: null,
@@ -727,6 +773,92 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
         method: "DELETE",
         authorization: "Bearer accounts-token",
         body: { reason: "user removed app" },
+      },
+    ]);
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("app-installations route lists Installation services through Takosumi Accounts", async () => {
+  const calls: unknown[] = [];
+  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
+    calls.push({ kind: "access", spaceId, userId, roles });
+    return {
+      space: { id: "space-1" },
+      membership: { role: "viewer" },
+    } as never;
+  };
+  installableAppInstallDeps.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    calls.push({
+      kind: "fetch",
+      pathname: url.pathname,
+      spaceId: url.searchParams.get("space_id"),
+      method: init?.method,
+      authorization: new Headers(init?.headers).get("authorization"),
+    });
+    if (url.pathname.endsWith("/services")) {
+      return Response.json({
+        installation_id: "inst_1",
+        services: [{
+          id: "takosumi.control.space",
+          material_kind: "takosumi.control@v1",
+          status: "ready",
+          endpoint: "https://accounts.internal/v1",
+          secret_ref: "secret://inst_1/control",
+        }],
+      });
+    }
+    return Response.json({
+      installations: [{ id: "inst_1", app_id: "jp.takos.docs" }],
+    });
+  };
+
+  try {
+    const response = await createApp().request(
+      "/spaces/space-alias/app-installations/inst_1/services",
+      { method: "GET" },
+      {
+        DB: {},
+        TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
+        TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
+      } as Env,
+    );
+    const body = await response.json() as Record<PropertyKey, unknown>;
+
+    assertEquals(response.status, 200);
+    assertEquals(body, {
+      installation_id: "inst_1",
+      services: [{
+        id: "takosumi.control.space",
+        material_kind: "takosumi.control@v1",
+        status: "ready",
+        endpoint: "https://accounts.internal/v1",
+        secret_configured: true,
+        token_expires_at: null,
+      }],
+    });
+    assertEquals(calls, [
+      {
+        kind: "access",
+        spaceId: "space-alias",
+        userId: "user-1",
+        roles: ["owner", "admin", "editor", "viewer"],
+      },
+      {
+        kind: "fetch",
+        pathname: "/v1/installations",
+        spaceId: "space-1",
+        method: "GET",
+        authorization: "Bearer accounts-token",
+      },
+      {
+        kind: "fetch",
+        pathname: "/v1/installations/inst_1/services",
+        spaceId: null,
+        method: "GET",
+        authorization: "Bearer accounts-token",
       },
     ]);
   } finally {

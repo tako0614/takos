@@ -26,32 +26,9 @@ import { resources } from "../../../infra/db/schema.ts";
 import { and, eq, inArray } from "drizzle-orm";
 import { logError } from "../../../shared/utils/logger.ts";
 import { getResourceTypeQueryValues } from "../../../application/services/resources/capabilities.ts";
-import { textDate } from "../../../shared/utils/db-guards.ts";
 import { resolvePostgresUrl } from "../../../node-platform/resolvers/env-utils.ts";
+import { toResource } from "./route-internals.ts";
 
-export const d1RouteDeps = {
-  getDb,
-  getPortableSqlDatabase,
-  isPortableResourceBackend,
-  createOptionalCloudflareWfpBackend,
-  checkResourceAccess,
-};
-
-type D1ResourceData = {
-  id: string;
-  ownerAccountId: string;
-  accountId: string | null;
-  backendName?: string | null;
-  name: string;
-  type: string;
-  status: string;
-  backingResourceId?: string | null;
-  backingResourceName?: string | null;
-  config: string;
-  metadata: string;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-};
 
 /**
  * Maximum number of rows returned per table by the SQL export endpoint.
@@ -170,33 +147,13 @@ function isReadOnlySql(sql: string): boolean {
   return !MUTATING_SQL_KEYWORD_PATTERN.test(sqlForKeywordScan);
 }
 
-function toSnakeCaseResource(resourceData: D1ResourceData): Resource {
-  return {
-    id: resourceData.id,
-    owner_id: resourceData.ownerAccountId,
-    space_id: resourceData.accountId,
-    ...(resourceData.backendName !== undefined
-      ? { backend_name: resourceData.backendName }
-      : {}),
-    name: resourceData.name,
-    type: resourceData.type as Resource["type"],
-    status: resourceData.status as Resource["status"],
-    backing_resource_id: resourceData.backingResourceId ?? null,
-    backing_resource_name: resourceData.backingResourceName ?? null,
-    config: resourceData.config,
-    metadata: resourceData.metadata,
-    created_at: textDate(resourceData.createdAt),
-    updated_at: textDate(resourceData.updatedAt),
-  };
-}
-
 async function loadD1ResourceWithAccess(
   c: Context<AuthenticatedRouteEnv>,
   resourceId: string,
   userId: string,
   requiredPermissions?: ResourcePermission[],
 ): Promise<Resource> {
-  const db = d1RouteDeps.getDb(c.env.DB);
+  const db = getDb(c.env.DB);
   const resourceData = await db.select().from(resources).where(
     and(
       eq(resources.id, resourceId),
@@ -208,9 +165,9 @@ async function loadD1ResourceWithAccess(
     throw new NotFoundError("SQL resource");
   }
 
-  const resource = toSnakeCaseResource(resourceData);
+  const resource = toResource(resourceData);
   const hasAccess = resource.owner_id === userId ||
-    await d1RouteDeps.checkResourceAccess(
+    await checkResourceAccess(
       c.env.DB,
       resourceId,
       userId,
@@ -225,7 +182,7 @@ async function loadD1ResourceWithAccess(
 }
 
 async function listPortableTables(resource: Resource) {
-  const db = await d1RouteDeps.getPortableSqlDatabase(resource);
+  const db = await getPortableSqlDatabase(resource);
   const usePortablePostgres = !!resolvePostgresUrl() &&
     !!resource.backend_name &&
     resource.backend_name !== "cloudflare" &&
@@ -304,7 +261,7 @@ async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
   }
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
-  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
+  if (isPortableResourceBackend(resource.backend_name)) {
     try {
       const tables = await listPortableTables(resource);
       return c.json({ tables });
@@ -323,7 +280,7 @@ async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
+    const wfp = createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
       throw new InternalError("platform backend not configured");
     }
@@ -377,9 +334,9 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
     throw new BadRequestError("Invalid table name");
   }
 
-  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
+  if (isPortableResourceBackend(resource.backend_name)) {
     try {
-      const db = await d1RouteDeps.getPortableSqlDatabase(resource);
+      const db = await getPortableSqlDatabase(resource);
       const usePortablePostgres = !!resolvePostgresUrl() &&
         !!resource.backend_name &&
         resource.backend_name !== "cloudflare" &&
@@ -449,7 +406,7 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
+    const wfp = createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
       throw new InternalError("platform backend not configured");
     }
@@ -508,9 +465,9 @@ async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
     requiredPermissions,
   );
 
-  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
+  if (isPortableResourceBackend(resource.backend_name)) {
     try {
-      const db = await d1RouteDeps.getPortableSqlDatabase(resource);
+      const db = await getPortableSqlDatabase(resource);
       const statement = db.prepare(body.sql);
       const result = isReadOnly
         ? await statement.all<Record<string, unknown>>()
@@ -531,7 +488,7 @@ async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
+    const wfp = createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
       throw new InternalError("platform backend not configured");
     }
@@ -574,9 +531,9 @@ async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
   // unbounded result set.
   const probeLimit = D1_EXPORT_ROW_LIMIT + 1;
 
-  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
+  if (isPortableResourceBackend(resource.backend_name)) {
     try {
-      const db = await d1RouteDeps.getPortableSqlDatabase(resource);
+      const db = await getPortableSqlDatabase(resource);
       const tableRows = body?.tables && body.tables.length > 0
         ? body.tables
         : (await listPortableTables(resource)).map((table: { name: string }) =>
@@ -615,7 +572,7 @@ async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
+    const wfp = createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
       throw new InternalError("platform backend not configured");
     }

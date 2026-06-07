@@ -13,6 +13,7 @@ import type {
   Space,
 } from "../../../shared/types/index.ts";
 import { generateId, slugifyName } from "../../../shared/utils/index.ts";
+import { ConflictError } from "@takos/worker-platform-utils/errors";
 import {
   accountToWorkspace,
   spaceCrudDeps,
@@ -242,7 +243,7 @@ export async function createWorkspaceWithDefaultRepo(
       .limit(1)
       .get();
     if (existing) {
-      throw new Error("Space ID already exists");
+      throw new ConflictError("Space ID already exists");
     }
   }
 

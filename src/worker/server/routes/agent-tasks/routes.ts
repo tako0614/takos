@@ -43,10 +43,6 @@ const CUSTOM_TOOL_NAMES = filterAgentAllowedToolNames(
   CUSTOM_TOOLS.map((tool) => tool.name),
 );
 
-export const agentTaskRouteDeps = {
-  checkSpaceAccess,
-  getDb,
-};
 
 export type AgentTaskRouteStatus = typeof VALID_STATUSES[number];
 
@@ -80,7 +76,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       maxLimit: 200,
     });
 
-    const access = await agentTaskRouteDeps.checkSpaceAccess(
+    const access = await checkSpaceAccess(
       c.env.DB,
       spaceId,
       user.id,
@@ -96,7 +92,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new BadRequestError("Invalid status");
     }
 
-    const db = agentTaskRouteDeps.getDb(c.env.DB);
+    const db = getDb(c.env.DB);
     const conditions = [eq(agentTasks.accountId, spaceId)];
     if (status) {
       conditions.push(eq(agentTasks.status, status));
@@ -134,7 +130,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const spaceId = c.req.param("spaceId");
       const body = c.req.valid("json");
 
-      const access = await agentTaskRouteDeps.checkSpaceAccess(
+      const access = await checkSpaceAccess(
         c.env.DB,
         spaceId,
         user.id,
@@ -160,7 +156,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         new Date().toISOString(),
       );
 
-      const db = agentTaskRouteDeps.getDb(c.env.DB);
+      const db = getDb(c.env.DB);
 
       let threadId = body.thread_id ?? null;
       if (threadId) {
@@ -225,7 +221,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await agentTaskRouteDeps.checkSpaceAccess(
+    const access = await checkSpaceAccess(
       c.env.DB,
       task.space_id,
       user.id,
@@ -265,7 +261,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         throw new NotFoundError("Task");
       }
 
-      const access = await agentTaskRouteDeps.checkSpaceAccess(
+      const access = await checkSpaceAccess(
         c.env.DB,
         task.space_id,
         user.id,
@@ -319,7 +315,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         updates.dueAt = body.due_at || null;
       }
 
-      const db = agentTaskRouteDeps.getDb(c.env.DB);
+      const db = getDb(c.env.DB);
 
       if (body.thread_id !== undefined) {
         if (body.thread_id) {
@@ -390,7 +386,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await agentTaskRouteDeps.checkSpaceAccess(
+    const access = await checkSpaceAccess(
       c.env.DB,
       task.space_id,
       user.id,
@@ -400,7 +396,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const db = agentTaskRouteDeps.getDb(c.env.DB);
+    const db = getDb(c.env.DB);
     await db.delete(agentTasks).where(eq(agentTasks.id, taskId));
 
     return c.json({ success: true });
@@ -414,7 +410,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await agentTaskRouteDeps.checkSpaceAccess(
+    const access = await checkSpaceAccess(
       c.env.DB,
       task.space_id,
       user.id,
@@ -458,7 +454,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const planJson = JSON.stringify(plan);
       const timestamp = new Date().toISOString();
 
-      const db = agentTaskRouteDeps.getDb(c.env.DB);
+      const db = getDb(c.env.DB);
       const updated = await db.update(agentTasks).set({
         plan: planJson,
         updatedAt: timestamp,

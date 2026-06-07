@@ -4,6 +4,7 @@ import type {
   ToolDefinition,
   ToolHandler,
 } from "../tool-definitions.ts";
+import { defineTools } from "./define-tools.ts";
 import { getDb, sessionRepos, sessions } from "../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 import { emitRunUsageEvent } from "../../services/offload/usage-client.ts";
@@ -280,12 +281,9 @@ export const runtimeStatusHandler: ToolHandler = async (args, context) => {
   return statusText;
 };
 
-export const RUNTIME_TOOLS: ToolDefinition[] = [
-  RUNTIME_EXEC,
-  RUNTIME_STATUS,
-];
-
-export const RUNTIME_HANDLERS: Record<string, ToolHandler> = {
-  runtime_exec: runtimeExecHandler,
-  runtime_status: runtimeStatusHandler,
-};
+export const { tools: RUNTIME_TOOLS, handlers: RUNTIME_HANDLERS } = defineTools(
+  [
+    [RUNTIME_EXEC, runtimeExecHandler],
+    [RUNTIME_STATUS, runtimeStatusHandler],
+  ],
+);

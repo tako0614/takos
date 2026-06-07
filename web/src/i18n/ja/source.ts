@@ -92,7 +92,6 @@ export const source = {
   // Job Card
   notStarted: "未開始",
   logs: "ログ",
-  loadMore: "さらに読み込む",
 
   // Source Page
   sourceTitle: "ソース",
@@ -149,6 +148,20 @@ export const source = {
   trackingCommit: "コミット",
   installedVersionLabel: "インストール済みバージョン",
   installedCommitLabel: "インストール済みコミット",
+  platformServicesLabel: "プラットフォームサービス",
+  platformServicesReadyCount: "{ready}/{total} 準備完了",
+  platformServiceOidc: "OIDC identity",
+  platformServiceBilling: "Billing port",
+  platformServiceOutputs: "Deployment outputs",
+  platformServiceEvents: "Event ingest",
+  platformServiceControl: "Space control",
+  platformServiceReady: "準備完了",
+  platformServiceNotConfigured: "未設定",
+  platformServiceUnavailable: "利用不可",
+  platformServiceUnknown: "不明",
+  platformServiceNoEndpoint: "endpoint なし",
+  platformServiceSecretConfigured: "secret 設定済み",
+  platformServiceTokenExpires: "期限 {date}",
   storeManagementTitle: "ストア管理",
   storeManagementDescription:
     "ストア、インベントリ、リモートストア接続を管理します。",

@@ -83,30 +83,13 @@ const addGroupItemSchema = z.object({
 
 type ShortcutContext = Context<{ Bindings: Env; Variables: { user: User } }>;
 
-export const shortcutsRouteDeps = {
-  requireSpaceAccess,
-  getRequestedSpaceIdentifier,
-  listShortcuts,
-  createShortcut,
-  updateShortcut,
-  deleteShortcut,
-  reorderShortcuts,
-  listShortcutGroups,
-  getShortcutGroup,
-  createShortcutGroup,
-  updateShortcutGroup,
-  deleteShortcutGroup,
-  addItemToGroup,
-  removeItemFromGroup,
-  isShortcutResourceType,
-};
 
 // Helper to resolve space context. Header-based space selection must pass membership checks.
 async function getSpaceId(c: ShortcutContext): Promise<string> {
-  const spaceIdentifier = shortcutsRouteDeps.getRequestedSpaceIdentifier(c);
+  const spaceIdentifier = getRequestedSpaceIdentifier(c);
   if (spaceIdentifier) {
     const user = c.get("user");
-    const access = await shortcutsRouteDeps.requireSpaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceIdentifier,
       user.id,
@@ -123,7 +106,7 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
   .get("/", async (c) => {
     const user = c.get("user");
     const spaceId = await getSpaceId(c);
-    const results = await shortcutsRouteDeps.listShortcuts(
+    const results = await listShortcuts(
       c.env.DB,
       user.id,
       spaceId,
@@ -148,7 +131,7 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
       );
     }
 
-    if (!shortcutsRouteDeps.isShortcutResourceType(body.resourceType)) {
+    if (!isShortcutResourceType(body.resourceType)) {
       throw new BadRequestError(
         `Invalid resourceType. Allowed values: ${
           ALLOWED_SHORTCUT_RESOURCE_TYPES.join(", ")
@@ -170,7 +153,7 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
       }
     }
 
-    const created = await shortcutsRouteDeps.createShortcut(
+    const created = await createShortcut(
       c.env.DB,
       user.id,
       spaceId,
@@ -186,7 +169,7 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
 
     const body = c.req.valid("json");
 
-    const updated = await shortcutsRouteDeps.updateShortcut(
+    const updated = await updateShortcut(
       c.env.DB,
       user.id,
       spaceId,
@@ -205,7 +188,7 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     const spaceId = await getSpaceId(c);
     const id = c.req.param("id");
 
-    await shortcutsRouteDeps.deleteShortcut(c.env.DB, user.id, spaceId, id);
+    await deleteShortcut(c.env.DB, user.id, spaceId, id);
 
     return c.json({ success: true });
   })
@@ -217,7 +200,7 @@ export default new Hono<{ Bindings: Env; Variables: { user: User } }>()
     const body = c.req.valid("json");
 
     // Batch update all shortcut positions in a single SQL store batch call
-    await shortcutsRouteDeps.reorderShortcuts(
+    await reorderShortcuts(
       c.env.DB,
       user.id,
       spaceId,
@@ -247,13 +230,13 @@ export const shortcutGroupRoutes = new Hono<
     const { spaceId } = c.req.param();
     const user = c.get("user");
 
-    const access = await shortcutsRouteDeps.requireSpaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
     );
 
-    const groups = await shortcutsRouteDeps.listShortcutGroups(
+    const groups = await listShortcutGroups(
       c.env.DB,
       access.space.id,
     );
@@ -268,7 +251,7 @@ export const shortcutGroupRoutes = new Hono<
       const { spaceId } = c.req.param();
       const user = c.get("user");
 
-      const access = await shortcutsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -281,7 +264,7 @@ export const shortcutGroupRoutes = new Hono<
         throw new BadRequestError("name is required");
       }
 
-      const group = await shortcutsRouteDeps.createShortcutGroup(
+      const group = await createShortcutGroup(
         c.env.DB,
         access.space.id,
         {
@@ -299,13 +282,13 @@ export const shortcutGroupRoutes = new Hono<
     const { spaceId, groupId } = c.req.param();
     const user = c.get("user");
 
-    const access = await shortcutsRouteDeps.requireSpaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
     );
 
-    const group = await shortcutsRouteDeps.getShortcutGroup(
+    const group = await getShortcutGroup(
       c.env.DB,
       access.space.id,
       groupId,
@@ -325,7 +308,7 @@ export const shortcutGroupRoutes = new Hono<
       const { spaceId, groupId } = c.req.param();
       const user = c.get("user");
 
-      const access = await shortcutsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -334,7 +317,7 @@ export const shortcutGroupRoutes = new Hono<
 
       const body = c.req.valid("json");
 
-      const group = await shortcutsRouteDeps.updateShortcutGroup(
+      const group = await updateShortcutGroup(
         c.env.DB,
         access.space.id,
         groupId,
@@ -359,14 +342,14 @@ export const shortcutGroupRoutes = new Hono<
     const { spaceId, groupId } = c.req.param();
     const user = c.get("user");
 
-    const access = await shortcutsRouteDeps.requireSpaceAccess(
+    const access = await requireSpaceAccess(
       c,
       spaceId,
       user.id,
       ["owner", "admin"],
     );
 
-    const deleted = await shortcutsRouteDeps.deleteShortcutGroup(
+    const deleted = await deleteShortcutGroup(
       c.env.DB,
       access.space.id,
       groupId,
@@ -388,7 +371,7 @@ export const shortcutGroupRoutes = new Hono<
       const { spaceId, groupId } = c.req.param();
       const user = c.get("user");
 
-      const access = await shortcutsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
@@ -401,7 +384,7 @@ export const shortcutGroupRoutes = new Hono<
         throw new BadRequestError("type and label are required");
       }
 
-      const item = await shortcutsRouteDeps.addItemToGroup(
+      const item = await addItemToGroup(
         c.env.DB,
         access.space.id,
         groupId,
@@ -424,14 +407,14 @@ export const shortcutGroupRoutes = new Hono<
       const { spaceId, groupId, itemId } = c.req.param();
       const user = c.get("user");
 
-      const access = await shortcutsRouteDeps.requireSpaceAccess(
+      const access = await requireSpaceAccess(
         c,
         spaceId,
         user.id,
         ["owner", "admin", "editor"],
       );
 
-      const removed = await shortcutsRouteDeps.removeItemFromGroup(
+      const removed = await removeItemFromGroup(
         c.env.DB,
         access.space.id,
         groupId,
