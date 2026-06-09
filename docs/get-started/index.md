@@ -1,22 +1,22 @@
 # はじめる
 
-**Takos is a product that runs on Takosumi and is deployed by it.** Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module and records the **Installation → PlanRun → ApplyRun → Deployment → DeploymentOutput** run ledger. Provider allowlist, credentials, state backend, and Cloudflare Container execution are owned by a **RunnerProfile**. Module metadata comes from generic repository information such as Git URL, ref, commit, and module path, plus well-known OpenTofu outputs.
+**Takos is self-hostable as a plain OpenTofu module; Takosumi is optional.** Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module and records the **Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment** run ledger. Connections hold credential references, ProviderBindings bind each provider (plus optional alias) to `default`, `connection`, `manual`, or `disabled`, and policy resolves provider allowlists, state backend, and Cloudflare Container execution. Module metadata comes from generic repository information such as Git URL, ref, commit, and module path, plus well-known OpenTofu outputs.
 
 ## Current Flow
 
 1. Install the Takos OpenTofu module (`deploy/opentofu`) to create an **Installation**.
-2. Run a **PlanRun** and review the recorded plan, diff, and warnings.
-3. Apply the reviewed plan as an **ApplyRun**. A successful apply updates the **Deployment** and **DeploymentOutput**.
-4. The **RunnerProfile** owns the provider allowlist, credential reference, state backend, and execution image / resource limits; Takosumi records the RunnerProfile policy decision and each run in the audit ledger.
+2. Run a **`plan` type Run** and review the recorded plan, diff, and warnings.
+3. Apply the reviewed plan as an **`apply` type Run**. A successful apply updates the **Deployment** and **OutputSnapshot**.
+4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) for the run, and policy resolves provider allowlists, state backend, and execution image / resource limits; Takosumi records the policy decision and each run in the audit ledger.
 5. Account-plane policy (OIDC clients, billing, domains, dashboard) belongs to the operator distribution / Takosumi Accounts.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records the run ledger (Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput) for the applied OpenTofu module, while the RunnerProfile owns the provider allowlist, credentials, and state backend. The operator distribution / Takosumi Accounts owns account-plane policy (OIDC / billing / dashboard).
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records the run ledger (Installation / Run / Deployment / OutputSnapshot) for the applied OpenTofu module, while Connections hold credential references, ProviderBindings resolve each provider (plus optional alias), and policy resolves provider allowlists and state handling. The operator distribution / Takosumi Accounts owns account-plane policy (OIDC / billing / dashboard).
 
 ## OpenTofu Module Shape
 
-The install target is a plain OpenTofu module; Takosumi does not require a Takosumi-specific manifest or `.takosumi.*` file. Module metadata is resolved from the Git URL / ref / commit / module path and well-known OpenTofu outputs.
+The install target is a plain OpenTofu module. Module metadata is resolved from the Git URL / ref / commit / module path and well-known OpenTofu outputs.
 
 ```hcl
 module "takos" {
@@ -25,7 +25,7 @@ module "takos" {
 }
 ```
 
-Selecting a target moves the Installation through a PlanRun and ApplyRun until the Deployment is updated, and non-secret endpoints are recorded as DeploymentOutput. Takos product routes trust the Takosumi deploy control plane run ledger instead of exposing a separate deployment proxy.
+Selecting a target moves the Installation through a typed Run until the Deployment is updated, and non-secret endpoints are recorded as OutputSnapshot. Takos product routes trust the Takosumi deploy control plane run ledger instead of exposing a separate deployment proxy.
 
 ## References
 

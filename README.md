@@ -1,7 +1,9 @@
 # takos
 
 Takos はセルフホスト可能な AI-first chat & agent プロダクトです。AI エージェントとの会話を通じて
-ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。Takosumi (OpenTofu-native な deploy control plane) の上で動作します。
+ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。Takos self-host は `deploy/opentofu`
+module と worker artifact で完結し、Takosumi は任意で Run ledger / StateSnapshot / OutputSnapshot /
+Dependency graph / audit を付ける control plane です。
 
 Takos product の実行実装とスクリプトは Bun を前提としており、`src/worker` / `web` /
 `containers/git` / `scripts` のローカル実行は `bun` コマンドで行います。
@@ -33,9 +35,9 @@ bun run local:up
 ログインや課金は Takosumi Accounts (operator account plane) が担当し、デプロイ制御は Takosumi
 (`../takosumi`) の OpenTofu-native Deploy Control API が担当します。
 
-Takos product を Takosumi に install する入口は、この source root そのものです。Takosumi v1 は Takosumi 専用 source metadata file を要求せず、
-Git URL / commit / module path / `package.json` などの汎用 metadata と OpenTofu module から PlanRun を作り、ApplyRun
-成功後に Deployment と DeploymentOutput を記録します。
+Takos product を Takosumi に install する入口は、この source root そのものです。Takosumi v1 は plain OpenTofu module と Git metadata を入力にし、
+Git URL / commit / module path / `package.json` などの汎用 metadata と OpenTofu module から Run を作り、apply
+成功後に Deployment と OutputSnapshot を記録します。
 
 ## ローカル compose
 

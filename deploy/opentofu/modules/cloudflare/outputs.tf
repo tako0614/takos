@@ -1,4 +1,4 @@
-# DeploymentOutput surface: non-secret resource IDs/names that the Worker
+# OutputSnapshot surface: non-secret resource IDs/names that the Worker
 # artifact (uploaded by the follow-up `wrangler deploy`) and Takosumi's
 # Deployment record consume as the binding map.
 

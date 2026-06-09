@@ -16,9 +16,9 @@
   Takos product と operator-owned infrastructure の境界を docs /
   実装間で揃えるためのチェックリスト。
 - runner boundary:
-  OpenTofu state backend、Cloudflare credential、RunnerProfile / runtime-agent handler
-  wiring は in-process deploy-control plane の RunnerProfile が所有します。Takos
-  product route は Takosumi の Deployment / DeploymentOutput を消費します。
+  OpenTofu state backend、Cloudflare credential、Connection / ProviderBinding / policy / runtime-agent handler
+  wiring は in-process deploy-control plane の Connection / ProviderBinding / policy で解決します。Takos
+  product route は Takosumi の Deployment / OutputSnapshot を消費します。
 
 ## 検証
 

@@ -5,8 +5,8 @@
 このページは **Takosumi kernel
 をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
 
-Takosumi 上で plain OpenTofu module の Installation を作り、PlanRun / ApplyRun から
-Deployment / DeploymentOutput を管理する方法は [Deploy](/deploy/) を参照してください。
+Takosumi 上で plain OpenTofu module の Installation を作り、typed Runs から
+Deployment / OutputSnapshot を管理する方法は [Deploy](/deploy/) を参照してください。
 
 ::: danger このページのサンプルはローカル開発向けデフォルトを含みます
 このページに掲載されている
@@ -361,12 +361,12 @@ services:
 | Service          | 役割                                                        |
 | ---------------- | ----------------------------------------------------------- |
 | `takos-worker`      | OIDC consumer / Web UI / public API gateway                 |
-| `takosumi`       | Installation / PlanRun / ApplyRun / Deployment ledger engine         |
+| `takosumi`       | Installation / Run / Deployment ledger engine         |
 | `takosumi` | Takosumi Accounts / Installation ledger / billing dashboard |
 | `takos-git`      | Git Smart HTTP / refs / objects / source resolution         |
 | `takos-agent`    | Takos agent execution service                               |
 
-Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput の記録は
+Installation / Run / Deployment / OutputSnapshot の記録は
 `takosumi`、infra provisioning は operator-owned OpenTofu / Helm / runtime-agent workflow、build は
 build service / CI、account-plane Installation / OIDC / billing は self-host operator の Takosumi Accounts (`takosumi`) が担当します。
 
@@ -429,8 +429,22 @@ PGVECTOR_ENABLED=true
 
 PostgreSQL backend は takos-worker 起動時に
 `takos/db/migrations-control/migrations` を self-host migration runner で自動適用
-する。Wrangler の local D1 backend を単体で使う場合だけ、
-`db/migrations-control/migrations` を migration source として Wrangler 側から適用する。
+する。Wrangler の D1 backend を使う場合だけ、`db/migrations-control/migrations`
+を migration source として、worker を上げる前に Wrangler 側から適用する
+(schema-first)。Cloudflare target の `bun run deploy:service` は build 後・worker
+upload 前にこの migration step (control DB = D1 binding `DB`) を自動実行する。
+wrangler を直接使う場合の手動コマンド:
+
+```bash
+# takos repo root から実行。remote D1 (production = base config、--env なし)
+bunx wrangler d1 migrations apply DB --remote --config deploy/cloudflare/wrangler.toml
+
+# local D1 backend を単体で使う場合
+bunx wrangler d1 migrations apply DB --local --config deploy/cloudflare/wrangler.toml
+```
+
+詳細は [Cloudflare](/hosting/cloudflare#control-db-d1-migrations-schema-first)
+を参照。
 
 ## 停止
 
@@ -460,7 +474,7 @@ k8s クラスタにデプロイする場合は [Kubernetes](/hosting/kubernetes)
 ## self-hosted operator implementation evidence
 
 bare metal / Docker Compose / VM 上の resource は operator-owned OpenTofu / Helm
-/ local workflow が作成し、その結果を Deployment / DeploymentOutput と audit ledger に
+/ local workflow が作成し、その結果を Deployment / OutputSnapshot と audit ledger に
 記録します。Takosumi core は self-host provider state や runtime handler implementation を
 所有しません。
 

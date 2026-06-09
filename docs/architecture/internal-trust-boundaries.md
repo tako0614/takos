@@ -1,10 +1,9 @@
 # Internal Trust Boundaries (canonical mechanism)
 
-**Premise: Takos is a product that runs on Takosumi.** Takosumi is the OpenTofu-native deploy control plane; Takos's whole
+**Premise: Takos is self-hostable as a plain OpenTofu module; Takosumi is optional.** Takosumi is the OpenTofu-native deploy control plane; Takos's whole
 deploy topology — the worker, its Durable Objects, the egress / runtime-host / executor services, container execution,
-bindings, and routes — is an OpenTofu module that **Takosumi installs and applies** (Installation → PlanRun → ApplyRun →
-Deployment), with a **RunnerProfile** owning the provider credentials, state backend, and Cloudflare Container execution,
-and the resulting non-secret endpoints recorded as **DeploymentOutput**. The trust boundaries here are properties of that
+bindings, and routes — is an OpenTofu module that **Takosumi installs and applies** (Installation → `plan` type Run -> `apply` type Run -> Deployment), with a **Connection / ProviderBinding / policy** owning the provider credentials, state backend, and Cloudflare Container execution,
+and the resulting non-secret endpoints recorded as **OutputSnapshot**. The trust boundaries here are properties of that
 Takosumi-applied topology; they do not depend on, and are not owned by, any single hand-written deploy file. The module
 lives in `deploy/opentofu` (`var.target` ∈ `aws | gcp | cloudflare`); the `cloudflare` target
 provisions the backing resources (D1 / KV / R2 / Queues) and the Worker-script layer consumes the resulting binding map.
@@ -47,9 +46,7 @@ no signature is required or wanted.** Adding header auth here is theater that in
   + link-local + metadata-endpoint destinations, so a rebind cannot reach internal addresses even if the in-worker gate is
   raced. Revisit the in-worker pinning if/when Workers exposes IP-pinned fetch for arbitrary hostnames.
 - **DEPLOY INVARIANT — Takos runs on Takosumi.** Takos is a product **deployed by Takosumi**, the OpenTofu-native deploy
-  control plane: its deploy topology is an OpenTofu module that Takosumi **installs and applies** (Installation → PlanRun →
-  ApplyRun → Deployment), with a **RunnerProfile** owning the provider allowlist, credentials, state backend, and
-  Cloudflare Container execution; the non-secret service URLs / binding map are recorded as **DeploymentOutput**. The
+  control plane: its deploy topology is an OpenTofu module that Takosumi **installs and applies** (Installation → `plan` type Run -> `apply` type Run -> Deployment), with Connections holding credential references, ProviderBindings resolving each provider (+ optional alias) to a default / connection / manual / disabled binding, and policy resolving provider allowlists, state backend, and Cloudflare Container execution; the non-secret service URLs / binding map are recorded as **OutputSnapshot**. The
   trust-boundary invariants below are therefore **properties of that module, validated by the reviewed plan** — not of
   hand-maintained wrangler. (`takos-private/cloudflare/wrangler.*.toml` is the interim reference
   materialization of the same topology and converges onto the Takosumi-applied module; do not treat it as a separate
@@ -68,7 +65,7 @@ no signature is required or wanted.** Adding header auth here is theater that in
     back to them by URL (`PROXY_BASE_URL`, `TAKOS_AGENT_CONTROL_RPC_BASE_URL`) because a Cloudflare Container cannot hold a
     service binding. Their boundary is the **per-run token (tier 2)**, not the binding — making them binding-only breaks
     container callbacks. This is exactly why tier 2 (a real credential) exists where tier 1 (binding boundary) cannot
-    apply, and why Takosumi's RunnerProfile — not the worker — owns the container execution + credentials.
+    apply, and why Takosumi's Connection / ProviderBinding / policy — not the worker — owns the container execution + credentials.
 - Invariant: never re-introduce a header that converts an intra-worker call into "trusted". If a future DO needs to
   distinguish callers, encode it as a typed argument, not a spoofable header.
 

@@ -27,7 +27,7 @@ raw データは `scripts/load-test/load-test-results.json` と
 | ----------------------------------------------------- | ------------- | ----------------------------------- |
 | `resolveDeployment` p50 (in-process)                  | < 50 ms       | 単一 deployment、N=10               |
 | `applyDeployment` p50 (in-process)                    | < 200 ms      | synthetic implementation binding    |
-| HTTP API スループット (PlanRun create)                | > 500 req/sec | loopback / single isolate           |
+| HTTP API スループット (`plan` type Run create)                | > 500 req/sec | loopback / single isolate           |
 | Cloudflare Workers CPU 時間 / resolve (100 planned service) | < 30,000 ms   | Workers Free / Paid 上限 (CPU time) |
 | HTTP エラー率 (実環境、k6)                            | < 1 %         | k6 threshold                        |
 | HTTP p95 latency (実環境、k6)                         | < 500 ms      | k6 threshold                        |
@@ -86,7 +86,7 @@ assertion を bypass した kernel-only handler を使用します。
 
 判定:
 
-- deployment PlanRun スループット **3,556 req/sec** (target > 500 req/sec) —
+- deployment `plan` type Run スループット **3,556 req/sec** (target > 500 req/sec) —
   達成
 - deployment apply スループット **10,390 req/sec** —達成
 - p95 < 50 ms (loopback、auth bypass)

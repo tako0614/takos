@@ -5,10 +5,9 @@
 このセクションは Takosumi kernel をセルフホストするオペレーター向けです。アプリをデプロイする開発者は
 [Deploy](/deploy/) を参照してください。
 
-**前提: Takos は Takosumi 上で動く product です。** Takos の deploy topology は OpenTofu module であり、Takosumi が
-それを **install して apply** します (Installation → PlanRun → ApplyRun → Deployment)。provider allowlist / credentials /
-state backend / Cloudflare Container execution は **RunnerProfile** が所有し、結果の non-secret endpoint は
-**DeploymentOutput** に記録されます。canonical な deploy model は
+**前提: Takos は plain OpenTofu module として self-host 完結し、Takosumi は optional です。** Takos の deploy topology は OpenTofu module であり、Takosumi が
+それを **install して apply** します (Installation → `plan` type Run -> `apply` type Run -> Deployment)。credential references / provider allowlists / state backend / Cloudflare Container execution は **Connection / ProviderBinding / policy** が所有し、結果の non-secret endpoint は
+**OutputSnapshot** に記録されます。canonical な deploy model は
 [Internal Trust Boundaries](/architecture/internal-trust-boundaries) を正本とします。
 
 Takos product/operator distribution は 5 つのホスティング target runbook を持ちます。 `takos-private/distribution.yml`
@@ -109,7 +108,7 @@ multi-cloud 構成を作れます:
 | Cloudflare reference backend | private `distribute:dry-run` + Cloudflare deployment dry-run   | opt-in       |
 | AWS / GCP / Kubernetes Helm  | private `distribute:dry-run` preflight + Helm chart validation | opt-in       |
 | Selfhosted compose packaging | private `distribute:dry-run` preflight + compose config        | opt-in       |
-| Takosumi run ledger          | RunnerProfile-scoped PlanRun / ApplyRun (tofu plan / apply) + DeploymentOutput 検証 | opt-in       |
+| Takosumi run ledger          | policy-scoped typed Runs (tofu plan / apply) + OutputSnapshot 検証 | opt-in       |
 
 Provider proof は operator が明示的に実行する opt-in proof です。CI / release gate に入れる場合も、各 provider の
 credential / cluster / account が揃った環境で gate-backed に実行してください。default docs build や kernel gate は

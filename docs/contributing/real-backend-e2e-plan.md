@@ -20,7 +20,7 @@ Then choose the matching live path:
   `bun run distribution:smoke --source deploy/distributions/<target>.json --live`
 - Takosumi deploy-control proof: `cd ../takosumi && bun run opentofu:live-local-proof`
   (local plan/apply proof; per-provider provisioning is proven by the deploy-control
-  plan/apply/destroy run against the operator RunnerProfile)
+  plan/apply/destroy run against the operator Connection / ProviderBinding / policy)
 - Public managed Takos:
   `cd ../takos-private && bun run managed-offering:status -- --environment <env> --date <YYYY-MM-DD>`
 

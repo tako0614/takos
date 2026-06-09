@@ -3,13 +3,12 @@
 > このページでわかること: Cloudflare / AWS / GCP / Kubernetes /
 > セルフホストの対応状況の比較。
 
-Takosumi 上で Takos の OpenTofu module を install し、Installation → PlanRun → ApplyRun → Deployment →
-DeploymentOutput の run ledger を管理する方法は [Deploy](/deploy/) を参照してください。
+Takosumi 上で Takos の OpenTofu module を install し、Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment の run ledger を管理する方法は [Deploy](/deploy/) を参照してください。
 
 `distribution.yml` の `kernel_host.target` で選べるのは `cloudflare` / `aws` /
 `gcp` / `kubernetes` / `selfhosted` の 5 種類です。Cloudflare は Takos operation
 の tracked reference deployment/backend です。Takosumi の public concept は Installation /
-Deployment / PlanRun / ApplyRun / RunnerProfile / DeploymentOutput に閉じ、infrastructure proof は operator
+Deployment / typed Runs / Connection / ProviderBinding / policy / OutputSnapshot に閉じ、infrastructure proof は operator
 evidence として扱います。AWS / GCP / Kubernetes は Helm overlay、selfhosted は
 docker-compose で扱い、いずれも Takosumi が apply する同一 OpenTofu module topology の interim materialization です。
 
@@ -38,7 +37,7 @@ target ごとの readiness status は
 | Cloudflare hosting       | 公開 contract のリファレンス Workers backend                              | opt-in な Cloudflare dry-run / deploy gate         |
 | AWS / GCP hosting        | EKS / GKE 向け Helm パッケージング (ECS / Cloud Run kernel host は対象外) | opt-in な Helm / preflight gate                    |
 | Kubernetes / selfhosted  | operator 所有のクラスタ / Docker host 向けパッケージング                  | opt-in な Helm / compose preflight gate            |
-| Operator infrastructure lifecycle | operator 固有の振る舞い (kernel リリースの default parity ではない) | opt-in な RunnerProfile-scoped ApplyRun smoke / live proof |
+| Operator infrastructure lifecycle | operator 固有の振る舞い (kernel リリースの default parity ではない) | opt-in な policy-scoped `apply` type Run smoke / live proof |
 
 infrastructure proof は opt-in です。provider credential / cluster / account / remote
 gateway を必要とする proof は、operator が用意した環境で gate

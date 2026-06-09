@@ -1,25 +1,25 @@
 # サンプル集
 
-This page has been reset for Takosumi v1. Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module repo as an **Installation** and records each run as a **PlanRun** or **ApplyRun**, with a successful apply updating the **Deployment** and its **DeploymentOutput**. Module display metadata comes from generic repository information such as Git URL, ref, commit, tag, and module path.
+This page has been reset for Takosumi v1. Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module repo as an **Installation** and records each run as a **`plan` type Run** or **`apply` type Run**, with a successful apply updating the **Deployment** and its **OutputSnapshot**. Module display metadata comes from generic repository information such as Git URL, ref, commit, tag, and module path.
 
 ## Current Flow
 
 1. Choose a Git URL/ref for a plain OpenTofu module repo (Takos itself is the module under `deploy/opentofu`, with `var.target ∈ aws | gcp | cloudflare`).
-2. Create the Installation against the target RunnerProfile.
-3. Run a plan; Takosumi records it as a **PlanRun** and surfaces the proposed changes for review.
-4. Apply the reviewed plan; Takosumi records an **ApplyRun**, and a successful apply updates the **Deployment** and **DeploymentOutput**. Destroy runs are also recorded as ApplyRun entries.
-5. Provider allowlist, credential references, state backend, execution image/resource limits, and Cloudflare Container execution belong to the RunnerProfile. Account-plane policy, OIDC clients, billing, and domains belong to the operator distribution.
+2. Create the Installation with target Connection / ProviderBinding settings.
+3. Run a plan; Takosumi records it as a **`plan` type Run** and surfaces the proposed changes for review.
+4. Apply the reviewed plan; Takosumi records an **`apply` type Run**, and a successful apply updates the **Deployment** and **OutputSnapshot**. Destroy runs are also recorded as `apply` type Run entries.
+5. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) to `default`, `connection`, `manual`, or `disabled`, and policy resolves provider allowlists, state backend, execution image/resource limits, and Cloudflare Container execution. Account-plane policy, OIDC clients, billing, and domains belong to the operator distribution.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput state and the RunnerProfile policy decisions for each run. The operator distribution (Takosumi Accounts) owns account-plane policy such as accounts, billing, OIDC, and the dashboard.
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Installation / Run / StateSnapshot / OutputSnapshot / Deployment state and policy decisions for each run. The operator distribution (Takosumi Accounts) owns account-plane policy such as accounts, billing, OIDC, and the dashboard.
 
 ## API Shape
 
 ```json
 {
   "spaceId": "space_1",
-  "runnerProfileId": "runner_default",
+  "deploymentProfileId": "profile_default",
   "module": {
     "gitUrl": "https://github.com/example/app.git",
     "ref": "main",
@@ -28,7 +28,7 @@ Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app lau
 }
 ```
 
-Plan and apply runs are submitted against the Installation, recorded as PlanRun / ApplyRun, and a successful apply updates the Deployment and DeploymentOutput. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+Plan and `apply` type Runs are submitted against the Installation, recorded as typed Runs, and a successful apply updates the Deployment and OutputSnapshot. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
 ## References
 

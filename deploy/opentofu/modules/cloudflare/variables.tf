@@ -16,7 +16,7 @@ variable "environment" {
 }
 
 variable "plan_mode" {
-  description = "Plan-only mode: no real Cloudflare credentials required (for Takosumi PlanRun review)."
+  description = "Plan-only mode: no real Cloudflare credentials required (for Takosumi Run with type `plan` review)."
   type        = bool
   default     = false
 }

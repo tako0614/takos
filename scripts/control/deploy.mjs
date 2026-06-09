@@ -60,12 +60,16 @@ export function buildDeployCommands(
   }
 
   const wranglerArgs = getWranglerDeployArgs(env);
+  const migrateBase = ['bunx', 'wrangler', 'd1', 'migrations', 'apply', 'DB', '--remote'];
   const deployBase = ['bunx', 'wrangler', 'deploy'];
   const commands = [];
 
   commands.push(
     debug ? 'bun run build --mode staging-debug' : 'bun run build',
   );
+  // Apply control-DB D1 migrations (binding DB) before uploading the worker so
+  // the deployed script never serves against an empty/stale schema.
+  commands.push([...migrateBase, '--config', SERVICES.worker, ...wranglerArgs].join(' '));
   commands.push([...deployBase, '--config', SERVICES.worker, ...wranglerArgs].join(' '));
   return commands;
 }
