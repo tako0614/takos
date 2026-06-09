@@ -134,7 +134,7 @@ end user 向けの OIDC issuer は Takosumi Accounts に置きます。fresh ope
 Takos bootstrap の primary path は Web UI / public API です。fresh operator
 向けの専用コマンドライン経路は増やしません。
 
-OpenTofu module PlanRun / ApplyRun は `takosumi` が扱います。Takos product は
+OpenTofu module typed Runs は `takosumi` が扱います。Takos product は
 Web UI と public API から space / catalog / app-local product API を扱い、OAuth
 / billing は operator account plane (リファレンス実装: Takosumi Accounts) の
 OIDC / BillingPort を consume します。

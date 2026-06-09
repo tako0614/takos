@@ -25,7 +25,7 @@ summary が揃い、 `managed-offering:status` が `canOpenManagedOffering: true
 | path               | target user                       | runtime mode                     | install 入口                                                                 | UX                                                            |
 | ------------------ | --------------------------------- | -------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `Use Takos`        | 一般ユーザー / 試したい人         | `shared-cell`                    | operator Accounts の `/start?takos_url=...` ボタン                           | public signup open 後に Account / Space 作成→ chat           |
-| `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (`https://<OPERATOR_INSTALL_HOST>/install?...`) | Installation 作成 → PlanRun → reviewed plan を approve → ApplyRun |
+| `Install from Git` | 開発者 / 透明性重視 / fork 利用者 | `shared-cell` または `dedicated` | operator-selected install UI (`https://<OPERATOR_INSTALL_HOST>/install?...`) | Installation 作成 → `plan` type Run → reviewed plan を approve → `apply` type Run |
 | `Self-host`        | 退出 / 企業 / 主権重視            | `self-hosted`                    | operator deploy + app export/import                                          | 自前 takosumi で運用                                          |
 
 `Install from Git` と app export/import は同じ Installation contract 上に設計されています。現時点で verified な path は
@@ -96,19 +96,19 @@ https://<OPERATOR_INSTALL_HOST>/install?git=...&ref=v1.2.3
   ↓
 Takosumi Account 作成 / login
   ↓
-Installation 作成 → PlanRun
+Installation 作成 → `plan` type Run
   - resolved Git commit / module path
   - requested bindings / authorization records
   - plan diff / estimated cost
   ↓ reviewed plan を approve
-ApplyRun → Deployment / DeploymentOutput
+`apply` type Run → Deployment / OutputSnapshot
   ↓
 Installation ready
   ↓
 launch token → chat
 ```
 
-PlanRun / ApplyRun の詳細は
+typed Runs の詳細は
 [Takosumi deploy control plane](https://takosumi.com/docs/reference/model) を参照。
 
 ### 3.2 ボタン例
@@ -134,7 +134,7 @@ fork した派生版を配る場合も同じ形。`git=` と `ref=` を fork 側
 ### 3.3 ref pin policy
 
 Managed install UI は production install を tag か commit に pin する policy を推奨する。Takosumi deploy control plane は branch /
-tag / commit ref を受け取り、PlanRun 時に immutable commit へ解決し、ApplyRun は PlanRun で review された
+tag / commit ref を受け取り、`plan` type Run 時に immutable commit へ解決し、`apply` type Run は `plan` type Run で review された
 commit を適用する。operator UI は必要に応じて `ref=main` / `ref=latest` のような移動 ref
 を拒否できる。
 
@@ -231,7 +231,7 @@ launch-readiness evidence が揃った operator だけが宣言できます。
 - [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md) 各 path
   が着地する `shared-cell` / `dedicated` / `self-hosted` の物理構造。
 - [Takosumi deploy control plane](https://takosumi.com/docs/reference/model)
-  `Install from Git` が記録する Installation → PlanRun → ApplyRun → Deployment → DeploymentOutput の run ledger と、
+  `Install from Git` が記録する Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment の run ledger と、
   Git URL / commit / tag / well-known OpenTofu outputs などの汎用 repo metadata から resolve される install input。
 - [はじめる](/get-started/) path 選択後の最初の作業。
 - [Upgrade / Export](/platform/upgrade-export) path 間の乗り換えと export bundle の運用。

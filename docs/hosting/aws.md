@@ -10,18 +10,17 @@
    overlay。Kubernetes ベースで control plane / runtime / executor を運用する
    path。
 2. **AWS operator implementation evidence** ― ECS Fargate / RDS / S3 / SQS /
-   KMS / Secrets Manager の output を operator runtime handler が ApplyRun を経て
-   Deployment / DeploymentOutput として記録する path。Cloudflare control plane + AWS tenant runtime
+   KMS / Secrets Manager の output を operator runtime handler が `apply` type Run を経て
+   Deployment / OutputSnapshot として記録する path。Cloudflare control plane + AWS tenant runtime
    (`composite.cf-control-aws-tenant@v1`) や AWS 単独 profile
    (`profiles/aws.example.json`) で使う。
 
 ::: tip 対象範囲 section 1 (Helm overlay) は ECS / Fargate への kernel 直接
 deploy、DynamoDB を control-plane storage として使う構成、OpenTofu / CDK
 overlay を扱いません。 section 2 (operator implementation evidence) は operator-owned infra workflow
-が作った Deployment / DeploymentOutput の接続までを扱います。 :::
+が作った Deployment / OutputSnapshot の接続までを扱います。 :::
 
-Takosumi が OpenTofu module を install して Installation → PlanRun → ApplyRun → Deployment →
-DeploymentOutput を記録する方法は [Deploy](/deploy/)
+Takosumi が OpenTofu module を install して Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment を記録する方法は [Deploy](/deploy/)
 を参照してください。 5 target 横断 runbook は
 [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
@@ -174,7 +173,7 @@ certificate ARN を設定します。
 
 AWS profile は operator-owned OpenTofu / native workflow が ECS Fargate、RDS
 Postgres、S3、SQS、KMS、Secrets Manager、ALB / Route53 の output を作成し、
-ApplyRun の Deployment / DeploymentOutput に接続する構成です。
+`apply` type Run の Deployment / OutputSnapshot に接続する構成です。
 Takosumi core はこれらの provider state や runtime handler implementation を所有しません。
 
 ### Operator workflow がやること / operator runtime handler が記録すること
@@ -446,12 +445,12 @@ kernel がやること:
 - ECS は tenant image workload adapter として OCI orchestrator
   経由で使う対象であり、 kernel hosting surface ではない
 - DynamoDB / SQS / Secrets Manager を app resource backend として自動
-  provisioning する contract (※ section 2 は operator-owned workflow の Deployment / DeploymentOutput 接続を扱う)
+  provisioning する contract (※ section 2 は operator-owned workflow の Deployment / OutputSnapshot 接続を扱う)
 - OpenTofu / CDK による AWS resource 作成手順
 - AWS 固有 runtime handler identifier を app author 向けの public surface として固定
   する contract
 
-必要なら operator が追加 runtime handler / DeploymentOutput importer
+必要なら operator が追加 runtime handler / OutputSnapshot importer
 を構成できますが、このページは Takos product/operator distribution の Helm
 overlay と operator implementation evidence で実際に表現されている範囲だけを runbook
 として扱います。

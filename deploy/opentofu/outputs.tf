@@ -8,7 +8,7 @@ output "database_endpoint" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null
 }
 
-# Cloudflare-specific binding map (DeploymentOutput consumed by the Worker-script layer).
+# Cloudflare-specific binding map (OutputSnapshot consumed by the Worker-script layer).
 
 output "cloudflare_d1_database_id" {
   description = "D1 database ID for the DB binding (cloudflare target)."

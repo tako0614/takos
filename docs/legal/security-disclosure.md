@@ -13,8 +13,8 @@
 
 Takos の customer-facing security disclosure surface は Takos Web / API +
 Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi は
-OpenTofu-native deploy control plane であり、Installation / PlanRun / ApplyRun /
-Deployment / DeploymentOutput を記録し、RunnerProfile が provider allowlist /
+OpenTofu-native deploy control plane であり、Installation / typed Runs /
+Deployment / OutputSnapshot を記録し、Connection / ProviderBinding / policy が provider allowlist /
 credential / state backend / Cloudflare Container execution を所有します。Takos
 managed service として影響する場合は Takos security intake が受け付け、必要に
 応じて Takosumi Accounts (identity / billing owner) を含む owning product root

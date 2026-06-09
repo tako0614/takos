@@ -16,7 +16,7 @@
 
 | 内容                                                 | 詳細ドキュメント                                                                        |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Takosumi Installation / PlanRun / ApplyRun model      | [Takosumi model](https://takosumi.com/docs/reference/model)                          |
+| Takosumi Installation / typed Runs model      | [Takosumi model](https://takosumi.com/docs/reference/model)                          |
 | Takosumi Accounts / billing / OIDC issuer             | [operator account-plane contract](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md) |
 | Takosumi deploy-control API                           | [Deploy Control API](https://takosumi.com/docs/reference/deploy-control-api)         |
 | production deploy runbook / secrets                  | [takos-private docs](https://github.com/tako0614/takos-private/tree/master/docs)        |

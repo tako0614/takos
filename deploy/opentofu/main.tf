@@ -10,9 +10,9 @@ terraform {
 }
 
 provider "cloudflare" {
-  # Real credential is supplied by Takosumi's RunnerProfile (CLOUDFLARE_API_TOKEN);
+  # Real credential is supplied by Takosumi Connection/CapabilityBinding/policy during the typed Run;
   # plan mode uses a deterministic 40-char placeholder for credential-free
-  # PlanRun review (the provider validates token shape, not auth, at configure).
+  # reviewed `plan` Run (the provider validates token shape, not auth, at configure).
   api_token = var.opentofu_plan_mode ? "abcdef0123456789abcdef0123456789abcdef01" : null
 }
 

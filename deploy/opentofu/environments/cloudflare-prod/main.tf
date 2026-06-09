@@ -8,13 +8,11 @@ terraform {
     }
   }
 
-  # State backend is owned by the Takosumi RunnerProfile; Takosumi records the
-  # PlanRun / ApplyRun and the resulting Deployment + DeploymentOutput. The
-  # backend block is supplied by the runner profile at apply time.
+  # State backend and provider credentials are resolved by Takosumi Connection/CapabilityBinding/policy during the typed Run. Takosumi records StateSnapshot, OutputSnapshot, and Deployment after a successful apply.
 }
 
 provider "cloudflare" {
-  # Real credential is supplied by Takosumi's RunnerProfile (CLOUDFLARE_API_TOKEN).
+  # Real credential is supplied by Takosumi Connection/CapabilityBinding/policy during the typed Run.
   api_token = var.api_token
 }
 

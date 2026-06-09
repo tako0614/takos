@@ -10,12 +10,12 @@
    を直接使う、または AWS / GCP overlay と組み合わせる path。
 2. **k8s operator implementation evidence** ― namespace / Deployment / Service
    / Ingress / Secret / ConfigMap を operator-owned workflow で作成し、
-   ApplyRun / Deployment / DeploymentOutput の run ledger に接続する path。Cloudflare control plane + k8s tenant runtime
+   `apply` type Run / Deployment / OutputSnapshot の run ledger に接続する path。Cloudflare control plane + k8s tenant runtime
    (`composite.cf-control-k8s-tenant@v1`) や k8s 単独 profile
    (`profiles/cloudflare-kubernetes.example.json`) で使う。
 
-Takosumi 上に OpenTofu module を install し、Installation / PlanRun / ApplyRun /
-Deployment / DeploymentOutput を管理する方法は
+Takosumi 上に OpenTofu module を install し、Installation / typed Runs /
+Deployment / OutputSnapshot を管理する方法は
 [Deploy](/deploy/) を参照してください。 5 target 横断 runbook は
 [Multi-cloud](/hosting/multi-cloud) を参照してください。
 
@@ -216,8 +216,8 @@ workload は作りません。
 
 Takosumi operator binding profile の k8s path は、operator-owned OpenTofu /
 Helm / native workflow が namespace、Deployment、Service、Ingress、Secret、
-ConfigMap、runtime endpoint の output を作成し、ApplyRun / Deployment /
-DeploymentOutput の run ledger に接続する構成です。Takosumi core は k8s provider state
+ConfigMap、runtime endpoint の output を作成し、`apply` type Run / Deployment /
+OutputSnapshot の run ledger に接続する構成です。Takosumi core は k8s provider state
 や runtime handler implementation を所有しません。
 
 ### Operator が手動でやること / reference binding が行うこと

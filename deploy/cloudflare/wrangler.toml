@@ -11,10 +11,8 @@
 ## container images, Durable Object migrations, routes, and binding wiring). It
 ## reads the module's outputs and must stay in sync with the module; it is not a
 ## competing source of truth for the durable infra. Running the same module
-## through Takosumi is OPTIONAL and only adds the Installation -> PlanRun ->
-## ApplyRun -> Deployment / DeploymentOutput ledger, policy decisions, and
-## dashboard (a Takosumi RunnerProfile then owns the provider allowlist,
-## credentials, state backend, and Cloudflare Container execution); Takos has no
+## through Takosumi is OPTIONAL and only adds the Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment ledger, policy decisions, and
+## dashboard (provider credentials, allowlists, state handling, and runner boundaries are resolved by Connection/ProviderBinding/policy); Takos has no
 ## special coupling to Takosumi.
 ## See ../../docs/architecture/internal-trust-boundaries.md for the deploy invariant.
 

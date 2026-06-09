@@ -1,18 +1,18 @@
 # Takos Product Current State
 
-This page has been reset for Takosumi v1. Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module repo as an **Installation** and records each `plan` as a **PlanRun** and each `apply`/`destroy` as an **ApplyRun**. A successful apply updates the **Deployment** and its **DeploymentOutput**. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+This page has been reset for Takosumi v1. Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module repo as an **Installation** and records each `plan` as a **`plan` type Run** and each `apply`/`destroy` as an **`apply` type Run**. A successful apply updates the **Deployment** and its **OutputSnapshot**. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
 
 ## Current Flow
 
 1. Point an Installation at a Git URL/ref and module path for a plain OpenTofu module repo.
-2. Run a `plan` and review the resulting PlanRun and runner profile policy decision.
-3. Run `apply` (or `destroy`) as an ApplyRun against the reviewed plan; a successful apply updates the Deployment and DeploymentOutput.
-4. Repeat plan/apply against the Installation; PlanRun and ApplyRun entries form the audit ledger for that Deployment.
-5. The RunnerProfile owns the provider allowlist, credential references, state backend, and Cloudflare Container execution. Account-plane policy, OIDC clients, billing, and domains belong to the in-process Accounts plane in the single Takos worker.
+2. Run a `plan` and review the resulting `plan` type Run and policy decision.
+3. Run `apply` (or `destroy`) as an `apply` type Run against the reviewed plan; a successful apply updates the Deployment and OutputSnapshot.
+4. Repeat plan/apply against the Installation; typed Run entries form the audit ledger for that Deployment.
+5. Connections hold credential references, ProviderBindings bind each provider (and optional alias) to a default / connection / manual / disabled resolution, and policy resolves provider allowlists, state backend, and Cloudflare Container execution. Account-plane policy, OIDC clients, billing, and domains belong to the in-process Accounts plane in the single Takos worker.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takos itself is deployed by Takosumi as an installed-and-applied OpenTofu module (`deploy/opentofu`, Cloudflare module; it provisions D1 / KV / R2 / Queues backing resources). Takosumi records Installation / PlanRun / ApplyRun / Deployment / DeploymentOutput state. The Takosumi deploy-control plane and the Accounts plane (account-plane policy, billing, OIDC, dashboard) run in-process inside the single Takos worker at `app.takosumi.com`; their implementation is owned by the Takosumi service repo and imported via tsconfig alias.
+Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takos can optionally be installed through Takosumi as a normal OpenTofu module (`deploy/opentofu`, Cloudflare module; it provisions D1 / KV / R2 / Queues backing resources). Takosumi records Installation / Run / StateSnapshot / OutputSnapshot / Deployment state. In self-host deployments, the deploy-control plane and Accounts plane run in-process inside the single Takos worker at the self-hoster's own origin; `app.takosumi.com` is only the operator Takosumi platform worker. Their implementation is owned by the Takosumi service repo and imported via tsconfig alias.
 
 ## Canonical Layout
 
@@ -49,7 +49,7 @@ and `deploy/distributions/cloudflare.json`).
 }
 ```
 
-An Installation points at a plain OpenTofu module repo; `plan` and `apply` runs are recorded as PlanRun and ApplyRun entries. Takos product routes should call the Takosumi deploy control API or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+An Installation points at a plain OpenTofu module repo; `plan` and `apply` runs are recorded as typed Run entries. Takos product routes should call the Takosumi deploy control API or Takosumi account-plane install flow instead of exposing a separate deployment proxy.
 
 ## References
 

@@ -14,9 +14,9 @@
 Takos の app-local profile (chat / memory / preferences) は `takos` が
 所有します。一方で **Takosumi Account の identity-level privacy (OIDC subject /
 authentication / billing identity) は operator account plane (リファレンス実装: Takosumi Accounts) が所有**します。
-Takosumi は OpenTofu-native deploy control plane として Installation / PlanRun /
-ApplyRun / Deployment / DeploymentOutput の run ledger を記録し、infra
-provisioning は RunnerProfile policy と operator distribution workflow が所有します。Takos の個人データ access / export / deletion handler は Takos Web / API
+Takosumi は OpenTofu-native deploy control plane として Installation / `plan` type Run /
+`apply` type Run / Deployment / OutputSnapshot の run ledger を記録し、infra
+provisioning は Connection / ProviderBinding / policy と operator distribution workflow が所有します。Takos の個人データ access / export / deletion handler は Takos Web / API
 の app-local boundary を扱い、identity-level の data subject request は operator
 account plane へ forward します。
 

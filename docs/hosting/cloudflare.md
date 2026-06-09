@@ -8,11 +8,11 @@
 topology (worker / Durable Objects / egress・runtime-host・executor service /
 container execution / binding / route) は [`deploy/opentofu`](https://github.com/tako0614/takos/tree/main/deploy/opentofu)
 の OpenTofu module であり、これを **Takosumi が install / apply** します
-(Installation → PlanRun → ApplyRun → Deployment)。`cloudflare` target が D1 / KV /
+(Installation → `plan` type Run -> `apply` type Run -> Deployment)。`cloudflare` target が D1 / KV /
 R2 / Queues などの backing resource を provision し、Worker-script layer は
 その binding map を consume します。provider allowlist / credential / state
-backend / Cloudflare Container execution は **RunnerProfile** が所有し、deploy
-結果の non-secret endpoint は **DeploymentOutput** に記録されます。Cloudflare
+backend / Cloudflare Container execution は **Connection / ProviderBinding / policy** が所有し、deploy
+結果の non-secret endpoint は **OutputSnapshot** に記録されます。Cloudflare
 control path は Worker-first です。Cloudflare Containers は API gateway や
 Takosumi Accounts の critical path ではなく、任意の tenant workload substrate
 です。
@@ -71,7 +71,7 @@ Cloudflare target に固有の prerequisites:
 5 target 共通の quick runbook です。target ごとの差は `distribution.yml` の
 `takosumi_service_host.target` だけで、`distribute:apply` は同じ deploy topology
 の interim runner として target 固有 backend (wrangler / Helm / docker-compose)
-を呼び出します。正本は `deploy/opentofu` module の Takosumi ApplyRun であり、
+を呼び出します。正本は `deploy/opentofu` module の Takosumi `apply` type Run であり、
 `distribute:apply` はその topology を converge させる interim materialization
 です:
 
@@ -95,7 +95,7 @@ bun packages/cli/src/main.ts accounts seed \
 `scripts/control/deploy.mjs` と `deploy/cloudflare/wrangler*.toml` を使った
 Wrangler deploy を呼び出します。これは `deploy/opentofu` の `cloudflare` target
 が表現するのと同じ binding/route topology を materialize する interim path で
-あり、Takosumi run-ledger model では PlanRun / ApplyRun が正本となります。
+あり、Takosumi run-ledger model では typed Runs が正本となります。
 
 deploy 後に
 `cd takos-private && bun run e2e:smoke:real --env=production --api-url=https://takos.jp`
@@ -141,10 +141,10 @@ secret sync では両者を混同しないでください。 :::
 
 control plane 本体の Cloudflare resource（D1 / R2 / KV / Dispatch / Queues /
 Vectorize など）は本来 `deploy/opentofu` の `cloudflare` target が provision
-し、Takosumi の ApplyRun がその backing resource を materialize します。以下の
+し、Takosumi の `apply` type Run がその backing resource を materialize します。以下の
 `wrangler ... create` 手順と次節の `wrangler.toml` は、その同じ topology の
 **interim reference materialization** であり、deploy の正本ではありません
-(provider credential / state backend は RunnerProfile が所有します)。interim
+(provider credential / state backend は Connection / ProviderBinding / policy で解決します)。interim
 path を使う operator のために、手動作成手順を残します。App credential は
 Takosumi Accounts の account-plane capability record / binding material から
 発行・注入します。
@@ -255,7 +255,7 @@ wrangler vectorize create takos-embeddings \
 以下は実際の staging 設定をベースにした例。シークレットは除いてある。この
 `wrangler.toml` は `deploy/opentofu` の `cloudflare` target が表現する binding /
 route topology の interim reference materialization であり、deploy の正本では
-ありません。Takosumi の ApplyRun が同じ topology を converge させ、`wrangler.toml`
+ありません。Takosumi の `apply` type Run が同じ topology を converge させ、`wrangler.toml`
 を別個の source of truth として扱わないでください。
 
 ```toml
@@ -600,10 +600,10 @@ staging 用の secrets は `takos-private/.secrets/staging/`
 
 Takos product / API gateway 本体の deploy は、model 上は **Takosumi の
 Installation** です。`deploy/opentofu` の Takos module を Takosumi が install /
-apply し (PlanRun → ApplyRun)、成功した ApplyRun が Deployment / DeploymentOutput
+apply し (`plan` type Run → `apply` type Run)、成功した `apply` type Run が Deployment / OutputSnapshot
 を更新します。下記の `control:deploy:*` は、その同じ topology を materialize
 する **interim runner** であり、provider credential / Cloudflare Container
-execution は RunnerProfile が所有します。実行は private 管理元である
+execution は Connection / ProviderBinding / policy で解決します。実行は private 管理元である
 `takos-private` から行います。次のコマンドは ecosystem checkout root から
 実行します:
 
@@ -618,6 +618,31 @@ production:
 cd takos-private
 bun run control:deploy:production
 ```
+
+### control-DB D1 migrations (schema-first)
+
+deploy script (`scripts/control/deploy.mjs` = `bun run deploy:service`、上記
+`control:deploy:*` が呼び出す本体) は build のあと、worker upload の **前** に
+control DB (D1 binding `DB`、migration source は
+`db/migrations-control/migrations`) の D1 migrations を remote に適用します。
+schema-first の順序により、deploy 直後の worker が空 schema / 古い schema に
+対して serve することはありません。
+
+wrangler を直接使って deploy する場合は、`wrangler deploy` の前に同じ
+migration step を手動で実行してください:
+
+```bash
+# takos repo root から実行 (production = base config、--env なし)
+bunx wrangler d1 migrations apply DB --remote --config deploy/cloudflare/wrangler.toml
+
+# staging などの non-production 環境は --env を付ける
+bunx wrangler d1 migrations apply DB --remote --config deploy/cloudflare/wrangler.toml --env staging
+```
+
+この wrangler migration step の対象は control DB (binding `DB`) だけです。
+accounts D1 (`TAKOSUMI_ACCOUNTS_DB`) は accounts 側の migrate-d1 runner が、
+deploy-control D1 (`TAKOS_D1`) は store の self-create が schema を所有する
+ため、これらに wrangler migrations を流さないでください。
 
 ::: info app install とは別ですここでの deploy は Takos product / API gateway
 自体の deploy です。Takosumi 上で動く app の install / Deployment apply は

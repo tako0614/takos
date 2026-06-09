@@ -21,5 +21,5 @@ TAKOS_LOCAL_ENV_FILE=.env.local bun run local:down
 ```
 
 Takosumi provider-specific live provisioning proof は `takosumi/` の deploy-control
-plan / apply / destroy run (RunnerProfile) で扱います。local deploy-control proof は
+plan / apply / destroy run (Connection / ProviderBinding / policy) で扱います。local deploy-control proof は
 `cd takosumi && bun run opentofu:live-local-proof` です。

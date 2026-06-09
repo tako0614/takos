@@ -70,10 +70,9 @@ evaluated output JSON, not raw HCL.
 ## Boundary
 
 OpenTofu state, provider credentials, resource apply, OIDC clients, billing,
-domains, and the provider allowlist belong to a Takosumi RunnerProfile, the
+domains, and the provider allowlist belong to a Takosumi Connection / ProviderBinding / policy, the
 operator distribution, or `takos-private`. Takos consumes the app output, and
-Takosumi records the run ledger — Installation → PlanRun → ApplyRun →
-Deployment → DeploymentOutput — for each plan and apply.
+Takosumi records the run ledger — Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment — for each plan and apply.
 
 ## References
 
