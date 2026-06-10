@@ -1,35 +1,37 @@
-/** Deep link into Takosumi's Use Takos account-plane entry. */
-const USE_TAKOS_FALLBACK = 'https://accounts.takosumi.com/takos/start' +
-  '?takos_url=' + encodeURIComponent('https://takos.jp');
+// The Takosumi platform worker hosts every public surface (account-plane,
+// install wizard, dashboard) on its bare origin: app.takosumi.com in
+// production, app.takosumi.test in local-substrate. There is no separate
+// "accounts." subdomain. The install wizard takes only the well-known
+// OpenTofu deep-link params git / ref / autoplan.
+const PLATFORM_HOST = 'app.takosumi.com';
+const LOCAL_PLATFORM_HOST = 'app.takosumi.test';
 
-/** Takosumi dashboard home. */
-const CLOUD_HOME_FALLBACK = 'https://accounts.takosumi.com/';
+const TAKOS_GIT_URL = 'https://github.com/tako0614/takos.git';
+
+function installUrl(host: string): string {
+  const url = new URL(`https://${host}/install`);
+  url.searchParams.set('git', TAKOS_GIT_URL);
+  url.searchParams.set('ref', 'main');
+  url.searchParams.set('autoplan', '1');
+  return url.toString();
+}
+
+/** Takosumi dashboard home on the platform worker. */
+const CLOUD_HOME_FALLBACK = `https://${PLATFORM_HOST}/`;
+const LOCAL_CLOUD_HOME_FALLBACK = `https://${LOCAL_PLATFORM_HOST}/`;
 
 /**
- * Takos rides on Takosumi's official install-by-URL entry: open
- * accounts.takosumi.com/install?git=<repo>&ref=&mode=&autoplan=1 and Takosumi
- * pre-fills the wizard and runs the PlanRun. Takos is just one such repo.
+ * Anyone — everyday user or developer — lands on the same Takosumi install
+ * wizard: open app.takosumi.com/install?git=<repo>&ref=main&autoplan=1 and
+ * Takosumi pre-fills the wizard and runs the plan. Takos is just one such repo.
  */
-const INSTALL_FALLBACK = 'https://accounts.takosumi.com/install' +
-  '?git=' + encodeURIComponent('https://github.com/tako0614/takos.git') +
-  '&ref=main&mode=shared-cell&autoplan=1';
+const INSTALL_FALLBACK = installUrl(PLATFORM_HOST);
+const LOCAL_INSTALL_FALLBACK = installUrl(LOCAL_PLATFORM_HOST);
 
-const LOCAL_USE_TAKOS_FALLBACK = USE_TAKOS_FALLBACK
-  .replace('accounts.takosumi.com', 'accounts.takosumi.test')
-  .replace(
-    encodeURIComponent('https://takos.jp'),
-    encodeURIComponent('https://takos.test'),
-  );
-
-const LOCAL_INSTALL_FALLBACK = INSTALL_FALLBACK.replace(
-  'accounts.takosumi.com',
-  'accounts.takosumi.test',
-);
-
-const LOCAL_CLOUD_HOME_FALLBACK = CLOUD_HOME_FALLBACK.replace(
-  'accounts.takosumi.com',
-  'accounts.takosumi.test',
-);
+// "Use Takos" (the everyday-user entry) lands on the same working install
+// wizard so the CTA is never a dead host.
+const USE_TAKOS_FALLBACK = INSTALL_FALLBACK;
+const LOCAL_USE_TAKOS_FALLBACK = LOCAL_INSTALL_FALLBACK;
 
 export interface CloudUrls {
   readonly home: string;

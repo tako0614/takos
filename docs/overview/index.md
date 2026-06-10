@@ -3,7 +3,8 @@
 > このページでわかること: Takos が何をするプロダクトで、どんな概念で構成されているか。
 
 Takos は AI エージェントと会話しながらソフトウェアを作成・編集できるセルフホスト型のプロダクトです。チャット、AI
-エージェント、メモリ、スペースの 4 つを中心機能として持ち、 Takosumi の OpenTofu-native deploy control plane 上で動作します。
+エージェント、メモリ、スペースの 4 つを中心機能として持ちます。Takos は plain OpenTofu module として self-host
+だけで完結し、Takosumi (OpenTofu-native deploy control plane) で運用するのは optional です。
 
 バンドルアプリ (`takos-docs`, `takos-slide`, `takos-excel`, `takos-computer`, `yurucommu`) は新しい Space
 を作成すると自動的にインストールされます。不要なアプリはいつでもアンインストールできます。
@@ -15,7 +16,8 @@ audit、operator approval が揃い、 `managed-offering:status` が `canOpenMan
 
 ## 基本概念
 
-Takos は以下の 4 つの階層で構成されています。
+Takos は以下の 4 つの階層で構成されています。Account / Space は Takosumi の managed / control-plane を使う場合の所有モデルで、self-host
+単体では必須ではありません。
 
 ### Account
 

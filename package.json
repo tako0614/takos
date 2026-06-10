@@ -31,6 +31,7 @@
     "lint:agent-docs": "bun run validate:agent-docs",
     "check": "tsc -p tsconfig.check.json --noEmit",
     "check:i18n-dupe": "bun scripts/check-i18n-dupe.mjs",
+    "check:website-host": "bun scripts/check-website-host-drift.mjs",
     "test": "bun test ./src/worker/platform-utils ./src/contracts/public ./src/worker/actions-engine ./src/contracts",
     "test:common": "bun test ./src/worker/platform-utils",
     "test:actions-engine": "bun test ./src/worker/actions-engine",
