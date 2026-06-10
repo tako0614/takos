@@ -169,7 +169,7 @@ export default defineConfig({
           { text: 'Space', link: '/platform/spaces' },
           { text: 'Threads and Runs', link: '/platform/threads-and-runs' },
           { text: 'Upgrade / Export', link: '/platform/upgrade-export' },
-          { text: 'Store', link: '/platform/store' },
+          { text: 'Git URL から install', link: '/platform/store' },
           { text: '課金', link: '/platform/billing' },
           { text: 'Bundled Apps', link: '/platform/default-apps' },
           {
