@@ -33,4 +33,4 @@ Worker adapter が in-process container host binding を合成します。
 
 ローカル開発のサービス構成は
 [ローカル開発ガイド](/get-started/local-development) を参照してください。
-本番のホスティング設計は [ホスティング](/hosting/) を参照してください。
+本番のデプロイ設計は [デプロイ](/deploy/) を参照してください。

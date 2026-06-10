@@ -517,7 +517,7 @@ bucket_name = "takos-artifacts-staging"
 
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
-id = "replace-with-staging-kv-namespace-id"
+id = "replace-with-staging-hostname-routing-kv-namespace-id"
 
 [[env.staging.kv_namespaces]]
 binding = "ROLLOUT_HEALTH_KV"
