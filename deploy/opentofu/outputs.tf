@@ -10,6 +10,11 @@ output "database_endpoint" {
 
 # Cloudflare-specific binding map (OutputSnapshot consumed by the Worker-script layer).
 
+output "cloudflare_account_id" {
+  description = "Cloudflare account ID the resources were provisioned in (for the CF_ACCOUNT_ID worker var)."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].account_id : null
+}
+
 output "cloudflare_d1_database_id" {
   description = "D1 database ID for the DB binding (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null

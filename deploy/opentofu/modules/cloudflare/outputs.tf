@@ -2,6 +2,14 @@
 # artifact (uploaded by the follow-up `wrangler deploy`) and Takosumi's
 # Deployment record consume as the binding map.
 
+# Cloudflare account id — echoed from the input so the follow-up wrangler
+# materialization can read CF_ACCOUNT_ID from the same OutputSnapshot. Not a
+# managed resource; this is the account the durable resources were created in.
+output "account_id" {
+  description = "Cloudflare account ID the resources were provisioned in (for the CF_ACCOUNT_ID worker var)."
+  value       = var.account_id
+}
+
 # Product control-plane D1 — binding DB.
 output "d1_database_id" {
   description = "D1 database ID for the DB binding."

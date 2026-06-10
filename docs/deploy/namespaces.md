@@ -37,5 +37,5 @@ GCP / Kubernetes target では同じ概念を source に露出しません。
 
 ## Next
 
-- [Cloudflare](/hosting/cloudflare)
+- [デプロイ / セルフホスト](/deploy/)
 - [Deployment History](/deploy/deploy-group)
