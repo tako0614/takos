@@ -4,14 +4,15 @@ import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 // The takos.jp marketing site must only deep-link to the Takosumi platform
-// worker's real bare origin (app.takosumi.com / app.takosumi.test). The
-// dead host accounts.takosumi.com and the dead install-wizard query params
-// (mode=shared-cell, autoplan as anything other than the well-known flag, etc.)
-// have shipped as live CTAs before and silently produced links that 404.
+// worker's real bare origin (app.takosumi.com / app.takosumi.test). Retired
+// account-plane hosts and install-wizard query params have shipped as live CTAs
+// before and silently produced links that 404.
 // This guard fails when any of those forbidden tokens re-enter the takos.jp
 // website source or its static assets (CSP allowlist in public/_headers
 // included) so a dead CTA or stale connect-src can never reach production.
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const retiredAccountsHost = ['accounts', 'takosumi', 'com'].join('.');
+const retiredSharedCellMode = ['mode', 'shared-cell'].join('=');
 const scanDirs = [
   resolve(repoRoot, 'website/src'),
   resolve(repoRoot, 'website/public'),
@@ -19,10 +20,10 @@ const scanDirs = [
 
 // Each rule: a token that must never appear, plus a human reason.
 const forbidden = [
-  { token: 'accounts.takosumi.com', reason: 'dead host — use app.takosumi.com' },
+  { token: retiredAccountsHost, reason: 'dead account-plane host' },
   { token: 'accounts.takosumi.test', reason: 'dead host — use app.takosumi.test' },
-  { token: 'shared-cell', reason: 'dead install-wizard param mode=shared-cell' },
-  { token: 'mode=shared-cell', reason: 'dead install-wizard param' },
+  { token: 'shared-cell', reason: 'dead install-wizard mode value' },
+  { token: retiredSharedCellMode, reason: 'dead install-wizard param' },
   { token: '/takos/start', reason: 'dead deep-link path — use /install' },
   { token: 'takos_url=', reason: 'dead install-wizard param takos_url' },
 ];

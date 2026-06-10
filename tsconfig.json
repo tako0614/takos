@@ -499,9 +499,6 @@
   },
   "exclude": [
     "node_modules",
-    "**/node_modules",
-    "website/node_modules.root-owned-stale",
-    "website/.output.root-owned-stale",
-    "website/.vinxi.root-owned-stale"
+    "**/node_modules"
   ]
 }

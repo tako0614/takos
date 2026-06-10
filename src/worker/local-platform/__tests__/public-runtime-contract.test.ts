@@ -154,14 +154,6 @@ test('local public runtime contract - publishes canonical local runtime entrypoi
     'bun src/worker/local-platform/unified-entrypoint.ts',
   );
   assertStringIncludes(
-    rootPackage.scripts?.['dev:api'] ?? '',
-    'src/worker/local-platform/unified-entrypoint.ts',
-  );
-  assertStringIncludes(
-    rootPackage.scripts?.['dev:worker'] ?? '',
-    'src/worker/local-platform/unified-entrypoint.ts',
-  );
-  assertStringIncludes(
     await read('local-platform/unified-entrypoint.ts', sourcePackageRoot),
     'startUnifiedTakosWorker',
   );

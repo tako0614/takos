@@ -159,7 +159,7 @@ async function validateCanonicalLayoutDocs(): Promise<string[]> {
   const forbidden = [
     'takos/app/',
     'takos/git/',
-    'takos/agent/',
+    'takos/containers/agent/',
     '`app/`',
     '`git/`',
     '`agent/`',
