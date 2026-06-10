@@ -1,18 +1,22 @@
 // The Takosumi platform worker hosts every public surface (account-plane,
 // install wizard, dashboard) on its bare origin: app.takosumi.com in
 // production, app.takosumi.test in local-substrate. There is no separate
-// "accounts." subdomain. The install wizard takes only the well-known
-// OpenTofu deep-link params git / ref / autoplan.
+// "accounts." subdomain. The install wizard reads only the well-known
+// OpenTofu deep-link params git / ref / path.
 const PLATFORM_HOST = 'app.takosumi.com';
 const LOCAL_PLATFORM_HOST = 'app.takosumi.test';
 
 const TAKOS_GIT_URL = 'https://github.com/tako0614/takos.git';
+// Takos ships as a plain OpenTofu module under deploy/opentofu; the deep link
+// points the install wizard at that module path inside the repo so the Capsule
+// resolves to the module root rather than the repo root.
+const TAKOS_MODULE_PATH = 'deploy/opentofu';
 
 function installUrl(host: string): string {
   const url = new URL(`https://${host}/install`);
   url.searchParams.set('git', TAKOS_GIT_URL);
   url.searchParams.set('ref', 'main');
-  url.searchParams.set('autoplan', '1');
+  url.searchParams.set('path', TAKOS_MODULE_PATH);
   return url.toString();
 }
 
@@ -22,8 +26,10 @@ const LOCAL_CLOUD_HOME_FALLBACK = `https://${LOCAL_PLATFORM_HOST}/`;
 
 /**
  * Anyone — everyday user or developer — lands on the same Takosumi install
- * wizard: open app.takosumi.com/install?git=<repo>&ref=main&autoplan=1 and
- * Takosumi pre-fills the wizard and runs the plan. Takos is just one such repo.
+ * wizard: open app.takosumi.com/install?git=<repo>&ref=main&path=<module> and
+ * Takosumi pre-fills the wizard with the repo coordinates. The visitor reviews
+ * the Capsule's compatibility and applies it there (on the managed default key
+ * when they bring no cloud of their own). Takos is just one such repo.
  */
 const INSTALL_FALLBACK = installUrl(PLATFORM_HOST);
 const LOCAL_INSTALL_FALLBACK = installUrl(LOCAL_PLATFORM_HOST);
