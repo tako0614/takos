@@ -10,8 +10,6 @@
   "private": true,
   "scripts": {
     "dev": "bun src/worker/local-platform/unified-entrypoint.ts",
-    "dev:api": "bun src/worker/local-platform/unified-entrypoint.ts",
-    "dev:worker": "bun src/worker/local-platform/unified-entrypoint.ts",
     "dev:web": "bunx vite --host 0.0.0.0 --config web/vite.config.ts",
     "web:dev": "bun run dev:web",
     "web:build": "bunx vite build --config web/vite.config.ts",
@@ -47,7 +45,6 @@
     "validate:patch-management": "bun scripts/validate-patch-management.ts",
     "validate:migration-safety": "bun scripts/validate-migration-safety.ts",
     "validate:legal-docs": "bun scripts/validate-legal-docs.ts",
-    "generate:agent-prompts": "bun scripts/generate-agent-prompts.ts",
     "generate:keys": "bun scripts/generate-platform-keys.ts",
     "containers:build:runtime": "bun --cwd containers/runtime run build",
     "containers:build:executor": "bun --cwd containers/executor run build",

@@ -22,9 +22,6 @@
       "takosumi-contract/internal/rpc": [
         "../../../takosumi/packages/schema/src/internal-rpc.ts"
       ],
-      "@takos/takosumi-contract": [
-        "../../../takosumi/packages/schema/src/index.ts"
-      ],
       "takos-git-contract": [
         "../../src/contracts/git/index.ts"
       ],
