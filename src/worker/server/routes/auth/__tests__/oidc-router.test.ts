@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { createEphemeralAccountsHandler } from "../../../../../../../takosumi/packages/accounts-service/src/mod.ts";
+import { createEphemeralAccountsHandler } from "../../../../../../../takosumi/accounts/service/src/mod.ts";
 import * as schema from "../../../../infra/db/schema.ts";
 import { accounts, authIdentities } from "../../../../infra/db/schema.ts";
 import { generateCodeChallenge } from "../../../../application/services/identity/oidc-pkce.ts";

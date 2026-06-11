@@ -8,7 +8,7 @@ const README_PATH = 'README.md';
 const CURRENT_STATE_PATH = 'docs/contributing/current-state.md';
 const TAKOSUMI_MODEL_PATH = '../takosumi/docs/reference/model.md';
 const TAKOSUMI_OPERATOR_PATH = '../takosumi/docs/reference/operator.md';
-const DOMAIN_ROOT = '../takosumi/src/service/domains';
+const DOMAIN_ROOT = '../takosumi/core/domains';
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
 const REQUIRED_OPERATOR_BOUNDARY_DOCS = [CURRENT_STATE_PATH];

@@ -240,7 +240,7 @@ test(
 
     assertStringIncludes(compose, "command: ['bun', 'run', 'dev']");
     assertStringIncludes(compose, "command: ['bun', 'run', 'dev']");
-    assertStringIncludes(compose, "command: ['bun', 'src/service/index.ts']");
+    assertStringIncludes(compose, "command: ['bun', 'core/index.ts']");
     assertStringIncludes(compose, 'context: ..');
     assertStringIncludes(compose, 'dockerfile: takos/containers/agent/Dockerfile');
     assert(!compose.includes('dev:local:web'));

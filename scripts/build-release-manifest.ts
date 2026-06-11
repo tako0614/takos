@@ -830,7 +830,7 @@ function collectServiceObservations(
 }
 
 async function collectDomainDirs(): Promise<JsonValue> {
-  const domainRoot = '../takosumi/src/service/domains';
+  const domainRoot = '../takosumi/core/domains';
   const dirs: Array<{ name: string; path: string; files: string[] }> = [];
 
   try {
