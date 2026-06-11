@@ -272,7 +272,7 @@ max_instances = 25
 # rewritten here; build context = takosumi repo root (the runner Dockerfile
 [[containers]]
 class_name = "OpenTofuRunnerObject"
-image = "../../../takosumi/runner-image/Dockerfile"
+image = "../../../takosumi/runner/Dockerfile"
 image_build_context = "../../../takosumi"
 instance_type = "basic"
 max_instances = 10
@@ -602,7 +602,7 @@ max_instances = 10
 # Deploy-control OpenTofu run executor (staging). Paths mirror production.
 [[env.staging.containers]]
 class_name = "OpenTofuRunnerObject"
-image = "../../../takosumi/runner-image/Dockerfile"
+image = "../../../takosumi/runner/Dockerfile"
 image_build_context = "../../../takosumi"
 instance_type = "basic"
 max_instances = 5

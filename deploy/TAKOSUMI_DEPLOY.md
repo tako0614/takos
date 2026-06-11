@@ -31,7 +31,7 @@ Run everything from the `takos/` repo root unless a step says otherwise. Replace
 - A Cloudflare account id (`<account-id>`) and, if you are attaching a custom domain, the DNS zone id (`<zone-id>`) for
   that hostname.
 - The `takosumi/` repo checked out as a sibling of `takos/` (the OpenTofu runner image at
-  `../../../takosumi/runner-image/Dockerfile` is built from it; see step 4).
+  `../../../takosumi/runner/Dockerfile` is built from it; see step 4).
 
 ### 1. Provision durable infra (`tofu apply`)
 
@@ -90,7 +90,7 @@ bun run containers:build      # builds dist/ for the runtime + executor containe
 ```
 
 The third image — the OpenTofu runner (`OpenTofuRunnerObject`) — is built directly by wrangler from
-`../../../takosumi/runner-image/Dockerfile` during deploy; no separate pre-build is needed, but the `takosumi/` repo
+`../../../takosumi/runner/Dockerfile` during deploy; no separate pre-build is needed, but the `takosumi/` repo
 must be present (see step 0).
 
 ### 5. Migrate the two D1 databases
