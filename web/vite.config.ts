@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
         // via this specifier; resolve it for the in-process web build too.
         '@takosjp/takosumi-accounts-contract': resolve(
           __dirname,
-          '../../takosumi/packages/accounts-contract/src/mod.ts',
+          '../../takosumi/accounts/contract/src/mod.ts',
         ),
         'takos-api-contract/shared/types': resolve(
           __dirname,

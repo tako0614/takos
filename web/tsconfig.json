@@ -19,7 +19,7 @@
       "@/*": ["src/*"],
       "@takosumi/dashboard/*": ["../../takosumi/dashboard/src/*"],
       "@takosjp/takosumi-accounts-contract": [
-        "../../takosumi/packages/accounts-contract/src/mod.ts"
+        "../../takosumi/accounts/contract/src/mod.ts"
       ],
       "takos-api-contract/rpc-types": [
         "../src/contracts/public/rpc-types.ts"

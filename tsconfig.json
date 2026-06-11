@@ -148,10 +148,10 @@
         "../takosumi/lib/policy/src/mod.ts"
       ],
       "@takosjp/takosumi-accounts-contract": [
-        "../takosumi/packages/accounts-contract/src/mod.ts"
+        "../takosumi/accounts/contract/src/mod.ts"
       ],
       "@takosjp/takosumi-accounts-service": [
-        "../takosumi/packages/accounts-service/src/mod.ts"
+        "../takosumi/accounts/service/src/mod.ts"
       ],
       "@takosjp/takosumi-accounts-worker": [
         "../takosumi/deploy/accounts-cloudflare/src/handler.ts"

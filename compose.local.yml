@@ -122,7 +122,7 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-    command: ['bun', 'src/service/index.ts']
+    command: ['bun', 'core/index.ts']
     healthcheck:
       test:
         - 'CMD-SHELL'
