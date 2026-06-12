@@ -830,9 +830,8 @@ function renderRouteSchemaGroup(
  * out-rank the schema's `/:username/:repoName` and `*rest` fallbacks in the
  * @solidjs/router specificity match.
  */
-/** Redirect preserving the query string (the worker's `/install?git=…`
- * external link and the Cloudflare OAuth callback's `/connections?connected=1`
- * both arrive with load-bearing params). */
+/** Redirect preserving the query string (the Cloudflare OAuth callback's
+ * `/connections?connected=1` carries a load-bearing result param). */
 function RedirectWithQuery(props: { readonly to: string }) {
   const loc = useLocation();
   return <Navigate href={`${props.to}${loc.search}`} />;
@@ -866,8 +865,10 @@ function AccountPlaneRoutes() {
       <Route path="/space/settings/:tab" component={SpaceSettingsView} />
       <Route path="/takos/start" component={TakosStartView} />
 
-      {/* Old paths → new homes (query preserved where it matters). */}
-      <Route path="/install" component={() => <RedirectWithQuery to="/new" />} />
+      {/* Old paths → new homes. /install drops its query on purpose: the
+          external install-link entry (URL-redirect installs) was removed, so
+          install params are never read. */}
+      <Route path="/install" component={() => <Navigate href="/new" />} />
       <Route
         path="/connections"
         component={() => <RedirectWithQuery to="/space/settings/connections" />}
