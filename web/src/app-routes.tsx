@@ -139,13 +139,13 @@ const RunView = lazy(() =>
   import("@takosumi/dashboard/views/runs/RunView.tsx")
 );
 const RunGroupView = lazy(() =>
-  import("@takosumi/dashboard/views/control/ControlRunGroupView.tsx")
+  import("@takosumi/dashboard/views/runs/RunGroupView.tsx")
 );
 const GraphView = lazy(() =>
-  import("@takosumi/dashboard/views/control/ControlGraphView.tsx")
+  import("@takosumi/dashboard/views/graph/GraphView.tsx")
 );
 const ActivityView = lazy(() =>
-  import("@takosumi/dashboard/views/control/ControlActivityView.tsx")
+  import("@takosumi/dashboard/views/activity/ActivityView.tsx")
 );
 const SpaceSettingsView = lazy(() =>
   import("@takosumi/dashboard/views/space/SpaceSettingsView.tsx")
