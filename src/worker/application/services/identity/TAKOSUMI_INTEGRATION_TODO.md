@@ -4,7 +4,7 @@
 
 ### Phase A: Best-effort dual-write
 
-- `createTakosumiInstallation()` calls `POST /v1/installations` on Space
+- `createTakosumiInstallation()` calls `POST /v1/app-installations` on Space
   creation.
 
 ### Phase B: Database migration

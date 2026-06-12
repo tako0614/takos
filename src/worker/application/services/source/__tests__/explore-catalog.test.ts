@@ -740,7 +740,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
           url,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        if (url.endsWith("/v1/installations/inst_docs/services")) {
+        if (url.endsWith("/v1/app-installations/inst_docs/services")) {
           return Response.json({
             installation_id: "inst_docs",
             services: [{
@@ -753,7 +753,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
               material_kind: "events.webhook@v1",
               status: "ready",
               endpoint:
-                "https://accounts.internal/base/v1/installations/inst_docs/events/ingest",
+                "https://accounts.internal/base/v1/app-installations/inst_docs/events/ingest",
               secret_ref: "secret://inst_docs/events",
               token_expires_at: "2026-05-01T00:00:00.000Z",
             }],
@@ -783,7 +783,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
 
   assertEquals(
     requests[0]?.url,
-    "https://accounts.internal/base/v1/installations?space_id=space-1",
+    "https://accounts.internal/base/v1/app-installations?space_id=space-1",
   );
   assertEquals(
     requests[0]?.authorization,
@@ -791,7 +791,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
   );
   assertEquals(
     requests[1]?.url,
-    "https://accounts.internal/base/v1/installations/inst_docs/services",
+    "https://accounts.internal/base/v1/app-installations/inst_docs/services",
   );
   assertEquals(result.items[0]?.installation, {
     installed: true,
@@ -818,7 +818,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
       material_kind: "events.webhook@v1",
       status: "ready",
       endpoint:
-        "https://accounts.internal/base/v1/installations/inst_docs/events/ingest",
+        "https://accounts.internal/base/v1/app-installations/inst_docs/events/ingest",
       secret_configured: true,
       token_expires_at: "2026-05-01T00:00:00.000Z",
     }],

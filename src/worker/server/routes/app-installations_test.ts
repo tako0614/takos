@@ -81,7 +81,7 @@ const roadToMeCatalogEntry = {
 } satisfies DefaultAppDistributionEntry;
 
 const installConfig = {
-  installUrl: "https://installer.internal/v1/installations",
+  installUrl: "https://installer.internal/v1/app-installations",
   token: "install-token",
   subject: "operator-subject",
   mode: "shared-cell",
@@ -353,7 +353,7 @@ test("app-installations route proxies Git URL install PlanRun", async () => {
       {
         DB: {},
         TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/installations",
+          "https://installer.internal/v1/app-installations",
         TAKOS_APP_INSTALL_TOKEN: "install-token",
       } as Env,
     );
@@ -372,7 +372,7 @@ test("app-installations route proxies Git URL install PlanRun", async () => {
       },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/installations/plan-runs",
+        input: "https://installer.internal/v1/app-installations/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -440,7 +440,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
       {
         DB: {},
         TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/installations",
+          "https://installer.internal/v1/app-installations",
         TAKOS_APP_INSTALL_TOKEN: "install-token",
         TAKOS_APP_INSTALL_ACCOUNT_ID: "acct_operator",
         TAKOS_APP_INSTALL_SUBJECT: "operator-subject",
@@ -467,7 +467,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
       { kind: "subject", userId: "user-1" },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/installations",
+        input: "https://installer.internal/v1/app-installations",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -537,7 +537,7 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
     const env = {
       DB: {},
       TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/installations",
+        "https://installer.internal/v1/app-installations",
       TAKOS_APP_INSTALL_TOKEN: "install-token",
       TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
       TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
@@ -585,7 +585,7 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
       },
       {
         kind: "fetch",
-        input: "https://accounts.internal/v1/installations",
+        input: "https://accounts.internal/v1/app-installations",
         method: "GET",
         authorization: "Bearer accounts-token",
         body: null,
@@ -593,7 +593,7 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
       {
         kind: "fetch",
         input:
-          "https://installer.internal/v1/installations/inst_1/deployments/plan-runs",
+          "https://installer.internal/v1/app-installations/inst_1/deployments/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -612,14 +612,14 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
       },
       {
         kind: "fetch",
-        input: "https://accounts.internal/v1/installations",
+        input: "https://accounts.internal/v1/app-installations",
         method: "GET",
         authorization: "Bearer accounts-token",
         body: null,
       },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/installations/inst_1/rollback",
+        input: "https://installer.internal/v1/app-installations/inst_1/rollback",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -670,7 +670,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
           id: "events.webhook.default",
           material_kind: "events.webhook@v1",
           status: "ready",
-          endpoint: "https://accounts.internal/v1/installations/inst_1/events/ingest",
+          endpoint: "https://accounts.internal/v1/app-installations/inst_1/events/ingest",
           secret_ref: "secret://inst_1/events",
           token_expires_at: "2026-05-01T00:00:00.000Z",
         }],
@@ -725,7 +725,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       material_kind: "events.webhook@v1",
       status: "ready",
       endpoint:
-        "https://accounts.internal/v1/installations/inst_1/events/ingest",
+        "https://accounts.internal/v1/app-installations/inst_1/events/ingest",
       secret_configured: true,
       token_expires_at: "2026-05-01T00:00:00.000Z",
     }]);
@@ -738,7 +738,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installations",
+        pathname: "/v1/app-installations",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -746,7 +746,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installations/inst_1/services",
+        pathname: "/v1/app-installations/inst_1/services",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -760,7 +760,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installations",
+        pathname: "/v1/app-installations",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -768,7 +768,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installations/inst_1",
+        pathname: "/v1/app-installations/inst_1",
         spaceId: null,
         method: "DELETE",
         authorization: "Bearer accounts-token",
@@ -848,14 +848,14 @@ test("app-installations route lists Installation services through Takosumi Accou
       },
       {
         kind: "fetch",
-        pathname: "/v1/installations",
+        pathname: "/v1/app-installations",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
       },
       {
         kind: "fetch",
-        pathname: "/v1/installations/inst_1/services",
+        pathname: "/v1/app-installations/inst_1/services",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -889,7 +889,7 @@ test("app-installations route rejects cross-space installation_id with 404", asy
     const env = {
       DB: {},
       TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/installations",
+        "https://installer.internal/v1/app-installations",
       TAKOS_APP_INSTALL_TOKEN: "install-token",
       TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
       TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",

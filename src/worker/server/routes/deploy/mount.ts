@@ -9,8 +9,8 @@ import type { DeployControlOperations } from "@takosjp/takosumi-accounts-service
 // this unified Takos worker. It owns NO public route: web.ts delegates `/v1/*`
 // only to the accounts handler, and the accounts facade reaches the
 // deploy-control service through the in-process seam injected below
-// (`createInProcessDeployControlFetch`). The two GET `/v1/installations/{id}` and
-// `/v1/installations/{id}/deployments` collisions that would arise from mounting
+// (`createInProcessDeployControlFetch`). The two GET `/v1/app-installations/{id}` and
+// `/v1/app-installations/{id}/deployments` collisions that would arise from mounting
 // deploy-control publicly are avoided entirely — deploy-control is a private
 // backend of the accounts proxy by design.
 //

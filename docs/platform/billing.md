@@ -340,7 +340,7 @@ surface は、Stripe checkout / webhook と Installation scoped usage report ing
 | ---------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
 | `/v1/billing/stripe/checkout`                  | POST     | Stripe Checkout session 作成                                                                       |
 | `/v1/billing/stripe/webhook`                   | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                        |
-| `/v1/installations/{id}/billing/usage-reports` | POST     | Installation OIDC access token + `billing.usage.report` account-plane capability record で保護された使用量 report |
+| `/v1/app-installations/{id}/billing/usage-reports` | POST     | Installation OIDC access token + `billing.usage.report` account-plane capability record で保護された使用量 report |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。
