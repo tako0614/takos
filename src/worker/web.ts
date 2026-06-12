@@ -272,6 +272,13 @@ app.all("/oauth/*", (c) =>
   handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
 app.all("/v1/*", (c) =>
   handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+// `/api/v1/*` is the account plane's edge-public deploy-control surface (the
+// dashboard control surface served by accounts-service). It is NOT under `/v1`,
+// so it needs its own delegation here, registered BEFORE the Takos product
+// `/api` router mount below, or the product router would shadow it (and answer
+// with its own 404 before the request could reach the account plane).
+app.all("/api/v1/*", (c) =>
+  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
 app.all("/start", (c) =>
   handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
 app.all("/__takosumi/*", (c) =>
