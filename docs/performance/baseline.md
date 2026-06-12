@@ -79,10 +79,10 @@ assertion を bypass した kernel-only handler を使用します。
 
 | Endpoint                                        | Requests | Concurrency | p50 (ms) | p95 (ms) | p99 (ms) | Throughput (req/sec) | Errors |
 | ----------------------------------------------- | -------: | ----------: | -------: | -------: | -------: | -------------------: | -----: |
-| POST /v1/installations/plan-runs (warmup)       |      100 |          16 |     5.62 |    19.56 |    20.21 |             1,955.02 |      0 |
-| POST /v1/installations/plan-runs                |    1,000 |          32 |     8.58 |    13.35 |    31.52 |             3,346.28 |      0 |
-| POST /v1/installations/{id}/deployments/plan-runs |      500 |          16 |     4.18 |     6.41 |     6.92 |             3,556.35 |      0 |
-| POST /v1/installations/{id}/deployments         |    2,000 |          32 |     3.19 |     4.58 |     6.27 |            10,390.12 |      0 |
+| POST /v1/app-installations/plan-runs (warmup)       |      100 |          16 |     5.62 |    19.56 |    20.21 |             1,955.02 |      0 |
+| POST /v1/app-installations/plan-runs                |    1,000 |          32 |     8.58 |    13.35 |    31.52 |             3,346.28 |      0 |
+| POST /v1/app-installations/{id}/deployments/plan-runs |      500 |          16 |     4.18 |     6.41 |     6.92 |             3,556.35 |      0 |
+| POST /v1/app-installations/{id}/deployments         |    2,000 |          32 |     3.19 |     4.58 |     6.27 |            10,390.12 |      0 |
 
 判定:
 
@@ -156,10 +156,10 @@ threshold (失敗時 exit code != 0):
 
 トラフィックミックス:
 
-- 55 % POST /v1/installations/plan-runs
-- 30 % POST /v1/installations/{id}/deployments/plan-runs → POST
-  /v1/installations/{id}/deployments
-- 15 % POST /v1/installations/{id}/deployments/plan-runs
+- 55 % POST /v1/app-installations/plan-runs
+- 30 % POST /v1/app-installations/{id}/deployments/plan-runs → POST
+  /v1/app-installations/{id}/deployments
+- 15 % POST /v1/app-installations/{id}/deployments/plan-runs
 
 サマリは `k6-load-test-summary.json` に出力されます。
 

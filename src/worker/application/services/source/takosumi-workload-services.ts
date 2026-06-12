@@ -1,3 +1,4 @@
+import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 import type {
   TakosumiAccountsWorkloadServiceProjection,
   TakosumiAccountsWorkloadServiceStatus,
@@ -45,9 +46,9 @@ export function accountsInstallationServicesUrl(
 ): URL {
   const url = new URL(baseUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
-  const installationsPath = basePath.endsWith("/v1/installations")
+  const installationsPath = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
     ? basePath
-    : `${basePath}/v1/installations`;
+    : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
   url.pathname = `${installationsPath}/${
     encodeURIComponent(installationId)
   }/services`;

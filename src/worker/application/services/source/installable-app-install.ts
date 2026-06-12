@@ -2,6 +2,7 @@ import {
   BadGatewayError,
   ServiceUnavailableError,
 } from "@takos/worker-platform-utils/errors";
+import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 
 import type { Env } from "../../../shared/types/index.ts";
 import {
@@ -116,9 +117,9 @@ function normalizeInstallationsUrl(value: string, field: string): string {
   const normalized = normalizeHttpUrl(value, field);
   const url = new URL(normalized);
   const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = basePath.endsWith("/v1/installations")
+  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
     ? basePath
-    : `${basePath}/v1/installations`;
+    : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
   url.search = "";
   return url.toString();
 }
@@ -273,9 +274,9 @@ function accountsInstallationsUrl(
 ): URL {
   const url = new URL(config.baseUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
-  const installationsPath = basePath.endsWith("/v1/installations")
+  const installationsPath = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
     ? basePath
-    : `${basePath}/v1/installations`;
+    : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
   url.pathname = installationId
     ? `${installationsPath}/${encodeURIComponent(installationId)}`
     : installationsPath;

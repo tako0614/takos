@@ -264,14 +264,14 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOS_DEFAULT_APP_REF_TYPE?: string;
   TAKOS_DEFAULT_APP_BACKEND?: string;
   TAKOS_DEFAULT_APP_ENV?: string;
-  /** Optional Takosumi installer /v1/installations endpoint for bundled app preinstall. */
+  /** Optional Takosumi installer /v1/app-installations endpoint for bundled app preinstall. */
   TAKOS_DEFAULT_APP_INSTALL_URL?: string;
   TAKOS_DEFAULT_APP_INSTALL_TOKEN?: string;
   TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID?: string;
   TAKOS_DEFAULT_APP_INSTALL_SUBJECT?: string;
   TAKOS_DEFAULT_APP_INSTALL_MODE?: string;
   TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL?: string;
-  /** Optional Takosumi installer /v1/installations base URL for third-party Git URL installs. */
+  /** Optional Takosumi installer /v1/app-installations base URL for third-party Git URL installs. */
   TAKOS_APP_INSTALLATIONS_URL?: string;
   TAKOS_APP_INSTALL_TOKEN?: string;
   TAKOS_APP_INSTALL_ACCOUNT_ID?: string;

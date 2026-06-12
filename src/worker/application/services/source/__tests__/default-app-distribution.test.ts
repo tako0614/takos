@@ -1198,7 +1198,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/installations",
+          "https://installer.internal/v1/app-installations",
         TAKOS_DEFAULT_APP_INSTALL_TOKEN: "install-token",
         TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_operator",
         TAKOS_DEFAULT_APP_INSTALL_MODE: "shared-cell",
@@ -1212,7 +1212,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
     assertEquals(sentRequests.length, 5);
     assertEquals(
       sentRequests[0].url,
-      "https://installer.internal/v1/installations",
+      "https://installer.internal/v1/app-installations",
     );
     assertEquals(
       sentRequests[0].headers.get("authorization"),
@@ -1299,7 +1299,7 @@ test("processDefaultAppPreinstallJobs blocks incomplete Installation install con
           repositoryUrl: "https://example.com/operator-docs.git",
         }]),
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/installations",
+          "https://installer.internal/v1/app-installations",
       }),
       { timestamp: "2026-01-01T00:00:00.000Z" },
     );
@@ -1510,7 +1510,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/installations",
+          "https://installer.internal/v1/app-installations",
         TAKOS_DEFAULT_APP_INSTALL_TOKEN: "install-token",
         TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_operator",
         TAKOS_DEFAULT_APP_INSTALL_MODE: "shared-cell",
@@ -1532,11 +1532,11 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
     ]);
     assertEquals(fetchCalls.length, 5);
     assertEquals(fetchCalls.map((call) => call.url), [
-      "https://installer.internal/v1/installations",
-      "https://installer.internal/v1/installations",
-      "https://installer.internal/v1/installations",
-      "https://installer.internal/v1/installations",
-      "https://installer.internal/v1/installations",
+      "https://installer.internal/v1/app-installations",
+      "https://installer.internal/v1/app-installations",
+      "https://installer.internal/v1/app-installations",
+      "https://installer.internal/v1/app-installations",
+      "https://installer.internal/v1/app-installations",
     ]);
     assertEquals(fetchCalls.map((call) => call.authorization), [
       "Bearer install-token",
