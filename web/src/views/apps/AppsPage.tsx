@@ -1,4 +1,4 @@
-import { Show } from "solid-js";
+import { For, Show } from "solid-js";
 import { type TranslationKey, useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Button } from "../../components/ui/index.ts";
@@ -10,6 +10,7 @@ import {
   type RegisteredApp,
   useRegisteredApps,
 } from "./registered-apps.ts";
+import { useInflightInstalls } from "./inflight-installs.ts";
 
 export interface AppsPageProps {
   spaceId: string;
@@ -19,6 +20,9 @@ export interface AppsPageProps {
 export function AppsPage(props: AppsPageProps) {
   const { t } = useI18n();
   const { apps, loading, error } = useRegisteredApps(() => props.spaceId);
+  // Control-plane installs in flight (from the admin `/new` flow), so "what did
+  // I just install?" is answerable here too. Fail-soft: hidden on any error.
+  const { installs: inflightInstalls } = useInflightInstalls();
 
   const appsCount = () => apps().length;
   const hasApps = () => appsCount() > 0;
@@ -60,6 +64,42 @@ export function AppsPage(props: AppsPageProps) {
           <Show when={errorMessage()}>
             <div class="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
               <p>{errorMessage()}</p>
+            </div>
+          </Show>
+
+          {/* In-flight control-plane installs (admin /new flow). Lets this page
+              answer "what did I just install?" without a separate surface.
+              Each row links to the embedded admin detail at /apps/:id. */}
+          <Show when={inflightInstalls().length > 0}>
+            <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+              <div class="mb-2 flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {t("appsInflightTitle")}
+                </h2>
+                <a
+                  href="/installations"
+                  class="text-xs font-medium text-amber-700 hover:underline dark:text-amber-300"
+                >
+                  {t("appsInflightManage")}
+                </a>
+              </div>
+              <ul class="flex flex-col gap-1">
+                <For each={inflightInstalls()}>
+                  {(inst) => (
+                    <li>
+                      <a
+                        href={`/apps/${encodeURIComponent(inst.id)}`}
+                        class="flex items-center justify-between rounded px-2 py-1.5 text-sm text-zinc-700 hover:bg-amber-100/60 dark:text-zinc-200 dark:hover:bg-amber-900/20"
+                      >
+                        <span class="truncate font-medium">{inst.name}</span>
+                        <span class="ml-3 shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
+                          {inst.status}
+                        </span>
+                      </a>
+                    </li>
+                  )}
+                </For>
+              </ul>
             </div>
           </Show>
 
