@@ -17,6 +17,8 @@ export const repository = {
   appsInstalledEmpty: "No apps installed yet",
   appsInstalledEmptyDesc: "Apps you add from the store will appear here.",
   browseStore: "Browse Store",
+  appsInflightTitle: "Installing / in progress",
+  appsInflightManage: "Manage installs →",
 
   // Branches
   branches: "Branches",

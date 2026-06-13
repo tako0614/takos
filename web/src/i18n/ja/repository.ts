@@ -18,6 +18,8 @@ export const repository = {
   appsInstalledEmpty: "まだアプリがインストールされていません",
   appsInstalledEmptyDesc: "ストアから追加すると、ここに表示されます。",
   browseStore: "ストアを見る",
+  appsInflightTitle: "導入中・実行中",
+  appsInflightManage: "導入を管理 →",
 
   // Branches
   branches: "ブランチ",
