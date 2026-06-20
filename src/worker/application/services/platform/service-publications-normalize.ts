@@ -3,9 +3,14 @@ import type {
   AppConsume,
   AppPublication,
 } from "../source/app-manifest-types.ts";
+import { TAKOS_APP_PUBLICATION_TYPES } from "../source/app-interface-contract.ts";
 import { normalizeEnvName } from "../common-env/crypto.ts";
 
 export { normalizeEnvName };
+export {
+  SERVICE_GRAPH_CAPABILITIES,
+  TAKOS_APP_PUBLICATION_TYPES,
+} from "../source/app-interface-contract.ts";
 
 export interface PublicationOutputDescriptor {
   name: string;
@@ -24,13 +29,7 @@ export const ROUTE_PUBLICATION_FIELDS = new Set([
   "spec",
 ]);
 
-export const STANDARD_PUBLICATION_TYPES: Record<string, string> = {
-  McpServer: "takos.mcp-server.v1",
-  FileHandler: "takos.file-handler.v1",
-  UiSurface: "takos.ui-surface.v1",
-};
-
-export const RETIRED_TAKOS_API_KEY_TYPE = "api-key";
+export const STANDARD_PUBLICATION_TYPES: Record<string, string> = {};
 
 export function canonicalPublicationType(type: string): string {
   return STANDARD_PUBLICATION_TYPES[type] ?? type;
@@ -47,7 +46,7 @@ export function parseJsonRecord(raw: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(raw) as unknown;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
+      ? (parsed as Record<string, unknown>)
       : {};
   } catch {
     return {};
@@ -102,12 +101,6 @@ export function normalizeName(name: string, field: string): string {
   return normalized;
 }
 
-export function isRetiredTakosGrantPublication(
-  publication: AppPublication,
-): boolean {
-  return publication.publisher === "takos";
-}
-
 export function isReservedTakosPublicationSource(source: string): boolean {
   return source.trim().startsWith("takos.");
 }
@@ -115,10 +108,7 @@ export function isReservedTakosPublicationSource(source: string): boolean {
 export function consumeLocalName(
   consume: Pick<AppConsume, "publication" | "as">,
 ): string {
-  return normalizeName(
-    consume.as ?? consume.publication,
-    "consume.as",
-  );
+  return normalizeName(consume.as ?? consume.publication, "consume.as");
 }
 
 export type ConsumeEntry = {
@@ -172,9 +162,11 @@ export function assertConsumeOutputAliases(
   for (const key of Object.keys(consume.inject?.env ?? {})) {
     if (outputNames.has(key)) continue;
     throw new Error(
-      `consume '${consume.publication}' maps unknown output '${key}'. Known outputs: ${
-        Array.from(outputNames).sort().join(", ")
-      }`,
+      `consume '${consume.publication}' maps unknown output '${key}'. Known outputs: ${Array.from(
+        outputNames,
+      )
+        .sort()
+        .join(", ")}`,
     );
   }
 }
@@ -194,8 +186,7 @@ export function resolveConsumeOutputEnvName(
   output: Pick<PublicationOutputDescriptor, "name" | "defaultEnv">,
 ): string {
   return normalizeEnvName(
-    consume.inject?.env?.[output.name] ??
-      output.defaultEnv,
+    consume.inject?.env?.[output.name] ?? output.defaultEnv,
   );
 }
 
@@ -210,32 +201,6 @@ export function normalizePublicationEnvSegment(value: string): string {
 
 export function publicationUrlDefaultEnv(name: string): string {
   return `PUBLICATION_${normalizePublicationEnvSegment(name)}_URL`;
-}
-
-export function retiredTakosApiOutputEnv(
-  name: string,
-  output: "ENDPOINT" | "API_KEY",
-): string {
-  return `PUBLICATION_${normalizePublicationEnvSegment(name)}_${output}`;
-}
-
-export function retiredTakosGrantOutputContract(
-  publication: AppPublication,
-): PublicationOutputDescriptor[] {
-  return [
-    {
-      name: "endpoint",
-      defaultEnv: retiredTakosApiOutputEnv(publication.name, "ENDPOINT"),
-      secret: false,
-      kind: "url",
-    },
-    {
-      name: "apiKey",
-      defaultEnv: retiredTakosApiOutputEnv(publication.name, "API_KEY"),
-      secret: true,
-      kind: "secret",
-    },
-  ];
 }
 
 export function buildPublicUrl(
@@ -284,7 +249,7 @@ function normalizeRoutePublication(
   );
   if (publisher === "takos") {
     throw new Error(
-      `publication '${name}' uses reserved publisher 'takos'; use AppGrant/AppBinding credentials from Takosumi Accounts instead`,
+      `publication '${name}' uses reserved publisher 'takos'; use ServiceBinding and ServiceGrant for runtime authority instead`,
     );
   }
   if (!publication.outputs || Object.keys(publication.outputs).length === 0) {
@@ -341,6 +306,70 @@ export function normalizePublicationDefinition(
   });
 }
 
+function normalizePublicationOutputs(
+  publication: AppPublication,
+  options: { requireRouteRef: boolean },
+): AppPublication["outputs"] {
+  const name = normalizeName(publication.name, "publication.name");
+  if (!publication.outputs || Object.keys(publication.outputs).length === 0) {
+    throw new Error(`publication '${name}'.outputs is required`);
+  }
+  const outputs: AppPublication["outputs"] = {};
+  for (const [outputName, output] of Object.entries(publication.outputs)) {
+    const kind = output.kind ?? "url";
+    if (!["url", "string", "secret"].includes(kind)) {
+      throw new Error(
+        `publication '${name}'.outputs.${outputName}.kind must be url, string, or secret`,
+      );
+    }
+    const routeRef = output.routeRef?.trim();
+    if (options.requireRouteRef && !routeRef) {
+      throw new Error(
+        `publication '${name}'.outputs.${outputName}.routeRef is required`,
+      );
+    }
+    outputs[outputName] = {
+      kind,
+      ...(routeRef ? { routeRef } : {}),
+    };
+  }
+  return outputs;
+}
+
+export function normalizeApiPublicationDefinition(
+  publication: AppPublication,
+): AppPublication {
+  const name = normalizeName(publication.name, "publication.name");
+  const publisher = publication.publisher
+    ? normalizeName(publication.publisher, "publication.publisher")
+    : undefined;
+  if (publisher === "takos") {
+    throw new Error(
+      `publication '${name}' uses reserved publisher 'takos'; use ServiceBinding and ServiceGrant for runtime authority instead`,
+    );
+  }
+  const type = canonicalPublicationType(
+    normalizeName(publication.type || "", "publication.type"),
+  );
+  if (
+    publication.spec != null &&
+    (typeof publication.spec !== "object" || Array.isArray(publication.spec))
+  ) {
+    throw new Error(`publication '${name}'.spec must be an object`);
+  }
+  return {
+    name,
+    ...(publisher ? { publisher } : {}),
+    type,
+    outputs: normalizePublicationOutputs(publication, {
+      requireRouteRef: false,
+    }),
+    ...(publication.display ? { display: publication.display } : {}),
+    ...(publication.auth ? { auth: publication.auth } : {}),
+    ...(publication.spec ? { spec: publication.spec } : {}),
+  };
+}
+
 export function normalizeServiceConsumes(
   consumes: AppConsume[] | undefined,
 ): AppConsume[] {
@@ -363,33 +392,36 @@ export function normalizeServiceConsumes(
     seen.add(localName);
     const request = consume.request
       ? (() => {
-        if (
-          typeof consume.request !== "object" ||
-          Array.isArray(consume.request)
-        ) {
-          throw new Error(`consume '${localName}'.request must be an object`);
-        }
-        return consume.request;
-      })()
+          if (
+            typeof consume.request !== "object" ||
+            Array.isArray(consume.request)
+          ) {
+            throw new Error(`consume '${localName}'.request must be an object`);
+          }
+          return consume.request;
+        })()
       : undefined;
     const rawInject = consume.inject;
     const injectEnv = rawInject?.env
       ? Object.fromEntries(
-        Object.entries(rawInject.env).map(([outputName, envName]) => [
-          normalizeName(outputName, `consume '${localName}'.inject.env output`),
-          normalizeEnvName(envName),
-        ]),
-      )
+          Object.entries(rawInject.env).map(([outputName, envName]) => [
+            normalizeName(
+              outputName,
+              `consume '${localName}'.inject.env output`,
+            ),
+            normalizeEnvName(envName),
+          ]),
+        )
       : undefined;
     const inject = rawInject
       ? {
-        ...(injectEnv && Object.keys(injectEnv).length > 0
-          ? { env: injectEnv }
-          : {}),
-        ...(rawInject.defaults != null
-          ? { defaults: Boolean(rawInject.defaults) }
-          : {}),
-      }
+          ...(injectEnv && Object.keys(injectEnv).length > 0
+            ? { env: injectEnv }
+            : {}),
+          ...(rawInject.defaults != null
+            ? { defaults: Boolean(rawInject.defaults) }
+            : {}),
+        }
       : undefined;
     return {
       publication,

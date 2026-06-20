@@ -1,80 +1,77 @@
-# Git / Store からのインストール
+# Source / Git URL install 手順
 
-> このページでわかること: Store や Git URL からアプリをインストールする手順。
+> このページでわかること: Store / Source 画面、または `/install?git=...` link から、Git URL の app を Workspace に追加する手順。
 
-Store はインストール可能な Git
-リポジトリを見つけるための画面です。インストールの所有権、承認、課金、バインディングは
-Takosumi Accounts が管理します。
+Takos の Store / Source 画面は、中央の公式 registry ではありません。Git URL の OpenTofu Capsule を見つけ、確認し、追加するための
+discovery surface です。deploy 実行主体ではなく、install flow への入口です。
 
-## 基本
+## Browser flow
 
-```bash
-takosumi install --source git:https://github.com/acme/my-app#v1.2.0 --space "$TAKOSUMI_SPACE_ID"
+通常の追加は browser から始めます。
+
+```txt
+Apps または Source を開く
+  ↓
+Git URL で追加
+  ↓
+Git URL / ref / module path を入力
+  ↓
+app summary と作られるものを確認
+  ↓
+承認
+  ↓
+Apps launcher に表示
 ```
 
-browser / dashboard から始める場合も、最終的には同じ install lifecycle
-に入ります。
+external install link は `/install?git=...&ref=...&path=...` の形で `/new` に prefill されます。link を開いただけでは install
+されません。ユーザーは必ず確認画面を通ります。
 
-```text
-User
-  -> Store / install UI
-  -> Takosumi: Installation 作成 (plain OpenTofu module を解決)
-  -> `plan` type Run (planned changes / policy decision を記録)
-  -> reviewed plan を approve
-  -> `apply` type Run
-  -> Deployment / OutputSnapshot 更新
-```
+## Store / Source 画面の責務
 
-## Store の責務
+Store / Source 画面が持つもの:
 
-- repository を検索・発見する
-- publisher、version、tag、Git URL を表示する
-- plain OpenTofu module がある repository を install candidate として扱う
-- Installation 作成へ進むための module metadata (Git URL / ref / commit / tag / well-known OpenTofu outputs) を渡す
+- repository / Git URL の発見
+- publisher、version、tag、Git URL、module path の表示
+- install candidate の説明
+- install flow へ進むための入力
+- install 済み app の launcher 反映
 
-Store は deploy 実行主体ではありません。Installation 作成、typed Runs 実行、
-Deployment / OutputSnapshot 更新は Takosumi deploy control plane、ownership と
-approval は operator account plane (reference impl: Takosumi Accounts)
-が担当します。provider allowlist / credential / state backend / Cloudflare Container execution は
-Connection / ProviderBinding / policy で解決し、Store contract の外に置きます。
+Store / Source 画面が持たないもの:
 
-## Platform services projection
+- provider credential
+- secret output
+- state backend
+- policy decision の正本
+- deploy 実行そのもの
 
-Store は Space の Installation readback を Takosumi Accounts から読み、installed state と一緒に
-Workload Services の非 secret summary を表示します。対象は OIDC identity、billing port、
-OutputSnapshot、event ingest、same-space control などの account-plane / operator-owned
-services です。
+これらは Takosumi control plane、Connections、policy、operator secret store の責務です。
 
-Takos が保持・表示するのは service id、material kind、status、endpoint、secret 設定済みかどうか、
-token expiry までです。token 本体、provider credential、state backend、secret output は Store に渡さず、
-Takosumi Accounts / Connection / ProviderBinding / policy / operator secret store の責務に残します。
+## Review step
 
-## `plan` type Run review
+追加前に、少なくとも次を確認します。
 
-`plan` type Run は mutate しない確認 step です。少なくとも次を表示します。
+- app name / source Git URL / ref / resolved commit
+- module path
+- 作られる resource と scope
+- requested provider と provider connection resolution
+- cost / quota の見込み
+- warning / unsupported finding
 
-- module Git URL / ref / resolved commit
-- publisher metadata / homepage
-- planned changes / policy decision
-- runtime mode
-- estimated cost
-- data exportability
+production install は tag または commit SHA に pin します。`main` / `latest` / `HEAD` のような moving ref は、operator policy により拒否できます。
 
-reviewed plan を approve すると `apply` type Run が実行され、成功した apply が
-Deployment と OutputSnapshot を更新します。Installation / `plan` type Run /
-`apply` type Run / Deployment / OutputSnapshot と audit trail は ledger
-に記録されます。
+## App launcher への反映
 
-## Version pinning
+追加が完了すると、Apps launcher に app が表示されます。launch URL が projection されている app は launcher から直接開けます。
+準備中、失敗、確認待ちの app は launcher では状態を短く見せ、詳細は `/installations/:id` の install 管理画面に分けます。
 
-install は tag または commit SHA に pin します。mutable branch を production
-install の identity として扱いません。upgrade は新しい ref で `plan` type Run
-を作り直し、 reviewed plan を approve した `apply` type Run が新しい Deployment を
-Installation に記録します。
+## 管理者向け detail
+
+operator / admin は install 管理画面で Source / Installation / Run / Deployment / OutputSnapshot / Activity を確認します。
+Workspace ユーザー向けの主導線では、この台帳を最初の説明にしません。
 
 ## 関連ページ
 
+- [Git URL からアプリを install する](/platform/store)
+- [はじめてのアプリ](/get-started/your-first-app)
 - [Install Paths](/apps/install-paths)
-- [Apps overview](/apps/)
-- [Project structure](/get-started/project-structure)
-- [Takosumi Deployment lifecycle](/deploy/deploy)
+- [Deploy overview](/deploy/)

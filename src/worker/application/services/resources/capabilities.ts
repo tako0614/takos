@@ -8,10 +8,9 @@ import type {
  * backend; `local` is the self-hosted portable backend (see
  * {@link PortableResourceBackend}).
  *
- * Multi-cloud materialization (aws/gcp/k8s) is operator-substrate scope owned
- * by OpenTofu RunnerProfiles, not the Takos worker. The aws/gcp/k8s backend
- * arms were retired from the worker; legacy stored `backend_name` values for
- * those are normalized to `local`.
+ * Multi-cloud materialization is operator-substrate scope owned by Takosumi
+ * runner policy, not the Takos worker. This worker accepts only the native
+ * `cloudflare` backend and the portable self-hosted `local` backend.
  */
 export type ResourceBackend = "cloudflare" | "local";
 
@@ -24,17 +23,19 @@ export type PortableResourceBackend = Exclude<ResourceBackend, "cloudflare">;
 export function normalizeResourceBackend(
   backendName?: string | null,
 ): ResourceBackend {
-  switch (backendName) {
+  const normalized = String(backendName ?? "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return "cloudflare";
+  switch (normalized) {
     case "local":
-    // Legacy multi-cloud backends are retired; map them to the portable
-    // self-hosted backend rather than the native cloudflare backend.
-    case "aws":
-    case "gcp":
-    case "k8s":
       return "local";
     case "cloudflare":
-    default:
       return "cloudflare";
+    default:
+      throw new Error(
+        `unsupported resource backend '${normalized}'; expected cloudflare or local`,
+      );
   }
 }
 
@@ -88,33 +89,33 @@ const CURRENT_RESOURCE_CAPABILITY_BY_TYPE: Record<
   ResourcePublicType,
   ResourceCapability
 > = {
-  "sql": "sql",
+  sql: "sql",
   "object-store": "object_store",
   "key-value": "kv",
-  "queue": "queue",
+  queue: "queue",
   "vector-index": "vector_index",
   "analytics-engine": "analytics_store",
-  "secret": "secret",
-  "workflow": "workflow_runtime",
+  secret: "secret",
+  workflow: "workflow_runtime",
   "durable-object": "durable_namespace",
 };
 
 const RESOURCE_CAPABILITY_BY_TYPE: Record<string, ResourceCapability> = {
-  "sql": "sql",
+  sql: "sql",
   "object-store": "object_store",
   "key-value": "kv",
-  "queue": "queue",
+  queue: "queue",
   "vector-index": "vector_index",
   "analytics-engine": "analytics_store",
-  "secret": "secret",
-  "workflow": "workflow_runtime",
+  secret: "secret",
+  workflow: "workflow_runtime",
   "durable-object": "durable_namespace",
-  "object_store": "object_store",
-  "kv": "kv",
-  "vector_index": "vector_index",
-  "analytics_store": "analytics_store",
-  "workflow_runtime": "workflow_runtime",
-  "durable_namespace": "durable_namespace",
+  object_store: "object_store",
+  kv: "kv",
+  vector_index: "vector_index",
+  analytics_store: "analytics_store",
+  workflow_runtime: "workflow_runtime",
+  durable_namespace: "durable_namespace",
 };
 
 const RESOURCE_IMPLEMENTATION_BY_CAPABILITY: Record<
@@ -211,8 +212,8 @@ export function toResourceCapability(
   config?: string | Record<string, unknown> | null,
 ): ResourceCapability | null {
   const parsedConfig = parseResourceConfig(config);
-  const configCapability = parsedConfig.resourceCapability ??
-    parsedConfig.capability;
+  const configCapability =
+    parsedConfig.resourceCapability ?? parsedConfig.capability;
   if (
     typeof configCapability === "string" &&
     configCapability in RESOURCE_CAPABILITY_BY_TYPE
@@ -228,9 +229,10 @@ export function toCurrentResourceCapability(
 ): ResourceCapability | null {
   const normalized = typeof type === "string" ? type.trim() : "";
   if (!normalized) return null;
-  return CURRENT_RESOURCE_CAPABILITY_BY_TYPE[
-    normalized as ResourcePublicType
-  ] ?? null;
+  return (
+    CURRENT_RESOURCE_CAPABILITY_BY_TYPE[normalized as ResourcePublicType] ??
+    null
+  );
 }
 
 export function currentResourceTypeList(): string {

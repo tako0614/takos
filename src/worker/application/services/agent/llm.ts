@@ -15,6 +15,7 @@ export { getBackendFromModel };
 export interface LLMConfig {
   apiKey: string;
   model?: string;
+  baseUrl?: string;
   maxTokens?: number;
   temperature?: number;
   backend?: ModelBackend;
@@ -43,6 +44,7 @@ export class LLMClient {
       backend: backendType,
       model,
       apiKey,
+      baseUrl: config.baseUrl,
       maxTokens: config.maxTokens || 4096,
       temperature: config.temperature ?? 1,
     });
@@ -76,16 +78,22 @@ function parseModelBackend(
     : undefined;
 }
 
+/**
+ * Env-override entry point for selecting an LLM backend (incl. Anthropic/Google)
+ * via `AI_MODEL` / `AI_BACKEND`. `OPENAI_BASE_URL` can point the OpenAI-compatible
+ * path at Takosumi AI Gateway or another compatible host.
+ */
 export function createLLMClientFromEnv(env: {
   OPENAI_API_KEY?: string;
+  OPENAI_BASE_URL?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   AI_MODEL?: string;
   AI_BACKEND?: string;
 }): LLMClient {
   const model = env.AI_MODEL || DEFAULT_MODEL_ID;
-  const backendType = parseModelBackend(env.AI_BACKEND) ||
-    getBackendFromModel(model);
+  const backendType =
+    parseModelBackend(env.AI_BACKEND) || getBackendFromModel(model);
 
   const keyMap: Record<
     ModelBackend,
@@ -93,7 +101,8 @@ export function createLLMClientFromEnv(env: {
   > = {
     openai: {
       key: env.OPENAI_API_KEY,
-      label: "OpenAI API key (OPENAI_API_KEY) is required for OpenAI models",
+      label:
+        "OpenAI-compatible API key (OPENAI_API_KEY) is required for OpenAI-compatible models",
     },
     anthropic: {
       key: env.ANTHROPIC_API_KEY,
@@ -114,6 +123,7 @@ export function createLLMClientFromEnv(env: {
     apiKey: entry.key,
     model,
     backend: backendType,
+    baseUrl: env.OPENAI_BASE_URL,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     googleApiKey: env.GOOGLE_API_KEY,
   });

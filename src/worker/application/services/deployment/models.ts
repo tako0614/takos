@@ -92,7 +92,7 @@ export type DeploymentTargetArtifact = {
  * を ready とみなす (201/204/3xx redirect/4xx/5xx/timeout は fail)。timeout は
  * hard-coded で 10 秒。失敗時は routing が更新されず deploy は fail-fast する。
  *
- * docs: `docs/apps/workers.md` の readiness section を参照。
+ * 契約の正本は readiness-probe.ts を参照 (WfP-managed worker deploy では probe は skip)。
  */
 export type DeploymentTargetReadiness = {
   path: string;

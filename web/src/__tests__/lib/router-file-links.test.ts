@@ -5,11 +5,12 @@ import { test } from "bun:test";
 
 test("parseRoute - parses repo file references from query params", () => {
   assertEquals(
-    parseRoute("/alice/demo", "?path=src/main.ts&line=42&ref=main"),
+    parseRoute("/w/ws-1/repos/repo-1", "?path=src/main.ts&line=42&ref=main"),
     {
       view: "repo",
-      username: "alice",
-      repoName: "demo",
+      spaceId: "ws-1",
+      spaceSlug: "ws-1",
+      repoId: "repo-1",
       filePath: "src/main.ts",
       fileLine: 42,
       ref: "main",
@@ -21,13 +22,13 @@ test("buildPath - builds repo file references with query params", () => {
   assertEquals(
     buildPath({
       view: "repo",
-      username: "alice",
-      repoName: "demo",
+      spaceId: "ws-1",
+      repoId: "repo-1",
       filePath: "src/main.ts",
       fileLine: 42,
       ref: "main",
     }),
-    "/alice/demo?ref=main&path=src%2Fmain.ts&line=42",
+    "/w/ws-1/repos/repo-1?ref=main&path=src%2Fmain.ts&line=42",
   );
 });
 

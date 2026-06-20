@@ -1,18 +1,22 @@
 # Takos deployment lifecycle
 
-Takos is deployed by Takosumi as an installed and applied OpenTofu module. Takosumi installs a plain OpenTofu module (Takos ships its module at `deploy/opentofu`) and records the run ledger: an **Installation** plus **`plan` type Run** → **`apply` type Run** → **Deployment** → **OutputSnapshot** entries. Module display metadata comes from generic repository information such as Git URL, ref, commit, tag, and well-known OpenTofu outputs.
+Takos deploy is an OpenTofu-native, Takosumi-managed distribution lifecycle: `takos/deploy/opentofu` provisions the distribution worker
+backing resources, and the wrangler artifact upload composes the Takos product surface with Takosumi Accounts,
+deploy-control, dashboard, and the OpenTofu runner in one origin. Takosumi records the run ledger as **Installation**
+plus **`plan` type Run** → **`apply` type Run** → **Deployment** → **OutputSnapshot** entries.
 
 ## Current Flow
 
-1. Choose a Git URL/ref for the Takos OpenTofu module (`deploy/opentofu`), with `var.target` ∈ `aws` | `gcp` | `cloudflare` (the `cloudflare` target provisions the D1/KV/R2/Queues backing resources).
-2. Run a plan and review the recorded **`plan` type Run** (planned changes, warnings, and policy decision).
-3. Apply the reviewed plan as an **`apply` type Run**; a successful apply updates the **Deployment** and **OutputSnapshot**.
-4. Destroy is also recorded as an **`apply` type Run** against the same Installation.
-5. Connections hold credential references, ProviderBindings resolve the connection for each provider (+ optional alias), and policy resolves provider allowlists, state backend, and Cloudflare Container execution. Infrastructure lifecycle, credentials, OIDC clients, billing, and domains belong to the operator distribution; Takosumi records the resulting run ledger and audit trail.
+1. Run `tofu apply` for `takos/deploy/opentofu` with `var.target = cloudflare`; this provisions the D1/KV/R2/Queues backing resources.
+2. Upload the Takos distribution worker artifact with wrangler, using the module outputs for bindings and routes.
+3. Create or update the Takos Installation from the Git URL/ref and review the recorded **`plan` type Run** before apply.
+4. `apply` updates the **Deployment** and **OutputSnapshot** and keeps policy/audit evidence.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Installation / Run / StateSnapshot / OutputSnapshot / Deployment state and audit trail. The operator distribution (Takosumi Accounts) owns account / billing / OIDC / dashboard.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takosumi records Installation / Run / StateSnapshot / OutputSnapshot /
+Deployment state and audit trail for the distribution lifecycle. The embedded Takosumi Accounts plane owns account /
+billing / OIDC / dashboard for the worker distribution.
 
 ## API Shape
 
@@ -27,11 +31,12 @@ Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app lau
 }
 ```
 
-Plan and apply requests are recorded as typed Runs entries against the Installation. Takos product routes should call the Takosumi deploy control API or the Takosumi account-plane install flow instead of exposing a separate deployment proxy.
+Plan and apply requests are recorded as typed Run entries against the Installation. Takos product routes should use that
+ledger instead of introducing a separate deploy shortcut.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/takosumi-v1)
+- [Takosumi model](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

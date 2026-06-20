@@ -27,7 +27,6 @@ import {
   NotImplementedError,
   PayloadTooLargeError,
 } from "@takos/worker-platform-utils/errors";
-import { recordPushActivity } from "../../../application/services/store-network/push-activities.ts";
 import {
   GIT_BLAME_MAX_COMMITS,
   GIT_DIFF_MAX_FILE_BYTES,
@@ -327,17 +326,6 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       };
       await c.env.INDEX_QUEUE.send(message);
 
-      // Record a Store Network feed event as soon as the vectorize job is queued.
-      c.executionCtx.waitUntil(
-        recordStoreFeedPushActivity(c, {
-          repoId,
-          spaceId: repoAccess.repo.space_id,
-          ref: `refs/heads/${ref.replace(/^refs\/heads\//, "")}`,
-          afterSha: resolvedCommit.resolvedCommitSha,
-          user,
-        }),
-      );
-
       return c.json({
         status: "queued",
         job_id: jobId,
@@ -352,17 +340,6 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       resolvedCommit.commit.tree,
     );
 
-    // Record a Store Network feed event without blocking the index response.
-    c.executionCtx.waitUntil(
-      recordStoreFeedPushActivity(c, {
-        repoId,
-        spaceId: repoAccess.repo.space_id,
-        ref: `refs/heads/${ref.replace(/^refs\/heads\//, "")}`,
-        afterSha: resolvedCommit.resolvedCommitSha,
-        user,
-      }),
-    );
-
     return c.json({
       status: "completed",
       ref,
@@ -372,40 +349,6 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       errors: result.errors,
     });
   });
-
-/**
- * Record a push event for Store Network feeds. Returns void; caller should
- * `waitUntil` so the primary response is not blocked.
- */
-async function recordStoreFeedPushActivity(
-  c: Context<AuthenticatedRouteEnv>,
-  input: {
-    repoId: string;
-    spaceId: string;
-    ref: string;
-    afterSha: string;
-    user: { id: string; name?: string | null };
-  },
-): Promise<void> {
-  try {
-    await recordPushActivity(c.env.DB, {
-      repoId: input.repoId,
-      accountId: input.spaceId,
-      ref: input.ref,
-      beforeSha: null,
-      afterSha: input.afterSha,
-      pusherName: input.user.name ?? null,
-      pusherActorUrl: null,
-      commitCount: 0,
-      commits: [],
-    });
-  } catch (err) {
-    logError("Failed to record push feed event", err, {
-      action: "push_feed_record",
-      repoId: input.repoId,
-    });
-  }
-}
 
 async function handleFileHistoryRequest(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get("user");

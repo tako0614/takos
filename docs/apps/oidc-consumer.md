@@ -1,20 +1,21 @@
 # OIDC Consumer
 
-This page has been reset for Takosumi v1. Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module and records an **Installation**, then a **`plan` type Run**, an **`apply` type Run**, and a resulting **Deployment** plus **OutputSnapshot**. Module display metadata comes from generic repository information such as Git URL, ref, commit, tag, and well-known OpenTofu outputs.
+Installed apps can consume the same-origin Takosumi issuer when the operator account plane has projected an OIDC client
+for that app. This is an installed-service identity projection, not a generic third-party login marketplace.
 
 ## Current Flow
 
-1. Create an **Installation** from a Git URL/ref pointing at a plain OpenTofu module.
-2. Record a **`plan` type Run** and review its plan diff, warnings, and policy decision.
-3. Approve the reviewed plan, then record an **`apply` type Run** that materializes the topology.
-4. A successful `apply` type Run updates the **Deployment** and **OutputSnapshot**; subsequent runs reconcile against the recorded Deployment to prevent stale approvals.
-5. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to a default / connection / manual / disabled binding, and policy resolves provider allowlists, state backend, and Cloudflare Container execution. OIDC clients, billing, domains, and dashboard belong to the operator distribution.
+1. Install an app Capsule from Git and review/apply the Takosumi plan.
+2. The account plane records the OIDC client projection for that Installation when the operator policy allows it.
+3. Takos shows the app in the Workspace with the projected sign-in material.
+4. Revocation and rotation are handled by the account plane and recorded as audit evidence.
+5. Generic third-party consent/client registry behavior is out of scope until that product surface is explicitly built.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takos can optionally be installed through Takosumi as a normal OpenTofu module (`deploy/opentofu`, `var.target` ∈ `aws` | `gcp` | `cloudflare`; the cloudflare target provisions D1/KV/R2/Queues backing resources). Takosumi records the Installation / Run / Deployment / OutputSnapshot run ledger. The operator distribution owns account-plane policy, OIDC clients, billing, and dashboard.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takos is delivered as an OpenTofu-native, Takosumi-managed distribution: `deploy/opentofu` (`var.target = cloudflare`) provisions D1/KV/R2/Queues backing resources, while embedded Takosumi services record Installation / Run / StateSnapshot / OutputSnapshot / Deployment state, policy decisions, and audit trail.
 
-## API Shape
+## Install Shape
 
 ```json
 {
@@ -26,7 +27,7 @@ Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app lau
 }
 ```
 
-A `plan` type Run records the plan to review; an `apply` type Run references the approved plan to update the Deployment. Takos product routes should call the Takosumi deploy control plane or Takosumi account-plane flow instead of exposing a separate deployment proxy.
+A `plan` type Run records the plan to review; an `apply` type Run references the approved plan to update the Deployment. Takos product routes should call the Takosumi deploy control plane or Takosumi account-plane flow instead of exposing a separate product-local deployment surface.
 
 ## References
 
@@ -35,9 +36,9 @@ A `plan` type Run records the plan to review; an `apply` type Run references the
 - [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
 
-## Managed offering gate
+## Public Hosted Availability
 
-OIDC clients for public managed installs are opened by the operator account
-plane only after operator approval. Until the managed offering gate is opened,
-the public OIDC authorization, token, upstream OAuth, and passkey surfaces stay
-closed for new public access.
+OIDC clients for public hosted installs are opened by the operator account plane
+only after operator approval. Until public hosted access is opened, the same
+OIDC flow can be verified in operator rehearsal or self-host environments; new
+public signups stay closed.

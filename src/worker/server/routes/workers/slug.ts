@@ -44,7 +44,7 @@ function applyCustomSlugToConfig(
   return JSON.stringify(rest);
 }
 
-function managedDefaultSlug(
+function derivedDeploymentSlug(
   groupId: string,
   configJson: string | null,
 ): string | null {
@@ -60,332 +60,344 @@ function managedDefaultSlug(
   );
 }
 
-const workersSlug = new Hono<AuthenticatedRouteEnv>()
-  .patch(
-    "/:id/slug",
-    zValidator(
-      "json",
-      z.object({
-        slug: z.string(),
-      }),
-    ),
-    async (c) => {
-      const user = c.get("user");
-      const workerId = c.req.param("id");
-      const body = c.req.valid("json");
+const workersSlug = new Hono<AuthenticatedRouteEnv>().patch(
+  "/:id/slug",
+  zValidator(
+    "json",
+    z.object({
+      slug: z.string(),
+    }),
+  ),
+  async (c) => {
+    const user = c.get("user");
+    const workerId = c.req.param("id");
+    const body = c.req.valid("json");
 
-      if (!body.slug) {
-        throw new BadRequestError("slug is required");
-      }
+    if (!body.slug) {
+      throw new BadRequestError("slug is required");
+    }
 
-      const newSlug = slugifyServiceName(body.slug);
-      if (newSlug.length < 3 || newSlug.length > 32) {
-        throw new BadRequestError("Slug must be between 3 and 32 characters");
-      }
+    const newSlug = slugifyServiceName(body.slug);
+    if (newSlug.length < 3 || newSlug.length > 32) {
+      throw new BadRequestError("Slug must be between 3 and 32 characters");
+    }
 
-      const reserved = [
-        "admin",
-        "api",
-        "www",
-        "mail",
-        "smtp",
-        "pop",
-        "imap",
-        "ftp",
-        "app",
-        "apps",
-      ];
-      if (reserved.includes(newSlug)) {
-        throw new BadRequestError("This subdomain is reserved");
-      }
+    const reserved = [
+      "admin",
+      "api",
+      "www",
+      "mail",
+      "smtp",
+      "pop",
+      "imap",
+      "ftp",
+      "app",
+      "apps",
+    ];
+    if (reserved.includes(newSlug)) {
+      throw new BadRequestError("This subdomain is reserved");
+    }
 
-      const worker = await getServiceForUserWithRole(
-        c.env.DB,
-        workerId,
-        user.id,
-        ["owner", "admin", "editor"],
-      );
+    const worker = await getServiceForUserWithRole(
+      c.env.DB,
+      workerId,
+      user.id,
+      ["owner", "admin", "editor"],
+    );
 
-      if (!worker) {
-        throw new NotFoundError("Service");
-      }
+    if (!worker) {
+      throw new NotFoundError("Service");
+    }
 
-      const db = getDb(c.env.DB);
-      const desiredState = new ServiceDesiredStateService(c.env);
-      const platformDomain = c.env.TENANT_BASE_DOMAIN?.trim()
-        .replace(/^\.+/, "")
-        .toLowerCase();
-      if (!platformDomain) {
-        throw new BadRequestError("TENANT_BASE_DOMAIN is not configured");
-      }
-      const newHostname = `${newSlug}.${platformDomain}`;
+    const db = getDb(c.env.DB);
+    const desiredState = new ServiceDesiredStateService(c.env);
+    const platformDomain = c.env.TENANT_BASE_DOMAIN?.trim()
+      .replace(/^\.+/, "")
+      .toLowerCase();
+    if (!platformDomain) {
+      throw new BadRequestError("TENANT_BASE_DOMAIN is not configured");
+    }
+    const newHostname = `${newSlug}.${platformDomain}`;
 
-      const serviceRecord = await db.select({
-        groupId: services.groupId,
-        config: services.config,
-      })
+    const serviceRecord =
+      (await db
+        .select({
+          groupId: services.groupId,
+          config: services.config,
+        })
         .from(services)
         .where(eq(services.id, workerId))
-        .get() ?? null;
-      const groupId = serviceRecord?.groupId ?? null;
-      const isGroupManaged = Boolean(groupId);
+        .get()) ?? null;
+    const groupId = serviceRecord?.groupId ?? null;
+    const isGroupManaged = Boolean(groupId);
 
-      const oldHostname = worker.hostname;
-      const groupAutoHostname = groupId
-        ? await getGroupAutoHostname(c.env, {
+    const oldHostname = worker.hostname;
+    const groupAutoHostname = groupId
+      ? await getGroupAutoHostname(c.env, {
           groupId,
           spaceId: worker.space_id,
         })
-        : null;
-      const previousGroupCustomSlug = groupId
-        ? await getGroupCustomSlugHostname(c.env, groupId)
-        : null;
-      const oldCustomHostname = isGroupManaged
-        ? previousGroupCustomSlug?.hostname ?? null
-        : worker.slug
+      : null;
+    const previousGroupCustomSlug = groupId
+      ? await getGroupCustomSlugHostname(c.env, groupId)
+      : null;
+    const oldCustomHostname = isGroupManaged
+      ? (previousGroupCustomSlug?.hostname ?? null)
+      : worker.slug
         ? `${worker.slug}.${platformDomain}`
         : null;
-      const existing = await db.select({
-        id: services.id,
-        groupId: services.groupId,
-      })
+    const existing =
+      (await db
+        .select({
+          id: services.id,
+          groupId: services.groupId,
+        })
         .from(services)
-        .where(and(
-          or(
-            eq(services.slug, newSlug),
-            eq(services.hostname, newHostname),
+        .where(
+          and(
+            or(eq(services.slug, newSlug), eq(services.hostname, newHostname)),
+            ne(services.id, workerId),
           ),
-          ne(services.id, workerId),
-        ))
-        .get() ?? null;
-
-      if (
-        existing &&
-        (
-          !isGroupManaged || existing.groupId !== groupId ||
-          existing.id !== previousGroupCustomSlug?.sourceServiceId
         )
-      ) {
-        throw new ConflictError("Slug or hostname already taken");
-      }
+        .get()) ?? null;
 
-      let oldRoutingTarget: RoutingTarget | null = null;
-      let oldCustomRoutingTarget: RoutingTarget | null = null;
-      let groupServiceSnapshots: Array<{
-        id: string;
-        slug: string | null;
-        config: string | null;
-        hostname: string | null;
-      }> = [];
+    if (
+      existing &&
+      (!isGroupManaged ||
+        existing.groupId !== groupId ||
+        existing.id !== previousGroupCustomSlug?.sourceServiceId)
+    ) {
+      throw new ConflictError("Slug or hostname already taken");
+    }
 
-      try {
-        const oldPrimaryHostname = isGroupManaged
-          ? groupAutoHostname
-          : oldHostname;
-        if (oldPrimaryHostname) {
-          const resolved = await resolveHostnameRouting({
+    let oldRoutingTarget: RoutingTarget | null = null;
+    let oldCustomRoutingTarget: RoutingTarget | null = null;
+    let groupServiceSnapshots: Array<{
+      id: string;
+      slug: string | null;
+      config: string | null;
+      hostname: string | null;
+    }> = [];
+
+    try {
+      const oldPrimaryHostname = isGroupManaged
+        ? groupAutoHostname
+        : oldHostname;
+      if (oldPrimaryHostname) {
+        const resolved = await resolveHostnameRouting({
+          env: c.env,
+          hostname: oldPrimaryHostname,
+          executionCtx: c.executionCtx,
+        });
+        oldRoutingTarget = resolved.tombstone ? null : resolved.target;
+        if (!isGroupManaged) {
+          await deleteHostnameRouting({
             env: c.env,
             hostname: oldPrimaryHostname,
             executionCtx: c.executionCtx,
           });
-          oldRoutingTarget = resolved.tombstone ? null : resolved.target;
-          if (!isGroupManaged) {
-            await deleteHostnameRouting({
-              env: c.env,
-              hostname: oldPrimaryHostname,
-              executionCtx: c.executionCtx,
-            });
-          }
         }
+      }
 
-        if (
-          isGroupManaged && oldHostname &&
-          oldHostname !== groupAutoHostname &&
-          oldHostname !== oldCustomHostname
-        ) {
-          await deleteHostnameRouting({
-            env: c.env,
-            hostname: oldHostname,
-            executionCtx: c.executionCtx,
-          });
-        }
+      if (
+        isGroupManaged &&
+        oldHostname &&
+        oldHostname !== groupAutoHostname &&
+        oldHostname !== oldCustomHostname
+      ) {
+        await deleteHostnameRouting({
+          env: c.env,
+          hostname: oldHostname,
+          executionCtx: c.executionCtx,
+        });
+      }
 
-        if (
-          isGroupManaged && oldCustomHostname &&
-          oldCustomHostname !== oldPrimaryHostname &&
-          oldCustomHostname !== newHostname
-        ) {
-          const resolved = await resolveHostnameRouting({
-            env: c.env,
-            hostname: oldCustomHostname,
-            executionCtx: c.executionCtx,
-          });
-          oldCustomRoutingTarget = resolved.tombstone ? null : resolved.target;
-          await deleteHostnameRouting({
-            env: c.env,
-            hostname: oldCustomHostname,
-            executionCtx: c.executionCtx,
-          });
-        }
+      if (
+        isGroupManaged &&
+        oldCustomHostname &&
+        oldCustomHostname !== oldPrimaryHostname &&
+        oldCustomHostname !== newHostname
+      ) {
+        const resolved = await resolveHostnameRouting({
+          env: c.env,
+          hostname: oldCustomHostname,
+          executionCtx: c.executionCtx,
+        });
+        oldCustomRoutingTarget = resolved.tombstone ? null : resolved.target;
+        await deleteHostnameRouting({
+          env: c.env,
+          hostname: oldCustomHostname,
+          executionCtx: c.executionCtx,
+        });
+      }
 
-        const now = new Date().toISOString();
-        if (isGroupManaged && groupId) {
-          const groupServices = await db.select({
+      const now = new Date().toISOString();
+      if (isGroupManaged && groupId) {
+        const groupServices = await db
+          .select({
             id: services.id,
             config: services.config,
             slug: services.slug,
             hostname: services.hostname,
           })
-            .from(services)
-            .where(eq(services.groupId, groupId))
-            .all();
-          groupServiceSnapshots = groupServices;
-          for (const row of groupServices) {
-            if (row.id === workerId) continue;
-            const defaultSlug = managedDefaultSlug(groupId, row.config);
-            await db.update(services)
-              .set({
-                slug: defaultSlug,
-                config: applyCustomSlugToConfig(row.config, null),
-                updatedAt: now,
-              })
-              .where(eq(services.id, row.id))
-              .run();
-          }
-          const current = groupServices.find((row) => row.id === workerId);
-          await db.update(services)
+          .from(services)
+          .where(eq(services.groupId, groupId))
+          .all();
+        groupServiceSnapshots = groupServices;
+        for (const row of groupServices) {
+          if (row.id === workerId) continue;
+          const defaultSlug = derivedDeploymentSlug(groupId, row.config);
+          await db
+            .update(services)
             .set({
-              slug: newSlug,
-              config: applyCustomSlugToConfig(
-                current?.config ?? serviceRecord?.config ?? null,
-                newSlug,
-              ),
-              hostname: oldHostname === groupAutoHostname ? oldHostname : null,
+              slug: defaultSlug,
+              config: applyCustomSlugToConfig(row.config, null),
               updatedAt: now,
             })
-            .where(eq(services.id, workerId))
-            .run();
-        } else {
-          await db.update(services)
-            .set({
-              slug: newSlug,
-              hostname: newHostname,
-              updatedAt: now,
-            })
-            .where(eq(services.id, workerId))
+            .where(eq(services.id, row.id))
             .run();
         }
+        const current = groupServices.find((row) => row.id === workerId);
+        await db
+          .update(services)
+          .set({
+            slug: newSlug,
+            config: applyCustomSlugToConfig(
+              current?.config ?? serviceRecord?.config ?? null,
+              newSlug,
+            ),
+            hostname: oldHostname === groupAutoHostname ? oldHostname : null,
+            updatedAt: now,
+          })
+          .where(eq(services.id, workerId))
+          .run();
+      } else {
+        await db
+          .update(services)
+          .set({
+            slug: newSlug,
+            hostname: newHostname,
+            updatedAt: now,
+          })
+          .where(eq(services.id, workerId))
+          .run();
+      }
 
-        const fallbackTarget = oldCustomRoutingTarget ?? oldRoutingTarget ??
-          await desiredState.getRoutingTarget(worker.id);
-        if (fallbackTarget) {
-          try {
-            await upsertHostnameRouting({
-              env: c.env,
-              hostname: newHostname,
-              target: fallbackTarget,
-              executionCtx: c.executionCtx,
-            });
-          } catch (kvError) {
-            logError("KV put failed, rolling back DB", kvError, {
-              module: "routes/services/slug",
-            });
-            await db.update(services)
-              .set({
-                slug: worker.slug,
-                ...(isGroupManaged
-                  ? {
+      const fallbackTarget =
+        oldCustomRoutingTarget ??
+        oldRoutingTarget ??
+        (await desiredState.getRoutingTarget(worker.id));
+      if (fallbackTarget) {
+        try {
+          await upsertHostnameRouting({
+            env: c.env,
+            hostname: newHostname,
+            target: fallbackTarget,
+            executionCtx: c.executionCtx,
+          });
+        } catch (kvError) {
+          logError("KV put failed, rolling back DB", kvError, {
+            module: "routes/services/slug",
+          });
+          await db
+            .update(services)
+            .set({
+              slug: worker.slug,
+              ...(isGroupManaged
+                ? {
                     config: serviceRecord?.config ?? null,
                     hostname: oldHostname,
                   }
-                  : { hostname: oldHostname }),
-                updatedAt: new Date().toISOString(),
-              })
-              .where(eq(services.id, workerId))
-              .run();
-            if (isGroupManaged && groupServiceSnapshots.length > 0) {
-              for (const row of groupServiceSnapshots) {
-                await db.update(services)
-                  .set({
-                    slug: row.slug,
-                    config: row.config,
-                    hostname: row.hostname,
-                    updatedAt: new Date().toISOString(),
-                  })
-                  .where(eq(services.id, row.id))
-                  .run();
-              }
+                : { hostname: oldHostname }),
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(services.id, workerId))
+            .run();
+          if (isGroupManaged && groupServiceSnapshots.length > 0) {
+            for (const row of groupServiceSnapshots) {
+              await db
+                .update(services)
+                .set({
+                  slug: row.slug,
+                  config: row.config,
+                  hostname: row.hostname,
+                  updatedAt: new Date().toISOString(),
+                })
+                .where(eq(services.id, row.id))
+                .run();
             }
-            if (!isGroupManaged && oldHostname) {
-              await upsertHostnameRouting({
-                env: c.env,
-                hostname: oldHostname,
-                target: oldRoutingTarget ?? fallbackTarget,
-                executionCtx: c.executionCtx,
-              });
-            }
-            if (isGroupManaged && oldCustomHostname && oldCustomRoutingTarget) {
-              await upsertHostnameRouting({
-                env: c.env,
-                hostname: oldCustomHostname,
-                target: oldCustomRoutingTarget,
-                executionCtx: c.executionCtx,
-              });
-            }
-            throw kvError;
           }
-        }
-
-        return c.json({
-          success: true,
-          slug: newSlug,
-          hostname: isGroupManaged ? groupAutoHostname : newHostname,
-          custom_hostname: isGroupManaged ? newHostname : undefined,
-        });
-      } catch (err) {
-        if (!isGroupManaged && oldHostname) {
-          try {
-            const fallbackTarget = oldRoutingTarget ??
-              await desiredState.getRoutingTarget(worker.id);
-            if (!fallbackTarget) {
-              throw new Error("No active deployment routing target available");
-            }
+          if (!isGroupManaged && oldHostname) {
             await upsertHostnameRouting({
               env: c.env,
               hostname: oldHostname,
               target: oldRoutingTarget ?? fallbackTarget,
               executionCtx: c.executionCtx,
             });
-          } catch (restoreErr) {
-            logError("Failed to restore old hostname routing", restoreErr, {
-              module: "routes/services/slug",
-            });
           }
-        }
-        if (isGroupManaged && oldCustomHostname && oldCustomRoutingTarget) {
-          try {
+          if (isGroupManaged && oldCustomHostname && oldCustomRoutingTarget) {
             await upsertHostnameRouting({
               env: c.env,
               hostname: oldCustomHostname,
               target: oldCustomRoutingTarget,
               executionCtx: c.executionCtx,
             });
-          } catch (restoreErr) {
-            logError(
-              "Failed to restore old custom hostname routing",
-              restoreErr,
-              {
-                module: "routes/services/slug",
-              },
-            );
           }
+          throw kvError;
         }
-        logError("Failed to update slug", err, {
-          module: "routes/services/slug",
-        });
-        throw new InternalError("Failed to update slug");
       }
-    },
-  );
+
+      return c.json({
+        success: true,
+        slug: newSlug,
+        hostname: isGroupManaged ? groupAutoHostname : newHostname,
+        custom_hostname: isGroupManaged ? newHostname : undefined,
+      });
+    } catch (err) {
+      if (!isGroupManaged && oldHostname) {
+        try {
+          const fallbackTarget =
+            oldRoutingTarget ??
+            (await desiredState.getRoutingTarget(worker.id));
+          if (!fallbackTarget) {
+            throw new Error("No active deployment routing target available");
+          }
+          await upsertHostnameRouting({
+            env: c.env,
+            hostname: oldHostname,
+            target: oldRoutingTarget ?? fallbackTarget,
+            executionCtx: c.executionCtx,
+          });
+        } catch (restoreErr) {
+          logError("Failed to restore old hostname routing", restoreErr, {
+            module: "routes/services/slug",
+          });
+        }
+      }
+      if (isGroupManaged && oldCustomHostname && oldCustomRoutingTarget) {
+        try {
+          await upsertHostnameRouting({
+            env: c.env,
+            hostname: oldCustomHostname,
+            target: oldCustomRoutingTarget,
+            executionCtx: c.executionCtx,
+          });
+        } catch (restoreErr) {
+          logError(
+            "Failed to restore old custom hostname routing",
+            restoreErr,
+            {
+              module: "routes/services/slug",
+            },
+          );
+        }
+      }
+      logError("Failed to update slug", err, {
+        module: "routes/services/slug",
+      });
+      throw new InternalError("Failed to update slug");
+    }
+  },
+);
 
 export default workersSlug;

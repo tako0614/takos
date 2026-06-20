@@ -1,4 +1,4 @@
-output "takos_app_manifest" {
+output "app_deployment" {
   value = {
     name    = "opentofu-only-app"
     version = "0.1.0"
@@ -22,7 +22,7 @@ output "takos_app_manifest" {
       {
         name      = "launcher"
         publisher = "web"
-        type      = "UiSurface"
+        type      = "interface.ui.surface"
         outputs = {
           url = {
             kind     = "url"

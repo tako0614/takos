@@ -177,7 +177,7 @@ export const deploy = {
   connectionInfoNotAvailable: "接続情報はありません",
   resourceCredentials: "認証情報",
   resourceCredentialsManagedByAccounts:
-    "リソース認証情報は Takosumi Accounts が AppGrant/AppBinding 認証情報として発行します。",
+    "runtime authority は Takosumi Accounts が ServiceGrant material として発行します。",
   resourceCredentialsNoLocalTokens:
     "この control UI ではリソースアクセストークンを作成しません。",
   copyConnectionField: "{field}をクリップボードにコピー",

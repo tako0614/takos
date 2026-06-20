@@ -1,108 +1,78 @@
 # Takos 全体像
 
-> このページでわかること: Takos が何をするプロダクトで、どんな概念で構成されているか。
+> このページでわかること: Takos がユーザーに提供する体験と、その裏側で Takosumi が何を管理するか。
 
-Takos は AI エージェントと会話しながらソフトウェアを作成・編集できるセルフホスト型のプロダクトです。チャット、AI
-エージェント、メモリ、スペースの 4 つを中心機能として持ちます。Takos は plain OpenTofu module として self-host
-だけで完結し、Takosumi (OpenTofu-native deploy control plane) で運用するのは optional です。
+Takos は chat、agent、memory、Git、Workspace、app launcher、MCP tools を一つの作業環境として使うための
+AI workspace distribution です。ユーザーが触る中心は Workspace、チャット、ファイル、リポジトリ、アプリ、ツールです。
 
-バンドルアプリ (`takos-docs`, `takos-slide`, `takos-excel`, `takos-computer`, `yurucommu`) は新しい Space
-を作成すると自動的にインストールされます。不要なアプリはいつでもアンインストールできます。
+アプリや追加サービスは Git URL から入る plain OpenTofu Capsule として install されます。Takos 専用 manifest や
+Takosumi 専用 DSL は要求しません。Takosumi は裏側で Account、Installation、Run、StateSnapshot、OutputSnapshot、
+Dependency、policy、audit、dashboard、OpenTofu runner を同一 origin の distribution worker に compose して管理します。
 
-::: warning Managed offering status `Use Takos` は local / operator-owned rehearsal path として実装済みですが、public
-managed signup は `takosumi` の launch-readiness evidence、`acceptedReady: true` topology reports、saved live
-audit、operator approval が揃い、 `managed-offering:status` が `canOpenManagedOffering: true` を返すまで closed です。
-公開 operator から案内された入口がない場合は、Self-host または local stack の手順を使ってください。 :::
+Self-host された Takos distribution は `takos/deploy/opentofu` の `tofu apply` と worker artifact upload で動きます。この
+module は distribution worker の durable backing infrastructure を provision し、embedded Takosumi services が review/apply
+ledger と policy evidence を記録します。公開 hosted operator を使う場合も、ユーザー体験は Workspace / Apps / Chat に収束し、
+operator が Takosumi Account、Space、Gateway coverage、provider policy を運用します。
+
+バンドルアプリ (`takos-docs`, `takos-slide`, `takos-excel`, `takos-computer`, `yurucommu`) は新しい Workspace に
+distribution seed として install されます。ledger 上は通常の Installation なので、不要なアプリはアンインストールできます。
 
 ## 基本概念
 
-Takos は以下の 4 つの階層で構成されています。Account / Space は Takosumi の managed / control-plane を使う場合の所有モデルで、self-host
-単体では必須ではありません。
+### Takosumi Account
 
-### Account
+ログイン、契約、課金、OIDC issuer の単位です。Takos は app-local profile / preferences / chat data を持ちますが、identity
+level の正本は Takosumi Accounts plane が所有します。
 
-Takosumi Account は課金・契約・ログインの単位です。メールアドレスや外部 IdP で作成します。
+### Takos product space
 
-### Space
+chat、agent、memory、Git repository、app launcher、MCP tools をまとめる Takos 内の作業空間です。
 
-Account の下に作る作業領域です。個人用 (`personal`)、チーム用 (`team`)、組織用 (`org`) の種類があり、アプリはすべて
-Space 単位でインストールされます。
+### Takosumi Space (`@handle`)
 
-### App (アプリ)
+Installation / Connection / Run / OutputSnapshot / Activity を保持する owner namespace です。provider credential、policy、
+audit trail もここに紐づきます。実装上の既存 API/DB 名に `space` が残る場合も、public docs では Takos product space と
+Takosumi Space を分けて説明します。
 
-Space にインストールされた個々のソフトウェアです。バンドルアプリもサードパーティアプリも
-同じ仕組みで管理されます。各アプリは Git リポジトリのコミットに紐づいているため、バージョンが透明に追跡できます。
+### App / Installation
 
-### Deploy
+アプリは Git URL から入る OpenTofu Capsule です。Takosumi が Installation を作り、`plan` / `apply` /
+`destroy_plan` / `destroy_apply` Run、Deployment、OutputSnapshot を記録します。Takos の app 一覧、launcher、MCP service は
+Installation / OutputSnapshot / Service Graph から投影される product surface です。
 
-アプリの実行環境です。3 つのモードがあります。
+## 始め方
 
-| モード      | 用途                                         |
-| ----------- | -------------------------------------------- |
-| shared-cell | すぐに使える共有環境。ビルド不要             |
-| dedicated   | 専用のリソースが必要な場合                   |
-| self-hosted | 自前のサーバーで完全にコントロールしたい場合 |
+| 方法             | 対象             | 概要                                                                                     |
+| ---------------- | ---------------- | ---------------------------------------------------------------------------------------- |
+| Use Takos        | すぐに使いたい人 | 公開 operator または rehearsal 環境で Account / Space / Workspace を作成して chat へ進む |
+| Install from Git | 開発者           | Git URL の Capsule を Space に install し、reviewed plan を approve する                 |
+| Self-host        | 自前運用したい人 | OpenTofu module + wrangler artifact upload で Takos を deploy する                       |
 
-shared-cell で始めて、あとから dedicated や self-hosted に切り替えることもできます。これは Installation の runtime mode
-を変える account-plane operation です。public managed offering での live data continuity / clean self-host restore は
-operator readiness evidence が揃った環境で提供されます。
-
-## 3 つの始め方
-
-| 方法             | 対象             | 概要                                                                          |
-| ---------------- | ---------------- | ----------------------------------------------------------------------------- |
-| Use Takos        | すぐに使いたい人 | operator が public signup を開いた場合、Account と Space 作成から chat へ進む |
-| Install from Git | 開発者           | Git URL を指定してアプリをインストール。ソースが透明に追跡される              |
-| Self-host        | 自前運用したい人 | Takos をまるごと自分のサーバーにデプロイ                                      |
-
-詳細は [Install paths](/apps/install-paths) を参照。
+3 path は同じ ownership model に収束します。違うのは operator が誰か、どの runtime mode を選ぶか、どの Connection / policy を使うかです。
 
 ## 代表的なユースケース
 
 ### すぐに Takos を使いたい
 
-operator が public signup を開いている場合、「Use Takos」ボタンから Account / Space を作成すれば、バンドルアプリが
-自動的にインストールされてチャットを始められます。public managed offering が closed の間は、この path は local / staged
-rehearsal または operator-internal flow として扱います。
+公開 operator が signup を開いている場合、「Use Takos」から Takosumi Account / Space / Takos Workspace を作成し、バンドルアプリが
+seed された状態で chat を始めます。public signup が closed の間は、operator が用意した rehearsal 環境または Self-host path で同じ
+journey を検証します。
 
 ### 自分のアプリをデプロイしたい
 
-アプリのコードを plain OpenTofu module として Git リポジトリに追加し、 Git URL
-を指定してインストールします。Takosumi が Installation を作り、typed Runs を経て Deployment / OutputSnapshot
-まで自動で記録します。
-
-- [はじめてのアプリ](/get-started/your-first-app)
-- [デプロイの設定](/deploy/)
-
-### shared-cell から専用環境に切り替えたい
-
-shared-cell → dedicated は Installation の runtime mode / operator binding selection の変更です。current public docs では live data copy
-guarantee ではなく、operator evidence 対象として扱います。
-
-- [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
+アプリのコードを OpenTofu Capsule として Git リポジトリに置き、Git URL を指定して install します。Takosumi が SourceSnapshot、
+DependencySnapshot、Run、Deployment、OutputSnapshot を記録し、Takos は launcher / MCP / file handler などの product surface に
+投影します。
 
 ### 完全にセルフホストしたい
 
-Takos を自分のサーバーにデプロイし、データ・ログイン・課金すべてを自分で管理します。既存 Installation の export/import
-は contract / API と local proof があります。production provider ごとの full restore は launch-readiness evidence
-の対象です。
-
-- [デプロイ / セルフホスト](/deploy/)
-
-## データモデルの詳細
-
-より詳しいデータモデル (Installation、`plan` type Run、`apply` type Run、Deployment、OutputSnapshot、operator account-plane records
-など) については以下を参照してください。
-
-- [Takosumi Installation Lifecycle](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
-  —アプリインストールの仕組み
-- [Installation](https://takosumi.com/docs/reference/model) —
-  所有権の台帳
+Takos を自分の origin に deploy し、Takosumi Accounts plane、provider credentials、backup / DR、billing policy を自分で管理します。
+同じ distribution worker 内の Takosumi deploy-control が Installation / Run / StateSnapshot / OutputSnapshot / Deployment を記録します。
 
 ## 次に読むページ
 
-- [はじめる](/get-started/) —最初のセットアップ手順
-- [Install paths](/apps/install-paths) —インストール方法の詳細
-- [Deploy 構成](/apps/) —OpenTofu module とアプリ設定
-- [アーキテクチャ](/architecture/) —内部構造の詳細
-- [用語集](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/glossary.md)
+- [Install paths](/apps/install-paths) — 3 path の違い
+- [はじめる](/get-started/) — 最初のセットアップ
+- [Deploy 構成](/deploy/) — Cloudflare reference topology
+- [アーキテクチャ](/architecture/) — 内部構造
+- [Takosumi model](https://takosumi.com/docs/reference/model) — Installation / Run / OutputSnapshot の正本

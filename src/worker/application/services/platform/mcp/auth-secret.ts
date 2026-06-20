@@ -31,7 +31,10 @@ function nonEmptyToken(value: string | null | undefined): string | null {
 export function readPublicationAuthSecretRef(
   record: Pick<PublicationRecord, "publication">,
 ): string | null {
-  const raw = record.publication.auth?.bearer?.secretRef;
+  const auth = record.publication.auth;
+  const raw = auth?.kind === "bearer"
+    ? auth.secretRef
+    : auth?.bearer?.secretRef;
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   return trimmed.length > 0 ? normalizeEnvName(trimmed) : null;
@@ -129,7 +132,7 @@ export async function resolvePublicationAuthToken(
   const envName = normalizeEnvName(params.authSecretRef);
   if (!params.ownerServiceId) {
     throw new Error(
-      `MCP publication '${params.publicationName}' declares auth.bearer.secretRef but has no owner service`,
+      `MCP publication '${params.publicationName}' declares bearer auth secretRef but has no owner service`,
     );
   }
 
@@ -147,6 +150,6 @@ export async function resolvePublicationAuthToken(
   if (bindingToken) return bindingToken;
 
   throw new Error(
-    `MCP publication '${params.publicationName}' auth.bearer.secretRef '${envName}' was not found in service env or secret bindings`,
+    `MCP publication '${params.publicationName}' bearer auth secretRef '${envName}' was not found in service env or secret bindings`,
   );
 }

@@ -67,6 +67,12 @@ export function isSelfHostLoopback(hostname: string): boolean {
     hostname === "::1" || hostname === "[::1]";
 }
 
+// `control-web` is the fixed in-cluster service name of the control worker in the
+// self-host docker compose topology (see compose.local.yml / deploy/docker). It is
+// not operator-configurable today; internal access is still gated by the
+// constant-time X-Takos-Internal-Secret check below, so this hostname is a
+// reachability hint, not the trust boundary. Longer term this collapses into the
+// signed-envelope internal transport (takos-internal-v3).
 export function isSelfHostInternalHostname(hostname: string): boolean {
   return hostname === "control-web";
 }

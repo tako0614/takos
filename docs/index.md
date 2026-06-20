@@ -26,7 +26,7 @@ features:
   - title: スペース
     details: 個人・チーム・組織ごとに分けられる作業領域。アプリはスペース単位で管理します。
   - title: アプリが自動でそろう
-    details: 新しい Space を作ると、ドキュメント・スライド・表計算・PC 操作・コミュニティといった便利なアプリ (takos-docs / takos-slide / takos-excel / takos-computer / yurucommu) が自動でインストールされます。不要なものはいつでも外せます。
+    details: 新しい Space を作ると、ドキュメント・スライド・表計算・PC 操作・自分のための ActivityPub SNS といった便利なアプリ (takos-docs / takos-slide / takos-excel / takos-computer / yurucommu) が自動でインストールされます。不要なものはいつでも外せます。
   - title: 自分で持てる
     details: Takos はあなたのサーバーにまるごとデプロイできます。データ・ログイン・運用を自分の手元で管理できます。
 ---

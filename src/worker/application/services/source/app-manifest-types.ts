@@ -1,11 +1,19 @@
 // ============================================================
-// AppManifest — flat canonical schema
+// AppManifest — internal desired-state projection
 // ============================================================
 //
-// This file is the single source of truth for the Takos deploy manifest
-// internal type. It mirrors the docs canonical spec
-// (`docs/apps/manifest.md`).
+// This file is the single source of truth for the Takos deployment desired-state
+// internal type. User repositories are installed as OpenTofu Capsules; this type
+// is an internal projection consumed by the reconciler, not a required source
+// manifest file.
 // ============================================================
+
+import type {
+  TakosAppAuthKind,
+  TakosAppContractVersion,
+  TakosAppServiceBindingCapability,
+  TakosAppServiceGrantScope,
+} from "./app-interface-contract.ts";
 
 // --- Volume mount (compute-local) ---
 
@@ -187,6 +195,21 @@ export type AppRoute = {
   timeoutMs?: number;
 };
 
+// --- ServiceBinding grant requests ---
+
+export type AppServiceBindingInject = {
+  baseUrlEnv?: string;
+  tokenEnv?: string;
+};
+
+export type AppServiceBinding = {
+  name: string;
+  capability: TakosAppServiceBindingCapability;
+  target: string;
+  inject: AppServiceBindingInject;
+  scopes: TakosAppServiceGrantScope[];
+};
+
 // --- Publications (MCP servers, file handlers, UI surfaces, etc.) ---
 
 export type AppPublication = {
@@ -219,6 +242,8 @@ export type AppPublicationDisplay = {
 };
 
 export type AppPublicationAuth = {
+  kind?: TakosAppAuthKind;
+  secretRef?: string;
   bearer?: {
     secretRef: string;
   };
@@ -229,26 +254,23 @@ export type AppPublicationAuth = {
 // Override entries hold raw resource records that are re-validated against
 // `AppResource` only after merging with the base manifest at apply time
 // (see `group-state.ts`), so the parsed shape is intentionally loose here.
-export type AppManifestOverride =
-  & Partial<
-    Pick<
-      AppManifest,
-      "compute" | "routes" | "publish" | "env"
-    >
-  >
-  & {
-    resources?: Record<string, unknown>;
-  };
+export type AppManifestOverride = Partial<
+  Pick<AppManifest, "compute" | "routes" | "publish" | "env">
+> & {
+  resources?: Record<string, unknown>;
+};
 
 // --- Root manifest ---
 
 export type AppManifest = {
+  contractVersion?: TakosAppContractVersion;
   name: string;
   version?: string;
   compute: Record<string, AppCompute>;
   resources?: Record<string, AppResource>;
   routes: AppRoute[];
   publish: AppPublication[];
+  serviceBindings?: AppServiceBinding[];
   env: Record<string, string>;
   overrides?: Record<string, AppManifestOverride>;
 };

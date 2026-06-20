@@ -3,8 +3,8 @@
 
 export {
   edges,
-  fileHandlerMatchers,
-  fileHandlers,
+  interfaceFileHandlerMatchers,
+  interfaceFileHandlers,
   infraEndpointRoutes,
   infraEndpoints,
   infraWorkers,
@@ -35,15 +35,7 @@ export {
   secretVersions,
 } from "./schema-platform-resources.ts";
 
-export {
-  apDeliveryQueue,
-  apFollowers,
-  repoGrants,
-  repoPushActivities,
-  storeInventoryItems,
-  storeRegistry,
-  storeRegistryUpdates,
-} from "./schema-platform-store.ts";
+export { repoGrants } from "./schema-platform-store.ts";
 
 export { dlqEntries } from "./schema-platform-dlq.ts";
 

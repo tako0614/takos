@@ -18,8 +18,6 @@ import spacesBase from "./spaces/routes.ts";
 import spacesMembers from "./spaces/members.ts";
 import spacesRepos from "./spaces/repositories.ts";
 import spacesStorage from "./spaces/storage.ts";
-import spacesStores from "./spaces/stores.ts";
-import spacesStoreRegistry from "./spaces/store-registry.ts";
 import spacesTools from "./spaces/tools.ts";
 import services from "./workers/index.ts";
 import resources from "./resources/index.ts";
@@ -32,7 +30,6 @@ import shortcuts from "./shortcuts/index.ts";
 import setup from "./setup.ts";
 import sessions from "./sessions/index.ts";
 import agentTasks from "./agent-tasks/index.ts";
-import { profilesApi } from "./profiles/index.ts";
 import notifications from "./notifications/index.ts";
 import publicShare from "./public-share/index.ts";
 import customDomains from "./custom-domains.ts";
@@ -58,15 +55,12 @@ const apiRoutes = new Hono<ApiEnv>()
   .route("/spaces", spacesMembers)
   .route("/spaces", spacesRepos)
   .route("/spaces", spacesStorage)
-  .route("/spaces", spacesStores)
-  .route("/spaces", spacesStoreRegistry)
   .route("/spaces", spacesTools)
   .route("/spaces", workersSpaceRoutes)
   .route("/services", services)
   .route("/resources", resources)
   .route("/shortcuts", shortcuts)
   .route("/setup", setup)
-  .route("/users", profilesApi)
   .route("/public", publicShare)
   // Root-mounted routes (have full paths in their definitions)
   .route("/", notifications)

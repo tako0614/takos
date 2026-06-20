@@ -3,12 +3,13 @@
 > このページでわかること: self-host distribution と local Compose の current
 > proof。
 
-Self-host static proof uses the distribution profile:
+Self-host static proof uses the current local release evidence:
 
 ```sh
 cd takos
-bun run validate:distributions
-bun run distribution:smoke --source deploy/distributions/selfhosted.json
+bun run check
+bun run validate:opentofu-secrets
+bun scripts/build-release-manifest.ts
 ```
 
 実 Docker Compose proof は operator-owned local evidence です。

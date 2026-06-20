@@ -11,13 +11,13 @@ signature process.
 
 ## Status
 
-| Field            | Value                                                                                                                                   |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Owner            | Data protection owner                                                                                                                   |
-| Last reviewed    | 2026-05-07                                                                                                                              |
-| Scope            | Takos Web / API, Takos Git hosting, Takos agent execution, and Takosumi/operator-managed deploy/runtime operations used by Takos spaces |
-| Current status   | Public template baseline                                                                                                                |
-| Signature status | Customer execution requires operator / legal approval and a signed order                                                                |
+| Field            | Value                                                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner            | Data protection owner                                                                                                                     |
+| Last reviewed    | 2026-05-07                                                                                                                                |
+| Scope            | Takos Web / API, Git service profile, agent runtime profile, and Takosumi/operator-managed deploy/runtime operations used by Takos spaces |
+| Current status   | Public template baseline                                                                                                                  |
+| Signature status | Customer execution requires operator / legal approval and a signed order                                                                  |
 
 ## Regulatory Baseline
 
@@ -87,13 +87,13 @@ data protection law, unless legally prohibited.
 
 ## 3. Details of Processing
 
-| Item               | Description                                                                                                                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Subject matter     | Providing Takos Web / API access, spaces, source and repository services, Takosumi-backed deploy orchestration, agent execution, operator account-plane billing usage, support, and security operations |
-| Duration           | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence                                                    |
-| Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata                                                |
-| Frequency          | Continuous while Customer uses Takos                                                                                                                                                                    |
-| Data subjects      | Customer admins, members, collaborators, application end users, support contacts, and people whose data Customer submits to Takos                                                                       |
+| Item               | Description                                                                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Subject matter     | Providing Takos Web / API access, spaces, source and repository service profiles, Takosumi-backed deploy orchestration, agent runtime profile, operator account-plane billing usage, support, and security operations |
+| Duration           | Agreement term plus the deletion / retention period required to close the account, resolve disputes, comply with law, and maintain security evidence                                                                  |
+| Nature and purpose | Hosting, storing, transmitting, indexing, generating, deploying, monitoring, securing, supporting, and deleting Customer-controlled content and metadata                                                              |
+| Frequency          | Continuous while Customer uses Takos                                                                                                                                                                                  |
+| Data subjects      | Customer admins, members, collaborators, application end users, support contacts, and people whose data Customer submits to Takos                                                                                     |
 
 ## 4. Personal Data Categories
 
@@ -146,18 +146,18 @@ agreement.
 Takos must maintain technical and organizational measures appropriate to the
 risk of processing, including:
 
-| Control area             | Baseline measure                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------ |
-| Access control           | Named user access, least privilege, service-owner review, break-glass logging                    |
-| Authentication           | OAuth / session controls, API token verification, internal service signatures                    |
-| Encryption               | TLS in transit; managed storage encryption or equivalent at rest                                 |
-| Secrets                  | Secrets managed through `takos-private` / operator secret stores; no secrets in OSS source paths |
-| Change management        | PR review, release gate, migration safety gate, patch management gate                            |
-| Logging                  | Request correlation, audit logs, redaction of secrets and sensitive values                       |
-| Backups                  | Backup / restore cadence and retention documented in operations runbooks                         |
-| Incident response        | SEV policy, incident response runbook, customer notification process                             |
-| Vulnerability management | Dependency update policy, Trivy scan, severity-based remediation SLA                             |
-| Data deletion            | Account / space deletion workflow and retention exceptions documented by the operator            |
+| Control area             | Baseline measure                                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Access control           | Named user access, least privilege, service-owner review, break-glass logging                                        |
+| Authentication           | OAuth / session controls, API token verification, internal service signatures                                        |
+| Encryption               | TLS in transit; managed storage encryption or equivalent at rest                                                     |
+| Secrets                  | Secrets managed through `takosumi-private` operator state and operator secret stores; no secrets in OSS source paths |
+| Change management        | PR review, release gate, migration safety gate, patch management gate                                                |
+| Logging                  | Request correlation, audit logs, redaction of secrets and sensitive values                                           |
+| Backups                  | Backup / restore cadence and retention documented in operations runbooks                                             |
+| Incident response        | SEV policy, incident response runbook, customer notification process                                                 |
+| Vulnerability management | Dependency update policy, Trivy scan, severity-based remediation SLA                                                 |
+| Data deletion            | Account / space deletion workflow and retention exceptions documented by the operator                                |
 
 ## 7. Data Subject Requests
 
@@ -227,16 +227,16 @@ Takos must:
 
 ## Annex I: Processing Details
 
-| Field                       | Template value                                                                                                                                                            |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Data exporter               | Customer                                                                                                                                                                  |
-| Data importer               | Takos                                                                                                                                                                     |
-| Processing purpose          | Providing Takos Web / API, Takosumi-backed deploy/runtime operation, Git hosting, agent execution, operator account-plane billing usage, support, and security operations |
-| Categories of data subjects | Customer users, Customer collaborators, Customer application users, support contacts                                                                                      |
-| Categories of personal data | Identity, access, repository, deployment, agent, application, billing, telemetry, support, and security data                                                              |
-| Sensitive data              | Not intended unless separately agreed                                                                                                                                     |
-| Transfer frequency          | Continuous while Customer uses Takos                                                                                                                                      |
-| Retention                   | Agreement term plus documented retention exceptions                                                                                                                       |
+| Field                       | Template value                                                                                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Data exporter               | Customer                                                                                                                                                                                |
+| Data importer               | Takos                                                                                                                                                                                   |
+| Processing purpose          | Providing Takos Web / API, Takosumi-backed deploy/runtime operation, Git service profile, agent runtime profile, operator account-plane billing usage, support, and security operations |
+| Categories of data subjects | Customer users, Customer collaborators, Customer application users, support contacts                                                                                                    |
+| Categories of personal data | Identity, access, repository, deployment, agent, application, billing, telemetry, support, and security data                                                                            |
+| Sensitive data              | Not intended unless separately agreed                                                                                                                                                   |
+| Transfer frequency          | Continuous while Customer uses Takos                                                                                                                                                    |
+| Retention                   | Agreement term plus documented retention exceptions                                                                                                                                     |
 
 ## Annex II: Technical and Organizational Measures
 

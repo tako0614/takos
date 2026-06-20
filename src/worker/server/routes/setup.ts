@@ -1,30 +1,11 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import type { Env } from "../../shared/types/index.ts";
 
-import { validateUsername } from "../../shared/utils/domain-validation.ts";
 import type { BaseVariables } from "./route-auth.ts";
-import {
-  BadRequestError,
-  ConflictError,
-} from "@takos/worker-platform-utils/errors";
-import { zValidator } from "./zod-validator.ts";
+import { BadRequestError } from "@takos/worker-platform-utils/errors";
 import { getDb } from "../../infra/db/index.ts";
 import { accounts } from "../../infra/db/schema.ts";
-import { and, eq, ne } from "drizzle-orm";
-
-// ---------------------------------------------------------------------------
-// Zod schemas
-// ---------------------------------------------------------------------------
-
-const completeSetupSchema = z.object({
-  username: z.string(),
-});
-
-const checkUsernameSchema = z.object({
-  username: z.string(),
-});
-
+import { eq } from "drizzle-orm";
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   /**
@@ -41,82 +22,24 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     });
   })
   /**
-   * POST /setup/complete - Complete initial setup
-   * Required: username
+   * POST /setup/complete - Complete initial setup.
+   *
+   * Takos is a single-owner personal product: setup simply flips the
+   * setupCompleted flag. No public @username handle is assigned.
    */
-  .post("/complete", zValidator("json", completeSetupSchema), async (c) => {
+  .post("/complete", async (c) => {
     const user = c.get("user");
 
-    // If already setup, return error
     if (user.setup_completed) {
       throw new BadRequestError("Setup already completed");
     }
 
-    const body = c.req.valid("json");
-    const { username } = body;
-
-    // Validate username
-    const usernameError = validateUsername(username);
-    if (usernameError) {
-      throw new BadRequestError(usernameError);
-    }
-
-    // Check if username is already taken
     const db = getDb(c.env.DB);
-    const existingAccount = await db.select({ id: accounts.id }).from(accounts)
-      .where(
-        and(
-          eq(accounts.slug, username.toLowerCase()),
-          ne(accounts.id, user.id),
-        ),
-      ).get();
-
-    if (existingAccount) {
-      throw new ConflictError("This username is already taken");
-    }
-
     const timestamp = new Date().toISOString();
     await db.update(accounts).set({
-      slug: username.toLowerCase(),
       setupCompleted: true,
       updatedAt: timestamp,
     }).where(eq(accounts.id, user.id));
 
-    return c.json({
-      success: true,
-      username: username.toLowerCase(),
-    });
-  })
-  /**
-   * POST /setup/check-username - Check if username is available
-   */
-  .post(
-    "/check-username",
-    zValidator("json", checkUsernameSchema),
-    async (c) => {
-      const body = c.req.valid("json");
-      const { username } = body;
-
-      // Validate username format
-      const usernameError = validateUsername(username);
-      if (usernameError) {
-        return c.json({ available: false, error: usernameError });
-      }
-
-      // Check if username is already taken
-      const existing = await getDb(c.env.DB).select({
-        id: accounts.id,
-      }).from(accounts).where(
-        eq(accounts.slug, username.toLowerCase()),
-      ).get();
-
-      if (existing) {
-        return c.json({
-          available: false,
-          error: "This username is already taken",
-        });
-      }
-
-      return c.json({ available: true });
-    },
-  );
+    return c.json({ success: true });
+  });

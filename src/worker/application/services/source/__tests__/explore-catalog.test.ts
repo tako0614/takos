@@ -61,49 +61,53 @@ function createCatalogDb(fixtures: {
   } as unknown as Env["DB"];
 }
 
-async function withDeployManifestAvailability<T>(
+async function withInstallableCapsuleAvailability<T>(
   available: boolean,
   fn: () => Promise<T>,
 ): Promise<T> {
-  return await withDeployManifestPath(
-    available ? "package.json" : null,
-    fn,
-  );
+  return await withInstallableCapsulePath(available ? "outputs.tf" : null, fn);
 }
 
-async function withDeployManifestPath<T>(
-  manifestPath: string | null,
+async function withInstallableCapsulePath<T>(
+  capsulePath: string | null,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const hasManifest = manifestPath !== null;
+  const hasCapsule = capsulePath !== null;
   const originalGitStore = sourceServiceDeps.gitStore;
-  (sourceServiceDeps as {
-    gitStore: typeof sourceServiceDeps.gitStore;
-  }).gitStore = {
+  (
+    sourceServiceDeps as {
+      gitStore: typeof sourceServiceDeps.gitStore;
+    }
+  ).gitStore = {
     ...sourceServiceDeps.gitStore,
-    getCommitData: (async () => ({
-      tree: "tree-1",
-    } as unknown)) as typeof sourceServiceDeps.gitStore.getCommitData,
-    listDirectory:
-      (async (_bucket: unknown, _treeSha: string, path = "") =>
-        path === ""
-          ? hasManifest && manifestPath
-            ? [{ name: manifestPath, mode: "100644", sha: "blob-1" }]
-            : []
-          : []) as typeof sourceServiceDeps.gitStore.listDirectory,
-    getBlobAtPath:
-      (async (_bucket: unknown, _treeSha: string, filePath: string) =>
-        hasManifest && filePath === manifestPath
-          ? new Uint8Array([1])
-          : null) as typeof sourceServiceDeps.gitStore.getBlobAtPath,
+    getCommitData: (async () =>
+      ({
+        tree: "tree-1",
+      }) as unknown) as typeof sourceServiceDeps.gitStore.getCommitData,
+    listDirectory: (async (_bucket: unknown, _treeSha: string, path = "") =>
+      path === ""
+        ? hasCapsule && capsulePath
+          ? [{ name: capsulePath, mode: "100644", sha: "blob-1" }]
+          : []
+        : []) as typeof sourceServiceDeps.gitStore.listDirectory,
+    getBlobAtPath: (async (
+      _bucket: unknown,
+      _treeSha: string,
+      filePath: string,
+    ) =>
+      hasCapsule && filePath === capsulePath
+        ? new Uint8Array([1])
+        : null) as typeof sourceServiceDeps.gitStore.getBlobAtPath,
   };
 
   try {
     return await fn();
   } finally {
-    (sourceServiceDeps as {
-      gitStore: typeof sourceServiceDeps.gitStore;
-    }).gitStore = originalGitStore;
+    (
+      sourceServiceDeps as {
+        gitStore: typeof sourceServiceDeps.gitStore;
+      }
+    ).gitStore = originalGitStore;
   }
 }
 
@@ -181,7 +185,7 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
     ],
   });
 
-  await withDeployManifestAvailability(true, async () => {
+  await withInstallableCapsuleAvailability(true, async () => {
     const gitObjects = {} as Env["GIT_OBJECTS"];
     const allItems = await listCatalogItems(db, {
       sort: "stars",
@@ -191,10 +195,10 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
       certifiedOnly: false,
       gitObjects,
     });
-    assertEquals(allItems.items.map((item) => item.repo.id), [
-      "repo-app",
-      "repo-only",
-    ]);
+    assertEquals(
+      allItems.items.map((item) => item.repo.id),
+      ["repo-app", "repo-only"],
+    );
     assertEquals(allItems.items[0]?.package.available, true);
     assertEquals(allItems.items[0]?.package.latest_version, "v1.0.0");
     assertEquals(allItems.items[0]?.package.publish_status, "approved");
@@ -210,10 +214,10 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
       certifiedOnly: false,
       gitObjects,
     });
-    assertEquals(repoOnly.items.map((item) => item.repo.id), [
-      "repo-app",
-      "repo-only",
-    ]);
+    assertEquals(
+      repoOnly.items.map((item) => item.repo.id),
+      ["repo-app", "repo-only"],
+    );
     assertEquals(repoOnly.items[0]?.package.available, true);
     assertEquals(repoOnly.items[1]?.package.available, false);
 
@@ -225,7 +229,10 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
       certifiedOnly: false,
       gitObjects,
     });
-    assertEquals(deployable.items.map((item) => item.repo.id), ["repo-app"]);
+    assertEquals(
+      deployable.items.map((item) => item.repo.id),
+      ["repo-app"],
+    );
 
     const certifiedOnly = await listCatalogItems(db, {
       sort: "stars",
@@ -235,7 +242,10 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
       certifiedOnly: true,
       gitObjects,
     });
-    assertEquals(certifiedOnly.items.map((item) => item.repo.id), ["repo-app"]);
+    assertEquals(
+      certifiedOnly.items.map((item) => item.repo.id),
+      ["repo-app"],
+    );
 
     const installed = await listCatalogItems(db, {
       sort: "stars",
@@ -250,19 +260,21 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
         baseUrl: "https://accounts.internal",
         fetch: async () =>
           Response.json({
-            installations: [{
-              id: "inst_repo_app",
-              app_id: "deployable-app",
-              status: "installed",
-              runtime_mode: "shared-cell",
-              source: {
-                url: "https://takos.jp/git/space-1/deployable-app.git",
-                ref: "v1.0.0",
-                commit: "commit-1",
+            installations: [
+              {
+                id: "inst_repo_app",
+                app_id: "deployable-app",
+                status: "installed",
+                runtime_mode: "shared-cell",
+                source: {
+                  url: "https://takos.jp/git/space-1/deployable-app.git",
+                  ref: "v1.0.0",
+                  commit: "commit-1",
+                },
+                created_at: "2026-01-06T00:00:00.000Z",
+                updated_at: "2026-01-06T00:00:00.000Z",
               },
-              created_at: "2026-01-06T00:00:00.000Z",
-              updated_at: "2026-01-06T00:00:00.000Z",
-            }],
+            ],
           }),
       },
     });
@@ -273,37 +285,41 @@ test("listCatalogItems treats public non-draft releases as deployable apps witho
 
 test("listCatalogItems marks repository packages installed from Accounts ledger source URL and release tag", async () => {
   const db = createCatalogDb({
-    repos: [{
-      id: "repo-app",
-      name: "deployable-app",
-      description: "A deployable app",
-      defaultBranch: "main",
-      stars: 25,
-      forks: 3,
-      primaryLanguage: "TypeScript",
-      license: "MIT",
-      remoteCloneUrl: "https://github.com/acme/deployable-app.git",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-03T00:00:00.000Z",
-      accountId: "space-1",
-      accountName: "Space 1",
-      accountSlug: "space-1",
-      accountPicture: null,
-    }],
-    releases: [{
-      id: "release-app",
-      repoId: "repo-app",
-      tag: "v1.0.0",
-      commitSha: "commit-1",
-      description: "First release",
-      publishedAt: "2026-01-04T00:00:00.000Z",
-      repoName: "deployable-app",
-    }],
+    repos: [
+      {
+        id: "repo-app",
+        name: "deployable-app",
+        description: "A deployable app",
+        defaultBranch: "main",
+        stars: 25,
+        forks: 3,
+        primaryLanguage: "TypeScript",
+        license: "MIT",
+        remoteCloneUrl: "https://github.com/acme/deployable-app.git",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-03T00:00:00.000Z",
+        accountId: "space-1",
+        accountName: "Space 1",
+        accountSlug: "space-1",
+        accountPicture: null,
+      },
+    ],
+    releases: [
+      {
+        id: "release-app",
+        repoId: "repo-app",
+        tag: "v1.0.0",
+        commitSha: "commit-1",
+        description: "First release",
+        publishedAt: "2026-01-04T00:00:00.000Z",
+        repoName: "deployable-app",
+      },
+    ],
     assets: [],
     deployments: [],
   });
 
-  await withDeployManifestAvailability(true, async () => {
+  await withInstallableCapsuleAvailability(true, async () => {
     const result = await listCatalogItems(db, {
       sort: "stars",
       limit: 20,
@@ -317,19 +333,21 @@ test("listCatalogItems marks repository packages installed from Accounts ledger 
         baseUrl: "https://accounts.internal",
         fetch: async () =>
           Response.json({
-            installations: [{
-              id: "inst_repo_app",
-              app_id: "deployable-app",
-              status: "installed",
-              runtime_mode: "shared-cell",
-              source: {
-                url: "https://takos.jp/git/space-1/deployable-app.git",
-                ref: "v1.0.0",
-                commit: "commit-1",
+            installations: [
+              {
+                id: "inst_repo_app",
+                app_id: "deployable-app",
+                status: "installed",
+                runtime_mode: "shared-cell",
+                source: {
+                  url: "https://takos.jp/git/space-1/deployable-app.git",
+                  ref: "v1.0.0",
+                  commit: "commit-1",
+                },
+                created_at: "2026-01-06T00:00:00.000Z",
+                updated_at: "2026-01-06T00:00:00.000Z",
               },
-              created_at: "2026-01-06T00:00:00.000Z",
-              updated_at: "2026-01-06T00:00:00.000Z",
-            }],
+            ],
           }),
       },
     });
@@ -349,7 +367,7 @@ test("listCatalogItems marks repository packages installed from Accounts ledger 
   });
 });
 
-test("listCatalogItems requires package.json when git objects are available", async () => {
+test("listCatalogItems requires an OpenTofu Capsule source when git objects are available", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -384,7 +402,7 @@ test("listCatalogItems requires package.json when git objects are available", as
     deployments: [],
   });
 
-  await withDeployManifestAvailability(false, async () => {
+  await withInstallableCapsuleAvailability(false, async () => {
     const deployable = await listCatalogItems(db, {
       sort: "stars",
       limit: 20,
@@ -397,7 +415,7 @@ test("listCatalogItems requires package.json when git objects are available", as
   });
 });
 
-test("listCatalogItems accepts package.json when git objects are available", async () => {
+test("listCatalogItems accepts outputs.tf when git objects are available", async () => {
   const db = createCatalogDb({
     repos: [
       {
@@ -432,7 +450,7 @@ test("listCatalogItems accepts package.json when git objects are available", asy
     deployments: [],
   });
 
-  await withDeployManifestPath("package.json", async () => {
+  await withInstallableCapsulePath("outputs.tf", async () => {
     const deployable = await listCatalogItems(db, {
       sort: "stars",
       limit: 20,
@@ -441,29 +459,37 @@ test("listCatalogItems accepts package.json when git objects are available", asy
       certifiedOnly: false,
       gitObjects: {} as Env["GIT_OBJECTS"],
     });
-    assertEquals(deployable.items.map((item) => item.repo.id), ["repo-app"]);
+    assertEquals(
+      deployable.items.map((item) => item.repo.id),
+      ["repo-app"],
+    );
   });
 });
 
-test("filterDeployablePackageReleases keeps only manifest-backed releases", async () => {
+test("filterDeployablePackageReleases keeps only Capsule-backed releases", async () => {
   const originalGitStore = sourceServiceDeps.gitStore;
-  (sourceServiceDeps as {
-    gitStore: typeof sourceServiceDeps.gitStore;
-  }).gitStore = {
+  (
+    sourceServiceDeps as {
+      gitStore: typeof sourceServiceDeps.gitStore;
+    }
+  ).gitStore = {
     ...sourceServiceDeps.gitStore,
-    getCommitData: (async (_bucket: unknown, sha: string) => ({
-      tree: sha === "commit-a" ? "tree-1" : "tree-2",
-    } as unknown)) as typeof sourceServiceDeps.gitStore.getCommitData,
-    listDirectory:
-      (async (_bucket: unknown, treeSha: string, path = "") =>
-        path === "" && treeSha === "tree-1"
-          ? [{ name: "package.json", mode: "100644", sha: "blob-1" }]
-          : []) as typeof sourceServiceDeps.gitStore.listDirectory,
-    getBlobAtPath:
-      (async (_bucket: unknown, treeSha: string, filePath: string) =>
-        treeSha === "tree-1" && filePath === "package.json"
-          ? new Uint8Array([1])
-          : null) as typeof sourceServiceDeps.gitStore.getBlobAtPath,
+    getCommitData: (async (_bucket: unknown, sha: string) =>
+      ({
+        tree: sha === "commit-a" ? "tree-1" : "tree-2",
+      }) as unknown) as typeof sourceServiceDeps.gitStore.getCommitData,
+    listDirectory: (async (_bucket: unknown, treeSha: string, path = "") =>
+      path === "" && treeSha === "tree-1"
+        ? [{ name: "outputs.tf", mode: "100644", sha: "blob-1" }]
+        : []) as typeof sourceServiceDeps.gitStore.listDirectory,
+    getBlobAtPath: (async (
+      _bucket: unknown,
+      treeSha: string,
+      filePath: string,
+    ) =>
+      treeSha === "tree-1" && filePath === "outputs.tf"
+        ? new Uint8Array([1])
+        : null) as typeof sourceServiceDeps.gitStore.getBlobAtPath,
   };
 
   try {
@@ -480,9 +506,11 @@ test("filterDeployablePackageReleases keeps only manifest-backed releases", asyn
       { repoId: "repo-a", tag: "v1.0.0", commitSha: "commit-a" },
     ]);
   } finally {
-    (sourceServiceDeps as {
-      gitStore: typeof sourceServiceDeps.gitStore;
-    }).gitStore = originalGitStore;
+    (
+      sourceServiceDeps as {
+        gitStore: typeof sourceServiceDeps.gitStore;
+      }
+    ).gitStore = originalGitStore;
   }
 });
 
@@ -547,29 +575,35 @@ test("listCatalogItems includes default app distribution entries in the catalog"
     certifiedOnly: true,
     searchQuery: "docs",
     tagsRaw: "default-app",
-    defaultAppEntries: [{
-      name: "takos-docs",
-      title: "Docs",
-      appId: "jp.takos.docs",
-      description: "Rich text document editor",
-      publisher: "takos",
-      homepage: "https://github.com/tako0614/takos-docs",
-      icon: "/icons/docs.svg",
-      category: "app",
-      tags: ["office"],
-      repositoryUrl: "https://github.com/tako0614/takos-docs.git",
-      ref: "main",
-      refType: "branch",
-      sourcePath: "package.json",
-      runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
-      bindings: [
-        { name: "auth", type: "identity.oidc@v1", required: true },
-        { name: "bootstrap", type: "install-launch-token@v1", required: true },
-      ],
-      preinstall: true,
-      backendName: "cloudflare",
-      envName: "staging",
-    }],
+    defaultAppEntries: [
+      {
+        name: "takos-docs",
+        title: "Docs",
+        appId: "jp.takos.docs",
+        description: "Rich text document editor",
+        publisher: "takos",
+        homepage: "https://github.com/tako0614/takos-docs",
+        icon: "/icons/docs.svg",
+        category: "app",
+        tags: ["office"],
+        repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+        ref: "main",
+        refType: "branch",
+        sourcePath: "outputs.tf",
+        runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
+        bindings: [
+          { name: "auth", type: "identity.oidc", required: true },
+          {
+            name: "bootstrap",
+            type: "auth.bootstrap_token",
+            required: true,
+          },
+        ],
+        preinstall: true,
+        backendName: "cloudflare",
+        envName: "staging",
+      },
+    ],
     now: "2026-04-22T00:00:00.000Z",
   });
 
@@ -591,11 +625,11 @@ test("listCatalogItems includes default app distribution entries in the catalog"
     description: "Rich text document editor",
     publisher: "takos",
     homepage: "https://github.com/tako0614/takos-docs",
-    source_path: "package.json",
+    source_path: "outputs.tf",
     runtime_modes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
   });
   assertEquals(item.source, {
@@ -623,27 +657,33 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
     type: "deployable-app",
     certifiedOnly: false,
     searchQuery: "road",
-    defaultAppEntries: [{
-      name: "road-to-me",
-      title: "Road to Me",
-      appId: "jp.takos.road-to-me",
-      description: "AI goal planning app for reverse timeline planning.",
-      publisher: "takos",
-      homepage: "https://github.com/tako0614/road-to-me",
-      category: "app",
-      tags: ["planning", "goals"],
-      repositoryUrl: "https://github.com/tako0614/road-to-me.git",
-      ref: "v0.1.0",
-      refType: "tag",
-      sourcePath: "backend/package.json",
-      runtimeModes: ["dedicated", "self-hosted"],
-      bindings: [
-        { name: "auth", type: "identity.oidc@v1", required: true },
-        { name: "domain", type: "domain.http@v1", required: false },
-        { name: "bootstrap", type: "install-launch-token@v1", required: true },
-      ],
-      preinstall: false,
-    }],
+    defaultAppEntries: [
+      {
+        name: "road-to-me",
+        title: "Road to Me",
+        appId: "jp.takos.road-to-me",
+        description: "AI goal planning app for reverse timeline planning.",
+        publisher: "takos",
+        homepage: "https://github.com/tako0614/road-to-me",
+        category: "app",
+        tags: ["planning", "goals"],
+        repositoryUrl: "https://github.com/tako0614/road-to-me.git",
+        ref: "v0.1.0",
+        refType: "tag",
+        sourcePath: "outputs.tf",
+        runtimeModes: ["dedicated", "self-hosted"],
+        bindings: [
+          { name: "auth", type: "identity.oidc", required: true },
+          { name: "domain", type: "protocol.http.api", required: false },
+          {
+            name: "bootstrap",
+            type: "auth.bootstrap_token",
+            required: true,
+          },
+        ],
+        preinstall: false,
+      },
+    ],
     now: "2026-04-22T00:00:00.000Z",
   });
 
@@ -659,12 +699,12 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
     description: "AI goal planning app for reverse timeline planning.",
     publisher: "takos",
     homepage: "https://github.com/tako0614/road-to-me",
-    source_path: "backend/package.json",
+    source_path: "outputs.tf",
     runtime_modes: ["dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
-      { name: "domain", type: "domain.http@v1", required: false },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
+      { name: "domain", type: "protocol.http.api", required: false },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
   });
   assertEquals(item.source, {
@@ -692,14 +732,16 @@ test("listCatalogItems does not infer default app installation without Accounts 
     type: "deployable-app",
     certifiedOnly: false,
     spaceId: "space-1",
-    defaultAppEntries: [{
-      name: "takos-docs",
-      title: "Docs",
-      repositoryUrl: "https://github.com/tako0614/takos-docs.git",
-      ref: "main",
-      refType: "branch",
-      preinstall: true,
-    }],
+    defaultAppEntries: [
+      {
+        name: "takos-docs",
+        title: "Docs",
+        repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+        ref: "main",
+        refType: "branch",
+        preinstall: true,
+      },
+    ],
     now: "2026-04-22T00:00:00.000Z",
   });
 
@@ -722,15 +764,17 @@ test("listCatalogItems overlays default app installation state from Accounts led
     type: "deployable-app",
     certifiedOnly: false,
     spaceId: "space-1",
-    defaultAppEntries: [{
-      name: "takos-docs",
-      title: "Docs",
-      appId: "jp.takos.docs",
-      repositoryUrl: "https://github.com/tako0614/takos-docs.git",
-      ref: "v1.2.6",
-      refType: "tag",
-      preinstall: true,
-    }],
+    defaultAppEntries: [
+      {
+        name: "takos-docs",
+        title: "Docs",
+        appId: "jp.takos.docs",
+        repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+        ref: "v1.2.6",
+        refType: "tag",
+        preinstall: true,
+      },
+    ],
     accountsInstallations: {
       baseUrl: "https://accounts.internal/base/",
       token: "accounts-token",
@@ -740,41 +784,46 @@ test("listCatalogItems overlays default app installation state from Accounts led
           url,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        if (url.endsWith("/v1/app-installations/inst_docs/services")) {
+        if (url.endsWith("/v1/installation-projections/inst_docs/services")) {
           return Response.json({
             installation_id: "inst_docs",
-            services: [{
-              id: "identity.primary.oidc",
-              material_kind: "identity.oidc@v1",
-              status: "ready",
-              endpoint: "https://accounts.internal/base",
-            }, {
-              id: "events.webhook.default",
-              material_kind: "events.webhook@v1",
-              status: "ready",
-              endpoint:
-                "https://accounts.internal/base/v1/app-installations/inst_docs/events/ingest",
-              secret_ref: "secret://inst_docs/events",
-              token_expires_at: "2026-05-01T00:00:00.000Z",
-            }],
+            services: [
+              {
+                id: "takosumi.identity.oidc",
+                capability: "identity.oidc",
+                status: "ready",
+                endpoint: "https://accounts.internal/base",
+              },
+              {
+                id: "takosumi.events.webhook",
+                capability: "events.webhook",
+                status: "ready",
+                endpoint:
+                  "https://accounts.internal/base/v1/installation-projections/inst_docs/events/ingest",
+                secret_ref: "secret://inst_docs/events",
+                token_expires_at: "2026-05-01T00:00:00.000Z",
+              },
+            ],
           });
         }
         return Response.json({
-          installations: [{
-            id: "inst_docs",
-            space_id: "space-1",
-            app_id: "jp.takos.docs",
-            source: {
-              type: "git",
-              url: "https://github.com/tako0614/takos-docs.git",
-              ref: "v1.2.6",
-              commit: "commit-docs",
+          installations: [
+            {
+              id: "inst_docs",
+              space_id: "space-1",
+              app_id: "jp.takos.docs",
+              source: {
+                type: "git",
+                url: "https://github.com/tako0614/takos-docs.git",
+                ref: "v1.2.6",
+                commit: "commit-docs",
+              },
+              mode: "shared-cell",
+              status: "ready",
+              created_at: "2026-04-22T01:00:00.000Z",
+              updated_at: "2026-04-22T01:05:00.000Z",
             },
-            mode: "shared-cell",
-            status: "ready",
-            created_at: "2026-04-22T01:00:00.000Z",
-            updated_at: "2026-04-22T01:05:00.000Z",
-          }],
+          ],
         });
       },
     },
@@ -783,15 +832,12 @@ test("listCatalogItems overlays default app installation state from Accounts led
 
   assertEquals(
     requests[0]?.url,
-    "https://accounts.internal/base/v1/app-installations?space_id=space-1",
+    "https://accounts.internal/base/v1/installation-projections?space_id=space-1",
   );
-  assertEquals(
-    requests[0]?.authorization,
-    "Bearer accounts-token",
-  );
+  assertEquals(requests[0]?.authorization, "Bearer accounts-token");
   assertEquals(
     requests[1]?.url,
-    "https://accounts.internal/base/v1/app-installations/inst_docs/services",
+    "https://accounts.internal/base/v1/installation-projections/inst_docs/services",
   );
   assertEquals(result.items[0]?.installation, {
     installed: true,
@@ -806,21 +852,24 @@ test("listCatalogItems overlays default app installation state from Accounts led
     deployed_at: null,
     installed_at: "2026-04-22T01:00:00.000Z",
     updated_at: "2026-04-22T01:05:00.000Z",
-    services: [{
-      id: "identity.primary.oidc",
-      material_kind: "identity.oidc@v1",
-      status: "ready",
-      endpoint: "https://accounts.internal/base",
-      secret_configured: false,
-      token_expires_at: null,
-    }, {
-      id: "events.webhook.default",
-      material_kind: "events.webhook@v1",
-      status: "ready",
-      endpoint:
-        "https://accounts.internal/base/v1/app-installations/inst_docs/events/ingest",
-      secret_configured: true,
-      token_expires_at: "2026-05-01T00:00:00.000Z",
-    }],
+    services: [
+      {
+        id: "takosumi.identity.oidc",
+        capability: "identity.oidc",
+        status: "ready",
+        endpoint: "https://accounts.internal/base",
+        secret_configured: false,
+        token_expires_at: null,
+      },
+      {
+        id: "takosumi.events.webhook",
+        capability: "events.webhook",
+        status: "ready",
+        endpoint:
+          "https://accounts.internal/base/v1/installation-projections/inst_docs/events/ingest",
+        secret_configured: true,
+        token_expires_at: "2026-05-01T00:00:00.000Z",
+      },
+    ],
   });
 });

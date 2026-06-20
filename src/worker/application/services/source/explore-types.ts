@@ -92,7 +92,7 @@ export interface CatalogInstallationResponse {
 
 export interface CatalogWorkloadServiceResponse {
   id: string;
-  material_kind: string;
+  capability: string;
   status: "ready" | "not_configured" | "unavailable" | "unknown";
   endpoint: string | null;
   secret_configured: boolean;

@@ -10,15 +10,15 @@ claim SOC 2 compliance until a qualified auditor completes the engagement.
 
 Initial SOC 2 readiness scope:
 
-| Area                    | In scope                                                        | Owner            |
-| ----------------------- | --------------------------------------------------------------- | ---------------- |
-| Application security    | `takos-worker`, `takos-git`, `takos-agent`, Takosumi API boundary  | service owners   |
-| Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles   | operator         |
-| Change management       | PR review, release gate, staging promotion, rollback            | release owner    |
-| Incident response       | SEV policy, incident runbook, postmortem evidence               | on-call owner    |
-| Availability            | SLOs, capacity planning, backup / restore, DR plan              | operations owner |
-| Confidentiality         | secret rotation, access control, private deploy boundary        | security owner   |
-| Processing integrity    | deploy audit trail, migration safety, usage / billing integrity | product owner    |
+| Area                    | In scope                                                          | Owner            |
+| ----------------------- | ----------------------------------------------------------------- | ---------------- |
+| Application security    | `takos-worker`, `takos-git`, `takos-agent`, Takosumi API boundary | service owners   |
+| Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles     | operator         |
+| Change management       | PR review, release gate, staging promotion, rollback              | release owner    |
+| Incident response       | SEV policy, incident runbook, postmortem evidence                 | on-call owner    |
+| Availability            | SLOs, capacity planning, backup / restore, DR plan                | operations owner |
+| Confidentiality         | secret rotation, access control, private deploy boundary          | security owner   |
+| Processing integrity    | deploy audit trail, migration safety, usage / billing integrity   | product owner    |
 
 Out of scope for the first readiness pass:
 
@@ -33,7 +33,7 @@ Out of scope for the first readiness pass:
 | ------------------------ | ---------------------------------------------------------- | ------------------------------------ |
 | CC1 Control environment  | owner map, code of conduct, operating policies             | formal security ownership roster     |
 | CC2 Communication        | docs site, incident updates, support channel               | customer-facing status page evidence |
-| CC3 Risk assessment      | ROADMAP risks, patch management, threat model backlog      | recurring risk review log            |
+| CC3 Risk assessment      | risk register, patch management, threat model backlog      | recurring risk review log            |
 | CC4 Monitoring           | release gate, observability stack, security audit workflow | alert review evidence                |
 | CC5 Control activities   | CI gates, migration safety, branch protection policy       | branch protection export             |
 | CC6 Logical access       | OAuth/PAT verification, internal service signatures        | access review cadence                |
@@ -111,15 +111,15 @@ Out of scope for the first readiness pass:
 
 | Evidence          | Owning docs                                                                                                                                                | Private evidence          |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| On-call policy    | [`takos-private/docs/operations/oncall.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/oncall.md)                               | incident paging config    |
-| Incident response | [`takos-private/docs/operations/incident-response.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/incident-response.md)         | incident records          |
-| Backup drills     | [`takos-private/docs/operations/backup-restore-drills.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/backup-restore-drills.md) | restore logs              |
-| DR plan           | [`takos-private/docs/operations/disaster-recovery.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/disaster-recovery.md)         | failover run logs         |
-| Capacity plan     | [`takos-private/docs/operations/capacity.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/capacity.md)                           | traffic reports           |
-| Cost monitoring   | [`takos-private/docs/operations/cost-monitoring.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/cost-monitoring.md)             | billing reconciliation    |
-| Patch management  | [`takos-private/docs/operations/patch-management.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/patch-management.md)           | vulnerability exceptions  |
-| Migration safety  | [`takos-private/docs/operations/online-db-migrations.md`](https://github.com/tako0614/takos-private/blob/master/docs/operations/online-db-migrations.md)   | production migration logs |
-| Release gate      | [`docs/quality/release-gate.md`](https://github.com/tako0614/takos-ecosystem/blob/master/docs/quality/release-gate.md)                                     | CI run artifacts          |
+| On-call policy    | `takosumi-private/operations/oncall.md`                    | incident paging config    |
+| Incident response | `takosumi-private/operations/incident-response.md`         | incident records          |
+| Backup drills     | `takosumi-private/operations/backup-restore-drills.md`     | restore logs              |
+| DR plan           | `takosumi-private/operations/disaster-recovery.md`         | failover run logs         |
+| Capacity plan     | `takosumi-private/operations/capacity.md`                  | traffic reports           |
+| Cost monitoring   | `takosumi-private/operations/cost-monitoring.md`           | billing reconciliation    |
+| Patch management  | `takosumi-private/operations/patch-management.md`          | vulnerability exceptions  |
+| Migration safety  | `takosumi-private/operations/online-db-migrations.md`      | production migration logs |
+| Release gate      | ecosystem root `docs/quality/release-gate.md`                    | CI run artifacts          |
 
 ## Audit Preparation Backlog
 

@@ -4,6 +4,7 @@ import { Router } from "@solidjs/router";
 import App from "./App.tsx";
 import { AppRoutes } from "./app-routes.tsx";
 import { useTheme } from "./store/theme.ts";
+import { useI18n } from "./store/i18n.ts";
 import "./styles.css";
 
 if (import.meta.env.PROD) {
@@ -88,6 +89,17 @@ function ThemeSync() {
   return null;
 }
 
+/** Mirrors the active UI language to the `lang` attribute on `<html>` (WCAG 3.1.1). */
+function LangSync() {
+  const i18n = useI18n();
+
+  createEffect(() => {
+    document.documentElement.lang = i18n.lang;
+  });
+
+  return null;
+}
+
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
@@ -97,6 +109,7 @@ if (!rootElement) {
 render(() => (
   <>
     <ThemeSync />
+    <LangSync />
     <Router explicitLinks root={App}>
       <AppRoutes />
     </Router>

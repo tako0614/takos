@@ -22,7 +22,6 @@ export type AppRouteComponentKey =
   | "memory"
   | "settings"
   | "space-settings"
-  | "profile"
   | "home";
 
 export type AppRoutePlacement = "public" | "protected" | "fallback";
@@ -41,6 +40,7 @@ const SIMPLE_TOP_LEVEL_VIEWS = {
 } as const satisfies Partial<Record<string, View>>;
 
 const LEGAL_PAGE_TO_PATH = new Map<string, string>([
+  ["terms", "/terms"],
   ["privacy", "/privacy"],
   ["security", "/security"],
   ["tokushoho", "/legal/tokushoho"],
@@ -229,16 +229,11 @@ function buildStoragePath(state: RouteState): string {
 }
 
 function buildRepoPath(state: RouteState): string | undefined {
-  let basePath: string | undefined;
-  if (state.username && state.repoName) {
-    basePath = `/${state.username}/${state.repoName}`;
-  } else if (state.spaceId && state.repoId) {
-    basePath = `/w/${state.spaceId}/repos/${state.repoId}`;
-  }
-
-  if (!basePath) {
+  // Single-owner model: repos are addressed by space id, never by `@username`.
+  if (!(state.spaceId && state.repoId)) {
     return undefined;
   }
+  const basePath = `/w/${state.spaceId}/repos/${state.repoId}`;
 
   const params = new URLSearchParams();
   if (state.ref) {
@@ -255,10 +250,6 @@ function buildRepoPath(state: RouteState): string | undefined {
   }
 
   return appendSearchParams(basePath, params);
-}
-
-function buildProfilePath(state: RouteState): string | undefined {
-  return state.username ? `/@${state.username}` : undefined;
 }
 
 export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
@@ -562,36 +553,8 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
         : undefined,
   },
   {
-    key: "profile",
-    componentKey: "profile",
-    componentPatterns: ["/@:username"],
-    placement: "protected",
-    match: (parts) =>
-      parts[0]?.startsWith("@")
-        ? { view: "profile", username: parts[0].slice(1) }
-        : undefined,
-    build: (state) =>
-      state.view === "profile" ? buildProfilePath(state) : undefined,
-  },
-  {
     key: "retired-app-shortcuts",
     match: (parts) => parts[0] === "app" ? { view: "home" } : undefined,
-  },
-  {
-    key: "repo",
-    componentKey: "repo",
-    componentPatterns: ["/:username/:repoName"],
-    placement: "public",
-    match: (parts) =>
-      parts[0] && parts[1] && !parts[0].startsWith("@") &&
-        /^[a-zA-Z0-9_-]+$/.test(parts[0]) &&
-        /^[a-zA-Z0-9_-]+$/.test(parts[1])
-        ? {
-          view: "repo",
-          username: parts[0],
-          repoName: parts[1],
-        }
-        : undefined,
   },
   {
     key: "home",

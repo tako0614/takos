@@ -12,10 +12,6 @@ export const NOTIFICATION_TYPES = [
   // Pull requests
   "pr.review.requested",
   "pr.comment",
-  // Social
-  "social.followed",
-  "social.follow.requested",
-  "social.follow.accepted",
   // Workspace
   "workspace.invite",
   // Billing
@@ -52,10 +48,6 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferenceMatrix = {
 
   "pr.review.requested": { in_app: true, email: false, push: false },
   "pr.comment": { in_app: true, email: false, push: false },
-
-  "social.followed": { in_app: true, email: false, push: false },
-  "social.follow.requested": { in_app: true, email: false, push: false },
-  "social.follow.accepted": { in_app: true, email: false, push: false },
 
   "workspace.invite": { in_app: true, email: true, push: false },
 

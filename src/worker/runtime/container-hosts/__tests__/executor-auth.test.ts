@@ -3,7 +3,7 @@ import { assertEquals } from "@takos/test/assert";
 import { dispatchControlRpc } from "../../executor-proxy-api.ts";
 import {
   claimsMatchRequestBody,
-  CONTROL_RPC_ENDPOINTS,
+  CONTROL_RPC_ENDPOINT_NAMES,
   getRequiredProxyCapability,
   isProxyRequestAuthorized,
 } from "../executor-auth.ts";
@@ -49,29 +49,27 @@ test("claimsMatchRequestBody fails closed when the body asserts a different id",
 });
 
 test("executor auth rejects removed binding proxy paths", () => {
-  for (
-    const path of [
-      "/proxy/db/query",
-      "/proxy/offload/get",
-      "/proxy/git-objects/get",
-      "/proxy/do/fetch",
-      "/proxy/vectorize/query",
-      "/proxy/ai/run",
-      "/proxy/egress/fetch",
-      "/proxy/runtime/fetch",
-      "/proxy/unknown/fetch",
-      "/proxy/queue/send",
-      "/proxy/heartbeat",
-      "/proxy/run/status",
-      "/proxy/run/fail",
-      "/proxy/run/reset",
-      "/proxy/run/usage",
-      "/proxy/api-keys",
-      "/proxy/billing/run-usage",
-      "/rpc/control/heartbeat",
-      "/api/internal/v1/agent-control/billing-run-usage",
-    ]
-  ) {
+  for (const path of [
+    "/proxy/db/query",
+    "/proxy/offload/get",
+    "/proxy/git-objects/get",
+    "/proxy/do/fetch",
+    "/proxy/vectorize/query",
+    "/proxy/ai/run",
+    "/proxy/egress/fetch",
+    "/proxy/runtime/fetch",
+    "/proxy/unknown/fetch",
+    "/proxy/queue/send",
+    "/proxy/heartbeat",
+    "/proxy/run/status",
+    "/proxy/run/fail",
+    "/proxy/run/reset",
+    "/proxy/run/usage",
+    "/proxy/api-keys",
+    "/proxy/billing/run-usage",
+    "/rpc/control/heartbeat",
+    "/api/internal/v1/agent-control/billing-run-usage",
+  ]) {
     assertEquals(getRequiredProxyCapability(path), null);
   }
 });
@@ -141,7 +139,7 @@ test("executor auth maps current dispatch-issued RPC paths to per-purpose scopes
 });
 
 test("every control endpoint maps to exactly one known scope", () => {
-  for (const endpoint of CONTROL_RPC_ENDPOINTS) {
+  for (const endpoint of CONTROL_RPC_ENDPOINT_NAMES) {
     const scope = getRequiredProxyCapability(agentControlRpcPath(endpoint));
     assertEquals(
       AGENT_PROXY_SCOPES.includes(scope as never),
@@ -155,7 +153,7 @@ test("an agent run token reaches every control endpoint (no regression)", () => 
   const agentCapability = proxyScopesForRunKind("agent");
   // Sanity: the agent scope set is the full scope set.
   assertEquals([...agentCapability].sort(), [...AGENT_PROXY_SCOPES].sort());
-  for (const endpoint of CONTROL_RPC_ENDPOINTS) {
+  for (const endpoint of CONTROL_RPC_ENDPOINT_NAMES) {
     const path = agentControlRpcPath(endpoint);
     assertEquals(
       isProxyRequestAuthorized(path, agentCapability),
@@ -165,13 +163,13 @@ test("an agent run token reaches every control endpoint (no regression)", () => 
   }
 });
 
-test("legacy 'control' token still reaches all control endpoints", () => {
-  for (const endpoint of CONTROL_RPC_ENDPOINTS) {
+test("unknown proxy capability is denied for all control endpoints", () => {
+  for (const endpoint of CONTROL_RPC_ENDPOINT_NAMES) {
     const path = agentControlRpcPath(endpoint);
     assertEquals(
-      isProxyRequestAuthorized(path, "control"),
-      true,
-      `legacy control token was denied endpoint ${endpoint}`,
+      isProxyRequestAuthorized(path, "control" as never),
+      false,
+      `unknown control capability reached endpoint ${endpoint}`,
     );
   }
 });
@@ -184,17 +182,15 @@ test("a workflow run token is denied conversation / memory / skill endpoints", (
   );
 
   // Granted: run-lifecycle, tools, provider-keys endpoints.
-  for (
-    const endpoint of [
-      "heartbeat",
-      "run-status",
-      "run-event",
-      "update-run-status",
-      "tool-execute",
-      "tool-catalog",
-      "api-keys",
-    ]
-  ) {
+  for (const endpoint of [
+    "heartbeat",
+    "run-status",
+    "run-event",
+    "update-run-status",
+    "tool-execute",
+    "tool-catalog",
+    "api-keys",
+  ]) {
     assertEquals(
       isProxyRequestAuthorized(
         agentControlRpcPath(endpoint),
@@ -206,18 +202,16 @@ test("a workflow run token is denied conversation / memory / skill endpoints", (
   }
 
   // Denied: conversation, memory, and skill endpoints a workflow does not need.
-  for (
-    const endpoint of [
-      "conversation-history",
-      "current-session",
-      "add-message",
-      "memory-activation",
-      "memory-finalize",
-      "skill-catalog",
-      "skill-plan",
-      "skill-runtime-context",
-    ]
-  ) {
+  for (const endpoint of [
+    "conversation-history",
+    "current-session",
+    "add-message",
+    "memory-activation",
+    "memory-finalize",
+    "skill-catalog",
+    "skill-plan",
+    "skill-runtime-context",
+  ]) {
     assertEquals(
       isProxyRequestAuthorized(
         agentControlRpcPath(endpoint),
@@ -261,7 +255,7 @@ test("unknown / non-control paths require no scope and are unauthorized", () => 
   assertEquals(
     isProxyRequestAuthorized(
       "/api/internal/v1/agent-control/unknown",
-      "control",
+      AGENT_PROXY_SCOPES,
     ),
     false,
   );

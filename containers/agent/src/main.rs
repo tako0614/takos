@@ -888,12 +888,12 @@ fn user_visible_failure_message(error: &str) -> String {
         || normalized.contains("invalid_api_key")
         || (normalized.contains("401 unauthorized") && normalized.contains("openai"))
     {
-        return "The agent could not call the language model because the configured OpenAI API key is invalid. Update OPENAI_API_KEY for this environment and retry.".to_string();
+        return "The agent could not call the language model because the configured OpenAI-compatible API key is invalid. Update OPENAI_API_KEY for this environment and retry.".to_string();
     }
     if normalized.contains("api key is not configured")
         || normalized.contains("api key not configured")
     {
-        return "The agent could not call the language model because no OpenAI API key is configured for this environment. Set OPENAI_API_KEY and retry.".to_string();
+        return "The agent could not call the language model because no OpenAI-compatible API key is configured for this environment. Set OPENAI_API_KEY and retry.".to_string();
     }
     if normalized.contains("rate limit") || normalized.contains("429") {
         return "The agent could not call the language model because the provider rate limit was reached. Wait a bit and retry.".to_string();
@@ -1075,15 +1075,15 @@ mod tests {
         let message = user_visible_failure_message(
             "model error: OpenAI chat completions failed: 401 Unauthorized {\"error\":{\"message\":\"Incorrect API key provided: sk-secret\"}}",
         );
-        assert!(message.contains("OpenAI API key is invalid"));
+        assert!(message.contains("OpenAI-compatible API key is invalid"));
         assert!(!message.contains("sk-secret"));
         assert!(!message.contains("401"));
     }
 
     #[test]
     fn failure_message_for_missing_openai_key_is_actionable() {
-        let message = user_visible_failure_message("OpenAI API key is not configured");
-        assert!(message.contains("no OpenAI API key is configured"));
+        let message = user_visible_failure_message("OpenAI-compatible API key is not configured");
+        assert!(message.contains("no OpenAI-compatible API key is configured"));
         assert!(message.contains("OPENAI_API_KEY"));
     }
 

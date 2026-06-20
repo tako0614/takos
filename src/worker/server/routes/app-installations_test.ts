@@ -25,9 +25,10 @@ function restoreDeps() {
 }
 
 function createApp() {
-  const app = new Hono<
-    { Bindings: Env; Variables: { user: { id: string } } }
-  >();
+  const app = new Hono<{
+    Bindings: Env;
+    Variables: { user: { id: string } };
+  }>();
   app.onError((error, c) => {
     if (isAppError(error)) {
       return c.json(
@@ -81,7 +82,7 @@ const roadToMeCatalogEntry = {
 } satisfies DefaultAppDistributionEntry;
 
 const installConfig = {
-  installUrl: "https://installer.internal/v1/app-installations",
+  installUrl: "https://installer.internal/v1/installation-projections",
   token: "install-token",
   subject: "operator-subject",
   mode: "shared-cell",
@@ -100,10 +101,6 @@ test("app-installations route applies a default app through Installation", async
     async () => [defaultAppEntry];
   appInstallationsRouteDeps.resolveDefaultAppInstallConfig = () =>
     installConfig;
-  appInstallationsRouteDeps.resolveTakosumiSubject = async (_env, userId) => {
-    calls.push({ kind: "subject", userId });
-    return "takosumi-user-subject";
-  };
   appInstallationsRouteDeps.applyDefaultAppInstallation = async (
     entry,
     config,
@@ -131,7 +128,7 @@ test("app-installations route applies a default app through Installation", async
       },
       { DB: {} } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 202);
     assertObjectMatch(body, {
@@ -143,7 +140,7 @@ test("app-installations route applies a default app through Installation", async
         runtime_mode: "shared-cell",
         installed_version: "v0.1.2",
       },
-      subject_source: "takosumi_oidc",
+      subject_source: "operator_config",
     });
     assertEquals(calls, [
       {
@@ -152,7 +149,6 @@ test("app-installations route applies a default app through Installation", async
         userId: "user-1",
         roles: ["owner", "admin", "editor"],
       },
-      { kind: "subject", userId: "user-1" },
       {
         kind: "apply",
         entry: defaultAppEntry,
@@ -160,7 +156,6 @@ test("app-installations route applies a default app through Installation", async
         params: {
           spaceId: "space-1",
           createdByAccountId: "space-1",
-          subject: "takosumi-user-subject",
           mode: "shared-cell",
         },
       },
@@ -183,8 +178,6 @@ test("app-installations route applies catalog-only road-to-me by app_id", async 
     async () => [defaultAppEntry, roadToMeCatalogEntry];
   appInstallationsRouteDeps.resolveDefaultAppInstallConfig = () =>
     installConfig;
-  appInstallationsRouteDeps.resolveTakosumiSubject = async () =>
-    "takosumi-user-subject";
   appInstallationsRouteDeps.applyDefaultAppInstallation = async (
     entry,
     config,
@@ -212,7 +205,7 @@ test("app-installations route applies catalog-only road-to-me by app_id", async 
       },
       { DB: {} } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 202);
     assertObjectMatch(body, {
@@ -224,7 +217,7 @@ test("app-installations route applies catalog-only road-to-me by app_id", async 
         runtime_mode: "dedicated",
         installed_version: "v0.1.0",
       },
-      subject_source: "takosumi_oidc",
+      subject_source: "operator_config",
     });
     assertEquals(calls.at(-1), {
       kind: "apply",
@@ -233,7 +226,6 @@ test("app-installations route applies catalog-only road-to-me by app_id", async 
       params: {
         spaceId: "space-1",
         createdByAccountId: "space-1",
-        subject: "takosumi-user-subject",
         mode: "dedicated",
       },
     });
@@ -259,7 +251,7 @@ test("app-installations route requires Installation install config", async () =>
       },
       { DB: {} } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 503);
     assertObjectMatch(body, {
@@ -287,7 +279,7 @@ test("app-installations route rejects camelCase request aliases", async () => {
       },
       { DB: {} } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 400);
     assertObjectMatch(body, {
@@ -301,7 +293,7 @@ test("app-installations route rejects camelCase request aliases", async () => {
   }
 });
 
-test("app-installations route proxies Git URL install PlanRun", async () => {
+test("app-installations route proxies Git URL install plan Run", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -353,11 +345,11 @@ test("app-installations route proxies Git URL install PlanRun", async () => {
       {
         DB: {},
         TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/app-installations",
+          "https://installer.internal/v1/installation-projections",
         TAKOS_APP_INSTALL_TOKEN: "install-token",
       } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 200);
     assertObjectMatch(body, {
@@ -372,7 +364,8 @@ test("app-installations route proxies Git URL install PlanRun", async () => {
       },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/app-installations/plan-runs",
+        input:
+          "https://installer.internal/v1/installation-projections/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -399,10 +392,6 @@ test("app-installations route proxies Git URL install apply with approval eviden
       membership: { role: "editor" },
     } as never;
   };
-  appInstallationsRouteDeps.resolveTakosumiSubject = async (_env, userId) => {
-    calls.push({ kind: "subject", userId });
-    return "takosumi-user-subject";
-  };
   installableAppInstallDeps.fetch = async (input, init) => {
     const inputUrl = String(input);
     calls.push({
@@ -412,14 +401,17 @@ test("app-installations route proxies Git URL install apply with approval eviden
       authorization: new Headers(init?.headers).get("authorization"),
       body: JSON.parse(String(init?.body)),
     });
-    return Response.json({
-      ok: true,
-      kind: "takosumi.installation-apply@v1",
-      accounts: {
-        installationId: "inst_git_1",
-        status: "ready",
+    return Response.json(
+      {
+        ok: true,
+        kind: "takosumi.installation-apply@v1",
+        accounts: {
+          installationId: "inst_git_1",
+          status: "ready",
+        },
       },
-    }, { status: 202 });
+      { status: 202 },
+    );
   };
 
   try {
@@ -440,13 +432,13 @@ test("app-installations route proxies Git URL install apply with approval eviden
       {
         DB: {},
         TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/app-installations",
+          "https://installer.internal/v1/installation-projections",
         TAKOS_APP_INSTALL_TOKEN: "install-token",
         TAKOS_APP_INSTALL_ACCOUNT_ID: "acct_operator",
         TAKOS_APP_INSTALL_SUBJECT: "operator-subject",
       } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 202);
     assertObjectMatch(body, {
@@ -464,14 +456,15 @@ test("app-installations route proxies Git URL install apply with approval eviden
         userId: "user-1",
         roles: ["owner", "admin", "editor"],
       },
-      { kind: "subject", userId: "user-1" },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/app-installations",
+        input: "https://installer.internal/v1/installation-projections",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
+          accountId: "acct_operator",
           spaceId: "space-1",
+          createdBySubject: "operator-subject",
           source: {
             kind: "git",
             url: "https://github.com/example/app.git",
@@ -491,7 +484,121 @@ test("app-installations route proxies Git URL install apply with approval eviden
   }
 });
 
-test("app-installations route proxies Git URL deployment PlanRun and apply", async () => {
+test("app-installations route applies Git URL install with same-origin Accounts session", async () => {
+  const calls: unknown[] = [];
+  routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
+    calls.push({ kind: "access", spaceId, userId, roles });
+    return {
+      space: { id: "space-1" },
+      membership: { role: "editor" },
+    } as never;
+  };
+  appInstallationsRouteDeps.handleAccountsPlaneRequest = async (request) => {
+    const url = new URL(request.url);
+    const body =
+      request.method === "POST" ? JSON.parse(await request.text()) : null;
+    calls.push({
+      kind: "accounts",
+      path: url.pathname,
+      method: request.method,
+      cookie: request.headers.get("cookie"),
+      body,
+    });
+    if (url.pathname === "/v1/account/session/me") {
+      return Response.json({
+        subject: "tsub_owner",
+        expiresAt: 1_767_225_600_000,
+      });
+    }
+    if (
+      url.pathname === "/v1/installation-projections" &&
+      request.method === "POST"
+    ) {
+      return Response.json(
+        {
+          ok: true,
+          accounts: {
+            installationId: "inst_session_1",
+            status: "ready",
+          },
+        },
+        { status: 202 },
+      );
+    }
+    return Response.json({ error: "not_found" }, { status: 404 });
+  };
+
+  try {
+    const response = await createApp().request(
+      "/spaces/space-alias/app-installations/git-url/apply",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "takosumi_session=sess_owner",
+        },
+        body: JSON.stringify({
+          git_url: "https://github.com/example/app.git",
+          ref: "v1.2.3",
+          mode: "shared-cell",
+          expected_commit: "1111111111111111111111111111111111111111",
+          expected_plan_digest: "sha256:abc",
+        }),
+      },
+      { DB: {} } as Env,
+    );
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
+
+    assertEquals(response.status, 202);
+    assertObjectMatch(body, {
+      ok: true,
+      accounts: {
+        installationId: "inst_session_1",
+        status: "ready",
+      },
+    });
+    assertEquals(calls, [
+      {
+        kind: "access",
+        spaceId: "space-alias",
+        userId: "user-1",
+        roles: ["owner", "admin", "editor"],
+      },
+      {
+        kind: "accounts",
+        path: "/v1/account/session/me",
+        method: "GET",
+        cookie: "takosumi_session=sess_owner",
+        body: null,
+      },
+      {
+        kind: "accounts",
+        path: "/v1/installation-projections",
+        method: "POST",
+        cookie: "takosumi_session=sess_owner",
+        body: {
+          accountId: "space-1",
+          spaceId: "space-1",
+          createdBySubject: "tsub_owner",
+          source: {
+            kind: "git",
+            url: "https://github.com/example/app.git",
+            ref: "v1.2.3",
+          },
+          expected: {
+            commit: "1111111111111111111111111111111111111111",
+            planDigest: "sha256:abc",
+          },
+          mode: "shared-cell",
+        },
+      },
+    ]);
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("app-installations route proxies Git URL deployment plan Run and apply", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -515,8 +622,8 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
         installations: [{ id: "inst_1", app_id: "jp.takos.docs" }],
       });
     }
-    const isMutation = inputUrl.endsWith("/deployments") ||
-      inputUrl.endsWith("/rollback");
+    const isMutation =
+      inputUrl.endsWith("/deployments") || inputUrl.endsWith("/rollback");
     calls.push({
       kind: "fetch",
       input: inputUrl,
@@ -524,12 +631,15 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
       authorization: new Headers(init?.headers).get("authorization"),
       body: JSON.parse(String(init?.body)),
     });
-    return Response.json({
-      ok: true,
-      kind: isMutation
-        ? "takosumi.deployment-apply@v1"
-        : "takosumi.deployment-PlanRun@v1",
-    }, { status: isMutation ? 202 : 200 });
+    return Response.json(
+      {
+        ok: true,
+        kind: isMutation
+          ? "takosumi.deployment-apply@v1"
+          : "takosumi.deployment-plan-run@v1",
+      },
+      { status: isMutation ? 202 : 200 },
+    );
   };
 
   try {
@@ -537,7 +647,7 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
     const env = {
       DB: {},
       TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/app-installations",
+        "https://installer.internal/v1/installation-projections",
       TAKOS_APP_INSTALL_TOKEN: "install-token",
       TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
       TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
@@ -585,7 +695,7 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
       },
       {
         kind: "fetch",
-        input: "https://accounts.internal/v1/app-installations",
+        input: "https://accounts.internal/v1/installation-projections",
         method: "GET",
         authorization: "Bearer accounts-token",
         body: null,
@@ -593,7 +703,7 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
       {
         kind: "fetch",
         input:
-          "https://installer.internal/v1/app-installations/inst_1/deployments/plan-runs",
+          "https://installer.internal/v1/installation-projections/inst_1/deployments/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -612,14 +722,15 @@ test("app-installations route proxies Git URL deployment PlanRun and apply", asy
       },
       {
         kind: "fetch",
-        input: "https://accounts.internal/v1/app-installations",
+        input: "https://accounts.internal/v1/installation-projections",
         method: "GET",
         authorization: "Bearer accounts-token",
         body: null,
       },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/app-installations/inst_1/rollback",
+        input:
+          "https://installer.internal/v1/installation-projections/inst_1/rollback",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -660,28 +771,34 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
     if (url.pathname.endsWith("/services")) {
       return Response.json({
         installation_id: "inst_1",
-        services: [{
-          id: "identity.primary.oidc",
-          material_kind: "identity.oidc@v1",
-          status: "ready",
-          endpoint: "https://accounts.internal",
-          material: { client_id: "client_1" },
-        }, {
-          id: "events.webhook.default",
-          material_kind: "events.webhook@v1",
-          status: "ready",
-          endpoint: "https://accounts.internal/v1/app-installations/inst_1/events/ingest",
-          secret_ref: "secret://inst_1/events",
-          token_expires_at: "2026-05-01T00:00:00.000Z",
-        }],
+        services: [
+          {
+            id: "takosumi.identity.oidc",
+            capability: "identity.oidc",
+            status: "ready",
+            endpoint: "https://accounts.internal",
+            material: { client_id: "client_1" },
+          },
+          {
+            id: "takosumi.events.webhook",
+            capability: "events.webhook",
+            status: "ready",
+            endpoint:
+              "https://accounts.internal/v1/installation-projections/inst_1/events/ingest",
+            secret_ref: "secret://inst_1/events",
+            token_expires_at: "2026-05-01T00:00:00.000Z",
+          },
+        ],
       });
     }
     return Response.json({
-      installations: [{
-        id: "inst_1",
-        app_id: "jp.takos.docs",
-        status: "ready",
-      }],
+      installations: [
+        {
+          id: "inst_1",
+          app_id: "jp.takos.docs",
+          status: "ready",
+        },
+      ],
     });
   };
 
@@ -710,25 +827,28 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
 
     assertEquals(listResponse.status, 200);
     assertEquals(deleteResponse.status, 200);
-    const listBody = await listResponse.json() as {
+    const listBody = (await listResponse.json()) as {
       installations: Array<{ services?: unknown }>;
     };
-    assertEquals(listBody.installations[0]?.services, [{
-      id: "identity.primary.oidc",
-      material_kind: "identity.oidc@v1",
-      status: "ready",
-      endpoint: "https://accounts.internal",
-      secret_configured: false,
-      token_expires_at: null,
-    }, {
-      id: "events.webhook.default",
-      material_kind: "events.webhook@v1",
-      status: "ready",
-      endpoint:
-        "https://accounts.internal/v1/app-installations/inst_1/events/ingest",
-      secret_configured: true,
-      token_expires_at: "2026-05-01T00:00:00.000Z",
-    }]);
+    assertEquals(listBody.installations[0]?.services, [
+      {
+        id: "takosumi.identity.oidc",
+        capability: "identity.oidc",
+        status: "ready",
+        endpoint: "https://accounts.internal",
+        secret_configured: false,
+        token_expires_at: null,
+      },
+      {
+        id: "takosumi.events.webhook",
+        capability: "events.webhook",
+        status: "ready",
+        endpoint:
+          "https://accounts.internal/v1/installation-projections/inst_1/events/ingest",
+        secret_configured: true,
+        token_expires_at: "2026-05-01T00:00:00.000Z",
+      },
+    ]);
     assertEquals(calls, [
       {
         kind: "access",
@@ -738,7 +858,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/app-installations",
+        pathname: "/v1/installation-projections",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -746,7 +866,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/app-installations/inst_1/services",
+        pathname: "/v1/installation-projections/inst_1/services",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -760,7 +880,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/app-installations",
+        pathname: "/v1/installation-projections",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -768,7 +888,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/app-installations/inst_1",
+        pathname: "/v1/installation-projections/inst_1",
         spaceId: null,
         method: "DELETE",
         authorization: "Bearer accounts-token",
@@ -801,13 +921,15 @@ test("app-installations route lists Installation services through Takosumi Accou
     if (url.pathname.endsWith("/services")) {
       return Response.json({
         installation_id: "inst_1",
-        services: [{
-          id: "takosumi.control.space",
-          material_kind: "takosumi.control@v1",
-          status: "ready",
-          endpoint: "https://accounts.internal/v1",
-          secret_ref: "secret://inst_1/control",
-        }],
+        services: [
+          {
+            id: "takosumi.control.api",
+            capability: "control.api",
+            status: "ready",
+            endpoint: "https://accounts.internal/v1",
+            secret_ref: "secret://inst_1/control",
+          },
+        ],
       });
     }
     return Response.json({
@@ -825,19 +947,21 @@ test("app-installations route lists Installation services through Takosumi Accou
         TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
       } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 200);
     assertEquals(body, {
       installation_id: "inst_1",
-      services: [{
-        id: "takosumi.control.space",
-        material_kind: "takosumi.control@v1",
-        status: "ready",
-        endpoint: "https://accounts.internal/v1",
-        secret_configured: true,
-        token_expires_at: null,
-      }],
+      services: [
+        {
+          id: "takosumi.control.api",
+          capability: "control.api",
+          status: "ready",
+          endpoint: "https://accounts.internal/v1",
+          secret_configured: true,
+          token_expires_at: null,
+        },
+      ],
     });
     assertEquals(calls, [
       {
@@ -848,14 +972,14 @@ test("app-installations route lists Installation services through Takosumi Accou
       },
       {
         kind: "fetch",
-        pathname: "/v1/app-installations",
+        pathname: "/v1/installation-projections",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
       },
       {
         kind: "fetch",
-        pathname: "/v1/app-installations/inst_1/services",
+        pathname: "/v1/installation-projections/inst_1/services",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -889,7 +1013,7 @@ test("app-installations route rejects cross-space installation_id with 404", asy
     const env = {
       DB: {},
       TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/app-installations",
+        "https://installer.internal/v1/installation-projections",
       TAKOS_APP_INSTALL_TOKEN: "install-token",
       TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
       TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
@@ -909,7 +1033,7 @@ test("app-installations route rejects cross-space installation_id with 404", asy
       },
       env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 404);
     assertObjectMatch(body, {
@@ -940,14 +1064,14 @@ test("app-installations route requires Git URL install approval evidence", async
       },
       { DB: {} } as Env,
     );
-    const body = await response.json() as Record<PropertyKey, unknown>;
+    const body = (await response.json()) as Record<PropertyKey, unknown>;
 
     assertEquals(response.status, 400);
     assertObjectMatch(body, {
       error: {
         code: "BAD_REQUEST",
         message:
-          "expected_commit and expected_plan_digest are required after install PlanRun approval",
+          "expected_commit and expected_plan_digest are required after install plan Run approval",
       },
     });
   } finally {

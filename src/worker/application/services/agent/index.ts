@@ -14,11 +14,13 @@ export type {
   SupportedModelId,
 } from "./model-catalog.ts";
 export {
+  AVAILABLE_MODELS_BY_BACKEND,
   DEFAULT_MODEL_ID,
   getModelBackend,
   getModelTokenLimit,
   MODEL_TOKEN_LIMITS,
   normalizeModelId,
+  OPENAI_COMPATIBLE_MODELS,
   OPENAI_MODELS,
   resolveHistoryTokenBudget,
   SUPPORTED_MODEL_IDS,

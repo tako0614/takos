@@ -9,22 +9,22 @@ and operations owners before publishing.
 
 ## Status
 
-| Field         | Value                                                       |
-| ------------- | ----------------------------------------------------------- |
-| Owner         | Operator operations owner                                   |
-| Last reviewed | `[EFFECTIVE_DATE]`                                          |
-| Scope         | Takos Web / API, Takos Git, Takos agent (shared / dedicated) |
-| Status        | Template — pre-public-launch baseline                       |
+| Field         | Value                                                                            |
+| ------------- | -------------------------------------------------------------------------------- |
+| Owner         | Operator operations owner                                                        |
+| Last reviewed | `[EFFECTIVE_DATE]`                                                               |
+| Scope         | Takos Web / API, Git service profile, agent runtime profile (shared / dedicated) |
+| Status        | Template — pre-public-launch baseline                                            |
 
 ## 1. サービス可用性目標 (Service Availability Target)
 
-| プラン                       | 月次可用性目標 | 計測対象                                       |
-| ---------------------------- | -------------- | ---------------------------------------------- |
-| Shared-cell (default)        | `[99.5%]`      | Takos Web / API endpoints, dashboard access    |
-| Dedicated (enterprise)       | `[99.9%]`      | Customer-isolated workload, dedicated endpoints |
-| Takos Git (shared)           | `[99.5%]`      | Git Smart HTTP push / fetch                    |
-| Takos Git (dedicated)        | `[99.9%]`      | Git Smart HTTP push / fetch (dedicated)        |
-| Takos agent execution        | `[99.0%]`      | Agent run start latency < `[60s]`              |
+| プラン                          | 月次可用性目標 | 計測対象                                        |
+| ------------------------------- | -------------- | ----------------------------------------------- |
+| Shared-cell (default)           | `[99.5%]`      | Takos Web / API endpoints, dashboard access     |
+| Dedicated (enterprise)          | `[99.9%]`      | Customer-isolated workload, dedicated endpoints |
+| Git service profile (shared)    | `[99.5%]`      | Git Smart HTTP push / fetch                     |
+| Git service profile (dedicated) | `[99.9%]`      | Git Smart HTTP push / fetch (dedicated)         |
+| Agent runtime profile           | `[99.0%]`      | Agent run start latency < `[60s]`               |
 
 可用性は **暦月単位** で計測します。計測対象の endpoint は
 [Status Page](/legal/status-page) で公開されます。
@@ -58,20 +58,20 @@ and operations owners before publishing.
 
 ### 4.1 Shared-cell プラン (目標 99.5%)
 
-| 月次可用性     | クレジット (当該月の月額料金に対する %) |
-| -------------- | --------------------------------------- |
-| 99.0% — 99.5%  | 5%                                      |
-| 95.0% — 99.0%  | 10%                                     |
-| < 95.0%        | 25%                                     |
+| 月次可用性    | クレジット (当該月の月額料金に対する %) |
+| ------------- | --------------------------------------- |
+| 99.0% — 99.5% | 5%                                      |
+| 95.0% — 99.0% | 10%                                     |
+| < 95.0%       | 25%                                     |
 
 ### 4.2 Dedicated プラン (目標 99.9%)
 
-| 月次可用性     | クレジット (当該月の月額料金に対する %) |
-| -------------- | --------------------------------------- |
-| 99.5% — 99.9%  | 5%                                      |
-| 99.0% — 99.5%  | 10%                                     |
-| 95.0% — 99.0%  | 25%                                     |
-| < 95.0%        | 50%                                     |
+| 月次可用性    | クレジット (当該月の月額料金に対する %) |
+| ------------- | --------------------------------------- |
+| 99.5% — 99.9% | 5%                                      |
+| 99.0% — 99.5% | 10%                                     |
+| 95.0% — 99.0% | 25%                                     |
+| < 95.0%       | 50%                                     |
 
 ### 4.3 上限
 
@@ -99,10 +99,10 @@ and operations owners before publishing.
 
 ## 7. 連絡先
 
-| 用途             | 連絡先                |
-| ---------------- | --------------------- |
-| SLA クレーム提出 | `[SLA_CLAIM_EMAIL]`   |
-| 一般問合せ       | `[OPERATOR_EMAIL]`    |
+| 用途             | 連絡先                                   |
+| ---------------- | ---------------------------------------- |
+| SLA クレーム提出 | `[SLA_CLAIM_EMAIL]`                      |
+| 一般問合せ       | `[OPERATOR_EMAIL]`                       |
 | 障害報告         | [Status Page](/legal/status-page) を参照 |
 
 施行日: `[EFFECTIVE_DATE]`

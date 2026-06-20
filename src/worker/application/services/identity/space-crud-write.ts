@@ -29,14 +29,12 @@ import {
   enqueueDefaultAppPreinstallJob,
   processDefaultAppPreinstallJobs,
 } from "../source/default-app-distribution.ts";
+import { ensureServiceGraphExports } from "../platform/service-graph-exports.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
-import {
-  createTakosumiInstallation,
-  deleteTakosumiInstallation,
-} from "./takosumi-installation-client.ts";
 
 export const spaceCrudWriteDeps = {
   enqueueDefaultAppPreinstallJob,
+  ensureServiceGraphExports,
   processDefaultAppPreinstallJobs,
 };
 
@@ -168,7 +166,8 @@ async function ensureSelfMembership(
   if (!principalId) return;
 
   const drizzle = getDb(db);
-  const existing = await drizzle.select({ id: accountMemberships.id })
+  const existing = await drizzle
+    .select({ id: accountMemberships.id })
     .from(accountMemberships)
     .where(
       and(
@@ -203,6 +202,23 @@ async function processDefaultAppsAfterCommit(
     });
   } catch (error) {
     logWarn("Default app preinstall immediate processing failed", {
+      module: "spaces",
+      spaceId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function ensureServiceGraphExportsAfterCommit(
+  env: Env,
+  spaceId: string,
+): Promise<void> {
+  try {
+    await spaceCrudWriteDeps.ensureServiceGraphExports(env, {
+      spaceId,
+    });
+  } catch (error) {
+    logWarn("Failed to seed service graph exports", {
       module: "spaces",
       spaceId,
       error: error instanceof Error ? error.message : String(error),
@@ -271,6 +287,8 @@ export async function createWorkspaceWithDefaultRepo(
     timestamp,
   });
 
+  await ensureServiceGraphExportsAfterCommit(env, spaceId);
+
   if (shouldInstallDefaultApps) {
     try {
       preinstallJobId = await spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob(
@@ -295,19 +313,6 @@ export async function createWorkspaceWithDefaultRepo(
 
   if (preinstallJobId) {
     await processDefaultAppsAfterCommit(env, spaceId);
-  }
-
-  const takosumiResult = await createTakosumiInstallation(
-    env,
-    spaceId,
-    trimmedName,
-  );
-  if (takosumiResult?.installationId) {
-    const drizzle = getDb(env.DB);
-    await drizzle
-      .update(accounts)
-      .set({ takosumiInstallationId: takosumiResult.installationId })
-      .where(eq(accounts.id, spaceId));
   }
 
   const space = await loadSpaceById(env.DB, spaceId);
@@ -339,7 +344,8 @@ export async function updateWorkspace(
   const nextName = updates.name ?? current.name;
   const nextModel = updates.ai_model ?? current.aiModel;
   const nextModelBackend = updates.model_backend ?? current.modelBackend;
-  const nextSecurityPosture = updates.security_posture ??
+  const nextSecurityPosture =
+    updates.security_posture ??
     (current.securityPosture === "restricted_egress"
       ? "restricted_egress"
       : "standard");
@@ -365,10 +371,6 @@ export async function deleteWorkspace(
   env: Env,
   spaceId: string,
 ): Promise<void> {
-  const space = await loadSpaceById(env.DB, spaceId);
-  if (space?.takosumiInstallationId) {
-    await deleteTakosumiInstallation(env, space.takosumiInstallationId);
-  }
   const drizzle = getDb(env.DB);
   await drizzle.delete(accounts).where(eq(accounts.id, spaceId));
 }
@@ -378,7 +380,9 @@ export async function getPersonalWorkspace(
   userId: string,
 ): Promise<SpaceListItem | null> {
   const drizzle = getDb(env.DB);
-  const userAccount = await drizzle.select().from(accounts)
+  const userAccount = await drizzle
+    .select()
+    .from(accounts)
     .where(and(eq(accounts.id, userId), eq(accounts.type, "user")))
     .limit(1)
     .get();
@@ -395,8 +399,8 @@ async function enqueuePersonalWorkspaceDefaultApps(
   userId: string,
 ): Promise<void> {
   try {
-    const preinstallJobId = await spaceCrudWriteDeps
-      .enqueueDefaultAppPreinstallJob(env, {
+    const preinstallJobId =
+      await spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob(env, {
         spaceId: userId,
         createdByAccountId: userId,
         timestamp: new Date().toISOString(),
@@ -419,6 +423,7 @@ export async function getOrCreatePersonalWorkspace(
 ): Promise<SpaceListItem | null> {
   const workspace = await getPersonalWorkspace(env, userId);
   if (workspace) {
+    await ensureServiceGraphExportsAfterCommit(env, userId);
     await enqueuePersonalWorkspaceDefaultApps(env, userId);
   }
   return workspace;

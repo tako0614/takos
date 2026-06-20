@@ -46,9 +46,10 @@ type AuthVariables = {
 };
 
 type AuthContext = Context<{ Bindings: Env; Variables: AuthVariables }>;
-type AuthMiddleware = MiddlewareHandler<
-  { Bindings: Env; Variables: AuthVariables }
->;
+type AuthMiddleware = MiddlewareHandler<{
+  Bindings: Env;
+  Variables: AuthVariables;
+}>;
 
 export const authDeps = {
   getSession,
@@ -98,9 +99,8 @@ async function resolveRequestUser(
     switch (bearer.kind) {
       case "no-bearer":
         return { user: null };
-      case "retired":
-        // A retired app-local bearer is never acceptable; reject regardless of
-        // rejectInvalidBearer (matches pre-refactor behavior).
+      case "unsupported-app-local-bearer":
+        // Unsupported app-local bearer prefixes are never acceptable.
         return {
           user: null,
           errorResponse: authenticationErrorResponse(
@@ -109,6 +109,17 @@ async function resolveRequestUser(
           ),
         };
       case "no-db":
+        return { user: null };
+      case "scope-insufficient":
+        if (options.rejectInvalidBearer) {
+          return {
+            user: null,
+            errorResponse: authenticationErrorResponse(
+              c,
+              "Insufficient bearer token scope",
+            ),
+          };
+        }
         return { user: null };
       case "invalid":
       case "user-not-found":
@@ -178,10 +189,7 @@ async function resolveRequestUser(
     authDeps.shouldRotateSession(session)
   ) {
     try {
-      const next = await authDeps.rotateSession(
-        sessionStore,
-        session,
-      );
+      const next = await authDeps.rotateSession(sessionStore, session);
       // Add the previous session ID to the blacklist so a stolen pre-rotation
       // cookie cannot be replayed. The blacklist row's expires_at matches the
       // session's original absolute expiry — once the original would have

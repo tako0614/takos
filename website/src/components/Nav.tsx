@@ -55,7 +55,7 @@ export default function Nav() {
             </svg>
           </a>
           <LangToggle class='nav-icon-desk' />
-          <a class='btn btn-primary nav-cta' href={cloud().install} rel='noopener'>
+          <a class='btn btn-primary nav-cta' href={cloud().useTakos} rel='noopener'>
             {t.hero.useTakos}
           </a>
           <button

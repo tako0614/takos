@@ -15,7 +15,9 @@ import type {
 export type PortableBackend = PortableResourceBackend;
 
 export function sanitizeName(name: string): string {
-  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-")
+  const sanitized = name
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
   return sanitized || "resource";
 }
@@ -36,7 +38,7 @@ function missingPortablePgVectorRequirements(): string[] {
 }
 
 // Multi-cloud materialization (aws/gcp/k8s: DynamoDB/Firestore/S3/GCS/SQS/PubSub
-// secret managers) is operator-substrate scope owned by OpenTofu RunnerProfiles,
+// secret managers) is operator-substrate scope owned by Takosumi runner policy,
 // not the Takos worker. Only the native `cloudflare` backend and the portable
 // self-hosted `local` backend are provisioned in-worker. `normalizePortableBackend`
 // always yields `local`, so the portable resolutions are a single static table

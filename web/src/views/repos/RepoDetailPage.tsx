@@ -8,8 +8,6 @@ import { useI18n } from "../../store/i18n.ts";
 interface RepoDetailPageProps {
   spaceId?: string;
   repoId?: string;
-  username?: string;
-  repoName?: string;
   initialFilePath?: string;
   initialFileLine?: number;
   initialRef?: string;
@@ -33,65 +31,6 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
     try {
       setLoading(true);
       setError(null);
-
-      if (props.username && props.repoName) {
-        type ByNameRepo = Omit<
-          Repository,
-          | "id"
-          | "name"
-          | "description"
-          | "visibility"
-          | "default_branch"
-          | "stars"
-          | "forks"
-          | "created_at"
-          | "updated_at"
-          | "space_id"
-          | "owner_username"
-          | "owner_name"
-        >;
-        const res = await rpc.explore.repos["by-name"][":username"][":repoName"]
-          .$get({
-            param: {
-              username: props.username,
-              repoName: props.repoName,
-            },
-          });
-        const data = await rpcJson<{
-          repository: {
-            id: string;
-            name: string;
-            description: string | null;
-            visibility: Repository["visibility"];
-            default_branch: string;
-            stars: number;
-            forks: number;
-            created_at: string;
-            updated_at: string;
-            space_id?: string;
-          } & ByNameRepo;
-          owner?: {
-            id?: string;
-            name: string;
-            username: string;
-            avatar_url?: string | null;
-          };
-          space?: {
-            id: string;
-            name?: string;
-          };
-        }>(res);
-
-        if (requestId !== repoRequestSeq) return;
-        setRepo({
-          ...data.repository,
-          space_id: data.repository.space_id || data.space?.id || "",
-          owner_username: data.owner?.username,
-          owner_name: data.owner?.name,
-        });
-        setResolvedSpaceId(data.space?.id || null);
-        return;
-      }
 
       if (props.repoId) {
         const res = await rpc.repos[":repoId"].$get({
@@ -121,7 +60,7 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
   };
 
   createEffect(on(
-    () => [props.spaceId, props.repoId, props.username, props.repoName],
+    () => [props.spaceId, props.repoId],
     () => {
       void fetchRepo();
     },

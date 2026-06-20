@@ -1,20 +1,21 @@
 # File Handlers
 
-This page has been reset for Takosumi v1. Takosumi installs a plain OpenTofu module and records an **Installation** plus the **Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment** run ledger. Module display metadata comes from generic repository information such as Git URL, ref, commit, tag, and well-known OpenTofu outputs.
+File handlers let installed apps open or edit selected file types from a Workspace. Takos discovers them through
+Takosumi Service Graph, not through a Takos-specific manifest.
 
 ## Current Flow
 
-1. Install the Takos OpenTofu module (`deploy/opentofu`) to create an **Installation**, choosing `var.target` (`aws | gcp | cloudflare`).
-2. Run a **`plan` type Run** and review the recorded plan, diff, and warnings.
-3. Apply the reviewed plan as an **`apply` type Run**. A successful apply updates the **Deployment** and **OutputSnapshot**.
-4. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to a default / connection / manual / disabled binding, and policy resolves provider allowlists, state backend, execution image / resource limits, and Cloudflare Container execution; Takosumi records the policy decision and each run in the audit ledger.
-5. Account-plane policy (OIDC clients, billing, domains, dashboard) belongs to the operator distribution.
+1. Install an app Capsule from Git.
+2. Review and apply the Takosumi plan.
+3. The app exposes a non-secret ServiceExport capability such as `interface.file.handler`.
+4. Takos reads the bound export and shows the handler for matching files in the Workspace.
+5. Runtime authority, when needed, comes from ServiceGrant rather than OpenTofu output values.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records the run ledger (Installation / Run / Deployment / OutputSnapshot) for the applied OpenTofu module, while Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to a default / connection / manual / disabled binding, and policy resolves provider allowlists and state handling. The operator distribution / Takosumi Accounts owns account-plane policy (OIDC / billing / dashboard).
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takosumi records the run ledger (Installation / Run / Deployment / OutputSnapshot) for the applied OpenTofu Capsule, while Connections hold credential references, Installation provider connections resolve each provider (+ optional alias) to an explicit provider connection (`own_key` or `takos_provided`), and policy resolves provider allowlists and state handling. The embedded Takosumi Accounts plane owns account-plane policy (OIDC / billing / dashboard).
 
-## API Shape
+## Install Shape
 
 ```json
 {
@@ -29,7 +30,9 @@ Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app lau
 }
 ```
 
-Selecting a target runs a `plan` type Run and then an `apply` type Run, which updates the Deployment and records non-sensitive endpoints as OutputSnapshot. Takos product routes should rely on the Takosumi deploy control plane run ledger instead of exposing a separate deployment proxy.
+Selecting a target runs a `plan` type Run and then an `apply` type Run, which updates the Deployment and records
+non-sensitive endpoints as OutputSnapshot. Takos product routes rely on the Takosumi deploy-control ledger and
+Service Graph instead of exposing a separate product-local deployment surface.
 
 ## References
 

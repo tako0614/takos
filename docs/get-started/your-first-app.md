@@ -1,35 +1,66 @@
 # はじめてのアプリ
 
-**Takos は plain OpenTofu module として self-host 完結し、Takosumi は optional です。** Takosumi は OpenTofu-native な deploy control plane で、Takos の deploy topology は一つの OpenTofu module (`deploy/opentofu`) として表現される。Takosumi はその module を install / apply し、**Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment** という run ledger を記録する。module metadata は Git URL / ref / commit / tag / module path と well-known OpenTofu outputs から解決する。
+このページの「アプリ」は、Takos Workspace に追加して Apps launcher から開く app を指します。Takos distribution 自体を
+deploy する手順ではありません。deploy / self-host の手順は [Deploy overview](/deploy/) に分けています。
 
-## Current Flow
+## 1. まず bundled app を開く
 
-1. Takos の OpenTofu module (`deploy/opentofu`) を install して **Installation** を作る。`var.target` は `aws | gcp | cloudflare` のいずれか。
-2. **`plan` type Run** を実行し、記録された plan・diff・warning を review する。
-3. review 済みの plan を **`apply` type Run** として apply する。成功した apply が **StateSnapshot**、**OutputSnapshot**、**Deployment** を記録する。
-4. Connection が credential reference を保持し、ProviderBinding が provider（+ optional alias）ごとの binding を `default` / `connection` / `manual` / `disabled` として解決し、policy が provider allowlist・state backend・Cloudflare Container 実行を解決し、Takosumi は policy decision と各 run を audit ledger に記録する。
-5. account-plane policy（OIDC clients / billing / domains / dashboard）は operator distribution / Takosumi Accounts が所有する。
+新しい Workspace には、first-party bundled app が seed されます。まず Apps を開き、利用可能な app を確認します。
 
-## Takos Boundary
+- `takos-docs`: 文書やメモを作る
+- `takos-slide`: スライドを作る
+- `takos-excel`: 表や集計を扱う
+- `takos-computer`: agent が browser automation / computer use を行う
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records the run ledger (Installation / Run / Deployment / OutputSnapshot) for the applied OpenTofu module, while Connections hold credential references, ProviderBindings resolve each provider (plus optional alias), and policy resolves provider allowlists and state handling. account-plane policy（OIDC / billing / dashboard）は operator distribution / Takosumi Accounts が所有する。
+launch URL がある app は、Apps launcher から直接開けます。準備中の app は状態だけを表示し、管理 detail は install 管理 link に分けます。
 
-## OpenTofu Module Shape
+## 2. Chat から app を使う
 
-Takosumi に渡す install 対象は plain OpenTofu module です。`var.target` を選ぶと topology が決まり、`cloudflare` target は backing resource (D1 / KV / R2 / Queues) を provision する。手書きの wrangler / helm / distribute pipeline は同じ topology の interim materialization であって、別の source of truth ではない。
+Takos の app は launcher で開くだけではなく、agent の作業にもつながります。Chat で app や Workspace の文脈を使って作業を頼みます。
 
-```hcl
-module "takos" {
-  source = "github.com/example/takos//deploy/opentofu"
-  target = "cloudflare" # aws | gcp | cloudflare
-}
+例:
+
+```txt
+takos-docs に、この Workspace のセットアップメモを作って。
 ```
 
-target を選ぶと、typed Runs を経て Deployment が更新され、非機密な endpoint は OutputSnapshot として記録される。Takos product routes は別の deployment proxy を露出せず、Takosumi deploy control plane の run ledger を信頼する。
+作業結果は会話だけでなく、files、Git diff、memory、app の状態として残ります。必要な context は Memory に保存して、次の作業でも使えます。
 
-## References
+## 3. Git URL から app を追加する
 
+自分の app、fork、third-party app は Git URL から追加します。Takos の Store / Source 画面は中央の公式 registry ではなく、
+Git URL の OpenTofu Capsule を見つけて追加するための discovery surface です。
+
+基本の流れ:
+
+1. Apps から **Git URL で追加** に進む
+2. Git URL、ref、module path を入力する
+3. 追加される app、作られる resource、注意点を確認する
+4. 承認する
+5. Apps launcher に app が表示される
+
+production で使う app は、tag または commit に pin します。`main` や `latest` のような moving ref は、operator policy により拒否される場合があります。
+
+## 4. 追加後に確認するもの
+
+Workspace ユーザーが確認するもの:
+
+- app が Apps launcher に表示される
+- app を開ける、または準備中 / 失敗が分かる
+- Chat で app や files に対する作業を頼める
+- Memory に必要な context が残る
+
+管理者 / operator が確認するもの:
+
+- Source / Installation / Run / Deployment / OutputSnapshot
+- provider connection outcome (Gateway coverage, Space-owned Connection, or policy block)
+- policy decision、cost、audit trail
+
+通常の product 導線では、後者は Apps と install 管理の裏側に置きます。
+
+## 次に読むページ
+
+- [Git URL からアプリを install する](/platform/store)
+- [Source / Git URL install 手順](/deploy/store-deploy)
+- [Bundled Apps](/platform/default-apps)
 - [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

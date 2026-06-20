@@ -25,8 +25,6 @@ export type AccountLikeRow = {
   aiModel: string | null;
   modelBackend: string | null;
   securityPosture: string | null;
-  /** Populated once `takosumi_installation_id` column exists (Phase 4 migration). */
-  takosumiInstallationId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -89,7 +87,6 @@ export function accountToWorkspace(row: AccountLikeRow): Space {
     ai_model: row.aiModel,
     model_backend: row.modelBackend,
     security_posture: toSecurityPosture(row.securityPosture),
-    takosumi_installation_id: row.takosumiInstallationId ?? null,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };

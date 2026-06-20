@@ -76,9 +76,8 @@ export interface PaginatedListResource<T> {
 }
 
 /**
- * createPaginatedListResource — the paginated list state that was hand-rolled
- * across useUserFollowers / useUserFollowing / useUserStars / useUserRepos
- * (offset mode) and useUserActivity (cursor mode). Owns the
+ * createPaginatedListResource — shared paginated list state (offset and cursor
+ * modes). Owns the
  * items/offset/hasMore/loading/error signals, the fetch(reset) flow with a
  * latest-wins stale guard, and the source-reset effect. Each hook supplies only
  * its endpoint mapping via `fetchPage` and wraps the returned signals with its

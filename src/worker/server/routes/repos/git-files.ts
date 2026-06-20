@@ -22,6 +22,7 @@ import {
   throwIfTreeFlattenLimit,
   warnDegradedCommit,
 } from "./git-shared.ts";
+import { computeSummaryFileDiffs } from "../pull-requests/diff.ts";
 
 async function handleRepoTreeRequest(c: RepoContext) {
   const user = c.get("user");
@@ -183,32 +184,9 @@ const gitFiles = new Hono<AuthenticatedRouteEnv>()
       const baseFiles = await gitStore.flattenTree(bucket, baseCommit.tree);
       const headFiles = await gitStore.flattenTree(bucket, headCommit.tree);
 
-      const baseMap = new Map(baseFiles.map((f) => [f.path, f.sha]));
-      const headMap = new Map(headFiles.map((f) => [f.path, f.sha]));
-
-      const files: Array<{
-        path: string;
-        status: "added" | "modified" | "deleted";
-        additions: number;
-        deletions: number;
-      }> = [];
-
-      for (const [path, sha] of headMap) {
-        const baseSha = baseMap.get(path);
-        if (!baseSha) {
-          files.push({ path, status: "added", additions: 1, deletions: 0 });
-        } else if (baseSha !== sha) {
-          files.push({ path, status: "modified", additions: 1, deletions: 1 });
-        }
-      }
-
-      for (const [path] of baseMap) {
-        if (!headMap.has(path)) {
-          files.push({ path, status: "deleted", additions: 0, deletions: 1 });
-        }
-      }
-
-      files.sort((a, b) => a.path.localeCompare(b.path));
+      // Real LCS-based additions/deletions (shared with the PR diff payload),
+      // not placeholder 1/1 counts.
+      const files = await computeSummaryFileDiffs(bucket, baseFiles, headFiles);
 
       const stats = {
         total_additions: files.reduce((sum, f) => sum + f.additions, 0),

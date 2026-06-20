@@ -4,6 +4,7 @@ import type {
   AppManifestOverride,
   AppPublication,
   AppResource,
+  AppServiceBinding,
 } from "../source/app-manifest-types.ts";
 import { assertAllowedTopLevelFields } from "../source/app-manifest-parser/index.ts";
 import { parseCompute } from "../source/app-manifest-parser/parse-compute.ts";
@@ -164,8 +165,8 @@ function mergePublishOverrides(
     if (typeof patchRecord.name !== "string" || !patchRecord.name.trim()) {
       throw new BadRequestError(`overrides.publish[${index}].name is required`);
     }
-    const baseIndex = result.findIndex((publication) =>
-      publication.name === patchRecord.name
+    const baseIndex = result.findIndex(
+      (publication) => publication.name === patchRecord.name,
     );
     if (baseIndex < 0 || baseIndex >= result.length) {
       result.push(entry);
@@ -173,10 +174,7 @@ function mergePublishOverrides(
     }
     const baseEntry = result[baseIndex];
     result[baseIndex] = baseEntry
-      ? deepMerge(
-        toPlainRecord(baseEntry),
-        patchRecord,
-      ) as AppPublication
+      ? (deepMerge(toPlainRecord(baseEntry), patchRecord) as AppPublication)
       : entry;
   });
 
@@ -217,9 +215,12 @@ export function applyManifestOverrides(
       manifest.compute as Record<string, unknown>,
       overrides.compute as Record<string, unknown>,
     );
-    merged.compute = parseCompute({ compute: mergedCompute }, {
-      allowInternalKind: true,
-    });
+    merged.compute = parseCompute(
+      { compute: mergedCompute },
+      {
+        allowInternalKind: true,
+      },
+    );
   }
   if (overrides.routes) {
     merged.routes = overrides.routes;
@@ -263,6 +264,15 @@ function workloadCategoryFromKind(
   }
 }
 
+function serviceBindingsForTarget(
+  manifest: AppManifest,
+  target: string,
+): AppServiceBinding[] {
+  return (manifest.serviceBindings ?? []).filter(
+    (service) => service.target === target,
+  );
+}
+
 export function attachedWorkloadName(
   parentName: string,
   childName: string,
@@ -291,7 +301,8 @@ export function compileGroupDesiredState(
   // avoid collisions when multiple workers use the same child container name.
   const routes = Object.fromEntries(
     routeList.map((route, index) => {
-      const routeName = route.id ??
+      const routeName =
+        route.id ??
         (route.target
           ? `${route.target}:${route.path ?? index}`
           : `route-${index}`);
@@ -334,6 +345,7 @@ export function compileGroupDesiredState(
       specFingerprint: stableFingerprint({
         spec: entry,
         manifestEnv: resolvedManifest.env ?? {},
+        serviceBindings: serviceBindingsForTarget(resolvedManifest, name),
       }),
       dependsOn: entry.depends ?? [],
       routeNames: routeNamesByTarget.get(name) ?? [],
@@ -354,6 +366,10 @@ export function compileGroupDesiredState(
           specFingerprint: stableFingerprint({
             spec: childEntry,
             manifestEnv: resolvedManifest.env ?? {},
+            serviceBindings: serviceBindingsForTarget(
+              resolvedManifest,
+              workloadName,
+            ),
           }),
           dependsOn: childEntry.depends ?? [],
           routeNames: routeNamesByTarget.get(workloadName) ?? [],
@@ -446,9 +462,10 @@ export function materializeRoutes(
   options: { groupHostname?: string | null } = {},
 ): Record<string, ObservedRouteState> {
   return Object.fromEntries(
-    Object.entries(desiredRoutes).map((
-      [name, route],
-    ) => [name, materializeRoute(route, workloads, updatedAt, options)]),
+    Object.entries(desiredRoutes).map(([name, route]) => [
+      name,
+      materializeRoute(route, workloads, updatedAt, options),
+    ]),
   );
 }
 

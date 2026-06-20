@@ -15,6 +15,7 @@ import type {
   PlatformServiceBinding,
 } from "../platform-config.ts";
 import { resolveHostnameRouting } from "../../application/services/routing/service.ts";
+import { resolveContainerHostBaseUrl } from "../../platform-utils/container-host.ts";
 
 function serviceBindingFromEnv(
   env: PlatformEnvIndex,
@@ -33,10 +34,11 @@ function serviceBindingFromEnv(
 }
 
 function defaultContainerHostBaseUrl(env: PlatformEnvIndex): string {
-  const publicBaseUrl = getString(env, "AUTH_PUBLIC_BASE_URL");
-  if (publicBaseUrl) return publicBaseUrl;
-  const adminDomain = getString(env, "ADMIN_DOMAIN");
-  return adminDomain ? `https://${adminDomain}` : "https://takos";
+  return resolveContainerHostBaseUrl({
+    proxyBaseUrl: getString(env, "PROXY_BASE_URL"),
+    authPublicBaseUrl: getString(env, "AUTH_PUBLIC_BASE_URL"),
+    adminDomain: getString(env, "ADMIN_DOMAIN"),
+  });
 }
 
 function createInProcessRuntimeHostBinding(
@@ -52,8 +54,7 @@ function createInProcessRuntimeHostBinding(
       return runtimeHost.fetch(new Request(input, init), {
         ...env,
         TAKOS_WORKER: takosWorker,
-        PROXY_BASE_URL: getString(env, "PROXY_BASE_URL") ??
-          defaultContainerHostBaseUrl(env),
+        PROXY_BASE_URL: defaultContainerHostBaseUrl(env),
       } as never);
     },
   };
@@ -69,6 +70,8 @@ function createInProcessExecutorHostBinding(
       const { default: executorHost } = await import(
         "../../runtime/container-hosts/executor-host.ts"
       );
+      // TAKOS_AGENT_CONTROL_RPC_BASE_URL keeps its dedicated env first, then
+      // falls back to the shared container-host base URL.
       return executorHost.fetch(new Request(input, init), {
         ...env,
         TAKOS_WORKER: takosWorker,

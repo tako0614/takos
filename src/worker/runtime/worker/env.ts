@@ -32,6 +32,7 @@ export type WorkerEnv = DbEnv & {
   AI?: Ai;
   VECTORIZE?: VectorizeIndex;
   OPENAI_API_KEY?: string;
+  OPENAI_BASE_URL?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   GIT_OBJECTS?: ObjectStoreBinding;

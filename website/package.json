@@ -22,6 +22,16 @@
     "typescript": "^5.7.3"
   },
   "overrides": {
-    "h3": "1.15.11"
+    "h3": "1.15.11",
+    "vinxi": {
+      "vite": "6.4.3",
+      "esbuild": "0.28.1"
+    },
+    "vite": {
+      "esbuild": "0.28.1"
+    },
+    "nitropack": {
+      "esbuild": "0.28.1"
+    }
   }
 }

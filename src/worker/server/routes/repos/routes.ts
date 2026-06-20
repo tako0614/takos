@@ -26,14 +26,12 @@ import {
   repoForks,
   repoRemotes,
   repositories,
-  repoStars,
   workflowSecrets,
 } from "../../../infra/db/schema.ts";
 import { and, eq, sql } from "drizzle-orm";
 import { invalidateCacheOnMutation } from "../../middleware/cache.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
 import { requireFound } from "../validation-utils.ts";
-import { recordRepoDeleteActivity } from "../../../application/services/store-network/push-activities.ts";
 
 // Re-export shared utilities so existing sibling imports (e.g. `from './routes.ts'`) keep working.
 export {
@@ -219,15 +217,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       });
     }
 
-    const star = user?.id
-      ? await db.select({ accountId: repoStars.accountId })
-        .from(repoStars)
-        .where(
-          and(eq(repoStars.accountId, user.id), eq(repoStars.repoId, repoId)),
-        )
-        .get()
-      : null;
-
     const workspaceData = await db.select({
       id: accounts.id,
       name: accounts.name,
@@ -248,7 +237,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     return c.json({
       repository,
       branch_count: branchCount,
-      starred: !!star,
+      starred: false,
       user_role: userRole,
       workspace: workspaceData ? { name: workspaceData.name } : null,
       owner: workspaceData
@@ -345,40 +334,6 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repoObjectCandidates = c.env.GIT_OBJECTS
         ? await collectCleanupCandidates(c.env.DB, c.env.GIT_OBJECTS, repoId)
         : null;
-
-      // Record a delete event before the repo is removed so Store Network feeds
-      // can expose the deletion after the repository row is gone.
-      try {
-        const [ownerSlug, defaultBranch] = await Promise.all([
-          resolveOwnerUsername(db, repoAccess.repo.space_id),
-          db.select({ commitSha: branches.commitSha }).from(branches)
-            .where(and(
-              eq(branches.repoId, repoId),
-              eq(branches.name, repoAccess.repo.default_branch || "main"),
-            ))
-            .limit(1)
-            .get(),
-        ]);
-        await recordRepoDeleteActivity(c.env.DB, {
-          repoId,
-          accountId: repoAccess.repo.space_id,
-          repository: {
-            ownerSlug: ownerSlug || repoAccess.repo.space_id,
-            name: repoAccess.repo.name,
-            summary: repoAccess.repo.description,
-            visibility: repoAccess.repo.visibility,
-            defaultBranch: repoAccess.repo.default_branch || "main",
-            defaultBranchHash: defaultBranch?.commitSha ?? null,
-            createdAt: repoAccess.repo.created_at,
-            updatedAt: repoAccess.repo.updated_at,
-          },
-        });
-      } catch (_err) {
-        logWarn("Failed to record repo delete activity", {
-          action: "deleteRepository",
-          repoId,
-        });
-      }
 
       await db.delete(branches).where(eq(branches.repoId, repoId));
       await db.delete(repoForks).where(eq(repoForks.forkRepoId, repoId));

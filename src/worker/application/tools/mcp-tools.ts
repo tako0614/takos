@@ -20,6 +20,7 @@ import {
   isPublicationType,
   listPublications,
   publicationResolvedUrl,
+  SERVICE_GRAPH_CAPABILITIES,
 } from "../services/platform/service-publications.ts";
 import { combineSignals } from "@takos/worker-platform-utils/abort";
 
@@ -87,25 +88,32 @@ export async function loadMcpTools(
   let servers: McpServerLoadRecord[];
 
   try {
-    const storedServers = await drizzle.select({
-      id: mcpServers.id,
-      name: mcpServers.name,
-      url: mcpServers.url,
-      sourceType: mcpServers.sourceType,
-      authMode: mcpServers.authMode,
-      serviceId: mcpServers.serviceId,
-      bundleDeploymentId: mcpServers.bundleDeploymentId,
-      oauthAccessToken: mcpServers.oauthAccessToken,
-      oauthRefreshToken: mcpServers.oauthRefreshToken,
-      oauthIssuerUrl: mcpServers.oauthIssuerUrl,
-      oauthTokenExpiresAt: mcpServers.oauthTokenExpiresAt,
-    }).from(mcpServers).where(
-      and(eq(mcpServers.accountId, spaceId), eq(mcpServers.enabled, true)),
-    ).all()
+    const storedServers = await drizzle
+      .select({
+        id: mcpServers.id,
+        name: mcpServers.name,
+        url: mcpServers.url,
+        sourceType: mcpServers.sourceType,
+        authMode: mcpServers.authMode,
+        serviceId: mcpServers.serviceId,
+        bundleDeploymentId: mcpServers.bundleDeploymentId,
+        oauthAccessToken: mcpServers.oauthAccessToken,
+        oauthRefreshToken: mcpServers.oauthRefreshToken,
+        oauthIssuerUrl: mcpServers.oauthIssuerUrl,
+        oauthTokenExpiresAt: mcpServers.oauthTokenExpiresAt,
+      })
+      .from(mcpServers)
+      .where(
+        and(eq(mcpServers.accountId, spaceId), eq(mcpServers.enabled, true)),
+      )
+      .all()
       .then((rows) => rows as McpServerLoadRecord[]);
     const publicationServers = (await listPublications({ DB: db }, spaceId))
       .filter((record) =>
-        isPublicationType(record.publicationType, "takos.mcp-server.v1")
+        isPublicationType(
+          record.publicationType,
+          SERVICE_GRAPH_CAPABILITIES.mcpServer,
+        ),
       )
       .map((record): McpServerLoadRecord | null => {
         const url = publicationResolvedUrl(record);
@@ -137,11 +145,10 @@ export async function loadMcpTools(
   }
 
   // Deterministic and contract-aligned ordering:
-  // Takos custom tools are resolved first (outside this loader), then managed MCP, then external MCP.
+  // Takos custom tools are resolved first (outside this loader), then Service Graph MCP, then external MCP.
   servers.sort((a, b) => {
-    const sourceRank = (
-      sourceType: string,
-    ) => (sourceType === "external" ? 1 : 0);
+    const sourceRank = (sourceType: string) =>
+      sourceType === "external" ? 1 : 0;
     const rankDiff = sourceRank(a.sourceType) - sourceRank(b.sourceType);
     if (rankDiff !== 0) return rankDiff;
     const nameDiff = a.name.localeCompare(b.name);
@@ -349,10 +356,13 @@ async function resolveMcpAccessToken(
   // Bearer token auth — decrypt the stored token and pass as access token.
   // Re-read from DB to pick up tokens rotated by re-deploy.
   if (server.authMode !== "bearer_token") return null;
-  const freshRow = await drizzle.select({
-    oauthAccessToken: mcpServers.oauthAccessToken,
-  })
-    .from(mcpServers).where(eq(mcpServers.id, server.id)).get();
+  const freshRow = await drizzle
+    .select({
+      oauthAccessToken: mcpServers.oauthAccessToken,
+    })
+    .from(mcpServers)
+    .where(eq(mcpServers.id, server.id))
+    .get();
   const tokenSource = freshRow?.oauthAccessToken
     ? { ...server, oauthAccessToken: freshRow.oauthAccessToken }
     : server;
@@ -368,19 +378,23 @@ async function refreshTokenIfNeeded(
 ): Promise<void> {
   if (!server.oauthTokenExpiresAt) return;
 
-  const expiresAt = typeof server.oauthTokenExpiresAt === "string"
-    ? new Date(server.oauthTokenExpiresAt)
-    : server.oauthTokenExpiresAt;
+  const expiresAt =
+    typeof server.oauthTokenExpiresAt === "string"
+      ? new Date(server.oauthTokenExpiresAt)
+      : server.oauthTokenExpiresAt;
   const fiveMinutes = 5 * 60 * 1000;
 
   if (expiresAt.getTime() - Date.now() >= fiveMinutes) return;
 
   await refreshMcpToken(db, env, server);
 
-  const updated = await drizzle.select({
-    oauthAccessToken: mcpServers.oauthAccessToken,
-  })
-    .from(mcpServers).where(eq(mcpServers.id, server.id)).get();
+  const updated = await drizzle
+    .select({
+      oauthAccessToken: mcpServers.oauthAccessToken,
+    })
+    .from(mcpServers)
+    .where(eq(mcpServers.id, server.id))
+    .get();
   if (updated) {
     server.oauthAccessToken = updated.oauthAccessToken;
   }

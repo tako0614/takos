@@ -34,6 +34,7 @@ export function ServerCard(props: {
   server: McpServerRecord;
   onToggle: () => void;
   onDelete: () => void;
+  onReauthorize?: () => void;
   fetchServerTools: (
     serverId: string,
   ) => Promise<{ name: string; description: string }[]>;
@@ -209,8 +210,18 @@ export function ServerCard(props: {
             </div>
           )}
 
-          {status() === "token_expired" && (
-            <p class="text-xs text-amber-500 mb-2">{t("mcpReauthorize")}</p>
+          {(status() === "token_expired" || status() === "no_token") &&
+            props.onReauthorize && (
+            <div class="flex items-center gap-2 mb-2">
+              <p class="text-xs text-amber-500">{t("mcpReauthorize")}</p>
+              <button
+                type="button"
+                onClick={() => props.onReauthorize?.()}
+                class="text-xs text-blue-500 hover:underline"
+              >
+                {t("mcpReauthorizeAction")}
+              </button>
+            </div>
           )}
 
           <Show when={tools()}>

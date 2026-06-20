@@ -1,7 +1,7 @@
 import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 import type {
-  TakosumiAccountsWorkloadServiceProjection,
-  TakosumiAccountsWorkloadServiceStatus,
+  TakosumiAccountsServiceGraphServiceProjection,
+  TakosumiAccountsServiceGraphServiceStatus,
 } from "@takosjp/takosumi-accounts-contract";
 
 export interface TakosumiAccountsServiceRequestConfig {
@@ -12,8 +12,8 @@ export interface TakosumiAccountsServiceRequestConfig {
 
 export interface InstallableAppWorkloadServiceSummary {
   id: string;
-  material_kind: string;
-  status: TakosumiAccountsWorkloadServiceStatus | "unknown";
+  capability: string;
+  status: TakosumiAccountsServiceGraphServiceStatus | "unknown";
   endpoint: string | null;
   secret_configured: boolean;
   token_expires_at: string | null;
@@ -21,7 +21,7 @@ export interface InstallableAppWorkloadServiceSummary {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -34,8 +34,9 @@ function readString(value: unknown): string | null {
 function readWorkloadServiceStatus(
   value: unknown,
 ): InstallableAppWorkloadServiceSummary["status"] {
-  return value === "ready" || value === "not_configured" ||
-      value === "unavailable"
+  return value === "ready" ||
+    value === "not_configured" ||
+    value === "unavailable"
     ? value
     : "unknown";
 }
@@ -46,12 +47,14 @@ export function accountsInstallationServicesUrl(
 ): URL {
   const url = new URL(baseUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
-  const installationsPath = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
+  const installationsPath = basePath.endsWith(
+    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+  )
     ? basePath
     : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
-  url.pathname = `${installationsPath}/${
-    encodeURIComponent(installationId)
-  }/services`;
+  url.pathname = `${installationsPath}/${encodeURIComponent(
+    installationId,
+  )}/services`;
   url.search = "";
   return url;
 }
@@ -60,16 +63,16 @@ export function sanitizeWorkloadServiceProjection(
   value: unknown,
 ): InstallableAppWorkloadServiceSummary | null {
   const record = readRecord(value) as
-    | (Partial<TakosumiAccountsWorkloadServiceProjection> &
-      Record<string, unknown>)
+    | (Partial<TakosumiAccountsServiceGraphServiceProjection> &
+        Record<string, unknown>)
     | null;
   if (!record) return null;
   const id = readString(record.id);
-  const materialKind = readString(record.material_kind);
-  if (!id || !materialKind) return null;
+  const capability = readString(record.capability);
+  if (!id || !capability) return null;
   return {
     id,
-    material_kind: materialKind,
+    capability: capability,
     status: readWorkloadServiceStatus(record.status),
     endpoint: readString(record.endpoint),
     secret_configured: Boolean(readString(record.secret_ref)),
@@ -83,8 +86,9 @@ export function sanitizeWorkloadServices(
   if (!Array.isArray(value)) return [];
   return value
     .map(sanitizeWorkloadServiceProjection)
-    .filter((service): service is InstallableAppWorkloadServiceSummary =>
-      service !== null
+    .filter(
+      (service): service is InstallableAppWorkloadServiceSummary =>
+        service !== null,
     );
 }
 
@@ -114,7 +118,7 @@ export async function fetchAccountsInstallationWorkloadServices(
   try {
     const response = await (config.fetch ?? fetch)(url, { headers });
     if (!response.ok) return [];
-    const body = await response.json() as unknown;
+    const body = (await response.json()) as unknown;
     return sanitizeWorkloadServices(readRecord(body)?.services);
   } catch {
     return [];

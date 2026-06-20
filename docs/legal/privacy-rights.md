@@ -6,7 +6,7 @@
 | Field         | Value                                                   |
 | ------------- | ------------------------------------------------------- |
 | Last reviewed | 2026-05-12                                              |
-| Owner         | Takos app / API (`takos`)                           |
+| Owner         | Takos app / API (`takos`)                               |
 | Status        | Operational baseline; final legal review remains E-11.1 |
 
 ## Scope
@@ -16,7 +16,7 @@ Takos の app-local profile (chat / memory / preferences) は `takos` が
 authentication / billing identity) は operator account plane (リファレンス実装: Takosumi Accounts) が所有**します。
 Takosumi は OpenTofu-native deploy control plane として Installation / `plan` type Run /
 `apply` type Run / Deployment / OutputSnapshot の run ledger を記録し、infra
-provisioning は Connection / ProviderBinding / policy と operator distribution workflow が所有します。Takos の個人データ access / export / deletion handler は Takos Web / API
+provisioning は Connection / Installation provider connection / policy と Takosumi deploy-control workflow が所有します。Takos の個人データ access / export / deletion handler は Takos Web / API
 の app-local boundary を扱い、identity-level の data subject request は operator
 account plane へ forward します。
 
@@ -24,11 +24,11 @@ account plane へ forward します。
 
 認証済みユーザーは次の API で自身の data subject request を開始できます。
 
-| Right    | Method | Path                                | Behavior                                                                                                                                                                                                                    |
-| -------- | ------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access   | `GET`  | `/api/me/privacy/access`            | subject、request status、available actions、lawful basis link を返す                                                                                                                                                        |
-| Export   | `GET`  | `/api/me/privacy/export`            | account / settings / auth identity metadata / app-local usage events and rollups / repositories / threads / messages / runs / memories / notifications を JSON attachment として返す                                        |
-| Deletion | `POST` | `/api/me/privacy/deletion-requests` | deletion request を `account_metadata` に記録し、account を `pending_deletion` にして再ログインを止め、Takos app-local SQL auth session を即時 revoke する。Accounts PAT / OIDC token は Takosumi Accounts 側で revoke する |
+| Right    | Method | Path                                | Behavior                                                                                                                                                                                                                                     |
+| -------- | ------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access   | `GET`  | `/api/me/privacy/access`            | subject、request status、available actions、lawful basis link を返す                                                                                                                                                                         |
+| Export   | `GET`  | `/api/me/privacy/export`            | app-local account mirror / settings / app-local usage events and rollups / repositories / threads / messages / runs / memories / notifications を JSON attachment として返す。Takosumi Account identity は operator account-plane SAR が扱う |
+| Deletion | `POST` | `/api/me/privacy/deletion-requests` | deletion request を `account_metadata` に記録し、account を `pending_deletion` にして再ログインを止め、Takos app-local SQL auth session を即時 revoke する。Accounts PAT / OIDC token は Takosumi Accounts 側で revoke する                  |
 
 Deletion request は即時の credential revocation と account disable を行います。
 請求・税務・不正対策・セキュリティ監査で保存義務または正当な利益が残るデータは、
@@ -56,10 +56,10 @@ endpoint で処理されます。
 Export handler はユーザー本人のデータを返しますが、再利用可能な credential
 secret は返しません。
 
-| Data            | Export handling                                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Auth identities | provider、provider subject、email snapshot、linked / last login metadata を返す。refresh token ciphertext は返さない  |
-| App usage       | app-local usage event / rollup metadata を返す。Accounts billing account / Stripe identifiers は Takos 側では返さない |
+| Data                            | Export handling                                                                                                                                            |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App-local auth/session metadata | Takos Web/API が持つ session mirror と revocation state だけを返す。provider subject、OIDC identity、billing identity、refresh token ciphertext は返さない |
+| App usage                       | app-local usage event / rollup metadata を返す。Accounts billing account / Stripe identifiers は Takos 側では返さない                                      |
 
 ## Lawful Bases
 

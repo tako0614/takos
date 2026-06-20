@@ -26,7 +26,8 @@ function applySecurityHeaders(
   // Conservative CSP for static assets — no scripts (HTML responses follow a
   // separate per-route CSP with nonces). SVG must still allow inline styles.
   if (
-    !headers.has("Content-Security-Policy") && contentType &&
+    !headers.has("Content-Security-Policy") &&
+    contentType &&
     !contentType.includes("text/html")
   ) {
     headers.set(
@@ -41,17 +42,18 @@ function applySecurityHeaders(
   });
 }
 
-export const staticAssetsMiddleware: MiddlewareHandler<
-  { Bindings: Env; Variables: Record<string, unknown> }
-> = async (c, next) => {
+export const staticAssetsMiddleware: MiddlewareHandler<{
+  Bindings: Env;
+  Variables: Record<string, unknown>;
+}> = async (c, next) => {
   const path = new URL(c.req.url).pathname;
 
   if (
-    path.startsWith("/api/") || path.startsWith("/auth/") ||
+    path.startsWith("/api/") ||
+    path.startsWith("/auth/") ||
     path === "/oauth" ||
     path.startsWith("/oauth/") ||
     path.startsWith("/v1/") ||
-    path === "/start" ||
     path.startsWith("/.well-known/") ||
     path.startsWith("/__takosumi/")
   ) {

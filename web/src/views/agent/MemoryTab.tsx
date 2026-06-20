@@ -20,6 +20,8 @@ export function MemoryTab(props: { spaceId: string }) {
     createReminder,
     savingMemory,
     savingReminder,
+    getTypeIcon,
+    getTypeLabel,
   } = useMemoryData(() => props.spaceId);
 
   return (
@@ -81,6 +83,8 @@ export function MemoryTab(props: { spaceId: string }) {
               onCreateMemory={(data) =>
                 createMemory({ ...data, source: "user" })}
               savingMemory={savingMemory()}
+              getTypeIcon={getTypeIcon}
+              getTypeLabel={getTypeLabel}
             />
           )
           : (

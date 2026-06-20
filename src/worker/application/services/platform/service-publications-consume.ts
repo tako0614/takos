@@ -5,15 +5,12 @@ import type {
   AppConsume,
   AppPublication,
 } from "../source/app-manifest-types.ts";
-import { deleteManagedTakosTokenConfig } from "../common-env/takos-managed.ts";
-import { RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE } from "../identity/takos-access-tokens.ts";
+import { RESERVED_TAKOS_PUBLICATION_MESSAGE } from "../identity/takos-access-tokens.ts";
 import { getDb, serviceConsumes } from "../../../infra/db/index.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import {
   isReservedTakosPublicationSource,
-  isRetiredTakosGrantPublication,
   type PublicationOutputDescriptor,
-  retiredTakosApiOutputEnv,
 } from "./service-publications-normalize.ts";
 import {
   getPublicationRowByRef,
@@ -25,6 +22,7 @@ import {
   toPublicationRecord,
   upsertServiceConsumeRow,
 } from "./service-publications-db.ts";
+import { resolveServiceGraphExportDefinition } from "./service-graph-exports.ts";
 
 export type ConsumePublicationDefinition = {
   publication: AppPublication;
@@ -41,13 +39,8 @@ export async function cleanupConsumeState(
     state: Record<string, unknown> | null;
   },
 ): Promise<void> {
-  if (!isRetiredTakosGrantPublication(params.publication)) return;
-  await deleteManagedTakosTokenConfig({
-    env: { DB: env.DB },
-    spaceId: params.spaceId,
-    serviceId: params.serviceId,
-    envName: retiredTakosApiOutputEnv(params.publication.name, "API_KEY"),
-  });
+  void env;
+  void params;
   void params.state;
 }
 
@@ -61,9 +54,6 @@ export async function syncConsumeState(
     consumeRow?: ServiceConsumeRow;
   },
 ): Promise<Record<string, unknown>> {
-  if (isRetiredTakosGrantPublication(params.publication)) {
-    throw new GoneError(RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE);
-  }
   void env;
   void params;
   return {};
@@ -72,11 +62,12 @@ export async function syncConsumeState(
 function resolveTakosSystemConsumeDefinition(
   _consume: AppConsume,
 ): ConsumePublicationDefinition {
-  throw new GoneError(RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE);
+  throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
 }
 
 export async function resolveConsumePublicationDefinition(
-  env: Pick<Env, "DB">,
+  env: Pick<Env, "DB"> &
+    Partial<Pick<Env, "ADMIN_DOMAIN" | "AUTH_PUBLIC_BASE_URL">>,
   params: {
     spaceId: string;
     consume: AppConsume;
@@ -91,7 +82,12 @@ export async function resolveConsumePublicationDefinition(
     ref: params.consume.publication,
     consumerGroupId: params.consumerGroupId,
   });
-  if (!row) return null;
+  if (!row) {
+    return resolveServiceGraphExportDefinition(env, {
+      spaceId: params.spaceId,
+      name: params.consume.publication,
+    });
+  }
   const record = toPublicationRecord(row);
   return { publication: record.publication, outputs: record.outputs, record };
 }
@@ -105,7 +101,8 @@ export async function syncConsumersForPublication(
 ): Promise<void> {
   const db = getDb(env.DB);
   const publication = toPublicationRecord(params.publication);
-  const rows = await db.select()
+  const rows = await db
+    .select()
     .from(serviceConsumes)
     .where(eq(serviceConsumes.accountId, params.spaceId))
     .all();

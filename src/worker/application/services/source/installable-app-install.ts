@@ -172,7 +172,8 @@ function rollbackUrl(
 export function resolveInstallableAppAccountsConfig(
   env: InstallableAppInstallEnv,
 ): InstallableAppAccountsConfig | null {
-  const baseUrl = readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
+  const baseUrl =
+    readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
     readEnvString(env.TAKOSUMI_ACCOUNTS_URL) ??
     readEnvString(env.OIDC_DISCOVERY_URL) ??
     readEnvString(env.OIDC_ISSUER_URL);
@@ -193,22 +194,19 @@ export function resolveInstallableAppInstallConfig(
   const accountId = readEnvString(env.TAKOS_APP_INSTALL_ACCOUNT_ID);
   const subject = readEnvString(env.TAKOS_APP_INSTALL_SUBJECT);
   const mode = readEnvString(env.TAKOS_APP_INSTALL_MODE);
-  const runtimeBaseUrl = readEnvString(
-    env.TAKOS_APP_INSTALL_RUNTIME_BASE_URL,
-  );
+  const runtimeBaseUrl = readEnvString(env.TAKOS_APP_INSTALL_RUNTIME_BASE_URL);
   const configured = Boolean(
-    installationsUrl || token || accountId || subject || mode ||
-      runtimeBaseUrl,
+    installationsUrl || token || accountId || subject || mode || runtimeBaseUrl,
   );
   if (!configured) return null;
   return {
     ...(installationsUrl
       ? {
-        installationsUrl: normalizeInstallationsUrl(
-          installationsUrl,
-          "TAKOS_APP_INSTALLATIONS_URL",
-        ),
-      }
+          installationsUrl: normalizeInstallationsUrl(
+            installationsUrl,
+            "TAKOS_APP_INSTALLATIONS_URL",
+          ),
+        }
       : {}),
     ...(token ? { token } : {}),
     ...(accountId ? { accountId } : {}),
@@ -216,11 +214,11 @@ export function resolveInstallableAppInstallConfig(
     ...(mode ? { mode } : {}),
     ...(runtimeBaseUrl
       ? {
-        runtimeBaseUrl: normalizeHttpUrl(
-          runtimeBaseUrl,
-          "TAKOS_APP_INSTALL_RUNTIME_BASE_URL",
-        ),
-      }
+          runtimeBaseUrl: normalizeHttpUrl(
+            runtimeBaseUrl,
+            "TAKOS_APP_INSTALL_RUNTIME_BASE_URL",
+          ),
+        }
       : {}),
   };
 }
@@ -274,7 +272,9 @@ function accountsInstallationsUrl(
 ): URL {
   const url = new URL(config.baseUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
-  const installationsPath = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
+  const installationsPath = basePath.endsWith(
+    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+  )
     ? basePath
     : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
   url.pathname = installationId
@@ -310,7 +310,7 @@ async function postInstallableAppJson(
     response = await installableAppInstallDeps.fetch(url, {
       method: "POST",
       headers: {
-        ...(token ? { "authorization": `Bearer ${token}` } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
         "content-type": "application/json",
       },
       body: JSON.stringify(body),
@@ -362,42 +362,49 @@ export async function listInstallableAppInstallationsWithServices(
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
   const accountsConfig = requireAccountsConfig(config);
-  const upstream = await listInstallableAppInstallations(spaceId, accountsConfig);
+  const upstream = await listInstallableAppInstallations(
+    spaceId,
+    accountsConfig,
+  );
   if (upstream.status >= 400) return upstream;
   const installations = Array.isArray(upstream.body?.installations)
     ? upstream.body.installations
     : null;
   if (!installations) return upstream;
 
-  const enriched = await Promise.all(installations.map(async (installation) => {
-    if (
-      !installation || typeof installation !== "object" ||
-      Array.isArray(installation)
-    ) {
-      return installation;
-    }
-    const record = installation as Record<string, unknown>;
-    const installationId = readRecordString(record.id) ??
-      readRecordString(record.installation_id) ??
-      readRecordString(record.installationId);
-    if (!installationId) return installation;
-    let services: InstallableAppUpstreamResponse;
-    try {
-      services = await listInstallableAppInstallationServices(
-        installationId,
-        accountsConfig,
-      );
-    } catch {
-      return installation;
-    }
-    if (services.status >= 400 || !Array.isArray(services.body?.services)) {
-      return installation;
-    }
-    return {
-      ...record,
-      services: services.body.services,
-    };
-  }));
+  const enriched = await Promise.all(
+    installations.map(async (installation) => {
+      if (
+        !installation ||
+        typeof installation !== "object" ||
+        Array.isArray(installation)
+      ) {
+        return installation;
+      }
+      const record = installation as Record<string, unknown>;
+      const installationId =
+        readRecordString(record.id) ??
+        readRecordString(record.installation_id) ??
+        readRecordString(record.installationId);
+      if (!installationId) return installation;
+      let services: InstallableAppUpstreamResponse;
+      try {
+        services = await listInstallableAppInstallationServices(
+          installationId,
+          accountsConfig,
+        );
+      } catch {
+        return installation;
+      }
+      if (services.status >= 400 || !Array.isArray(services.body?.services)) {
+        return installation;
+      }
+      return {
+        ...record,
+        services: services.body.services,
+      };
+    }),
+  );
 
   return {
     status: upstream.status,
@@ -447,14 +454,18 @@ export async function planInstallableAppInstallation(
   input: InstallableAppPlanInput,
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
-  return await postInstallableAppJson(installPlanRunUrl(config), {
-    spaceId: input.spaceId,
-    source: {
-      kind: "git",
-      url: input.gitUrl,
-      ref: input.ref,
+  return await postInstallableAppJson(
+    installPlanRunUrl(config),
+    {
+      spaceId: input.spaceId,
+      source: {
+        kind: "git",
+        url: input.gitUrl,
+        ref: input.ref,
+      },
     },
-  }, config.token);
+    config.token,
+  );
 }
 
 export async function applyInstallableAppInstallation(
@@ -462,26 +473,32 @@ export async function applyInstallableAppInstallation(
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
   const { installUrl, token } = requireApplyConfig(config);
-  return await postInstallableAppJson(installUrl, {
-    spaceId: input.spaceId,
-    source: {
-      kind: "git",
-      url: input.gitUrl,
-      ref: input.ref,
-      ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
+  return await postInstallableAppJson(
+    installUrl,
+    {
+      accountId: input.accountId,
+      spaceId: input.spaceId,
+      createdBySubject: input.subject,
+      source: {
+        kind: "git",
+        url: input.gitUrl,
+        ref: input.ref,
+        ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
+      },
+      ...(input.expectedCommit && input.expectedPlanDigest
+        ? {
+            expected: {
+              commit: input.expectedCommit,
+              planDigest: input.expectedPlanDigest,
+            },
+          }
+        : {}),
+      ...(input.mode ? { mode: input.mode } : {}),
+      ...(input.runtimeBaseUrl ? { runtimeBaseUrl: input.runtimeBaseUrl } : {}),
+      ...(input.costAck === undefined ? {} : { costAck: input.costAck }),
     },
-    ...(input.expectedCommit && input.expectedPlanDigest
-      ? {
-        expected: {
-          commit: input.expectedCommit,
-          planDigest: input.expectedPlanDigest,
-        },
-      }
-      : {}),
-    ...(input.mode ? { mode: input.mode } : {}),
-    ...(input.runtimeBaseUrl ? { runtimeBaseUrl: input.runtimeBaseUrl } : {}),
-    ...(input.costAck === undefined ? {} : { costAck: input.costAck }),
-  }, token);
+    token,
+  );
 }
 
 export async function planInstallableAppRevision(
@@ -489,10 +506,7 @@ export async function planInstallableAppRevision(
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
   return await postInstallableAppJson(
-    deploymentPlanRunUrl(
-      config,
-      input.installationId,
-    ),
+    deploymentPlanRunUrl(config, input.installationId),
     {
       source: {
         kind: "git",
@@ -511,32 +525,41 @@ export async function applyInstallableAppRevision(
   config: InstallableAppInstallConfig,
 ): Promise<InstallableAppUpstreamResponse> {
   const { token } = requireRevisionApplyConfig(config);
-  const url = input.operation === "rollback"
-    ? rollbackUrl(config, input.installationId)
-    : deploymentApplyUrl(config, input.installationId);
+  const url =
+    input.operation === "rollback"
+      ? rollbackUrl(config, input.installationId)
+      : deploymentApplyUrl(config, input.installationId);
   const hasExpectedCurrentDeploymentId = Object.prototype.hasOwnProperty.call(
     input,
     "expectedCurrentDeploymentId",
   );
-  return await postInstallableAppJson(url, {
-    ...(input.operation === "rollback" ? { deploymentId: input.ref } : {
-      source: {
-        kind: "git",
-        url: input.gitUrl,
-        ref: input.ref,
-        ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
-      },
-      ...(input.expectedCommit && input.expectedPlanDigest &&
-          hasExpectedCurrentDeploymentId
-        ? {
-          expected: {
-            commit: input.expectedCommit,
-            planDigest: input.expectedPlanDigest,
-            currentDeploymentId: input.expectedCurrentDeploymentId ?? null,
-          },
-        }
-        : {}),
-    }),
-    ...(input.reason ? { reason: input.reason } : {}),
-  }, token);
+  return await postInstallableAppJson(
+    url,
+    {
+      ...(input.operation === "rollback"
+        ? { deploymentId: input.ref }
+        : {
+            source: {
+              kind: "git",
+              url: input.gitUrl,
+              ref: input.ref,
+              ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
+            },
+            ...(input.expectedCommit &&
+            input.expectedPlanDigest &&
+            hasExpectedCurrentDeploymentId
+              ? {
+                  expected: {
+                    commit: input.expectedCommit,
+                    planDigest: input.expectedPlanDigest,
+                    currentDeploymentId:
+                      input.expectedCurrentDeploymentId ?? null,
+                  },
+                }
+              : {}),
+          }),
+      ...(input.reason ? { reason: input.reason } : {}),
+    },
+    token,
+  );
 }

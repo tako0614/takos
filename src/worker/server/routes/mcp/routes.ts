@@ -16,8 +16,10 @@ import {
   deleteMcpServer,
   getMcpServerWithTokens,
   listMcpServers,
+  reauthorizeExternalMcpServer,
   refreshMcpToken,
   registerExternalMcpServer,
+  resolvePublicationMcpServerAccessToken,
   updateMcpServer,
 } from "../../../application/services/platform/mcp.ts";
 import { McpClient } from "../../../application/tools/mcp-client.ts";
@@ -57,9 +59,8 @@ const MCP_DELETE_ROLES =
 function serializeMcpServer(
   server: Awaited<ReturnType<typeof listMcpServers>>[number],
 ) {
-  const sourceType = server.sourceType === "worker"
-    ? "service"
-    : server.sourceType;
+  const sourceType =
+    server.sourceType === "worker" ? "service" : server.sourceType;
   return {
     id: server.id,
     name: server.name,
@@ -78,7 +79,6 @@ function serializeMcpServer(
     updated_at: server.updatedAt,
   };
 }
-
 
 mcpRoutes.get("/oauth/callback", async (c) => {
   const code = c.req.query("code");
@@ -103,8 +103,8 @@ mcpRoutes.get("/oauth/callback", async (c) => {
       400,
     );
   }
-  const baseHostname = c.env.ADMIN_DOMAIN || c.env.TENANT_BASE_DOMAIN ||
-    "localhost";
+  const baseHostname =
+    c.env.ADMIN_DOMAIN || c.env.TENANT_BASE_DOMAIN || "localhost";
   const redirectUri = `https://${baseHostname}/api/mcp/oauth/callback`;
   try {
     await completeMcpOAuthFlow(c.env.DB, c.env, {
@@ -138,15 +138,34 @@ mcpRoutes.post(
     const spaceId = c.get("spaceId");
     const body = c.req.valid("json");
     if (!body.name || !body.url) {
-      throw new BadRequestError(
-        "name and url are required",
-      );
+      throw new BadRequestError("name and url are required");
     }
-    const result = await registerExternalMcpServer(
-      c.env.DB,
-      c.env,
-      { spaceId, name: body.name, url: body.url, scope: body.scope },
-    );
+    const result = await registerExternalMcpServer(c.env.DB, c.env, {
+      spaceId,
+      name: body.name,
+      url: body.url,
+      scope: body.scope,
+    });
+    return c.json({
+      data: {
+        status: result.status,
+        name: result.name,
+        url: result.url,
+        auth_url: result.authUrl,
+        message: result.message,
+      },
+    });
+  },
+);
+
+mcpRoutes.post(
+  "/servers/:id/reauthorize",
+  spaceAccess({ roles: MCP_CREATE_ROLES }),
+  async (c) => {
+    const result = await reauthorizeExternalMcpServer(c.env.DB, c.env, {
+      spaceId: c.get("spaceId"),
+      serverId: c.req.param("id"),
+    });
     return c.json({
       data: {
         status: result.status,
@@ -201,11 +220,7 @@ mcpRoutes.get(
   async (c) => {
     const spaceId = c.get("spaceId");
     const serverId = c.req.param("id");
-    const server = await getMcpServerWithTokens(
-      c.env.DB,
-      spaceId,
-      serverId,
-    );
+    const server = await getMcpServerWithTokens(c.env.DB, spaceId, serverId);
     if (!server) throw new NotFoundError("MCP server");
     let accessToken: string | null = null;
     if (server.sourceType === "external") {
@@ -234,6 +249,12 @@ mcpRoutes.get(
           });
         }
       }
+    } else if (server.sourceType === "publication") {
+      accessToken = await resolvePublicationMcpServerAccessToken(
+        c.env.DB,
+        c.env,
+        { spaceId, serverId },
+      );
     }
     const client = new McpClient(
       server.url,
@@ -256,9 +277,8 @@ mcpRoutes.get(
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       logError("MCP tool listing failed", err, { module: "mcp", serverId });
-      if (
-        detail.includes("timeout") || detail.includes("Timeout")
-      ) throw new GatewayTimeoutError("MCP server connection timed out");
+      if (detail.includes("timeout") || detail.includes("Timeout"))
+        throw new GatewayTimeoutError("MCP server connection timed out");
       throw new BadGatewayError("Failed to connect to MCP server");
     } finally {
       await client.close().catch((e) => {
@@ -272,14 +292,14 @@ mcpRoutes.get(
 );
 
 function successPage(serverName: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>MCP Server Connected</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4}.card{background:white;border-radius:12px;padding:2rem 3rem;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center;max-width:400px}h1{color:#16a34a;margin-bottom:.5rem}p{color:#4b5563}</style></head><body><div class="card"><h1>✓ Connected</h1><p>MCP server <strong>${
-    escapeHtml(serverName)
-  }</strong> has been successfully authorized.</p><p>You can close this window and continue in the agent.</p></div></body></html>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>MCP Server Connected</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4}.card{background:white;border-radius:12px;padding:2rem 3rem;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center;max-width:400px}h1{color:#16a34a;margin-bottom:.5rem}p{color:#4b5563}</style></head><body><div class="card"><h1>✓ Connected</h1><p>MCP server <strong>${escapeHtml(
+    serverName,
+  )}</strong> has been successfully authorized.</p><p>You can close this window and continue in the agent.</p></div></body></html>`;
 }
 function errorPage(message: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>MCP Authorization Error</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fef2f2}.card{background:white;border-radius:12px;padding:2rem 3rem;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center;max-width:400px}h1{color:#dc2626;margin-bottom:.5rem}p{color:#4b5563}</style></head><body><div class="card"><h1>Authorization Failed</h1><p>${
-    escapeHtml(message)
-  }</p><p>Please close this window and try again.</p></div></body></html>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>MCP Authorization Error</title><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#fef2f2}.card{background:white;border-radius:12px;padding:2rem 3rem;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center;max-width:400px}h1{color:#dc2626;margin-bottom:.5rem}p{color:#4b5563}</style></head><body><div class="card"><h1>Authorization Failed</h1><p>${escapeHtml(
+    message,
+  )}</p><p>Please close this window and try again.</p></div></body></html>`;
 }
 
 export default mcpRoutes;

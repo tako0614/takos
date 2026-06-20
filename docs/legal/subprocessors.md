@@ -11,19 +11,19 @@ store.
 
 ## Status
 
-| Field                | Value                                                                                                                                                                                 |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Owner                | Data protection owner                                                                                                                                                                 |
-| Last reviewed        | 2026-05-07                                                                                                                                                                            |
-| Applies to           | Takos Web / API, Takosumi Accounts (identity / billing processor), Takosumi/operator-managed deploy/runtime operations used by Takos spaces, Takos Git hosting, Takos agent execution |
-| Related DPA          | `/legal/data-processing-agreement`                                                                                                                                                    |
-| Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                                                  |
+| Field                | Value                                                                                                                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner                | Data protection owner                                                                                                                                                                   |
+| Last reviewed        | 2026-05-07                                                                                                                                                                              |
+| Applies to           | Takos Web / API, Takosumi Accounts (identity / billing processor), Takosumi/operator-managed deploy/runtime operations used by Takos spaces, Git service profile, agent runtime profile |
+| Related DPA          | `/legal/data-processing-agreement`                                                                                                                                                      |
+| Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                                                    |
 
 > **Internal processor boundary note.** Within the Takosumi / Takos ecosystem
 > itself, **Takosumi kernel** is treated as the Installation / typed Runs /
 > Deployment / OutputSnapshot run-ledger processor and never holds identity,
-> billing, or customer account state. **Takosumi Accounts** (`identity.primary.oidc` /
-> `billing.primary.default`) is the separate identity / billing processor that
+> billing, or customer account state. **Takosumi Accounts** (`takosumi.identity.oidc` /
+> `takosumi.billing.usage`) is the separate identity / billing processor that
 > owns OIDC issuance, Installation ownership, and operator BillingPort billing.
 > External sub-processors below are referenced by both planes only when the
 > relevant feature is enabled.
@@ -46,7 +46,7 @@ feature:
 
 | Provider class                      | Example trigger                                                                                                   | Handling rule                                                                                                                 |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Customer app integrations           | Customer installs an app, MCP server, OAuth client, webhook, or external API integration                         | Customer owns the integration choice; Takos must show the integration boundary in product UI / docs                           |
+| Customer app integrations           | Customer installs an app, MCP server, OAuth client, webhook, or external API integration                          | Customer owns the integration choice; Takos must show the integration boundary in product UI / docs                           |
 | Customer-selected deployment target | Customer or operator deploys a Takos space to AWS, GCP, Kubernetes, self-hosted infrastructure, or another target | Target provider must appear in the signed order / deployment profile and this list before production personal-data processing |
 | AI provider override                | Customer configures non-OpenAI model provider or custom `OPENAI_BASE_URL` equivalent                              | Vendor review and sub-processor list update required before Takos-managed production use                                      |
 | Support tools                       | Customer submits support tickets, diagnostics, or incident evidence to a separate support system                  | Tool cannot receive Customer Personal Data until vendor review and DPA coverage are complete                                  |
@@ -56,7 +56,7 @@ feature:
 | System                                            | Reason                                                                                                                           |
 | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | GitHub Actions for OSS repository CI              | Processes source and CI metadata for Takos development, not customer production personal data by default                         |
-| JSR package registry                       | Distributes packages; no Takos customer production personal data is sent by default                                              |
+| JSR package registry                              | Distributes packages; no Takos customer production personal data is sent by default                                              |
 | Customer self-hosted databases / object stores    | Controlled by Customer or operator deployment choices, not a Takos-managed sub-processor unless Takos operates them for Customer |
 | Prometheus / Grafana in self-hosted observability | Deployment-local tooling unless Takos uses a managed third-party observability vendor                                            |
 

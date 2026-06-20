@@ -4,14 +4,18 @@ import type {
   AppManifest,
   AppPublication,
   AppResourceBinding,
+  AppServiceBinding,
 } from "../source/app-manifest-types.ts";
 import {
+  isPublicationType,
   listPublications,
   listServiceConsumes,
   previewServiceConsumeEnvVars,
-  replaceManifestPublications,
+  replaceServiceGraphPublications,
   replaceServiceConsumes,
   resolveServiceConsumeEnvVars,
+  SERVICE_GRAPH_CAPABILITIES,
+  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
 } from "../platform/service-publications.ts";
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
 import { resolveLinkedCommonEnvState } from "../platform/env-state-resolution.ts";
@@ -28,6 +32,10 @@ import {
   resolveWorkloadBaseUrl,
 } from "./group-state.ts";
 import { normalizeEnvName } from "../common-env/crypto.ts";
+import {
+  materializeTakosumiServiceGrant,
+  type ServiceGrantMaterializer,
+} from "./service-grants.ts";
 
 function buildInjectedEnv(
   desiredState: GroupDesiredState,
@@ -69,10 +77,14 @@ type DesiredResourceBinding = {
 
 function readMcpAuthSecretRef(publication: AppPublication): string | null {
   if (
-    publication.type !== "McpServer" &&
-    publication.type !== "takos.mcp-server.v1"
-  ) return null;
-  const raw = publication.auth?.bearer?.secretRef;
+    !isPublicationType(publication.type, SERVICE_GRAPH_CAPABILITIES.mcpServer)
+  ) {
+    return null;
+  }
+  const raw =
+    publication.auth?.kind === "bearer"
+      ? publication.auth.secretRef
+      : publication.auth?.bearer?.secretRef;
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   return trimmed ? normalizeEnvName(trimmed) : null;
@@ -84,17 +96,18 @@ function collectMcpAuthSecretRefsForWorkload(
 ): string[] {
   const refs = new Set<string>();
   for (const publication of manifest.publish ?? []) {
-    const routeRefTargets = Object.values(publication.outputs ?? {})
-      .map((output) =>
+    const routeRefTargets = Object.values(publication.outputs ?? {}).map(
+      (output) =>
         output.routeRef
           ? manifest.routes.find((route) => route.id === output.routeRef)
-            ?.target
-          : publication.publisher
-      );
+              ?.target
+          : publication.publisher,
+    );
     if (
       publication.publisher !== workloadName &&
       !routeRefTargets.includes(workloadName)
-    ) continue;
+    )
+      continue;
     const ref = readMcpAuthSecretRef(publication);
     if (ref) refs.add(ref);
   }
@@ -157,16 +170,112 @@ function ensureMcpAuthSecrets(
   }
 }
 
+function collectServiceBindingsForWorkload(
+  manifest: Pick<AppManifest, "serviceBindings">,
+  workloadName: string,
+): AppServiceBinding[] {
+  return (manifest.serviceBindings ?? []).filter(
+    (service) => service.target === workloadName,
+  );
+}
+
+function inferServiceBindingInstallationId(
+  explicitInstallationId: string | null | undefined,
+  observedGroupId: string,
+): string | null {
+  const explicit = explicitInstallationId?.trim();
+  if (explicit) return explicit;
+  return /^inst_[A-Za-z0-9_-]+$/.test(observedGroupId) ? observedGroupId : null;
+}
+
+async function materializeServiceGrants(
+  env: Env,
+  serviceBindings: AppServiceBinding[],
+  input: {
+    spaceId: string;
+    installationId?: string | null;
+    observedGroupId: string;
+    workloadName: string;
+  },
+  localEnvMap: Map<string, DesiredEnvVar>,
+  effectiveEnvMap: Map<string, DesiredEnvVar>,
+  previousEnvVars: Map<string, DesiredEnvVar>,
+  materializer: ServiceGrantMaterializer,
+): Promise<void> {
+  const installationId = inferServiceBindingInstallationId(
+    input.installationId,
+    input.observedGroupId,
+  );
+  for (const serviceBinding of serviceBindings) {
+    for (const envName of [
+      serviceBinding.inject.baseUrlEnv,
+      serviceBinding.inject.tokenEnv,
+    ]) {
+      if (!envName) continue;
+      const key = normalizeEnvName(envName);
+      if (effectiveEnvMap.has(key)) {
+        throw new Error(
+          `service binding '${serviceBinding.name}' inject env '${key}' already exists in compute '${input.workloadName}'`,
+        );
+      }
+    }
+  }
+
+  for (const serviceBinding of serviceBindings) {
+    if (!serviceBinding.inject.baseUrlEnv || !serviceBinding.inject.tokenEnv) {
+      throw new Error(
+        `service binding '${serviceBinding.name}' inject.baseUrlEnv and inject.tokenEnv are required`,
+      );
+    }
+    const baseUrlEnv = normalizeEnvName(serviceBinding.inject.baseUrlEnv);
+    const tokenEnv = normalizeEnvName(serviceBinding.inject.tokenEnv);
+    const materialized = await materializer(env, {
+      spaceId: input.spaceId,
+      installationId,
+      workloadName: input.workloadName,
+      serviceBinding,
+      previousToken: previousEnvVars.get(tokenEnv)?.value,
+    });
+    const baseUrlEntry = {
+      name: baseUrlEnv,
+      value: materialized.baseUrl,
+      secret: false,
+    };
+    const tokenEntry = {
+      name: tokenEnv,
+      value: materialized.token,
+      secret: true,
+    };
+    localEnvMap.set(baseUrlEnv, baseUrlEntry);
+    localEnvMap.set(tokenEnv, tokenEntry);
+    effectiveEnvMap.set(baseUrlEnv, baseUrlEntry);
+    effectiveEnvMap.set(tokenEnv, tokenEntry);
+  }
+}
+
+function reserveEffectiveEnvVar(
+  effectiveEnvMap: Map<string, DesiredEnvVar>,
+  entry: DesiredEnvVar,
+  errorMessage: string,
+): void {
+  const key = normalizeEnvName(entry.name);
+  if (effectiveEnvMap.has(key)) {
+    throw new Error(errorMessage);
+  }
+  effectiveEnvMap.set(key, entry);
+}
+
 export type GroupManagedDesiredStateDeps = {
   createDesiredStateService: (env: Env) => DesiredStateService;
   listServiceConsumes: typeof listServiceConsumes;
   previewServiceConsumeEnvVars: typeof previewServiceConsumeEnvVars;
-  replaceManifestPublications: typeof replaceManifestPublications;
+  replaceServiceGraphPublications: typeof replaceServiceGraphPublications;
   replaceServiceConsumes: typeof replaceServiceConsumes;
   resolveServiceConsumeEnvVars: typeof resolveServiceConsumeEnvVars;
   resolveLinkedCommonEnvState: typeof resolveLinkedCommonEnvState;
   createServiceBinding: typeof createServiceBinding;
   deleteServiceBinding: typeof deleteServiceBinding;
+  materializeServiceGrant: ServiceGrantMaterializer;
 };
 
 type ManagedWorkloadDesiredStateHelpers = {
@@ -181,16 +290,17 @@ const defaultGroupManagedDesiredStateDeps: GroupManagedDesiredStateDeps = {
   createDesiredStateService: (env: Env) => new ServiceDesiredStateService(env),
   listServiceConsumes,
   previewServiceConsumeEnvVars,
-  replaceManifestPublications,
+  replaceServiceGraphPublications,
   replaceServiceConsumes,
   resolveServiceConsumeEnvVars,
   resolveLinkedCommonEnvState,
   createServiceBinding,
   deleteServiceBinding,
+  materializeServiceGrant: materializeTakosumiServiceGrant,
 };
 
-const defaultManagedWorkloadDesiredStateHelpers:
-  ManagedWorkloadDesiredStateHelpers = {
+const defaultManagedWorkloadDesiredStateHelpers: ManagedWorkloadDesiredStateHelpers =
+  {
     createDesiredStateService: (env: Env) =>
       new ServiceDesiredStateService(env),
     listServiceConsumes,
@@ -208,8 +318,10 @@ async function captureManagedPublicationSnapshot(
 ): Promise<AppPublication[]> {
   const publications = await listPublications(env, spaceId);
   return publications
-    .filter((publication) =>
-      publication.groupId === groupId && publication.sourceType === "manifest"
+    .filter(
+      (publication) =>
+        publication.groupId === groupId &&
+        publication.sourceType === SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
     )
     .map((publication) => publication.publication);
 }
@@ -217,17 +329,18 @@ async function captureManagedPublicationSnapshot(
 function manifestRoutesFromObservedState(
   observedState: ObservedGroupState,
 ): Array<{ id?: string; target: string; path: string }> {
-  return Object.entries(observedState.routes)
-    .flatMap(([name, route]) => {
-      if (typeof route.path !== "string" || route.path.length === 0) {
-        return [];
-      }
-      return [{
+  return Object.entries(observedState.routes).flatMap(([name, route]) => {
+    if (typeof route.path !== "string" || route.path.length === 0) {
+      return [];
+    }
+    return [
+      {
         id: route.name || name,
         target: route.target,
         path: route.path,
-      }];
-    });
+      },
+    ];
+  });
 }
 
 function normalizeBindingName(name: string): string {
@@ -242,11 +355,9 @@ function collectDesiredResourceBindingsForWorkload(
   const rowsByName = new Map(resourceRows.map((row) => [row.name, row]));
   const bindings: DesiredResourceBinding[] = [];
 
-  for (
-    const [resourceName, desiredResource] of Object.entries(
-      desiredState.resources,
-    )
-  ) {
+  for (const [resourceName, desiredResource] of Object.entries(
+    desiredState.resources,
+  )) {
     const targetBindings = (desiredResource.spec.bindings ?? []).filter(
       (binding: AppResourceBinding) => binding.target === workloadName,
     );
@@ -269,9 +380,10 @@ function collectDesiredResourceBindingsForWorkload(
     }
   }
 
-  return bindings.sort((a, b) =>
-    a.resourceName.localeCompare(b.resourceName) ||
-    a.bindingName.localeCompare(b.bindingName)
+  return bindings.sort(
+    (a, b) =>
+      a.resourceName.localeCompare(b.resourceName) ||
+      a.bindingName.localeCompare(b.bindingName),
   );
 }
 
@@ -308,7 +420,8 @@ async function syncManagedResourceBindingsForWorkload(
 
   for (const current of currentBindings) {
     if (
-      !current.resource_name || !desiredResourceNames.has(current.resource_name)
+      !current.resource_name ||
+      !desiredResourceNames.has(current.resource_name)
     ) {
       continue;
     }
@@ -359,12 +472,12 @@ export async function syncGroupPublicationDesiredState(
     observedState: ObservedGroupState;
   },
   deps: Partial<
-    Pick<GroupManagedDesiredStateDeps, "replaceManifestPublications">
+    Pick<GroupManagedDesiredStateDeps, "replaceServiceGraphPublications">
   > = {},
 ): Promise<PublicationSyncFailure[]> {
   const resolvedDeps = {
-    replaceManifestPublications: deps.replaceManifestPublications ??
-      replaceManifestPublications,
+    replaceServiceGraphPublications:
+      deps.replaceServiceGraphPublications ?? replaceServiceGraphPublications,
   };
   let snapshot: AppPublication[];
   try {
@@ -374,14 +487,16 @@ export async function syncGroupPublicationDesiredState(
       input.observedState.groupId,
     );
   } catch (error) {
-    return [{
-      name: "publications",
-      error: error instanceof Error ? error.message : String(error),
-    }];
+    return [
+      {
+        name: "publications",
+        error: error instanceof Error ? error.message : String(error),
+      },
+    ];
   }
 
   try {
-    await resolvedDeps.replaceManifestPublications(env, {
+    await resolvedDeps.replaceServiceGraphPublications(env, {
       spaceId: input.spaceId,
       groupId: input.observedState.groupId,
       manifest: {
@@ -392,7 +507,7 @@ export async function syncGroupPublicationDesiredState(
     });
   } catch (error) {
     try {
-      await resolvedDeps.replaceManifestPublications(env, {
+      await resolvedDeps.replaceServiceGraphPublications(env, {
         spaceId: input.spaceId,
         groupId: input.observedState.groupId,
         manifest: {
@@ -402,22 +517,26 @@ export async function syncGroupPublicationDesiredState(
         observedState: input.observedState,
       });
     } catch (restoreError) {
-      return [{
-        name: "publications",
-        error: `${
-          error instanceof Error ? error.message : String(error)
-        }; rollback failed: ${
-          restoreError instanceof Error
-            ? restoreError.message
-            : String(restoreError)
-        }`,
-      }];
+      return [
+        {
+          name: "publications",
+          error: `${
+            error instanceof Error ? error.message : String(error)
+          }; rollback failed: ${
+            restoreError instanceof Error
+              ? restoreError.message
+              : String(restoreError)
+          }`,
+        },
+      ];
     }
 
-    return [{
-      name: "publications",
-      error: error instanceof Error ? error.message : String(error),
-    }];
+    return [
+      {
+        name: "publications",
+        error: error instanceof Error ? error.message : String(error),
+      },
+    ];
   }
 
   return [];
@@ -487,9 +606,7 @@ export async function restoreManagedWorkloadDesiredState(
       consumes: snapshot.consumes,
     });
   } catch (error) {
-    errors.push(
-      error instanceof Error ? error.message : String(error),
-    );
+    errors.push(error instanceof Error ? error.message : String(error));
   }
 
   try {
@@ -516,9 +633,7 @@ export async function restoreManagedWorkloadDesiredState(
       });
     }
   } catch (error) {
-    errors.push(
-      error instanceof Error ? error.message : String(error),
-    );
+    errors.push(error instanceof Error ? error.message : String(error));
   }
 
   try {
@@ -528,9 +643,7 @@ export async function restoreManagedWorkloadDesiredState(
       variables: snapshot.localEnvVars,
     });
   } catch (error) {
-    errors.push(
-      error instanceof Error ? error.message : String(error),
-    );
+    errors.push(error instanceof Error ? error.message : String(error));
   }
 
   if (errors.length > 0) {
@@ -547,6 +660,7 @@ export async function syncGroupManagedDesiredState(
     resourceRows: ManagedResourceRow[];
     targetWorkloadNames?: string[];
     syncPublications?: boolean;
+    installationId?: string | null;
   },
   deps: Partial<GroupManagedDesiredStateDeps> = {},
 ): Promise<Array<{ name: string; error: string }>> {
@@ -563,43 +677,45 @@ export async function syncGroupManagedDesiredState(
   });
   const targetWorkloadNames = input.targetWorkloadNames
     ? new Set(
-      input.targetWorkloadNames.map((name) => name.trim()).filter(Boolean),
-    )
+        input.targetWorkloadNames.map((name) => name.trim()).filter(Boolean),
+      )
     : null;
 
-  for (
-    const [workloadName, desiredWorkload] of Object.entries(
-      input.desiredState.workloads,
-    )
-  ) {
+  for (const [workloadName, desiredWorkload] of Object.entries(
+    input.desiredState.workloads,
+  )) {
     if (targetWorkloadNames && !targetWorkloadNames.has(workloadName)) {
       continue;
     }
     const observedWorkload = input.observedState.workloads[workloadName];
     if (!observedWorkload) continue;
 
-    const restoreSnapshot = await captureManagedWorkloadDesiredState(env, {
-      spaceId: input.spaceId,
-      serviceId: observedWorkload.serviceId,
-      serviceName: `${input.desiredState.manifest.name}:${workloadName}`,
-      groupId: input.observedState.groupId,
-      groupHostname,
-    }, {
-      createDesiredStateService: resolvedDeps.createDesiredStateService,
-      listServiceConsumes: resolvedDeps.listServiceConsumes,
-      replaceServiceConsumes: resolvedDeps.replaceServiceConsumes,
-      createServiceBinding: resolvedDeps.createServiceBinding,
-      deleteServiceBinding: resolvedDeps.deleteServiceBinding,
-    });
+    const restoreSnapshot = await captureManagedWorkloadDesiredState(
+      env,
+      {
+        spaceId: input.spaceId,
+        serviceId: observedWorkload.serviceId,
+        serviceName: `${input.desiredState.manifest.name}:${workloadName}`,
+        groupId: input.observedState.groupId,
+        groupHostname,
+      },
+      {
+        createDesiredStateService: resolvedDeps.createDesiredStateService,
+        listServiceConsumes: resolvedDeps.listServiceConsumes,
+        replaceServiceConsumes: resolvedDeps.replaceServiceConsumes,
+        createServiceBinding: resolvedDeps.createServiceBinding,
+        deleteServiceBinding: resolvedDeps.deleteServiceBinding,
+      },
+    );
 
     try {
       const workloadSpec: AppCompute = desiredWorkload.spec;
       const specEnv = workloadSpec.env
         ? Object.entries(workloadSpec.env).map(([name, value]) => ({
-          name,
-          value,
-          secret: false,
-        }))
+            name,
+            value,
+            secret: false,
+          }))
         : [];
       const localEnvMap = new Map<string, DesiredEnvVar>();
       const effectiveEnvMap = new Map<string, DesiredEnvVar>();
@@ -624,6 +740,12 @@ export async function syncGroupManagedDesiredState(
         effectiveEnvMap.set(key, value);
       }
 
+      const serviceBindings = collectServiceBindingsForWorkload(
+        input.desiredState.manifest,
+        workloadName,
+      );
+      const preReservedRuntimeEnvKeys = new Set<string>();
+
       const consumeEnvPreview = await resolvedDeps.previewServiceConsumeEnvVars(
         env,
         {
@@ -639,6 +761,61 @@ export async function syncGroupManagedDesiredState(
             `consume output resolves env '${key}' which already exists in compute '${workloadName}'`,
           );
         }
+        if (serviceBindings.length > 0) {
+          effectiveEnvMap.set(key, {
+            name: entry.name,
+            value: "",
+            secret: entry.secret,
+          });
+          preReservedRuntimeEnvKeys.add(key);
+        }
+      }
+
+      if (serviceBindings.length > 0) {
+        const linkedCommonEnvState =
+          await resolvedDeps.resolveLinkedCommonEnvState(
+            env,
+            input.spaceId,
+            observedWorkload.serviceId,
+          );
+        for (const entry of linkedCommonEnvState.envBindings) {
+          const key = normalizeEnvName(entry.name);
+          reserveEffectiveEnvVar(
+            effectiveEnvMap,
+            {
+              name: entry.name,
+              value: entry.text ?? "",
+              secret: entry.type === "secret_text",
+            },
+            `common env '${key}' already exists in compute '${workloadName}'`,
+          );
+          preReservedRuntimeEnvKeys.add(key);
+        }
+
+        ensureMcpAuthSecrets(
+          localEnvMap,
+          effectiveEnvMap,
+          mapPreviousLocalEnvVars(restoreSnapshot),
+          collectMcpAuthSecretRefsForWorkload(
+            input.desiredState.manifest,
+            workloadName,
+          ),
+        );
+
+        await materializeServiceGrants(
+          env,
+          serviceBindings,
+          {
+            spaceId: input.spaceId,
+            installationId: input.installationId,
+            observedGroupId: input.observedState.groupId,
+            workloadName,
+          },
+          localEnvMap,
+          effectiveEnvMap,
+          mapPreviousLocalEnvVars(restoreSnapshot),
+          resolvedDeps.materializeServiceGrant,
+        );
       }
 
       await resolvedDeps.replaceServiceConsumes(env, {
@@ -650,14 +827,17 @@ export async function syncGroupManagedDesiredState(
         consumes: workloadSpec.consume,
       });
 
-      const consumeEnvVars = await resolvedDeps
-        .resolveServiceConsumeEnvVars(env, {
+      const consumeEnvVars = await resolvedDeps.resolveServiceConsumeEnvVars(
+        env,
+        {
           spaceId: input.spaceId,
           serviceId: observedWorkload.serviceId,
-        });
+        },
+      );
       for (const entry of consumeEnvVars) {
         const key = normalizeEnvName(entry.name);
         if (effectiveEnvMap.has(key)) {
+          if (preReservedRuntimeEnvKeys.has(key)) continue;
           throw new Error(
             `consume output resolves env '${key}' which already exists in compute '${workloadName}'`,
           );
@@ -669,8 +849,8 @@ export async function syncGroupManagedDesiredState(
         });
       }
 
-      const linkedCommonEnvState = await resolvedDeps
-        .resolveLinkedCommonEnvState(
+      const linkedCommonEnvState =
+        await resolvedDeps.resolveLinkedCommonEnvState(
           env,
           input.spaceId,
           observedWorkload.serviceId,
@@ -678,6 +858,7 @@ export async function syncGroupManagedDesiredState(
       for (const entry of linkedCommonEnvState.envBindings) {
         const key = normalizeEnvName(entry.name);
         if (effectiveEnvMap.has(key)) {
+          if (preReservedRuntimeEnvKeys.has(key)) continue;
           throw new Error(
             `common env '${key}' already exists in compute '${workloadName}'`,
           );
@@ -699,16 +880,20 @@ export async function syncGroupManagedDesiredState(
         ),
       );
 
-      await syncManagedResourceBindingsForWorkload(env, {
-        serviceId: observedWorkload.serviceId,
-        desiredState: input.desiredState,
-        workloadName,
-        resourceRows: input.resourceRows,
-      }, {
-        createDesiredStateService: resolvedDeps.createDesiredStateService,
-        createServiceBinding: resolvedDeps.createServiceBinding,
-        deleteServiceBinding: resolvedDeps.deleteServiceBinding,
-      });
+      await syncManagedResourceBindingsForWorkload(
+        env,
+        {
+          serviceId: observedWorkload.serviceId,
+          desiredState: input.desiredState,
+          workloadName,
+          resourceRows: input.resourceRows,
+        },
+        {
+          createDesiredStateService: resolvedDeps.createDesiredStateService,
+          createServiceBinding: resolvedDeps.createServiceBinding,
+          deleteServiceBinding: resolvedDeps.deleteServiceBinding,
+        },
+      );
 
       await desiredStateService.replaceLocalEnvVars({
         spaceId: input.spaceId,
@@ -751,7 +936,8 @@ export async function syncGroupManagedDesiredState(
           observedState: input.observedState,
         },
         {
-          replaceManifestPublications: resolvedDeps.replaceManifestPublications,
+          replaceServiceGraphPublications:
+            resolvedDeps.replaceServiceGraphPublications,
         },
       )),
     );

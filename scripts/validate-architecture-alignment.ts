@@ -4,11 +4,11 @@ type CheckFailure = {
   message: string;
 };
 
-const README_PATH = 'README.md';
-const CURRENT_STATE_PATH = 'docs/contributing/current-state.md';
-const TAKOSUMI_MODEL_PATH = '../takosumi/docs/reference/model.md';
-const TAKOSUMI_OPERATOR_PATH = '../takosumi/docs/reference/operator.md';
-const DOMAIN_ROOT = '../takosumi/core/domains';
+const README_PATH = "README.md";
+const CURRENT_STATE_PATH = "docs/contributing/current-state.md";
+const TAKOSUMI_MODEL_PATH = "../takosumi/docs/reference/model.md";
+const TAKOSUMI_OPERATOR_PATH = "../takosumi/docs/reference/operator.md";
+const DOMAIN_ROOT = "../takosumi/core/domains";
 
 const REQUIRED_INTERNAL_DOMAIN_DOCS = [CURRENT_STATE_PATH];
 const REQUIRED_OPERATOR_BOUNDARY_DOCS = [CURRENT_STATE_PATH];
@@ -18,115 +18,127 @@ const ARCHITECTURE_ALIGNMENT_DOCS = [
   TAKOSUMI_MODEL_PATH,
   TAKOSUMI_OPERATOR_PATH,
 ];
-const PERMISSION_SCOPE_DOCS = [
-  TAKOSUMI_OPERATOR_PATH,
-];
+const PERMISSION_SCOPE_DOCS = [TAKOSUMI_OPERATOR_PATH];
 const TAKOSUMI_MODEL_DOCS = [
-  '../docs/platform/runtime-modes.md',
+  "../docs/platform/runtime-modes.md",
   TAKOSUMI_MODEL_PATH,
-  'docs/platform/upgrade-export.md',
+  "docs/platform/upgrade-export.md",
 ];
 const RUNTIME_TARGET_DOCS = [
-  TAKOSUMI_MODEL_PATH,
   TAKOSUMI_OPERATOR_PATH,
+  "../takosumi/docs/reference/operator-execution-boundaries.md",
 ];
-const ACCOUNT_MODEL_DOC_PATH = 'docs/operator/account-model.md';
+const ACCOUNT_MODEL_DOC_PATH = "docs/operator/account-model.md";
 const ACCOUNT_MODEL_REQUIRED_TERMS = [
-  'auth_identities',
-  'provider_sub = <issuer>#<sub>',
-  'email_verified = true',
-  'identity.oidc@v1',
-  'personal_access_tokens',
-  '公開 contract ではなく private operator evidence shaping',
+  "auth_identities",
+  "provider_sub = <issuer>#<sub>",
+  "email_verified = true",
+  "identity.oidc",
+  "personal_access_tokens",
+  "公開 contract ではなく private operator evidence shaping",
 ];
 const FORBIDDEN_PUBLIC_STATUS_PATTERNS = [
   {
-    pattern: /AppInstallation status [^\n]*`ready\s*→\s*materializing\s*→\s*ready`/i,
-    message: 'materializing must be documented as an operation phase, not as a public AppInstallation status.',
+    pattern:
+      /AppInstallation status [^\n]*`ready\s*→\s*materializing\s*→\s*ready`/i,
+    message:
+      "materializing must be documented as an operation phase, not as a public AppInstallation status.",
   },
   {
-    pattern: /state は canonical `ready`\s*→\s*transitional `materializing`\s*→\s*canonical `ready`/i,
-    message: 'Materialize docs must keep public status canonical and describe materializing as operation metadata.',
+    pattern:
+      /state は canonical `ready`\s*→\s*transitional `materializing`\s*→\s*canonical `ready`/i,
+    message:
+      "Materialize docs must keep public status canonical and describe materializing as operation metadata.",
   },
   {
     pattern: /`uninstalling` \(data 廃棄\) を選べる/i,
-    message: 'uninstalling must be documented as an operation phase, not as a selectable public status.',
+    message:
+      "uninstalling must be documented as an operation phase, not as a selectable public status.",
   },
 ];
 const FORBIDDEN_RUNTIME_BINDING_TARGET_PATTERNS = [
   {
     pattern: /shared-cell:\/\//,
-    message: 'Runtime target docs must use RunnerProfile / Workers for Platforms wording, not shared-cell target URIs.',
+    message:
+      "Runtime target docs must use runner policy / Workers for Platforms wording, not shared-cell target URIs.",
   },
   {
     pattern: /"target_id":\s*"tokyo-cell-[^"]*"/,
-    message: 'Runtime target docs must not use old shared-cell target_id examples.',
+    message:
+      "Runtime target docs must not use old shared-cell target_id examples.",
   },
   {
     pattern: /runtime binding:\s*tokyo-cell-[^\n]*/i,
-    message: 'Runtime target docs must not use old cell-only binding examples.',
+    message: "Runtime target docs must not use old cell-only binding examples.",
   },
 ];
 const REQUIRED_DOMAIN_DIRS = [
-  'space',
-  'binding',
-  'deploy-control',
-  'deploy-records',
-  'runtime',
-  'resources',
-  'routing',
-  'network',
-  'registry',
-  'audit',
-  'events',
-  'outputs',
-  'service-endpoints',
-  'supply-chain',
+  "spaces",
+  "sources",
+  "connections",
+  "installations",
+  "dependencies",
+  "run-groups",
+  "deploy-control",
+  "deploy-records",
+  "runtime",
+  "resources",
+  "network",
+  "registry",
+  "audit",
+  "activity",
+  "output-shares",
+  "service-endpoints",
+  "security",
+  "backups",
+  "templates",
 ];
 
 const PRODUCT_ROOT_TERMS = [
-  'product root',
-  'repo',
-  'repository',
-  'top-level service',
-  'service boundary',
-  'service boundaries',
+  "product root",
+  "repo",
+  "repository",
+  "top-level service",
+  "service boundary",
+  "service boundaries",
 ];
 
 const SAFE_DRIFT_TERMS = [
-  'internal domain',
-  'internal domains',
-  'domain modules',
-  'domains/deploy',
-  'domains/deploy-control',
-  'domains/runtime',
-  'inside `takosumi`',
-  'inside takosumi',
-  'implemented as',
-  'not default top-level',
-  'not a default top-level',
-  'not top-level',
-  'no longer top-level',
-  'compatibility',
-  'legacy',
+  "internal domain",
+  "internal domains",
+  "domain modules",
+  "domains/deploy",
+  "domains/deploy-control",
+  "domains/runtime",
+  "inside `takosumi`",
+  "inside takosumi",
+  "implemented as",
+  "not default top-level",
+  "not a default top-level",
+  "not top-level",
+  "no longer top-level",
+  "compatibility",
+  "legacy",
 ];
 
 const OPERATOR_BOUNDARY_REQUIRED_TERMS = [
-  'service',
-  'operator',
-  'opentofu',
-  'runnerprofile',
+  "service",
+  "operator",
+  "opentofu",
+  "runner",
 ];
 
 const FORBIDDEN_CURRENT_BOUNDARY_PATTERNS = [
   {
     pattern: /Implement local Docker\/single-node only first/i,
     message:
-      'Runtime/routing milestones must describe service ports/projections first; Docker/self-host belongs to operator-owned implementation wiring.',
+      "Runtime/routing milestones must describe service ports/projections first; Docker/self-host belongs to operator-owned implementation wiring.",
   },
   {
-    pattern: /real backend[^.\n]*(service release|release gate|criterion|criteria)/i,
-    message: 'Real backend proofs must not be described as service release criteria.',
+    pattern:
+      /real backend[^.\n]*(service release|release gate|criterion|criteria)/i,
+    message:
+      "Real backend proofs must not be described as service release criteria.",
   },
 ];
 
@@ -153,20 +165,20 @@ async function readText(
       path,
       message: `Unable to read file: ${error instanceof Error ? error.message : String(error)}`,
     });
-    return '';
+    return "";
   }
 }
 
 function paragraphAt(text: string, index: number): string {
-  const before = text.lastIndexOf('\n\n', index);
-  const after = text.indexOf('\n\n', index);
+  const before = text.lastIndexOf("\n\n", index);
+  const after = text.indexOf("\n\n", index);
   const start = before === -1 ? 0 : before + 2;
   const end = after === -1 ? text.length : after;
   return text.slice(start, end).trim();
 }
 
 function lineNumberAt(text: string, index: number): number {
-  return text.slice(0, index).split('\n').length;
+  return text.slice(0, index).split("\n").length;
 }
 
 function hasAny(text: string, terms: string[]): boolean {
@@ -180,24 +192,28 @@ function validateInternalDomainMentions(
   failures: CheckFailure[],
 ): void {
   const lowerText = text.toLowerCase();
-  const mentionsPaas = lowerText.includes('takosumi') ||
-    lowerText.includes('takos paas');
-  const mentionsInternalDomains = lowerText.includes('internal domain') ||
-    lowerText.includes('internal domains') ||
-    lowerText.includes('domain modules') ||
-    lowerText.includes('src/service/domains') ||
-    lowerText.includes('src/service/domains');
-  const mentionsDeployRuntimeDomains = lowerText.includes('domains/deploy-control') ||
-    lowerText.includes('domains/runtime') ||
-    (lowerText.includes('deploy control') && lowerText.includes('runtime'));
+  const mentionsPaas =
+    lowerText.includes("takosumi") || lowerText.includes("takos paas");
+  const mentionsInternalDomains =
+    lowerText.includes("internal domain") ||
+    lowerText.includes("internal domains") ||
+    lowerText.includes("domain modules") ||
+    lowerText.includes("src/service/domains") ||
+    lowerText.includes("src/service/domains");
+  const mentionsDeployRuntimeDomains =
+    lowerText.includes("domains/deploy-control") ||
+    lowerText.includes("domains/runtime") ||
+    (lowerText.includes("deploy control") && lowerText.includes("runtime"));
 
   if (
-    !mentionsPaas || !mentionsInternalDomains || !mentionsDeployRuntimeDomains
+    !mentionsPaas ||
+    !mentionsInternalDomains ||
+    !mentionsDeployRuntimeDomains
   ) {
     failures.push({
       path,
       message:
-        'Expected README/current-state docs to describe takosumi internal domains, including deploy/runtime as domains inside the Takosumi service.',
+        "Expected README/current-state docs to describe takosumi internal domains, including deploy/runtime as domains inside the Takosumi service.",
     });
   }
 }
@@ -268,7 +284,7 @@ async function validateDomainDirs(failures: CheckFailure[]): Promise<void> {
     if (!(await pathExists(domainPath))) {
       failures.push({
         path: domainPath,
-        message: 'Required Takosumi domain directory is missing.',
+        message: "Required Takosumi domain directory is missing.",
       });
     }
   }
@@ -291,12 +307,13 @@ async function validateTakosumiModelDocs(
   failures: CheckFailure[],
 ): Promise<void> {
   const requiredTerms = [
-    'Installation',
-    'PlanRun',
-    'ApplyRun',
-    'Deployment',
-    'DeploymentOutput',
-    'RunnerProfile',
+    "Installation",
+    "Run",
+    "RunGroup",
+    "Deployment",
+    "StateSnapshot",
+    "OutputSnapshot",
+    "Installation provider connection",
   ];
   for (const path of TAKOSUMI_MODEL_DOCS) {
     const text = await readText(path, failures);
@@ -323,11 +340,11 @@ async function validateRuntimeTargetDocs(
 ): Promise<void> {
   for (const path of RUNTIME_TARGET_DOCS) {
     const text = await readText(path, failures);
-    if (!text.includes('Workers for Platforms')) {
+    if (!text.includes("Workers for Platforms")) {
       failures.push({
         path,
         message:
-          'Expected runtime target docs to describe Workers for Platforms as the tenant/user Worker ingress boundary.',
+          "Expected runtime target docs to describe Workers for Platforms as the tenant/user Worker ingress boundary, separate from OpenTofu runner execution.",
       });
     }
     for (const rule of FORBIDDEN_RUNTIME_BINDING_TARGET_PATTERNS) {
@@ -353,11 +370,11 @@ async function validateAccountModelDocs(
     });
   }
 
-  const sidebar = await readText('docs/.vitepress/config.ts', failures);
-  if (!sidebar.includes('/operator/account-model')) {
+  const sidebar = await readText("docs/.vitepress/config.ts", failures);
+  if (!sidebar.includes("/operator/account-model")) {
     failures.push({
-      path: 'docs/.vitepress/config.ts',
-      message: 'Expected Operator sidebar to link account model docs.',
+      path: "docs/.vitepress/config.ts",
+      message: "Expected Operator sidebar to link account model docs.",
     });
   }
 }
@@ -389,14 +406,14 @@ async function main(): Promise<void> {
   await validateAccountModelDocs(failures);
 
   if (failures.length > 0) {
-    console.error('Architecture alignment validation failed:');
+    console.error("Architecture alignment validation failed:");
     for (const failure of failures) {
       console.error(`- ${failure.path}: ${failure.message}`);
     }
     runtime.exit(1);
   }
 
-  console.log('Architecture alignment validation passed.');
+  console.log("Architecture alignment validation passed.");
   console.log(
     `Checked ${markdownFiles.length} architecture alignment markdown files.`,
   );
@@ -410,7 +427,7 @@ async function main(): Promise<void> {
   console.log(
     `Verified runtime target docs in ${RUNTIME_TARGET_DOCS.length} files.`,
   );
-  console.log('Verified account model docs.');
+  console.log("Verified account model docs.");
 }
 
 if (import.meta.main) {

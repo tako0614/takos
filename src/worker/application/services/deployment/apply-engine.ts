@@ -2,10 +2,11 @@
  * In-worker desired-state reconciler (internal helper — NOT the deploy authority).
  *
  * Takos itself is deployed by Takosumi: its infrastructure is an OpenTofu module
- * Takosumi installs and applies (Installation → PlanRun → ApplyRun → Deployment),
- * with a RunnerProfile owning provider credentials and execution. This reconciler
- * only compiles in-app desired state, diffs it against current resources/services
- * state, and reconciles through backend ops. See
+ * Takosumi installs and applies (Installation -> plan/apply Runs -> Deployment),
+ * with Provider connection / runner policy owning
+ * provider credentials and execution. This reconciler only compiles in-app desired
+ * state, diffs it against current resources/services state, and reconciles through
+ * backend ops. See
  * docs/architecture/internal-trust-boundaries.md.
  */
 
@@ -18,8 +19,9 @@ import { groups } from "../../../infra/db/schema-groups.ts";
 import { deployments } from "../../../infra/db/schema-workers.ts";
 import type { AppManifest } from "../source/app-manifest-types.ts";
 import {
-  assertManifestPublicationPrerequisites,
+  assertServiceGraphPublicationPrerequisites,
   listPublications,
+  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
 } from "../platform/service-publications.ts";
 import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 import {
@@ -121,32 +123,33 @@ export async function applyArtifactChangesToDiff(
   if (!artifacts) return diff;
 
   let changed = false;
-  const entries = await Promise.all(diff.entries.map(async (entry) => {
-    if (entry.category !== "worker" || entry.action !== "unchanged") {
-      return entry;
-    }
+  const entries = await Promise.all(
+    diff.entries.map(async (entry) => {
+      if (entry.category !== "worker" || entry.action !== "unchanged") {
+        return entry;
+      }
 
-    const artifact = parseApplyArtifact(artifacts[entry.name]);
-    if (artifact?.kind !== "worker_bundle") return entry;
+      const artifact = parseApplyArtifact(artifacts[entry.name]);
+      if (artifact?.kind !== "worker_bundle") return entry;
 
-    const nextHash = await computeSHA256(artifact.bundleContent);
-    const currentHash = currentState?.workloads?.[entry.name]?.codeHash ?? "";
-    if (currentHash === nextHash) return entry;
+      const nextHash = await computeSHA256(artifact.bundleContent);
+      const currentHash = currentState?.workloads?.[entry.name]?.codeHash ?? "";
+      if (currentHash === nextHash) return entry;
 
-    changed = true;
-    return {
-      ...entry,
-      action: "update" as const,
-      reason: "code changed",
-    };
-  }));
+      changed = true;
+      return {
+        ...entry,
+        action: "update" as const,
+        reason: "code changed",
+      };
+    }),
+  );
 
   if (!changed) return diff;
   const summary = summarizeDiffEntries(entries);
   return {
     entries,
-    hasChanges: summary.create > 0 || summary.update > 0 ||
-      summary.delete > 0,
+    hasChanges: summary.create > 0 || summary.update > 0 || summary.delete > 0,
     summary,
   };
 }
@@ -156,7 +159,8 @@ async function getGroupRecord(
   groupId: string,
 ): Promise<GroupRow | null> {
   const db = applyEngineDeps.getDb(env.DB);
-  return db.select()
+  return db
+    .select()
     .from(groups)
     .where(eq(groups.id, groupId))
     .get() as Promise<GroupRow | null>;
@@ -180,10 +184,12 @@ export async function getGroupState(
     .filter((id): id is string => typeof id === "string" && id.length > 0);
   const activeDeploymentArtifactRefs = new Map<string, string>();
   if (activeDeploymentIds.length > 0) {
-    const rows = await applyEngineDeps.getDb(env.DB).select({
-      id: deployments.id,
-      artifactRef: deployments.artifactRef,
-    })
+    const rows = await applyEngineDeps
+      .getDb(env.DB)
+      .select({
+        id: deployments.id,
+        artifactRef: deployments.artifactRef,
+      })
       .from(deployments)
       .where(inArray(deployments.id, activeDeploymentIds))
       .all();
@@ -200,15 +206,14 @@ export async function getGroupState(
       {
         name: row.name,
         type: row.config.type,
-        resourceId: row.backingResourceId ?? row.config.backingResourceId ??
-          "",
+        resourceId: row.backingResourceId ?? row.config.backingResourceId ?? "",
         binding: row.config.binding,
         status: "active",
         ...((row.backingResourceName ?? row.config.backingResourceName)
           ? {
-            backingResourceName: row.backingResourceName ??
-              row.config.backingResourceName,
-          }
+              backingResourceName:
+                row.backingResourceName ?? row.config.backingResourceName,
+            }
           : {}),
         ...(row.config.specFingerprint
           ? { specFingerprint: row.config.specFingerprint }
@@ -220,8 +225,8 @@ export async function getGroupState(
 
   const workloads = Object.fromEntries(
     serviceRows
-      .filter((record) =>
-        record.config.componentKind && record.config.manifestName
+      .filter(
+        (record) => record.config.componentKind && record.config.manifestName,
       )
       .map((record) => {
         const activeDeploymentId = record.row.activeDeploymentId;
@@ -278,19 +283,20 @@ export async function getGroupState(
 
   const groupHostname = desiredState
     ? await getGroupAutoHostname(env, {
-      groupId,
-      spaceId: group.spaceId,
-    })
+        groupId,
+        spaceId: group.spaceId,
+      })
     : null;
   const routes = desiredState
     ? materializeRoutes(desiredState.routes, workloads, group.updatedAt, {
-      groupHostname,
-    })
+        groupHostname,
+      })
     : {};
 
   if (
     Object.keys(resources).length === 0 &&
-    Object.keys(workloads).length === 0 && Object.keys(routes).length === 0
+    Object.keys(workloads).length === 0 &&
+    Object.keys(routes).length === 0
   ) {
     return null;
   }
@@ -317,18 +323,14 @@ async function saveGroupSnapshots(
 ): Promise<void> {
   const db = applyEngineDeps.getDb(env.DB);
   const now = new Date().toISOString();
-  const snapshot = buildGroupSnapshotUpdate(
-    desiredState,
-    currentGroup,
-    status,
-  );
+  const snapshot = buildGroupSnapshotUpdate(desiredState, currentGroup, status);
 
-  await db.update(groups)
+  await db
+    .update(groups)
     .set({
       ...snapshot,
-      lastAppliedAt: status === "ready"
-        ? now
-        : currentGroup?.lastAppliedAt ?? null,
+      lastAppliedAt:
+        status === "ready" ? now : (currentGroup?.lastAppliedAt ?? null),
       updatedAt: now,
     })
     .where(eq(groups.id, groupId))
@@ -372,7 +374,8 @@ export function resolveTargetWorkloadNames(
   desiredState: GroupDesiredState,
   targets?: string[],
 ): string[] | undefined {
-  const normalizedTargets = (targets ?? []).map((target) => target.trim())
+  const normalizedTargets = (targets ?? [])
+    .map((target) => target.trim())
     .filter(Boolean);
   if (normalizedTargets.length === 0) return undefined;
 
@@ -387,7 +390,7 @@ export function resolveTargetWorkloadNames(
             action: "unchanged",
           },
           target,
-        )
+        ),
       )
     ) {
       names.add(workload.name);
@@ -408,12 +411,13 @@ export function buildPublicationPrerequisiteManifest(
     ...desiredState.manifest,
     compute: Object.fromEntries(
       Object.entries(desiredState.manifest.compute ?? {}).filter(([name]) =>
-        targeted.has(name)
+        targeted.has(name),
       ),
     ),
-    publish: (desiredState.manifest.publish ?? []).filter((publication) =>
-      typeof publication.publisher === "string" &&
-      targeted.has(publication.publisher)
+    publish: (desiredState.manifest.publish ?? []).filter(
+      (publication) =>
+        typeof publication.publisher === "string" &&
+        targeted.has(publication.publisher),
     ),
   };
 }
@@ -427,8 +431,8 @@ export function manifestNeedsEarlyPublicationSync(
   if (publicationNames.size === 0) return false;
   return Object.values(manifest.compute ?? {}).some((compute) =>
     (compute.consume ?? []).some((consume) =>
-      publicationNames.has(consume.publication)
-    )
+      publicationNames.has(consume.publication),
+    ),
   );
 }
 
@@ -455,7 +459,8 @@ export async function applyDesiredState(
     loadDesiredManifest,
     getCurrentState: (targetGroupId) => getGroupState(env, targetGroupId),
   });
-  const requestedTargets = (opts.target ?? []).map((target) => target.trim())
+  const requestedTargets = (opts.target ?? [])
+    .map((target) => target.trim())
     .filter(Boolean);
 
   const unmatchedTargets = validateTargetsAgainstDesiredState(
@@ -464,9 +469,9 @@ export async function applyDesiredState(
   );
   if (unmatchedTargets.length > 0) {
     throw new BadRequestError(
-      `Target${unmatchedTargets.length > 1 ? "s" : ""} ${
-        unmatchedTargets.map((target) => `'${target}'`).join(", ")
-      } did not match any desired workload or route`,
+      `Target${unmatchedTargets.length > 1 ? "s" : ""} ${unmatchedTargets
+        .map((target) => `'${target}'`)
+        .join(", ")} did not match any desired workload or route`,
     );
   }
 
@@ -477,14 +482,16 @@ export async function applyDesiredState(
       );
     }
     const publicationRows = await listPublications(env, group.spaceId);
-    const hasExistingManifestPublications = publicationRows.some((row) =>
-      row.groupId === groupId && row.sourceType === "manifest"
+    const hasExistingServiceGraphPublications = publicationRows.some(
+      (row) =>
+        row.groupId === groupId &&
+        row.sourceType === SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
     );
     const hasDesiredPublications =
       (plan.desiredState.manifest.publish?.length ?? 0) > 0;
-    if (hasExistingManifestPublications || hasDesiredPublications) {
+    if (hasExistingServiceGraphPublications || hasDesiredPublications) {
       throw new BadRequestError(
-        "Partial deploys cannot synchronize manifest publications. Deploy without target scoping, or remove publish[] entries before using targeted applies.",
+        "Partial deploys cannot synchronize service graph publications. Deploy without target scoping, or remove publish[] entries before using targeted applies.",
       );
     }
   }
@@ -501,7 +508,7 @@ export async function applyDesiredState(
     plan.desiredState,
     targetWorkloadNames,
   );
-  await assertManifestPublicationPrerequisites(env, {
+  await assertServiceGraphPublicationPrerequisites(env, {
     spaceId: group.spaceId,
     groupId,
     manifest: scopedPublicationManifest,
@@ -524,8 +531,8 @@ export async function applyDesiredState(
     skipped: [],
     diff,
   };
-  const routeEntries = ordered.filter((entry) =>
-    entry.category === "route" && entry.action !== "unchanged"
+  const routeEntries = ordered.filter(
+    (entry) => entry.category === "route" && entry.action !== "unchanged",
   );
   let refreshedState: Awaited<ReturnType<typeof getGroupState>> = null;
   const envName = opts.envName ?? group.env ?? "default";
@@ -548,9 +555,11 @@ export async function applyDesiredState(
   let hasFailures = prepareFailures.length > 0;
 
   if (!hasFailures && needsEarlyPublicationSync) {
-    const publicationState = await getGroupState(env, groupId) ??
-      refreshedState ?? plan.currentState ??
-      {
+    const publicationState =
+      (await getGroupState(env, groupId)) ??
+      refreshedState ??
+      plan.currentState ??
+      ({
         groupId,
         groupName: group.name,
         backend: group.backend ?? "cloudflare",
@@ -560,16 +569,13 @@ export async function applyDesiredState(
         resources: {},
         workloads: {},
         routes: {},
-      } as ObservedGroupState;
-    const publicationResults = await applyEngineDeps
-      .syncGroupPublicationDesiredState(
-        env,
-        {
-          spaceId: group.spaceId,
-          desiredState: plan.desiredState,
-          observedState: publicationState,
-        },
-      );
+      } as ObservedGroupState);
+    const publicationResults =
+      await applyEngineDeps.syncGroupPublicationDesiredState(env, {
+        spaceId: group.spaceId,
+        desiredState: plan.desiredState,
+        observedState: publicationState,
+      });
     result.applied.push(
       ...publicationResults.map((failure) => ({
         name: failure.name,
@@ -621,9 +627,11 @@ export async function applyDesiredState(
 
   hasFailures = result.applied.some((entry) => entry.status === "failed");
   if (!hasFailures) {
-    const publicationState = await getGroupState(env, groupId) ??
-      refreshedState ?? plan.currentState ??
-      {
+    const publicationState =
+      (await getGroupState(env, groupId)) ??
+      refreshedState ??
+      plan.currentState ??
+      ({
         groupId,
         groupName: group.name,
         backend: group.backend ?? "cloudflare",
@@ -633,16 +641,13 @@ export async function applyDesiredState(
         resources: {},
         workloads: {},
         routes: {},
-      } as ObservedGroupState;
-    const publicationResults = await applyEngineDeps
-      .syncGroupPublicationDesiredState(
-        env,
-        {
-          spaceId: group.spaceId,
-          desiredState: plan.desiredState,
-          observedState: publicationState,
-        },
-      );
+      } as ObservedGroupState);
+    const publicationResults =
+      await applyEngineDeps.syncGroupPublicationDesiredState(env, {
+        spaceId: group.spaceId,
+        desiredState: plan.desiredState,
+        observedState: publicationState,
+      });
     result.applied.push(
       ...publicationResults.map((failure) => ({
         name: failure.name,
@@ -683,19 +688,15 @@ export async function applyDesiredState(
   if (shouldReconcileRoutes) {
     refreshedState = await getGroupState(env, groupId);
     if (refreshedState) {
-      const routeResults = await reconcileAppliedRoutes(
-        applyEngineDeps,
-        env,
-        {
-          groupId,
-          spaceId: group.spaceId,
-          desiredState: plan.desiredState,
-          currentRoutes: plan.currentState?.routes ?? {},
-          refreshedWorkloads: refreshedState.workloads,
-          routeEntries,
-          appliedAt: new Date().toISOString(),
-        },
-      );
+      const routeResults = await reconcileAppliedRoutes(applyEngineDeps, env, {
+        groupId,
+        spaceId: group.spaceId,
+        desiredState: plan.desiredState,
+        currentRoutes: plan.currentState?.routes ?? {},
+        refreshedWorkloads: refreshedState.workloads,
+        routeEntries,
+        appliedAt: new Date().toISOString(),
+      });
       result.applied.push(...routeResults);
       hasFailures = result.applied.some((entry) => entry.status === "failed");
     }
@@ -751,7 +752,7 @@ export async function planManifest(
       plan.desiredState,
       targetWorkloadNames,
     );
-    await assertManifestPublicationPrerequisites(env, {
+    await assertServiceGraphPublicationPrerequisites(env, {
       spaceId: group.spaceId,
       groupId: group.id,
       manifest: scopedPublicationManifest,

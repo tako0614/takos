@@ -8,14 +8,17 @@ port と deployment tests で検証します。
 ```sh
 cd ../takosumi
 bun test \
-  src/service/domains/deploy/plan_apply_test.ts
+  core/api/deploy_control_deploy_routes_test.ts \
+  core/api/deploy_control_source_routes_test.ts \
+  core/api/deploy_control_connection_routes_test.ts \
+  core/api/deploy_control_model_routes_test.ts
 ```
 
 Takos product 側の distribution profile は次で、routing / binding metadata
-を含む official distribution artifacts を検証します。
+を含む official distribution artifacts の digest と release manifest evidence
+を記録します。
 
 ```sh
 cd takos
-bun run validate:distributions
-bun run distribution:smoke
+bun scripts/build-release-manifest.ts
 ```

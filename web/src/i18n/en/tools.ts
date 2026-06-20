@@ -61,6 +61,8 @@ export const tools = {
   mcpFetchToolsFailed: "Failed to fetch tools",
   mcpRefreshTools: "Refresh tools",
   mcpReauthorize: "Re-authorize",
+  mcpReauthorizeAction: "Re-authorize",
+  failedToReauthorizeMcpServer: "Failed to re-authorize the MCP server",
   mcpStatusConnected: "Connected",
   mcpStatusTokenExpired: "Token expired",
   mcpStatusDisabled: "Disabled",

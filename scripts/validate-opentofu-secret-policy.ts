@@ -25,19 +25,35 @@ if (failed.length > 0) {
 console.log(JSON.stringify({ ok: true, checked: checks.length }, null, 2));
 
 async function checkRequiredDocs(): Promise<void> {
-  const docs = await readText('docs/hosting/secrets.md');
-  const required = [
-    'takos-private',
-    'opentofu_plan_mode = true',
-    'opentofu.tfvars',
-    'validate:opentofu-secrets',
+  const runbookPath = 'deploy/TAKOSUMI_DEPLOY.md';
+  const envExamplePath = 'deploy/opentofu/environments/cloudflare-prod/opentofu.tfvars.example';
+  const runbook = await readText(runbookPath);
+  const envExample = await readText(envExamplePath);
+  const requiredRunbookTerms = [
+    'wrangler secret put',
+    'TAKOSUMI_DEPLOY_CONTROL_TOKEN',
+    'The OpenTofu module owns durable topology',
+    'deploy/cloudflare/wrangler.toml',
   ];
-  const missing = required.filter((text) => !docs.includes(text));
+  const requiredExampleTerms = [
+    'account_id = "replace-with-cloudflare-account-id"',
+    'api_token is supplied by the Takosumi RunnerProfile',
+  ];
+  const missingRunbook = requiredRunbookTerms
+    .filter((text) => !runbook.includes(text))
+    .map((text) => `${runbookPath}:${text}`);
+  const missingExample = requiredExampleTerms
+    .filter((text) => !envExample.includes(text))
+    .map((text) => `${envExamplePath}:${text}`);
+  const forbiddenExample = envExample.includes('api_token =')
+    ? [`${envExamplePath}:must not contain api_token assignment`]
+    : [];
+  const missing = [...missingRunbook, ...missingExample, ...forbiddenExample];
   checks.push({
-    name: 'hosting-secret-policy-doc',
+    name: 'opentofu-secret-policy-source-of-truth',
     ok: missing.length === 0,
     detail: missing.length === 0
-      ? 'docs/hosting/secrets.md contains required policy terms'
+      ? 'deploy runbook and OpenTofu env example contain required policy terms'
       : `missing ${missing.join(', ')}`,
   });
 }

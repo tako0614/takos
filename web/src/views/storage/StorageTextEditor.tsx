@@ -7,6 +7,7 @@ import {
   Suspense,
 } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
+import { useConfirmDialog } from "../../store/confirm-dialog.ts";
 import { useToast } from "../../store/toast.ts";
 import { useFileContent } from "../../hooks/useFileContent.ts";
 import { detectLanguage } from "../../lib/languageMap.ts";
@@ -33,6 +34,20 @@ export function StorageTextEditor(props: {
   onSave?: () => void;
 }) {
   const { t } = useI18n();
+  const { confirm } = useConfirmDialog();
+
+  const handleClose = async () => {
+    if (isDirty()) {
+      const confirmed = await confirm({
+        title: t("unsavedChangesTitle"),
+        message: t("unsavedChangesMessage"),
+        confirmText: t("discardChanges"),
+        danger: true,
+      });
+      if (!confirmed) return;
+    }
+    props.onClose();
+  };
   const { showToast } = useToast();
   const {
     content,
@@ -114,7 +129,7 @@ export function StorageTextEditor(props: {
       setShowHandlerMenu={props.setShowHandlerMenu}
       onSelectHandler={props.onSelectHandler}
       onClearDefault={props.onClearDefault}
-      onClose={props.onClose}
+      onClose={handleClose}
       t={t}
       extraButtons={extraButtons()}
     >

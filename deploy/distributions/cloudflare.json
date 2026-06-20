@@ -10,15 +10,7 @@
     },
     {
       "kind": "wrangler",
-      "ref": "../takosumi/deploy/cloudflare/wrangler.toml"
-    },
-    {
-      "kind": "operator",
-      "ref": "../takosumi/deploy/accounts-cloudflare"
-    },
-    {
-      "kind": "wrangler",
-      "ref": "../takosumi/deploy/accounts-cloudflare/wrangler.toml"
+      "ref": "deploy/cloudflare/wrangler.toml"
     }
   ],
   "providerProof": {
@@ -28,7 +20,15 @@
   "requiredBindings": [
     {
       "kind": "cloudflare-d1",
-      "name": "TAKOS_D1"
+      "name": "DB"
+    },
+    {
+      "kind": "cloudflare-d1",
+      "name": "TAKOSUMI_ACCOUNTS_DB"
+    },
+    {
+      "kind": "cloudflare-d1",
+      "name": "TAKOSUMI_CONTROL_DB"
     },
     {
       "kind": "cloudflare-r2",
@@ -36,15 +36,15 @@
     },
     {
       "kind": "cloudflare-queue",
-      "name": "TAKOS_QUEUE"
+      "name": "RUN_QUEUE"
     },
     {
       "kind": "cloudflare-durable-object",
       "name": "COORDINATION"
     },
     {
-      "kind": "cloudflare-d1",
-      "name": "TAKOSUMI_ACCOUNTS_DB"
+      "kind": "cloudflare-durable-object",
+      "name": "RUNNER"
     }
   ],
   "target": {
@@ -59,9 +59,8 @@
     }
   },
   "routing": {
-    "publicBaseUrl": "https://takos.example.com",
-    "adminBaseUrl": "https://admin.takos.example.com",
-    "accountsBaseUrl": "https://accounts.takos.example.com",
+    "publicBaseUrl": "https://app.takos.example.com",
+    "adminBaseUrl": "https://app.takos.example.com",
     "wildcardDomain": "*.app.takos.example.com",
     "dnsProvider": "cloudflare"
   },
@@ -157,35 +156,6 @@
       }
     },
     {
-      "serviceId": "takosumi",
-      "runtime": "worker",
-      "hostingTargetId": "cloudflare",
-      "artifactRef": "worker:takosumi",
-      "internalUrl": "https://takosumi.internal.takos.example",
-      "smoke": {
-        "healthPath": "/health",
-        "expectedStatus": 200,
-        "expectedJson": {
-          "service": "takosumi"
-        }
-      }
-    },
-    {
-      "serviceId": "takosumi-accounts",
-      "runtime": "worker",
-      "hostingTargetId": "cloudflare",
-      "artifactRef": "worker:takosumi-accounts",
-      "internalUrl": "https://takosumi-accounts.internal.takos.example",
-      "publicUrl": "https://accounts.takos.example.com",
-      "smoke": {
-        "healthPath": "/healthz",
-        "expectedStatus": 200,
-        "expectedJson": {
-          "service": "takosumi-accounts"
-        }
-      }
-    },
-    {
       "serviceId": "takos-git",
       "runtime": "container",
       "hostingTargetId": "cloudflare",
@@ -216,10 +186,10 @@
   ],
   "metadata": {
     "official": true,
-    "liveSmokeTask": "bun run distribution:smoke --manifest deploy/distributions/cloudflare.json"
+    "releaseGateTask": "bun run release-gate"
   },
   "operatorProfile": {
-    "distribution": "takosumi",
+    "distribution": "takos",
     "profileId": "operator.takosumi.cloudflare",
     "implementationIds": [
       "operator.takosumi.cloudflare"

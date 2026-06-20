@@ -1,15 +1,16 @@
 # takos
 
-Takos はセルフホスト可能な AI-first chat & agent プロダクトです。AI エージェントとの会話を通じて
-ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。Takos self-host は `deploy/opentofu`
-module と worker artifact で完結し、Takosumi は任意で Run ledger / StateSnapshot / OutputSnapshot /
-Dependency graph / audit を付ける control plane です。
+Takos は OpenTofu-native, Takosumi-managed な first-party AI Workspace distribution です。AI エージェントとの会話を通じて
+ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。app / deploy topology は Git-hosted OpenTofu Capsule
+として扱い、Takosumi 専用 manifest や DSL を要求しません。self-host は embedded Takosumi services (Accounts /
+deploy-control / dashboard / OpenTofu runner / Run ledger / policy / audit) と Takos product surface (chat / agent /
+memory / Git / Workspace / app launcher / MCP tools) を同じ origin の Worker として compose します。
 
 Takos product の実行実装とスクリプトは Bun を前提としており、`src/worker` / `web` /
 `containers/git` / `scripts` のローカル実行は `bun` コマンドで行います。
 
-バンドルアプリ (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) は 新しい Space
-作成時に自動インストールされます。
+バンドルアプリ (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) は新しい Workspace
+作成時に distribution seed として install されます。
 
 📖 ドキュメント: <https://docs.takos.jp/>
 
@@ -25,19 +26,19 @@ bun run local:up
 
 ## サービス構成
 
-| Component       | 責務                                                                |
-| --------------- | ------------------------------------------------------------------- |
-| `takos-worker`  | 単一の public/control Worker、Hono API、OIDC consumer、internal RPC |
-| Takos UI        | browser UI source (`web/`)                                          |
-| `takos-git`     | Git hosting container (Smart HTTP、リポジトリ、refs、object store) |
-| `takos-agent`   | agent execution container                                           |
+| Component      | 責務                                                                |
+| -------------- | ------------------------------------------------------------------- |
+| `takos-worker` | 単一の public/control Worker、Hono API、OIDC consumer、internal RPC |
+| Takos UI       | browser UI source (`web/`)                                          |
+| `takos-git`    | Git hosting container (Smart HTTP、リポジトリ、refs、object store)  |
+| `takos-agent`  | agent execution container                                           |
 
-ログインや課金は Takosumi Accounts (operator account plane) が担当し、デプロイ制御は Takosumi
-(`../takosumi`) の OpenTofu-native Deploy Control API が担当します。
+ログインや課金は Takosumi Accounts が担当し、デプロイ制御は Takosumi (`../takosumi`) の OpenTofu-native
+Deploy Control API が担当します。self-host worker ではこれらを in-process で同居させます。
 
-Takos product を Takosumi に install する入口は、この source root そのものです。Takosumi v1 は plain OpenTofu module と Git metadata を入力にし、
-Git URL / commit / module path / `package.json` などの汎用 metadata と OpenTofu module から Run を作り、apply
-成功後に Deployment と OutputSnapshot を記録します。
+Takos distribution の deploy topology は `deploy/opentofu` の OpenTofu Capsule です。Takosumi v1 は Git URL /
+commit / module path / well-known OpenTofu outputs などの汎用 metadata から Run を作り、apply 成功後に StateVersion と
+Output を記録します。
 
 ## ローカル compose
 
@@ -59,26 +60,27 @@ takos/
   containers/
     git/        -> Git hosting container
     agent/      -> agent execution container
-  deploy/       -> デプロイ用アーティファクト (Helm / OpenTofu / distribution)
+  deploy/       -> デプロイ用アーティファクト (OpenTofu / distribution)
   docs/         -> プロダクトドキュメント (VitePress site → docs.takos.jp)
 ```
 
 ## よく使うコマンド
 
-| コマンド                           | 説明                                      |
-| ---------------------------------- | ----------------------------------------- |
-| `bun run doctor`                 | ツール・canonical layout・compose の診断  |
-| `bun run check`                  | 軽量な自動チェック                        |
-| `bun run local:up` / `down`      | ローカル compose の起動 / 停止            |
-| `bun run local:logs`             | ローカルサービスのログ                    |
-| `bun run local:smoke`            | ローカルサービスのヘルスチェック          |
-| `bun run local:e2e`              | docker compose による E2E スモークテスト  |
-| `bun run docs:dev`               | ドキュメントの開発サーバー起動            |
-| `bun run docs:build` / `deploy`  | ドキュメントのビルド / デプロイ           |
-| `bun run lint:docs`              | ドキュメントの lint                       |
-| `bun run validate:distributions` | ディストリビューションの検証              |
-| `bun run validate:service-set`   | Helm chart のサービスセット検証           |
-| `bun run helm:template-smoke`    | Helm テンプレートのスモークテスト         |
+| コマンド                         | 説明                                     |
+| -------------------------------- | ---------------------------------------- |
+| `bun run doctor`                 | ツール・canonical layout・compose の診断 |
+| `bun run check`                  | 軽量な自動チェック                       |
+| `bun run local:up` / `down`      | ローカル compose の起動 / 停止           |
+| `bun run local:logs`             | ローカルサービスのログ                   |
+| `bun run local:smoke`            | ローカルサービスのヘルスチェック         |
+| `bun run local:e2e`              | docker compose による E2E スモークテスト |
+| `bun run docs:dev`               | ドキュメントの開発サーバー起動           |
+| `bun run docs:build` / `deploy`  | ドキュメントのビルド / デプロイ          |
+| `bun run lint:docs`              | ドキュメントの lint / build              |
+| `bun run web:build`              | browser UI の production build          |
+| `bun run validate:opentofu-secrets` | OpenTofu tfvars / secret policy 検証 |
+| `bun scripts/build-release-manifest.ts` | distribution profile digest と release evidence manifest の生成 |
+| `bun run release-gate`           | Takos product の local release gate      |
 
 ## ドキュメントの場所
 
@@ -87,7 +89,7 @@ takos/
 | Takos プロダクト docs | `docs/` (このリポジトリ内、VitePress) |
 | プラットフォーム仕様  | `../docs/` (ecosystem root)           |
 | Takosumi docs         | `../takosumi/docs/`                   |
-| Accounts / 課金 docs  | `../takosumi/docs/`             |
+| Accounts / 課金 docs  | `../takosumi/docs/`                   |
 | Git installer docs    | `../takosumi/docs/`                   |
 | 運用 runbook          | `../takosumi/docs/operations/`        |
 

@@ -39,6 +39,7 @@
     "validate:opentofu-secrets": "bun scripts/validate-opentofu-secret-policy.ts",
     "validate:agent-docs": "bun scripts/validate-agent-docs.ts",
     "validate:architecture": "bun scripts/validate-architecture-alignment.ts",
+    "validate:default-app-opentofu": "bun scripts/validate-default-app-opentofu.ts",
     "validate:source-launcher-proof": "bun test src/worker/server/routes/__tests__/apps-source-proof.test.ts",
     "validate:agent-local-proof": "bun scripts/validate-agent-local-proof.ts",
     "validate:observability": "bun scripts/validate-observability-artifacts.ts",

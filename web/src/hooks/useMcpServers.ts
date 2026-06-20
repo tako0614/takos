@@ -84,6 +84,32 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     };
   };
 
+  const reauthorizeServer = async (serverId: string) => {
+    const targetSpaceId = currentSpaceId();
+    if (!targetSpaceId) {
+      throw new Error(t("missingSpaceId"));
+    }
+    const res = await fetch(
+      `/api/mcp/servers/${serverId}/reauthorize?spaceId=${
+        encodeURIComponent(targetSpaceId)
+      }`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || t("failedToReauthorizeMcpServer"));
+    }
+    const result = data.data as { auth_url?: string; message?: string };
+    if (result.auth_url) {
+      globalThis.open(result.auth_url, "_blank", "noopener,noreferrer");
+    }
+    await refresh();
+    return result;
+  };
+
   const updateServer = async (
     serverId: string,
     input: { enabled?: boolean; name?: string },
@@ -180,6 +206,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     loading,
     refresh,
     createExternalServer,
+    reauthorizeServer,
     toggleServer,
     deleteServer,
     fetchServerTools,

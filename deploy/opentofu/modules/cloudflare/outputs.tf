@@ -32,14 +32,14 @@ output "accounts_d1_database_name" {
   value       = cloudflare_d1_database.this["accounts"].name
 }
 
-# Deploy-control D1 — binding TAKOS_D1.
+# Deploy-control D1 — binding TAKOSUMI_CONTROL_DB.
 output "deploy_d1_database_id" {
-  description = "D1 database ID for the TAKOS_D1 binding (deploy-control run ledger)."
+  description = "D1 database ID for the TAKOSUMI_CONTROL_DB binding (deploy-control run ledger)."
   value       = cloudflare_d1_database.this["deploy"].id
 }
 
 output "deploy_d1_database_name" {
-  description = "D1 database name for the TAKOS_D1 binding (deploy-control run ledger)."
+  description = "D1 database name for the TAKOSUMI_CONTROL_DB binding (deploy-control run ledger)."
   value       = cloudflare_d1_database.this["deploy"].name
 }
 

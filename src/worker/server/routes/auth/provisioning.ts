@@ -1,7 +1,6 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import { generateId, slugifyName } from "../../../shared/utils/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
 import { bytesToHex } from "../../../shared/utils/encoding-utils.ts";
-import { validateUsername } from "../../../shared/utils/domain-validation.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { accounts } from "../../../infra/db/schema.ts";
 import { eq } from "drizzle-orm";
@@ -105,52 +104,28 @@ function authUserFromAccountRow(row: {
   };
 }
 
-function normalizeUsernameBase(value: string): string {
-  const slug = slugifyName(value).replace(/-+/g, "-").replace(/^-+|-+$/g, "");
-  const base = slug || "user";
-  if (base.length >= 3) {
-    return base.slice(0, 24);
-  }
-  return `${base}user`.slice(0, 24);
-}
+// Single-owner model: an account does NOT present a user-chosen public handle.
+// `accounts.slug` is kept only as a stable internal owner key (it also anchors
+// Space resolution). Use a predictable owner slug; only disambiguate when the
+// base is already taken so the `unique(slug)` constraint still holds on legacy
+// multi-account data.
+const OWNER_ACCOUNT_SLUG = "owner";
 
-async function generateUniqueUsername(
+async function resolveOwnerAccountSlug(
   db: SqlDatabaseBinding,
-  profile: {
-    email?: string | null;
-    name?: string | null;
-    subject?: string | null;
-  },
 ): Promise<string> {
-  const emailBase = normalizeUsernameBase(profile.email?.split("@")[0] ?? "");
-  const nameBase = normalizeUsernameBase(profile.name ?? "");
-  const subjectBase = normalizeUsernameBase(profile.subject ?? "");
-  const fallbackBase = "user";
-  const bases = Array.from(
-    new Set([emailBase, nameBase, subjectBase, fallbackBase]),
-  );
-
-  for (const base of bases) {
-    for (let suffix = 0; suffix < 100; suffix += 1) {
-      const candidate = suffix === 0
-        ? base
-        : `${base}-${suffix}`.slice(0, 30).replace(/[-_]+$/g, "");
-      if (validateUsername(candidate) !== null) {
-        continue;
-      }
-      const drizzleDb = getDb(db);
-      const existing = await drizzleDb.select({ id: accounts.id }).from(
-        accounts,
-      ).where(
-        eq(accounts.slug, candidate),
-      ).get();
-      if (!existing) {
-        return candidate;
-      }
+  const drizzleDb = getDb(db);
+  for (let suffix = 0; suffix < 100; suffix += 1) {
+    const candidate = suffix === 0
+      ? OWNER_ACCOUNT_SLUG
+      : `${OWNER_ACCOUNT_SLUG}-${suffix}`;
+    const existing = await drizzleDb.select({ id: accounts.id }).from(accounts)
+      .where(eq(accounts.slug, candidate)).get();
+    if (!existing) {
+      return candidate;
     }
   }
-
-  return `user-${generateId(8)}`.slice(0, 30);
+  return `${OWNER_ACCOUNT_SLUG}-${generateId(8)}`;
 }
 
 export async function provisionOidcUser(
@@ -183,11 +158,7 @@ export async function provisionOidcUser(
   const userId = await generateUniqueUserId(dbBinding);
   const displayName = profile.name?.trim() ||
     `Takosumi Account ${profile.subject.slice(0, 8)}`;
-  const username = await generateUniqueUsername(dbBinding, {
-    email: profile.email,
-    name: displayName,
-    subject: profile.subject,
-  });
+  const username = await resolveOwnerAccountSlug(dbBinding);
   const timestamp = new Date().toISOString();
 
   await db.insert(accounts).values({

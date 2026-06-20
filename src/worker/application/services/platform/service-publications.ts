@@ -7,7 +7,7 @@ import type {
 } from "../source/app-manifest-types.ts";
 import type { ObservedGroupState } from "../deployment/group-state.ts";
 import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
-import { RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE } from "../identity/takos-access-tokens.ts";
+import { RESERVED_TAKOS_PUBLICATION_MESSAGE } from "../identity/takos-access-tokens.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import { GoneError } from "@takos/worker-platform-utils/errors";
 import {
@@ -17,7 +17,6 @@ import {
   type ConsumeEntry,
   consumeLocalName,
   isReservedTakosPublicationSource,
-  isRetiredTakosGrantPublication,
   normalizeEnvName,
   normalizePublicationDefinition,
   normalizeServiceConsumes,
@@ -29,6 +28,7 @@ import {
   assertPublicationHasNoConsumers,
   deletePublicationRow,
   deleteServiceConsumeRow,
+  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
   getPublicationRowByRef,
   getServiceGroupId,
   listPublicationRows,
@@ -49,19 +49,23 @@ import {
   syncConsumersForPublication,
   syncConsumeState,
 } from "./service-publications-consume.ts";
+import { resolveServiceGraphExportDefinition } from "./service-graph-exports.ts";
 
 export {
   buildPublicUrl,
   canonicalPublicationType,
   isPublicationType,
+  normalizeApiPublicationDefinition,
   normalizePublicationDefinition,
   normalizeServiceConsumes,
   publicationAllowedFields,
   type PublicationOutputDescriptor,
   resolveConsumeOutputEnvName,
+  SERVICE_GRAPH_CAPABILITIES,
 } from "./service-publications-normalize.ts";
 
 export {
+  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
   publicationOutputContract,
   type PublicationRecord,
   publicationResolvedUrl,
@@ -146,9 +150,6 @@ async function resolvePublicationOutputValues(
   },
 ): Promise<Record<string, { value: string; secret: boolean }>> {
   const publication = params.publication.publication;
-  if (isRetiredTakosGrantPublication(publication)) {
-    throw new GoneError(RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE);
-  }
   void env;
   void params.spaceId;
   void params.serviceId;
@@ -188,7 +189,7 @@ export async function getPublicationByName(
   return row ? toPublicationRecord(row) : null;
 }
 
-export async function replaceManifestPublications(
+export async function replaceServiceGraphPublications(
   env: Pick<
     Env,
     "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN" | "TENANT_BASE_DOMAIN"
@@ -207,18 +208,20 @@ export async function replaceManifestPublications(
     groupId: params.groupId,
     spaceId: params.spaceId,
   });
-  const desired = (params.manifest.publish ?? [])
-    .map((publication) => normalizePublicationDefinition(publication));
+  const desired = (params.manifest.publish ?? []).map((publication) =>
+    normalizePublicationDefinition(publication),
+  );
   const desiredByName = new Map(
     desired.map((publication) => [publication.name, publication]),
   );
   const existingRows = await listPublicationRows(env, params.spaceId, {
     groupId: params.groupId,
   });
-  const staleRows = existingRows.filter((row) =>
-    row.groupId === params.groupId &&
-    row.sourceType === "manifest" &&
-    !desiredByName.has(row.name)
+  const staleRows = existingRows.filter(
+    (row) =>
+      row.groupId === params.groupId &&
+      row.sourceType === SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE &&
+      !desiredByName.has(row.name),
   );
   for (const row of staleRows) {
     await assertPublicationHasNoConsumers(env, params.spaceId, row);
@@ -234,7 +237,7 @@ export async function replaceManifestPublications(
       spaceId: params.spaceId,
       groupId: params.groupId,
       ownerServiceId: routeResolved.ownerServiceId,
-      sourceType: "manifest",
+      sourceType: SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
       publication,
       resolved: routeResolved.resolved,
     });
@@ -249,8 +252,11 @@ export async function replaceManifestPublications(
   }
 }
 
-export async function assertManifestPublicationPrerequisites(
-  env: Pick<Env, "DB"> & Partial<Pick<Env, "TENANT_BASE_DOMAIN">>,
+export async function assertServiceGraphPublicationPrerequisites(
+  env: Pick<Env, "DB"> &
+    Partial<
+      Pick<Env, "TENANT_BASE_DOMAIN" | "AUTH_PUBLIC_BASE_URL" | "ADMIN_DOMAIN">
+    >,
   params: {
     spaceId: string;
     groupId?: string;
@@ -267,13 +273,16 @@ export async function assertManifestPublicationPrerequisites(
   async function resolveGroupHostname(): Promise<string | null> {
     if (!params.groupId) return null;
     if (groupHostname !== undefined) return groupHostname;
-    groupHostname = await getGroupAutoHostname({
-      DB: env.DB,
-      TENANT_BASE_DOMAIN: env.TENANT_BASE_DOMAIN ?? "",
-    }, {
-      groupId: params.groupId,
-      spaceId: params.spaceId,
-    });
+    groupHostname = await getGroupAutoHostname(
+      {
+        DB: env.DB,
+        TENANT_BASE_DOMAIN: env.TENANT_BASE_DOMAIN ?? "",
+      },
+      {
+        groupId: params.groupId,
+        spaceId: params.spaceId,
+      },
+    );
     return groupHostname;
   }
 
@@ -294,15 +303,13 @@ export async function assertManifestPublicationPrerequisites(
   }
 
   const publicationRecordCache = new Map<string, PublicationRecord | null>();
-  async function resolveConsumePublication(
-    consume: AppConsume,
-  ): Promise<
-    | { publication: AppPublication; outputs: PublicationOutputDescriptor[] }
-    | null
-  > {
+  async function resolveConsumePublication(consume: AppConsume): Promise<{
+    publication: AppPublication;
+    outputs: PublicationOutputDescriptor[];
+  } | null> {
     const name = consume.publication;
     if (isReservedTakosPublicationSource(name)) {
-      throw new GoneError(RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE);
+      throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
     }
     const manifestPublication = desiredByName.get(name);
     if (manifestPublication) {
@@ -320,12 +327,20 @@ export async function assertManifestPublicationPrerequisites(
       );
     }
     const record = publicationRecordCache.get(name) ?? null;
-    if (record && isRetiredTakosGrantPublication(record.publication)) {
-      throw new GoneError(RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE);
-    }
+    const serviceGraphExport = record
+      ? null
+      : resolveServiceGraphExportDefinition(env, {
+          spaceId: params.spaceId,
+          name,
+        });
     return record
       ? { publication: record.publication, outputs: record.outputs }
-      : null;
+      : serviceGraphExport
+        ? {
+            publication: serviceGraphExport.publication,
+            outputs: serviceGraphExport.outputs,
+          }
+        : null;
   }
 
   const topLevelEnvNames = new Set<string>();
@@ -353,9 +368,10 @@ export async function assertManifestPublicationPrerequisites(
   }
 
   for (const entry of collectManifestConsumeEntries(params.manifest)) {
-    let publication:
-      | { publication: AppPublication; outputs: PublicationOutputDescriptor[] }
-      | null;
+    let publication: {
+      publication: AppPublication;
+      outputs: PublicationOutputDescriptor[];
+    } | null;
     try {
       publication = await resolveConsumePublication(entry.consume);
     } catch (error) {
@@ -374,7 +390,9 @@ export async function assertManifestPublicationPrerequisites(
     }
     const manifestPublication = desiredByName.get(entry.consume.publication);
     if (
-      manifestPublication && params.groupId && !(await resolveGroupHostname())
+      manifestPublication &&
+      params.groupId &&
+      !(await resolveGroupHostname())
     ) {
       errors.push(
         `${entry.path}: consume references same-manifest route publication '${entry.consume.publication}' but the group hostname is unavailable`,
@@ -392,9 +410,10 @@ export async function assertManifestPublicationPrerequisites(
       continue;
     }
     const seen = seenEnvForCompute(entry);
-    for (
-      const output of selectedConsumeOutputs(entry.consume, publication.outputs)
-    ) {
+    for (const output of selectedConsumeOutputs(
+      entry.consume,
+      publication.outputs,
+    )) {
       let envName: string;
       try {
         envName = resolveConsumeOutputEnvName(entry.consume, output);
@@ -417,9 +436,10 @@ export async function assertManifestPublicationPrerequisites(
   }
 
   if (errors.length === 0) return;
-  const header = errors.length === 1
-    ? "Publication prerequisite validation failed:"
-    : `Publication prerequisite validation failed (${errors.length} errors):`;
+  const header =
+    errors.length === 1
+      ? "Publication prerequisite validation failed:"
+      : `Publication prerequisite validation failed (${errors.length} errors):`;
   throw new BadRequestError(
     [header, ...errors.map((error) => `  - ${error}`)].join("\n"),
     { errors },
@@ -432,9 +452,9 @@ export async function listServiceConsumes(
   serviceId: string,
 ): Promise<AppConsume[]> {
   const rows = await listServiceConsumeRows(env, spaceId, serviceId);
-  return rows.map(parseConsumeConfig).sort((a, b) =>
-    consumeLocalName(a).localeCompare(consumeLocalName(b))
-  );
+  return rows
+    .map(parseConsumeConfig)
+    .sort((a, b) => consumeLocalName(a).localeCompare(consumeLocalName(b)));
 }
 
 export async function replaceServiceConsumes(
@@ -463,7 +483,7 @@ export async function replaceServiceConsumes(
         spaceId: params.spaceId,
         consume,
         consumerGroupId: params.consumerGroupId,
-      })
+      }),
     ),
   );
   const publicationMap = new Map<string, ConsumePublicationDefinition>();
@@ -507,8 +527,8 @@ export async function replaceServiceConsumes(
 
   for (const consume of consumes) {
     const localName = consumeLocalName(consume);
-    const existing = existingRows.find((row) =>
-      row.publicationName === localName
+    const existing = existingRows.find(
+      (row) => row.publicationName === localName,
     );
     const publication = publicationMap.get(localName);
     if (!publication) {
@@ -550,7 +570,7 @@ export async function previewServiceConsumeEnvVars(
         spaceId: params.spaceId,
         consume,
         consumerGroupId: params.consumerGroupId,
-      })
+      }),
     ),
   );
   const out = new Map<string, { secret: boolean }>();

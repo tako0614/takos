@@ -129,7 +129,6 @@ async function createAuthTestDb(dbPath: string) {
       model_backend TEXT DEFAULT 'openai',
       security_posture TEXT NOT NULL DEFAULT 'standard',
       owner_account_id TEXT,
-      takosumi_installation_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -411,7 +410,7 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
 // fetch against the issued authorize URL. Skipped in the default gate; run with
 // TAKOS_INTEGRATION=1.
 test.skipIf(!RUN_INTEGRATION_TESTS)(
-  "OIDC login reaches real Takosumi Accounts while default managed offering gate stays closed",
+  "OIDC login reaches real Takosumi Accounts while default platform readiness gate stays closed",
   async () => {
     const accountsServer = await startAccountsServer({
       clientId: "takos-client",
@@ -620,7 +619,7 @@ async function startAccountsServer(input: {
       clientId: input.clientId,
       redirectUris: [input.redirectUri],
     }],
-    managedOfferingAccess: { status: "closed" },
+    platformAccess: { status: "closed" },
   });
   const server = Bun.serve({
     hostname: "127.0.0.1",

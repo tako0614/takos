@@ -8,11 +8,11 @@ export const tools = {
   noCustomToolsYet: "カスタムツールがまだありません",
   mcpServers: "MCP サーバー",
   mcpServersDescription:
-    "worker と app 由来の managed MCP は自動で表示されます。外部サーバーはここで追加します。",
+    "worker と app 由来の MCP service は自動で表示されます。外部サーバーはここで追加します。",
   addMcpServer: "MCP サーバーを追加",
   noMcpServersYet: "接続された MCP サーバーはまだありません",
   managedMcpServersAutoConnected:
-    "managed worker / app の MCP は deploy または install 後に自動で表示されます。",
+    "worker / app の MCP service は deploy または install 後に自動で表示されます。",
   inputJson: "入力 (JSON)",
   enable: "有効化",
   disable: "無効化",
@@ -61,6 +61,8 @@ export const tools = {
   mcpFetchToolsFailed: "ツールの取得に失敗しました",
   mcpRefreshTools: "ツールを更新",
   mcpReauthorize: "再認証",
+  mcpReauthorizeAction: "再認証する",
+  failedToReauthorizeMcpServer: "MCP サーバーの再認証に失敗しました",
   mcpStatusConnected: "接続済み",
   mcpStatusTokenExpired: "トークン期限切れ",
   mcpStatusDisabled: "無効",

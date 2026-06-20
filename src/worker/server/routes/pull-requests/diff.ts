@@ -220,31 +220,22 @@ async function computeDetailedFileDiffs(
   return { files, truncated };
 }
 
-function computeSummaryFileDiffs(
+export async function computeSummaryFileDiffs(
+  bucket: takosGit.GitBucket,
   baseFiles: TreeFileEntry[],
   headFiles: TreeFileEntry[],
-): RepoDiffFile[] {
-  const baseMap = new Map(baseFiles.map((file) => [file.path, file.sha]));
-  const headMap = new Map(headFiles.map((file) => [file.path, file.sha]));
-  const files: RepoDiffFile[] = [];
-
-  for (const [path, oid] of headMap) {
-    const baseOid = baseMap.get(path);
-    if (!baseOid) {
-      files.push({ path, status: "added", additions: 1, deletions: 0 });
-    } else if (baseOid !== oid) {
-      files.push({ path, status: "modified", additions: 1, deletions: 1 });
-    }
-  }
-
-  for (const [path] of baseMap) {
-    if (!headMap.has(path)) {
-      files.push({ path, status: "deleted", additions: 0, deletions: 1 });
-    }
-  }
-
-  files.sort((a, b) => a.path.localeCompare(b.path));
-  return files;
+): Promise<RepoDiffFile[]> {
+  // Derive the summary from the same real LCS computation the detailed view
+  // uses, then drop the hunks. This keeps additions/deletions accurate instead
+  // of emitting placeholder 1/1 counts. Oversized/binary files honestly report
+  // 0/0 (same cap behavior as computeFileDiffWithHunks).
+  const { files } = await computeDetailedFileDiffs(bucket, baseFiles, headFiles);
+  return files.map(({ path, status, additions, deletions }) => ({
+    path,
+    status,
+    additions,
+    deletions,
+  }));
 }
 
 async function resolveTreeFiles(
@@ -277,7 +268,7 @@ export async function buildRepoDiffPayload(
     ]);
     if (!baseFiles || !headFiles) return null;
 
-    const files = computeSummaryFileDiffs(baseFiles, headFiles);
+    const files = await computeSummaryFileDiffs(bucket, baseFiles, headFiles);
     return {
       base: baseRef,
       head: headRef,

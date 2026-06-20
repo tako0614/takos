@@ -144,15 +144,15 @@ function createPublicationRecord(options: {
   return {
     id: options.id,
     name: options.name,
-    sourceType: "manifest",
+    sourceType: "service_graph",
     groupId: "space_1",
     ownerServiceId: "svc_1",
     catalogName: null,
-    publicationType: "FileHandler",
+    publicationType: "interface.file.handler",
     publication: {
       name: options.name,
       publisher: "web",
-      type: "FileHandler",
+      type: "interface.file.handler",
       outputs: { url: { kind: "url", routeRef: "files" } },
       display: { title: "Markdown" },
       spec: {

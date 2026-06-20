@@ -1,10 +1,9 @@
 import {
   accounts,
   repositories,
-  repoStars,
   type SqlDatabaseLike,
 } from "../../../infra/db/index.ts";
-import { and, count, eq, gte, inArray, like } from "drizzle-orm";
+import { and, count, eq, gte, like } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import type {
   ExploreRepoResponse,
@@ -73,25 +72,14 @@ export function computeTrendingScore(options: {
     (ageDays + 2);
 }
 
-export async function getStarredRepoIds(
-  dbBinding: SqlDatabaseLike,
-  userId: string | undefined,
-  repoIds: string[],
-) {
-  if (!userId || repoIds.length === 0) {
-    return new Set<string>();
-  }
-
-  const db = sourceServiceDeps.getDb(dbBinding);
-
-  const stars = await db.select({ repoId: repoStars.repoId }).from(repoStars)
-    .where(and(
-      eq(repoStars.accountId, userId),
-      inArray(repoStars.repoId, repoIds),
-    ))
-    .all();
-
-  return new Set(stars.map((s) => s.repoId));
+// Takos is a single-owner personal product with no social starring graph.
+// Repo star state is always empty.
+export function getStarredRepoIds(
+  _dbBinding: SqlDatabaseLike,
+  _userId: string | undefined,
+  _repoIds: string[],
+): Set<string> {
+  return new Set<string>();
 }
 
 export function mapExploreRepos(

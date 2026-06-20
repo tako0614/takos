@@ -53,7 +53,7 @@ export function AppsPage(props: AppsPageProps) {
                   variant="secondary"
                   size="sm"
                   onClick={props.onNavigateToStore}
-                  leftIcon={<Icons.ShoppingBag class="h-4 w-4" />}
+                  leftIcon={<Icons.Download class="h-4 w-4" />}
                 >
                   {t("browseStore")}
                 </Button>
@@ -67,9 +67,9 @@ export function AppsPage(props: AppsPageProps) {
             </div>
           </Show>
 
-          {/* In-flight control-plane installs (admin /new flow). Lets this page
-              answer "what did I just install?" without a separate surface.
-              Each row links to the embedded admin detail at /apps/:id. */}
+          {/* In-flight installs from the admin /new flow. Lets this page answer
+              "what did I just add?" while keeping launcher routes separate
+              from installation detail routes. */}
           <Show when={inflightInstalls().length > 0}>
             <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
               <div class="mb-2 flex items-center justify-between">
@@ -88,7 +88,7 @@ export function AppsPage(props: AppsPageProps) {
                   {(inst) => (
                     <li>
                       <a
-                        href={`/apps/${encodeURIComponent(inst.id)}`}
+                        href={`/installations/${encodeURIComponent(inst.id)}`}
                         class="flex items-center justify-between rounded px-2 py-1.5 text-sm text-zinc-700 hover:bg-amber-100/60 dark:text-zinc-200 dark:hover:bg-amber-900/20"
                       >
                         <span class="truncate font-medium">{inst.name}</span>
@@ -143,7 +143,7 @@ export function AppsPage(props: AppsPageProps) {
                       variant="primary"
                       size="sm"
                       onClick={props.onNavigateToStore}
-                      leftIcon={<Icons.ShoppingBag class="h-4 w-4" />}
+                      leftIcon={<Icons.Download class="h-4 w-4" />}
                     >
                       {t("browseStore")}
                     </Button>

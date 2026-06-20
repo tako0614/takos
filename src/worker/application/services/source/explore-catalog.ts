@@ -68,8 +68,8 @@ async function listRepoSourcePaths(
 
   const paths = rootEntries.map((entry) => entry.name);
   for (const dirName of ["opentofu", "infra"]) {
-    const dir = rootEntries.find((entry) =>
-      entry.name === dirName && isDirectoryEntry(entry)
+    const dir = rootEntries.find(
+      (entry) => entry.name === dirName && isDirectoryEntry(entry),
     );
     if (!dir) continue;
     const entries = await sourceServiceDeps.gitStore.listDirectory(
@@ -85,7 +85,7 @@ async function listRepoSourcePaths(
   return paths;
 }
 
-export async function hasDeployManifestForRelease(
+export async function hasInstallableCapsuleForRelease(
   dbBinding: Env["DB"],
   gitObjects: ObjectStoreBinding | undefined,
   release: { repoId: string; tag: string; commitSha: string | null },
@@ -93,17 +93,18 @@ export async function hasDeployManifestForRelease(
   if (!gitObjects) return false;
 
   try {
-    const commitSha = release.commitSha ||
-      await sourceServiceDeps.gitStore.resolveRef(
+    const commitSha =
+      release.commitSha ||
+      (await sourceServiceDeps.gitStore.resolveRef(
         dbBinding,
         release.repoId,
         `refs/tags/${release.tag}`,
-      ) ||
-      await sourceServiceDeps.gitStore.resolveRef(
+      )) ||
+      (await sourceServiceDeps.gitStore.resolveRef(
         dbBinding,
         release.repoId,
         release.tag,
-      );
+      ));
     if (!commitSha) return false;
 
     const commit = await sourceServiceDeps.gitStore.getCommitData(
@@ -113,7 +114,7 @@ export async function hasDeployManifestForRelease(
     if (!commit?.tree) return false;
 
     const sourcePath = selectInstallableSourcePathFromRepo(
-      await listRepoSourcePaths(gitObjects, commit.tree) ?? [],
+      (await listRepoSourcePaths(gitObjects, commit.tree)) ?? [],
     );
     if (!sourcePath) return false;
 
@@ -148,9 +149,9 @@ function buildCatalogRepositoryUrl(
 ): string | null {
   const base = normalizeRepositoryBaseUrl(repositoryBaseUrl);
   if (!base) return null;
-  return `${base}/git/${encodeURIComponent(ownerSlug)}/${
-    encodeURIComponent(repoName)
-  }.git`;
+  return `${base}/git/${encodeURIComponent(ownerSlug)}/${encodeURIComponent(
+    repoName,
+  )}.git`;
 }
 
 function packageDeploySource(
@@ -159,11 +160,12 @@ function packageDeploySource(
   repositoryBaseUrl: string | undefined,
 ): CatalogDeploySourceResponse | undefined {
   if (!release) return undefined;
-  const repositoryUrl = buildCatalogRepositoryUrl(
-    repositoryBaseUrl,
-    repo.account.slug,
-    repo.name,
-  ) ?? repo.remoteCloneUrl;
+  const repositoryUrl =
+    buildCatalogRepositoryUrl(
+      repositoryBaseUrl,
+      repo.account.slug,
+      repo.name,
+    ) ?? repo.remoteCloneUrl;
   if (!repositoryUrl) return undefined;
   return {
     kind: "git_ref",
@@ -226,35 +228,42 @@ export async function listCatalogItems(
     repoIds,
   );
 
-  const releases = repoIds.length > 0
-    ? await db.select({
-      id: repoReleases.id,
-      repoId: repoReleases.repoId,
-      tag: repoReleases.tag,
-      commitSha: repoReleases.commitSha,
-      description: repoReleases.description,
-      publishedAt: repoReleases.publishedAt,
-      repoName: repositories.name,
-    })
-      .from(repoReleases)
-      .innerJoin(repositories, eq(repoReleases.repoId, repositories.id))
-      .where(and(
-        inArray(repoReleases.repoId, repoIds),
-        eq(repoReleases.isDraft, false),
-        eq(repoReleases.isPrerelease, false),
-      ))
-      .orderBy(desc(repoReleases.publishedAt), desc(repoReleases.createdAt))
-      .all()
-    : [];
+  const releases =
+    repoIds.length > 0
+      ? await db
+          .select({
+            id: repoReleases.id,
+            repoId: repoReleases.repoId,
+            tag: repoReleases.tag,
+            commitSha: repoReleases.commitSha,
+            description: repoReleases.description,
+            publishedAt: repoReleases.publishedAt,
+            repoName: repositories.name,
+          })
+          .from(repoReleases)
+          .innerJoin(repositories, eq(repoReleases.repoId, repositories.id))
+          .where(
+            and(
+              inArray(repoReleases.repoId, repoIds),
+              eq(repoReleases.isDraft, false),
+              eq(repoReleases.isPrerelease, false),
+            ),
+          )
+          .orderBy(desc(repoReleases.publishedAt), desc(repoReleases.createdAt))
+          .all()
+      : [];
 
   // Fetch assets for these releases
   const releaseIds = releases.map((r) => r.id);
-  const allAssets = releaseIds.length > 0
-    ? await db.select().from(repoReleaseAssets)
-      .where(inArray(repoReleaseAssets.releaseId, releaseIds))
-      .orderBy(asc(repoReleaseAssets.createdAt))
-      .all()
-    : [];
+  const allAssets =
+    releaseIds.length > 0
+      ? await db
+          .select()
+          .from(repoReleaseAssets)
+          .where(inArray(repoReleaseAssets.releaseId, releaseIds))
+          .orderBy(asc(repoReleaseAssets.createdAt))
+          .all()
+      : [];
 
   const assetsByRelease = new Map<string, typeof allAssets>();
   for (const asset of allAssets) {
@@ -264,13 +273,13 @@ export async function listCatalogItems(
   }
 
   const latestReleaseByRepoId = new Map<string, ParsedCatalogRelease>();
-  const hasManifestByReleaseId = new Map<string, boolean>();
+  const hasCapsuleByReleaseId = new Map<string, boolean>();
   for (const release of releases) {
     if (latestReleaseByRepoId.has(release.repoId)) continue;
 
-    let hasManifest = hasManifestByReleaseId.get(release.id);
-    if (hasManifest === undefined) {
-      hasManifest = await hasDeployManifestForRelease(
+    let hasCapsule = hasCapsuleByReleaseId.get(release.id);
+    if (hasCapsule === undefined) {
+      hasCapsule = await hasInstallableCapsuleForRelease(
         dbBinding,
         options.gitObjects,
         {
@@ -279,9 +288,9 @@ export async function listCatalogItems(
           commitSha: release.commitSha ?? null,
         },
       );
-      hasManifestByReleaseId.set(release.id, hasManifest);
+      hasCapsuleByReleaseId.set(release.id, hasCapsule);
     }
-    if (!hasManifest) continue;
+    if (!hasCapsule) continue;
 
     const releaseAssetRows = assetsByRelease.get(release.id) || [];
     const assets = toReleaseAssets(releaseAssetRows);
@@ -293,19 +302,21 @@ export async function listCatalogItems(
     latestReleaseByRepoId.set(release.repoId, {
       releaseId: release.id,
       repoId: release.repoId,
-      appId: primaryAsset?.bundle_meta?.app_id ||
-        primaryAsset?.bundle_meta?.name || release.repoName,
+      appId:
+        primaryAsset?.bundle_meta?.app_id ||
+        primaryAsset?.bundle_meta?.name ||
+        release.repoName,
       releaseTag: release.tag,
       publishedAt: release.publishedAt ?? null,
       version: primaryAsset?.bundle_meta?.version || release.tag,
-      description: primaryAsset?.bundle_meta?.description ||
-        release.description || null,
+      description:
+        primaryAsset?.bundle_meta?.description || release.description || null,
       icon: primaryAsset?.bundle_meta?.icon || null,
       category: primaryAsset?.bundle_meta?.category || null,
       tags: Array.isArray(primaryAsset?.bundle_meta?.tags)
-        ? primaryAsset.bundle_meta.tags.filter((tag): tag is string =>
-          typeof tag === "string"
-        )
+        ? primaryAsset.bundle_meta.tags.filter(
+            (tag): tag is string => typeof tag === "string",
+          )
         : [],
       assetId: primaryAsset?.id || null,
       downloadCount: primaryAsset?.download_count || 0,
@@ -315,16 +326,17 @@ export async function listCatalogItems(
 
   const publishStatusMap = await fetchPublishStatuses(
     db,
-    Array.from(latestReleaseByRepoId.values())
-      .flatMap((release) =>
-        release.assetId
-          ? [{
-            repoId: release.repoId,
-            releaseTag: release.releaseTag,
-            assetId: release.assetId,
-          }]
-          : []
-      ),
+    Array.from(latestReleaseByRepoId.values()).flatMap((release) =>
+      release.assetId
+        ? [
+            {
+              repoId: release.repoId,
+              releaseTag: release.releaseTag,
+              assetId: release.assetId,
+            },
+          ]
+        : [],
+    ),
   );
 
   const reviewMap = new Map<
@@ -368,9 +380,9 @@ export async function listCatalogItems(
     const packageRelease = latestReleaseByRepoId.get(repo.id);
     const review = reviewMap.get(repo.id);
     const publishStatus = packageRelease?.assetId
-      ? (publishStatusMap.get(
-        `${packageRelease.releaseId}:${packageRelease.assetId}`,
-      ) || "none")
+      ? publishStatusMap.get(
+          `${packageRelease.releaseId}:${packageRelease.assetId}`,
+        ) || "none"
       : "none";
     const source = packageDeploySource(
       repo,
@@ -378,17 +390,19 @@ export async function listCatalogItems(
       options.repositoryBaseUrl,
     );
     const sourceAppInstallation = source
-      ? appInstallationMap.get(defaultAppSourceKey({
-        repositoryUrl: source.repository_url,
-        ref: source.ref,
-        refType: source.ref_type,
-      }))
+      ? appInstallationMap.get(
+          defaultAppSourceKey({
+            repositoryUrl: source.repository_url,
+            ref: source.ref,
+            refType: source.ref_type,
+          }),
+        )
       : undefined;
     const packageAppInstallation = packageRelease?.appId
       ? appInstallationMap.get(packageRelease.appId)
       : undefined;
     const installation = options.spaceId
-      ? packageAppInstallation ?? sourceAppInstallation
+      ? (packageAppInstallation ?? sourceAppInstallation)
       : undefined;
     const packageInfo = {
       available: !!packageRelease,
@@ -462,11 +476,11 @@ export async function listCatalogItems(
   );
   const defaultAppTimestamp = options.now ?? new Date().toISOString();
   const defaultAppItems = (options.defaultAppEntries ?? [])
-    .filter((entry) =>
-      !repositoryUrlKeys.has(normalizeCatalogRepositoryUrlKey(
-        entry.repositoryUrl,
-      )) &&
-      shouldIncludeDefaultAppEntry(entry, options, parsedTags)
+    .filter(
+      (entry) =>
+        !repositoryUrlKeys.has(
+          normalizeCatalogRepositoryUrlKey(entry.repositoryUrl),
+        ) && shouldIncludeDefaultAppEntry(entry, options, parsedTags),
     )
     .map((entry) =>
       mapDefaultAppCatalogItem(
@@ -474,7 +488,7 @@ export async function listCatalogItems(
         appInstallationMap.get(defaultAppPackageAppId(entry)) ??
           appInstallationMap.get(defaultAppSourceKey(entry)),
         defaultAppTimestamp,
-      )
+      ),
     );
   items = [...items, ...defaultAppItems];
 
@@ -489,9 +503,9 @@ export async function listCatalogItems(
   if (parsedTags.tags.length > 0) {
     items = items.filter((item) => {
       if (!item.package.available) return false;
-      const packageTags = item.package.tags.map((tag) =>
-        tag.trim().toLowerCase()
-      ).filter(Boolean);
+      const packageTags = item.package.tags
+        .map((tag) => tag.trim().toLowerCase())
+        .filter(Boolean);
       return parsedTags.tags.every((tag) => packageTags.includes(tag));
     });
   }

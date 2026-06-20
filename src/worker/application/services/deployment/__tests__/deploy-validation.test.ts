@@ -249,7 +249,7 @@ test("validateConsumeReferences rejects reserved Takos publication consumes", ()
   });
   const errors = validateConsumeReferences(manifest);
   assertEquals(errors.length, 1);
-  assertEquals(errors[0].code, "publication_retired");
+  assertEquals(errors[0].code, "publication_reserved");
   assertEquals(errors[0].path, "compute.web.consume[1]");
 });
 
@@ -360,7 +360,7 @@ test("validatePublicationKnownFields rejects unknown publication fields", () => 
       {
         name: "search",
         publisher: "web",
-        type: "McpServer",
+        type: "protocol.mcp.server",
         outputs: { url: { kind: "url", routeRef: "mcp" } },
         extras: "oops",
       } as AppManifest["publish"][number],
@@ -383,7 +383,7 @@ test("validatePublicationKnownFields rejects unknown publication spec fields", (
       {
         name: "markdown",
         publisher: "web",
-        type: "FileHandler",
+        type: "interface.file.handler",
         outputs: { url: { kind: "url", routeRef: "files" } },
         spec: { mimeTypes: ["text/markdown"], note: "oops" },
       },

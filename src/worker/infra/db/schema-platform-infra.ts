@@ -39,16 +39,16 @@ export const edges = sqliteTable("edges", {
 }));
 
 // 36. FileHandlerMatcher
-export const fileHandlerMatchers = sqliteTable("file_handler_matchers", {
-  fileHandlerId: text("file_handler_id").notNull(),
+export const interfaceFileHandlerMatchers = sqliteTable("file_handler_matchers", {
+  interfaceFileHandlerId: text("file_handler_id").notNull(),
   kind: text("kind").notNull(),
   value: text("value").notNull(),
 }, (table) => ({
-  pk: primaryKey({ columns: [table.fileHandlerId, table.kind, table.value] }),
+  pk: primaryKey({ columns: [table.interfaceFileHandlerId, table.kind, table.value] }),
 }));
 
 // 37. FileHandler
-const fileHandlersTable = sqliteTable("file_handlers", {
+const interfaceFileHandlersTable = sqliteTable("file_handlers", {
   id: text("id").primaryKey(),
   accountId: text("account_id").notNull().references(() => accounts.id),
   bundleDeploymentId: text("bundle_deployment_id").notNull(),
@@ -60,8 +60,8 @@ const fileHandlersTable = sqliteTable("file_handlers", {
   idxAccount: index("idx_file_handlers_account_id").on(table.accountId),
 }));
 
-export const fileHandlers = Object.assign(fileHandlersTable, {
-  workerHostname: fileHandlersTable.serviceHostname,
+export const interfaceFileHandlers = Object.assign(interfaceFileHandlersTable, {
+  workerHostname: interfaceFileHandlersTable.serviceHostname,
 });
 
 // 43. InfraEndpointRoute

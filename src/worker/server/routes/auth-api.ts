@@ -7,7 +7,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Env, User } from "../../shared/types/index.ts";
 import { accounts, authIdentities, getDb } from "../../infra/db/index.ts";
 import {
@@ -25,7 +25,6 @@ import { getPlatformServices } from "../../platform/accessors.ts";
 import {
   AuthenticationError,
   BadRequestError,
-  ConflictError,
 } from "@takos/worker-platform-utils/errors";
 import { zValidator } from "./zod-validator.ts";
 
@@ -38,10 +37,6 @@ const authApi = new Hono<{ Bindings: Env; Variables: Variables }>();
 // ---------------------------------------------------------------------------
 // Zod schemas
 // ---------------------------------------------------------------------------
-
-const setupUsernameSchema = z.object({
-  username: z.string(),
-});
 
 const profileSchema = z.object({
   display_name: z.string().optional(),
@@ -75,58 +70,6 @@ authApi.get("/me", async (c) => {
     },
   });
 });
-
-// ============================================================
-// Profile Setup Routes
-// ============================================================
-
-// POST /api/auth/setup-username - Set username (requires auth)
-//
-// SECURITY: No per-route rate limit. This endpoint sits on the signup-adjacent
-// onboarding path and is reachable by any authenticated session. Without an
-// operator-tier limiter (CDN / WAF), it can be abused to enumerate / squat
-// usernames via repeated availability probes. See SECURITY.md.
-authApi.post(
-  "/setup-username",
-  zValidator("json", setupUsernameSchema),
-  async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      throw new AuthenticationError();
-    }
-
-    const body = c.req.valid("json");
-
-    if (!body.username) {
-      throw new BadRequestError("Username is required");
-    }
-
-    // Validate username format (3-30 chars, lowercase alphanumeric, underscores or hyphens)
-    if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(body.username)) {
-      throw new BadRequestError(
-        "Username must be 3-30 characters, lowercase alphanumeric, underscores or hyphens",
-      );
-    }
-
-    // Check if username is taken
-    const db = getDb(c.env.DB);
-    const existing = await db.select({ id: accounts.id })
-      .from(accounts)
-      .where(and(eq(accounts.slug, body.username), ne(accounts.id, user.id)))
-      .get();
-
-    if (existing) {
-      throw new ConflictError("Username already taken");
-    }
-
-    await db.update(accounts).set({
-      slug: body.username,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(accounts.id, user.id)).run();
-
-    return c.json({ success: true, username: body.username });
-  },
-);
 
 // PATCH /api/auth/profile - Update profile (requires auth)
 authApi.patch("/profile", zValidator("json", profileSchema), async (c) => {

@@ -15,7 +15,7 @@ import { fail } from "./cli-utils.ts";
 export function requireD1DatabaseId(config: ResolvedConfig): string {
   if (!config.d1DatabaseId) {
     fail(
-      "D1 database_id is required (set TAKOS_D1_DATABASE_ID or configure wrangler.toml).",
+      "D1 database_id is required (set TAKOS_DB_DATABASE_ID or configure wrangler.toml).",
     );
   }
   return config.d1DatabaseId;

@@ -2,9 +2,14 @@ import { type Context, Hono } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   BadRequestError,
+  AuthenticationError,
   NotFoundError,
   ServiceUnavailableError,
 } from "@takos/worker-platform-utils/errors";
+import {
+  TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+  TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+} from "@takosjp/takosumi-accounts-contract";
 
 import {
   applyDefaultAppInstallation,
@@ -26,12 +31,16 @@ import {
   resolveInstallableAppAccountsConfig,
   resolveInstallableAppInstallConfig,
 } from "../../application/services/source/installable-app-install.ts";
-import { resolveTakosumiSubject } from "../../application/services/identity/takosumi-subject.ts";
+import { sanitizeWorkloadServicesBody } from "../../application/services/source/takosumi-workload-services.ts";
 import {
   parseJsonBody,
   spaceAccess,
   type SpaceAccessRouteEnv,
 } from "./route-auth.ts";
+import {
+  handleAccountsPlaneRequest,
+  type CloudflareWorkerEnv as AccountsWorkerEnv,
+} from "./accounts/mount.ts";
 
 type InstallableAppApplyBody = {
   app_id?: unknown;
@@ -71,7 +80,6 @@ export const appInstallationsRouteDeps = {
   resolveDefaultAppInstallConfig,
   resolveInstallableAppAccountsConfig,
   resolveInstallableAppInstallConfig,
-  resolveTakosumiSubject,
   listInstallableAppInstallations,
   deleteInstallableAppInstallation,
   planInstallableAppInstallation,
@@ -80,6 +88,7 @@ export const appInstallationsRouteDeps = {
   applyInstallableAppRevision,
   listInstallableAppInstallationsWithServices,
   listInstallableAppInstallationServices,
+  handleAccountsPlaneRequest,
 };
 
 function readString(value: unknown): string | null {
@@ -193,19 +202,336 @@ function jsonFromUpstream(
   return c.json(result.body, result.status as ContentfulStatusCode);
 }
 
+const TAKOSUMI_ACCOUNTS_SESSION_ME_PATH = "/v1/account/session/me";
+const TAKOSUMI_ACCOUNTS_SESSION_COOKIE_NAME = "takosumi_session";
+
+type AccountsSessionCaller = {
+  kind: "accounts_session";
+  subject: string;
+  headers: Headers;
+};
+
+function bearerToken(value: string | undefined): string | null {
+  if (!value?.startsWith("Bearer ")) return null;
+  const token = value.slice("Bearer ".length).trim();
+  return token.length > 0 ? token : null;
+}
+
+function hasAccountsSessionCookie(cookie: string | undefined): boolean {
+  if (!cookie) return false;
+  return cookie.split(";").some((part) => {
+    const [name] = part.trim().split("=", 1);
+    return name === TAKOSUMI_ACCOUNTS_SESSION_COOKIE_NAME;
+  });
+}
+
+function readAccountsSessionHeader(c: Context<SpaceAccessRouteEnv>): {
+  present: boolean;
+  headers: Headers;
+} {
+  const headers = new Headers({ accept: "application/json" });
+  let present = false;
+  const bearer = bearerToken(c.req.header("Authorization"));
+  if (bearer?.startsWith("sess_")) {
+    headers.set("authorization", `Bearer ${bearer}`);
+    present = true;
+  }
+  const explicitSession = readString(
+    c.req.header("x-takosumi-account-session"),
+  );
+  if (explicitSession?.startsWith("sess_")) {
+    headers.set("x-takosumi-account-session", explicitSession);
+    present = true;
+  }
+  const cookie = c.req.header("Cookie");
+  if (hasAccountsSessionCookie(cookie)) {
+    headers.set("cookie", cookie ?? "");
+    present = true;
+  }
+  return { present, headers };
+}
+
+async function readUpstreamBody(
+  response: Response,
+): Promise<Record<string, unknown> | null> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return { value: parsed };
+  } catch {
+    return { error: text.length > 400 ? `${text.slice(0, 400)}...` : text };
+  }
+}
+
+async function accountsPlaneJson(
+  c: Context<SpaceAccessRouteEnv>,
+  path: string,
+  init: RequestInit,
+): Promise<InstallableAppUpstreamResponse> {
+  const url = new URL(c.req.url);
+  url.pathname = path;
+  url.search = "";
+  const request = new Request(url.toString(), init);
+  const response = await appInstallationsRouteDeps.handleAccountsPlaneRequest(
+    request,
+    c.env as unknown as AccountsWorkerEnv,
+  );
+  return {
+    status: response.status,
+    body: await readUpstreamBody(response),
+  };
+}
+
+async function accountsPlaneGetJson(
+  c: Context<SpaceAccessRouteEnv>,
+  path: string,
+  headers: Headers,
+  search?: Record<string, string>,
+): Promise<InstallableAppUpstreamResponse> {
+  const url = new URL(c.req.url);
+  url.pathname = path;
+  url.search = "";
+  for (const [key, value] of Object.entries(search ?? {})) {
+    url.searchParams.set(key, value);
+  }
+  const response = await appInstallationsRouteDeps.handleAccountsPlaneRequest(
+    new Request(url.toString(), { method: "GET", headers }),
+    c.env as unknown as AccountsWorkerEnv,
+  );
+  return {
+    status: response.status,
+    body: await readUpstreamBody(response),
+  };
+}
+
+function jsonHeaders(headers: Headers): Headers {
+  const next = new Headers(headers);
+  next.set("accept", "application/json");
+  next.set("content-type", "application/json");
+  return next;
+}
+
+async function resolveAccountsSessionCaller(
+  c: Context<SpaceAccessRouteEnv>,
+): Promise<AccountsSessionCaller | null> {
+  const session = readAccountsSessionHeader(c);
+  if (!session.present) return null;
+  const response = await accountsPlaneJson(
+    c,
+    TAKOSUMI_ACCOUNTS_SESSION_ME_PATH,
+    {
+      method: "GET",
+      headers: session.headers,
+    },
+  );
+  if (response.status !== 200) {
+    throw new AuthenticationError("Takosumi Accounts session is required");
+  }
+  const subject = readString(response.body?.subject);
+  if (!subject) {
+    throw new AuthenticationError("Takosumi Accounts session is invalid");
+  }
+  return {
+    kind: "accounts_session",
+    subject,
+    headers: session.headers,
+  };
+}
+
+function accountsInstallationsPath(installationId?: string): string {
+  return installationId
+    ? `${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}/${encodeURIComponent(
+        installationId,
+      )}`
+    : TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH;
+}
+
+function readAccountsExpectedGuard(
+  value: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const expected = readRecord(value?.expected);
+  if (!expected) {
+    throw new ServiceUnavailableError(
+      "Installation plan Run response is missing expected guard",
+    );
+  }
+  return expected;
+}
+
+function defaultAppMode(
+  entry: DefaultAppDistributionEntry,
+  requestedMode: string | undefined,
+): string {
+  if (requestedMode) return requestedMode;
+  const firstMode = (entry.runtimeModes as readonly string[] | undefined)?.[0];
+  return firstMode || "shared-cell";
+}
+
+async function postAccountsInstallationJson(
+  c: Context<SpaceAccessRouteEnv>,
+  caller: AccountsSessionCaller,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<InstallableAppUpstreamResponse> {
+  return await accountsPlaneJson(c, path, {
+    method: "POST",
+    headers: jsonHeaders(caller.headers),
+    body: JSON.stringify(body),
+  });
+}
+
+async function applyDefaultAppInstallationForRoute(
+  c: Context<SpaceAccessRouteEnv>,
+  caller: AccountsSessionCaller,
+  entry: DefaultAppDistributionEntry,
+  params: {
+    spaceId: string;
+    mode: string;
+  },
+): Promise<InstallableAppUpstreamResponse> {
+  const source = {
+    kind: "git",
+    url: entry.repositoryUrl,
+    ref: entry.ref,
+  };
+  const plan = await postAccountsInstallationJson(
+    c,
+    caller,
+    TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+    {
+      spaceId: params.spaceId,
+      source,
+    },
+  );
+  if (plan.status >= 400) return plan;
+  const expected = readAccountsExpectedGuard(plan.body);
+  return await postAccountsInstallationJson(
+    c,
+    caller,
+    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+    {
+      accountId: params.spaceId,
+      spaceId: params.spaceId,
+      createdBySubject: caller.subject,
+      source,
+      expected,
+      mode: params.mode,
+    },
+  );
+}
+
+async function listInstallableAppInstallationsForRoute(
+  c: Context<SpaceAccessRouteEnv>,
+  spaceId: string,
+): Promise<InstallableAppUpstreamResponse> {
+  const caller = await resolveAccountsSessionCaller(c);
+  if (caller) {
+    return await accountsPlaneGetJson(
+      c,
+      TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+      caller.headers,
+      { space_id: spaceId },
+    );
+  }
+  return await appInstallationsRouteDeps.listInstallableAppInstallations(
+    spaceId,
+    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+  );
+}
+
+async function listInstallableAppInstallationServicesForRoute(
+  c: Context<SpaceAccessRouteEnv>,
+  installationId: string,
+): Promise<InstallableAppUpstreamResponse> {
+  const caller = await resolveAccountsSessionCaller(c);
+  if (caller) {
+    const result = await accountsPlaneGetJson(
+      c,
+      `${accountsInstallationsPath(installationId)}/services`,
+      caller.headers,
+    );
+    return {
+      status: result.status,
+      body: sanitizeWorkloadServicesBody(result.body),
+    };
+  }
+  return await appInstallationsRouteDeps.listInstallableAppInstallationServices(
+    installationId,
+    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+  );
+}
+
+async function listInstallableAppInstallationsWithServicesForRoute(
+  c: Context<SpaceAccessRouteEnv>,
+  spaceId: string,
+): Promise<InstallableAppUpstreamResponse> {
+  const caller = await resolveAccountsSessionCaller(c);
+  if (!caller) {
+    return await appInstallationsRouteDeps.listInstallableAppInstallationsWithServices(
+      spaceId,
+      appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
+    );
+  }
+  const upstream = await accountsPlaneGetJson(
+    c,
+    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+    caller.headers,
+    { space_id: spaceId },
+  );
+  if (upstream.status >= 400) return upstream;
+  const installations = Array.isArray(upstream.body?.installations)
+    ? upstream.body.installations
+    : null;
+  if (!installations) return upstream;
+  const enriched = await Promise.all(
+    installations.map(async (installation) => {
+      const record = readRecord(installation);
+      if (!record) return installation;
+      const installationId =
+        readString(record.id) ??
+        readString(record.installation_id) ??
+        readString(record.installationId);
+      if (!installationId) return installation;
+      const services = await accountsPlaneGetJson(
+        c,
+        `${accountsInstallationsPath(installationId)}/services`,
+        caller.headers,
+      );
+      if (services.status >= 400 || !Array.isArray(services.body?.services)) {
+        return installation;
+      }
+      return {
+        ...record,
+        services: sanitizeWorkloadServicesBody(services.body)?.services,
+      };
+    }),
+  );
+  return {
+    status: upstream.status,
+    body: {
+      ...upstream.body,
+      installations: enriched,
+    },
+  };
+}
+
 function findDefaultAppEntry(
   entries: DefaultAppDistributionEntry[],
   appId: string,
 ): DefaultAppDistributionEntry | null {
-  return entries.find((entry) =>
-    entry.appId === appId || entry.name === appId
-  ) ??
-    null;
+  return (
+    entries.find((entry) => entry.appId === appId || entry.name === appId) ??
+    null
+  );
 }
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -216,7 +542,8 @@ function listInstallationIds(body: Record<string, unknown> | null): string[] {
   for (const item of installations) {
     const record = readRecord(item);
     if (!record) continue;
-    const id = readString(record.id) ??
+    const id =
+      readString(record.id) ??
       readString(record.installation_id) ??
       readString(record.installationId);
     if (id) ids.push(id);
@@ -236,19 +563,13 @@ async function assertInstallationBelongsToSpace(
   spaceId: string,
   installationId: string,
 ): Promise<void> {
-  const list = await appInstallationsRouteDeps.listInstallableAppInstallations(
-    spaceId,
-    appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
-  );
+  const list = await listInstallableAppInstallationsForRoute(c, spaceId);
   if (!listInstallationIds(list.body).includes(installationId)) {
     throw new NotFoundError("Installable app");
   }
 }
 
-function readPathString(
-  value: unknown,
-  path: string[],
-): string | null {
+function readPathString(value: unknown, path: string[]): string | null {
   let current: unknown = value;
   for (const segment of path) {
     const record = readRecord(current);
@@ -259,20 +580,25 @@ function readPathString(
 }
 
 function readBodyExpectedCommit(body: InstallableAppApplyBody): string | null {
-  return readString(body.expected_commit) ??
-    readPathString(body.expected, ["commit"]);
+  return (
+    readString(body.expected_commit) ??
+    readPathString(body.expected, ["commit"])
+  );
 }
 
 function readBodyExpectedPlanDigest(
   body: InstallableAppApplyBody,
 ): string | null {
-  return readString(body.expected_plan_digest) ??
-    readPathString(body.expected, ["planDigest"]);
+  return (
+    readString(body.expected_plan_digest) ??
+    readPathString(body.expected, ["planDigest"])
+  );
 }
 
-function readBodyExpectedCurrentDeploymentId(
-  body: InstallableAppApplyBody,
-): { provided: boolean; value: string | null } {
+function readBodyExpectedCurrentDeploymentId(body: InstallableAppApplyBody): {
+  provided: boolean;
+  value: string | null;
+} {
   if ("expected_current_deployment_id" in body) {
     return readNullableString(
       body.expected_current_deployment_id,
@@ -300,19 +626,23 @@ function readNullableString(
 }
 
 function extractInstallationId(value: unknown): string | null {
-  return readPathString(value, ["accounts", "installationId"]) ??
+  return (
+    readPathString(value, ["accounts", "installationId"]) ??
     readPathString(value, ["accounts", "installation_id"]) ??
     readPathString(value, ["installation", "id"]) ??
     readPathString(value, ["installation", "installation_id"]) ??
     readPathString(value, ["installationId"]) ??
-    readPathString(value, ["installation_id"]);
+    readPathString(value, ["installation_id"])
+  );
 }
 
 function extractInstallationStatus(value: unknown): string {
-  return readPathString(value, ["installation", "status"]) ??
+  return (
+    readPathString(value, ["installation", "status"]) ??
     readPathString(value, ["accounts", "status"]) ??
     readPathString(value, ["status"]) ??
-    "installing";
+    "installing"
+  );
 }
 
 function toInstallationRecord(
@@ -346,11 +676,10 @@ appInstallationsRouter.get(
   spaceAccess({ roles: ["owner", "admin", "editor", "viewer"] }),
   async (c) => {
     const { space } = c.get("access");
-    const upstream = await appInstallationsRouteDeps
-      .listInstallableAppInstallationsWithServices(
-        space.id,
-        appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
-      );
+    const upstream = await listInstallableAppInstallationsWithServicesForRoute(
+      c,
+      space.id,
+    );
     return jsonFromUpstream(c, upstream);
   },
 );
@@ -365,11 +694,10 @@ appInstallationsRouter.get(
       throw new BadRequestError("installation_id is required");
     }
     await assertInstallationBelongsToSpace(c, space.id, installationId);
-    const upstream = await appInstallationsRouteDeps
-      .listInstallableAppInstallationServices(
-        installationId,
-        appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
-      );
+    const upstream = await listInstallableAppInstallationServicesForRoute(
+      c,
+      installationId,
+    );
     return jsonFromUpstream(c, upstream);
   },
 );
@@ -387,18 +715,38 @@ appInstallationsRouter.post(
     if (!source) {
       throw new BadRequestError("git_url and ref are required");
     }
-    const installConfig = appInstallationsRouteDeps
-      .resolveInstallableAppInstallConfig(c.env);
+    const caller = await resolveAccountsSessionCaller(c);
+    if (caller) {
+      const upstream = await postAccountsInstallationJson(
+        c,
+        caller,
+        TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+        {
+          spaceId: space.id,
+          source: {
+            kind: "git",
+            url: source.gitUrl,
+            ref: source.ref,
+          },
+        },
+      );
+      return jsonFromUpstream(c, upstream);
+    }
+    const installConfig =
+      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Installation PlanRun is not configured",
+        "Third-party Installation plan Run is not configured",
       );
     }
-    const upstream = await appInstallationsRouteDeps
-      .planInstallableAppInstallation({
-        ...source,
-        spaceId: space.id,
-      }, installConfig);
+    const upstream =
+      await appInstallationsRouteDeps.planInstallableAppInstallation(
+        {
+          ...source,
+          spaceId: space.id,
+        },
+        installConfig,
+      );
     return jsonFromUpstream(c, upstream);
   },
 );
@@ -407,7 +755,6 @@ appInstallationsRouter.post(
   "/spaces/:spaceId/app-installations/git-url/apply",
   spaceAccess({ roles: ["owner", "admin", "editor"] }),
   async (c) => {
-    const user = c.get("user");
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
     if (body === null) {
@@ -420,45 +767,73 @@ appInstallationsRouter.post(
 
     const costAck = readOptionalBodyBoolean(body, "cost_ack");
     const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
-    const expectedPlanDigest = readBodyExpectedPlanDigest(
-      body,
-    ) ?? undefined;
+    const expectedPlanDigest = readBodyExpectedPlanDigest(body) ?? undefined;
     if (!expectedCommit || !expectedPlanDigest) {
       throw new BadRequestError(
-        "expected_commit and expected_plan_digest are required after install PlanRun approval",
+        "expected_commit and expected_plan_digest are required after install plan Run approval",
       );
     }
 
-    const installConfig = appInstallationsRouteDeps
-      .resolveInstallableAppInstallConfig(c.env);
+    const caller = await resolveAccountsSessionCaller(c);
+    if (caller) {
+      const mode = readOptionalBodyMode(body) ?? "shared-cell";
+      const runtimeBaseUrl = readOptionalBodyRuntimeBaseUrl(body);
+      const upstream = await postAccountsInstallationJson(
+        c,
+        caller,
+        TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+        {
+          accountId: space.id,
+          spaceId: space.id,
+          createdBySubject: caller.subject,
+          source: {
+            kind: "git",
+            url: source.gitUrl,
+            ref: source.ref,
+          },
+          expected: {
+            commit: expectedCommit,
+            planDigest: expectedPlanDigest,
+          },
+          mode,
+          ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
+          ...(costAck === undefined ? {} : { costAck }),
+        },
+      );
+      return jsonFromUpstream(c, upstream);
+    }
+
+    const installConfig =
+      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Third-party Installation apply is not configured",
       );
     }
-    const subject = await appInstallationsRouteDeps
-      .resolveTakosumiSubject(c.env, user.id) ?? installConfig.subject;
-    if (!subject) {
+    if (!installConfig.subject) {
       throw new ServiceUnavailableError(
         "Third-party Installation subject is not configured",
       );
     }
     const mode = readOptionalBodyMode(body) ?? installConfig.mode;
-    const runtimeBaseUrl = readOptionalBodyRuntimeBaseUrl(body) ??
-      installConfig.runtimeBaseUrl;
+    const runtimeBaseUrl =
+      readOptionalBodyRuntimeBaseUrl(body) ?? installConfig.runtimeBaseUrl;
 
-    const upstream = await appInstallationsRouteDeps
-      .applyInstallableAppInstallation({
-        ...source,
-        accountId: installConfig.accountId ?? space.id,
-        spaceId: space.id,
-        subject,
-        ...(mode ? { mode } : {}),
-        ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
-        ...(expectedCommit ? { expectedCommit } : {}),
-        ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
-        ...(costAck === undefined ? {} : { costAck }),
-      }, installConfig);
+    const upstream =
+      await appInstallationsRouteDeps.applyInstallableAppInstallation(
+        {
+          ...source,
+          accountId: installConfig.accountId ?? space.id,
+          spaceId: space.id,
+          subject: installConfig.subject,
+          ...(mode ? { mode } : {}),
+          ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
+          ...(expectedCommit ? { expectedCommit } : {}),
+          ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
+          ...(costAck === undefined ? {} : { costAck }),
+        },
+        installConfig,
+      );
     return jsonFromUpstream(c, upstream);
   },
 );
@@ -478,24 +853,44 @@ appInstallationsRouter.post(
     }
     const installationId = readRequiredInstallationId(body);
     const operation = readBodyRevisionOperation(body);
-    const installConfig = appInstallationsRouteDeps
-      .resolveInstallableAppInstallConfig(c.env);
-    if (!installConfig) {
-      throw new ServiceUnavailableError(
-        "Third-party Installation deployment PlanRun is not configured",
-      );
-    }
     await assertInstallationBelongsToSpace(c, space.id, installationId);
     const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
-    const upstream = await appInstallationsRouteDeps
-      .planInstallableAppRevision({
+    const caller = await resolveAccountsSessionCaller(c);
+    if (caller) {
+      const upstream = await postAccountsInstallationJson(
+        c,
+        caller,
+        `${accountsInstallationsPath(installationId)}/deployments/plan-runs`,
+        {
+          source: {
+            kind: "git",
+            url: source.gitUrl,
+            ref: source.ref,
+            ...(sourceCommit ? { commit: sourceCommit } : {}),
+          },
+          ...(reason ? { reason } : {}),
+        },
+      );
+      return jsonFromUpstream(c, upstream);
+    }
+    const installConfig =
+      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
+    if (!installConfig) {
+      throw new ServiceUnavailableError(
+        "Third-party Installation deployment plan Run is not configured",
+      );
+    }
+    const upstream = await appInstallationsRouteDeps.planInstallableAppRevision(
+      {
         ...source,
         installationId,
         operation,
         ...(sourceCommit ? { sourceCommit } : {}),
         ...(reason ? { reason } : {}),
-      }, installConfig);
+      },
+      installConfig,
+    );
     return jsonFromUpstream(c, upstream);
   },
 );
@@ -515,45 +910,78 @@ appInstallationsRouter.post(
     }
     const installationId = readRequiredInstallationId(body);
     const operation = readBodyRevisionOperation(body);
-    const installConfig = appInstallationsRouteDeps
-      .resolveInstallableAppInstallConfig(c.env);
+    await assertInstallationBelongsToSpace(c, space.id, installationId);
+    const sourceCommit = readString(body.source_commit) ?? undefined;
+    const reason = readString(body.reason) ?? undefined;
+    const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
+    const expectedPlanDigest = readBodyExpectedPlanDigest(body) ?? undefined;
+    const expectedCurrentDeploymentId =
+      readBodyExpectedCurrentDeploymentId(body);
+    if (
+      operation === "upgrade" &&
+      (!expectedCommit ||
+        !expectedPlanDigest ||
+        !expectedCurrentDeploymentId.provided)
+    ) {
+      throw new BadRequestError(
+        "expected.commit, expected.planDigest, and expected.currentDeploymentId are required after deployment plan Run approval",
+      );
+    }
+    const caller = await resolveAccountsSessionCaller(c);
+    if (caller) {
+      const path =
+        operation === "rollback"
+          ? `${accountsInstallationsPath(installationId)}/rollback`
+          : `${accountsInstallationsPath(installationId)}/deployments`;
+      const upstream = await postAccountsInstallationJson(c, caller, path, {
+        ...(operation === "rollback"
+          ? { deploymentId: source.ref }
+          : {
+              source: {
+                kind: "git",
+                url: source.gitUrl,
+                ref: source.ref,
+                ...(sourceCommit ? { commit: sourceCommit } : {}),
+              },
+              ...(expectedCommit &&
+              expectedPlanDigest &&
+              expectedCurrentDeploymentId.provided
+                ? {
+                    expected: {
+                      commit: expectedCommit,
+                      planDigest: expectedPlanDigest,
+                      currentDeploymentId: expectedCurrentDeploymentId.value,
+                    },
+                  }
+                : {}),
+            }),
+        ...(reason ? { reason } : {}),
+      });
+      return jsonFromUpstream(c, upstream);
+    }
+    const installConfig =
+      appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Third-party Installation deployment apply is not configured",
       );
     }
-    await assertInstallationBelongsToSpace(c, space.id, installationId);
-    const sourceCommit = readString(body.source_commit) ?? undefined;
-    const reason = readString(body.reason) ?? undefined;
-    const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
-    const expectedPlanDigest = readBodyExpectedPlanDigest(
-      body,
-    ) ?? undefined;
-    const expectedCurrentDeploymentId = readBodyExpectedCurrentDeploymentId(
-      body,
-    );
-    if (
-      operation === "upgrade" &&
-      (!expectedCommit || !expectedPlanDigest ||
-        !expectedCurrentDeploymentId.provided)
-    ) {
-      throw new BadRequestError(
-        "expected.commit, expected.planDigest, and expected.currentDeploymentId are required after deployment PlanRun approval",
+    const upstream =
+      await appInstallationsRouteDeps.applyInstallableAppRevision(
+        {
+          ...source,
+          installationId,
+          operation,
+          ...(sourceCommit ? { sourceCommit } : {}),
+          ...(reason ? { reason } : {}),
+          ...(expectedCommit ? { expectedCommit } : {}),
+          ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
+          ...(expectedCurrentDeploymentId.provided
+            ? { expectedCurrentDeploymentId: expectedCurrentDeploymentId.value }
+            : {}),
+        },
+        installConfig,
       );
-    }
-    const upstream = await appInstallationsRouteDeps
-      .applyInstallableAppRevision({
-        ...source,
-        installationId,
-        operation,
-        ...(sourceCommit ? { sourceCommit } : {}),
-        ...(reason ? { reason } : {}),
-        ...(expectedCommit ? { expectedCommit } : {}),
-        ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
-        ...(expectedCurrentDeploymentId.provided
-          ? { expectedCurrentDeploymentId: expectedCurrentDeploymentId.value }
-          : {}),
-      }, installConfig);
     return jsonFromUpstream(c, upstream);
   },
 );
@@ -562,7 +990,6 @@ appInstallationsRouter.post(
   "/spaces/:spaceId/app-installations/apply",
   spaceAccess({ roles: ["owner", "admin", "editor"] }),
   async (c) => {
-    const user = c.get("user");
     const { space } = c.get("access");
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
     if (body === null) {
@@ -570,46 +997,72 @@ appInstallationsRouter.post(
     }
 
     const appId = readBodyAppId(body);
-    const entries = await appInstallationsRouteDeps
-      .resolveDefaultAppDistributionForBootstrap(c.env);
+    const entries =
+      await appInstallationsRouteDeps.resolveDefaultAppDistributionForBootstrap(
+        c.env,
+      );
     const entry = findDefaultAppEntry(entries, appId);
     if (!entry?.appId) {
       throw new NotFoundError("Installable app");
     }
 
-    const installConfig = appInstallationsRouteDeps
-      .resolveDefaultAppInstallConfig(c.env);
+    const mode = readBodyMode(body, entry);
+    const caller = await resolveAccountsSessionCaller(c);
+    if (caller) {
+      const selectedMode = defaultAppMode(entry, mode);
+      const upstream = await applyDefaultAppInstallationForRoute(
+        c,
+        caller,
+        entry,
+        {
+          spaceId: space.id,
+          mode: selectedMode,
+        },
+      );
+      if (upstream.status >= 400) return jsonFromUpstream(c, upstream);
+      const timestamp = new Date().toISOString();
+      return c.json(
+        {
+          installation: toInstallationRecord(entry, upstream.body, {
+            mode: selectedMode,
+            timestamp,
+          }),
+          subject_source: "accounts_session",
+        },
+        202,
+      );
+    }
+
+    const installConfig =
+      appInstallationsRouteDeps.resolveDefaultAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Installation install is not configured",
       );
     }
 
-    const mode = readBodyMode(body, entry);
-    const subject = await appInstallationsRouteDeps
-      .resolveTakosumiSubject(c.env, user.id) ?? installConfig.subject;
-    const upstream = await appInstallationsRouteDeps
-      .applyDefaultAppInstallation(
+    const upstream =
+      await appInstallationsRouteDeps.applyDefaultAppInstallation(
         entry,
         installConfig,
         {
           spaceId: space.id,
           createdByAccountId: space.id,
-          subject,
           ...(mode ? { mode } : {}),
         },
       );
     const timestamp = new Date().toISOString();
 
-    return c.json({
-      installation: toInstallationRecord(entry, upstream, {
-        mode: mode ?? installConfig.mode ?? null,
-        timestamp,
-      }),
-      subject_source: subject === installConfig.subject
-        ? "operator_config"
-        : "takosumi_oidc",
-    }, 202);
+    return c.json(
+      {
+        installation: toInstallationRecord(entry, upstream, {
+          mode: mode ?? installConfig.mode ?? null,
+          timestamp,
+        }),
+        subject_source: "operator_config",
+      },
+      202,
+    );
   },
 );
 
@@ -624,10 +1077,25 @@ appInstallationsRouter.delete(
     }
     await assertInstallationBelongsToSpace(c, space.id, installationId);
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
-    const reason = body === null ? undefined : readString(body.reason) ??
-      undefined;
-    const upstream = await appInstallationsRouteDeps
-      .deleteInstallableAppInstallation(
+    const reason =
+      body === null ? undefined : (readString(body.reason) ?? undefined);
+    const caller = await resolveAccountsSessionCaller(c);
+    if (caller) {
+      const upstream = await accountsPlaneJson(
+        c,
+        accountsInstallationsPath(installationId),
+        {
+          method: "DELETE",
+          headers: reason
+            ? jsonHeaders(caller.headers)
+            : new Headers(caller.headers),
+          ...(reason ? { body: JSON.stringify({ reason }) } : {}),
+        },
+      );
+      return jsonFromUpstream(c, upstream);
+    }
+    const upstream =
+      await appInstallationsRouteDeps.deleteInstallableAppInstallation(
         installationId,
         appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(c.env),
         reason,

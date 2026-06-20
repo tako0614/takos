@@ -14,7 +14,7 @@ import * as runtime from "../runtime.ts";
 //   bun ../../scripts/control/render-wrangler-from-tofu.mjs production --zone-id <zone>
 //
 // What it fills (per environment): CF_ACCOUNT_ID + the three D1 database ids
-// (DB / TAKOSUMI_ACCOUNTS_DB / TAKOS_D1) + the two KV namespace ids
+// (DB / TAKOSUMI_ACCOUNTS_DB / TAKOSUMI_CONTROL_DB) + the two KV namespace ids
 // (HOSTNAME_ROUTING / ROLLOUT_HEALTH_KV). CF_ZONE_ID is NOT a module-managed
 // resource (it is the self-hoster's existing DNS zone), so pass it with
 // --zone-id or fill the remaining `replace-with-*zone-id` placeholder by hand.

@@ -14,17 +14,17 @@ counsel and replace all placeholder fields before publishing to end users.
 | ------------- | ------------------------------------------------------------------ |
 | Owner         | Operator data protection owner / DPO                               |
 | Last reviewed | `[EFFECTIVE_DATE]`                                                 |
-| Scope         | Takos Web / API, Takosumi Accounts, billing, agent execution       |
+| Scope         | Takos Web / API, Takosumi Accounts, billing, agent runtime profile |
 | Status        | Template — pre-public-launch baseline                              |
 
 ## 1. 適用範囲と controller / processor 役割
 
 `[OPERATOR_NAME]` (以下「当社」) は、本サービス利用者の個人データを以下の役割で処理します。
 
-| Plane                          | 役割             | 説明                                                                    |
-| ------------------------------ | ---------------- | ----------------------------------------------------------------------- |
-| Takosumi (Accounts plane) | 独立 controller | アカウント識別、認証、課金、不正対策、法令遵守                          |
-| Takos product (app plane)       | processor       | 利用者が投入したチャット / リポジトリ / AI エージェント context を処理 |
+| Plane                     | 役割            | 説明                                                                   |
+| ------------------------- | --------------- | ---------------------------------------------------------------------- |
+| Takosumi (Accounts plane) | 独立 controller | アカウント識別、認証、課金、不正対策、法令遵守                         |
+| Takos product (app plane) | processor       | 利用者が投入したチャット / リポジトリ / AI エージェント context を処理 |
 
 この区別は [Data Processing Agreement](/legal/data-processing-agreement) と
 [Privacy Rights](/legal/privacy-rights) で詳細に定義されています。
@@ -57,15 +57,15 @@ counsel and replace all placeholder fields before publishing to end users.
 
 ## 3. 利用目的と法的根拠
 
-| 目的                            | 法的根拠 (GDPR Art. 6 / APPI)              |
-| ------------------------------- | ------------------------------------------ |
-| サービス提供と契約履行          | 契約履行 (Art. 6(1)(b))                    |
-| 認証・アクセス制御              | 契約履行・正当な利益 (Art. 6(1)(b)/(f))    |
-| 請求・税務                      | 契約履行・法令遵守 (Art. 6(1)(b)/(c))      |
-| セキュリティ監視・不正対策      | 正当な利益・法令遵守 (Art. 6(1)(f)/(c))    |
-| プロダクト信頼性向上            | 正当な利益 (Art. 6(1)(f))                  |
-| マーケティング (newsletter 等)  | 同意 (Art. 6(1)(a))                        |
-| Cookie / UI 個人設定の保存      | 同意 (Art. 6(1)(a))                        |
+| 目的                           | 法的根拠 (GDPR Art. 6 / APPI)           |
+| ------------------------------ | --------------------------------------- |
+| サービス提供と契約履行         | 契約履行 (Art. 6(1)(b))                 |
+| 認証・アクセス制御             | 契約履行・正当な利益 (Art. 6(1)(b)/(f)) |
+| 請求・税務                     | 契約履行・法令遵守 (Art. 6(1)(b)/(c))   |
+| セキュリティ監視・不正対策     | 正当な利益・法令遵守 (Art. 6(1)(f)/(c)) |
+| プロダクト信頼性向上           | 正当な利益 (Art. 6(1)(f))               |
+| マーケティング (newsletter 等) | 同意 (Art. 6(1)(a))                     |
+| Cookie / UI 個人設定の保存     | 同意 (Art. 6(1)(a))                     |
 
 APPI (個人情報の保護に関する法律) のもとでは、上記目的に対応する第 17 条 (利用目的の特定)
 および第 18 条 (利用目的の通知・公表) の要件を満たします。
@@ -74,18 +74,18 @@ APPI (個人情報の保護に関する法律) のもとでは、上記目的に
 
 当社は利用者の個人データを以下の sub-processor および第三者と共有することがあります:
 
-- 共有先一覧と役割は [Sub-processors](/legal/sub-processors) を参照
+- 共有先一覧と役割は canonical list の [Sub-processors](/legal/subprocessors) を参照
 - 共有は当該 sub-processor との DPA / SCC / transfer mechanism に従う
 - 法令・裁判所命令に基づく開示要求は [Data Processing
   Agreement](/legal/data-processing-agreement) §9 に従う
 
 ## 5. データ保持期間
 
-| データ種別          | 保持期間                                                  |
-| ------------------- | --------------------------------------------------------- |
-| アカウントデータ    | アカウント有効期間 + `[ACCOUNT_RETENTION_DAYS]` 日         |
-| 課金データ          | 法令で要求される期間 (日本の場合は 7 年)                  |
-| 利用・監査ログ      | `[AUDIT_RETENTION_DAYS]` 日                                |
+| データ種別              | 保持期間                                                  |
+| ----------------------- | --------------------------------------------------------- |
+| アカウントデータ        | アカウント有効期間 + `[ACCOUNT_RETENTION_DAYS]` 日        |
+| 課金データ              | 法令で要求される期間 (日本の場合は 7 年)                  |
+| 利用・監査ログ          | `[AUDIT_RETENTION_DAYS]` 日                               |
 | AI エージェント context | Installation 削除時に削除 (privacy-rights handler に従う) |
 
 ## 6. 利用者の権利
@@ -126,11 +126,11 @@ APPI (個人情報の保護に関する法律) のもとでは、上記目的に
 
 ## 11. 連絡先
 
-| 用途                       | 連絡先              |
-| -------------------------- | ------------------- |
-| プライバシー全般           | `[PRIVACY_EMAIL]`   |
-| データ保護責任者 (DPO)     | `[DPO_EMAIL]`       |
-| EU 代理人 (該当する場合)   | `[EU_REP_EMAIL]`    |
-| 住所                       | `[OPERATOR_ADDRESS]` |
+| 用途                     | 連絡先               |
+| ------------------------ | -------------------- |
+| プライバシー全般         | `[PRIVACY_EMAIL]`    |
+| データ保護責任者 (DPO)   | `[DPO_EMAIL]`        |
+| EU 代理人 (該当する場合) | `[EU_REP_EMAIL]`     |
+| 住所                     | `[OPERATOR_ADDRESS]` |
 
 施行日: `[EFFECTIVE_DATE]`

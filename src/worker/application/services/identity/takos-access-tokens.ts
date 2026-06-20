@@ -1,7 +1,6 @@
 /**
- * App-local Takos bearer credentials are retired. Human, automation, and service
- * credentials are owned by Takosumi Accounts and materialized through
- * AppGrant/AppBinding records.
+ * `takos.*` publication names are reserved for Takos-owned service identity and
+ * are not an app-local credential channel.
  */
-export const RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE =
-  "Takos app-local managed tokens are retired; use AppGrant/AppBinding credentials from Takosumi Accounts.";
+export const RESERVED_TAKOS_PUBLICATION_MESSAGE =
+  "Reserved Takos publication names are not a credential channel; request runtime authority through ServiceBinding and ServiceGrant.";

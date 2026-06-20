@@ -2,18 +2,20 @@
 // app-manifest-parser/index.ts
 // ============================================================
 //
-// Flat-schema manifest parser entry point.
+// Flat-schema desired-state projection parser entry point.
 //
-// Reads a YAML string, parses the top-level flat schema, and
+// Reads a YAML string or OpenTofu output value, parses the top-level flat schema, and
 // returns an `AppManifest`.
 //
 // Top-level fields:
+//   - contractVersion (optional — deploy contract version, currently 1)
 //   - name       (required)
 //   - version    (optional — semver if present)
 //   - compute    (required shape)
-//   - resources  (optional managed resource declarations)
+//   - resources  (optional runtime bindings for the flat app contract)
 //   - routes     (optional)
 //   - publish    (optional)
+//   - serviceBindings (optional ServiceBinding grant requests)
 //   - env        (optional — flat Record<string, string>)
 //   - overrides  (optional)
 //
@@ -26,6 +28,7 @@ import type {
   AppManifest,
   AppManifestOverride,
 } from "../app-manifest-types.ts";
+import { TAKOS_APP_CONTRACT_VERSION } from "../app-interface-contract.ts";
 import {
   asRecord,
   asRequiredString,
@@ -36,25 +39,25 @@ import { validateSemver } from "./parse-common.ts";
 import { parseCompute, parseComputeOverride } from "./parse-compute.ts";
 import { parsePublish, parsePublishOverride } from "./parse-publish.ts";
 import { parseResources, parseResourcesOverride } from "./parse-resources.ts";
+import { parseServiceBindings } from "./parse-service-bindings.ts";
 import { parseRoutes } from "./parse-routes.ts";
 
 export type ParseAppManifestOptions = Record<string, never>;
 
 const TOP_LEVEL_FIELDS = new Set([
+  "contractVersion",
   "name",
   "version",
   "compute",
   "resources",
   "routes",
   "publish",
+  "serviceBindings",
   "env",
   "overrides",
 ]);
 
-function requireRecord(
-  raw: unknown,
-  field: string,
-): Record<string, unknown> {
+function requireRecord(raw: unknown, field: string): Record<string, unknown> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error(`${field} must be an object`);
   }
@@ -75,22 +78,43 @@ function assertAllowedFields(
   }
 }
 
-export function assertAllowedTopLevelFields(
-  record: object,
-): void {
+function parseContractVersion(
+  value: unknown,
+): typeof TAKOS_APP_CONTRACT_VERSION | undefined {
+  if (value == null) return undefined;
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value !== TAKOS_APP_CONTRACT_VERSION
+  ) {
+    throw new Error(
+      `contractVersion must be the number ${TAKOS_APP_CONTRACT_VERSION}`,
+    );
+  }
+  return TAKOS_APP_CONTRACT_VERSION;
+}
+
+export function assertAllowedTopLevelFields(record: object): void {
   const envelopeFields = ["apiVersion", "kind", "metadata", "spec"];
   const hasEnvelopeField = envelopeFields.some((field) =>
-    Object.hasOwn(record, field)
+    Object.hasOwn(record, field),
   );
   if (hasEnvelopeField) {
     throw new Error(
-      "Takos app manifests use the flat contract; remove apiVersion/kind/metadata/spec and put name, compute, routes, publish, env, and overrides at the top level",
+      "Takos desired-state projections use the flat contract; remove apiVersion/kind/metadata/spec and put contractVersion, name, compute, routes, publish, serviceBindings, env, and overrides at the top level",
     );
   }
 
   for (const key of Object.keys(record)) {
+    if (key === "schema") {
+      throw new Error(
+        "schema is not supported; use contractVersion = 1 for the deploy contract",
+      );
+    }
     if (!TOP_LEVEL_FIELDS.has(key)) {
-      throw new Error(`${key} is not supported by the app manifest contract`);
+      throw new Error(
+        `${key} is not supported by the Capsule desired-state projection contract`,
+      );
     }
   }
 }
@@ -100,8 +124,8 @@ export function assertAllowedTopLevelFields(
 // ============================================================
 //
 // Each `overrides.<env>` block is a set of *deltas* layered onto the base
-// manifest at apply time (see `applyManifestOverrides` in group-state.ts).
-// Rather than maintaining a second, weaker manifest parser, override sections
+// projection at apply time (see `applyManifestOverrides` in group-state.ts).
+// Rather than maintaining a second, weaker projection parser, override sections
 // reuse the canonical section parsers in partial mode: required fields such as
 // compute `kind`/`image`/`port` and publish `type`/`outputs` may be omitted as
 // deltas, while canonicalization, image/build, and file-handler validation run
@@ -157,10 +181,13 @@ function parseOverrides(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-export function parseAppManifestRecord(record: Record<string, unknown>): AppManifest {
+export function parseAppManifestRecord(
+  record: Record<string, unknown>,
+): AppManifest {
   assertAllowedTopLevelFields(record);
 
   // --- Top-level scalars ---
+  const contractVersion = parseContractVersion(record.contractVersion);
   const name = asRequiredString(record.name, "name");
   const version = asString(record.version, "version");
   if (version) {
@@ -172,6 +199,7 @@ export function parseAppManifestRecord(record: Record<string, unknown>): AppMani
   const resources = parseResources(record, compute);
   const routes = parseRoutes(record, compute);
   const publish = parsePublish(record);
+  const serviceBindings = parseServiceBindings(record, compute);
 
   // --- Env (flat Record<string, string>) ---
   const env = asStringMap(record.env, "env") ?? {};
@@ -193,12 +221,14 @@ export function parseAppManifestRecord(record: Record<string, unknown>): AppMani
   }
 
   return {
+    ...(contractVersion != null ? { contractVersion } : {}),
     name,
     ...(version ? { version } : {}),
     compute,
     resources,
     routes,
     publish,
+    ...(serviceBindings.length > 0 ? { serviceBindings } : {}),
     env,
     ...(overrides ? { overrides } : {}),
   };
@@ -220,5 +250,6 @@ export const parseAppManifestText = parseAppManifestYaml;
 // Re-export parsers for any consumers that import them directly
 export { parseCompute } from "./parse-compute.ts";
 export { parsePublish } from "./parse-publish.ts";
+export { parseServiceBindings } from "./parse-service-bindings.ts";
 export { parseRoutes } from "./parse-routes.ts";
 export { assertManifestInputDoesNotUseBuildMetadata } from "./build-metadata.ts";

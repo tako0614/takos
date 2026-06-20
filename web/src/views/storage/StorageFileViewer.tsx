@@ -19,7 +19,7 @@ interface StorageFileViewerProps {
   spaceId: string;
   file: StorageFile;
   downloadUrl: string | null;
-  fileHandlers: FileHandler[];
+  interfaceFileHandlers: FileHandler[];
   onClose: () => void;
   onSave?: () => void;
 }
@@ -28,7 +28,7 @@ export function StorageFileViewer(props: StorageFileViewerProps) {
   const { t } = useI18n();
 
   // Resolve all available handlers for this file
-  const allHandlers = resolveHandlers(props.file, props.fileHandlers);
+  const allHandlers = resolveHandlers(props.file, props.interfaceFileHandlers);
   const savedDefault = getDefaultHandler(props.file, allHandlers);
 
   // Active handler state: use saved default, or show picker if multiple

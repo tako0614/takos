@@ -1,13 +1,14 @@
 # Internal Trust Boundaries (canonical mechanism)
 
-**Premise: Takos is self-hostable as a plain OpenTofu module; Takosumi is optional.** Takosumi is the OpenTofu-native deploy control plane; Takos's whole
-deploy topology — the worker, its Durable Objects, the egress / runtime-host / executor services, container execution,
-bindings, and routes — is an OpenTofu module that **Takosumi installs and applies** (Installation → `plan` type Run -> `apply` type Run -> Deployment), with a **Connection / ProviderBinding / policy** owning the provider credentials, state backend, and Cloudflare Container execution,
+**Premise: Takos is the OpenTofu-native AI workspace distribution managed by embedded Takosumi services.** Takosumi is the OpenTofu-native deploy control plane; Takos's whole
+deploy topology — the worker, its Durable Objects, the egress proxy, container callback endpoints, container execution,
+bindings, and routes — is an OpenTofu module that **Takosumi installs and applies** (Installation → `plan` type Run -> `apply` type Run -> Deployment), with a **Connection / Installation provider connection / policy** owning the provider credentials, state backend, and Cloudflare Container execution,
 and the resulting non-secret endpoints recorded as **OutputSnapshot**. The trust boundaries here are properties of that
 Takosumi-applied topology; they do not depend on, and are not owned by, any single hand-written deploy file. The module
-lives in `deploy/opentofu` (`var.target` ∈ `aws | gcp | cloudflare`); the `cloudflare` target
+lives in `deploy/opentofu` (`var.target = cloudflare`); the `cloudflare` target
 provisions the backing resources (D1 / KV / R2 / Queues) and the Worker-script layer consumes the resulting binding map.
-`takos-private/cloudflare/wrangler.*.toml` is the interim reference materialization of that same topology.
+`takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
+materialization of that same topology.
 
 At runtime Takos deploys as **one Worker** (`src/worker/index.ts`). Because a single worker serves both the public
 internet edge (`web.fetch` on the admin domain) and self/binding traffic, "is this request internal?" **cannot** be
@@ -31,7 +32,7 @@ no signature is required or wanted.** Adding header auth here is theater that in
 - Status: **DONE.** `X-Takos-Internal-Marker` is no longer an auth gate anywhere: `validateContainerAuth` (audit #10) is
   deleted, `notifier-base.isAuthorizedHttp` returns `true` (binding boundary), and the **egress** proxy
   (`runtime/worker/egress.ts`) no longer requires the marker either — the real deploy binds `TAKOS_EGRESS` to a separate,
-  binding-only service (`takos-private-worker`, `workers_dev = false`), so the binding is the boundary and egress's own
+  binding-only operator egress worker (`workers_dev = false`), so the binding is the boundary and egress's own
   SSRF guards (private-IP / port / protocol / redirect / credential blocking) carry outbound safety. The only remaining
   `X-Takos-Internal-Marker` references are defensive inbound strips (`dispatch.ts:79`, header strip-lists) — nothing reads
   it as trust.
@@ -43,12 +44,12 @@ no signature is required or wanted.** Adding header auth here is theater that in
   narrows this to a short-TTL-flip race rather than a wide-open hole. **Mitigations in place:** the private-IP gate on the
   DoH result, `redirect: 'manual'`, and per-space egress rate limiting (shrinks the rebinding window). **Operator
   mitigation (required for hard isolation):** deploy egress behind a network egress DMZ / firewall that itself blocks RFC1918
-  + link-local + metadata-endpoint destinations, so a rebind cannot reach internal addresses even if the in-worker gate is
-  raced. Revisit the in-worker pinning if/when Workers exposes IP-pinned fetch for arbitrary hostnames.
-- **DEPLOY INVARIANT — Takos runs on Takosumi.** Takos is a product **deployed by Takosumi**, the OpenTofu-native deploy
-  control plane: its deploy topology is an OpenTofu module that Takosumi **installs and applies** (Installation → `plan` type Run -> `apply` type Run -> Deployment), with Connections holding credential references, ProviderBindings resolving each provider (+ optional alias) to a default / connection / manual / disabled binding, and policy resolving provider allowlists, state backend, and Cloudflare Container execution; the non-secret service URLs / binding map are recorded as **OutputSnapshot**. The
+  - link-local + metadata-endpoint destinations, so a rebind cannot reach internal addresses even if the in-worker gate is
+    raced. Revisit the in-worker pinning if/when Workers exposes IP-pinned fetch for arbitrary hostnames.
+- **DEPLOY INVARIANT — Takos is OpenTofu-native and Takosumi-managed.** Takos deploy topology is a plain OpenTofu module;
+  embedded Takosumi deploy-control installs and applies it as an Installation (Installation → `plan` type Run -> `apply` type Run -> Deployment), with Connections holding credential references, Installation provider connections resolving each provider (+ optional alias) to an explicit provider connection (`own_key` or `takos_provided`), and policy resolving provider allowlists, state backend, and Cloudflare Container execution; the non-secret service URLs / binding map are recorded as **OutputSnapshot**. The
   trust-boundary invariants below are therefore **properties of that module, validated by the reviewed plan** — not of
-  hand-maintained wrangler. (`takos-private/cloudflare/wrangler.*.toml` is the interim reference
+  hand-maintained wrangler. (`takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the interim reference
   materialization of the same topology and converges onto the Takosumi-applied module; do not treat it as a separate
   source of truth.)
   - The **egress** service MUST be binding-only — no public route (`workers_dev = false`). Tier 1: only worker code holds
@@ -59,13 +60,14 @@ no signature is required or wanted.** Adding header auth here is theater that in
       marker removal there is no application-layer auth on that hop either. Its boundary is therefore a **deploy
       network-isolation invariant**: the egress URL MUST NOT be reachable from untrusted networks (only the worker process
       may reach it), backed by egress's own SSRF guards. This invariant is owned by the deploy materialization
-      (`takos-private`) and MUST be asserted there (egress URL not publicly routable); it is **not** enforced by worker
+      (`takosumi-private` / operator-local config) and MUST be asserted there (egress URL not publicly routable); it is **not** enforced by worker
       code. Until that is verified in staging, treat node-profile egress as URL-reachable and keep it network-isolated.
-  - The **runtime-host / executor** services MUST stay publicly reachable: the untrusted agent/actions containers call
-    back to them by URL (`PROXY_BASE_URL`, `TAKOS_AGENT_CONTROL_RPC_BASE_URL`) because a Cloudflare Container cannot hold a
-    service binding. Their boundary is the **per-run token (tier 2)**, not the binding — making them binding-only breaks
-    container callbacks. This is exactly why tier 2 (a real credential) exists where tier 1 (binding boundary) cannot
-    apply, and why Takosumi's Connection / ProviderBinding / policy — not the worker — owns the container execution + credentials.
+  - The **container callback endpoints exposed by the single worker** MUST stay URL-reachable from the untrusted
+    agent/actions containers: containers call back by URL (`PROXY_BASE_URL`, `TAKOS_AGENT_CONTROL_RPC_BASE_URL`) because a
+    Cloudflare Container cannot hold a service binding. Their boundary is the **per-run token (tier 2)**, not the binding
+    — making them binding-only breaks container callbacks. This is exactly why tier 2 (a real credential) exists where
+    tier 1 (binding boundary) cannot apply, and why Takosumi's Connection / Installation provider connection / policy —
+    not a separate runtime service — owns the container execution + credentials.
 - Invariant: never re-introduce a header that converts an intra-worker call into "trusted". If a future DO needs to
   distinguish callers, encode it as a typed argument, not a spoofable header.
 
@@ -85,11 +87,15 @@ untrusted party, so it keeps a real credential:
 - Target hardening (tracked, not yet done): split the single coarse `ProxyCapability="control"` into per-purpose scopes
   and give workflow/actions runs a smaller set than agent runs; gate workflow-container egress deny-by-default.
 
-### 3. Cross-service (operator / account-plane) → worker → ONE signed-envelope
+### 3. Cross-service implementation calls → worker → ONE signed-envelope
 
-`/internal/scheduled`, `/internal/default-app-distribution`, `/api/internal/v1/default-apps/status`,
-and the agent-control backend are called by a **different service / trust domain** (the operator distribution / takosumi
-account-plane, or a scheduler). These cross a real trust boundary and legitimately need a credential.
+Takos still has product-internal implementation calls such as scheduled jobs, default-app distribution checks, and
+agent-control backend calls. They are not Takosumi's canonical `/internal/*` public route family; Takosumi reserves
+`/internal/*` HTTP routes for runner / executor container callbacks inside each worker. The hosted Takosumi platform
+worker has one explicit exception, `/internal/v1/gateway/provider-endpoints/*`, for the signed Gateway provider endpoint
+bridge used as an OpenTofu provider `base_url`; it is not an operator bearer API and is outside Takos self-host product
+routing. When Takos product code crosses a real service or trust-domain boundary, it must use a signed request envelope
+rather than a route name or header marker.
 
 - **Canonical mechanism: the `takos-internal-v3` HMAC signed-request envelope**
   (`verifyTakosumiInternalRequestFromHeaders`): signature over method + path + body, with `caller` / `audience` /
@@ -97,9 +103,9 @@ account-plane, or a scheduler). These cross a real trust boundary and legitimate
   and `/api/internal/v1/agent-control-backend`.
 - **Decision:** the signed envelope is the ONE cross-service primitive. The ad-hoc plain-secret gates —
   `validateInternalApiAccess` (hostname + `X-Takos-Internal-Secret`) and the executor-proxy plain
-  `EXECUTOR_PROXY_SECRET` mode — are **legacy** and converge
+  `EXECUTOR_PROXY_SECRET` mode — converge
   onto it. They are load-bearing today (the plain secret is the only gate against Host-spoof/DNS-rebind), so removal is
-  gated on the callers (operator distribution, in `takosumi/` / `takos-private/`) sending the signed envelope.
+  gated on the callers (Takosumi Accounts / deploy-control, with operator-private config outside this repo) sending the signed envelope.
 
 ## What "internal auth is unnecessary" means precisely
 
@@ -113,11 +119,11 @@ per-run token where a trust boundary is actually crossed.**"
 - Tier 1: **complete on the Cloudflare profile** (marker eliminated; binding boundary; audit #10 closed by deletion).
   Caveat: on the **node-postgres / self-host profile** the worker→egress hop is URL-reachable, not a binding, so its
   boundary is a deploy network-isolation invariant (egress URL not publicly routable) that must be asserted in
-  `takos-private` staging — see the egress profile-scope note above.
+  `takosumi-private` staging evidence — see the egress profile-scope note above.
 - Tier 2: cross-tenant binding + least-privilege secrets **complete**; capability-split + workflow-egress gate tracked.
-- Tier 3: signed envelope **exists and is canonical**; collapsing the legacy plain-secret gates onto it requires the
+- Tier 3: signed envelope **exists and is canonical for Takos product cross-service implementation calls**; collapsing the plain-secret gates onto it requires the
   cross-repo operator callers to send the envelope, then a topology step so `/internal/*` and egress are reachable only
-  via their binding/entrypoint. These are **deploy-environment changes** (validate in `takos-private/` staging), not
+  via their binding/entrypoint. These are **deploy-environment changes** (validate in `takosumi-private` staging evidence), not
   worker-local edits.
 - Optional transport upgrade: tiers 1/2 may later move from `.fetch(Request)` over bindings to native Cloudflare RPC
   (WorkerEntrypoint / DO RPC) for typed, header-free calls. This is cleanliness only — the marker is already gone, so it

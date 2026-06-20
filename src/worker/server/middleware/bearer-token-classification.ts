@@ -1,4 +1,4 @@
-const RETIRED_APP_LOCAL_BEARER_PREFIXES = ["tak_pat_", "tak_oat_"] as const;
+const UNSUPPORTED_APP_LOCAL_BEARER_PREFIXES = ["tak_pat_", "tak_oat_"] as const;
 const TAKOSUMI_ACCOUNTS_BEARER_PREFIX = "takpat_";
 const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/;
 
@@ -16,9 +16,9 @@ export function extractBearerToken(
     : null;
 }
 
-export function isRetiredAppLocalBearerToken(token: string): boolean {
-  return RETIRED_APP_LOCAL_BEARER_PREFIXES.some((prefix) =>
-    token.startsWith(prefix)
+export function isUnsupportedAppLocalBearerToken(token: string): boolean {
+  return UNSUPPORTED_APP_LOCAL_BEARER_PREFIXES.some((prefix) =>
+    token.startsWith(prefix),
   );
 }
 
@@ -47,6 +47,8 @@ function looksLikeJwt(token: string): boolean {
 }
 
 export function isTakosumiAccountsBearerCandidate(token: string): boolean {
-  return !isRetiredAppLocalBearerToken(token) &&
-    (token.startsWith(TAKOSUMI_ACCOUNTS_BEARER_PREFIX) || looksLikeJwt(token));
+  return (
+    !isUnsupportedAppLocalBearerToken(token) &&
+    (token.startsWith(TAKOSUMI_ACCOUNTS_BEARER_PREFIX) || looksLikeJwt(token))
+  );
 }

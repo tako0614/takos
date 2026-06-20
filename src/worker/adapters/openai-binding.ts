@@ -48,8 +48,8 @@ interface EmbeddingOutput {
  * used by `EmbeddingsService`, delegating to OpenAI's embedding endpoint.
  */
 export function createOpenAiAiBinding(config: OpenAiAiBindingConfig) {
-  const baseUrl = config.baseUrl?.replace(/\/+$/, "") ??
-    "https://api.openai.com/v1";
+  const baseUrl =
+    config.baseUrl?.replace(/\/+$/, "") ?? "https://api.openai.com/v1";
 
   return {
     async run(model: string, inputs: EmbeddingInput): Promise<EmbeddingOutput> {
@@ -76,16 +76,20 @@ export function createOpenAiAiBinding(config: OpenAiAiBindingConfig) {
 
       if (!response.ok) {
         const body = await response.text().catch((e) => {
-          logWarn("Failed to read OpenAI error response body", {
-            module: "openai-binding",
-            error: String(e),
-          });
+          logWarn(
+            "Failed to read OpenAI-compatible upstream error response body",
+            {
+              module: "openai-binding",
+              error: String(e),
+            },
+          );
           return "";
         });
         throw new Error(
-          `OpenAI embeddings API error (${response.status}): ${
-            body.slice(0, 500)
-          }`,
+          `OpenAI-compatible embeddings API error (${response.status}): ${body.slice(
+            0,
+            500,
+          )}`,
         );
       }
 

@@ -178,7 +178,7 @@ export const deploy = {
   connectionInfoNotAvailable: "Connection info not available",
   resourceCredentials: "Credentials",
   resourceCredentialsManagedByAccounts:
-    "Resource credentials are issued by Takosumi Accounts as AppGrant/AppBinding credentials.",
+    "Runtime authority is issued by Takosumi Accounts as ServiceGrant material.",
   resourceCredentialsNoLocalTokens:
     "This control UI no longer creates resource access tokens.",
   copyConnectionField: "Copy {field} to clipboard",

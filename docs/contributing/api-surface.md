@@ -3,9 +3,9 @@
 > このページでわかること: Takosumi reference kernel の route snapshot と公開
 > deploy-control API の境界。
 
-`../takosumi/src/service/api/openapi.ts` が Takosumi reference service の
+`../takosumi/core/api/openapi.ts` が Takosumi reference service の
 route snapshot を保持します。Takosumi public conformance surface は
-Installation / Run / Deployment / OutputSnapshot を扱う
+Space / Source / Connection / Installation / Dependency / Run / RunGroup / Deployment / OutputSnapshot / Activity を扱う
 deploy-control API です。 `/api/public/v1/*` の Takos product gateway route は
 `takos` 側で管理しており、Takosumi 公開 API としては扱いません。
 

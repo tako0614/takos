@@ -6,7 +6,7 @@
 | Field         | Value                                                                         |
 | ------------- | ----------------------------------------------------------------------------- |
 | Last reviewed | 2026-05-07                                                                    |
-| Owner         | Security owner / Takos app (`takos`)                                      |
+| Owner         | Security owner / Takos app (`takos`)                                          |
 | Status        | Published policy; mailbox and encrypted-exchange evidence is operator-private |
 
 ## Scope
@@ -14,7 +14,7 @@
 Takos の customer-facing security disclosure surface は Takos Web / API +
 Takosumi Accounts (identity / billing owner) を中心に定義します。Takosumi は
 OpenTofu-native deploy control plane であり、Installation / typed Runs /
-Deployment / OutputSnapshot を記録し、Connection / ProviderBinding / policy が provider allowlist /
+Deployment / OutputSnapshot を記録し、Connection / Installation provider connection / policy が provider allowlist /
 credential / state backend / Cloudflare Container execution を所有します。Takos
 managed service として影響する場合は Takos security intake が受け付け、必要に
 応じて Takosumi Accounts (identity / billing owner) を含む owning product root
@@ -23,9 +23,9 @@ managed service として影響する場合は Takos security intake が受け�
 In scope:
 
 - Takos Web / API (`takos`)
-- Takos Git hosting (`takos/containers/git`)
-- Takos agent service (`takos/containers/agent`)
-- Takosumi Accounts (`identity.primary.oidc` / `billing.primary.default`) —
+- Git service profile (`takos/containers/git`)
+- Agent runtime profile (`takos/containers/agent`)
+- Takosumi Accounts (`takosumi.identity.oidc` / `takosumi.billing.usage`) —
   identity / billing / Installation owner; OIDC issuer, opaque launch token
   redeem, account-plane capability record revocation, and pairwise OIDC subject
   derivation are in scope when Takos managed service is impacted

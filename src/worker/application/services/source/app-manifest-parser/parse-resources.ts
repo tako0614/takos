@@ -39,11 +39,7 @@ const RESOURCE_FIELDS = new Set([
   "durableObject",
 ]);
 
-const RESOURCE_BINDING_FIELDS = new Set([
-  "target",
-  "binding",
-  "name",
-]);
+const RESOURCE_BINDING_FIELDS = new Set(["target", "binding", "name"]);
 
 const QUEUE_FIELDS = new Set([
   "deliveryDelaySeconds",
@@ -69,7 +65,7 @@ function assertAllowedFields(
   for (const key of Object.keys(record)) {
     if (!allowed.has(key)) {
       throw new Error(
-        `${prefix}.${key} is not supported by the app manifest contract`,
+        `${prefix}.${key} is not supported by the Capsule desired-state projection contract`,
       );
     }
   }
@@ -111,10 +107,7 @@ function parseBindingTargets(raw: unknown, field: string): string[] {
   return [];
 }
 
-function parseBindingsMap(
-  raw: unknown,
-  prefix: string,
-): AppResourceBinding[] {
+function parseBindingsMap(raw: unknown, prefix: string): AppResourceBinding[] {
   if (raw == null) return [];
   if (Array.isArray(raw)) {
     return raw.map((entry, index) => {
@@ -299,9 +292,10 @@ export function parseResources(
     const record = asRecord(value);
     assertAllowedFields(record, prefix, RESOURCE_FIELDS);
     const type = parseResourceType(record.type, `${prefix}.type`);
-    const bind = record.bind != null
-      ? parseBindingName(record.bind, `${prefix}.bind`)
-      : undefined;
+    const bind =
+      record.bind != null
+        ? parseBindingName(record.bind, `${prefix}.bind`)
+        : undefined;
     const to = parseBindingTargets(record.to, `${prefix}.to`);
     const explicitBindings = parseBindingsMap(
       record.bindings,
@@ -332,33 +326,33 @@ export function parseResources(
         : {}),
       ...(parseVectorIndex(record.vectorIndex, `${prefix}.vectorIndex`)
         ? {
-          vectorIndex: parseVectorIndex(
-            record.vectorIndex,
-            `${prefix}.vectorIndex`,
-          ),
-        }
+            vectorIndex: parseVectorIndex(
+              record.vectorIndex,
+              `${prefix}.vectorIndex`,
+            ),
+          }
         : {}),
       ...(parseAnalyticsEngine(
-          record.analyticsEngine,
-          `${prefix}.analyticsEngine`,
-        )
+        record.analyticsEngine,
+        `${prefix}.analyticsEngine`,
+      )
         ? {
-          analyticsEngine: parseAnalyticsEngine(
-            record.analyticsEngine,
-            `${prefix}.analyticsEngine`,
-          ),
-        }
+            analyticsEngine: parseAnalyticsEngine(
+              record.analyticsEngine,
+              `${prefix}.analyticsEngine`,
+            ),
+          }
         : {}),
       ...(parseWorkflow(record.workflow, `${prefix}.workflow`)
         ? { workflow: parseWorkflow(record.workflow, `${prefix}.workflow`) }
         : {}),
       ...(parseDurableObject(record.durableObject, `${prefix}.durableObject`)
         ? {
-          durableObject: parseDurableObject(
-            record.durableObject,
-            `${prefix}.durableObject`,
-          ),
-        }
+            durableObject: parseDurableObject(
+              record.durableObject,
+              `${prefix}.durableObject`,
+            ),
+          }
         : {}),
     };
   }

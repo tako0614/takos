@@ -1,9 +1,10 @@
 /**
  * Workload readiness probe — kernel deploy 時の HTTP probe 実装。
  *
- * Spec (`docs/apps/manifest.md` / `docs/apps/workers.md` / `docs/architecture/control-plane.md`):
+ * Readiness contract (canonical here; this is the source of truth):
  *
- * - kernel は deploy 時に workload に対して **HTTP probe** を送る
+ * - kernel は deploy 時に、resolvable な endpoint を持つ workload に対して
+ *   **HTTP probe** を送る
  * - default probe path は `/`
  * - manifest の `compute.<name>.readiness` field で probe path を override 可
  * - **HTTP 200 OK のみ** を ready とみなす
@@ -11,8 +12,11 @@
  * - timeout は **hard-coded で 10 秒** (configurable ではない)
  * - 失敗したら deploy fail-fast (workload は起動扱いされず、routing は更新されない)
  *
- * Service / Container は manifest の `healthCheck` field を使うので、この probe は
- * bundle workload runtime のみで動く。
+ * 適用範囲 (重要): この probe は deploy backend が candidate endpoint URL を返す
+ * path (bundle workload runtime 等) でのみ実行される。WfP-managed worker deploy は
+ * resolvable endpoint を返さないため probe は **skip** され、Cloudflare の
+ * createWorker による compile 検証に依存する (`execute.ts` の skip 分岐を参照)。
+ * Service / Container は manifest の `healthCheck` field を使う。
  */
 
 /** kernel readiness probe の hard-coded timeout (10 秒)。 */

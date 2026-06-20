@@ -309,11 +309,11 @@ export const ExecutorContainerTier1 = createExecutorContainerClass(1, "10m");
  * Tier 2 — basic instances. RESERVED / currently unused: the managed pool
  * (`selectExecutorPoolSlot`) routes tier 1 → tier 3 and never selects tier 2,
  * and no caller requests tier 2 via `resolveContainerNamespace`, so this class
- * receives no traffic today. It is kept (not deleted) because retiring a Durable
+ * receives no traffic today. It is kept (not deleted) because removing a Durable
  * Object class requires a wrangler `deleted_classes` migration in the deploy
- * config (the retired operator control plane). To fully remove it: drop the class + the
- * `EXECUTOR_CONTAINER_TIER2` binding + add the `deleted_classes` migration. To
- * put it back in rotation: add tier-2 pool sizing and select it in
+ * config. To fully remove it: drop the class + the `EXECUTOR_CONTAINER_TIER2`
+ * binding + add the `deleted_classes` migration. To put it back in rotation: add
+ * tier-2 pool sizing and select it in
  * `selectExecutorPoolSlot`.
  */
 export const ExecutorContainerTier2 = createExecutorContainerClass(2, "5m");
@@ -554,8 +554,8 @@ export default {
       }
 
       // Build claims-equivalent object for existing validation logic. The
-      // capability may be a scope array, a single scope, or the legacy
-      // "control" alias — normalize to a flat scope list for the claims view.
+      // capability may be a scope array or a single concrete scope; normalize to
+      // a flat scope list for the claims view.
       const claims: Record<string, unknown> = {
         run_id: tokenInfo.runId,
         service_id: tokenInfo.serviceId,
@@ -588,10 +588,8 @@ export default {
         return unauthorized();
       }
       // Membership check: the endpoint's required scope must be present in the
-      // token's scope set (expanded from tokenInfo.capability, which may be a
-      // scope array, a single scope, or the legacy "control" full-agent alias).
-      // A workflow token therefore cannot reach conversation / memory / skill
-      // endpoints it was not granted.
+      // token's scope set. A workflow token therefore cannot reach conversation
+      // / memory / skill endpoints it was not granted.
       if (!isProxyRequestAuthorized(path, tokenInfo.capability)) {
         return unauthorized();
       }

@@ -59,7 +59,7 @@ export function StoragePage(props: StoragePageProps) {
   const [contextMenu, setContextMenu] = createSignal<ContextMenuState | null>(
     null,
   );
-  const [fileHandlers, setFileHandlers] = createSignal<FileHandler[]>([]);
+  const [interfaceFileHandlers, setFileHandlers] = createSignal<FileHandler[]>([]);
 
   const { uploading, handleFileSelect } = useFileUpload({ uploadFile });
   const [isDragOver, setIsDragOver] = createSignal(false);
@@ -102,7 +102,7 @@ export function StoragePage(props: StoragePageProps) {
     resolveStorageInitialPath(props.initialPath, props.initialFilePath);
 
   const [initialPathReady, setInitialPathReady] = createSignal(false);
-  let fileHandlersRequestVersion = 0;
+  let interfaceFileHandlersRequestVersion = 0;
 
   createEffect(() => {
     const _spaceId = props.spaceId;
@@ -130,7 +130,7 @@ export function StoragePage(props: StoragePageProps) {
       setFileHandlers([]);
       return;
     }
-    const requestVersion = ++fileHandlersRequestVersion;
+    const requestVersion = ++interfaceFileHandlersRequestVersion;
     let cancelled = false;
     onCleanup(() => {
       cancelled = true;
@@ -138,7 +138,7 @@ export function StoragePage(props: StoragePageProps) {
     setFileHandlers([]);
     void loadStorageFileHandlers(
       spaceId,
-      () => !cancelled && requestVersion === fileHandlersRequestVersion,
+      () => !cancelled && requestVersion === interfaceFileHandlersRequestVersion,
       globalThis.fetch,
       file,
     ).then((handlers) => {
@@ -229,7 +229,7 @@ export function StoragePage(props: StoragePageProps) {
           spaceId={props.spaceId}
           file={actions.viewingFile()!}
           downloadUrl={actions.viewingFileDownloadUrl()}
-          fileHandlers={fileHandlers()}
+          interfaceFileHandlers={interfaceFileHandlers()}
           onClose={actions.handleCloseViewer}
           onSave={() => loadFiles(currentPath())}
         />

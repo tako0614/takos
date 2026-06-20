@@ -12,21 +12,6 @@ import {
   updatedAtColumn,
 } from "./schema-utils.ts";
 
-// 1. AccountBlock
-export const accountBlocks = sqliteTable("account_blocks", {
-  blockerAccountId: text("blocker_account_id").notNull(),
-  blockedAccountId: text("blocked_account_id").notNull(),
-  ...createdAtColumn,
-}, (table) => ({
-  pk: primaryKey({ columns: [table.blockerAccountId, table.blockedAccountId] }),
-  idxBlocker: index("idx_account_blocks_blocker_account_id").on(
-    table.blockerAccountId,
-  ),
-  idxBlocked: index("idx_account_blocks_blocked_account_id").on(
-    table.blockedAccountId,
-  ),
-}));
-
 // 2. AccountEnvVar
 export const accountEnvVars = sqliteTable("account_env_vars", {
   id: text("id").primaryKey(),
@@ -41,48 +26,6 @@ export const accountEnvVars = sqliteTable("account_env_vars", {
     table.name,
   ),
   idxAccount: index("idx_account_env_vars_account_id").on(table.accountId),
-}));
-
-// 3. AccountFollowRequest
-export const accountFollowRequests = sqliteTable("account_follow_requests", {
-  id: text("id").primaryKey(),
-  requesterAccountId: text("requester_account_id").notNull(),
-  targetAccountId: text("target_account_id").notNull(),
-  status: text("status").notNull().default("pending"),
-  ...createdAtColumn,
-  respondedAt: text("responded_at"),
-  ...updatedAtColumn,
-}, (table) => ({
-  uniqRequesterTarget: uniqueIndex(
-    "idx_account_follow_requests_requester_target",
-  ).on(table.requesterAccountId, table.targetAccountId),
-  idxTargetStatus: index("idx_account_follow_requests_target_status").on(
-    table.targetAccountId,
-    table.status,
-  ),
-  idxRequester: index("idx_account_follow_requests_requester").on(
-    table.requesterAccountId,
-  ),
-  idxCreatedAt: index("idx_account_follow_requests_created_at").on(
-    table.createdAt,
-  ),
-}));
-
-// 4. AccountFollow
-export const accountFollows = sqliteTable("account_follows", {
-  followerAccountId: text("follower_account_id").notNull(),
-  followingAccountId: text("following_account_id").notNull(),
-  ...createdAtColumn,
-}, (table) => ({
-  pk: primaryKey({
-    columns: [table.followerAccountId, table.followingAccountId],
-  }),
-  idxFollowing: index("idx_account_follows_following_account_id").on(
-    table.followingAccountId,
-  ),
-  idxFollower: index("idx_account_follows_follower_account_id").on(
-    table.followerAccountId,
-  ),
 }));
 
 // 5. AccountMembership
@@ -129,21 +72,6 @@ export const accountModeration = sqliteTable("account_moderation", {
     table.suspendedUntil,
   ),
   idxStatus: index("idx_account_moderation_status").on(table.status),
-}));
-
-// 8. AccountMute
-export const accountMutes = sqliteTable("account_mutes", {
-  muterAccountId: text("muter_account_id").notNull(),
-  mutedAccountId: text("muted_account_id").notNull(),
-  ...createdAtColumn,
-}, (table) => ({
-  pk: primaryKey({ columns: [table.muterAccountId, table.mutedAccountId] }),
-  idxMuter: index("idx_account_mutes_muter_account_id").on(
-    table.muterAccountId,
-  ),
-  idxMuted: index("idx_account_mutes_muted_account_id").on(
-    table.mutedAccountId,
-  ),
 }));
 
 // 9. AccountSettings
@@ -253,7 +181,6 @@ export const accounts = sqliteTable("accounts", {
   modelBackend: text("model_backend").default("openai"),
   securityPosture: text("security_posture").notNull().default("standard"),
   ownerAccountId: text("owner_account_id"),
-  takosumiInstallationId: text("takosumi_installation_id"),
   ...timestamps,
 }, (table) => ({
   idxType: index("idx_accounts_type").on(table.type),

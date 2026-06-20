@@ -55,7 +55,10 @@ import { disposeRedisClient } from "../local-platform/redis-bindings.ts";
 import { removeLocalDataDir } from "../local-platform/persistent-bindings.ts";
 import type { TenantWorkerRuntimeRegistry } from "../local-platform/tenant-worker-runtime.ts";
 
-import { DEFAULT_LOCAL_DOMAINS } from "../local-platform/runtime-types.ts";
+import {
+  DEFAULT_LOCAL_DOMAINS,
+  DEFAULT_LOCAL_PORTS,
+} from "../local-platform/runtime-types.ts";
 
 // -- Resolvers ----------------------------------------------------------------
 import {
@@ -90,7 +93,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export const LOCAL_DEV_DEFAULTS = {
-  OIDC_ISSUER_URL: "http://accounts.local",
+  OIDC_ISSUER_URL: `http://${DEFAULT_LOCAL_DOMAINS.admin}:${DEFAULT_LOCAL_PORTS.web}`,
   OIDC_CLIENT_ID: "local-oidc-client",
   OIDC_CLIENT_SECRET: "local-oidc-secret",
   PLATFORM_PRIVATE_KEY: "local-platform-private-key",
@@ -224,12 +227,15 @@ function optionalJsonArrayEnv(name: string): string | undefined {
 
 function buildBaseConfig(isLocal: boolean) {
   return {
-    ADMIN_DOMAIN: optionalEnv("ADMIN_DOMAIN") ??
+    ADMIN_DOMAIN:
+      optionalEnv("ADMIN_DOMAIN") ??
       (isLocal ? DEFAULT_LOCAL_DOMAINS.admin : ""),
     TAKOS_INTERNAL_API_URL: optionalEnv("TAKOS_INTERNAL_API_URL"),
-    TENANT_BASE_DOMAIN: optionalEnv("TENANT_BASE_DOMAIN") ??
+    TENANT_BASE_DOMAIN:
+      optionalEnv("TENANT_BASE_DOMAIN") ??
       (isLocal ? DEFAULT_LOCAL_DOMAINS.tenantBase : ""),
-    OIDC_ISSUER_URL: optionalEnv("OIDC_ISSUER_URL") ??
+    OIDC_ISSUER_URL:
+      optionalEnv("OIDC_ISSUER_URL") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_ISSUER_URL : ""),
     OIDC_DISCOVERY_URL: optionalEnv("OIDC_DISCOVERY_URL"),
     TAKOSUMI_ACCOUNTS_INTERNAL_URL: optionalEnv(
@@ -237,14 +243,18 @@ function buildBaseConfig(isLocal: boolean) {
     ),
     TAKOSUMI_ACCOUNTS_URL: optionalEnv("TAKOSUMI_ACCOUNTS_URL"),
     TAKOSUMI_ACCOUNTS_TOKEN: optionalEnv("TAKOSUMI_ACCOUNTS_TOKEN"),
-    OIDC_CLIENT_ID: optionalEnv("OIDC_CLIENT_ID") ??
+    OIDC_CLIENT_ID:
+      optionalEnv("OIDC_CLIENT_ID") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_ID : ""),
-    OIDC_CLIENT_SECRET: optionalEnv("OIDC_CLIENT_SECRET") ??
+    OIDC_CLIENT_SECRET:
+      optionalEnv("OIDC_CLIENT_SECRET") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.OIDC_CLIENT_SECRET : ""),
     OIDC_REDIRECT_URI: optionalEnv("OIDC_REDIRECT_URI"),
-    PLATFORM_PRIVATE_KEY: optionalEnv("PLATFORM_PRIVATE_KEY") ??
+    PLATFORM_PRIVATE_KEY:
+      optionalEnv("PLATFORM_PRIVATE_KEY") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.PLATFORM_PRIVATE_KEY : ""),
-    PLATFORM_PUBLIC_KEY: optionalEnv("PLATFORM_PUBLIC_KEY") ??
+    PLATFORM_PUBLIC_KEY:
+      optionalEnv("PLATFORM_PUBLIC_KEY") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.PLATFORM_PUBLIC_KEY : ""),
     CF_ACCOUNT_ID: optionalEnv("CF_ACCOUNT_ID"),
     CF_API_TOKEN: optionalEnv("CF_API_TOKEN"),
@@ -253,30 +263,28 @@ function buildBaseConfig(isLocal: boolean) {
       "TAKOS_CUSTOM_DOMAIN_TLS_PROVIDER",
     ),
     WFP_DISPATCH_NAMESPACE: optionalEnv("WFP_DISPATCH_NAMESPACE"),
-    ENCRYPTION_KEY: optionalEnv("ENCRYPTION_KEY") ??
+    ENCRYPTION_KEY:
+      optionalEnv("ENCRYPTION_KEY") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY : ""),
-    EXECUTOR_PROXY_SECRET: optionalEnv("EXECUTOR_PROXY_SECRET") ??
+    EXECUTOR_PROXY_SECRET:
+      optionalEnv("EXECUTOR_PROXY_SECRET") ??
       (isLocal ? LOCAL_DEV_DEFAULTS.EXECUTOR_PROXY_SECRET : ""),
-    SERVICE_INTERNAL_JWT_ISSUER: optionalEnv("SERVICE_INTERNAL_JWT_ISSUER") ??
-      "takos-node",
-    ENVIRONMENT: optionalEnv("ENVIRONMENT") ??
-      (isLocal ? "development" : "production"),
+    SERVICE_INTERNAL_JWT_ISSUER:
+      optionalEnv("SERVICE_INTERNAL_JWT_ISSUER") ?? "takos-node",
+    ENVIRONMENT:
+      optionalEnv("ENVIRONMENT") ?? (isLocal ? "development" : "production"),
     TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: optionalJsonArrayEnv(
       "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON",
     ),
     TAKOS_DEFAULT_APP_REPOSITORIES_JSON: optionalJsonArrayEnv(
       "TAKOS_DEFAULT_APP_REPOSITORIES_JSON",
     ),
-    TAKOS_DEFAULT_APPS_PREINSTALL: optionalEnv(
-      "TAKOS_DEFAULT_APPS_PREINSTALL",
-    ),
+    TAKOS_DEFAULT_APPS_PREINSTALL: optionalEnv("TAKOS_DEFAULT_APPS_PREINSTALL"),
     TAKOS_DEFAULT_APP_REF: optionalEnv("TAKOS_DEFAULT_APP_REF"),
     TAKOS_DEFAULT_APP_REF_TYPE: optionalEnv("TAKOS_DEFAULT_APP_REF_TYPE"),
     TAKOS_DEFAULT_APP_BACKEND: optionalEnv("TAKOS_DEFAULT_APP_BACKEND"),
     TAKOS_DEFAULT_APP_ENV: optionalEnv("TAKOS_DEFAULT_APP_ENV"),
-    TAKOS_DEFAULT_APP_INSTALL_URL: optionalEnv(
-      "TAKOS_DEFAULT_APP_INSTALL_URL",
-    ),
+    TAKOS_DEFAULT_APP_INSTALL_URL: optionalEnv("TAKOS_DEFAULT_APP_INSTALL_URL"),
     TAKOS_DEFAULT_APP_INSTALL_TOKEN: optionalEnv(
       "TAKOS_DEFAULT_APP_INSTALL_TOKEN",
     ),
@@ -294,9 +302,7 @@ function buildBaseConfig(isLocal: boolean) {
     ),
     TAKOS_APP_INSTALLATIONS_URL: optionalEnv("TAKOS_APP_INSTALLATIONS_URL"),
     TAKOS_APP_INSTALL_TOKEN: optionalEnv("TAKOS_APP_INSTALL_TOKEN"),
-    TAKOS_APP_INSTALL_ACCOUNT_ID: optionalEnv(
-      "TAKOS_APP_INSTALL_ACCOUNT_ID",
-    ),
+    TAKOS_APP_INSTALL_ACCOUNT_ID: optionalEnv("TAKOS_APP_INSTALL_ACCOUNT_ID"),
     TAKOS_APP_INSTALL_SUBJECT: optionalEnv("TAKOS_APP_INSTALL_SUBJECT"),
     TAKOS_APP_INSTALL_MODE: optionalEnv("TAKOS_APP_INSTALL_MODE"),
     TAKOS_APP_INSTALL_RUNTIME_BASE_URL: optionalEnv(
@@ -386,9 +392,9 @@ function assertSelfHostedProductionConfig(config: BaseConfig): void {
 
   if (invalid.length > 0) {
     throw new Error(
-      `Self-hosted production requires explicit non-local values for: ${
-        invalid.join(", ")
-      }`,
+      `Self-hosted production requires explicit non-local values for: ${invalid.join(
+        ", ",
+      )}`,
     );
   }
 }
@@ -433,20 +439,18 @@ export async function disposeNodePlatformState(
     : null;
   if (state) {
     await Promise.resolve(
-      (state.db as typeof state.db & { close?: () => Promise<void> | void })
-        .close?.(),
-    )
-      .catch(() =>
-        undefined /* dispose: db close is best-effort during teardown */
-      );
+      (
+        state.db as typeof state.db & { close?: () => Promise<void> | void }
+      ).close?.(),
+    ).catch(
+      () => undefined /* dispose: db close is best-effort during teardown */,
+    );
   }
   await Promise.all(
-    Array.from(
-      dispatchRegistries,
-      (registry) =>
-        registry.dispose().catch(() =>
-          undefined /* dispose: registry teardown is best-effort */
-        ),
+    Array.from(dispatchRegistries, (registry) =>
+      registry
+        .dispose()
+        .catch(() => undefined /* dispose: registry teardown is best-effort */),
     ),
   );
   dispatchRegistries.clear();

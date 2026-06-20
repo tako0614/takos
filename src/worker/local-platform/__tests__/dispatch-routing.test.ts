@@ -119,7 +119,7 @@ test("dispatch routes service-ref deployments through the registry with deployme
   assertEquals(await response.json(), {
     worker: "worker-demo",
     deployment: "deployment-v2",
-    internal: "1",
+    internal: null,
     legacyInternal: null,
   });
   assertEquals(registryCall, {
