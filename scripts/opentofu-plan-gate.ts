@@ -15,7 +15,7 @@ type CommandOutput = {
   stderr: string;
 };
 
-const CLOUDFLARE_PLAN_PLACEHOLDER_TOKEN = 'abcdef0123456789abcdef0123456789abcdef01';
+const CLOUDFLARE_PLAN_PLACEHOLDER_TOKEN = 'dummy-cloudflare-token-for-offline-plan';
 
 type PlanResult = {
   target: TargetId;
