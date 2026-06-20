@@ -13,7 +13,7 @@ const DEFAULT_TAKOS_GIT_URL = "https://github.com/tako0614/takos.git";
 // Fallback must be immutable because takos.jp can be built without operator
 // env overrides. Release builds should still set VITE_TAKOS_INSTALL_REF to the
 // release tag, but the source fallback must never publish a moving ref.
-const DEFAULT_TAKOS_REF = "e343560dc63bb0440614da2589169404d8543efa";
+const DEFAULT_TAKOS_REF = "9d43896d6bd0dd0a59ed4fb72e9f25151af06ad2";
 const DEFAULT_TAKOS_MODULE_PATH = "deploy/opentofu";
 
 function installUrl(host: string): string {
