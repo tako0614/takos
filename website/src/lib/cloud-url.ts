@@ -29,19 +29,19 @@ const CLOUD_HOME_FALLBACK = `https://${PLATFORM_HOST}/`;
 const LOCAL_CLOUD_HOME_FALLBACK = `https://${LOCAL_PLATFORM_HOST}/`;
 
 /**
- * Anyone — everyday user or developer — lands on the same Takosumi add flow:
- * open app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module> and
- * Takosumi pre-fills `/new` with the repo coordinates. The visitor reviews the
- * Capsule compatibility result and explicitly creates/plans there. Takos is
- * just one such repo.
+ * Git/install links land on the Takosumi add flow:
+ * app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module>
+ * pre-fills `/new` with the repo coordinates. The visitor reviews the Capsule
+ * compatibility result and explicitly creates/plans there.
  */
 const INSTALL_FALLBACK = installUrl(PLATFORM_HOST);
 const LOCAL_INSTALL_FALLBACK = installUrl(LOCAL_PLATFORM_HOST);
 
-// "Use Takos" (the everyday-user entry) lands on the same working add flow so
-// the CTA is never a dead host.
-const USE_TAKOS_FALLBACK = INSTALL_FALLBACK;
-const LOCAL_USE_TAKOS_FALLBACK = LOCAL_INSTALL_FALLBACK;
+// "Use Takos" is the everyday-user entry. It should land on the account/home
+// surface, not the Git Capsule install wizard. "Install from Git" is the
+// explicit Git URL path below.
+const USE_TAKOS_FALLBACK = CLOUD_HOME_FALLBACK;
+const LOCAL_USE_TAKOS_FALLBACK = LOCAL_CLOUD_HOME_FALLBACK;
 
 export interface CloudUrls {
   readonly home: string;
