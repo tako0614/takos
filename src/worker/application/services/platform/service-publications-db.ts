@@ -17,24 +17,29 @@ import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import {
   consumeLocalName,
-  isRetiredTakosGrantPublication,
   normalizeName,
+  normalizeApiPublicationDefinition,
   normalizePublicationDefinition,
   parseJsonRecord,
   parsePublicationRecord,
   type PublicationOutputDescriptor,
   publicationUrlDefaultEnv,
-  RETIRED_TAKOS_API_KEY_TYPE,
-  retiredTakosGrantOutputContract,
 } from "./service-publications-normalize.ts";
 
 export type PublicationRow = SelectOf<typeof publications>;
 export type ServiceConsumeRow = SelectOf<typeof serviceConsumes>;
 
+export const SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE = "service_graph" as const;
+export const API_PUBLICATION_SOURCE_TYPE = "api" as const;
+
+export type PublicationSourceType =
+  | typeof SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE
+  | typeof API_PUBLICATION_SOURCE_TYPE;
+
 export interface PublicationRecord {
   id: string;
   name: string;
-  sourceType: "manifest" | "api";
+  sourceType: PublicationSourceType;
   groupId: string | null;
   groupName?: string | null;
   qualifiedName?: string;
@@ -58,9 +63,6 @@ export function publicationResolvedUrl(
 export function publicationOutputContract(
   publication: AppPublication,
 ): PublicationOutputDescriptor[] {
-  if (isRetiredTakosGrantPublication(publication)) {
-    return retiredTakosGrantOutputContract(publication);
-  }
   return Object.keys(publication.outputs ?? {}).map((name) => ({
     name,
     defaultEnv: publicationUrlDefaultEnv(
@@ -73,14 +75,10 @@ export function publicationOutputContract(
 
 export function toPublicationRecord(row: PublicationRow): PublicationRecord {
   const parsedPublication = parsePublicationRecord(row.specJson);
-  const publication = isRetiredTakosGrantPublication(parsedPublication)
-    ? {
-      name: normalizeName(parsedPublication.name, "publication.name"),
-      publisher: "takos",
-      type: String(parsedPublication.type || RETIRED_TAKOS_API_KEY_TYPE),
-      ...(parsedPublication.spec ? { spec: parsedPublication.spec } : {}),
-    }
-    : normalizePublicationDefinition(parsedPublication);
+  const publication =
+    row.sourceType === "api"
+      ? normalizeApiPublicationDefinition(parsedPublication)
+      : normalizePublicationDefinition(parsedPublication);
   const resolvedRecord = parseJsonRecord(row.resolvedJson);
   const resolved = Object.fromEntries(
     Object.entries(resolvedRecord)
@@ -90,7 +88,7 @@ export function toPublicationRecord(row: PublicationRow): PublicationRecord {
   return {
     id: row.id,
     name: row.name,
-    sourceType: row.sourceType as "manifest" | "api",
+    sourceType: row.sourceType as PublicationSourceType,
     groupId: row.groupId ?? null,
     ownerServiceId: row.ownerServiceId ?? null,
     catalogName: row.catalogName ?? null,
@@ -103,39 +101,45 @@ export function toPublicationRecord(row: PublicationRow): PublicationRecord {
   };
 }
 
-export function parseConsumeConfig(
-  row: ServiceConsumeRow,
-): AppConsume {
+export function parseConsumeConfig(row: ServiceConsumeRow): AppConsume {
   const config = parseJsonRecord(row.configJson);
-  const publication = typeof config.publication === "string" &&
-      config.publication.trim()
-    ? config.publication.trim()
-    : row.publicationName;
-  const alias = typeof config.as === "string" && config.as.trim()
-    ? config.as.trim()
-    : (publication === row.publicationName ? undefined : row.publicationName);
-  const request = config.request && typeof config.request === "object" &&
-      !Array.isArray(config.request)
-    ? config.request as Record<string, unknown>
-    : undefined;
-  const injectRaw = config.inject && typeof config.inject === "object" &&
-      !Array.isArray(config.inject)
-    ? config.inject as Record<string, unknown>
-    : undefined;
-  const injectEnvRaw = injectRaw?.env && typeof injectRaw.env === "object" &&
-      !Array.isArray(injectRaw.env)
-    ? injectRaw.env as Record<string, unknown>
-    : undefined;
+  const publication =
+    typeof config.publication === "string" && config.publication.trim()
+      ? config.publication.trim()
+      : row.publicationName;
+  const alias =
+    typeof config.as === "string" && config.as.trim()
+      ? config.as.trim()
+      : publication === row.publicationName
+        ? undefined
+        : row.publicationName;
+  const request =
+    config.request &&
+    typeof config.request === "object" &&
+    !Array.isArray(config.request)
+      ? (config.request as Record<string, unknown>)
+      : undefined;
+  const injectRaw =
+    config.inject &&
+    typeof config.inject === "object" &&
+    !Array.isArray(config.inject)
+      ? (config.inject as Record<string, unknown>)
+      : undefined;
+  const injectEnvRaw =
+    injectRaw?.env &&
+    typeof injectRaw.env === "object" &&
+    !Array.isArray(injectRaw.env)
+      ? (injectRaw.env as Record<string, unknown>)
+      : undefined;
   const injectEnv = injectEnvRaw
     ? Object.fromEntries(
-      Object.entries(injectEnvRaw)
-        .filter(([, value]) => typeof value === "string")
-        .map(([key, value]) => [key, String(value)]),
-    )
+        Object.entries(injectEnvRaw)
+          .filter(([, value]) => typeof value === "string")
+          .map(([key, value]) => [key, String(value)]),
+      )
     : undefined;
-  const defaults = typeof injectRaw?.defaults === "boolean"
-    ? injectRaw.defaults
-    : undefined;
+  const defaults =
+    typeof injectRaw?.defaults === "boolean" ? injectRaw.defaults : undefined;
   const inject = {
     ...(injectEnv && Object.keys(injectEnv).length > 0
       ? { env: injectEnv }
@@ -163,23 +167,39 @@ export async function listPublicationRows(
   spaceId: string,
   opts: {
     groupId?: string;
-    sourceType?: "manifest" | "api";
+    sourceType?: PublicationSourceType;
   } = {},
 ): Promise<PublicationRow[]> {
   const db = getDb(env.DB);
   if (opts.groupId) {
-    return db.select().from(publications).where(and(
-      eq(publications.accountId, spaceId),
-      eq(publications.groupId, opts.groupId),
-    )).orderBy(asc(publications.createdAt), asc(publications.id)).all();
+    return db
+      .select()
+      .from(publications)
+      .where(
+        and(
+          eq(publications.accountId, spaceId),
+          eq(publications.groupId, opts.groupId),
+        ),
+      )
+      .orderBy(asc(publications.createdAt), asc(publications.id))
+      .all();
   }
   if (opts.sourceType) {
-    return db.select().from(publications).where(and(
-      eq(publications.accountId, spaceId),
-      eq(publications.sourceType, opts.sourceType),
-    )).orderBy(asc(publications.createdAt), asc(publications.id)).all();
+    return db
+      .select()
+      .from(publications)
+      .where(
+        and(
+          eq(publications.accountId, spaceId),
+          eq(publications.sourceType, opts.sourceType),
+        ),
+      )
+      .orderBy(asc(publications.createdAt), asc(publications.id))
+      .all();
   }
-  return db.select().from(publications)
+  return db
+    .select()
+    .from(publications)
     .where(eq(publications.accountId, spaceId))
     .orderBy(asc(publications.createdAt), asc(publications.id))
     .all();
@@ -206,12 +226,12 @@ async function getPublicationRowsByName(
   name: string,
 ): Promise<PublicationRow[]> {
   const db = getDb(env.DB);
-  return await db.select()
+  return await db
+    .select()
     .from(publications)
-    .where(and(
-      eq(publications.accountId, spaceId),
-      eq(publications.name, name),
-    ))
+    .where(
+      and(eq(publications.accountId, spaceId), eq(publications.name, name)),
+    )
     .all();
 }
 
@@ -221,7 +241,8 @@ async function getGroupIdByName(
   groupName: string,
 ): Promise<string | null> {
   const db = getDb(env.DB);
-  const rows = await db.select({ id: groups.id })
+  const rows = await db
+    .select({ id: groups.id })
     .from(groups)
     .where(and(eq(groups.spaceId, spaceId), eq(groups.name, groupName)))
     .all();
@@ -234,7 +255,8 @@ export async function getServiceGroupId(
   serviceId: string,
 ): Promise<string | null> {
   const db = getDb(env.DB);
-  const rows = await db.select({ groupId: services.groupId })
+  const rows = await db
+    .select({ groupId: services.groupId })
     .from(services)
     .where(and(eq(services.accountId, spaceId), eq(services.id, serviceId)))
     .all();
@@ -250,12 +272,15 @@ export async function getPublicationRowByIdentity(
   },
 ): Promise<PublicationRow | null> {
   const db = getDb(env.DB);
-  const rows = await db.select()
+  const rows = await db
+    .select()
     .from(publications)
-    .where(and(
-      eq(publications.accountId, params.spaceId),
-      eq(publications.name, params.name),
-    ))
+    .where(
+      and(
+        eq(publications.accountId, params.spaceId),
+        eq(publications.name, params.name),
+      ),
+    )
     .all();
   return rows.find((row) => (row.groupId ?? null) === params.groupId) ?? null;
 }
@@ -308,7 +333,7 @@ export async function upsertPublicationRow(
     spaceId: string;
     groupId?: string | null;
     ownerServiceId?: string | null;
-    sourceType: "manifest" | "api";
+    sourceType: PublicationSourceType;
     publication: AppPublication;
     resolved?: Record<string, string>;
   },
@@ -336,7 +361,8 @@ export async function upsertPublicationRow(
   if (existing) {
     const existingGroupId = existing.groupId ?? null;
     if (
-      existing.sourceType !== params.sourceType || existingGroupId !== groupId
+      existing.sourceType !== params.sourceType ||
+      existingGroupId !== groupId
     ) {
       throw new BadRequestError(
         `publication '${params.publication.name}' already exists in this space and is owned by ${existing.sourceType}${
@@ -344,7 +370,8 @@ export async function upsertPublicationRow(
         }`,
       );
     }
-    await db.update(publications)
+    await db
+      .update(publications)
       .set(values)
       .where(eq(publications.id, existing.id))
       .run();
@@ -355,7 +382,8 @@ export async function upsertPublicationRow(
     }))!;
   }
 
-  await db.insert(publications)
+  await db
+    .insert(publications)
     .values({
       id: generateId(),
       accountId: params.spaceId,
@@ -386,7 +414,8 @@ export async function assertPublicationHasNoConsumers(
   publication: PublicationRow,
 ): Promise<void> {
   const db = getDb(env.DB);
-  const consumers = await db.select()
+  const consumers = await db
+    .select()
     .from(serviceConsumes)
     .where(eq(serviceConsumes.accountId, spaceId))
     .all();
@@ -415,12 +444,15 @@ export async function listServiceConsumeRows(
   serviceId: string,
 ): Promise<ServiceConsumeRow[]> {
   const db = getDb(env.DB);
-  return db.select()
+  return db
+    .select()
     .from(serviceConsumes)
-    .where(and(
-      eq(serviceConsumes.accountId, spaceId),
-      eq(serviceConsumes.serviceId, serviceId),
-    ))
+    .where(
+      and(
+        eq(serviceConsumes.accountId, spaceId),
+        eq(serviceConsumes.serviceId, serviceId),
+      ),
+    )
     .all();
 }
 
@@ -442,7 +474,8 @@ export async function upsertServiceConsumeRow(
     ...(params.consume.request ? { request: params.consume.request } : {}),
     ...(params.consume.inject ? { inject: params.consume.inject } : {}),
   });
-  await db.insert(serviceConsumes)
+  await db
+    .insert(serviceConsumes)
     .values({
       id: generateId(),
       accountId: params.spaceId,

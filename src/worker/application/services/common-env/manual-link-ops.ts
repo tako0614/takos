@@ -12,7 +12,6 @@ import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import {
   deleteManagedTakosTokenConfig,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
-  upsertManagedTakosTokenConfig,
 } from "./takos-managed.ts";
 import { getDb, serviceCommonEnvLinks } from "../../../infra/db/index.ts";
 
@@ -37,28 +36,6 @@ async function enqueueServiceReconcile(deps: ManualLinkDeps, params: {
 }
 
 // --- Takos-managed config operations ---
-
-export async function upsertServiceTakosAccessTokenConfig(
-  deps: ManualLinkDeps,
-  params: {
-    spaceId: string;
-    serviceId: string;
-    scopes: string[];
-  },
-): Promise<void> {
-  await upsertManagedTakosTokenConfig({
-    env: deps.env,
-    spaceId: params.spaceId,
-    serviceId: params.serviceId,
-    scopes: params.scopes,
-  });
-  await enqueueServiceReconcile(deps, {
-    spaceId: params.spaceId,
-    serviceId: params.serviceId,
-    targetKeys: [TAKOS_ACCESS_TOKEN_ENV_NAME],
-    trigger: "manual_links_patch",
-  });
-}
 
 export async function deleteServiceTakosAccessTokenConfig(
   deps: ManualLinkDeps,

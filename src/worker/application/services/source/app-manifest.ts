@@ -5,7 +5,10 @@ export type {
   AppManifest,
   AppManifestOverride,
   AppPublication,
+  AppPublicationAuth,
   AppRoute,
+  AppServiceBinding,
+  AppServiceBindingInject,
   AppTriggers,
   ComputeKind,
   HealthCheck,
@@ -21,6 +24,27 @@ export {
   parseAppManifestText,
   parseAppManifestYaml,
 } from "./app-manifest-parser/index.ts";
+
+export {
+  APP_DEPLOYMENT_OUTPUT_KEY,
+  APP_DEPLOYMENT_OUTPUT_KEYS,
+  SERVICE_GRAPH_CAPABILITIES,
+  TAKOS_APP_AUTH_KINDS,
+  TAKOS_APP_CONTRACT_VERSION,
+  TAKOS_APP_PUBLICATION_TYPES,
+  TAKOS_APP_SERVICE_BINDING_CAPABILITIES,
+  TAKOS_APP_SERVICE_GRANT_SCOPES,
+} from "./app-interface-contract.ts";
+
+export type {
+  AppDeploymentOutputKey,
+  TakosAppAuthKind,
+  TakosAppContractVersion,
+  TakosAppPublicationType,
+  TakosAppServiceBindingCapability,
+  TakosAppServiceGrantScope,
+  ServiceGraphCapability,
+} from "./app-interface-contract.ts";
 
 export {
   APP_MANIFEST_OUTPUT_KEYS,

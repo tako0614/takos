@@ -162,11 +162,11 @@ test(
         appType: "custom",
         accountId: "space-123",
         groupId: "group-1",
-        sourceType: "manifest",
-        publicationType: "UiSurface",
+        sourceType: "service_graph",
+        publicationType: "interface.ui.surface",
         specJson: JSON.stringify({
           name: "space-app",
-          type: "UiSurface",
+          type: "interface.ui.surface",
           publisher: "web",
           outputs: { url: { kind: "url", routeRef: "root" } },
           display: {

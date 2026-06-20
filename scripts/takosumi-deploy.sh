@@ -2,24 +2,26 @@
 # Takosumi deploy wrapper — installs and applies the Takos OpenTofu module through
 # Takosumi's OpenTofu-native deploy control API.
 #
-# Premise: Takos is a product DEPLOYED BY Takosumi. The deploy topology is the plain
-# OpenTofu module in deploy/opentofu (var.target ∈ aws | gcp | cloudflare; the
-# cloudflare target provisions the D1 / KV / R2 / Queues backing resources). Takosumi
-# resolves that Git module as an Installation, records a PlanRun, and on apply records
-# an ApplyRun that updates the Deployment and its DeploymentOutput. A RunnerProfile owns
-# the provider allowlist, credentials, state backend, and Cloudflare Container execution.
+# Premise: Takos can be managed by Takosumi as a normal Installation. The deploy
+# topology is the plain OpenTofu module in deploy/opentofu (var.target ∈ aws |
+# gcp | cloudflare; the cloudflare target provisions the D1 / KV / R2 / Queues
+# backing resources). Takosumi resolves that Git module as an Installation,
+# records a plan Run, and applies the reviewed plan through an apply Run that
+# updates the Deployment and OutputSnapshot. Connection, Installation provider
+# connection, and runner policy own provider credentials, state backend, and
+# Cloudflare Container execution.
 #
 # Usage: ./scripts/takosumi-deploy.sh [--plan-only] [--target TARGET]
 #
 # Required env vars:
-#   TAKOSUMI_URL            — Takosumi deploy control plane URL (e.g. https://takosumi.example.com)
+#   TAKOSUMI_URL            — Takosumi control plane origin (e.g. https://app.takosumi.com)
 #   TAKOSUMI_TOKEN          — Bearer token for the deploy control API
-#   TAKOSUMI_INSTALLATION_ID — existing Installation to plan/apply (resolves the Git module + RunnerProfile)
+#   TAKOSUMI_INSTALLATION_ID — existing Installation to plan/apply
 #
 # This script:
-# 1. Triggers a PlanRun for the Installation's OpenTofu module
+# 1. Triggers a plan Run for the Installation's OpenTofu module
 # 2. Prints the reviewed plan summary
-# 3. (unless --plan-only) triggers an ApplyRun, which updates the Deployment and DeploymentOutput
+# 3. (unless --plan-only) applies the reviewed plan through the session/API facade
 
 set -euo pipefail
 
@@ -48,9 +50,11 @@ fi
 
 if [[ -z "$INSTALLATION_ID" ]]; then
   echo "Error: TAKOSUMI_INSTALLATION_ID (or --installation) is required"
-  echo "  The Installation resolves the Git OpenTofu module (deploy/opentofu) and its RunnerProfile."
+  echo "  The Installation resolves the Git OpenTofu module (deploy/opentofu)."
   exit 1
 fi
+
+TAKOSUMI_URL="${TAKOSUMI_URL%/}"
 
 api_post() {
   # $1 = path, $2 = json body
@@ -78,29 +82,30 @@ check_response() {
   echo "$body"
 }
 
-# 1. Trigger a PlanRun for the Installation's OpenTofu module.
-echo "Triggering PlanRun for installation ${INSTALLATION_ID}..."
+# 1. Trigger a plan Run for the Installation's OpenTofu module.
+echo "Triggering plan Run for installation ${INSTALLATION_ID}..."
 PLAN_BODY="{}"
 if [[ -n "$TARGET" ]]; then
   PLAN_BODY="{ \"variables\": { \"target\": \"$TARGET\" } }"
 fi
-PLAN_RESPONSE=$(api_post "/v1/installations/${INSTALLATION_ID}/plan-runs" "$PLAN_BODY")
-PLAN_OUT=$(check_response "$PLAN_RESPONSE" "PlanRun")
-PLAN_RUN_ID=$(echo "$PLAN_OUT" | jq -r '.id // .planRunId // empty' 2>/dev/null || true)
+PLAN_RESPONSE=$(api_post "/api/v1/installations/${INSTALLATION_ID}/plan" "$PLAN_BODY")
+PLAN_OUT=$(check_response "$PLAN_RESPONSE" "plan Run")
+PLAN_RUN_ID=$(echo "$PLAN_OUT" | jq -r '.run.id // .id // .planRunId // empty' 2>/dev/null || true)
+
+if [[ -z "$PLAN_RUN_ID" ]]; then
+  echo "Error: plan response did not include a run id"
+  exit 1
+fi
 
 if [[ -n "$PLAN_ONLY" ]]; then
-  echo "--plan-only: stopping after PlanRun (no ApplyRun)."
+  echo "--plan-only: stopping after plan Run (no apply)."
   exit 0
 fi
 
-# 2. Trigger an ApplyRun referencing the reviewed PlanRun. A successful ApplyRun updates
-#    the Deployment and its DeploymentOutput.
-echo "Triggering ApplyRun for installation ${INSTALLATION_ID}..."
+# 2. Apply the reviewed plan Run. The server rebuilds and verifies the apply guard.
+echo "Applying reviewed plan Run ${PLAN_RUN_ID}..."
 APPLY_BODY="{}"
-if [[ -n "$PLAN_RUN_ID" ]]; then
-  APPLY_BODY="{ \"planRunId\": \"$PLAN_RUN_ID\" }"
-fi
-APPLY_RESPONSE=$(api_post "/v1/installations/${INSTALLATION_ID}/apply-runs" "$APPLY_BODY")
-check_response "$APPLY_RESPONSE" "ApplyRun" >/dev/null
+APPLY_RESPONSE=$(api_post "/api/v1/plan-runs/${PLAN_RUN_ID}/apply" "$APPLY_BODY")
+check_response "$APPLY_RESPONSE" "apply Run" >/dev/null
 
-echo "Done. Deployment and DeploymentOutput updated by the ApplyRun."
+echo "Done. Deployment and OutputSnapshot are updated after the apply Run succeeds."

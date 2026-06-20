@@ -6,26 +6,18 @@ import type {
 import type { Env } from "../../../shared/types/index.ts";
 
 export type DefaultAppRefType = "branch" | "tag" | "commit";
-export type DefaultAppBackend =
-  | "cloudflare"
-  | "local"
-  | "aws"
-  | "gcp"
-  | "k8s";
-export type DefaultAppRuntimeMode =
-  | "shared-cell"
-  | "dedicated"
-  | "self-hosted";
-export type DefaultAppBindingType =
-  | "identity.oidc@v1"
-  | "database.postgres@v1"
-  | "object-store.s3-compatible@v1"
-  | "domain.http@v1"
-  | "install-launch-token@v1";
+export type DefaultAppBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
+export type DefaultAppRuntimeMode = "shared-cell" | "dedicated" | "self-hosted";
+export type DefaultAppServiceBindingType =
+  | "identity.oidc"
+  | "storage.sql"
+  | "storage.object"
+  | "protocol.http.api"
+  | "auth.bootstrap_token";
 
-export interface DefaultAppBindingSummary {
+export interface DefaultAppServiceBindingSummary {
   name: string;
-  type: DefaultAppBindingType;
+  type: DefaultAppServiceBindingType;
   required: boolean;
 }
 
@@ -44,7 +36,7 @@ export interface DefaultAppDistributionEntry {
   refType: DefaultAppRefType;
   sourcePath?: string;
   runtimeModes?: DefaultAppRuntimeMode[];
-  bindings?: DefaultAppBindingSummary[];
+  bindings?: DefaultAppServiceBindingSummary[];
   preinstall: boolean;
   backendName?: DefaultAppBackend;
   envName?: string;
@@ -66,6 +58,16 @@ export type DefaultAppDistributionEnv = Pick<
   | "TAKOS_DEFAULT_APP_INSTALL_SUBJECT"
   | "TAKOS_DEFAULT_APP_INSTALL_MODE"
   | "TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL"
+  | "TAKOS_APP_INSTALLATIONS_URL"
+  | "TAKOS_APP_INSTALL_TOKEN"
+  | "TAKOS_APP_INSTALL_ACCOUNT_ID"
+  | "TAKOS_APP_INSTALL_SUBJECT"
+  | "TAKOS_APP_INSTALL_MODE"
+  | "TAKOS_APP_INSTALL_RUNTIME_BASE_URL"
+  | "TAKOSUMI_ACCOUNTS_INTERNAL_URL"
+  | "TAKOSUMI_ACCOUNTS_URL"
+  | "TAKOSUMI_ACCOUNTS_TOKEN"
+  | "TAKOSUMI_ACCOUNTS_SUBJECT"
   | "TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL"
   | "TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL"
   | "TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL"

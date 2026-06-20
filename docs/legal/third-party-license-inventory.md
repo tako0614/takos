@@ -13,8 +13,8 @@ license strings where available.
 | Lockfile                              | npm packages | JSR packages | remote modules |
 | ------------------------------------- | -----------: | -----------: | -------------: |
 | `deno.lock`                           |          177 |            5 |             27 |
-| `takos/deno.lock`                 |          676 |            7 |              0 |
-| `takos/containers/git/deno.lock`                 |            2 |            1 |              0 |
+| `takos/deno.lock`                     |          676 |            7 |              0 |
+| `takos/containers/git/deno.lock`      |            2 |            1 |              0 |
 | `takosumi/deno.lock`                  |           16 |           12 |              0 |
 | `takosumi/deno.lock`                  |            0 |            5 |              0 |
 | `takos-apps/takos-computer/deno.lock` |          333 |            2 |              0 |
@@ -24,8 +24,7 @@ license strings where available.
 | `yurucommu/deno.lock`                 |          452 |           12 |              9 |
 | `road-to-me/backend/deno.lock`        |          316 |            2 |              0 |
 | `road-to-me/app/deno.lock`            |          598 |            3 |              0 |
-| `takos-private/deno.lock`             |          700 |            3 |              0 |
-| `takos/containers/agent/Cargo.lock`              |  Rust crates |          n/a |            n/a |
+| `takos/containers/agent/Cargo.lock`   |  Rust crates |          n/a |            n/a |
 | `takos-agent-engine/Cargo.lock`       |  Rust crates |          n/a |            n/a |
 
 `takos/bun.lock` is canonical for the Takos product package; the `takos/`

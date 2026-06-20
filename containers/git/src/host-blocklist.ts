@@ -41,14 +41,11 @@ import {
   parseIpv6,
 } from "../../../src/contracts/public/ip-classification.ts";
 
-// Re-export so existing importers (e.g. the host-blocklist unit tests) keep a
-// stable `parseIpv6` entry point on this module.
+// Host-blocklist tests and callers use this module as the parseIpv6 entrypoint.
 export { parseIpv6 };
 
 /** Outcome of classifying a host string. */
-export type HostClassification =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type HostClassification = { ok: true } | { ok: false; reason: string };
 
 /**
  * Opt-out for environments where DNS resolution is unavailable or undesirable
@@ -102,9 +99,8 @@ async function classifyResolvedHostname(
   if (addresses.length === 0) {
     // Fail closed: a host we cannot resolve to any address must not be fetched,
     // because git would resolve it through some other path we did not vet.
-    const detail = resolveError instanceof Error
-      ? `: ${resolveError.message}`
-      : "";
+    const detail =
+      resolveError instanceof Error ? `: ${resolveError.message}` : "";
     return {
       ok: false,
       reason: `host did not resolve to any address: ${hostname}${detail}`,

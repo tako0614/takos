@@ -5,8 +5,8 @@ import {
 
 import type {
   DefaultAppBackend,
-  DefaultAppBindingSummary,
-  DefaultAppBindingType,
+  DefaultAppServiceBindingSummary,
+  DefaultAppServiceBindingType,
   DefaultAppDistributionConfigRow,
   DefaultAppDistributionDefaults,
   DefaultAppDistributionEntry,
@@ -21,13 +21,14 @@ export const DEFAULT_APP_RUNTIME_MODES: readonly DefaultAppRuntimeMode[] = [
   "self-hosted",
 ];
 
-export const DEFAULT_APP_BINDING_TYPES: readonly DefaultAppBindingType[] = [
-  "identity.oidc@v1",
-  "database.postgres@v1",
-  "object-store.s3-compatible@v1",
-  "domain.http@v1",
-  "install-launch-token@v1",
-];
+export const DEFAULT_APP_SERVICE_BINDING_TYPES: readonly DefaultAppServiceBindingType[] =
+  [
+    "identity.oidc",
+    "storage.sql",
+    "storage.object",
+    "protocol.http.api",
+    "auth.bootstrap_token",
+  ];
 
 export const DEFAULT_APP_CATEGORIES = [
   "app",
@@ -79,14 +80,17 @@ export function normalizeBackend(
   field = "backendName",
 ): DefaultAppBackend | undefined {
   if (value === undefined || value === null || value === "") return undefined;
-  return value === "cloudflare" || value === "local" || value === "aws" ||
-      value === "gcp" || value === "k8s"
+  return value === "cloudflare" ||
+    value === "local" ||
+    value === "aws" ||
+    value === "gcp" ||
+    value === "k8s"
     ? value
     : (() => {
-      throw new Error(
-        `default app distribution ${field} is invalid: ${String(value)}`,
-      );
-    })();
+        throw new Error(
+          `default app distribution ${field} is invalid: ${String(value)}`,
+        );
+      })();
 }
 
 export function normalizeCategory(
@@ -95,14 +99,14 @@ export function normalizeCategory(
 ): DefaultAppDistributionEntry["category"] {
   if (value === undefined || value === null || value === "") return undefined;
   return DEFAULT_APP_CATEGORIES.includes(
-      value as NonNullable<DefaultAppDistributionEntry["category"]>,
-    )
-    ? value as NonNullable<DefaultAppDistributionEntry["category"]>
+    value as NonNullable<DefaultAppDistributionEntry["category"]>,
+  )
+    ? (value as NonNullable<DefaultAppDistributionEntry["category"]>)
     : (() => {
-      throw new Error(
-        `default app distribution ${field} is invalid: ${String(value)}`,
-      );
-    })();
+        throw new Error(
+          `default app distribution ${field} is invalid: ${String(value)}`,
+        );
+      })();
 }
 
 export function asRecord(value: unknown): Record<string, unknown> {
@@ -154,9 +158,9 @@ export function readStringArray(
       `default app distribution entry.${field} must contain at most ${opts.maxItems} items`,
     );
   }
-  const items = value.map((item) =>
-    typeof item === "string" ? item.trim().toLowerCase() : ""
-  ).filter(Boolean);
+  const items = value
+    .map((item) => (typeof item === "string" ? item.trim().toLowerCase() : ""))
+    .filter(Boolean);
   for (const item of items) {
     if (!itemPattern.test(item)) {
       throw new Error(
@@ -180,9 +184,9 @@ export function normalizeRuntimeModes(
   for (const rawMode of value) {
     if (!DEFAULT_APP_RUNTIME_MODES.includes(rawMode as DefaultAppRuntimeMode)) {
       throw new Error(
-        `default app distribution entry.runtimeModes contains invalid mode: ${
-          String(rawMode)
-        }`,
+        `default app distribution entry.runtimeModes contains invalid mode: ${String(
+          rawMode,
+        )}`,
       );
     }
     const mode = rawMode as DefaultAppRuntimeMode;
@@ -193,7 +197,7 @@ export function normalizeRuntimeModes(
 
 export function normalizeBindingSummaries(
   value: unknown,
-): DefaultAppBindingSummary[] | undefined {
+): DefaultAppServiceBindingSummary[] | undefined {
   if (value === undefined || value === null) return undefined;
   if (!Array.isArray(value) || value.length < 1 || value.length > 32) {
     throw new Error(
@@ -214,14 +218,18 @@ export function normalizeBindingSummaries(
     }
     names.add(name);
     const type = readString(record, "type");
-    if (!DEFAULT_APP_BINDING_TYPES.includes(type as DefaultAppBindingType)) {
+    if (
+      !DEFAULT_APP_SERVICE_BINDING_TYPES.includes(
+        type as DefaultAppServiceBindingType,
+      )
+    ) {
       throw new Error(
         `default app distribution entry.bindings[${index}].type is invalid: ${type}`,
       );
     }
     return {
       name,
-      type: type as DefaultAppBindingType,
+      type: type as DefaultAppServiceBindingType,
       required: typeof record.required === "boolean" ? record.required : true,
     };
   });
@@ -240,14 +248,10 @@ export function assertValidRepositoryUrl(url: string): void {
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(
-      `default app repository URL must use HTTPS: ${url}`,
-    );
+    throw new Error(`default app repository URL must use HTTPS: ${url}`);
   }
   if (parsed.protocol !== "https:") {
-    throw new Error(
-      `default app repository URL must use HTTPS: ${url}`,
-    );
+    throw new Error(`default app repository URL must use HTTPS: ${url}`);
   }
   if (parsed.username || parsed.password) {
     throw new Error("default app repository URL must not include credentials");
@@ -359,8 +363,8 @@ export function normalizeEntry(
   const repositoryUrl = readString(record, "repositoryUrl");
   assertValidRepositoryUrl(repositoryUrl);
   const title = readString(record, "title", name);
-  const appId = readOptionalString(record, "appId") ??
-    readOptionalString(record, "app_id");
+  const appId =
+    readOptionalString(record, "appId") ?? readOptionalString(record, "app_id");
   if (appId) assertValidAppId(appId);
   const description = readOptionalString(record, "description");
   const publisher = readOptionalString(record, "publisher");
@@ -373,22 +377,25 @@ export function normalizeEntry(
     maxItems: 10,
     label: "tag",
   });
-  const sourcePath = readOptionalString(record, "sourcePath") ??
+  const sourcePath =
+    readOptionalString(record, "sourcePath") ??
     readOptionalString(record, "source_path");
   if (sourcePath) assertValidSourcePath(sourcePath);
   const runtimeModes = normalizeRuntimeModes(
     record.runtimeModes ?? record.runtime_modes,
   );
   const bindings = normalizeBindingSummaries(record.bindings);
-  const preinstall = typeof record.preinstall === "boolean"
-    ? record.preinstall
-    : defaults.preinstall;
+  const preinstall =
+    typeof record.preinstall === "boolean"
+      ? record.preinstall
+      : defaults.preinstall;
   const backendName =
     normalizeBackend(record.backendName, "entry.backendName") ??
-      defaults.backendName;
-  const envName = typeof record.envName === "string" && record.envName.trim()
-    ? record.envName.trim()
-    : defaults.envName;
+    defaults.backendName;
+  const envName =
+    typeof record.envName === "string" && record.envName.trim()
+      ? record.envName.trim()
+      : defaults.envName;
   return {
     name,
     title,
@@ -425,12 +432,14 @@ export function normalizeRepositoryEntry(
   }
 
   const record = asRecord(raw);
-  const repositoryUrl = readOptionalString(record, "repositoryUrl") ??
+  const repositoryUrl =
+    readOptionalString(record, "repositoryUrl") ??
     readOptionalString(record, "url");
   if (!repositoryUrl) {
     throw new Error("default app distribution entry.repositoryUrl is required");
   }
-  const name = readOptionalString(record, "name") ??
+  const name =
+    readOptionalString(record, "name") ??
     groupNameFromRepositoryUrl(repositoryUrl);
   return normalizeEntry({ ...record, name, repositoryUrl }, defaults);
 }

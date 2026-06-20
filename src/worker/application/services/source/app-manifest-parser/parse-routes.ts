@@ -32,13 +32,7 @@ const VALID_HTTP_METHODS = [
   "OPTIONS",
 ];
 
-const ROUTE_FIELDS = new Set([
-  "id",
-  "target",
-  "path",
-  "methods",
-  "timeoutMs",
-]);
+const ROUTE_FIELDS = new Set(["id", "target", "path", "methods", "timeoutMs"]);
 
 const ALL_HTTP_METHODS = new Set([
   "GET",
@@ -57,7 +51,7 @@ function assertAllowedFields(
   for (const key of Object.keys(record)) {
     if (!ROUTE_FIELDS.has(key)) {
       throw new Error(
-        `${prefix}.${key} is not supported by the app manifest contract`,
+        `${prefix}.${key} is not supported by the Capsule desired-state projection contract`,
       );
     }
   }
@@ -125,10 +119,7 @@ export function validateRouteUniqueness(routes: AppRoute[]): void {
     string,
     { index: number; target: string; path: string }
   >();
-  const byPath = new Map<
-    string,
-    { index: number; methods: Set<string> }[]
-  >();
+  const byPath = new Map<string, { index: number; methods: Set<string> }[]>();
 
   for (let index = 0; index < routes.length; index++) {
     const route = routes[index];
@@ -215,10 +206,14 @@ export function parseRoutes(
         : {}),
       ...(route.timeoutMs != null
         ? {
-          timeoutMs: asOptionalInteger(route.timeoutMs, `${prefix}.timeoutMs`, {
-            min: 1,
-          }),
-        }
+            timeoutMs: asOptionalInteger(
+              route.timeoutMs,
+              `${prefix}.timeoutMs`,
+              {
+                min: 1,
+              },
+            ),
+          }
         : {}),
     };
   });

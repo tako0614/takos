@@ -14,7 +14,7 @@ export interface RegisteredApp {
   space_name: string | null;
   service_hostname: string | null;
   service_status: string | null;
-  source_type?: "manifest";
+  source_type?: "service_graph";
   group_id?: string | null;
   publication_name?: string | null;
   category?: string | null;
@@ -72,14 +72,17 @@ export function getAppStatusVariant(
   if (!normalized) return "default";
   if (normalized === "deployed" || normalized === "active") return "success";
   if (
-    normalized === "failed" || normalized === "error" ||
+    normalized === "failed" ||
+    normalized === "error" ||
     normalized === "degraded"
   ) {
     return "error";
   }
   if (
-    normalized.includes("pending") || normalized.includes("queue") ||
-    normalized.includes("progress") || normalized === "paused"
+    normalized.includes("pending") ||
+    normalized.includes("queue") ||
+    normalized.includes("progress") ||
+    normalized === "paused"
   ) {
     return "warning";
   }
@@ -126,7 +129,7 @@ export function useRegisteredApps(spaceId: Accessor<string>) {
   const { t } = useI18n();
   const initialSpaceId = spaceId();
   const [apps, setApps] = createSignal<RegisteredApp[]>(
-    initialSpaceId ? registeredAppsCache.get(initialSpaceId) ?? [] : [],
+    initialSpaceId ? (registeredAppsCache.get(initialSpaceId) ?? []) : [],
   );
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -158,9 +161,7 @@ export function useRegisteredApps(spaceId: Accessor<string>) {
         setApps(fallback);
         setError(null);
       } else if (apps().length === 0) {
-        setError(
-          err instanceof Error ? err.message : t("failedToLoadApps"),
-        );
+        setError(err instanceof Error ? err.message : t("failedToLoadApps"));
       }
     } finally {
       if (requestId === requestSeq && spaceId() === currentSpaceId) {
@@ -169,23 +170,25 @@ export function useRegisteredApps(spaceId: Accessor<string>) {
     }
   };
 
-  createComputed(on(
-    () => spaceId(),
-    (currentSpaceId) => {
-      requestSeq++;
-      if (!currentSpaceId) {
-        setApps([]);
+  createComputed(
+    on(
+      () => spaceId(),
+      (currentSpaceId) => {
+        requestSeq++;
+        if (!currentSpaceId) {
+          setApps([]);
+          setLoading(false);
+          setError(null);
+          return;
+        }
+        setApps(registeredAppsCache.get(currentSpaceId) ?? []);
         setLoading(false);
         setError(null);
-        return;
-      }
-      setApps(registeredAppsCache.get(currentSpaceId) ?? []);
-      setLoading(false);
-      setError(null);
-      void fetchApps();
-    },
-    { defer: false },
-  ));
+        void fetchApps();
+      },
+      { defer: false },
+    ),
+  );
 
   return { apps, loading, error, fetchApps };
 }

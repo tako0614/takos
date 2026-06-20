@@ -28,9 +28,9 @@ export function SecurityDisclosureContent() {
 
       <h2>対象範囲</h2>
       <p>
-        Takos Web/API、Takos Git hosting、Takos agent service、Takos の managed
-        deployment artifacts、および Takos managed service として提供される
-        default apps を対象とします。
+        Takos Web/API、Git service profile、agent runtime profile、Takos の
+        managed deployment artifacts、および Takos managed service
+        として提供される default apps を対象とします。
       </p>
 
       <h2>対象外</h2>

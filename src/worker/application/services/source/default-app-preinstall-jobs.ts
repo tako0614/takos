@@ -2,6 +2,10 @@ import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import {
+  TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+  TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+} from "@takosjp/takosumi-accounts-contract";
+import {
   defaultAppDistributionConfig,
   defaultAppDistributionEntries,
   defaultAppPreinstallJobs,
@@ -42,11 +46,12 @@ import {
   resolveDefaultAppInstallConfig,
 } from "./default-app-resolution.ts";
 
-function hasTransactionSupport(
-  db: DefaultAppDistributionEnv["DB"],
-): boolean {
-  return typeof db === "object" && db !== null &&
-    typeof Reflect.get(db, "prepare") === "function";
+function hasTransactionSupport(db: DefaultAppDistributionEnv["DB"]): boolean {
+  return (
+    typeof db === "object" &&
+    db !== null &&
+    typeof Reflect.get(db, "prepare") === "function"
+  );
 }
 
 function nextRetryAt(timestamp: string, attempts: number): string {
@@ -89,7 +94,7 @@ function parsePreinstallDistribution(
           ref: "main",
           refFromEnv: false,
           refType: "branch",
-        })
+        }),
       ),
     );
   } catch {
@@ -108,8 +113,9 @@ async function resolvePreinstallPlanForJob(
       refreshed: false,
     };
   }
-  const entries = (await resolveDefaultAppDistributionForBootstrap(env))
-    .filter((entry) => entry.preinstall);
+  const entries = (await resolveDefaultAppDistributionForBootstrap(env)).filter(
+    (entry) => entry.preinstall,
+  );
   return { entries, refreshed: true };
 }
 
@@ -149,6 +155,59 @@ async function readResponseJson(response: Response): Promise<unknown> {
   }
 }
 
+function endpointWithPath(baseUrl: string, path: string): string {
+  const url = new URL(baseUrl);
+  url.pathname = path;
+  url.search = "";
+  return url.toString();
+}
+
+function planRunUrlFromInstallUrl(installUrl: string): string {
+  const url = new URL(installUrl);
+  const path = url.pathname.replace(/\/+$/, "");
+  if (path.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)) {
+    return endpointWithPath(
+      installUrl,
+      TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+    );
+  }
+  return endpointWithPath(
+    installUrl,
+    `${path}${TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH}`,
+  );
+}
+
+async function postJson(
+  url: string,
+  token: string,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  const response = await defaultAppDistributionDeps.fetch(url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const snippet = await readResponseTextSnippet(response);
+    throw new Error(`${response.status} ${snippet}`);
+  }
+  return await readResponseJson(response);
+}
+
+function readExpectedGuard(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("default app PlanRun response is missing expected guard");
+  }
+  const expected = (value as Record<string, unknown>).expected;
+  if (!expected || typeof expected !== "object" || Array.isArray(expected)) {
+    throw new Error("default app PlanRun response is missing expected guard");
+  }
+  return expected as Record<string, unknown>;
+}
+
 export async function applyDefaultAppInstallation(
   entry: DefaultAppDistributionEntry,
   config: DefaultAppInstallConfig,
@@ -159,32 +218,47 @@ export async function applyDefaultAppInstallation(
     mode?: string;
   },
 ): Promise<unknown> {
-  const body: Record<string, unknown> = {
-    spaceId: params.spaceId,
-    source: {
-      kind: "git",
-      url: entry.repositoryUrl,
-      ref: entry.ref,
-    },
+  const source = {
+    kind: "git",
+    url: entry.repositoryUrl,
+    ref: entry.ref,
   };
-  if (params.mode ?? config.mode) body.mode = params.mode ?? config.mode;
-  if (config.runtimeBaseUrl) body.runtimeBaseUrl = config.runtimeBaseUrl;
-
-  const response = await defaultAppDistributionDeps.fetch(config.installUrl, {
-    method: "POST",
-    headers: {
-      "authorization": `Bearer ${config.token}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const snippet = await readResponseTextSnippet(response);
+  const planBody: Record<string, unknown> = {
+    spaceId: params.spaceId,
+    source,
+  };
+  const plan = await postJson(
+    planRunUrlFromInstallUrl(config.installUrl),
+    config.token,
+    planBody,
+  ).catch((error) => {
     throw new Error(
-      `default app Installation apply failed for ${entry.name}: ${response.status} ${snippet}`,
+      `default app Installation plan failed for ${entry.name}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
-  }
-  return await readResponseJson(response);
+  });
+  const expected = readExpectedGuard(plan);
+  const mode = params.mode ?? config.mode ?? "shared-cell";
+  const applyBody: Record<string, unknown> = {
+    accountId: config.accountId ?? params.spaceId,
+    spaceId: params.spaceId,
+    createdBySubject: params.subject ?? config.subject,
+    source,
+    expected,
+    mode,
+  };
+  if (config.runtimeBaseUrl) applyBody.runtimeBaseUrl = config.runtimeBaseUrl;
+
+  return await postJson(config.installUrl, config.token, applyBody).catch(
+    (error) => {
+      throw new Error(
+        `default app Installation apply failed for ${entry.name}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    },
+  );
 }
 
 interface DefaultAppPreinstallResult {
@@ -235,28 +309,36 @@ export async function saveDefaultAppDistributionEntries(
 
   const replaceRows = async () => {
     await db.delete(defaultAppDistributionEntries).run();
-    await db.delete(defaultAppDistributionConfig)
+    await db
+      .delete(defaultAppDistributionConfig)
       .where(eq(defaultAppDistributionConfig.id, "default"))
       .run();
-    await db.insert(defaultAppDistributionConfig).values({
-      id: "default",
-      configured: true,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }).run();
+    await db
+      .insert(defaultAppDistributionConfig)
+      .values({
+        id: "default",
+        configured: true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
     if (rows.length > 0) {
       await db.insert(defaultAppDistributionEntries).values(rows).run();
     }
-    await db.update(defaultAppPreinstallJobs).set({
-      status: "queued",
-      nextAttemptAt: timestamp,
-      lockedAt: null,
-      lastError: null,
-      distributionJson: null,
-      expectedGroupIdsJson: null,
-      deploymentQueuedAt: null,
-      updatedAt: timestamp,
-    }).where(eq(defaultAppPreinstallJobs.status, "blocked_by_config")).run();
+    await db
+      .update(defaultAppPreinstallJobs)
+      .set({
+        status: "queued",
+        nextAttemptAt: timestamp,
+        lockedAt: null,
+        lastError: null,
+        distributionJson: null,
+        expectedGroupIdsJson: null,
+        deploymentQueuedAt: null,
+        updatedAt: timestamp,
+      })
+      .where(eq(defaultAppPreinstallJobs.status, "blocked_by_config"))
+      .run();
   };
 
   if (hasTransactionSupport(env.DB)) {
@@ -286,25 +368,33 @@ export async function clearDefaultAppDistributionEntries(
   const timestamp = options.timestamp ?? new Date().toISOString();
   const clearRows = async () => {
     await db.delete(defaultAppDistributionEntries).run();
-    await db.delete(defaultAppDistributionConfig)
+    await db
+      .delete(defaultAppDistributionConfig)
       .where(eq(defaultAppDistributionConfig.id, "default"))
       .run();
-    await db.insert(defaultAppDistributionConfig).values({
-      id: "default",
-      configured: false,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }).run();
-    await db.update(defaultAppPreinstallJobs).set({
-      status: "queued",
-      nextAttemptAt: timestamp,
-      lockedAt: null,
-      lastError: null,
-      distributionJson: null,
-      expectedGroupIdsJson: null,
-      deploymentQueuedAt: null,
-      updatedAt: timestamp,
-    }).where(eq(defaultAppPreinstallJobs.status, "blocked_by_config")).run();
+    await db
+      .insert(defaultAppDistributionConfig)
+      .values({
+        id: "default",
+        configured: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .run();
+    await db
+      .update(defaultAppPreinstallJobs)
+      .set({
+        status: "queued",
+        nextAttemptAt: timestamp,
+        lockedAt: null,
+        lastError: null,
+        distributionJson: null,
+        expectedGroupIdsJson: null,
+        deploymentQueuedAt: null,
+        updatedAt: timestamp,
+      })
+      .where(eq(defaultAppPreinstallJobs.status, "blocked_by_config"))
+      .run();
   };
 
   if (hasTransactionSupport(env.DB)) {
@@ -333,9 +423,11 @@ async function preinstallDefaultAppsForSpaceDetailed(
     entries?: DefaultAppDistributionEntry[];
   },
 ): Promise<DefaultAppPreinstallResult> {
-  const entries = params.entries ??
-    (await resolveDefaultAppDistributionForBootstrap(env))
-      .filter((entry) => entry.preinstall);
+  const entries =
+    params.entries ??
+    (await resolveDefaultAppDistributionForBootstrap(env)).filter(
+      (entry) => entry.preinstall,
+    );
   if (entries.length === 0) {
     return {
       entries: [],
@@ -405,23 +497,26 @@ export async function enqueueDefaultAppPreinstallJob(
   }
 
   await runDbStatement(
-    db.insert(defaultAppPreinstallJobs).values({
-      id,
-      spaceId: params.spaceId,
-      createdByAccountId: params.createdByAccountId ?? null,
-      status,
-      attempts: 0,
-      nextAttemptAt,
-      lockedAt: null,
-      lastError,
-      distributionJson,
-      expectedGroupIdsJson: null,
-      deploymentQueuedAt: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    }).onConflictDoNothing({
-      target: defaultAppPreinstallJobs.id,
-    }),
+    db
+      .insert(defaultAppPreinstallJobs)
+      .values({
+        id,
+        spaceId: params.spaceId,
+        createdByAccountId: params.createdByAccountId ?? null,
+        status,
+        attempts: 0,
+        nextAttemptAt,
+        lockedAt: null,
+        lastError,
+        distributionJson,
+        expectedGroupIdsJson: null,
+        deploymentQueuedAt: null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .onConflictDoNothing({
+        target: defaultAppPreinstallJobs.id,
+      }),
   );
   return id;
 }
@@ -435,7 +530,8 @@ function duePreinstallJobs(
   return rows.filter((row) => {
     const status = normalizePreinstallJobStatus(row.status);
     if (
-      status === "queued" || status === "blocked_by_config" ||
+      status === "queued" ||
+      status === "blocked_by_config" ||
       status === "paused_by_operator"
     ) {
       return !row.nextAttemptAt || row.nextAttemptAt <= timestamp;
@@ -456,16 +552,22 @@ async function claimDefaultAppPreinstallJob(
   const lockedAtPredicate = row.lockedAt
     ? eq(defaultAppPreinstallJobs.lockedAt, row.lockedAt)
     : isNull(defaultAppPreinstallJobs.lockedAt);
-  const result = await db.update(defaultAppPreinstallJobs).set({
-    status: "in_progress",
-    attempts: params.attempts,
-    lockedAt: params.timestamp,
-    updatedAt: params.timestamp,
-  }).where(and(
-    eq(defaultAppPreinstallJobs.id, row.id),
-    eq(defaultAppPreinstallJobs.status, status),
-    lockedAtPredicate,
-  )).run();
+  const result = await db
+    .update(defaultAppPreinstallJobs)
+    .set({
+      status: "in_progress",
+      attempts: params.attempts,
+      lockedAt: params.timestamp,
+      updatedAt: params.timestamp,
+    })
+    .where(
+      and(
+        eq(defaultAppPreinstallJobs.id, row.id),
+        eq(defaultAppPreinstallJobs.status, status),
+        lockedAtPredicate,
+      ),
+    )
+    .run();
   return updateChanged(result);
 }
 
@@ -531,7 +633,8 @@ export async function processDefaultAppPreinstallJobs(
   const wherePredicate = options.spaceId
     ? and(duePredicate, eq(defaultAppPreinstallJobs.spaceId, options.spaceId))
     : duePredicate;
-  const rows = await db.select()
+  const rows = await db
+    .select()
     .from(defaultAppPreinstallJobs)
     .where(wherePredicate)
     .orderBy(
@@ -542,13 +645,7 @@ export async function processDefaultAppPreinstallJobs(
     .all();
   summary.scanned = rows.length;
 
-  for (
-    const row of duePreinstallJobs(
-      rows,
-      timestamp,
-      leaseMs,
-    )
-  ) {
+  for (const row of duePreinstallJobs(rows, timestamp, leaseMs)) {
     const attempts = row.attempts + 1;
     const claimed = await claimDefaultAppPreinstallJob(db, row, {
       attempts,
@@ -560,14 +657,18 @@ export async function processDefaultAppPreinstallJobs(
     try {
       const defaults = readDefaults(env);
       if (!defaults.preinstall) {
-        await db.update(defaultAppPreinstallJobs).set({
-          status: "paused_by_operator",
-          nextAttemptAt: nextRetryAt(timestamp, attempts),
-          lockedAt: null,
-          lastError: "default app preinstall is disabled by operator",
-          deploymentQueuedAt: null,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(defaultAppPreinstallJobs.id, row.id)).run();
+        await db
+          .update(defaultAppPreinstallJobs)
+          .set({
+            status: "paused_by_operator",
+            nextAttemptAt: nextRetryAt(timestamp, attempts),
+            lockedAt: null,
+            lastError: "default app preinstall is disabled by operator",
+            deploymentQueuedAt: null,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(defaultAppPreinstallJobs.id, row.id))
+          .run();
         summary.paused += 1;
         continue;
       }
@@ -578,42 +679,51 @@ export async function processDefaultAppPreinstallJobs(
         timestamp,
         entries: plan.entries,
       });
-      await db.update(defaultAppPreinstallJobs).set({
-        status: "completed",
-        nextAttemptAt: null,
-        lockedAt: null,
-        lastError: null,
-        distributionJson: plan.refreshed
-          ? serializePreinstallDistribution(plan.entries)
-          : row.distributionJson,
-        expectedGroupIdsJson: null,
-        deploymentQueuedAt: null,
-        updatedAt: new Date().toISOString(),
-      }).where(eq(defaultAppPreinstallJobs.id, row.id)).run();
+      await db
+        .update(defaultAppPreinstallJobs)
+        .set({
+          status: "completed",
+          nextAttemptAt: null,
+          lockedAt: null,
+          lastError: null,
+          distributionJson: plan.refreshed
+            ? serializePreinstallDistribution(plan.entries)
+            : row.distributionJson,
+          expectedGroupIdsJson: null,
+          deploymentQueuedAt: null,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(defaultAppPreinstallJobs.id, row.id))
+        .run();
       summary.completed += 1;
     } catch (error) {
       const lastError = error instanceof Error ? error.message : String(error);
       const blockedByConfig = isDefaultAppDistributionInvalidError(error);
-      const terminal = error instanceof DefaultAppPreinstallConflictError ||
+      const terminal =
+        error instanceof DefaultAppPreinstallConflictError ||
         (!blockedByConfig && attempts >= maxAttempts);
-      await db.update(defaultAppPreinstallJobs).set({
-        status: blockedByConfig
-          ? "blocked_by_config"
-          : terminal
-          ? "failed"
-          : "queued",
-        nextAttemptAt: terminal ? null : nextRetryAt(timestamp, attempts),
-        lockedAt: null,
-        lastError,
-        deploymentQueuedAt: null,
-        ...(blockedByConfig
-          ? {
-            distributionJson: null,
-            expectedGroupIdsJson: null,
-          }
-          : {}),
-        updatedAt: new Date().toISOString(),
-      }).where(eq(defaultAppPreinstallJobs.id, row.id)).run();
+      await db
+        .update(defaultAppPreinstallJobs)
+        .set({
+          status: blockedByConfig
+            ? "blocked_by_config"
+            : terminal
+              ? "failed"
+              : "queued",
+          nextAttemptAt: terminal ? null : nextRetryAt(timestamp, attempts),
+          lockedAt: null,
+          lastError,
+          deploymentQueuedAt: null,
+          ...(blockedByConfig
+            ? {
+                distributionJson: null,
+                expectedGroupIdsJson: null,
+              }
+            : {}),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(defaultAppPreinstallJobs.id, row.id))
+        .run();
       if (blockedByConfig) {
         summary.blocked += 1;
       } else if (terminal) {

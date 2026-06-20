@@ -1,13 +1,9 @@
 // Accounts
 export {
-  accountBlocks,
   accountEnvVars,
-  accountFollowRequests,
-  accountFollows,
   accountMemberships,
   accountMetadata,
   accountModeration,
-  accountMutes,
   accounts,
   accountSettings,
   accountStats,
@@ -45,7 +41,6 @@ export {
   repoReleases,
   repoRemotes,
   repositories,
-  repoStars,
   snapshots,
   tags,
 } from "./schema-repos.ts";
@@ -85,15 +80,13 @@ export { mcpOauthPending, mcpServers } from "./schema-oauth.ts";
 
 // Platform
 export {
-  apDeliveryQueue,
-  apFollowers,
   defaultAppDistributionConfig,
   defaultAppDistributionEntries,
   defaultAppPreinstallJobs,
   dlqEntries,
   edges,
-  fileHandlerMatchers,
-  fileHandlers,
+  interfaceFileHandlerMatchers,
+  interfaceFileHandlers,
   infraEndpointRoutes,
   infraEndpoints,
   infraWorkers,
@@ -103,7 +96,6 @@ export {
   notifications,
   notificationSettings,
   repoGrants,
-  repoPushActivities,
   reports,
   resourceAccess,
   resources,
@@ -117,9 +109,6 @@ export {
   shortcutGroupItems,
   shortcutGroups,
   shortcuts,
-  storeInventoryItems,
-  storeRegistry,
-  storeRegistryUpdates,
   uiExtensions,
 } from "./schema-platform.ts";
 

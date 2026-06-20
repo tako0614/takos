@@ -80,6 +80,7 @@ export function ChatView(props: ChatViewProps) {
 
   const {
     selectedModel,
+    availableModels,
     setSelectedModel,
     messages,
     input,
@@ -116,10 +117,10 @@ export function ChatView(props: ChatViewProps) {
   let focusedRunPanelRef: HTMLDivElement | undefined;
 
   const focusedRunMeta = createMemo(() =>
-    getFocusedRunMeta(runMetaById(), focusRunId())
+    getFocusedRunMeta(runMetaById(), focusRunId()),
   );
   const focusedRunEntries = createMemo(() =>
-    getFocusedRunEntries(timelineEntries(), focusRunId()).slice(-8)
+    getFocusedRunEntries(timelineEntries(), focusRunId()).slice(-8),
   );
 
   // Auto-send initialMessage once on mount
@@ -204,8 +205,8 @@ export function ChatView(props: ChatViewProps) {
       jumpStart = null;
       return;
     }
-    const hasTargetMessage = messages().some((message) =>
-      message.id === currentJumpToMessageId
+    const hasTargetMessage = messages().some(
+      (message) => message.id === currentJumpToMessageId,
     );
     if (!jumpStart || jumpStart.id !== currentJumpToMessageId) {
       jumpStart = { id: currentJumpToMessageId, startedAt: Date.now() };
@@ -257,6 +258,7 @@ export function ChatView(props: ChatViewProps) {
     mobileHeader.setHeaderContent(
       <ModelSwitcher
         selectedModel={selectedModel()}
+        models={availableModels()}
         isLoading={isLoading()}
         onModelChange={handleModelChange}
       />,
@@ -343,6 +345,7 @@ export function ChatView(props: ChatViewProps) {
       </Show>
       <ChatHeader
         selectedModel={selectedModel()}
+        models={availableModels()}
         isLoading={isLoading()}
         onModelChange={handleModelChange}
         actions={headerActions()}
@@ -356,9 +359,7 @@ export function ChatView(props: ChatViewProps) {
                 <span class="font-medium text-zinc-900 dark:text-zinc-100">
                   {taskContext().title}
                 </span>
-                <span>
-                  {t(TASK_STATUS_LABEL_KEYS[taskContext().status])}
-                </span>
+                <span>{t(TASK_STATUS_LABEL_KEYS[taskContext().status])}</span>
                 <span>
                   {t(TASK_PRIORITY_LABEL_KEYS[taskContext().priority])}
                 </span>
@@ -467,10 +468,7 @@ export function ChatView(props: ChatViewProps) {
           />
           <Show when={error()}>
             {(err) => (
-              <ChatErrorBanner
-                error={err()}
-                onDismiss={() => setError(null)}
-              />
+              <ChatErrorBanner error={err()} onDismiss={() => setError(null)} />
             )}
           </Show>
           <ChatInputBar

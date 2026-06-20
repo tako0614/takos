@@ -81,12 +81,7 @@ const QUEUE_TRIGGER_FIELDS = new Set([
   "maxWaitTimeMs",
   "retryDelaySeconds",
 ]);
-const CONSUME_FIELDS = new Set([
-  "publication",
-  "as",
-  "request",
-  "inject",
-]);
+const CONSUME_FIELDS = new Set(["publication", "as", "request", "inject"]);
 const CONSUME_INJECT_FIELDS = new Set(["env", "defaults"]);
 const CLOUDFLARE_FIELDS = new Set(["container"]);
 const CLOUDFLARE_CONTAINER_FIELDS = new Set([
@@ -119,7 +114,7 @@ function assertAllowedFields(
   for (const key of Object.keys(record)) {
     if (!allowed.has(key)) {
       throw new Error(
-        `${prefix}.${key} is not supported by the app manifest contract`,
+        `${prefix}.${key} is not supported by the Capsule desired-state projection contract`,
       );
     }
   }
@@ -158,11 +153,11 @@ function parseVolumeMounts(
       target,
       ...(mountRecord.persistent != null
         ? {
-          persistent: asOptionalBoolean(
-            mountRecord.persistent,
-            `${prefix}.volumes.${name}.persistent`,
-          ),
-        }
+            persistent: asOptionalBoolean(
+              mountRecord.persistent,
+              `${prefix}.volumes.${name}.persistent`,
+            ),
+          }
         : {}),
     };
   }
@@ -312,10 +307,7 @@ function parseQueueTriggers(
   });
 }
 
-function parseTriggers(
-  prefix: string,
-  raw: unknown,
-): AppTriggers | undefined {
+function parseTriggers(prefix: string, raw: unknown): AppTriggers | undefined {
   if (raw == null) return undefined;
   const record = asRecord(raw);
   assertAllowedFields(record, `${prefix}.triggers`, TRIGGER_FIELDS);
@@ -376,10 +368,7 @@ function parseConsumeRequest(
   return raw as Record<string, unknown>;
 }
 
-function parseConsume(
-  prefix: string,
-  raw: unknown,
-): AppConsume[] | undefined {
+function parseConsume(prefix: string, raw: unknown): AppConsume[] | undefined {
   if (raw == null) return undefined;
   if (!Array.isArray(raw)) {
     throw new Error(`${prefix}.consume must be an array`);
@@ -389,10 +378,7 @@ function parseConsume(
     const record = asRecord(entry);
     const consumePrefix = `${prefix}.consume[${index}]`;
     assertAllowedFields(record, consumePrefix, CONSUME_FIELDS);
-    const inject = parseConsumeInject(
-      record.inject,
-      `${consumePrefix}.inject`,
-    );
+    const inject = parseConsumeInject(record.inject, `${consumePrefix}.inject`);
     const alias = asString(record.as, `${consumePrefix}.as`);
     const publication = asRequiredString(
       record.publication,
@@ -400,7 +386,7 @@ function parseConsume(
     );
     if (publication.startsWith("takos.")) {
       throw new Error(
-        `${consumePrefix}.publication '${publication}' is not supported by the app manifest contract; reserved Takos consumes are retired, use AppGrant/AppBinding credentials from the operator account plane`,
+        `${consumePrefix}.publication '${publication}' is not supported by the Capsule desired-state projection contract; request runtime authority through ServiceBinding and ServiceGrant`,
       );
     }
     const request = parseConsumeRequest(
@@ -513,13 +499,11 @@ function parseCloudflareConfig(
     containerRecord.instanceType,
     `${prefix}.cloudflare.container.instanceType`,
   );
-  if (
-    instanceType && !CLOUDFLARE_CONTAINER_INSTANCE_TYPES.has(instanceType)
-  ) {
+  if (instanceType && !CLOUDFLARE_CONTAINER_INSTANCE_TYPES.has(instanceType)) {
     throw new Error(
-      `${prefix}.cloudflare.container.instanceType must be one of ${
-        Array.from(CLOUDFLARE_CONTAINER_INSTANCE_TYPES).join("/")
-      }`,
+      `${prefix}.cloudflare.container.instanceType must be one of ${Array.from(
+        CLOUDFLARE_CONTAINER_INSTANCE_TYPES,
+      ).join("/")}`,
     );
   }
   const imageBuildContext = asString(
@@ -538,14 +522,14 @@ function parseCloudflareConfig(
     containerRecord.imageVars,
     `${prefix}.cloudflare.container.imageVars`,
   );
-  const rolloutActiveGracePeriod = containerRecord.rolloutActiveGracePeriod !=
-      null
-    ? asOptionalInteger(
-      containerRecord.rolloutActiveGracePeriod,
-      `${prefix}.cloudflare.container.rolloutActiveGracePeriod`,
-      { min: 0 },
-    )
-    : undefined;
+  const rolloutActiveGracePeriod =
+    containerRecord.rolloutActiveGracePeriod != null
+      ? asOptionalInteger(
+          containerRecord.rolloutActiveGracePeriod,
+          `${prefix}.cloudflare.container.rolloutActiveGracePeriod`,
+          { min: 0 },
+        )
+      : undefined;
   const rolloutStepPercentage = parseRolloutStepPercentage(
     containerRecord.rolloutStepPercentage,
     `${prefix}.cloudflare.container.rolloutStepPercentage`,
@@ -579,11 +563,11 @@ function parseCloudflareConfig(
       ...(migrationTag ? { migrationTag } : {}),
       ...(containerRecord.sqlite != null
         ? {
-          sqlite: asOptionalBoolean(
-            containerRecord.sqlite,
-            `${prefix}.cloudflare.container.sqlite`,
-          ),
-        }
+            sqlite: asOptionalBoolean(
+              containerRecord.sqlite,
+              `${prefix}.cloudflare.container.sqlite`,
+            ),
+          }
         : {}),
     },
   };
@@ -738,6 +722,9 @@ function parseComputeEntry(
   const kind = partial
     ? detectPartialComputeKind(prefix, record, parentKind)
     : detectComputeKind(prefix, record, parentKind);
+  if (!partial && kind === undefined) {
+    throw new Error(`${prefix}.kind is required`);
+  }
   const cloudflare = parseCloudflareConfig(prefix, record.cloudflare);
   if (!partial && cloudflare?.container && kind !== "attached-container") {
     throw new Error(
@@ -749,42 +736,39 @@ function parseComputeEntry(
   const image = parseComputeImage(record.image, `${prefix}.image`, {
     allowCloudflareDockerfile: !!cloudflare?.container,
   });
-  const port = record.port != null
-    ? (() => {
-      const value = Number(record.port);
-      if (!Number.isFinite(value) || value <= 0) {
-        throw new Error(`${prefix}.port must be a positive number`);
-      }
-      return value;
-    })()
-    : undefined;
+  const port =
+    record.port != null
+      ? (() => {
+          const value = Number(record.port);
+          if (!Number.isFinite(value) || value <= 0) {
+            throw new Error(`${prefix}.port must be a positive number`);
+          }
+          return value;
+        })()
+      : undefined;
   if (!partial && kind !== "worker" && port == null) {
     throw new Error(
-      `${prefix}.port is required for ${describeComputeKind(kind)}`,
+      `${prefix}.port is required for ${describeComputeKind(kind as ComputeKind)}`,
     );
   }
   const env = asStringMap(record.env, `${prefix}.env`);
-  const readiness = record.readiness != null
-    ? (() => {
-      if (!partial && kind !== "worker") {
-        throw new Error(
-          `${prefix}.readiness is not supported for ${
-            describeComputeKind(kind)
-          }; readiness is worker-only`,
-        );
-      }
-      return validateReadinessPath(
-        record.readiness,
-        `${prefix}.readiness`,
-      );
-    })()
-    : undefined;
+  const readiness =
+    record.readiness != null
+      ? (() => {
+          if (!partial && kind !== "worker") {
+            throw new Error(
+              `${prefix}.readiness is not supported for ${describeComputeKind(
+                kind as ComputeKind,
+              )}; readiness is worker-only`,
+            );
+          }
+          return validateReadinessPath(record.readiness, `${prefix}.readiness`);
+        })()
+      : undefined;
   const scaling = validateServiceScaling(record.scaling, `${prefix}.scaling`);
   const volumes = parseVolumeMounts(prefix, record.volumes);
   if (!partial && kind === "worker" && volumes) {
-    throw new Error(
-      `${prefix}.volumes is not supported for worker compute`,
-    );
+    throw new Error(`${prefix}.volumes is not supported for worker compute`);
   }
   const depends = asStringArray(record.depends, `${prefix}.depends`);
   const triggers = parseTriggers(prefix, record.triggers);
@@ -826,9 +810,7 @@ function parseComputeEntry(
 
   // Triggers are only meaningful on workers (schedule/queue drive workers).
   if (!partial && kind !== "worker" && triggers) {
-    throw new Error(
-      `${prefix}.triggers is only supported for worker compute`,
-    );
+    throw new Error(`${prefix}.triggers is only supported for worker compute`);
   }
 
   return {
@@ -887,19 +869,14 @@ export function parseCompute(
  * may be omitted because they are inherited from the matching base compute entry
  * at apply-time merge. The merged result is re-parsed with the full guards.
  */
-export function parseComputeOverride(
-  raw: unknown,
-): Record<string, AppCompute> {
+export function parseComputeOverride(raw: unknown): Record<string, AppCompute> {
   if (raw == null) return {};
   const record = asRecord(raw);
   const result: Record<string, AppCompute> = {};
   for (const [name, value] of Object.entries(record)) {
-    result[name] = parseComputeEntry(
-      `overrides.compute.${name}`,
-      value,
-      null,
-      { partial: true },
-    );
+    result[name] = parseComputeEntry(`overrides.compute.${name}`, value, null, {
+      partial: true,
+    });
   }
   return result;
 }

@@ -2,18 +2,15 @@
 ## Replace placeholder domains, account IDs, namespace IDs, and resource IDs
 ## before deploying.
 ##
-## SOURCE OF TRUTH: Takos is complete as a plain OpenTofu module — no Takosumi is
-## required to self-host. The canonical topology for all DURABLE infra is the
-## OpenTofu module at ../opentofu (var.target = cloudflare); `tofu apply`
-## provisions it and publishes the non-secret endpoints / binding map. This
-## wrangler.toml is the WORKER-ARTIFACT HALF of that same deploy: the part the
-## Terraform/OpenTofu provider cannot express (the worker script entry, ASSETS,
-## container images, Durable Object migrations, routes, and binding wiring). It
-## reads the module's outputs and must stay in sync with the module; it is not a
-## competing source of truth for the durable infra. Running the same module
-## through Takosumi is OPTIONAL and only adds the Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment ledger, policy decisions, and
-## dashboard (provider credentials, allowlists, state handling, and runner boundaries are resolved by Connection/ProviderBinding/policy); Takos has no
-## special coupling to Takosumi.
+## SOURCE OF TRUTH: Takos is the first-party AI Workspace distribution on
+## Takosumi. The OpenTofu module at ../opentofu (var.target = cloudflare)
+## provisions the DURABLE infra for the Takos distribution worker and publishes
+## the non-secret endpoints / binding map. This wrangler.toml is the
+## WORKER-ARTIFACT HALF of that same Takosumi-native deploy: the worker script
+## entry, ASSETS, container images, Durable Object migrations, routes, and binding
+## wiring the OpenTofu provider cannot express. It reads the module outputs and
+## must stay in sync with the module; it is not a competing source of truth for
+## durable infra or a product-only deploy authority.
 ## See ../../docs/architecture/internal-trust-boundaries.md for the deploy invariant.
 
 # NOTE: all relative paths in this file resolve from THIS config file's
@@ -47,10 +44,16 @@ TENANT_BASE_DOMAIN = "app.your-domain.example"
 AUTH_PUBLIC_BASE_URL = "https://app.your-domain.example"
 PROXY_BASE_URL = "https://app.your-domain.example"
 TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://app.your-domain.example"
-# TODO: AUTH_ALLOWED_REDIRECT_DOMAINS is defined but never consumed by application code.
-# It should be used for OIDC redirect URI validation (restrict redirect targets to
-# known domains). Remove this comment and implement validation, or remove the var entirely.
-# AUTH_ALLOWED_REDIRECT_DOMAINS = "app.your-domain.example"
+# Remote-tool allowlist for the agent runtime. The agent container fails closed
+# when this is empty, so the bundled distribution defaults to "*" (all
+# first-party tools: file read/write, runtime exec, web fetch, repo ops). Narrow
+# it to a comma-separated list (e.g. "file_read,web_fetch") to restrict which
+# tools the agent may call. Leave unset to keep the all-tools default.
+# TAKOS_AGENT_TOOL_ALLOWLIST = "*"
+# OIDC redirect/return-to targets are validated from server-managed config:
+# redirect_uri is checked against the per-client redirectUris allowlist
+# (auth/oidc.ts) and return_to is constrained by sanitizeReturnTo
+# (auth/provisioning.ts). No separate domain-allowlist env var is consumed.
 # Root-unified single app: the embedded account plane runs in-process and this
 # self-hosted Takos worker is its OWN OIDC issuer at the bare origin (no /accounts
 # suffix). The accounts handler derives all discovery + OIDC endpoints from the
@@ -68,9 +71,8 @@ TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_subject"
 TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-selfhost-installation-client"
 # self-host: this instance's own origin (the embedded accounts plane is the issuer).
 TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://app.your-domain.example/auth/oidc/callback"
-TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS = "closed"
+TAKOSUMI_ACCOUNTS_PLATFORM_ACCESS = "closed"
 TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
-TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
 # OCI deployment adapter for image-backed services / containers.
 OCI_ORCHESTRATOR_URL = ""
 CF_ACCOUNT_ID = "replace-with-account-id"
@@ -118,10 +120,9 @@ bucket_name = "takos-accounts-exports"
 # its own schema. No migrations_dir — d1_opentofu_store.ts + d1_deploy_stores.ts
 # self-create their namespaced key/value + run tables lazily. Create with
 # `wrangler d1 create takos-deploy`. Binding name is read verbatim by the
-# takosumi deploy handler (bindings.ts TAKOS_D1) and does not collide with takos
-# names.
+# Takosumi deploy handler (bindings.ts TAKOSUMI_CONTROL_DB).
 [[d1_databases]]
-binding = "TAKOS_D1"
+binding = "TAKOSUMI_CONTROL_DB"
 database_name = "takos-deploy"
 database_id = "replace-with-deploy-d1-database-id"
 
@@ -334,17 +335,13 @@ bucket_name = "takos-offload"
 # - TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET: pairwise OIDC subject HMAC secret
 # - TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET: launch-token pairwise HMAC secret
 # - TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET: signs /__takosumi/exports/* download URLs
-# - TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_TOKEN: optional bearer for deploy-control calls
 # Deploy-control plane (in-process Takosumi deploy-control handler) handshake —
 # push via `wrangler secret put`:
-# - TAKOSUMI_DEPLOY_CONTROL_TOKEN: REQUIRED to enable the in-process deploy-control
-#   routes. The embedded deploy service gates `authorizeDeployControl` on this
-#   secret (404 "deploy control routes disabled" when unset), and the accounts
-#   deploy-control proxy sends the SAME value as `Authorization: Bearer`. In this
-#   single worker it is an internal handshake — generate one shared secret and set
-#   it once; install/plan/apply silently fail without it. Must ship in the same
-#   deploy as the TAKOS_D1 binding (bootstrap fail-closes in prod when the routes
-#   are exposed but no durable deploy store is bound).
+# - TAKOSUMI_DEPLOY_CONTROL_TOKEN: REQUIRED to enable remote deploy-control
+#   fallback routes when they are explicitly exposed. The normal self-host Takos
+#   path uses the in-process typed operations seam, but this secret still gates
+#   bearer-protected fallback/callback surfaces. Must ship in the same deploy as
+#   the TAKOSUMI_CONTROL_DB binding.
 # Optional account-plane integrations (push only when enabled):
 # - TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY / _STRIPE_WEBHOOK_SECRET: Stripe billing
 # - TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_ID / _CLIENT_SECRET: upstream GitHub OAuth
@@ -372,21 +369,10 @@ binding = "WORKFLOW_QUEUE"
 queue = "takos-deployment-jobs"
 binding = "DEPLOY_QUEUE"
 
-# Deploy-control plane queues (in-process Takosumi deploy-control plane). Binding
-# names are read verbatim by the takosumi deploy handler (bindings.ts: TAKOS_QUEUE
-# coordination control-plane, RUN_QUEUE OpenTofu run dispatch).
-# Only producer bindings are wired: the in-process CloudflareContainerOpenTofuRunner
-# adapter dispatches runs synchronously to the RUNNER container DO
-# (handler.ts #runContainer), so no separate queue consumer is required here. If a
-# future async-via-queue dispatch model is adopted, add matching [[queues.consumers]]
-# blocks and teach the takos queue() handler the takosumi.opentofu-run@v1 kind.
-[[queues.producers]]
-queue = "takos-control-plane"
-binding = "TAKOS_QUEUE"
-
-[[queues.producers]]
-queue = "takos-opentofu-runs"
-binding = "RUN_QUEUE"
+# The embedded Takosumi deploy-control plane intentionally has no queue binding
+# in the self-host Takos worker. `RUN_QUEUE` is owned by the Takos agent runtime;
+# the Takosumi controller falls back to its inline dispatcher when its optional
+# queue producer is absent and drives the RUNNER Durable Object directly.
 
 [[queues.consumers]]
 queue = "takos-runs"
@@ -476,9 +462,8 @@ TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_staging_subject"
 TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-selfhost-staging-client"
 # self-host: this instance's own origin (the embedded accounts plane is the issuer).
 TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://staging-app.your-domain.example/auth/oidc/callback"
-TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS = "closed"
+TAKOSUMI_ACCOUNTS_PLATFORM_ACCESS = "closed"
 TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
-TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL = ""
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"
 
@@ -506,7 +491,7 @@ bucket_name = "takos-accounts-exports-staging"
 # `wrangler d1 create takos-deploy-staging` and fill the id. No migrations_dir
 # (stores self-create their tables). See the production [[d1_databases]] note.
 [[env.staging.d1_databases]]
-binding = "TAKOS_D1"
+binding = "TAKOSUMI_CONTROL_DB"
 database_name = "takos-deploy-staging"
 database_id = "replace-with-staging-deploy-d1-database-id"
 
@@ -643,15 +628,8 @@ binding = "WORKFLOW_QUEUE"
 queue = "takos-deployment-jobs-staging"
 binding = "DEPLOY_QUEUE"
 
-# Deploy-control plane queues (staging). Producer-only; see the production note —
-# the in-process runner adapter dispatches synchronously to the container DO.
-[[env.staging.queues.producers]]
-queue = "takos-control-plane-staging"
-binding = "TAKOS_QUEUE"
-
-[[env.staging.queues.producers]]
-queue = "takos-opentofu-runs-staging"
-binding = "RUN_QUEUE"
+# The embedded Takosumi deploy-control plane intentionally has no queue binding
+# in the self-host staging worker. See the production note.
 
 [[env.staging.queues.consumers]]
 queue = "takos-runs-staging"

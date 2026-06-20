@@ -56,14 +56,15 @@ export function requireOAuthAuth(
     switch (result.kind) {
       case "no-bearer":
         return c.json(
-          new AuthenticationError("Missing or invalid Authorization header")
-            .toResponse(),
+          new AuthenticationError(
+            "Missing or invalid Authorization header",
+          ).toResponse(),
           401,
         );
-      // App-local managed tokens are retired, and any non-Accounts bearer is
-      // unsupported. Human, automation, and service credentials are Takosumi
-      // Accounts bearer/AppGrant credentials.
-      case "retired":
+      // App-local managed tokens are not a current credential channel, and any
+      // non-Accounts bearer is unsupported. Human, automation, and service
+      // credentials are Takosumi Accounts bearer or ServiceGrant material.
+      case "unsupported-app-local-bearer":
       case "not-accounts":
         return c.json(
           new AuthenticationError("Unsupported bearer token").toResponse(),
@@ -76,8 +77,9 @@ export function requireOAuthAuth(
         );
       case "invalid":
         return c.json(
-          new AuthenticationError("Invalid or expired bearer token")
-            .toResponse(),
+          new AuthenticationError(
+            "Invalid or expired bearer token",
+          ).toResponse(),
           401,
         );
       case "scope-insufficient":

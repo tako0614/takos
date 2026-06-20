@@ -179,6 +179,15 @@ export function createEventsRouter(): Hono<EventsRouteEnv> {
  *
  * Takes a raw `Env` rather than a Hono context so this can be invoked from
  * non-route layers (e.g. background jobs) in the future.
+ *
+ * STATUS (not-yet-produced): the subscribe side (`/api/events`) is fully wired,
+ * but this producer is not yet called from the deploy engine. Until it is,
+ * subscribers receive an open stream with no group lifecycle events. Intended
+ * call sites when wiring lands:
+ *   - `group.deployed` / `group.unhealthy`: apply-engine after the group
+ *     ready/degraded StateSnapshot is saved.
+ *   - `group.deleted`: the group deletion path once teardown commits.
+ *   - `group.rollback`: the rollback orchestrator on a successful revert.
  */
 export function emitGroupLifecycleEvent(
   env: Env,

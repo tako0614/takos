@@ -16,16 +16,11 @@ export type TenantWorkerScheduledResult = {
   noRetry: boolean;
 };
 
-export type TenantWorkerQueueMessage<Body = unknown> =
-  & {
-    id: string;
-    timestamp: Date;
-    attempts: number;
-  }
-  & (
-    | { body: Body }
-    | { serializedBody: ArrayBuffer | ArrayBufferView }
-  );
+export type TenantWorkerQueueMessage<Body = unknown> = {
+  id: string;
+  timestamp: Date;
+  attempts: number;
+} & ({ body: Body } | { serializedBody: ArrayBuffer | ArrayBufferView });
 
 export type TenantWorkerQueueResult = {
   outcome: string;
@@ -78,7 +73,7 @@ export type TenantWorkerRuntimeFactoryOptions = {
       values?: unknown[],
     ): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>;
   };
-  /** OpenAI API key for AI bindings (auto-injected to all tenant services). */
+  /** OpenAI-compatible API key for AI bindings (auto-injected to all tenant services). */
   openAiApiKey?: string;
   /** OpenAI-compatible base URL for AI bindings. */
   openAiBaseUrl?: string;
@@ -143,9 +138,8 @@ export async function createLocalTenantWorkerRuntimeRegistry(
   const loadRegistry = async (): Promise<TenantWorkerRuntimeRegistry> => {
     if (!registryPromise) {
       const module = await import("./miniflare-registry.ts");
-      registryPromise = module.createLocalTenantRuntimeRegistry(
-        registryOptions,
-      );
+      registryPromise =
+        module.createLocalTenantRuntimeRegistry(registryOptions);
     }
     return registryPromise;
   };

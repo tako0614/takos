@@ -35,9 +35,9 @@ export function parseAndValidateWorkflowYaml(
   const parseErrors = filterWorkflowErrors(diagnostics);
   if (parseErrors.length > 0) {
     throw new Error(
-      `Workflow parse error (${workflowPath}): ${
-        parseErrors.map((entry) => entry.message).join(", ")
-      }`,
+      `Workflow parse error (${workflowPath}): ${parseErrors
+        .map((entry) => entry.message)
+        .join(", ")}`,
     );
   }
 
@@ -45,9 +45,9 @@ export function parseAndValidateWorkflowYaml(
   const validationErrors = filterWorkflowErrors(validation.diagnostics);
   if (validationErrors.length > 0) {
     throw new Error(
-      `Workflow validation error (${workflowPath}): ${
-        validationErrors.map((entry) => entry.message).join(", ")
-      }`,
+      `Workflow validation error (${workflowPath}): ${validationErrors
+        .map((entry) => entry.message)
+        .join(", ")}`,
     );
   }
 
@@ -201,7 +201,7 @@ export function validateServiceScaling(
   for (const key of Object.keys(record)) {
     if (key !== "minInstances" && key !== "maxInstances") {
       throw new Error(
-        `${field}.${key} is not supported by the app manifest contract`,
+        `${field}.${key} is not supported by the Capsule desired-state projection contract`,
       );
     }
   }
@@ -216,7 +216,9 @@ export function validateServiceScaling(
     { min: 1 },
   );
   if (
-    minInstances != null && maxInstances != null && minInstances > maxInstances
+    minInstances != null &&
+    maxInstances != null &&
+    minInstances > maxInstances
   ) {
     throw new Error(
       `${field}.minInstances (${minInstances}) must be <= ${field}.maxInstances (${maxInstances})`,

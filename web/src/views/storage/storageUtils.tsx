@@ -2,7 +2,7 @@ import type { JSX } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import type { TranslationKey } from "../../store/i18n.ts";
 import type { StorageFile } from "../../types/index.ts";
-import { fileHandlerOpenUrlHasIdPathTemplate } from "./fileHandlerUrls.ts";
+import { interfaceFileHandlerOpenUrlHasIdPathTemplate } from "./fileHandlerUrls.ts";
 
 export interface FileHandler {
   id: string;
@@ -70,7 +70,7 @@ export function resolveHandlers(
 
   // App handlers first
   for (const h of appHandlers) {
-    if (!fileHandlerOpenUrlHasIdPathTemplate(h.open_url)) continue;
+    if (!interfaceFileHandlerOpenUrlHasIdPathTemplate(h.open_url)) continue;
     if (handlerMatchesFile(h, file)) {
       result.push({ type: "app", handler: h });
     }
@@ -119,7 +119,7 @@ function saveDefaultMap(map: DefaultHandlerMap): void {
  * Get the file key used for default handler lookup.
  * Uses extension if available, otherwise mime type, otherwise '*'.
  */
-function fileHandlerLookupKey(file: StorageFile): string {
+function interfaceFileHandlerLookupKey(file: StorageFile): string {
   const ext = getFileExtension(file.name);
   if (ext) return `ext:${ext}`;
   if (file.mime_type) return `mime:${file.mime_type}`;
@@ -135,7 +135,7 @@ export function getDefaultHandler(
   handlers: ResolvedHandler[],
 ): ResolvedHandler | undefined {
   const map = getDefaultMap();
-  const key = fileHandlerLookupKey(file);
+  const key = interfaceFileHandlerLookupKey(file);
   const savedHandlerKey = map[key];
   if (!savedHandlerKey) return undefined;
   return handlers.find((h) => getHandlerKey(h) === savedHandlerKey);
@@ -149,7 +149,7 @@ export function setDefaultHandler(
   handler: ResolvedHandler,
 ): void {
   const map = getDefaultMap();
-  const key = fileHandlerLookupKey(file);
+  const key = interfaceFileHandlerLookupKey(file);
   map[key] = getHandlerKey(handler);
   saveDefaultMap(map);
 }
@@ -159,7 +159,7 @@ export function setDefaultHandler(
  */
 export function clearDefaultHandler(file: StorageFile): void {
   const map = getDefaultMap();
-  const key = fileHandlerLookupKey(file);
+  const key = interfaceFileHandlerLookupKey(file);
   delete map[key];
   saveDefaultMap(map);
 }

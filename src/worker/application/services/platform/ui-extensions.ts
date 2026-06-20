@@ -11,6 +11,7 @@ import {
   listPublications,
   type PublicationRecord,
   publicationResolvedUrl,
+  SERVICE_GRAPH_CAPABILITIES,
 } from "./service-publications.ts";
 
 export interface UIExtension {
@@ -56,10 +57,10 @@ function sidebarItemFromUiSurfacePublication(
   const spec = record.publication.spec ?? {};
   const display = record.publication.display ?? {};
   const sidebarSpec = asRecord(spec.sidebar);
-  const label = readOptionalString(sidebarSpec, "label") ??
-    display.title ??
-    record.name;
-  const icon = readOptionalString(sidebarSpec, "icon") ??
+  const label =
+    readOptionalString(sidebarSpec, "label") ?? display.title ?? record.name;
+  const icon =
+    readOptionalString(sidebarSpec, "icon") ??
     display.icon ??
     readOptionalString(spec, "icon") ??
     "app";
@@ -82,7 +83,10 @@ export async function getUISidebarItems(
 ): Promise<UISidebarItem[]> {
   const publicationItems = (await listPublications({ DB: db }, spaceId))
     .filter((record) =>
-      isPublicationType(record.publicationType, "takos.ui-surface.v1")
+      isPublicationType(
+        record.publicationType,
+        SERVICE_GRAPH_CAPABILITIES.interfaceUiSurface,
+      ),
     )
     .map(sidebarItemFromUiSurfacePublication)
     .filter((item): item is NonNullable<typeof item> => item !== null);

@@ -1,36 +1,27 @@
 # MCP Server
 
-This page has been reset for Takosumi v1. Takosumi installs a plain OpenTofu module repo and records an **Installation**, typed **Run** entries, and a successful apply updates the **Deployment** and its **OutputSnapshot**. Repo metadata comes from generic repository information such as Git URL, ref, commit, tag, and module path.
+MCP servers appear in Takos as tools that can be used from a Workspace. Users install a plain OpenTofu Capsule rather
+than a Takos-specific MCP manifest, and Takos reads the Service Graph records that Takosumi projects after a successful
+apply.
 
 ## Current Flow
 
-1. Choose a Git URL/ref pointing at a plain OpenTofu module repo.
-2. Create a **`plan` type Run** and review its diff, warnings, and policy decision.
-3. Promote the reviewed plan to an **`apply` type Run**.
-4. A successful apply updates the **Deployment** and records its **OutputSnapshot** in the audit ledger.
-5. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to a default / connection / manual / disabled binding, and policy resolves provider allowlists, state backend, execution image / resource limits, and Cloudflare Container execution; account-plane policy, OIDC clients, billing, and domains belong to the operator distribution.
+1. Install a Git URL/ref that points at an OpenTofu Capsule.
+2. Review the Takosumi `plan` Run and approve the saved plan.
+3. A successful `apply` records Deployment, OutputSnapshot, and any non-secret ServiceExport projection.
+4. Takos reads ServiceExport records with the `protocol.mcp.server` capability and shows the server as Workspace tools.
+5. Runtime authority is issued by ServiceGrant. API keys and bearer token literals are never read from OpenTofu outputs.
 
-## Takos Boundary
+## Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records Installation / Run / StateSnapshot / OutputSnapshot / Deployment state and run-ledger evidence. The operator distribution owns account-plane policy, OIDC clients, billing, and dashboard.
-
-## API Shape
-
-```json
-{
-  "spaceId": "space_1",
-  "repo": {
-    "url": "https://github.com/example/app.git",
-    "ref": "main"
-  }
-}
-```
-
-An `apply` type Run promotes a reviewed `plan` type Run. Takos product routes should call the Takosumi deploy control plane or the operator distribution account-plane install flow instead of exposing a separate deployment proxy.
+Takos owns tool discovery, display, consent, and invocation UX. Takosumi owns ServiceExport / ServiceBinding /
+ServiceGrant, output projection, dependency pinning, policy, and audit evidence. Provider credentials remain in
+Connection / Installation provider connection / vault / runner phase boundaries.
 
 ## References
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
+- [Service exports](/deploy/service-exports)
 - [Takosumi specification](https://takosumi.com/docs/reference/model)
 - [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)

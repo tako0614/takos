@@ -185,7 +185,6 @@ export function createDispatchWorker(
             );
           }
           headers.set("X-Tenant-Worker", routeRef);
-          headers.set("X-Takos-Internal-Marker", "1");
           const userWorker = platform.services.serviceRegistry?.get(routeRef);
           if (!userWorker) {
             return errorJsonResponse(
@@ -224,7 +223,6 @@ export function createDispatchWorker(
           });
         }
         headers.set("X-Tenant-Worker", routeRef);
-        headers.set("X-Takos-Internal-Marker", "1");
         if (deploymentTarget.deploymentId) {
           headers.set("X-Tenant-Deployment", deploymentTarget.deploymentId);
         } else {

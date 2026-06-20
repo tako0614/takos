@@ -1,9 +1,11 @@
 import { isRecord } from "../../../../shared/utils/guards.ts";
 
 export function buildMetadataDisabledMessage(field: string): string {
-  return `${field} is no longer supported by the Takos app manifest parser; ` +
-    `resolve artifacts upstream with the Takosumi OpenTofu module PlanRun flow and ` +
-    `apply the reviewed expected guard returned by PlanRun.`;
+  return (
+    `${field} is no longer supported by the Takos desired-state projection parser; ` +
+    `resolve artifacts upstream with the Takosumi OpenTofu module plan Run flow and ` +
+    `apply the reviewed expected guard returned by that Run.`
+  );
 }
 
 function assertComputeInputDoesNotUseBuildMetadata(

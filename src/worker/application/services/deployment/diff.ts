@@ -1,14 +1,14 @@
 /**
  * Diff computation for the canonical group reconciler.
  *
- * Desired state is compiled from the current deploy manifest into
- * `GroupDesiredState`.
+ * Desired state is compiled from the current OpenTofu Capsule output projection
+ * into `GroupDesiredState`.
  * Current state is reconstructed from canonical tables (`groups`, `resources`,
  * `services`) plus the group's observed routing snapshot.
  *
- * Resource reconciliation is part of the manifest deploy pipeline for
- * manifest-owned resources. The current-state snapshot is reconstructed from
- * canonical resource rows and compared with `manifest.resources`.
+ * Resource reconciliation is part of the Capsule apply pipeline for projected
+ * resources. The current-state snapshot is reconstructed from canonical
+ * resource rows and compared with the projected desired resources.
  */
 
 import type { GroupDesiredState, ObservedGroupState } from "./group-state.ts";
@@ -62,8 +62,10 @@ export function diffEntryMatchesTarget(
   const normalized = target.trim();
   if (!normalized) return false;
   if (normalized === entry.name) return true;
-  return normalized === `${entry.category}.${entry.name}` ||
-    normalized === `${pluralCategory(entry.category)}.${entry.name}`;
+  return (
+    normalized === `${entry.category}.${entry.name}` ||
+    normalized === `${pluralCategory(entry.category)}.${entry.name}`
+  );
 }
 
 function desiredEntryMatchesTarget(
@@ -84,7 +86,8 @@ export function validateTargetsAgainstDesiredState(
   desired: Pick<GroupDesiredState, "resources" | "workloads" | "routes">,
   targets?: string[],
 ): string[] {
-  const normalizedTargets = (targets ?? []).map((target) => target.trim())
+  const normalizedTargets = (targets ?? [])
+    .map((target) => target.trim())
     .filter(Boolean);
   if (normalizedTargets.length === 0) return [];
 
@@ -94,16 +97,19 @@ export function validateTargetsAgainstDesiredState(
       desiredEntryMatchesTarget(
         { name: resource.name, category: "resource" },
         target,
-      )
+      ),
     );
     const workloadMatch = Object.values(desired.workloads).some((workload) =>
       desiredEntryMatchesTarget(
         { name: workload.name, category: workload.category },
         target,
-      )
+      ),
     );
     const routeMatch = Object.values(desired.routes).some((route) =>
-      desiredEntryMatchesTarget({ name: route.name, category: "route" }, target)
+      desiredEntryMatchesTarget(
+        { name: route.name, category: "route" },
+        target,
+      ),
     );
     if (!resourceMatch && !workloadMatch && !routeMatch) {
       unmatched.push(target);
@@ -116,18 +122,18 @@ export function filterDiffByTargets(
   diff: DiffResult,
   targets?: string[],
 ): DiffResult {
-  const normalizedTargets = (targets ?? []).map((target) => target.trim())
+  const normalizedTargets = (targets ?? [])
+    .map((target) => target.trim())
     .filter(Boolean);
   if (normalizedTargets.length === 0) return diff;
 
   const entries = diff.entries.filter((entry) =>
-    normalizedTargets.some((target) => diffEntryMatchesTarget(entry, target))
+    normalizedTargets.some((target) => diffEntryMatchesTarget(entry, target)),
   );
   const summary = summarizeEntries(entries);
   return {
     entries,
-    hasChanges: summary.create > 0 || summary.update > 0 ||
-      summary.delete > 0,
+    hasChanges: summary.create > 0 || summary.update > 0 || summary.delete > 0,
     summary,
   };
 }

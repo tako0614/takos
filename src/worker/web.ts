@@ -11,7 +11,6 @@ import { createApiRouter } from "./server/routes/api.ts";
 import { RateLimiters } from "./shared/utils/rate-limiter.ts";
 import { authSessionRouter } from "./server/routes/auth/session.ts";
 import { authOidcRouter } from "./server/routes/auth/oidc.ts";
-import { registerProfileRoutes } from "./server/routes/profiles/register.ts";
 import {
   type CloudflareWorkerEnv,
   handleAccountsPlaneRequest,
@@ -41,7 +40,11 @@ import {
 import { isInvalidArrayBufferError } from "./shared/utils/db-guards.ts";
 import { createEnvGuard, validateWebEnv } from "./shared/utils/validate-env.ts";
 import { logError, logInfo, logWarn } from "./shared/utils/logger.ts";
-import { isAppError, RateLimitError } from "@takos/worker-platform-utils/errors";
+import {
+  isAppError,
+  RateLimitError,
+} from "@takos/worker-platform-utils/errors";
+import { resolveContainerHostBaseUrl } from "@takos/worker-platform-utils/container-host";
 import { PRODUCTION_DOMAIN } from "./shared/constants/app.ts";
 import { buildWorkersWebPlatform } from "./platform/adapters/workers.ts";
 import type { ControlPlatform } from "./platform/platform-config.ts";
@@ -89,8 +92,11 @@ export function getWebApp() {
 export const createWebApp = getWebApp;
 
 function containerHostBaseUrl(env: Env): string {
-  return env.PROXY_BASE_URL ?? env.AUTH_PUBLIC_BASE_URL ??
-    `https://${env.ADMIN_DOMAIN}`;
+  return resolveContainerHostBaseUrl({
+    proxyBaseUrl: env.PROXY_BASE_URL,
+    authPublicBaseUrl: env.AUTH_PUBLIC_BASE_URL,
+    adminDomain: env.ADMIN_DOMAIN,
+  });
 }
 
 function withUnifiedContainerHostEnv(env: Env): Env {
@@ -167,12 +173,15 @@ app.use("*", async (c, next): Promise<Response | void> => {
   if (!isDev) {
     // Require HTTPS in production - reject if X-Forwarded-Proto exists and is not https
     if (proto && proto !== "https") {
-      return c.json({
-        error: {
-          code: "FORBIDDEN",
-          message: "HTTPS required",
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "HTTPS required",
+          },
         },
-      }, 403);
+        403,
+      );
     }
   }
 
@@ -202,7 +211,8 @@ app.use("*", async (c, next): Promise<Response | void> => {
   // Skip if route already set a custom CSP (e.g., with nonce for inline scripts)
   const contentType = headers.get("Content-Type") || "";
   if (
-    contentType.includes("text/html") && !headers.has("Content-Security-Policy")
+    contentType.includes("text/html") &&
+    !headers.has("Content-Security-Policy")
   ) {
     headers.set("Content-Security-Policy", csp);
   }
@@ -261,28 +271,48 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 // ============================================================================
 // Takosumi Accounts plane (in-process, at the ORIGIN ROOT — no /accounts prefix)
 // ============================================================================
-// app.takosumi.com IS the OIDC issuer. The account plane owns these root prefixes
-// in-process; everything else is the Takos product. The product has no root
-// /oauth or /.well-known handler, so there is no collision. `/internal/*` is NOT
-// delegated here: account-plane internals are in-process calls, and `/internal`
-// HTTP routes are reserved for opentofu-runner / executor container callbacks.
+// The worker origin is the OIDC issuer: app.takosumi.com for the hosted platform
+// worker, or the self-hoster's own origin for a Takos distribution worker. The
+// account plane owns these root prefixes in-process; everything else is the
+// Takos product. The product has no root /oauth or /.well-known handler, so
+// there is no collision. `/internal/*` is NOT delegated here: account-plane
+// internals are in-process calls, and `/internal` HTTP routes are reserved for
+// opentofu-runner / executor container callbacks.
 app.all("/.well-known/*", (c) =>
-  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+  handleAccountsPlaneRequest(
+    c.req.raw,
+    c.env as unknown as CloudflareWorkerEnv,
+  ),
+);
 app.all("/oauth/*", (c) =>
-  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+  handleAccountsPlaneRequest(
+    c.req.raw,
+    c.env as unknown as CloudflareWorkerEnv,
+  ),
+);
 app.all("/v1/*", (c) =>
-  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+  handleAccountsPlaneRequest(
+    c.req.raw,
+    c.env as unknown as CloudflareWorkerEnv,
+  ),
+);
 // `/api/v1/*` is the account plane's edge-public deploy-control surface (the
 // dashboard control surface served by accounts-service). It is NOT under `/v1`,
 // so it needs its own delegation here, registered BEFORE the Takos product
 // `/api` router mount below, or the product router would shadow it (and answer
 // with its own 404 before the request could reach the account plane).
 app.all("/api/v1/*", (c) =>
-  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
-app.all("/start", (c) =>
-  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+  handleAccountsPlaneRequest(
+    c.req.raw,
+    c.env as unknown as CloudflareWorkerEnv,
+  ),
+);
 app.all("/__takosumi/*", (c) =>
-  handleAccountsPlaneRequest(c.req.raw, c.env as unknown as CloudflareWorkerEnv));
+  handleAccountsPlaneRequest(
+    c.req.raw,
+    c.env as unknown as CloudflareWorkerEnv,
+  ),
+);
 
 // ============================================================================
 // Unified container-host callbacks
@@ -328,33 +358,30 @@ app.all("/api/internal/v1/agent-control/*", async (c) => {
 // authenticated cluster-internal hostnames.
 
 app.post("/internal/scheduled", async (c) => {
-  const access = validateInternalApiAccess(
-    c.req.url,
-    c.env,
-    (name) => c.req.header(name),
+  const access = validateInternalApiAccess(c.req.url, c.env, (name) =>
+    c.req.header(name),
   );
   if (!access.ok) {
-    return c.json({
-      error: {
-        code: "FORBIDDEN",
-        message: access.message,
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: access.message,
+        },
       },
-    }, access.status);
+      access.status,
+    );
   }
 
   const cron = c.req.query("cron") ?? "*/15 * * * *";
   const env = c.env;
   const errors: Array<{ job: string; error: string }> = [];
-  let appScheduleSummary:
-    | Awaited<
-      ReturnType<typeof dispatchScheduledComputeTriggers>
-    >
-    | null = null;
-  let workflowScheduleSummary:
-    | Awaited<
-      ReturnType<typeof triggerScheduledWorkflows>
-    >
-    | null = null;
+  let appScheduleSummary: Awaited<
+    ReturnType<typeof dispatchScheduledComputeTriggers>
+  > | null = null;
+  let workflowScheduleSummary: Awaited<
+    ReturnType<typeof triggerScheduledWorkflows>
+  > | null = null;
 
   try {
     await runScheduledFamilyMaintenance(env, cron, errors);
@@ -373,14 +400,17 @@ app.post("/internal/scheduled", async (c) => {
         error: "PLATFORM context is unavailable",
       });
     }
-    workflowScheduleSummary = await triggerScheduledWorkflows({
-      db: env.DB,
-      bucket: env.GIT_OBJECTS,
-      queue: env.WORKFLOW_QUEUE,
-      encryptionKey: env.ENCRYPTION_KEY,
-    }, {
-      windowMinutes: scheduledWorkflowWindowMinutes(cron),
-    });
+    workflowScheduleSummary = await triggerScheduledWorkflows(
+      {
+        db: env.DB,
+        bucket: env.GIT_OBJECTS,
+        queue: env.WORKFLOW_QUEUE,
+        encryptionKey: env.ENCRYPTION_KEY,
+      },
+      {
+        windowMinutes: scheduledWorkflowWindowMinutes(cron),
+      },
+    );
   } catch (error) {
     errors.push({
       job: "scheduled-http",
@@ -401,48 +431,55 @@ app.post("/internal/scheduled", async (c) => {
 
 app.put("/internal/default-app-distribution", async (c) => {
   const env = c.env;
-  const access = validateInternalApiAccess(
-    c.req.url,
-    env,
-    (name) => c.req.header(name),
+  const access = validateInternalApiAccess(c.req.url, env, (name) =>
+    c.req.header(name),
   );
   if (!access.ok) {
-    return c.json({
-      error: {
-        code: "FORBIDDEN",
-        message: access.message,
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: access.message,
+        },
       },
-    }, access.status);
+      access.status,
+    );
   }
 
   if (hasDefaultAppDistributionEnvOverride(env)) {
-    return c.json({
-      error: {
-        code: "CONFLICT",
-        message:
-          "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON or TAKOS_DEFAULT_APP_REPOSITORIES_JSON is configured; env overrides DB-managed default app distribution. Remove the env override before saving DB distribution.",
+    return c.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON or TAKOS_DEFAULT_APP_REPOSITORIES_JSON is configured; env overrides DB-operator-provided coverage app distribution. Remove the env override before saving DB distribution.",
+        },
       },
-    }, 409);
+      409,
+    );
   }
 
-  const body = await c.req.json().catch(() => null) as
+  const body = (await c.req.json().catch(() => null)) as
     | { entries?: unknown; repositories?: unknown }
     | unknown[];
   const entries = Array.isArray(body)
     ? body
     : Array.isArray(body?.entries)
-    ? body.entries
-    : Array.isArray(body?.repositories)
-    ? body.repositories
-    : null;
+      ? body.entries
+      : Array.isArray(body?.repositories)
+        ? body.repositories
+        : null;
   if (!entries) {
-    return c.json({
-      error: {
-        code: "BAD_REQUEST",
-        message:
-          "Expected a JSON array, or an object with entries/repositories array",
+    return c.json(
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message:
+            "Expected a JSON array, or an object with entries/repositories array",
+        },
       },
-    }, 400);
+      400,
+    );
   }
 
   let saved;
@@ -450,12 +487,15 @@ app.put("/internal/default-app-distribution", async (c) => {
     saved = await saveDefaultAppDistributionEntries(env, entries);
   } catch (error) {
     if (isDefaultAppDistributionSaveValidationError(error)) {
-      return c.json({
-        error: {
-          code: "BAD_REQUEST",
-          message: error instanceof Error ? error.message : String(error),
+      return c.json(
+        {
+          error: {
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : String(error),
+          },
         },
-      }, 400);
+        400,
+      );
     }
     throw error;
   }
@@ -464,28 +504,32 @@ app.put("/internal/default-app-distribution", async (c) => {
 
 app.delete("/internal/default-app-distribution", async (c) => {
   const env = c.env;
-  const access = validateInternalApiAccess(
-    c.req.url,
-    env,
-    (name) => c.req.header(name),
+  const access = validateInternalApiAccess(c.req.url, env, (name) =>
+    c.req.header(name),
   );
   if (!access.ok) {
-    return c.json({
-      error: {
-        code: "FORBIDDEN",
-        message: access.message,
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: access.message,
+        },
       },
-    }, access.status);
+      access.status,
+    );
   }
 
   if (hasDefaultAppDistributionEnvOverride(env)) {
-    return c.json({
-      error: {
-        code: "CONFLICT",
-        message:
-          "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON or TAKOS_DEFAULT_APP_REPOSITORIES_JSON is configured; env overrides DB-managed default app distribution. Remove the env override before clearing DB distribution.",
+    return c.json(
+      {
+        error: {
+          code: "CONFLICT",
+          message:
+            "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON or TAKOS_DEFAULT_APP_REPOSITORIES_JSON is configured; env overrides DB-operator-provided coverage app distribution. Remove the env override before clearing DB distribution.",
+        },
       },
-    }, 409);
+      409,
+    );
   }
 
   await clearDefaultAppDistributionEntries(env);
@@ -494,18 +538,19 @@ app.delete("/internal/default-app-distribution", async (c) => {
 
 app.get("/api/internal/v1/default-apps/status", async (c) => {
   const env = c.env;
-  const access = validateInternalApiAccess(
-    c.req.url,
-    env,
-    (name) => c.req.header(name),
+  const access = validateInternalApiAccess(c.req.url, env, (name) =>
+    c.req.header(name),
   );
   if (!access.ok) {
-    return c.json({
-      error: {
-        code: "FORBIDDEN",
-        message: access.message,
+    return c.json(
+      {
+        error: {
+          code: "FORBIDDEN",
+          message: access.message,
+        },
       },
-    }, access.status);
+      access.status,
+    );
   }
 
   try {
@@ -544,12 +589,6 @@ const apiRouter = createApiRouter({ requireAuth, optionalAuth });
 app.route("/api", apiRouter);
 
 // ============================================================================
-// Profile Routes (special handling for /@username)
-// ============================================================================
-
-registerProfileRoutes(app, optionalAuth);
-
-// ============================================================================
 // Error Handling
 // ============================================================================
 
@@ -557,26 +596,29 @@ registerProfileRoutes(app, optionalAuth);
 app.notFound(async (c) => {
   const path = new URL(c.req.url).pathname;
 
-  // If it's an API/auth/reserved route, return JSON error.
+  // If it's an API/auth/reserved route, return a JSON error instead of the SPA
+  // shell. `/git/` (Git Smart HTTP container) is edge-fronted ahead of this app
+  // router; it is listed here so that any request that does fall through is
+  // answered as a machine-readable 404 rather than HTML.
   if (
     path.startsWith("/api/") ||
     path.startsWith("/auth/") ||
     path === "/oauth" ||
     path.startsWith("/oauth/") ||
     path.startsWith("/git/") ||
-    path.startsWith("/ap/") ||
-    path.startsWith("/ns/") ||
     path.startsWith("/.well-known/") ||
     path.startsWith("/v1/") ||
-    path === "/start" ||
     path.startsWith("/__takosumi/")
   ) {
-    return c.json({
-      error: {
-        code: "NOT_FOUND",
-        message: "Not Found",
+    return c.json(
+      {
+        error: {
+          code: "NOT_FOUND",
+          message: "Not Found",
+        },
       },
-    }, 404);
+      404,
+    );
   }
 
   // For non-API routes, serve index.html (SPA fallback)
@@ -599,12 +641,15 @@ app.notFound(async (c) => {
     }
   }
 
-  return c.json({
-    error: {
-      code: "NOT_FOUND",
-      message: "Not Found",
+  return c.json(
+    {
+      error: {
+        code: "NOT_FOUND",
+        message: "Not Found",
+      },
     },
-  }, 404);
+    404,
+  );
 });
 
 // S14: Error handler - never expose stack traces or sensitive error details in production
@@ -614,12 +659,15 @@ app.onError((err, c) => {
       `Rejected malformed lookup payload on ${c.req.method} ${c.req.path}`,
       { module: "db_guard" },
     );
-    return c.json({
-      error: {
-        code: "BAD_REQUEST",
-        message: "Malformed lookup parameter",
+    return c.json(
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message: "Malformed lookup parameter",
+        },
       },
-    }, 400);
+      400,
+    );
   }
 
   // Handle AppError subclasses — return structured error responses
@@ -637,7 +685,7 @@ app.onError((err, c) => {
       const existingDetails = body.error.details;
       body.error.details = {
         ...(existingDetails && typeof existingDetails === "object"
-          ? existingDetails as Record<string, unknown>
+          ? (existingDetails as Record<string, unknown>)
           : {}),
         retryAfter: err.retryAfter,
       };
@@ -658,15 +706,18 @@ app.onError((err, c) => {
   const errorId = crypto.randomUUID().slice(0, 8);
 
   // In production, only return generic error with correlation ID
-  return c.json({
-    error: {
-      code: "INTERNAL_ERROR",
-      message: "An unexpected error occurred. Please try again later.",
-      details: {
-        error_id: errorId,
+  return c.json(
+    {
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "An unexpected error occurred. Please try again later.",
+        details: {
+          error_id: errorId,
+        },
       },
     },
-  }, 500);
+    500,
+  );
 });
 
 // ============================================================================
@@ -676,8 +727,9 @@ app.onError((err, c) => {
 export function createWebWorker(
   buildPlatform: (
     env: Env,
-  ) => ControlPlatform<Env> | Promise<ControlPlatform<Env>> =
-    buildWorkersWebPlatform,
+  ) =>
+    | ControlPlatform<Env>
+    | Promise<ControlPlatform<Env>> = buildWorkersWebPlatform,
 ) {
   return {
     async fetch(
@@ -768,14 +820,17 @@ export function createWebWorker(
       }
 
       try {
-        const summary = await triggerScheduledWorkflows({
-          db: bindings.DB,
-          bucket: bindings.GIT_OBJECTS,
-          queue: bindings.WORKFLOW_QUEUE,
-          encryptionKey: bindings.ENCRYPTION_KEY,
-        }, {
-          windowMinutes: scheduledWorkflowWindowMinutes(cron),
-        });
+        const summary = await triggerScheduledWorkflows(
+          {
+            db: bindings.DB,
+            bucket: bindings.GIT_OBJECTS,
+            queue: bindings.WORKFLOW_QUEUE,
+            encryptionKey: bindings.ENCRYPTION_KEY,
+          },
+          {
+            windowMinutes: scheduledWorkflowWindowMinutes(cron),
+          },
+        );
         if (summary.triggeredRunIds.length > 0) {
           logInfo("workflow schedule dispatch completed", {
             module: "cron",
@@ -796,13 +851,15 @@ export function createWebWorker(
       }
 
       if (errors.length > 0) {
-        logError("scheduled job failures", { cron, errors }, {
-          module: "cron",
-        });
+        logError(
+          "scheduled job failures",
+          { cron, errors },
+          {
+            module: "cron",
+          },
+        );
         // Ensure failures are visible in cron monitoring, without impacting request traffic.
-        const summary = errors
-          .map((e) => `${e.job}: ${e.error}`)
-          .join("; ");
+        const summary = errors.map((e) => `${e.job}: ${e.error}`).join("; ");
         throw new Error(
           `scheduled job failures (cron=${cron}, count=${errors.length}): ${summary}`,
         );

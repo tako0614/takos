@@ -34,7 +34,7 @@ export type LocalTenantWorkerRegistryOptions = {
       values?: unknown[],
     ): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>;
   };
-  /** OpenAI API key for AI bindings. */
+  /** OpenAI-compatible API key for AI bindings. */
   openAiApiKey?: string;
   /** OpenAI-compatible base URL for AI bindings. */
   openAiBaseUrl?: string;
@@ -87,13 +87,14 @@ export function parseRuntimeConfig(
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
-      compatibility_date: typeof parsed.compatibility_date === "string"
-        ? parsed.compatibility_date
-        : undefined,
+      compatibility_date:
+        typeof parsed.compatibility_date === "string"
+          ? parsed.compatibility_date
+          : undefined,
       compatibility_flags: Array.isArray(parsed.compatibility_flags)
-        ? parsed.compatibility_flags.filter((value): value is string =>
-          typeof value === "string"
-        )
+        ? parsed.compatibility_flags.filter(
+            (value): value is string => typeof value === "string",
+          )
         : undefined,
     };
   } catch {
@@ -105,8 +106,9 @@ function deploymentMatchesWorkerRef(
   deployment: DeploymentRuntimeRecord,
   workerRef: string,
 ): boolean {
-  return deployment.routeRef === workerRef ||
-    deployment.artifactRef === workerRef;
+  return (
+    deployment.routeRef === workerRef || deployment.artifactRef === workerRef
+  );
 }
 
 function parseDeploymentRouteRef(
@@ -123,7 +125,8 @@ function parseDeploymentRouteRef(
       const endpointRecord = endpoint as Record<string, unknown>;
       if (
         endpointRecord.kind === "service-ref" &&
-        typeof endpointRecord.ref === "string" && endpointRecord.ref.trim()
+        typeof endpointRecord.ref === "string" &&
+        endpointRecord.ref.trim()
       ) {
         return endpointRecord.ref.trim();
       }
@@ -184,23 +187,26 @@ export async function resolveDeploymentRuntime(
 ): Promise<DeploymentRuntimeRecord | null> {
   const db = getDb(dbBinding);
   if (options?.deploymentId) {
-    const byDeploymentId = await db.select({
-      id: deployments.id,
-      serviceId: deployments.serviceId,
-      routeRef: services.routeRef,
-      artifactRef: deployments.artifactRef,
-      bundleR2Key: deployments.bundleR2Key,
-      wasmR2Key: deployments.wasmR2Key,
-      runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
-      bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
-      envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
-    })
+    const byDeploymentId = await db
+      .select({
+        id: deployments.id,
+        serviceId: deployments.serviceId,
+        routeRef: services.routeRef,
+        artifactRef: deployments.artifactRef,
+        bundleR2Key: deployments.bundleR2Key,
+        wasmR2Key: deployments.wasmR2Key,
+        runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
+        bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
+        envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
+      })
       .from(deployments)
       .innerJoin(services, eq(services.id, deployments.serviceId))
-      .where(and(
-        eq(deployments.id, options.deploymentId),
-        inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES),
-      ))
+      .where(
+        and(
+          eq(deployments.id, options.deploymentId),
+          inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES),
+        ),
+      )
       .get();
 
     if (byDeploymentId?.artifactRef && byDeploymentId.bundleR2Key) {
@@ -228,23 +234,26 @@ export async function resolveDeploymentRuntime(
     return null;
   }
 
-  const byArtifact = await db.select({
-    id: deployments.id,
-    serviceId: deployments.serviceId,
-    routeRef: services.routeRef,
-    artifactRef: deployments.artifactRef,
-    bundleR2Key: deployments.bundleR2Key,
-    wasmR2Key: deployments.wasmR2Key,
-    runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
-    bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
-    envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
-  })
+  const byArtifact = await db
+    .select({
+      id: deployments.id,
+      serviceId: deployments.serviceId,
+      routeRef: services.routeRef,
+      artifactRef: deployments.artifactRef,
+      bundleR2Key: deployments.bundleR2Key,
+      wasmR2Key: deployments.wasmR2Key,
+      runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
+      bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
+      envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
+    })
     .from(deployments)
     .innerJoin(services, eq(services.id, deployments.serviceId))
-    .where(and(
-      eq(deployments.artifactRef, workerRef),
-      inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES),
-    ))
+    .where(
+      and(
+        eq(deployments.artifactRef, workerRef),
+        inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES),
+      ),
+    )
     .orderBy(desc(deployments.version))
     .get();
 
@@ -262,17 +271,18 @@ export async function resolveDeploymentRuntime(
     };
   }
 
-  const byWorker = await db.select({
-    id: deployments.id,
-    serviceId: deployments.serviceId,
-    routeRef: services.routeRef,
-    artifactRef: deployments.artifactRef,
-    bundleR2Key: deployments.bundleR2Key,
-    wasmR2Key: deployments.wasmR2Key,
-    runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
-    bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
-    envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
-  })
+  const byWorker = await db
+    .select({
+      id: deployments.id,
+      serviceId: deployments.serviceId,
+      routeRef: services.routeRef,
+      artifactRef: deployments.artifactRef,
+      bundleR2Key: deployments.bundleR2Key,
+      wasmR2Key: deployments.wasmR2Key,
+      runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
+      bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
+      envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
+    })
     .from(services)
     .innerJoin(deployments, eq(deployments.id, services.activeDeploymentId))
     .where(eq(services.routeRef, workerRef))
@@ -292,18 +302,19 @@ export async function resolveDeploymentRuntime(
     };
   }
 
-  const candidateDeployments = await db.select({
-    id: deployments.id,
-    serviceId: deployments.serviceId,
-    serviceRouteRef: services.routeRef,
-    artifactRef: deployments.artifactRef,
-    bundleR2Key: deployments.bundleR2Key,
-    wasmR2Key: deployments.wasmR2Key,
-    runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
-    bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
-    envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
-    targetJson: deployments.targetJson,
-  })
+  const candidateDeployments = await db
+    .select({
+      id: deployments.id,
+      serviceId: deployments.serviceId,
+      serviceRouteRef: services.routeRef,
+      artifactRef: deployments.artifactRef,
+      bundleR2Key: deployments.bundleR2Key,
+      wasmR2Key: deployments.wasmR2Key,
+      runtimeConfigSnapshotJson: deployments.runtimeConfigSnapshotJson,
+      bindingsSnapshotEncrypted: deployments.bindingsSnapshotEncrypted,
+      envVarsSnapshotEncrypted: deployments.envVarsSnapshotEncrypted,
+      targetJson: deployments.targetJson,
+    })
     .from(deployments)
     .innerJoin(services, eq(services.id, deployments.serviceId))
     .where(inArray(deployments.routingStatus, LOCAL_ROUTING_STATUSES))
@@ -379,10 +390,13 @@ export function createMissingBindingFetcher(
 ): Fetcher {
   const fetcher: Fetcher = {
     async fetch(): Promise<Response> {
-      return Response.json({
-        error: `Local ${kind} target not configured`,
-        target: name,
-      }, { status: 503 });
+      return Response.json(
+        {
+          error: `Local ${kind} target not configured`,
+          target: name,
+        },
+        { status: 503 },
+      );
     },
   };
   return fetcher;
@@ -393,15 +407,19 @@ export function normalizeFetcherInput(
   init?: RequestInit,
 ): [string | URL, RequestInit | undefined] {
   if (input instanceof Request) {
-    const body = input.method === "GET" || input.method === "HEAD"
-      ? undefined
-      : input.clone().body;
-    return [input.url, {
-      method: input.method,
-      headers: input.headers,
-      body,
-      redirect: input.redirect,
-    }];
+    const body =
+      input.method === "GET" || input.method === "HEAD"
+        ? undefined
+        : input.clone().body;
+    return [
+      input.url,
+      {
+        method: input.method,
+        headers: input.headers,
+        body,
+        redirect: input.redirect,
+      },
+    ];
   }
 
   return [input, init];

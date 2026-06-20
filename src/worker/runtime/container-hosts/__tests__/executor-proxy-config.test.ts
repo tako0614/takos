@@ -15,10 +15,30 @@ test("container env omits provider keys by default (proxy mode)", () => {
 
   assertEquals(vars, {
     TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
+    TAKOS_AGENT_TOOL_ALLOWLIST: "*",
   });
   assertEquals("OPENAI_API_KEY" in vars, false);
   assertEquals("ANTHROPIC_API_KEY" in vars, false);
   assertEquals("GOOGLE_API_KEY" in vars, false);
+});
+
+test("tool allowlist defaults to '*' but honors an operator override", () => {
+  const def = buildAgentExecutorContainerEnvVars({
+    TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
+  });
+  assertEquals(def.TAKOS_AGENT_TOOL_ALLOWLIST, "*");
+
+  const override = buildAgentExecutorContainerEnvVars({
+    TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
+    TAKOS_AGENT_TOOL_ALLOWLIST: "file_read, web_fetch",
+  });
+  assertEquals(override.TAKOS_AGENT_TOOL_ALLOWLIST, "file_read, web_fetch");
+
+  const blank = buildAgentExecutorContainerEnvVars({
+    TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
+    TAKOS_AGENT_TOOL_ALLOWLIST: "   ",
+  });
+  assertEquals(blank.TAKOS_AGENT_TOOL_ALLOWLIST, "*");
 });
 
 test("container env stays proxy-only when flag is unset/empty/false", () => {

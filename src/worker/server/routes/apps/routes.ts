@@ -13,7 +13,11 @@ import {
 import { getDb } from "../../../infra/db/index.ts";
 import { accounts } from "../../../infra/db/schema.ts";
 import { publications, services } from "../../../infra/db/schema-services.ts";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import {
+  SERVICE_GRAPH_CAPABILITIES,
+  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+} from "../../../application/services/platform/service-publications.ts";
 
 type Variables = {
   user?: User;
@@ -59,7 +63,7 @@ type PublicApp = {
   space_name: string | null;
   service_hostname: string | null;
   service_status: string | null;
-  source_type: "manifest";
+  source_type: "service_graph";
   group_id: string | null;
   publication_name: string | null;
   category: string | null;
@@ -68,7 +72,9 @@ type PublicApp = {
   updated_at?: string | null;
 };
 
-const UI_SURFACE_PUBLICATION_TYPES = ["UiSurface", "takos.ui-surface.v1"];
+const UI_SURFACE_PUBLICATION_TYPES = [
+  SERVICE_GRAPH_CAPABILITIES.interfaceUiSurface,
+];
 const DEFAULT_APP_ICON = "";
 
 function getSpaceIdentifierFromAccount(
@@ -117,7 +123,7 @@ function parseJsonRecord(value: unknown): Record<string, unknown> {
   try {
     const parsed = JSON.parse(value) as unknown;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
+      ? (parsed as Record<string, unknown>)
       : {};
   } catch {
     return {};
@@ -126,7 +132,7 @@ function parseJsonRecord(value: unknown): Record<string, unknown> {
 
 function recordOrNull(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -165,35 +171,39 @@ function resolveLauncherIcon(
 }
 
 function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {
-  if (row.sourceType !== "manifest") return null;
+  if (row.sourceType !== SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE) return null;
   if (!UI_SURFACE_PUBLICATION_TYPES.includes(row.publicationType ?? "")) {
     return null;
   }
 
   const publication = parseJsonRecord(row.specJson);
-  const spec = publication.spec && typeof publication.spec === "object" &&
-      !Array.isArray(publication.spec)
-    ? publication.spec as Record<string, unknown>
-    : {};
+  const spec =
+    publication.spec &&
+    typeof publication.spec === "object" &&
+    !Array.isArray(publication.spec)
+      ? (publication.spec as Record<string, unknown>)
+      : {};
   const display =
-    publication.display && typeof publication.display === "object" &&
-      !Array.isArray(publication.display)
-      ? publication.display as Record<string, unknown>
+    publication.display &&
+    typeof publication.display === "object" &&
+    !Array.isArray(publication.display)
+      ? (publication.display as Record<string, unknown>)
       : {};
   if (spec.launcher === false) return null;
 
   const url = stringOrNull(parseJsonRecord(row.resolvedJson).url);
-  const name = stringOrNull(display.title) ??
-    stringOrNull(publication.name) ?? row.name;
+  const name =
+    stringOrNull(display.title) ?? stringOrNull(publication.name) ?? row.name;
   const description = stringOrNull(display.description);
   const serviceConfig = parseJsonRecord(row.serviceConfig);
   const desiredSpec = recordOrNull(serviceConfig.desiredSpec);
-  const rawIcon = stringOrNull(display.icon) ??
-    stringOrNull(desiredSpec?.icon) ?? stringOrNull(serviceConfig.icon);
+  const rawIcon =
+    stringOrNull(display.icon) ??
+    stringOrNull(desiredSpec?.icon) ??
+    stringOrNull(serviceConfig.icon);
   const icon = resolveLauncherIcon(rawIcon, url) ?? DEFAULT_APP_ICON;
   const category = stringOrNull(display.category);
-  const sortOrder = numberOrNull(display.sortOrder) ??
-    null;
+  const sortOrder = numberOrNull(display.sortOrder) ?? null;
 
   return {
     id: row.id,
@@ -210,7 +220,7 @@ function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {
     space_name: row.accountName || null,
     service_hostname: row.serviceHostname || hostnameFromUrl(url),
     service_status: row.serviceStatus || (url ? "deployed" : null),
-    source_type: "manifest",
+    source_type: "service_graph",
     group_id: row.groupId,
     publication_name: row.name,
     category,
@@ -233,35 +243,36 @@ async function listPublicationAppRows(
   db: ReturnType<typeof getDb>,
   accountId: string,
 ): Promise<PublicationAppRow[]> {
-  return await db.select({
-    id: publications.id,
-    name: publications.name,
-    groupId: publications.groupId,
-    sourceType: publications.sourceType,
-    publicationType: publications.publicationType,
-    specJson: publications.specJson,
-    resolvedJson: publications.resolvedJson,
-    serviceConfig: services.config,
-    serviceHostname: services.hostname,
-    serviceStatus: services.status,
-    accountName: accounts.name,
-    accountSlug: accounts.slug,
-    accountType: accounts.type,
-    createdAt: publications.createdAt,
-    updatedAt: publications.updatedAt,
-  }).from(publications)
+  return (await db
+    .select({
+      id: publications.id,
+      name: publications.name,
+      groupId: publications.groupId,
+      sourceType: publications.sourceType,
+      publicationType: publications.publicationType,
+      specJson: publications.specJson,
+      resolvedJson: publications.resolvedJson,
+      serviceConfig: services.config,
+      serviceHostname: services.hostname,
+      serviceStatus: services.status,
+      accountName: accounts.name,
+      accountSlug: accounts.slug,
+      accountType: accounts.type,
+      createdAt: publications.createdAt,
+      updatedAt: publications.updatedAt,
+    })
+    .from(publications)
     .leftJoin(services, eq(publications.ownerServiceId, services.id))
     .leftJoin(accounts, eq(publications.accountId, accounts.id))
-    .where(and(
-      eq(publications.accountId, accountId),
-      eq(publications.sourceType, "manifest"),
-      or(
-        eq(publications.publicationType, "UiSurface"),
-        eq(publications.publicationType, "takos.ui-surface.v1"),
+    .where(
+      and(
+        eq(publications.accountId, accountId),
+        eq(publications.sourceType, SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE),
+        inArray(publications.publicationType, UI_SURFACE_PUBLICATION_TYPES),
       ),
-    ))
+    )
     .orderBy(asc(publications.createdAt), asc(publications.id))
-    .all() as PublicationAppRow[];
+    .all()) as PublicationAppRow[];
 }
 
 async function findPublicationAppRow(
@@ -269,35 +280,36 @@ async function findPublicationAppRow(
   accountId: string,
   appId: string,
 ): Promise<PublicationAppRow | null> {
-  return await db.select({
-    id: publications.id,
-    name: publications.name,
-    groupId: publications.groupId,
-    sourceType: publications.sourceType,
-    publicationType: publications.publicationType,
-    specJson: publications.specJson,
-    resolvedJson: publications.resolvedJson,
-    serviceConfig: services.config,
-    serviceHostname: services.hostname,
-    serviceStatus: services.status,
-    accountName: accounts.name,
-    accountSlug: accounts.slug,
-    accountType: accounts.type,
-    createdAt: publications.createdAt,
-    updatedAt: publications.updatedAt,
-  }).from(publications)
+  return (await db
+    .select({
+      id: publications.id,
+      name: publications.name,
+      groupId: publications.groupId,
+      sourceType: publications.sourceType,
+      publicationType: publications.publicationType,
+      specJson: publications.specJson,
+      resolvedJson: publications.resolvedJson,
+      serviceConfig: services.config,
+      serviceHostname: services.hostname,
+      serviceStatus: services.status,
+      accountName: accounts.name,
+      accountSlug: accounts.slug,
+      accountType: accounts.type,
+      createdAt: publications.createdAt,
+      updatedAt: publications.updatedAt,
+    })
+    .from(publications)
     .leftJoin(services, eq(publications.ownerServiceId, services.id))
     .leftJoin(accounts, eq(publications.accountId, accounts.id))
-    .where(and(
-      eq(publications.id, appId),
-      eq(publications.accountId, accountId),
-      eq(publications.sourceType, "manifest"),
-      or(
-        eq(publications.publicationType, "UiSurface"),
-        eq(publications.publicationType, "takos.ui-surface.v1"),
+    .where(
+      and(
+        eq(publications.id, appId),
+        eq(publications.accountId, accountId),
+        eq(publications.sourceType, SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE),
+        inArray(publications.publicationType, UI_SURFACE_PUBLICATION_TYPES),
       ),
-    ))
-    .get() as PublicationAppRow | null;
+    )
+    .get()) as PublicationAppRow | null;
 }
 
 async function rejectManifestManagedAppMutationIfMatched(
@@ -311,7 +323,7 @@ async function rejectManifestManagedAppMutationIfMatched(
     : null;
   if (!publicationApp) return;
   throw new BadRequestError(
-    "Manifest-managed apps are read-only. Update publish[] in the app manifest and redeploy.",
+    "Capsule-projected apps are read-only. Update the OpenTofu Capsule service export and redeploy.",
   );
 }
 
@@ -330,14 +342,12 @@ export function registerAppApiRoutes<V extends Variables>(
       throw new AuthenticationError();
     }
     const db = appsRouteDeps.getDb(c.env.DB);
-    const spaceScope = await resolveAppsSpaceScope(
-      c,
-      () =>
-        appsRouteDeps.requireSpaceAccess(
-          c,
-          getRequestedSpaceIdentifier(c) || "",
-          user.id,
-        ),
+    const spaceScope = await resolveAppsSpaceScope(c, () =>
+      appsRouteDeps.requireSpaceAccess(
+        c,
+        getRequestedSpaceIdentifier(c) || "",
+        user.id,
+      ),
     );
     const principalId = resolvePrincipalId(user);
 
@@ -358,14 +368,12 @@ export function registerAppApiRoutes<V extends Variables>(
     }
     const appId = c.req.param("id");
     const db = appsRouteDeps.getDb(c.env.DB);
-    const spaceScope = await resolveAppsSpaceScope(
-      c,
-      () =>
-        appsRouteDeps.requireSpaceAccess(
-          c,
-          getRequestedSpaceIdentifier(c) || "",
-          user.id,
-        ),
+    const spaceScope = await resolveAppsSpaceScope(c, () =>
+      appsRouteDeps.requireSpaceAccess(
+        c,
+        getRequestedSpaceIdentifier(c) || "",
+        user.id,
+      ),
     );
     const principalId = resolvePrincipalId(user);
 
@@ -404,14 +412,12 @@ export function registerAppApiRoutes<V extends Variables>(
       throw new BadRequestError("Invalid JSON body");
     }
 
-    const spaceScope = await resolveAppsSpaceScope(
-      c,
-      () =>
-        appsRouteDeps.requireSpaceAccess(
-          c,
-          getRequestedSpaceIdentifier(c) || "",
-          user.id,
-        ),
+    const spaceScope = await resolveAppsSpaceScope(c, () =>
+      appsRouteDeps.requireSpaceAccess(
+        c,
+        getRequestedSpaceIdentifier(c) || "",
+        user.id,
+      ),
     );
     const principalId = resolvePrincipalId(user);
 
@@ -430,14 +436,12 @@ export function registerAppApiRoutes<V extends Variables>(
     const appId = c.req.param("id");
     const db = appsRouteDeps.getDb(c.env.DB);
 
-    const spaceScope = await resolveAppsSpaceScope(
-      c,
-      () =>
-        appsRouteDeps.requireSpaceAccess(
-          c,
-          getRequestedSpaceIdentifier(c) || "",
-          user.id,
-        ),
+    const spaceScope = await resolveAppsSpaceScope(c, () =>
+      appsRouteDeps.requireSpaceAccess(
+        c,
+        getRequestedSpaceIdentifier(c) || "",
+        user.id,
+      ),
     );
     const principalId = resolvePrincipalId(user);
 

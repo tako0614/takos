@@ -36,8 +36,7 @@ export const VALID_PLAN_TYPES: ReadonlySet<string> = new Set([
 
 // ── Prompt ──────────────────────────────────────────────────────────────
 
-export const TASK_ANALYSIS_PROMPT =
-  `You are a task analyzer for an AI agent system. Analyze the user's task and determine the best approach to complete it.
+export const TASK_ANALYSIS_PROMPT = `You are a task analyzer for an AI agent system. Analyze the user's task and determine the best approach to complete it.
 
 Available tools: {tools}
 
@@ -75,16 +74,19 @@ export async function analyzeTask(
     tools: string[];
     apiKey: string;
     model?: string;
+    baseUrl?: string;
   },
 ): Promise<TaskPlan> {
   const llm = new taskAnalysisDeps.LLMClient({
     apiKey: context.apiKey,
     ...(context.model ? { model: context.model } : undefined),
+    ...(context.baseUrl ? { baseUrl: context.baseUrl } : undefined),
   });
 
-  const prompt = TASK_ANALYSIS_PROMPT
-    .replace("{tools}", context.tools.join(", "))
-    .replace("{task}", task);
+  const prompt = TASK_ANALYSIS_PROMPT.replace(
+    "{tools}",
+    context.tools.join(", "),
+  ).replace("{task}", task);
 
   const messages: AgentMessage[] = [
     {
@@ -98,8 +100,11 @@ export async function analyzeTask(
     const response = await llm.chat(messages);
     const jsonBody = response.content.trim().startsWith("{")
       ? response.content.trim()
-      : response.content.trim().replace(/```json?\n?/g, "").replace(/```/g, "")
-        .trim();
+      : response.content
+          .trim()
+          .replace(/```json?\n?/g, "")
+          .replace(/```/g, "")
+          .trim();
     const plan = JSON.parse(jsonBody) as TaskPlan;
 
     if (!VALID_PLAN_TYPES.has(plan.type)) {

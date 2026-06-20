@@ -1,4 +1,8 @@
 export const storage = {
+  // Editor — unsaved changes guard
+  unsavedChangesTitle: "保存していない変更があります",
+  unsavedChangesMessage: "閉じると編集中の変更は失われます。",
+  discardChanges: "変更を破棄",
   // File Browser
   upload: "アップロード",
   newFolder: "新規フォルダ",

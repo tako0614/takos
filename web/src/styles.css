@@ -24,7 +24,9 @@
 
   --color-text-primary: #18181b;
   --color-text-secondary: #52525b;
-  --color-text-tertiary: #a1a1aa;
+  /* zinc-500 (~4.6:1 on white) so tertiary body text meets WCAG AA 4.5:1;
+     previously zinc-400 (#a1a1aa) sat at ~2.5:1 in light mode. */
+  --color-text-tertiary: #71717a;
   --color-text-inverted: #ffffff;
 
   --color-border-primary: #e4e4e7;
@@ -136,6 +138,14 @@
     background-color: var(--color-bg-primary);
     color: var(--color-text-primary);
     @apply font-sans text-sm antialiased;
+  }
+
+  /* Global keyboard-focus backstop (WCAG 2.4.7). Components may override with
+     their own focus-visible:ring-* treatment; this guarantees a visible focus
+     indicator for any interactive element that does not. */
+  :focus-visible {
+    outline: 2px solid var(--color-border-focus);
+    outline-offset: 2px;
   }
 
   ::-webkit-scrollbar {

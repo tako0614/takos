@@ -505,8 +505,9 @@ export async function executeDeploymentPipeline(
     // -----------------------------------------------------------------------
     // Workload readiness probe
     //
-    // spec (`docs/apps/manifest.md` / `docs/apps/workers.md` /
-    // `docs/architecture/control-plane.md` の readiness section):
+    // Readiness contract (canonical: readiness-probe.ts). Note this probe only
+    // runs when the backend returns a resolvable endpoint; WfP-managed worker
+    // deploys return none and the probe is skipped (see the skip branch below):
     //   - kernel が deploy 時に workload に対して GET <readiness path> を probe する
     //   - default path は `/`、manifest の `compute.<name>.readiness` で override 可
     //   - **HTTP 200 OK のみ** を ready とみなす

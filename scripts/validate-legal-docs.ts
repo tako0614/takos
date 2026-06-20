@@ -98,7 +98,7 @@ const requiredDocs = [
     expected: [
       'First-party License Inventory',
       'REUSE / SPDX Baseline',
-      'takos-private',
+      'takosumi-private',
       'bun run check:license-compliance',
       'AGPL-3.0-only',
       'GPL-3.0-only',
@@ -133,15 +133,15 @@ for (const doc of requiredDocs) {
 }
 
 validateTextIncludes('docs/.vitepress/config.ts', [
-  "link: '/legal/'",
-  "link: '/legal/data-processing-agreement'",
-  "link: '/legal/subprocessors'",
-  "link: '/legal/data-residency'",
-  "link: '/legal/privacy-rights'",
-  "link: '/legal/security-disclosure'",
-  "link: '/legal/license-compliance'",
-  "link: '/legal/third-party-license-inventory'",
-  "link: '/legal/soc2-readiness'",
+  'link: "/legal/"',
+  'link: "/legal/data-processing-agreement"',
+  'link: "/legal/subprocessors"',
+  'link: "/legal/data-residency"',
+  'link: "/legal/privacy-rights"',
+  'link: "/legal/security-disclosure"',
+  'link: "/legal/license-compliance"',
+  'link: "/legal/third-party-license-inventory"',
+  'link: "/legal/soc2-readiness"',
 ]);
 
 validateTextIncludes('web/public/.well-known/security.txt', [

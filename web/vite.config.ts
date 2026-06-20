@@ -13,6 +13,13 @@ export default defineConfig(({ mode }) => {
       solid(),
       tailwindcss(),
     ],
+    define: {
+      // Marks this as the takos-embedded build of the shared takosumi dashboard
+      // source. The dashboard shell uses it to show a "back to Takos product"
+      // affordance; the standalone platform-worker dashboard build leaves it
+      // undefined, so that surface only appears when embedded in the takos SPA.
+      'import.meta.env.VITE_TAKOS_EMBEDDED': JSON.stringify('1'),
+    },
     root: resolve(__dirname),
     resolve: {
       alias: {

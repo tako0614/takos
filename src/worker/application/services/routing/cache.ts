@@ -73,6 +73,10 @@ export function deleteL1(hostname: string): void {
   l1Cache.delete(hostname);
 }
 
+export function clearL1(): void {
+  l1Cache.clear();
+}
+
 export function getL1(hostname: string, nowMs: number): ResolvedRouting | null {
   const cached = l1Cache.get(hostname);
   if (!cached) return null;

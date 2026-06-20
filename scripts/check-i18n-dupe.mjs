@@ -22,9 +22,13 @@ function extractKeys(text) {
 }
 
 const violations = [];
+const keysByLang = new Map();
 
 for (const localeDir of localeDirs) {
   const dir = resolve(repoRoot, localeDir);
+  const lang = localeDir.split('/').pop();
+  const langKeys = new Set();
+  keysByLang.set(lang, langKeys);
   const seen = new Map();
   let entries;
   try {
@@ -43,6 +47,7 @@ for (const localeDir of localeDirs) {
       continue;
     }
     for (const key of extractKeys(text)) {
+      langKeys.add(key);
       const existing = seen.get(key);
       if (existing) {
         violations.push({ key, files: [existing, relPath] });
@@ -63,3 +68,24 @@ if (violations.length > 0) {
 }
 
 console.log('i18n duplicate-key check passed');
+
+// Cross-language parity: ja is the master key set (TranslationKey = keyof ja),
+// and en is type-forced to it — but a key added to only one language slips past
+// tsc's structural check until it is read. Fail when the two key sets diverge so
+// ja/en stay 1:1.
+const enKeys = keysByLang.get('en');
+const jaKeys = keysByLang.get('ja');
+if (enKeys && jaKeys) {
+  const missingInEn = [...jaKeys].filter((k) => !enKeys.has(k)).sort();
+  const missingInJa = [...enKeys].filter((k) => !jaKeys.has(k)).sort();
+  if (missingInEn.length > 0 || missingInJa.length > 0) {
+    for (const k of missingInEn) {
+      console.error(`i18n parity: key "${k}" exists in ja but is missing in en`);
+    }
+    for (const k of missingInJa) {
+      console.error(`i18n parity: key "${k}" exists in en but is missing in ja`);
+    }
+    process.exit(1);
+  }
+  console.log(`i18n parity check passed (${jaKeys.size} keys, ja↔en 1:1)`);
+}

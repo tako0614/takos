@@ -19,4 +19,4 @@ bun run local:smoke
 ```
 
 Cloudflare Queue / provider queue health is live operator evidence and belongs
-in the managed-offering or distribution target evidence bundle.
+in the hosted Takosumi or distribution target evidence bundle.

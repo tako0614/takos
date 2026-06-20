@@ -6,14 +6,14 @@ import type {
   ObjectStoreBinding,
   SqlDatabaseBinding,
   VectorIndexBinding,
-} from './bindings.ts';
+} from "./bindings.ts";
 import type {
   DeploymentQueueMessage,
   IndexJobQueueMessage,
   RunQueueMessage,
   WorkflowJobQueueMessage,
-} from './queue-messages.ts';
-import type { RoutingStore } from './routing.ts';
+} from "./queue-messages.ts";
+import type { RoutingStore } from "./routing.ts";
 
 // ---------------------------------------------------------------------------
 // Env fragments — each groups related bindings by concern.
@@ -37,6 +37,8 @@ export interface AiEnv {
   VECTORIZE?: VectorIndexBinding;
   AI?: AiBinding;
   OPENAI_API_KEY?: string;
+  /** OpenAI-compatible base URL, e.g. Takosumi AI Gateway `/gateway/ai/v1`. */
+  OPENAI_BASE_URL?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   SERPER_API_KEY?: string;
@@ -129,7 +131,8 @@ export type IndexerEnv = DbEnv & {
 // so all existing code continues to type-check without changes.
 // ---------------------------------------------------------------------------
 
-export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, ContainerHostEnv {
+export interface Env
+  extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, ContainerHostEnv {
   // Internal service config
   SERVICE_INTERNAL_JWT_ISSUER?: string;
   // DO bindings — SESSION_DO is only bound in the web app worker; queue /
@@ -175,9 +178,8 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOSUMI_ACCOUNTS_SUBJECT?: string;
   TAKOSUMI_ACCOUNTS_CLIENT_ID?: string;
   TAKOSUMI_ACCOUNTS_REDIRECT_URIS?: string;
-  TAKOSUMI_ACCOUNTS_MANAGED_OFFERING_ACCESS?: string;
+  TAKOSUMI_ACCOUNTS_PLATFORM_ACCESS?: string;
   TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS?: string;
-  TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_URL?: string;
   // Account-plane secrets (wrangler secret put). The handler reads these; they
   // are never committed as vars.
   TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK?: string;
@@ -185,7 +187,6 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET?: string;
   TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET?: string;
   TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET?: string;
-  TAKOSUMI_ACCOUNTS_DEPLOY_CONTROL_TOKEN?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
   /**
@@ -264,14 +265,14 @@ export interface Env extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, Container
   TAKOS_DEFAULT_APP_REF_TYPE?: string;
   TAKOS_DEFAULT_APP_BACKEND?: string;
   TAKOS_DEFAULT_APP_ENV?: string;
-  /** Optional Takosumi installer /v1/app-installations endpoint for bundled app preinstall. */
+  /** Takosumi Accounts Installation API endpoint for bundled app seed installs. */
   TAKOS_DEFAULT_APP_INSTALL_URL?: string;
   TAKOS_DEFAULT_APP_INSTALL_TOKEN?: string;
   TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID?: string;
   TAKOS_DEFAULT_APP_INSTALL_SUBJECT?: string;
   TAKOS_DEFAULT_APP_INSTALL_MODE?: string;
   TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL?: string;
-  /** Optional Takosumi installer /v1/app-installations base URL for third-party Git URL installs. */
+  /** Takosumi Accounts Installation API base URL for third-party Git URL installs. */
   TAKOS_APP_INSTALLATIONS_URL?: string;
   TAKOS_APP_INSTALL_TOKEN?: string;
   TAKOS_APP_INSTALL_ACCOUNT_ID?: string;

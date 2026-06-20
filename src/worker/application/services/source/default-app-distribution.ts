@@ -38,8 +38,8 @@ export {
 } from "./default-app-preinstall-jobs.ts";
 
 export type {
-  DefaultAppBindingSummary,
-  DefaultAppBindingType,
+  DefaultAppServiceBindingSummary,
+  DefaultAppServiceBindingType,
   DefaultAppDistributionEntry,
   DefaultAppDistributionEnv,
   DefaultAppDistributionStatus,

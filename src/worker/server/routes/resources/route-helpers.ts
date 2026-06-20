@@ -9,13 +9,10 @@ import {
   toResourceCapability,
 } from "../../../application/services/resources/capabilities.ts";
 
-// Multi-cloud materialization (aws/gcp/k8s) is operator-substrate scope owned
-// by OpenTofu RunnerProfiles, not the Takos worker. The worker resolves only
-// the native `cloudflare` backend and the portable self-hosted `local` backend.
-export const RESOURCE_BACKEND_VALUES = [
-  "cloudflare",
-  "local",
-] as const;
+// Multi-cloud materialization is operator-substrate scope owned by Takosumi
+// runner policy, not the Takos worker. The worker resolves only the native
+// `cloudflare` backend and the portable self-hosted `local` backend.
+export const RESOURCE_BACKEND_VALUES = ["cloudflare", "local"] as const;
 
 export type ResourceBackendName = (typeof RESOURCE_BACKEND_VALUES)[number];
 
@@ -32,10 +29,16 @@ function readEnvString(
 export function inferResourceBackend(
   env: AuthenticatedRouteEnv["Bindings"],
 ): ResourceBackendName {
-  const configuredBackend = normalizeResourceBackend(
-    readEnvString(env, "TAKOS_RESOURCE_BACKEND"),
-  );
-  if (configuredBackend) return configuredBackend;
+  const configuredBackend = readEnvString(env, "TAKOS_RESOURCE_BACKEND");
+  if (configuredBackend) {
+    const normalized = normalizeResourceBackend(configuredBackend);
+    if (!normalized) {
+      throw new Error(
+        `unsupported resource backend '${configuredBackend.toLowerCase()}'; expected cloudflare or local`,
+      );
+    }
+    return normalized;
+  }
   if (env.CF_ACCOUNT_ID && env.CF_API_TOKEN) return "cloudflare";
   return "local";
 }
@@ -47,12 +50,11 @@ export function normalizeResourceBackend(
     return undefined;
   }
 
-  const backendName = typeof backend === "string"
-    ? backend.trim().toLowerCase()
-    : "";
+  const backendName =
+    typeof backend === "string" ? backend.trim().toLowerCase() : "";
 
   return RESOURCE_BACKEND_VALUES.includes(backendName as ResourceBackendName)
-    ? backendName as ResourceBackendName
+    ? (backendName as ResourceBackendName)
     : undefined;
 }
 
@@ -90,11 +92,11 @@ export function buildProjectedResourceSpec(
         binding,
         ...(asObject(config.vectorize)
           ? {
-            vectorize: config.vectorize as {
-              dimensions: number;
-              metric: "cosine" | "euclidean" | "dot-product";
-            },
-          }
+              vectorize: config.vectorize as {
+                dimensions: number;
+                metric: "cosine" | "euclidean" | "dot-product";
+              },
+            }
           : {}),
       };
     case "analytics-engine":
@@ -103,8 +105,8 @@ export function buildProjectedResourceSpec(
         binding,
         ...(asObject(config.analyticsEngine)
           ? {
-            analyticsEngine: config.analyticsEngine as { dataset?: string },
-          }
+              analyticsEngine: config.analyticsEngine as { dataset?: string },
+            }
           : {}),
       };
     case "workflow":
@@ -121,14 +123,12 @@ export function buildProjectedResourceSpec(
         type: "durableObject" as const,
         binding,
         durableObject: {
-          className: String(
-            config.className ?? durableConfig?.className ?? "",
-          ),
+          className: String(config.className ?? durableConfig?.className ?? ""),
           ...(typeof config.scriptName === "string"
             ? { scriptName: config.scriptName }
             : typeof durableConfig?.scriptName === "string"
-            ? { scriptName: durableConfig.scriptName }
-            : {}),
+              ? { scriptName: durableConfig.scriptName }
+              : {}),
         },
       };
     case "secret":
@@ -151,11 +151,12 @@ export function resolveRequestedBackingResourceName(
 ): string {
   const capability = toResourceCapability(type);
   if (capability === "analytics_store") {
-    const analyticsConfig = asObject(config?.analyticsEngine) ??
-      asObject(config?.analyticsStore);
-    const dataset = typeof analyticsConfig?.dataset === "string"
-      ? analyticsConfig.dataset.trim()
-      : "";
+    const analyticsConfig =
+      asObject(config?.analyticsEngine) ?? asObject(config?.analyticsStore);
+    const dataset =
+      typeof analyticsConfig?.dataset === "string"
+        ? analyticsConfig.dataset.trim()
+        : "";
     if (dataset) return dataset;
   }
   return fallbackName;
@@ -167,23 +168,25 @@ export function buildProvisioningRequest(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const queueConfig = asObject(config?.queue);
-  const vectorConfig = asObject(config?.vectorize) ??
-    asObject(config?.vectorIndex);
-  const analyticsConfig = asObject(config?.analyticsEngine) ??
-    asObject(config?.analyticsStore);
-  const workflowConfig = asObject(config?.workflow) ??
-    asObject(config?.workflowRuntime);
-  const durableConfig = asObject(config?.durableObject) ??
-    asObject(config?.durableNamespace);
+  const vectorConfig =
+    asObject(config?.vectorize) ?? asObject(config?.vectorIndex);
+  const analyticsConfig =
+    asObject(config?.analyticsEngine) ?? asObject(config?.analyticsStore);
+  const workflowConfig =
+    asObject(config?.workflow) ?? asObject(config?.workflowRuntime);
+  const durableConfig =
+    asObject(config?.durableObject) ?? asObject(config?.durableNamespace);
 
   if (capability === "vector_index") {
     out.vectorIndex = {
-      dimensions: typeof vectorConfig?.dimensions === "number"
-        ? vectorConfig.dimensions
-        : VECTORIZE_DEFAULT_DIMENSIONS,
-      metric: typeof vectorConfig?.metric === "string"
-        ? vectorConfig.metric
-        : "cosine",
+      dimensions:
+        typeof vectorConfig?.dimensions === "number"
+          ? vectorConfig.dimensions
+          : VECTORIZE_DEFAULT_DIMENSIONS,
+      metric:
+        typeof vectorConfig?.metric === "string"
+          ? vectorConfig.metric
+          : "cosine",
     };
   }
 
@@ -236,6 +239,6 @@ export function buildProvisioningRequest(
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : undefined;
 }

@@ -4,7 +4,7 @@ import type {
   ToolResult,
 } from "../../tools/tool-definitions.ts";
 
-// Re-export canonical types so existing imports from this file keep working.
+// Public agent-domain exports for tool call/result shapes.
 export type { ToolCall, ToolResult };
 
 export type AgentContext = Pick<
@@ -46,11 +46,14 @@ export interface AgentTool {
   description: string;
   parameters: {
     type: "object";
-    properties: Record<string, {
-      type: string;
-      description: string;
-      enum?: string[];
-    }>;
+    properties: Record<
+      string,
+      {
+        type: string;
+        description: string;
+        enum?: string[];
+      }
+    >;
     required?: string[];
   };
 }

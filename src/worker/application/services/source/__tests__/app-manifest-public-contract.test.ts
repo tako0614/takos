@@ -1,5 +1,9 @@
 import { test } from "bun:test";
-import { assertEquals, assertStringIncludes, assertThrows } from "@takos/test/assert";
+import {
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from "@takos/test/assert";
 import { applyManifestOverrides } from "../../deployment/group-state.ts";
 import {
   assertManifestInputDoesNotUseBuildMetadata,
@@ -23,15 +27,12 @@ routes:
   - id: launcher
     target: web
     path: /
-`)
+`),
   ) as Error;
 
   assertStringIncludes(error.message, "compute.web.build");
-  assertStringIncludes(
-    error.message,
-    "no longer supported",
-  );
-  assertStringIncludes(error.message, "Takosumi OpenTofu module PlanRun flow");
+  assertStringIncludes(error.message, "no longer supported");
+  assertStringIncludes(error.message, "Takosumi OpenTofu module plan Run flow");
 });
 
 test("public source contract - rejects override build.fromWorkflow", () => {
@@ -57,15 +58,12 @@ overrides:
             path: .takos/workflows/deploy.yml
             job: bundle
             artifact: web
-`)
+`),
   ) as Error;
 
   assertStringIncludes(error.message, "overrides.compute.web.build");
-  assertStringIncludes(
-    error.message,
-    "no longer supported",
-  );
-  assertStringIncludes(error.message, "Takosumi OpenTofu module PlanRun flow");
+  assertStringIncludes(error.message, "no longer supported");
+  assertStringIncludes(error.message, "Takosumi OpenTofu module plan Run flow");
 });
 
 test("public source contract - raw source objects reject legacy build metadata", () => {
@@ -83,15 +81,12 @@ test("public source contract - raw source objects reject legacy build metadata",
           },
         },
       },
-    })
+    }),
   ) as Error;
 
   assertStringIncludes(error.message, "compute.web.build");
-  assertStringIncludes(
-    error.message,
-    "no longer supported",
-  );
-  assertStringIncludes(error.message, "Takosumi OpenTofu module PlanRun flow");
+  assertStringIncludes(error.message, "no longer supported");
+  assertStringIncludes(error.message, "Takosumi OpenTofu module plan Run flow");
 });
 
 test("public source contract - allows compute depends to reference compute entries", () => {
@@ -174,17 +169,16 @@ publish:
     manifest.compute.web.containers?.sandbox.kind,
     "attached-container",
   );
-  assertEquals(
-    manifest.compute.web.containers?.sandbox.consume,
-    [{
+  assertEquals(manifest.compute.web.containers?.sandbox.consume, [
+    {
       publication: "notes",
       inject: {
         env: {
           url: "SANDBOX_MCP_URL",
         },
       },
-    }],
-  );
+    },
+  ]);
   assertEquals(manifest.publish[0]?.name, "notes");
   assertEquals(manifest.publish[0]?.publisher, "web");
   assertEquals(manifest.publish[0]?.outputs, {
@@ -267,7 +261,7 @@ routes:
   );
 });
 
-test("public source contract - rejects Takos publications in app manifests during parse", () => {
+test("public source contract - rejects Takos publications in Capsule desired-state projections during parse", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -284,7 +278,7 @@ compute:
     kind: worker
 `),
     Error,
-    "publish[0].publisher 'takos' is not supported in app manifests",
+    "publish[0].publisher 'takos' is not supported in Capsule desired-state projections",
   );
 });
 
@@ -362,7 +356,7 @@ routes:
     path: /
 `),
     Error,
-    "routes[0].name is not supported by the app manifest contract",
+    "routes[0].name is not supported by the Capsule desired-state projection contract",
   );
 
   assertThrows(
@@ -380,7 +374,7 @@ routes:
     path: /
 `),
     Error,
-    "routes[0].ingress is not supported by the app manifest contract",
+    "routes[0].ingress is not supported by the Capsule desired-state projection contract",
   );
 });
 
@@ -403,10 +397,12 @@ overrides:
         path: /api
 `);
 
-  assertEquals(manifest.overrides?.staging?.routes, [{
-    target: "api",
-    path: "/api",
-  }]);
+  assertEquals(manifest.overrides?.staging?.routes, [
+    {
+      target: "api",
+      path: "/api",
+    },
+  ]);
 
   assertThrows(
     () => applyManifestOverrides(manifest, "staging"),
@@ -469,12 +465,14 @@ overrides:
 `);
 
   const resolved = applyManifestOverrides(manifest, "production");
-  assertEquals(resolved.compute.web.triggers?.queues, [{
-    binding: "DELIVERY_QUEUE",
-    deadLetterQueue: "DELIVERY_DLQ",
-    maxBatchSize: 10,
-    maxRetries: 3,
-  }]);
+  assertEquals(resolved.compute.web.triggers?.queues, [
+    {
+      binding: "DELIVERY_QUEUE",
+      deadLetterQueue: "DELIVERY_DLQ",
+      maxBatchSize: 10,
+      maxRetries: 3,
+    },
+  ]);
 });
 
 test("public source contract - validates compute overrides after merge", () => {
@@ -670,7 +668,7 @@ routes:
 
 publish:
   - name: notes
-    type: McpServer
+    type: protocol.mcp.server
     publisher: web
     outputs:
       url:
@@ -681,7 +679,7 @@ overrides:
   production:
     publish:
       - name: handler
-        type: FileHandler
+        type: interface.file.handler
         publisher: web
         outputs:
           url:
@@ -694,16 +692,16 @@ overrides:
 
   // The override delta is parsed by the canonical parser in partial mode, so the
   // standard short type name is expanded just like a top-level publication.
-  assertEquals(manifest.publish[0]?.type, "takos.mcp-server.v1");
+  assertEquals(manifest.publish[0]?.type, "protocol.mcp.server");
   assertEquals(
     manifest.overrides?.production?.publish?.[0]?.type,
-    "takos.file-handler.v1",
+    "interface.file.handler",
   );
 });
 
 test("public source contract - validates FileHandler publish overrides", () => {
-  // The override copy of the publish parser used to skip FileHandler spec
-  // validation; it now runs uniformly, so a FileHandler override without
+  // The override copy of the publish parser used to skip interface.file.handler spec
+  // validation; it now runs uniformly, so a interface.file.handler override without
   // mimeTypes/extensions is rejected the same way a top-level one is.
   assertThrows(
     () =>
@@ -722,10 +720,10 @@ overrides:
   production:
     publish:
       - name: handler
-        type: FileHandler
+        type: interface.file.handler
 `),
     Error,
-    "overrides.publish[0].spec.mimeTypes or overrides.publish[0].spec.extensions is required for FileHandler",
+    "overrides.publish[0].spec.mimeTypes or overrides.publish[0].spec.extensions is required for interface.file.handler",
   );
 });
 
@@ -903,7 +901,7 @@ compute:
     instanceType: c7g.large
 `),
     Error,
-    "compute.api.instanceType is not supported by the app manifest contract",
+    "compute.api.instanceType is not supported by the Capsule desired-state projection contract",
   );
 
   assertThrows(
@@ -920,7 +918,7 @@ compute:
       cpu: 2
 `),
     Error,
-    "compute.api.scaling.cpu is not supported by the app manifest contract",
+    "compute.api.scaling.cpu is not supported by the Capsule desired-state projection contract",
   );
 });
 
@@ -1041,14 +1039,18 @@ routes:
     path: /
 `);
 
-  assertEquals(manifest.resources?.["session-index"].bindings, [{
-    target: "web",
-    binding: "SESSION_INDEX",
-  }]);
-  assertEquals(manifest.resources?.["host-token"].bindings, [{
-    target: "web",
-    binding: "SANDBOX_HOST_AUTH_TOKEN",
-  }]);
+  assertEquals(manifest.resources?.["session-index"].bindings, [
+    {
+      target: "web",
+      binding: "SESSION_INDEX",
+    },
+  ]);
+  assertEquals(manifest.resources?.["host-token"].bindings, [
+    {
+      target: "web",
+      binding: "SANDBOX_HOST_AUTH_TOKEN",
+    },
+  ]);
 });
 
 test("public source contract - rejects quoted resource generate booleans", () => {
@@ -1287,7 +1289,7 @@ publish:
   );
 });
 
-test("public source contract - preserves UiSurface launcher metadata", () => {
+test("public source contract - preserves interface.ui.surface launcher metadata", () => {
   const manifest = parseAppManifestYaml(`
 name: launcher-app
 
@@ -1300,7 +1302,7 @@ routes:
     path: /
 
 publish:
-  - type: UiSurface
+  - type: interface.ui.surface
     name: launcher
     publisher: web
     outputs:
@@ -1317,7 +1319,7 @@ publish:
       launcher: true
 `);
 
-  assertEquals(manifest.publish[0]?.type, "takos.ui-surface.v1");
+  assertEquals(manifest.publish[0]?.type, "interface.ui.surface");
   assertEquals(manifest.publish[0]?.display, {
     title: "Launcher",
     description: "Launcher app",
@@ -1345,7 +1347,7 @@ routes:
     path: /
 
 publish:
-  - type: UiSurface
+  - type: interface.ui.surface
     name: launcher
     publisher: web
     outputs:
@@ -1357,7 +1359,7 @@ publish:
   assertEquals(manifest.compute.web?.icon, "/icons/search.png");
 });
 
-test("public source contract - parses FileHandler publications with route refs and selector lists", () => {
+test("public source contract - parses interface.file.handler publications with route refs and selector lists", () => {
   const manifest = parseAppManifestYaml(`
 name: file-handler-app
 
@@ -1371,7 +1373,7 @@ routes:
     path: /files/:id
 
 publish:
-  - type: FileHandler
+  - type: interface.file.handler
     name: markdown
     publisher: web
     display:
@@ -1385,7 +1387,7 @@ publish:
         - text/markdown
 `);
 
-  assertEquals(manifest.publish[0]?.type, "takos.file-handler.v1");
+  assertEquals(manifest.publish[0]?.type, "interface.file.handler");
   assertEquals(manifest.publish[0]?.display, { title: "Markdown" });
   assertEquals(manifest.publish[0]?.outputs?.url?.routeRef, "file-open");
   assertEquals(manifest.publish[0]?.spec, {
@@ -1460,11 +1462,13 @@ overrides:
 `);
 
   const resolved = applyManifestOverrides(manifest, "production");
-  assertEquals(resolved.routes, [{
-    id: "base",
-    target: "web",
-    path: "/production",
-  }]);
+  assertEquals(resolved.routes, [
+    {
+      id: "base",
+      target: "web",
+      path: "/production",
+    },
+  ]);
   assertEquals(resolved.publish[0]?.outputs?.url?.routeRef, "base");
 });
 
@@ -1484,7 +1488,7 @@ routes:
     path: /files/open
 
 publish:
-  - type: FileHandler
+  - type: interface.file.handler
     name: markdown
     publisher: web
     display:
@@ -1501,7 +1505,7 @@ publish:
   );
 });
 
-test("public source contract - rejects FileHandler publications without mimeTypes or extensions", () => {
+test("public source contract - rejects interface.file.handler publications without mimeTypes or extensions", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1517,7 +1521,7 @@ routes:
     path: /files/:id
 
 publish:
-  - type: FileHandler
+  - type: interface.file.handler
     name: markdown
     publisher: web
     display:
@@ -1530,11 +1534,11 @@ publish:
       note: no selectors
 `),
     Error,
-    "publish[0].spec.mimeTypes or publish[0].spec.extensions is required for FileHandler",
+    "publish[0].spec.mimeTypes or publish[0].spec.extensions is required for interface.file.handler",
   );
 });
 
-test("public source contract - rejects unknown FileHandler spec fields", () => {
+test("public source contract - rejects unknown interface.file.handler spec fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -1550,7 +1554,7 @@ routes:
     path: /files/:id
 
 publish:
-  - type: FileHandler
+  - type: interface.file.handler
     name: markdown
     publisher: web
     display:
@@ -1646,7 +1650,7 @@ compute:
           endpoint: EXTERNAL_API_URL
 `),
     Error,
-    "compute.web.consume[0].env is not supported by the app manifest contract",
+    "compute.web.consume[0].env is not supported by the Capsule desired-state projection contract",
   );
 
   assertThrows(
@@ -1679,7 +1683,7 @@ spec:
   compute: {}
 `),
     Error,
-    "Takos app manifests use the flat contract",
+    "Takos desired-state projections use the flat contract",
   );
 });
 
@@ -1695,7 +1699,7 @@ compute:
     kind: worker
 `),
     Error,
-    "scopes is not supported by the app manifest contract",
+    "scopes is not supported by the Capsule desired-state projection contract",
   );
 
   assertThrows(
@@ -1712,7 +1716,7 @@ compute:
     kind: worker
 `),
     Error,
-    "oauth is not supported by the app manifest contract",
+    "oauth is not supported by the Capsule desired-state projection contract",
   );
 });
 
@@ -1729,7 +1733,7 @@ compute:
     kind: worker
 `),
     Error,
-    "storage is not supported by the app manifest contract",
+    "storage is not supported by the Capsule desired-state projection contract",
   );
 });
 
@@ -1791,7 +1795,7 @@ compute:
     kind: worker
 `),
     Error,
-    "publish[0].publisher 'takos' is not supported in app manifests",
+    "publish[0].publisher 'takos' is not supported in Capsule desired-state projections",
   );
 });
 
@@ -1834,7 +1838,7 @@ compute:
     kind: worker
 `),
     Error,
-    "publish[0].publisher 'takos' is not supported in app manifests",
+    "publish[0].publisher 'takos' is not supported in Capsule desired-state projections",
   );
 });
 
@@ -1852,7 +1856,7 @@ compute:
           - files:read
 `),
     Error,
-    "compute.web.capabilities is not supported by the app manifest contract",
+    "compute.web.capabilities is not supported by the Capsule desired-state projection contract",
   );
 });
 
@@ -1873,15 +1877,17 @@ compute:
           retryDelaySeconds: 10
 `);
 
-  assertEquals(manifest.compute.worker.triggers?.queues, [{
-    binding: "JOBS",
-    deadLetterQueue: "JOBS_DLQ",
-    maxBatchSize: 10,
-    maxConcurrency: 2,
-    maxRetries: 3,
-    maxWaitTimeMs: 5000,
-    retryDelaySeconds: 10,
-  }]);
+  assertEquals(manifest.compute.worker.triggers?.queues, [
+    {
+      binding: "JOBS",
+      deadLetterQueue: "JOBS_DLQ",
+      maxBatchSize: 10,
+      maxConcurrency: 2,
+      maxRetries: 3,
+      maxWaitTimeMs: 5000,
+      retryDelaySeconds: 10,
+    },
+  ]);
 });
 
 test("public source contract - rejects queue triggers without binding or queue", () => {
@@ -1898,5 +1904,283 @@ compute:
 `),
     Error,
     "compute.worker.triggers.queues[0] requires binding or queue",
+  );
+});
+
+test("public source contract - parses contractVersion, service bindings, and bearer auth", () => {
+  const manifest = parseAppManifestYaml(`
+contractVersion: 1
+name: service-grant-app
+version: 1.0.0
+
+compute:
+  web:
+    kind: worker
+
+routes:
+  - id: mcp
+    target: web
+    path: /mcp
+
+publish:
+  - name: tools
+    publisher: web
+    type: protocol.mcp.server
+    outputs:
+      url:
+        kind: url
+        routeRef: mcp
+    auth:
+      kind: bearer
+      secretRef: mcp_token
+
+serviceBindings:
+  - name: space-control
+    capability: control.api
+    target: web
+    inject:
+      baseUrlEnv: takosumi_control_url
+      tokenEnv: takosumi_control_token
+    scopes:
+      - installations.outputs.read.same-space
+`);
+
+  assertEquals(manifest.contractVersion, 1);
+  assertEquals(manifest.publish[0]?.auth, {
+    kind: "bearer",
+    secretRef: "mcp_token",
+  });
+  assertEquals(manifest.serviceBindings, [
+    {
+      name: "space-control",
+      capability: "control.api",
+      target: "web",
+      inject: {
+        baseUrlEnv: "TAKOSUMI_CONTROL_URL",
+        tokenEnv: "TAKOSUMI_CONTROL_TOKEN",
+      },
+      scopes: ["installations.outputs.read.same-space"],
+    },
+  ]);
+});
+
+test("public source contract - rejects schema and unsupported contractVersion", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+schema: https://takos.jp/schemas/app/v1
+name: schema-app
+compute:
+  web:
+    kind: worker
+`),
+    Error,
+    "schema is not supported; use contractVersion = 1",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+contractVersion: 2
+name: future-contract-app
+compute:
+  web:
+    kind: worker
+`),
+    Error,
+    "contractVersion must be the number 1",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+contractVersion: "1"
+name: string-contract-app
+compute:
+  web:
+    kind: worker
+`),
+    Error,
+    "contractVersion must be the number 1",
+  );
+});
+
+test("public source contract - rejects invalid service binding grants", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: unknown-service-binding-target-app
+compute:
+  web:
+    kind: worker
+serviceBindings:
+  - name: space-control
+    capability: control.api
+    target: api
+    inject:
+      baseUrlEnv: TAKOSUMI_CONTROL_URL
+      tokenEnv: TAKOSUMI_CONTROL_TOKEN
+    scopes:
+      - installations.outputs.read.same-space
+`),
+    Error,
+    "serviceBindings[0].target references unknown top-level compute: api",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: duplicate-service-binding-env-app
+compute:
+  web:
+    kind: worker
+serviceBindings:
+  - name: space-control
+    capability: control.api
+    target: web
+    inject:
+      baseUrlEnv: TAKOSUMI_CONTROL_URL
+      tokenEnv: TAKOSUMI_CONTROL_TOKEN
+    scopes:
+      - installations.outputs.read.same-space
+  - name: space-control-reader
+    capability: control.api
+    target: web
+    inject:
+      baseUrlEnv: TAKOSUMI_CONTROL_READER_URL
+      tokenEnv: TAKOSUMI_CONTROL_TOKEN
+    scopes:
+      - installations.outputs.read.same-space
+`),
+    Error,
+    "serviceBindings[1].inject env 'TAKOSUMI_CONTROL_TOKEN' duplicates service binding 'space-control' for compute 'web'",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: unsupported-service-binding-app
+compute:
+  web:
+    kind: worker
+serviceBindings:
+  - name: memory
+    capability: takos.memory.workspace
+    target: web
+    inject:
+      baseUrlEnv: TAKOS_MEMORY_URL
+      tokenEnv: TAKOS_MEMORY_TOKEN
+    scopes:
+      - memory.read
+`),
+    Error,
+    "serviceBindings[0].capability 'takos.memory.workspace' is not supported by the Takos Service Graph profile",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: service-binding-missing-token-env-app
+compute:
+  web:
+    kind: worker
+serviceBindings:
+  - name: space-control
+    capability: control.api
+    target: web
+    inject:
+      baseUrlEnv: TAKOSUMI_CONTROL_URL
+    scopes:
+      - installations.outputs.read.same-space
+`),
+    Error,
+    "serviceBindings[0].inject.baseUrlEnv and serviceBindings[0].inject.tokenEnv are required",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: service-binding-missing-scopes-app
+compute:
+  web:
+    kind: worker
+serviceBindings:
+  - name: space-control
+    capability: control.api
+    target: web
+    inject:
+      baseUrlEnv: TAKOSUMI_CONTROL_URL
+      tokenEnv: TAKOSUMI_CONTROL_TOKEN
+`),
+    Error,
+    "serviceBindings[0].scopes must declare at least one scope",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: service-binding-unsupported-scope-app
+compute:
+  web:
+    kind: worker
+serviceBindings:
+  - name: space-control
+    capability: control.api
+    target: web
+    inject:
+      baseUrlEnv: TAKOSUMI_CONTROL_URL
+      tokenEnv: TAKOSUMI_CONTROL_TOKEN
+    scopes:
+      - provider.credentials.manage
+`),
+    Error,
+    "serviceBindings[0].scopes[0] 'provider.credentials.manage' is not supported by service binding capability 'control.api'",
+  );
+});
+
+test("public source contract - rejects inconsistent publication auth", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: oidc-secret-app
+compute:
+  web:
+    kind: worker
+publish:
+  - name: tools
+    publisher: web
+    type: protocol.mcp.server
+    outputs:
+      url:
+        kind: url
+        routeRef: mcp
+    auth:
+      kind: takos_oidc
+      secretRef: MCP_TOKEN
+`),
+    Error,
+    "publish[0].auth.secretRef is only supported when auth.kind is bearer",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: missing-auth-kind-app
+compute:
+  web:
+    kind: worker
+publish:
+  - name: tools
+    publisher: web
+    type: protocol.mcp.server
+    outputs:
+      url:
+        kind: url
+        routeRef: mcp
+    auth:
+      secretRef: MCP_TOKEN
+`),
+    Error,
+    "publish[0].auth.kind is required when auth.secretRef is set",
   );
 });

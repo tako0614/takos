@@ -88,9 +88,8 @@ export interface ProxyTokenInfo {
   serviceId: string;
   /**
    * The scope set this token grants. Minted as an array of least-privilege
-   * scopes (see proxyScopesForRunKind). A single value / legacy `"control"`
-   * remains accepted for already-stored tokens; expandProxyCapability resolves
-   * either form to the concrete scope set during the endpoint check.
+   * scopes (see proxyScopesForRunKind). A single concrete scope is accepted for
+   * narrow internal callers; unknown values resolve to an empty scope set.
    */
   capability: ProxyCapability | ProxyCapability[];
   executorTier?: ExecutorTier;
@@ -112,8 +111,7 @@ export interface ExecutorContainerStub {
   revokeProxyTokens?(): Promise<void>;
 }
 
-export interface ContainerNamespace
-  extends DurableObjectNamespace<ExecutorContainerStub> {
+export interface ContainerNamespace extends DurableObjectNamespace<ExecutorContainerStub> {
   get(id: unknown): ExecutorContainerStub;
   getByName(name: string): ExecutorContainerStub;
 }
@@ -140,11 +138,12 @@ export function resolveContainerNamespace(
  * Defaults to tier 1 if not specified.
  */
 export function parseExecutorTier(value: unknown): ExecutorTier {
-  const n = typeof value === "number"
-    ? value
-    : typeof value === "string"
-    ? parseInt(value, 10)
-    : NaN;
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? parseInt(value, 10)
+        : NaN;
   if (n === 2 || n === 3) return n;
   return 1;
 }
@@ -154,11 +153,12 @@ function parsePositiveInteger(
   fallback: number,
   options: { min?: number; max?: number } = {},
 ): number {
-  const parsed = typeof value === "number"
-    ? value
-    : typeof value === "string" && value.trim().length > 0
-    ? Number(value)
-    : NaN;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? Number(value)
+        : NaN;
   if (!Number.isFinite(parsed)) return fallback;
   const integer = Math.floor(parsed);
   const min = options.min ?? 1;
@@ -186,11 +186,10 @@ export function getExecutorPoolConfig(
       4,
       { min: 1, max: 100 },
     ),
-    tier3PoolSize: parsePositiveInteger(
-      env.EXECUTOR_TIER3_POOL_SIZE,
-      25,
-      { min: 1, max: 500 },
-    ),
+    tier3PoolSize: parsePositiveInteger(env.EXECUTOR_TIER3_POOL_SIZE, 25, {
+      min: 1,
+      max: 500,
+    }),
     tier3MaxConcurrentRuns: parsePositiveInteger(
       env.EXECUTOR_TIER3_MAX_CONCURRENT_RUNS,
       32,
@@ -223,10 +222,6 @@ export interface AiRunBinding {
  * one of these per-purpose scopes (see executor-auth.ts). A minted proxy token
  * carries a *set* of scopes (`ProxyTokenInfo.capability` may be an array); an
  * endpoint is reachable only if its required scope is in the token's set.
- *
- * `"control"` is a back-compat alias: legacy in-flight tokens were minted with
- * the single value `"control"`, which is treated as "the full agent scope set"
- * so already-dispatched runs keep working across a deploy.
  */
 export type ProxyScope =
   | "run-lifecycle"
@@ -236,9 +231,9 @@ export type ProxyScope =
   | "skills"
   | "provider-keys";
 
-export type ProxyCapability = ProxyScope | "control";
+export type ProxyCapability = ProxyScope;
 
-/** Full scope set granted to agent runs (and to the legacy "control" alias). */
+/** Full scope set granted to agent runs. */
 export const AGENT_PROXY_SCOPES: readonly ProxyScope[] = [
   "run-lifecycle",
   "conversation",
@@ -274,24 +269,21 @@ export function proxyScopesForRunKind(
 
 /**
  * Expand a stored token capability into the concrete scope set it grants.
- * Accepts the new array form, a single scope, or the legacy `"control"` alias
- * (which expands to the full agent scope set). Unknown values yield an empty
- * set (fail-closed: an endpoint check against it will reject).
+ * Accepts the array form or a single concrete scope. Unknown values yield an
+ * empty set (fail-closed: an endpoint check against it will reject).
  */
 export function expandProxyCapability(
-  capability: ProxyCapability | ProxyCapability[] | undefined,
+  capability: ProxyCapability | readonly ProxyCapability[] | undefined,
 ): Set<ProxyScope> {
   const out = new Set<ProxyScope>();
   const add = (value: ProxyCapability) => {
-    if (value === "control") {
-      for (const scope of AGENT_PROXY_SCOPES) out.add(scope);
-      return;
+    if ((AGENT_PROXY_SCOPES as readonly string[]).includes(value)) {
+      out.add(value);
     }
-    out.add(value);
   };
   if (Array.isArray(capability)) {
     for (const value of capability) add(value);
-  } else if (capability) {
+  } else if (typeof capability === "string") {
     add(capability);
   }
   return out;
@@ -328,9 +320,9 @@ export function err(message: string, status = 500): Response {
  * (`ok: false`) preserving the behavior of pre-parser sites that previously
  * surfaced the same status via `classifyProxyError` on field-access TypeErrors.
  */
-export async function parseExecutorRpcBody(
-  req: { json(): Promise<unknown> },
-): Promise<
+export async function parseExecutorRpcBody(req: {
+  json(): Promise<unknown>;
+}): Promise<
   | { ok: true; value: Record<string, unknown> }
   | { ok: false; response: Response }
 > {
@@ -340,9 +332,7 @@ export async function parseExecutorRpcBody(
   } catch {
     return { ok: false, response: err("Invalid JSON body", 400) };
   }
-  if (
-    typeof raw !== "object" || raw === null || Array.isArray(raw)
-  ) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return {
       ok: false,
       response: err("Request body must be a JSON object", 400),
@@ -355,16 +345,19 @@ export async function parseExecutorRpcBody(
 // Error classification
 // ---------------------------------------------------------------------------
 
-export function classifyProxyError(
-  e: unknown,
-): { status: number; message: string } {
+export function classifyProxyError(e: unknown): {
+  status: number;
+  message: string;
+} {
   const name = e instanceof Error ? e.name : "";
   const msg = e instanceof Error ? e.message : String(e);
 
   // Timeout / AbortError
   if (
-    name === "AbortError" || name === "TimeoutError" ||
-    msg.includes("timed out") || msg.includes("timeout")
+    name === "AbortError" ||
+    name === "TimeoutError" ||
+    msg.includes("timed out") ||
+    msg.includes("timeout")
   ) {
     return { status: 504, message: "Proxy request timed out" };
   }
@@ -453,14 +446,14 @@ export function recordProxyUsage(path: string): void {
   const bucket = isControlRpcEndpoint(path, "tool-catalog")
     ? "tool-catalog"
     : isControlRpcEndpoint(path, "tool-execute")
-    ? "tool-execute"
-    : isControlRpcEndpoint(path, "tool-cleanup")
-    ? "tool-cleanup"
-    : isControlRpcEndpoint(path, "run-event")
-    ? "run-event"
-    : isAgentControlRpcPath(path)
-    ? "other-control-rpc"
-    : "other";
+      ? "tool-execute"
+      : isControlRpcEndpoint(path, "tool-cleanup")
+        ? "tool-cleanup"
+        : isControlRpcEndpoint(path, "run-event")
+          ? "run-event"
+          : isAgentControlRpcPath(path)
+            ? "other-control-rpc"
+            : "other";
   proxyUsageCounters.set(bucket, (proxyUsageCounters.get(bucket) ?? 0) + 1);
 }
 

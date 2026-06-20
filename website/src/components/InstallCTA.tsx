@@ -37,10 +37,10 @@ export default function InstallCTA() {
                 when={c.kind !== 'self'}
                 fallback={
                   <CodeBlock terminal>
-                    <span class='k'>$</span> bunx @takosjp/takosumi plan \{'\n'}
-                    &nbsp;&nbsp;--source git:https://github.com/you/takos#main --space my-space{'\n'}
-                    <span class='k'>$</span> bunx @takosjp/takosumi install \{'\n'}
-                    &nbsp;&nbsp;--source git:https://github.com/you/takos#main --space my-space
+                    <span class='k'>$</span> git clone https://github.com/tako0614/takos.git{'\n'}
+                    <span class='k'>$</span> cd takos{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu init{'\n'}
+                    <span class='k'>$</span> tofu -chdir=deploy/opentofu apply -var target=cloudflare
                   </CodeBlock>
                 }
               >

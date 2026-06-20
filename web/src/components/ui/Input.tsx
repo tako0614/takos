@@ -1,4 +1,4 @@
-import { splitProps } from "solid-js";
+import { createUniqueId, splitProps } from "solid-js";
 import type { JSX } from "solid-js";
 
 interface InputProps extends JSX.InputHTMLAttributes<HTMLInputElement> {
@@ -17,6 +17,8 @@ export function Input(props: InputProps) {
     "ref",
   ]);
 
+  const errorId = createUniqueId();
+
   return (
     <div>
       <div class="relative flex items-center">
@@ -27,6 +29,8 @@ export function Input(props: InputProps) {
         )}
         <input
           ref={local.ref}
+          aria-invalid={local.error ? "true" : undefined}
+          aria-describedby={local.error ? errorId : undefined}
           class={`
             w-full py-2.5 text-base min-h-[44px]
             bg-[var(--color-surface-primary)] text-[var(--color-text-primary)]
@@ -50,7 +54,7 @@ export function Input(props: InputProps) {
         )}
       </div>
       {local.error && (
-        <p class="mt-1 text-xs text-[var(--color-error)]">
+        <p id={errorId} role="alert" class="mt-1 text-xs text-[var(--color-error)]">
           {local.error}
         </p>
       )}

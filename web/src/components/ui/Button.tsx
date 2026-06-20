@@ -41,7 +41,7 @@ export function Button(props: ButtonProps) {
   ]);
 
   const baseClasses =
-    "inline-flex items-center justify-center gap-2 font-medium rounded-[var(--radius-md)] transition-colors cursor-pointer border-none outline-none";
+    "inline-flex items-center justify-center gap-2 font-medium rounded-[var(--radius-md)] transition-colors cursor-pointer border-none outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-primary)]";
 
   return (
     <button

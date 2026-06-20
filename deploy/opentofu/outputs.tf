@@ -26,7 +26,7 @@ output "cloudflare_accounts_d1_database_id" {
 }
 
 output "cloudflare_deploy_d1_database_id" {
-  description = "D1 database ID for the TAKOS_D1 binding (cloudflare target)."
+  description = "D1 database ID for the TAKOSUMI_CONTROL_DB binding (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].deploy_d1_database_id : null
 }
 
@@ -51,6 +51,6 @@ output "object_storage_buckets" {
 }
 
 output "queue_bindings" {
-  description = "Queue bindings for Takos control-plane jobs (runs, index, workflow, deployment)."
+  description = "Queue bindings for Takos product jobs (runs, index, workflow, deployment)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].queue_names : null
 }

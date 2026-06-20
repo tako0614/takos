@@ -11,7 +11,7 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
 
 ## 実行の仕組み
 
-- **Takos app / agent service** が Thread / Run
+- **Takos product API と agent runtime profile** が Thread / Run
   のライフサイクル、キュー、DB、認証、Space の状態を管理します
 - **`takos-agent`** (ランタイムコンテナ)
   が実際のプロンプト構築、スキル選択、ツール実行を担当します

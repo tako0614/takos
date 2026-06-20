@@ -1,376 +1,115 @@
-# Deployment update / ロールバック / エクスポート
+# Deployment Update / Rollback / Export
 
-> このページでわかること: インストール済みアプリの更新、巻き戻し、dedicated
-> materialize、export / import の扱い。
+このページは、Takos 上の installed app / bundled app を更新・巻き戻し・持ち出すときの authority を整理します。deploy の正本は
+Takosumi control plane の Installation / RunGroup / Run / Deployment / OutputSnapshot です。provider access は
+Installation provider connection が provider (+ optional alias) を explicit provider connection に解決します。Accounts plane の
+`/v1/installation-projections` は OIDC client metadata、billing usage endpoint、ServiceGrant の非 secret delivery metadata / secretRef、export handoff を
+installed service に渡す supporting route であり、deploy-control Installation API ではありません。
 
-## 1. Deployment update
+## Authority Split
 
-Installation の OpenTofu module に新しい ref を apply する操作。Accounts は deploy
-request を broker / authorize し、Takosumi が `plan` type Run を作って reviewed plan を生成
-し、その plan を `apply` type Run として apply します。`apply` type Run が成功すると Deployment と
-OutputSnapshot が更新されます。`Deployment.status: "succeeded"` になったあと、
-Accounts は `currentDeploymentId`、module ref、commit、event metadata を ledger に
-projection します。
+| 操作                               | 正本                                                                                   | 補足                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Git URL から install               | dashboard `/install?git=...` -> `/new` -> `POST /api/v1/spaces/:spaceId/installations` | 作成は compatibility check と明示確認後。`/install` は prefill link。                               |
+| ローカル作業 tree の upload        | `takosumi deploy ./dir` -> upload-origin SourceSnapshot -> `POST /api/v1/deploy`       | developer / operator helper。標準 product flow は Git URL install。                                 |
+| update                             | Source sync -> `plan` Run -> approval -> `apply` Run -> Deployment / OutputSnapshot    | Accounts は結果を projection するだけで、Run ledger の正本ではない。                                |
+| rollback                           | `POST /api/v1/deployments/:deploymentId/rollback-plan` -> approval -> `apply` Run      | retained Deployment に pin した新しい Run / Deployment ledger entry を作る。                        |
+| export / import                    | Takosumi Accounts projection API と operator helper                                    | portability handoff。source/target の Accounts plane が secret/OIDC/runtime material を再発行する。 |
+| billing / OIDC / ServiceGrant 配布 | `/v1/installation-projections/*`                                                       | installed service への supporting projection。Space / Source / Installation / Run の正本ではない。  |
 
-Current revision boundary: Deployment update / rollback の authority は Takosumi の
-Deployment / run ledger です。Accounts は request / projection history を保持します。
-provider data restore や cross-provider data migration は current guarantee
-としては扱わない。
+## Update Flow
 
-### 1.1 Takosumi CLI
-
-```bash
-takosumi deploy inst_abc --source https://github.com/example/my-app --ref v1.2.4
-```
-
-`--ref` には tag / branch / commit SHA を指定できます。`plan` type Run は git ref を
-resolved commit に固定し、`apply` type Run は `plan` type Run の reviewed plan artifact と、deploy
-plan 時点の `currentDeploymentId` で review 済み module ref と base Deployment
-pointer を guard します。operator policy は production install で mutable branch を
-拒否してもよい。
-
-### 1.2 流れ
+Deployment update は既存 Installation の Source ref を変え、通常の plan / apply flow をもう一度通します。
 
 ```txt
-1. new ref fetch       (takosumi が module repo から指定 ref を pin)
-2. module resolution   (git ref を resolved commit に pin し、汎用 repo metadata から module path / outputs を解決)
-3. `plan` type Run             (current Deployment と next ref の OpenTofu plan を生成し、reviewed plan artifact を作成)
-4. plan review         (resource add/change/destroy と policy decision を確認)
-5. Connection / ProviderBinding / policy check (provider allowlist / credential / state backend / Cloudflare Container execution の policy decision)
-6. approve             (UI / Accounts API で operator approval evidence と costAck を ack)
-7. `apply` type Run            (Takosumi が plan を apply して Deployment / OutputSnapshot を更新し、Accounts が succeeded Deployment を projection)
+1. Source sync: Git URL / ref / module path を resolved commit に固定
+2. compatibility_check: Capsule Normalizer / Gate が provider requirement と output を確認
+3. plan Run: SourceSnapshot + DependencySnapshot + base StateSnapshot generation を pin
+4. review: resource change / provider resolution / policy decision / cost を確認
+5. apply Run: saved plan digest と generation guard を検証して apply
+6. Deployment / OutputSnapshot: 成功した apply だけを immutable Deployment として記録
+7. Accounts projection: currentDeploymentId、OIDC/billing/runtime material を installed service 向けに更新
 ```
 
-### 1.3 UI 例
+自動 update は、plan が追加 approval / costAck / policy escalation を要求しない場合だけ許可できます。mutable branch を production
+Installation で拒否するかどうかは operator policy です。
+
+## Rollback
+
+Rollback は単なる pointer 書き換えではありません。retained `succeeded` Deployment を target にして rollback plan Run を作り、通常の
+approval / apply flow で新しい Deployment ledger entry を作ります。
 
 ```txt
-Upgrade Takos v1.2.3 → v1.2.4
-
-Module:
-  github.com/takos/takos
-  ref: v1.2.4
-  commit: 9d8e2...
-
-Plan:
-  - api image updated
-  - web image updated
-  - Connection / ProviderBinding / policy / policy change: none
-  - resource change: database.postgres changed
-
-Estimated cost change:
-  no change
-
-[Cancel]                                              [Upgrade]
+POST /api/v1/deployments/:deploymentId/rollback-plan
+  -> plan Run (target Deployment の source snapshot / dependency snapshot に pin)
+  -> review / approval
+  -> apply Run
+  -> new Deployment / OutputSnapshot
 ```
 
-plan の resource change / Connection / ProviderBinding / policy / policy decision が privilege や cost を
-増やす場合は、UI が新しい `plan` type Run に対する operator approval を再度通すことを要求する。
+Rollback が保証するのは OpenTofu module / provider resource state に対する plan/apply の再実行です。Postgres rows、blob objects、
+schema migration、外部 provider data の巻き戻しは自動保証ではありません。必要な場合は Capsule 側の forward-compatible migration、
+backup / restore Run、または operator-owned data restorer evidence で扱います。
 
-### 1.4 channel policy
+## Export / Import
 
-upgrade channel policy は Takos product catalog / account-plane install-ref
-policy で扱います。module ref は Git URL / commit / tag / module path などの汎用
-repo metadata から resolve されます。
+Export は Installation を別 operator / self-host へ移すための portability handoff です。これは deploy-control の Source /
+Installation / Run API ではなく、Takosumi Accounts plane が installed service material を束ねる supporting flow です。
 
-```yaml
-# catalog/account-plane policy object; not module input
-upgradePolicy:
-  securityPatch: automatic
-  minor: ask
-  major: ask
-```
+Export bundle に入れてよいもの:
 
-- `automatic`: ユーザ ack なしで operator install service が自動 upgrade
-- `ask`: 必ず UI / Accounts API で ack
-- `pin`: 自動 upgrade を一切行わない
+- Git URL / ref / resolved commit / module path
+- reviewed plan / Deployment / OutputSnapshot への non-secret reference
+- public non-secret outputs
+- OIDC / DB / object store / runtime grant の再発行 template
+- provider が export data provider / restorer を持つ場合だけ data dump reference
 
-`securityPatch` channel での自動 upgrade は **plan の resource change / runner
-profile / policy decision が approval を要求せず、かつ costAck 不要** な場合のみ
-実行される。
+Export bundle に入れないもの:
 
-## 2. Rollback
+- provider credential value
+- OIDC client secret / ServiceGrant token value
+- source instance の audit chain continuity
+- source instance の pairwise subject を target issuer でそのまま使う前提
 
-retained `succeeded` Deployment を current pointer として選び直す操作。rollback
-は新しい Deployment を作らず、過去 Deployment の module ref pin / reviewed plan
-artifact / OutputSnapshot を authority とする。
+target 側の Takosumi Accounts は OIDC client、pairwise subject、ServiceGrant、runtime secret、billing projection を再発行します。
+data dump / restore が必要な app は、その Capsule または operator runbook が restore contract を持つ必要があります。
 
-### 2.1 Takosumi CLI
+## CLI Boundary
+
+公開の標準導線は dashboard の Git URL install です。CLI は補助です。
 
 ```bash
-takosumi rollback inst_abc dep_previous
+takosumi deploy ./my-capsule --space @me --name my-app --provider cloudflare=conn_cf
+takosumi plan ./my-capsule --space @me --name my-app
+takosumi status <run-id>
+takosumi logs <run-id>
 ```
 
-指定された Deployment が当該 Installation の Deployment 履歴に存在しない場合は
-`not_found`、`succeeded` でない場合は `failed_precondition` の error envelope
-を返す。
+`takosumi internal installations export ...` / `takosumi internal installations import ...` は operator / development helper であり、
+通常の install / update / rollback product path として公開しません。operator runbook では Accounts projection API と合わせて扱います。
 
-### 2.2 必要保存物
+## Current Revision Boundary
 
-current Accounts 台帳は、upgrade / rollback の revision event に次を記録する:
+Update / rollback / export は deploy-control ledger と Accounts projection の両方にまたがります。current implementation では、
+SourceSnapshot / plan digest / DependencySnapshot / StateSnapshot generation / OutputSnapshot を pin した reviewed apply が
+新しい Deployment ledger revision を作る唯一の update authority です。Accounts 台帳操作は OIDC client、billing usage
+endpoint、ServiceGrant delivery metadata、export handoff を installed service に投影する supporting flow であり、deploy-control
+の Installation / Run 正本ではありません。
 
-- module ref / resolved commit
-- reviewed plan artifact metadata (`plan` type Run) / `apply` type Run id
-- OutputSnapshot refs / public non-secret outputs
-- Connection / ProviderBinding / policy / policy decision snapshot
-- operator approval evidence / `costAck` の confirm evidence
+binding-level review は ServiceBinding / ServiceGrant / provider connection / output allowlist の変更を確認するための
+operator review です。provider data copy、schema migration の巻き戻し、source instance の audit chain continuity、pairwise
+subject の移植は current guarantee としては扱わないため、必要な場合は Capsule 側 contract または operator-owned restore evidence
+で別途扱います。
 
-データそのもの (Postgres rows / blob objects) は **rollback で巻き戻されない**。
-current rollback は ledger 上の Deployment pointer の revision として扱う。large
-blob / data dump retention や database restore marker の世代保持は operator policy /
-provider evidence の領域であり、このページでは current guarantee
-としては扱わない。
+## Status Boundary
 
-Current revision boundary: rollback は Accounts 台帳操作として、binding-level
-review を経て current Deployment pointer を過去の succeeded Deployment に戻す
-ledger revision primitive です。runtime data の復元、database restore、provider
-data namespace の移行は別の operator / provider evidence で扱います。
+Installation の public status は `pending` / `active` / `stale` / `error` / `disabled` / `destroyed` に固定します。
+`upgrading` / `rolling-back` / `exporting` / `importing` / `materializing` は operation phase や event payload の hint であり、
+public status enum ではありません。
 
-### 2.3 制限事項
+## References
 
-- provider data copy / schema migration の巻き戻しは rollback の current
-  guarantee ではない
-- database / object-store / HTTP domain などの provisioned resource と runner
-  profile の変更は `plan` type Run review と user approval の対象
-- production-grade large blob retention / rollback drill は managed offering
-  launch-readiness evidence 側で扱う
-
-`plan` type Run は resource change / Connection / ProviderBinding / policy / policy decision / cost の差分を示し、
-必要な operator approval を要求する。
-
-## 3. Export bundle
-
-Installation を取り出してセルフホストするための bundle を生成します。
-
-現時点で verified な path は bundle / API / archive / restorer bridge
-までです。data dump は provider が export data provider / restorer
-を構成した場合に含まれます。production full live dump / restore は managed
-offering launch-readiness evidence で確認します。
-
-Export は「module ref pin と bundle metadata を持ち出し、target で新しい identity
-を生成する」操作です:
-
-- ✅保持される: module ref pin / resolved commit / reviewed plan artifact metadata
-  / OutputSnapshot refs / public non-secret outputs / provisioning template /
-  provider 構成済みの場合のみ data dump (DB / blobs / memory / profiles)
-- ⚠ target で再生成される: OIDC client (新 `client_id` / `client_secret`)、
-  pairwise subject (新 issuer で再計算)、InstallationEvent ledger (新
-  chain)、launch token の発行 context
-- ❌移植されない: instance を跨ぐ audit chain、source instance での access
-  history と target の continuity を link する protocol 手段
-
-user の identity は source / target instance で別 entity として扱われ、 link
-は持ちません。これは
-[per-instance scope の trade-off](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/design-principles.md#7-per-instance-scope-sovereignty-trade-off)
-の直接の帰結です。federation が必要なユースケースは app-layer (例: yurucommu の
-ActivityPub) で対応します。
-
-### 3.1 Takosumi CLI
-
-```bash
-takosumi accounts installations export inst_abc --output takos-export.tar.zst
-```
-
-Takosumi Accounts lifecycle API 経由なら
-[`POST /v1/app-installations/{id}/export`](https://takosumi.com/docs/reference/operator)。
-
-### 3.2 Bundle 構造 {#export-bundle}
-
-bundle (tar.zst) を展開すると、次の directory tree になる:
-
-```txt
-takos-export/
-  bundle.json
-  installation.json
-  module.json
-  module/
-    opentofu module input
-  deployment/
-    outputs.json
-  provisioning-template/
-    template.yml
-    identity.oidc.yml
-    db.connection.yml
-    media.bucket.yml
-    http-domain.yml
-    account-plane.facade.yml
-    launch-token-context.yml
-  data/
-    index.json
-    postgres.dump
-    blobs/
-    memory.jsonl
-    profiles.jsonl
-  docs/
-    restore.md
-```
-
-`bundle.json` は Accounts API が直接受け取る machine-readable payload
-(`takosumi.accounts.installation-export-bundle@v1`)。
-`takosumi accounts installations import ./takos-export.tar.zst` はこの
-file を読んで `POST /v1/app-installations/import` に送る。`installation.json` /
-`module.json` / `module/opentofu module input` / `provisioning-template/*.yml`
-は restore review と手動復旧用の public projection。
-
-`installation.json` 例:
-
-```json
-{
-  "installationId": "inst_abc",
-  "appId": "example.notes",
-  "module": {
-    "git": "https://github.com/example/notes-app",
-    "ref": "v1.2.3",
-    "commit": "7f3c9..."
-  },
-  "deployment": {
-    "reviewedPlanRef": "...",
-    "deploymentOutputRef": "..."
-  }
-}
-```
-
-`provisioning-template/*.yml` には各 provisioned resource / projection profile の
-**provisioning templates** が入る (secret material は **含まない**; self-host 側の
-Takosumi Accounts が再 materialize する)。 launch-token context template は
-audience / consume path / canonical origin intent などの non-secret redeem context
-だけを持ちます。launch token は OpenTofu module の resource ではなく Cloud-owned
-account-plane bootstrap flow であり、target Accounts instance が token と
-consume ledger を再生成します。
-
-`data/` の内容は export request の `scope.data` で制御される (`postgres` /
-`blobs` / `memory` / `profiles`)。
-
-Accounts 内部の payload kind は
-`takosumi.accounts.installation-export-bundle@v1` です。
-
-### 3.3 Encryption
-
-bundle は default で **age 暗号化**される (`POST /export` の
-`encryption.method: "age"`、`recipients: ["age1..."]`)。`none` も指定可能だが
-非推奨。
-
-## 4. Self-host import
-
-export bundle (または直接 Git clone) を、自前の takosumi インスタンスに install
-する。
-
-### 4.1 Takosumi CLI
-
-```bash
-takosumi accounts installations import ./takos-export.tar.zst \
-  --to https://my-takosumi.example.com \
-  --account-id acct_self_host \
-  --space-id space_self_host \
-  --subject tsub_owner
-```
-
-`--to` は **self-host 側の Takosumi Accounts (= account plane)** の base URL。
-OIDC issuer は import 先の Takosumi Accounts が `identity.primary.oidc` として
-発行する。Keycloak / Authentik / Auth0 などはその Accounts instance の upstream
-IdP として接続し、Installation の issuer を直接外部 IdP に差し替えない。 import
-planner は bundle 内の issuer を target issuer に置換し、revoked grant を
-import request から除外する。secret material は移さず、self-host 側で
-再発行する。Accounts API では `POST /v1/app-installations/import` が JSON bundle
-payload を受け取り、target Accounts instance の staged Installation
-として登録する。target Accounts は provisioning / secret / OIDC material
-を再生成し、target Takosumi で typed Runs を回して新しい target Deployment /
-OutputSnapshot を受け取ったあと、`currentDeploymentId` を projection して `ready`
-にする。metadata-only restore は non-ready staged import として扱う。 current
-operator command bridge として
-`takosumi accounts installations import ./takos-export.tar.zst` は archive
-内の `takos-export/bundle.json` を同 endpoint に送る。tar.zst writer、age
-wrapped tar.zst import、`--restore-data` による configured data restorer への
-data entries 受け渡しは実装済み。ただし production provider ごとの full live
-dump / restore は operator-owned export data provider / restorer workflow
-として追加実装する。
-
-```bash
-takosumi accounts installations import ./takos-export.bundle.json \
-  --to https://my-takosumi.example.com \
-  --account-id acct_self_host \
-  --space-id space_self_host \
-  --subject tsub_owner
-```
-
-bundle ではなく Git URL から直接 install する経路も同等にサポートされる:
-
-```bash
-takosumi install https://github.com/example/my-app --ref v1.2.3 \
-  --to https://my-takosumi.example.com
-```
-
-### 4.2 OIDC issuer の再解決
-
-self-host 側では、Installation の `identity.oidc@v1` binding は
-`identity.primary.oidc` を self-host Takosumi Accounts に resolve して
-`issuerUrl` を得ます。既存 IdP は Takosumi Accounts の upstream として接続し、
-Takos runtime が Installation ledger を迂回して直接外部 issuer を consume
-する形にはしません。
-
-| issuer の例                                      | 用途                                         |
-| ------------------------------------------------ | -------------------------------------------- |
-| `identity.primary.oidc` から resolve した issuer | managed / self-host Takosumi Accounts        |
-| Keycloak / Authentik / Auth0 / Clerk             | Takosumi Accounts の upstream IdP として接続 |
-
-issuer 切替時の制約:
-
-- issuer は OIDC Discovery (`/.well-known/openid-configuration`) を返す必要が
-  ある
-- Takos runtime が受け取る `sub` は per-Installation / per-client の pairwise
-  subject である必要がある。外部 IdP が upstream にある場合も、Takosumi Accounts
-  が broker として runtime 向け subject を再発行する
-- export 時の `pairwiseSubject` は **新 issuer では再計算される**ため、
-  installation 内の Takos profile レコードは新 subject に再 mapping される。
-  詳細は self-host 側
-  [Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
-  docs を参照
-
-### 4.3 Import 後の確認
-
-import 完了後、以下が動作することを確認する:
-
-1. Takos の `/auth/oidc/login` から新 issuer での login が完了する
-2. `/auth/oidc/callback` で profile が新 `externalSubject` に再 mapping
-   されている
-3. `data/` の Postgres / blobs / memory が import されている
-4. activated HTTP domain projection の hostname が新 self-host 環境で reachable
-
-## 5. lifecycle 全体図
-
-図中の `upgrading` / `rolling-back` / `materializing` / `exporting` /
-`uninstalling` は public `installation.status` ではなく、operation metadata と
-InstallationEvent payload 上の transitional phase hint です。外部公開 status は
-canonical 5 public statuses (`installing` / `ready` / `failed` / `suspended` /
-`exported`) に固定されます。
-
-```txt
-install ──► ready ──┬─► upgrading ──► ready (new ref)
-                    │       │
-                    │       └► upgrade-failed → ready (previous ref)
-                    │
-                    ├─► rolling-back ──► ready (previous ref)
-                    │
-                    ├─► materializing ──► ready (mode=dedicated)
-                    │       │
-                    │       └► materialize-failed → ready (previous mode)
-                    │
-                    ├─► exporting ──► exported
-                    │
-                    └─► uninstalling ──► suspended ledger (retained)
-```
-
-各遷移は
-[`InstallationEvent`](https://takosumi.com/docs/reference/model)
-として append-only に記録される。
-
-## 次に読むページ
-
-- [Takosumi operator account-plane contract](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
-  — upgrade / rollback / export を駆動する operator account-plane REST endpoint
-- [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
-  — `materialize` で遷移する shared-cell / dedicated / self-hosted の比較
-- [Installation 台帳](https://takosumi.com/docs/reference/model)
-  —過去世代を保存する record と event ledger
-- [Connection / ProviderBinding / policy / OutputSnapshot](https://takosumi.com/docs/reference/model)
-  —provisioning template / output の export 時の扱い (template / secret 除外)
-- [Install paths](/apps/install-paths) — 3 path のうち self-host への遷移
+- [Install paths](../apps/install-paths.md)
+- [Deploy overview](/deploy/)
+- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+- [Takosumi CLI](https://takosumi.com/docs/reference/cli)

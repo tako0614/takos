@@ -39,3 +39,23 @@ configuration can find them quickly:
 If you operate Takos without an upstream CDN / WAF limiter, treat these
 endpoints as the highest priority for a self-hosted limiter (e.g. an Nginx
 `limit_req` zone keyed on client IP + cookie).
+
+## Agent egress proxy (SSRF posture)
+
+Agent outbound HTTP goes through the egress worker, which fails closed against
+SSRF: the destination IP is resolved via DoH and rejected when it is private,
+loopback, link-local, cloud-metadata (`169.254.169.254`), CGNAT, or an
+IPv6 / NAT64 / 6to4 form wrapping any of those (see `isPrivateIP`,
+regression-tested in `platform-utils/__tests__/validation.test.ts`). The egress
+worker is reached only as a service binding — it has **no public route** — and
+responses cap size and use `redirect: 'manual'`.
+
+Accepted residual (documented, not a regression): after the DoH IP check, the
+final `fetch()` re-resolves the hostname through the Workers platform resolver
+and is **not pinned** to the validated IP, because the Workers runtime offers no
+portable way to pin a fetch to a literal IP while preserving Host/SNI. A
+short-TTL DNS rebind could therefore answer a public IP to the probe and a
+private IP to the edge resolver. Both lookups traverse Cloudflare's resolver,
+which narrows this to a short-TTL-flip race. Operators who must eliminate it
+should restrict the egress worker's reachable network at the platform layer.
+This closes once the Workers runtime supports literal-IP + Host/SNI fetches.

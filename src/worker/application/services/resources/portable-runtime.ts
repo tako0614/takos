@@ -103,7 +103,7 @@ function resolveResourceBasePath(
 ): string {
   const baseDir = resolvePortableDataDir();
   const fileBase = sanitizeName(resource.backing_resource_name ?? resource.id);
-  return path.join(baseDir, "managed-resources", kind, fileBase);
+  return path.join(baseDir, "portable-resources", kind, fileBase);
 }
 
 function resolveControlMigrationsDir(): string {

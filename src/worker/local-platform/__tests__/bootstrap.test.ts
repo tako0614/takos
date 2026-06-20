@@ -1,4 +1,9 @@
-import { deleteEnv, envObject, getEnv, setEnv } from "@takos/worker-platform-utils/runtime-env";
+import {
+  deleteEnv,
+  envObject,
+  getEnv,
+  setEnv,
+} from "@takos/worker-platform-utils/runtime-env";
 import { test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -39,10 +44,7 @@ type LocalPlatformTestHooks = {
   __TAKOS_TEST_BACKEND_QUEUE_ADAPTER__?: (
     binding: WorkerBinding & { queue_backend?: string },
   ) => {
-    send(
-      message: unknown,
-      options?: { delaySeconds?: number },
-    ): Promise<void>;
+    send(message: unknown, options?: { delaySeconds?: number }): Promise<void>;
     sendBatch(
       messages: Iterable<{ body: unknown; delaySeconds?: number }>,
     ): Promise<void>;
@@ -65,18 +67,19 @@ function prepareQueueMocks(): void {
   };
 }
 
-function stubGlobalFetch(
-  handler: (request: Request) => Promise<Response>,
-) {
+function stubGlobalFetch(handler: (request: Request) => Promise<Response>) {
   return stub(
     globalThis,
     "fetch",
     async (...args: Parameters<typeof globalThis.fetch>) => {
       const [input, init] = args;
-      const request = input instanceof Request ? input : new Request(
-        input instanceof URL ? input.toString() : String(input),
-        init as RequestInit | undefined,
-      );
+      const request =
+        input instanceof Request
+          ? input
+          : new Request(
+              input instanceof URL ? input.toString() : String(input),
+              init as RequestInit | undefined,
+            );
       return await handler(request);
     },
   );
@@ -142,9 +145,10 @@ async function withLocalBootstrapEnv(
   }
 }
 
-async function runMiniflareDispatchSmoke(): Promise<
-  { status: number; body: unknown }
-> {
+async function runMiniflareDispatchSmoke(): Promise<{
+  status: number;
+  body: unknown;
+}> {
   setEnv("ADMIN_DOMAIN", "admin.local");
   setEnv("TENANT_BASE_DOMAIN", "tenant.local");
   setEnv(
@@ -152,11 +156,13 @@ async function runMiniflareDispatchSmoke(): Promise<
     JSON.stringify({
       "hello.local": {
         type: "deployments",
-        deployments: [{
-          routeRef: "worker-demo-v1",
-          weight: 100,
-          status: "active",
-        }],
+        deployments: [
+          {
+            routeRef: "worker-demo-v1",
+            weight: 100,
+            status: "active",
+          },
+        ],
       },
     }),
   );
@@ -236,42 +242,51 @@ async function seedTenantWorkerBundle(params: {
   const encryptionKey = env.ENCRYPTION_KEY ?? LOCAL_DEV_DEFAULTS.ENCRYPTION_KEY;
   const bindingsSnapshotEncrypted = bindingsSnapshot?.length
     ? JSON.stringify(
-      await encrypt(
-        JSON.stringify(bindingsSnapshot),
-        encryptionKey,
-        resolvedDeploymentId,
-      ),
-    )
+        await encrypt(
+          JSON.stringify(bindingsSnapshot),
+          encryptionKey,
+          resolvedDeploymentId,
+        ),
+      )
     : null;
-  await db.insert(accounts).values({
-    id: "space-demo",
-    type: "workspace",
-    status: "active",
-    name: "Space Demo",
-    slug: "space-demo",
-  }).run();
-  await db.insert(services).values({
-    id: serviceId,
-    accountId: "space-demo",
-    serviceType: "app",
-    status: "active",
-    routeRef,
-    activeDeploymentId: resolvedDeploymentId,
-  }).run();
-  await db.insert(deployments).values({
-    id: resolvedDeploymentId,
-    serviceId,
-    accountId: "space-demo",
-    version,
-    artifactRef,
-    bundleR2Key,
-    runtimeConfigSnapshotJson: "{}",
-    bindingsSnapshotEncrypted,
-    targetJson,
-    status: "active",
-    routingStatus,
-    routingWeight,
-  }).run();
+  await db
+    .insert(accounts)
+    .values({
+      id: "space-demo",
+      type: "workspace",
+      status: "active",
+      name: "Space Demo",
+      slug: "space-demo",
+    })
+    .run();
+  await db
+    .insert(services)
+    .values({
+      id: serviceId,
+      accountId: "space-demo",
+      serviceType: "app",
+      status: "active",
+      routeRef,
+      activeDeploymentId: resolvedDeploymentId,
+    })
+    .run();
+  await db
+    .insert(deployments)
+    .values({
+      id: resolvedDeploymentId,
+      serviceId,
+      accountId: "space-demo",
+      version,
+      artifactRef,
+      bundleR2Key,
+      runtimeConfigSnapshotJson: "{}",
+      bindingsSnapshotEncrypted,
+      targetJson,
+      status: "active",
+      routingStatus,
+      routingWeight,
+    })
+    .run();
   await env.WORKER_BUNDLES?.put(bundleR2Key, bundleContent);
 }
 
@@ -291,7 +306,7 @@ const originalEnv = {
 };
 let tempDataDir: string | null = null;
 localBootstrapTest(
-  "local bootstrap - serves takos health without provider bindings",
+  "local bootstrap - serves takos health without Installation provider connection policy",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
@@ -419,11 +434,13 @@ localBootstrapTest(
         JSON.stringify({
           "hello.local": {
             type: "deployments",
-            deployments: [{
-              routeRef: "tenant-app",
-              weight: 100,
-              status: "active",
-            }],
+            deployments: [
+              {
+                routeRef: "tenant-app",
+                weight: 100,
+                status: "active",
+              },
+            ],
           },
         }),
       );
@@ -468,9 +485,9 @@ localBootstrapTest(
         }),
       );
 
-      const error = await assertRejects(async () => {
+      const error = (await assertRejects(async () => {
         await createLocalDispatchFetchForTests();
-      }) as Error;
+      })) as Error;
       assertStringIncludes(
         (error as Error).message,
         "TAKOS_LOCAL_DISPATCH_TARGETS_JSON may only override infra service targets",
@@ -554,43 +571,54 @@ localBootstrapTest(
         JSON.stringify({
           "hello.local": {
             type: "deployments",
-            deployments: [{
-              routeRef: "worker-demo-v1",
-              weight: 100,
-              status: "active",
-            }],
+            deployments: [
+              {
+                routeRef: "worker-demo-v1",
+                weight: 100,
+                status: "active",
+              },
+            ],
           },
         }),
       );
 
       const env = await createNodeWebEnv();
       const db = getDb(env.DB);
-      await db.insert(accounts).values({
-        id: "space-demo",
-        type: "workspace",
-        status: "active",
-        name: "Space Demo",
-        slug: "space-demo",
-      }).run();
-      await db.insert(services).values({
-        id: "worker-demo",
-        accountId: "space-demo",
-        serviceType: "app",
-        status: "active",
-        routeRef: "worker-demo",
-      }).run();
-      await db.insert(deployments).values({
-        id: "deployment-demo-v1",
-        serviceId: "worker-demo",
-        accountId: "space-demo",
-        version: 1,
-        artifactRef: "worker-demo-v1",
-        bundleR2Key: "deployments/worker-demo/1/bundle.js",
-        runtimeConfigSnapshotJson: "{}",
-        status: "active",
-        routingStatus: "active",
-        routingWeight: 100,
-      }).run();
+      await db
+        .insert(accounts)
+        .values({
+          id: "space-demo",
+          type: "workspace",
+          status: "active",
+          name: "Space Demo",
+          slug: "space-demo",
+        })
+        .run();
+      await db
+        .insert(services)
+        .values({
+          id: "worker-demo",
+          accountId: "space-demo",
+          serviceType: "app",
+          status: "active",
+          routeRef: "worker-demo",
+        })
+        .run();
+      await db
+        .insert(deployments)
+        .values({
+          id: "deployment-demo-v1",
+          serviceId: "worker-demo",
+          accountId: "space-demo",
+          version: 1,
+          artifactRef: "worker-demo-v1",
+          bundleR2Key: "deployments/worker-demo/1/bundle.js",
+          runtimeConfigSnapshotJson: "{}",
+          status: "active",
+          routingStatus: "active",
+          routingWeight: 100,
+        })
+        .run();
       await env.WORKER_BUNDLES?.put(
         "deployments/worker-demo/1/bundle.js",
         `
@@ -665,9 +693,9 @@ localBootstrapTest(
         assertEquals(typeof scheduledResult.outcome, "string");
         assertEquals(typeof scheduledResult.noRetry, "boolean");
 
-        const response = await registry.get("worker-demo").fetch(
-          "http://worker-demo/internal/state",
-        );
+        const response = await registry
+          .get("worker-demo")
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await response.json(), {
           lastScheduled: {
             cron: "0 * * * *",
@@ -738,9 +766,9 @@ localBootstrapTest(
         assertEquals(typeof queueResult.outcome, "string");
         assertEquals(typeof queueResult.ackAll, "boolean");
 
-        const response = await registry.get("worker-demo").fetch(
-          "http://worker-demo/internal/state",
-        );
+        const response = await registry
+          .get("worker-demo")
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await response.json(), {
           lastQueue: {
             queue: "tenant-jobs",
@@ -781,22 +809,25 @@ localBootstrapTest(
       `,
       });
       const db = getDb(env.DB);
-      await db.insert(deployments).values({
-        id: "deployment-demo-v2",
-        serviceId: "worker-demo",
-        accountId: "space-demo",
-        version: 2,
-        artifactRef: "worker-demo-v2",
-        bundleR2Key: "deployments/worker-demo/2/bundle.js",
-        runtimeConfigSnapshotJson: "{}",
-        targetJson: JSON.stringify({
-          route_ref: "worker-demo",
-          endpoint: { kind: "service-ref", ref: "worker-demo" },
-        }),
-        status: "active",
-        routingStatus: "canary",
-        routingWeight: 100,
-      }).run();
+      await db
+        .insert(deployments)
+        .values({
+          id: "deployment-demo-v2",
+          serviceId: "worker-demo",
+          accountId: "space-demo",
+          version: 2,
+          artifactRef: "worker-demo-v2",
+          bundleR2Key: "deployments/worker-demo/2/bundle.js",
+          runtimeConfigSnapshotJson: "{}",
+          targetJson: JSON.stringify({
+            route_ref: "worker-demo",
+            endpoint: { kind: "service-ref", ref: "worker-demo" },
+          }),
+          status: "active",
+          routingStatus: "canary",
+          routingWeight: 100,
+        })
+        .run();
       await env.WORKER_BUNDLES?.put(
         "deployments/worker-demo/2/bundle.js",
         `
@@ -830,17 +861,21 @@ localBootstrapTest(
           },
         );
 
-        const canaryResponse = await registry.get("worker-demo", {
-          deploymentId: "deployment-demo-v2",
-        }).fetch("http://worker-demo/internal/state");
+        const canaryResponse = await registry
+          .get("worker-demo", {
+            deploymentId: "deployment-demo-v2",
+          })
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await canaryResponse.json(), {
           worker: "worker-demo-v2",
           lastScheduled: { worker: "worker-demo-v2", cron: "*/5 * * * *" },
         });
 
-        const activeResponse = await registry.get("worker-demo", {
-          deploymentId: "deployment-demo-v1",
-        }).fetch("http://worker-demo/internal/state");
+        const activeResponse = await registry
+          .get("worker-demo", {
+            deploymentId: "deployment-demo-v1",
+          })
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await activeResponse.json(), {
           worker: "worker-demo-v1",
           lastScheduled: null,
@@ -879,22 +914,25 @@ localBootstrapTest(
       `,
       });
       const db = getDb(env.DB);
-      await db.insert(deployments).values({
-        id: "deployment-demo-v2",
-        serviceId: "worker-demo",
-        accountId: "space-demo",
-        version: 2,
-        artifactRef: "worker-demo-v2",
-        bundleR2Key: "deployments/worker-demo/2/bundle.js",
-        runtimeConfigSnapshotJson: "{}",
-        targetJson: JSON.stringify({
-          route_ref: "worker-demo",
-          endpoint: { kind: "service-ref", ref: "worker-demo" },
-        }),
-        status: "active",
-        routingStatus: "canary",
-        routingWeight: 100,
-      }).run();
+      await db
+        .insert(deployments)
+        .values({
+          id: "deployment-demo-v2",
+          serviceId: "worker-demo",
+          accountId: "space-demo",
+          version: 2,
+          artifactRef: "worker-demo-v2",
+          bundleR2Key: "deployments/worker-demo/2/bundle.js",
+          runtimeConfigSnapshotJson: "{}",
+          targetJson: JSON.stringify({
+            route_ref: "worker-demo",
+            endpoint: { kind: "service-ref", ref: "worker-demo" },
+          }),
+          status: "active",
+          routingStatus: "canary",
+          routingWeight: 100,
+        })
+        .run();
       await env.WORKER_BUNDLES?.put(
         "deployments/worker-demo/2/bundle.js",
         `
@@ -921,16 +959,25 @@ localBootstrapTest(
       });
 
       try {
-        await registry.dispatchQueue("worker-demo", "tenant-jobs", [{
-          id: "msg-canary",
-          timestamp: new Date("2026-03-25T02:00:00.000Z"),
-          attempts: 1,
-          body: { value: "gamma" },
-        }], { deploymentId: "deployment-demo-v2" });
+        await registry.dispatchQueue(
+          "worker-demo",
+          "tenant-jobs",
+          [
+            {
+              id: "msg-canary",
+              timestamp: new Date("2026-03-25T02:00:00.000Z"),
+              attempts: 1,
+              body: { value: "gamma" },
+            },
+          ],
+          { deploymentId: "deployment-demo-v2" },
+        );
 
-        const canaryResponse = await registry.get("worker-demo", {
-          deploymentId: "deployment-demo-v2",
-        }).fetch("http://worker-demo/internal/state");
+        const canaryResponse = await registry
+          .get("worker-demo", {
+            deploymentId: "deployment-demo-v2",
+          })
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await canaryResponse.json(), {
           worker: "worker-demo-v2",
           lastQueue: {
@@ -940,9 +987,11 @@ localBootstrapTest(
           },
         });
 
-        const activeResponse = await registry.get("worker-demo", {
-          deploymentId: "deployment-demo-v1",
-        }).fetch("http://worker-demo/internal/state");
+        const activeResponse = await registry
+          .get("worker-demo", {
+            deploymentId: "deployment-demo-v1",
+          })
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await activeResponse.json(), {
           worker: "worker-demo-v1",
           lastQueue: null,
@@ -961,12 +1010,14 @@ localBootstrapTest(
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
-        bindingsSnapshot: [{
-          type: "workflow",
-          name: "RUN_WORKFLOW",
-          workflow_name: "runWorkflow",
-          class_name: "RunWorkflow",
-        }],
+        bindingsSnapshot: [
+          {
+            type: "workflow",
+            name: "RUN_WORKFLOW",
+            workflow_name: "runWorkflow",
+            class_name: "RunWorkflow",
+          },
+        ],
         bundleContent: `
         export default {
           async fetch() {
@@ -1027,13 +1078,11 @@ localBootstrapTest(
       });
 
       try {
-        const error = await assertRejects(
-          async () => {
-            await registry
-              .get("worker-beta", { deploymentId: "deployment-alpha-v1" })
-              .fetch("http://worker-beta/internal/state");
-          },
-        ) as Error;
+        const error = (await assertRejects(async () => {
+          await registry
+            .get("worker-beta", { deploymentId: "deployment-alpha-v1" })
+            .fetch("http://worker-beta/internal/state");
+        })) as Error;
         assertStringIncludes(
           (error as Error).message,
           "does not belong to local tenant service worker-beta",
@@ -1052,11 +1101,13 @@ localBootstrapTest(
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
-        bindingsSnapshot: [{
-          type: "queue",
-          name: "JOBS",
-          queue_name: "tenant-jobs",
-        }],
+        bindingsSnapshot: [
+          {
+            type: "queue",
+            name: "JOBS",
+            queue_name: "tenant-jobs",
+          },
+        ],
         bundleContent: `
         export default {
           async fetch(_request, env) {
@@ -1078,9 +1129,9 @@ localBootstrapTest(
       });
 
       try {
-        const response = await registry.get("worker-demo").fetch(
-          "http://worker-demo/internal/state",
-        );
+        const response = await registry
+          .get("worker-demo")
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await response.json(), {
           ok: true,
           hasSend: true,
@@ -1099,14 +1150,16 @@ localBootstrapTest(
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
-        bindingsSnapshot: [{
-          type: "queue",
-          name: "JOBS",
-          queue_name: "tenant-jobs",
-          queue_backend: "sqs",
-          queue_url:
-            "https://sqs.ap-northeast-1.amazonaws.com/123456789012/tenant-jobs",
-        }],
+        bindingsSnapshot: [
+          {
+            type: "queue",
+            name: "JOBS",
+            queue_name: "tenant-jobs",
+            queue_backend: "sqs",
+            queue_url:
+              "https://sqs.ap-northeast-1.amazonaws.com/123456789012/tenant-jobs",
+          },
+        ],
         bundleContent: `
         export default {
           async fetch(_request, env) {
@@ -1128,9 +1181,9 @@ localBootstrapTest(
       });
 
       try {
-        const response = await registry.get("worker-demo").fetch(
-          "http://worker-demo/internal/state",
-        );
+        const response = await registry
+          .get("worker-demo")
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await response.json(), {
           ok: true,
           hasSend: true,
@@ -1149,11 +1202,13 @@ localBootstrapTest(
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
-        bindingsSnapshot: [{
-          type: "durable_object_namespace",
-          name: "COUNTER",
-          class_name: "Counter",
-        }],
+        bindingsSnapshot: [
+          {
+            type: "durable_object_namespace",
+            name: "COUNTER",
+            class_name: "Counter",
+          },
+        ],
         bundleContent: `
         export class Counter {
           async fetch(request) {
@@ -1181,9 +1236,9 @@ localBootstrapTest(
       });
 
       try {
-        const response = await registry.get("worker-demo").fetch(
-          "http://worker-demo/internal/state",
-        );
+        const response = await registry
+          .get("worker-demo")
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await response.json(), {
           ok: true,
           path: "/internal/state",
@@ -1202,11 +1257,13 @@ localBootstrapTest(
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
-        bindingsSnapshot: [{
-          type: "analytics_engine",
-          name: "EVENTS",
-          dataset: "tenant_events",
-        }],
+        bindingsSnapshot: [
+          {
+            type: "analytics_engine",
+            name: "EVENTS",
+            dataset: "tenant_events",
+          },
+        ],
         bundleContent: `
         export default {
           async fetch(_request, env) {
@@ -1232,9 +1289,9 @@ localBootstrapTest(
       });
 
       try {
-        const response = await registry.get("worker-demo").fetch(
-          "http://worker-demo/internal/state",
-        );
+        const response = await registry
+          .get("worker-demo")
+          .fetch("http://worker-demo/internal/state");
         await assertEquals(await response.json(), {
           ok: true,
           hasWriteDataPoint: true,
@@ -1253,12 +1310,14 @@ localBootstrapTest(
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
-        bindingsSnapshot: [{
-          type: "workflow",
-          name: "ONBOARDING",
-          workflow_name: "onboarding",
-          class_name: "OnboardingWorkflow",
-        }],
+        bindingsSnapshot: [
+          {
+            type: "workflow",
+            name: "ONBOARDING",
+            workflow_name: "onboarding",
+            class_name: "OnboardingWorkflow",
+          },
+        ],
         bundleContent: `
         export default {
           async fetch(_request, env) {
@@ -1282,10 +1341,10 @@ localBootstrapTest(
       });
 
       try {
-        const response = await registry.get("worker-demo").fetch(
-          "http://worker-demo/internal/state",
-        );
-        const json = await response.json() as {
+        const response = await registry
+          .get("worker-demo")
+          .fetch("http://worker-demo/internal/state");
+        const json = (await response.json()) as {
           ok: boolean;
           instanceId: string;
           status: string;
@@ -1319,49 +1378,58 @@ localBootstrapTest(
 
       const env = await createNodeWebEnv();
       const db = getDb(env.DB);
-      await db.insert(accounts).values({
-        id: "space-demo",
-        type: "workspace",
-        status: "active",
-        name: "Space Demo",
-        slug: "space-demo",
-      }).run();
-      await db.insert(services).values({
-        id: "worker-demo",
-        accountId: "space-demo",
-        serviceType: "app",
-        status: "active",
-        routeRef: "worker-demo",
-        activeDeploymentId: "deployment-demo-v1",
-      }).run();
-      await db.insert(deployments).values([
-        {
-          id: "deployment-demo-v1",
-          serviceId: "worker-demo",
-          accountId: "space-demo",
-          version: 1,
-          artifactRef: "worker-demo-v1",
-          bundleR2Key: "deployments/worker-demo/1/bundle.js",
-          runtimeConfigSnapshotJson: "{}",
-          targetJson: JSON.stringify({ route_ref: "worker-demo-v1" }),
+      await db
+        .insert(accounts)
+        .values({
+          id: "space-demo",
+          type: "workspace",
           status: "active",
-          routingStatus: "active",
-          routingWeight: 1,
-        },
-        {
-          id: "deployment-demo-v2",
-          serviceId: "worker-demo",
+          name: "Space Demo",
+          slug: "space-demo",
+        })
+        .run();
+      await db
+        .insert(services)
+        .values({
+          id: "worker-demo",
           accountId: "space-demo",
-          version: 2,
-          artifactRef: "worker-demo-v2",
-          bundleR2Key: "deployments/worker-demo/2/bundle.js",
-          runtimeConfigSnapshotJson: "{}",
-          targetJson: JSON.stringify({ route_ref: "worker-demo-v2" }),
+          serviceType: "app",
           status: "active",
-          routingStatus: "canary",
-          routingWeight: 99,
-        },
-      ]).run();
+          routeRef: "worker-demo",
+          activeDeploymentId: "deployment-demo-v1",
+        })
+        .run();
+      await db
+        .insert(deployments)
+        .values([
+          {
+            id: "deployment-demo-v1",
+            serviceId: "worker-demo",
+            accountId: "space-demo",
+            version: 1,
+            artifactRef: "worker-demo-v1",
+            bundleR2Key: "deployments/worker-demo/1/bundle.js",
+            runtimeConfigSnapshotJson: "{}",
+            targetJson: JSON.stringify({ route_ref: "worker-demo-v1" }),
+            status: "active",
+            routingStatus: "active",
+            routingWeight: 1,
+          },
+          {
+            id: "deployment-demo-v2",
+            serviceId: "worker-demo",
+            accountId: "space-demo",
+            version: 2,
+            artifactRef: "worker-demo-v2",
+            bundleR2Key: "deployments/worker-demo/2/bundle.js",
+            runtimeConfigSnapshotJson: "{}",
+            targetJson: JSON.stringify({ route_ref: "worker-demo-v2" }),
+            status: "active",
+            routingStatus: "canary",
+            routingWeight: 99,
+          },
+        ])
+        .run();
       await env.WORKER_BUNDLES?.put(
         "deployments/worker-demo/1/bundle.js",
         `
@@ -1433,55 +1501,64 @@ localBootstrapTest(
 
       const env = await createNodeWebEnv();
       const db = getDb(env.DB);
-      await db.insert(accounts).values({
-        id: "space-demo",
-        type: "workspace",
-        status: "active",
-        name: "Space Demo",
-        slug: "space-demo",
-      }).run();
-      await db.insert(services).values({
-        id: "worker-demo",
-        accountId: "space-demo",
-        serviceType: "app",
-        status: "active",
-        routeRef: "worker-demo",
-        activeDeploymentId: "deployment-demo-v1",
-      }).run();
-      await db.insert(deployments).values([
-        {
-          id: "deployment-demo-v1",
-          serviceId: "worker-demo",
-          accountId: "space-demo",
-          version: 1,
-          artifactRef: "worker-demo-v1",
-          bundleR2Key: "deployments/worker-demo/1/bundle.js",
-          runtimeConfigSnapshotJson: "{}",
-          targetJson: JSON.stringify({
-            route_ref: "worker-demo",
-            endpoint: { kind: "service-ref", ref: "worker-demo" },
-          }),
+      await db
+        .insert(accounts)
+        .values({
+          id: "space-demo",
+          type: "workspace",
           status: "active",
-          routingStatus: "active",
-          routingWeight: 1,
-        },
-        {
-          id: "deployment-demo-v2",
-          serviceId: "worker-demo",
+          name: "Space Demo",
+          slug: "space-demo",
+        })
+        .run();
+      await db
+        .insert(services)
+        .values({
+          id: "worker-demo",
           accountId: "space-demo",
-          version: 2,
-          artifactRef: "worker-demo-v2",
-          bundleR2Key: "deployments/worker-demo/2/bundle.js",
-          runtimeConfigSnapshotJson: "{}",
-          targetJson: JSON.stringify({
-            route_ref: "worker-demo",
-            endpoint: { kind: "service-ref", ref: "worker-demo" },
-          }),
+          serviceType: "app",
           status: "active",
-          routingStatus: "canary",
-          routingWeight: 99,
-        },
-      ]).run();
+          routeRef: "worker-demo",
+          activeDeploymentId: "deployment-demo-v1",
+        })
+        .run();
+      await db
+        .insert(deployments)
+        .values([
+          {
+            id: "deployment-demo-v1",
+            serviceId: "worker-demo",
+            accountId: "space-demo",
+            version: 1,
+            artifactRef: "worker-demo-v1",
+            bundleR2Key: "deployments/worker-demo/1/bundle.js",
+            runtimeConfigSnapshotJson: "{}",
+            targetJson: JSON.stringify({
+              route_ref: "worker-demo",
+              endpoint: { kind: "service-ref", ref: "worker-demo" },
+            }),
+            status: "active",
+            routingStatus: "active",
+            routingWeight: 1,
+          },
+          {
+            id: "deployment-demo-v2",
+            serviceId: "worker-demo",
+            accountId: "space-demo",
+            version: 2,
+            artifactRef: "worker-demo-v2",
+            bundleR2Key: "deployments/worker-demo/2/bundle.js",
+            runtimeConfigSnapshotJson: "{}",
+            targetJson: JSON.stringify({
+              route_ref: "worker-demo",
+              endpoint: { kind: "service-ref", ref: "worker-demo" },
+            }),
+            status: "active",
+            routingStatus: "canary",
+            routingWeight: 99,
+          },
+        ])
+        .run();
       await env.WORKER_BUNDLES?.put(
         "deployments/worker-demo/1/bundle.js",
         `
@@ -1533,60 +1610,71 @@ localBootstrapTest(
         JSON.stringify({
           "hello.local": {
             type: "deployments",
-            deployments: [{
-              routeRef: "worker-demo",
-              weight: 100,
-              status: "active",
-            }],
+            deployments: [
+              {
+                routeRef: "worker-demo",
+                weight: 100,
+                status: "active",
+              },
+            ],
           },
         }),
       );
 
       const env = await createNodeWebEnv();
       const db = getDb(env.DB);
-      await db.insert(accounts).values({
-        id: "space-demo",
-        type: "workspace",
-        status: "active",
-        name: "Space Demo",
-        slug: "space-demo",
-      }).run();
-      await db.insert(services).values({
-        id: "worker-demo",
-        accountId: "space-demo",
-        serviceType: "app",
-        status: "active",
-        routeRef: "worker-demo",
-        activeDeploymentId: "deployment-demo-v1",
-      }).run();
-      await db.insert(deployments).values([
-        {
-          id: "deployment-demo-v1",
-          serviceId: "worker-demo",
-          accountId: "space-demo",
-          version: 1,
-          artifactRef: "worker-demo-v1",
-          bundleR2Key: "deployments/worker-demo/1/bundle.js",
-          runtimeConfigSnapshotJson: "{}",
-          targetJson: JSON.stringify({ route_ref: "worker-demo" }),
+      await db
+        .insert(accounts)
+        .values({
+          id: "space-demo",
+          type: "workspace",
           status: "active",
-          routingStatus: "active",
-          routingWeight: 100,
-        },
-        {
-          id: "deployment-demo-v2",
-          serviceId: "worker-demo",
+          name: "Space Demo",
+          slug: "space-demo",
+        })
+        .run();
+      await db
+        .insert(services)
+        .values({
+          id: "worker-demo",
           accountId: "space-demo",
-          version: 2,
-          artifactRef: "worker-demo-v2",
-          bundleR2Key: "deployments/worker-demo/2/bundle.js",
-          runtimeConfigSnapshotJson: "{}",
-          targetJson: JSON.stringify({ route_ref: "worker-demo" }),
+          serviceType: "app",
           status: "active",
-          routingStatus: "active",
-          routingWeight: 100,
-        },
-      ]).run();
+          routeRef: "worker-demo",
+          activeDeploymentId: "deployment-demo-v1",
+        })
+        .run();
+      await db
+        .insert(deployments)
+        .values([
+          {
+            id: "deployment-demo-v1",
+            serviceId: "worker-demo",
+            accountId: "space-demo",
+            version: 1,
+            artifactRef: "worker-demo-v1",
+            bundleR2Key: "deployments/worker-demo/1/bundle.js",
+            runtimeConfigSnapshotJson: "{}",
+            targetJson: JSON.stringify({ route_ref: "worker-demo" }),
+            status: "active",
+            routingStatus: "active",
+            routingWeight: 100,
+          },
+          {
+            id: "deployment-demo-v2",
+            serviceId: "worker-demo",
+            accountId: "space-demo",
+            version: 2,
+            artifactRef: "worker-demo-v2",
+            bundleR2Key: "deployments/worker-demo/2/bundle.js",
+            runtimeConfigSnapshotJson: "{}",
+            targetJson: JSON.stringify({ route_ref: "worker-demo" }),
+            status: "active",
+            routingStatus: "active",
+            routingWeight: 100,
+          },
+        ])
+        .run();
       await env.WORKER_BUNDLES?.put(
         "deployments/worker-demo/1/bundle.js",
         `
@@ -1621,7 +1709,8 @@ localBootstrapTest(
         worker: "worker-demo-v1",
       });
 
-      await db.update(services)
+      await db
+        .update(services)
         .set({ activeDeploymentId: "deployment-demo-v2" })
         .where(eq(services.id, "worker-demo"))
         .run();
@@ -1645,9 +1734,9 @@ localBootstrapTest(
       await env.DB.exec(
         "CREATE TABLE IF NOT EXISTS local_check (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
       );
-      await env.DB.prepare("INSERT INTO local_check (value) VALUES (?)").bind(
-        "persisted",
-      ).run();
+      await env.DB.prepare("INSERT INTO local_check (value) VALUES (?)")
+        .bind("persisted")
+        .run();
       await env.HOSTNAME_ROUTING.put("persist.local", "tenant-app");
       await env.TAKOS_OFFLOAD?.put("artifacts/demo.txt", "hello local");
       await env.RUN_QUEUE.send({
@@ -1676,11 +1765,9 @@ localBootstrapTest(
         "tenant-app",
       );
       await assertEquals(
-        await reloaded.TAKOS_OFFLOAD
-          ?.get("artifacts/demo.txt")
-          ?.then((object: { text: () => Promise<string> } | null) =>
-            object?.text()
-          ),
+        await reloaded.TAKOS_OFFLOAD?.get("artifacts/demo.txt")?.then(
+          (object: { text: () => Promise<string> } | null) => object?.text(),
+        ),
         "hello local",
       );
       assertEquals(queueSnapshot.messages.length, 1);

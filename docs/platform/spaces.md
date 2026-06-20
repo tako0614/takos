@@ -2,32 +2,33 @@
 
 > このページでわかること: Space の役割と種類。
 
-Space は Takosumi Account
-の下に作る作業領域です。メンバー、リポジトリ、アプリ、スレッド、
-ファイルをまとめて管理します。
+このページの Space は **Takos product space** です。chat、agent、memory、Git repository、app launcher、MCP tools をまとめる
+Takos 内の作業領域で、Takosumi Space (`@handle` の Capsule owner namespace) とは別概念です。
 
 ```txt
-Takosumi Account
-  ├─ personal Space
-  └─ team / org Space
-        └─ Installation (例: example.notes)
+Takos
+  ├─ user product space
+  ├─ team product space
+  └─ system product space
+        └─ bundled app / user content
 ```
 
-`Account → Space → Installation` の 3 階層になっています。 Installation の詳細は
-[App Installation Ledger](https://takosumi.com/docs/reference/model)
-を参照。
+OpenTofu Capsule Installation の owner namespace は Takosumi Space です。Capsule Installation の詳細は
+[Takosumi model](https://takosumi.com/docs/reference/model) を参照。
 
 ## Space の種類
 
-| kind       | 説明                                             |
-| ---------- | ------------------------------------------------ |
-| `personal` | 個人用 space。ユーザー作成時に自動生成           |
-| `team`     | チーム用 space。複数メンバーで共同利用           |
-| `org`      | 組織用 space。複数 team / 大規模 membership 向け |
-| `system`   | システム管理用 space                             |
+| kind     | 説明                                                                   |
+| -------- | ---------------------------------------------------------------------- |
+| `user`   | 個人用 space。ユーザー作成時に自動生成され、UI では personal と表示する |
+| `team`   | チーム用 space。複数メンバーで共同利用する                             |
+| `system` | システム管理用 space                                                   |
 
-Personal space は `GET /api/me/personal-space` で取得。`slug`
-で一意に識別でき、`/api/spaces/me` で personal space を指す shortcut もある。
+Organization は `SpaceKind` ではなく membership / billing / policy の上位構造です。大規模な組織利用でも、Takos product
+space の kind は `user` / `team` / `system` のいずれかに閉じます。
+
+Personal space は `GET /api/me/personal-space` で取得。`slug` で一意に識別でき、`/api/spaces/me` で personal space を指す
+shortcut もある。
 
 ## Role
 
@@ -65,16 +66,14 @@ Space は親 Takosumi Account の billing account
 に紐づき、プランに応じたクォータが適用される。請求主体は operator account plane (リファレンス実装: Takosumi Accounts)
 / BillingPort であり、Space 単位の usage は Takosumi Account の invoice line
 item として集計される。詳しくは [課金](/platform/billing) と
-[Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
+[Takosumi operator model](https://takosumi.com/docs/reference/operator)
 を参照。
 
 ## 関連ドキュメント
 
-- [Takosumi Accounts](https://github.com/tako0614/takos-ecosystem/blob/master/docs/reference/operator-account-plane-contract.md)
+- [Takosumi operator model](https://takosumi.com/docs/reference/operator)
   — Space の親 account
 - [App Installation Ledger](https://takosumi.com/docs/reference/model)
   — Space に install される Installation の管理台帳
-- [Takosumi Installation Lifecycle](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/installable-app-model.md)
+- [Takosumi Installation Lifecycle](https://takosumi.com/docs/reference/model)
   — Takos が Space に install される形
-- [Runtime Modes](https://github.com/tako0614/takos-ecosystem/blob/master/docs/platform/runtime-modes.md)
-  — Space ごとの runtime mode (shared-cell / dedicated / self-hosted)

@@ -28,8 +28,10 @@ export function normalizeSessionId(
   const value = raw.trim();
   if (!value) return null;
   if (
-    value.length < MIN_SESSION_ID_LENGTH || value.length > MAX_SESSION_ID_LENGTH
-  ) return null;
+    value.length < MIN_SESSION_ID_LENGTH ||
+    value.length > MAX_SESSION_ID_LENGTH
+  )
+    return null;
   if (!SESSION_ID_PATTERN.test(value)) return null;
   return value;
 }
@@ -45,26 +47,29 @@ function isValidSessionUserId(raw: unknown): raw is string {
 function isValidSessionPayload(raw: unknown): raw is Session {
   if (!raw || typeof raw !== "object") return false;
   const value = raw as Partial<Session>;
-  if (
-    typeof value.id !== "string" || normalizeSessionId(value.id) !== value.id
-  ) return false;
+  if (typeof value.id !== "string" || normalizeSessionId(value.id) !== value.id)
+    return false;
   if (!isValidSessionUserId(value.user_id)) return false;
   if (
     typeof value.expires_at !== "number" ||
-    !Number.isFinite(value.expires_at) || value.expires_at <= 0
-  ) return false;
+    !Number.isFinite(value.expires_at) ||
+    value.expires_at <= 0
+  )
+    return false;
   if (
     typeof value.created_at !== "number" ||
-    !Number.isFinite(value.created_at) || value.created_at <= 0
-  ) return false;
+    !Number.isFinite(value.created_at) ||
+    value.created_at <= 0
+  )
+    return false;
   // last_rotated_at is optional. Reject only if explicitly malformed.
   if (
-    value.last_rotated_at !== undefined && (
-      typeof value.last_rotated_at !== "number" ||
+    value.last_rotated_at !== undefined &&
+    (typeof value.last_rotated_at !== "number" ||
       !Number.isFinite(value.last_rotated_at) ||
-      value.last_rotated_at <= 0
-    )
-  ) return false;
+      value.last_rotated_at <= 0)
+  )
+    return false;
   return true;
 }
 
@@ -230,7 +235,7 @@ export async function getSession(
       );
       return null;
     }
-    const payload = await response.json() as { session?: unknown };
+    const payload = (await response.json()) as { session?: unknown };
     if (!payload.session) return null;
     if (!isValidSessionPayload(payload.session)) {
       logWarn("Discarded malformed session payload from SessionDO", {
@@ -313,7 +318,7 @@ export async function getOIDCState(
       );
       return null;
     }
-    const { oidcState } = await response.json() as {
+    const { oidcState } = (await response.json()) as {
       oidcState: OIDCState | null;
     };
     return oidcState;
@@ -386,16 +391,19 @@ export function getSessionIdFromCookie(
 // lets the callback require that the browser completing the flow is the one that
 // initiated it, closing login CSRF / session fixation (state must match cookie).
 //
-// SameSite=Lax (not Strict) is required: the callback is a top-level navigation
-// arriving from the external OIDC issuer, and Strict would drop the cookie on
-// that cross-site redirect. Lax still sends the cookie on top-level GET
+// SameSite=Lax (not Strict) is required because hosted and delegated login flows
+// can complete through a top-level OIDC redirect where Strict would drop the
+// browser-bound state cookie. Lax still sends the cookie on top-level GET
 // navigations while blocking it from cross-site subrequests.
 export const OIDC_STATE_COOKIE_NAME = "__Host-tp_oidc_state";
 
 // Mirror the OAuth `state` charset (generateRandomString -> base64url alphabet).
 const OIDC_STATE_COOKIE_PATTERN = /^[A-Za-z0-9_-]{1,256}$/;
 
-export function setOIDCStateCookie(state: string, maxAgeSeconds: number): string {
+export function setOIDCStateCookie(
+  state: string,
+  maxAgeSeconds: number,
+): string {
   return `${OIDC_STATE_COOKIE_NAME}=${state}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`;
 }
 

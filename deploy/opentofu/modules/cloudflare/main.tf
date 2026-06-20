@@ -39,7 +39,7 @@ locals {
   # one worker because their schemas are namespace-incompatible:
   #   db       — binding DB (product control-plane relational tables)
   #   accounts — binding TAKOSUMI_ACCOUNTS_DB (account-plane document buckets)
-  #   deploy   — binding TAKOS_D1 (deploy-control OpenTofu run ledger)
+  #   deploy   — binding TAKOSUMI_CONTROL_DB (deploy-control OpenTofu run ledger)
   d1_databases = {
     db       = "${var.project_name}-db"
     accounts = "${var.project_name}-accounts"
@@ -71,8 +71,11 @@ locals {
   #   index_jobs      INDEX_QUEUE        | index_jobs_dlq      (DLQ)
   #   workflow        WORKFLOW_QUEUE     | workflow_dlq        (DLQ)
   #   deployment      DEPLOY_QUEUE       | deployment_dlq      (DLQ)
-  #   control_plane   TAKOS_QUEUE              (deploy-control coordination)
-  #   opentofu_runs   RUN_QUEUE (deploy-control OpenTofu dispatch)
+  #
+  # The embedded Takosumi deploy-control plane does not get a separate queue in
+  # the self-host Takos worker. The Takosumi controller falls back to its inline
+  # dispatcher and drives the RUNNER Durable Object directly, while RUN_QUEUE
+  # remains the Takos agent runtime queue.
   queues = {
     runs           = "${var.project_name}-runs"
     index_jobs     = "${var.project_name}-index-jobs"
@@ -82,8 +85,6 @@ locals {
     index_jobs_dlq = "${var.project_name}-index-jobs-dlq"
     workflow_dlq   = "${var.project_name}-workflow-jobs-dlq"
     deployment_dlq = "${var.project_name}-deployment-jobs-dlq"
-    control_plane  = "${var.project_name}-control-plane"
-    opentofu_runs  = "${var.project_name}-opentofu-runs"
   }
 
   kv_namespaces = {
@@ -92,7 +93,7 @@ locals {
   }
 }
 
-# D1 databases — bindings DB, TAKOSUMI_ACCOUNTS_DB, TAKOS_D1
+# D1 databases — bindings DB, TAKOSUMI_ACCOUNTS_DB, TAKOSUMI_CONTROL_DB
 resource "cloudflare_d1_database" "this" {
   for_each   = local.d1_databases
   account_id = var.account_id
@@ -115,7 +116,7 @@ resource "cloudflare_r2_bucket" "this" {
 }
 
 # Queues — bindings RUN_QUEUE, INDEX_QUEUE, WORKFLOW_QUEUE, DEPLOY_QUEUE,
-# TAKOS_QUEUE, RUN_QUEUE, plus the four dead-letter queues
+# plus the four dead-letter queues
 # referenced by the run/index/workflow/deployment consumers in wrangler.toml.
 resource "cloudflare_queue" "this" {
   for_each   = local.queues

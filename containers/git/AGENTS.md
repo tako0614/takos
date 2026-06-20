@@ -1,6 +1,6 @@
-# AGENTS.md — takos-git (Takos Git hosting service)
+# AGENTS.md — takos-git (Git service profile container)
 
-`takos-git` は Takos の **Git hosting service** で、 Git Smart HTTP / repository
+`takos-git` は Takos が消費する **Git service profile container** で、 Git Smart HTTP / repository
 metadata / refs / object storage / source resolution / repository API contracts
 を所有する。 ecosystem sibling の `takosumi` (Git URL / prepared source provenance
 と OpenTofu-native deploy control の canonical implementation) とは別物。
@@ -13,7 +13,7 @@ metadata / refs / object storage / source resolution / repository API contracts
 - repository metadata / refs / object storage
 - source snapshot resolution (Takosumi kernel への source provenance)
 - repository API contracts (signed internal RPC 受け入れ)
-- Takos Git authorization (signed internal actor context の verify)
+- Git service profile authorization (signed internal actor context の verify)
 
 ### 持たない
 

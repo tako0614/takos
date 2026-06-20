@@ -50,8 +50,8 @@ export interface CookieSessionResolverDeps {
  * The `dbBinding`-guard preserves prior behavior: when no SQL binding is
  * configured the revocation check is skipped (there is no blacklist to read).
  */
-export async function resolveCookieSession(
-  c: Context<{ Bindings: Env }>,
+export async function resolveCookieSession<TVariables extends object>(
+  c: Context<{ Bindings: Env; Variables: TVariables }>,
   deps: CookieSessionResolverDeps,
   input: {
     sessionId: string;
@@ -60,7 +60,10 @@ export async function resolveCookieSession(
   },
 ): Promise<SessionResolution> {
   if (input.dbBinding) {
-    const revoked = await deps.isSessionRevoked(input.dbBinding, input.sessionId);
+    const revoked = await deps.isSessionRevoked(
+      input.dbBinding,
+      input.sessionId,
+    );
     if (revoked) return { kind: "revoked" };
   }
 

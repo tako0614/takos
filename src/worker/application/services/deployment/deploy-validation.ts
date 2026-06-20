@@ -11,7 +11,7 @@
  * entry point `runDeployValidations` runs them all and `assertDeployValid`
  * throws if anything failed.
  *
- * Validators implemented (per Takosumi DeploymentOutput docs and
+ * Validators implemented (per Takosumi OutputSnapshot docs and
  * `architecture/app-publications.md`):
  *
  *   1. validateAttachedNotRouteTarget    — `route.target` references an
@@ -30,9 +30,9 @@
  *   6. validatePublicationDefinitions    — publication normalization fails
  *      (`publisher`/`type` mismatch or type-specific field errors).
  *   7. validatePublicationKnownFields    — publication entries only use the
- *      generic route-publication or grant fields.
- * The validators operate on the flat `AppManifest` shape produced by the
- * parser (`compute` / `routes` / `publish` / `env`).
+ *      generic route-publication fields.
+ * The validators operate on the internal `AppManifest` desired-state projection
+ * (`compute` / `routes` / `publish` / `env`).
  */
 import type {
   AppCompute,
@@ -48,18 +48,19 @@ import {
   publicationOutputContract,
   type PublicationOutputDescriptor,
   resolveConsumeOutputEnvName,
+  SERVICE_GRAPH_CAPABILITIES,
 } from "../platform/service-publications.ts";
-import { RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE } from "../identity/takos-access-tokens.ts";
+import { RESERVED_TAKOS_PUBLICATION_MESSAGE } from "../identity/takos-access-tokens.ts";
 import { isDigestPinnedImageRef } from "./image-ref.ts";
 import { normalizeEnvName } from "../common-env/crypto.ts";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
 /**
- * Parsed manifest used by the deploy-time validators.
+ * Parsed desired-state projection used by the deploy-time validators.
  *
- * Aliased to `AppManifest` so the validators can be called with the
- * canonical type emitted by `parseAppManifestYaml` without an extra adapter.
+ * Aliased to `AppManifest` so the validators can be called with the reconciler's
+ * internal projection shape without an extra adapter.
  */
 export type ParsedManifest = AppManifest;
 
@@ -75,7 +76,7 @@ export type ValidationErrorCode =
   | "consume_env_collision"
   | "publication_duplicate"
   | "publication_invalid_definition"
-  | "publication_retired"
+  | "publication_reserved"
   | "publication_unknown_field"
   | "publication_route_mismatch";
 
@@ -114,13 +115,11 @@ function getAttachedContainers(
   manifest: ParsedManifest,
 ): Record<string, AttachedContainerEntry> {
   const out: Record<string, AttachedContainerEntry> = {};
-  for (
-    const [workerName, compute] of Object.entries(getTopLevelCompute(manifest))
-  ) {
+  for (const [workerName, compute] of Object.entries(
+    getTopLevelCompute(manifest),
+  )) {
     if (compute.kind !== "worker") continue;
-    for (
-      const [childName, child] of Object.entries(compute.containers ?? {})
-    ) {
+    for (const [childName, child] of Object.entries(compute.containers ?? {})) {
       const entry = { ...child, parentWorker: workerName, childName };
       out[childName] = entry;
       out[attachedWorkloadName(workerName, childName)] = entry;
@@ -137,12 +136,10 @@ function getPublications(manifest: ParsedManifest): AppPublication[] {
   return manifest.publish ?? [];
 }
 
-const FILE_HANDLER_PUBLICATION_TYPE = "takos.file-handler.v1";
+const FILE_HANDLER_PUBLICATION_TYPE =
+  SERVICE_GRAPH_CAPABILITIES.interfaceFileHandler;
 
-const FILE_HANDLER_SPEC_FIELDS = new Set([
-  "mimeTypes",
-  "extensions",
-]);
+const FILE_HANDLER_SPEC_FIELDS = new Set(["mimeTypes", "extensions"]);
 
 const ALL_HTTP_METHODS = [
   "GET",
@@ -177,8 +174,9 @@ function getComputeEntries(manifest: ParsedManifest): ComputeEntry[] {
 }
 
 function isNativeCloudflareContainer(compute: AppCompute): boolean {
-  return compute.kind === "attached-container" &&
-    !!compute.cloudflare?.container;
+  return (
+    compute.kind === "attached-container" && !!compute.cloudflare?.container
+  );
 }
 
 function isCloudflareDockerfileImage(image: string): boolean {
@@ -207,9 +205,7 @@ function collectPublications(manifest: ParsedManifest): PublicationEntry[] {
   }));
 }
 
-function collectValidatedPublications(
-  manifest: ParsedManifest,
-): {
+function collectValidatedPublications(manifest: ParsedManifest): {
   entries: ValidatedPublicationEntry[];
   errors: ValidationError[];
 } {
@@ -245,16 +241,11 @@ function normalizeConsumeLocalName(consume: {
   return (consume.as ?? consume.publication).trim();
 }
 
-function consumeEnvAliases(
-  consume: AppConsume,
-): Record<string, string> {
+function consumeEnvAliases(consume: AppConsume): Record<string, string> {
   return consume.inject?.env ?? {};
 }
 
-function consumeEnvAliasPath(
-  consumePath: string,
-  outputName: string,
-): string {
+function consumeEnvAliasPath(consumePath: string, outputName: string): string {
   return `${consumePath}.inject.env.${outputName}`;
 }
 
@@ -283,7 +274,8 @@ export function validateAttachedNotRouteTarget(
     if (!target) continue;
     const topEntry = topLevel[target];
     if (
-      topEntry && (topEntry.kind === "worker" || topEntry.kind === "service")
+      topEntry &&
+      (topEntry.kind === "worker" || topEntry.kind === "service")
     ) {
       continue;
     }
@@ -303,7 +295,8 @@ export function validateAttachedNotRouteTarget(
     errors.push({
       code: "route_unknown_target",
       path: `routes[${i}]`,
-      message: `route target '${target}' references unknown compute. Declare ` +
+      message:
+        `route target '${target}' references unknown compute. Declare ` +
         `compute.${target} or point the route at an existing top-level Worker or Service.`,
     });
   }
@@ -353,8 +346,7 @@ export function validateRouteUniqueness(
         errors.push({
           code: "route_duplicate",
           path: `routes[${i}]`,
-          message:
-            `route id '${route.id}' duplicates routes[${previousId}]. Route ids must be unique because publications use routeRef to point at one route.`,
+          message: `route id '${route.id}' duplicates routes[${previousId}]. Route ids must be unique because publications use routeRef to point at one route.`,
         });
       } else {
         byId.set(route.id, i);
@@ -423,21 +415,21 @@ export function validateOnlineDeployImageSources(
       errors.push({
         code: "deploy_image_required",
         path: entry.path,
-        message:
-          `${entry.compute.kind} '${entry.name}' requires a digest-pinned image for online deploy; dockerfile-only workloads are local/private builder manifests.`,
+        message: `${entry.compute.kind} '${entry.name}' requires a digest-pinned image for online deploy; dockerfile-only workloads are local/private builder manifests.`,
       });
       continue;
     }
     if (
       !isDigestPinnedImageRef(image) &&
-      !(isNativeCloudflareContainer(entry.compute) &&
-        isCloudflareDockerfileImage(image))
+      !(
+        isNativeCloudflareContainer(entry.compute) &&
+        isCloudflareDockerfileImage(image)
+      )
     ) {
       errors.push({
         code: "deploy_image_invalid",
         path: `${entry.path}.image`,
-        message:
-          `${entry.compute.kind} '${entry.name}' image must be digest-pinned with @sha256:<64 hex chars> for online deploy, except native Cloudflare containers may point at a repository-relative Dockerfile.`,
+        message: `${entry.compute.kind} '${entry.name}' image must be digest-pinned with @sha256:<64 hex chars> for online deploy, except native Cloudflare containers may point at a repository-relative Dockerfile.`,
       });
     }
   }
@@ -468,8 +460,7 @@ function collectNormalizedEnvNames(
       errors.push({
         code: "env_collision",
         path: `${path}.${name}`,
-        message:
-          `environment variable '${name}' duplicates another env entry after uppercase normalization (${normalized})`,
+        message: `environment variable '${name}' duplicates another env entry after uppercase normalization (${normalized})`,
       });
       continue;
     }
@@ -494,8 +485,7 @@ export function validateLocalEnvNames(
       errors.push({
         code: "env_collision",
         path: `${entry.path}.env`,
-        message:
-          `compute '${entry.name}' defines env '${name}' which already exists in top-level env`,
+        message: `compute '${entry.name}' defines env '${name}' which already exists in top-level env`,
       });
     }
   }
@@ -511,26 +501,29 @@ export function validateConsumeReferences(
   const { entries } = collectValidatedPublications(manifest);
   const publicationMap = new Map(
     entries.flatMap((entry) =>
-      entry.normalized ? [[entry.normalized.name, entry.normalized]] : []
+      entry.normalized ? [[entry.normalized.name, entry.normalized]] : [],
     ),
   );
   for (const entry of getComputeEntries(manifest)) {
     for (const [index, consume] of (entry.compute.consume ?? []).entries()) {
       const publication = publicationMap.get(consume.publication) ?? null;
       if (
-        !publication && isReservedTakosPublicationSource(consume.publication)
+        !publication &&
+        isReservedTakosPublicationSource(consume.publication)
       ) {
         errors.push({
-          code: "publication_retired",
+          code: "publication_reserved",
           path: `${entry.path}.consume[${index}]`,
-          message: RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE,
+          message: RESERVED_TAKOS_PUBLICATION_MESSAGE,
         });
         continue;
       }
       if (!publication) {
         if (
-          entries.some((entry) =>
-            entry.publication.name === consume.publication && !entry.normalized
+          entries.some(
+            (entry) =>
+              entry.publication.name === consume.publication &&
+              !entry.normalized,
           )
         ) {
           continue;
@@ -546,10 +539,11 @@ export function validateConsumeReferences(
         errors.push({
           code: "consume_unknown_output",
           path: consumeEnvAliasPath(consumePath, key),
-          message:
-            `publication '${consume.publication}' does not expose output '${key}'. Known outputs: ${
-              Array.from(outputs).sort().join(", ")
-            }.`,
+          message: `publication '${consume.publication}' does not expose output '${key}'. Known outputs: ${Array.from(
+            outputs,
+          )
+            .sort()
+            .join(", ")}.`,
         });
       }
     }
@@ -566,7 +560,7 @@ export function validateConsumeEnvCollision(
   const { entries } = collectValidatedPublications(manifest);
   const publicationMap = new Map(
     entries.flatMap((entry) =>
-      entry.normalized ? [[entry.normalized.name, entry.normalized]] : []
+      entry.normalized ? [[entry.normalized.name, entry.normalized]] : [],
     ),
   );
   const topLevelEnvNames = collectNormalizedEnvNames(manifest.env, "env").names;
@@ -576,32 +570,28 @@ export function validateConsumeEnvCollision(
       entry.compute.env,
       `${entry.path}.env`,
     ).names;
-    const seen = new Set<string>([
-      ...topLevelEnvNames,
-      ...localEnvNames,
-    ]);
+    const seen = new Set<string>([...topLevelEnvNames, ...localEnvNames]);
     for (const [index, consume] of (entry.compute.consume ?? []).entries()) {
       const publication = publicationMap.get(consume.publication) ?? null;
       if (
-        !publication && isReservedTakosPublicationSource(consume.publication)
+        !publication &&
+        isReservedTakosPublicationSource(consume.publication)
       ) {
         continue;
       }
       if (!publication) continue;
-      for (
-        const output of selectedConsumeOutputs(
-          consume,
-          publicationOutputContract(publication),
-        )
-      ) {
+      for (const output of selectedConsumeOutputs(
+        consume,
+        publicationOutputContract(publication),
+      )) {
         const envName = resolveConsumeOutputEnvName(consume, output);
         if (seen.has(envName)) {
           errors.push({
             code: "consume_env_collision",
             path: `${entry.path}.consume[${index}]`,
-            message: `consume '${
-              normalizeConsumeLocalName(consume)
-            }' resolves env '${envName}' which already exists in compute '${entry.name}'. Pick a different alias or remove the conflicting env/bind.`,
+            message: `consume '${normalizeConsumeLocalName(
+              consume,
+            )}' resolves env '${envName}' which already exists in compute '${entry.name}'. Pick a different alias or remove the conflicting env/bind.`,
           });
           continue;
         }
@@ -649,9 +639,10 @@ export function validatePublicationUniqueness(
         errors.push({
           code: "publication_duplicate",
           path: `publish[${index}]`,
-          message: `route publication target/path '${
-            routeKey.replace("\0", " ")
-          }' duplicates publish[${previousRoutePublication}]`,
+          message: `route publication target/path '${routeKey.replace(
+            "\0",
+            " ",
+          )}' duplicates publish[${previousRoutePublication}]`,
         });
         continue;
       }
@@ -671,9 +662,9 @@ export function validatePublicationRouteMatches(
     const publication = entry.normalized;
     if (!publication) continue;
     const target = publication.publisher;
-    for (
-      const [outputName, output] of Object.entries(publication.outputs ?? {})
-    ) {
+    for (const [outputName, output] of Object.entries(
+      publication.outputs ?? {},
+    )) {
       const routeRef = output.routeRef?.trim();
       if (!routeRef) continue;
       const matches = routes.filter((route) => route.id === routeRef);
@@ -681,8 +672,7 @@ export function validatePublicationRouteMatches(
         errors.push({
           code: "publication_route_mismatch",
           path: `${entry.path}.outputs.${outputName}.routeRef`,
-          message:
-            `route publication '${publication.name}' routeRef '${routeRef}' does not match any route id`,
+          message: `route publication '${publication.name}' routeRef '${routeRef}' does not match any route id`,
         });
         continue;
       }
@@ -691,8 +681,7 @@ export function validatePublicationRouteMatches(
         errors.push({
           code: "publication_route_mismatch",
           path: `${entry.path}.outputs.${outputName}.routeRef`,
-          message:
-            `route publication '${publication.name}' publisher '${target}' does not match routeRef '${routeRef}' target '${route.target}'`,
+          message: `route publication '${publication.name}' publisher '${target}' does not match routeRef '${routeRef}' target '${route.target}'`,
         });
       }
     }
@@ -725,7 +714,7 @@ export function validatePublicationKnownFields(
 
 function asSpecRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -738,15 +727,13 @@ function specAllowedFieldsForPublication(
   return null;
 }
 
-function validateUnknownSpecKeys(
-  params: {
-    publicationName: string;
-    path: string;
-    spec: Record<string, unknown>;
-    allowed: ReadonlySet<string>;
-    label?: string;
-  },
-): ValidationError[] {
+function validateUnknownSpecKeys(params: {
+  publicationName: string;
+  path: string;
+  spec: Record<string, unknown>;
+  allowed: ReadonlySet<string>;
+  label?: string;
+}): ValidationError[] {
   const errors: ValidationError[] = [];
   for (const key of Object.keys(params.spec)) {
     if (params.allowed.has(key)) continue;
@@ -809,11 +796,12 @@ export function runDeployValidations(
 
 export function formatValidationErrors(errors: ValidationError[]): string {
   if (errors.length === 0) return "";
-  const header = errors.length === 1
-    ? "Deploy validation failed:"
-    : `Deploy validation failed (${errors.length} errors):`;
-  const lines = errors.map((err) =>
-    `  - [${err.code}] ${err.path}: ${err.message}`
+  const header =
+    errors.length === 1
+      ? "Deploy validation failed:"
+      : `Deploy validation failed (${errors.length} errors):`;
+  const lines = errors.map(
+    (err) => `  - [${err.code}] ${err.path}: ${err.message}`,
   );
   return [header, ...lines].join("\n");
 }

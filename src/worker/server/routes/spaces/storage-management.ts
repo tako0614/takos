@@ -26,9 +26,11 @@ import {
 } from "./storage-operations.ts";
 import {
   buildPublicUrl,
+  isPublicationType,
   listPublications,
   type PublicationRecord,
   publicationResolvedUrl,
+  SERVICE_GRAPH_CAPABILITIES,
 } from "../../../application/services/platform/service-publications.ts";
 
 export const storageManagementRouteDeps = {
@@ -48,7 +50,7 @@ export function buildFileHandlerOpenUrl(
   openPath: string,
   fileId: string,
 ): string {
-  if (!fileHandlerPathHasIdTemplate(openPath)) {
+  if (!interfaceFileHandlerPathHasIdTemplate(openPath)) {
     throw new Error("FileHandler path must include :id");
   }
   return buildPublicUrl(serviceHostname, openPath, { id: fileId });
@@ -64,7 +66,7 @@ export type ProjectedFileHandler = {
   open_url: string;
 };
 
-export function fileHandlerPathHasIdTemplate(
+export function interfaceFileHandlerPathHasIdTemplate(
   path: string | undefined,
 ): boolean {
   return (
@@ -91,10 +93,13 @@ export function projectFileHandlerPublication(
   idx: number,
 ): ProjectedFileHandler | null {
   if (
-    record.publicationType !== "FileHandler" &&
-    record.publicationType !== "takos.file-handler.v1"
-  )
+    !isPublicationType(
+      record.publicationType,
+      SERVICE_GRAPH_CAPABILITIES.interfaceFileHandler,
+    )
+  ) {
     return null;
+  }
   const openUrl = publicationResolvedUrl(record);
   if (!openUrl) return null;
   const path = (() => {
@@ -104,7 +109,7 @@ export function projectFileHandlerPublication(
       return undefined;
     }
   })();
-  if (!fileHandlerPathHasIdTemplate(path)) return null;
+  if (!interfaceFileHandlerPathHasIdTemplate(path)) return null;
 
   const spec = record.publication.spec ?? {};
   const mimeTypes = readStringList(spec.mimeTypes).map((value) =>

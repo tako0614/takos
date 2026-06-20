@@ -1,4 +1,5 @@
 import type { AppManifest } from "./app-manifest-types.ts";
+import { APP_DEPLOYMENT_OUTPUT_KEYS } from "./app-interface-contract.ts";
 import { parseAppManifestObject } from "./app-manifest-parser/index.ts";
 
 type JsonValue =
@@ -19,10 +20,7 @@ type OpenTofuOutput = {
 
 type OpenTofuOutputs = Record<string, OpenTofuOutput>;
 
-const APP_MANIFEST_OUTPUT_KEYS = [
-  "takos_app_manifest",
-  "takos_app",
-] as const;
+const APP_MANIFEST_OUTPUT_KEYS = APP_DEPLOYMENT_OUTPUT_KEYS;
 
 function isJsonRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -58,7 +56,9 @@ function selectAppManifestOutput(
     const output = outputs[key];
     if (!output) continue;
     if (output.sensitive) {
-      throw new Error(`${source}.${key} must not be a sensitive OpenTofu output`);
+      throw new Error(
+        `${source}.${key} must not be a sensitive OpenTofu output`,
+      );
     }
     if (output.value == null) {
       throw new Error(`${source}.${key}.value is required`);
@@ -86,20 +86,17 @@ export function parseOpenTofuAppManifestOutputs(
 export function selectInstallableSourcePathFromRepo(
   entries: ReadonlyArray<string>,
 ): string | null {
-  for (
-    const candidate of [
-      "main.tf",
-      "outputs.tf",
-      "takos.tf",
-      "opentofu/main.tf",
-      "opentofu/outputs.tf",
-      "infra/main.tf",
-      "infra/outputs.tf",
-    ]
-  ) {
+  for (const candidate of [
+    "main.tf",
+    "outputs.tf",
+    "takos.tf",
+    "opentofu/main.tf",
+    "opentofu/outputs.tf",
+    "infra/main.tf",
+    "infra/outputs.tf",
+  ]) {
     if (entries.includes(candidate)) return candidate;
   }
-  if (entries.includes("package.json")) return "package.json";
   return null;
 }
 

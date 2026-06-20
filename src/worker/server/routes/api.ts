@@ -10,8 +10,6 @@ import spacesBase from "./spaces/routes.ts";
 import spacesMembers from "./spaces/members.ts";
 import spacesRepos from "./spaces/repositories.ts";
 import spacesStorage from "./spaces/storage.ts";
-import spacesStores from "./spaces/stores.ts";
-import spacesStoreRegistry from "./spaces/store-registry.ts";
 import spacesTools from "./spaces/tools.ts";
 import seedRepositories from "./seed-repositories.ts";
 import threads from "./threads.ts";
@@ -27,7 +25,6 @@ import sessions from "./sessions/index.ts";
 import repos from "./repos/index.ts";
 import pullRequests from "./pull-requests/index.ts";
 import notifications from "./notifications/index.ts";
-import { profilesApi } from "./profiles/index.ts";
 import { registerAppApiRoutes } from "./apps/index.ts";
 import shortcuts, { shortcutGroupRoutes } from "./shortcuts/index.ts";
 import me from "./me/index.ts";
@@ -35,7 +32,6 @@ import setup from "./setup.ts";
 import agentTasks from "./agent-tasks/index.ts";
 import authApi from "./auth-api.ts";
 import publicShare from "./public-share/index.ts";
-import publicStores from "./public-store/index.ts";
 import mcpRoutes from "./mcp/index.ts";
 import groupsRouter from "./groups.ts";
 import appInstallationsRouter from "./app-installations.ts";
@@ -156,8 +152,6 @@ function requiredApiScopesForRequest(
     isSpaceScopedFamily(pathname, "search") ||
     isSpaceScopedFamily(pathname, "index") ||
     isSpaceScopedFamily(pathname, "graph") ||
-    isSpaceScopedFamily(pathname, "stores") ||
-    isSpaceScopedFamily(pathname, "store-registry") ||
     isSpaceScopedFamily(pathname, "tools") ||
     isSpaceScopedFamily(pathname, "services") ||
     isSpaceScopedFamily(pathname, "skills") ||
@@ -261,13 +255,9 @@ export function createApiRouter({
   // 3. Public / optional-auth routes
   // ================================================================
 
-  apiRouter.use("/users/*", optionalAuth);
-  apiRouter.route("/users", profilesApi);
-
   // Public share routes (no auth required)
   // Note: share views are read-only and sanitized by default.
   apiRouter.route("/public", publicShare);
-  apiRouter.route("/public/stores", publicStores);
 
   // MCP management routes (authenticated)
   apiRouter.use("/mcp/servers", scopedApiAuth);
@@ -341,8 +331,6 @@ export function createApiRouter({
   apiRouter.route("/spaces", spacesMembers);
   apiRouter.route("/spaces", spacesRepos);
   apiRouter.route("/spaces", spacesStorage);
-  apiRouter.route("/spaces", spacesStores);
-  apiRouter.route("/spaces", spacesStoreRegistry);
   apiRouter.route("/spaces", spacesTools);
   apiRouter.route("/spaces", workersSpaceRoutes);
   apiRouter.route("/", seedRepositories);
@@ -364,7 +352,7 @@ export function createApiRouter({
   apiRouter.route("/", agentTasks); // Agent task routes
   apiRouter.route("/", notifications); // Notifications routes at /api/notifications
   apiRouter.route("/notifications", createNotificationSseRouter()); // SSE route at /api/notifications/sse (Node.js WebSocket alternative)
-  apiRouter.route("/events", createEventsRouter()); // SSE route at /api/events for space lifecycle events (auth handled internally)
+  apiRouter.route("/events", createEventsRouter()); // SSE route at /api/events for space lifecycle events (auth handled internally). NOTE: subscribe side is wired; the group lifecycle producer (emitGroupLifecycleEvent) is not yet called from the deploy engine, so the stream is currently empty — see events/routes.ts.
   apiRouter.route("/", pullRequests); // Pull request routes for code review
   apiRouter.route("/", appInstallationsRouter); // Installation-backed app install routes
   apiRouter.route("/", groupsRouter); // Read-only runtime group inventory at /api/spaces/:id/groups
@@ -373,7 +361,6 @@ export function createApiRouter({
   // ================================================================
   apiRouter.use("/auth/me", scopedApiAuth);
   apiRouter.use("/auth/setup-password", scopedApiAuth);
-  apiRouter.use("/auth/setup-username", scopedApiAuth);
   apiRouter.use("/auth/profile", scopedApiAuth);
   apiRouter.use("/auth/logout", scopedApiAuth);
   apiRouter.route("/auth", authApi);

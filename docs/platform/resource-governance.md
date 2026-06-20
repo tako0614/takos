@@ -71,13 +71,13 @@ agent 系では次の制限も併用します。
 ## Usage / billing データモデル
 
 Takos app は app-local の usage を記録し、課金主体は Takosumi Accounts
-(`billing.primary.default`) に置きます。Takos app
+(`takosumi.billing.usage`) に置きます。Takos app
 側の主なテーブルは次のとおりです。
 
 - `app_usage_events`
 - `app_usage_rollups`
 
-billing の所有者は Takosumi Accounts の `billing.primary.default` BillingPort
+billing の所有者は Takosumi Accounts の `takosumi.billing.usage` BillingPort
 です。 Takos app は usage イベントを記録し、billing API は Accounts
 側が提供します。
 

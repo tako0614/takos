@@ -9,10 +9,6 @@ export const auth = {
   // Initial Setup Page
   setupWelcome: "Takos へようこそ",
   setupAccountSubtitle: "アカウントを設定しましょう",
-  username: "ユーザー名",
-  usernamePlaceholder: "username",
-  usernameTooShort: "ユーザー名は3文字以上必要です",
-  failedToCheckUsername: "ユーザー名の確認に失敗しました",
   settingUp: "設定中...",
   continue: "続行",
 

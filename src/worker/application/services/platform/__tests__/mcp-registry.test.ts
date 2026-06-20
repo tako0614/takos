@@ -1,10 +1,15 @@
 import { test } from "bun:test";
-import { assertEquals, assertRejects, assertStringIncludes } from "@takos/test/assert";
+import {
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from "@takos/test/assert";
 import { stub } from "@takos/test/mock";
 
 import {
   listMcpServers,
   registerExternalMcpServer,
+  resolvePublicationMcpServerAccessToken,
   updateMcpServer,
 } from "../mcp/crud.ts";
 import { mcpRemoveServerHandler } from "../../../tools/custom/mcp.ts";
@@ -75,14 +80,14 @@ function publicationRow(overrides: Record<string, unknown> = {}) {
     accountId: "space_1",
     groupId: null,
     ownerServiceId: "svc_1",
-    sourceType: "manifest",
+    sourceType: "service_graph",
     name: "shared-mcp",
     catalogName: null,
-    publicationType: "McpServer",
+    publicationType: "protocol.mcp.server",
     specJson: JSON.stringify({
       name: "shared-mcp",
       publisher: "web",
-      type: "McpServer",
+      type: "protocol.mcp.server",
       outputs: { url: { kind: "url", routeRef: "mcp" } },
     }),
     resolvedJson: JSON.stringify({
@@ -154,10 +159,12 @@ test("updateMcpServer rejects rename collisions with published MCP servers", asy
 
 test("listMcpServers keeps publication and external MCP rows visible", async () => {
   const servers = await listMcpServers(
-    (makeMcpEnv({
-      mcpServers: [externalRow()],
-      publications: [publicationRow()],
-    }) as Env).DB,
+    (
+      makeMcpEnv({
+        mcpServers: [externalRow()],
+        publications: [publicationRow()],
+      }) as Env
+    ).DB,
     "space_1",
   );
 
@@ -168,6 +175,86 @@ test("listMcpServers keeps publication and external MCP rows visible", async () 
       ["publication:pub_1", "shared-mcp", "publication"],
       ["srv_1", "shared-mcp", "external"],
     ],
+  );
+});
+
+test("listMcpServers marks bearer-auth MCP publications", async () => {
+  const servers = await listMcpServers(
+    (
+      makeMcpEnv({
+        mcpServers: [],
+        publications: [
+          publicationRow({
+            specJson: JSON.stringify({
+              name: "shared-mcp",
+              publisher: "web",
+              type: "protocol.mcp.server",
+              outputs: { url: { kind: "url", routeRef: "mcp" } },
+              auth: { bearer: { secretRef: "MCP_TOKEN" } },
+            }),
+          }),
+        ],
+      }) as Env
+    ).DB,
+    "space_1",
+  );
+
+  assertEquals(servers.length, 1);
+  assertEquals(servers[0]?.id, "publication:pub_1");
+  assertEquals(servers[0]?.authMode, "bearer_token");
+});
+
+test("listMcpServers marks v1 bearer-auth MCP publications", async () => {
+  const servers = await listMcpServers(
+    (
+      makeMcpEnv({
+        mcpServers: [],
+        publications: [
+          publicationRow({
+            specJson: JSON.stringify({
+              name: "shared-mcp",
+              publisher: "web",
+              type: "protocol.mcp.server",
+              outputs: { url: { kind: "url", routeRef: "mcp" } },
+              auth: { kind: "bearer", secretRef: "MCP_TOKEN" },
+            }),
+          }),
+        ],
+      }) as Env
+    ).DB,
+    "space_1",
+  );
+
+  assertEquals(servers.length, 1);
+  assertEquals(servers[0]?.id, "publication:pub_1");
+  assertEquals(servers[0]?.authMode, "bearer_token");
+});
+
+test("resolvePublicationMcpServerAccessToken rejects dangling bearer-auth publications", async () => {
+  const env = makeMcpEnv({
+    mcpServers: [],
+    publications: [
+      publicationRow({
+        ownerServiceId: null,
+        specJson: JSON.stringify({
+          name: "shared-mcp",
+          publisher: "web",
+          type: "protocol.mcp.server",
+          outputs: { url: { kind: "url", routeRef: "mcp" } },
+          auth: { bearer: { secretRef: "MCP_TOKEN" } },
+        }),
+      }),
+    ],
+  }) as Env;
+
+  await assertRejects(
+    () =>
+      resolvePublicationMcpServerAccessToken(env.DB, env, {
+        spaceId: "space_1",
+        serverId: "publication:pub_1",
+    }),
+    Error,
+    "declares bearer auth secretRef but has no owner service",
   );
 });
 
@@ -199,10 +286,12 @@ test("loadMcpTools keeps same-name publication and external servers distinct", a
 
   try {
     const result = await loadMcpTools(
-      (makeMcpEnv({
-        mcpServers: [externalRow()],
-        publications: [publicationRow()],
-      }) as Env).DB,
+      (
+        makeMcpEnv({
+          mcpServers: [externalRow()],
+          publications: [publicationRow()],
+        }) as Env
+      ).DB,
       "space_1",
       {
         DB: makeDb({
@@ -218,7 +307,10 @@ test("loadMcpTools keeps same-name publication and external servers distinct", a
     assertEquals(result.tools.size, 2);
     const keys = Array.from(result.tools.keys());
     assertEquals(keys.includes("ping"), true);
-    assertEquals(keys.some((key) => key !== "ping"), true);
+    assertEquals(
+      keys.some((key) => key !== "ping"),
+      true,
+    );
     const publicationTool = result.tools.get("ping")?.definition;
     const externalTool = result.tools.get("shared-mcp__ping")?.definition;
     assertEquals(publicationTool?.namespace, "mcp");

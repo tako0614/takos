@@ -9,7 +9,7 @@ import { useReposData } from "../../hooks/useReposData.ts";
 
 interface ReposPanelProps {
   spaceId: string;
-  onNavigateToRepo?: (username: string, repoName: string) => void;
+  onNavigateToRepo?: (spaceId: string, repoId: string) => void;
 }
 
 export function ReposPanel(props: ReposPanelProps) {
@@ -40,10 +40,10 @@ export function ReposPanel(props: ReposPanelProps) {
   });
 
   const handleSelectRepo = (
-    repo: { owner?: { username?: string | null } | null; name: string },
+    repo: { id: string },
   ) => {
-    if (repo?.owner?.username && repo.name) {
-      props.onNavigateToRepo?.(repo.owner.username, repo.name);
+    if (repo?.id) {
+      props.onNavigateToRepo?.(props.spaceId, repo.id);
     }
   };
 

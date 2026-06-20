@@ -1,4 +1,8 @@
 export const storage = {
+  // Editor — unsaved changes guard
+  unsavedChangesTitle: "Unsaved changes",
+  unsavedChangesMessage: "Closing will discard your edits.",
+  discardChanges: "Discard changes",
   // File Browser
   upload: "Upload",
   newFolder: "New Folder",

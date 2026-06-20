@@ -2,9 +2,26 @@ import type { AgentExecutorControlConfig } from "./executor-dispatch.ts";
 import { base64UrlEncode } from "../../shared/utils/encoding-utils.ts";
 import { logError, logWarn } from "../../shared/utils/logger.ts";
 
+/**
+ * Default remote-tool allowlist for the bundled Takos distribution. The agent
+ * container fails closed when `TAKOS_AGENT_TOOL_ALLOWLIST` is unset (no remote
+ * tool runs), so without a default the agent ships unable to read/write files,
+ * exec, fetch, or touch repos out of the box. The remote tools are all
+ * first-party Takos tools served by the same control plane, so the product
+ * default is "all first-party tools" (`*`); operators can narrow this by
+ * setting the env to an explicit comma-separated list.
+ */
+export const DEFAULT_AGENT_TOOL_ALLOWLIST = "*";
+
 export interface AgentExecutorProxyConfigEnv {
   TAKOS_AGENT_CONTROL_RPC_BASE_URL?: string;
   TAKOS_AGENT_START_TOKEN?: string;
+  /**
+   * Comma-separated remote-tool allowlist forwarded to the agent container as
+   * `TAKOS_AGENT_TOOL_ALLOWLIST`. `*` allows every first-party tool. When unset
+   * the bundled distribution falls back to {@link DEFAULT_AGENT_TOOL_ALLOWLIST}.
+   */
+  TAKOS_AGENT_TOOL_ALLOWLIST?: string;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
@@ -77,6 +94,12 @@ export function buildAgentExecutorContainerEnvVars(
   const vars: AgentExecutorContainerEnvVars = {
     TAKOS_AGENT_CONTROL_RPC_BASE_URL: env.TAKOS_AGENT_CONTROL_RPC_BASE_URL ||
       "",
+    // Operator-configured allowlist wins; otherwise the bundled distribution
+    // ships with first-party tools enabled so the agent is usable out of the
+    // box. The container still fails closed if this resolves to empty.
+    TAKOS_AGENT_TOOL_ALLOWLIST:
+      (env.TAKOS_AGENT_TOOL_ALLOWLIST ?? "").trim() ||
+      DEFAULT_AGENT_TOOL_ALLOWLIST,
   };
   copyOptionalEnvVar(
     vars,

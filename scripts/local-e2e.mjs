@@ -267,7 +267,7 @@ async function main() {
     `takos-e2e-${Date.now()}-${runtime.pid}`,
   );
   const envFile = env('TAKOS_LOCAL_ENV_FILE', '.env.local.example');
-  const gitRepositoryHostRoot = await runtime.makeTempDir({
+  const sourceRepositoryHostRoot = await runtime.makeTempDir({
     prefix: 'takos-git-repositories-',
   });
   const ports = await selectPorts();
@@ -279,21 +279,21 @@ async function main() {
     TAKOS_INTERNAL_API_SECRET: env('TAKOS_INTERNAL_API_SECRET', secret),
     TAKOSUMI_INTERNAL_API_SECRET: env('TAKOSUMI_INTERNAL_API_SECRET', secret),
     TAKOS_ALLOW_NO_LLM: env('TAKOS_ALLOW_NO_LLM', '1'),
-    TAKOS_GIT_REPOSITORY_HOST_ROOT: gitRepositoryHostRoot,
+    TAKOS_GIT_REPOSITORY_HOST_ROOT: sourceRepositoryHostRoot,
   };
   const composeArgs = composeBaseArgs(project, envFile);
   const keepStack = runtime.env.get('TAKOS_LOCAL_E2E_KEEP_STACK') === '1';
   let started = false;
 
   console.log(`[local-e2e] project=${project}`);
-  console.log(`[local-e2e] gitRepositoryHostRoot=${gitRepositoryHostRoot}`);
+  console.log(`[local-e2e] sourceRepositoryHostRoot=${sourceRepositoryHostRoot}`);
   console.log(
     `[local-e2e] ports worker=${ports.TAKOS_WORKER_PORT} takosumi=${ports.TAKOSUMI_PORT} agent=${ports.TAKOS_AGENT_PORT} git=${ports.TAKOS_GIT_PORT}`,
   );
 
   try {
-    await seedGitRepository(gitRepositoryHostRoot);
-    await makeTreeWritableForContainer(gitRepositoryHostRoot);
+    await seedGitRepository(sourceRepositoryHostRoot);
+    await makeTreeWritableForContainer(sourceRepositoryHostRoot);
 
     const config = await runDocker([...composeArgs, 'config', '--services'], {
       env: commandEnv,
@@ -344,15 +344,15 @@ async function main() {
         { check: false, env: commandEnv, timeoutMs: 120_000 },
       );
       console.log('[local-e2e] compose stack cleaned up');
-      await runtime.remove(gitRepositoryHostRoot, { recursive: true });
+      await runtime.remove(sourceRepositoryHostRoot, { recursive: true });
       console.log('[local-e2e] git repository seed cleaned up');
     } else if (started) {
       console.log('[local-e2e] keeping compose stack for inspection');
       console.log(
-        `[local-e2e] keeping git repository seed at ${gitRepositoryHostRoot}`,
+        `[local-e2e] keeping git repository seed at ${sourceRepositoryHostRoot}`,
       );
     } else {
-      await runtime.remove(gitRepositoryHostRoot, { recursive: true });
+      await runtime.remove(sourceRepositoryHostRoot, { recursive: true });
     }
   }
 }

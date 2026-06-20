@@ -3,6 +3,10 @@ import type {
   AppPublicationOutput,
 } from "../app-manifest-types.ts";
 import {
+  TAKOS_APP_AUTH_KINDS,
+  TAKOS_APP_PUBLICATION_TYPES,
+} from "../app-interface-contract.ts";
+import {
   asOptionalInteger,
   asRecord,
   asRequiredString,
@@ -20,18 +24,10 @@ const PUBLICATION_FIELDS = new Set([
   "spec",
 ]);
 
-const STANDARD_PUBLICATION_TYPES: Record<string, string> = {
-  McpServer: "takos.mcp-server.v1",
-  FileHandler: "takos.file-handler.v1",
-  UiSurface: "takos.ui-surface.v1",
-};
+const FILE_HANDLER_PUBLICATION_TYPE =
+  TAKOS_APP_PUBLICATION_TYPES.interfaceFileHandler;
 
-const FILE_HANDLER_PUBLICATION_TYPE = "takos.file-handler.v1";
-
-const FILE_HANDLER_SPEC_FIELDS = new Set([
-  "mimeTypes",
-  "extensions",
-]);
+const FILE_HANDLER_SPEC_FIELDS = new Set(["mimeTypes", "extensions"]);
 
 const OUTPUT_FIELDS = new Set(["kind", "routeRef"]);
 const DISPLAY_FIELDS = new Set([
@@ -42,6 +38,7 @@ const DISPLAY_FIELDS = new Set([
   "sortOrder",
 ]);
 const AUTH_FIELDS = new Set(["bearer"]);
+const AUTH_V2_FIELDS = new Set(["kind", "secretRef", "bearer"]);
 const AUTH_BEARER_FIELDS = new Set(["secretRef"]);
 const OUTPUT_KINDS = new Set(["url", "string", "secret"]);
 
@@ -68,10 +65,6 @@ function parseOptionalSpec(
     throw new Error(`${prefix}.spec must be an object`);
   }
   return value as Record<string, unknown>;
-}
-
-function canonicalPublicationType(type: string): string {
-  return STANDARD_PUBLICATION_TYPES[type] ?? type;
 }
 
 function parseOptionalDisplay(
@@ -108,15 +101,52 @@ function parseOptionalAuth(
 ): AppPublication["auth"] | undefined {
   if (value == null) return undefined;
   const record = asRecord(value);
-  assertAllowedFields(record, `${prefix}.auth`, AUTH_FIELDS);
-  if (record.bearer == null) return undefined;
+  assertAllowedFields(record, `${prefix}.auth`, AUTH_V2_FIELDS);
+  if (record.bearer != null) {
+    if (record.kind != null || record.secretRef != null) {
+      throw new Error(
+        `${prefix}.auth must use either kind/secretRef or bearer.secretRef, not both`,
+      );
+    }
+    assertAllowedFields(record, `${prefix}.auth`, AUTH_FIELDS);
+  }
+  if (record.bearer == null) {
+    const kind = asString(record.kind, `${prefix}.auth.kind`);
+    if (!kind) {
+      if (record.secretRef != null) {
+        throw new Error(
+          `${prefix}.auth.kind is required when auth.secretRef is set`,
+        );
+      }
+      return undefined;
+    }
+    if (
+      kind !== TAKOS_APP_AUTH_KINDS.bearer &&
+      kind !== TAKOS_APP_AUTH_KINDS.takosOidc
+    ) {
+      throw new Error(`${prefix}.auth.kind must be bearer or takos_oidc`);
+    }
+    if (kind === TAKOS_APP_AUTH_KINDS.takosOidc) {
+      if (record.secretRef != null) {
+        throw new Error(
+          `${prefix}.auth.secretRef is only supported when auth.kind is bearer`,
+        );
+      }
+      return { kind: TAKOS_APP_AUTH_KINDS.takosOidc };
+    }
+    const secretRef = asRequiredString(
+      record.secretRef,
+      `${prefix}.auth.secretRef`,
+    );
+    return { kind: TAKOS_APP_AUTH_KINDS.bearer, secretRef };
+  }
   const bearer = asRecord(record.bearer);
   assertAllowedFields(bearer, `${prefix}.auth.bearer`, AUTH_BEARER_FIELDS);
   const secretRef = asRequiredString(
     bearer.secretRef,
     `${prefix}.auth.bearer.secretRef`,
   );
-  return { bearer: { secretRef } };
+  return { kind: TAKOS_APP_AUTH_KINDS.bearer, secretRef };
 }
 
 function parsePublicationOutputs(
@@ -171,7 +201,7 @@ function validateFileHandlerPublication(
 
   if ((mimeTypes?.length ?? 0) === 0 && (extensions?.length ?? 0) === 0) {
     throw new Error(
-      `${prefix}.spec.mimeTypes or ${prefix}.spec.extensions is required for FileHandler`,
+      `${prefix}.spec.mimeTypes or ${prefix}.spec.extensions is required for interface.file.handler`,
     );
   }
   if (spec) {
@@ -206,16 +236,17 @@ export function parsePublicationEntry(
   const rawType = partial
     ? asString(record.type, `${prefix}.type`)
     : asRequiredString(record.type, `${prefix}.type`);
-  const type = rawType != null ? canonicalPublicationType(rawType) : undefined;
+  const type = rawType ?? undefined;
   const publisher = asString(record.publisher, `${prefix}.publisher`);
   if (publisher === "takos") {
     throw new Error(
-      `${prefix}.publisher 'takos' is not supported in app manifests; use AppGrant/AppBinding credentials from Takosumi Accounts instead`,
+      `${prefix}.publisher 'takos' is not supported in Capsule desired-state projections; use ServiceBinding and ServiceGrant for runtime authority instead`,
     );
   }
-  const outputs = partial && record.outputs == null
-    ? undefined
-    : parsePublicationOutputs(prefix, record.outputs);
+  const outputs =
+    partial && record.outputs == null
+      ? undefined
+      : parsePublicationOutputs(prefix, record.outputs);
   const display = parseOptionalDisplay(prefix, record.display);
   const spec = parseOptionalSpec(prefix, record.spec);
   const auth = parseOptionalAuth(prefix, record.auth);
@@ -273,7 +304,7 @@ export function parsePublish(
     throw new Error(`${field} must be an array`);
   }
   const entries = raw.map((entry, index) =>
-    parsePublicationEntry(index, entry, { prefixBase: field })
+    parsePublicationEntry(index, entry, { prefixBase: field }),
   );
   validateUniqueness(entries);
   return entries;
@@ -295,6 +326,6 @@ export function parsePublishOverride(raw: unknown): AppPublication[] {
     parsePublicationEntry(index, entry, {
       partial: true,
       prefixBase: "overrides.publish",
-    })
+    }),
   );
 }

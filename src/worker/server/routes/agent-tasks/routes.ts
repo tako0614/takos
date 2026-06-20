@@ -43,8 +43,7 @@ const CUSTOM_TOOL_NAMES = filterAgentAllowedToolNames(
   CUSTOM_TOOLS.map((tool) => tool.name),
 );
 
-
-export type AgentTaskRouteStatus = typeof VALID_STATUSES[number];
+export type AgentTaskRouteStatus = (typeof VALID_STATUSES)[number];
 
 export function isTerminalAgentTaskStatus(
   status: AgentTaskRouteStatus | null | undefined,
@@ -76,18 +75,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       maxLimit: 200,
     });
 
-    const access = await checkSpaceAccess(
-      c.env.DB,
-      spaceId,
-      user.id,
-    );
+    const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
     if (!access) {
       throw new NotFoundError("Workspace");
     }
 
     if (
       status &&
-      !VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])
+      !VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])
     ) {
       throw new BadRequestError("Invalid status");
     }
@@ -97,7 +92,9 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     if (status) {
       conditions.push(eq(agentTasks.status, status));
     }
-    const results = await db.select().from(agentTasks)
+    const results = await db
+      .select()
+      .from(agentTasks)
       .where(and(...conditions))
       .orderBy(desc(agentTasks.updatedAt))
       .limit(limit)
@@ -130,12 +127,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const spaceId = c.req.param("spaceId");
       const body = c.req.valid("json");
 
-      const access = await checkSpaceAccess(
-        c.env.DB,
-        spaceId,
-        user.id,
-        ["owner", "admin", "editor"],
-      );
+      const access = await checkSpaceAccess(c.env.DB, spaceId, user.id, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
       if (!access) {
         throw new NotFoundError("Workspace");
       }
@@ -160,13 +156,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
       let threadId = body.thread_id ?? null;
       if (threadId) {
-        const thread = await db.select({ id: threads.id }).from(threads)
-          .where(
-            and(
-              eq(threads.id, threadId),
-              eq(threads.accountId, spaceId),
-            ),
-          ).get();
+        const thread = await db
+          .select({ id: threads.id })
+          .from(threads)
+          .where(and(eq(threads.id, threadId), eq(threads.accountId, spaceId)))
+          .get();
         if (!thread) {
           throw new NotFoundError("Thread");
         }
@@ -179,33 +173,37 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       }
 
       const planValue = body.plan
-        ? (typeof body.plan === "string"
+        ? typeof body.plan === "string"
           ? body.plan
-          : JSON.stringify(body.plan))
+          : JSON.stringify(body.plan)
         : null;
 
       const normalizedModel = normalizeModelId(body.model);
       const taskId = generateId();
       const timestamp = new Date().toISOString();
 
-      const created = await db.insert(agentTasks).values({
-        id: taskId,
-        accountId: spaceId,
-        createdByAccountId: user.id,
-        threadId,
-        title: body.title.trim(),
-        description: body.description?.trim() || null,
-        status,
-        priority,
-        agentType: body.agent_type || "default",
-        model: normalizedModel,
-        plan: planValue,
-        dueAt: body.due_at || null,
-        startedAt: timestamps.startedAt ?? null,
-        completedAt: timestamps.completedAt ?? null,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      }).returning().get();
+      const created = await db
+        .insert(agentTasks)
+        .values({
+          id: taskId,
+          accountId: spaceId,
+          createdByAccountId: user.id,
+          threadId,
+          title: body.title.trim(),
+          description: body.description?.trim() || null,
+          status,
+          priority,
+          agentType: body.agent_type || "default",
+          model: normalizedModel,
+          plan: planValue,
+          dueAt: body.due_at || null,
+          startedAt: timestamps.startedAt ?? null,
+          completedAt: timestamps.completedAt ?? null,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .returning()
+        .get();
 
       const task = await enrichTask(c.env, toApiTask(created));
 
@@ -221,11 +219,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await checkSpaceAccess(
-      c.env.DB,
-      task.space_id,
-      user.id,
-    );
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id);
     if (!access) {
       throw new NotFoundError("Task");
     }
@@ -261,12 +255,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         throw new NotFoundError("Task");
       }
 
-      const access = await checkSpaceAccess(
-        c.env.DB,
-        task.space_id,
-        user.id,
-        ["owner", "admin", "editor"],
-      );
+      const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
       if (!access) {
         throw new NotFoundError("Task");
       }
@@ -305,9 +298,9 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
       if (body.plan !== undefined) {
         updates.plan = body.plan
-          ? (typeof body.plan === "string"
+          ? typeof body.plan === "string"
             ? body.plan
-            : JSON.stringify(body.plan))
+            : JSON.stringify(body.plan)
           : null;
       }
 
@@ -319,13 +312,16 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
       if (body.thread_id !== undefined) {
         if (body.thread_id) {
-          const thread = await db.select({ id: threads.id }).from(threads)
+          const thread = await db
+            .select({ id: threads.id })
+            .from(threads)
             .where(
               and(
                 eq(threads.id, body.thread_id),
                 eq(threads.accountId, task.space_id),
               ),
-            ).get();
+            )
+            .get();
           if (!thread) {
             throw new NotFoundError("Thread");
           }
@@ -335,12 +331,16 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
       if (body.last_run_id !== undefined) {
         if (body.last_run_id) {
-          const run = await db.select({ id: runs.id }).from(runs).where(
-            and(
-              eq(runs.id, body.last_run_id),
-              eq(runs.accountId, task.space_id),
-            ),
-          ).get();
+          const run = await db
+            .select({ id: runs.id })
+            .from(runs)
+            .where(
+              and(
+                eq(runs.id, body.last_run_id),
+                eq(runs.accountId, task.space_id),
+              ),
+            )
+            .get();
           if (!run) {
             throw new NotFoundError("Run");
           }
@@ -367,9 +367,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       }
 
       updates.updatedAt = new Date().toISOString();
-      const updated = await db.update(agentTasks).set(updates).where(
-        eq(agentTasks.id, taskId),
-      ).returning().get();
+      const updated = await db
+        .update(agentTasks)
+        .set(updates)
+        .where(eq(agentTasks.id, taskId))
+        .returning()
+        .get();
       if (!updated) {
         throw new InternalError("Failed to update task");
       }
@@ -386,12 +389,10 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await checkSpaceAccess(
-      c.env.DB,
-      task.space_id,
-      user.id,
-      ["owner", "admin"],
-    );
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, [
+      "owner",
+      "admin",
+    ]);
     if (!access) {
       throw new NotFoundError("Task");
     }
@@ -410,17 +411,17 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new NotFoundError("Task");
     }
 
-    const access = await checkSpaceAccess(
-      c.env.DB,
-      task.space_id,
-      user.id,
-      ["owner", "admin", "editor"],
-    );
+    const access = await checkSpaceAccess(c.env.DB, task.space_id, user.id, [
+      "owner",
+      "admin",
+      "editor",
+    ]);
     if (!access) {
       throw new NotFoundError("Task");
     }
 
-    const model = normalizeModelId(task.model) ||
+    const model =
+      normalizeModelId(task.model) ||
       normalizeModelId(access.space.ai_model) ||
       DEFAULT_MODEL_ID;
     const backend = getBackendFromModel(model);
@@ -449,16 +450,22 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         tools: CUSTOM_TOOL_NAMES,
         apiKey,
         model,
+        baseUrl: c.env.OPENAI_BASE_URL,
       });
 
       const planJson = JSON.stringify(plan);
       const timestamp = new Date().toISOString();
 
       const db = getDb(c.env.DB);
-      const updated = await db.update(agentTasks).set({
-        plan: planJson,
-        updatedAt: timestamp,
-      }).where(eq(agentTasks.id, taskId)).returning().get();
+      const updated = await db
+        .update(agentTasks)
+        .set({
+          plan: planJson,
+          updatedAt: timestamp,
+        })
+        .where(eq(agentTasks.id, taskId))
+        .returning()
+        .get();
       if (!updated) {
         throw new InternalError("Failed to update task plan");
       }

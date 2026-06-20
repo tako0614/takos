@@ -1,12 +1,14 @@
-// Static 1st-party fallback catalog for the default-app distribution
+// Static 1st-party fallback catalog for bundled/default seed apps plus
+// catalog-only first-party entries
 // (see takos/./default-app-distribution.ts).
 //
 // This is the hardcoded list of `takos-{docs,excel,slide,computer}`, `yurucommu`,
-// and `road-to-me` entries that ship as `InstallableApp`s with Takos and that
-// auto-install into new spaces when no operator-supplied distribution is
-// configured. Each entry's `repositoryEnvKey` maps to an env var operators can
-// set to override the per-app repository URL without replacing the whole
-// distribution.
+// and `road-to-me` entries that ship as `InstallableApp`s with Takos. Entries
+// tagged `default-app` seed into new spaces when no operator-supplied
+// distribution is configured; catalog-only entries such as `road-to-me` remain
+// installable but do not auto-install. Each entry's `repositoryEnvKey` maps to
+// an env var operators can set to override the per-app repository URL without
+// replacing the whole distribution.
 export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-docs",
@@ -25,14 +27,14 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
       {
         name: "documents",
-        type: "object-store.s3-compatible@v1",
+        type: "storage.object",
         required: true,
       },
-      { name: "domain", type: "domain.http@v1", required: false },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "domain", type: "protocol.http.api", required: false },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
   },
   {
@@ -53,14 +55,14 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
       {
         name: "spreadsheets",
-        type: "object-store.s3-compatible@v1",
+        type: "storage.object",
         required: true,
       },
-      { name: "domain", type: "domain.http@v1", required: false },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "domain", type: "protocol.http.api", required: false },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
   },
   {
@@ -80,14 +82,14 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
       {
         name: "presentations",
-        type: "object-store.s3-compatible@v1",
+        type: "storage.object",
         required: true,
       },
-      { name: "domain", type: "domain.http@v1", required: false },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "domain", type: "protocol.http.api", required: false },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
   },
   {
@@ -108,9 +110,9 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
-      { name: "domain", type: "domain.http@v1", required: false },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
+      { name: "domain", type: "protocol.http.api", required: false },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
   },
   {
@@ -118,7 +120,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     title: "Yurucommu",
     appId: "com.yurucommu.app",
     description:
-      "Self-hosted ActivityPub community social app for small communities.",
+      "A self-hosted ActivityPub SNS an individual runs for themselves, reaching within their communities.",
     publisher: "takos",
     homepage: "https://github.com/tako0614/yurucommu",
     icon: undefined,
@@ -131,15 +133,15 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     sourcePath: "outputs.tf",
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
-      { name: "db", type: "database.postgres@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
+      { name: "db", type: "storage.sql", required: true },
       {
         name: "media",
-        type: "object-store.s3-compatible@v1",
+        type: "storage.object",
         required: true,
       },
-      { name: "domain", type: "domain.http@v1", required: true },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "domain", type: "protocol.http.api", required: true },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
   },
   {
@@ -159,10 +161,10 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     sourcePath: "outputs.tf",
     runtimeModes: ["dedicated", "self-hosted"],
     bindings: [
-      { name: "auth", type: "identity.oidc@v1", required: true },
-      { name: "db", type: "database.postgres@v1", required: true },
-      { name: "domain", type: "domain.http@v1", required: false },
-      { name: "bootstrap", type: "install-launch-token@v1", required: true },
+      { name: "auth", type: "identity.oidc", required: true },
+      { name: "db", type: "storage.sql", required: true },
+      { name: "domain", type: "protocol.http.api", required: false },
+      { name: "bootstrap", type: "auth.bootstrap_token", required: true },
     ],
     preinstall: false,
   },

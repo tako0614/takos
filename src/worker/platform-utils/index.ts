@@ -18,6 +18,7 @@ export { generateId } from "./id.ts";
 // バリデーションユーティリリティ
 // =============================================================================
 export { isLocalhost, isPrivateIP } from "./validation.ts";
+export { resolveContainerHostBaseUrl } from "./container-host.ts";
 
 // =============================================================================
 // 構造化ロガー

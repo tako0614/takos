@@ -125,6 +125,15 @@ export function ProfileMenu(props: ProfileMenuProps) {
             <Icons.Settings class="w-4 h-4" />
             <span>{t("accountSettings")}</span>
           </button>
+          <a
+            href="/terms"
+            class={PROFILE_MENU_BTN}
+            role="menuitem"
+            onClick={() => setShowProfileMenu(false)}
+          >
+            <Icons.FileText class="w-4 h-4" />
+            <span>{t("legalInfo")}</span>
+          </a>
           <button
             type="button"
             class={PROFILE_MENU_BTN}

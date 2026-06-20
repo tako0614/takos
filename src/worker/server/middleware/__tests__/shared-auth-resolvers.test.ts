@@ -34,10 +34,13 @@ const SESSION: Session = {
 
 function ctxWithAuthHeader(value: string | undefined): Context<{
   Bindings: Env;
+  Variables: object;
 }> {
   return {
-    req: { header: (name: string) => (name === "Authorization" ? value : undefined) },
-  } as unknown as Context<{ Bindings: Env }>;
+    req: {
+      header: (name: string) => (name === "Authorization" ? value : undefined),
+    },
+  } as unknown as Context<{ Bindings: Env; Variables: object }>;
 }
 
 const fakeServices = { sql: { binding: {} } } as never;
@@ -75,12 +78,12 @@ test("resolveAccountsBearer: no Authorization header -> no-bearer", async () => 
   assertEquals(r.kind, "no-bearer");
 });
 
-test("resolveAccountsBearer: retired app-local prefix -> retired", async () => {
+test("resolveAccountsBearer: unsupported app-local prefix -> unsupported-app-local-bearer", async () => {
   const r = await resolveAccountsBearer(
     ctxWithAuthHeader("Bearer tak_pat_abc"),
     bearerDeps({}),
   );
-  assertEquals(r.kind, "retired");
+  assertEquals(r.kind, "unsupported-app-local-bearer");
 });
 
 test("resolveAccountsBearer: opaque non-candidate bearer -> not-accounts", async () => {
@@ -149,17 +152,24 @@ function sessionDeps(
   } as CookieSessionResolverDeps;
 }
 
-const sessionCtx = {} as unknown as Context<{ Bindings: Env }>;
+const sessionCtx = {} as unknown as Context<{
+  Bindings: Env;
+  Variables: object;
+}>;
 
 test("resolveCookieSession: revoked session id -> revoked (invariant single-sourced)", async () => {
   let getSessionCalled = false;
-  const r = await resolveCookieSession(sessionCtx, sessionDeps({
-    isSessionRevoked: async () => true,
-    getSession: async () => {
-      getSessionCalled = true;
-      return SESSION;
-    },
-  }), { sessionId: "session_abc", sessionStore: {}, dbBinding: {} as never });
+  const r = await resolveCookieSession(
+    sessionCtx,
+    sessionDeps({
+      isSessionRevoked: async () => true,
+      getSession: async () => {
+        getSessionCalled = true;
+        return SESSION;
+      },
+    }),
+    { sessionId: "session_abc", sessionStore: {}, dbBinding: {} as never },
+  );
   assertEquals(r.kind, "revoked");
   // Fail-closed: revoked sessions never reach the session store.
   assertEquals(getSessionCalled, false);
@@ -167,12 +177,16 @@ test("resolveCookieSession: revoked session id -> revoked (invariant single-sour
 
 test("resolveCookieSession: no dbBinding skips the revocation check", async () => {
   let revokedChecked = false;
-  const r = await resolveCookieSession(sessionCtx, sessionDeps({
-    isSessionRevoked: async () => {
-      revokedChecked = true;
-      return true;
-    },
-  }), { sessionId: "session_abc", sessionStore: {}, dbBinding: undefined });
+  const r = await resolveCookieSession(
+    sessionCtx,
+    sessionDeps({
+      isSessionRevoked: async () => {
+        revokedChecked = true;
+        return true;
+      },
+    }),
+    { sessionId: "session_abc", sessionStore: {}, dbBinding: undefined },
+  );
   assertEquals(revokedChecked, false);
   assertEquals(r.kind, "ok");
 });

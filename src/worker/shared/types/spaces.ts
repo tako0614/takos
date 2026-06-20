@@ -16,8 +16,6 @@ export interface Space {
   ai_model?: string | null;
   model_backend?: string | null;
   security_posture?: SecurityPosture;
-  /** Takosumi Installation ID (Phase 4 integration). Populated after dual-write succeeds. */
-  takosumi_installation_id?: string | null;
   created_at: string;
   updated_at: string;
 }

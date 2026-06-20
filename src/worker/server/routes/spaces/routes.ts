@@ -17,6 +17,7 @@ import {
   updateWorkspaceModel,
 } from "../../../application/services/identity/spaces.ts";
 import {
+  AVAILABLE_MODELS_BY_BACKEND,
   DEFAULT_MODEL_ID,
   getModelBackend as getModelBackendForModel,
   normalizeModelId,
@@ -418,6 +419,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       ai_model: model,
       model,
       model_backend: modelBackend,
+      available_models: AVAILABLE_MODELS_BY_BACKEND,
       token_limit: resolveHistoryTokenBudget(
         model,
         c.env.MODEL_CONTEXT_WINDOWS,
@@ -481,6 +483,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         ai_model: model,
         model,
         model_backend: modelBackend,
+        available_models: AVAILABLE_MODELS_BY_BACKEND,
         token_limit: resolveHistoryTokenBudget(
           model,
           c.env.MODEL_CONTEXT_WINDOWS,

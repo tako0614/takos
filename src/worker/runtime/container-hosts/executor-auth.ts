@@ -24,12 +24,12 @@ import {
  * (see proxyScopesForRunKind), so a workflow token cannot reach conversation /
  * memory / skill endpoints.
  */
-const CONTROL_RPC_ENDPOINT_SCOPES: Record<string, ProxyScope> = Object
-  .fromEntries(
+const CONTROL_RPC_ENDPOINT_SCOPES: Record<string, ProxyScope> =
+  Object.fromEntries(
     CONTROL_RPC_ENDPOINT_REGISTRY.map(({ name, scope }) => [name, scope]),
   );
 
-const CONTROL_RPC_ENDPOINTS = new Set(
+const CONTROL_RPC_ENDPOINT_NAMES = new Set(
   CONTROL_RPC_ENDPOINT_REGISTRY.map(({ name }) => name),
 );
 
@@ -38,9 +38,7 @@ const CONTROL_RPC_ENDPOINTS = new Set(
  * is not a recognized control-RPC endpoint (callers MUST treat null as
  * unauthorized — fail closed).
  */
-export function getRequiredProxyCapability(
-  path: string,
-): ProxyScope | null {
+export function getRequiredProxyCapability(path: string): ProxyScope | null {
   if (!isAgentControlRpcPath(path)) return null;
   const endpoint = path.slice(agentControlRpcPath("").length);
   return CONTROL_RPC_ENDPOINT_SCOPES[endpoint] ?? null;
@@ -48,20 +46,20 @@ export function getRequiredProxyCapability(
 
 /**
  * Membership check used by the executor host: a request to `path` is authorized
- * iff the path maps to a known scope AND the token's scope set (expanded from
- * its stored capability, including the legacy `"control"` full-agent alias)
- * contains that scope. Fail-closed for unknown paths / empty scope sets.
+ * iff the path maps to a known scope AND the token's scope set expanded from
+ * its stored capability contains that scope. Fail-closed for unknown paths /
+ * empty scope sets.
  */
 export function isProxyRequestAuthorized(
   path: string,
-  capability: ProxyCapability | ProxyCapability[] | undefined,
+  capability: ProxyCapability | readonly ProxyCapability[] | undefined,
 ): boolean {
   const required = getRequiredProxyCapability(path);
   if (!required) return false;
   return expandProxyCapability(capability).has(required);
 }
 
-export { CONTROL_RPC_ENDPOINTS };
+export { CONTROL_RPC_ENDPOINT_NAMES };
 
 // ---------------------------------------------------------------------------
 // Claims / body matching
@@ -87,17 +85,19 @@ export function claimsMatchRequestBody(
   body: Record<string, unknown>,
 ): boolean {
   const claimRunId = typeof claims.run_id === "string" ? claims.run_id : null;
-  const claimServiceId = typeof claims.service_id === "string"
-    ? claims.service_id
-    : typeof claims.worker_id === "string"
-    ? claims.worker_id
-    : null;
+  const claimServiceId =
+    typeof claims.service_id === "string"
+      ? claims.service_id
+      : typeof claims.worker_id === "string"
+        ? claims.worker_id
+        : null;
   const bodyRunId = typeof body.runId === "string" ? body.runId : null;
-  const bodyServiceId = typeof body.serviceId === "string"
-    ? body.serviceId
-    : typeof body.workerId === "string"
-    ? body.workerId
-    : null;
+  const bodyServiceId =
+    typeof body.serviceId === "string"
+      ? body.serviceId
+      : typeof body.workerId === "string"
+        ? body.workerId
+        : null;
 
   // Fail closed: a bound claim requires the body to carry the matching id.
   // (Skipping the comparison when the body omits the id let a token scoped to

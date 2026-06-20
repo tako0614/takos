@@ -11,6 +11,7 @@ import {
 } from "../../local-platform/routing-store.ts";
 import { createRedisRoutingStore } from "../../local-platform/redis-bindings.ts";
 import type { ActiveRoutingStatus } from "../../application/services/deployment/models.ts";
+import { clearL1, deleteL1 } from "../../application/services/routing/cache.ts";
 
 // ---------------------------------------------------------------------------
 // Routing store resolver
@@ -106,8 +107,10 @@ export async function ensureRoutingSeeded(
   const shared = await getSharedState();
   const routingSeed = parseRoutingSeed(optionalEnv("TAKOS_LOCAL_ROUTING_JSON"));
   for (const [hostname, value] of Object.entries(routingSeed)) {
+    const normalizedHostname = hostname.toLowerCase();
+    deleteL1(normalizedHostname);
     await shared.hostnameRouting.put(
-      hostname.toLowerCase(),
+      normalizedHostname,
       serializeRoutingValue(value),
     );
     const target = value.type === "http-endpoint-set"
@@ -123,7 +126,7 @@ export async function ensureRoutingSeeded(
           status: deployment.status ?? "active",
         })),
       };
-    await shared.routingStore.putRecord(hostname, target, Date.now());
+    await shared.routingStore.putRecord(normalizedHostname, target, Date.now());
   }
 }
 
@@ -132,4 +135,5 @@ export async function ensureRoutingSeeded(
  */
 export function resetRoutingSeed(): void {
   seeded = false;
+  clearL1();
 }

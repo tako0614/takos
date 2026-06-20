@@ -214,41 +214,10 @@ export function useReposData(
     }
   };
 
-  const handleStar = async (repo: SourceRepo) => {
-    try {
-      if (repo.is_starred) {
-        await rpc.repos[":repoId"].star.$delete({ param: { repoId: repo.id } });
-      } else {
-        await rpc.repos[":repoId"].star.$post({ param: { repoId: repo.id } });
-      }
-
-      const isNowStarred = !repo.is_starred;
-      const updateRepoStar = (entry: SourceRepo) => {
-        if (entry.id !== repo.id) return entry;
-        const currentStars = entry.stars ?? entry.stars_count ?? 0;
-        const nextStars = currentStars + (repo.is_starred ? -1 : 1);
-        return {
-          ...entry,
-          is_starred: isNowStarred,
-          stars: nextStars,
-          stars_count: nextStars,
-        };
-      };
-
-      setMyRepos((prev) => prev.map(updateRepoStar));
-      explore.updateItems(updateRepoStar);
-      search.updateItems(updateRepoStar);
-
-      if (repo.is_starred) {
-        starred.filterItems((entry) => entry.id !== repo.id);
-        setStarredTotal((prev) => Math.max(0, prev - 1));
-      } else {
-        setStarredTotal((prev) => prev + 1);
-      }
-    } catch (err) {
-      console.error("Failed to toggle star:", err);
-    }
-  };
+  // Takos is a single-owner personal product with no social starring graph.
+  // Starring is a no-op; the action remains wired so list components keep a
+  // stable contract.
+  const handleStar = (_repo: SourceRepo) => {};
 
   const loadMoreExplore = () => {
     void explore.fetch(false);

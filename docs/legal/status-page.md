@@ -8,12 +8,12 @@ URL と購読基盤を確定してから公開してください。
 
 ## Status
 
-| Field         | Value                                              |
-| ------------- | -------------------------------------------------- |
-| Owner         | Operator operations owner                          |
-| Last reviewed | `[EFFECTIVE_DATE]`                                 |
-| Scope         | Takos Web / API, Takos Git, Takos agent, dashboard |
-| Status        | Template — pre-public-launch baseline              |
+| Field         | Value                                                                  |
+| ------------- | ---------------------------------------------------------------------- |
+| Owner         | Operator operations owner                                              |
+| Last reviewed | `[EFFECTIVE_DATE]`                                                     |
+| Scope         | Takos Web / API, Git service profile, agent runtime profile, dashboard |
+| Status        | Template — pre-public-launch baseline                                  |
 
 ## 1. 公開ステータスページ
 
@@ -28,13 +28,13 @@ URL と購読基盤を確定してから公開してください。
 
 ステータスページでは以下の状態を表示します:
 
-| 状態          | 意味                                                                  |
-| ------------- | --------------------------------------------------------------------- |
-| **Operational** | 全コンポーネントが正常稼働                                          |
-| **Degraded**    | 一部機能の遅延・部分障害・限定的影響 (SLA 違反は通常なし)           |
-| **Partial outage** | 一部の Installation / region / 機能が利用不可                   |
-| **Major outage**| サービス全体または広範囲が利用不可                                  |
-| **Maintenance** | 計画メンテナンス中 (SLA 計算から除外)                              |
+| 状態               | 意味                                                      |
+| ------------------ | --------------------------------------------------------- |
+| **Operational**    | 全コンポーネントが正常稼働                                |
+| **Degraded**       | 一部機能の遅延・部分障害・限定的影響 (SLA 違反は通常なし) |
+| **Partial outage** | 一部の Installation / region / 機能が利用不可             |
+| **Major outage**   | サービス全体または広範囲が利用不可                        |
+| **Maintenance**    | 計画メンテナンス中 (SLA 計算から除外)                     |
 
 詳細な SLA 計算と除外事由は [SLA](/legal/sla) を参照してください。
 
@@ -43,8 +43,8 @@ URL と購読基盤を確定してから公開してください。
 ステータスページは過去 12 ヶ月分の **月次可用性** を planned service ごとに公開します:
 
 - Takos Web / API
-- Takos Git
-- Takos agent execution
+- Git service profile
+- Agent runtime profile
 - Takosumi Accounts dashboard
 - OIDC issuer
 - Billing portal
@@ -64,11 +64,11 @@ URL と購読基盤を確定してから公開してください。
 
 ステータスページに反映されていない障害を発見した場合、以下に連絡してください:
 
-| 用途                | 連絡先                |
-| ------------------- | --------------------- |
-| 障害報告 (一般)     | `[OPERATOR_EMAIL]`    |
-| 緊急 (サービス全停) | `[EMERGENCY_EMAIL]`   |
-| サポート (ログイン後) | dashboard `/support` |
-| SLA クレーム        | [SLA](/legal/sla) §5 を参照 |
+| 用途                  | 連絡先                      |
+| --------------------- | --------------------------- |
+| 障害報告 (一般)       | `[OPERATOR_EMAIL]`          |
+| 緊急 (サービス全停)   | `[EMERGENCY_EMAIL]`         |
+| サポート (ログイン後) | dashboard `/support`        |
+| SLA クレーム          | [SLA](/legal/sla) §5 を参照 |
 
 施行日: `[EFFECTIVE_DATE]`

@@ -56,7 +56,7 @@ test("manifestNeedsEarlyPublicationSync only triggers for same-manifest consumes
       publish: [{
         name: "ui",
         publisher: "web",
-        type: "UiSurface",
+        type: "interface.ui.surface",
         outputs: { url: { kind: "url", routeRef: "root" } },
       }],
       compute: { web: { kind: "worker" } },
@@ -68,7 +68,7 @@ test("manifestNeedsEarlyPublicationSync only triggers for same-manifest consumes
       publish: [{
         name: "ui",
         publisher: "web",
-        type: "UiSurface",
+        type: "interface.ui.surface",
         outputs: { url: { kind: "url", routeRef: "root" } },
       }],
       compute: {
@@ -85,7 +85,7 @@ test("manifestNeedsEarlyPublicationSync only triggers for same-manifest consumes
       publish: [{
         name: "ui",
         publisher: "web",
-        type: "UiSurface",
+        type: "interface.ui.surface",
         outputs: { url: { kind: "url", routeRef: "root" } },
       }],
       compute: {
@@ -190,18 +190,18 @@ test(
         {
           name: "web-tools",
           publisher: "web",
-          type: "McpServer",
+          type: "protocol.mcp.server",
           outputs: { url: { kind: "url", routeRef: "root" } },
         },
         {
           name: "api-tools",
           publisher: "api",
-          type: "McpServer",
+          type: "protocol.mcp.server",
           outputs: { url: { kind: "url", routeRef: "api" } },
         },
         {
           name: "platform-tools",
-          type: "McpServer",
+          type: "protocol.mcp.server",
         },
       ],
       env: {},

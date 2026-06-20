@@ -25,5 +25,4 @@ export {
   markRequiredKeysLocallyOverriddenForService,
   patchServiceManualLinks,
   setServiceManualLinks,
-  upsertServiceTakosAccessTokenConfig,
 } from "./manual-link-ops.ts";

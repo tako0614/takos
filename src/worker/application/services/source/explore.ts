@@ -1,4 +1,4 @@
-// Re-export all public types and functions so existing imports remain valid.
+// Source explore facade: keeps catalog/query exports in one domain entrypoint.
 
 export type {
   CatalogInstallationResponse,

@@ -1,66 +1,62 @@
 # 初回セットアップ
 
-> このページでわかること: Takos を新規に立ち上げるための手順 (Web ベース)。
+> このページでわかること: self-host / operator-managed Takos を新規に立ち上げるときの Web ベース確認。
 
-Takos は Takosumi Accounts の OIDC consumer として起動します。
-初回セットアップでは、Takosumi Accounts で発行された OIDC クライアント情報を
-Takos に接続します。
+Takos distribution worker は Takos product surface と embedded Takosumi Accounts / deploy-control / dashboard を同一
+origin に compose します。self-host ではその origin 自身が OIDC issuer です。hosted Takosumi の public platform では
+`https://app.takosumi.com` が issuer になります。
+
+Takos runtime は外部 hosted Takosumi Accounts を必須にしません。upstream Google / GitHub / enterprise OIDC / passkey は
+embedded Takosumi Accounts plane の upstream IdP / credential policy として扱い、Takos product routes は account-plane subject
+から app-local profile / session を作ります。
 
 ## Prerequisites
 
-- `takos-private/` の target deploy が完了している
-- `ADMIN_DOMAIN` が public HTTPS で解決できる
-- [OIDC Setup](/operator/oidc-setup) の Takosumi Accounts issuer と OIDC
-  redirect が登録済み
-- Installation の domain が `<TENANT_HOST>` として確定している
-- Installation 用の OIDC client (`OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` /
-  `OIDC_REDIRECT_URI`) が Takosumi Accounts / binding material 経由で
-  発行・注入済み
-- `DB` / `SESSION_DO` / `OIDC_CLIENT_SECRET` (Takosumi Accounts 連携) が
-  production または staging profile に入っている
+- Takos OpenTofu module が backing resources (D1 / KV / R2 / Queues / DO / containers) を provision 済み
+- worker artifact が同じ origin に deploy 済み
+- `BASE_URL` / `TAKOSUMI_ACCOUNTS_ISSUER` / `OIDC_ISSUER_URL` がその worker origin を指す
+- embedded Accounts plane の signing key / pairwise secret / launch-token secret / export download secret が operator secret store にある
+- `DB` / `TAKOSUMI_ACCOUNTS_DB` / `TAKOSUMI_CONTROL_DB` / `SESSION_DO` などの bindings が production または staging profile にある
 - trusted edge / internal service secret は public internet へ露出していない
 
-`takos/` shell から本番・staging deploy を直接進めません。deploy 設定と secret
-操作は `takos-private/` で管理してください。
+`takos/` shell から本番・staging deploy を直接進めません。deploy 設定と secret 操作は operator-local secret store と
+Takosumi operations runbook で管理してください。
 
 ## Env テーブル
 
-operator が bootstrap 時に確認する env は次の通りです。Takos 自身は OAuth
-provider を持たず、Takosumi Accounts に登録した OIDC client の情報を注入する
-だけで OIDC consumer として動きます。
+| key                        | secret  | scope                 | 用途                                               |
+| -------------------------- | ------- | --------------------- | -------------------------------------------------- |
+| `BASE_URL`                 | no      | worker origin         | Takos / embedded Takosumi の public origin         |
+| `TAKOSUMI_ACCOUNTS_ISSUER` | no      | Accounts plane        | 同一 origin issuer                                 |
+| `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | 通常は `TAKOSUMI_ACCOUNTS_ISSUER` と同じ           |
+| `OIDC_CLIENT_ID`           | no      | Accounts projection   | 同一 origin Accounts plane が発行した client id    |
+| `OIDC_CLIENT_SECRET`       | yes     | Accounts projection   | confidential client secret                         |
+| `OIDC_REDIRECT_URI`        | no      | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                    |
+| `TAKOS_INSTALLATION_ID`    | no      | Takos runtime         | Installation id (app-local profile の FK)          |
+| `DB`                       | binding | Takos product         | app-local persistence                              |
+| `TAKOSUMI_ACCOUNTS_DB`     | binding | Accounts plane        | account / OIDC / billing ledger                    |
+| `TAKOSUMI_CONTROL_DB`      | binding | deploy-control plane  | Installation / Run / State / Output / audit ledger |
+| `SESSION_DO`               | binding | Takos product session | browser session store                              |
 
-| key                     | secret  | scope             | 用途                                                                                          |
-| ----------------------- | ------- | ----------------- | --------------------------------------------------------------------------------------------- |
-| `ADMIN_DOMAIN`          | no      | Takos runtime     | Takos admin Web の host                                                                       |
-| `OIDC_ISSUER_URL`       | no      | Takosumi Accounts | `identity.primary.oidc` / OIDC discovery から解決された operator-selected issuer URL |
-| `OIDC_CLIENT_ID`        | no      | Takosumi Accounts | Installation 用の client id                                                                   |
-| `OIDC_CLIENT_SECRET`    | yes     | Takosumi Accounts | confidential client secret                                                                    |
-| `OIDC_REDIRECT_URI`     | no      | Takosumi Accounts | `<TENANT_HOST>/auth/oidc/callback`                                                            |
-| `BASE_URL`              | no      | Takos runtime     | Takos public URL                                                                              |
-| `TAKOS_INSTALLATION_ID` | no      | Takos runtime     | Installation id (app-local profile の FK)                                                     |
-| `DB`                    | binding | Takos runtime     | app-local persistence                                                                         |
-| `SESSION_DO`            | binding | Takos runtime     | browser session store                                                                         |
+`OIDC_*` は「外部 Accounts service を注入する」ための値ではなく、同一 origin Accounts plane が Takos product routes に投影する
+consumer metadata です。
 
-## 1. Admin Web に入る (operator login)
+## 1. Admin Web に入る
 
-browser で admin domain を開きます。
+browser で worker origin を開きます。
 
 ```text
-https://<ADMIN_DOMAIN>/
+https://<BASE_URL>/
 ```
 
-未ログインなら `/auth/oidc/login` へ進み、Takosumi Accounts の resolved OIDC
-issuer で認証します。Takos は `/auth/oidc/login` / `/auth/oidc/callback` /
-`/auth/logout` の 3 route だけを consumer として受けます。Google / GitHub /
-passkey / enterprise OIDC などの upstream IdP は Takosumi Accounts 側の broker
-設定で扱います。`/auth/login` は公開 route ではありません。詳しくは
-[OIDC Consumer](/apps/oidc-consumer) を参照してください。
+未ログインなら `/auth/oidc/login` へ進み、同一 origin の Accounts issuer で認証します。Takos は
+`/auth/oidc/login` / `/auth/oidc/callback` / `/auth/logout` を consumer route として受けます。upstream IdP は Accounts
+plane 側の policy で扱います。
 
 ## 2. 初回 setup を完了する
 
-初回ユーザーは `/setup` に送られます。この画面は次の API で Takos app-local
-profile 用の username を保存します。ログイン用 credential は Takosumi Accounts
-側で管理し、Takos app には保存しません。
+初回ユーザーは `/setup` に送られます。この画面は Takos app-local profile 用の username だけを保存します。ログイン用
+credential、upstream IdP、PAT、billing identity は Accounts plane が所有します。
 
 | method | path                        | 用途                        |
 | ------ | --------------------------- | --------------------------- |
@@ -68,73 +64,19 @@ profile 用の username を保存します。ログイン用 credential は Tako
 | POST   | `/api/setup/check-username` | username availability check |
 | POST   | `/api/setup/complete`       | username 保存               |
 
-Web 画面で username を決めて `continue` します。完了後、Takos Web の main app
-に入れることを確認します。
+## 3. Accounts bearer で API smoke を行う
 
-## 3. Takosumi Accounts bearer を用意する
-
-automation や API smoke に使う long-lived credential は Takosumi Accounts
-で発行します。
-
-1. Takosumi Accounts の account settings を開く
-2. Personal Access Tokens を開く
-3. token 名を入力する
-4. 必要な scope / access level を選ぶ (`/api/me` smoke だけなら `profile`)
-5. 生成された `takpat_...` を secret store に保存する
-
-Takos API の route family ごとの必要 scope は
-[`API Reference`](/reference/api#認証) を参照します。token value は作成時に
-一度だけ表示されます。再表示できないため、発行直後に operator secret store
-へ移してください。
-
-## 4. Accounts bearer で API smoke を行う
-
-保存した Accounts bearer で `/api/me` を確認します。
+automation や smoke 用 token は Accounts plane の account settings / PAT flow で発行し、operator secret store に保存します。
 
 ```bash
 curl -fsS \
   -H "Authorization: Bearer $TAKOS_ACCOUNTS_TOKEN" \
-  https://<ADMIN_DOMAIN>/api/me
+  https://<BASE_URL>/api/me
 ```
 
-レスポンスに setup 済み user が返れば、browser session と Accounts bearer の
-consumer 経路は動いています。
+レスポンスに setup 済み user が返れば、browser session と Accounts bearer の consumer 経路は動いています。
 
-## 5. Automation へ渡す
+## Boundary
 
-Accounts bearer は operator が管理する secret store に保存し、必要な automation
-にだけ渡します。
-
-- local shell や CI に直書きしない
-- `TAKOS_INTERNAL_API_SECRET` / `TAKOS_INTERNAL_SERVICE_SECRET` を user token
-  として使わない
-- `admin` bucket は短命にし、作業後に削除する
-- Git Smart HTTP などの automation には必要最小限の bucket を使う
-
-## 6. Takosumi Accounts 連携を設定する
-
-end user 向けの OIDC issuer は Takosumi Accounts に置きます。fresh operator
-は次を完了させてください。
-
-1. 対象 Installation の OIDC client を Takosumi Accounts で発行する (managed
-   deploy では install pipeline が自動発行。self-host では operator-owned
-   Takosumi Accounts に登録し、Keycloak / Authentik 等は upstream IdP
-   として接続)
-2. 取得した `clientId` / `clientSecret` / `redirectUris` を `takos-private/` の
-   secret store に保存する
-3. Takos runtime に env として注入する。具体的な secret store / runtime の
-   wiring (Cloudflare Workers profile の `wrangler.toml` `[vars]` /
-   `wrangler secret put` 等) は **bootstrap runbook の scope 外** であり、
-   `takos-private/` の deploy pipeline と secret 管理を参照してください
-4. `<TENANT_HOST>/auth/oidc/login` にアクセスして Takosumi Accounts へ redirect
-   されること、callback で session が作られることを確認する
-
-## Product Access Boundary
-
-Takos bootstrap の primary path は Web UI / public API です。fresh operator
-向けの専用コマンドライン経路は増やしません。
-
-OpenTofu module typed Runs は `takosumi` が扱います。Takos product は
-Web UI と public API から space / catalog / app-local product API を扱い、OAuth
-/ billing は operator account plane (リファレンス実装: Takosumi Accounts) の
-OIDC / BillingPort を consume します。
+Takos bootstrap の primary path は Web UI / public API です。OpenTofu module typed Runs、Installation、Deployment、
+OutputSnapshot、provider connection、Gateway coverage、billing / OIDC policy は embedded Takosumi services が扱います。

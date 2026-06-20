@@ -32,8 +32,7 @@ export interface RolloutState {
    * Monotonic optimistic-concurrency version. Bumped on every persisted
    * mutation and used for a compare-and-swap UPDATE so concurrent advances
    * across Worker isolates cannot double-apply a stage (see `saveState` /
-   * `advanceStage`). Optional for backward compatibility with rollout rows
-   * persisted before this field existed (treated as version 0).
+   * `advanceStage`). Optional rows are treated as version 0.
    */
   stateVersion?: number;
   /** Human-readable reason recorded when a rollout fails or aborts. */
@@ -93,16 +92,17 @@ function withAdvanceStageLock<T>(
   bundleDeploymentId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const prior = advanceStageLocks.get(bundleDeploymentId) ??
-    Promise.resolve();
+  const prior = advanceStageLocks.get(bundleDeploymentId) ?? Promise.resolve();
   const next = prior.then(fn, fn);
   // Track the chain so subsequent calls queue behind it. Clean up the entry
   // when this link is the tail, so the map does not grow without bound.
-  const tracked = next.catch(() => {}).finally(() => {
-    if (advanceStageLocks.get(bundleDeploymentId) === tracked) {
-      advanceStageLocks.delete(bundleDeploymentId);
-    }
-  });
+  const tracked = next
+    .catch(() => {})
+    .finally(() => {
+      if (advanceStageLocks.get(bundleDeploymentId) === tracked) {
+        advanceStageLocks.delete(bundleDeploymentId);
+      }
+    });
   advanceStageLocks.set(bundleDeploymentId, tracked);
   return next;
 }
@@ -151,14 +151,20 @@ export class RolloutService {
       canaryWeight: firstStage.weight,
     });
 
-    await db.update(deployments).set({
-      routingStatus: "canary",
-      routingWeight: firstStage.weight,
-    }).where(eq(deployments.id, deploymentId));
+    await db
+      .update(deployments)
+      .set({
+        routingStatus: "canary",
+        routingWeight: firstStage.weight,
+      })
+      .where(eq(deployments.id, deploymentId));
 
-    await db.update(bundleDeployments).set({
-      rolloutState: JSON.stringify(state),
-    }).where(eq(bundleDeployments.id, bundleDeploymentId));
+    await db
+      .update(bundleDeployments)
+      .set({
+        rolloutState: JSON.stringify(state),
+      })
+      .where(eq(bundleDeployments.id, bundleDeploymentId));
 
     if (state.autoPromote && firstStage.pauseMinutes > 0) {
       await this.scheduleAlarm(params.hostname, firstStage.pauseMinutes);
@@ -178,9 +184,8 @@ export class RolloutService {
     bundleDeploymentId: string,
     hostname: string,
   ): Promise<RolloutState> {
-    return withAdvanceStageLock(
-      bundleDeploymentId,
-      () => this.advanceStageWithRetry(bundleDeploymentId, hostname),
+    return withAdvanceStageLock(bundleDeploymentId, () =>
+      this.advanceStageWithRetry(bundleDeploymentId, hostname),
     );
   }
 
@@ -210,15 +215,17 @@ export class RolloutService {
   ): Promise<{ state: RolloutState; conflict: boolean }> {
     if (!hostname) throw new Error("Hostname is required");
     const db = getDb(this.env.DB);
-    const { state, raw: expectedRaw } = await this.loadStateRaw(
-      bundleDeploymentId,
-    );
+    const { state, raw: expectedRaw } =
+      await this.loadStateRaw(bundleDeploymentId);
     if (state.status !== "in_progress") return { state, conflict: false };
 
     // Health check before advancing
     if (state.healthCheck && this.env.ROLLOUT_HEALTH_KV) {
-      const dep = await db.select({ artifactRef: deployments.artifactRef })
-        .from(deployments).where(eq(deployments.id, state.deploymentId)).get();
+      const dep = await db
+        .select({ artifactRef: deployments.artifactRef })
+        .from(deployments)
+        .where(eq(deployments.id, state.deploymentId))
+        .get();
 
       if (dep?.artifactRef) {
         const health = await getErrorRate(
@@ -234,11 +241,11 @@ export class RolloutService {
             bundleDeploymentId,
             hostname,
             state,
-            `Error rate ${
-              (health.errorRate * 100).toFixed(1)
-            }% exceeds threshold ${
-              (state.healthCheck.errorRateThreshold * 100).toFixed(1)
-            }%`,
+            `Error rate ${(health.errorRate * 100).toFixed(
+              1,
+            )}% exceeds threshold ${(
+              state.healthCheck.errorRateThreshold * 100
+            ).toFixed(1)}%`,
           );
           return { state: reverted, conflict: false };
         }
@@ -256,11 +263,14 @@ export class RolloutService {
     }
 
     const nextStage = state.stages[nextIndex];
-    const dep = await db.select({
-      id: deployments.id,
-      artifactRef: deployments.artifactRef,
-    })
-      .from(deployments).where(eq(deployments.id, state.deploymentId)).get();
+    const dep = await db
+      .select({
+        id: deployments.id,
+        artifactRef: deployments.artifactRef,
+      })
+      .from(deployments)
+      .where(eq(deployments.id, state.deploymentId))
+      .get();
     if (!dep?.artifactRef) throw new Error("Deployment artifact not found");
 
     const active = await this.getActiveDeployment(
@@ -298,7 +308,9 @@ export class RolloutService {
       canaryWeight: nextStage.weight,
     });
 
-    await db.update(deployments).set({ routingWeight: nextStage.weight })
+    await db
+      .update(deployments)
+      .set({ routingWeight: nextStage.weight })
       .where(eq(deployments.id, state.deploymentId));
 
     if (nextState.autoPromote && nextStage.pauseMinutes > 0) {
@@ -363,12 +375,13 @@ export class RolloutService {
     bundleDeploymentId: string,
   ): Promise<RolloutState | null> {
     const db = getDb(this.env.DB);
-    const bundle = await db.select({
-      rolloutState: bundleDeployments.rolloutState,
-    })
-      .from(bundleDeployments).where(
-        eq(bundleDeployments.id, bundleDeploymentId),
-      ).get();
+    const bundle = await db
+      .select({
+        rolloutState: bundleDeployments.rolloutState,
+      })
+      .from(bundleDeployments)
+      .where(eq(bundleDeployments.id, bundleDeploymentId))
+      .get();
     if (!bundle?.rolloutState) return null;
     try {
       return JSON.parse(bundle.rolloutState) as RolloutState;
@@ -385,11 +398,14 @@ export class RolloutService {
     state: RolloutState,
   ): Promise<RolloutState> {
     const db = getDb(this.env.DB);
-    const dep = await db.select({
-      id: deployments.id,
-      artifactRef: deployments.artifactRef,
-    })
-      .from(deployments).where(eq(deployments.id, state.deploymentId)).get();
+    const dep = await db
+      .select({
+        id: deployments.id,
+        artifactRef: deployments.artifactRef,
+      })
+      .from(deployments)
+      .where(eq(deployments.id, state.deploymentId))
+      .get();
 
     if (dep?.artifactRef) {
       // Route 100% to the new deployment
@@ -398,32 +414,40 @@ export class RolloutService {
         hostname,
         target: {
           type: "deployments",
-          deployments: [{
-            routeRef: dep.artifactRef,
-            weight: 100,
-            deploymentId: dep.id,
-            status: "active",
-          }],
+          deployments: [
+            {
+              routeRef: dep.artifactRef,
+              weight: 100,
+              deploymentId: dep.id,
+              status: "active",
+            },
+          ],
         },
       });
     }
 
     // Archive old active deployments (excluding the one being promoted)
-    await db.update(deployments).set({
-      routingStatus: "archived",
-      routingWeight: 0,
-    })
-      .where(and(
-        eq(deployments.serviceId, state.serviceId),
-        eq(deployments.routingStatus, "active"),
-        ne(deployments.id, state.deploymentId),
-      ));
+    await db
+      .update(deployments)
+      .set({
+        routingStatus: "archived",
+        routingWeight: 0,
+      })
+      .where(
+        and(
+          eq(deployments.serviceId, state.serviceId),
+          eq(deployments.routingStatus, "active"),
+          ne(deployments.id, state.deploymentId),
+        ),
+      );
 
     // Promote canary → active
-    await db.update(deployments).set({
-      routingStatus: "active",
-      routingWeight: 100,
-    })
+    await db
+      .update(deployments)
+      .set({
+        routingStatus: "active",
+        routingWeight: 100,
+      })
       .where(eq(deployments.id, state.deploymentId));
 
     state.status = "completed";
@@ -452,20 +476,24 @@ export class RolloutService {
         hostname,
         target: {
           type: "deployments",
-          deployments: [{
-            routeRef: active.artifactRef,
-            weight: 100,
-            deploymentId: active.id,
-            status: "active",
-          }],
+          deployments: [
+            {
+              routeRef: active.artifactRef,
+              weight: 100,
+              deploymentId: active.id,
+              status: "active",
+            },
+          ],
         },
       });
     }
 
-    await db.update(deployments).set({
-      routingStatus: "archived",
-      routingWeight: 0,
-    })
+    await db
+      .update(deployments)
+      .set({
+        routingStatus: "archived",
+        routingWeight: 0,
+      })
       .where(eq(deployments.id, state.deploymentId));
 
     state.status = status;
@@ -512,12 +540,13 @@ export class RolloutService {
     bundleDeploymentId: string,
   ): Promise<{ state: RolloutState; raw: string }> {
     const db = getDb(this.env.DB);
-    const bundle = await db.select({
-      rolloutState: bundleDeployments.rolloutState,
-    })
-      .from(bundleDeployments).where(
-        eq(bundleDeployments.id, bundleDeploymentId),
-      ).get();
+    const bundle = await db
+      .select({
+        rolloutState: bundleDeployments.rolloutState,
+      })
+      .from(bundleDeployments)
+      .where(eq(bundleDeployments.id, bundleDeploymentId))
+      .get();
     if (!bundle?.rolloutState) throw new Error("No active rollout found");
     try {
       return {
@@ -557,19 +586,25 @@ export class RolloutService {
     };
     const serialized = JSON.stringify(next);
     if (expectedRaw === undefined) {
-      await db.update(bundleDeployments).set({ rolloutState: serialized })
+      await db
+        .update(bundleDeployments)
+        .set({ rolloutState: serialized })
         .where(eq(bundleDeployments.id, bundleDeploymentId));
       // Reflect the persisted version back to the caller's object.
       state.stateVersion = next.stateVersion;
       return true;
     }
-    const result = await db.update(bundleDeployments).set({
-      rolloutState: serialized,
-    })
-      .where(and(
-        eq(bundleDeployments.id, bundleDeploymentId),
-        eq(bundleDeployments.rolloutState, expectedRaw),
-      ));
+    const result = await db
+      .update(bundleDeployments)
+      .set({
+        rolloutState: serialized,
+      })
+      .where(
+        and(
+          eq(bundleDeployments.id, bundleDeploymentId),
+          eq(bundleDeployments.rolloutState, expectedRaw),
+        ),
+      );
     const changed = affectedRowCount(result) > 0;
     if (changed) {
       state.stateVersion = next.stateVersion;
@@ -579,27 +614,33 @@ export class RolloutService {
 
   private async getActiveDeployment(serviceId: string, excludeId: string) {
     const db = getDb(this.env.DB);
-    return db.select({
-      id: deployments.id,
-      artifactRef: deployments.artifactRef,
-    })
-      .from(deployments).where(
+    return db
+      .select({
+        id: deployments.id,
+        artifactRef: deployments.artifactRef,
+      })
+      .from(deployments)
+      .where(
         and(
           eq(deployments.serviceId, serviceId),
           eq(deployments.routingStatus, "active"),
           ne(deployments.id, excludeId),
         ),
-      ).get();
+      )
+      .get();
   }
 
-  private async updateRoutingWeights(hostname: string, params: {
-    activeRef: string;
-    activeDeploymentId?: string | null;
-    activeWeight: number;
-    canaryRef: string;
-    canaryDeploymentId?: string | null;
-    canaryWeight: number;
-  }): Promise<void> {
+  private async updateRoutingWeights(
+    hostname: string,
+    params: {
+      activeRef: string;
+      activeDeploymentId?: string | null;
+      activeWeight: number;
+      canaryRef: string;
+      canaryDeploymentId?: string | null;
+      canaryWeight: number;
+    },
+  ): Promise<void> {
     await upsertHostnameRouting({
       env: this.env,
       hostname,

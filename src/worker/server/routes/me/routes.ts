@@ -1,11 +1,9 @@
 import { Hono } from "hono";
 import type { Env } from "../../../shared/types/index.ts";
-import { validateUsername } from "../../../shared/utils/domain-validation.ts";
 import { type BaseVariables, parseJsonBody } from "../route-auth.ts";
 import {
   AuthorizationError,
   BadRequestError,
-  ConflictError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 import {
@@ -15,7 +13,6 @@ import {
 } from "../../../application/services/identity/user-settings.ts";
 import { toUserResponse } from "../../../application/services/identity/response-formatters.ts";
 import { getOrCreatePersonalWorkspace } from "../../../application/services/identity/spaces.ts";
-import { updateUsername } from "../../../application/services/identity/user-profile.ts";
 import privacy from "./privacy.ts";
 
 
@@ -112,36 +109,5 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       activity_visibility: activityVisibility,
     });
     return c.json(formatUserSettingsResponse(settings));
-  })
-  // Update username
-  .patch("/username", async (c) => {
-    const user = c.get("user");
-    const body = await parseJsonBody<{ username?: string }>(c);
-
-    if (!body || typeof body.username !== "string") {
-      throw new BadRequestError("username is required");
-    }
-
-    const normalizedUsername = body.username.trim().replace(/^@+/, "")
-      .toLowerCase();
-    const usernameError = validateUsername(normalizedUsername);
-    if (usernameError) {
-      throw new BadRequestError(usernameError);
-    }
-
-    if (normalizedUsername === user.username) {
-      return c.json({ success: true, username: normalizedUsername });
-    }
-
-    const result = await updateUsername(
-      c.env.DB,
-      user.id,
-      normalizedUsername,
-    );
-    if (!result.ok) {
-      throw new ConflictError("This username is already taken");
-    }
-
-    return c.json({ success: true, username: normalizedUsername });
   })
   .route("/privacy", privacy);

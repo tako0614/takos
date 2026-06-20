@@ -70,10 +70,10 @@ function readEnvString(env: object, key: string): string | undefined {
     : undefined;
 }
 
-// Multi-cloud materialization (aws/gcp/k8s) is operator-substrate scope owned
-// by OpenTofu RunnerProfiles, not the Takos worker. The worker provisions only
-// the native `cloudflare` backend and the portable self-hosted `local` backend;
-// any other configured value normalizes to one of those two.
+// Multi-cloud materialization is operator-substrate scope owned by Takosumi
+// runner policy, not the Takos worker. The worker provisions only the native
+// `cloudflare` backend and the portable self-hosted `local` backend; any other
+// explicit configured value fails closed.
 export function inferDefaultManagedResourceBackend(
   env: Partial<Env>,
 ): ManagedResourceBackend {
@@ -126,26 +126,32 @@ export async function provisionManagedResource(
   const id = input.id || generateId();
   const timestamp = input.timestamp || new Date().toISOString();
   const semanticType = input.semanticType ?? (input.type as ResourceCapability);
-  const publicType = input.publicType ?? toPublicResourceType(semanticType) ??
+  const publicType =
+    input.publicType ??
+    toPublicResourceType(semanticType) ??
     (input.type as ResourceType);
   const backendName = normalizeManagedResourceBackend(
     input.backendName ?? inferDefaultManagedResourceBackend(env),
   );
   const driver = resolveResourceDriver(semanticType, backendName);
   const persist = input.persist ?? true;
-  const backingResourceName = input.backingResourceName ??
-    `${input.type}-${id}`;
-  const implementation = resolveResourceImplementation(semanticType) ??
+  const backingResourceName =
+    input.backingResourceName ?? `${input.type}-${id}`;
+  const implementation =
+    resolveResourceImplementation(semanticType) ??
     (input.type as CloudflareManagedResourceType);
 
   try {
     if (backendName !== "cloudflare") {
-      await ensurePortableManagedResource({
-        id,
-        backend_name: backendName,
-        backing_resource_name: backingResourceName,
-        ...(input.config ? { config: input.config } : {}),
-      }, semanticType);
+      await ensurePortableManagedResource(
+        {
+          id,
+          backend_name: backendName,
+          backing_resource_name: backingResourceName,
+          ...(input.config ? { config: input.config } : {}),
+        },
+        semanticType,
+      );
       const portableBackingResourceId = await resolvePortableBackendResourceId({
         id,
         semanticType,
@@ -262,15 +268,19 @@ export async function deleteManagedResource(
     input.backendName ?? inferDefaultManagedResourceBackend(env),
   );
   if (backendName !== "cloudflare") {
-    await deletePortableManagedResource({
-      id: input.backingResourceId ?? input.backingResourceName ?? input.type,
-      backend_name: backendName,
-      backing_resource_name: input.backingResourceName ?? undefined,
-    }, input.type);
+    await deletePortableManagedResource(
+      {
+        id: input.backingResourceId ?? input.backingResourceName ?? input.type,
+        backend_name: backendName,
+        backing_resource_name: input.backingResourceName ?? undefined,
+      },
+      input.type,
+    );
     return;
   }
   const cloudflareResources = new CloudflareResourceService(env);
-  const implementation = resolveResourceImplementation(input.type) ??
+  const implementation =
+    resolveResourceImplementation(input.type) ??
     (input.type as CloudflareManagedResourceType);
   await cloudflareResources.deleteResource({
     type: implementation,

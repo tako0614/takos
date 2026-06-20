@@ -214,7 +214,7 @@ export function resolveConfig(options: GlobalOptions): ResolvedConfig {
     runtime.env.get("CF_API_TOKEN");
 
   const d1DatabaseId = options.databaseIdOverride ||
-    runtime.env.get("TAKOS_D1_DATABASE_ID") ||
+    runtime.env.get("TAKOS_DB_DATABASE_ID") ||
     inferD1DatabaseId(options.environment, wranglerToml);
 
   if (!accountId) {

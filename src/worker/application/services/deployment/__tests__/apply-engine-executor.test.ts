@@ -229,7 +229,7 @@ test(
         failedRoutes: [],
       }),
       previewServiceConsumeEnvVars: async () => [],
-      replaceManifestPublications: async () => undefined,
+      replaceServiceGraphPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({
@@ -365,7 +365,7 @@ test(
       publish: [{
         name: "api-url",
         publisher: "api",
-        type: "UiSurface",
+        type: "interface.ui.surface",
         outputs: { url: { kind: "url", routeRef: "api" } },
       }],
       env: {},

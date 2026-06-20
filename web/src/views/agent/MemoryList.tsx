@@ -1,6 +1,5 @@
 import { createMemo, createSignal } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
-import type { TranslationKey } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import {
   Badge,
@@ -9,36 +8,10 @@ import {
   Input,
   Modal,
   ModalFooter,
+  Select,
   Textarea,
 } from "../../components/ui/index.ts";
 import type { Memory } from "../../types/index.ts";
-
-function getTypeIcon(type: Memory["type"]) {
-  switch (type) {
-    case "episode":
-      return "📅";
-    case "semantic":
-      return "💡";
-    case "procedural":
-      return "📋";
-  }
-}
-
-function getTypeLabel(
-  type: Memory["type"],
-  t: (key: TranslationKey) => string,
-) {
-  switch (type) {
-    case "episode":
-      return t("memoryEpisode");
-    case "semantic":
-      return t("memorySemantic");
-    case "procedural":
-      return t("memoryProcedural");
-  }
-}
-
-import { Select } from "../../components/ui/index.ts";
 
 export function MemoryList(props: {
   memories: Memory[];
@@ -47,6 +20,10 @@ export function MemoryList(props: {
     data: { content: string; type: Memory["type"]; category?: string },
   ) => Promise<void>;
   savingMemory: boolean;
+  // Shared classification helpers from useMemoryData — same source as the
+  // full-page MemoryList so the two surfaces cannot drift on type icon/label.
+  getTypeIcon: (type: Memory["type"]) => string;
+  getTypeLabel: (type: Memory["type"]) => string;
 }) {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = createSignal("");
@@ -107,7 +84,7 @@ export function MemoryList(props: {
               >
                 {filter === "all"
                   ? t("taskFilterAll")
-                  : `${getTypeIcon(filter)} ${getTypeLabel(filter, t)}`}
+                  : `${props.getTypeIcon(filter)} ${props.getTypeLabel(filter)}`}
               </Button>
             ),
           )}
@@ -146,7 +123,8 @@ export function MemoryList(props: {
                   }}
                 >
                   <Badge variant="default">
-                    {getTypeIcon(memory.type)} {getTypeLabel(memory.type, t)}
+                    {props.getTypeIcon(memory.type)}{" "}
+                    {props.getTypeLabel(memory.type)}
                   </Badge>
                   {memory.category && (
                     <Badge variant="default">{memory.category}</Badge>
@@ -282,15 +260,19 @@ export function MemoryList(props: {
                 options={[
                   {
                     value: "semantic",
-                    label: `${getTypeIcon("semantic")} ${t("memorySemantic")}`,
+                    label: `${props.getTypeIcon("semantic")} ${
+                      t("memorySemantic")
+                    }`,
                   },
                   {
                     value: "episode",
-                    label: `${getTypeIcon("episode")} ${t("memoryEpisode")}`,
+                    label: `${props.getTypeIcon("episode")} ${
+                      t("memoryEpisode")
+                    }`,
                   },
                   {
                     value: "procedural",
-                    label: `${getTypeIcon("procedural")} ${
+                    label: `${props.getTypeIcon("procedural")} ${
                       t("memoryProcedural")
                     }`,
                   },

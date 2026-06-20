@@ -1,12 +1,13 @@
 // In-process Bearer self-validation for the unified worker.
 //
-// Because `app.takosumi.com` is now its own OIDC issuer (the account plane runs
-// in-process inside this worker), Bearer tokens it issued can be verified
+// Because the unified worker origin is its own OIDC issuer (the account plane
+// runs in-process inside this worker), Bearer tokens it issued can be verified
 // without any external HTTP call: the JWKS is served by the same in-process
-// accounts handler at `/oauth/jwks`. This module fetches that key set through
-// the in-process handler (NOT a remote URL), verifies the JWT signature/claims
-// with `jose`, and resolves the local user via the existing `authIdentities`
-// lookup keyed by `${issuer}#${sub}`.
+// accounts handler at `/oauth/jwks`. Hosted Takosumi uses app.takosumi.com;
+// self-hosted Takos uses its own origin. This module fetches that key set
+// through the in-process handler (NOT a remote URL), verifies the JWT
+// signature/claims with `jose`, and resolves the local user via the existing
+// `authIdentities` lookup keyed by `${issuer}#${sub}`.
 import * as jose from "jose";
 import { and, eq } from "drizzle-orm";
 import type { Env, User } from "../../../shared/types/index.ts";
@@ -19,12 +20,7 @@ import {
 } from "../accounts/mount.ts";
 import { extractBearerToken } from "../../middleware/bearer-token-classification.ts";
 
-const SELF_BEARER_ALGORITHMS = [
-  "RS256",
-  "PS256",
-  "ES256",
-  "EdDSA",
-] as const;
+const SELF_BEARER_ALGORITHMS = ["RS256", "PS256", "ES256", "EdDSA"] as const;
 
 // In-process JWKS path served by the accounts handler (mirrors
 // TAKOSUMI_ACCOUNTS_JWKS_PATH). Kept local to avoid a contract import for a
@@ -40,12 +36,12 @@ export type SelfIssuedBearerResult =
   | { kind: "invalid" }
   /** Token verified against the local JWKS and the local user resolved. */
   | {
-    kind: "ok";
-    user: User;
-    userId: string;
-    subject: string;
-    scopes: string[];
-  };
+      kind: "ok";
+      user: User;
+      userId: string;
+      subject: string;
+      scopes: string[];
+    };
 
 /**
  * Parse the OAuth scope claim from a verified self-issued token payload. Mirrors
@@ -53,16 +49,21 @@ export type SelfIssuedBearerResult =
  * path so the scope gate behaves identically for self-issued tokens.
  */
 function parseTokenScopes(payload: jose.JWTPayload): string[] {
-  const source = (payload as Record<string, unknown>).scope ??
+  const source =
+    (payload as Record<string, unknown>).scope ??
     (payload as Record<string, unknown>).scopes ??
     (payload as Record<string, unknown>).scp;
   if (typeof source === "string") {
-    return source.split(/\s+/).map((scope) => scope.trim()).filter(Boolean);
+    return source
+      .split(/\s+/)
+      .map((scope) => scope.trim())
+      .filter(Boolean);
   }
   if (Array.isArray(source)) {
     return source
-      .filter((scope): scope is string =>
-        typeof scope === "string" && scope.trim().length > 0
+      .filter(
+        (scope): scope is string =>
+          typeof scope === "string" && scope.trim().length > 0,
       )
       .map((scope) => scope.trim());
   }
@@ -84,9 +85,9 @@ async function loadLocalJwks(
     env,
   );
   if (!response.ok) return null;
-  const body = await response.json().catch(() => null) as
-    | jose.JSONWebKeySet
-    | null;
+  const body = (await response
+    .json()
+    .catch(() => null)) as jose.JSONWebKeySet | null;
   if (!body || !Array.isArray(body.keys)) return null;
   return body;
 }
@@ -98,19 +99,25 @@ async function resolveSelfIssuedUser(input: {
 }): Promise<User | null> {
   const db = getDb(input.db);
   const providerSub = `${input.issuer}#${input.subject}`;
-  const identity = await db.select({
-    userId: authIdentities.userId,
-  }).from(authIdentities).where(
-    and(
-      eq(authIdentities.provider, "oidc"),
-      eq(authIdentities.providerSub, providerSub),
-    ),
-  ).get();
+  const identity = await db
+    .select({
+      userId: authIdentities.userId,
+    })
+    .from(authIdentities)
+    .where(
+      and(
+        eq(authIdentities.provider, "oidc"),
+        eq(authIdentities.providerSub, providerSub),
+      ),
+    )
+    .get();
   if (!identity) return null;
 
-  const row = await db.select().from(accounts).where(
-    eq(accounts.id, identity.userId),
-  ).get();
+  const row = await db
+    .select()
+    .from(accounts)
+    .where(eq(accounts.id, identity.userId))
+    .get();
   if (!row || row.status !== "active") return null;
 
   return {

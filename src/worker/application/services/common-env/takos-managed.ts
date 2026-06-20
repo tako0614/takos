@@ -4,7 +4,7 @@ import type { Env } from "../../../shared/types/index.ts";
 import { ALL_API_BEARER_SCOPES } from "../../../shared/types/api-scopes.ts";
 import { normalizeEnvName } from "./crypto.ts";
 import type { SyncState } from "./repository.ts";
-import { RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE } from "../identity/takos-access-tokens.ts";
+import { RESERVED_TAKOS_PUBLICATION_MESSAGE } from "../identity/takos-access-tokens.ts";
 import { accounts, getDb } from "../../../infra/db/index.ts";
 import {
   BadRequestError,
@@ -95,20 +95,18 @@ async function loadSpaceIdentity(
   spaceId: string,
 ): Promise<SpaceIdentityRow | null> {
   const drizzle = getDb(db);
-  const row = await drizzle.select().from(accounts)
+  const row = await drizzle
+    .select()
+    .from(accounts)
     .where(eq(accounts.id, spaceId))
     .limit(1)
     .get();
   if (!row) return null;
 
-  const kind = row.type === "user"
-    ? "user"
-    : row.type === "system"
-    ? "system"
-    : "team";
-  const ownerUserId = row.type === "user"
-    ? row.id
-    : (row.ownerAccountId ?? row.id);
+  const kind =
+    row.type === "user" ? "user" : row.type === "system" ? "system" : "team";
+  const ownerUserId =
+    row.type === "user" ? row.id : (row.ownerAccountId ?? row.id);
   return {
     id: row.id,
     kind: kind as "user" | "team" | "system",
@@ -123,13 +121,11 @@ async function loadSpaceIdentity(
 export async function resolveTakosTokenSubject(params: {
   env: Pick<Env, "DB">;
   spaceId: string;
-}): Promise<
-  {
-    subjectUserId: string;
-    subjectMode: TakosTokenSubjectMode;
-    space: SpaceIdentityRow;
-  }
-> {
+}): Promise<{
+  subjectUserId: string;
+  subjectMode: TakosTokenSubjectMode;
+  space: SpaceIdentityRow;
+}> {
   const space = await loadSpaceIdentity(params.env.DB, params.spaceId);
   if (!space) {
     throw new NotFoundError(`Space ${params.spaceId}`);
@@ -166,27 +162,18 @@ export async function deleteManagedTakosTokenConfig(params: {
   void envName;
 }
 
-export async function upsertManagedTakosTokenConfig(_params: {
-  env: Pick<Env, "DB" | "ENCRYPTION_KEY">;
-  spaceId: string;
-  serviceId?: string;
-  workerId?: string;
-  scopes: string[];
-  envName?: string;
-}): Promise<void> {
-  throw new GoneError(RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE);
-}
-
 export async function ensureManagedTakosTokenValue(_params: {
   env: Pick<Env, "DB" | "ENCRYPTION_KEY">;
   spaceId: string;
   serviceId?: string;
   workerId?: string;
   envName?: string;
-}): Promise<
-  { value: string; scopes: string[]; subjectMode: TakosTokenSubjectMode } | null
-> {
-  throw new GoneError(RETIRED_APP_LOCAL_TAKOS_TOKEN_MESSAGE);
+}): Promise<{
+  value: string;
+  scopes: string[];
+  subjectMode: TakosTokenSubjectMode;
+} | null> {
+  throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
 }
 
 export async function listTakosManagedStatuses(params: {
@@ -205,20 +192,22 @@ export async function listTakosManagedStatuses(params: {
     throw new NotFoundError(`Space ${params.spaceId}`);
   }
   const apiUrl = resolveTakosApiUrl(params.env);
-  const apiLinkState = params.linkStateByName?.get(TAKOS_API_URL_ENV_NAME) ||
-    null;
+  const apiLinkState =
+    params.linkStateByName?.get(TAKOS_API_URL_ENV_NAME) || null;
 
   return {
     [TAKOS_API_URL_ENV_NAME]: {
       managed: true,
       available: Boolean(apiUrl),
       sync_state: apiLinkState
-        ? (apiLinkState.syncState === "missing_common"
+        ? apiLinkState.syncState === "missing_common"
           ? "missing_included"
-          : apiLinkState.syncState)
-        : (apiUrl ? "managed" : "error"),
-      sync_reason: apiLinkState?.syncReason ??
-        (apiUrl ? null : "admin_domain_missing"),
+          : apiLinkState.syncState
+        : apiUrl
+          ? "managed"
+          : "error",
+      sync_reason:
+        apiLinkState?.syncReason ?? (apiUrl ? null : "admin_domain_missing"),
     },
   };
 }
@@ -227,5 +216,5 @@ export async function markManagedTakosTokenUsedByHash(
   _db: SqlDatabaseBinding,
   _tokenHash: string,
 ): Promise<void> {
-  // App-local managed Takos tokens are retired; the historical table is gone.
+  // App-local managed Takos tokens are not a current credential channel.
 }

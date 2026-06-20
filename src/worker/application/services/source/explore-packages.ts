@@ -37,7 +37,7 @@ import {
   getPackageRatingSummary,
   type PublishStatus,
 } from "./explore-stats.ts";
-import { hasDeployManifestForRelease } from "./explore-catalog.ts";
+import { hasInstallableCapsuleForRelease } from "./explore-catalog.ts";
 import { toReleaseAssets } from "./repo-release-assets.ts";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 import type { ObjectStoreBinding } from "../../../shared/types/bindings.ts";
@@ -82,9 +82,7 @@ export async function filterDeployablePackageReleases(
   }> = [];
 
   for (const release of releases) {
-    if (
-      await hasDeployManifestForRelease(dbBinding, gitObjects, release)
-    ) {
+    if (await hasInstallableCapsuleForRelease(dbBinding, gitObjects, release)) {
       deployable.push(release);
     }
   }
@@ -200,9 +198,9 @@ function buildRepositoryUrl(
   const base = /^https?:\/\//i.test(adminDomain)
     ? adminDomain.replace(/\/+$/, "")
     : `https://${adminDomain.replace(/\/+$/, "")}`;
-  return `${base}/git/${encodeURIComponent(ownerUsername)}/${
-    encodeURIComponent(repoName)
-  }.git`;
+  return `${base}/git/${encodeURIComponent(ownerUsername)}/${encodeURIComponent(
+    repoName,
+  )}.git`;
 }
 
 async function findRepoByUsernameAndName(
@@ -213,22 +211,26 @@ async function findRepoByUsernameAndName(
   const cleanUsername = username.trim().toLowerCase();
   const cleanRepoName = repoName.trim().toLowerCase();
 
-  const row = await db.select({
-    id: repositories.id,
-    name: repositories.name,
-    description: repositories.description,
-    visibility: repositories.visibility,
-    stars: repositories.stars,
-    owner_id: accounts.id,
-    owner_name: accounts.name,
-    owner_username: accounts.slug,
-    owner_avatar_url: accounts.picture,
-  }).from(repositories)
+  const row = await db
+    .select({
+      id: repositories.id,
+      name: repositories.name,
+      description: repositories.description,
+      visibility: repositories.visibility,
+      stars: repositories.stars,
+      owner_id: accounts.id,
+      owner_name: accounts.name,
+      owner_username: accounts.slug,
+      owner_avatar_url: accounts.picture,
+    })
+    .from(repositories)
     .innerJoin(accounts, eq(accounts.id, repositories.accountId))
-    .where(and(
-      sql`lower(${repositories.name}) = ${cleanRepoName}`,
-      sql`lower(${accounts.slug}) = ${cleanUsername}`,
-    ))
+    .where(
+      and(
+        sql`lower(${repositories.name}) = ${cleanRepoName}`,
+        sql`lower(${accounts.slug}) = ${cleanUsername}`,
+      ),
+    )
     .limit(1)
     .get();
 
@@ -243,14 +245,20 @@ async function loadLatestDeployablePackage(
 ): Promise<LatestPackageSelection | null> {
   const pageSize = 10;
 
-  for (let offset = 0;; offset += pageSize) {
-    const releaseRows = await db.select().from(repoReleases).where(
-      and(
-        eq(repoReleases.repoId, repoId),
-        eq(repoReleases.isDraft, false),
-        eq(repoReleases.isPrerelease, false),
-      ),
-    ).orderBy(desc(repoReleases.publishedAt)).limit(pageSize).offset(offset)
+  for (let offset = 0; ; offset += pageSize) {
+    const releaseRows = await db
+      .select()
+      .from(repoReleases)
+      .where(
+        and(
+          eq(repoReleases.repoId, repoId),
+          eq(repoReleases.isDraft, false),
+          eq(repoReleases.isPrerelease, false),
+        ),
+      )
+      .orderBy(desc(repoReleases.publishedAt))
+      .limit(pageSize)
+      .offset(offset)
       .all();
 
     if (releaseRows.length === 0) {
@@ -275,15 +283,18 @@ async function loadLatestDeployablePackage(
       deployableReleaseRows.map((release) => release.tag),
     );
     const latestRelease = releaseRows.find((release) =>
-      deployableTags.has(release.tag)
+      deployableTags.has(release.tag),
     );
     if (!latestRelease) {
       continue;
     }
 
-    const assets = await db.select().from(repoReleaseAssets).where(
-      eq(repoReleaseAssets.releaseId, latestRelease.id),
-    ).orderBy(asc(repoReleaseAssets.createdAt)).all();
+    const assets = await db
+      .select()
+      .from(repoReleaseAssets)
+      .where(eq(repoReleaseAssets.releaseId, latestRelease.id))
+      .orderBy(asc(repoReleaseAssets.createdAt))
+      .all();
 
     return {
       release: latestRelease,
@@ -324,16 +335,19 @@ export async function loadLatestExplorePackage(
     ok: true,
     package: {
       name: repo.name,
-      app_id: latestPackage.asset?.bundle_meta?.app_id ||
-        latestPackage.asset?.bundle_meta?.name || repo.name,
-      version: latestPackage.asset?.bundle_meta?.version ||
-        latestPackage.release.tag,
+      app_id:
+        latestPackage.asset?.bundle_meta?.app_id ||
+        latestPackage.asset?.bundle_meta?.name ||
+        repo.name,
+      version:
+        latestPackage.asset?.bundle_meta?.version || latestPackage.release.tag,
       repository_url: buildRepositoryUrl(
         params.repositoryBaseUrl,
         repo.owner_username,
         repo.name,
       ),
-      description: latestPackage.asset?.bundle_meta?.description ||
+      description:
+        latestPackage.asset?.bundle_meta?.description ||
         latestPackage.release.description,
       icon: latestPackage.asset?.bundle_meta?.icon,
       repository: {
@@ -355,11 +369,11 @@ export async function loadLatestExplorePackage(
       },
       asset: latestPackage.asset
         ? {
-          id: latestPackage.asset.id,
-          name: latestPackage.asset.name,
-          size: latestPackage.asset.size,
-          download_count: latestPackage.asset.download_count,
-        }
+            id: latestPackage.asset.id,
+            name: latestPackage.asset.name,
+            size: latestPackage.asset.size,
+            download_count: latestPackage.asset.download_count,
+          }
         : null,
       published_at: textDateNullable(latestPackage.release.publishedAt),
       rating_avg: rating.rating_avg,
@@ -383,9 +397,14 @@ export async function listExplorePackageVersions(
     return { ok: false, resource: "Repository" };
   }
 
-  const releaseRows = await db.select().from(repoReleases).where(
-    and(eq(repoReleases.repoId, repo.id), eq(repoReleases.isDraft, false)),
-  ).orderBy(desc(repoReleases.publishedAt)).all();
+  const releaseRows = await db
+    .select()
+    .from(repoReleases)
+    .where(
+      and(eq(repoReleases.repoId, repo.id), eq(repoReleases.isDraft, false)),
+    )
+    .orderBy(desc(repoReleases.publishedAt))
+    .all();
 
   const deployableReleaseRows = await filterDeployablePackageReleases(
     dbBinding,
@@ -401,14 +420,18 @@ export async function listExplorePackageVersions(
   );
 
   const filteredReleaseRows = releaseRows.filter((release) =>
-    deployableReleaseTags.has(release.tag)
+    deployableReleaseTags.has(release.tag),
   );
   const releaseIds = filteredReleaseRows.map((release) => release.id);
-  const allAssets = releaseIds.length > 0
-    ? await db.select().from(repoReleaseAssets).where(
-      inArray(repoReleaseAssets.releaseId, releaseIds),
-    ).orderBy(asc(repoReleaseAssets.createdAt)).all()
-    : [];
+  const allAssets =
+    releaseIds.length > 0
+      ? await db
+          .select()
+          .from(repoReleaseAssets)
+          .where(inArray(repoReleaseAssets.releaseId, releaseIds))
+          .orderBy(asc(repoReleaseAssets.createdAt))
+          .all()
+      : [];
   const assetsByRelease = new Map<string, typeof allAssets>();
   for (const asset of allAssets) {
     const list = assetsByRelease.get(asset.releaseId) ?? [];
@@ -422,8 +445,10 @@ export async function listExplorePackageVersions(
 
     return {
       tag: release.tag,
-      app_id: primaryAsset?.bundle_meta?.app_id ||
-        primaryAsset?.bundle_meta?.name || repo.name,
+      app_id:
+        primaryAsset?.bundle_meta?.app_id ||
+        primaryAsset?.bundle_meta?.name ||
+        repo.name,
       version: primaryAsset?.bundle_meta?.version || release.tag,
       repository_url: buildRepositoryUrl(
         params.repositoryBaseUrl,
@@ -446,12 +471,16 @@ export async function loadExplorePackageReviews(
   repoId: string,
 ): Promise<LoadExplorePackageReviewsResult> {
   const db = getDb(dbBinding);
-  const repo = await db.select({
-    id: repositories.id,
-    name: repositories.name,
-  }).from(repositories).where(
-    and(eq(repositories.id, repoId), eq(repositories.visibility, "public")),
-  ).get();
+  const repo = await db
+    .select({
+      id: repositories.id,
+      name: repositories.name,
+    })
+    .from(repositories)
+    .where(
+      and(eq(repositories.id, repoId), eq(repositories.visibility, "public")),
+    )
+    .get();
   if (!repo) {
     return { ok: false, resource: "Repository" };
   }
@@ -494,17 +523,19 @@ function toPackageDto(
     ? `${pkg.release.id}:${pkg.primaryAsset.id}`
     : null;
   const publishStatus = publishKey
-    ? (publishStatusByKey.get(publishKey) || "none")
+    ? publishStatusByKey.get(publishKey) || "none"
     : "none";
 
   return {
     id: pkg.release.id,
     name: pkg.release.repository.name,
-    app_id: pkg.primaryAsset?.bundle_meta?.app_id ||
-      pkg.primaryAsset?.bundle_meta?.name || pkg.release.repository.name,
+    app_id:
+      pkg.primaryAsset?.bundle_meta?.app_id ||
+      pkg.primaryAsset?.bundle_meta?.name ||
+      pkg.release.repository.name,
     version: pkg.primaryAsset?.bundle_meta?.version || pkg.release.tag,
-    description: pkg.primaryAsset?.bundle_meta?.description ||
-      pkg.release.description,
+    description:
+      pkg.primaryAsset?.bundle_meta?.description || pkg.release.description,
     icon: pkg.primaryAsset?.bundle_meta?.icon,
     category: pkg.primaryAsset?.bundle_meta?.category,
     tags: pkg.primaryAsset?.bundle_meta?.tags,
@@ -522,11 +553,11 @@ function toPackageDto(
     },
     asset: pkg.primaryAsset
       ? {
-        id: pkg.primaryAsset.id,
-        name: pkg.primaryAsset.name,
-        size: pkg.primaryAsset.size,
-        download_count: pkg.primaryAsset.download_count,
-      }
+          id: pkg.primaryAsset.id,
+          name: pkg.primaryAsset.name,
+          size: pkg.primaryAsset.size,
+          download_count: pkg.primaryAsset.download_count,
+        }
       : null,
     total_downloads: pkg.totalDownloads,
     published_at: textDateNullable(pkg.release.publishedAt),
@@ -592,12 +623,14 @@ export async function searchPackages(
     db,
     filtered.flatMap((pkg) =>
       pkg.primaryAsset
-        ? [{
-          repoId: pkg.release.repository.id,
-          releaseTag: pkg.release.tag,
-          assetId: pkg.primaryAsset.id,
-        }]
-        : []
+        ? [
+            {
+              repoId: pkg.release.repository.id,
+              releaseTag: pkg.release.tag,
+              assetId: pkg.primaryAsset.id,
+            },
+          ]
+        : [],
     ),
   );
 
@@ -614,7 +647,7 @@ export async function searchPackages(
   if (hasMoreFiltered) filtered.pop();
 
   const packages = filtered.map((pkg) =>
-    toPackageDto(pkg, ratingStatsByRepoId, publishStatusByKey)
+    toPackageDto(pkg, ratingStatsByRepoId, publishStatusByKey),
   );
 
   return { packages, has_more: hasMoreFiltered };
@@ -653,11 +686,13 @@ export async function suggestPackages(
       return {
         id: release.id,
         name: release.repoName,
-        app_id: primaryAsset?.bundle_meta?.app_id ||
-          primaryAsset?.bundle_meta?.name || release.repoName,
+        app_id:
+          primaryAsset?.bundle_meta?.app_id ||
+          primaryAsset?.bundle_meta?.name ||
+          release.repoName,
         version: primaryAsset?.bundle_meta?.version || release.tag,
-        description: primaryAsset?.bundle_meta?.description ||
-          release.description,
+        description:
+          primaryAsset?.bundle_meta?.description || release.description,
         icon: primaryAsset?.bundle_meta?.icon,
         category: primaryAsset?.bundle_meta?.category,
         tags: primaryAsset?.bundle_meta?.tags,
@@ -680,11 +715,11 @@ export async function suggestPackages(
         },
         asset: primaryAsset
           ? {
-            id: primaryAsset.id,
-            name: primaryAsset.name,
-            size: primaryAsset.size,
-            download_count: primaryAsset.download_count,
-          }
+              id: primaryAsset.id,
+              name: primaryAsset.name,
+              size: primaryAsset.size,
+              download_count: primaryAsset.download_count,
+            }
           : null,
         total_downloads: totalDownloads,
         published_at: textDateNullable(release.publishedAt),
@@ -694,7 +729,11 @@ export async function suggestPackages(
       if (category && p.category !== category) return false;
       if (tags.length > 0) {
         const pkgTags = (p.tags || [])
-          .map((t) => String(t || "").trim().toLowerCase())
+          .map((t) =>
+            String(t || "")
+              .trim()
+              .toLowerCase(),
+          )
           .filter(Boolean);
         if (pkgTags.length === 0) return false;
         if (!tags.every((t) => pkgTags.includes(t))) return false;

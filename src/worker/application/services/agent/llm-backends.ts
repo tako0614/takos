@@ -1,6 +1,10 @@
 /**
- * Multi-Model Backend Abstraction
- * Supports OpenAI, Anthropic Claude, and Google Gemini
+ * Multi-Model Backend Abstraction.
+ *
+ * Three native backends are implemented here, but the default product surface
+ * routes model aliases through the OpenAI-compatible contract. Hosted Takosumi
+ * can set OPENAI_BASE_URL to `/gateway/ai/v1` and expose DeepSeek / GLM /
+ * Gemini aliases without adding provider-specific Takos model backends.
  */
 
 import type {
@@ -20,6 +24,7 @@ export interface ModelConfig {
   backend: ModelBackend;
   model: string;
   apiKey: string;
+  baseUrl?: string;
   maxTokens?: number;
   temperature?: number;
 }
@@ -43,16 +48,32 @@ export interface LLMBackend {
 
 /** Truncate and redact LLM API error bodies to prevent secret leakage. */
 function sanitize(body: string, max = 500): string {
-  return body.slice(0, max)
+  return body
+    .slice(0, max)
     .replace(/sk-[A-Za-z0-9_-]{10,}/g, "sk-***")
     .replace(/key-[A-Za-z0-9_-]{10,}/g, "key-***")
     .replace(/Bearer\s+[A-Za-z0-9_-]+/gi, "Bearer ***");
 }
 
+function openAiChatCompletionsUrl(baseUrl?: string): string {
+  const trimmed = baseUrl?.trim();
+  if (!trimmed) return "https://api.openai.com/v1/chat/completions";
+
+  const parsed = new URL(trimmed);
+  if (parsed.username || parsed.password) {
+    throw new Error("OPENAI_BASE_URL must not embed credentials");
+  }
+  const normalized = parsed.toString().replace(/\/+$/, "");
+  return normalized.endsWith("/chat/completions")
+    ? normalized
+    : `${normalized}/chat/completions`;
+}
+
 /** Extract and concatenate system messages; return the rest unchanged. */
-function extractSystem(
-  msgs: AgentMessage[],
-): { system: string; rest: AgentMessage[] } {
+function extractSystem(msgs: AgentMessage[]): {
+  system: string;
+  rest: AgentMessage[];
+} {
   let system = "";
   const rest: AgentMessage[] = [];
   for (const m of msgs) {
@@ -70,9 +91,11 @@ function extractSystem(
  * cache breakpoint. When no system message is marked, everything is dynamic
  * (caching off) — so this is a no-op until the agent emits a marked stable block.
  */
-function extractSystemBlocks(
-  msgs: AgentMessage[],
-): { stableSystem: string; dynamicSystem: string; rest: AgentMessage[] } {
+function extractSystemBlocks(msgs: AgentMessage[]): {
+  stableSystem: string;
+  dynamicSystem: string;
+  rest: AgentMessage[];
+} {
   const rest: AgentMessage[] = [];
   const systems: AgentMessage[] = [];
   for (const m of msgs) {
@@ -84,12 +107,17 @@ function extractSystemBlocks(
     if (systems[i].cacheControl === "ephemeral") lastStableIdx = i;
   }
   const join = (from: number, to: number) =>
-    systems.slice(from, to).map((m) => m.content).filter(Boolean).join("\n\n");
+    systems
+      .slice(from, to)
+      .map((m) => m.content)
+      .filter(Boolean)
+      .join("\n\n");
   return {
     stableSystem: lastStableIdx >= 0 ? join(0, lastStableIdx + 1) : "",
-    dynamicSystem: lastStableIdx >= 0
-      ? join(lastStableIdx + 1, systems.length)
-      : join(0, systems.length),
+    dynamicSystem:
+      lastStableIdx >= 0
+        ? join(lastStableIdx + 1, systems.length)
+        : join(0, systems.length),
     rest,
   };
 }
@@ -126,9 +154,10 @@ function parseToolCalls(
       out.push({
         id: tc.id,
         name: tc.name,
-        arguments: typeof tc.arguments === "string"
-          ? JSON.parse(tc.arguments)
-          : tc.arguments,
+        arguments:
+          typeof tc.arguments === "string"
+            ? JSON.parse(tc.arguments)
+            : tc.arguments,
       });
     } catch (e) {
       logError("Failed to parse tool call", e, {
@@ -216,8 +245,10 @@ class OpenAIBackend implements LLMBackend {
       }),
     };
 
-    const isReasoning = /^o[0-9]/.test(this.cfg.model) ||
-      this.cfg.model.includes("o1") || this.cfg.model.includes("o3") ||
+    const isReasoning =
+      /^o[0-9]/.test(this.cfg.model) ||
+      this.cfg.model.includes("o1") ||
+      this.cfg.model.includes("o3") ||
       this.cfg.model.includes("gpt-5");
     if (!isReasoning) body.temperature = this.cfg.temperature ?? 1;
 
@@ -246,25 +277,26 @@ class OpenAIBackend implements LLMBackend {
       usage: {
         prompt_tokens: number;
         completion_tokens: number;
-        // OpenAI automatic prefix caching reports the cached subset here.
+        // Some OpenAI-compatible upstreams report the cached subset here.
         prompt_tokens_details?: { cached_tokens?: number };
       };
     };
     const d = await llmFetch<Res>(
-      "https://api.openai.com/v1/chat/completions",
+      openAiChatCompletionsUrl(this.cfg.baseUrl),
       { Authorization: `Bearer ${this.cfg.apiKey}` },
       body,
-      "OpenAI",
+      "OpenAI-compatible upstream",
       signal,
     );
     if (!d.choices?.length) {
-      throw new Error("OpenAI API returned empty choices array");
+      throw new Error(
+        "OpenAI-compatible upstream returned empty choices array",
+      );
     }
 
     const c = d.choices[0];
-    // `prompt_tokens` is the TOTAL (cached + uncached); cached_tokens is the
-    // discounted subset (OpenAI auto-caches stable prefixes ≥1024 tokens — no
-    // explicit cache_control needed, so the agent just keeps the prefix stable).
+    // `prompt_tokens` is the TOTAL (cached + uncached); when the upstream
+    // reports `cached_tokens`, it is the discounted subset.
     return respond(
       c.message.content || "",
       parseToolCalls(
@@ -471,9 +503,11 @@ class GoogleBackend implements LLMBackend {
         const name = (fn?.functionCall as { name?: string })?.name || "unknown";
         contents.push({
           role: "user",
-          parts: [{
-            functionResponse: { name, response: { result: m.content } },
-          }],
+          parts: [
+            {
+              functionResponse: { name, response: { result: m.content } },
+            },
+          ],
         });
       }
     }
@@ -487,24 +521,27 @@ class GoogleBackend implements LLMBackend {
     };
     if (system) body.systemInstruction = { parts: [{ text: system }] };
     if (tools?.length) {
-      body.tools = [{
-        functionDeclarations: tools.map((t) => ({
-          name: t.name,
-          description: t.description,
-          parameters: {
-            type: "OBJECT",
-            properties: Object.fromEntries(
-              Object.entries(t.parameters.properties).map((
-                [k, v],
-              ) => [k, {
-                type: (v.type || "string").toUpperCase(),
-                description: v.description,
-              }]),
-            ),
-            required: t.parameters.required,
-          },
-        })),
-      }];
+      body.tools = [
+        {
+          functionDeclarations: tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            parameters: {
+              type: "OBJECT",
+              properties: Object.fromEntries(
+                Object.entries(t.parameters.properties).map(([k, v]) => [
+                  k,
+                  {
+                    type: (v.type || "string").toUpperCase(),
+                    description: v.description,
+                  },
+                ]),
+              ),
+              required: t.parameters.required,
+            },
+          })),
+        },
+      ];
     }
 
     type Res = {

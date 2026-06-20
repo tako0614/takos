@@ -52,8 +52,10 @@ export {
   deleteMcpServer,
   getMcpServerWithTokens,
   listMcpServers,
+  reauthorizeExternalMcpServer,
   reconcileManagedWorkerMcpServer,
   registerExternalMcpServer,
+  resolvePublicationMcpServerAccessToken,
   updateMcpServer,
   upsertManagedMcpServer,
 } from "./mcp/crud.ts";

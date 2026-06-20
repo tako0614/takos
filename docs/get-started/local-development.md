@@ -48,17 +48,17 @@ bun run local:e2e      # E2E スモークテスト
 
 ## ローカルで起動するサービス
 
-| サービス      | 役割                          |
-| ------------- | ----------------------------- |
+| サービス       | 役割                                    |
+| -------------- | --------------------------------------- |
 | `takos-worker` | Web UI / API / queue / scheduled Worker |
-| `takos-git`   | Git ホスティング (Smart HTTP) |
-| `takos-agent` | エージェント実行              |
-| `takosumi`    | デプロイエンジン              |
-| `postgres`    | データベース                  |
-| `redis`       | キュー / キャッシュ           |
+| `takos-git`    | Git ホスティング (Smart HTTP)           |
+| `takos-agent`  | エージェント実行                        |
+| `takosumi`     | デプロイエンジン                        |
+| `postgres`     | データベース                            |
+| `redis`        | キュー / キャッシュ                     |
 
 Takos product の public/control Worker は `takos-worker` 1 つです。local / self-host
-stack で runtime host や executor host の helper endpoint が見える場合も、これは container
+stack で container callback helper endpoint が見える場合も、これは container
 接続用の実装 detail であり、追加の Takos product Worker 境界ではありません。
 
 ## 個別のプロセスを起動する

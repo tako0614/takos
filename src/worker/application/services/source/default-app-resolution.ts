@@ -1,6 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
+import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 import {
   defaultAppDistributionConfig,
   defaultAppDistributionEntries,
@@ -95,28 +96,53 @@ function normalizeHttpUrl(value: string, field: string): string {
   return parsed.toString();
 }
 
+function normalizeInstallationsUrl(value: string, field: string): string {
+  const normalized = normalizeHttpUrl(value, field);
+  const url = new URL(normalized);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
+    ? basePath
+    : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
+  url.search = "";
+  return url.toString();
+}
+
 export function resolveDefaultAppInstallConfig(
   env: DefaultAppDistributionEnv,
 ): DefaultAppInstallConfig | null {
-  const installUrl = readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_URL);
-  const token = readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_TOKEN);
-  const accountId = readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID);
-  const subject = readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_SUBJECT);
-  const mode = readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_MODE);
-  const runtimeBaseUrl = readEnvString(
-    env.TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL,
-  );
+  const installUrl =
+    readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_URL) ??
+    readEnvString(env.TAKOS_APP_INSTALLATIONS_URL) ??
+    readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
+    readEnvString(env.TAKOSUMI_ACCOUNTS_URL);
+  const token =
+    readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_TOKEN) ??
+    readEnvString(env.TAKOS_APP_INSTALL_TOKEN) ??
+    readEnvString(env.TAKOSUMI_ACCOUNTS_TOKEN);
+  const accountId =
+    readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID) ??
+    readEnvString(env.TAKOS_APP_INSTALL_ACCOUNT_ID);
+  const subject =
+    readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_SUBJECT) ??
+    readEnvString(env.TAKOS_APP_INSTALL_SUBJECT) ??
+    readEnvString(env.TAKOSUMI_ACCOUNTS_SUBJECT);
+  const mode =
+    readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_MODE) ??
+    readEnvString(env.TAKOS_APP_INSTALL_MODE);
+  const runtimeBaseUrl =
+    readEnvString(env.TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL) ??
+    readEnvString(env.TAKOS_APP_INSTALL_RUNTIME_BASE_URL);
   const configured = Boolean(
     installUrl || token || accountId || subject || mode || runtimeBaseUrl,
   );
   if (!configured) return null;
   if (!installUrl || !token || !subject) {
     throw new DefaultAppDistributionInvalidError(
-      "TAKOS_DEFAULT_APP_INSTALL_URL, TAKOS_DEFAULT_APP_INSTALL_TOKEN, and TAKOS_DEFAULT_APP_INSTALL_SUBJECT are required when default app Installation install is configured",
+      "Default app Installation install requires endpoint, token, and subject: configure TAKOS_DEFAULT_APP_INSTALL_URL/TOKEN/SUBJECT, shared TAKOS_APP_INSTALLATIONS_URL/TOKEN/SUBJECT, or TAKOSUMI_ACCOUNTS_INTERNAL_URL + TAKOSUMI_ACCOUNTS_TOKEN/SUBJECT",
     );
   }
   return {
-    installUrl: normalizeHttpUrl(
+    installUrl: normalizeInstallationsUrl(
       installUrl,
       "TAKOS_DEFAULT_APP_INSTALL_URL",
     ),
@@ -126,11 +152,11 @@ export function resolveDefaultAppInstallConfig(
     ...(mode ? { mode } : {}),
     ...(runtimeBaseUrl
       ? {
-        runtimeBaseUrl: normalizeHttpUrl(
-          runtimeBaseUrl,
-          "TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL",
-        ),
-      }
+          runtimeBaseUrl: normalizeHttpUrl(
+            runtimeBaseUrl,
+            "TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL",
+          ),
+        }
       : {}),
   };
 }
@@ -170,8 +196,10 @@ function parseConfiguredDistribution(
   defaults: DefaultAppDistributionDefaults,
 ): DefaultAppDistributionEntry[] | null {
   try {
-    return parseOperatorDistribution(env, defaults) ??
-      parseOperatorRepositories(env, defaults);
+    return (
+      parseOperatorDistribution(env, defaults) ??
+      parseOperatorRepositories(env, defaults)
+    );
   } catch (error) {
     throw new DefaultAppDistributionInvalidError(
       error instanceof Error ? error.message : String(error),
@@ -198,10 +226,10 @@ export function resolveFallbackDefaultAppDistribution(
           icon: entry.icon,
           category: entry.category,
           tags: entry.tags,
-          repositoryUrl: typeof repositoryOverride === "string" &&
-              repositoryOverride.trim()
-            ? repositoryOverride.trim()
-            : entry.repositoryUrl,
+          repositoryUrl:
+            typeof repositoryOverride === "string" && repositoryOverride.trim()
+              ? repositoryOverride.trim()
+              : entry.repositoryUrl,
           ref: defaults.refFromEnv ? defaults.ref : entry.ref,
           refType: defaults.refFromEnv ? defaults.refType : entry.refType,
           sourcePath: entry.sourcePath,
@@ -223,18 +251,15 @@ async function readPersistedDefaultAppDistribution(
   const now = clock.now();
   const key = defaultsCacheKey(defaults);
   const cached = getDistributionCacheEntry(env.DB);
-  if (
-    cached?.key === key &&
-    cached.expiresAt &&
-    cached.expiresAt > now
-  ) {
+  if (cached?.key === key && cached.expiresAt && cached.expiresAt > now) {
     return clonePersistedDistribution(cached.distribution);
   }
 
   const db = defaultAppDistributionDeps.getDb(env.DB);
   let configRow: DefaultAppDistributionConfigRow | undefined;
   try {
-    configRow = await db.select()
+    configRow = await db
+      .select()
       .from(defaultAppDistributionConfig)
       .where(eq(defaultAppDistributionConfig.id, "default"))
       .get();
@@ -257,7 +282,8 @@ async function readPersistedDefaultAppDistribution(
 
   let rows: DefaultAppDistributionRow[];
   try {
-    rows = await db.select()
+    rows = await db
+      .select()
       .from(defaultAppDistributionEntries)
       .where(eq(defaultAppDistributionEntries.enabled, true))
       .orderBy(
@@ -463,7 +489,9 @@ async function readDefaultAppPreinstallJobsStatus(
 ): Promise<DefaultAppPreinstallJobsStatus> {
   const byStatus = emptyPreinstallJobStatusCounts();
   try {
-    const rows = await defaultAppDistributionDeps.getDb(env.DB).select()
+    const rows = await defaultAppDistributionDeps
+      .getDb(env.DB)
+      .select()
       .from(defaultAppPreinstallJobs)
       .all();
     let latestUpdatedAt: string | null = null;
@@ -473,7 +501,8 @@ async function readDefaultAppPreinstallJobsStatus(
       const status = normalizePreinstallJobStatus(row.status);
       byStatus[status] += 1;
       if (
-        row.updatedAt && (!latestUpdatedAt || row.updatedAt > latestUpdatedAt)
+        row.updatedAt &&
+        (!latestUpdatedAt || row.updatedAt > latestUpdatedAt)
       ) {
         latestUpdatedAt = row.updatedAt;
       }
@@ -489,7 +518,7 @@ async function readDefaultAppPreinstallJobsStatus(
     }
 
     lastErrors.sort((left, right) =>
-      String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? ""))
+      String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")),
     );
     return {
       available: true,

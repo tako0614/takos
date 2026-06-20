@@ -282,17 +282,6 @@ export const repoRemotes = sqliteTable("repo_remotes", {
   idxRepo: index("idx_repo_remotes_repo_id").on(table.repoId),
 }));
 
-// 77. RepoStar
-export const repoStars = sqliteTable("repo_stars", {
-  accountId: text("account_id").notNull().references(() => accounts.id),
-  repoId: text("repo_id").notNull().references(() => repositories.id),
-  ...createdAtColumn,
-}, (table) => ({
-  pk: primaryKey({ columns: [table.accountId, table.repoId] }),
-  idxRepo: index("idx_repo_stars_repo_id").on(table.repoId),
-  idxAccount: index("idx_repo_stars_account_id").on(table.accountId),
-}));
-
 // 79. Repository
 export const repositories = sqliteTable("repositories", {
   id: text("id").primaryKey(),

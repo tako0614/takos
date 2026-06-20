@@ -7,6 +7,7 @@ export interface SidebarCallbacks {
   onNavigateStorage: () => void;
   onNavigateDeploy: () => void;
   onNavigateApps: () => void;
+  onNavigateMemory: () => void;
   onNavigateStore: () => void;
   onNavigateRepos: () => void;
   onOpenSearch: () => void;

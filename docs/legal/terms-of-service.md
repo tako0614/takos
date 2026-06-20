@@ -10,13 +10,13 @@ counsel and replace all placeholder fields before publishing to end users.
 
 ## Status
 
-| Field            | Value                                                  |
-| ---------------- | ------------------------------------------------------ |
-| Owner            | Operator legal owner                                   |
-| Last reviewed    | `[EFFECTIVE_DATE]`                                     |
-| Scope            | Takos Web / API, Takos Git, Takos agent, bundled apps  |
-| Current status   | Template — pre-public-launch baseline                  |
-| Signature status | Click-through acceptance; not a signed master contract |
+| Field            | Value                                                                     |
+| ---------------- | ------------------------------------------------------------------------- |
+| Owner            | Operator legal owner                                                      |
+| Last reviewed    | `[EFFECTIVE_DATE]`                                                        |
+| Scope            | Takos Web / API, Git service profile, agent runtime profile, bundled apps |
+| Current status   | Template — pre-public-launch baseline                                     |
+| Signature status | Click-through acceptance; not a signed master contract                    |
 
 ## 1. 定義
 
@@ -55,7 +55,7 @@ Takosumi リファレンスディストリビューション (以下「本サー
 ## 4. サービス可用性
 
 - 当社は本サービスを可用性目標
-  ([SLA](/legal/sla) に定める shared-cell 99.5% / dedicated 99.9%) に従い提供します。
+  ([SLA](/legal/sla) に定める shared 99.5% / dedicated 99.9%) に従い提供します。
 - 計画メンテナンス、不可抗力、利用者起因の障害は SLA の除外事由です。
 - ステータス情報は [Status Page](/legal/status-page) で公開されます。
 
@@ -114,11 +114,11 @@ Takosumi リファレンスディストリビューション (以下「本サー
 
 ## 12. お問い合わせ
 
-| 用途             | 連絡先                |
-| ---------------- | --------------------- |
-| 一般問い合わせ   | `[OPERATOR_EMAIL]`    |
-| 法務             | `[LEGAL_EMAIL]`       |
-| 住所             | `[OPERATOR_ADDRESS]`  |
-| データ保護責任者 | `[DPO_EMAIL]`         |
+| 用途             | 連絡先               |
+| ---------------- | -------------------- |
+| 一般問い合わせ   | `[OPERATOR_EMAIL]`   |
+| 法務             | `[LEGAL_EMAIL]`      |
+| 住所             | `[OPERATOR_ADDRESS]` |
+| データ保護責任者 | `[DPO_EMAIL]`        |
 
 施行日: `[EFFECTIVE_DATE]`

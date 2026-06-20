@@ -1,14 +1,20 @@
 import { For, Show } from "solid-js";
-import { getModelLabel, MODEL_OPTIONS } from "../../lib/modelCatalog.ts";
+import {
+  getModelLabel,
+  MODEL_OPTIONS,
+  type ModelSelectOption,
+} from "../../lib/modelCatalog.ts";
 import { Icons } from "../../lib/Icons.tsx";
 
 interface ModelSwitcherProps {
   selectedModel: string;
+  models?: readonly ModelSelectOption[];
   isLoading?: boolean;
   onModelChange?: (model: string) => void;
 }
 
 export function ModelSwitcher(props: ModelSwitcherProps) {
+  const models = () => (props.models?.length ? props.models : MODEL_OPTIONS);
   return (
     <Show
       when={props.onModelChange}
@@ -25,7 +31,7 @@ export function ModelSwitcher(props: ModelSwitcherProps) {
           disabled={props.isLoading ?? false}
           class="appearance-none bg-transparent text-base font-semibold text-zinc-900 dark:text-zinc-100 pr-6 cursor-pointer focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <For each={MODEL_OPTIONS}>
+          <For each={models()}>
             {(opt) => (
               <option
                 value={opt.id}

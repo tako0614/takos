@@ -138,7 +138,7 @@ function buildManagedDeploymentTarget(
   if (category === "worker") {
     // Workload readiness probe path: kernel が deploy 時に GET <path> を probe する。
     // 200 OK 以外は fail (timeout 10s, hard-coded)。default は `/`。
-    // docs: docs/apps/workers.md readiness section
+    // 契約の正本は readiness-probe.ts を参照。
     const workerSpec = spec as AppWorker;
     const readinessPath = typeof workerSpec.readiness === "string" &&
         workerSpec.readiness.length > 0

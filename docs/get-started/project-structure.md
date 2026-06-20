@@ -1,20 +1,22 @@
 # プロジェクト構成
 
-This page describes how Takos relates to Takosumi v1. Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module repo and records an **Installation**, then a **`plan` type Run**, an **`apply` type Run**, a **Deployment**, and **OutputSnapshot**. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, and well-known OpenTofu outputs.
+Takos は AI workspace distribution です。ユーザー向けの主な構成要素は Workspace、chat、agent、memory、Git、
+app launcher、MCP tools です。アプリや追加 runtime service は Git URL から入る OpenTofu Capsule として install され、
+embedded Takosumi services が Installation / Run / Deployment / OutputSnapshot / Service Graph を管理します。
 
 ## Current Flow
 
-1. Create an Installation from a Git URL/ref (and module path) pointing at a plain OpenTofu module.
-2. Run plan to produce a `plan` type Run and review its proposed changes, warnings, and policy decision.
-3. Apply the reviewed plan to produce an `apply` type Run. A successful apply updates the `Deployment` and its `OutputSnapshot`.
-4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) used by the module, and policy resolves provider allowlists, state backend, execution image/resource limits, and Cloudflare Container execution; Takosumi records the run ledger and policy decisions for each plan/apply/destroy.
-5. Account-plane concerns — accounts, billing, OIDC clients, dashboard, and the deploy facade — belong to the operator distribution (Takosumi Accounts).
+1. Create a Workspace and use the seeded first-party apps, chat, memory, Git, and tools.
+2. Install more apps or services by selecting a Git URL/ref and module path for an OpenTofu Capsule.
+3. Review the Takosumi `plan` Run and approve the saved plan before `apply`.
+4. Takos reads non-secret outputs and Service Graph records to show app launcher entries, MCP tools, file handlers, storage, Git, and agent runtime capabilities.
+5. Accounts, billing, OIDC clients, dashboard, provider credentials, state, and audit evidence stay in embedded Takosumi services.
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takos can optionally be installed through Takosumi as a normal OpenTofu module (`deploy/opentofu`, with `var.target` ∈ `aws` | `gcp` | `cloudflare`; the `cloudflare` target provisions D1/KV/R2/Queues backing resources). Takosumi records the Installation / Run / Deployment / OutputSnapshot ledger. Takosumi Accounts or another operator distribution owns account-plane policy.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takos is delivered as an OpenTofu-native, Takosumi-managed distribution: `deploy/opentofu` (`var.target = cloudflare`) provisions D1/KV/R2/Queues backing resources, while embedded Takosumi services record Installation / Run / StateSnapshot / OutputSnapshot / Deployment state, policy decisions, and audit trail.
 
-## API Shape
+## Installation Shape
 
 An Installation references the OpenTofu module to deploy:
 
@@ -29,7 +31,7 @@ An Installation references the OpenTofu module to deploy:
 }
 ```
 
-Plan and apply requests reference the Installation and the reviewed `plan` type Run. Takos product routes should call the Takosumi deploy control API or the Takosumi Accounts deploy facade instead of exposing a separate deployment proxy.
+Plan and apply requests reference the Installation and the reviewed `plan` type Run. Takos product routes call the Takosumi deploy-control API or the Takosumi Accounts dashboard flow instead of exposing a separate product-local deployment surface.
 
 ## References
 

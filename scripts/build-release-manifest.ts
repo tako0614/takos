@@ -795,7 +795,6 @@ function stringArraysEqual(
 async function collectServiceSet(): Promise<JsonValue> {
   const expected = [
     'takos-worker',
-    'takosumi',
     'takos-git',
     'takos-agent',
   ];

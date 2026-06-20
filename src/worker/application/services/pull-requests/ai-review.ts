@@ -95,7 +95,8 @@ export class AiReviewError extends Error {
 
 function toReviewStatus(value: string): ReviewStatus {
   if (
-    value === "approved" || value === "changes_requested" ||
+    value === "approved" ||
+    value === "changes_requested" ||
     value === "commented"
   ) {
     return value;
@@ -177,14 +178,12 @@ export async function buildPRDiffText(
   const baseMap = new Map(baseFiles.map((f) => [f.path, f.sha]));
   const headMap = new Map(headFiles.map((f) => [f.path, f.sha]));
 
-  const changes: Array<
-    {
-      path: string;
-      status: "added" | "modified" | "deleted";
-      oldOid?: string;
-      newOid?: string;
-    }
-  > = [];
+  const changes: Array<{
+    path: string;
+    status: "added" | "modified" | "deleted";
+    oldOid?: string;
+    newOid?: string;
+  }> = [];
   for (const [path, oid] of headMap) {
     const baseOid = baseMap.get(path);
     if (!baseOid) {
@@ -310,7 +309,9 @@ export async function runAiReview(options: {
     "--- DIFF START ---",
     diffResult.diffText || "(no textual diff available)",
     "--- DIFF END ---",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const messages: AgentMessage[] = [
     { role: "system", content: systemPrompt },
@@ -321,6 +322,7 @@ export async function runAiReview(options: {
     apiKey,
     model,
     backend,
+    baseUrl: env.OPENAI_BASE_URL,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     googleApiKey: env.GOOGLE_API_KEY,
   });
@@ -338,19 +340,23 @@ export async function runAiReview(options: {
     status?: ReviewStatus;
     summary?: string;
     issues?: string[];
-    comments?: Array<
-      { file_path?: string; line_number?: number; content?: string }
-    >;
+    comments?: Array<{
+      file_path?: string;
+      line_number?: number;
+      content?: string;
+    }>;
   }>(jsonCandidate, {});
 
-  const reviewStatus: ReviewStatus = parsed?.status &&
-      ["approved", "changes_requested", "commented"].includes(parsed.status)
-    ? parsed.status
-    : (parsed?.issues && parsed.issues.length > 0
-      ? "changes_requested"
-      : "commented");
+  const reviewStatus: ReviewStatus =
+    parsed?.status &&
+    ["approved", "changes_requested", "commented"].includes(parsed.status)
+      ? parsed.status
+      : parsed?.issues && parsed.issues.length > 0
+        ? "changes_requested"
+        : "commented";
 
-  const summary = parsed?.summary ||
+  const summary =
+    parsed?.summary ||
     (llmContent ? llmContent.slice(0, 1000) : "AI review completed.");
   const issues = parsed?.issues || [];
   const reviewBody = [
@@ -358,29 +364,38 @@ export async function runAiReview(options: {
     issues.length > 0
       ? `\nIssues:\n${issues.map((issue: string) => `- ${issue}`).join("\n")}`
       : "",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const db = getDb(env.DB);
   const reviewId = generateId();
   const timestamp = new Date().toISOString();
 
-  const review = await db.insert(prReviews).values({
-    id: reviewId,
-    prId: pullRequest.id,
-    reviewerType: "ai",
-    reviewerId: null,
-    status: reviewStatus,
-    body: reviewBody,
-    analysis: llmContent || null,
-    createdAt: timestamp,
-  }).returning().get();
+  const review = await db
+    .insert(prReviews)
+    .values({
+      id: reviewId,
+      prId: pullRequest.id,
+      reviewerType: "ai",
+      reviewerId: null,
+      status: reviewStatus,
+      body: reviewBody,
+      analysis: llmContent || null,
+      createdAt: timestamp,
+    })
+    .returning()
+    .get();
 
   const rawComments = parsed?.comments || [];
   const commentsToCreate = rawComments
-    .filter((
-      cmt: { file_path?: string; line_number?: number; content?: string },
-    ): cmt is { file_path: string; line_number?: number; content: string } =>
-      Boolean(cmt.content) && Boolean(cmt.file_path)
+    .filter(
+      (cmt: {
+        file_path?: string;
+        line_number?: number;
+        content?: string;
+      }): cmt is { file_path: string; line_number?: number; content: string } =>
+        Boolean(cmt.content) && Boolean(cmt.file_path),
     )
     .slice(0, 20)
     .map((cmt) => ({
@@ -400,12 +415,16 @@ export async function runAiReview(options: {
     }
   }
 
-  const comments = await db.select().from(prComments)
-    .where(and(
-      eq(prComments.prId, pullRequest.id),
-      eq(prComments.authorType, "ai"),
-      eq(prComments.createdAt, timestamp),
-    ))
+  const comments = await db
+    .select()
+    .from(prComments)
+    .where(
+      and(
+        eq(prComments.prId, pullRequest.id),
+        eq(prComments.authorType, "ai"),
+        eq(prComments.createdAt, timestamp),
+      ),
+    )
     .all();
 
   return {

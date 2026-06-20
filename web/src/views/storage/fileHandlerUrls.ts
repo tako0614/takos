@@ -4,7 +4,7 @@ type FileHandlerOpenTarget = {
   open_url: string;
 };
 
-export function fileHandlerOpenUrlHasIdPathTemplate(openUrl: string): boolean {
+export function interfaceFileHandlerOpenUrlHasIdPathTemplate(openUrl: string): boolean {
   try {
     const url = new URL(openUrl, "https://takos.invalid");
     return url.pathname.split("/").some((segment) => segment === ":id");
@@ -28,7 +28,7 @@ export function buildFileHandlerLaunchUrl(
   file: Pick<StorageFile, "id" | "space_id">,
   spaceId: string,
 ): string {
-  if (!fileHandlerOpenUrlHasIdPathTemplate(handler.open_url)) {
+  if (!interfaceFileHandlerOpenUrlHasIdPathTemplate(handler.open_url)) {
     throw new Error("FileHandler open_url must include :id in the path");
   }
   const encodedFileId = encodeURIComponent(file.id);

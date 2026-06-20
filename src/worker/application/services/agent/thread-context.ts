@@ -56,9 +56,9 @@ function normalizeKeyPoints(points: unknown): string[] {
     .filter((v): v is string => typeof v === "string")
     .map((v) => v.trim())
     .filter(Boolean)
-    .map((
-      v,
-    ) => (v.length > KEY_POINT_MAX_CHARS ? v.slice(0, KEY_POINT_MAX_CHARS) : v))
+    .map((v) =>
+      v.length > KEY_POINT_MAX_CHARS ? v.slice(0, KEY_POINT_MAX_CHARS) : v,
+    )
     .slice(0, KEY_POINTS_MAX_ITEMS);
 }
 
@@ -102,9 +102,9 @@ async function generateEmbeddings(
   }
   if (texts.length === 0) return [];
 
-  const result = await env.AI.run(EMBEDDING_MODEL, {
+  const result = (await env.AI.run(EMBEDDING_MODEL, {
     text: texts,
-  }) as EmbeddingResult;
+  })) as EmbeddingResult;
   if (!result?.data || result.data.length !== texts.length) {
     throw new Error(
       `Failed to generate embeddings (model=${EMBEDDING_MODEL}, requested=${texts.length}, received=${
@@ -149,7 +149,7 @@ export async function queryRelevantThreadMessages(params: {
     metadata?: Record<string, unknown>;
   }
 
-  const searchResult = await env.VECTORIZE.query(queryEmbedding, {
+  const searchResult = (await env.VECTORIZE.query(queryEmbedding, {
     topK: Math.max(10, topK * 3),
     filter: {
       kind: THREAD_MESSAGE_VECTOR_KIND,
@@ -157,7 +157,7 @@ export async function queryRelevantThreadMessages(params: {
       threadId,
     },
     returnMetadata: "all",
-  }) as { matches: VectorMatch[] };
+  })) as { matches: VectorMatch[] };
 
   const results: RetrievedThreadMessage[] = [];
   const seenSeq = new Set<number>();
@@ -211,9 +211,13 @@ async function buildUpdatedThreadSummary(params: {
   } = params;
 
   const db = getDb(env.DB);
-  const space = await db.select({
-    aiModel: accounts.aiModel,
-  }).from(accounts).where(eq(accounts.id, spaceId)).get();
+  const space = await db
+    .select({
+      aiModel: accounts.aiModel,
+    })
+    .from(accounts)
+    .where(eq(accounts.id, spaceId))
+    .get();
 
   const preferredModel = space?.aiModel || DEFAULT_MODEL_ID;
   const backend = getBackendFromModel(preferredModel);
@@ -225,7 +229,10 @@ async function buildUpdatedThreadSummary(params: {
   };
   const backendKey = backendKeyMap[backend];
   const model = backendKey ? preferredModel : DEFAULT_MODEL_ID;
-  const apiKey = backendKey || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY ||
+  const apiKey =
+    backendKey ||
+    env.OPENAI_API_KEY ||
+    env.ANTHROPIC_API_KEY ||
     env.GOOGLE_API_KEY;
   if (!apiKey) {
     logWarn(
@@ -238,6 +245,7 @@ async function buildUpdatedThreadSummary(params: {
   const llm = new LLMClient({
     apiKey,
     model,
+    baseUrl: env.OPENAI_BASE_URL,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     googleApiKey: env.GOOGLE_API_KEY,
     maxTokens: 1200,
@@ -282,7 +290,10 @@ async function buildUpdatedThreadSummary(params: {
   const raw = resp.content.trim();
   const jsonText = raw.startsWith("{")
     ? raw
-    : raw.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+    : raw
+        .replace(/```json?\n?/g, "")
+        .replace(/```/g, "")
+        .trim();
 
   interface SummaryResult {
     summary?: string;
@@ -291,16 +302,16 @@ async function buildUpdatedThreadSummary(params: {
 
   try {
     const parsed = JSON.parse(jsonText) as SummaryResult;
-    const summary = typeof parsed.summary === "string"
-      ? parsed.summary.trim()
-      : "";
+    const summary =
+      typeof parsed.summary === "string" ? parsed.summary.trim() : "";
     const normalized = normalizeKeyPoints(parsed.key_points);
 
     if (!summary) return null;
     return {
-      summary: summary.length > SUMMARY_MAX_CHARS
-        ? summary.slice(0, SUMMARY_MAX_CHARS)
-        : summary,
+      summary:
+        summary.length > SUMMARY_MAX_CHARS
+          ? summary.slice(0, SUMMARY_MAX_CHARS)
+          : summary,
       keyPoints: normalized,
     };
   } catch (err) {
@@ -333,13 +344,17 @@ export async function indexThreadContext(params: {
   );
 
   const db = getDb(env.DB);
-  const thread = await db.select({
-    id: threads.id,
-    accountId: threads.accountId,
-    retrievalIndex: threads.retrievalIndex,
-    summary: threads.summary,
-    keyPoints: threads.keyPoints,
-  }).from(threads).where(eq(threads.id, threadId)).get();
+  const thread = await db
+    .select({
+      id: threads.id,
+      accountId: threads.accountId,
+      retrievalIndex: threads.retrievalIndex,
+      summary: threads.summary,
+      keyPoints: threads.keyPoints,
+    })
+    .from(threads)
+    .where(eq(threads.id, threadId))
+    .get();
 
   if (!thread || thread.accountId !== spaceId) {
     return {
@@ -350,22 +365,27 @@ export async function indexThreadContext(params: {
     };
   }
 
-  const lastSeq = typeof thread.retrievalIndex === "number"
-    ? thread.retrievalIndex
-    : -1;
-  const newMessages = await db.select({
-    id: messages.id,
-    role: messages.role,
-    content: messages.content,
-    sequence: messages.sequence,
-    createdAt: messages.createdAt,
-  }).from(messages).where(
-    and(
-      eq(messages.threadId, threadId),
-      gt(messages.sequence, lastSeq),
-      inArray(messages.role, ["user", "assistant", "tool"]),
-    ),
-  ).orderBy(asc(messages.sequence)).limit(maxMessages).all();
+  const lastSeq =
+    typeof thread.retrievalIndex === "number" ? thread.retrievalIndex : -1;
+  const newMessages = await db
+    .select({
+      id: messages.id,
+      role: messages.role,
+      content: messages.content,
+      sequence: messages.sequence,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.threadId, threadId),
+        gt(messages.sequence, lastSeq),
+        inArray(messages.role, ["user", "assistant", "tool"]),
+      ),
+    )
+    .orderBy(asc(messages.sequence))
+    .limit(maxMessages)
+    .all();
 
   if (newMessages.length === 0) {
     return {
@@ -414,19 +434,24 @@ export async function indexThreadContext(params: {
 
   lastSequence = newMessages[newMessages.length - 1].sequence;
 
-  await db.update(threads).set({
-    retrievalIndex: lastSequence,
-    updatedAt: new Date().toISOString(),
-  }).where(eq(threads.id, threadId));
+  await db
+    .update(threads)
+    .set({
+      retrievalIndex: lastSequence,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(threads.id, threadId));
 
-  const next = await db.select({
-    id: messages.id,
-  }).from(messages).where(
-    and(
-      eq(messages.threadId, threadId),
-      gt(messages.sequence, lastSequence),
-    ),
-  ).orderBy(asc(messages.sequence)).get();
+  const next = await db
+    .select({
+      id: messages.id,
+    })
+    .from(messages)
+    .where(
+      and(eq(messages.threadId, threadId), gt(messages.sequence, lastSequence)),
+    )
+    .orderBy(asc(messages.sequence))
+    .get();
   const hasMore = !!next;
 
   let summaryUpdated = false;
@@ -439,16 +464,21 @@ export async function indexThreadContext(params: {
       }));
 
       if (!thread.summary) {
-        const seed = await db.select({
-          sequence: messages.sequence,
-          role: messages.role,
-          content: messages.content,
-        }).from(messages).where(
-          and(
-            eq(messages.threadId, threadId),
-            inArray(messages.role, ["user", "assistant", "tool"]),
-          ),
-        ).orderBy(desc(messages.sequence)).limit(SUMMARY_INITIAL_INPUT_MESSAGES)
+        const seed = await db
+          .select({
+            sequence: messages.sequence,
+            role: messages.role,
+            content: messages.content,
+          })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.threadId, threadId),
+              inArray(messages.role, ["user", "assistant", "tool"]),
+            ),
+          )
+          .orderBy(desc(messages.sequence))
+          .limit(SUMMARY_INITIAL_INPUT_MESSAGES)
           .all();
         seed.reverse();
         summaryInput = seed;
@@ -468,11 +498,14 @@ export async function indexThreadContext(params: {
       });
 
       if (updated) {
-        await db.update(threads).set({
-          summary: updated.summary,
-          keyPoints: JSON.stringify(updated.keyPoints),
-          updatedAt: new Date().toISOString(),
-        }).where(eq(threads.id, threadId));
+        await db
+          .update(threads)
+          .set({
+            summary: updated.summary,
+            keyPoints: JSON.stringify(updated.keyPoints),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(threads.id, threadId));
         summaryUpdated = true;
       }
     } catch (err) {
@@ -519,9 +552,10 @@ export function buildThreadContextSystemMessage(params: {
     parts.push("");
     parts.push("Relevant past messages (retrieved):");
     for (const r of retrieved) {
-      const line = `- [${r.score.toFixed(3)}] #${r.sequence} [${r.role}] ${
-        truncateText(r.content, 300)
-      }`;
+      const line = `- [${r.score.toFixed(3)}] #${r.sequence} [${r.role}] ${truncateText(
+        r.content,
+        300,
+      )}`;
       parts.push(line);
     }
   }

@@ -14,18 +14,18 @@ drift across the ecosystem checkout.
 | ---------------------------- | --------------------- | ------------------------------------------------------------------------------- |
 | `takos-ecosystem` root       | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`                                                        |
 | `takos/` shell               | `AGPL-3.0-only`       | `takos/LICENSE`, `takos/.reuse/dep5`                                            |
-| `takos/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                           |
-| `takos/containers/git/`                 | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                                 |
-| `takos/containers/agent/`               | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
+| `takos/`                     | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                                  |
+| `takos/containers/git/`      | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                                  |
+| `takos/containers/agent/`    | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
 | `takosumi/`                  | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                                  |
 | `takos-agent-engine/`        | `MIT`                 | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
-| `takos-apps/takos-computer/` | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm package metadata                                 |
-| `takos-apps/takos-docs/`     | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                         |
-| `takos-apps/takos-slide/`    | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                         |
-| `takos-apps/takos-excel/`    | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata; aligns with HyperFormula GPLv3 use     |
-| `yurucommu/`                 | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata                                         |
-| `road-to-me/`                | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm / Cargo metadata                                 |
-| `takos-private/`             | private / unpublished | no public OSS license; deploy configuration and secrets evidence remain private |
+| `takos-apps/takos-computer/` | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm package metadata                                  |
+| `takos-apps/takos-docs/`     | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                          |
+| `takos-apps/takos-slide/`    | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                          |
+| `takos-apps/takos-excel/`    | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata; aligns with HyperFormula GPLv3 use      |
+| `yurucommu/`                 | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata                                          |
+| `road-to-me/`                | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm / Cargo metadata                                  |
+| `takosumi-private/`          | private / unpublished | operator state only; realized config and secrets evidence remain private       |
 
 ## REUSE / SPDX Baseline
 
@@ -61,7 +61,7 @@ The gate validates:
 - public repo `LICENSE` files match the approved first-party license inventory
 - `.reuse/dep5` exists and names the expected SPDX license id
 - npm / Cargo manifests declare the expected license
-- `takos-private/` remains private and does not publish an OSS license from the
+- `takosumi-private/` remains private and does not publish an OSS license from the
   public tree without legal review
 - legal docs include the first-party and third-party inventory artifacts
 

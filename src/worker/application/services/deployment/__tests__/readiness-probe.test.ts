@@ -2,8 +2,7 @@ import { test } from "bun:test";
 /**
  * Unit tests for the workload readiness probe (Track G).
  *
- * spec (`docs/apps/manifest.md` / `docs/apps/workers.md` /
- * `docs/architecture/control-plane.md`):
+ * Readiness contract (canonical: readiness-probe.ts):
  *
  * - kernel が deploy 時に workload に対して GET <readiness path> を送る
  * - default path は `/`、manifest の `compute.<name>.readiness` で override 可

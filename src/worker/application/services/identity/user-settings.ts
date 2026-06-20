@@ -19,7 +19,7 @@ export interface UserSettingsRow {
 }
 
 export const AI_MODELS = SUPPORTED_MODEL_IDS;
-export type AIModel = typeof AI_MODELS[number];
+export type AIModel = (typeof AI_MODELS)[number];
 export const DEFAULT_AI_MODEL: AIModel = DEFAULT_MODEL_ID as AIModel;
 
 export async function getUserSettings(
@@ -29,9 +29,11 @@ export async function getUserSettings(
   if (!isValidOpaqueId(userId)) return null;
 
   const drizzle = getDb(db);
-  const row = await drizzle.select().from(accountSettings).where(
-    eq(accountSettings.accountId, userId),
-  ).get();
+  const row = await drizzle
+    .select()
+    .from(accountSettings)
+    .where(eq(accountSettings.accountId, userId))
+    .get();
 
   if (!row) return null;
   return {
@@ -64,24 +66,32 @@ export async function ensureUserSettings(
   }
 
   const drizzle = getDb(db);
-  let row = await drizzle.select().from(accountSettings).where(
-    eq(accountSettings.accountId, userId),
-  ).get();
+  let row = await drizzle
+    .select()
+    .from(accountSettings)
+    .where(eq(accountSettings.accountId, userId))
+    .get();
 
   if (!row) {
     try {
-      row = await drizzle.insert(accountSettings).values({
-        accountId: userId,
-        setupCompleted: false,
-        autoUpdateEnabled: true,
-        privateAccount: false,
-        activityVisibility: "public",
-      }).returning().get();
+      row = await drizzle
+        .insert(accountSettings)
+        .values({
+          accountId: userId,
+          setupCompleted: false,
+          autoUpdateEnabled: true,
+          privateAccount: false,
+          activityVisibility: "public",
+        })
+        .returning()
+        .get();
     } catch {
       // Race condition: another request created it first
-      row = await drizzle.select().from(accountSettings).where(
-        eq(accountSettings.accountId, userId),
-      ).get();
+      row = await drizzle
+        .select()
+        .from(accountSettings)
+        .where(eq(accountSettings.accountId, userId))
+        .get();
     }
   }
 
@@ -143,9 +153,10 @@ export async function updateUserSettings(
   }
 
   if (Object.keys(data).length > 0) {
-    await drizzle.update(accountSettings).set(data).where(
-      eq(accountSettings.accountId, userId),
-    );
+    await drizzle
+      .update(accountSettings)
+      .set(data)
+      .where(eq(accountSettings.accountId, userId));
   }
 
   return getUserSettings(db, userId);

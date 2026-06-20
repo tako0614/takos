@@ -1,43 +1,78 @@
 # はじめる
 
-**Takos is self-hostable as a plain OpenTofu module; Takosumi is optional.** Takosumi is an OpenTofu-native deploy control plane: it installs a plain OpenTofu module and records the **Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment** run ledger. Connections hold credential references, ProviderBindings bind each provider (plus optional alias) to `default`, `connection`, `manual`, or `disabled`, and policy resolves provider allowlists, state backend, and Cloudflare Container execution. Module metadata comes from generic repository information such as Git URL, ref, commit, and module path, plus well-known OpenTofu outputs.
+Takos の最初の成功状態は、Workspace を開いて、bundled app を起動し、chat で agent に作業を頼み、その結果が Git / files /
+memory / app launcher に残ることです。OpenTofu や Takosumi の実行台帳は重要ですが、通常の Workspace ユーザーが最初に理解するものではありません。
 
-## Current Flow
+## 1. Workspace を開く
 
-1. Install the Takos OpenTofu module (`deploy/opentofu`) to create an **Installation**.
-2. Run a **`plan` type Run** and review the recorded plan, diff, and warnings.
-3. Apply the reviewed plan as an **`apply` type Run**. A successful apply updates the **Deployment** and **OutputSnapshot**.
-4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) for the run, and policy resolves provider allowlists, state backend, and execution image / resource limits; Takosumi records the policy decision and each run in the audit ledger.
-5. Account-plane policy (OIDC clients, billing, domains, dashboard) belongs to the operator distribution / Takosumi Accounts.
+公開 operator、operator が用意した rehearsal 環境、または self-host した Takos で sign in すると、最初に Workspace と app
+launcher が表示されます。Workspace は chat、agent、memory、Git、files、apps をまとめる作業場所です。public Takosumi for
+Platforms signup が closed の間も、rehearsal / self-host では同じ product journey を確認します。
 
-## Takos Boundary
+最初に見るもの:
 
-Takos owns product UI, chat, agent, memory, spaces, Git hosting, bundled app launcher metadata, file-handler metadata, and MCP-facing product metadata. Takosumi records the run ledger (Installation / Run / Deployment / OutputSnapshot) for the applied OpenTofu module, while Connections hold credential references, ProviderBindings resolve each provider (plus optional alias), and policy resolves provider allowlists and state handling. The operator distribution / Takosumi Accounts owns account-plane policy (OIDC / billing / dashboard).
+- **Apps**: `takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` など、すぐ開ける bundled app
+- **Chat**: agent に作業を依頼する入口
+- **Memory**: project notes、決定事項、繰り返し使う context
+- **Repos / Files**: agent が作ったコードやファイルを確認する場所
 
-## OpenTofu Module Shape
+新規 Workspace では bundled app が seed されます。install の途中状態や失敗は Apps 画面から管理できますが、通常は「開ける app」が主役です。
 
-The install target is a plain OpenTofu module. Module metadata is resolved from the Git URL / ref / commit / module path and well-known OpenTofu outputs.
+## 2. Chat で最初の作業を頼む
 
-```hcl
-module "takos" {
-  source = "github.com/example/takos//deploy/opentofu"
-  target = "cloudflare" # aws | gcp | cloudflare
-}
+Chat では、agent に調査、実装、文書化、file 更新、repo 操作を依頼できます。作業結果は会話だけで終わらず、必要に応じて Git diff、files、
+memory、app の状態に反映されます。
+
+例:
+
+- `この Workspace の README を読んで、次にやることを整理して`
+- `takos-docs に新しいメモページを作って`
+- `この app の設定を確認して、必要な変更を PR にして`
+
+Takos は chat だけの UI ではなく、agent が使う Git / files / memory / apps を同じ Workspace に置くための product です。
+
+## 3. Apps から成果物を開く
+
+Apps 画面は Workspace の launcher です。bundled app や Git URL から追加した app がここに並びます。app に launch URL がある場合は、
+ここから直接開けます。install 中のものは管理 link から Installation detail に進めます。
+
+新しい app を追加したい場合は、Apps 画面から Source / Git URL の追加導線に進みます。Takos に中央の公式 app store はありません。
+Store / Source 画面は、Git URL の OpenTofu Capsule を見つけて追加するための discovery surface です。
+
+## 4. Git URL から app を追加する
+
+任意の app は、Git URL、ref、module path を指定して追加します。通常の Workspace ユーザーに見える流れは次の形です。
+
+```txt
+Git URL を入力
+  ↓
+作られるものと注意点を確認
+  ↓
+承認
+  ↓
+Apps launcher に表示
 ```
 
-Selecting a target moves the Installation through a typed Run until the Deployment is updated, and non-secret endpoints are recorded as OutputSnapshot. Takos product routes trust the Takosumi deploy control plane run ledger instead of exposing a separate deployment proxy.
+裏側では Takosumi が compatibility check、plan、apply、Deployment / OutputSnapshot 記録を行います。ただし product 導線では、
+まず「何が追加され、どこから開けるか」を確認できることが重要です。詳細は [はじめてのアプリ](/get-started/your-first-app) を参照してください。
 
-## References
+## 5. 管理者向けの裏側
 
-- [Deploy overview](/deploy/)
-- [Install paths](/apps/install-paths)
-- [Takosumi specification](https://takosumi.com/docs/reference/model)
-- [Takosumi deploy control API](https://takosumi.com/docs/reference/deploy-control-api)
+operator / self-host 管理者は、Takos distribution を OpenTofu module と wrangler artifact upload で deploy します。この worker は
+Takos product surface と embedded Takosumi Accounts / deploy-control / dashboard / OpenTofu runner を同一 origin に compose します。
 
-## Public Managed Offering Gate
+管理者が見るもの:
 
-Public managed offering gate status is checked from `takos-private` with
-`managed-offering:status`. Public signup stays `closed` until that read-only
-status reports `canOpenManagedOffering: true`; install links should use
-`https://<OPERATOR_INSTALL_HOST>/install?...` rather than a fixed production
-host while the gate is closed.
+- backing resources: D1 / KV / R2 / Queues / Durable Objects / containers
+- account / OIDC / billing / domain policy
+- Source / Connection / Installation / Run / Deployment / OutputSnapshot / Activity
+- provider connection outcome: Gateway coverage, Space-owned Connection, or policy block
+
+Workspace ユーザー向けの導線では、これらは Apps、Chat、Memory、Git、Files の裏側に隠れます。
+
+## 次に読むページ
+
+- [はじめてのアプリ](/get-started/your-first-app)
+- [インストール方法](/apps/install-paths)
+- [Git URL からアプリを install する](/platform/store)
+- [Self-host / deploy](/deploy/)

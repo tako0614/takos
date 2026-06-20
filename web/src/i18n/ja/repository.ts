@@ -14,12 +14,12 @@ export const repository = {
   details: "詳細",
   history: "履歴",
   appsInstalledDescription:
-    "このスペースにインストール済みのアプリを一覧・管理します",
+    "このスペースで開けるアプリを一覧します",
   appsInstalledEmpty: "まだアプリがインストールされていません",
-  appsInstalledEmptyDesc: "ストアから追加すると、ここに表示されます。",
-  browseStore: "ストアを見る",
-  appsInflightTitle: "導入中・実行中",
-  appsInflightManage: "導入を管理 →",
+  appsInstalledEmptyDesc: "Git URL からアプリを追加すると、ここに表示されます。",
+  browseStore: "Git URL で追加",
+  appsInflightTitle: "追加中のアプリ",
+  appsInflightManage: "インストール詳細 →",
 
   // Branches
   branches: "ブランチ",
@@ -40,7 +40,6 @@ export const repository = {
   commits: "コミット",
   pullRequests: "プルリクエスト",
   releases: "リリース",
-  star: "スター",
   starRepository: "{name}をスター",
   unstarRepository: "{name}のスターを外す",
   fork: "フォーク",

@@ -1,5 +1,10 @@
 import { test } from "bun:test";
-import { assert, assertEquals, assertRejects, assertThrows } from "@takos/test/assert";
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from "@takos/test/assert";
 import { getTableName } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 
@@ -14,6 +19,7 @@ import {
   processDefaultAppPreinstallJobs,
   resolveDefaultAppDistribution,
   resolveDefaultAppDistributionForBootstrap,
+  resolveDefaultAppInstallConfig,
   saveDefaultAppDistributionEntries,
 } from "../default-app-distribution.ts";
 
@@ -92,10 +98,7 @@ type PackageSummary = {
   version: string;
 };
 
-function objectRecord(
-  value: unknown,
-  field: string,
-): Record<string, unknown> {
+function objectRecord(value: unknown, field: string): Record<string, unknown> {
   assert(
     value != null && typeof value === "object" && !Array.isArray(value),
     `${field} must be an object`,
@@ -122,46 +125,44 @@ async function readInstallableAppPackage(
 test("resolveDefaultAppDistribution returns default app fallback set", () => {
   const entries = resolveDefaultAppDistribution(makeEnv());
 
-  assertEquals(entries.map((entry) => entry.name), [
-    "takos-docs",
-    "takos-excel",
-    "takos-slide",
-    "takos-computer",
-    "yurucommu",
-    "road-to-me",
-  ]);
-  assertEquals(entries.map((entry) => entry.preinstall), [
-    true,
-    true,
-    true,
-    true,
-    true,
-    false,
-  ]);
-  assertEquals(entries.map((entry) => entry.ref), [
-    "v0.1.2",
-    "v0.1.2",
-    "v0.1.2",
-    "v2.1.2",
-    "v1.2.6",
-    "v0.1.0",
-  ]);
-  assertEquals(entries.map((entry) => entry.appId), [
-    "jp.takos.docs",
-    "jp.takos.excel",
-    "jp.takos.slide",
-    "jp.takos.computer",
-    "com.yurucommu.app",
-    "jp.takos.road-to-me",
-  ]);
+  assertEquals(
+    entries.map((entry) => entry.name),
+    [
+      "takos-docs",
+      "takos-excel",
+      "takos-slide",
+      "takos-computer",
+      "yurucommu",
+      "road-to-me",
+    ],
+  );
+  assertEquals(
+    entries.map((entry) => entry.preinstall),
+    [true, true, true, true, true, false],
+  );
+  assertEquals(
+    entries.map((entry) => entry.ref),
+    ["v0.1.2", "v0.1.2", "v0.1.2", "v2.1.2", "v1.2.6", "v0.1.0"],
+  );
+  assertEquals(
+    entries.map((entry) => entry.appId),
+    [
+      "jp.takos.docs",
+      "jp.takos.excel",
+      "jp.takos.slide",
+      "jp.takos.computer",
+      "com.yurucommu.app",
+      "jp.takos.road-to-me",
+    ],
+  );
   assertEquals(
     entries.map((entry) => entry.sourcePath),
     DEFAULT_APP_SOURCES.map((source) => source.sourcePath),
   );
   assertEquals(
-    entries.filter((entry) => entry.name !== "road-to-me").every((entry) =>
-      entry.runtimeModes?.includes("shared-cell")
-    ),
+    entries
+      .filter((entry) => entry.name !== "road-to-me")
+      .every((entry) => entry.runtimeModes?.includes("shared-cell")),
     true,
   );
   assertEquals(
@@ -170,13 +171,16 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
   );
   assertEquals(
     entries.every((entry) =>
-      entry.bindings?.some((binding) =>
-        binding.type === "install-launch-token@v1"
-      )
+      entry.bindings?.some(
+        (binding) => binding.type === "auth.bootstrap_token",
+      ),
     ),
     true,
   );
-  assertEquals(entries.every((entry) => entry.refType === "tag"), true);
+  assertEquals(
+    entries.every((entry) => entry.refType === "tag"),
+    true,
+  );
   assertEquals(
     entries.map((entry) => entry.repositoryUrl),
     [
@@ -191,9 +195,11 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
 });
 
 test("resolveDefaultAppDistribution stays in sync with installable source packages", async () => {
-  const entries = resolveDefaultAppDistribution(makeEnv({
-    TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-  }));
+  const entries = resolveDefaultAppDistribution(
+    makeEnv({
+      TAKOS_DEFAULT_APPS_PREINSTALL: "true",
+    }),
+  );
   const entriesByName = new Map(entries.map((entry) => [entry.name, entry]));
 
   assertEquals(
@@ -215,19 +221,15 @@ test("resolveDefaultAppDistribution stays in sync with installable source packag
 });
 
 test("resolveDefaultAppDistribution keeps road-to-me catalog-only when fallback preinstall is enabled", () => {
-  const entries = resolveDefaultAppDistribution(makeEnv({
-    TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-  }));
+  const entries = resolveDefaultAppDistribution(
+    makeEnv({
+      TAKOS_DEFAULT_APPS_PREINSTALL: "true",
+    }),
+  );
 
   assertEquals(
     entries.filter((entry) => entry.preinstall).map((entry) => entry.name),
-    [
-      "takos-docs",
-      "takos-excel",
-      "takos-slide",
-      "takos-computer",
-      "yurucommu",
-    ],
+    ["takos-docs", "takos-excel", "takos-slide", "takos-computer", "yurucommu"],
   );
   assertEquals(
     entries.find((entry) => entry.name === "road-to-me")?.preinstall,
@@ -236,63 +238,74 @@ test("resolveDefaultAppDistribution keeps road-to-me catalog-only when fallback 
 });
 
 test("resolveDefaultAppDistribution lets operators replace the distribution", () => {
-  const entries = resolveDefaultAppDistribution(makeEnv({
-    TAKOS_DEFAULT_APPS_PREINSTALL: "false",
-    TAKOS_DEFAULT_APP_REF: "stable",
-    TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
-      {
-        name: "operator-docs",
-        title: "Docs",
-        repositoryUrl: "https://example.com/operator-docs.git",
-        preinstall: true,
-      },
-    ]),
-  }));
+  const entries = resolveDefaultAppDistribution(
+    makeEnv({
+      TAKOS_DEFAULT_APPS_PREINSTALL: "false",
+      TAKOS_DEFAULT_APP_REF: "stable",
+      TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
+        {
+          name: "operator-docs",
+          title: "Docs",
+          repositoryUrl: "https://example.com/operator-docs.git",
+          preinstall: true,
+        },
+      ]),
+    }),
+  );
 
-  assertEquals(entries, [{
-    name: "operator-docs",
-    title: "Docs",
-    repositoryUrl: "https://example.com/operator-docs.git",
-    ref: "stable",
-    refType: "branch",
-    preinstall: true,
-  }]);
+  assertEquals(entries, [
+    {
+      name: "operator-docs",
+      title: "Docs",
+      repositoryUrl: "https://example.com/operator-docs.git",
+      ref: "stable",
+      refType: "branch",
+      preinstall: true,
+    },
+  ]);
 });
 
 test("resolveDefaultAppDistribution prefers distribution JSON over repository list JSON", () => {
-  const entries = resolveDefaultAppDistribution(makeEnv({
-    TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
-      {
-        name: "distribution-docs",
-        title: "Distribution Docs",
-        repositoryUrl: "https://example.com/distribution-docs.git",
-      },
-    ]),
-    TAKOS_DEFAULT_APP_REPOSITORIES_JSON: JSON.stringify([
-      {
-        name: "repository-docs",
-        title: "Repository Docs",
-        url: "https://example.com/repository-docs.git",
-      },
-    ]),
-  }));
+  const entries = resolveDefaultAppDistribution(
+    makeEnv({
+      TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
+        {
+          name: "distribution-docs",
+          title: "Distribution Docs",
+          repositoryUrl: "https://example.com/distribution-docs.git",
+        },
+      ]),
+      TAKOS_DEFAULT_APP_REPOSITORIES_JSON: JSON.stringify([
+        {
+          name: "repository-docs",
+          title: "Repository Docs",
+          url: "https://example.com/repository-docs.git",
+        },
+      ]),
+    }),
+  );
 
-  assertEquals(entries.map((entry) => entry.name), ["distribution-docs"]);
+  assertEquals(
+    entries.map((entry) => entry.name),
+    ["distribution-docs"],
+  );
 });
 
 test("resolveDefaultAppDistribution accepts repository list JSON", () => {
-  const entries = resolveDefaultAppDistribution(makeEnv({
-    TAKOS_DEFAULT_APP_REF: "stable",
-    TAKOS_DEFAULT_APP_REF_TYPE: "tag",
-    TAKOS_DEFAULT_APP_REPOSITORIES_JSON: JSON.stringify([
-      {
-        name: "operator-docs",
-        title: "Docs",
-        url: "https://example.com/operator-docs.git",
-      },
-      "https://example.com/takos-whiteboard.git",
-    ]),
-  }));
+  const entries = resolveDefaultAppDistribution(
+    makeEnv({
+      TAKOS_DEFAULT_APP_REF: "stable",
+      TAKOS_DEFAULT_APP_REF_TYPE: "tag",
+      TAKOS_DEFAULT_APP_REPOSITORIES_JSON: JSON.stringify([
+        {
+          name: "operator-docs",
+          title: "Docs",
+          url: "https://example.com/operator-docs.git",
+        },
+        "https://example.com/takos-whiteboard.git",
+      ]),
+    }),
+  );
 
   assertEquals(entries, [
     {
@@ -339,19 +352,24 @@ test("resolveDefaultAppDistributionForBootstrap prefers repository list env over
   defaultAppDistributionDeps.getDb = (() => db) as any;
 
   try {
-    const entries = await resolveDefaultAppDistributionForBootstrap(makeEnv({
-      TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-      TAKOS_DEFAULT_APP_REPOSITORIES_JSON: JSON.stringify([
-        {
-          name: "repository-docs",
-          title: "Repository Docs",
-          url: "https://example.com/repository-docs.git",
-        },
-      ]),
-    }));
+    const entries = await resolveDefaultAppDistributionForBootstrap(
+      makeEnv({
+        TAKOS_DEFAULT_APPS_PREINSTALL: "true",
+        TAKOS_DEFAULT_APP_REPOSITORIES_JSON: JSON.stringify([
+          {
+            name: "repository-docs",
+            title: "Repository Docs",
+            url: "https://example.com/repository-docs.git",
+          },
+        ]),
+      }),
+    );
 
     assertEquals(selectCalled, false);
-    assertEquals(entries.map((entry) => entry.name), ["repository-docs"]);
+    assertEquals(
+      entries.map((entry) => entry.name),
+      ["repository-docs"],
+    );
   } finally {
     clearDefaultAppDistributionCache();
     defaultAppDistributionDeps.getDb = originalGetDb;
@@ -359,35 +377,84 @@ test("resolveDefaultAppDistributionForBootstrap prefers repository list env over
 });
 
 test("resolveDefaultAppDistributionForBootstrap honors the preinstall kill switch before parsing overrides", async () => {
-  const entries = await resolveDefaultAppDistributionForBootstrap(makeEnv({
-    TAKOS_DEFAULT_APPS_PREINSTALL: "false",
-    TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: "{not json",
-    TAKOS_DEFAULT_APP_REPOSITORIES_JSON: "{also not json",
-  }));
+  const entries = await resolveDefaultAppDistributionForBootstrap(
+    makeEnv({
+      TAKOS_DEFAULT_APPS_PREINSTALL: "false",
+      TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: "{not json",
+      TAKOS_DEFAULT_APP_REPOSITORIES_JSON: "{also not json",
+    }),
+  );
 
-  assertEquals(entries.map((entry) => entry.name), [
-    "takos-docs",
-    "takos-excel",
-    "takos-slide",
-    "takos-computer",
-    "yurucommu",
-    "road-to-me",
-  ]);
-  assertEquals(entries.every((entry) => entry.preinstall === false), true);
+  assertEquals(
+    entries.map((entry) => entry.name),
+    [
+      "takos-docs",
+      "takos-excel",
+      "takos-slide",
+      "takos-computer",
+      "yurucommu",
+      "road-to-me",
+    ],
+  );
+  assertEquals(
+    entries.every((entry) => entry.preinstall === false),
+    true,
+  );
+});
+
+test("resolveDefaultAppInstallConfig reuses the shared Takosumi Accounts install surface", () => {
+  assertEquals(
+    resolveDefaultAppInstallConfig(
+      makeEnv({
+        TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal/",
+        TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
+        TAKOSUMI_ACCOUNTS_SUBJECT: "tsub_operator",
+        TAKOS_APP_INSTALL_MODE: "shared-cell",
+        TAKOS_APP_INSTALL_RUNTIME_BASE_URL: "https://takos.example.com",
+      }),
+    ),
+    {
+      installUrl: "https://accounts.internal/v1/installation-projections",
+      token: "accounts-token",
+      subject: "tsub_operator",
+      mode: "shared-cell",
+      runtimeBaseUrl: "https://takos.example.com/",
+    },
+  );
+  assertEquals(
+    resolveDefaultAppInstallConfig(
+      makeEnv({
+        TAKOS_DEFAULT_APP_INSTALL_URL:
+          "https://installer.internal/v1/installation-projections",
+        TAKOS_DEFAULT_APP_INSTALL_TOKEN: "default-token",
+        TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_default",
+        TAKOS_APP_INSTALLATIONS_URL: "https://accounts.internal",
+        TAKOS_APP_INSTALL_TOKEN: "shared-token",
+        TAKOS_APP_INSTALL_SUBJECT: "tsub_shared",
+      }),
+    ),
+    {
+      installUrl: "https://installer.internal/v1/installation-projections",
+      token: "default-token",
+      subject: "tsub_default",
+    },
+  );
 });
 
 test("resolveDefaultAppDistribution rejects non-portable repository URLs", () => {
   assertThrows(
     () =>
-      resolveDefaultAppDistribution(makeEnv({
-        TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
-          {
-            name: "operator-docs",
-            title: "Docs",
-            repositoryUrl: "git@example.com:operator/docs.git",
-          },
-        ]),
-      })),
+      resolveDefaultAppDistribution(
+        makeEnv({
+          TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
+            {
+              name: "operator-docs",
+              title: "Docs",
+              repositoryUrl: "git@example.com:operator/docs.git",
+            },
+          ]),
+        }),
+      ),
     Error,
     "must use HTTPS",
   );
@@ -396,9 +463,11 @@ test("resolveDefaultAppDistribution rejects non-portable repository URLs", () =>
 test("resolveDefaultAppDistribution rejects invalid global ref type", () => {
   assertThrows(
     () =>
-      resolveDefaultAppDistribution(makeEnv({
-        TAKOS_DEFAULT_APP_REF_TYPE: "branches",
-      })),
+      resolveDefaultAppDistribution(
+        makeEnv({
+          TAKOS_DEFAULT_APP_REF_TYPE: "branches",
+        }),
+      ),
     Error,
     "TAKOS_DEFAULT_APP_REF_TYPE is invalid",
   );
@@ -407,9 +476,11 @@ test("resolveDefaultAppDistribution rejects invalid global ref type", () => {
 test("resolveDefaultAppDistribution rejects invalid global backend", () => {
   assertThrows(
     () =>
-      resolveDefaultAppDistribution(makeEnv({
-        TAKOS_DEFAULT_APP_BACKEND: "cloudfare",
-      })),
+      resolveDefaultAppDistribution(
+        makeEnv({
+          TAKOS_DEFAULT_APP_BACKEND: "cloudfare",
+        }),
+      ),
     Error,
     "TAKOS_DEFAULT_APP_BACKEND is invalid",
   );
@@ -506,19 +577,19 @@ test("resolveDefaultAppDistributionForBootstrap keeps an empty DB distribution e
             where: () =>
               isDefaultAppDistributionConfigTable(table)
                 ? {
-                  get: async () => {
-                    selectCalls++;
-                    return { configured: true };
-                  },
-                }
-                : {
-                  orderBy: () => ({
-                    all: async () => {
+                    get: async () => {
                       selectCalls++;
-                      return [];
+                      return { configured: true };
                     },
-                  }),
-                },
+                  }
+                : {
+                    orderBy: () => ({
+                      all: async () => {
+                        selectCalls++;
+                        return [];
+                      },
+                    }),
+                  },
           };
         },
       };
@@ -527,9 +598,11 @@ test("resolveDefaultAppDistributionForBootstrap keeps an empty DB distribution e
   defaultAppDistributionDeps.getDb = (() => db) as any;
 
   try {
-    const entries = await resolveDefaultAppDistributionForBootstrap(makeEnv({
-      TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-    }));
+    const entries = await resolveDefaultAppDistributionForBootstrap(
+      makeEnv({
+        TAKOS_DEFAULT_APPS_PREINSTALL: "true",
+      }),
+    );
 
     assertEquals(selectCalls, 2);
     assertEquals(entries, []);
@@ -558,18 +631,23 @@ test("resolveDefaultAppDistributionForBootstrap falls back when DB read fails", 
   defaultAppDistributionDeps.getDb = (() => db) as any;
 
   try {
-    const entries = await resolveDefaultAppDistributionForBootstrap(makeEnv({
-      TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-    }));
+    const entries = await resolveDefaultAppDistributionForBootstrap(
+      makeEnv({
+        TAKOS_DEFAULT_APPS_PREINSTALL: "true",
+      }),
+    );
 
-    assertEquals(entries.map((entry) => entry.name), [
-      "takos-docs",
-      "takos-excel",
-      "takos-slide",
-      "takos-computer",
-      "yurucommu",
-      "road-to-me",
-    ]);
+    assertEquals(
+      entries.map((entry) => entry.name),
+      [
+        "takos-docs",
+        "takos-excel",
+        "takos-slide",
+        "takos-computer",
+        "yurucommu",
+        "road-to-me",
+      ],
+    );
   } finally {
     clearDefaultAppDistributionCache();
     defaultAppDistributionDeps.getDb = originalGetDb;
@@ -589,22 +667,25 @@ test("resolveDefaultAppDistributionForBootstrap rejects invalid DB configuration
             where: () =>
               isDefaultAppDistributionConfigTable(table)
                 ? {
-                  get: async () => ({ configured: true }),
-                }
+                    get: async () => ({ configured: true }),
+                  }
                 : {
-                  orderBy: () => ({
-                    all: async () => [{
-                      name: "persisted-docs",
-                      title: "Docs",
-                      repositoryUrl: "https://example.com/persisted-docs.git",
-                      ref: "main",
-                      refType: "branches",
-                      preinstall: true,
-                      backendName: null,
-                      envName: null,
-                    }],
-                  }),
-                },
+                    orderBy: () => ({
+                      all: async () => [
+                        {
+                          name: "persisted-docs",
+                          title: "Docs",
+                          repositoryUrl:
+                            "https://example.com/persisted-docs.git",
+                          ref: "main",
+                          refType: "branches",
+                          preinstall: true,
+                          backendName: null,
+                          envName: null,
+                        },
+                      ],
+                    }),
+                  },
           };
         },
       };
@@ -615,9 +696,11 @@ test("resolveDefaultAppDistributionForBootstrap rejects invalid DB configuration
   try {
     await assertRejects(
       () =>
-        resolveDefaultAppDistributionForBootstrap(makeEnv({
-          TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-        })),
+        resolveDefaultAppDistributionForBootstrap(
+          makeEnv({
+            TAKOS_DEFAULT_APPS_PREINSTALL: "true",
+          }),
+        ),
       Error,
       "entry.refType is invalid",
     );
@@ -641,29 +724,32 @@ test("resolveDefaultAppDistributionForBootstrap reads persisted distribution onc
             where: () =>
               isDefaultAppDistributionConfigTable(table)
                 ? {
-                  get: async () => {
-                    selectCalls++;
-                    return { configured: true };
-                  },
-                }
-                : {
-                  orderBy: () => ({
-                    all: async () => {
+                    get: async () => {
                       selectCalls++;
-                      return [{
-                        name: "persisted-docs",
-                        title: "Docs",
-                        icon: "/icons/docs.svg",
-                        repositoryUrl: "https://example.com/persisted-docs.git",
-                        ref: "main",
-                        refType: "branch",
-                        preinstall: true,
-                        backendName: null,
-                        envName: null,
-                      }];
+                      return { configured: true };
                     },
-                  }),
-                },
+                  }
+                : {
+                    orderBy: () => ({
+                      all: async () => {
+                        selectCalls++;
+                        return [
+                          {
+                            name: "persisted-docs",
+                            title: "Docs",
+                            icon: "/icons/docs.svg",
+                            repositoryUrl:
+                              "https://example.com/persisted-docs.git",
+                            ref: "main",
+                            refType: "branch",
+                            preinstall: true,
+                            backendName: null,
+                            envName: null,
+                          },
+                        ];
+                      },
+                    }),
+                  },
           };
         },
       };
@@ -676,9 +762,15 @@ test("resolveDefaultAppDistributionForBootstrap reads persisted distribution onc
     const first = await resolveDefaultAppDistributionForBootstrap(env);
     const second = await resolveDefaultAppDistributionForBootstrap(env);
 
-    assertEquals(first.map((entry) => entry.name), ["persisted-docs"]);
+    assertEquals(
+      first.map((entry) => entry.name),
+      ["persisted-docs"],
+    );
     assertEquals(first[0].icon, "/icons/docs.svg");
-    assertEquals(second.map((entry) => entry.name), ["persisted-docs"]);
+    assertEquals(
+      second.map((entry) => entry.name),
+      ["persisted-docs"],
+    );
     assertEquals(second[0].icon, "/icons/docs.svg");
     assertEquals(selectCalls, 2);
   } finally {
@@ -701,22 +793,24 @@ test("resolveDefaultAppDistributionForBootstrap keeps cache entries scoped per D
               where: () =>
                 isDefaultAppDistributionConfigTable(table)
                   ? {
-                    get: async () => ({ configured: true }),
-                  }
+                      get: async () => ({ configured: true }),
+                    }
                   : {
-                    orderBy: () => ({
-                      all: async () => [{
-                        name,
-                        title: name,
-                        repositoryUrl: `https://example.com/${name}.git`,
-                        ref: "main",
-                        refType: "branch",
-                        preinstall: true,
-                        backendName: null,
-                        envName: null,
-                      }],
-                    }),
-                  },
+                      orderBy: () => ({
+                        all: async () => [
+                          {
+                            name,
+                            title: name,
+                            repositoryUrl: `https://example.com/${name}.git`,
+                            ref: "main",
+                            refType: "branch",
+                            preinstall: true,
+                            backendName: null,
+                            envName: null,
+                          },
+                        ],
+                      }),
+                    },
             };
           },
         };
@@ -741,8 +835,14 @@ test("resolveDefaultAppDistributionForBootstrap keeps cache entries scoped per D
       }),
     );
 
-    assertEquals(first.map((entry) => entry.name), ["persisted-one"]);
-    assertEquals(second.map((entry) => entry.name), ["persisted-two"]);
+    assertEquals(
+      first.map((entry) => entry.name),
+      ["persisted-one"],
+    );
+    assertEquals(
+      second.map((entry) => entry.name),
+      ["persisted-two"],
+    );
   } finally {
     clearDefaultAppDistributionCache();
     defaultAppDistributionDeps.getDb = originalGetDb;
@@ -771,24 +871,23 @@ test("saveDefaultAppDistributionEntries rejects duplicate names before mutating 
   defaultAppDistributionDeps.getDb = (() => db) as any;
 
   try {
-    await assertRejects(
-      () =>
-        saveDefaultAppDistributionEntries(
-          makeEnv(),
-          [
-            {
-              name: "duplicate-docs",
-              title: "Docs A",
-              repositoryUrl: "https://example.com/duplicate-docs-a.git",
-            },
-            {
-              name: "duplicate-docs",
-              title: "Docs B",
-              repositoryUrl: "https://example.com/duplicate-docs-b.git",
-            },
-          ],
-          { timestamp: "2026-01-01T00:00:00.000Z" },
-        ),
+    await assertRejects(() =>
+      saveDefaultAppDistributionEntries(
+        makeEnv(),
+        [
+          {
+            name: "duplicate-docs",
+            title: "Docs A",
+            repositoryUrl: "https://example.com/duplicate-docs-a.git",
+          },
+          {
+            name: "duplicate-docs",
+            title: "Docs B",
+            repositoryUrl: "https://example.com/duplicate-docs-b.git",
+          },
+        ],
+        { timestamp: "2026-01-01T00:00:00.000Z" },
+      ),
     );
     assertEquals(deleted, false);
     assertEquals(inserted, false);
@@ -809,30 +908,30 @@ test("saveDefaultAppDistributionEntries replaces persisted repositories and warm
     delete: (table: unknown) =>
       isDefaultAppDistributionConfigTable(table)
         ? {
-          where: () => ({
-            run: async () => {
-              deletedConfig = true;
-            },
-          }),
-        }
+            where: () => ({
+              run: async () => {
+                deletedConfig = true;
+              },
+            }),
+          }
         : {
-          run: async () => {
-            deletedEntries = true;
+            run: async () => {
+              deletedEntries = true;
+            },
           },
-        },
     insert: (table: unknown) =>
       isDefaultAppDistributionConfigTable(table)
         ? {
-          values: () => ({
-            run: async () => undefined,
-          }),
-        }
+            values: () => ({
+              run: async () => undefined,
+            }),
+          }
         : {
-          values: (rows: Array<Record<string, unknown>>) => {
-            inserted = rows;
-            return { run: async () => undefined };
+            values: (rows: Array<Record<string, unknown>>) => {
+              inserted = rows;
+              return { run: async () => undefined };
+            },
           },
-        },
     update: () => ({
       set: () => ({
         where: () => ({
@@ -873,23 +972,29 @@ test("saveDefaultAppDistributionEntries replaces persisted repositories and warm
     });
     const saved = await saveDefaultAppDistributionEntries(
       env,
-      [{
-        name: "cached-docs",
-        title: "Docs",
-        icon: "/icons/cached.svg",
-        repositoryUrl: "https://example.com/cached-docs.git",
-      }],
+      [
+        {
+          name: "cached-docs",
+          title: "Docs",
+          icon: "/icons/cached.svg",
+          repositoryUrl: "https://example.com/cached-docs.git",
+        },
+      ],
       { timestamp: "2026-01-01T00:00:00.000Z" },
     );
-    const resolved = await resolveDefaultAppDistributionForBootstrap(
-      env,
-    );
+    const resolved = await resolveDefaultAppDistributionForBootstrap(env);
 
     assertEquals(deletedEntries, true);
     assertEquals(deletedConfig, true);
-    assertEquals(saved.map((entry) => entry.name), ["cached-docs"]);
+    assertEquals(
+      saved.map((entry) => entry.name),
+      ["cached-docs"],
+    );
     assertEquals(saved[0].icon, "/icons/cached.svg");
-    assertEquals(resolved.map((entry) => entry.name), ["cached-docs"]);
+    assertEquals(
+      resolved.map((entry) => entry.name),
+      ["cached-docs"],
+    );
     assertEquals(resolved[0].icon, "/icons/cached.svg");
     assertEquals(selectCalled, false);
     assertEquals(inserted[0].id, "cached-docs");
@@ -912,17 +1017,17 @@ test("clearDefaultAppDistributionEntries disables DB distribution and requeues b
     delete: (table: unknown) =>
       isDefaultAppDistributionConfigTable(table)
         ? {
-          where: () => ({
-            run: async () => {
-              deletedTables.push("default_app_distribution_config");
-            },
-          }),
-        }
+            where: () => ({
+              run: async () => {
+                deletedTables.push("default_app_distribution_config");
+              },
+            }),
+          }
         : {
-          run: async () => {
-            deletedTables.push(String(tableName(table)));
+            run: async () => {
+              deletedTables.push(String(tableName(table)));
+            },
           },
-        },
     insert: (table: unknown) => ({
       values: (row: Record<string, unknown>) => ({
         run: async () => {
@@ -1067,28 +1172,32 @@ test("enqueueDefaultAppPreinstallJob defers source resolution until processing",
 test("processDefaultAppPreinstallJobs pauses queued jobs when preinstall is disabled", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
-  const jobRows = [{
-    id: "default-app-preinstall:space-1",
-    spaceId: "space-1",
-    createdByAccountId: "user-1",
-    distributionJson: JSON.stringify([{
-      name: "operator-docs",
-      title: "Docs",
-      repositoryUrl: "https://example.com/operator-docs.git",
-      ref: "main",
-      refType: "branch",
-      preinstall: true,
-    }]),
-    expectedGroupIdsJson: null,
-    deploymentQueuedAt: null,
-    status: "queued",
-    attempts: 0,
-    nextAttemptAt: "2026-01-01T00:00:00.000Z",
-    lockedAt: null,
-    lastError: null,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  }];
+  const jobRows = [
+    {
+      id: "default-app-preinstall:space-1",
+      spaceId: "space-1",
+      createdByAccountId: "user-1",
+      distributionJson: JSON.stringify([
+        {
+          name: "operator-docs",
+          title: "Docs",
+          repositoryUrl: "https://example.com/operator-docs.git",
+          ref: "main",
+          refType: "branch",
+          preinstall: true,
+        },
+      ]),
+      expectedGroupIdsJson: null,
+      deploymentQueuedAt: null,
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: "2026-01-01T00:00:00.000Z",
+      lockedAt: null,
+      lastError: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
   const jobUpdates: Array<Record<string, unknown>> = [];
   const db = {
     select: () => ({
@@ -1127,10 +1236,10 @@ test("processDefaultAppPreinstallJobs pauses queued jobs when preinstall is disa
     );
 
     assertEquals(summary.paused, 1);
-    assertEquals(jobUpdates.map((update) => update.status), [
-      "in_progress",
-      "paused_by_operator",
-    ]);
+    assertEquals(
+      jobUpdates.map((update) => update.status),
+      ["in_progress", "paused_by_operator"],
+    );
     assertEquals(jobUpdates.at(-1)?.nextAttemptAt, "2026-01-01T00:01:00.000Z");
   } finally {
     clearDefaultAppDistributionCache();
@@ -1142,18 +1251,20 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();
-  const jobRows = [{
-    id: "default-app-preinstall:space-1",
-    spaceId: "space-1",
-    createdByAccountId: "acct-owner",
-    status: "queued",
-    attempts: 0,
-    nextAttemptAt: "2026-01-01T00:00:00.000Z",
-    lockedAt: null,
-    lastError: null,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  }];
+  const jobRows = [
+    {
+      id: "default-app-preinstall:space-1",
+      spaceId: "space-1",
+      createdByAccountId: "acct-owner",
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: "2026-01-01T00:00:00.000Z",
+      lockedAt: null,
+      lastError: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
   const jobStatuses: unknown[] = [];
   const sentRequests: Request[] = [];
   const db = {
@@ -1190,6 +1301,19 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
   defaultAppDistributionDeps.getDb = (() => db) as any;
   defaultAppDistributionDeps.fetch = async (input, init) => {
     sentRequests.push(new Request(input, init));
+    if (String(input).endsWith("/plan-runs")) {
+      return Response.json({
+        expected: {
+          planRunId: `plan_${sentRequests.length}`,
+          runnerProfileId: "runner_default",
+          sourceDigest: "sha256:source",
+          variablesDigest: "sha256:variables",
+          policyDecisionDigest: "sha256:policy",
+          planDigest: "sha256:plan",
+          planArtifactDigest: "sha256:artifact",
+        },
+      });
+    }
     return Response.json({ ok: true }, { status: 202 });
   };
 
@@ -1198,7 +1322,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/app-installations",
+          "https://installer.internal/v1/installation-projections",
         TAKOS_DEFAULT_APP_INSTALL_TOKEN: "install-token",
         TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_operator",
         TAKOS_DEFAULT_APP_INSTALL_MODE: "shared-cell",
@@ -1209,10 +1333,10 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
 
     assertEquals(summary.completed, 1);
     assertEquals(jobStatuses, ["in_progress", "completed"]);
-    assertEquals(sentRequests.length, 5);
+    assertEquals(sentRequests.length, 10);
     assertEquals(
       sentRequests[0].url,
-      "https://installer.internal/v1/app-installations",
+      "https://installer.internal/v1/installation-projections/plan-runs",
     );
     assertEquals(
       sentRequests[0].headers.get("authorization"),
@@ -1225,6 +1349,30 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
         kind: "git",
         url: "https://github.com/tako0614/takos-docs.git",
         ref: "v0.1.2",
+      },
+    });
+    assertEquals(
+      sentRequests[1].url,
+      "https://installer.internal/v1/installation-projections",
+    );
+    const applyBody = await sentRequests[1].json();
+    assertEquals(applyBody, {
+      accountId: "space-1",
+      spaceId: "space-1",
+      createdBySubject: "tsub_operator",
+      source: {
+        kind: "git",
+        url: "https://github.com/tako0614/takos-docs.git",
+        ref: "v0.1.2",
+      },
+      expected: {
+        planRunId: "plan_1",
+        runnerProfileId: "runner_default",
+        sourceDigest: "sha256:source",
+        variablesDigest: "sha256:variables",
+        policyDecisionDigest: "sha256:policy",
+        planDigest: "sha256:plan",
+        planArtifactDigest: "sha256:artifact",
       },
       mode: "shared-cell",
       runtimeBaseUrl: "https://apps.example.test/",
@@ -1240,18 +1388,20 @@ test("processDefaultAppPreinstallJobs blocks incomplete Installation install con
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();
-  const jobRows = [{
-    id: "default-app-preinstall:space-1",
-    spaceId: "space-1",
-    createdByAccountId: "user-1",
-    status: "queued",
-    attempts: 0,
-    nextAttemptAt: "2026-01-01T00:00:00.000Z",
-    lockedAt: null,
-    lastError: null,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  }];
+  const jobRows = [
+    {
+      id: "default-app-preinstall:space-1",
+      spaceId: "space-1",
+      createdByAccountId: "user-1",
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: "2026-01-01T00:00:00.000Z",
+      lockedAt: null,
+      lastError: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
   const jobUpdates: Array<Record<string, unknown>> = [];
   let fetchCalled = false;
   const db = {
@@ -1293,26 +1443,28 @@ test("processDefaultAppPreinstallJobs blocks incomplete Installation install con
     const summary = await processDefaultAppPreinstallJobs(
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-        TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([{
-          name: "operator-docs",
-          title: "Docs",
-          repositoryUrl: "https://example.com/operator-docs.git",
-        }]),
+        TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
+          {
+            name: "operator-docs",
+            title: "Docs",
+            repositoryUrl: "https://example.com/operator-docs.git",
+          },
+        ]),
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/app-installations",
+          "https://installer.internal/v1/installation-projections",
       }),
       { timestamp: "2026-01-01T00:00:00.000Z" },
     );
 
     assertEquals(summary.blocked, 1);
     assertEquals(fetchCalled, false);
-    assertEquals(jobUpdates.map((update) => update.status), [
-      "in_progress",
-      "blocked_by_config",
-    ]);
+    assertEquals(
+      jobUpdates.map((update) => update.status),
+      ["in_progress", "blocked_by_config"],
+    );
     assertEquals(
       String(jobUpdates.at(-1)?.lastError).includes(
-        "TAKOS_DEFAULT_APP_INSTALL_TOKEN",
+        "TAKOS_DEFAULT_APP_INSTALL_URL/TOKEN/SUBJECT",
       ),
       true,
     );
@@ -1326,18 +1478,20 @@ test("processDefaultAppPreinstallJobs blocks incomplete Installation install con
 test("processDefaultAppPreinstallJobs skips rows another processor already claimed", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
-  const jobRows = [{
-    id: "default-app-preinstall:space-1",
-    spaceId: "space-1",
-    createdByAccountId: "user-1",
-    status: "queued",
-    attempts: 0,
-    nextAttemptAt: "2026-01-01T00:00:00.000Z",
-    lockedAt: null,
-    lastError: null,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  }];
+  const jobRows = [
+    {
+      id: "default-app-preinstall:space-1",
+      spaceId: "space-1",
+      createdByAccountId: "user-1",
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: "2026-01-01T00:00:00.000Z",
+      lockedAt: null,
+      lastError: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
   const db = {
     select: () => ({
       from: (table: unknown) => ({
@@ -1371,11 +1525,13 @@ test("processDefaultAppPreinstallJobs skips rows another processor already claim
     const summary = await processDefaultAppPreinstallJobs(
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
-        TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([{
-          name: "operator-docs",
-          title: "Docs",
-          repositoryUrl: "https://example.com/operator-docs.git",
-        }]),
+        TAKOS_DEFAULT_APP_DISTRIBUTION_JSON: JSON.stringify([
+          {
+            name: "operator-docs",
+            title: "Docs",
+            repositoryUrl: "https://example.com/operator-docs.git",
+          },
+        ]),
       }),
       { timestamp: "2026-01-01T00:00:00.000Z" },
     );
@@ -1391,18 +1547,20 @@ test("processDefaultAppPreinstallJobs skips rows another processor already claim
 test("processDefaultAppPreinstallJobs blocks invalid config without permanent failure", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
-  const jobRows = [{
-    id: "default-app-preinstall:space-1",
-    spaceId: "space-1",
-    createdByAccountId: "user-1",
-    status: "queued",
-    attempts: 0,
-    nextAttemptAt: "2026-01-01T00:00:00.000Z",
-    lockedAt: null,
-    lastError: null,
-    createdAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  }];
+  const jobRows = [
+    {
+      id: "default-app-preinstall:space-1",
+      spaceId: "space-1",
+      createdByAccountId: "user-1",
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: "2026-01-01T00:00:00.000Z",
+      lockedAt: null,
+      lastError: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
   const jobUpdates: Array<Record<string, unknown>> = [];
   const db = {
     select: () => ({
@@ -1492,17 +1650,34 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
     }),
   })) as any;
   defaultAppDistributionDeps.fetch = async (input, init) => {
+    const url = String(input);
     fetchCalls.push({
       url: String(input),
       authorization: new Headers(init?.headers).get("authorization"),
       body: JSON.parse(String(init?.body)) as Record<string, unknown>,
     });
-    return Response.json({
-      accounts: {
-        installationId: `inst_${fetchCalls.length}`,
-        status: "ready",
+    if (url.endsWith("/plan-runs")) {
+      return Response.json({
+        expected: {
+          planRunId: `plan_${fetchCalls.length}`,
+          runnerProfileId: "runner_default",
+          sourceDigest: "sha256:source",
+          variablesDigest: "sha256:variables",
+          policyDecisionDigest: "sha256:policy",
+          planDigest: "sha256:plan",
+          planArtifactDigest: "sha256:artifact",
+        },
+      });
+    }
+    return Response.json(
+      {
+        accounts: {
+          installationId: `inst_${fetchCalls.length}`,
+          status: "ready",
+        },
       },
-    }, { status: 202 });
+      { status: 202 },
+    );
   };
 
   try {
@@ -1510,7 +1685,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/app-installations",
+          "https://installer.internal/v1/installation-projections",
         TAKOS_DEFAULT_APP_INSTALL_TOKEN: "install-token",
         TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_operator",
         TAKOS_DEFAULT_APP_INSTALL_MODE: "shared-cell",
@@ -1523,32 +1698,36 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
       },
     );
 
-    assertEquals(installed.map((entry) => entry.name), [
-      "takos-docs",
-      "takos-excel",
-      "takos-slide",
-      "takos-computer",
-      "yurucommu",
-    ]);
-    assertEquals(fetchCalls.length, 5);
-    assertEquals(fetchCalls.map((call) => call.url), [
-      "https://installer.internal/v1/app-installations",
-      "https://installer.internal/v1/app-installations",
-      "https://installer.internal/v1/app-installations",
-      "https://installer.internal/v1/app-installations",
-      "https://installer.internal/v1/app-installations",
-    ]);
-    assertEquals(fetchCalls.map((call) => call.authorization), [
-      "Bearer install-token",
-      "Bearer install-token",
-      "Bearer install-token",
-      "Bearer install-token",
-      "Bearer install-token",
-    ]);
     assertEquals(
-      fetchCalls.map((call) =>
-        objectRecord(call.body.source, "install request source").url
-      ),
+      installed.map((entry) => entry.name),
+      [
+        "takos-docs",
+        "takos-excel",
+        "takos-slide",
+        "takos-computer",
+        "yurucommu",
+      ],
+    );
+    assertEquals(fetchCalls.length, 10);
+    assertEquals(
+      fetchCalls[0].url,
+      "https://installer.internal/v1/installation-projections/plan-runs",
+    );
+    assertEquals(
+      fetchCalls[1].url,
+      "https://installer.internal/v1/installation-projections",
+    );
+    assertEquals(
+      fetchCalls.every((call) => call.authorization === "Bearer install-token"),
+      true,
+    );
+    assertEquals(
+      fetchCalls
+        .filter((_, index) => index % 2 === 0)
+        .map(
+          (call) =>
+            objectRecord(call.body.source, "install request source").url,
+        ),
       [
         "https://github.com/tako0614/takos-docs.git",
         "https://github.com/tako0614/takos-excel.git",
@@ -1558,25 +1737,29 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
       ],
     );
     assertEquals(
-      fetchCalls.map((call) =>
-        objectRecord(call.body.source, "install request source").ref
-      ),
-      [
-        "v0.1.2",
-        "v0.1.2",
-        "v0.1.2",
-        "v2.1.2",
-        "v1.2.6",
-      ],
+      fetchCalls
+        .filter((_, index) => index % 2 === 0)
+        .map(
+          (call) =>
+            objectRecord(call.body.source, "install request source").ref,
+        ),
+      ["v0.1.2", "v0.1.2", "v0.1.2", "v2.1.2", "v1.2.6"],
     );
     assertEquals(
-      fetchCalls.every((call) =>
-        call.body.spaceId === "space-1" &&
-        objectRecord(call.body.source, "install request source").kind ===
-          "git" &&
-        call.body.mode === "shared-cell" &&
-        call.body.runtimeBaseUrl === "https://takos.example.com/"
-      ),
+      fetchCalls
+        .filter((_, index) => index % 2 === 1)
+        .every(
+          (call) =>
+            call.body.accountId === "space-1" &&
+            call.body.createdBySubject === "tsub_operator" &&
+            call.body.spaceId === "space-1" &&
+            objectRecord(call.body.source, "install request source").kind ===
+              "git" &&
+            objectRecord(call.body.expected, "install expected guard")
+              .planRunId === `plan_${fetchCalls.indexOf(call)}` &&
+            call.body.mode === "shared-cell" &&
+            call.body.runtimeBaseUrl === "https://takos.example.com/",
+        ),
       true,
     );
   } finally {
@@ -1689,9 +1872,8 @@ test("invalidateDistributionCache drops the in-memory cache entry for a DB bindi
 });
 
 test("saveDefaultAppDistributionEntries invalidates the cache before reseeding fresh data", async () => {
-  const { getDistributionCacheEntry, setDistributionCacheEntry } = await import(
-    "../default-app-distribution-internal.ts"
-  );
+  const { getDistributionCacheEntry, setDistributionCacheEntry } =
+    await import("../default-app-distribution-internal.ts");
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const db = {
@@ -1715,28 +1897,39 @@ test("saveDefaultAppDistributionEntries invalidates the cache before reseeding f
       key: "STALE",
       distribution: {
         configured: true,
-        entries: [{
-          name: "stale-app",
-          title: "Stale",
-          repositoryUrl: "https://example.com/stale.git",
-          ref: "main",
-          refType: "branch",
-          preinstall: false,
-        }],
+        entries: [
+          {
+            name: "stale-app",
+            title: "Stale",
+            repositoryUrl: "https://example.com/stale.git",
+            ref: "main",
+            refType: "branch",
+            preinstall: false,
+          },
+        ],
       },
       expiresAt: Date.now() + 30_000,
     });
     assertEquals(getDistributionCacheEntry(env.DB)?.key, "STALE");
 
-    await saveDefaultAppDistributionEntries(env, [{
-      name: "fresh-app",
-      title: "Fresh",
-      repositoryUrl: "https://example.com/fresh.git",
-    }], { timestamp: "2026-01-01T00:00:00.000Z" });
+    await saveDefaultAppDistributionEntries(
+      env,
+      [
+        {
+          name: "fresh-app",
+          title: "Fresh",
+          repositoryUrl: "https://example.com/fresh.git",
+        },
+      ],
+      { timestamp: "2026-01-01T00:00:00.000Z" },
+    );
 
     const cached = getDistributionCacheEntry(env.DB);
     assert(cached !== null);
-    assertEquals(cached.distribution.entries.map((e) => e.name), ["fresh-app"]);
+    assertEquals(
+      cached.distribution.entries.map((e) => e.name),
+      ["fresh-app"],
+    );
     // The pre-existing stale key must have been dropped before reseeding.
     assertEquals(cached.key === "STALE", false);
   } finally {
@@ -1746,9 +1939,8 @@ test("saveDefaultAppDistributionEntries invalidates the cache before reseeding f
 });
 
 test("clearDefaultAppDistributionEntries invalidates the cache before reseeding empty state", async () => {
-  const { getDistributionCacheEntry, setDistributionCacheEntry } = await import(
-    "../default-app-distribution-internal.ts"
-  );
+  const { getDistributionCacheEntry, setDistributionCacheEntry } =
+    await import("../default-app-distribution-internal.ts");
   const originalGetDb = defaultAppDistributionDeps.getDb;
   clearDefaultAppDistributionCache();
   const db = {
@@ -1771,14 +1963,16 @@ test("clearDefaultAppDistributionEntries invalidates the cache before reseeding 
       key: "STALE-CLEAR",
       distribution: {
         configured: true,
-        entries: [{
-          name: "stale",
-          title: "Stale",
-          repositoryUrl: "https://example.com/stale.git",
-          ref: "main",
-          refType: "branch",
-          preinstall: false,
-        }],
+        entries: [
+          {
+            name: "stale",
+            title: "Stale",
+            repositoryUrl: "https://example.com/stale.git",
+            ref: "main",
+            refType: "branch",
+            preinstall: false,
+          },
+        ],
       },
       expiresAt: Date.now() + 30_000,
     });

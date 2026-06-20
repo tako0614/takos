@@ -211,7 +211,7 @@ impl TakosModelRunner {
 
     async fn openai_response(&self, input: &ModelInput) -> AppResult<ModelOutput> {
         if self.openai_api_keys.is_empty() {
-            return Err(io::Error::other("OpenAI API key is not configured").into());
+            return Err(io::Error::other("OpenAI-compatible API key is not configured").into());
         }
 
         let mut last_auth_error: Option<String> = None;
@@ -230,7 +230,8 @@ impl TakosModelRunner {
         }
 
         Err(io::Error::other(
-            last_auth_error.unwrap_or_else(|| "OpenAI API key is not configured".to_string()),
+            last_auth_error
+                .unwrap_or_else(|| "OpenAI-compatible API key is not configured".to_string()),
         )
         .into())
     }
@@ -305,11 +306,10 @@ impl TakosModelRunner {
                 "failed to decode OpenAI response: {err}; body={text}"
             ))
         })?;
-        let choice = body
-            .choices
-            .into_iter()
-            .next()
-            .ok_or_else(|| io::Error::other("OpenAI returned no choices"))?;
+        let choice =
+            body.choices.into_iter().next().ok_or_else(|| {
+                io::Error::other("OpenAI-compatible upstream returned no choices")
+            })?;
 
         // prompt_tokens is the TOTAL prompt tokens (cached + uncached);
         // prompt_tokens_details.cached_tokens is the cached subset. Record it for
@@ -533,7 +533,7 @@ struct OpenAiToolFunction {
 struct OpenAiUsage {
     prompt_tokens: usize,
     completion_tokens: usize,
-    // OpenAI automatic prefix caching reports the cached subset of prompt_tokens.
+    // Some OpenAI-compatible upstreams report the cached subset of prompt_tokens.
     #[serde(default)]
     prompt_tokens_details: Option<OpenAiPromptTokensDetails>,
 }
@@ -605,7 +605,7 @@ mod tests {
 
         assert!(error
             .to_string()
-            .contains("OpenAI API key is not configured"));
+            .contains("OpenAI-compatible API key is not configured"));
     }
 
     #[test]

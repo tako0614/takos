@@ -2,15 +2,18 @@ import { test } from "bun:test";
 import { assertEquals, assertRejects, assertThrows } from "@takos/test/assert";
 
 import {
-  assertManifestPublicationPrerequisites,
+  assertServiceGraphPublicationPrerequisites,
+  canonicalPublicationType,
   normalizePublicationDefinition,
   normalizeServiceConsumes,
   publicationAllowedFields,
   publicationOutputContract,
-  replaceManifestPublications,
+  replaceServiceGraphPublications,
   resolveConsumeOutputEnvName,
   resolveRoutePublication,
+  SERVICE_GRAPH_CAPABILITIES,
 } from "../service-publications.ts";
+import { toPublicationRecord } from "../service-publications-db.ts";
 import { publications, serviceConsumes } from "../../../../infra/db/index.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 
@@ -35,7 +38,10 @@ function makePublicationRow(
     name: string;
     publisher: string;
     type: string;
-    outputs?: Record<string, { kind?: "url"; routeRef: string }>;
+    outputs?: Record<
+      string,
+      { kind?: "url" | "string" | "secret"; routeRef?: string }
+    >;
     spec?: Record<string, unknown>;
   },
   resolved: Record<string, string> = {},
@@ -45,7 +51,7 @@ function makePublicationRow(
     accountId: "space_1",
     groupId: publication.publisher === "takos" ? null : "group_other",
     ownerServiceId: publication.publisher === "takos" ? null : "svc_other",
-    sourceType: publication.publisher === "takos" ? "api" : "manifest",
+    sourceType: publication.publisher === "takos" ? "api" : "service_graph",
     name: publication.name,
     catalogName: publication.publisher === "takos" ? "takos" : null,
     publicationType: publication.type,
@@ -63,9 +69,9 @@ function makePublicationDb(row: PublicationTestRow | null) {
       from: () => ({
         where: () => ({
           get: () => row,
-          all: () => row ? [row] : [],
+          all: () => (row ? [row] : []),
           orderBy: () => ({
-            all: () => row ? [row] : [],
+            all: () => (row ? [row] : []),
           }),
         }),
       }),
@@ -142,6 +148,77 @@ test("service publications reject Takos publisher and keep route type open-ended
   );
 });
 
+test("publication type canonicalization preserves service graph capability tokens", () => {
+  assertEquals(
+    canonicalPublicationType(SERVICE_GRAPH_CAPABILITIES.mcpServer),
+    SERVICE_GRAPH_CAPABILITIES.mcpServer,
+  );
+  assertEquals(
+    canonicalPublicationType("com.example.custom"),
+    "com.example.custom",
+  );
+});
+
+test("api Service Graph exports can be restored without route refs", () => {
+  const row = makePublicationRow(
+    {
+      name: "storage.filesystem",
+      publisher: "service-graph",
+      type: SERVICE_GRAPH_CAPABILITIES.storageFilesystem,
+      outputs: { url: { kind: "url" } },
+      spec: {
+        scopes: { read: ["files:read"], write: ["files:write"] },
+      },
+    },
+    {
+      url: "https://takos.example/api/spaces/space_1/storage",
+    },
+  );
+  row.groupId = null;
+  row.ownerServiceId = null;
+  row.sourceType = "api";
+  row.publicationType = SERVICE_GRAPH_CAPABILITIES.storageFilesystem;
+
+  const record = toPublicationRecord(row as never);
+
+  assertEquals(record.name, "storage.filesystem");
+  assertEquals(
+    record.publicationType,
+    SERVICE_GRAPH_CAPABILITIES.storageFilesystem,
+  );
+  assertEquals(record.outputs, [
+    {
+      name: "url",
+      defaultEnv: "PUBLICATION_STORAGE_FILESYSTEM_URL",
+      secret: false,
+      kind: "url",
+    },
+  ]);
+  assertEquals(
+    record.resolved.url,
+    "https://takos.example/api/spaces/space_1/storage",
+  );
+});
+
+test("publication prerequisites allow built-in Service Graph consumes without catalog rows", async () => {
+  await assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
+    spaceId: "space_1",
+    manifest: {
+      compute: {
+        web: {
+          kind: "worker",
+          consume: [
+            {
+              publication: "storage.filesystem",
+              inject: { defaults: true },
+            },
+          ],
+        },
+      },
+    },
+  });
+});
+
 test("service consumes normalize aliases and reject duplicates", () => {
   assertEquals(
     normalizeServiceConsumes([
@@ -154,14 +231,16 @@ test("service consumes normalize aliases and reject duplicates", () => {
         },
       },
     ]),
-    [{
-      publication: "shared-db",
-      inject: {
-        env: {
-          endpoint: "PRIMARY_DATABASE_URL",
+    [
+      {
+        publication: "shared-db",
+        inject: {
+          env: {
+            endpoint: "PRIMARY_DATABASE_URL",
+          },
         },
       },
-    }],
+    ],
   );
 
   assertThrows(
@@ -206,12 +285,14 @@ test("service publication output contracts are stable", () => {
       type: "com.example.McpEndpoint",
       outputs: { url: { kind: "url", routeRef: "mcp" } },
     }),
-    [{
-      name: "url",
-      defaultEnv: "PUBLICATION_MCP_SEARCH_URL",
-      secret: false,
-      kind: "url",
-    }],
+    [
+      {
+        name: "url",
+        defaultEnv: "PUBLICATION_MCP_SEARCH_URL",
+        secret: false,
+        kind: "url",
+      },
+    ],
   );
   assertEquals(
     publicationOutputContract({
@@ -222,12 +303,14 @@ test("service publication output contracts are stable", () => {
         ingest: { kind: "url", routeRef: "metrics" },
       },
     }),
-    [{
-      name: "ingest",
-      defaultEnv: "PUBLICATION_SEARCH_METRICS_INGEST_URL",
-      secret: false,
-      kind: "url",
-    }],
+    [
+      {
+        name: "ingest",
+        defaultEnv: "PUBLICATION_SEARCH_METRICS_INGEST_URL",
+        secret: false,
+        kind: "url",
+      },
+    ],
   );
 });
 
@@ -236,7 +319,7 @@ test("route publications resolve URLs from the group hostname", () => {
     {
       name: "search",
       publisher: "web",
-      type: "McpServer",
+      type: "protocol.mcp.server",
       outputs: { url: { kind: "url", routeRef: "mcp" } },
     },
     {
@@ -272,14 +355,17 @@ test("route publications resolve URLs from the group hostname", () => {
 });
 
 test("publication prerequisites allow external catalog route consumes", async () => {
-  await assertManifestPublicationPrerequisites(
+  await assertServiceGraphPublicationPrerequisites(
     makePublicationEnv(
-      makePublicationRow({
-        name: "external-search",
-        publisher: "api",
-        type: "com.example.McpEndpoint",
-        outputs: { url: { kind: "url", routeRef: "mcp" } },
-      }, { url: "https://api.example/mcp" }),
+      makePublicationRow(
+        {
+          name: "external-search",
+          publisher: "api",
+          type: "com.example.McpEndpoint",
+          outputs: { url: { kind: "url", routeRef: "mcp" } },
+        },
+        { url: "https://api.example/mcp" },
+      ),
     ),
     {
       spaceId: "space_1",
@@ -297,24 +383,29 @@ test("publication prerequisites allow external catalog route consumes", async ()
 
 test("publication prerequisites validate aliases for external catalog route consumes", async () => {
   const env = makePublicationEnv(
-    makePublicationRow({
-      name: "external-search",
-      publisher: "api",
-      type: "com.example.McpEndpoint",
-      outputs: { url: { kind: "url", routeRef: "mcp" } },
-    }, { url: "https://api.example/mcp" }),
+    makePublicationRow(
+      {
+        name: "external-search",
+        publisher: "api",
+        type: "com.example.McpEndpoint",
+        outputs: { url: { kind: "url", routeRef: "mcp" } },
+      },
+      { url: "https://api.example/mcp" },
+    ),
   );
 
-  await assertManifestPublicationPrerequisites(env, {
+  await assertServiceGraphPublicationPrerequisites(env, {
     spaceId: "space_1",
     manifest: {
       compute: {
         web: {
           kind: "worker",
-          consume: [{
-            publication: "external-search",
-            inject: { env: { url: "SEARCH_URL" } },
-          }],
+          consume: [
+            {
+              publication: "external-search",
+              inject: { env: { url: "SEARCH_URL" } },
+            },
+          ],
         },
       },
     },
@@ -322,16 +413,18 @@ test("publication prerequisites validate aliases for external catalog route cons
 
   await assertRejects(
     () =>
-      assertManifestPublicationPrerequisites(env, {
+      assertServiceGraphPublicationPrerequisites(env, {
         spaceId: "space_1",
         manifest: {
           compute: {
             web: {
               kind: "worker",
-              consume: [{
-                publication: "external-search",
-                inject: { env: { endpoint: "SEARCH_ENDPOINT" } },
-              }],
+              consume: [
+                {
+                  publication: "external-search",
+                  inject: { env: { endpoint: "SEARCH_ENDPOINT" } },
+                },
+              ],
             },
           },
         },
@@ -342,15 +435,17 @@ test("publication prerequisites validate aliases for external catalog route cons
 });
 
 test("publication prerequisites allow same-manifest consumes before catalog write", async () => {
-  await assertManifestPublicationPrerequisites(makePublicationEnv(null), {
+  await assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
     spaceId: "space_1",
     manifest: {
-      publish: [{
-        name: "search",
-        publisher: "web",
-        type: "com.example.McpEndpoint",
-        outputs: { url: { kind: "url", routeRef: "mcp" } },
-      }],
+      publish: [
+        {
+          name: "search",
+          publisher: "web",
+          type: "com.example.McpEndpoint",
+          outputs: { url: { kind: "url", routeRef: "mcp" } },
+        },
+      ],
       compute: {
         web: {
           kind: "worker",
@@ -364,16 +459,18 @@ test("publication prerequisites allow same-manifest consumes before catalog writ
 test("publication prerequisites require a group hostname for same-manifest route consumes", async () => {
   await assertRejects(
     () =>
-      assertManifestPublicationPrerequisites(makePublicationEnv(null), {
+      assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
         spaceId: "space_1",
         groupId: "group_1",
         manifest: {
-          publish: [{
-            name: "search",
-            publisher: "web",
-            type: "com.example.McpEndpoint",
-            outputs: { url: { kind: "url", routeRef: "mcp" } },
-          }],
+          publish: [
+            {
+              name: "search",
+              publisher: "web",
+              type: "com.example.McpEndpoint",
+              outputs: { url: { kind: "url", routeRef: "mcp" } },
+            },
+          ],
           compute: {
             web: {
               kind: "worker",
@@ -390,20 +487,17 @@ test("publication prerequisites require a group hostname for same-manifest route
 test("publication prerequisites reject missing catalog consumes", async () => {
   await assertRejects(
     () =>
-      assertManifestPublicationPrerequisites(
-        makePublicationEnv(null),
-        {
-          spaceId: "space_1",
-          manifest: {
-            compute: {
-              web: {
-                kind: "worker",
-                consume: [{ publication: "missing" }],
-              },
+      assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
+        spaceId: "space_1",
+        manifest: {
+          compute: {
+            web: {
+              kind: "worker",
+              consume: [{ publication: "missing" }],
             },
           },
         },
-      ),
+      }),
     Error,
     "consume references unknown publication 'missing' in this space",
   );
@@ -412,14 +506,17 @@ test("publication prerequisites reject missing catalog consumes", async () => {
 test("publication prerequisites reject unknown aliases from catalog metadata", async () => {
   await assertRejects(
     () =>
-      assertManifestPublicationPrerequisites(
+      assertServiceGraphPublicationPrerequisites(
         makePublicationEnv(
-          makePublicationRow({
-            name: "search",
-            publisher: "web",
-            type: "McpServer",
-            outputs: { url: { kind: "url", routeRef: "mcp" } },
-          }, { url: "https://web.example/mcp" }),
+          makePublicationRow(
+            {
+              name: "search",
+              publisher: "web",
+              type: "protocol.mcp.server",
+              outputs: { url: { kind: "url", routeRef: "mcp" } },
+            },
+            { url: "https://web.example/mcp" },
+          ),
         ),
         {
           spaceId: "space_1",
@@ -427,10 +524,12 @@ test("publication prerequisites reject unknown aliases from catalog metadata", a
             compute: {
               web: {
                 kind: "worker",
-                consume: [{
-                  publication: "search",
-                  inject: { env: { nope: "NOPE" } },
-                }],
+                consume: [
+                  {
+                    publication: "search",
+                    inject: { env: { nope: "NOPE" } },
+                  },
+                ],
               },
             },
           },
@@ -443,41 +542,38 @@ test("publication prerequisites reject unknown aliases from catalog metadata", a
 
 test("service publication allowed fields use route publication contract", () => {
   assertEquals(
-    Array.from(publicationAllowedFields({
-      name: "notes",
-      publisher: "web",
-      type: "com.example.McpEndpoint",
-      outputs: { url: { kind: "url", routeRef: "mcp" } },
-    })).sort(),
-    [
-      "auth",
-      "display",
-      "name",
-      "outputs",
-      "publisher",
-      "spec",
-      "type",
-    ],
+    Array.from(
+      publicationAllowedFields({
+        name: "notes",
+        publisher: "web",
+        type: "com.example.McpEndpoint",
+        outputs: { url: { kind: "url", routeRef: "mcp" } },
+      }),
+    ).sort(),
+    ["auth", "display", "name", "outputs", "publisher", "spec", "type"],
   );
 });
 
 test("service publications allow same publication name in different groups", async () => {
   const rows: PublicationTestRow[] = [
-    makePublicationRow({
-      name: "shared-name",
-      publisher: "other-web",
-      type: "McpServer",
-      outputs: { url: { kind: "url", routeRef: "mcp" } },
-    }, { url: "https://other.example/mcp" }),
+    makePublicationRow(
+      {
+        name: "shared-name",
+        publisher: "other-web",
+        type: "protocol.mcp.server",
+        outputs: { url: { kind: "url", routeRef: "mcp" } },
+      },
+      { url: "https://other.example/mcp" },
+    ),
   ];
   const env = {
     DB: {
       select: () => ({
         from: (table: unknown) => ({
           where: () => ({
-            all: () => table === publications ? rows : [],
+            all: () => (table === publications ? rows : []),
             orderBy: () => ({
-              all: () => table === publications ? rows : [],
+              all: () => (table === publications ? rows : []),
             }),
           }),
         }),
@@ -501,17 +597,19 @@ test("service publications allow same publication name in different groups", asy
     TENANT_BASE_DOMAIN: "",
   };
 
-  await replaceManifestPublications(env, {
+  await replaceServiceGraphPublications(env, {
     spaceId: "space_1",
     groupId: "group_current",
     manifest: {
       routes: [{ id: "mcp", target: "web", path: "/mcp" }],
-      publish: [{
-        name: "shared-name",
-        publisher: "web",
-        type: "McpServer",
-        outputs: { url: { kind: "url", routeRef: "mcp" } },
-      }],
+      publish: [
+        {
+          name: "shared-name",
+          publisher: "web",
+          type: "protocol.mcp.server",
+          outputs: { url: { kind: "url", routeRef: "mcp" } },
+        },
+      ],
     },
     observedState: {
       groupId: "group_current",
@@ -535,20 +633,26 @@ test("service publications allow same publication name in different groups", asy
     },
   });
 
-  assertEquals(rows.some((row) => row.groupId === "group_current"), true);
+  assertEquals(
+    rows.some((row) => row.groupId === "group_current"),
+    true,
+  );
 });
 
 test("service publications reject manifest removal while still consumed", async () => {
   const row = {
-    ...makePublicationRow({
-      name: "shared-api",
-      publisher: "api",
-      type: "McpServer",
-      outputs: { url: { kind: "url", routeRef: "mcp" } },
-    }, { url: "https://api.example/mcp" }),
+    ...makePublicationRow(
+      {
+        name: "shared-api",
+        publisher: "api",
+        type: "protocol.mcp.server",
+        outputs: { url: { kind: "url", routeRef: "mcp" } },
+      },
+      { url: "https://api.example/mcp" },
+    ),
     groupId: "group_current",
     ownerServiceId: "svc_api",
-    sourceType: "manifest",
+    sourceType: "service_graph",
   };
   const env = {
     DB: {
@@ -558,16 +662,18 @@ test("service publications reject manifest removal while still consumed", async 
             all: () => {
               if (table === publications) return [row];
               if (table !== serviceConsumes) return [];
-              return [{
-                id: "consume_1",
-                accountId: "space_1",
-                serviceId: "svc_web",
-                publicationName: "shared-api",
-                configJson: JSON.stringify({ publication: "shared-api" }),
-                stateJson: "{}",
-                createdAt: "2026-04-18T00:00:00.000Z",
-                updatedAt: "2026-04-18T00:00:00.000Z",
-              }];
+              return [
+                {
+                  id: "consume_1",
+                  accountId: "space_1",
+                  serviceId: "svc_web",
+                  publicationName: "shared-api",
+                  configJson: JSON.stringify({ publication: "shared-api" }),
+                  stateJson: "{}",
+                  createdAt: "2026-04-18T00:00:00.000Z",
+                  updatedAt: "2026-04-18T00:00:00.000Z",
+                },
+              ];
             },
             orderBy: () => ({
               all: () => [row],
@@ -599,7 +705,7 @@ test("service publications reject manifest removal while still consumed", async 
 
   await assertRejects(
     () =>
-      replaceManifestPublications(env, {
+      replaceServiceGraphPublications(env, {
         spaceId: "space_1",
         groupId: "group_current",
         manifest: { publish: [], routes: [] },
@@ -621,15 +727,18 @@ test("service publications reject manifest removal while still consumed", async 
 
 test("service publications preflight consumed removals before manifest writes", async () => {
   const row = {
-    ...makePublicationRow({
-      name: "shared-api",
-      publisher: "api",
-      type: "McpServer",
-      outputs: { url: { kind: "url", routeRef: "mcp" } },
-    }, { url: "https://api.example/mcp" }),
+    ...makePublicationRow(
+      {
+        name: "shared-api",
+        publisher: "api",
+        type: "protocol.mcp.server",
+        outputs: { url: { kind: "url", routeRef: "mcp" } },
+      },
+      { url: "https://api.example/mcp" },
+    ),
     groupId: "group_current",
     ownerServiceId: "svc_api",
-    sourceType: "manifest",
+    sourceType: "service_graph",
   };
   let writeCount = 0;
   const env = {
@@ -640,16 +749,18 @@ test("service publications preflight consumed removals before manifest writes", 
             all: () => {
               if (table === publications) return [row];
               if (table !== serviceConsumes) return [];
-              return [{
-                id: "consume_1",
-                accountId: "space_1",
-                serviceId: "svc_web",
-                publicationName: "shared-api",
-                configJson: JSON.stringify({ publication: "shared-api" }),
-                stateJson: "{}",
-                createdAt: "2026-04-18T00:00:00.000Z",
-                updatedAt: "2026-04-18T00:00:00.000Z",
-              }];
+              return [
+                {
+                  id: "consume_1",
+                  accountId: "space_1",
+                  serviceId: "svc_web",
+                  publicationName: "shared-api",
+                  configJson: JSON.stringify({ publication: "shared-api" }),
+                  stateJson: "{}",
+                  createdAt: "2026-04-18T00:00:00.000Z",
+                  updatedAt: "2026-04-18T00:00:00.000Z",
+                },
+              ];
             },
             orderBy: () => ({
               all: () => [row],
@@ -684,16 +795,18 @@ test("service publications preflight consumed removals before manifest writes", 
 
   await assertRejects(
     () =>
-      replaceManifestPublications(env, {
+      replaceServiceGraphPublications(env, {
         spaceId: "space_1",
         groupId: "group_current",
         manifest: {
-          publish: [{
-            name: "new-api",
-            publisher: "web",
-            type: "McpServer",
-            outputs: { url: { kind: "url", routeRef: "mcp" } },
-          }],
+          publish: [
+            {
+              name: "new-api",
+              publisher: "web",
+              type: "protocol.mcp.server",
+              outputs: { url: { kind: "url", routeRef: "mcp" } },
+            },
+          ],
           routes: [{ id: "mcp", target: "web", path: "/mcp" }],
         },
         observedState: {

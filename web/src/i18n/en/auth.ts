@@ -9,10 +9,6 @@ export const auth = {
   // Initial Setup Page
   setupWelcome: "Welcome to Takos",
   setupAccountSubtitle: "Set up your account",
-  username: "Username",
-  usernamePlaceholder: "username",
-  usernameTooShort: "Username must be at least 3 characters",
-  failedToCheckUsername: "Failed to check username",
   settingUp: "Setting up...",
   continue: "Continue",
 

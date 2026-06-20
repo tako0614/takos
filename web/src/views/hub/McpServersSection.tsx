@@ -22,6 +22,7 @@ export function McpServersSection(props: McpServersSectionProps) {
     servers,
     loading,
     createExternalServer,
+    reauthorizeServer,
     toggleServer,
     deleteServer,
     fetchServerTools,
@@ -106,6 +107,18 @@ export function McpServersSection(props: McpServersSectionProps) {
                 server={server}
                 onToggle={() => toggleServer(server)}
                 onDelete={() => deleteServer(server)}
+                onReauthorize={async () => {
+                  try {
+                    await reauthorizeServer(server.id);
+                  } catch (error) {
+                    showToast(
+                      "error",
+                      error instanceof Error
+                        ? error.message
+                        : t("failedToReauthorizeMcpServer"),
+                    );
+                  }
+                }}
                 fetchServerTools={fetchServerTools}
               />
             ))}

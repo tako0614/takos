@@ -143,65 +143,76 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       return currentPreview.preview.next.appId ?? t("unknownApp");
     }
     if ("app" in currentPreview) {
-      return currentPreview.app?.name ?? currentPreview.app?.id ??
-        t("unknownApp");
+      return (
+        currentPreview.app?.name ?? currentPreview.app?.id ?? t("unknownApp")
+      );
     }
     const planRun = currentPreview as InstallPlanResponse;
-    return planRun.installPlan?.repo?.name ??
-      planRun.installPlan?.repo?.id ?? t("unknownApp");
+    return (
+      planRun.installPlan?.repo?.name ??
+      planRun.installPlan?.repo?.id ??
+      t("unknownApp")
+    );
   };
 
-  const previewSourceLabel = (
-    currentPreview: GitUrlPreviewResponse,
-  ): string =>
+  const previewSourceLabel = (currentPreview: GitUrlPreviewResponse): string =>
     isRevisionPreview(currentPreview)
-      ? currentPreview.preview.next.source.commit ??
+      ? (currentPreview.preview.next.source.commit ??
         currentPreview.preview.next.source.ref ??
-        ref()
-      : currentPreview.source?.commit ?? currentPreview.source?.ref ?? ref();
+        ref())
+      : (currentPreview.source?.commit ?? currentPreview.source?.ref ?? ref());
 
   const previewRiskLabel = (currentPreview: GitUrlPreviewResponse): string =>
     isRevisionPreview(currentPreview)
       ? currentPreview.preview.operation
       : "risk" in currentPreview
-      ? currentPreview.risk?.level ?? "low"
-      : "PlanRun";
+        ? (currentPreview.risk?.level ?? "low")
+        : "plan Run";
+
+  const previewMeteredCount = (
+    currentPreview: GitUrlPreviewResponse,
+  ): number | undefined =>
+    "cost" in currentPreview
+      ? (currentPreview as { cost?: { meteredBindingCount?: number } }).cost
+        ?.meteredBindingCount
+      : undefined;
 
   const previewBindingLabels = (
     currentPreview: GitUrlPreviewResponse,
   ): string[] =>
     isRevisionPreview(currentPreview)
       ? [
-        ...(currentPreview.preview.diff?.bindings?.added ?? []).map((value) =>
-          `+${value}`
-        ),
-        ...(currentPreview.preview.diff?.bindings?.removed ?? []).map((
-          value,
-        ) => `-${value}`),
-      ]
+          ...(currentPreview.preview.diff?.bindings?.added ?? []).map(
+            (value) => `+${value}`,
+          ),
+          ...(currentPreview.preview.diff?.bindings?.removed ?? []).map(
+            (value) => `-${value}`,
+          ),
+        ]
       : "bindings" in currentPreview
-      ? (currentPreview.bindings ?? []).map((binding) => binding.name)
-      : "changes" in currentPreview
-      ? (currentPreview.changes ?? []).map((change) =>
-        `${change.op ?? "change"} ${change.component ?? "component"}`
-      )
-      : [];
+        ? (currentPreview.bindings ?? []).map((binding) => binding.name)
+        : "changes" in currentPreview
+          ? (currentPreview.changes ?? []).map(
+              (change) =>
+                `${change.op ?? "change"} ${change.component ?? "component"}`,
+            )
+          : [];
 
   const previewPermissionLabels = (
     currentPreview: GitUrlPreviewResponse,
   ): string[] =>
     isRevisionPreview(currentPreview)
       ? [
-        ...(currentPreview.preview.diff?.permissions?.added ?? []).map((
-          value,
-        ) => `+${value}`),
-        ...(currentPreview.preview.diff?.permissions?.removed ?? []).map((
-          value,
-        ) => `-${value}`),
-      ]
+          ...(currentPreview.preview.diff?.permissions?.added ?? []).map(
+            (value) => `+${value}`,
+          ),
+          ...(currentPreview.preview.diff?.permissions?.removed ?? []).map(
+            (value) => `-${value}`,
+          ),
+        ]
       : "permissions" in currentPreview
-      ? currentPreview.permissions?.requested ?? []
-      : [];
+        ? (currentPreview.permissions?.requested ?? [])
+        : [];
 
   const resetPreview = () => {
     setPreview(null);
@@ -240,9 +251,9 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
             ref: ref().trim(),
             ...(revision
               ? {
-                installation_id: revision.installationId,
-                operation: revision.operation,
-              }
+                  installation_id: revision.installationId,
+                  operation: revision.operation,
+                }
               : {}),
           }),
         },
@@ -251,7 +262,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       setPreview(data);
       setMode(
         !isRevisionPreview(data) && "runtime" in data
-          ? data.runtime?.modes?.[0] ?? ""
+          ? (data.runtime?.modes?.[0] ?? "")
           : "",
       );
       setApproved(false);
@@ -277,45 +288,46 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
       const sourceCommit = isRevisionPreview(currentPreview)
         ? currentPreview.preview.next.source.commit
         : currentPreview.source?.commit;
-      const expected = isRevisionPreview(currentPreview) ||
-          "expected" in currentPreview
-        ? currentPreview.expected
-        : undefined;
-      const planDigest = "planDigest" in currentPreview
-        ? currentPreview.planDigest
-        : expected?.planDigest;
+      const expected =
+        isRevisionPreview(currentPreview) || "expected" in currentPreview
+          ? currentPreview.expected
+          : undefined;
+      const planDigest =
+        "planDigest" in currentPreview
+          ? currentPreview.planDigest
+          : expected?.planDigest;
       const requestBody = revision
         ? {
-          git_url: gitUrl().trim(),
-          ref: ref().trim(),
-          installation_id: revision.installationId,
-          operation: revision.operation,
-          ...(sourceCommit ? { source_commit: sourceCommit } : {}),
-          ...(revision.operation === "upgrade"
-            ? {
+            git_url: gitUrl().trim(),
+            ref: ref().trim(),
+            installation_id: revision.installationId,
+            operation: revision.operation,
+            ...(sourceCommit ? { source_commit: sourceCommit } : {}),
+            ...(revision.operation === "upgrade"
+              ? {
+                  expected_commit: expected?.commit ?? sourceCommit,
+                  expected_plan_digest: planDigest,
+                  expected_current_deployment_id:
+                    expected?.currentDeploymentId ?? null,
+                }
+              : {}),
+          }
+        : isRevisionPreview(currentPreview)
+          ? null
+          : {
+              git_url: gitUrl().trim(),
+              ref: ref().trim(),
+              ...(mode() ? { mode: mode() } : {}),
               expected_commit: expected?.commit ?? sourceCommit,
               expected_plan_digest: planDigest,
-              expected_current_deployment_id:
-                expected?.currentDeploymentId ?? null,
-            }
-            : {}),
-        }
-        : isRevisionPreview(currentPreview)
-        ? null
-        : {
-          git_url: gitUrl().trim(),
-          ref: ref().trim(),
-          ...(mode() ? { mode: mode() } : {}),
-          expected_commit: expected?.commit ?? sourceCommit,
-          expected_plan_digest: planDigest,
-          cost_ack: true,
-        };
+              cost_ack: true,
+            };
       if (!requestBody) return;
       await rpcJson(
         await fetch(
-          `/api/spaces/${
-            encodeURIComponent(spaceId)
-          }/app-installations/git-url${revision ? "/revision" : ""}/apply`,
+          `/api/spaces/${encodeURIComponent(
+            spaceId,
+          )}/app-installations/git-url${revision ? "/revision" : ""}/apply`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -403,10 +415,12 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
               </div>
 
               <Show
-                when={!isRevisionPreview(currentPreview()) &&
+                when={
+                  !isRevisionPreview(currentPreview()) &&
                   "runtime" in currentPreview() &&
                   ((currentPreview() as InstallCatalogPlanResponse).runtime
-                      ?.modes?.length ?? 0) > 0}
+                    ?.modes?.length ?? 0) > 0
+                }
               >
                 <label class="mt-4 block space-y-1.5">
                   <span class="text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -418,8 +432,10 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                     class="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:focus:border-zinc-100"
                   >
                     <For
-                      each={(currentPreview() as InstallCatalogPlanResponse)
-                        .runtime?.modes ?? []}
+                      each={
+                        (currentPreview() as InstallCatalogPlanResponse).runtime
+                          ?.modes ?? []
+                      }
                     >
                       {(runtimeMode) => (
                         <option value={runtimeMode}>{runtimeMode}</option>
@@ -459,6 +475,16 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                   </div>
                 </div>
               </div>
+
+              <Show
+                when={(previewMeteredCount(currentPreview()) ?? 0) > 0}
+              >
+                <div class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
+                  {t("meteredBindingsNotice", {
+                    count: String(previewMeteredCount(currentPreview()) ?? 0),
+                  })}
+                </div>
+              </Show>
 
               <label class="mt-4 flex items-start gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
                 <input
