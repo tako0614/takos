@@ -1,4 +1,4 @@
 # Copy to opentofu.tfvars and source secret values from the operator-local
 # secret store. Do not commit the rendered opentofu.tfvars file.
-# api_token is supplied by the Takosumi RunnerProfile at ApplyRun time.
+# CLOUDFLARE_API_TOKEN is supplied by the Takosumi ProviderConnection at Run time.
 account_id = "replace-with-cloudflare-account-id"
