@@ -37,7 +37,7 @@ async function checkRequiredDocs(): Promise<void> {
   ];
   const requiredExampleTerms = [
     'account_id = "replace-with-cloudflare-account-id"',
-    'api_token is supplied by the Takosumi RunnerProfile',
+    'CLOUDFLARE_API_TOKEN is supplied by the Takosumi ProviderConnection',
   ];
   const missingRunbook = requiredRunbookTerms
     .filter((text) => !runbook.includes(text))

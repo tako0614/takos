@@ -12,8 +12,8 @@ terraform {
 }
 
 provider "cloudflare" {
-  # Real credential is supplied by Takosumi Connection/CapabilityBinding/policy during the typed Run.
-  api_token = var.api_token
+  # Credentials are supplied outside the module by Takosumi ProviderConnection
+  # env injection.
 }
 
 module "takos" {
@@ -26,12 +26,6 @@ module "takos" {
 
 variable "account_id" {
   type = string
-}
-
-variable "api_token" {
-  type      = string
-  sensitive = true
-  default   = null
 }
 
 output "target" {

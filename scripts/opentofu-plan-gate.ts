@@ -15,6 +15,8 @@ type CommandOutput = {
   stderr: string;
 };
 
+const CLOUDFLARE_PLAN_PLACEHOLDER_TOKEN = 'abcdef0123456789abcdef0123456789abcdef01';
+
 type PlanResult = {
   target: TargetId;
   label: string;
@@ -128,6 +130,7 @@ async function opentofu(input: OpenTofuCommand): Promise<CommandOutput> {
     stderr: 'pipe',
     env: {
       TF_DATA_DIR: tfDataDir,
+      CLOUDFLARE_API_TOKEN: CLOUDFLARE_PLAN_PLACEHOLDER_TOKEN,
     },
   });
 
@@ -162,7 +165,7 @@ function renderMarkdownSummary(results: PlanResult[]): string {
   const lines = [
     '# OpenTofu Plan Gate',
     '',
-    'Credential-free staging plans are generated from `deploy/opentofu` root composition with `opentofu_plan_mode = true`.',
+    'Staging plans are generated from `deploy/opentofu` root composition with `opentofu_plan_mode = true` and a temporary CI-only Cloudflare token env placeholder.',
     'Full plan text is uploaded as workflow artifact.',
     '',
     '| Target | Var file | Add | Change | Destroy | Plan text |',
