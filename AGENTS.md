@@ -19,9 +19,9 @@ identity と vocabulary は root docs [`../docs/reference/design-principles.md`]
 
 > **Takos is the OpenTofu-native AI workspace distribution managed by embedded Takosumi services.** It uses plain
 > Git-hosted OpenTofu Capsules as the app / deploy input and adds the Takos product experience: AI agents, chat,
-> Workspaces, memory, app launcher, a first-party Takosumi Service Graph profile for Git / storage / agent runtime /
-> MCP, and first-party Capsule apps (`takos-docs` / `takos-slide` /
-> `takos-excel` / `takos-computer` / `yurucommu`) seeded on new Workspace creation. A self-host Takos deployment is a
+> Workspaces, memory, app launcher, Takos-facing service surfaces for Git / storage / agent runtime /
+> MCP, and first-party Capsule apps (`takos-office` / `takos-computer` / `yurucommu`) seeded on new Workspace creation.
+> A self-host Takos deployment is a
 > same-origin distribution worker: Takos product routes, Takosumi Accounts, Takosumi deploy-control, the dashboard, and
 > the OpenTofu runner are composed in-process. External hosted Takosumi is not required for self-hosting; embedded
 > Takosumi services are still the product-grade deploy authority.
@@ -29,9 +29,11 @@ identity と vocabulary は root docs [`../docs/reference/design-principles.md`]
 Takos の constituent (AI agents / Git / memory / Workspaces / tools) と「ソフトウェアの民主化」 core concept の formal
 definition は [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) §0 を参照。
 
-曖昧 / 旧 wording (「Takos は通常の App ではない」 だけの表現等) を増やさず、 root docs の vocabulary に統一する (=
-Takosumi の public concept は `Space` / `Source` / `Connection` / `Installation` / `Dependency` / `Run` /
-`RunGroup` / `Deployment` / `OutputSnapshot` / `Activity` に閉じる)。
+曖昧 / 旧 wording (「Takos は通常の App ではない」 だけの表現等) を増やさず、 root docs の vocabulary に統一する。
+Takosumi の public model は `Workspace` / `Project` / `Capsule` / `Source` / `ProviderConnection` /
+`CredentialRecipe` / `ProviderBinding` / `Secret` / `Run` / `Plan` / `Apply` / `Destroy` / `StateVersion` /
+`Output` / `Runner` / `AuditEvent` / `Operator`。旧 `Space` / `Installation` / `Deployment` / `OutputSnapshot` /
+Provider Catalog / Service Graph 語彙は migration debt として扱い、新規の正本 public vocabulary として増やさない。
 
 ## 責務
 

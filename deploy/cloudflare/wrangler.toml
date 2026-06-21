@@ -344,7 +344,6 @@ bucket_name = "takos-offload"
 #   the TAKOSUMI_CONTROL_DB binding.
 # Optional account-plane integrations (push only when enabled):
 # - TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY / _STRIPE_WEBHOOK_SECRET: Stripe billing
-# - TAKOSUMI_ACCOUNTS_UPSTREAM_GITHUB_CLIENT_ID / _CLIENT_SECRET: upstream GitHub OAuth
 # - TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_ID / _CLIENT_SECRET: upstream Google OAuth
 # - TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_ID / _CLIENT_SECRET: upstream generic OIDC
 # - TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID / _PASSKEY_RP_NAME / _PASSKEY_ORIGIN: passkey auth
