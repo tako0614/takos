@@ -50,23 +50,9 @@ const ECOSYSTEM_ROOT = new URL("../../../../../../../", import.meta.url);
 
 const DEFAULT_APP_SOURCES = [
   {
-    name: "takos-docs",
-    path: "takos-apps/takos-docs/package.json",
-    packageName: "@takos/takos-docs",
-    sourcePath: "outputs.tf",
-    preinstall: true,
-  },
-  {
-    name: "takos-excel",
-    path: "takos-apps/takos-excel/package.json",
-    packageName: "@takos-apps/takos-excel",
-    sourcePath: "outputs.tf",
-    preinstall: true,
-  },
-  {
-    name: "takos-slide",
-    path: "takos-apps/takos-slide/package.json",
-    packageName: "takos-slide",
+    name: "takos-office",
+    path: "takos-apps/takos-office/package.json",
+    packageName: "takos-office",
     sourcePath: "outputs.tf",
     preinstall: true,
   },
@@ -128,9 +114,7 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
   assertEquals(
     entries.map((entry) => entry.name),
     [
-      "takos-docs",
-      "takos-excel",
-      "takos-slide",
+      "takos-office",
       "takos-computer",
       "yurucommu",
       "road-to-me",
@@ -138,18 +122,16 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
   );
   assertEquals(
     entries.map((entry) => entry.preinstall),
-    [true, true, true, true, true, false],
+    [true, true, true, false],
   );
   assertEquals(
     entries.map((entry) => entry.ref),
-    ["v0.1.2", "v0.1.2", "v0.1.2", "v2.1.2", "v1.2.6", "v0.1.0"],
+    ["v0.1.0", "v2.1.2", "v1.2.6", "v0.1.0"],
   );
   assertEquals(
     entries.map((entry) => entry.appId),
     [
-      "jp.takos.docs",
-      "jp.takos.excel",
-      "jp.takos.slide",
+      "jp.takos.office",
       "jp.takos.computer",
       "com.yurucommu.app",
       "jp.takos.road-to-me",
@@ -184,9 +166,7 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
   assertEquals(
     entries.map((entry) => entry.repositoryUrl),
     [
-      "https://github.com/tako0614/takos-docs.git",
-      "https://github.com/tako0614/takos-excel.git",
-      "https://github.com/tako0614/takos-slide.git",
+      "https://github.com/tako0614/takos-office.git",
       "https://github.com/tako0614/takos-computer.git",
       "https://github.com/tako0614/yurucommu.git",
       "https://github.com/tako0614/road-to-me.git",
@@ -229,7 +209,7 @@ test("resolveDefaultAppDistribution keeps road-to-me catalog-only when fallback 
 
   assertEquals(
     entries.filter((entry) => entry.preinstall).map((entry) => entry.name),
-    ["takos-docs", "takos-excel", "takos-slide", "takos-computer", "yurucommu"],
+    ["takos-office", "takos-computer", "yurucommu"],
   );
   assertEquals(
     entries.find((entry) => entry.name === "road-to-me")?.preinstall,
@@ -388,9 +368,7 @@ test("resolveDefaultAppDistributionForBootstrap honors the preinstall kill switc
   assertEquals(
     entries.map((entry) => entry.name),
     [
-      "takos-docs",
-      "takos-excel",
-      "takos-slide",
+      "takos-office",
       "takos-computer",
       "yurucommu",
       "road-to-me",
@@ -640,9 +618,7 @@ test("resolveDefaultAppDistributionForBootstrap falls back when DB read fails", 
     assertEquals(
       entries.map((entry) => entry.name),
       [
-        "takos-docs",
-        "takos-excel",
-        "takos-slide",
+        "takos-office",
         "takos-computer",
         "yurucommu",
         "road-to-me",
@@ -1333,7 +1309,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
 
     assertEquals(summary.completed, 1);
     assertEquals(jobStatuses, ["in_progress", "completed"]);
-    assertEquals(sentRequests.length, 10);
+    assertEquals(sentRequests.length, 6);
     assertEquals(
       sentRequests[0].url,
       "https://installer.internal/v1/installation-projections/plan-runs",
@@ -1347,8 +1323,8 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
       spaceId: "space-1",
       source: {
         kind: "git",
-        url: "https://github.com/tako0614/takos-docs.git",
-        ref: "v0.1.2",
+        url: "https://github.com/tako0614/takos-office.git",
+        ref: "v0.1.0",
       },
     });
     assertEquals(
@@ -1362,8 +1338,8 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
       createdBySubject: "tsub_operator",
       source: {
         kind: "git",
-        url: "https://github.com/tako0614/takos-docs.git",
-        ref: "v0.1.2",
+        url: "https://github.com/tako0614/takos-office.git",
+        ref: "v0.1.0",
       },
       expected: {
         planRunId: "plan_1",
@@ -1701,14 +1677,12 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
     assertEquals(
       installed.map((entry) => entry.name),
       [
-        "takos-docs",
-        "takos-excel",
-        "takos-slide",
+        "takos-office",
         "takos-computer",
         "yurucommu",
       ],
     );
-    assertEquals(fetchCalls.length, 10);
+    assertEquals(fetchCalls.length, 6);
     assertEquals(
       fetchCalls[0].url,
       "https://installer.internal/v1/installation-projections/plan-runs",
@@ -1729,9 +1703,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
             objectRecord(call.body.source, "install request source").url,
         ),
       [
-        "https://github.com/tako0614/takos-docs.git",
-        "https://github.com/tako0614/takos-excel.git",
-        "https://github.com/tako0614/takos-slide.git",
+        "https://github.com/tako0614/takos-office.git",
         "https://github.com/tako0614/takos-computer.git",
         "https://github.com/tako0614/yurucommu.git",
       ],
@@ -1743,7 +1715,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
           (call) =>
             objectRecord(call.body.source, "install request source").ref,
         ),
-      ["v0.1.2", "v0.1.2", "v0.1.2", "v2.1.2", "v1.2.6"],
+      ["v0.1.0", "v2.1.2", "v1.2.6"],
     );
     assertEquals(
       fetchCalls

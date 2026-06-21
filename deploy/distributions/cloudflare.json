@@ -67,26 +67,10 @@
   "defaultApps": {
     "entries": [
       {
-        "name": "takos-docs",
-        "title": "Docs",
-        "repositoryUrl": "https://github.com/tako0614/takos-docs.git",
-        "ref": "v0.1.2",
-        "refType": "tag",
-        "preinstall": true
-      },
-      {
-        "name": "takos-excel",
-        "title": "Excel",
-        "repositoryUrl": "https://github.com/tako0614/takos-excel.git",
-        "ref": "v0.1.2",
-        "refType": "tag",
-        "preinstall": true
-      },
-      {
-        "name": "takos-slide",
-        "title": "Slide",
-        "repositoryUrl": "https://github.com/tako0614/takos-slide.git",
-        "ref": "v0.1.2",
+        "name": "takos-office",
+        "title": "Office",
+        "repositoryUrl": "https://github.com/tako0614/takos-office.git",
+        "ref": "v0.1.0",
         "refType": "tag",
         "preinstall": true
       },
@@ -121,18 +105,14 @@
       },
       "staging": {
         "preinstall": [
-          "takos-docs",
-          "takos-excel",
-          "takos-slide",
+          "takos-office",
           "takos-computer",
           "yurucommu"
         ]
       },
       "production": {
         "preinstall": [
-          "takos-docs",
-          "takos-excel",
-          "takos-slide",
+          "takos-office",
           "takos-computer",
           "yurucommu"
         ]
