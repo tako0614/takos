@@ -25,6 +25,7 @@ const accountsWorker = createCloudflareWorker({
     createInProcessDeployControlSeam(
       env as unknown as DeployControlWorkerEnv,
     ).operations(),
+  serviceGraphRuntimeAvailability: () => ({ takosProfileConfigured: true }),
 });
 
 export type { CloudflareWorkerEnv };
