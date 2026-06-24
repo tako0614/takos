@@ -177,27 +177,50 @@ export class ServiceDesiredStateService {
       });
     }
 
-    // Cloudflare Durable Object storage rejects raw BEGIN/COMMIT SQL. Keep this
-    // operation portable and let the caller's desired-state rollback restore
-    // previous values if a later apply step fails.
-    await this.db.delete(serviceEnvVars)
-      .where(and(
-        eq(serviceEnvVars.accountId, params.spaceId),
-        eq(serviceEnvVars.serviceId, serviceId),
-      ));
+    const replaceRows = async () => {
+      await this.db.delete(serviceEnvVars)
+        .where(and(
+          eq(serviceEnvVars.accountId, params.spaceId),
+          eq(serviceEnvVars.serviceId, serviceId),
+        ));
 
-    if (encrypted.length > 0) {
-      await this.db.insert(serviceEnvVars)
-        .values(encrypted.map((row) => ({
-          id: generateId(),
-          serviceId,
-          accountId: params.spaceId,
-          name: row.name,
-          valueEncrypted: row.valueEncrypted,
-          isSecret: !!row.isSecret,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        })));
+      if (encrypted.length > 0) {
+        await this.db.insert(serviceEnvVars)
+          .values(encrypted.map((row) => ({
+            id: generateId(),
+            serviceId,
+            accountId: params.spaceId,
+            name: row.name,
+            valueEncrypted: row.valueEncrypted,
+            isSecret: !!row.isSecret,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          })));
+      }
+    };
+
+    // Atomic delete+insert: a crash/failure between the two must not leave the
+    // service with its env vars and secrets partially (or fully) wiped. This is
+    // also the desired-state ROLLBACK primitive, so non-atomicity here could
+    // turn a failed apply's recovery into permanent secret loss. Mirrors
+    // replaceResourceBindings: prefer the binding's transaction, fall back to a
+    // manual BEGIN/COMMIT where `withTransaction` is unavailable (real D1).
+    if (typeof this.env.DB.withTransaction === "function") {
+      await this.env.DB.withTransaction(() => replaceRows());
+      return;
+    }
+
+    await this.env.DB.prepare("BEGIN IMMEDIATE").run();
+    try {
+      await replaceRows();
+      await this.env.DB.prepare("COMMIT").run();
+    } catch (error) {
+      try {
+        await this.env.DB.prepare("ROLLBACK").run();
+      } catch {
+        // Ignore rollback failures and rethrow the original error.
+      }
+      throw error;
     }
   }
 

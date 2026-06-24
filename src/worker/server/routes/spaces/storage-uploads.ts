@@ -12,6 +12,7 @@ import {
   FILE_URL_EXPIRY_SECONDS,
   getStorageItem,
   MAX_FILE_SIZE,
+  StorageError,
   uploadPendingFileContent,
 } from "../../../application/services/source/space-storage.ts";
 import {
@@ -171,6 +172,17 @@ const app = new Hono<AuthenticatedRouteEnv>()
           fileId,
         );
         const declaredSize = fileRecord?.size ?? 0;
+
+        // Reject oversized uploads from the Content-Length header before
+        // buffering the whole body into memory (the post-read size check would
+        // otherwise let an authenticated caller force a large allocation).
+        const contentLength = Number(c.req.header("Content-Length") ?? "");
+        if (Number.isFinite(contentLength) && contentLength > MAX_FILE_SIZE) {
+          throw new StorageError(
+            `File size exceeds maximum of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+            "TOO_LARGE",
+          );
+        }
 
         const body = await c.req.arrayBuffer();
         await uploadPendingFileContent(

@@ -15,17 +15,8 @@ const HEX_ENCODED_SECRET_LENGTH = 64;
 /** Length of the '0x' hex prefix. */
 const HEX_PREFIX_LENGTH = 2;
 
-/** Threshold below which masked values are fully replaced with '****'. */
-const MASK_SHORT_VALUE_THRESHOLD = 8;
-
-/** Number of visible characters at the start of a masked value. */
-const MASK_VISIBLE_PREFIX_LENGTH = 2;
-
-/** Number of visible characters at the end of a masked value. */
-const MASK_VISIBLE_SUFFIX_LENGTH = 2;
-
-/** Number of asterisks used in the masked middle section. */
-const MASK_ASTERISK_COUNT = 4;
+/** Fixed mask for any non-empty value (never reveals length or any plaintext). */
+const MASK_PLACEHOLDER = "********";
 
 export interface EncryptedData {
   ciphertext: string;
@@ -173,12 +164,11 @@ export async function decryptEnvVars(
 }
 
 function maskValue(value: string): string {
-  if (value.length <= MASK_SHORT_VALUE_THRESHOLD) {
-    return "****";
-  }
-  return `${value.slice(0, MASK_VISIBLE_PREFIX_LENGTH)}${
-    "*".repeat(MASK_ASTERISK_COUNT)
-  }${value.slice(-MASK_VISIBLE_SUFFIX_LENGTH)}`;
+  // This masked map mixes plain_text and secret_text values without a secret
+  // flag, so it must never reveal any plaintext — a prefix/suffix-revealing
+  // mask leaked the leading/trailing chars of API keys. Full-mask everything,
+  // matching the `bindings[]` secret projection.
+  return value.length > 0 ? MASK_PLACEHOLDER : "";
 }
 
 export function maskEnvVars(

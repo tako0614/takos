@@ -310,6 +310,14 @@ const jobDefaultsSchema = z.object({
     .optional(),
 });
 
+// SECURITY (DoS): generous upper bounds on workflow size. Workflow YAML is
+// attacker-controllable (repo `.takos/workflows/*.yml` via push), and the
+// dependency graph / job expansion that runs afterward is O(jobs)/O(steps).
+// These caps are far above any realistic workflow but stop a multi-MB file from
+// declaring millions of jobs/steps and pinning the Worker before a run starts.
+const MAX_JOBS_PER_WORKFLOW = 1000;
+const MAX_STEPS_PER_JOB = 1000;
+
 /**
  * ジョブのスキーマ
  */
@@ -319,7 +327,10 @@ const jobSchema = z.object({
   needs: z.union([z.string(), z.array(z.string())]).optional(),
   if: z.string().optional(),
   env: z.record(z.string()).optional(),
-  steps: z.array(stepSchema).min(1, "Job must have at least one step"),
+  steps: z
+    .array(stepSchema)
+    .min(1, "Job must have at least one step")
+    .max(MAX_STEPS_PER_JOB, `Job must not exceed ${MAX_STEPS_PER_JOB} steps`),
   outputs: z.record(z.string()).optional(),
   strategy: jobStrategySchema.optional(),
   container: containerConfigSchema.optional(),
@@ -348,6 +359,9 @@ const workflowSchema = z.object({
     .record(jobSchema)
     .refine((jobs) => Object.keys(jobs).length > 0, {
       message: "Workflow must have at least one job",
+    })
+    .refine((jobs) => Object.keys(jobs).length <= MAX_JOBS_PER_WORKFLOW, {
+      message: `Workflow must not define more than ${MAX_JOBS_PER_WORKFLOW} jobs`,
     }),
   permissions: permissionsSchema.optional(),
   concurrency: concurrencySchema.optional(),

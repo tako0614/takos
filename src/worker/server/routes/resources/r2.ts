@@ -23,6 +23,10 @@ import { getDb } from "../../../infra/db/index.ts";
 import { resources } from "../../../infra/db/schema.ts";
 import { and, eq, inArray } from "drizzle-orm";
 import { logError } from "../../../shared/utils/logger.ts";
+import {
+  base64ToBytes,
+  bytesToBase64,
+} from "../../../shared/utils/encoding-utils.ts";
 import { getResourceTypeQueryValues } from "../../../application/services/resources/capabilities.ts";
 import { toResource } from "./route-internals.ts";
 import type {
@@ -234,6 +238,22 @@ async function objectStatsHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 }
 
+/**
+ * Encode raw object bytes for the JSON transport. Valid UTF-8 is returned as
+ * text (readable, smaller); anything else (images, archives, ...) is returned
+ * as base64 so binary objects round-trip without corruption.
+ */
+function encodeObjectBody(
+  bytes: Uint8Array,
+): { value: string; encoding: "utf8" | "base64" } {
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return { value: text, encoding: "utf8" };
+  } catch {
+    return { value: bytesToBase64(bytes), encoding: "base64" };
+  }
+}
+
 async function getObjectHandler(c: Context<AuthenticatedRouteEnv>) {
   const resource = await loadObjectStoreResource(c, requireResourceId(c));
   const key = requireObjectKey(c);
@@ -245,9 +265,10 @@ async function getObjectHandler(c: Context<AuthenticatedRouteEnv>) {
       if (!object) {
         throw new NotFoundError("Object");
       }
+      const bytes = new Uint8Array(await object.arrayBuffer());
       return c.json({
         key,
-        value: await object.text(),
+        ...encodeObjectBody(bytes),
         content_type: getPortableObjectContentType(object),
         size: object.size,
       });
@@ -278,7 +299,7 @@ async function getObjectHandler(c: Context<AuthenticatedRouteEnv>) {
     }
     return c.json({
       key,
-      value: new TextDecoder().decode(object.body),
+      ...encodeObjectBody(new Uint8Array(object.body)),
       content_type: object.contentType,
       size: object.size,
     });
@@ -295,6 +316,9 @@ const putObjectValidator = zValidator(
   "json",
   z.object({
     value: z.string(),
+    // "base64" decodes `value` to raw bytes before storing (binary-safe);
+    // "utf8" (default) stores `value` as a text body.
+    encoding: z.enum(["utf8", "base64"]).optional(),
     content_type: z.string().optional(),
   }),
 );
@@ -307,13 +331,17 @@ async function putObjectHandler(c: Context<AuthenticatedRouteEnv>) {
   const key = requireObjectKey(c);
   const body = c.req.valid("json" as never) as {
     value: string;
+    encoding?: "utf8" | "base64";
     content_type?: string;
   };
+  const payload: ArrayBuffer | string = body.encoding === "base64"
+    ? (base64ToBytes(body.value).buffer as ArrayBuffer)
+    : body.value;
 
   if (isPortableResourceBackend(resource.backend_name)) {
     try {
       const bucket = getPortableObjectStore(resource);
-      await bucket.put(key, body.value, {
+      await bucket.put(key, payload, {
         ...(body.content_type
           ? { httpMetadata: { contentType: body.content_type } }
           : {}),
@@ -339,7 +367,7 @@ async function putObjectHandler(c: Context<AuthenticatedRouteEnv>) {
     await wfp.r2.uploadToR2(
       resource.backing_resource_name,
       key,
-      body.value,
+      payload,
       {
         contentType: body.content_type,
       },

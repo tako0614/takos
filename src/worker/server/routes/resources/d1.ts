@@ -103,6 +103,10 @@ export function enforceExportAggregateRowLimit(
 const READ_ONLY_PREFIXES = new Set(["SELECT", "PRAGMA", "EXPLAIN", "WITH"]);
 const MUTATING_SQL_KEYWORD_PATTERN =
   /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|ATTACH|DETACH|VACUUM|REINDEX|ANALYZE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
+// PRAGMAs that change persistent/connection state via the function-call form
+// (no `=`), which the mutating-keyword scan above would otherwise miss.
+const MUTATING_CALL_FORM_PRAGMA_PATTERN =
+  /\b(wal_checkpoint|incremental_vacuum|optimize|shrink_memory|writable_schema)\b/i;
 
 function stripLeadingSqlComments(sql: string): string {
   let remaining = sql.trim();
@@ -136,7 +140,17 @@ function maskQuotedSqlLiterals(sql: string): string {
     .replace(/"(?:""|[^"])*"/g, '""');
 }
 
-function isReadOnlySql(sql: string): boolean {
+// A PRAGMA is read-only introspection only if it neither assigns a value
+// (`PRAGMA x = y` — the write form of every settable pragma, e.g.
+// `user_version`, `writable_schema`, `journal_mode`) nor invokes one of the
+// state-mutating call-form pragmas. Anything else changing persistent state
+// must require write/admin permission.
+function isReadOnlyPragma(maskedSql: string): boolean {
+  if (maskedSql.includes("=")) return false;
+  return !MUTATING_CALL_FORM_PRAGMA_PATTERN.test(maskedSql);
+}
+
+export function isReadOnlySql(sql: string): boolean {
   const sqlNoComments = stripLeadingSqlComments(sql);
   const firstWord = sqlNoComments.split(/\s+/)[0]?.toUpperCase() ?? "";
   if (!READ_ONLY_PREFIXES.has(firstWord)) {
@@ -144,7 +158,13 @@ function isReadOnlySql(sql: string): boolean {
   }
 
   const sqlForKeywordScan = maskQuotedSqlLiterals(sqlNoComments);
-  return !MUTATING_SQL_KEYWORD_PATTERN.test(sqlForKeywordScan);
+  if (MUTATING_SQL_KEYWORD_PATTERN.test(sqlForKeywordScan)) {
+    return false;
+  }
+  if (firstWord === "PRAGMA" && !isReadOnlyPragma(sqlForKeywordScan)) {
+    return false;
+  }
+  return true;
 }
 
 async function loadD1ResourceWithAccess(

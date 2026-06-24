@@ -13,6 +13,13 @@ const PUBLIC_INTERNAL_FIELD_NAMES = new Set([
   "backing_resource_id",
   "backingResourceName",
   "backing_resource_name",
+  // Encrypted env/binding snapshot blobs (AES-GCM ciphertext + IV). Never ship
+  // to clients — the masked views (env_vars_masked / sanitized bindings) are
+  // the intended public projection.
+  "envVarsSnapshotEncrypted",
+  "env_vars_snapshot_encrypted",
+  "bindingsSnapshotEncrypted",
+  "bindings_snapshot_encrypted",
 ]);
 
 export function hasPublicInternalField(value: unknown): boolean {

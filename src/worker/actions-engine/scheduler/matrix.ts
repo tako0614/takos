@@ -167,7 +167,21 @@ function applyIncludeEntries(
   baseKeys: string[],
 ): MatrixContext[] {
   const baseKeySet = new Set(baseKeys);
+  // SECURITY (DoS): the base cartesian product is capped, but `include` was not.
+  // Each include entry costs an O(result) scan and non-matching ones each append
+  // a job, so an attacker-controlled workflow with a large `include` array would
+  // both blow past the job cap and cause quadratic CPU. Bound the include count
+  // up front, and re-check the running total on every append below.
+  if (includes.length > MAX_MATRIX_COMBINATIONS) {
+    throw new MatrixExpansionLimitError(combinations.length + includes.length);
+  }
   const result: MatrixContext[] = combinations.map((entry) => ({ ...entry }));
+  const pushCombination = (entry: MatrixContext) => {
+    result.push(entry);
+    if (result.length > MAX_MATRIX_COMBINATIONS) {
+      throw new MatrixExpansionLimitError(result.length);
+    }
+  };
 
   for (const includeEntry of includes) {
     const includeBaseKeys = Object.keys(includeEntry).filter((key) =>
@@ -179,7 +193,7 @@ function applyIncludeEntries(
 
     // ベース matrix キーが無い include は新しい combination を追加するだけ
     if (includeBaseKeys.length === 0) {
-      result.push({ ...includeEntry });
+      pushCombination({ ...includeEntry });
       continue;
     }
 
@@ -209,7 +223,7 @@ function applyIncludeEntries(
     if (!matched) {
       // GitHub Actions: include が既存 combination と一致しない場合、
       // エントリそのものが新しい combination として追加される
-      result.push({ ...includeEntry });
+      pushCombination({ ...includeEntry });
     }
   }
 

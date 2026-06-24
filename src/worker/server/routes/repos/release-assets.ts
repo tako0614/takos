@@ -158,6 +158,11 @@ const releaseAssets = new Hono<AuthenticatedRouteEnv>()
 
         // After null/string checks, `file` is a File (Blob with name)
         uploadedFileName = file.name || "asset";
+        // Reject oversized assets from the known blob size before materializing
+        // the bytes into a second in-memory copy.
+        if (file.size > 100 * 1024 * 1024) {
+          throw new BadRequestError("File too large. Maximum size is 100MB");
+        }
         fileData = await file.arrayBuffer();
       } else {
         throw new BadRequestError(

@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 
 import { createExecutionPlan } from "../../scheduler/job.ts";
-import { expandMatrix } from "../../scheduler/matrix.ts";
+import {
+  expandMatrix,
+  MatrixExpansionLimitError,
+} from "../../scheduler/matrix.ts";
 import type { Workflow } from "../../workflow-models.ts";
 
 test("expandMatrix - returns empty when strategy or matrix is missing", () => {
@@ -110,4 +113,35 @@ test("createExecutionPlan - expands matrix jobs into separate entries", () => {
   for (const jobId of plan.phases[0]) {
     expect(jobId.startsWith("test-")).toBeTruthy();
   }
+});
+
+test("expandMatrix - rejects a base cartesian product past the 256 cap (DoS)", () => {
+  // 16 × 17 = 272 combinations > 256.
+  expect(() =>
+    expandMatrix({
+      matrix: {
+        a: Array.from({ length: 16 }, (_, i) => i),
+        b: Array.from({ length: 17 }, (_, i) => i),
+      },
+    })
+  ).toThrow(MatrixExpansionLimitError);
+});
+
+test("expandMatrix - rejects an oversized include array (DoS bypass)", () => {
+  // Small base product, but a huge `include` array used to bypass the cap and
+  // append unbounded jobs / cause quadratic CPU.
+  const include = Array.from({ length: 300 }, (_, i) => ({ extra: i }));
+  expect(() => expandMatrix({ matrix: { os: ["linux"], include } })).toThrow(
+    MatrixExpansionLimitError,
+  );
+});
+
+test("expandMatrix - rejects includes that push the total past the cap", () => {
+  // 200 base combinations + 100 non-matching includes = 300 jobs > 256.
+  const include = Array.from({ length: 100 }, (_, i) => ({ os: `extra-${i}` }));
+  expect(() =>
+    expandMatrix({
+      matrix: { os: Array.from({ length: 200 }, (_, i) => `os-${i}`), include },
+    })
+  ).toThrow(MatrixExpansionLimitError);
 });
