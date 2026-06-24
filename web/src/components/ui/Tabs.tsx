@@ -1,18 +1,33 @@
 import {
   createContext,
   createSignal,
+  createUniqueId,
   Show,
   splitProps,
   useContext,
 } from "solid-js";
 import type { JSX } from "solid-js";
+import { moveTabFocus } from "../../lib/a11y.ts";
 
 interface TabsContextValue {
   activeTab: () => string;
   setActiveTab: (id: string) => void;
+  // Per-group prefix so tab/panel DOM ids stay unique when several Tabs
+  // instances render on the same page.
+  groupId: string;
 }
 
 const TabsContext = createContext<TabsContextValue | undefined>(undefined);
+
+/** DOM id of a tab button, derived from the group + logical tab id. */
+function tabDomId(groupId: string, id: string): string {
+  return `${groupId}-tab-${id}`;
+}
+
+/** DOM id of a tab panel, derived from the group + logical tab id. */
+function panelDomId(groupId: string, id: string): string {
+  return `${groupId}-panel-${id}`;
+}
 
 interface TabsProps {
   defaultTab: string;
@@ -22,6 +37,7 @@ interface TabsProps {
 
 export function Tabs(props: TabsProps) {
   const [activeTab, setActiveTabState] = createSignal(props.defaultTab);
+  const groupId = createUniqueId();
 
   const setActiveTab = (id: string) => {
     setActiveTabState(id);
@@ -29,7 +45,7 @@ export function Tabs(props: TabsProps) {
   };
 
   return (
-    <TabsContext.Provider value={{ activeTab, setActiveTab }}>
+    <TabsContext.Provider value={{ activeTab, setActiveTab, groupId }}>
       {props.children}
     </TabsContext.Provider>
   );
@@ -46,6 +62,8 @@ export function TabList(props: TabListProps) {
       style={{
         display: "flex",
         gap: "0.25rem",
+        // Scroll rather than clip/wrap when tabs overflow a narrow viewport.
+        "overflow-x": "auto",
         "border-bottom": "1px solid var(--color-border-primary)",
         ...(typeof local.style === "object" && local.style !== null
           ? local.style
@@ -69,7 +87,14 @@ export function Tab(props: TabProps) {
   const context = useContext(TabsContext);
   if (!context) throw new Error("Tab must be used within Tabs");
 
-  const { activeTab, setActiveTab } = context;
+  const { activeTab, setActiveTab, groupId } = context;
+
+  // Arrow / Home / End keyboard navigation across the tablist (automatic
+  // activation: the selected panel follows focus).
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const nextId = moveTabFocus(e);
+    if (nextId) setActiveTab(nextId);
+  };
 
   const tabStyle = (): JSX.CSSProperties => ({
     padding: "0.75rem 1rem",
@@ -92,7 +117,11 @@ export function Tab(props: TabProps) {
     <button
       type="button"
       role="tab"
+      id={tabDomId(groupId, local.id)}
+      data-tab-id={local.id}
       aria-selected={activeTab() === local.id}
+      aria-controls={panelDomId(groupId, local.id)}
+      tabindex={activeTab() === local.id ? 0 : -1}
       class={local.class ?? ""}
       style={{
         ...tabStyle(),
@@ -101,6 +130,7 @@ export function Tab(props: TabProps) {
           : {}),
       }}
       onClick={() => setActiveTab(local.id)}
+      onKeyDown={handleKeyDown}
       {...rest}
     >
       {local.children}
@@ -118,12 +148,15 @@ export function TabPanel(props: TabPanelProps) {
   const context = useContext(TabsContext);
   if (!context) throw new Error("TabPanel must be used within Tabs");
 
-  const { activeTab } = context;
+  const { activeTab, groupId } = context;
 
   return (
     <Show when={activeTab() === local.id}>
       <div
         role="tabpanel"
+        id={panelDomId(groupId, local.id)}
+        aria-labelledby={tabDomId(groupId, local.id)}
+        tabindex={0}
         class={local.class ?? ""}
         style={{
           padding: "1rem 0",

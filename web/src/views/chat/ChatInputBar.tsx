@@ -23,7 +23,26 @@ interface ChatInputBarProps {
 export function ChatInputBar(props: ChatInputBarProps) {
   const { t } = useI18n();
   let fileInputRef: HTMLInputElement | undefined;
+  let textareaRef: HTMLTextAreaElement | undefined;
   const [isComposing, setIsComposing] = createSignal(false);
+
+  // Grow the composer with its content up to the CSS max-height (max-h-48 =
+  // 192px), then let it scroll. Without this the textarea stays one row tall
+  // and multi-line drafts are cramped into a tiny scrolling box.
+  const MAX_TEXTAREA_HEIGHT = 192;
+  const autoResizeTextarea = () => {
+    const el = textareaRef;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  };
+
+  // Re-fit on every value change, including external resets (e.g. cleared
+  // after send) so the box shrinks back to one row.
+  createEffect(() => {
+    props.input;
+    autoResizeTextarea();
+  });
   const sendDisabled = () =>
     (!props.input.trim() && props.attachedFiles.length === 0) ||
     props.isLoading;
@@ -148,10 +167,15 @@ export function ChatInputBar(props: ChatInputBarProps) {
             onChange={props.onFileSelect}
           />
           <textarea
+            ref={textareaRef}
             class="flex-1 bg-transparent border-none outline-none resize-none py-2.5 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 min-h-[44px] max-h-48 text-base"
             placeholder={props.placeholder}
+            aria-label={props.placeholder}
             value={props.input}
-            onInput={(e) => props.onInputChange(e.currentTarget.value)}
+            onInput={(e) => {
+              props.onInputChange(e.currentTarget.value);
+              autoResizeTextarea();
+            }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onCompositionStart={() => setIsComposing(true)}

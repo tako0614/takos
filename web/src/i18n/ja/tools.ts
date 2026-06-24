@@ -1,11 +1,5 @@
 export const tools = {
-  // Packages
-  packageLabel: "パッケージ",
-
-  // Custom Tools
-
-  // Custom Tools Section
-  noCustomToolsYet: "カスタムツールがまだありません",
+  // MCP Servers Section
   mcpServers: "MCP サーバー",
   mcpServersDescription:
     "worker と app 由来の MCP service は自動で表示されます。外部サーバーはここで追加します。",
@@ -16,33 +10,6 @@ export const tools = {
   inputJson: "入力 (JSON)",
   enable: "有効化",
   disable: "無効化",
-
-  // Create Tool Modal
-  createCustomTool: "Workerツールを作成",
-  editTool: "Workerツールを編集",
-  toolNameSnakeCase: "ツール名 (スネークケース)",
-  toolDescriptionPlaceholder: "このツールの機能を説明してください",
-  parameterDescriptionPlaceholder: "このパラメータの説明",
-  toolType: "タイプ",
-  inputParameters: "入力パラメータ",
-  noParametersDefined: "パラメータが定義されていません",
-  addParameter: "パラメータを追加",
-  requiredField: "必須",
-  schemaTypeString: "文字列",
-  schemaTypeNumber: "数値",
-  schemaTypeBoolean: "真偽値",
-  schemaTypeArray: "配列",
-  schemaTypeObject: "オブジェクト",
-  nameAlreadyExists: "名前が既に存在します",
-  nameCannotBeChanged: "名前 (変更不可)",
-  workerIdCannotBeChanged: "Worker ID (変更不可)",
-  saveChanges: "変更を保存",
-
-  // Custom Tools Hook
-  failedToLoadTool: "ツールの読み込みに失敗しました",
-
-  // Installation Hook
-  rollbackFailed: "ロールバックに失敗しました",
 
   // MCP Servers Hook
   failedToFetchMcpServers: "MCPサーバーの取得に失敗しました",

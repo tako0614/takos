@@ -80,6 +80,8 @@ export function SessionDiffPanel(props: {
                 type="button"
                 class="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400"
                 onClick={props.onDismiss}
+                title={t("close")}
+                aria-label={t("close")}
               >
                 <Icons.X />
               </button>

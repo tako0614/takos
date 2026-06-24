@@ -20,6 +20,10 @@ export const repository = {
   browseStore: "Git URL で追加",
   appsInflightTitle: "追加中のアプリ",
   appsInflightManage: "インストール詳細 →",
+  installStatusPending: "保留中",
+  installStatusInstalling: "インストール中",
+  installStatusStale: "古い",
+  installStatusError: "エラー",
 
   // Branches
   branches: "ブランチ",
@@ -36,6 +40,7 @@ export const repository = {
   branchDeleteSuccess: "ブランチを削除しました",
 
   // Repository Detail
+  repositoryTabs: "リポジトリのセクション",
   code: "コード",
   commits: "コミット",
   pullRequests: "プルリクエスト",
@@ -150,6 +155,13 @@ export const repository = {
   resolveConflicts: "コンフリクトを解決",
   aiReview: "AIレビュー",
   aiReviewTitle: "Takos AIによるレビューとインラインコメントを生成",
+
+  // Pull request action failures
+  failedToMerge: "プルリクエストのマージに失敗しました",
+  failedToComment: "コメントの投稿に失敗しました",
+  failedToClosePr: "プルリクエストのクローズに失敗しました",
+  failedToRunAiReview: "AIレビューの実行に失敗しました",
+  failedToSubmitReview: "レビューの送信に失敗しました",
 
   // Conflict Resolver
   noConflictsToResolve: "解決するコンフリクトがありません",

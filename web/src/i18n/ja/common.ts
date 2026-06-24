@@ -8,6 +8,7 @@ export const common = {
   edit: "編集",
   copy: "コピー",
   close: "閉じる",
+  tabSectionsLabel: "セクション",
   dialog: "ダイアログ",
   confirm: "確認",
   refresh: "更新",

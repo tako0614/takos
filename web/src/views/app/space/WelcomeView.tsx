@@ -188,6 +188,8 @@ export function WelcomeView(props: WelcomeViewProps) {
               onClick={handleSend}
               disabled={!input().trim() &&
                 fileAttachments.attachedFiles.length === 0}
+              title={t("send")}
+              aria-label={t("send")}
             >
               <Icons.Send class="w-4 h-4" />
             </button>

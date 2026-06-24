@@ -8,6 +8,7 @@ export const common = {
   edit: "Edit",
   copy: "Copy",
   close: "Close",
+  tabSectionsLabel: "Sections",
   dialog: "Dialog",
   confirm: "Confirm",
   refresh: "Refresh",

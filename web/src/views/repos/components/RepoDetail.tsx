@@ -1,6 +1,14 @@
-import { createEffect, createSignal, For, on, Show } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  on,
+  Show,
+} from "solid-js";
 import type { JSX } from "solid-js";
 import { Icons } from "../../../lib/Icons.tsx";
+import { moveTabFocus } from "../../../lib/a11y.ts";
 import type { Branch, Repository } from "../../../types/index.ts";
 import { CommitList } from "./CommitList.tsx";
 import { RepoCodeSearch } from "./RepoCodeSearch.tsx";
@@ -110,6 +118,14 @@ export function RepoDetail(props: RepoDetailProps) {
   const { confirm } = useConfirmDialog();
   const safeHomepage = () => toSafeHref(props.repo.homepage);
   const [activeTab, setActiveTab] = createSignal<TabType>("code");
+  const tablistId = createUniqueId();
+  const tabButtonId = (id: TabType) => `${tablistId}-tab-${id}`;
+  const tabPanelId = `${tablistId}-panel`;
+  const handleTabKeyDown = (e: KeyboardEvent) => {
+    const nextId = moveTabFocus(e);
+    const target = nextId ? tabs.find((tab) => tab.id === nextId) : undefined;
+    if (target) setActiveTab(target.id);
+  };
   const [branches, setBranches] = createSignal<Branch[]>([]);
   const [currentBranch, setCurrentBranch] = createSignal<string>(
     props.initialRef || props.repo.default_branch,
@@ -433,17 +449,28 @@ export function RepoDetail(props: RepoDetailProps) {
             </Show>
           </div>
 
-          <div class="flex items-center gap-0 px-4 -mb-px overflow-x-auto scrollbar-none">
+          <div
+            role="tablist"
+            aria-label={t("repositoryTabs")}
+            class="flex items-center gap-0 px-4 -mb-px overflow-x-auto scrollbar-none"
+          >
             <For each={tabs}>
               {(tab) => (
                 <button
                   type="button"
+                  role="tab"
+                  id={tabButtonId(tab.id)}
+                  data-tab-id={tab.id}
+                  aria-selected={activeTab() === tab.id}
+                  aria-controls={tabPanelId}
+                  tabindex={activeTab() === tab.id ? 0 : -1}
                   class={`flex items-center gap-1.5 px-3 py-2 text-xs border-b-2 transition-colors whitespace-nowrap ${
                     activeTab() === tab.id
                       ? "border-orange-500 text-zinc-900 dark:text-zinc-100 font-medium"
                       : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                   }`}
                   onClick={() => setActiveTab(tab.id)}
+                  onKeyDown={handleTabKeyDown}
                 >
                   {tab.icon}
                   <span>{tab.label}</span>
@@ -471,6 +498,8 @@ export function RepoDetail(props: RepoDetailProps) {
                   class="p-1 text-zinc-400 hover:text-red-500 transition-colors disabled:opacity-50"
                   onClick={handleDelete}
                   disabled={deleting()}
+                  title={t("deleteRepo")}
+                  aria-label={t("deleteRepo")}
                 >
                   <Icons.Trash class="w-3.5 h-3.5" />
                 </button>
@@ -479,7 +508,13 @@ export function RepoDetail(props: RepoDetailProps) {
           </div>
         </Show>
 
-        <div class="flex-1 overflow-auto">
+        <div
+          role="tabpanel"
+          id={tabPanelId}
+          aria-labelledby={tabButtonId(activeTab())}
+          tabindex={0}
+          class="flex-1 overflow-auto"
+        >
           <Show when={activeTab() === "code"}>
             <RepoDetailFiles
               repo={props.repo}

@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import type { TranslationKey } from "../../store/i18n.ts";
@@ -82,11 +82,18 @@ export function SpaceInfoCard(props: {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(
-                    getSpaceIdentifier(props.selectedSpace),
-                  );
-                  showToast("success", t("copied"));
+                aria-label={t("copy")}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      getSpaceIdentifier(props.selectedSpace),
+                    );
+                    showToast("success", t("copied"));
+                  } catch {
+                    // Clipboard can be denied (permissions / insecure context);
+                    // don't claim success when nothing was copied.
+                    showToast("error", t("copyFailed"));
+                  }
                 }}
               >
                 <Icons.Copy class="w-4 h-4" />
@@ -116,6 +123,8 @@ export function SpaceInfoCard(props: {
 export function MembersCard(props: {
   members: SpaceMember[];
   loadingMembers: boolean;
+  membersError?: string | null;
+  onRetryMembers?: () => void;
   inviteEmail: string;
   setInviteEmail: (email: string) => void;
   inviteRole: "admin" | "member";
@@ -172,6 +181,21 @@ export function MembersCard(props: {
           ? (
             <div class="flex items-center justify-center py-8">
               <div class="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
+            </div>
+          )
+          : props.membersError
+          ? (
+            <div class="flex flex-col items-center gap-3 py-8 text-center">
+              <p class="text-sm text-red-500">{props.membersError}</p>
+              <Show when={props.onRetryMembers}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => props.onRetryMembers?.()}
+                >
+                  {t("retry")}
+                </Button>
+              </Show>
             </div>
           )
           : props.members.length === 0

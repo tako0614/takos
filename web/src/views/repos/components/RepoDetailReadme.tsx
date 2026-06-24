@@ -1,5 +1,6 @@
 import { Show } from "solid-js";
 import { Icons } from "../../../lib/Icons.tsx";
+import { MarkdownRenderer } from "../../chat/MarkdownRenderer.tsx";
 
 interface RepoDetailReadmeProps {
   readme: string | null;
@@ -20,8 +21,8 @@ export function RepoDetailReadme(props: RepoDetailReadmeProps) {
           <Show
             when={props.readmeLoading}
             fallback={
-              <div class="prose dark:prose-invert prose-zinc max-w-none prose-pre:bg-zinc-100 dark:prose-pre:bg-zinc-800 prose-pre:border prose-pre:border-zinc-200 dark:prose-pre:border-zinc-700">
-                <pre class="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300 font-mono">{props.readme}</pre>
+              <div class="text-sm text-zinc-700 dark:text-zinc-300">
+                <MarkdownRenderer content={props.readme ?? ""} />
               </div>
             }
           >

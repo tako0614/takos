@@ -71,9 +71,16 @@ export function RepoBrowseCard(props: RepoBrowseCardProps) {
       </Show>
       <div class="flex items-center gap-2 mb-2">
         <Icons.GitBranch class="w-5 h-5 text-zinc-900 dark:text-zinc-100" />
-        <span class="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+        <button
+          type="button"
+          class="font-medium text-zinc-900 dark:text-zinc-100 truncate text-left bg-transparent border-0 p-0 cursor-pointer rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)]"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onSelect(props.repo);
+          }}
+        >
           {props.repo.name}
-        </span>
+        </button>
         <span
           class={`ml-auto px-2 py-0.5 text-xs rounded-full flex-shrink-0 ${
             props.repo.visibility === "public"

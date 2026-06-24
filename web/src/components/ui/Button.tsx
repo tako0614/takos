@@ -52,6 +52,7 @@ export function Button(props: ButtonProps) {
         local.disabled || local.isLoading ? "opacity-50 cursor-not-allowed" : ""
       } ${local.class ?? ""}`}
       disabled={local.disabled || local.isLoading}
+      aria-busy={local.isLoading ? "true" : undefined}
       {...rest}
     >
       {local.isLoading ? <LoadingSpinner /> : local.leftIcon}
@@ -67,6 +68,7 @@ function LoadingSpinner() {
       class="w-4 h-4 animate-spin"
       fill="none"
       viewBox="0 0 24 24"
+      aria-hidden="true"
     >
       <circle
         class="opacity-25"

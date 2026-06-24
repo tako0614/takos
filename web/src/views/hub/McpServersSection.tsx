@@ -21,6 +21,8 @@ export function McpServersSection(props: McpServersSectionProps) {
   const {
     servers,
     loading,
+    error,
+    refresh,
     createExternalServer,
     reauthorizeServer,
     toggleServer,
@@ -84,6 +86,19 @@ export function McpServersSection(props: McpServersSectionProps) {
             <span class="text-sm text-zinc-400">{t("loading")}</span>
           </div>
         )
+        : error()
+        ? (
+          <div class="flex flex-col items-center justify-center h-64 gap-3 text-center">
+            <p class="text-sm text-red-500">{error()}</p>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+              onClick={() => void refresh()}
+            >
+              {t("retry")}
+            </button>
+          </div>
+        )
         : servers().length === 0
         ? (
           <div class="flex flex-col items-center justify-center h-64 gap-4">
@@ -129,16 +144,28 @@ export function McpServersSection(props: McpServersSectionProps) {
         <CreateMcpServerModal
           onClose={() => setShowCreateModal(false)}
           onCreate={async (input) => {
-            const result = await createExternalServer(input);
-            showToast("success", result.message);
-            if (result.auth_url) {
-              globalThis.open(
-                result.auth_url,
-                "_blank",
-                "noopener,noreferrer",
+            try {
+              const result = await createExternalServer(input);
+              showToast("success", result.message);
+              if (result.auth_url) {
+                globalThis.open(
+                  result.auth_url,
+                  "_blank",
+                  "noopener,noreferrer",
+                );
+              }
+              setShowCreateModal(false);
+            } catch (err) {
+              // Keep the modal open (setShowCreateModal stays true) so the user
+              // can correct input and retry instead of losing it to a silent
+              // failure.
+              showToast(
+                "error",
+                err instanceof Error && err.message
+                  ? err.message
+                  : t("failedToCreateMcpServer"),
               );
             }
-            setShowCreateModal(false);
           }}
         />
       )}

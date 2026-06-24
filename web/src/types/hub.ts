@@ -1,22 +1,9 @@
 /**
- * Client-side type definitions for the Hub view (custom tools & MCP servers).
+ * Client-side type definitions for the Hub view (MCP servers).
  *
  * These mirror the shapes returned by the API, using snake_case field names
  * as they appear in JSON responses.
  */
-
-export interface CustomTool {
-  id: string;
-  name: string;
-  description: string;
-  inputSchema: object;
-  enabled: boolean;
-  type?: string;
-  workerId?: string;
-  bundleDeploymentId?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-}
 
 export interface McpServerRecord {
   id: string;

@@ -1,5 +1,7 @@
+import { createUniqueId } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
+import { moveTabFocus } from "../../lib/a11y.ts";
 import type { Resource, Worker } from "../../types/index.ts";
 import { Breadcrumb } from "../../components/ui/Breadcrumb.tsx";
 import { WorkerOverviewTab } from "./detail/WorkerOverviewTab.tsx";
@@ -75,11 +77,27 @@ function StatusDot(props: { status: Worker["status"] }) {
   );
 }
 
+const WORKER_DETAIL_TABS: WorkerDetailTab[] = [
+  "overview",
+  "deployments",
+  "settings",
+];
+
 export function WorkerDetail(props: WorkerDetailProps) {
   const { t } = useI18n();
   const workerName = () => getWorkerDisplayName(props.worker);
   const workerHostname = () => getWorkerDisplayHostname(props.worker);
   const workerUrl = () => getWorkerUrl(props.worker);
+
+  const tablistId = createUniqueId();
+  const tabButtonId = (id: WorkerDetailTab) => `${tablistId}-tab-${id}`;
+  const tabPanelId = `${tablistId}-panel`;
+  const handleTabKeyDown = (e: KeyboardEvent) => {
+    const nextId = moveTabFocus(e);
+    if (nextId && (WORKER_DETAIL_TABS as string[]).includes(nextId)) {
+      props.onTabChange(nextId as WorkerDetailTab);
+    }
+  };
 
   const breadcrumbItems = () => [
     { label: t("workers"), onClick: props.onBack },
@@ -129,43 +147,74 @@ export function WorkerDetail(props: WorkerDetailProps) {
         </div>
       </header>
 
-      <div class="flex gap-1 px-6 pt-4 border-b border-zinc-200 dark:border-zinc-800">
+      <div
+        role="tablist"
+        aria-label={t("tabSectionsLabel")}
+        class="flex gap-1 px-6 pt-4 border-b border-zinc-200 dark:border-zinc-800"
+      >
         <button
           type="button"
+          role="tab"
+          id={tabButtonId("overview")}
+          data-tab-id="overview"
+          aria-selected={props.tab === "overview"}
+          aria-controls={tabPanelId}
+          tabindex={props.tab === "overview" ? 0 : -1}
           class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
             props.tab === "overview"
               ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
               : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
           }`}
           onClick={() => props.onTabChange("overview")}
+          onKeyDown={handleTabKeyDown}
         >
           {t("overview")}
         </button>
         <button
           type="button"
+          role="tab"
+          id={tabButtonId("deployments")}
+          data-tab-id="deployments"
+          aria-selected={props.tab === "deployments"}
+          aria-controls={tabPanelId}
+          tabindex={props.tab === "deployments" ? 0 : -1}
           class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
             props.tab === "deployments"
               ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
               : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
           }`}
           onClick={() => props.onTabChange("deployments")}
+          onKeyDown={handleTabKeyDown}
         >
           {t("deploymentHistory")}
         </button>
         <button
           type="button"
+          role="tab"
+          id={tabButtonId("settings")}
+          data-tab-id="settings"
+          aria-selected={props.tab === "settings"}
+          aria-controls={tabPanelId}
+          tabindex={props.tab === "settings" ? 0 : -1}
           class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
             props.tab === "settings"
               ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
               : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
           }`}
           onClick={() => props.onTabChange("settings")}
+          onKeyDown={handleTabKeyDown}
         >
           {t("settings")}
         </button>
       </div>
 
-      <div class="flex-1 overflow-auto p-6">
+      <div
+        role="tabpanel"
+        id={tabPanelId}
+        aria-labelledby={tabButtonId(props.tab)}
+        tabindex={0}
+        class="flex-1 overflow-auto p-6"
+      >
         {props.tab === "overview" && (
           <WorkerOverviewTab
             worker={props.worker}

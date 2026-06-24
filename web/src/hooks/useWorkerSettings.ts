@@ -222,8 +222,12 @@ export function useWorkerSettings(
       const res = await rpcPath(rpc, "services", ":id", "env").$patch({
         param: { id: currentWorker.id },
         json: {
-          variables: envVars().filter((e) => e.value).map((e) => ({
-            name: e.name,
+          // The PATCH replaces the full env set, so gate on the *name* (every
+          // row already has one — handleAddEnvVar requires it) rather than the
+          // value. Gating on value silently deleted intentionally-empty vars
+          // (a valid `FOO=` config) while still reporting "saved".
+          variables: envVars().filter((e) => e.name.trim() !== "").map((e) => ({
+            name: e.name.trim(),
             value: e.value,
             secret: e.type === "secret_text",
           })),

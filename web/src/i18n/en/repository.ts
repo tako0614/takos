@@ -19,6 +19,10 @@ export const repository = {
   browseStore: "Add from Git URL",
   appsInflightTitle: "Adding apps",
   appsInflightManage: "Install details →",
+  installStatusPending: "Pending",
+  installStatusInstalling: "Installing",
+  installStatusStale: "Stale",
+  installStatusError: "Error",
 
   // Branches
   branches: "Branches",
@@ -35,6 +39,7 @@ export const repository = {
   branchDeleteSuccess: "Branch deleted",
 
   // Repository Detail
+  repositoryTabs: "Repository sections",
   code: "Code",
   commits: "Commits",
   pullRequests: "Pull Requests",
@@ -149,6 +154,13 @@ export const repository = {
   resolveConflicts: "Resolve Conflicts",
   aiReview: "AI Review",
   aiReviewTitle: "Generate review + inline comments using Takos AI",
+
+  // Pull request action failures
+  failedToMerge: "Failed to merge pull request",
+  failedToComment: "Failed to post comment",
+  failedToClosePr: "Failed to close pull request",
+  failedToRunAiReview: "Failed to run AI review",
+  failedToSubmitReview: "Failed to submit review",
 
   // Conflict Resolver
   noConflictsToResolve: "No conflicts to resolve",

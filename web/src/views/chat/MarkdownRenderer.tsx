@@ -1,9 +1,11 @@
 import { createMemo, type JSX } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { useNavigate } from "@solidjs/router";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { toSafeHref } from "../../lib/safeHref.ts";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard.ts";
+import { parseMarkdownBlocks, type TableAlign } from "./markdownBlocks.ts";
 
 function isInternalHref(href: string): boolean {
   try {
@@ -213,143 +215,111 @@ function resolveInternalNavigate(): InternalNavigate {
  * If richer Markdown is needed, replace this with a vetted library plus a
  * sanitizer rather than extending the regex grammar further.
  */
+const HEADING_CLASS: Record<1 | 2 | 3 | 4, string> = {
+  1: "text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-3",
+  2: "text-xl font-semibold text-zinc-900 dark:text-zinc-100 mt-6 mb-3",
+  3: "text-lg font-semibold text-zinc-900 dark:text-zinc-100 mt-5 mb-2",
+  4: "text-base font-semibold text-zinc-900 dark:text-zinc-100 mt-4 mb-2",
+};
+
+function alignClass(align: TableAlign): string {
+  return align === "center"
+    ? "text-center"
+    : align === "right"
+    ? "text-right"
+    : "text-left";
+}
+
 export function MarkdownRenderer(props: { content: string }) {
   const navigateInternal = resolveInternalNavigate();
   const renderContent = createMemo(() => {
-    const lines = props.content.split("\n");
-    const elements: JSX.Element[] = [];
-    let codeBlock: string[] = [];
-    let inCodeBlock = false;
-    let codeLang = "";
-    let listItems: JSX.Element[] = [];
-    let listType: "ul" | "ol" | null = null;
-
-    const flushList = () => {
-      if (listItems.length > 0 && listType) {
-        if (listType === "ul") {
-          elements.push(
-            <ul class="list-disc pl-6 mb-4 space-y-1">{listItems}</ul>,
+    const inline = (text: string) => parseInlineMarkdown(text, navigateInternal);
+    return parseMarkdownBlocks(props.content).map((block): JSX.Element => {
+      switch (block.kind) {
+        case "heading":
+          return (
+            <Dynamic
+              component={`h${block.level}`}
+              class={HEADING_CLASS[block.level]}
+            >
+              {inline(block.text)}
+            </Dynamic>
           );
-        } else {
-          elements.push(
-            <ol class="list-decimal pl-6 mb-4 space-y-1">{listItems}</ol>,
+        case "code":
+          return <CodeBlock code={block.code} language={block.lang} />;
+        case "list":
+          return block.ordered
+            ? (
+              <ol class="list-decimal pl-6 mb-4 space-y-1">
+                {block.items.map((item) => (
+                  <li class="text-zinc-900 dark:text-zinc-100">
+                    {inline(item)}
+                  </li>
+                ))}
+              </ol>
+            )
+            : (
+              <ul class="list-disc pl-6 mb-4 space-y-1">
+                {block.items.map((item) => (
+                  <li class="text-zinc-900 dark:text-zinc-100">
+                    {inline(item)}
+                  </li>
+                ))}
+              </ul>
+            );
+        case "quote":
+          return (
+            <blockquote class="border-l-4 border-zinc-300 dark:border-zinc-600 pl-4 my-4 italic text-zinc-600 dark:text-zinc-400">
+              {block.lines.map((l) => <p class="mb-1">{inline(l)}</p>)}
+            </blockquote>
           );
-        }
-        listItems = [];
-        listType = null;
-      }
-    };
-
-    lines.forEach((line, _i) => {
-      // Code block
-      if (line.startsWith("```")) {
-        flushList();
-        if (inCodeBlock) {
-          const code = codeBlock.join("\n");
-          const lang = codeLang;
-          elements.push(
-            <CodeBlock code={code} language={lang} />,
+        case "table":
+          return (
+            <div class="overflow-x-auto mb-4">
+              <table class="min-w-full text-sm border-collapse">
+                <thead>
+                  <tr>
+                    {block.header.map((cell, idx) => (
+                      <th
+                        class={`border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 font-semibold bg-zinc-50 dark:bg-zinc-800 ${
+                          alignClass(block.align[idx] ?? null)
+                        }`}
+                      >
+                        {inline(cell)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row) => (
+                    <tr>
+                      {row.map((cell, idx) => (
+                        <td
+                          class={`border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-zinc-900 dark:text-zinc-100 ${
+                            alignClass(block.align[idx] ?? null)
+                          }`}
+                        >
+                          {inline(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           );
-          codeBlock = [];
-          inCodeBlock = false;
-          codeLang = "";
-        } else {
-          inCodeBlock = true;
-          codeLang = line.slice(3).trim();
-        }
-        return;
+        case "hr":
+          return <hr class="my-4 border-zinc-200 dark:border-zinc-700" />;
+        case "blank":
+          return <div class="h-4" />;
+        case "paragraph":
+          return (
+            <p class="mb-4 text-zinc-900 dark:text-zinc-100">
+              {inline(block.text)}
+            </p>
+          );
       }
-
-      if (inCodeBlock) {
-        codeBlock.push(line);
-        return;
-      }
-
-      // Headers
-      if (line.startsWith("#### ")) {
-        flushList();
-        elements.push(
-          <h4 class="text-base font-semibold text-zinc-900 dark:text-zinc-100 mt-4 mb-2">
-            {parseInlineMarkdown(line.slice(5), navigateInternal)}
-          </h4>,
-        );
-        return;
-      }
-      if (line.startsWith("### ")) {
-        flushList();
-        elements.push(
-          <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mt-5 mb-2">
-            {parseInlineMarkdown(line.slice(4), navigateInternal)}
-          </h3>,
-        );
-        return;
-      }
-      if (line.startsWith("## ")) {
-        flushList();
-        elements.push(
-          <h2 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mt-6 mb-3">
-            {parseInlineMarkdown(line.slice(3), navigateInternal)}
-          </h2>,
-        );
-        return;
-      }
-      if (line.startsWith("# ")) {
-        flushList();
-        elements.push(
-          <h1 class="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-3">
-            {parseInlineMarkdown(line.slice(2), navigateInternal)}
-          </h1>,
-        );
-        return;
-      }
-
-      // Unordered list
-      if (line.match(/^[-*]\s/)) {
-        if (listType !== "ul") {
-          flushList();
-          listType = "ul";
-        }
-        listItems.push(
-          <li class="text-zinc-900 dark:text-zinc-100">
-            {parseInlineMarkdown(line.slice(2), navigateInternal)}
-          </li>,
-        );
-        return;
-      }
-
-      // Ordered list
-      const olMatch = line.match(/^(\d+)\.\s(.*)$/);
-      if (olMatch) {
-        if (listType !== "ol") {
-          flushList();
-          listType = "ol";
-        }
-        listItems.push(
-          <li class="text-zinc-900 dark:text-zinc-100">
-            {parseInlineMarkdown(olMatch[2], navigateInternal)}
-          </li>,
-        );
-        return;
-      }
-
-      flushList();
-
-      // Empty line
-      if (line.trim() === "") {
-        elements.push(<div class="h-4" />);
-        return;
-      }
-
-      // Regular paragraph
-      elements.push(
-        <p class="mb-4 text-zinc-900 dark:text-zinc-100">
-          {parseInlineMarkdown(line, navigateInternal)}
-        </p>,
-      );
     });
-
-    flushList();
-    return elements;
   });
 
   return <>{renderContent()}</>;

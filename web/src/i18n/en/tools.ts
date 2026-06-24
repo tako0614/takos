@@ -1,11 +1,5 @@
 export const tools = {
-  // Packages
-  packageLabel: "Package",
-
-  // Custom Tools
-
-  // Custom Tools Section
-  noCustomToolsYet: "No custom tools yet",
+  // MCP Servers Section
   mcpServers: "MCP Servers",
   mcpServersDescription:
     "Managed worker and app MCP servers appear automatically. Add external servers here.",
@@ -16,33 +10,6 @@ export const tools = {
   inputJson: "Input (JSON)",
   enable: "Enable",
   disable: "Disable",
-
-  // Create Tool Modal
-  createCustomTool: "Create Worker Tool",
-  editTool: "Edit Worker Tool",
-  toolNameSnakeCase: "Name (snake_case)",
-  toolDescriptionPlaceholder: "What does this tool do?",
-  parameterDescriptionPlaceholder: "Describe this parameter",
-  toolType: "Type",
-  inputParameters: "Input Parameters",
-  noParametersDefined: "No parameters defined",
-  addParameter: "Add Parameter",
-  requiredField: "Required",
-  schemaTypeString: "String",
-  schemaTypeNumber: "Number",
-  schemaTypeBoolean: "Boolean",
-  schemaTypeArray: "Array",
-  schemaTypeObject: "Object",
-  nameAlreadyExists: "Name already exists",
-  nameCannotBeChanged: "Name (cannot be changed)",
-  workerIdCannotBeChanged: "Worker ID (cannot be changed)",
-  saveChanges: "Save Changes",
-
-  // Custom Tools Hook
-  failedToLoadTool: "Failed to load tool",
-
-  // Installation Hook
-  rollbackFailed: "Rollback failed",
 
   // MCP Servers Hook
   failedToFetchMcpServers: "Failed to fetch MCP servers",

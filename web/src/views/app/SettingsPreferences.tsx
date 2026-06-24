@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
+import { useToast } from "../../store/toast.ts";
 import { rpc, rpcJson } from "../../lib/rpc.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Button } from "../../components/ui/index.ts";
@@ -11,6 +12,7 @@ export function SettingsPreferences(props: {
   onSettingsChange?: (settings: UserSettings) => void;
 }) {
   const { t } = useI18n();
+  const { showToast } = useToast();
   const [saving, setSaving] = createSignal(false);
 
   const updateSetting = async (patch: Partial<UserSettings>) => {
@@ -21,7 +23,12 @@ export function SettingsPreferences(props: {
       const settings = await rpcJson<UserSettings>(res);
       props.onSettingsChange?.(settings);
     } catch (err) {
-      console.error("Failed to update settings:", err);
+      // The toggle/segmented control reverts to the (unchanged) prop value on
+      // failure; without this the revert looks like a no-op success.
+      showToast(
+        "error",
+        err instanceof Error && err.message ? err.message : t("failedToSave"),
+      );
     } finally {
       setSaving(false);
     }

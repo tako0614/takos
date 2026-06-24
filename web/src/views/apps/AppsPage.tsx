@@ -17,6 +17,13 @@ export interface AppsPageProps {
   onNavigateToStore?: () => void;
 }
 
+const INFLIGHT_STATUS_LABEL: Record<string, TranslationKey> = {
+  pending: "installStatusPending",
+  installing: "installStatusInstalling",
+  stale: "installStatusStale",
+  error: "installStatusError",
+};
+
 export function AppsPage(props: AppsPageProps) {
   const { t } = useI18n();
   const { apps, loading, error } = useRegisteredApps(() => props.spaceId);
@@ -28,6 +35,15 @@ export function AppsPage(props: AppsPageProps) {
   const hasApps = () => appsCount() > 0;
   const loadingState = () => loading() && !hasApps();
   const errorMessage = () => error();
+
+  const inflightStatusLabel = (status: string) => {
+    const key = INFLIGHT_STATUS_LABEL[status];
+    return key ? t(key) : status;
+  };
+  const inflightStatusClass = (status: string) =>
+    status === "error"
+      ? "text-red-600 dark:text-red-400 font-medium"
+      : "text-zinc-500 dark:text-zinc-400";
 
   return (
     <div class="flex h-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-900">
@@ -92,8 +108,12 @@ export function AppsPage(props: AppsPageProps) {
                         class="flex items-center justify-between rounded px-2 py-1.5 text-sm text-zinc-700 hover:bg-amber-100/60 dark:text-zinc-200 dark:hover:bg-amber-900/20"
                       >
                         <span class="truncate font-medium">{inst.name}</span>
-                        <span class="ml-3 shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
-                          {inst.status}
+                        <span
+                          class={`ml-3 shrink-0 text-xs ${
+                            inflightStatusClass(inst.status)
+                          }`}
+                        >
+                          {inflightStatusLabel(inst.status)}
                         </span>
                       </a>
                     </li>

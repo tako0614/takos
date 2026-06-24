@@ -19,6 +19,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     `/api/mcp/servers?spaceId=${encodeURIComponent(currentSpaceId())}`;
   const [servers, setServers] = createSignal<McpServerRecord[]>([]);
   const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
   const latestRefresh = createLatestRequest();
 
   const refresh = async () => {
@@ -26,12 +27,14 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     if (!targetSpaceId) {
       latestRefresh.next();
       setServers([]);
+      setError(null);
       setLoading(false);
       return;
     }
 
     const claim = latestRefresh.claim(() => targetSpaceId === currentSpaceId());
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(
         `/api/mcp/servers?spaceId=${encodeURIComponent(targetSpaceId)}`,
@@ -40,9 +43,16 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       const data = await res.json();
       if (!claim.won()) return;
       setServers(data.data || []);
-    } catch {
+    } catch (err) {
       if (!claim.won()) return;
+      // Surface load failures with a retry instead of rendering an empty
+      // "no servers connected" state that hides the error.
       setServers([]);
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : t("failedToFetchMcpServers"),
+      );
     } finally {
       if (claim.won()) {
         setLoading(false);
@@ -204,6 +214,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
   return {
     servers,
     loading,
+    error,
     refresh,
     createExternalServer,
     reauthorizeServer,

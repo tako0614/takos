@@ -12,6 +12,7 @@ export const storage = {
   renamed: "Renamed",
   deleted: "Deleted",
   actions: "Actions",
+  moreActions: "More actions",
 
   // File Upload
   dragDropHint: "Drag & drop files or click to select",

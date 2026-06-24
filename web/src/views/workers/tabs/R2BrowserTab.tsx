@@ -8,6 +8,7 @@ import { Button } from "../../../components/ui/Button.tsx";
 import { rpc, rpcJson, rpcPath } from "../../../lib/rpc.ts";
 import type { Resource } from "../../../types/index.ts";
 import { formatDateTime, formatFileSize } from "../../../lib/format.ts";
+import { base64ToBytes, bytesToBase64 } from "../../../lib/base64.ts";
 
 interface R2Object {
   key: string;
@@ -19,6 +20,9 @@ interface R2Object {
 interface R2ObjectPayload {
   key: string;
   value: string;
+  // How `value` is encoded. "base64" carries arbitrary binary bytes; "utf8"
+  // (or absent, for older responses) means `value` is the literal text body.
+  encoding?: "utf8" | "base64";
   content_type?: string | null;
   size: number;
 }
@@ -138,11 +142,15 @@ export function R2BrowserTab(props: R2BrowserTabProps) {
   const uploadFile = async (file: File) => {
     const key = prefix() + file.name;
     try {
+      // Send the raw bytes as base64 so binary files (images, archives, ...)
+      // round-trip intact instead of being mangled by a UTF-8 text decode.
+      const value = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
       const res = await rpcPath(rpc, "resources", ":id", "objects", ":key")
         .$put({
           param: { id: props.resource.id, key: encodeURIComponent(key) },
           json: {
-            value: await file.text(),
+            value,
+            encoding: "base64",
             content_type: file.type || "application/octet-stream",
           },
         });
@@ -226,7 +234,10 @@ export function R2BrowserTab(props: R2BrowserTabProps) {
           param: { id: props.resource.id, key: encodeURIComponent(key) },
         });
       const object = await rpcJson<R2ObjectPayload>(res);
-      const blob = new Blob([object.value], {
+      const body = object.encoding === "base64"
+        ? base64ToBytes(object.value)
+        : new TextEncoder().encode(object.value);
+      const blob = new Blob([body], {
         type: object.content_type || "application/octet-stream",
       });
       const url = URL.createObjectURL(blob);

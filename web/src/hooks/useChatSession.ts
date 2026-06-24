@@ -252,7 +252,17 @@ export function useChatSession({
     threadId();
 
     const anchor = messagesEndRef();
-    const scrollContainer = anchor?.parentElement?.parentElement;
+    // Walk up to the nearest scrollable ancestor by CSS rather than assuming a
+    // fixed nesting depth (anchor.parentElement.parentElement) — that silently
+    // broke autoscroll whenever the feed markup gained/lost a wrapper.
+    let scrollContainer: HTMLElement | null = anchor?.parentElement ?? null;
+    while (scrollContainer) {
+      const overflowY = getComputedStyle(scrollContainer).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+        break;
+      }
+      scrollContainer = scrollContainer.parentElement;
+    }
     if (!(scrollContainer instanceof HTMLElement)) {
       return;
     }

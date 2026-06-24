@@ -143,6 +143,8 @@ export function ServerCard(props: {
             onClick={handleToggleExpand}
             class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
             title={t("mcpServerTools")}
+            aria-label={t("mcpServerTools")}
+            aria-expanded={expanded()}
           >
             {expanded()
               ? <Icons.ChevronDown class="w-4 h-4" />
@@ -154,6 +156,8 @@ export function ServerCard(props: {
             onClick={props.onToggle}
             class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
             title={props.server.enabled ? t("disable") : t("enable")}
+            aria-label={props.server.enabled ? t("disable") : t("enable")}
+            aria-pressed={props.server.enabled}
           >
             {props.server.enabled
               ? <Icons.ToggleOn class="w-6 h-6 text-emerald-500" />
@@ -184,6 +188,7 @@ export function ServerCard(props: {
               disabled={toolsLoading()}
               class="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400 dark:text-zinc-500 disabled:opacity-50"
               title={t("mcpRefreshTools")}
+              aria-label={t("mcpRefreshTools")}
             >
               <Icons.RefreshCw
                 class={`w-3.5 h-3.5 ${toolsLoading() ? "animate-spin" : ""}`}

@@ -50,4 +50,4 @@ export type {
 
 export type { StorageFile } from "./storage.ts";
 
-export type { CustomTool, McpServerRecord } from "./hub.ts";
+export type { McpServerRecord } from "./hub.ts";

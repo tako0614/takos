@@ -108,12 +108,19 @@ export function StorageFileTable(props: StorageFileTableProps) {
                 <td class="px-2 py-2">
                   <div class="flex items-center gap-3">
                     {getFileIcon(file)}
-                    <span
-                      class="truncate max-w-md text-zinc-900 dark:text-zinc-100 text-sm"
+                    <button
+                      type="button"
+                      class="truncate max-w-md text-left text-zinc-900 dark:text-zinc-100 text-sm bg-transparent border-0 p-0 cursor-pointer hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)] rounded-sm"
                       title={file.name}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        file.type === "folder"
+                          ? props.onNavigateToFolder(file)
+                          : props.onOpenFile(file);
+                      }}
                     >
                       {file.name}
-                    </span>
+                    </button>
                   </div>
                 </td>
                 <td class="px-4 py-2 text-zinc-400 dark:text-zinc-500 hidden sm:table-cell">
@@ -125,11 +132,12 @@ export function StorageFileTable(props: StorageFileTableProps) {
                 <td class="px-2 py-2" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
-                    class="p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 dark:text-zinc-500 transition-all"
+                    aria-label={t("moreActions")}
+                    aria-haspopup="menu"
+                    class="p-1.5 rounded-full opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 max-md:opacity-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 dark:text-zinc-500 transition-all"
                     onClick={(e) => {
                       e.stopPropagation();
-                      const rect = (e.target as HTMLElement)
-                        .getBoundingClientRect();
+                      const rect = e.currentTarget.getBoundingClientRect();
                       props.onContextMenu({
                         file,
                         x: rect.right - 208,

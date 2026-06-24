@@ -2,11 +2,19 @@ import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import type { Toast } from "../../types/index.ts";
 import { useToast } from "../../store/toast.ts";
+import { useI18n } from "../../store/i18n.ts";
 
 /** Renders the global toast list from the shared Solid store. */
 export function ToastRenderer() {
-  const { toasts, dismissToast } = useToast();
-  return <ToastContainer toasts={toasts} onDismiss={dismissToast} />;
+  const { toasts, dismissToast, pauseToast, resumeToast } = useToast();
+  return (
+    <ToastContainer
+      toasts={toasts}
+      onDismiss={dismissToast}
+      onPause={pauseToast}
+      onResume={resumeToast}
+    />
+  );
 }
 
 const iconClasses: Record<Toast["type"], string> = {
@@ -16,8 +24,14 @@ const iconClasses: Record<Toast["type"], string> = {
 };
 
 export function ToastContainer(
-  props: { toasts: Toast[]; onDismiss: (id: string) => void },
+  props: {
+    toasts: Toast[];
+    onDismiss: (id: string) => void;
+    onPause?: (id: string) => void;
+    onResume?: (id: string) => void;
+  },
 ) {
+  const { t } = useI18n();
   const [isMobile, setIsMobile] = createSignal(
     typeof globalThis.innerWidth === "number"
       ? globalThis.innerWidth < 768
@@ -45,6 +59,13 @@ export function ToastContainer(
         <For each={props.toasts}>
           {(toast) => (
             <div
+              role={toast.type === "error" ? "alert" : "status"}
+              aria-live={toast.type === "error" ? "assertive" : "polite"}
+              aria-atomic="true"
+              onMouseEnter={() => props.onPause?.(toast.id)}
+              onMouseLeave={() => props.onResume?.(toast.id)}
+              onFocusIn={() => props.onPause?.(toast.id)}
+              onFocusOut={() => props.onResume?.(toast.id)}
               class={`
               flex items-center gap-3 px-4 py-3 rounded-[var(--radius-md)]
               border border-[var(--color-border-primary)] shadow-[var(--shadow-lg)]
@@ -69,6 +90,7 @@ export function ToastContainer(
               </span>
               <button
                 type="button"
+                aria-label={t("close")}
                 class="shrink-0 p-1 rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
                 onClick={() => props.onDismiss(toast.id)}
               >

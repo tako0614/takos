@@ -3,6 +3,17 @@ import { useI18n } from "../../../store/i18n.ts";
 import { Icons } from "../../../lib/Icons.tsx";
 import type { Resource } from "../../../types/index.ts";
 import type { Binding } from "../worker-models.ts";
+import { getResourceTypeName } from "../utils/resourceUtils.tsx";
+
+// Resource types that map to a real worker binding (see
+// useWorkerSettings.bindingTypeForResource: sql->d1, object-store->r2_bucket,
+// key-value->kv_namespace). Other resource types (queue/secret/...) have no
+// binding mapping and must not appear in the add-binding picker.
+const BINDABLE_RESOURCE_TYPES: ReadonlyArray<Resource["type"]> = [
+  "sql",
+  "object-store",
+  "key-value",
+];
 
 interface BindingsTabProps {
   bindings: Binding[];
@@ -68,10 +79,14 @@ export function BindingsTab(props: BindingsTabProps) {
           <option value="">{t("addBinding")}</option>
           <For
             each={props.resources.filter((r) =>
-              ["d1", "r2", "kv"].includes(r.type)
+              BINDABLE_RESOURCE_TYPES.includes(r.type)
             )}
           >
-            {(r) => <option value={r.name}>{r.name} ({r.type})</option>}
+            {(r) => (
+              <option value={r.name}>
+                {r.name} ({getResourceTypeName(r.type, t)})
+              </option>
+            )}
           </For>
         </select>
         <button

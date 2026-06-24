@@ -58,9 +58,16 @@ export function WorkersTab(props: WorkersTabProps) {
                 </div>
                 <div class="flex-1 min-w-0 py-0.5">
                   <div class="flex items-center gap-2">
-                    <h3 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                    <button
+                      type="button"
+                      class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate text-left bg-transparent border-0 p-0 cursor-pointer rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-focus)]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        props.onSelectWorker(worker);
+                      }}
+                    >
                       {workerName}
-                    </h3>
+                    </button>
                     <span
                       class={`w-2 h-2 rounded-full shrink-0 ${
                         getWorkerStatusBgClass(worker.status)
@@ -85,6 +92,7 @@ export function WorkersTab(props: WorkersTabProps) {
                       );
                     }}
                     title={t("open")}
+                    aria-label={t("open")}
                   >
                     <Icons.ExternalLink class="w-4 h-4" />
                   </button>

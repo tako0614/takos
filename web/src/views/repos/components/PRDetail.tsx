@@ -1,5 +1,6 @@
-import { createEffect, createSignal, on, Show } from "solid-js";
+import { createEffect, createSignal, createUniqueId, on, Show } from "solid-js";
 import { Icons } from "../../../lib/Icons.tsx";
+import { moveTabFocus } from "../../../lib/a11y.ts";
 import type {
   FileDiff,
   PRComment,
@@ -17,6 +18,7 @@ import {
   repoRunPullRequestAiReview,
 } from "../../../lib/rpc.ts";
 import { useI18n } from "../../../store/i18n.ts";
+import { useToast } from "../../../store/toast.ts";
 import { PRHeader } from "./PRHeader.tsx";
 import { PRComments } from "./PRComments.tsx";
 import { PRDiffView } from "./PRDiffView.tsx";
@@ -34,7 +36,15 @@ interface PRDetailProps {
 
 export function PRDetail(props: PRDetailProps) {
   const { t } = useI18n();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = createSignal<TabType>("conversation");
+  const tablistId = createUniqueId();
+  const tabButtonId = (id: TabType) => `${tablistId}-tab-${id}`;
+  const tabPanelId = `${tablistId}-panel`;
+  const handleTabKeyDown = (e: KeyboardEvent) => {
+    const nextId = moveTabFocus(e);
+    if (nextId === "conversation" || nextId === "files") setActiveTab(nextId);
+  };
   const [reviews, setReviews] = createSignal<PRReview[]>([]);
   const [comments, setComments] = createSignal<PRComment[]>([]);
   const [diffs, setDiffs] = createSignal<FileDiff[]>([]);
@@ -94,8 +104,11 @@ export function PRDetail(props: PRDetailProps) {
             merged_at: new Date().toISOString(),
           },
       );
-    } catch (_err) {
-      /* merge failed */
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error && err.message ? err.message : t("failedToMerge"),
+      );
     } finally {
       setMerging(false);
     }
@@ -111,7 +124,12 @@ export function PRDetail(props: PRDetailProps) {
       );
       setComments([...comments(), data.comment]);
       setNewComment("");
-    } catch (_err) { /* comment failed */ }
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error && err.message ? err.message : t("failedToComment"),
+      );
+    }
   };
 
   const handleClose = async () => {
@@ -127,8 +145,11 @@ export function PRDetail(props: PRDetailProps) {
             closed_at: new Date().toISOString(),
           },
       );
-    } catch (_err) {
-      /* close failed */
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error && err.message ? err.message : t("failedToClosePr"),
+      );
     } finally {
       setClosing(false);
     }
@@ -141,8 +162,13 @@ export function PRDetail(props: PRDetailProps) {
       await repoRunPullRequestAiReview(props.repoId, props.pr.number);
       await fetchPRDetails();
       setActiveTab("conversation");
-    } catch (_err) {
-      /* AI review failed */
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error && err.message
+          ? err.message
+          : t("failedToRunAiReview"),
+      );
     } finally {
       setAiReviewing(false);
     }
@@ -165,8 +191,13 @@ export function PRDetail(props: PRDetailProps) {
       setReviews([...reviews(), data.review]);
       setReviewComment("");
       setShowReviewForm(false);
-    } catch (_err) {
-      /* review failed */
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error && err.message
+          ? err.message
+          : t("failedToSubmitReview"),
+      );
     } finally {
       setSubmittingReview(false);
     }
@@ -204,6 +235,8 @@ export function PRDetail(props: PRDetailProps) {
       />
 
       <div
+        role="tablist"
+        aria-label={t("tabSectionsLabel")}
         class="flex border-b"
         style={{
           "border-color": "var(--color-border-primary)",
@@ -212,12 +245,19 @@ export function PRDetail(props: PRDetailProps) {
       >
         <button
           type="button"
+          role="tab"
+          id={tabButtonId("conversation")}
+          data-tab-id="conversation"
+          aria-selected={activeTab() === "conversation"}
+          aria-controls={tabPanelId}
+          tabindex={activeTab() === "conversation" ? 0 : -1}
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
             activeTab() === "conversation"
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
               : "text-zinc-500 dark:text-zinc-400 border-transparent hover:text-zinc-900 dark:hover:text-zinc-100"
           }`}
           onClick={() => setActiveTab("conversation")}
+          onKeyDown={handleTabKeyDown}
         >
           <Icons.MessageSquare />
           <span>{t("conversationTab")}</span>
@@ -227,12 +267,19 @@ export function PRDetail(props: PRDetailProps) {
         </button>
         <button
           type="button"
+          role="tab"
+          id={tabButtonId("files")}
+          data-tab-id="files"
+          aria-selected={activeTab() === "files"}
+          aria-controls={tabPanelId}
+          tabindex={activeTab() === "files" ? 0 : -1}
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
             activeTab() === "files"
               ? "text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100"
               : "text-zinc-500 dark:text-zinc-400 border-transparent hover:text-zinc-900 dark:hover:text-zinc-100"
           }`}
           onClick={() => setActiveTab("files")}
+          onKeyDown={handleTabKeyDown}
         >
           <Icons.File />
           <span>{t("filesChangedTab")}</span>
@@ -242,7 +289,13 @@ export function PRDetail(props: PRDetailProps) {
         </button>
       </div>
 
-      <div class="flex-1 overflow-auto p-6">
+      <div
+        role="tabpanel"
+        id={tabPanelId}
+        aria-labelledby={tabButtonId(activeTab())}
+        tabindex={0}
+        class="flex-1 overflow-auto p-6"
+      >
         <Show when={loading()}>
           <div class="flex flex-col items-center justify-center py-16 text-zinc-500">
             <div class="w-8 h-8 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />

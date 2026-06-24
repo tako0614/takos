@@ -115,6 +115,8 @@ export function DomainsTab(props: DomainsTabProps) {
                               class="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
                               onClick={() =>
                                 props.onDeleteWorkerDomain(domain.id)}
+                              title={t("deleteDomain")}
+                              aria-label={t("deleteDomain")}
                             >
                               <Icons.Trash class="w-4 h-4" />
                             </button>

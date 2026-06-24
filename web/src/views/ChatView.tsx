@@ -255,13 +255,19 @@ export function ChatView(props: ChatViewProps) {
   };
 
   createEffect(() => {
+    // On mobile the desktop ChatHeader (hidden md:flex) is not shown, so inject
+    // BOTH the model switcher and the search/share/export actions into the
+    // mobile header — otherwise those actions are unreachable on phones.
     mobileHeader.setHeaderContent(
-      <ModelSwitcher
-        selectedModel={selectedModel()}
-        models={availableModels()}
-        isLoading={isLoading()}
-        onModelChange={handleModelChange}
-      />,
+      <div class="flex items-center gap-1 w-full">
+        <ModelSwitcher
+          selectedModel={selectedModel()}
+          models={availableModels()}
+          isLoading={isLoading()}
+          onModelChange={handleModelChange}
+        />
+        <div class="ml-auto">{headerActions()}</div>
+      </div>,
     );
     onCleanup(() => mobileHeader.setHeaderContent(null));
   });

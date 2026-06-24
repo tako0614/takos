@@ -37,6 +37,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
 
   const [members, setMembers] = createSignal<SpaceMember[]>([]);
   const [loadingMembers, setLoadingMembers] = createSignal(false);
+  const [membersError, setMembersError] = createSignal<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = createSignal("");
   const [inviteRole, setInviteRole] = createSignal<"admin" | "member">(
@@ -75,14 +76,23 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
     if (!targetSpaceId) return;
     try {
       setLoadingMembers(true);
+      setMembersError(null);
       const res = await rpc.spaces[":spaceId"].members.$get({
         param: { spaceId: targetSpaceId },
       });
       const data = await rpcJson<{ members: SpaceMember[] }>(res);
       if (targetSpaceId !== selectedSpaceId()) return;
       setMembers(data.members || []);
-    } catch {
-      // member fetch failed silently
+    } catch (err) {
+      if (targetSpaceId !== selectedSpaceId()) return;
+      // Surface the failure (with retry) instead of rendering an empty member
+      // list, which would read as "this space has no members".
+      setMembers([]);
+      setMembersError(
+        err instanceof Error && err.message
+          ? err.message
+          : t("failedToLoad"),
+      );
     } finally {
       setLoadingMembers(false);
     }
@@ -93,6 +103,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
       void fetchMembers();
     } else {
       setMembers([]);
+      setMembersError(null);
     }
   });
 
@@ -308,6 +319,8 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
               <MembersCard
                 members={members()}
                 loadingMembers={loadingMembers()}
+                membersError={membersError()}
+                onRetryMembers={() => void fetchMembers()}
                 inviteEmail={inviteEmail()}
                 setInviteEmail={setInviteEmail}
                 inviteRole={inviteRole()}

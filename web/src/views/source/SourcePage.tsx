@@ -1,6 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
+import { useToast } from "../../store/toast.ts";
 import { CreateRepoModal } from "../shared/repos/CreateRepoModal.tsx";
 import type { Space } from "../../types/index.ts";
 import { GitUrlInstallModal } from "./GitUrlInstallModal.tsx";
@@ -22,6 +23,7 @@ interface SourcePageProps {
  */
 export function SourcePage(props: SourcePageProps) {
   const { t } = useI18n();
+  const { showToast } = useToast();
   const [showGitUrlInstallModal, setShowGitUrlInstallModal] = createSignal(
     false,
   );
@@ -44,12 +46,21 @@ export function SourcePage(props: SourcePageProps) {
   ) => {
     const id = spaceId();
     if (!id) return;
-    const res = await rpc.spaces[":spaceId"].repos.$post({
-      param: { spaceId: id },
-      json: { name, description, visibility },
-    });
-    await rpcJson(res);
-    setShowCreateModal(false);
+    try {
+      const res = await rpc.spaces[":spaceId"].repos.$post({
+        param: { spaceId: id },
+        json: { name, description, visibility },
+      });
+      await rpcJson(res);
+      setShowCreateModal(false);
+    } catch (err) {
+      // CreateRepoModal fires onCreate without awaiting and shows no error of
+      // its own, so surface the failure here and keep the modal open.
+      showToast(
+        "error",
+        err instanceof Error && err.message ? err.message : t("failedToCreate"),
+      );
+    }
   };
 
   return (
