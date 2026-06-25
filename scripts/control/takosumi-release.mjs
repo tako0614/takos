@@ -15,8 +15,8 @@ Usage: bun scripts/control/takosumi-release.mjs <environment> [--debug]
 
 Runs the operator-side artifact activation after Takosumi/OpenTofu has
 provisioned durable resources. The command reads non-secret OpenTofu outputs
-from TAKOSUMI_OUTPUTS_JSON, renders wrangler bindings, applies app-owned
-migrations, and uploads the Worker artifact.
+from TAKOSUMI_OUTPUTS_JSON, renders wrangler bindings, runs Takos-owned
+release setup steps, and uploads the Worker artifact.
 
 Environment:
   production
@@ -25,7 +25,8 @@ Environment:
 Optional env:
   TAKOS_CLOUDFLARE_ZONE_ID or CF_ZONE_ID  Render CF_ZONE_ID placeholders.
   TAKOSUMI_REPO_DIR                       Sibling Takosumi checkout for the
-                                          accounts migrate-d1 CLI.
+                                          embedded accounts-plane migration
+                                          command used by this distribution.
 `);
   runtime.exit(1);
 }
