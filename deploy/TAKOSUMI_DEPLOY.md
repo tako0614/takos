@@ -36,7 +36,8 @@ bun scripts/control/takosumi-release.mjs <environment>
 ```
 
 That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
-the app-owned D1 migration commands, and uploads the Worker artifact.
+the product-owned activation steps, and uploads the Worker artifact. Any D1 or
+schema work remains Takos script behavior, not a Takosumi resource type.
 
 ## Cloudflare Self-Host Runbook
 
