@@ -134,7 +134,6 @@ export type AppResource = {
   bind?: string;
   to?: string[];
   bindings?: AppResourceBinding[];
-  migrations?: string;
   queue?: {
     deliveryDelaySeconds?: number;
     maxRetries?: number;

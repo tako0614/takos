@@ -101,7 +101,6 @@ function pickResourceSpecDetails(
     const key of [
       "generate",
       "limits",
-      "migrations",
       "queue",
       "vectorize",
       "vectorIndex",

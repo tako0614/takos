@@ -102,7 +102,7 @@ bun run containers:build
 Wrangler builds the OpenTofu runner image from the sibling `takosumi/` checkout
 during deploy.
 
-### 5. Apply D1 Migrations
+### 5. Run Product Activation
 
 ```sh
 bunx wrangler d1 migrations apply DB --remote --config deploy/cloudflare/wrangler.toml
@@ -114,6 +114,9 @@ cd ../takos
 
 `<accounts-d1-id>` is the `cloudflare_accounts_d1_database_id` OpenTofu output.
 The deploy-control DB binding (`TAKOSUMI_CONTROL_DB`) self-creates its tables lazily.
+These are product-owned activation commands. Takosumi does not model them as
+database migration resources; when installed through Takosumi, the same class of
+work is executed through the opaque `takosumi_release.post_apply` command.
 
 ### 6. Set Secrets
 

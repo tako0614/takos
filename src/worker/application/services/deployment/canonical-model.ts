@@ -19,7 +19,6 @@ export type CanonicalManifestResourceType = ResourcePublicType;
 export type CanonicalManifestResourceSpec = {
   type: CanonicalManifestResourceType;
   bind?: string;
-  migrations?: string;
   queue?: {
     maxRetries?: number;
     deadLetterQueue?: string;

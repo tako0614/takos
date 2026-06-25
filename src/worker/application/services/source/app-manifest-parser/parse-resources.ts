@@ -30,7 +30,6 @@ const RESOURCE_FIELDS = new Set([
   "bind",
   "to",
   "bindings",
-  "migrations",
   "queue",
   "vectorIndex",
   "generate",
@@ -315,9 +314,6 @@ export function parseResources(
       ...(bind ? { bind } : {}),
       ...(to.length > 0 ? { to } : {}),
       ...(bindings.length > 0 ? { bindings } : {}),
-      ...(record.migrations != null
-        ? { migrations: asString(record.migrations, `${prefix}.migrations`) }
-        : {}),
       ...(record.generate != null
         ? { generate: asOptionalBoolean(record.generate, `${prefix}.generate`) }
         : {}),

@@ -1075,6 +1075,31 @@ resources:
   );
 });
 
+test("public source contract - rejects resource migration fields", () => {
+  const error = assertThrows(() =>
+    parseAppManifestYaml(`
+name: bad-resource-app
+
+compute:
+  web:
+    kind: worker
+
+resources:
+  app-db:
+    type: sql
+    bind: DB
+    to: web
+    migrations: migrations
+`),
+  ) as Error;
+
+  assertStringIncludes(error.message, "resources.app-db.migrations");
+  assertStringIncludes(
+    error.message,
+    "not supported by the Capsule desired-state projection contract",
+  );
+});
+
 test("public source contract - rejects resource bindings to unknown compute", () => {
   assertThrows(
     () =>
