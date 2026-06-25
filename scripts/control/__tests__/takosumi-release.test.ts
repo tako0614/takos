@@ -1,5 +1,6 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   buildTakosumiReleaseCommands,
@@ -51,4 +52,35 @@ test("readReleaseOutputs requires Takosumi non-sensitive outputs", () => {
     rawOutputs,
   );
   assert.throws(() => readReleaseOutputs({}));
+});
+
+test("Takos OpenTofu modules declare generic Takosumi post-apply release commands", () => {
+  const rootModule = readFileSync(
+    new URL("../../../deploy/opentofu/outputs.tf", import.meta.url),
+    "utf8",
+  );
+  assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
+  assert.match(rootModule, /post_apply\s*=\s*\[/);
+  assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
+  assert.match(rootModule, /executor\s*=\s*"operator"/);
+  assert.match(
+    rootModule,
+    /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*var\.environment\]/,
+  );
+
+  const productionModule = readFileSync(
+    new URL(
+      "../../../deploy/opentofu/environments/cloudflare-prod/main.tf",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(productionModule, /output\s+"takosumi_release"\s*\{/);
+  assert.match(productionModule, /post_apply\s*=\s*\[/);
+  assert.match(productionModule, /id\s*=\s*"takos-worker-release"/);
+  assert.match(productionModule, /executor\s*=\s*"operator"/);
+  assert.match(
+    productionModule,
+    /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*"production"\]/,
+  );
 });

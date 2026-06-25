@@ -3,7 +3,11 @@ import { TAKOSUMI_ACCOUNTS_CONTROL_API_PERMISSIONS } from "@takosjp/takosumi-acc
 export const TAKOS_APP_CONTRACT_VERSION = 1 as const;
 
 export const APP_DEPLOYMENT_OUTPUT_KEY = "app_deployment" as const;
-export const APP_DEPLOYMENT_OUTPUT_KEYS = [APP_DEPLOYMENT_OUTPUT_KEY] as const;
+export const TAKOS_APP_OUTPUT_KEY = "takos_app" as const;
+export const APP_DEPLOYMENT_OUTPUT_KEYS = [
+  APP_DEPLOYMENT_OUTPUT_KEY,
+  TAKOS_APP_OUTPUT_KEY,
+] as const;
 
 export const SERVICE_GRAPH_CAPABILITIES = {
   mcpServer: "protocol.mcp.server",
