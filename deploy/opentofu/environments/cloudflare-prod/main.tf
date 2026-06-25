@@ -32,6 +32,10 @@ output "target" {
   value = "cloudflare"
 }
 
+output "cloudflare_account_id" {
+  value = var.account_id
+}
+
 output "d1_database_id" {
   value = module.takos.d1_database_id
 }
@@ -66,4 +70,18 @@ output "queue_bindings" {
 
 output "vectorize_index_name" {
   value = module.takos.vectorize_index_name
+}
+
+output "takosumi_release" {
+  description = "Operator-side release activation commands Takosumi should run after a successful apply."
+  value = {
+    post_apply = [
+      {
+        id                = "takos-worker-release"
+        executor          = "operator"
+        command           = ["bun", "scripts/control/takosumi-release.mjs", "production"]
+        working_directory = "."
+      },
+    ]
+  }
 }

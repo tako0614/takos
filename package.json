@@ -54,6 +54,7 @@
     "release-manifest:check-clean": "bun scripts/build-release-manifest.ts --require-clean-git",
     "release-manifest:check-artifacts": "bun scripts/build-release-manifest.ts --require-clean-git --require-image-digests",
     "deploy:service": "bun scripts/control/deploy.mjs",
+    "deploy:takosumi-release": "bun scripts/control/takosumi-release.mjs",
     "deploy:render-wrangler": "bun scripts/control/render-wrangler-from-tofu.mjs"
   },
   "dependencies": {

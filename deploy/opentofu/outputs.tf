@@ -54,3 +54,17 @@ output "queue_bindings" {
   description = "Queue bindings for Takos product jobs (runs, index, workflow, deployment)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].queue_names : null
 }
+
+output "takosumi_release" {
+  description = "Operator-side release activation commands Takosumi should run after a successful apply."
+  value = {
+    post_apply = [
+      {
+        id                = "takos-worker-release"
+        executor          = "operator"
+        command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment]
+        working_directory = "."
+      },
+    ]
+  }
+}

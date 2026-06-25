@@ -26,6 +26,18 @@ Those phases are one Takosumi-native deploy. The wrangler config is not a
 separate product-only deploy authority; it consumes the module outputs and must
 stay in sync with them.
 
+When Takos is installed through Takosumi, the OpenTofu module exports a
+`takosumi_release.post_apply` command with `executor = "operator"`. Takosumi
+does not learn a DB-specific migration resource. It records an opaque
+post-apply command, and the operator-side release activator runs:
+
+```sh
+bun scripts/control/takosumi-release.mjs <environment>
+```
+
+That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
+the app-owned D1 migration commands, and uploads the Worker artifact.
+
 ## Cloudflare Self-Host Runbook
 
 Run commands from the `takos/` repo root unless a step says otherwise. Replace
@@ -64,6 +76,10 @@ The render script fills resource id placeholders in
 `ADMIN_DOMAIN`, `TENANT_BASE_DOMAIN`, `AUTH_PUBLIC_BASE_URL`,
 `TAKOSUMI_ACCOUNTS_ISSUER`, `OIDC_ISSUER_URL`, redirect URIs, and route patterns
 are operator-owned values and must be set explicitly.
+
+In Takosumi release activation, `TAKOSUMI_OUTPUTS_JSON` is injected by the
+release runner, so the render step reads the same non-secret outputs without
+requiring local `tofu output -json`.
 
 ### 3. Create Vectorize
 
