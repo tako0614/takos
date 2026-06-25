@@ -2,6 +2,8 @@
 import * as runtime from "../runtime.ts";
 // Render deploy/cloudflare/wrangler.toml resource-id placeholders from the
 // OpenTofu module's outputs, closing the hand-copy gap in the self-host path.
+// Takosumi release commands pass the same non-sensitive outputs through
+// TAKOSUMI_OUTPUTS_JSON, so this script can run without reading local tofu state.
 //
 // Usage:
 //   bun scripts/control/render-wrangler-from-tofu.mjs <environment> [--zone-id <id>] [--dry-run]
@@ -61,10 +63,10 @@ function fail(message) {
 }
 
 /**
- * Map a parsed `tofu output -json` object to the wrangler placeholder strings
- * for one environment. Returns { [placeholder]: value }. Throws if a required
- * Cloudflare output is missing (e.g. the module was applied with a non-cloudflare
- * target).
+ * Map parsed OpenTofu outputs to the wrangler placeholder strings for one
+ * environment. Accepts either the `tofu output -json` envelope shape
+ * (`name -> { value, sensitive, type }`) or Takosumi release output shape
+ * (`name -> rawValue`). Throws if a required Cloudflare output is missing.
  */
 export function buildReplacements(outputs, env, { zoneId } = {}) {
   if (!ENVIRONMENTS.includes(env)) {
@@ -72,12 +74,13 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
   }
   const read = (name) => {
     const entry = outputs[name];
-    if (!entry || entry.value == null) {
+    const value = outputValue(entry);
+    if (value == null) {
       throw new Error(
         `tofu output "${name}" is missing or null. Did you \`tofu apply\` the cloudflare target first?`,
       );
     }
-    return entry.value;
+    return value;
   };
 
   const accountId = read("cloudflare_account_id");
@@ -94,11 +97,31 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
   const prefix = env === "staging" ? "staging-" : "";
   const replacements = {
     [`replace-with-${prefix}account-id`]: accountId,
-    [`replace-with-${prefix}d1-database-id`]: requireKey(d1, "db", "cloudflare_d1_database_ids"),
-    [`replace-with-${prefix}accounts-d1-database-id`]: requireKey(d1, "accounts", "cloudflare_d1_database_ids"),
-    [`replace-with-${prefix}deploy-d1-database-id`]: requireKey(d1, "deploy", "cloudflare_d1_database_ids"),
-    [`replace-with-${prefix}hostname-routing-kv-namespace-id`]: requireKey(kv, "hostname_routing", "cloudflare_kv_namespace_ids"),
-    [`replace-with-${prefix}rollout-health-kv-namespace-id`]: requireKey(kv, "rollout_health", "cloudflare_kv_namespace_ids"),
+    [`replace-with-${prefix}d1-database-id`]: requireKey(
+      d1,
+      "db",
+      "cloudflare_d1_database_ids",
+    ),
+    [`replace-with-${prefix}accounts-d1-database-id`]: requireKey(
+      d1,
+      "accounts",
+      "cloudflare_d1_database_ids",
+    ),
+    [`replace-with-${prefix}deploy-d1-database-id`]: requireKey(
+      d1,
+      "deploy",
+      "cloudflare_d1_database_ids",
+    ),
+    [`replace-with-${prefix}hostname-routing-kv-namespace-id`]: requireKey(
+      kv,
+      "hostname_routing",
+      "cloudflare_kv_namespace_ids",
+    ),
+    [`replace-with-${prefix}rollout-health-kv-namespace-id`]: requireKey(
+      kv,
+      "rollout_health",
+      "cloudflare_kv_namespace_ids",
+    ),
   };
   if (zoneId) {
     replacements[`replace-with-${prefix}zone-id`] = zoneId;
@@ -120,6 +143,26 @@ export function applyReplacements(toml, replacements) {
     applied.push({ placeholder, value });
   }
   return { toml: next, applied, missing };
+}
+
+function outputValue(entry) {
+  if (entry == null) return undefined;
+  if (
+    typeof entry === "object" &&
+    Object.hasOwn(entry, "value") &&
+    Object.hasOwn(entry, "sensitive")
+  ) {
+    return entry.value;
+  }
+  return entry;
+}
+
+export function parseTakosumiOutputsJson(text) {
+  const outputs = JSON.parse(text);
+  if (!outputs || typeof outputs !== "object" || Array.isArray(outputs)) {
+    throw new Error("TAKOSUMI_OUTPUTS_JSON must be a JSON object");
+  }
+  return outputs;
 }
 
 export function parseArgs(argv = process.argv.slice(2)) {
@@ -144,7 +187,9 @@ export function parseArgs(argv = process.argv.slice(2)) {
     fail("Error: environment is required.");
   }
   if (!ENVIRONMENTS.includes(env)) {
-    fail(`Error: unknown environment "${env}". Valid: ${ENVIRONMENTS.join(", ")}`);
+    fail(
+      `Error: unknown environment "${env}". Valid: ${ENVIRONMENTS.join(", ")}`,
+    );
   }
   return { env, zoneId, dryRun };
 }
@@ -154,12 +199,24 @@ function readTofuOutputs() {
   return JSON.parse(json);
 }
 
+function readOutputs() {
+  const releaseOutputs = process.env.TAKOSUMI_OUTPUTS_JSON;
+  if (releaseOutputs?.trim()) {
+    return parseTakosumiOutputsJson(releaseOutputs);
+  }
+  return readTofuOutputs();
+}
+
 export function main(argv = process.argv.slice(2)) {
   const { env, zoneId, dryRun } = parseArgs(argv);
-  const outputs = readTofuOutputs();
+  const outputs = readOutputs();
   const replacements = buildReplacements(outputs, env, { zoneId });
   const toml = readFileSync(WRANGLER_CONFIG, "utf8");
-  const { toml: next, applied, missing } = applyReplacements(toml, replacements);
+  const {
+    toml: next,
+    applied,
+    missing,
+  } = applyReplacements(toml, replacements);
 
   for (const { placeholder, value } of applied) {
     console.log(`  ${placeholder} -> ${value}`);
@@ -170,9 +227,10 @@ export function main(argv = process.argv.slice(2)) {
     );
   }
   if (!zoneId) {
-    const zonePlaceholder = env === "staging"
-      ? "replace-with-staging-zone-id"
-      : "replace-with-zone-id";
+    const zonePlaceholder =
+      env === "staging"
+        ? "replace-with-staging-zone-id"
+        : "replace-with-zone-id";
     if (next.includes(zonePlaceholder)) {
       console.log(
         `\nNOTE: ${zonePlaceholder} is unset. The module does not manage your DNS zone; ` +
@@ -186,7 +244,9 @@ export function main(argv = process.argv.slice(2)) {
     return;
   }
   writeFileSync(WRANGLER_CONFIG, next);
-  console.log(`\nWrote ${applied.length} replacement(s) to ${WRANGLER_CONFIG}.`);
+  console.log(
+    `\nWrote ${applied.length} replacement(s) to ${WRANGLER_CONFIG}.`,
+  );
 }
 
 if (import.meta.main) {
