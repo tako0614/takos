@@ -21,6 +21,12 @@ variable "environment" {
   default     = "production"
 }
 
+variable "release_working_directory" {
+  description = "Source-root relative directory where Takos release commands run."
+  type        = string
+  default     = "."
+}
+
 variable "opentofu_plan_mode" {
   description = "Use deterministic provider-free inputs for CI OpenTofu plan review. Do not use for apply."
   type        = bool

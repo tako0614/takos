@@ -28,6 +28,11 @@ variable "account_id" {
   type = string
 }
 
+variable "release_working_directory" {
+  type    = string
+  default = "."
+}
+
 output "target" {
   value = "cloudflare"
 }
@@ -92,7 +97,7 @@ output "takosumi_release" {
         id                = "takos-worker-release"
         executor          = "operator"
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production"]
-        working_directory = "."
+        working_directory = var.release_working_directory
       },
     ]
     pre_destroy = [
@@ -100,7 +105,7 @@ output "takosumi_release" {
         id                = "takos-worker-destroy"
         executor          = "operator"
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production", "--destroy"]
-        working_directory = "."
+        working_directory = var.release_working_directory
       },
     ]
   }

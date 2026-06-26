@@ -110,12 +110,21 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     new URL("../../../deploy/opentofu/outputs.tf", import.meta.url),
     "utf8",
   );
+  const rootVariables = readFileSync(
+    new URL("../../../deploy/opentofu/variables.tf", import.meta.url),
+    "utf8",
+  );
   assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
   assert.match(rootModule, /post_apply\s*=\s*\[/);
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-destroy"/);
   assert.match(rootModule, /executor\s*=\s*"operator"/);
+  assert.match(rootVariables, /variable\s+"release_working_directory"\s*\{/);
+  assert.match(
+    rootModule,
+    /working_directory\s*=\s*var\.release_working_directory/,
+  );
   assert.match(
     rootModule,
     /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*var\.environment\]/,
@@ -138,6 +147,11 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(productionModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(productionModule, /id\s*=\s*"takos-worker-destroy"/);
   assert.match(productionModule, /executor\s*=\s*"operator"/);
+  assert.match(productionModule, /variable\s+"release_working_directory"\s*\{/);
+  assert.match(
+    productionModule,
+    /working_directory\s*=\s*var\.release_working_directory/,
+  );
   assert.match(
     productionModule,
     /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*"production"\]/,
