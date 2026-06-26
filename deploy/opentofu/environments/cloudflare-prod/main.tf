@@ -36,6 +36,18 @@ output "cloudflare_account_id" {
   value = var.account_id
 }
 
+output "worker_name" {
+  value = module.takos.worker_name
+}
+
+output "url" {
+  value = module.takos.launch_url
+}
+
+output "launch_url" {
+  value = module.takos.launch_url
+}
+
 output "d1_database_id" {
   value = module.takos.d1_database_id
 }
@@ -80,6 +92,14 @@ output "takosumi_release" {
         id                = "takos-worker-release"
         executor          = "operator"
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production"]
+        working_directory = "."
+      },
+    ]
+    pre_destroy = [
+      {
+        id                = "takos-worker-destroy"
+        executor          = "operator"
+        command           = ["bun", "scripts/control/takosumi-release.mjs", "production", "--destroy"]
         working_directory = "."
       },
     ]

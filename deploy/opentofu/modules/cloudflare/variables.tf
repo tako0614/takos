@@ -20,3 +20,9 @@ variable "plan_mode" {
   type        = bool
   default     = false
 }
+
+variable "workers_subdomain" {
+  description = "Optional workers.dev subdomain used to project a public launch URL for smoke/release verification."
+  type        = string
+  default     = null
+}

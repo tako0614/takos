@@ -13,7 +13,7 @@ const WRANGLER_CONFIG = "deploy/cloudflare/wrangler.toml";
 
 function usage() {
   console.error(`
-Usage: bun scripts/control/takosumi-release.mjs <environment> [--debug]
+Usage: bun scripts/control/takosumi-release.mjs <environment> [--debug] [--destroy]
 
 Runs the operator-side artifact activation after Takosumi/OpenTofu has
 provisioned durable resources. The command reads non-secret OpenTofu outputs
@@ -33,6 +33,8 @@ Optional env:
                                           embedded accounts-plane migration
                                           command used by this distribution
                                           (legacy fallback).
+  TAKOS_SKIP_D1_MIGRATIONS                Set to 1/true to skip D1 migration
+                                          commands in constrained sandboxes.
 `);
   runtime.exit(1);
 }
@@ -72,6 +74,26 @@ function requireStringOutput(outputs, name) {
   return value;
 }
 
+function requireObjectOutput(outputs, name) {
+  const value = outputValue(outputs[name]);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(
+      `TAKOSUMI_OUTPUTS_JSON must include object output "${name}"`,
+    );
+  }
+  return value;
+}
+
+function requireNestedStringOutput(outputs, name, key) {
+  const value = requireObjectOutput(outputs, name)[key];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(
+      `TAKOSUMI_OUTPUTS_JSON must include string output "${name}.${key}"`,
+    );
+  }
+  return value;
+}
+
 function ensureTakosumiSourceModule(takosumiRepoDir) {
   const expected = resolve("..", "takosumi");
   if (existsSync(expected)) return;
@@ -86,6 +108,12 @@ function ensureTakosumiSourceModule(takosumiRepoDir) {
 
 export function parseReleaseArgs(argv = process.argv.slice(2)) {
   const debug = argv.includes("--debug");
+  const destroy = argv.includes("--destroy");
+  const allowedFlags = new Set(["--debug", "--destroy"]);
+  const unknown = argv.find(
+    (arg) => arg.startsWith("--") && !allowedFlags.has(arg),
+  );
+  if (unknown) fail(`Error: unknown flag "${unknown}".`);
   const positional = argv.filter((arg) => !arg.startsWith("--"));
   const [environment] = positional;
   if (!environment) fail("Error: environment is required.");
@@ -97,7 +125,10 @@ export function parseReleaseArgs(argv = process.argv.slice(2)) {
   if (debug && environment !== "staging") {
     fail("Error: --debug is only supported for staging.");
   }
-  return { environment, debug };
+  if (debug && destroy) {
+    fail("Error: --debug is not supported with --destroy.");
+  }
+  return { environment, debug, destroy };
 }
 
 export function readReleaseOutputs(env = process.env) {
@@ -111,7 +142,12 @@ export function readReleaseOutputs(env = process.env) {
 export function buildTakosumiReleaseCommands(
   outputs,
   environment,
-  { debug = false, zoneId, takosumiRepoDir = "../takosumi" } = {},
+  {
+    debug = false,
+    zoneId,
+    takosumiRepoDir = "../takosumi",
+    skipD1Migrations = false,
+  } = {},
 ) {
   if (!ENVIRONMENTS.includes(environment)) {
     throw new Error(`Unknown environment "${environment}"`);
@@ -120,6 +156,10 @@ export function buildTakosumiReleaseCommands(
   const accountsDatabaseId = requireStringOutput(
     outputs,
     "cloudflare_accounts_d1_database_id",
+  );
+  const vectorizeIndexName = requireStringOutput(
+    outputs,
+    "cloudflare_vectorize_index_name",
   );
   const wranglerEnvArgs = environment === "staging" ? ["--env", "staging"] : [];
   const renderArgs = [
@@ -133,37 +173,55 @@ export function buildTakosumiReleaseCommands(
     debug && environment === "staging"
       ? ["bun", "run", "build", "--mode", "staging-debug"]
       : ["bun", "run", "build"];
+  const containerBuildArgs = ["bun", "run", "containers:build"];
+  const migrationCommands = skipD1Migrations
+    ? []
+    : [
+        commandLine([
+          "bunx",
+          "wrangler",
+          "d1",
+          "migrations",
+          "apply",
+          "DB",
+          "--remote",
+          "--config",
+          WRANGLER_CONFIG,
+          ...wranglerEnvArgs,
+        ]),
+        commandLine([
+          "bun",
+          "--cwd",
+          takosumiRepoDir,
+          "run",
+          "cli",
+          "--",
+          "accounts",
+          "migrate-d1",
+          "--database-id",
+          accountsDatabaseId,
+          "--account-id",
+          accountId,
+          "--remote",
+        ]),
+      ];
 
   return [
     commandLine(renderArgs),
     commandLine(installArgs),
     commandLine(buildArgs),
+    commandLine(containerBuildArgs),
+    ...migrationCommands,
     commandLine([
       "bunx",
       "wrangler",
-      "d1",
-      "migrations",
-      "apply",
-      "DB",
-      "--remote",
-      "--config",
-      WRANGLER_CONFIG,
-      ...wranglerEnvArgs,
-    ]),
-    commandLine([
-      "bun",
-      "--cwd",
-      takosumiRepoDir,
-      "run",
-      "cli",
-      "--",
-      "accounts",
-      "migrate-d1",
-      "--database-id",
-      accountsDatabaseId,
-      "--account-id",
-      accountId,
-      "--remote",
+      "vectorize",
+      "create",
+      vectorizeIndexName,
+      "--dimensions",
+      "768",
+      "--metric",
+      "cosine",
     ]),
     commandLine([
       "bunx",
@@ -176,26 +234,75 @@ export function buildTakosumiReleaseCommands(
   ];
 }
 
+export function buildTakosumiDestroyCommands(outputs) {
+  const workerName = requireStringOutput(outputs, "worker_name");
+  const vectorizeIndexName = requireStringOutput(
+    outputs,
+    "cloudflare_vectorize_index_name",
+  );
+  const queues = [
+    requireNestedStringOutput(outputs, "queue_bindings", "runs"),
+    requireNestedStringOutput(outputs, "queue_bindings", "runs_dlq"),
+    requireNestedStringOutput(outputs, "queue_bindings", "index_jobs"),
+    requireNestedStringOutput(outputs, "queue_bindings", "index_jobs_dlq"),
+    requireNestedStringOutput(outputs, "queue_bindings", "workflow"),
+    requireNestedStringOutput(outputs, "queue_bindings", "workflow_dlq"),
+    requireNestedStringOutput(outputs, "queue_bindings", "deployment"),
+    requireNestedStringOutput(outputs, "queue_bindings", "deployment_dlq"),
+  ];
+  return [
+    ...queues.map((queueName) =>
+      commandLine([
+        "bunx",
+        "wrangler",
+        "queues",
+        "consumer",
+        "remove",
+        queueName,
+        workerName,
+      ]),
+    ),
+    commandLine(["bunx", "wrangler", "delete", workerName, "--force"]),
+    commandLine([
+      "bunx",
+      "wrangler",
+      "vectorize",
+      "delete",
+      vectorizeIndexName,
+      "--force",
+    ]),
+  ];
+}
+
 function run(command) {
   console.log(`\n> ${command}\n`);
   execSync(command, { stdio: "inherit" });
 }
 
 export function main(argv = process.argv.slice(2), env = process.env) {
-  const { environment, debug } = parseReleaseArgs(argv);
+  const { environment, debug, destroy } = parseReleaseArgs(argv);
   const outputs = readReleaseOutputs(env);
   const takosumiRepoDir =
     env.TAKOS_RELEASE_TAKOSUMI_REPO_DIR ??
     env.TAKOSUMI_REPO_DIR ??
     "../takosumi";
-  ensureTakosumiSourceModule(takosumiRepoDir);
-  const commands = buildTakosumiReleaseCommands(outputs, environment, {
-    debug,
-    zoneId: env.TAKOS_CLOUDFLARE_ZONE_ID ?? env.CF_ZONE_ID,
-    takosumiRepoDir,
-  });
+  const commands = destroy
+    ? buildTakosumiDestroyCommands(outputs)
+    : (() => {
+        ensureTakosumiSourceModule(takosumiRepoDir);
+        return buildTakosumiReleaseCommands(outputs, environment, {
+          debug,
+          zoneId: env.TAKOS_CLOUDFLARE_ZONE_ID ?? env.CF_ZONE_ID,
+          takosumiRepoDir,
+          skipD1Migrations:
+            env.TAKOS_SKIP_D1_MIGRATIONS === "1" ||
+            env.TAKOS_SKIP_D1_MIGRATIONS === "true",
+        });
+      })();
   for (const command of commands) run(command);
-  console.log(`\nTakos release activation completed for ${environment}.`);
+  console.log(
+    `\nTakos ${destroy ? "release cleanup" : "release activation"} completed for ${environment}.`,
+  );
 }
 
 if (import.meta.main) {

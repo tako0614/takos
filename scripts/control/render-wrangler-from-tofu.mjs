@@ -15,14 +15,12 @@ import * as runtime from "../runtime.ts";
 //   cd deploy/opentofu && tofu apply -var 'cloudflare={account_id="<acct>"}'
 //   bun ../../scripts/control/render-wrangler-from-tofu.mjs production --zone-id <zone>
 //
-// What it fills (per environment): CF_ACCOUNT_ID + the three D1 database ids
-// (DB / TAKOSUMI_ACCOUNTS_DB / TAKOSUMI_CONTROL_DB) + the two KV namespace ids
-// (HOSTNAME_ROUTING / ROLLOUT_HEALTH_KV). CF_ZONE_ID is NOT a module-managed
-// resource (it is the self-hoster's existing DNS zone), so pass it with
-// --zone-id or fill the remaining `replace-with-*zone-id` placeholder by hand.
-// The Vectorize index, container images, SPA build, secrets, and the
-// accounts-D1 migration are NOT resource-id placeholders and are handled by the
-// runbook (deploy/TAKOSUMI_DEPLOY.md), not by this script.
+// What it fills (per environment): Worker script name, CF_ACCOUNT_ID, the D1
+// database ids, KV namespace ids, R2 bucket names, Queue names, and Vectorize
+// index name. CF_ZONE_ID is NOT a module-managed resource (it is the
+// self-hoster's existing DNS zone), so pass it with --zone-id or fill the
+// remaining `replace-with-*zone-id` placeholder by hand. Container images, SPA
+// build, secrets, and D1 migrations are handled by the release command.
 
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -57,6 +55,10 @@ Run \`tofu apply\` in deploy/opentofu first, then run this from that dir so
   runtime.exit(1);
 }
 
+function tomlString(value) {
+  return JSON.stringify(String(value));
+}
+
 function fail(message) {
   console.error(`${message}\n`);
   usage();
@@ -84,8 +86,12 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
   };
 
   const accountId = read("cloudflare_account_id");
+  const workerName = read("worker_name");
   const d1 = read("cloudflare_d1_database_ids"); // { db, accounts, deploy }
   const kv = read("cloudflare_kv_namespace_ids"); // { hostname_routing, rollout_health }
+  const r2 = read("object_storage_buckets");
+  const queues = read("queue_bindings");
+  const vectorizeIndexName = read("cloudflare_vectorize_index_name");
   const requireKey = (obj, key, outputName) => {
     if (obj[key] == null) {
       throw new Error(`tofu output "${outputName}" has no "${key}" key`);
@@ -95,7 +101,10 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
 
   // placeholder string in wrangler.toml -> resolved value
   const prefix = env === "staging" ? "staging-" : "";
+  const legacy = env === "staging" ? "takos-{name}-staging" : "takos-{name}";
+  const oldWorkerName = env === "staging" ? "takos-staging" : "takos";
   const replacements = {
+    [`"${oldWorkerName}"`]: tomlString(workerName),
     [`replace-with-${prefix}account-id`]: accountId,
     [`replace-with-${prefix}d1-database-id`]: requireKey(
       d1,
@@ -122,6 +131,53 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
       "rollout_health",
       "cloudflare_kv_namespace_ids",
     ),
+    [`"${legacy.replace("{name}", "accounts-exports")}"`]: tomlString(
+      requireKey(r2, "accounts_exports", "object_storage_buckets"),
+    ),
+    [`"${legacy.replace("{name}", "artifacts")}"`]: tomlString(
+      requireKey(r2, "artifacts", "object_storage_buckets"),
+    ),
+    [`"${legacy.replace("{name}", "worker-bundles")}"`]: tomlString(
+      requireKey(r2, "worker_bundles", "object_storage_buckets"),
+    ),
+    [`"${legacy.replace("{name}", "tenant-builds")}"`]: tomlString(
+      requireKey(r2, "tenant_builds", "object_storage_buckets"),
+    ),
+    [`"${legacy.replace("{name}", "tenant-source")}"`]: tomlString(
+      requireKey(r2, "tenant_source", "object_storage_buckets"),
+    ),
+    [`"${legacy.replace("{name}", "git-objects")}"`]: tomlString(
+      requireKey(r2, "git_objects", "object_storage_buckets"),
+    ),
+    [`"${legacy.replace("{name}", "offload")}"`]: tomlString(
+      requireKey(r2, "offload", "object_storage_buckets"),
+    ),
+    [`"${legacy.replace("{name}", "runs")}"`]: tomlString(
+      requireKey(queues, "runs", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "runs-dlq")}"`]: tomlString(
+      requireKey(queues, "runs_dlq", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "index-jobs")}"`]: tomlString(
+      requireKey(queues, "index_jobs", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "index-jobs-dlq")}"`]: tomlString(
+      requireKey(queues, "index_jobs_dlq", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "workflow-jobs")}"`]: tomlString(
+      requireKey(queues, "workflow", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "workflow-jobs-dlq")}"`]: tomlString(
+      requireKey(queues, "workflow_dlq", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "deployment-jobs")}"`]: tomlString(
+      requireKey(queues, "deployment", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "deployment-jobs-dlq")}"`]: tomlString(
+      requireKey(queues, "deployment_dlq", "queue_bindings"),
+    ),
+    [`"${legacy.replace("{name}", "embeddings")}"`]:
+      tomlString(vectorizeIndexName),
   };
   if (zoneId) {
     replacements[`replace-with-${prefix}zone-id`] = zoneId;

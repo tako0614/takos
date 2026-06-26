@@ -30,7 +30,8 @@ variable "opentofu_plan_mode" {
 variable "cloudflare" {
   description = "Cloudflare-specific backing-resource settings (provisioned by Takosumi Run with type `apply`)."
   type = object({
-    account_id = optional(string, "takos-placeholder")
+    account_id        = optional(string, "takos-placeholder")
+    workers_subdomain = optional(string)
   })
   default = {}
 

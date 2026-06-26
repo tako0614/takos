@@ -18,8 +18,9 @@ module "cloudflare" {
   count  = var.target == "cloudflare" ? 1 : 0
   source = "./modules/cloudflare"
 
-  account_id   = var.cloudflare.account_id
-  project_name = var.project_name
-  environment  = var.environment
-  plan_mode    = var.opentofu_plan_mode
+  account_id        = var.cloudflare.account_id
+  project_name      = var.project_name
+  environment       = var.environment
+  plan_mode         = var.opentofu_plan_mode
+  workers_subdomain = try(var.cloudflare.workers_subdomain, null)
 }

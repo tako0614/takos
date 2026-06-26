@@ -77,6 +77,7 @@ TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 OCI_ORCHESTRATOR_URL = ""
 CF_ACCOUNT_ID = "replace-with-account-id"
 CF_ZONE_ID = "replace-with-zone-id"
+R2_ARTIFACTS_BUCKET_NAME = "takos-artifacts"
 
 [triggers]
 crons = ["3,18,33,48 * * * *", "5 * * * *"]
@@ -465,6 +466,7 @@ TAKOSUMI_ACCOUNTS_PLATFORM_ACCESS = "closed"
 TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"
+R2_ARTIFACTS_BUCKET_NAME = "takos-artifacts-staging"
 
 [[env.staging.d1_databases]]
 binding = "DB"

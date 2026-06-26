@@ -33,7 +33,8 @@ terraform {
 # no architectural privilege there — it is one plain OpenTofu module app.
 
 locals {
-  name = var.project_name
+  name        = var.project_name
+  worker_name = var.project_name
 
   # D1 databases keyed by logical binding. Three separate databases live in the
   # one worker because their schemas are namespace-incompatible:

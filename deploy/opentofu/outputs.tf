@@ -15,6 +15,21 @@ output "cloudflare_account_id" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].account_id : null
 }
 
+output "worker_name" {
+  description = "Worker script name rendered into wrangler.toml by the release activation step."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].worker_name : null
+}
+
+output "url" {
+  description = "Public URL for smoke checks when cloudflare.workers_subdomain is supplied."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
+}
+
+output "launch_url" {
+  description = "Alias of url for Takosumi public output projection."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
+}
+
 output "cloudflare_d1_database_id" {
   description = "D1 database ID for the DB binding (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null
@@ -63,6 +78,14 @@ output "takosumi_release" {
         id                = "takos-worker-release"
         executor          = "operator"
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment]
+        working_directory = "."
+      },
+    ]
+    pre_destroy = [
+      {
+        id                = "takos-worker-destroy"
+        executor          = "operator"
+        command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment, "--destroy"]
         working_directory = "."
       },
     ]

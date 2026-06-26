@@ -10,6 +10,16 @@ output "account_id" {
   value       = var.account_id
 }
 
+output "worker_name" {
+  description = "Worker script name rendered into wrangler.toml for the artifact upload."
+  value       = local.worker_name
+}
+
+output "launch_url" {
+  description = "Public workers.dev URL when a workers_subdomain input is supplied."
+  value       = var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.worker_name}.${var.workers_subdomain}.workers.dev" : null
+}
+
 # Product control-plane D1 — binding DB.
 output "d1_database_id" {
   description = "D1 database ID for the DB binding."
