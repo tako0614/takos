@@ -20,6 +20,7 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
     }),
     [
       "'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'production' '--zone-id' 'zone_123'",
+      "'bun' 'install' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml'",
       "'bun' '--cwd' '../takosumi' 'run' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'd1_accounts' '--account-id' 'acc_123' '--remote'",
@@ -36,6 +37,7 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
     }),
     [
       "'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging'",
+      "'bun' 'install' '--frozen-lockfile'",
       "'bun' 'run' 'build' '--mode' 'staging-debug'",
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
       "'bun' '--cwd' '/opt/takosumi' 'run' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'd1_accounts' '--account-id' 'acc_123' '--remote'",

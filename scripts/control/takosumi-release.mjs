@@ -2,6 +2,8 @@
 import * as runtime from "../runtime.ts";
 
 import { execSync } from "node:child_process";
+import { existsSync, symlinkSync } from "node:fs";
+import { resolve } from "node:path";
 import process from "node:process";
 
 import { parseTakosumiOutputsJson } from "./render-wrangler-from-tofu.mjs";
@@ -24,9 +26,13 @@ Environment:
 
 Optional env:
   TAKOS_CLOUDFLARE_ZONE_ID or CF_ZONE_ID  Render CF_ZONE_ID placeholders.
+  TAKOS_RELEASE_TAKOSUMI_REPO_DIR         Takosumi source checkout to symlink
+                                          beside a restored Takos source
+                                          archive before build/migration.
   TAKOSUMI_REPO_DIR                       Sibling Takosumi checkout for the
                                           embedded accounts-plane migration
-                                          command used by this distribution.
+                                          command used by this distribution
+                                          (legacy fallback).
 `);
   runtime.exit(1);
 }
@@ -64,6 +70,18 @@ function requireStringOutput(outputs, name) {
     );
   }
   return value;
+}
+
+function ensureTakosumiSourceModule(takosumiRepoDir) {
+  const expected = resolve("..", "takosumi");
+  if (existsSync(expected)) return;
+  const source = resolve(takosumiRepoDir);
+  if (!existsSync(source)) {
+    throw new Error(
+      `Takosumi source checkout was not found at ${source}; set TAKOS_RELEASE_TAKOSUMI_REPO_DIR in the operator release environment`,
+    );
+  }
+  symlinkSync(source, expected, "dir");
 }
 
 export function parseReleaseArgs(argv = process.argv.slice(2)) {
@@ -110,6 +128,7 @@ export function buildTakosumiReleaseCommands(
     environment,
     ...(zoneId ? ["--zone-id", zoneId] : []),
   ];
+  const installArgs = ["bun", "install", "--frozen-lockfile"];
   const buildArgs =
     debug && environment === "staging"
       ? ["bun", "run", "build", "--mode", "staging-debug"]
@@ -117,6 +136,7 @@ export function buildTakosumiReleaseCommands(
 
   return [
     commandLine(renderArgs),
+    commandLine(installArgs),
     commandLine(buildArgs),
     commandLine([
       "bunx",
@@ -164,10 +184,15 @@ function run(command) {
 export function main(argv = process.argv.slice(2), env = process.env) {
   const { environment, debug } = parseReleaseArgs(argv);
   const outputs = readReleaseOutputs(env);
+  const takosumiRepoDir =
+    env.TAKOS_RELEASE_TAKOSUMI_REPO_DIR ??
+    env.TAKOSUMI_REPO_DIR ??
+    "../takosumi";
+  ensureTakosumiSourceModule(takosumiRepoDir);
   const commands = buildTakosumiReleaseCommands(outputs, environment, {
     debug,
     zoneId: env.TAKOS_CLOUDFLARE_ZONE_ID ?? env.CF_ZONE_ID,
-    takosumiRepoDir: env.TAKOSUMI_REPO_DIR ?? "../takosumi",
+    takosumiRepoDir,
   });
   for (const command of commands) run(command);
   console.log(`\nTakos release activation completed for ${environment}.`);
