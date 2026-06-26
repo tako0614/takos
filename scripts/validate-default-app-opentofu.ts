@@ -28,6 +28,8 @@ const results: Array<{
   name: string;
   manifestName?: string;
   publications: number;
+  serviceExports: number;
+  serviceBindings: number;
   postApplyCommands: number;
 }> = [];
 
@@ -41,16 +43,18 @@ async function validateDefaultApp(app: DefaultAppSource): Promise<{
   name: string;
   manifestName?: string;
   publications: number;
+  serviceExports: number;
+  serviceBindings: number;
   postApplyCommands: number;
 }> {
   const sourceDir = join(repoRoot, app.path);
   const outputText = await runtime.readTextFile(join(sourceDir, "outputs.tf"));
-  if (
-    !outputText.includes('output "app_deployment"') &&
-    !outputText.includes('output "takos_app"')
-  ) {
+  const hasLegacyManifestOutput =
+    outputText.includes('output "app_deployment"') ||
+    outputText.includes('output "takos_app"');
+  if (!outputText.includes('output "service_exports"')) {
     throw new Error(
-      `${app.name}: outputs.tf must declare output "app_deployment" or output "takos_app"`,
+      `${app.name}: outputs.tf must declare generic output "service_exports"`,
     );
   }
 
@@ -86,29 +90,46 @@ async function validateDefaultApp(app: DefaultAppSource): Promise<{
     );
     const outputJson = await runTofu(["output", "-json"], workdir, app.name);
     const source = `${app.path}/outputs.tf`;
-    const manifest = parseOpenTofuAppManifestOutputs(outputJson, source);
-    if (manifest.name !== app.name) {
-      throw new Error(
-        `${app.name}: expected manifest name ${app.name}, got ${manifest.name}`,
-      );
-    }
-    const launcher = manifest.publish.find(
-      (publication) =>
-        publication.type === "interface.ui.surface" &&
-        publication.spec?.launcher === true,
+    const serviceGraph = parseServiceGraphOutputs(outputJson, source);
+    const launcherExport = serviceGraph.exports.find((serviceExport) =>
+      serviceExport.capabilities.includes("interface.ui.surface"),
     );
-    if (!launcher) {
+    if (!launcherExport) {
       throw new Error(
-        `${app.name}: app projection must publish a launcher interface.ui.surface`,
+        `${app.name}: service_exports must include an interface.ui.surface launcher`,
       );
     }
-    for (const [index, publication] of manifest.publish.entries()) {
-      if (LEGACY_PUBLICATION_TYPES.has(publication.type)) {
+
+    let manifestName: string | undefined;
+    let publications = 0;
+    if (hasLegacyManifestOutput) {
+      const manifest = parseOpenTofuAppManifestOutputs(outputJson, source);
+      if (manifest.name !== app.name) {
         throw new Error(
-          `${app.name}: publish[${index}].type must use canonical Service Graph capability, got ${publication.type}`,
+          `${app.name}: expected manifest name ${app.name}, got ${manifest.name}`,
         );
       }
+      const launcher = manifest.publish.find(
+        (publication) =>
+          publication.type === "interface.ui.surface" &&
+          publication.spec?.launcher === true,
+      );
+      if (!launcher) {
+        throw new Error(
+          `${app.name}: app projection must publish a launcher interface.ui.surface`,
+        );
+      }
+      for (const [index, publication] of manifest.publish.entries()) {
+        if (LEGACY_PUBLICATION_TYPES.has(publication.type)) {
+          throw new Error(
+            `${app.name}: publish[${index}].type must use canonical Service Graph capability, got ${publication.type}`,
+          );
+        }
+      }
+      manifestName = manifest.name;
+      publications = manifest.publish.length;
     }
+
     const release = parseTakosumiReleaseOutput(outputJson, source);
     if (app.requiresPostApply && release.postApplyCommands.length === 0) {
       throw new Error(
@@ -117,13 +138,94 @@ async function validateDefaultApp(app: DefaultAppSource): Promise<{
     }
     return {
       name: app.name,
-      manifestName: manifest.name,
-      publications: manifest.publish.length,
+      ...(manifestName ? { manifestName } : {}),
+      publications,
+      serviceExports: serviceGraph.exports.length,
+      serviceBindings: serviceGraph.bindings.length,
       postApplyCommands: release.postApplyCommands.length,
     };
   } finally {
     await runtime.remove(workdir, { recursive: true });
   }
+}
+
+type ServiceExport = {
+  name: string;
+  capabilities: string[];
+};
+
+function parseServiceGraphOutputs(
+  raw: string,
+  source: string,
+): { exports: ServiceExport[]; bindings: unknown[] } {
+  const parsed = JSON.parse(raw) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${source} must be an OpenTofu output object`);
+  }
+  const outputs = parsed as Record<string, unknown>;
+  const serviceExports = parseServiceExportsOutput(
+    outputs.service_exports,
+    source,
+  );
+  const serviceBindings =
+    outputs.service_bindings === undefined
+      ? []
+      : parseArrayOutput(
+          outputs.service_bindings,
+          `${source}.service_bindings`,
+        );
+  return { exports: serviceExports, bindings: serviceBindings };
+}
+
+function parseServiceExportsOutput(
+  output: unknown,
+  source: string,
+): ServiceExport[] {
+  const value = parseArrayOutput(output, `${source}.service_exports`);
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`${source}.service_exports[${index}] must be an object`);
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.name !== "string" || record.name.trim().length === 0) {
+      throw new Error(`${source}.service_exports[${index}].name is required`);
+    }
+    if (
+      !Array.isArray(record.capabilities) ||
+      record.capabilities.length === 0 ||
+      !record.capabilities.every((capability) => typeof capability === "string")
+    ) {
+      throw new Error(
+        `${source}.service_exports[${index}].capabilities must be a non-empty string array`,
+      );
+    }
+    for (const capability of record.capabilities) {
+      if (LEGACY_PUBLICATION_TYPES.has(capability)) {
+        throw new Error(
+          `${source}.service_exports[${index}].capabilities must use canonical Service Graph capability, got ${capability}`,
+        );
+      }
+    }
+    return {
+      name: record.name,
+      capabilities: record.capabilities,
+    };
+  });
+}
+
+function parseArrayOutput(output: unknown, source: string): unknown[] {
+  if (!output || typeof output !== "object" || Array.isArray(output)) {
+    throw new Error(`${source} must be an OpenTofu output object`);
+  }
+  const outputRecord = output as Record<string, unknown>;
+  if (outputRecord.sensitive === true) {
+    throw new Error(`${source} must not be sensitive`);
+  }
+  const value = outputRecord.value;
+  if (!Array.isArray(value)) {
+    throw new Error(`${source}.value must be an array`);
+  }
+  return value;
 }
 
 function parseTakosumiReleaseOutput(
