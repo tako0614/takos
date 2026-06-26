@@ -153,14 +153,12 @@ export function buildTakosumiReleaseCommands(
     throw new Error(`Unknown environment "${environment}"`);
   }
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
-  const accountsDatabaseId = requireStringOutput(
-    outputs,
-    "cloudflare_accounts_d1_database_id",
-  );
+  requireStringOutput(outputs, "cloudflare_accounts_d1_database_id");
   const vectorizeIndexName = requireStringOutput(
     outputs,
     "cloudflare_vectorize_index_name",
   );
+  const wranglerConfigPath = resolve(WRANGLER_CONFIG);
   const wranglerEnvArgs = environment === "staging" ? ["--env", "staging"] : [];
   const renderArgs = [
     "bun",
@@ -169,11 +167,32 @@ export function buildTakosumiReleaseCommands(
     ...(zoneId ? ["--zone-id", zoneId] : []),
   ];
   const installArgs = ["bun", "install", "--frozen-lockfile"];
+  const takosumiInstallArgs = [
+    "bun",
+    "install",
+    "--cwd",
+    takosumiRepoDir,
+    "--frozen-lockfile",
+  ];
+  const takosumiDashboardInstallArgs = [
+    "bun",
+    "install",
+    "--cwd",
+    `${takosumiRepoDir}/dashboard`,
+    "--frozen-lockfile",
+  ];
   const buildArgs =
     debug && environment === "staging"
       ? ["bun", "run", "build", "--mode", "staging-debug"]
       : ["bun", "run", "build"];
   const containerBuildArgs = ["bun", "run", "containers:build"];
+  const ensureSecretsArgs = [
+    "bun",
+    "scripts/control/ensure-release-secrets.mjs",
+    environment,
+    "--config",
+    WRANGLER_CONFIG,
+  ];
   const migrationCommands = skipD1Migrations
     ? []
     : [
@@ -191,32 +210,35 @@ export function buildTakosumiReleaseCommands(
         ]),
         commandLine([
           "bun",
+          "run",
           "--cwd",
           takosumiRepoDir,
-          "run",
           "cli",
           "--",
           "accounts",
           "migrate-d1",
           "--database-id",
-          accountsDatabaseId,
+          "TAKOSUMI_ACCOUNTS_DB",
+          "--wrangler-config",
+          wranglerConfigPath,
           "--account-id",
           accountId,
           "--remote",
+          ...wranglerEnvArgs,
         ]),
       ];
 
   return [
     commandLine(renderArgs),
     commandLine(installArgs),
+    commandLine(takosumiInstallArgs),
+    commandLine(takosumiDashboardInstallArgs),
     commandLine(buildArgs),
     commandLine(containerBuildArgs),
     ...migrationCommands,
     commandLine([
-      "bunx",
-      "wrangler",
-      "vectorize",
-      "create",
+      "bun",
+      "scripts/control/ensure-vectorize-index.mjs",
       vectorizeIndexName,
       "--dimensions",
       "768",
@@ -231,6 +253,7 @@ export function buildTakosumiReleaseCommands(
       WRANGLER_CONFIG,
       ...wranglerEnvArgs,
     ]),
+    commandLine(ensureSecretsArgs),
   ];
 }
 

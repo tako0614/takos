@@ -186,6 +186,9 @@
       "@takos/worker-platform-utils/clock": [
         "./src/worker/platform-utils/clock.ts"
       ],
+      "@takos/worker-platform-utils/container-host": [
+        "./src/worker/platform-utils/container-host.ts"
+      ],
       "@takos/worker-platform-utils/env-parse": [
         "./src/worker/platform-utils/env-parse.ts"
       ],

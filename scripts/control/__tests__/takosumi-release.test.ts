@@ -1,6 +1,7 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   buildTakosumiDestroyCommands,
@@ -25,6 +26,8 @@ const rawOutputs = {
   },
 };
 
+const wranglerConfigPath = resolve("deploy/cloudflare/wrangler.toml");
+
 test("buildTakosumiReleaseCommands runs generic operator activation steps", () => {
   assert.deepEqual(
     buildTakosumiReleaseCommands(rawOutputs, "production", {
@@ -34,12 +37,15 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
     [
       "'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'production' '--zone-id' 'zone_123'",
       "'bun' 'install' '--frozen-lockfile'",
+      "'bun' 'install' '--cwd' '../takosumi' '--frozen-lockfile'",
+      "'bun' 'install' '--cwd' '../takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml'",
-      "'bun' '--cwd' '../takosumi' 'run' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'd1_accounts' '--account-id' 'acc_123' '--remote'",
-      "'bunx' 'wrangler' 'vectorize' 'create' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
+      `'bun' 'run' '--cwd' '../takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote'`,
+      "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' 'deploy/cloudflare/wrangler.toml'",
     ],
   );
 });
@@ -53,12 +59,15 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
     [
       "'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging'",
       "'bun' 'install' '--frozen-lockfile'",
+      "'bun' 'install' '--cwd' '/opt/takosumi' '--frozen-lockfile'",
+      "'bun' 'install' '--cwd' '/opt/takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build' '--mode' 'staging-debug'",
       "'bun' 'run' 'containers:build'",
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
-      "'bun' '--cwd' '/opt/takosumi' 'run' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'd1_accounts' '--account-id' 'acc_123' '--remote'",
-      "'bunx' 'wrangler' 'vectorize' 'create' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
+      `'bun' 'run' '--cwd' '/opt/takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote' '--env' 'staging'`,
+      "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
+      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
     ],
   );
 });
@@ -72,10 +81,13 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
     [
       "'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging'",
       "'bun' 'install' '--frozen-lockfile'",
+      "'bun' 'install' '--cwd' '/opt/takosumi' '--frozen-lockfile'",
+      "'bun' 'install' '--cwd' '/opt/takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
-      "'bunx' 'wrangler' 'vectorize' 'create' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
+      "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
+      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
     ],
   );
 });
