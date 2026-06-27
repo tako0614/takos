@@ -1,22 +1,36 @@
 import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
-import type {
-  TakosumiAccountsServiceGraphServiceProjection,
-  TakosumiAccountsServiceGraphServiceStatus,
-} from "@takosjp/takosumi-accounts-contract";
+
+/**
+ * Workload service display, derived from a Capsule's deployment OUTPUTS
+ * (deploy decision D3). The OSS "Service Graph" service projection was removed
+ * from Takosumi Accounts; the Takos product now reads the installation's
+ * deployment-output projection (`deployment_outputs` on the installation
+ * envelope) instead of the retired `/installations/{id}/services` endpoint.
+ *
+ * The functional env/URL material reaching workloads is owned separately by the
+ * local service-publication catalog (apply-engine + group-managed-desired-state)
+ * and is unaffected by this display projection.
+ */
+
+export type WorkloadServiceStatus =
+  | "ready"
+  | "not_configured"
+  | "unavailable"
+  | "unknown";
+
+export interface InstallableAppWorkloadServiceSummary {
+  id: string;
+  capability: string;
+  status: WorkloadServiceStatus;
+  endpoint: string | null;
+  secret_configured: boolean;
+  token_expires_at: string | null;
+}
 
 export interface TakosumiAccountsServiceRequestConfig {
   baseUrl: string;
   token?: string;
   fetch?: typeof fetch;
-}
-
-export interface InstallableAppWorkloadServiceSummary {
-  id: string;
-  capability: string;
-  status: TakosumiAccountsServiceGraphServiceStatus | "unknown";
-  endpoint: string | null;
-  secret_configured: boolean;
-  token_expires_at: string | null;
 }
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -31,17 +45,12 @@ function readString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function readWorkloadServiceStatus(
-  value: unknown,
-): InstallableAppWorkloadServiceSummary["status"] {
-  return value === "ready" ||
-    value === "not_configured" ||
-    value === "unavailable"
-    ? value
-    : "unknown";
-}
-
-export function accountsInstallationServicesUrl(
+/**
+ * Builds the `/installations/{id}` projection URL on the accounts plane. The
+ * installation envelope carries the deployment-output projection that backs the
+ * workload service display.
+ */
+export function accountsInstallationProjectionUrl(
   baseUrl: string,
   installationId: string,
 ): URL {
@@ -52,55 +61,75 @@ export function accountsInstallationServicesUrl(
   )
     ? basePath
     : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
-  url.pathname = `${installationsPath}/${encodeURIComponent(
-    installationId,
-  )}/services`;
+  url.pathname = `${installationsPath}/${encodeURIComponent(installationId)}`;
   url.search = "";
   return url;
 }
 
-export function sanitizeWorkloadServiceProjection(
+function projectDeploymentOutput(
   value: unknown,
 ): InstallableAppWorkloadServiceSummary | null {
-  const record = readRecord(value) as
-    | (Partial<TakosumiAccountsServiceGraphServiceProjection> &
-        Record<string, unknown>)
-    | null;
+  const record = readRecord(value);
   if (!record) return null;
-  const id = readString(record.id);
-  const capability = readString(record.capability);
-  if (!id || !capability) return null;
+  const name =
+    readString(record.name) ?? readString(record.kind) ?? null;
+  if (!name) return null;
+  const endpoint = readString(record.value);
   return {
-    id,
-    capability: capability,
-    status: readWorkloadServiceStatus(record.status),
-    endpoint: readString(record.endpoint),
-    secret_configured: Boolean(readString(record.secret_ref)),
-    token_expires_at: readString(record.token_expires_at),
+    id: name,
+    capability: "deployment.outputs",
+    status: endpoint ? "ready" : "not_configured",
+    endpoint,
+    secret_configured: record.sensitive === true,
+    token_expires_at: null,
   };
 }
 
-export function sanitizeWorkloadServices(
-  value: unknown,
+/**
+ * Projects an installation envelope body (`{ installation: { deployment_outputs,
+ * launch_url, ... } }`) into the workload service display summaries.
+ */
+export function projectWorkloadServicesFromInstallationBody(
+  body: Record<string, unknown> | null,
 ): InstallableAppWorkloadServiceSummary[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map(sanitizeWorkloadServiceProjection)
-    .filter(
-      (service): service is InstallableAppWorkloadServiceSummary =>
-        service !== null,
-    );
+  if (!body) return [];
+  const installation = readRecord(body.installation) ?? body;
+  const outputs = installation.deployment_outputs;
+  if (Array.isArray(outputs) && outputs.length > 0) {
+    return outputs
+      .map(projectDeploymentOutput)
+      .filter(
+        (service): service is InstallableAppWorkloadServiceSummary =>
+          service !== null,
+      );
+  }
+  const launchUrl = readString(installation.launch_url);
+  if (launchUrl) {
+    return [
+      {
+        id: "launch_url",
+        capability: "deployment.outputs",
+        status: "ready",
+        endpoint: launchUrl,
+        secret_configured: false,
+        token_expires_at: null,
+      },
+    ];
+  }
+  return [];
 }
 
-export function sanitizeWorkloadServicesBody(
+/**
+ * Wraps an installation envelope body into the `{ installation_id, services }`
+ * response shape the dashboard consumes for the per-installation services view.
+ */
+export function installationProjectionToServicesBody(
+  installationId: string,
   body: Record<string, unknown> | null,
-): Record<string, unknown> | null {
-  if (!body) return body;
-  const services = sanitizeWorkloadServices(body.services);
-  if (!Array.isArray(body.services)) return body;
+): Record<string, unknown> {
   return {
-    ...body,
-    services,
+    installation_id: installationId,
+    services: projectWorkloadServicesFromInstallationBody(body),
   };
 }
 
@@ -109,7 +138,7 @@ export async function fetchAccountsInstallationWorkloadServices(
   config: TakosumiAccountsServiceRequestConfig | undefined,
 ): Promise<InstallableAppWorkloadServiceSummary[]> {
   if (!config) return [];
-  const url = accountsInstallationServicesUrl(config.baseUrl, installationId);
+  const url = accountsInstallationProjectionUrl(config.baseUrl, installationId);
   const headers = new Headers({ accept: "application/json" });
   if (config.token?.trim()) {
     headers.set("authorization", `Bearer ${config.token.trim()}`);
@@ -119,7 +148,7 @@ export async function fetchAccountsInstallationWorkloadServices(
     const response = await (config.fetch ?? fetch)(url, { headers });
     if (!response.ok) return [];
     const body = (await response.json()) as unknown;
-    return sanitizeWorkloadServices(readRecord(body)?.services);
+    return projectWorkloadServicesFromInstallationBody(readRecord(body));
   } catch {
     return [];
   }

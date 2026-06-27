@@ -768,27 +768,22 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
         installation: { id: "inst_1", status: "suspended" },
       });
     }
-    if (url.pathname.endsWith("/services")) {
+    if (url.pathname.endsWith("/inst_1")) {
+      // Deploy decision D3: workload services are projected from the
+      // installation deployment-output projection (the `/services` endpoint
+      // was retired).
       return Response.json({
-        installation_id: "inst_1",
-        services: [
-          {
-            id: "takosumi.identity.oidc",
-            capability: "identity.oidc",
-            status: "ready",
-            endpoint: "https://accounts.internal",
-            material: { client_id: "client_1" },
-          },
-          {
-            id: "takosumi.events.webhook",
-            capability: "events.webhook",
-            status: "ready",
-            endpoint:
-              "https://accounts.internal/v1/installation-projections/inst_1/events/ingest",
-            secret_ref: "secret://inst_1/events",
-            token_expires_at: "2026-05-01T00:00:00.000Z",
-          },
-        ],
+        installation: {
+          id: "inst_1",
+          deployment_outputs: [
+            {
+              name: "launch_url",
+              kind: "launch_url",
+              value: "https://app.example.test",
+              sensitive: false,
+            },
+          ],
+        },
       });
     }
     return Response.json({
@@ -832,21 +827,12 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
     };
     assertEquals(listBody.installations[0]?.services, [
       {
-        id: "takosumi.identity.oidc",
-        capability: "identity.oidc",
+        id: "launch_url",
+        capability: "deployment.outputs",
         status: "ready",
-        endpoint: "https://accounts.internal",
+        endpoint: "https://app.example.test",
         secret_configured: false,
         token_expires_at: null,
-      },
-      {
-        id: "takosumi.events.webhook",
-        capability: "events.webhook",
-        status: "ready",
-        endpoint:
-          "https://accounts.internal/v1/installation-projections/inst_1/events/ingest",
-        secret_configured: true,
-        token_expires_at: "2026-05-01T00:00:00.000Z",
       },
     ]);
     assertEquals(calls, [
@@ -866,7 +852,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections/inst_1/services",
+        pathname: "/v1/installation-projections/inst_1",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -918,18 +904,19 @@ test("app-installations route lists Installation services through Takosumi Accou
       method: init?.method,
       authorization: new Headers(init?.headers).get("authorization"),
     });
-    if (url.pathname.endsWith("/services")) {
+    if (url.pathname.endsWith("/inst_1")) {
       return Response.json({
-        installation_id: "inst_1",
-        services: [
-          {
-            id: "takosumi.control.api",
-            capability: "control.api",
-            status: "ready",
-            endpoint: "https://accounts.internal/v1",
-            secret_ref: "secret://inst_1/control",
-          },
-        ],
+        installation: {
+          id: "inst_1",
+          deployment_outputs: [
+            {
+              name: "launch_url",
+              kind: "launch_url",
+              value: "https://app.example.test",
+              sensitive: false,
+            },
+          ],
+        },
       });
     }
     return Response.json({
@@ -954,11 +941,11 @@ test("app-installations route lists Installation services through Takosumi Accou
       installation_id: "inst_1",
       services: [
         {
-          id: "takosumi.control.api",
-          capability: "control.api",
+          id: "launch_url",
+          capability: "deployment.outputs",
           status: "ready",
-          endpoint: "https://accounts.internal/v1",
-          secret_configured: true,
+          endpoint: "https://app.example.test",
+          secret_configured: false,
           token_expires_at: null,
         },
       ],
@@ -979,7 +966,7 @@ test("app-installations route lists Installation services through Takosumi Accou
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections/inst_1/services",
+        pathname: "/v1/installation-projections/inst_1",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",

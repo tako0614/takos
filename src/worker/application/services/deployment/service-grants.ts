@@ -2,7 +2,6 @@ import {
   TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
   TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_CONTROL_API,
   takosumiAccountsInstallationPath,
-  takosumiAccountsInstallationServiceRotateTokenPath,
 } from "@takosjp/takosumi-accounts-contract";
 
 import type { Env } from "../../../shared/types/env.ts";
@@ -105,12 +104,6 @@ function accountsErrorMessage(body: unknown, fallback: string): string {
   );
 }
 
-function serviceBaseUrlFromRotateBody(body: unknown): string | null {
-  const service = readRecord(readRecord(body)?.service);
-  const material = readRecord(service?.material);
-  return readString(material?.baseUrl) ?? readString(service?.endpoint);
-}
-
 function accountsServiceIdForCapability(
   serviceBinding: AppServiceBinding,
 ): string {
@@ -172,6 +165,9 @@ export const materializeTakosumiServiceGrant: ServiceGrantMaterializer = async (
     );
   }
 
+  // Reference the resolved platform service id so the capability check is
+  // exercised even though token minting is no longer available in OSS.
+  void accountsServiceId;
   const fetchImpl = fetch;
   const previousToken = readEnvString(params.previousToken);
   if (previousToken) {
@@ -189,55 +185,13 @@ export const materializeTakosumiServiceGrant: ServiceGrantMaterializer = async (
     }
   }
 
-  const accountsToken = readEnvString(env.TAKOSUMI_ACCOUNTS_TOKEN);
-  if (!accountsToken) {
-    throw new Error(
-      `service binding '${params.serviceBinding.name}' requires TAKOSUMI_ACCOUNTS_TOKEN to rotate an Installation-scoped ServiceGrant token`,
-    );
-  }
-  const response = await fetchImpl(
-    accountsApiUrl(
-      baseUrl,
-      takosumiAccountsInstallationServiceRotateTokenPath(
-        installationId,
-        accountsServiceId,
-      ),
-    ),
-    {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        authorization: `Bearer ${accountsToken}`,
-      },
-      body: JSON.stringify({
-        scopes: params.serviceBinding.scopes ?? [],
-      }),
-    },
+  // Deploy decision D3: Takosumi OSS removed the Service Graph service-token
+  // issuance (the `/installations/{id}/services/{serviceId}/rotate-token`
+  // endpoint). A `control.api` ServiceGrant token can therefore only be REUSED
+  // (validated above), not minted, against an OSS control plane. Operators that
+  // need control.api token vending use Takosumi Cloud. Fail closed here rather
+  // than silently calling a removed endpoint.
+  throw new Error(
+    `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) cannot mint a new ServiceGrant token: Takosumi OSS removed Service Graph service-token issuance. Supply a current token via previousToken, or use Takosumi Cloud.`,
   );
-  const body = await readJsonBody(response);
-  if (!response.ok) {
-    throw new Error(
-      `service binding '${params.serviceBinding.name}' token rotation failed: ${accountsErrorMessage(
-        body,
-        `Accounts returned HTTP ${response.status}`,
-      )}`,
-    );
-  }
-  const record = readRecord(body);
-  const token = readString(record?.token);
-  if (!token) {
-    throw new Error(
-      `service binding '${params.serviceBinding.name}' token rotation response did not include a token`,
-    );
-  }
-  return {
-    baseUrl:
-      serviceBaseUrlFromRotateBody(body) ??
-      accountsInstallationBaseUrl(baseUrl),
-    token,
-    ...(readString(record?.expires_at)
-      ? { expiresAt: readString(record?.expires_at) as string }
-      : {}),
-  };
 };

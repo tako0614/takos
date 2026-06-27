@@ -1,4 +1,14 @@
-import { TAKOSUMI_ACCOUNTS_CONTROL_API_PERMISSIONS } from "@takosjp/takosumi-accounts-contract";
+// control.api ServiceGrant scope contract. Re-localized in the Takos product
+// after Takosumi OSS removed the Service Graph (deploy decision D3): the
+// permission token set is the Takos manifest contract for a `control.api`
+// service binding and no longer lives in the accounts contract.
+export const TAKOS_CONTROL_API_PERMISSIONS = [
+  "installations.list.same-space",
+  "installations.read.same-space",
+  "installations.events.read.same-space",
+  "installations.outputs.read.same-space",
+  "billing.usage.report.same-space",
+] as const;
 
 export const TAKOS_APP_CONTRACT_VERSION = 1 as const;
 
@@ -42,8 +52,7 @@ export const TAKOS_APP_SERVICE_BINDING_CAPABILITIES = [
 ] as const;
 
 export const TAKOS_APP_SERVICE_GRANT_SCOPES = {
-  [SERVICE_GRAPH_CAPABILITIES.controlApi]:
-    TAKOSUMI_ACCOUNTS_CONTROL_API_PERMISSIONS,
+  [SERVICE_GRAPH_CAPABILITIES.controlApi]: TAKOS_CONTROL_API_PERMISSIONS,
 } as const;
 
 export type TakosAppContractVersion = typeof TAKOS_APP_CONTRACT_VERSION;
@@ -58,4 +67,4 @@ export type TakosAppAuthKind =
 export type TakosAppServiceBindingCapability =
   (typeof TAKOS_APP_SERVICE_BINDING_CAPABILITIES)[number];
 export type TakosAppServiceGrantScope =
-  (typeof TAKOSUMI_ACCOUNTS_CONTROL_API_PERMISSIONS)[number];
+  (typeof TAKOS_CONTROL_API_PERMISSIONS)[number];

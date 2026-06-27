@@ -5,10 +5,7 @@ import {
 import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 
 import type { Env } from "../../../shared/types/index.ts";
-import {
-  accountsInstallationServicesUrl,
-  sanitizeWorkloadServicesBody,
-} from "./takosumi-workload-services.ts";
+import { installationProjectionToServicesBody } from "./takosumi-workload-services.ts";
 
 type InstallableAppInstallEnv = Pick<
   Env,
@@ -420,14 +417,17 @@ export async function listInstallableAppInstallationServices(
   config: InstallableAppAccountsConfig | null,
 ): Promise<InstallableAppUpstreamResponse> {
   const accountsConfig = requireAccountsConfig(config);
+  // Deploy decision D3: derive workload services from the installation
+  // deployment-output projection (the `/services` endpoint was retired).
   const result = await fetchAccountsJson(
-    accountsInstallationServicesUrl(accountsConfig.baseUrl, installationId),
+    accountsInstallationsUrl(accountsConfig, installationId),
     { method: "GET" },
     accountsConfig.token,
   );
+  if (result.status >= 400) return result;
   return {
     status: result.status,
-    body: sanitizeWorkloadServicesBody(result.body),
+    body: installationProjectionToServicesBody(installationId, result.body),
   };
 }
 

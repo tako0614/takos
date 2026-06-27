@@ -31,7 +31,10 @@ import {
   resolveInstallableAppAccountsConfig,
   resolveInstallableAppInstallConfig,
 } from "../../application/services/source/installable-app-install.ts";
-import { sanitizeWorkloadServicesBody } from "../../application/services/source/takosumi-workload-services.ts";
+import {
+  installationProjectionToServicesBody,
+  projectWorkloadServicesFromInstallationBody,
+} from "../../application/services/source/takosumi-workload-services.ts";
 import {
   parseJsonBody,
   spaceAccess,
@@ -449,14 +452,17 @@ async function listInstallableAppInstallationServicesForRoute(
 ): Promise<InstallableAppUpstreamResponse> {
   const caller = await resolveAccountsSessionCaller(c);
   if (caller) {
+    // Deploy decision D3: the retired `/services` endpoint is replaced by the
+    // installation deployment-output projection.
     const result = await accountsPlaneGetJson(
       c,
-      `${accountsInstallationsPath(installationId)}/services`,
+      accountsInstallationsPath(installationId),
       caller.headers,
     );
+    if (result.status >= 400) return result;
     return {
       status: result.status,
-      body: sanitizeWorkloadServicesBody(result.body),
+      body: installationProjectionToServicesBody(installationId, result.body),
     };
   }
   return await appInstallationsRouteDeps.listInstallableAppInstallationServices(
@@ -498,15 +504,15 @@ async function listInstallableAppInstallationsWithServicesForRoute(
       if (!installationId) return installation;
       const services = await accountsPlaneGetJson(
         c,
-        `${accountsInstallationsPath(installationId)}/services`,
+        accountsInstallationsPath(installationId),
         caller.headers,
       );
-      if (services.status >= 400 || !Array.isArray(services.body?.services)) {
+      if (services.status >= 400) {
         return installation;
       }
       return {
         ...record,
-        services: sanitizeWorkloadServicesBody(services.body)?.services,
+        services: projectWorkloadServicesFromInstallationBody(services.body),
       };
     }),
   );

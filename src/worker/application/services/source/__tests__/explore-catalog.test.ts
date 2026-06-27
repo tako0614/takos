@@ -784,26 +784,21 @@ test("listCatalogItems overlays default app installation state from Accounts led
           url,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        if (url.endsWith("/v1/installation-projections/inst_docs/services")) {
+        if (url.endsWith("/v1/installation-projections/inst_docs")) {
+          // Deploy decision D3: workload services are projected from the
+          // installation deployment-output projection.
           return Response.json({
-            installation_id: "inst_docs",
-            services: [
-              {
-                id: "takosumi.identity.oidc",
-                capability: "identity.oidc",
-                status: "ready",
-                endpoint: "https://accounts.internal/base",
-              },
-              {
-                id: "takosumi.events.webhook",
-                capability: "events.webhook",
-                status: "ready",
-                endpoint:
-                  "https://accounts.internal/base/v1/installation-projections/inst_docs/events/ingest",
-                secret_ref: "secret://inst_docs/events",
-                token_expires_at: "2026-05-01T00:00:00.000Z",
-              },
-            ],
+            installation: {
+              id: "inst_docs",
+              deployment_outputs: [
+                {
+                  name: "launch_url",
+                  kind: "launch_url",
+                  value: "https://docs.example.test",
+                  sensitive: false,
+                },
+              ],
+            },
           });
         }
         return Response.json({
@@ -837,7 +832,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
   assertEquals(requests[0]?.authorization, "Bearer accounts-token");
   assertEquals(
     requests[1]?.url,
-    "https://accounts.internal/base/v1/installation-projections/inst_docs/services",
+    "https://accounts.internal/base/v1/installation-projections/inst_docs",
   );
   assertEquals(result.items[0]?.installation, {
     installed: true,
@@ -854,21 +849,12 @@ test("listCatalogItems overlays default app installation state from Accounts led
     updated_at: "2026-04-22T01:05:00.000Z",
     services: [
       {
-        id: "takosumi.identity.oidc",
-        capability: "identity.oidc",
+        id: "launch_url",
+        capability: "deployment.outputs",
         status: "ready",
-        endpoint: "https://accounts.internal/base",
+        endpoint: "https://docs.example.test",
         secret_configured: false,
         token_expires_at: null,
-      },
-      {
-        id: "takosumi.events.webhook",
-        capability: "events.webhook",
-        status: "ready",
-        endpoint:
-          "https://accounts.internal/base/v1/installation-projections/inst_docs/events/ingest",
-        secret_configured: true,
-        token_expires_at: "2026-05-01T00:00:00.000Z",
       },
     ],
   });
