@@ -77,6 +77,7 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
     buildTakosumiReleaseCommands(rawOutputs, "staging", {
       skipD1Migrations: true,
       takosumiRepoDir: "/opt/takosumi",
+      containersRollout: "none",
     }),
     [
       "'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging'",
@@ -86,7 +87,7 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging' '--containers-rollout' 'none'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
     ],
   );

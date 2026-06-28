@@ -35,6 +35,10 @@ Optional env:
                                           (legacy fallback).
   TAKOS_SKIP_D1_MIGRATIONS                Set to 1/true to skip D1 migration
                                           commands in constrained sandboxes.
+  TAKOS_WRANGLER_CONTAINERS_ROLLOUT       Optional value for wrangler deploy
+                                          --containers-rollout, for example
+                                          "none" in operator sandboxes where
+                                          Docker image builds are unavailable.
 `);
   runtime.exit(1);
 }
@@ -147,6 +151,7 @@ export function buildTakosumiReleaseCommands(
     zoneId,
     takosumiRepoDir = "../takosumi",
     skipD1Migrations = false,
+    containersRollout,
   } = {},
 ) {
   if (!ENVIRONMENTS.includes(environment)) {
@@ -252,6 +257,9 @@ export function buildTakosumiReleaseCommands(
       "--config",
       WRANGLER_CONFIG,
       ...wranglerEnvArgs,
+      ...(containersRollout
+        ? ["--containers-rollout", containersRollout]
+        : []),
     ]),
     commandLine(ensureSecretsArgs),
   ];
@@ -302,6 +310,36 @@ function run(command) {
   execSync(command, { stdio: "inherit" });
 }
 
+function runDestroyCommand(command) {
+  console.log(`\n> ${command}\n`);
+  try {
+    execSync(command, { stdio: "pipe" });
+  } catch (error) {
+    const stdout = error?.stdout ? String(error.stdout) : "";
+    const stderr = error?.stderr ? String(error.stderr) : "";
+    process.stdout.write(stdout);
+    process.stderr.write(stderr);
+    if (isIgnorableDestroyFailure(command, `${stdout}\n${stderr}`)) {
+      console.warn("Ignoring missing release resource during destroy.");
+      return;
+    }
+    throw error;
+  }
+}
+
+function isIgnorableDestroyFailure(command, output) {
+  if (command.includes("'queues' 'consumer' 'remove'")) {
+    return /No worker consumer .* exists for queue/u.test(output);
+  }
+  if (command.includes("'wrangler' 'delete'")) {
+    return /not found|does not exist|No such Worker/i.test(output);
+  }
+  if (command.includes("'vectorize' 'delete'")) {
+    return /not found|does not exist/i.test(output);
+  }
+  return false;
+}
+
 export function main(argv = process.argv.slice(2), env = process.env) {
   const { environment, debug, destroy } = parseReleaseArgs(argv);
   const outputs = readReleaseOutputs(env);
@@ -320,9 +358,13 @@ export function main(argv = process.argv.slice(2), env = process.env) {
           skipD1Migrations:
             env.TAKOS_SKIP_D1_MIGRATIONS === "1" ||
             env.TAKOS_SKIP_D1_MIGRATIONS === "true",
+          containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
         });
       })();
-  for (const command of commands) run(command);
+  for (const command of commands) {
+    if (destroy) runDestroyCommand(command);
+    else run(command);
+  }
   console.log(
     `\nTakos ${destroy ? "release cleanup" : "release activation"} completed for ${environment}.`,
   );

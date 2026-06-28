@@ -1,7 +1,7 @@
 import {
   TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
   TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_CONTROL_API,
-  takosumiAccountsInstallationPath,
+  takosumiAccountsCapsulePath,
 } from "@takosjp/takosumi-accounts-contract";
 
 import type { Env } from "../../../shared/types/env.ts";
@@ -124,7 +124,7 @@ async function previousTokenIsCurrent(input: {
   const response = await input.fetchImpl(
     accountsApiUrl(
       input.baseUrl,
-      takosumiAccountsInstallationPath(input.installationId),
+      takosumiAccountsCapsulePath(input.installationId),
     ),
     {
       method: "GET",

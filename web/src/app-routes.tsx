@@ -138,7 +138,8 @@ const ActivityView = lazy(
   () => import("@takosumi/dashboard/views/activity/ActivityView.tsx"),
 );
 const SpaceSettingsView = lazy(
-  () => import("@takosumi/dashboard/views/space/SpaceSettingsView.tsx"),
+  () =>
+    import("@takosumi/dashboard/views/workspace/WorkspaceSettingsView.tsx"),
 );
 const SignInView = lazy(
   () => import("@takosumi/dashboard/views/auth/SignInView.tsx"),

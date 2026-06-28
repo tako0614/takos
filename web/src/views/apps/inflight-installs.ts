@@ -16,7 +16,7 @@
  * instead of hijacking the product page.
  */
 import { type Accessor, createResource } from "solid-js";
-import { currentSpaceId } from "@takosumi/dashboard/lib/space-state.ts";
+import { currentWorkspaceId } from "@takosumi/dashboard/lib/workspace-state.ts";
 
 export interface InflightInstall {
   readonly id: string;
@@ -77,14 +77,14 @@ async function fetchInflightInstalls(
 
 /**
  * Reactive in-flight installs for the AppsPage section. Keyed on the shared
- * dashboard space-state so it tracks the Space the admin `/new` installs into.
+ * dashboard workspace-state so it tracks the Workspace the admin `/new` installs into.
  */
 export function useInflightInstalls(): {
   readonly installs: Accessor<readonly InflightInstall[]>;
   readonly loading: Accessor<boolean>;
 } {
   const [resource] = createResource(
-    () => currentSpaceId(),
+    () => currentWorkspaceId(),
     fetchInflightInstalls,
   );
   return {
