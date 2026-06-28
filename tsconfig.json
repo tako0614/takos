@@ -87,8 +87,11 @@
       "takosumi-contract/internal-crypto": [
         "../takosumi/contract/internal-crypto.ts"
       ],
-      "takosumi-contract/spaces": [
-        "../takosumi/contract/spaces.ts"
+      "takosumi-contract/workspaces": [
+        "../takosumi/contract/workspaces.ts"
+      ],
+      "takosumi-contract/projects": [
+        "../takosumi/contract/projects.ts"
       ],
       "takosumi-contract/installations": [
         "../takosumi/contract/installations.ts"
@@ -111,11 +114,14 @@
       "takosumi-contract/activity": [
         "../takosumi/contract/activity.ts"
       ],
-      "takosumi-contract/output-snapshots": [
-        "../takosumi/contract/output-snapshots.ts"
+      "takosumi-contract/outputs": [
+        "../takosumi/contract/outputs.ts"
       ],
       "takosumi-contract/runs": [
         "../takosumi/contract/runs.ts"
+      ],
+      "takosumi-contract/state-versions": [
+        "../takosumi/contract/state-versions.ts"
       ],
       "takosumi-contract/deployments": [
         "../takosumi/contract/deployments.ts"
