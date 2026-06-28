@@ -9,8 +9,8 @@ Takos deployment materializes one same-origin Worker that composes:
   launcher, and MCP tools.
 - Takosumi Accounts: login, OIDC issuer, billing/account contracts, and launch
   tokens.
-- Takosumi deploy-control: Space / Source / Connection / Installation / Run /
-  Deployment / OutputSnapshot ledger and in-process control seam.
+- Takosumi deploy-control: Workspace / Source / ProviderConnection / Capsule /
+  Run / StateVersion / Output ledger and in-process control seam.
 - Takosumi dashboard and OpenTofu runner container.
 
 The Cloudflare target is split into two mechanical phases:
@@ -43,6 +43,27 @@ schema work remains Takos script behavior, not a Takosumi resource type.
 
 Run commands from the `takos/` repo root unless a step says otherwise. Replace
 `<account-id>`, `<zone-id>`, and `app.your-domain.example` with your own values.
+
+### Guided One-Command Path
+
+Steps 1-7 below are wrapped by a single guided command that reuses the same
+control scripts and runs them in order, stopping on the first failure so you can
+fix the environment and re-run (the render, vectorize, and secret steps are
+idempotent):
+
+```sh
+# Preview the exact ordered command list without executing anything:
+bun run selfhost:bootstrap -- --dry-run
+
+# Run it for real (production):
+bun run selfhost:bootstrap -- --account-id <account-id> --zone-id <zone-id>
+```
+
+Useful flags: `staging` (positional), `--vectorize-index <name>`,
+`--takosumi-repo-dir <path>`, and `--skip-provision` / `--skip-migrations` /
+`--skip-secrets` to resume a partial run. The feature-gated secrets in step 6
+remain operator-provided; the command prints the list to set by hand. The
+numbered steps below document what each phase does.
 
 ### 0. Prerequisites
 
@@ -166,13 +187,12 @@ For staging, render the staging wrangler profile and pass `staging`.
 
 The OpenTofu module owns durable topology. The wrangler config owns the artifact
 publication pieces the provider cannot declare. Takosumi owns the deploy ledger:
-Installation, typed Runs, StateSnapshot, OutputSnapshot, Deployment, policy
-decision, and audit events.
+Capsule, typed Runs, StateVersion, Output, policy decision, and audit events.
 
 Takos product code must not introduce another deploy authority. App launcher,
-MCP, file-handler, and Workspace surfaces should project Installation /
-OutputSnapshot state from Takosumi instead of inventing product-local lifecycle
-state for deployed apps.
+MCP, file-handler, and Workspace surfaces should project Capsule / Output state
+from Takosumi instead of inventing product-local lifecycle state for deployed
+apps.
 
 ## Validation
 
