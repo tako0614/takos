@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Takosumi deploy wrapper — installs and applies the Takos OpenTofu module through
+# Takosumi deploy wrapper — plans and applies the Takos OpenTofu module through
 # Takosumi's OpenTofu-native deploy control API.
 #
-# Premise: Takos can be managed by Takosumi as a normal Installation. The deploy
+# Premise: Takos can be managed by Takosumi as a normal Capsule. The deploy
 # topology is the plain OpenTofu module in deploy/opentofu (var.target ∈ aws |
 # gcp | cloudflare; the cloudflare target provisions the D1 / KV / R2 / Queues
-# backing resources). Takosumi resolves that Git module as an Installation,
-# records a plan Run, and applies the reviewed plan through an apply Run that
-# updates the Deployment and OutputSnapshot. Connection, Installation provider
-# connection, and runner policy own provider credentials, state backend, and
-# Cloudflare Container execution.
+# backing resources). Takosumi resolves that Git module as a Capsule, records a
+# plan Run, and applies the reviewed plan through an apply Run that records a new
+# StateVersion and Output. Provider Connection, Provider Binding, and runner
+# policy own provider credentials, state backend, and Cloudflare Container
+# execution.
 #
 # Usage: ./scripts/takosumi-deploy.sh [--plan-only] [--target TARGET]
 #
 # Required env vars:
-#   TAKOSUMI_URL            — Takosumi control plane origin (e.g. https://app.takosumi.com)
-#   TAKOSUMI_TOKEN          — Bearer token for the deploy control API
-#   TAKOSUMI_INSTALLATION_ID — existing Installation to plan/apply
+#   TAKOSUMI_URL        — Takosumi control plane origin (e.g. https://app.takosumi.com)
+#   TAKOSUMI_TOKEN      — Bearer token for the deploy control API
+#   TAKOSUMI_CAPSULE_ID — existing Capsule to plan/apply
 #
 # This script:
-# 1. Triggers a plan Run for the Installation's OpenTofu module
+# 1. Triggers a plan Run for the Capsule's OpenTofu module
 # 2. Prints the reviewed plan summary
 # 3. (unless --plan-only) applies the reviewed plan through the session/API facade
 
@@ -27,13 +27,13 @@ set -euo pipefail
 
 PLAN_ONLY=""
 TARGET="${TAKOSUMI_TARGET:-}"
-INSTALLATION_ID="${TAKOSUMI_INSTALLATION_ID:-}"
+CAPSULE_ID="${TAKOSUMI_CAPSULE_ID:-}"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --plan-only) PLAN_ONLY="true"; shift ;;
     --target) TARGET="$2"; shift 2 ;;
-    --installation) INSTALLATION_ID="$2"; shift 2 ;;
+    --capsule) CAPSULE_ID="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
@@ -48,9 +48,9 @@ if [[ -z "${TAKOSUMI_TOKEN:-}" ]]; then
   exit 1
 fi
 
-if [[ -z "$INSTALLATION_ID" ]]; then
-  echo "Error: TAKOSUMI_INSTALLATION_ID (or --installation) is required"
-  echo "  The Installation resolves the Git OpenTofu module (deploy/opentofu)."
+if [[ -z "$CAPSULE_ID" ]]; then
+  echo "Error: TAKOSUMI_CAPSULE_ID (or --capsule) is required"
+  echo "  The Capsule resolves the Git OpenTofu module (deploy/opentofu)."
   exit 1
 fi
 
@@ -82,13 +82,13 @@ check_response() {
   echo "$body"
 }
 
-# 1. Trigger a plan Run for the Installation's OpenTofu module.
-echo "Triggering plan Run for installation ${INSTALLATION_ID}..."
+# 1. Trigger a plan Run for the Capsule's OpenTofu module.
+echo "Triggering plan Run for capsule ${CAPSULE_ID}..."
 PLAN_BODY="{}"
 if [[ -n "$TARGET" ]]; then
   PLAN_BODY="{ \"variables\": { \"target\": \"$TARGET\" } }"
 fi
-PLAN_RESPONSE=$(api_post "/api/v1/installations/${INSTALLATION_ID}/plan" "$PLAN_BODY")
+PLAN_RESPONSE=$(api_post "/api/v1/capsules/${CAPSULE_ID}/plan" "$PLAN_BODY")
 PLAN_OUT=$(check_response "$PLAN_RESPONSE" "plan Run")
 PLAN_RUN_ID=$(echo "$PLAN_OUT" | jq -r '.run.id // .id // .planRunId // empty' 2>/dev/null || true)
 
@@ -108,4 +108,4 @@ APPLY_BODY="{}"
 APPLY_RESPONSE=$(api_post "/api/v1/plan-runs/${PLAN_RUN_ID}/apply" "$APPLY_BODY")
 check_response "$APPLY_RESPONSE" "apply Run" >/dev/null
 
-echo "Done. Deployment and OutputSnapshot are updated after the apply Run succeeds."
+echo "Done. A new StateVersion and Output are recorded after the apply Run succeeds."

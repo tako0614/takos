@@ -60,5 +60,5 @@ Takos owns the MCP user experience.
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takos Service Graph Profile](/architecture/app-interface)
-- [Takosumi Service Graph](https://takosumi.com/docs/service-graph-spec)
+- [Takos App Interface](/architecture/app-interface)
+- [Capsule Runtime Projection](/architecture/capsule-runtime-projection)

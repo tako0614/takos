@@ -93,6 +93,10 @@ export default defineConfig({
           },
           { text: "Service Topology", link: "/architecture/service-topology" },
           { text: "Takos App Interface", link: "/architecture/app-interface" },
+          {
+            text: "Capsule Runtime Projection",
+            link: "/architecture/capsule-runtime-projection",
+          },
           { text: "App Metadata", link: "/architecture/app-metadata" },
           { text: "Runtime / Agent", link: "/architecture/runtime-service" },
           { text: "Diagrams", link: "/architecture/diagrams" },

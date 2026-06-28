@@ -1,10 +1,10 @@
 # OpenTofu Service Exports
 
 Takos app/source repositories are OpenTofu-native. A repository does not need a
-Takos-specific or Takosumi-specific manifest file. Takosumi installs the repo as
-an OpenTofu Capsule, records Installation / Run / Deployment / OutputSnapshot,
-and projects runtime services through
-[Takosumi Service Graph](https://takosumi.com/docs/service-graph-spec).
+Takos-specific or Takosumi-specific manifest file. Takosumi runs the repo as an
+OpenTofu Capsule, records Capsule / Run / StateVersion / Output, and Takos
+projects runtime services from those Outputs through
+[Capsule Runtime Projection](/architecture/capsule-runtime-projection).
 
 ## Service Export Output
 
@@ -98,5 +98,5 @@ records the run ledger for each plan and apply.
 
 - [Deploy overview](/deploy/)
 - [Install paths](/apps/install-paths)
-- [Takos Service Graph Profile](/architecture/app-interface)
-- [Takosumi Service Graph](https://takosumi.com/docs/service-graph-spec)
+- [Takos App Interface](/architecture/app-interface)
+- [Capsule Runtime Projection](/architecture/capsule-runtime-projection)

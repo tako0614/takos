@@ -38,8 +38,7 @@ jobs:
         env:
           TAKOSUMI_URL: ${{ secrets.TAKOSUMI_URL }}
           TAKOSUMI_TOKEN: ${{ secrets.TAKOSUMI_TOKEN }}
-          TAKOSUMI_SPACE_ID: ${{ secrets.TAKOSUMI_SPACE_ID }}
-          TAKOSUMI_INSTALLATION_ID: ${{ secrets.TAKOSUMI_INSTALLATION_ID }}
+          TAKOSUMI_CAPSULE_ID: ${{ secrets.TAKOSUMI_CAPSULE_ID }}
           DRY_RUN: ${{ inputs.dry_run }}
         run: |
           chmod +x scripts/takosumi-deploy.sh
