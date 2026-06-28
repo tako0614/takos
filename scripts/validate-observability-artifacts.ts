@@ -3,7 +3,7 @@ import * as runtime from "./runtime.ts";
 
 const dashboardDir = 'deploy/observability/grafana';
 const costDashboardPath = `${dashboardDir}/takos-cost-attribution.json`;
-const costRunbookPath = '../takos-private/docs/operations/cost-monitoring.md';
+const costRunbookPath = '../takosumi-private/docs/operations/cost-monitoring.md';
 
 const dashboardFiles: string[] = [];
 for (const entry of runtime.readDirSync(dashboardDir)) {
@@ -20,19 +20,23 @@ for (const path of dashboardFiles.toSorted()) {
   validateDashboard(path);
 }
 
-const runbook = runtime.readTextFileSync(costRunbookPath);
-for (
-  const expected of [
-    'deploy/observability/grafana/takos-cost-attribution.json',
-    'takos_cloud_spend_cents_total',
-    'takos_billing_usage_cost_cents_total',
-    'takos_app_usage_units_total',
-    'takosumi/docs/reference/cost-attribution.md',
-  ]
-) {
-  if (!runbook.includes(expected)) {
-    fail(`${costRunbookPath} must mention ${expected}`);
+if (exists(costRunbookPath)) {
+  const runbook = runtime.readTextFileSync(costRunbookPath);
+  for (
+    const expected of [
+      'deploy/observability/grafana/takos-cost-attribution.json',
+      'takos_cloud_spend_cents_total',
+      'takos_billing_usage_cost_cents_total',
+      'takos_app_usage_units_total',
+      'takosumi/docs/reference/cost-attribution.md',
+    ]
+  ) {
+    if (!runbook.includes(expected)) {
+      fail(`${costRunbookPath} must mention ${expected}`);
+    }
   }
+} else {
+  console.warn(`Skipping private cost runbook validation: ${costRunbookPath} not found`);
 }
 
 console.log(`Validated ${dashboardFiles.length} observability dashboard(s)`);
@@ -97,6 +101,16 @@ function assertNonEmptyString(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function exists(path: string): boolean {
+  try {
+    runtime.statSync(path);
+    return true;
+  } catch (error) {
+    if (error instanceof runtime.errors.NotFound) return false;
+    throw error;
+  }
 }
 
 function fail(message: string): never {

@@ -81,9 +81,14 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     tags: ["default-app", "takos", "yurucommu", "social", "activitypub"],
     repositoryUrl: "https://github.com/tako0614/yurucommu.git",
     repositoryEnvKey: "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
-    ref: "v1.2.6",
-    refType: "tag",
-    sourcePath: "outputs.tf",
+    ref: "master",
+    refType: "branch",
+    sourcePath: "main.tf",
+    variables: {
+      enable_cloudflare_resources: true,
+      project_name: "yurucommu",
+      worker_name: "yurucommu",
+    },
     runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
       { name: "auth", type: "identity.oidc", required: true },

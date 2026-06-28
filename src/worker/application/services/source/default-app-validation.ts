@@ -13,6 +13,7 @@ import type {
   DefaultAppDistributionRow,
   DefaultAppRefType,
   DefaultAppRuntimeMode,
+  DefaultAppVariableValue,
 } from "./default-app-distribution-types.ts";
 
 export const DEFAULT_APP_RUNTIME_MODES: readonly DefaultAppRuntimeMode[] = [
@@ -45,6 +46,9 @@ export function cloneEntries(
     ...entry,
     ...(entry.tags ? { tags: [...entry.tags] } : {}),
     ...(entry.runtimeModes ? { runtimeModes: [...entry.runtimeModes] } : {}),
+    ...(entry.variables
+      ? { variables: cloneVariableRecord(entry.variables) }
+      : {}),
     ...(entry.bindings
       ? { bindings: entry.bindings.map((binding) => ({ ...binding })) }
       : {}),
@@ -235,6 +239,79 @@ export function normalizeBindingSummaries(
   });
 }
 
+const OPENTOFU_VARIABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function normalizeVariableValue(
+  value: unknown,
+  field: string,
+): DefaultAppVariableValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `default app distribution entry.${field} must be a finite JSON number`,
+      );
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item, index) =>
+      normalizeVariableValue(item, `${field}[${index}]`),
+    );
+  }
+  if (isPlainObject(value)) {
+    const result: Record<string, DefaultAppVariableValue> = {};
+    for (const [key, child] of Object.entries(value)) {
+      result[key] = normalizeVariableValue(child, `${field}.${key}`);
+    }
+    return result;
+  }
+  throw new Error(
+    `default app distribution entry.${field} must be a JSON value`,
+  );
+}
+
+export function normalizeVariables(
+  value: unknown,
+): Record<string, DefaultAppVariableValue> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isPlainObject(value)) {
+    throw new Error(
+      "default app distribution entry.variables must be an object",
+    );
+  }
+  const result: Record<string, DefaultAppVariableValue> = {};
+  for (const [key, rawValue] of Object.entries(value)) {
+    if (!OPENTOFU_VARIABLE_NAME_PATTERN.test(key)) {
+      throw new Error(
+        `default app distribution entry.variables contains invalid OpenTofu variable name: ${key}`,
+      );
+    }
+    result[key] = normalizeVariableValue(rawValue, `variables.${key}`);
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+export function cloneVariableRecord(
+  variables: Record<string, DefaultAppVariableValue>,
+): Record<string, DefaultAppVariableValue> {
+  return normalizeVariables(variables) ?? {};
+}
+
 export function assertValidGroupName(name: string): void {
   if (!isValidGroupName(name)) {
     throw new Error(
@@ -381,6 +458,11 @@ export function normalizeEntry(
     readOptionalString(record, "sourcePath") ??
     readOptionalString(record, "source_path");
   if (sourcePath) assertValidSourcePath(sourcePath);
+  const modulePath =
+    readOptionalString(record, "modulePath") ??
+    readOptionalString(record, "module_path");
+  if (modulePath) assertValidSourcePath(modulePath);
+  const variables = normalizeVariables(record.variables ?? record.vars);
   const runtimeModes = normalizeRuntimeModes(
     record.runtimeModes ?? record.runtime_modes,
   );
@@ -413,6 +495,8 @@ export function normalizeEntry(
       "entry.refType",
     ),
     ...(sourcePath ? { sourcePath } : {}),
+    ...(modulePath ? { modulePath } : {}),
+    ...(variables ? { variables } : {}),
     ...(runtimeModes ? { runtimeModes } : {}),
     ...(bindings ? { bindings } : {}),
     preinstall,

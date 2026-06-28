@@ -8,6 +8,13 @@ import type { Env } from "../../../shared/types/index.ts";
 export type DefaultAppRefType = "branch" | "tag" | "commit";
 export type DefaultAppBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
 export type DefaultAppRuntimeMode = "shared-cell" | "dedicated" | "self-hosted";
+export type DefaultAppVariableValue =
+  | string
+  | number
+  | boolean
+  | null
+  | DefaultAppVariableValue[]
+  | { [key: string]: DefaultAppVariableValue };
 export type DefaultAppServiceBindingType =
   | "identity.oidc"
   | "storage.sql"
@@ -35,6 +42,8 @@ export interface DefaultAppDistributionEntry {
   ref: string;
   refType: DefaultAppRefType;
   sourcePath?: string;
+  modulePath?: string;
+  variables?: Record<string, DefaultAppVariableValue>;
   runtimeModes?: DefaultAppRuntimeMode[];
   bindings?: DefaultAppServiceBindingSummary[];
   preinstall: boolean;

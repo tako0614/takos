@@ -53,6 +53,8 @@ const DEFAULT_APP_SOURCES = [
     name: "takos-office",
     path: "takos-apps/takos-office/package.json",
     packageName: "takos-office",
+    ref: "v0.1.0",
+    refType: "tag",
     sourcePath: "outputs.tf",
     preinstall: true,
   },
@@ -60,6 +62,8 @@ const DEFAULT_APP_SOURCES = [
     name: "takos-computer",
     path: "takos-apps/takos-computer/package.json",
     packageName: "@takos-apps/takos-computer",
+    ref: "v2.1.2",
+    refType: "tag",
     sourcePath: "outputs.tf",
     preinstall: true,
   },
@@ -67,13 +71,17 @@ const DEFAULT_APP_SOURCES = [
     name: "yurucommu",
     path: "yurucommu/package.json",
     packageName: "@takos/yurucommu",
-    sourcePath: "outputs.tf",
+    ref: "master",
+    refType: "branch",
+    sourcePath: "main.tf",
     preinstall: true,
   },
   {
     name: "road-to-me",
     path: "road-to-me/backend/package.json",
     packageName: "@takos/road-to-me-backend",
+    ref: "v0.1.0",
+    refType: "tag",
     sourcePath: "outputs.tf",
     preinstall: false,
   },
@@ -126,7 +134,7 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
   );
   assertEquals(
     entries.map((entry) => entry.ref),
-    ["v0.1.0", "v2.1.2", "v1.2.6", "v0.1.0"],
+    DEFAULT_APP_SOURCES.map((source) => source.ref),
   );
   assertEquals(
     entries.map((entry) => entry.appId),
@@ -160,8 +168,8 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
     true,
   );
   assertEquals(
-    entries.every((entry) => entry.refType === "tag"),
-    true,
+    entries.map((entry) => entry.refType),
+    DEFAULT_APP_SOURCES.map((source) => source.refType),
   );
   assertEquals(
     entries.map((entry) => entry.repositoryUrl),
@@ -195,7 +203,8 @@ test("resolveDefaultAppDistribution stays in sync with installable source packag
     assertEquals(expected.name, source.packageName);
     assert(typeof expected.version === "string" && expected.version.length > 0);
     assertEquals(entry.sourcePath, source.sourcePath);
-    assertEquals(entry.refType, "tag");
+    assertEquals(entry.ref, source.ref);
+    assertEquals(entry.refType, source.refType);
     assertEquals(entry.preinstall, source.preinstall);
   }
 });
@@ -1715,7 +1724,35 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
           (call) =>
             objectRecord(call.body.source, "install request source").ref,
         ),
-      ["v0.1.0", "v2.1.2", "v1.2.6"],
+      ["v0.1.0", "v2.1.2", "master"],
+    );
+    assertEquals(
+      fetchCalls
+        .filter((_, index) => index % 2 === 0)
+        .map((call) => call.body.variables ?? null),
+      [
+        null,
+        null,
+        {
+          enable_cloudflare_resources: true,
+          project_name: "yurucommu",
+          worker_name: "yurucommu",
+        },
+      ],
+    );
+    assertEquals(
+      fetchCalls
+        .filter((_, index) => index % 2 === 1)
+        .map((call) => call.body.vars ?? null),
+      [
+        null,
+        null,
+        {
+          enable_cloudflare_resources: true,
+          project_name: "yurucommu",
+          worker_name: "yurucommu",
+        },
+      ],
     );
     assertEquals(
       fetchCalls

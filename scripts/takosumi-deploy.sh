@@ -3,9 +3,9 @@
 # Takosumi's OpenTofu-native deploy control API.
 #
 # Premise: Takos can be managed by Takosumi as a normal Capsule. The deploy
-# topology is the plain OpenTofu module in deploy/opentofu (var.target ∈ aws |
-# gcp | cloudflare; the cloudflare target provisions the D1 / KV / R2 / Queues
-# backing resources). Takosumi resolves that Git module as a Capsule, records a
+# topology is the plain OpenTofu module in deploy/opentofu. The current
+# Cloudflare target provisions the D1 / KV / R2 / Queues backing resources.
+# Takosumi resolves that Git module as a Capsule, records a
 # plan Run, and applies the reviewed plan through an apply Run that records a new
 # StateVersion and Output. Provider Connection, Provider Binding, and runner
 # policy own provider credentials, state backend, and Cloudflare Container

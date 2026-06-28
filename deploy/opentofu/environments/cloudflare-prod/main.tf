@@ -8,7 +8,7 @@ terraform {
     }
   }
 
-  # State backend and provider credentials are resolved by Takosumi Connection/CapabilityBinding/policy during the typed Run. Takosumi records StateSnapshot, OutputSnapshot, and Deployment after a successful apply.
+  # State backend and provider credentials are resolved by Takosumi ProviderConnection / ProviderBinding / policy during the typed Run. Takosumi records StateVersion, Output, and audit/run evidence after a successful apply.
 }
 
 provider "cloudflare" {

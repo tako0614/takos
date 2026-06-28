@@ -208,6 +208,24 @@ function readExpectedGuard(value: unknown): Record<string, unknown> {
   return expected as Record<string, unknown>;
 }
 
+function defaultAppOpenTofuSource(entry: DefaultAppDistributionEntry): {
+  kind: "git";
+  url: string;
+  ref: string;
+  modulePath?: string;
+} {
+  return {
+    kind: "git",
+    url: entry.repositoryUrl,
+    ref: entry.ref,
+    ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
+  };
+}
+
+function hasDefaultAppVariables(entry: DefaultAppDistributionEntry): boolean {
+  return Boolean(entry.variables && Object.keys(entry.variables).length > 0);
+}
+
 export async function applyDefaultAppInstallation(
   entry: DefaultAppDistributionEntry,
   config: DefaultAppInstallConfig,
@@ -218,15 +236,12 @@ export async function applyDefaultAppInstallation(
     mode?: string;
   },
 ): Promise<unknown> {
-  const source = {
-    kind: "git",
-    url: entry.repositoryUrl,
-    ref: entry.ref,
-  };
+  const source = defaultAppOpenTofuSource(entry);
   const planBody: Record<string, unknown> = {
     spaceId: params.spaceId,
     source,
   };
+  if (hasDefaultAppVariables(entry)) planBody.variables = entry.variables;
   const plan = await postJson(
     planRunUrlFromInstallUrl(config.installUrl),
     config.token,
@@ -249,6 +264,8 @@ export async function applyDefaultAppInstallation(
     mode,
   };
   if (config.runtimeBaseUrl) applyBody.runtimeBaseUrl = config.runtimeBaseUrl;
+  if (entry.modulePath) applyBody.modulePath = entry.modulePath;
+  if (hasDefaultAppVariables(entry)) applyBody.vars = entry.variables;
 
   return await postJson(config.installUrl, config.token, applyBody).catch(
     (error) => {

@@ -374,6 +374,24 @@ function defaultAppMode(
   return firstMode || "shared-cell";
 }
 
+function defaultAppOpenTofuSource(entry: DefaultAppDistributionEntry): {
+  kind: "git";
+  url: string;
+  ref: string;
+  modulePath?: string;
+} {
+  return {
+    kind: "git",
+    url: entry.repositoryUrl,
+    ref: entry.ref,
+    ...(entry.modulePath ? { modulePath: entry.modulePath } : {}),
+  };
+}
+
+function hasDefaultAppVariables(entry: DefaultAppDistributionEntry): boolean {
+  return Boolean(entry.variables && Object.keys(entry.variables).length > 0);
+}
+
 async function postAccountsInstallationJson(
   c: Context<SpaceAccessRouteEnv>,
   caller: AccountsSessionCaller,
@@ -396,34 +414,35 @@ async function applyDefaultAppInstallationForRoute(
     mode: string;
   },
 ): Promise<InstallableAppUpstreamResponse> {
-  const source = {
-    kind: "git",
-    url: entry.repositoryUrl,
-    ref: entry.ref,
+  const source = defaultAppOpenTofuSource(entry);
+  const planBody: Record<string, unknown> = {
+    spaceId: params.spaceId,
+    source,
   };
+  if (hasDefaultAppVariables(entry)) planBody.variables = entry.variables;
   const plan = await postAccountsInstallationJson(
     c,
     caller,
     TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
-    {
-      spaceId: params.spaceId,
-      source,
-    },
+    planBody,
   );
   if (plan.status >= 400) return plan;
   const expected = readAccountsExpectedGuard(plan.body);
+  const applyBody: Record<string, unknown> = {
+    accountId: params.spaceId,
+    spaceId: params.spaceId,
+    createdBySubject: caller.subject,
+    source,
+    expected,
+    mode: params.mode,
+  };
+  if (entry.modulePath) applyBody.modulePath = entry.modulePath;
+  if (hasDefaultAppVariables(entry)) applyBody.vars = entry.variables;
   return await postAccountsInstallationJson(
     c,
     caller,
     TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
-    {
-      accountId: params.spaceId,
-      spaceId: params.spaceId,
-      createdBySubject: caller.subject,
-      source,
-      expected,
-      mode: params.mode,
-    },
+    applyBody,
   );
 }
 

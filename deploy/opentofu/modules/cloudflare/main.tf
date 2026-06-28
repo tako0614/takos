@@ -28,8 +28,8 @@ terraform {
 # fold those into this module when the provider catches up.
 #
 # Takosumi is OPTIONAL: running this same module through Takosumi adds the
-# Installation / Run / StateSnapshot / OutputSnapshot / Deployment ledger, policy decisions, audit
-# trail, and dashboard, and records the IDs below as OutputSnapshot. Takos has
+# Workspace / Project / Capsule / Run / StateVersion / Output ledger, policy decisions, audit
+# trail, and dashboard, and records the IDs below as Output. Takos has
 # no architectural privilege there — it is one plain OpenTofu module app.
 
 locals {
@@ -128,5 +128,5 @@ resource "cloudflare_queue" "this" {
 # Vectorize index — binding VECTORIZE.
 # The cloudflare/cloudflare v5 provider has no managed resource for Vectorize
 # indexes; the index is created out-of-band (wrangler `vectorize create` /
-# Cloudflare API as part of the Connection/CapabilityBinding/policy-controlled apply flow). Its expected name
+# Cloudflare API as part of the ProviderConnection / ProviderBinding / policy-controlled apply flow). Its expected name
 # is exported below so the binding map stays complete.

@@ -215,6 +215,8 @@ export function resolveFallbackDefaultAppDistribution(
   return assertUniqueEntries(
     FALLBACK_DEFAULT_APP_DISTRIBUTION.map((entry) => {
       const repositoryOverride = Reflect.get(env, entry.repositoryEnvKey);
+      const modulePath = Reflect.get(entry, "modulePath");
+      const variables = Reflect.get(entry, "variables");
       return normalizeEntry(
         {
           name: entry.name,
@@ -233,6 +235,8 @@ export function resolveFallbackDefaultAppDistribution(
           ref: defaults.refFromEnv ? defaults.ref : entry.ref,
           refType: defaults.refFromEnv ? defaults.refType : entry.refType,
           sourcePath: entry.sourcePath,
+          ...(typeof modulePath === "string" ? { modulePath } : {}),
+          ...(variables && typeof variables === "object" ? { variables } : {}),
           runtimeModes: entry.runtimeModes,
           bindings: entry.bindings,
           preinstall: "preinstall" in entry ? entry.preinstall : undefined,

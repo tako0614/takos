@@ -9,6 +9,34 @@
       "description": "Logical service slot for the Takos distribution profile. The slot names are fixed for Takos release validation; replaceable operator distributions vary by artifact, endpoint, and implementation behind the slot, not by changing this service-id vocabulary.",
       "type": "string",
       "enum": ["takos-agent", "takos-git", "takos-worker"]
+    },
+    "jsonValue": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/jsonValue"
+          }
+        }
+      ]
     }
   },
   "required": [
@@ -245,6 +273,19 @@
                 "type": "string",
                 "minLength": 1
               },
+              "modulePath": {
+                "type": "string",
+                "minLength": 1
+              },
+              "variables": {
+                "type": "object",
+                "propertyNames": {
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/jsonValue"
+                }
+              },
               "runtimeModes": {
                 "type": "array",
                 "minItems": 1,
@@ -278,7 +319,7 @@
               },
               "backendName": {
                 "type": "string",
-                "enum": ["cloudflare", "local"]
+                "enum": ["cloudflare", "local", "aws", "gcp", "k8s"]
               },
               "envName": {
                 "type": "string",
