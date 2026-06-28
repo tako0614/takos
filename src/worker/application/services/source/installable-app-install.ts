@@ -50,10 +50,12 @@ export const installableAppInstallDeps: {
 export type InstallableAppSourceInput = {
   gitUrl: string;
   ref: string;
+  modulePath?: string;
 };
 
 export type InstallableAppPlanInput = InstallableAppSourceInput & {
   spaceId: string;
+  variables?: Record<string, unknown>;
 };
 
 export type InstallableAppApplyInput = InstallableAppSourceInput & {
@@ -65,6 +67,8 @@ export type InstallableAppApplyInput = InstallableAppSourceInput & {
   sourceCommit?: string;
   expectedCommit?: string;
   expectedPlanDigest?: string;
+  expected?: Record<string, unknown>;
+  variables?: Record<string, unknown>;
   costAck?: boolean;
 };
 
@@ -462,7 +466,9 @@ export async function planInstallableAppInstallation(
         kind: "git",
         url: input.gitUrl,
         ref: input.ref,
+        ...(input.modulePath ? { modulePath: input.modulePath } : {}),
       },
+      ...(input.variables ? { variables: input.variables } : {}),
     },
     config.token,
   );
@@ -484,15 +490,19 @@ export async function applyInstallableAppInstallation(
         url: input.gitUrl,
         ref: input.ref,
         ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
+        ...(input.modulePath ? { modulePath: input.modulePath } : {}),
       },
-      ...(input.expectedCommit && input.expectedPlanDigest
-        ? {
-            expected: {
-              commit: input.expectedCommit,
-              planDigest: input.expectedPlanDigest,
-            },
-          }
-        : {}),
+      ...(input.expected
+        ? { expected: input.expected }
+        : input.expectedCommit && input.expectedPlanDigest
+          ? {
+              expected: {
+                commit: input.expectedCommit,
+                planDigest: input.expectedPlanDigest,
+              },
+            }
+          : {}),
+      ...(input.variables ? { vars: input.variables } : {}),
       ...(input.mode ? { mode: input.mode } : {}),
       ...(input.runtimeBaseUrl ? { runtimeBaseUrl: input.runtimeBaseUrl } : {}),
       ...(input.costAck === undefined ? {} : { costAck: input.costAck }),
@@ -513,6 +523,7 @@ export async function planInstallableAppRevision(
         url: input.gitUrl,
         ref: input.ref,
         ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
+        ...(input.modulePath ? { modulePath: input.modulePath } : {}),
       },
       ...(input.reason ? { reason: input.reason } : {}),
     },
@@ -544,6 +555,7 @@ export async function applyInstallableAppRevision(
               url: input.gitUrl,
               ref: input.ref,
               ...(input.sourceCommit ? { commit: input.sourceCommit } : {}),
+              ...(input.modulePath ? { modulePath: input.modulePath } : {}),
             },
             ...(input.expectedCommit &&
             input.expectedPlanDigest &&

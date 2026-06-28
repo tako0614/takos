@@ -73,7 +73,8 @@ const DEFAULT_APP_SOURCES = [
     packageName: "@takos/yurucommu",
     ref: "master",
     refType: "branch",
-    sourcePath: "main.tf",
+    sourcePath: undefined,
+    modulePath: ".",
     preinstall: true,
   },
   {
@@ -121,12 +122,7 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
 
   assertEquals(
     entries.map((entry) => entry.name),
-    [
-      "takos-office",
-      "takos-computer",
-      "yurucommu",
-      "road-to-me",
-    ],
+    ["takos-office", "takos-computer", "yurucommu", "road-to-me"],
   );
   assertEquals(
     entries.map((entry) => entry.preinstall),
@@ -148,6 +144,10 @@ test("resolveDefaultAppDistribution returns default app fallback set", () => {
   assertEquals(
     entries.map((entry) => entry.sourcePath),
     DEFAULT_APP_SOURCES.map((source) => source.sourcePath),
+  );
+  assertEquals(
+    entries.map((entry) => entry.modulePath ?? null),
+    DEFAULT_APP_SOURCES.map((source) => source.modulePath ?? null),
   );
   assertEquals(
     entries
@@ -203,6 +203,7 @@ test("resolveDefaultAppDistribution stays in sync with installable source packag
     assertEquals(expected.name, source.packageName);
     assert(typeof expected.version === "string" && expected.version.length > 0);
     assertEquals(entry.sourcePath, source.sourcePath);
+    assertEquals(entry.modulePath, source.modulePath);
     assertEquals(entry.ref, source.ref);
     assertEquals(entry.refType, source.refType);
     assertEquals(entry.preinstall, source.preinstall);
@@ -376,12 +377,7 @@ test("resolveDefaultAppDistributionForBootstrap honors the preinstall kill switc
 
   assertEquals(
     entries.map((entry) => entry.name),
-    [
-      "takos-office",
-      "takos-computer",
-      "yurucommu",
-      "road-to-me",
-    ],
+    ["takos-office", "takos-computer", "yurucommu", "road-to-me"],
   );
   assertEquals(
     entries.every((entry) => entry.preinstall === false),
@@ -626,12 +622,7 @@ test("resolveDefaultAppDistributionForBootstrap falls back when DB read fails", 
 
     assertEquals(
       entries.map((entry) => entry.name),
-      [
-        "takos-office",
-        "takos-computer",
-        "yurucommu",
-        "road-to-me",
-      ],
+      ["takos-office", "takos-computer", "yurucommu", "road-to-me"],
     );
   } finally {
     clearDefaultAppDistributionCache();
@@ -1685,11 +1676,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
 
     assertEquals(
       installed.map((entry) => entry.name),
-      [
-        "takos-office",
-        "takos-computer",
-        "yurucommu",
-      ],
+      ["takos-office", "takos-computer", "yurucommu"],
     );
     assertEquals(fetchCalls.length, 6);
     assertEquals(
@@ -1725,6 +1712,26 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
             objectRecord(call.body.source, "install request source").ref,
         ),
       ["v0.1.0", "v2.1.2", "master"],
+    );
+    assertEquals(
+      fetchCalls
+        .filter((_, index) => index % 2 === 0)
+        .map(
+          (call) =>
+            objectRecord(call.body.source, "install request source")
+              .modulePath ?? null,
+        ),
+      [null, null, "."],
+    );
+    assertEquals(
+      fetchCalls
+        .filter((_, index) => index % 2 === 1)
+        .map(
+          (call) =>
+            objectRecord(call.body.source, "install request source")
+              .modulePath ?? null,
+        ),
+      [null, null, "."],
     );
     assertEquals(
       fetchCalls

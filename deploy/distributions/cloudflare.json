@@ -88,11 +88,10 @@
         "repositoryUrl": "https://github.com/tako0614/yurucommu.git",
         "ref": "master",
         "refType": "branch",
-        "sourcePath": "main.tf",
+        "modulePath": ".",
         "preinstall": true,
         "variables": {
           "enable_cloudflare_resources": true,
-          "cloudflare_account_id": "cloudflare-account-id",
           "project_name": "yurucommu",
           "worker_name": "yurucommu"
         }

@@ -35,6 +35,7 @@ interface InstallPlanResponse {
     commit?: string;
     planDigest?: string;
     currentDeploymentId?: string | null;
+    [key: string]: unknown;
   };
   changes?: Array<{
     op?: string;
@@ -88,6 +89,7 @@ interface RevisionPlanResponse {
     commit?: string;
     planDigest?: string;
     currentDeploymentId?: string | null;
+    [key: string]: unknown;
   };
   planDigest?: string;
   preview: {
@@ -115,9 +117,7 @@ interface RevisionPlanResponse {
 }
 
 type GitUrlPreviewResponse =
-  | InstallPlanResponse
-  | InstallCatalogPlanResponse
-  | RevisionPlanResponse;
+  InstallPlanResponse | InstallCatalogPlanResponse | RevisionPlanResponse;
 
 function isRevisionPreview(
   value: GitUrlPreviewResponse,
@@ -174,7 +174,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
   ): number | undefined =>
     "cost" in currentPreview
       ? (currentPreview as { cost?: { meteredBindingCount?: number } }).cost
-        ?.meteredBindingCount
+          ?.meteredBindingCount
       : undefined;
 
   const previewBindingLabels = (
@@ -249,6 +249,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           body: JSON.stringify({
             git_url: gitUrl().trim(),
             ref: ref().trim(),
+            module_path: ".",
             ...(revision
               ? {
                   installation_id: revision.installationId,
@@ -300,11 +301,13 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
         ? {
             git_url: gitUrl().trim(),
             ref: ref().trim(),
+            module_path: ".",
             installation_id: revision.installationId,
             operation: revision.operation,
             ...(sourceCommit ? { source_commit: sourceCommit } : {}),
             ...(revision.operation === "upgrade"
               ? {
+                  ...(expected ? { expected } : {}),
                   expected_commit: expected?.commit ?? sourceCommit,
                   expected_plan_digest: planDigest,
                   expected_current_deployment_id:
@@ -317,7 +320,9 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
           : {
               git_url: gitUrl().trim(),
               ref: ref().trim(),
+              module_path: ".",
               ...(mode() ? { mode: mode() } : {}),
+              ...(expected ? { expected } : {}),
               expected_commit: expected?.commit ?? sourceCommit,
               expected_plan_digest: planDigest,
               cost_ack: true,
@@ -476,9 +481,7 @@ export function GitUrlInstallModal(props: GitUrlInstallModalProps) {
                 </div>
               </div>
 
-              <Show
-                when={(previewMeteredCount(currentPreview()) ?? 0) > 0}
-              >
+              <Show when={(previewMeteredCount(currentPreview()) ?? 0) > 0}>
                 <div class="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
                   {t("meteredBindingsNotice", {
                     count: String(previewMeteredCount(currentPreview()) ?? 0),

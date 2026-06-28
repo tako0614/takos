@@ -340,6 +340,10 @@ test("app-installations route proxies Git URL install plan Run", async () => {
         body: JSON.stringify({
           git_url: "https://github.com/example/app.git",
           ref: "v1.2.3",
+          module_path: ".",
+          variables: {
+            worker_name: "example-app",
+          },
         }),
       },
       {
@@ -374,6 +378,10 @@ test("app-installations route proxies Git URL install plan Run", async () => {
             kind: "git",
             url: "https://github.com/example/app.git",
             ref: "v1.2.3",
+            modulePath: ".",
+          },
+          variables: {
+            worker_name: "example-app",
           },
         },
       },
@@ -540,9 +548,20 @@ test("app-installations route applies Git URL install with same-origin Accounts 
         body: JSON.stringify({
           git_url: "https://github.com/example/app.git",
           ref: "v1.2.3",
+          module_path: ".",
           mode: "shared-cell",
-          expected_commit: "1111111111111111111111111111111111111111",
-          expected_plan_digest: "sha256:abc",
+          expected: {
+            planRunId: "run_plan_1",
+            runnerProfileId: "runner_default",
+            sourceDigest: "sha256:source",
+            variablesDigest: "sha256:variables",
+            policyDecisionDigest: "sha256:policy",
+            planDigest: "sha256:abc",
+            planArtifactDigest: "sha256:artifact",
+          },
+          variables: {
+            worker_name: "example-app",
+          },
         }),
       },
       { DB: {} } as Env,
@@ -578,16 +597,26 @@ test("app-installations route applies Git URL install with same-origin Accounts 
         cookie: "takosumi_session=sess_owner",
         body: {
           accountId: "space-1",
+          workspaceId: "space-1",
           spaceId: "space-1",
           createdBySubject: "tsub_owner",
           source: {
             kind: "git",
             url: "https://github.com/example/app.git",
             ref: "v1.2.3",
+            modulePath: ".",
           },
           expected: {
-            commit: "1111111111111111111111111111111111111111",
+            planRunId: "run_plan_1",
+            runnerProfileId: "runner_default",
+            sourceDigest: "sha256:source",
+            variablesDigest: "sha256:variables",
+            policyDecisionDigest: "sha256:policy",
             planDigest: "sha256:abc",
+            planArtifactDigest: "sha256:artifact",
+          },
+          vars: {
+            worker_name: "example-app",
           },
           mode: "shared-cell",
         },
@@ -1057,8 +1086,7 @@ test("app-installations route requires Git URL install approval evidence", async
     assertObjectMatch(body, {
       error: {
         code: "BAD_REQUEST",
-        message:
-          "expected_commit and expected_plan_digest are required after install plan Run approval",
+        message: "expected guard is required after install plan Run approval",
       },
     });
   } finally {

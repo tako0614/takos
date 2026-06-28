@@ -49,6 +49,9 @@ type InstallableAppApplyBody = {
   app_id?: unknown;
   git_url?: unknown;
   ref?: unknown;
+  path?: unknown;
+  module_path?: unknown;
+  modulePath?: unknown;
   mode?: unknown;
   runtime_base_url?: unknown;
   source_commit?: unknown;
@@ -56,6 +59,8 @@ type InstallableAppApplyBody = {
   expected_plan_digest?: unknown;
   expected_current_deployment_id?: unknown;
   expected?: unknown;
+  variables?: unknown;
+  vars?: unknown;
   installation_id?: unknown;
   operation?: unknown;
   reason?: unknown;
@@ -129,10 +134,12 @@ function readBodyMode(
 function readBodyInstallSource(body: InstallableAppApplyBody): {
   gitUrl: string;
   ref: string;
+  modulePath?: string;
 } | null {
   const gitUrl = readString(body.git_url);
   const ref = readString(body.ref);
-  const hasPartialSource = Boolean(gitUrl || ref);
+  const modulePath = readOptionalBodyModulePath(body);
+  const hasPartialSource = Boolean(gitUrl || ref || modulePath);
   if (!hasPartialSource) return null;
   if (!gitUrl || !ref) {
     throw new BadRequestError("git_url and ref are required");
@@ -141,6 +148,7 @@ function readBodyInstallSource(body: InstallableAppApplyBody): {
   return {
     gitUrl,
     ref,
+    ...(modulePath ? { modulePath } : {}),
   };
 }
 
@@ -174,6 +182,29 @@ function assertBrowserGitUrl(gitUrl: string): void {
   }
 }
 
+function readOptionalBodyModulePath(
+  body: InstallableAppApplyBody,
+): string | undefined {
+  const modulePath =
+    readString(body.modulePath) ??
+    readString(body.module_path) ??
+    readString(body.path);
+  if (!modulePath) return undefined;
+  assertSafeModulePath(modulePath);
+  return modulePath;
+}
+
+function assertSafeModulePath(modulePath: string): void {
+  if (
+    modulePath.startsWith("/") ||
+    modulePath.split("/").some((part) => part === "..")
+  ) {
+    throw new BadRequestError(
+      "module_path must be a repository-relative OpenTofu module directory",
+    );
+  }
+}
+
 function readOptionalBodyMode(
   body: InstallableAppApplyBody,
 ): string | undefined {
@@ -184,6 +215,12 @@ function readOptionalBodyRuntimeBaseUrl(
   body: InstallableAppApplyBody,
 ): string | undefined {
   return readString(body.runtime_base_url) ?? undefined;
+}
+
+function readOptionalBodyVariables(
+  body: InstallableAppApplyBody,
+): Record<string, unknown> | undefined {
+  return readRecord(body.variables) ?? readRecord(body.vars) ?? undefined;
 }
 
 function readOptionalBodyBoolean(
@@ -620,6 +657,25 @@ function readBodyExpectedPlanDigest(
   );
 }
 
+function readBodyExpectedGuard(
+  body: InstallableAppApplyBody,
+): Record<string, unknown> | null {
+  return readRecord(body.expected);
+}
+
+function gitSourceBody(source: {
+  gitUrl: string;
+  ref: string;
+  modulePath?: string;
+}): Record<string, unknown> {
+  return {
+    kind: "git",
+    url: source.gitUrl,
+    ref: source.ref,
+    ...(source.modulePath ? { modulePath: source.modulePath } : {}),
+  };
+}
+
 function readBodyExpectedCurrentDeploymentId(body: InstallableAppApplyBody): {
   provided: boolean;
   value: string | null;
@@ -740,6 +796,7 @@ appInstallationsRouter.post(
     if (!source) {
       throw new BadRequestError("git_url and ref are required");
     }
+    const variables = readOptionalBodyVariables(body);
     const caller = await resolveAccountsSessionCaller(c);
     if (caller) {
       const upstream = await postAccountsInstallationJson(
@@ -747,12 +804,10 @@ appInstallationsRouter.post(
         caller,
         TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
         {
+          workspaceId: space.id,
           spaceId: space.id,
-          source: {
-            kind: "git",
-            url: source.gitUrl,
-            ref: source.ref,
-          },
+          source: gitSourceBody(source),
+          ...(variables ? { variables } : {}),
         },
       );
       return jsonFromUpstream(c, upstream);
@@ -769,6 +824,7 @@ appInstallationsRouter.post(
         {
           ...source,
           spaceId: space.id,
+          ...(variables ? { variables } : {}),
         },
         installConfig,
       );
@@ -791,13 +847,15 @@ appInstallationsRouter.post(
     }
 
     const costAck = readOptionalBodyBoolean(body, "cost_ack");
+    const expected = readBodyExpectedGuard(body);
     const expectedCommit = readBodyExpectedCommit(body) ?? undefined;
     const expectedPlanDigest = readBodyExpectedPlanDigest(body) ?? undefined;
-    if (!expectedCommit || !expectedPlanDigest) {
+    if (!expected && (!expectedCommit || !expectedPlanDigest)) {
       throw new BadRequestError(
-        "expected_commit and expected_plan_digest are required after install plan Run approval",
+        "expected guard is required after install plan Run approval",
       );
     }
+    const variables = readOptionalBodyVariables(body);
 
     const caller = await resolveAccountsSessionCaller(c);
     if (caller) {
@@ -809,18 +867,16 @@ appInstallationsRouter.post(
         TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
         {
           accountId: space.id,
+          workspaceId: space.id,
           spaceId: space.id,
           createdBySubject: caller.subject,
-          source: {
-            kind: "git",
-            url: source.gitUrl,
-            ref: source.ref,
-          },
-          expected: {
+          source: gitSourceBody(source),
+          expected: expected ?? {
             commit: expectedCommit,
             planDigest: expectedPlanDigest,
           },
           mode,
+          ...(variables ? { vars: variables } : {}),
           ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
           ...(costAck === undefined ? {} : { costAck }),
         },
@@ -853,8 +909,10 @@ appInstallationsRouter.post(
           subject: installConfig.subject,
           ...(mode ? { mode } : {}),
           ...(runtimeBaseUrl ? { runtimeBaseUrl } : {}),
+          ...(expected ? { expected } : {}),
           ...(expectedCommit ? { expectedCommit } : {}),
           ...(expectedPlanDigest ? { expectedPlanDigest } : {}),
+          ...(variables ? { variables } : {}),
           ...(costAck === undefined ? {} : { costAck }),
         },
         installConfig,
@@ -889,9 +947,7 @@ appInstallationsRouter.post(
         `${accountsInstallationsPath(installationId)}/deployments/plan-runs`,
         {
           source: {
-            kind: "git",
-            url: source.gitUrl,
-            ref: source.ref,
+            ...gitSourceBody(source),
             ...(sourceCommit ? { commit: sourceCommit } : {}),
           },
           ...(reason ? { reason } : {}),
@@ -963,9 +1019,7 @@ appInstallationsRouter.post(
           ? { deploymentId: source.ref }
           : {
               source: {
-                kind: "git",
-                url: source.gitUrl,
-                ref: source.ref,
+                ...gitSourceBody(source),
                 ...(sourceCommit ? { commit: sourceCommit } : {}),
               },
               ...(expectedCommit &&
