@@ -6,7 +6,6 @@ import {
   CANONICAL_RESOURCE_CAPABILITIES,
   resourcePublicTypeFromCapability,
 } from "../resources/capabilities.ts";
-import type { ArtifactKind } from "./models.ts";
 
 /**
  * The canonical manifest resource type is exactly the backend-independent
@@ -69,20 +68,11 @@ export type CanonicalBindingContract =
   | "durable_namespace"
   | "secret_text";
 
-export type ManifestWorkloadKind = "worker" | "container" | "service";
-export type ServiceExecutionProfile = "workers" | "oci-service";
-
 export interface CanonicalResourceDescriptor {
   manifestType: CanonicalManifestResourceType;
   resourceClass: CanonicalResourceClass;
   backing: CanonicalResourceBacking;
   bindingType: CanonicalBindingContract;
-}
-
-export interface CanonicalWorkloadDescriptor {
-  sourceKind: ManifestWorkloadKind;
-  executionProfile: ServiceExecutionProfile;
-  artifactKind: ArtifactKind;
 }
 
 /**
@@ -143,48 +133,10 @@ const RESOURCE_DESCRIPTORS: Record<
   }),
 ) as Record<CanonicalManifestResourceType, CanonicalResourceDescriptor>;
 
-const WORKLOAD_DESCRIPTORS: Record<
-  ManifestWorkloadKind,
-  CanonicalWorkloadDescriptor
-> = {
-  worker: {
-    sourceKind: "worker",
-    executionProfile: "workers",
-    artifactKind: "worker-bundle",
-  },
-  container: {
-    sourceKind: "container",
-    executionProfile: "oci-service",
-    artifactKind: "container-image",
-  },
-  service: {
-    sourceKind: "service",
-    executionProfile: "oci-service",
-    artifactKind: "container-image",
-  },
-};
-
-export function getCanonicalResourceDescriptor(
-  resource: CanonicalManifestResourceSpec,
-): CanonicalResourceDescriptor {
-  const descriptor = RESOURCE_DESCRIPTORS[resource.type] ??
-    inferCanonicalResourceDescriptor(resource.type);
-  if (!descriptor) {
-    throw new Error(`Unsupported resource type: ${resource.type}`);
-  }
-  return descriptor;
-}
-
 export function inferCanonicalResourceDescriptor(
   manifestType: string,
 ): CanonicalResourceDescriptor | null {
   return Object.prototype.hasOwnProperty.call(RESOURCE_DESCRIPTORS, manifestType)
     ? RESOURCE_DESCRIPTORS[manifestType as CanonicalManifestResourceType]
     : null;
-}
-
-export function getCanonicalWorkloadDescriptor(
-  sourceKind: ManifestWorkloadKind,
-): CanonicalWorkloadDescriptor {
-  return WORKLOAD_DESCRIPTORS[sourceKind];
 }

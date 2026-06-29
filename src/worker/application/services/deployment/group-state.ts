@@ -468,7 +468,3 @@ export function materializeRoutes(
     ]),
   );
 }
-
-// Silence unused-type warning: `AppManifestOverride` re-exported for callers
-// that still need the override shape.
-export type { AppManifestOverride };

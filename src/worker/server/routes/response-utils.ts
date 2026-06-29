@@ -15,24 +15,6 @@ const PUBLIC_INTERNAL_FIELD_NAMES = new Set([
   "backing_resource_name",
 ]);
 
-export function hasPublicInternalField(value: unknown): boolean {
-  if (Array.isArray(value)) {
-    return value.some((entry) => hasPublicInternalField(entry));
-  }
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  for (const [key, entry] of Object.entries(value)) {
-    if (PUBLIC_INTERNAL_FIELD_NAMES.has(key)) {
-      return true;
-    }
-    if (hasPublicInternalField(entry)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function stripPublicInternalFields<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((entry) => stripPublicInternalFields(entry)) as T;

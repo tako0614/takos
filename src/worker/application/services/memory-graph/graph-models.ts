@@ -78,15 +78,6 @@ export interface ClaimEdge {
   createdAt: string;
 }
 
-export interface ClaimEdgeInsert {
-  id: string;
-  accountId: string;
-  sourceClaimId: string;
-  targetClaimId: string;
-  relation: ClaimRelation;
-  weight?: number;
-}
-
 export interface ClaimPath {
   id: string;
   accountId: string;

@@ -290,16 +290,6 @@ export function getResourceTypeQueryValues(typeOrCapability: string): string[] {
   return RESOURCE_QUERY_VALUES_BY_CAPABILITY[capability];
 }
 
-export function isCanonicalResourceCapability(
-  type?: string | null,
-): type is ResourceCapability {
-  if (!type) return false;
-  return Object.prototype.hasOwnProperty.call(
-    RESOURCE_IMPLEMENTATION_BY_CAPABILITY,
-    type,
-  );
-}
-
 export function toPublicResourceType(
   type?: string | null,
   config?: string | Record<string, unknown> | null,

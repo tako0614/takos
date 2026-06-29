@@ -2,10 +2,8 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type {
   Claim,
   ClaimEdge,
-  ClaimEdgeInsert,
   ClaimInsert,
   ClaimPath,
-  ClaimStatus,
   Evidence,
   EvidenceInsert,
 } from "./graph-models.ts";
@@ -50,15 +48,6 @@ const UPSERT_CLAIM_SQL = `${INSERT_CLAIM_SQL}
      source_run_id = excluded.source_run_id,
      updated_at = excluded.updated_at
    WHERE memory_claims.account_id = excluded.account_id`;
-
-export async function insertClaim(
-  db: SqlDatabaseBinding,
-  claim: ClaimInsert,
-): Promise<void> {
-  await db.prepare(INSERT_CLAIM_SQL).bind(
-    ...claimBindParams(claim, new Date().toISOString()),
-  ).run();
-}
 
 export async function upsertClaim(
   db: SqlDatabaseBinding,
@@ -128,24 +117,6 @@ export async function searchClaims(
   ).bind(accountId, pattern, pattern, pattern, limit).all();
 
   return (result.results ?? []).map(rowToClaim);
-}
-
-/**
- * Updates a claim's status. The caller MUST pass `accountId` so that the
- * UPDATE is scoped to the owning tenant; without that predicate, a caller
- * holding a foreign `claimId` could mutate another tenant's claim.
- */
-export async function updateClaimStatus(
-  db: SqlDatabaseBinding,
-  accountId: string,
-  claimId: string,
-  status: ClaimStatus,
-  supersededBy?: string,
-): Promise<void> {
-  const now = new Date().toISOString();
-  await db.prepare(
-    `UPDATE memory_claims SET status = ?, superseded_by = ?, updated_at = ? WHERE id = ? AND account_id = ?`,
-  ).bind(status, supersededBy ?? null, now, claimId, accountId).run();
 }
 
 function rowToClaim(row: Record<string, unknown>): Claim {
@@ -255,67 +226,6 @@ function rowToEvidence(row: Record<string, unknown>): Evidence {
   };
 }
 
-export async function insertEdge(
-  db: SqlDatabaseBinding,
-  edge: ClaimEdgeInsert,
-): Promise<void> {
-  const now = new Date().toISOString();
-  await db.prepare(
-    `INSERT INTO memory_claim_edges (id, account_id, source_claim_id, target_claim_id, relation, weight, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(
-    edge.id,
-    edge.accountId,
-    edge.sourceClaimId,
-    edge.targetClaimId,
-    edge.relation,
-    edge.weight ?? 1.0,
-    now,
-  ).run();
-}
-
-/**
- * Returns outgoing edges from `claimId`, scoped to the owning tenant. The
- * JOIN against memory_claims + account_id predicate prevents cross-tenant
- * graph traversal.
- */
-export async function getEdgesFrom(
-  db: SqlDatabaseBinding,
-  accountId: string,
-  claimId: string,
-): Promise<ClaimEdge[]> {
-  const result = await db.prepare(
-    `SELECT e.id, e.account_id, e.source_claim_id, e.target_claim_id, e.relation, e.weight, e.created_at
-     FROM memory_claim_edges AS e
-     INNER JOIN memory_claims AS c
-       ON c.id = e.source_claim_id AND c.account_id = e.account_id
-     WHERE e.source_claim_id = ? AND e.account_id = ?`,
-  ).bind(claimId, accountId).all();
-
-  return (result.results ?? []).map(rowToEdge);
-}
-
-/**
- * Returns incoming edges to `claimId`, scoped to the owning tenant. The JOIN
- * against memory_claims + account_id predicate prevents cross-tenant graph
- * traversal.
- */
-export async function getEdgesTo(
-  db: SqlDatabaseBinding,
-  accountId: string,
-  claimId: string,
-): Promise<ClaimEdge[]> {
-  const result = await db.prepare(
-    `SELECT e.id, e.account_id, e.source_claim_id, e.target_claim_id, e.relation, e.weight, e.created_at
-     FROM memory_claim_edges AS e
-     INNER JOIN memory_claims AS c
-       ON c.id = e.target_claim_id AND c.account_id = e.account_id
-     WHERE e.target_claim_id = ? AND e.account_id = ?`,
-  ).bind(claimId, accountId).all();
-
-  return (result.results ?? []).map(rowToEdge);
-}
-
 export async function getEdgesForAccount(
   db: SqlDatabaseBinding,
   accountId: string,
@@ -389,16 +299,6 @@ export async function deletePathsForAccount(
   await db.prepare(
     `DELETE FROM memory_paths WHERE account_id = ?`,
   ).bind(accountId).run();
-}
-
-export async function countPathsForAccount(
-  db: SqlDatabaseBinding,
-  accountId: string,
-): Promise<number> {
-  const result = await db.prepare(
-    `SELECT COUNT(*) as cnt FROM memory_paths WHERE account_id = ?`,
-  ).bind(accountId).first();
-  return (result?.cnt as number) ?? 0;
 }
 
 function rowToPath(row: Record<string, unknown>): ClaimPath {

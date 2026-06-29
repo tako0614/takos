@@ -4,11 +4,9 @@ import type { Env } from "../../../shared/types/index.ts";
 import { ALL_API_BEARER_SCOPES } from "../../../shared/types/api-scopes.ts";
 import { normalizeEnvName } from "./crypto.ts";
 import type { SyncState } from "./repository.ts";
-import { RESERVED_TAKOS_PUBLICATION_MESSAGE } from "../identity/takos-access-tokens.ts";
 import { accounts, getDb } from "../../../infra/db/index.ts";
 import {
   BadRequestError,
-  GoneError,
   NotFoundError,
 } from "@takos/worker-platform-utils/errors";
 
@@ -72,24 +70,6 @@ export function resolveTakosApiUrl(
   return `https://${adminDomain}`;
 }
 
-export function resolveTakosInternalApiUrl(
-  env: Pick<Env, "ADMIN_DOMAIN" | "TAKOS_INTERNAL_API_URL">,
-): string | null {
-  const internalUrl = String(env.TAKOS_INTERNAL_API_URL || "").trim();
-  if (internalUrl) {
-    try {
-      const parsed = new URL(internalUrl);
-      parsed.pathname = parsed.pathname.replace(/\/+$/, "");
-      parsed.search = "";
-      parsed.hash = "";
-      return parsed.toString().replace(/\/$/, "");
-    } catch {
-      throw new Error("TAKOS_INTERNAL_API_URL must be an absolute URL");
-    }
-  }
-  return resolveTakosApiUrl(env);
-}
-
 async function loadSpaceIdentity(
   db: SqlDatabaseBinding,
   spaceId: string,
@@ -118,33 +98,6 @@ async function loadSpaceIdentity(
   };
 }
 
-export async function resolveTakosTokenSubject(params: {
-  env: Pick<Env, "DB">;
-  spaceId: string;
-}): Promise<{
-  subjectUserId: string;
-  subjectMode: TakosTokenSubjectMode;
-  space: SpaceIdentityRow;
-}> {
-  const space = await loadSpaceIdentity(params.env.DB, params.spaceId);
-  if (!space) {
-    throw new NotFoundError(`Space ${params.spaceId}`);
-  }
-  if (space.kind === "user") {
-    return {
-      subjectUserId: space.owner_user_id,
-      subjectMode: "owner_principal",
-      space,
-    };
-  }
-  // For team spaces, the account id itself acts as the principal
-  return {
-    subjectUserId: space.owner_user_id,
-    subjectMode: "space_agent",
-    space,
-  };
-}
-
 export async function deleteManagedTakosTokenConfig(params: {
   env: Pick<Env, "DB">;
   spaceId: string;
@@ -160,20 +113,6 @@ export async function deleteManagedTakosTokenConfig(params: {
     throw new Error("deleteManagedTakosTokenConfig requires a serviceId");
   }
   void envName;
-}
-
-export async function ensureManagedTakosTokenValue(_params: {
-  env: Pick<Env, "DB" | "ENCRYPTION_KEY">;
-  spaceId: string;
-  serviceId?: string;
-  workerId?: string;
-  envName?: string;
-}): Promise<{
-  value: string;
-  scopes: string[];
-  subjectMode: TakosTokenSubjectMode;
-} | null> {
-  throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
 }
 
 export async function listTakosManagedStatuses(params: {
@@ -210,11 +149,4 @@ export async function listTakosManagedStatuses(params: {
         apiLinkState?.syncReason ?? (apiUrl ? null : "admin_domain_missing"),
     },
   };
-}
-
-export async function markManagedTakosTokenUsedByHash(
-  _db: SqlDatabaseBinding,
-  _tokenHash: string,
-): Promise<void> {
-  // App-local managed Takos tokens are not a current credential channel.
 }
