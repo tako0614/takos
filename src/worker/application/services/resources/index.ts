@@ -21,7 +21,6 @@ export {
 
 // bindings
 export {
-  buildBindingFromResource,
   countResourceBindings,
   createServiceBinding,
   deleteServiceBinding,

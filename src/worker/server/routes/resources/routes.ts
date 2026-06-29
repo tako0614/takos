@@ -67,7 +67,6 @@ import {
 } from "./secret-rotation.ts";
 
 export { stripPublicResourceBackingFields };
-export { verifyResourceSecretValue } from "./secret-rotation.ts";
 
 const resourcesBase = new Hono<AuthenticatedRouteEnv>();
 

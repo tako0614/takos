@@ -90,38 +90,6 @@ async function clearExpiredPreviousSecret(
   return { previousValue: null, previousExpiresAt: null };
 }
 
-/**
- * Verify a presented secret value against both the current value and the
- * (still in-grace) previous value. Exposed so future authentication paths
- * can perform dual-value verification without re-reading the schema.
- */
-export async function verifyResourceSecretValue(
-  dbBinding: ReturnType<typeof requireDbBinding>,
-  resource: ResourceRecord,
-  presented: string,
-  encryptionKey?: string | undefined,
-): Promise<boolean> {
-  if (!presented) return false;
-  const current = await readResourceSecretValue(
-    dbBinding,
-    resource,
-    encryptionKey,
-  );
-  if (current && presented === current) return true;
-
-  const initial = await getSecretRotationState(
-    dbBinding,
-    resource.id,
-    encryptionKey,
-  );
-  const state = await clearExpiredPreviousSecret(
-    dbBinding,
-    resource.id,
-    initial,
-  );
-  return state.previousValue !== null && presented === state.previousValue;
-}
-
 export async function readResourceSecretValue(
   dbBinding: ReturnType<typeof requireDbBinding>,
   resource: ResourceRecord,
@@ -262,9 +230,7 @@ export async function rotateResourceSecretValue(
 
   // 24h grace period: capture the current value before mutating, then store
   // it as `previous_secret_value` with an expiry of `now + 24h`. Any read or
-  // rotate operation after the expiry will lazy-clear these columns. Future
-  // verification paths should use `verifyResourceSecretValue` to check both
-  // the current and grace-period value.
+  // rotate operation after the expiry will lazy-clear these columns.
   if (backendName && backendName !== "cloudflare") {
     // For portable backends we must capture the existing value BEFORE the
     // delete-and-regenerate cycle, otherwise the old material is lost.
