@@ -4,10 +4,9 @@ import type {
 } from "../../../shared/types/bindings.ts";
 import type { Repository } from "../../../shared/types/index.ts";
 import { toApiRepositoryFromDb } from "./repos.ts";
-import { repoReleases, repositories } from "../../../infra/db/index.ts";
-import { and, desc, eq } from "drizzle-orm";
+import { repositories } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 import { sourceServiceDeps } from "./deps.ts";
 
 export interface ForkOptions {
@@ -24,29 +23,6 @@ export interface ForkResult {
     space_id: string;
   };
   workflows_copied?: number;
-}
-
-export interface SyncStatus {
-  can_sync: boolean;
-  can_fast_forward: boolean;
-  commits_behind: number;
-  commits_ahead: number;
-  has_conflicts: boolean;
-  upstream: {
-    id: string;
-    name: string;
-    space_id: string;
-    default_branch: string;
-  } | null;
-  upstream_releases: UpstreamRelease[];
-}
-
-export interface UpstreamRelease {
-  id: string;
-  tag: string;
-  name: string | null;
-  published_at: string | null;
-  is_newer: boolean;
 }
 
 export interface SyncOptions {
@@ -151,82 +127,6 @@ export async function forkWithWorkflows(
       space_id: sourceRepo.accountId,
     },
     workflows_copied: workflowsCopied,
-  };
-}
-
-/**
- * Get sync status between a fork and its upstream
- */
-export async function getSyncStatus(
-  db: SqlDatabaseBinding,
-  bucket: ObjectStoreBinding | undefined,
-  repoId: string,
-): Promise<SyncStatus> {
-  const drizzle = sourceServiceDeps.getDb(db);
-
-  const repo = await drizzle.select().from(repositories).where(
-    eq(repositories.id, repoId),
-  ).get();
-
-  if (!repo) {
-    throw new Error("Repository not found");
-  }
-
-  const noSyncResult: SyncStatus = {
-    can_sync: false,
-    can_fast_forward: false,
-    commits_behind: 0,
-    commits_ahead: 0,
-    has_conflicts: false,
-    upstream: null,
-    upstream_releases: [],
-  };
-
-  if (!repo.forkedFromId) {
-    return noSyncResult;
-  }
-
-  const upstream = await drizzle.select().from(repositories).where(
-    eq(repositories.id, repo.forkedFromId),
-  ).get();
-
-  if (!upstream) {
-    return noSyncResult;
-  }
-
-  let syncStatus = {
-    can_sync: false,
-    can_fast_forward: false,
-    commits_behind: 0,
-    commits_ahead: 0,
-    has_conflict: false,
-  };
-
-  if (bucket) {
-    const branchName = repo.defaultBranch || "main";
-    syncStatus = await sourceServiceDeps.gitStore.checkSyncStatus(
-      db,
-      bucket,
-      repoId,
-      branchName,
-    );
-  }
-
-  const upstreamReleases = await getUpstreamReleases(db, upstream.id, repoId);
-
-  return {
-    can_sync: syncStatus.can_sync,
-    can_fast_forward: syncStatus.can_fast_forward,
-    commits_behind: syncStatus.commits_behind,
-    commits_ahead: syncStatus.commits_ahead,
-    has_conflicts: syncStatus.has_conflict,
-    upstream: {
-      id: upstream.id,
-      name: upstream.name,
-      space_id: upstream.accountId,
-      default_branch: upstream.defaultBranch,
-    },
-    upstream_releases: upstreamReleases,
   };
 }
 
@@ -374,38 +274,4 @@ async function copyWorkflows(
     });
     return 0;
   }
-}
-
-/**
- * Get releases from upstream that are newer than fork's last sync
- */
-async function getUpstreamReleases(
-  db: SqlDatabaseBinding,
-  upstreamId: string,
-  forkId: string,
-): Promise<UpstreamRelease[]> {
-  const drizzle = sourceServiceDeps.getDb(db);
-
-  const fork = await drizzle.select({ createdAt: repositories.createdAt }).from(
-    repositories,
-  ).where(eq(repositories.id, forkId)).get();
-
-  const forkCreatedAt = fork?.createdAt || "1970-01-01T00:00:00Z";
-
-  const releases = await drizzle.select({
-    id: repoReleases.id,
-    tag: repoReleases.tag,
-    name: repoReleases.name,
-    publishedAt: repoReleases.publishedAt,
-  }).from(repoReleases).where(
-    and(eq(repoReleases.repoId, upstreamId), eq(repoReleases.isDraft, false)),
-  ).orderBy(desc(repoReleases.publishedAt)).limit(5).all();
-
-  return releases.map((r) => ({
-    id: r.id,
-    tag: r.tag,
-    name: r.name,
-    published_at: textDateNullable(r.publishedAt),
-    is_newer: r.publishedAt ? r.publishedAt > forkCreatedAt : false,
-  }));
 }

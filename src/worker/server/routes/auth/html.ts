@@ -94,26 +94,3 @@ export function errorPage(
 </div>`,
   );
 }
-
-/** Warning page (e.g. setup required) */
-export function warningPage(
-  title: string,
-  message: string,
-  linkHref?: string,
-  linkText?: string,
-): string {
-  const safeTitle = escapeHtml(title);
-  const safeMessage = escapeHtml(message);
-  const safeLinkHref = linkHref ? escapeAttr(linkHref) : undefined;
-  const safeLinkText = escapeHtml(linkText || "ホームに戻る");
-  return page(
-    title,
-    `
-<div class="card">
-  <div class="logo">🐙</div>
-  <h1 class="warning">${safeTitle}</h1>
-  <p class="message">${safeMessage}</p>
-  ${safeLinkHref ? `<a href="${safeLinkHref}">${safeLinkText}</a>` : ""}
-</div>`,
-  );
-}

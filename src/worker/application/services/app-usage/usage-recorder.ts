@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import {
   appUsageEvents,
@@ -180,21 +180,4 @@ export async function recordRunUsageBatch(
       });
     }
   }
-}
-
-export async function listAppUsageForOwner(
-  d1: AppUsageDb,
-  ownerAccountId: string,
-): Promise<{
-  events: unknown[];
-  rollups: unknown[];
-}> {
-  const db = getDb(d1);
-  const events = await db.select().from(appUsageEvents).where(
-    eq(appUsageEvents.ownerAccountId, ownerAccountId),
-  ).orderBy(desc(appUsageEvents.createdAt)).all();
-  const rollups = await db.select().from(appUsageRollups).where(
-    eq(appUsageRollups.ownerAccountId, ownerAccountId),
-  ).orderBy(desc(appUsageRollups.updatedAt)).all();
-  return { events, rollups };
 }

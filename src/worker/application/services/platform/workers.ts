@@ -56,15 +56,6 @@ export type ServiceRouteRecord = {
   slug: string | null;
 };
 
-export type ServiceRouteSummary = Pick<
-  ServiceRouteRecord,
-  "id" | "accountId" | "hostname" | "routeRef" | "slug"
->;
-
-export type ServiceRouteCleanupRecord = ServiceRouteSummary & {
-  config: string | null;
-};
-
 export function slugifyServiceName(name: string): string {
   return name
     .toLowerCase()
@@ -272,39 +263,6 @@ export async function listServiceRouteRecordsByIds(
     .where(inArray(services.id, serviceIds))
     .all();
   return rows.map(normalizeServiceRouteRecord);
-}
-
-export async function resolveServiceRouteSummaryForSpace(
-  d1: SqlDatabaseBinding,
-  spaceId: string,
-  reference: string,
-): Promise<ServiceRouteSummary | null> {
-  const service = await resolveServiceReferenceRecord(d1, spaceId, reference);
-  if (!service) return null;
-  return {
-    id: service.id,
-    accountId: service.accountId,
-    hostname: service.hostname,
-    routeRef: service.routeRef,
-    slug: service.slug,
-  };
-}
-
-export async function listSpaceServiceRouteCleanupRecords(
-  d1: SqlDatabaseBinding,
-  spaceId: string,
-): Promise<ServiceRouteCleanupRecord[]> {
-  const db = workerServiceDeps.getDb(d1);
-  return db.select({
-    id: services.id,
-    accountId: services.accountId,
-    hostname: services.hostname,
-    routeRef: services.routeRef,
-    slug: services.slug,
-    config: services.config,
-  }).from(services)
-    .where(eq(services.accountId, spaceId))
-    .all();
 }
 
 export async function getServiceForUser(

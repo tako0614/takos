@@ -55,25 +55,6 @@ export function isExpired(
 }
 
 // ---------------------------------------------------------------------------
-// Expiration computation
-// ---------------------------------------------------------------------------
-
-/**
- * Derive the epoch-seconds expiration value from `put()` options.
- * Returns `null` when no expiration is configured.
- */
-export function computeExpiration(options?: {
-  expiration?: number;
-  expirationTtl?: number;
-}): number | null {
-  if (options?.expiration !== undefined) return options.expiration;
-  if (options?.expirationTtl !== undefined) {
-    return nowEpoch() + options.expirationTtl;
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
 // Value coercion (read path)
 // ---------------------------------------------------------------------------
 
@@ -138,20 +119,4 @@ export async function serializeValue(
     offset += chunk.length;
   }
   return new TextDecoder().decode(combined);
-}
-
-// ---------------------------------------------------------------------------
-// Metadata helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Deserialise a metadata value. DynamoDB stores it as a JSON string;
- * Firestore stores it as a native map. This helper normalises both shapes.
- */
-export function deserializeMetadata(
-  raw: string | Record<string, string> | null | undefined,
-): Record<string, string> | null {
-  if (!raw) return null;
-  if (typeof raw === "string") return JSON.parse(raw) as Record<string, string>;
-  return raw;
 }

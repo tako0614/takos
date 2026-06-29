@@ -124,19 +124,6 @@ export interface ConversationHistoryDeps {
   aiModel: string;
 }
 
-export function normalizeRunStatus(
-  value: string | null | undefined,
-): RunStatus | null {
-  return value === "pending" ||
-      value === "queued" ||
-      value === "running" ||
-      value === "completed" ||
-      value === "failed" ||
-      value === "cancelled"
-    ? value
-    : null;
-}
-
 type MessageAttachmentRef = {
   file_id: string;
   path?: string;

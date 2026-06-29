@@ -1,7 +1,5 @@
 const MAX_OPAQUE_ID_LENGTH = 128;
 const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
-const MAX_LOOKUP_EMAIL_LENGTH = 320;
-const LOOKUP_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isInvalidArrayBufferError(error: unknown): boolean {
   const message = (() => {
@@ -51,12 +49,4 @@ export function textDateNullable(
   value: string | Date | null | undefined | unknown,
 ): string | null {
   return value == null ? null : textDate(value);
-}
-
-export function isValidLookupEmail(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const normalized = value.trim();
-  if (!normalized) return false;
-  if (normalized.length > MAX_LOOKUP_EMAIL_LENGTH) return false;
-  return LOOKUP_EMAIL_PATTERN.test(normalized);
 }

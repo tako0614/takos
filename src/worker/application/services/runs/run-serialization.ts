@@ -17,25 +17,3 @@ export type SpaceModelLookup = {
 export type D1CountRow = {
   count: number | string;
 };
-
-export const runSelect = {
-  id: true,
-  threadId: true,
-  spaceId: true,
-  sessionId: true,
-  parentRunId: true,
-  childThreadId: true,
-  rootThreadId: true,
-  rootRunId: true,
-  agentType: true,
-  status: true,
-  input: true,
-  output: true,
-  error: true,
-  usage: true,
-  serviceId: true,
-  serviceHeartbeat: true,
-  startedAt: true,
-  completedAt: true,
-  createdAt: true,
-} as const;

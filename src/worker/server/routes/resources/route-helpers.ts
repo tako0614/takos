@@ -1,13 +1,7 @@
 import { VECTORIZE_DEFAULT_DIMENSIONS } from "../../../shared/config/limits.ts";
-import type {
-  ResourceCapability,
-  ResourceType,
-} from "../../../shared/types/index.ts";
+import type { ResourceCapability } from "../../../shared/types/index.ts";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
-import {
-  toPublicResourceType,
-  toResourceCapability,
-} from "../../../application/services/resources/capabilities.ts";
+import { toResourceCapability } from "../../../application/services/resources/capabilities.ts";
 
 // Multi-cloud materialization is operator-substrate scope owned by Takosumi
 // runner policy, not the Takos worker. The worker resolves only the native
@@ -56,92 +50,6 @@ export function normalizeResourceBackend(
   return RESOURCE_BACKEND_VALUES.includes(backendName as ResourceBackendName)
     ? (backendName as ResourceBackendName)
     : undefined;
-}
-
-export function buildProjectedResourceSpec(
-  name: string,
-  body: {
-    type: ResourceType;
-    config?: Record<string, unknown>;
-  },
-) {
-  const config = body.config ?? {};
-  const canonicalType = toPublicResourceType(body.type, config) ?? body.type;
-  const workflowConfig = asObject(config.workflow);
-  const durableConfig = asObject(config.durableObject);
-  const binding =
-    typeof config.binding === "string" && config.binding.trim().length > 0
-      ? config.binding.trim()
-      : name.toUpperCase().replace(/-/g, "_");
-  switch (canonicalType) {
-    case "sql":
-      return { type: "d1" as const, binding };
-    case "object-store":
-      return { type: "r2" as const, binding };
-    case "key-value":
-      return { type: "kv" as const, binding };
-    case "queue":
-      return {
-        type: "queue" as const,
-        binding,
-        ...(asObject(config.queue) ? { queue: asObject(config.queue)! } : {}),
-      };
-    case "vector-index":
-      return {
-        type: "vectorize" as const,
-        binding,
-        ...(asObject(config.vectorize)
-          ? {
-              vectorize: config.vectorize as {
-                dimensions: number;
-                metric: "cosine" | "euclidean" | "dot-product";
-              },
-            }
-          : {}),
-      };
-    case "analytics-engine":
-      return {
-        type: "analyticsEngine" as const,
-        binding,
-        ...(asObject(config.analyticsEngine)
-          ? {
-              analyticsEngine: config.analyticsEngine as { dataset?: string },
-            }
-          : {}),
-      };
-    case "workflow":
-      return {
-        type: "workflow" as const,
-        binding,
-        workflow: {
-          service: String(config.service ?? workflowConfig?.service ?? ""),
-          export: String(config.export ?? workflowConfig?.export ?? ""),
-        },
-      };
-    case "durable-object":
-      return {
-        type: "durableObject" as const,
-        binding,
-        durableObject: {
-          className: String(config.className ?? durableConfig?.className ?? ""),
-          ...(typeof config.scriptName === "string"
-            ? { scriptName: config.scriptName }
-            : typeof durableConfig?.scriptName === "string"
-              ? { scriptName: durableConfig.scriptName }
-              : {}),
-        },
-      };
-    case "secret":
-      return {
-        type: "secretRef" as const,
-        binding,
-      };
-    default:
-      return {
-        type: canonicalType as ResourceType,
-        binding,
-      };
-  }
 }
 
 export function resolveRequestedBackingResourceName(

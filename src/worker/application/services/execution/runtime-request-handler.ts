@@ -1,5 +1,4 @@
 import type { DbEnv } from "../../../shared/types/index.ts";
-import { parseServiceResponse } from "../../../shared/utils/service-client.ts";
 import { recordAppUsage } from "../app-usage/usage-recorder.ts";
 import { withTimeout } from "../../../shared/utils/with-timeout.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
@@ -281,18 +280,4 @@ export async function callRuntime(
   timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ) {
   return callRuntimeRequest(env, endpoint, { method: "POST", body, timeoutMs });
-}
-
-/**
- * Call runtime and parse the JSON response with type safety.
- * Throws ServiceCallError on non-2xx responses.
- */
-export async function callRuntimeJson<T>(
-  env: RuntimeEnv,
-  endpoint: string,
-  body: Record<string, unknown>,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
-): Promise<T> {
-  const res = await callRuntime(env, endpoint, body, timeoutMs);
-  return parseServiceResponse<T>(res, "takos-runtime");
 }

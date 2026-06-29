@@ -106,16 +106,6 @@ export function getRequestedSpaceIdentifier(
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function requireTenantSource(
-  c: RouteHelperContext,
-  message = "Storage not configured",
-) {
-  if (!c.env.TENANT_SOURCE) {
-    throw new InternalError(message);
-  }
-  return c.env.TENANT_SOURCE;
-}
-
 export async function parseJsonBody<T>(
   c: RouteHelperContext,
   fallback: T,
