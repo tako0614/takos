@@ -445,8 +445,6 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     try {
       const plan = await analyzeTask(taskText, {
-        spaceId: task.space_id,
-        userId: user.id,
         tools: CUSTOM_TOOL_NAMES,
         apiKey,
         model,

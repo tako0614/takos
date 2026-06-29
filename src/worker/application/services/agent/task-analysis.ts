@@ -69,8 +69,6 @@ export const taskAnalysisDeps = {
 export async function analyzeTask(
   task: string,
   context: {
-    spaceId: string;
-    userId: string;
     tools: string[];
     apiKey: string;
     model?: string;

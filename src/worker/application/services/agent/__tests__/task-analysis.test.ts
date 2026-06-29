@@ -25,8 +25,6 @@ function stubLLM(content: string | (() => never)): void {
 }
 
 const ctx = {
-  spaceId: "s1",
-  userId: "u1",
   tools: ["search", "edit"],
   apiKey: "k",
 };

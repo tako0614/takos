@@ -32,7 +32,6 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .post("/repos/import-external", async (c) => {
     const user = c.get("user");
-    if (!user) throw new AuthenticationError();
 
     let body: {
       url?: string;
@@ -140,7 +139,6 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .post("/repos/:repoId/fetch-remote", async (c) => {
     const user = c.get("user");
-    if (!user) throw new AuthenticationError();
 
     const repoId = c.req.param("repoId");
     if (!repoId) throw new BadRequestError("repoId is required");
