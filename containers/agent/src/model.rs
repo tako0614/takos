@@ -302,8 +302,11 @@ impl TakosModelRunner {
 
     fn decode_openai_response(&self, text: &str) -> AppResult<ModelOutput> {
         let body: OpenAiChatCompletionResponse = serde_json::from_str(text).map_err(|err| {
+            // The raw body may contain a reflected credential; redact before it
+            // becomes an error string that is logged / persisted.
             io::Error::other(format!(
-                "failed to decode OpenAI response: {err}; body={text}"
+                "failed to decode OpenAI response: {err}; body={}",
+                sanitize_provider_error_body(text)
             ))
         })?;
         let choice =
@@ -413,7 +416,11 @@ fn is_openai_auth_failure(error: &str) -> bool {
 
 fn sanitize_provider_error_body(body: &str) -> String {
     const MAX_ERROR_BODY_CHARS: usize = 512;
-    let redacted = redact_secret_like_tokens(body);
+    // Use the shared strong redactor (provider keys, AWS ids, JWTs, Bearer
+    // pairs, emails) — NOT a `sk-`-only scrub — so a non-OpenAI provider key or
+    // a reflected Authorization header in the upstream error body is removed
+    // before the message reaches logs / persisted run records.
+    let redacted = crate::redaction::redact_secret_text(body);
     if redacted.chars().count() <= MAX_ERROR_BODY_CHARS {
         return redacted;
     }
@@ -423,20 +430,6 @@ fn sanitize_provider_error_body(body: &str) -> String {
         .collect::<String>();
     truncated.push_str("...");
     truncated
-}
-
-fn redact_secret_like_tokens(input: &str) -> String {
-    input
-        .split_whitespace()
-        .map(|part| {
-            if part.contains("sk-") {
-                "<redacted>"
-            } else {
-                part
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 fn flatten_message_content(content: Option<Value>) -> Option<String> {

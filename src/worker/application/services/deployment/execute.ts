@@ -15,6 +15,7 @@ import {
 import type { DeploymentBackendQueueConsumerSyncInput } from "./backend-contracts.ts";
 import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import {
+  claimDeploymentForExecution,
   getDeploymentById,
   getDeploymentCancellationRequestedAt,
   getDeploymentEvents,
@@ -23,7 +24,7 @@ import {
   logDeploymentEvent,
   updateDeploymentRecord,
 } from "./store.ts";
-import { executeDeploymentStep, updateDeploymentState } from "./state.ts";
+import { executeDeploymentStep } from "./state.ts";
 import {
   applyRoutingDbUpdates,
   applyRoutingToHostnames,
@@ -344,15 +345,18 @@ export async function executeDeploymentPipeline(
     throw new AppError(message);
   }
 
+  // Atomically claim the deployment before doing any work. This is the choke
+  // point that makes execution idempotent against an Idempotency-Key replay or a
+  // duplicate queue dispatch: only one runner can transition pending/failed ->
+  // in_progress, so a second concurrent invocation for the same deploymentId
+  // exits here instead of re-running the provider deploy and routing swap.
+  const claimed = await claimDeploymentForExecution(env.DB, deploymentId);
+  if (!claimed) {
+    return (await getDeploymentById(env.DB, deploymentId)) ?? deployment;
+  }
+
   const completedStepNames = resolveCompletedStepNames(
     await getDeploymentEvents(env.DB, deploymentId),
-  );
-
-  await updateDeploymentState(
-    env.DB,
-    deploymentId,
-    "in_progress",
-    deployment.deploy_state,
   );
   const deploymentServiceId = getDeploymentServiceId(deployment);
 

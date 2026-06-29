@@ -603,6 +603,68 @@ export async function createPostgresSqlDatabase(
   return db;
 }
 
+/**
+ * Establish DATABASE-ENFORCED tenant isolation for a portable-postgres resource
+ * schema. `search_path` is only name resolution, not a privilege boundary — when
+ * the tenant SQL adapter and the control plane share one Postgres database/role,
+ * a tenant could read/write `public.*` (accounts, sessions, resource secrets) and
+ * any other tenant's `resource_*.*` via fully-qualified names. The privilege
+ * boundary is a dedicated NOLOGIN role, 1:1 with the schema, that can only touch
+ * its own schema; every connection checkout enters it via `SET ROLE`, so Postgres
+ * itself rejects cross-schema access regardless of the SQL the tenant submits.
+ *
+ * Returns `{ ok: true }` only after probing that `SET ROLE` actually drops into
+ * the tenant role on this server. If the connection role cannot create/assume the
+ * role (e.g. lacks CREATEROLE and is not a superuser) the caller MUST fail closed
+ * rather than silently fall back to shared-role access.
+ */
+async function establishSchemaRoleIsolation(
+  pool: Pool,
+  schemaName: string,
+): Promise<{ ok: true; quotedRole: string } | { ok: false; reason: string }> {
+  // The role shares the schema name (roles and schemas are separate Postgres
+  // namespaces, so the 1:1 mapping is unambiguous). schemaName is already
+  // sanitized to [a-zA-Z0-9_] upstream (resolvePortableSqlSchemaName →
+  // sanitizeSqlIdentifier); the quoting/escaping below is defense-in-depth.
+  const quotedSchema = `"${schemaName.replace(/"/g, '""')}"`;
+  const quotedRole = `"${schemaName.replace(/"/g, '""')}"`;
+  const roleLiteral = `'${schemaName.replace(/'/g, "''")}'`;
+  try {
+    await pool.query(
+      `DO $$ BEGIN
+         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${roleLiteral}) THEN
+           CREATE ROLE ${quotedRole} NOLOGIN NOINHERIT;
+         END IF;
+       END $$;`,
+    );
+    await pool.query(`GRANT USAGE, CREATE ON SCHEMA ${quotedSchema} TO ${quotedRole}`);
+    await pool.query(
+      `GRANT ALL ON ALL TABLES IN SCHEMA ${quotedSchema} TO ${quotedRole}`,
+    );
+    await pool.query(
+      `GRANT ALL ON ALL SEQUENCES IN SCHEMA ${quotedSchema} TO ${quotedRole}`,
+    );
+    // Membership lets a non-superuser connection role assume the tenant role.
+    // Superusers (the documented node-postgres profile) can SET ROLE without it,
+    // and a CREATEROLE creator is already a member, so this is best-effort.
+    await pool.query(`GRANT ${quotedRole} TO CURRENT_USER`).catch(() => {});
+    // Definitive probe: SET ROLE must succeed for the isolation to be real.
+    const probe = await pool.connect();
+    try {
+      await probe.query(`SET ROLE ${quotedRole}`);
+      await probe.query("RESET ROLE");
+    } finally {
+      probe.release();
+    }
+    return { ok: true, quotedRole };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 export async function createSchemaScopedPostgresSqlDatabase(
   connectionString: string,
   schemaName: string,
@@ -610,6 +672,33 @@ export async function createSchemaScopedPostgresSqlDatabase(
   const pool = new Pool({ connectionString });
   const quotedSchema = `"${schemaName.replace(/"/g, '""')}"`;
   await pool.query(`CREATE SCHEMA IF NOT EXISTS ${quotedSchema}`);
+
+  // DB-enforced isolation is mandatory: without it a tenant SQL resource can
+  // reach the control plane (accounts/sessions/resource secrets in `public`) and
+  // other tenants' schemas. Fail closed if the connection role cannot establish
+  // it rather than serving cross-tenant access.
+  const isolation = await establishSchemaRoleIsolation(pool, schemaName);
+  if (!isolation.ok) {
+    await pool.end().catch(() => {});
+    throw new Error(
+      `portable_postgres_isolation_unavailable: cannot establish per-schema role ` +
+        `isolation for "${schemaName}" (${isolation.reason}). The Postgres ` +
+        `connection role must be able to CREATE ROLE and SET ROLE so tenant SQL ` +
+        `resources stay isolated from the control plane and other tenants. Grant ` +
+        `CREATEROLE (or use a superuser) on the self-host Postgres profile.`,
+    );
+  }
+  const quotedRole = isolation.quotedRole;
+
+  // Per-checkout scoping: enter the least-privilege tenant role, then pin
+  // search_path to ONLY the tenant schema (NOT `public`) so unqualified names
+  // cannot fall through to control-plane tables and qualified cross-schema names
+  // are rejected by the role's privileges.
+  async function applyScopedSession(client: PoolClient): Promise<void> {
+    await client.query(`SET ROLE ${quotedRole}`);
+    await client.query(`SET search_path TO ${quotedSchema}`);
+  }
+
   // Same serialization model as createPostgresSqlDatabase: a transaction holds
   // an exclusive gate and runs on a dedicated PoolClient (with search_path set
   // to the scoped schema); concurrent callers park in the gate queue. This
@@ -646,7 +735,7 @@ export async function createSchemaScopedPostgresSqlDatabase(
     activeTransactionClient = client;
     releaseGate = release;
     try {
-      await client.query(`SET search_path TO ${quotedSchema}, public`);
+      await applyScopedSession(client);
       return await client.query(normalized, values);
     } catch (error) {
       finishTransaction();
@@ -668,7 +757,7 @@ export async function createSchemaScopedPostgresSqlDatabase(
   ): Promise<T> {
     const client = await pool.connect();
     try {
-      await client.query(`SET search_path TO ${quotedSchema}, public`);
+      await applyScopedSession(client);
       return await run(client);
     } finally {
       client.release();
@@ -804,7 +893,7 @@ export async function createSchemaScopedPostgresSqlDatabase(
     };
     inExplicitTx = true;
     try {
-      await client.query(`SET search_path TO ${quotedSchema}, public`);
+      await applyScopedSession(client);
       await client.query("BEGIN");
       const result = await cb(tx);
       await client.query("COMMIT");

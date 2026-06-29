@@ -109,6 +109,13 @@ async function createRemoteToolExecutor(
 ): Promise<ToolExecutorLike> {
   const bootstrap = await getRunBootstrap(env, runId);
 
+  // The agent acts on behalf of the run's triggering user and must never hold
+  // MORE authority than that user. Resolving capabilities with NO role floor
+  // makes `assertToolPermission` evaluate the user's REAL space role, so an
+  // editor-initiated run cannot invoke owner/admin-only operations (service /
+  // skill delete, frontend deploy) that the user could not perform directly.
+  // (A previous `minimumRole: "admin"` floor raised every agent run to admin,
+  // erasing that boundary.)
   return createToolExecutor(
     env,
     env.DB,
@@ -120,11 +127,6 @@ async function createRemoteToolExecutor(
     bootstrap.userId,
     {
       disabledCustomTools: [...AGENT_DISABLED_CUSTOM_TOOLS],
-    },
-    undefined,
-    undefined,
-    {
-      minimumRole: "admin",
     },
   );
 }

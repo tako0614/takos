@@ -241,6 +241,9 @@ export function isSafeRefInput(ref: string): boolean {
     !ref.includes("\\") &&
     !ref.startsWith("/") &&
     !ref.endsWith("/") &&
+    // Reject a leading '-' so a ref name can never be parsed as a git option
+    // flag (e.g. `-d`, `--stdin`) when passed as a positional argument.
+    !ref.startsWith("-") &&
     /^[A-Za-z0-9._/-]+$/.test(ref);
 }
 
@@ -627,6 +630,9 @@ export async function writeConfiguredGitRefs(
       "--git-dir",
       repository.repositoryPath,
       "update-ref",
+      // Defense-in-depth: stop git from interpreting a user-controlled ref name
+      // as an option flag even if isSafeRefInput is ever loosened/bypassed.
+      "--end-of-options",
       ref.name,
       ref.target,
     ]);

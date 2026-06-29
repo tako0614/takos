@@ -82,12 +82,29 @@ export function validateInternalApiAccess(
   env: Env,
   getHeader: (name: string) => string | undefined,
 ): { ok: true } | { ok: false; status: 403; message: string } {
+  // SECURITY: the request hostname is NOT a trust signal. In the node self-host
+  // runtime the request URL is built from the client-controlled `Host` header
+  // (and absolute-form request targets), so a remote attacker can make
+  // `new URL(url).hostname` parse as `localhost`. The loopback hostname must
+  // therefore NEVER grant access on its own.
+  //
+  // When an internal secret is configured it is REQUIRED on EVERY /internal/*
+  // request — loopback included. The in-process scheduler triggers maintenance
+  // via the worker's `scheduled()` handler (not this HTTP route), so the only
+  // legitimate HTTP callers are external cron systems, which must present the
+  // shared secret.
+  const expectedSecret = env.TAKOS_INTERNAL_API_SECRET;
+  if (expectedSecret) {
+    return checkInternalSecretHeader(env, getHeader, "X-Takos-Internal-Secret");
+  }
+
+  // No secret configured: dev/local convenience only. With nothing to verify,
+  // fall back to allowing genuine loopback so the local stack works. This branch
+  // must not run on an internet-exposed deployment — production self-host MUST
+  // set TAKOS_INTERNAL_API_SECRET (the secret branch above then governs access).
   const hostname = new URL(url).hostname;
   if (isSelfHostLoopback(hostname)) {
     return { ok: true };
   }
-  if (!isSelfHostInternalHostname(hostname)) {
-    return { ok: false, status: 403, message: "forbidden" };
-  }
-  return checkInternalSecretHeader(env, getHeader, "X-Takos-Internal-Secret");
+  return { ok: false, status: 403, message: "forbidden" };
 }

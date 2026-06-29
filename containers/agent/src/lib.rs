@@ -20,6 +20,7 @@ pub mod managed_skills;
 pub mod model;
 pub mod prompt_assets;
 pub mod prompts;
+pub mod redaction;
 pub mod skills;
 pub mod tool_bridge;
 

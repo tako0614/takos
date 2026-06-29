@@ -463,7 +463,7 @@ test.skipIf(!RUN_INTEGRATION_TESTS)(
   15_000,
 );
 
-test("regression: OIDC callback links an existing Takos account by verified email", async () => {
+test("OIDC callback does NOT link a new subject to an existing account by verified email (account-takeover prevention)", async () => {
   const dir = await makeTempDir();
   const authDb = await createAuthTestDb(`${dir}/control.sqlite`);
   const timestamp = new Date().toISOString();
@@ -562,21 +562,35 @@ test("regression: OIDC callback links an existing Takos account by verified emai
     );
 
     assertEquals(response.status, 302);
-    assertEquals(response.headers.get("location"), "/spaces");
+    // A freshly-provisioned account has not completed setup, so the callback
+    // routes to onboarding rather than the requested return_to.
+    assertEquals(response.headers.get("location"), "/setup");
     assertEquals(createdSessions.length, 1);
-    assertEquals(createdSessions[0].user_id, "legacy-user-1");
+    // SECURITY: a brand-new (issuer, sub) carrying a verified email that matches
+    // an existing account MUST NOT be logged in as that account — email is
+    // transferable/reusable, so auto-linking by email is account takeover. The
+    // new subject gets its OWN account instead.
+    const newUserId = createdSessions[0].user_id;
+    assertEquals(newUserId === "legacy-user-1", false);
 
     const accountRows = await authDb.db.select({
       id: accounts.id,
+      email: accounts.email,
       name: accounts.name,
-      setupCompleted: accounts.setupCompleted,
     }).from(accounts).all();
-    assertEquals(accountRows.length, 1);
-    assertEquals(accountRows[0], {
-      id: "legacy-user-1",
-      name: "Legacy User",
-      setupCompleted: true,
-    });
+    assertEquals(accountRows.length, 2);
+
+    // The existing account is untouched and keeps its email.
+    const legacy = accountRows.find((row) => row.id === "legacy-user-1");
+    assertExists(legacy);
+    assertEquals(legacy.email, "legacy@example.test");
+    assertEquals(legacy.name, "Legacy User");
+
+    // The new account owns the new subject and does NOT steal the email — it is
+    // dropped to null on the unique-email collision rather than hijacked.
+    const fresh = accountRows.find((row) => row.id === newUserId);
+    assertExists(fresh);
+    assertEquals(fresh.email, null);
 
     const identity = await authDb.db.select({
       userId: authIdentities.userId,
@@ -587,12 +601,13 @@ test("regression: OIDC callback links an existing Takos account by verified emai
     }).from(authIdentities).get();
     assertExists(identity);
     assertEquals(identity, {
-      userId: "legacy-user-1",
+      userId: newUserId,
       provider: "oidc",
       providerSub: "https://accounts.example.test#takosumi-legacy-subject",
       emailSnapshot: "legacy@example.test",
       emailKind: "oidc_verified",
     });
+    assertEquals(identity.userId === "legacy-user-1", false);
   } finally {
     globalThis.fetch = originalFetch;
     authDb.client.close();

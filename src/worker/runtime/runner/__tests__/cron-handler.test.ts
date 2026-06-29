@@ -3,10 +3,15 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { assertEquals, assertStringIncludes } from "@takos/test/assert";
 
 import {
+  cronHandlerDeps,
   reenqueueStaleRunningRuns,
   reenqueueStaleUnclaimedRuns,
 } from "../cron-handler.ts";
 import { RUN_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
+
+// Stub model resolution so the cron re-enqueue is deterministic and does not hit
+// the space-model query (the real resolveRunModel reads the workspace default).
+cronHandlerDeps.resolveRunModel = async () => "test-model";
 import type { RunnerEnv } from "../../../shared/types/index.ts";
 
 type FakeResponse = {
@@ -66,7 +71,13 @@ function createEnv(
 
 test("reenqueueStaleUnclaimedRuns re-enqueues stale pending and queued runs", async () => {
   const { db, prepareCalls } = createFakeSqlDatabaseBinding([
-    { rawRows: [["run-queued", "queued"], ["run-pending", "pending"]] },
+    {
+      rawRows: [["run-queued", "acct-1", "queued"], [
+        "run-pending",
+        "acct-2",
+        "pending",
+      ]],
+    },
     { run: { meta: { changes: 1 } } },
     { run: { meta: { changes: 1 } } },
   ]);
@@ -78,12 +89,14 @@ test("reenqueueStaleUnclaimedRuns re-enqueues stale pending and queued runs", as
     {
       version: RUN_QUEUE_MESSAGE_VERSION,
       runId: "run-queued",
+      model: "test-model",
       timestamp: (env.sentMessages[0] as { timestamp: number }).timestamp,
       retryCount: 0,
     },
     {
       version: RUN_QUEUE_MESSAGE_VERSION,
       runId: "run-pending",
+      model: "test-model",
       timestamp: (env.sentMessages[1] as { timestamp: number }).timestamp,
       retryCount: 0,
     },
@@ -108,7 +121,7 @@ test("reenqueueStaleUnclaimedRuns leaves fresh queues untouched when no rows mat
 
 test("reenqueueStaleRunningRuns reverts to stale running when queue send fails", async () => {
   const { db, prepareCalls } = createFakeSqlDatabaseBinding([
-    { rawRows: [["run-running"]] },
+    { rawRows: [["run-running", "acct-1"]] },
     { run: { meta: { changes: 1 } } },
     { run: { meta: { changes: 1 } } },
   ]);

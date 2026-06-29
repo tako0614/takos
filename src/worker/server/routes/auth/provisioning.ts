@@ -76,34 +76,6 @@ type ProvisionedAuthUser = {
   updated_at: string;
 };
 
-function authUserFromAccountRow(row: {
-  id: string;
-  email: string | null;
-  name: string;
-  slug: string;
-  bio: string | null;
-  picture: string | null;
-  setupCompleted: boolean;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-}): ProvisionedAuthUser {
-  return {
-    id: row.id,
-    email: row.email,
-    name: row.name,
-    username: row.slug,
-    bio: row.bio,
-    picture: row.picture,
-    setup_completed: row.setupCompleted,
-    created_at: row.createdAt instanceof Date
-      ? row.createdAt.toISOString()
-      : row.createdAt,
-    updated_at: row.updatedAt instanceof Date
-      ? row.updatedAt.toISOString()
-      : row.updatedAt,
-  };
-}
-
 // Single-owner model: an account does NOT present a user-chosen public handle.
 // `accounts.slug` is kept only as a stable internal owner key (it also anchors
 // Space resolution). Use a predictable owner slug; only disambiguate when the
@@ -133,25 +105,24 @@ export async function provisionOidcUser(
   profile: OidcUserProfile,
 ): Promise<ProvisionedAuthUser> {
   const db = getDb(dbBinding);
-  if (profile.email) {
-    const existingAccount = await db.select({
-      id: accounts.id,
-      email: accounts.email,
-      name: accounts.name,
-      slug: accounts.slug,
-      status: accounts.status,
-      bio: accounts.bio,
-      picture: accounts.picture,
-      setupCompleted: accounts.setupCompleted,
-      createdAt: accounts.createdAt,
-      updatedAt: accounts.updatedAt,
-    }).from(accounts).where(eq(accounts.email, profile.email)).get();
 
-    if (existingAccount) {
-      if (existingAccount.status !== "active") {
-        throw new Error("Existing account for OIDC email is not active");
-      }
-      return authUserFromAccountRow(existingAccount);
+  // Account identity is keyed STRICTLY on the (issuer, sub) pair via
+  // authIdentities (the caller already matched on it before reaching here, so
+  // this function only ever runs for a brand-new subject). Email is a
+  // transferable / reusable profile attribute and MUST NOT auto-link a new
+  // subject onto an existing account: an IdP that reissues a verified email
+  // under a new sub (email change, address re-registration) would otherwise let
+  // an attacker log in AS the original account. Each new subject therefore gets
+  // its OWN account.
+  let email = profile.email ?? null;
+  if (email) {
+    const emailOwner = await db.select({ id: accounts.id }).from(accounts)
+      .where(eq(accounts.email, email)).get();
+    if (emailOwner) {
+      // The address already belongs to a different account (a different
+      // subject). Leave it on its original owner and provision this subject
+      // without an email rather than colliding with or hijacking that account.
+      email = null;
     }
   }
 
@@ -165,7 +136,7 @@ export async function provisionOidcUser(
     id: userId,
     type: "user",
     status: "active",
-    email: profile.email ?? null,
+    email,
     name: displayName,
     slug: username,
     picture: profile.picture ?? null,
@@ -181,7 +152,7 @@ export async function provisionOidcUser(
 
   return {
     id: userId,
-    email: profile.email ?? null,
+    email,
     name: displayName,
     username,
     bio: null,

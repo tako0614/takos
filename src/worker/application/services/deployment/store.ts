@@ -13,6 +13,7 @@ import {
 } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, inArray, isNotNull, lt, max } from "drizzle-orm";
 import { ConflictError } from "@takos/worker-platform-utils/errors";
+import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import type { ArtifactKind, Deployment, DeploymentEvent } from "./models.ts";
 import { normalizeDeploymentBackendName } from "./models.ts";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
@@ -149,6 +150,32 @@ export async function updateDeploymentRecord(
     .set(data)
     .where(eq(deployments.id, deploymentId))
     .run();
+}
+
+/**
+ * Atomically claim a deployment for pipeline execution (compare-and-swap).
+ * Transitions status -> 'in_progress' ONLY when it is currently 'pending' or
+ * 'failed' (a fresh deploy or a recoverable/stuck-reset one). Returns false when
+ * no row was updated, i.e. another runner already claimed it (idempotency-key
+ * replay or a duplicate queue dispatch) or it already finished — in which case
+ * the caller must NOT run the pipeline again, preventing concurrent double
+ * provider deploys and routing thrash.
+ */
+export async function claimDeploymentForExecution(
+  db: SqlDatabaseBinding,
+  deploymentId: string,
+): Promise<boolean> {
+  const drizzle = deploymentStoreDeps.getDb(db);
+  const result = await drizzle.update(deployments)
+    .set({ status: "in_progress", updatedAt: new Date().toISOString() })
+    .where(
+      and(
+        eq(deployments.id, deploymentId),
+        inArray(deployments.status, ["pending", "failed"]),
+      ),
+    )
+    .run();
+  return affectedRowCount(result) > 0;
 }
 
 export async function requestDeploymentCancellation(

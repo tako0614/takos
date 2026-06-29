@@ -105,13 +105,19 @@ function buildConnectionInfo(resource: {
       connectionInfo.connection_url = portableConnectionUrl(resource);
       break;
     case "secret":
+      // NEVER emit backing_resource_id here: for a secret-typed resource that
+      // column holds the raw secret token (the value the dedicated owner-gated
+      // /secret-value channel returns). Expose only the logical id + name so the
+      // secret cannot leak through the display-oriented "connection info"
+      // projection.
       connectionInfo.secret_name = resource.backing_resource_name || "";
-      connectionInfo.resource_id = resource.backing_resource_id ||
-        resource.id || resource._internal_id || "";
+      connectionInfo.resource_id = resource.id || resource._internal_id || "";
       break;
     default:
-      connectionInfo.resource_id = resource.backing_resource_id ||
-        resource.id || resource._internal_id || "";
+      // Logical id only — backing_resource_id is treated as sensitive backing
+      // material everywhere else (stripPublicResourceBackingFields) and must not
+      // be re-projected under a benign-looking key.
+      connectionInfo.resource_id = resource.id || resource._internal_id || "";
   }
 
   return connectionInfo;

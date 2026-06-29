@@ -5,6 +5,7 @@ mod internal_rpc;
 mod managed_skills;
 mod model;
 mod prompt_assets;
+mod redaction;
 mod prompts;
 mod skills;
 mod tool_bridge;
@@ -321,7 +322,12 @@ async fn start(
             run_id: run_id_for_task,
         };
         if let Err(err) = execute_run(payload_for_task.clone(), state_for_task).await {
-            error!(error = %err, "run execution failed");
+            // Sanitize before logging: an upstream provider error body or decode
+            // error embedded in `err` can carry a reflected credential.
+            error!(
+                error = %redaction::redact_secret_text(&err.to_string()),
+                "run execution failed"
+            );
             if let Ok(client) = ControlRpcClient::new(&payload_for_task) {
                 let _ = client.tool_cleanup().await;
                 let _ = handle_failure(&client, None, err.as_ref(), UsagePayload::default()).await;
@@ -480,6 +486,27 @@ async fn load_run_context(
 // fragment the lifecycle without isolating concerns.
 #[allow(clippy::too_many_lines)]
 async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResult<()> {
+    // Defense-in-depth: a run MUST arrive with an explicit, real model. A
+    // missing/empty model (or the literal `local-smoke` test affordance) would
+    // otherwise enter the local-smoke engine, where a `tool:`/`memory:`/
+    // `timeline:`-prefixed user message is dispatched DIRECTLY as a tool call
+    // with no LLM mediation. The control plane always resolves a concrete model
+    // (run creation + cron re-enqueue), so this only fires on a control-plane
+    // bug — fail closed unless the smoke engine is explicitly opted into.
+    let has_real_model = payload
+        .model
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|model| !model.is_empty() && model != "local-smoke");
+    if !has_real_model && !local_smoke_opt_in() {
+        return Err(io::Error::other(
+            "run started without a concrete model; refusing to default to the \
+             local-smoke engine (set TAKOS_AGENT_ALLOW_LOCAL_SMOKE=true to enable \
+             the smoke engine in dev/test)",
+        )
+        .into());
+    }
+
     let client = ControlRpcClient::new(&payload)?;
     let context = load_run_context(&client, &payload).await?;
     let RunContextBundle {
@@ -806,80 +833,17 @@ async fn handle_failure(
 }
 
 fn sanitize_failure_error_message(message: &str) -> String {
-    let mut parts: Vec<String> = message
-        .split_whitespace()
-        .map(|part| {
-            if part_contains_secret_token(part) || looks_like_email(part) {
-                "<redacted>".to_string()
-            } else {
-                part.to_string()
-            }
-        })
-        .collect();
-    // Bearer tokens follow the literal "Bearer <token>" pattern with a space,
-    // so the per-part scan above only covers the token. Walk pairs of parts to
-    // also redact the trailing token when the preceding part is `Bearer`.
-    let mut index = 0;
-    while index < parts.len() {
-        if parts[index].eq_ignore_ascii_case("bearer")
-            && index + 1 < parts.len()
-            && parts[index + 1] != "<redacted>"
-        {
-            parts[index + 1] = "<redacted>".to_string();
-        }
-        index += 1;
-    }
-    parts.join(" ")
+    redaction::redact_secret_text(message)
 }
 
-fn part_contains_secret_token(part: &str) -> bool {
-    // Common provider key shapes. Substring (not whole-token) so embedded
-    // tokens inside JSON-like fragments (`"key":"sk-…"`) are still redacted.
-    const PREFIX_NEEDLES: &[&str] = &["sk-", "sk_live_", "sk_test_", "ghp_"];
-    for needle in PREFIX_NEEDLES {
-        if part.contains(needle) {
-            return true;
-        }
-    }
-    // AWS access key id: literal "AKIA" + 16 base32-ish chars [0-9A-Z]. Scan
-    // every starting index because the token may be embedded in a longer
-    // word (e.g. JSON quoting).
-    let bytes = part.as_bytes();
-    if bytes.len() >= 20 {
-        for start in 0..=bytes.len().saturating_sub(20) {
-            if &bytes[start..start + 4] == b"AKIA"
-                && bytes[start + 4..start + 20]
-                    .iter()
-                    .all(|byte| byte.is_ascii_digit() || byte.is_ascii_uppercase())
-            {
-                return true;
-            }
-        }
-    }
-    // JWT-shaped: `eyJ...` (base64url of a JSON header). Require the prefix
-    // plus at least one dot to avoid matching arbitrary words.
-    if part.contains("eyJ") && part.contains('.') {
-        return true;
-    }
-    false
-}
-
-fn looks_like_email(part: &str) -> bool {
-    // Naive shape check: contains exactly one '@' surrounded by non-empty
-    // local / domain parts and the domain has at least one dot. Stricter
-    // grammars need regex; the heuristic is enough for error-message scrub.
-    let Some(at) = part.find('@') else {
-        return false;
-    };
-    if part.matches('@').count() != 1 {
-        return false;
-    }
-    let (local, rest) = part.split_at(at);
-    let domain = &rest[1..];
-    if local.is_empty() || domain.is_empty() {
-        return false;
-    }
-    domain.contains('.') && domain.bytes().all(|byte| !byte.is_ascii_whitespace())
+/// Whether the local-smoke engine (a dev/test affordance that turns a
+/// `tool:`-prefixed user message into a direct tool call) is explicitly enabled.
+/// It is OFF by default so a missing/empty model can never silently activate it
+/// in production.
+fn local_smoke_opt_in() -> bool {
+    env::var("TAKOS_AGENT_ALLOW_LOCAL_SMOKE")
+        .map(|value| value == "true" || value == "1")
+        .unwrap_or(false)
 }
 
 fn user_visible_failure_message(error: &str) -> String {

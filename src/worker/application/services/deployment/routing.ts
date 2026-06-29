@@ -23,6 +23,7 @@ import {
   type DeploymentRoutingServiceRecord,
   getDeploymentById,
   getDeploymentRoutingServiceRecord,
+  getServiceDeploymentBasics,
   logDeploymentEvent,
   updateServiceDeploymentPointers,
 } from "./store.ts";
@@ -333,9 +334,25 @@ export async function applyRoutingDbUpdates(
       .where(eq(deployments.id, ctx.deploymentId))
       .run();
 
+    // Compute the rollback target (fallback) from a FRESH read of the service's
+    // current active pointer rather than the value captured at pipeline start
+    // (ctx.serviceRouteRecord, read much earlier). Under a concurrent deploy of
+    // the same service the captured value can be stale, which would record a
+    // wrong rollback baseline. Never fall back to the deployment being promoted.
+    const currentBasics = await getServiceDeploymentBasics(
+      env.DB,
+      ctx.serviceRouteRecord.id,
+    );
+    const freshActive = currentBasics.activeDeploymentId;
+    const fallbackDeploymentId = freshActive && freshActive !== ctx.deploymentId
+      ? freshActive
+      : (ctx.serviceRouteRecord.activeDeploymentId !== ctx.deploymentId
+        ? ctx.serviceRouteRecord.activeDeploymentId ?? null
+        : null);
+
     await updateServiceDeploymentPointers(env.DB, ctx.serviceRouteRecord.id, {
       status: "deployed",
-      fallbackDeploymentId: ctx.serviceRouteRecord.activeDeploymentId ?? null,
+      fallbackDeploymentId,
       activeDeploymentId: ctx.deploymentId,
       activeDeploymentVersion: ctx.deploymentVersion,
       updatedAt: nowIso,

@@ -20,10 +20,15 @@ import {
   writeJsonFile,
 } from "../../../local-platform/persistent-shared.ts";
 import {
+  optionalEnv,
   resolveLocalDataDir,
   resolvePostgresUrl,
 } from "../../../node-platform/resolvers/env-utils.ts";
 import { toResourceCapability } from "./capabilities.ts";
+import {
+  decryptResourceSecretValue,
+  encryptResourceSecretValue,
+} from "./secret-crypto.ts";
 import {
   getPortableBackendResolution,
   missingPortableBootstrapRequirementsForBackend,
@@ -422,17 +427,32 @@ export async function getPortableSecretValue(
   resource: PortableResourceRef,
 ): Promise<string> {
   const secretPath = markerFilePath("secret", resource);
+  const encryptionKey = optionalEnv("ENCRYPTION_KEY");
   const existing = await readJsonFile<Record<string, unknown> | null>(
     secretPath,
     null,
   );
   if (typeof existing?.value === "string" && existing.value.length > 0) {
-    return existing.value;
+    // Marker `value` is stored encrypted at rest; decrypt on read. Legacy
+    // plaintext markers pass through unchanged (decrypt is legacy-tolerant).
+    return await decryptResourceSecretValue(
+      encryptionKey,
+      resource.id,
+      existing.value,
+    );
   }
 
+  // Generate the token, persist it encrypted, but return the plaintext to the
+  // caller (which injects it as a runner secret binding).
   const payload = markerPayload("secret", resource);
+  const token = payload.value as string;
+  payload.value = await encryptResourceSecretValue(
+    encryptionKey,
+    resource.id,
+    token,
+  );
   await writeJsonFile(secretPath, payload);
-  return payload.value as string;
+  return token;
 }
 
 export function isPortableResourceBackend(

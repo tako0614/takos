@@ -8,17 +8,33 @@ import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
 import { envGuard, STALE_WORKER_THRESHOLD_MS } from "./runner-constants.ts";
+import { resolveRunModel } from "../../application/services/runs/create-thread-run-validation.ts";
+
+/** Injectable deps (model resolution) for deterministic testing. */
+export const cronHandlerDeps = {
+  resolveRunModel,
+};
 
 type StaleRun = {
   id: string;
+  accountId: string;
 };
 
-async function sendRunQueueMessage(env: Env, runId: string): Promise<void> {
+async function sendRunQueueMessage(env: Env, run: StaleRun): Promise<void> {
+  // The model is NOT stored on the Run record, and the executor dispatches the
+  // queue message's model verbatim with NO re-resolution. An empty/missing model
+  // degrades the agent container into "local-smoke" mode, where the user's raw
+  // message becomes a direct tool-dispatch channel. So re-resolve the workspace
+  // model here (same path as run creation) and always enqueue a concrete model.
+  const model = await cronHandlerDeps.resolveRunModel(
+    env.DB,
+    run.accountId,
+    undefined,
+  );
   await env.RUN_QUEUE.send({
     version: RUN_QUEUE_MESSAGE_VERSION,
-    runId,
-    // model is not stored on the Run record; re-enqueue without it
-    // (AgentRunner will fall back to workspace default model)
+    runId: run.id,
+    model,
     timestamp: Date.now(),
     retryCount: 0,
   });
@@ -30,7 +46,7 @@ export async function reenqueueStaleRunningRuns(
 ): Promise<void> {
   const db = getDb(env.DB);
 
-  const staleRuns = await db.select({ id: runs.id })
+  const staleRuns = await db.select({ id: runs.id, accountId: runs.accountId })
     .from(runs).where(
       and(
         eq(runs.status, "running"),
@@ -61,7 +77,7 @@ export async function reenqueueStaleRunningRuns(
 
     if (affectedRowCount(resetResult) > 0) {
       try {
-        await sendRunQueueMessage(env, run.id);
+        await sendRunQueueMessage(env, run);
         logInfo(`Re-enqueued stale run ${run.id} (previous worker timed out)`, {
           module: "runner_cron",
         });
@@ -98,6 +114,7 @@ export async function reenqueueStaleUnclaimedRuns(
 
   const staleRuns = await db.select({
     id: runs.id,
+    accountId: runs.accountId,
     status: runs.status,
   })
     .from(runs).where(
@@ -143,7 +160,7 @@ export async function reenqueueStaleUnclaimedRuns(
 
     if (affectedRowCount(resetResult) > 0) {
       try {
-        await sendRunQueueMessage(env, run.id);
+        await sendRunQueueMessage(env, run);
         logInfo(
           `Re-enqueued stale ${run.status} run ${run.id} (queue message missing)`,
           { module: "runner_cron" },

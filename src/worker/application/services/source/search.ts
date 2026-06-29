@@ -73,6 +73,28 @@ function toSpaceFile(f: {
   };
 }
 
+// Caller-supplied `file_types` reaches a parameterized `OR LIKE` term per
+// element (searchFilenames). Without a cap, a large array exceeds the D1/SQLite
+// bound-variable / expression-complexity limits and turns malformed input into a
+// 500. Clamp defensively here so every caller (HTTP route + MCP) is protected
+// regardless of request-body validation, and coerce non-string input so a
+// non-array `file_types` cannot throw downstream.
+const MAX_FILE_TYPES = 20;
+const MAX_FILE_TYPE_LENGTH = 16;
+
+function sanitizeFileTypes(input: unknown): string[] | undefined {
+  if (!Array.isArray(input)) return undefined;
+  const seen = new Set<string>();
+  for (const value of input) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > MAX_FILE_TYPE_LENGTH) continue;
+    seen.add(trimmed);
+    if (seen.size >= MAX_FILE_TYPES) break;
+  }
+  return seen.size > 0 ? [...seen] : undefined;
+}
+
 export async function searchWorkspace(params: {
   env: Env;
   spaceId: string;
@@ -83,7 +105,8 @@ export async function searchWorkspace(params: {
 }): Promise<
   { results: CodeSearchResult[]; total: number; semanticAvailable: boolean }
 > {
-  const { env, spaceId, query, fileTypes } = params;
+  const { env, spaceId, query } = params;
+  const fileTypes = sanitizeFileTypes(params.fileTypes);
   const searchType = params.searchType || "all";
   const limit = Math.min(params.limit || 20, 100);
   const results: CodeSearchResult[] = [];
