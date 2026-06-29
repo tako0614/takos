@@ -9,6 +9,7 @@ import type {
   SqlDatabaseBinding,
 } from "../../../shared/types/bindings.ts";
 import type { ResourceCapability } from "../../../shared/types/index.ts";
+import { randomHex } from "../../../shared/utils/encoding-utils.ts";
 import {
   createPersistentKvStoreBinding,
   createPersistentObjectStore,
@@ -356,12 +357,6 @@ function markerFilePath(kind: string, resource: PortableResourceRef): string {
   }
 }
 
-function generateSecretToken(bytes = 32): string {
-  const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
-  return Array.from(buf).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 function markerPayload(
   kind: string,
   resource: PortableResourceRef,
@@ -399,7 +394,7 @@ function markerPayload(
     case "secret":
       return {
         ...base,
-        value: generateSecretToken(),
+        value: randomHex(32),
       };
     default:
       return base;

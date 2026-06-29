@@ -1,6 +1,7 @@
 import type { Env } from "../../../shared/types/index.ts";
 import { type WfpEnv, WFPService } from "../wfp/index.ts";
 import { VECTORIZE_DEFAULT_DIMENSIONS } from "../../../shared/config/limits.ts";
+import { randomHex } from "../../../shared/utils/encoding-utils.ts";
 
 export type CloudflareManagedResourceType =
   | "d1"
@@ -38,12 +39,6 @@ type WorkflowCreateOptions = {
   timeoutMs?: number;
   maxRetries?: number;
 };
-
-function generateSecretToken(bytes = 32): string {
-  const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
-  return Array.from(buf).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 export class CloudflareResourceService {
   readonly wfp: WFPService;
@@ -95,7 +90,7 @@ export class CloudflareResourceService {
         };
       case "secret_ref":
         return {
-          backingResourceId: generateSecretToken(),
+          backingResourceId: randomHex(32),
           backingResourceName: name,
         };
       case "workflow":

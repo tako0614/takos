@@ -45,29 +45,6 @@ async function getRedisClient(redisUrl: string): Promise<RedisClient> {
   return redisClientState.clientPromise;
 }
 
-export async function disposeRedisDurableObjectClient(): Promise<void> {
-  if (!redisClientState) return;
-  const state = redisClientState;
-  redisClientState = null;
-  await state.clientPromise
-    .then((client) =>
-      client.quit().catch((err) => {
-        logWarn("Failed to quit Redis client during dispose", {
-          module: "redis-durable-object",
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return undefined;
-      })
-    )
-    .catch((err) => {
-      logWarn("Failed to resolve Redis client for dispose", {
-        module: "redis-durable-object",
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return undefined;
-    });
-}
-
 function storageHashKey(prefix: string, instanceId: string): string {
   return `${REDIS_KEY_PREFIX}:${prefix}:${instanceId}:storage`;
 }

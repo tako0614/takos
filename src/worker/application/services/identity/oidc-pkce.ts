@@ -32,20 +32,6 @@ export async function verifyCodeChallenge(
   return constantTimeEqualsString(computedChallenge, codeChallenge);
 }
 
-export function isValidCodeVerifier(verifier: string): boolean {
-  if (verifier.length < 43 || verifier.length > 128) {
-    return false;
-  }
-  return /^[A-Za-z0-9\-._~]+$/.test(verifier);
-}
-
-export function isValidCodeChallenge(challenge: string): boolean {
-  if (challenge.length !== 43) {
-    return false;
-  }
-  return /^[A-Za-z0-9\-_]+$/.test(challenge);
-}
-
 export function generateRandomString(length: number): string {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);

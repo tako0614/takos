@@ -466,46 +466,6 @@ export async function getDeploymentRouteHead(
   };
 }
 
-export type DeploymentRollbackAnchor = {
-  id: string;
-  activeDeploymentId: string | null;
-  fallbackDeploymentId: string | null;
-  activeDeploymentVersion: number | null;
-};
-
-export async function getDeploymentRollbackAnchor(
-  db: SqlDatabaseBinding,
-  serviceId: string,
-): Promise<DeploymentRollbackAnchor | null> {
-  const drizzle = getDb(db);
-  const service = await drizzle.select({
-    id: services.id,
-    activeDeploymentId: services.activeDeploymentId,
-    fallbackDeploymentId: services.fallbackDeploymentId,
-  })
-    .from(services)
-    .where(eq(services.id, serviceId))
-    .get();
-
-  if (!service) return null;
-
-  let activeDeploymentVersion: number | null = null;
-  if (service.activeDeploymentId) {
-    const dep = await drizzle.select({ version: deployments.version })
-      .from(deployments)
-      .where(eq(deployments.id, service.activeDeploymentId))
-      .get();
-    activeDeploymentVersion = dep?.version ?? null;
-  }
-
-  return {
-    id: service.id,
-    activeDeploymentId: service.activeDeploymentId,
-    fallbackDeploymentId: service.fallbackDeploymentId,
-    activeDeploymentVersion,
-  };
-}
-
 export type DeploymentRoutingServiceRecord = {
   id: string;
   hostname: string | null;

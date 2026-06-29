@@ -38,18 +38,6 @@ import {
   getSecretIds,
 } from "./workflow-run-lifecycle.ts";
 
-export const workflowJobSchedulerDeps = {
-  getDb,
-  parseWorkflow,
-  resolveRef: gitStore.resolveRef,
-  getCommitData: gitStore.getCommitData,
-  getBlobAtPath: gitStore.getBlobAtPath,
-  buildWorkflowDispatchEnv,
-  finalizeRunIfComplete,
-  enqueueJob,
-  getSecretIds,
-};
-
 // ---------------------------------------------------------------------------
 // onJobComplete
 // ---------------------------------------------------------------------------
@@ -61,7 +49,7 @@ export async function onJobComplete(
   jobId: string,
   result: WorkflowJobResult,
 ): Promise<void> {
-  const drizzle = workflowJobSchedulerDeps.getDb(db);
+  const drizzle = getDb(db);
 
   await drizzle.update(workflowJobs)
     .set({
@@ -117,7 +105,7 @@ export async function onJobComplete(
   const pendingJobsCount = pendingJobsResult?.count ?? 0;
 
   if (pendingJobsCount === 0) {
-    await workflowJobSchedulerDeps.finalizeRunIfComplete(db, runId);
+    await finalizeRunIfComplete(db, runId);
   } else {
     await scheduleDependentJobs(db, bucket, queue, runId, completedJobKey);
   }
@@ -134,7 +122,7 @@ export async function scheduleDependentJobs(
   runId: string,
   completedJobKey: string,
 ): Promise<void> {
-  const drizzle = workflowJobSchedulerDeps.getDb(db);
+  const drizzle = getDb(db);
 
   const run = await drizzle.select()
     .from(workflowRuns)
@@ -174,7 +162,7 @@ export async function scheduleDependentJobs(
     }
 
     if (jobRecord) {
-      const secretIds = await workflowJobSchedulerDeps.getSecretIds(
+      const secretIds = await getSecretIds(
         db,
         run.repoId,
       );
@@ -182,7 +170,7 @@ export async function scheduleDependentJobs(
         "main";
       const queuedJobDefinition: WorkflowJobDefinition =
         toWorkflowJobDefinition(jobDef);
-      const dispatchEnv = workflowJobSchedulerDeps.buildWorkflowDispatchEnv({
+      const dispatchEnv = buildWorkflowDispatchEnv({
         workflow,
         workflowPath: run.workflowPath,
         repoId: run.repoId,
@@ -194,7 +182,7 @@ export async function scheduleDependentJobs(
         jobDefinition: jobDef,
       });
 
-      await workflowJobSchedulerDeps.enqueueJob(queue, {
+      await enqueueJob(queue, {
         runId,
         jobId: jobRecord.id,
         repoId: run.repoId,
@@ -208,7 +196,7 @@ export async function scheduleDependentJobs(
     }
   }
 
-  await workflowJobSchedulerDeps.finalizeRunIfComplete(db, runId);
+  await finalizeRunIfComplete(db, runId);
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +211,7 @@ export async function evaluateDependencies(
   runId: string,
   needs: string[],
 ): Promise<DependencyState> {
-  const drizzle = workflowJobSchedulerDeps.getDb(db);
+  const drizzle = getDb(db);
 
   for (const dep of needs) {
     const depJob = await drizzle.select({
@@ -264,7 +252,7 @@ export async function onJobStart(
   runnerId?: string,
   runnerName?: string,
 ): Promise<void> {
-  const drizzle = workflowJobSchedulerDeps.getDb(db);
+  const drizzle = getDb(db);
   const timestamp = new Date().toISOString();
 
   await drizzle.update(workflowJobs)
@@ -305,7 +293,7 @@ export async function updateStepStatus(
   exitCode?: number,
   error?: string,
 ): Promise<void> {
-  const drizzle = workflowJobSchedulerDeps.getDb(db);
+  const drizzle = getDb(db);
   const timestamp = new Date().toISOString();
   const startedAt = status === "in_progress" ? timestamp : undefined;
   const completedAt =
@@ -347,7 +335,7 @@ async function loadWorkflowFromGit(
   let commitSha = runSha;
   if (!commitSha) {
     const resolvedRef = ref?.replace("refs/heads/", "") || "main";
-    commitSha = await workflowJobSchedulerDeps.resolveRef(
+    commitSha = await gitStore.resolveRef(
       db,
       repoId,
       resolvedRef,
@@ -355,13 +343,13 @@ async function loadWorkflowFromGit(
     if (!commitSha) return null;
   }
 
-  const commit = await workflowJobSchedulerDeps.getCommitData(
+  const commit = await gitStore.getCommitData(
     bucket,
     commitSha,
   );
   if (!commit) return null;
 
-  const blob = await workflowJobSchedulerDeps.getBlobAtPath(
+  const blob = await gitStore.getBlobAtPath(
     bucket,
     commit.tree,
     workflowPath,
@@ -369,7 +357,7 @@ async function loadWorkflowFromGit(
   if (!blob) return null;
 
   const content = new TextDecoder().decode(blob);
-  const { workflow } = workflowJobSchedulerDeps.parseWorkflow(content);
+  const { workflow } = parseWorkflow(content);
   return workflow;
 }
 
@@ -382,7 +370,7 @@ async function findJobRecordByKey(
   jobKey: string,
   jobName?: string,
 ): Promise<{ id: string } | null> {
-  const drizzle = workflowJobSchedulerDeps.getDb(db);
+  const drizzle = getDb(db);
   return await drizzle.select({ id: workflowJobs.id })
     .from(workflowJobs)
     .where(
@@ -404,7 +392,7 @@ async function skipJobAndSteps(
   db: SqlDatabaseBinding,
   jobId: string,
 ): Promise<void> {
-  const drizzle = workflowJobSchedulerDeps.getDb(db);
+  const drizzle = getDb(db);
   const ts = new Date().toISOString();
 
   await drizzle.update(workflowJobs)

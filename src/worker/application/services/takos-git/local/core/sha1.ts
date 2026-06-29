@@ -17,10 +17,6 @@ export async function sha1(data: Uint8Array): Promise<string> {
   return hexFromBuffer(hashBuffer);
 }
 
-export function sha1Bytes(data: Uint8Array): Promise<ArrayBuffer> {
-  return crypto.subtle.digest("SHA-1", toBufferSource(data));
-}
-
 export function hexFromBuffer(buffer: ArrayBuffer): string {
   return bytesToHex(new Uint8Array(buffer));
 }

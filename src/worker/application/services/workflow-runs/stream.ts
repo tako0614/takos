@@ -1,33 +1,7 @@
 import { getDb, workflowRuns } from "../../../infra/db/index.ts";
 import { and, eq } from "drizzle-orm";
 import type { Env } from "../../../shared/types/index.ts";
-
-const INTERNAL_ONLY_HEADERS = [
-  "X-Takos-Internal",
-  "X-Takos-Internal-Marker",
-  "X-WS-Auth-Validated",
-  "X-WS-User-Id",
-] as const;
-
-function buildSanitizedDOHeaders(
-  source: HeadersInit | undefined,
-  trustedOverrides: Record<string, string>,
-): Record<string, string> {
-  const headers = new Headers(source);
-  for (const name of INTERNAL_ONLY_HEADERS) headers.delete(name);
-  for (const [key, value] of Object.entries(trustedOverrides)) {
-    headers.set(key, value);
-  }
-  const result: Record<string, string> = {};
-  headers.forEach((v, k) => {
-    result[k] = v;
-  });
-  return result;
-}
-
-export const workflowRunStreamDeps = {
-  getDb,
-};
+import { buildSanitizedDOHeaders } from "../../../runtime/durable-objects/do-header-utils.ts";
 
 export async function connectWorkflowRunStream(
   env: Env,
@@ -38,7 +12,7 @@ export async function connectWorkflowRunStream(
     request: Request;
   },
 ): Promise<Response> {
-  const db = workflowRunStreamDeps.getDb(env.DB);
+  const db = getDb(env.DB);
   const run = await db.select({ id: workflowRuns.id })
     .from(workflowRuns)
     .where(

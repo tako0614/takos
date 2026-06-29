@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal } from "solid-js";
 import type { Accessor, JSX, Setter } from "solid-js";
 
 const [headerContent, setHeaderContent] = createSignal<JSX.Element | null>(
@@ -13,9 +13,4 @@ export function useMobileHeader(): {
     headerContent,
     setHeaderContent,
   };
-}
-
-export function useMobileHeaderContent(content: JSX.Element | null) {
-  onMount(() => setHeaderContent(content));
-  onCleanup(() => setHeaderContent(null));
 }

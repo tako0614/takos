@@ -7,10 +7,6 @@ import {
 import { buildRunNotifierEmitRequest, getRunNotifierStub } from "./client.ts";
 import { buildRunNotifierEmitPayload } from "./run-notifier-payload.ts";
 
-export const runFailureEventDeps = {
-  getDb,
-};
-
 export interface PersistedRunFailedEvent {
   payload: RunTerminalPayload;
   eventId: number | null;
@@ -39,7 +35,7 @@ export async function persistRunFailedEvent(
 
   const eventId = env.TAKOS_OFFLOAD
     ? null
-    : (await runFailureEventDeps.getDb(env.DB).insert(runEvents).values({
+    : (await getDb(env.DB).insert(runEvents).values({
       runId,
       type: "run.failed",
       data: JSON.stringify(payload),

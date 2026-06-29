@@ -2,13 +2,12 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type {
   Resource,
   ResourceCapability,
-  ResourcePermission,
   ResourceStatus,
   ResourceType,
 } from "../../../shared/types/index.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import { getDb, resourceAccess, resources } from "../../../infra/db/index.ts";
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { toApiResource } from "./format.ts";
 import { resolveAccessibleAccountIds } from "../identity/membership-resolver.ts";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
@@ -416,57 +415,4 @@ export async function deleteResource(
 ) {
   const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.delete(resources).where(eq(resources.id, resourceId));
-}
-
-export async function getAvailableResourcesForWorkspace(
-  db: SqlDatabaseBinding,
-  spaceId: string,
-  resourceType: ResourceType,
-): Promise<Array<Resource & { access_level: "owner" | ResourcePermission }>> {
-  const drizzle = resourceStoreDeps.getDb(db);
-
-  const ownedResources = await drizzle.select().from(resources)
-    .where(and(
-      eq(resources.type, resourceType),
-      eq(resources.status, "active"),
-      eq(resources.accountId, spaceId),
-    ))
-    .orderBy(asc(resources.name))
-    .all();
-
-  // Get shared resources via access grants
-  const accessGrants = await drizzle.select({
-    resourceId: resourceAccess.resourceId,
-    permission: resourceAccess.permission,
-  })
-    .from(resourceAccess)
-    .where(eq(resourceAccess.accountId, spaceId))
-    .all();
-  const sharedResourceIds = [...new Set(accessGrants.map((a) => a.resourceId))];
-  const accessPermMap = buildAccessMap(accessGrants);
-
-  let sharedResources: Array<SelectOf<typeof resources>> = [];
-  if (sharedResourceIds.length > 0) {
-    sharedResources = await drizzle.select().from(resources)
-      .where(and(
-        eq(resources.type, resourceType),
-        eq(resources.status, "active"),
-        ne(resources.accountId, spaceId),
-        inArray(resources.id, sharedResourceIds),
-      ))
-      .orderBy(asc(resources.name))
-      .all();
-  }
-
-  const ownedWithLevel = ownedResources.map((r) => ({
-    ...toApiResourceRow(r),
-    access_level: "owner" as const,
-  }));
-
-  const sharedWithLevel = sharedResources.map((r) => ({
-    ...toApiResourceRow(r),
-    access_level: (accessPermMap.get(r.id) || "read") as ResourcePermission,
-  }));
-
-  return [...ownedWithLevel, ...sharedWithLevel];
 }

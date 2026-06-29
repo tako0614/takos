@@ -97,28 +97,3 @@ export async function isSessionRevoked(
     return true;
   }
 }
-
-/**
- * Best-effort cleanup of expired entries. Background jobs may call this to
- * keep the table from growing unbounded. Rows whose `expires_at` is past the
- * current time are deleted; rows with NULL `expires_at` are retained as
- * permanent revocations.
- */
-export async function cleanupExpiredSessionRevocations(
-  d1: SqlDatabaseBinding,
-  now: Date = new Date(),
-): Promise<void> {
-  try {
-    await d1
-      .prepare(
-        `DELETE FROM sessions_revoked
-         WHERE expires_at IS NOT NULL AND expires_at < ?`,
-      )
-      .bind(now.toISOString())
-      .run();
-  } catch (err) {
-    logError("Failed to clean up session revocations", err, {
-      module: "services/identity/session-revocation",
-    });
-  }
-}

@@ -22,10 +22,6 @@ interface MemberListItem {
   created_at: string;
 }
 
-export const spaceMemberDeps = {
-  getDb,
-};
-
 async function resolveMembershipPrincipalId(
   db: SqlDatabaseBinding,
   actorId: string,
@@ -79,7 +75,7 @@ export async function getUserByEmail(
   db: SqlDatabaseBinding,
   email: string,
 ): Promise<User | null> {
-  const drizzle = spaceMemberDeps.getDb(db);
+  const drizzle = getDb(db);
   const row = await drizzle
     .select()
     .from(accounts)

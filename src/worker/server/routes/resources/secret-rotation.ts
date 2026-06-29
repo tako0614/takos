@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { type TtlMs, ttlMs } from "@takos/worker-platform-utils/ttl";
 import { generateId } from "../../../shared/utils/index.ts";
+import { randomHex } from "../../../shared/utils/encoding-utils.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import {
   resources,
@@ -25,14 +26,6 @@ export const SECRET_ROTATION_GRACE_PERIOD_MS: TtlMs = ttlMs(
 export function isSecretResource(resource: ResourceRecord): boolean {
   const capability = toResourceCapability(resource.type, resource.config);
   return capability === "secret";
-}
-
-function generateSecretTokenHex(bytes = 32): string {
-  const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
-  return Array.from(buf)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 export interface SecretRotationState {
@@ -225,7 +218,7 @@ export async function rotateResourceSecretValue(
   const previousValueExpiresAt = new Date(
     Date.parse(rotatedAt) + SECRET_ROTATION_GRACE_PERIOD_MS,
   ).toISOString();
-  const newValue = generateSecretTokenHex();
+  const newValue = randomHex(32);
   const backendName = resource.backend_name;
 
   // 24h grace period: capture the current value before mutating, then store

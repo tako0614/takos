@@ -1,10 +1,5 @@
 import { currentLocale } from "./locale.ts";
 
-function diffInDays(dateString: string): number {
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
-}
-
 function relativeFormatter(): Intl.RelativeTimeFormat {
   return new Intl.RelativeTimeFormat(currentLocale(), { numeric: "auto" });
 }
@@ -19,12 +14,6 @@ function formatDaysAgo(diffDays: number, date: Date): string {
     return formatter.format(-Math.floor(diffDays / 30), "month");
   }
   return date.toLocaleDateString(currentLocale());
-}
-
-export function formatRelativeDate(dateString: string): string {
-  const days = diffInDays(dateString);
-  if (days === 0) return relativeFormatter().format(0, "day");
-  return formatDaysAgo(days, new Date(dateString));
 }
 
 export function formatDetailedRelativeDate(dateString: string): string {
@@ -49,8 +38,6 @@ export function formatShortDate(dateString: string): string {
     day: "numeric",
   });
 }
-
-export const formatDate = formatShortDate;
 
 export function formatDateTime(dateString: string | undefined): string {
   if (!dateString) return "";

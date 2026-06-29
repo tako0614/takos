@@ -306,42 +306,6 @@ export function err(message: string, status = 500): Response {
 }
 
 // ---------------------------------------------------------------------------
-// Ingress body parsing
-// ---------------------------------------------------------------------------
-
-/**
- * Reads a JSON request body and confirms it is a plain object record before
- * surfacing it to executor RPC handlers. Replaces the implicit
- * `c.req.json<Record<string, unknown>>()` cast with an explicit structural
- * check so handlers can rely on the `Record<string, unknown>` shape without
- * having to defend against arrays / primitives / null escaping the parse step.
- *
- * Returns either the validated record (`ok: true`) or a 400 `err` response
- * (`ok: false`) preserving the behavior of pre-parser sites that previously
- * surfaced the same status via `classifyProxyError` on field-access TypeErrors.
- */
-export async function parseExecutorRpcBody(req: {
-  json(): Promise<unknown>;
-}): Promise<
-  | { ok: true; value: Record<string, unknown> }
-  | { ok: false; response: Response }
-> {
-  let raw: unknown;
-  try {
-    raw = await req.json();
-  } catch {
-    return { ok: false, response: err("Invalid JSON body", 400) };
-  }
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    return {
-      ok: false,
-      response: err("Request body must be a JSON object", 400),
-    };
-  }
-  return { ok: true, value: raw as Record<string, unknown> };
-}
-
-// ---------------------------------------------------------------------------
 // Error classification
 // ---------------------------------------------------------------------------
 
@@ -396,14 +360,6 @@ export function classifyProxyError(e: unknown): {
 // ---------------------------------------------------------------------------
 // Misc helpers
 // ---------------------------------------------------------------------------
-
-export function headersToRecord(headers: Headers): Record<string, string> {
-  const out: Record<string, string> = {};
-  headers.forEach((value, key) => {
-    out[key] = value;
-  });
-  return out;
-}
 
 export { base64ToBytes };
 

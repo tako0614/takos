@@ -43,14 +43,6 @@ export async function createLocalWebFetchForTests(): Promise<LocalFetch> {
     webWorker.fetch(request, env, executionContext);
 }
 
-export async function createLocalDispatchFetch(): Promise<LocalFetch> {
-  const env = await loadLocalDispatchEnv();
-  const { createDispatchWorker } = await import("../dispatch.ts");
-  const dispatchWorker = createDispatchWorker(buildNodeDispatchPlatform);
-  return (request, executionContext = createLocalExecutionContext()) =>
-    dispatchWorker.fetch(request, env, executionContext);
-}
-
 export async function createLocalDispatchFetchForTests(): Promise<LocalFetch> {
   const env = await loadLocalDispatchEnv();
   const { createDispatchWorker } = await import("../dispatch.ts");

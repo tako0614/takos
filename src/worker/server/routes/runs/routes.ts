@@ -26,29 +26,7 @@ import type { BaseVariables } from "../route-auth.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { checkRunAccess } from "./access.ts";
 import { loadRunObservation } from "./observation.ts";
-
-const INTERNAL_ONLY_HEADERS = [
-  "X-Takos-Internal",
-  "X-Takos-Internal-Marker",
-  "X-WS-Auth-Validated",
-  "X-WS-User-Id",
-] as const;
-
-function buildSanitizedDOHeaders(
-  source: HeadersInit | undefined,
-  trustedOverrides: Record<string, string>,
-): Record<string, string> {
-  const headers = new Headers(source);
-  for (const name of INTERNAL_ONLY_HEADERS) headers.delete(name);
-  for (const [key, value] of Object.entries(trustedOverrides)) {
-    headers.set(key, value);
-  }
-  const result: Record<string, string> = {};
-  headers.forEach((v, k) => {
-    result[k] = v;
-  });
-  return result;
-}
+import { buildSanitizedDOHeaders } from "../../../runtime/durable-objects/do-header-utils.ts";
 
 type RunRouteEnv = { Bindings: Env; Variables: BaseVariables };
 type RunRouteApp = Hono<RunRouteEnv>;
