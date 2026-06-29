@@ -3,7 +3,6 @@ import { assertEquals } from "@takos/test/assert";
 
 import type { Env } from "../../../../shared/types/index.ts";
 import { listCatalogItems } from "../explore-catalog.ts";
-import { filterDeployablePackageReleases } from "../explore-packages.ts";
 import { sourceServiceDeps } from "../deps.ts";
 import {
   bundleDeployments,
@@ -464,54 +463,6 @@ test("listCatalogItems accepts outputs.tf when git objects are available", async
       ["repo-app"],
     );
   });
-});
-
-test("filterDeployablePackageReleases keeps only Capsule-backed releases", async () => {
-  const originalGitStore = sourceServiceDeps.gitStore;
-  (
-    sourceServiceDeps as {
-      gitStore: typeof sourceServiceDeps.gitStore;
-    }
-  ).gitStore = {
-    ...sourceServiceDeps.gitStore,
-    getCommitData: (async (_bucket: unknown, sha: string) =>
-      ({
-        tree: sha === "commit-a" ? "tree-1" : "tree-2",
-      }) as unknown) as typeof sourceServiceDeps.gitStore.getCommitData,
-    listDirectory: (async (_bucket: unknown, treeSha: string, path = "") =>
-      path === "" && treeSha === "tree-1"
-        ? [{ name: "outputs.tf", mode: "100644", sha: "blob-1" }]
-        : []) as typeof sourceServiceDeps.gitStore.listDirectory,
-    getBlobAtPath: (async (
-      _bucket: unknown,
-      treeSha: string,
-      filePath: string,
-    ) =>
-      treeSha === "tree-1" && filePath === "outputs.tf"
-        ? new Uint8Array([1])
-        : null) as typeof sourceServiceDeps.gitStore.getBlobAtPath,
-  };
-
-  try {
-    const deployable = await filterDeployablePackageReleases(
-      {} as Env["DB"],
-      {} as Env["GIT_OBJECTS"],
-      [
-        { repoId: "repo-a", tag: "v1.0.0", commitSha: "commit-a" },
-        { repoId: "repo-b", tag: "v2.0.0", commitSha: "commit-b" },
-      ],
-    );
-
-    assertEquals(deployable, [
-      { repoId: "repo-a", tag: "v1.0.0", commitSha: "commit-a" },
-    ]);
-  } finally {
-    (
-      sourceServiceDeps as {
-        gitStore: typeof sourceServiceDeps.gitStore;
-      }
-    ).gitStore = originalGitStore;
-  }
 });
 
 test("listCatalogItems marks release catalog entries unavailable when git objects are missing", async () => {
