@@ -514,12 +514,20 @@ resourcesBase
       );
     }
 
-    const value = await readResourceSecretValue(dbBinding, resource);
+    const value = await readResourceSecretValue(
+      dbBinding,
+      resource,
+      c.env.ENCRYPTION_KEY,
+    );
     // Surface the in-grace previous value (if any) so callers can perform
     // dual-value verification while consumers are reloading after a recent
     // rotation. Reads also lazy-clear expired previous values inside
     // `readResourceSecretValue`, so the state we fetch here is always fresh.
-    const rotationState = await getSecretRotationState(dbBinding, resource.id);
+    const rotationState = await getSecretRotationState(
+      dbBinding,
+      resource.id,
+      c.env.ENCRYPTION_KEY,
+    );
     return c.json({
       id: resource.id,
       name: resource.name,
@@ -554,6 +562,7 @@ resourcesBase
     const rotation = await rotateResourceSecretValue(
       dbBinding,
       resource,
+      c.env.ENCRYPTION_KEY,
     );
     await recordSecretRotationAudit(
       dbBinding,

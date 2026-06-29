@@ -15,6 +15,7 @@ import {
 import type { PublicationRecord } from "../service-publications.ts";
 import { toResourceCapability } from "../../resources/capabilities.ts";
 import { getPortableSecretValue } from "../../resources/portable-runtime.ts";
+import { decryptResourceSecretValue } from "../../resources/secret-crypto.ts";
 import { getResourceById } from "../../resources/store.ts";
 import { normalizeEnvName } from "../../common-env/crypto.ts";
 
@@ -77,6 +78,7 @@ async function resolveServiceEnvToken(
 
 async function resolveSecretBindingToken(
   dbBinding: SqlDatabaseBinding,
+  encryptionKey: string | undefined,
   params: {
     serviceId: string;
     envName: string;
@@ -115,7 +117,14 @@ async function resolveSecretBindingToken(
       }),
     );
   }
-  return nonEmptyToken(resource.backing_resource_id);
+  // Cloudflare backend: secret value is stored encrypted in backing_resource_id.
+  return nonEmptyToken(
+    await decryptResourceSecretValue(
+      encryptionKey,
+      resource.id,
+      resource.backing_resource_id ?? "",
+    ),
+  );
 }
 
 export async function resolvePublicationAuthToken(
@@ -143,10 +152,14 @@ export async function resolvePublicationAuthToken(
   });
   if (envToken) return envToken;
 
-  const bindingToken = await resolveSecretBindingToken(dbBinding, {
-    serviceId: params.ownerServiceId,
-    envName,
-  });
+  const bindingToken = await resolveSecretBindingToken(
+    dbBinding,
+    env.ENCRYPTION_KEY,
+    {
+      serviceId: params.ownerServiceId,
+      envName,
+    },
+  );
   if (bindingToken) return bindingToken;
 
   throw new Error(

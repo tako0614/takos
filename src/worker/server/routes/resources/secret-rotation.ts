@@ -9,6 +9,10 @@ import {
 } from "../../../infra/db/schema.ts";
 import { toResourceCapability } from "../../../application/services/resources/capabilities.ts";
 import {
+  decryptResourceSecretValue,
+  encryptResourceSecretValue,
+} from "../../../application/services/resources/secret-crypto.ts";
+import {
   deletePortableManagedResource,
   getPortableSecretValue,
 } from "./portable-runtime.ts";
@@ -44,13 +48,20 @@ export interface SecretRotationState {
 export async function getSecretRotationState(
   dbBinding: ReturnType<typeof requireDbBinding>,
   resourceId: string,
+  encryptionKey?: string | undefined,
 ): Promise<SecretRotationState> {
   const row = await getDb(dbBinding).select({
     previousSecretValue: resources.previousSecretValue,
     previousSecretExpiresAt: resources.previousSecretExpiresAt,
   }).from(resources).where(eq(resources.id, resourceId)).get();
+  const stored = row?.previousSecretValue ?? null;
+  // The grace-period previous value is stored encrypted at rest; decrypt for
+  // callers that compare/return it (legacy plaintext passes through unchanged).
+  const previousValue = stored
+    ? await decryptResourceSecretValue(encryptionKey, resourceId, stored)
+    : null;
   return {
-    previousValue: row?.previousSecretValue ?? null,
+    previousValue,
     previousExpiresAt: row?.previousSecretExpiresAt ?? null,
   };
 }
@@ -88,12 +99,21 @@ export async function verifyResourceSecretValue(
   dbBinding: ReturnType<typeof requireDbBinding>,
   resource: ResourceRecord,
   presented: string,
+  encryptionKey?: string | undefined,
 ): Promise<boolean> {
   if (!presented) return false;
-  const current = await readResourceSecretValue(dbBinding, resource);
+  const current = await readResourceSecretValue(
+    dbBinding,
+    resource,
+    encryptionKey,
+  );
   if (current && presented === current) return true;
 
-  const initial = await getSecretRotationState(dbBinding, resource.id);
+  const initial = await getSecretRotationState(
+    dbBinding,
+    resource.id,
+    encryptionKey,
+  );
   const state = await clearExpiredPreviousSecret(
     dbBinding,
     resource.id,
@@ -105,6 +125,7 @@ export async function verifyResourceSecretValue(
 export async function readResourceSecretValue(
   dbBinding: ReturnType<typeof requireDbBinding>,
   resource: ResourceRecord,
+  encryptionKey?: string | undefined,
 ): Promise<string> {
   // Lazy-clear any expired previous secret value while we are touching this
   // row. This keeps the grace-period state from lingering past 24h even if
@@ -122,7 +143,12 @@ export async function readResourceSecretValue(
       ...(resource.config ? { config: resource.config } : {}),
     });
   }
-  return resource.backing_resource_id ?? "";
+  // Cloudflare backend: the secret value lives (encrypted) in backing_resource_id.
+  return await decryptResourceSecretValue(
+    encryptionKey,
+    resource.id,
+    resource.backing_resource_id ?? "",
+  );
 }
 
 export interface SecretRotationResult {
@@ -225,6 +251,7 @@ export async function recordSecretRotationAudit(
 export async function rotateResourceSecretValue(
   dbBinding: ReturnType<typeof requireDbBinding>,
   resource: ResourceRecord,
+  encryptionKey?: string | undefined,
 ): Promise<SecretRotationResult> {
   const rotatedAt = new Date().toISOString();
   const previousValueExpiresAt = new Date(
@@ -278,7 +305,10 @@ export async function rotateResourceSecretValue(
     await getDb(dbBinding).update(resources)
       .set({
         updatedAt: rotatedAt,
-        previousSecretValue: oldValue || null,
+        // Store the grace-period previous value encrypted at rest.
+        previousSecretValue: oldValue
+          ? await encryptResourceSecretValue(encryptionKey, resource.id, oldValue)
+          : null,
         previousSecretExpiresAt: oldValue ? previousValueExpiresAt : null,
       })
       .where(eq(resources.id, resource.id))
@@ -294,13 +324,23 @@ export async function rotateResourceSecretValue(
     };
   }
 
-  // Platform backend: the secret value lives in backing_resource_id.
-  const oldValue = resource.backing_resource_id ?? "";
+  // Platform backend: the secret value lives (encrypted) in backing_resource_id.
+  const oldValue = await decryptResourceSecretValue(
+    encryptionKey,
+    resource.id,
+    resource.backing_resource_id ?? "",
+  );
   await getDb(dbBinding).update(resources)
     .set({
-      backingResourceId: newValue,
+      backingResourceId: await encryptResourceSecretValue(
+        encryptionKey,
+        resource.id,
+        newValue,
+      ),
       updatedAt: rotatedAt,
-      previousSecretValue: oldValue || null,
+      previousSecretValue: oldValue
+        ? await encryptResourceSecretValue(encryptionKey, resource.id, oldValue)
+        : null,
       previousSecretExpiresAt: oldValue ? previousValueExpiresAt : null,
     })
     .where(eq(resources.id, resource.id))

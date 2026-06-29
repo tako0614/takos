@@ -1,6 +1,7 @@
 import type { Env } from "../../../shared/types/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { insertFailedResource, insertResource } from "./store.ts";
+import { encryptResourceSecretValue } from "./secret-crypto.ts";
 import {
   type CloudflareManagedResourceType,
   CloudflareResourceService,
@@ -205,6 +206,18 @@ export async function provisionManagedResource(
     const createdBackingResourceId = created.backingResourceId;
     const createdBackingResourceName = created.backingResourceName;
 
+    // For a Cloudflare-backend secret the generated token lives in
+    // backing_resource_id — encrypt it at rest (mirrors the portable marker).
+    // Other resource types store a real backing id that must NOT be encrypted.
+    const persistedBackingResourceId =
+      implementation === "secret_ref" && createdBackingResourceId
+        ? await encryptResourceSecretValue(
+          env.ENCRYPTION_KEY,
+          id,
+          createdBackingResourceId,
+        )
+        : createdBackingResourceId;
+
     if (persist) {
       await insertResource(env.DB, {
         id,
@@ -215,7 +228,7 @@ export async function provisionManagedResource(
         driver,
         backend_name: backendName,
         status: "active",
-        backing_resource_id: createdBackingResourceId,
+        backing_resource_id: persistedBackingResourceId,
         backing_resource_name: createdBackingResourceName,
         config: input.config || {},
         space_id: input.spaceId || null,

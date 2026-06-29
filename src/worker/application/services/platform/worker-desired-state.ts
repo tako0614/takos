@@ -53,6 +53,7 @@ import {
 
 import { getRuntimeConfig, saveRuntimeConfig } from "./runtime-config.ts";
 import { getPortableSecretValue } from "../resources/portable-runtime.ts";
+import { decryptResourceSecretValue } from "../resources/secret-crypto.ts";
 import { normalizeEnvName } from "../common-env/crypto.ts";
 
 // Re-export resolveServiceCommonEnvState for external consumers
@@ -284,18 +285,25 @@ export class ServiceDesiredStateService {
     const bindings: ServiceBindingSpec[] = [];
     for (const row of rows) {
       let secretText: string | undefined;
-      if (
-        toRuntimeBindingType(row.bindingType) === "secret_text" &&
-        row.backendName &&
-        row.backendName !== "cloudflare"
-      ) {
-        secretText = await getPortableSecretValue({
-          id: row.resourceId,
-          backend_name: row.backendName,
-          backing_resource_id: row.backingResourceId,
-          backing_resource_name: row.backingResourceName,
-          config: row.resourceConfig,
-        });
+      if (toRuntimeBindingType(row.bindingType) === "secret_text") {
+        if (row.backendName && row.backendName !== "cloudflare") {
+          secretText = await getPortableSecretValue({
+            id: row.resourceId,
+            backend_name: row.backendName,
+            backing_resource_id: row.backingResourceId,
+            backing_resource_name: row.backingResourceName,
+            config: row.resourceConfig,
+          });
+        } else {
+          // Cloudflare backend: the secret value lives (encrypted) in
+          // backing_resource_id. Decrypt before it is injected as a runner
+          // secret binding (legacy plaintext passes through unchanged).
+          secretText = await decryptResourceSecretValue(
+            this.env.ENCRYPTION_KEY,
+            row.resourceId,
+            row.backingResourceId ?? "",
+          );
+        }
       }
 
       const binding = toServiceBinding(row, { secretText });
