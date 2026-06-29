@@ -7,6 +7,11 @@ export function bytesToHex(bytes: Uint8Array): string {
     .join("");
 }
 
+/** Generate `byteLength` cryptographically-random bytes as a lowercase hex string. */
+export function randomHex(byteLength: number): string {
+  return bytesToHex(crypto.getRandomValues(new Uint8Array(byteLength)));
+}
+
 /** Convert a hex string to a Uint8Array. */
 export function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);

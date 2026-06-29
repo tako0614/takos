@@ -9,6 +9,7 @@ import {
   accountsInstallationServicesUrl,
   sanitizeWorkloadServicesBody,
 } from "./takosumi-workload-services.ts";
+import { readEnvString } from "./default-app-validation.ts";
 
 type InstallableAppInstallEnv = Pick<
   Env,
@@ -87,11 +88,6 @@ export type InstallableAppUpstreamResponse = {
   status: number;
   body: Record<string, unknown> | null;
 };
-
-function readEnvString(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-  return normalized || undefined;
-}
 
 function readRecordString(value: unknown): string | undefined {
   return typeof value === "string" ? readEnvString(value) : undefined;

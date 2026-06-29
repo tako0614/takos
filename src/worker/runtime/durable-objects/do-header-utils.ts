@@ -131,6 +131,7 @@ export function broadcastHeartbeat(
 
 const INTERNAL_ONLY_HEADERS = [
   "X-Takos-Internal",
+  "X-Takos-Internal-Marker",
   "X-WS-Auth-Validated",
   "X-WS-User-Id",
 ] as const;

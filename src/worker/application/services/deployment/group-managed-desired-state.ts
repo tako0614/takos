@@ -18,6 +18,7 @@ import {
   SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
 } from "../platform/service-publications.ts";
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
+import { randomHex } from "../../../shared/utils/encoding-utils.ts";
 import { resolveLinkedCommonEnvState } from "../platform/env-state-resolution.ts";
 import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 import {
@@ -47,13 +48,6 @@ function buildInjectedEnv(
   };
 }
 
-function generateSecretToken(bytes = 32): string {
-  const buffer = new Uint8Array(bytes);
-  crypto.getRandomValues(buffer);
-  return Array.from(buffer, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
-  );
-}
 
 type DesiredEnvVar = { name: string; value: string; secret: boolean };
 
@@ -162,7 +156,7 @@ function ensureMcpAuthSecrets(
     const previous = previousEnvVars.get(key);
     const entry = {
       name: previous?.name ?? key,
-      value: previous?.value ?? generateSecretToken(),
+      value: previous?.value ?? randomHex(32),
       secret: true,
     };
     localEnvMap.set(key, entry);
