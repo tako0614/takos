@@ -47,29 +47,6 @@ export interface App {
   worker?: Worker;
 }
 
-export interface CustomDomain {
-  id: string;
-  service_id: string;
-  domain: string;
-  status:
-    | "pending"
-    | "verifying"
-    | "dns_verified"
-    | "ssl_pending"
-    | "ssl_failed"
-    | "active"
-    | "failed"
-    | "expired";
-  verification_token: string;
-  verification_host?: string;
-  verification_method: "cname" | "txt";
-  cf_custom_hostname_id?: string | null;
-  ssl_status: "pending" | "active" | "failed" | null;
-  verified_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 /**
  * Frontend Resource: a simplified view of the backend Resource type with
  * a narrower set of resource types and statuses relevant to the UI.

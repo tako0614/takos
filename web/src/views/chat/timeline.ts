@@ -59,11 +59,6 @@ export const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set([
   "cancelled",
 ]);
 
-type TimelineStatusSourceEvent = {
-  type: string;
-  data: unknown;
-};
-
 export function parseTimelineEventId(
   event: { id?: number; event_id?: string },
 ): number | undefined {
@@ -124,27 +119,6 @@ export function getTerminalRunStatusFromTimelineEvent(
   }
 
   return null;
-}
-
-export function deriveRunStatusFromTimelineEvents(
-  fallbackStatus: Run["status"],
-  events: TimelineStatusSourceEvent[],
-): Run["status"] {
-  let derivedTerminalStatus: RunTerminalStatus | null = null;
-
-  for (const event of events) {
-    const normalizedType = normalizeTimelineEventType(event.type);
-    const payload = parseEventData(event.data);
-    const terminalStatus = getTerminalRunStatusFromTimelineEvent(
-      normalizedType,
-      payload,
-    );
-    if (terminalStatus) {
-      derivedTerminalStatus = terminalStatus;
-    }
-  }
-
-  return derivedTerminalStatus ?? fallbackStatus;
 }
 
 export function isRunInRootTree(
