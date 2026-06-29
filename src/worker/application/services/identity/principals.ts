@@ -12,16 +12,12 @@ import {
 } from "../../../infra/db/index.ts";
 import { eq } from "drizzle-orm";
 
-export const principalsDeps = {
-  getDb,
-};
-
 /** Resolve a user principal id; the account id is the canonical value. */
 export async function resolveUserPrincipalId(
   db: SqlDatabaseLike,
   userId: string,
 ): Promise<string | null> {
-  const drizzle = principalsDeps.getDb(db);
+  const drizzle = getDb(db);
   const row = await drizzle.select({ id: accounts.id }).from(accounts).where(
     eq(accounts.id, userId),
   ).get();
@@ -33,7 +29,7 @@ export async function resolveActorPrincipalId(
   db: SqlDatabaseLike,
   actorId: string,
 ): Promise<string | null> {
-  const drizzle = principalsDeps.getDb(db);
+  const drizzle = getDb(db);
   const account = await drizzle.select({ id: accounts.id }).from(accounts)
     .where(eq(accounts.id, actorId)).get();
   return account?.id || null;

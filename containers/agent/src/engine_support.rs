@@ -474,23 +474,15 @@ pub fn safe_space_path(root: &Path, space_id: &str) -> std::path::PathBuf {
     root.join("spaces").join(safe_storage_slug(space_id))
 }
 
-pub fn safe_installation_path(
-    root: &Path,
-    space_id: &str,
-    installation_id: &str,
-) -> std::path::PathBuf {
-    safe_space_path(root, space_id)
-        .join("installations")
-        .join(safe_storage_slug(installation_id))
-}
-
 pub fn safe_run_store_path(
     root: &Path,
     space_id: &str,
     installation_id: Option<&str>,
 ) -> std::path::PathBuf {
     if let Some(installation_id) = installation_id.filter(|value| !value.trim().is_empty()) {
-        return safe_installation_path(root, space_id, installation_id);
+        return safe_space_path(root, space_id)
+            .join("installations")
+            .join(safe_storage_slug(installation_id));
     }
     safe_space_path(root, space_id)
 }

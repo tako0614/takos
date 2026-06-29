@@ -297,10 +297,6 @@ impl ControlRpcClient {
         self.sequence.fetch_add(1, Ordering::SeqCst)
     }
 
-    fn idempotency_hash(value: &str) -> String {
-        crate::hash::fnv1a_hex(value)
-    }
-
     pub async fn run_bootstrap(&self) -> AppResult<RunBootstrap> {
         self.post_control_json(
             "run-bootstrap",
@@ -475,7 +471,7 @@ impl ControlRpcClient {
         let idempotency_key = format!(
             "run:{}:assistant-message:{}",
             self.run_id,
-            Self::idempotency_hash(content)
+            crate::hash::fnv1a_hex(content)
         );
         let mut body = json!({
             "threadId": thread_id,

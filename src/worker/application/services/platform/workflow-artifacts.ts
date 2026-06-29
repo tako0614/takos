@@ -8,10 +8,6 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import type { Env } from "../../../shared/types/index.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 
-export const workflowArtifactDeps = {
-  getDb: realGetDb,
-};
-
 type ArtifactBucket = Pick<ObjectStoreBinding, "get" | "delete" | "list">;
 
 export type WorkflowArtifactRecord = {
@@ -165,7 +161,7 @@ export async function listWorkflowArtifactsForRun(
   repoId: string,
   runId: string,
 ) {
-  const db = workflowArtifactDeps.getDb(env.DB);
+  const db = realGetDb(env.DB);
   const run = await db.select({ id: workflowRuns.id })
     .from(workflowRuns)
     .where(and(eq(workflowRuns.id, runId), eq(workflowRuns.repoId, repoId)))
@@ -184,7 +180,7 @@ export async function getWorkflowArtifactById(
   repoId: string,
   artifactId: string,
 ) {
-  const db = workflowArtifactDeps.getDb(env.DB);
+  const db = realGetDb(env.DB);
   // Join workflowArtifacts with workflowRuns to verify repoId
   const result = await db.select({
     id: workflowArtifacts.id,
@@ -227,7 +223,7 @@ export async function deleteWorkflowArtifactById(
   repoId: string,
   artifactId: string,
 ) {
-  const db = workflowArtifactDeps.getDb(env.DB);
+  const db = realGetDb(env.DB);
   const artifact = await getWorkflowArtifactById(env, repoId, artifactId);
   if (!artifact) return null;
 
@@ -258,7 +254,7 @@ export async function resolveWorkflowArtifactFileForJob(
     artifactPath?: string | null;
   },
 ): Promise<ResolvedWorkflowArtifactFile> {
-  const db = workflowArtifactDeps.getDb(env.DB);
+  const db = realGetDb(env.DB);
   const artifactPath = normalizeOptionalArtifactPath(params.artifactPath);
 
   // Find inventory artifact by name + runId, verifying repoId via join

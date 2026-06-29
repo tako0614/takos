@@ -10,10 +10,6 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
-export const workflowRunReadModelDeps = {
-  getDb,
-};
-
 type ListWorkflowRunsOptions = {
   repoId: string;
   workflow?: string;
@@ -28,7 +24,7 @@ export async function listWorkflowRuns(
   db: SqlDatabaseBinding,
   options: ListWorkflowRunsOptions,
 ) {
-  const drizzle = workflowRunReadModelDeps.getDb(db);
+  const drizzle = getDb(db);
 
   const conditions = [eq(workflowRuns.repoId, options.repoId)];
   if (options.workflow) {
@@ -106,7 +102,7 @@ export async function getWorkflowRunDetail(
   repoId: string,
   runId: string,
 ) {
-  const drizzle = workflowRunReadModelDeps.getDb(db);
+  const drizzle = getDb(db);
   const runData = await drizzle.select({
     id: workflowRuns.id,
     workflowPath: workflowRuns.workflowPath,
@@ -197,7 +193,7 @@ export async function getWorkflowRunJobs(
   repoId: string,
   runId: string,
 ) {
-  const drizzle = workflowRunReadModelDeps.getDb(db);
+  const drizzle = getDb(db);
   const run = await drizzle.select({ id: workflowRuns.id })
     .from(workflowRuns)
     .where(and(eq(workflowRuns.id, runId), eq(workflowRuns.repoId, repoId)))

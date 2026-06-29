@@ -3,10 +3,6 @@ import { and, eq } from "drizzle-orm";
 import type { Env } from "../../../shared/types/index.ts";
 import { buildSanitizedDOHeaders } from "../../../runtime/durable-objects/do-header-utils.ts";
 
-export const workflowRunStreamDeps = {
-  getDb,
-};
-
 export async function connectWorkflowRunStream(
   env: Env,
   params: {
@@ -16,7 +12,7 @@ export async function connectWorkflowRunStream(
     request: Request;
   },
 ): Promise<Response> {
-  const db = workflowRunStreamDeps.getDb(env.DB);
+  const db = getDb(env.DB);
   const run = await db.select({ id: workflowRuns.id })
     .from(workflowRuns)
     .where(
