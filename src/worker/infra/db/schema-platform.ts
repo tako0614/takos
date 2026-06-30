@@ -18,6 +18,7 @@ export {
 } from "./schema-platform-infra.ts";
 
 export {
+  mobilePushRegistrations,
   notificationPreferences,
   notifications,
   notificationSettings,

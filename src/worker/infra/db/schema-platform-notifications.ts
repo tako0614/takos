@@ -43,6 +43,37 @@ export const notificationSettings = sqliteTable("notification_settings", {
   ...timestamps,
 });
 
+// 57a. MobilePushRegistration
+export const mobilePushRegistrations = sqliteTable(
+  "mobile_push_registrations",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    product: text("product").notNull(),
+    token: text("token").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    environment: text("environment").notNull().default("production"),
+    hostUrl: text("host_url"),
+    ...timestamps,
+    lastSeenAt: text("last_seen_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    uniqAccountProductToken: uniqueIndex(
+      "idx_mobile_push_registrations_account_product_token",
+    ).on(table.accountId, table.product, table.tokenHash),
+    idxAccount: index("idx_mobile_push_registrations_account_id").on(
+      table.accountId,
+    ),
+    idxLastSeen: index("idx_mobile_push_registrations_last_seen_at").on(
+      table.lastSeenAt,
+    ),
+  }),
+);
+
 // 58. Notification
 export const notifications = sqliteTable("notifications", {
   id: text("id").primaryKey(),

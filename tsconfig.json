@@ -72,6 +72,9 @@
       "takosumi-contract/reference/types": [
         "../takosumi/contract/types.ts"
       ],
+      "takosumi-contract/mobile": [
+        "../takosumi/contract/mobile.ts"
+      ],
       "takosumi-contract/internal/api": [
         "../takosumi/contract/internal-api.ts"
       ],
@@ -507,6 +510,7 @@
     }
   },
   "exclude": [
+    "mobile",
     "node_modules",
     "**/node_modules"
   ]

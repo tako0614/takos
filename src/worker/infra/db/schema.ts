@@ -90,6 +90,7 @@ export {
   infraEndpointRoutes,
   infraEndpoints,
   infraWorkers,
+  mobilePushRegistrations,
   moderationAuditLogs,
   nodes,
   notificationPreferences,
