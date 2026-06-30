@@ -109,6 +109,58 @@ export async function decrypt(
   return new TextDecoder().decode(plaintextBytes);
 }
 
+/**
+ * Strict shape guard for a parsed {@link EncryptedData} envelope. Matches what
+ * {@link decrypt} accepts (alg + v), so callers can validate a stored value
+ * before decryption instead of a bare `JSON.parse(...) as EncryptedData` cast.
+ */
+export function isEncryptedData(raw: unknown): raw is EncryptedData {
+  if (typeof raw !== "object" || raw === null) return false;
+  const candidate = raw as Record<string, unknown>;
+  return typeof candidate.ciphertext === "string" &&
+    typeof candidate.iv === "string" &&
+    candidate.alg === "AES-256-GCM" &&
+    candidate.v === 1;
+}
+
+/**
+ * Single-value envelope encrypt: AES-256-GCM, serialized to the canonical
+ * `JSON.stringify(EncryptedData)` at-rest format. Companion of
+ * {@link decryptEnvelope}; use these instead of re-rolling
+ * `JSON.stringify(await encrypt(...))` per domain.
+ */
+export async function encryptEnvelope(
+  value: string,
+  masterSecret: string,
+  salt: string,
+): Promise<string> {
+  return JSON.stringify(await encrypt(value, masterSecret, salt));
+}
+
+/**
+ * Single-value envelope decrypt with strict shape validation. Rejects a
+ * malformed stored value up front with a clear error rather than relying on
+ * `decrypt`'s internal alg/v guard after a bare cast.
+ */
+export async function decryptEnvelope(
+  stored: string,
+  masterSecret: string,
+  salt: string,
+): Promise<string> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(stored);
+  } catch {
+    throw new Error("decryptEnvelope: stored value is not valid JSON");
+  }
+  if (!isEncryptedData(raw)) {
+    throw new Error(
+      "decryptEnvelope: stored value is not a valid EncryptedData envelope",
+    );
+  }
+  return decrypt(raw, masterSecret, salt);
+}
+
 export async function encryptEnvVars(
   envVars: Record<string, string>,
   masterSecret: string,

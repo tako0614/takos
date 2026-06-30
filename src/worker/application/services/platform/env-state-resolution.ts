@@ -1,6 +1,10 @@
 import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import { ConflictError, InternalError } from "@takos/worker-platform-utils/errors";
-import { decrypt, type EncryptedData } from "../../../shared/utils/crypto.ts";
+import {
+  decrypt,
+  type EncryptedData,
+  isEncryptedData,
+} from "../../../shared/utils/crypto.ts";
 import { resolveServiceConsumeEnvVars } from "./service-publications.ts";
 import { getDb, serviceEnvVars } from "../../../infra/db/index.ts";
 import { and, desc, eq } from "drizzle-orm";
@@ -44,7 +48,11 @@ export async function decryptServiceEnvRow(
 ): Promise<ServiceLocalEnvVarState> {
   let encrypted: EncryptedData;
   try {
-    encrypted = JSON.parse(row.valueEncrypted) as EncryptedData;
+    const raw: unknown = JSON.parse(row.valueEncrypted);
+    if (!isEncryptedData(raw)) {
+      throw new Error("value is not a valid EncryptedData envelope");
+    }
+    encrypted = raw;
   } catch (err) {
     throw new Error(
       `Failed to parse encrypted env var "${row.name}" for service ${row.serviceId}: ${

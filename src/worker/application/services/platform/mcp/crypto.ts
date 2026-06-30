@@ -5,9 +5,8 @@
  */
 
 import {
-  decrypt,
-  encrypt,
-  type EncryptedData,
+  decryptEnvelope,
+  encryptEnvelope,
 } from "../../../../shared/utils/crypto.ts";
 import { base64UrlEncode } from "../../../../shared/utils/encoding-utils.ts";
 
@@ -46,29 +45,19 @@ export function saltFor(
   return `mcp:token:${field}:${serverId}`;
 }
 
-export async function encryptToken(
+export function encryptToken(
   token: string,
   masterSecret: string,
   salt: string,
 ): Promise<string> {
-  const encrypted = await encrypt(token, masterSecret, salt);
-  return JSON.stringify(encrypted);
+  return encryptEnvelope(token, masterSecret, salt);
 }
 
-export async function decryptToken(
+export function decryptToken(
   encryptedJson: string,
   masterSecret: string,
   salt: string,
 ): Promise<string> {
-  let parsed: EncryptedData;
-  try {
-    parsed = JSON.parse(encryptedJson) as EncryptedData;
-  } catch (err) {
-    throw new Error(
-      `Failed to parse encrypted token JSON: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
-  return decrypt(parsed, masterSecret, salt);
+  // Validates the EncryptedData shape before decrypting (was a bare cast).
+  return decryptEnvelope(encryptedJson, masterSecret, salt);
 }
