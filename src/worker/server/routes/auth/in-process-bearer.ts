@@ -44,6 +44,38 @@ export type SelfIssuedBearerResult =
     };
 
 /**
+ * Whether a verified JWT payload is an OIDC `id_token` rather than an OAuth
+ * access token.
+ *
+ * The in-process accounts plane signs `id_token`s (`issueIdToken`) with the same
+ * key it publishes at `/oauth/jwks`, but it NEVER mints JWT access tokens —
+ * OAuth access/refresh tokens are opaque (`takat_` / `takrt_`) and can never
+ * satisfy `jwtVerify`. So any JWT presented as a Bearer here can only be an
+ * `id_token`, which must NOT be accepted as a full API access token: `id_token`s
+ * routinely leak through front-channel redirect URLs, `id_token_hint`
+ * parameters, and logs, and are treated as lower-sensitivity than access tokens.
+ *
+ * We reject `id_token`s by their hallmark OIDC claims (an `aud` set to the
+ * relying-party `client_id`, or an OIDC `nonce` / `auth_time`) and only allow a
+ * JWT that positively declares itself an access token (an OAuth `scope`/`scp` or
+ * a `token_use` marker). This stays forward-compatible if JWT access tokens
+ * (e.g. RFC 9068 `at+jwt`, which carry `scope`) are ever introduced.
+ */
+export function isOidcIdToken(payload: jose.JWTPayload): boolean {
+  const claims = payload as Record<string, unknown>;
+  const hasAccessTokenMarker = typeof claims.token_use === "string" ||
+    claims.scope !== undefined ||
+    claims.scopes !== undefined ||
+    claims.scp !== undefined;
+  if (hasAccessTokenMarker) return false;
+  return (
+    claims.aud !== undefined ||
+    claims.nonce !== undefined ||
+    claims.auth_time !== undefined
+  );
+}
+
+/**
  * Parse the OAuth scope claim from a verified self-issued token payload. Mirrors
  * the `scope` / `scopes` / `scp` precedence used by the remote introspection
  * path so the scope gate behaves identically for self-issued tokens.
@@ -149,13 +181,22 @@ export async function resolveSelfIssuedBearer(input: {
   issuer: string | null;
   db: SqlDatabaseBinding | undefined;
   env: Env;
+  /**
+   * Test seam: override the in-process JWKS loader. Production callers omit this
+   * and the real {@link loadLocalJwks} (which calls the in-process accounts
+   * handler) is used.
+   */
+  loadJwks?: (
+    origin: string,
+    env: CloudflareWorkerEnv,
+  ) => Promise<jose.JSONWebKeySet | null>;
 }): Promise<SelfIssuedBearerResult> {
   const token = extractBearerToken(input.authorizationHeader);
   if (!token) return { kind: "no-bearer" };
   if (!input.issuer) return { kind: "no-issuer" };
   if (!input.db) return { kind: "invalid" };
 
-  const jwks = await loadLocalJwks(
+  const jwks = await (input.loadJwks ?? loadLocalJwks)(
     input.origin,
     input.env as unknown as CloudflareWorkerEnv,
   );
@@ -169,6 +210,14 @@ export async function resolveSelfIssuedBearer(input: {
       algorithms: [...SELF_BEARER_ALGORITHMS],
     }));
   } catch {
+    return { kind: "invalid" };
+  }
+
+  // Refuse OIDC id_tokens: they are signed by the same in-process key the JWKS
+  // serves, so a relying party's id_token (or any captured id_token) would
+  // otherwise be accepted as a full API access token. Only opaque access tokens
+  // are legitimate, and those never reach this JWT path.
+  if (isOidcIdToken(payload)) {
     return { kind: "invalid" };
   }
 
