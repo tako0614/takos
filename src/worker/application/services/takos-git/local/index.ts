@@ -89,6 +89,7 @@ export {
   getCommit,
   getCommitFromIndex,
   getCommitLog,
+  getCommitsFromIndex,
   getCommitsFromRef,
   indexCommit,
   isAncestor,

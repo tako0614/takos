@@ -41,6 +41,7 @@ export {
   getBranchesByNames,
   getCommit,
   getCommitData,
+  getCommitsFromIndex,
   getCommitsFromRef,
   getDefaultBranch,
   getEntryAtPath,

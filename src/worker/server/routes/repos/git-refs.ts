@@ -47,50 +47,91 @@ const gitRefs = new Hono<AuthenticatedRouteEnv>()
           ? toGitBucket(c.env.GIT_OBJECTS)
           : undefined;
 
-        const branchesWithCommits = await Promise.all(
-          branches.map(async (b) => {
-            const result: {
-              name: string;
-              is_default: boolean;
-              is_protected: boolean;
-              commit_sha: string;
-              latest_commit?: {
-                sha: string;
-                message: string;
-                author_name: string;
-                date: string;
-              };
-            } = {
-              name: b.name,
-              is_default: b.is_default,
-              is_protected: b.is_protected,
-              commit_sha: b.commit_sha,
-            };
+        // Resolve each branch head's commit in ONE batched (chunked) index
+        // query instead of one getCommit per branch, then fall back to the
+        // object store only for index misses with bounded concurrency. This
+        // turns a per-branch N+1 (N D1 + up to N R2 subrequests, which exhausts
+        // the per-request subrequest cap on repos with many branches) into
+        // ceil(N/90) D1 reads plus a small, capped R2 tail.
+        const commitsBySha = includeCommits && bucket
+          ? await gitStore.getCommitsFromIndex(
+            c.env.DB,
+            repoId,
+            branches.map((b) => b.commit_sha).filter((sha): sha is string =>
+              !!sha
+            ),
+          )
+          : new Map<
+            string,
+            NonNullable<Awaited<ReturnType<typeof gitStore.getCommit>>>
+          >();
 
-            if (includeCommits && bucket && b.commit_sha) {
-              try {
-                const commit = await gitStore.getCommit(
-                  c.env.DB,
-                  bucket,
-                  repoId,
-                  b.commit_sha,
-                );
-                if (commit) {
-                  result.latest_commit = {
-                    sha: getCommitSha(commit),
-                    message: commit.message,
-                    author_name: commit.author.name,
-                    date: sigTimestampToIso(commit.author.timestamp),
-                  };
+        if (includeCommits && bucket) {
+          const missing = [
+            ...new Set(
+              branches
+                .map((b) => b.commit_sha)
+                .filter((sha): sha is string => !!sha && !commitsBySha.has(sha)),
+            ),
+          ];
+          const R2_FALLBACK_CONCURRENCY = 10;
+          for (let i = 0; i < missing.length; i += R2_FALLBACK_CONCURRENCY) {
+            const batch = missing.slice(i, i + R2_FALLBACK_CONCURRENCY);
+            const resolved = await Promise.all(
+              batch.map(async (sha) => {
+                try {
+                  // Branch heads are repo-bound SHAs, so the object-store
+                  // fallthrough in getCommit is safe here.
+                  return [sha, await gitStore.getCommit(
+                    c.env.DB,
+                    bucket,
+                    repoId,
+                    sha,
+                  )] as const;
+                } catch {
+                  return [sha, null] as const;
                 }
-              } catch {
-                // Ignore commit fetch errors
-              }
+              }),
+            );
+            for (const [sha, commit] of resolved) {
+              if (commit) commitsBySha.set(sha, commit);
             }
+          }
+        }
 
-            return result;
-          }),
-        );
+        const branchesWithCommits = branches.map((b) => {
+          const result: {
+            name: string;
+            is_default: boolean;
+            is_protected: boolean;
+            commit_sha: string;
+            latest_commit?: {
+              sha: string;
+              message: string;
+              author_name: string;
+              date: string;
+            };
+          } = {
+            name: b.name,
+            is_default: b.is_default,
+            is_protected: b.is_protected,
+            commit_sha: b.commit_sha,
+          };
+
+          if (includeCommits && b.commit_sha) {
+            const commit = commitsBySha.get(b.commit_sha);
+            if (commit) {
+              result.latest_commit = {
+                sha: getCommitSha(commit),
+                message: commit.message,
+                author_name: commit.author.name,
+                date: sigTimestampToIso(commit.author.timestamp),
+              };
+            }
+          }
+
+          return result;
+        });
 
         return c.json({
           branches: branchesWithCommits,

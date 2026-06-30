@@ -16,9 +16,10 @@ import type {
 import { isValidSha } from "../git-objects.ts";
 import { getCommitData, putCommit } from "./object-store.ts";
 import { commits, getDb } from "../../../../../infra/db/index.ts";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { generateId } from "../../../../../shared/utils/index.ts";
 import { textDateNullable } from "../../../../../shared/utils/db-guards.ts";
+import { chunkForInClause } from "../../../../../shared/utils/in-clause.ts";
 
 interface CommitIndexRow {
   sha: string;
@@ -181,6 +182,49 @@ export async function getCommitFromIndex(
     commitDate: textDateNullable(indexed.commitDate) ??
       new Date(0).toISOString(),
   });
+}
+
+/**
+ * Batched index lookup for many commit SHAs at once, scoped to `repoId`. Used to
+ * collapse a per-branch N+1 (one getCommit per branch) into chunked `inArray`
+ * queries. Returns a sha -> commit map containing only SHAs present in the index
+ * (callers fall back to the object store for any miss). Each query stays within
+ * the D1 bound-parameter cap via chunkForInClause.
+ */
+export async function getCommitsFromIndex(
+  dbBinding: SqlDatabaseBinding,
+  repoId: string,
+  shas: readonly string[],
+): Promise<Map<string, GitCommit>> {
+  const result = new Map<string, GitCommit>();
+  const uniqueShas = [...new Set(shas)].filter((sha) => sha.length > 0);
+  if (uniqueShas.length === 0) return result;
+  const db = getDb(dbBinding);
+  for (const chunk of chunkForInClause(uniqueShas)) {
+    const rows = await db.select().from(commits)
+      .where(and(eq(commits.repoId, repoId), inArray(commits.sha, chunk)))
+      .all();
+    for (const indexed of rows) {
+      result.set(
+        indexed.sha,
+        indexedToCommit({
+          sha: indexed.sha,
+          treeSha: indexed.treeSha,
+          parentShas: indexed.parentShas,
+          message: indexed.message,
+          authorName: indexed.authorName,
+          authorEmail: indexed.authorEmail,
+          authorDate: textDateNullable(indexed.authorDate) ??
+            new Date(0).toISOString(),
+          committerName: indexed.committerName,
+          committerEmail: indexed.committerEmail,
+          commitDate: textDateNullable(indexed.commitDate) ??
+            new Date(0).toISOString(),
+        }),
+      );
+    }
+  }
+  return result;
 }
 
 export async function getCommit(
