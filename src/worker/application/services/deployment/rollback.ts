@@ -140,31 +140,53 @@ export async function rollbackDeploymentSteps(
     }
   }
 
-  if (ctx.env.WORKER_BUNDLES && ctx.deployment.bundle_r2_key) {
+  // NOTE: the source bundle/wasm in WORKER_BUNDLES is deliberately NOT deleted
+  // here. The deployment pipeline is designed to retry/resume on the SAME
+  // deploymentId (CF queue redelivery -> claimDeploymentForExecution reclaims a
+  // `failed` row -> deploy_worker re-runs and re-reads bundle_r2_key, which the
+  // retry path never re-uploads). Deleting the source bundle on every failed
+  // attempt turned a transient deploy_worker error into a permanent failure
+  // (NotFoundError "Bundle at ..."). Terminal source-artifact cleanup is
+  // deferred to deleteDeploymentSourceArtifacts(), invoked only from the DLQ
+  // handler after retries are exhausted.
+}
+
+/**
+ * Delete a deployment's source bundle + wasm from WORKER_BUNDLES. Call this only
+ * for a TERMINALLY failed deployment (DLQ after max retries), never in the
+ * per-attempt rollback — otherwise a queued retry can no longer re-read the
+ * source it needs to resume.
+ */
+export async function deleteDeploymentSourceArtifacts(
+  env: RollbackEnv,
+  deploymentId: string,
+  deployment: Pick<Deployment, "bundle_r2_key" | "wasm_r2_key">,
+): Promise<void> {
+  if (env.WORKER_BUNDLES && deployment.bundle_r2_key) {
     try {
-      await ctx.env.WORKER_BUNDLES.delete(ctx.deployment.bundle_r2_key);
+      await env.WORKER_BUNDLES.delete(deployment.bundle_r2_key);
       await logDeploymentEvent(
-        ctx.env.DB,
-        ctx.deploymentId,
+        env.DB,
+        deploymentId,
         "rollback_step",
         "upload_bundle",
-        "Rolled back object-store bundle",
-      );
+        "Deleted object-store bundle after terminal failure",
+      ).catch(() => {});
     } catch (bundleCleanupError) {
       logError(
-        `Failed to roll back object-store bundle ${ctx.deployment.bundle_r2_key}`,
+        `Failed to delete object-store bundle ${deployment.bundle_r2_key}`,
         bundleCleanupError,
         { module: "deployment" },
       );
     }
   }
 
-  if (ctx.env.WORKER_BUNDLES && ctx.deployment.wasm_r2_key) {
+  if (env.WORKER_BUNDLES && deployment.wasm_r2_key) {
     try {
-      await ctx.env.WORKER_BUNDLES.delete(ctx.deployment.wasm_r2_key);
+      await env.WORKER_BUNDLES.delete(deployment.wasm_r2_key);
     } catch (wasmCleanupError) {
       logError(
-        `Failed to roll back object-store WASM ${ctx.deployment.wasm_r2_key}`,
+        `Failed to delete object-store WASM ${deployment.wasm_r2_key}`,
         wasmCleanupError,
         { module: "deployment" },
       );

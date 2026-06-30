@@ -1,6 +1,7 @@
 import { and, eq, notInArray } from "drizzle-orm";
 
 import {
+  deleteDeploymentSourceArtifacts,
   type DeploymentEnv,
   DeploymentService,
 } from "../../application/services/deployment/index.ts";
@@ -100,6 +101,11 @@ export async function handleDeploymentJobDlq(
           notInArray(deployments.status, ["success", "rolled_back"]),
         ),
       ).run();
+
+      // Terminal failure: the retry/resume path is exhausted, so the source
+      // bundle/wasm is now safe to delete (the per-attempt rollback no longer
+      // touches it, which is what lets queued retries resume).
+      await deleteDeploymentSourceArtifacts(env, deploymentId, deployment);
     }
   } catch (err) {
     logError("Failed to update deployment status", err, {

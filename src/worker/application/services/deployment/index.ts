@@ -10,4 +10,7 @@ export type {
   DeployState,
   RollbackInput,
 } from "./models.ts";
-export { rollbackDeploymentSteps } from "./rollback.ts";
+export {
+  deleteDeploymentSourceArtifacts,
+  rollbackDeploymentSteps,
+} from "./rollback.ts";
