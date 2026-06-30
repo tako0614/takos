@@ -6,7 +6,7 @@ import {
   notifications,
   notificationSettings,
 } from "../../../infra/db/index.ts";
-import { and, count, desc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import {
   generateId,
   safeJsonParseOrDefault,
@@ -351,7 +351,7 @@ export async function updateNotificationPreferences(
 export async function listNotifications(
   dbBinding: SqlDatabaseBinding,
   userId: string,
-  opts?: { limit?: number; before?: string | null },
+  opts?: { limit?: number; before?: string | null; beforeId?: string | null },
 ): Promise<{ notifications: NotificationDto[] }> {
   const db = getDb(dbBinding);
   const limitInput = opts?.limit;
@@ -367,6 +367,8 @@ export async function listNotifications(
     }
   }
 
+  const beforeId = opts?.beforeId?.trim() || null;
+
   const prefs = await getNotificationPreferences(dbBinding, userId);
   const enabledTypes = NOTIFICATION_TYPES.filter((t) => prefs[t].in_app);
   if (enabledTypes.length === 0) return { notifications: [] };
@@ -377,7 +379,21 @@ export async function listNotifications(
       inArray(notifications.type, enabledTypes),
     ];
     if (before) {
-      conditions.push(lt(notifications.createdAt, before));
+      // Composite keyset cursor with a stable `id` tiebreaker so notifications
+      // sharing a millisecond at a page boundary are not skipped (createdAt is
+      // ms-precision and a fan-out can collide). The legacy timestamp-only
+      // cursor (no beforeId) keeps the prior `lt(createdAt, before)` behavior.
+      conditions.push(
+        beforeId
+          ? or(
+            lt(notifications.createdAt, before),
+            and(
+              eq(notifications.createdAt, before),
+              lt(notifications.id, beforeId),
+            ),
+          )!
+          : lt(notifications.createdAt, before),
+      );
     }
 
     const rows = await db.select({
@@ -392,7 +408,7 @@ export async function listNotifications(
       createdAt: notifications.createdAt,
     }).from(notifications)
       .where(and(...conditions))
-      .orderBy(desc(notifications.createdAt))
+      .orderBy(desc(notifications.createdAt), desc(notifications.id))
       .limit(limitVal)
       .all();
 

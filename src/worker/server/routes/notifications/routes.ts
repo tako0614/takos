@@ -76,6 +76,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
           (v) => !v || Number.isFinite(Date.parse(v)),
           { message: "before must be a valid datetime" },
         ).optional(),
+        // Optional composite-cursor tiebreaker: the id of the last row from the
+        // previous page (paired with `before`) so same-millisecond rows at a
+        // page boundary are not skipped. Omitting it keeps the legacy
+        // timestamp-only behavior.
+        before_id: z.string().optional(),
       }),
     ),
     async (c) => {
@@ -86,11 +91,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         ? parsePagination(validatedQuery, { limit: 50, maxLimit: 100 }).limit
         : undefined;
       const before = validatedQuery.before || null;
+      const beforeId = validatedQuery.before_id || null;
 
       const result = await listNotifications(
         c.env.DB,
         user.id,
-        { limit, before },
+        { limit, before, beforeId },
       );
       return c.json(result);
     },
