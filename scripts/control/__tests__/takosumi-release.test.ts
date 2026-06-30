@@ -132,7 +132,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-destroy"/);
-  assert.match(rootModule, /executor\s*=\s*"operator"/);
+  assert.match(rootModule, /executor\s*=\s*"runner"/);
   assert.match(rootVariables, /variable\s+"release_working_directory"\s*\{/);
   assert.match(
     rootModule,
@@ -159,7 +159,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(productionModule, /pre_destroy\s*=\s*\[/);
   assert.match(productionModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(productionModule, /id\s*=\s*"takos-worker-destroy"/);
-  assert.match(productionModule, /executor\s*=\s*"operator"/);
+  assert.match(productionModule, /executor\s*=\s*"runner"/);
   assert.match(productionModule, /variable\s+"release_working_directory"\s*\{/);
   assert.match(
     productionModule,

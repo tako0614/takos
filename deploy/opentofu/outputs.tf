@@ -76,7 +76,7 @@ output "takosumi_release" {
     post_apply = [
       {
         id                = "takos-worker-release"
-        executor          = "operator"
+        executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment]
         working_directory = var.release_working_directory
       },
@@ -84,7 +84,7 @@ output "takosumi_release" {
     pre_destroy = [
       {
         id                = "takos-worker-destroy"
-        executor          = "operator"
+        executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment, "--destroy"]
         working_directory = var.release_working_directory
       },
