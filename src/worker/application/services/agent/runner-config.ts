@@ -1,6 +1,7 @@
 import type { AgentConfig } from "./agent-models.ts";
 import type { AgentConfigEnv } from "../../../shared/types/env.ts";
 import { CUSTOM_TOOLS } from "../../tools/custom/index.ts";
+import { AGENT_DISABLED_CUSTOM_TOOLS } from "../../tools/tool-policy.ts";
 import { SYSTEM_PROMPTS } from "./prompt-builder.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import {
@@ -20,11 +21,18 @@ export function getAgentConfig(
 
   const systemPrompt = SYSTEM_PROMPTS[agentType] || SYSTEM_PROMPTS.default;
 
-  const tools = CUSTOM_TOOLS.map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters,
-  }));
+  // Advertise only the tools the agent can actually invoke. The executor gates
+  // execution on AGENT_DISABLED_CUSTOM_TOOLS (the raw-SQL storage tools bound to
+  // the shared platform DB live there), so advertising them here only produced
+  // rejected calls and a catalog that disagreed with handleToolCatalog.
+  const disabled = AGENT_DISABLED_CUSTOM_TOOLS as readonly string[];
+  const tools = CUSTOM_TOOLS
+    .filter((tool) => !disabled.includes(tool.name))
+    .map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    }));
 
   const maxIterations = parseIntValue(
     "MAX_AGENT_ITERATIONS",
