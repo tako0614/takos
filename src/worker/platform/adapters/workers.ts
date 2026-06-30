@@ -1,20 +1,12 @@
 import type { Env } from "../../shared/types/index.ts";
 import type { WorkerEnv } from "../../runtime/worker/env.ts";
 import type { DispatchEnv } from "../../dispatch.ts";
-import {
-  buildPlatform,
-  createPlatformConfig,
-  createPlatformServices,
-  createRoutingService,
-  getServiceRegistry,
-  getString,
-} from "./shared.ts";
+import { buildPlatformFromEnv, getString } from "./shared.ts";
 import type { PlatformEnvIndex } from "./shared.ts";
 import type {
   ControlPlatform,
   PlatformServiceBinding,
 } from "../platform-config.ts";
-import { resolveHostnameRouting } from "../../application/services/routing/service.ts";
 import { resolveContainerHostBaseUrl } from "../../platform-utils/container-host.ts";
 
 function serviceBindingFromEnv(
@@ -96,84 +88,14 @@ function buildWorkersPlatform<TBindings extends object>(
     ...(executorHost ? { EXECUTOR_HOST: executorHost } : {}),
   } as TBindings & PlatformEnvIndex;
 
-  const config = createPlatformConfig({
-    adminDomain: getString(bindings, "ADMIN_DOMAIN"),
-    tenantBaseDomain: getString(bindings, "TENANT_BASE_DOMAIN"),
-    environment: getString(bindings, "ENVIRONMENT"),
-    oidcIssuerUrl: getString(bindings, "OIDC_ISSUER_URL"),
-    oidcDiscoveryUrl: getString(bindings, "OIDC_DISCOVERY_URL"),
-    oidcClientId: getString(bindings, "OIDC_CLIENT_ID"),
-    oidcClientSecret: getString(bindings, "OIDC_CLIENT_SECRET"),
-    oidcRedirectUri: getString(bindings, "OIDC_REDIRECT_URI"),
-    platformPrivateKey: getString(bindings, "PLATFORM_PRIVATE_KEY"),
-    platformPublicKey: getString(bindings, "PLATFORM_PUBLIC_KEY"),
-    encryptionKey: getString(bindings, "ENCRYPTION_KEY"),
-    serviceInternalJwtIssuer: getString(bindings, "SERVICE_INTERNAL_JWT_ISSUER"),
+  // The only workers-specific wiring is the in-process runtime/executor host
+  // fallback (resolved above and merged into `bindings`); the rest of the
+  // config/service map is shared with the node adapter.
+  return buildPlatformFromEnv(bindings, {
+    source: "workers",
+    runtimeHost,
+    executorHost,
   });
-
-  const services = createPlatformServices({
-    routing: createRoutingService({
-      resolveHostname(hostname, executionContext) {
-        return resolveHostnameRouting({
-          env: bindings,
-          hostname,
-          executionCtx: executionContext,
-        });
-      },
-    }),
-    sqlBinding: bindings.DB as Env["DB"] | undefined,
-    routingStore: bindings.ROUTING_STORE as Env["ROUTING_STORE"] | undefined,
-    hostnameRouting: bindings.HOSTNAME_ROUTING as
-      | Env["HOSTNAME_ROUTING"]
-      | undefined,
-    queues: {
-      runs: bindings.RUN_QUEUE as Env["RUN_QUEUE"] | undefined,
-      index: bindings.INDEX_QUEUE as Env["INDEX_QUEUE"] | undefined,
-      workflow: bindings.WORKFLOW_QUEUE as Env["WORKFLOW_QUEUE"] | undefined,
-      deployment: bindings.DEPLOY_QUEUE as Env["DEPLOY_QUEUE"] | undefined,
-    },
-    objects: {
-      gitObjects: bindings.GIT_OBJECTS as Env["GIT_OBJECTS"] | undefined,
-      offload: bindings.TAKOS_OFFLOAD as Env["TAKOS_OFFLOAD"] | undefined,
-      tenantSource: bindings.TENANT_SOURCE as Env["TENANT_SOURCE"] | undefined,
-      workerBundles: bindings.WORKER_BUNDLES as
-        | Env["WORKER_BUNDLES"]
-        | undefined,
-      tenantBuilds: bindings.TENANT_BUILDS as
-        | Env["TENANT_BUILDS"]
-        | undefined,
-    },
-    notifications: {
-      runNotifier: bindings.RUN_NOTIFIER as Env["RUN_NOTIFIER"] | undefined,
-      sessionStore: bindings.SESSION_DO as Env["SESSION_DO"] | undefined,
-      notificationNotifier: bindings.NOTIFICATION_NOTIFIER as
-        | Env["NOTIFICATION_NOTIFIER"]
-        | undefined,
-    },
-    locks: {
-      rateLimiter: bindings.RATE_LIMITER_DO as
-        | Env["RATE_LIMITER_DO"]
-        | undefined,
-    },
-    hosts: {
-      runtimeHost,
-      executorHost,
-    },
-    ai: {
-      binding: bindings.AI as Env["AI"] | undefined,
-      vectorize: bindings.VECTORIZE as Env["VECTORIZE"] | undefined,
-      openAiApiKey: getString(bindings, "OPENAI_API_KEY"),
-      anthropicApiKey: getString(bindings, "ANTHROPIC_API_KEY"),
-      googleApiKey: getString(bindings, "GOOGLE_API_KEY"),
-    },
-    assets: {
-      binding: bindings.ASSETS as PlatformServiceBinding | undefined,
-    },
-    documents: {},
-    serviceRegistry: getServiceRegistry(bindings),
-  });
-
-  return buildPlatform("workers", bindings, config, services);
 }
 
 export function buildWorkersWebPlatform(env: Env): ControlPlatform<Env> {
