@@ -281,42 +281,67 @@ export async function searchContent(
     .limit(100)
     .all();
 
-  const results: CodeSearchResult[] = [];
   const queryLower = query.toLowerCase();
 
-  for (const file of fileRows) {
-    if (results.length >= limit) break;
-    if (file.size > 1024 * 1024) continue;
+  // Pre-filter (size + extension) without any I/O, preserving updatedAt-desc
+  // order, so the R2 reads below operate only on real candidates.
+  const candidates = fileRows.filter((file) => {
+    if (file.size > 1024 * 1024) return false;
     if (fileTypes && fileTypes.length > 0) {
       const ext = file.path.split(".").pop()?.toLowerCase();
-      if (!ext || !fileTypes.includes(ext)) continue;
+      if (!ext || !fileTypes.includes(ext)) return false;
     }
-    try {
-      const r2Key = getR2Key(spaceId, file.id);
-      const object = await storage.get(r2Key);
-      if (!object) continue;
-      const content = await object.text();
-      const matches = findContentMatches(content, queryLower);
-      if (matches.length > 0) {
-        results.push({
-          type: "content",
-          file: toSpaceFile(file),
-          matches: matches.slice(0, 5),
-          score: matches.length * 10 + calculateFilenameScore(file.path, query),
-        });
-      }
-    } catch (err) {
-      if (err instanceof Error && !err.message.includes("not found")) {
-        sourceServiceDeps.logWarn(`Error reading file ${file.path}`, {
-          module: "search",
-          detail: err.message,
-        });
-      }
-      continue;
+    return true;
+  });
+
+  // Read candidate blobs in bounded-concurrency batches instead of one
+  // sequential R2 GET per file (a rare/absent query previously read all 100
+  // objects end-to-end on the user-facing request). Order and the
+  // "stop once `limit` matches are collected" semantics are preserved: batches
+  // run in candidate order, matches are appended in order, and we stop fetching
+  // once enough matches exist (the final batch may over-read by < concurrency,
+  // which is then trimmed by the slice).
+  const results: CodeSearchResult[] = [];
+  const CONTENT_READ_CONCURRENCY = 10;
+  for (
+    let i = 0;
+    i < candidates.length && results.length < limit;
+    i += CONTENT_READ_CONCURRENCY
+  ) {
+    const batch = candidates.slice(i, i + CONTENT_READ_CONCURRENCY);
+    const batchResults = await Promise.all(
+      batch.map(async (file): Promise<CodeSearchResult | null> => {
+        try {
+          const r2Key = getR2Key(spaceId, file.id);
+          const object = await storage.get(r2Key);
+          if (!object) return null;
+          const content = await object.text();
+          const matches = findContentMatches(content, queryLower);
+          if (matches.length === 0) return null;
+          return {
+            type: "content",
+            file: toSpaceFile(file),
+            matches: matches.slice(0, 5),
+            score: matches.length * 10 +
+              calculateFilenameScore(file.path, query),
+          };
+        } catch (err) {
+          if (err instanceof Error && !err.message.includes("not found")) {
+            sourceServiceDeps.logWarn(`Error reading file ${file.path}`, {
+              module: "search",
+              detail: err.message,
+            });
+          }
+          return null;
+        }
+      }),
+    );
+    for (const result of batchResults) {
+      if (result) results.push(result);
     }
   }
 
-  return results;
+  return results.slice(0, limit);
 }
 
 function calculateFilenameScore(path: string, query: string): number {
