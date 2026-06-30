@@ -11,7 +11,19 @@ import {
   serviceDeployments,
   services,
 } from "../../../infra/db/index.ts";
-import { and, asc, desc, eq, inArray, isNotNull, lt, max } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  max,
+  or,
+} from "drizzle-orm";
 import { ConflictError } from "@takos/worker-platform-utils/errors";
 import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import type { ArtifactKind, Deployment, DeploymentEvent } from "./models.ts";
@@ -216,10 +228,31 @@ export async function updateServiceDeploymentPointers(
     activeDeploymentVersion: number | null;
     updatedAt: string;
     status?: string;
+    /**
+     * When set, the promotion only applies if it does not regress the recorded
+     * version: `current_version IS NULL OR current_version <= activeDeploymentVersion`.
+     * This serializes concurrent same-service deploys at the authoritative
+     * pointer — an older deploy whose pipeline commits after a newer one can no
+     * longer overwrite activeDeploymentId/currentVersion (lost update / order
+     * inversion). `<=` (not `<`) keeps same-version resume idempotent. Forward
+     * promotions set this; rollback (which intentionally promotes an OLDER
+     * version) and group reconciliation leave it unset.
+     */
+    guardMonotonicVersion?: boolean;
   },
-): Promise<void> {
+): Promise<boolean> {
   const drizzle = deploymentStoreDeps.getDb(db);
-  await drizzle.update(services)
+  const guard = input.guardMonotonicVersion &&
+      input.activeDeploymentVersion !== null
+    ? and(
+      eq(services.id, serviceId),
+      or(
+        isNull(services.currentVersion),
+        lte(services.currentVersion, input.activeDeploymentVersion),
+      ),
+    )
+    : eq(services.id, serviceId);
+  const result = await drizzle.update(services)
     .set({
       ...(input.status ? { status: input.status } : {}),
       fallbackDeploymentId: input.fallbackDeploymentId,
@@ -229,8 +262,9 @@ export async function updateServiceDeploymentPointers(
         : { currentVersion: input.activeDeploymentVersion }),
       updatedAt: input.updatedAt,
     })
-    .where(eq(services.id, serviceId))
+    .where(guard)
     .run();
+  return affectedRowCount(result) > 0;
 }
 
 export async function getDeploymentById(

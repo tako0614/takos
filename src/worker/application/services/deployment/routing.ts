@@ -306,10 +306,47 @@ export async function applyRoutingDbUpdates(
   env: DeploymentRoutingEnv,
   ctx: RoutingContext,
   nowIso: string,
-): Promise<void> {
+): Promise<boolean> {
   const db = getDb(env.DB);
 
   if (ctx.desiredRoutingStatus !== "canary") {
+    // Compute the rollback target (fallback) from a FRESH read of the service's
+    // current active pointer rather than the value captured at pipeline start
+    // (ctx.serviceRouteRecord, read much earlier). Under a concurrent deploy of
+    // the same service the captured value can be stale, which would record a
+    // wrong rollback baseline. Never fall back to the deployment being promoted.
+    const currentBasics = await getServiceDeploymentBasics(
+      env.DB,
+      ctx.serviceRouteRecord.id,
+    );
+    const freshActive = currentBasics.activeDeploymentId;
+    const fallbackDeploymentId = freshActive && freshActive !== ctx.deploymentId
+      ? freshActive
+      : (ctx.serviceRouteRecord.activeDeploymentId !== ctx.deploymentId
+        ? ctx.serviceRouteRecord.activeDeploymentId ?? null
+        : null);
+
+    // Version-guarded promotion FIRST: it is the authoritative serialization
+    // point for concurrent same-service deploys. If an older deploy's pipeline
+    // commits after a newer one, the guard rejects it (0 rows) and we skip the
+    // archive/activate, so we never archive the newer winner or leave two
+    // deployments routingStatus='active'.
+    const promoted = await updateServiceDeploymentPointers(
+      env.DB,
+      ctx.serviceRouteRecord.id,
+      {
+        status: "deployed",
+        fallbackDeploymentId,
+        activeDeploymentId: ctx.deploymentId,
+        activeDeploymentVersion: ctx.deploymentVersion,
+        updatedAt: nowIso,
+        guardMonotonicVersion: true,
+      },
+    );
+    if (!promoted) {
+      return false;
+    }
+
     await db.update(deployments)
       .set({
         routingStatus: "archived",
@@ -334,31 +371,7 @@ export async function applyRoutingDbUpdates(
       .where(eq(deployments.id, ctx.deploymentId))
       .run();
 
-    // Compute the rollback target (fallback) from a FRESH read of the service's
-    // current active pointer rather than the value captured at pipeline start
-    // (ctx.serviceRouteRecord, read much earlier). Under a concurrent deploy of
-    // the same service the captured value can be stale, which would record a
-    // wrong rollback baseline. Never fall back to the deployment being promoted.
-    const currentBasics = await getServiceDeploymentBasics(
-      env.DB,
-      ctx.serviceRouteRecord.id,
-    );
-    const freshActive = currentBasics.activeDeploymentId;
-    const fallbackDeploymentId = freshActive && freshActive !== ctx.deploymentId
-      ? freshActive
-      : (ctx.serviceRouteRecord.activeDeploymentId !== ctx.deploymentId
-        ? ctx.serviceRouteRecord.activeDeploymentId ?? null
-        : null);
-
-    await updateServiceDeploymentPointers(env.DB, ctx.serviceRouteRecord.id, {
-      status: "deployed",
-      fallbackDeploymentId,
-      activeDeploymentId: ctx.deploymentId,
-      activeDeploymentVersion: ctx.deploymentVersion,
-      updatedAt: nowIso,
-    });
-
-    return;
+    return true;
   }
 
   const canaryWeight = normalizeCanaryWeight(ctx.desiredRoutingWeight);
@@ -408,6 +421,8 @@ export async function applyRoutingDbUpdates(
     })
     .where(eq(services.id, ctx.serviceRouteRecord.id))
     .run();
+
+  return true;
 }
 
 export async function applyRoutingToHostnames(

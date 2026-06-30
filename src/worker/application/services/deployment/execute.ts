@@ -735,8 +735,9 @@ export async function executeDeploymentPipeline(
             },
           );
 
+          let promoted = true;
           try {
-            await applyRoutingDbUpdates(env, routingCtx, nowIso);
+            promoted = await applyRoutingDbUpdates(env, routingCtx, nowIso);
           } catch (dbErr) {
             if (routingRollbackSnapshot) {
               await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch(
@@ -750,6 +751,24 @@ export async function executeDeploymentPipeline(
               );
             }
             throw dbErr;
+          }
+
+          if (!promoted) {
+            // The version-guarded promotion was rejected: a newer concurrent
+            // deploy of this service already won. Record the skip instead of a
+            // misleading "Promoted" audit and leave the newer winner's pointer
+            // intact. We deliberately do NOT restore our hostname snapshot here
+            // (it would clobber the winner's hostname routing with our stale
+            // pre-deploy state); the winner's own swap is authoritative.
+            await logDeploymentEvent(
+              env.DB,
+              deploymentId,
+              "routing_skipped",
+              "update_routing",
+              "Skipped promotion: a newer version of this service is already active",
+              { actorAccountId: deployment.deployed_by ?? null },
+            );
+            return;
           }
 
           await logDeploymentEvent(
