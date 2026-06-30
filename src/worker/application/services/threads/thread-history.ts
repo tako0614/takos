@@ -28,6 +28,17 @@ import {
 } from "../../../shared/utils/db-guards.ts";
 import { listThreadMessages } from "./thread-service.ts";
 import { logError } from "../../../shared/utils/logger.ts";
+import { chunkForInClause } from "../../../shared/utils/in-clause.ts";
+
+/**
+ * Defensive cap on how many runs a single thread-history read loads from the
+ * root delegation tree. A busy thread/project accumulates one run per turn plus
+ * child runs per sub-agent delegation with no retention, so an uncapped scan
+ * would pull the whole tree (and all its artifacts/events) into the Worker on
+ * every open. Newest-first ordering means the cap keeps the most recent runs,
+ * which is what the history view surfaces.
+ */
+const MAX_THREAD_HISTORY_RUNS = 500;
 
 type PendingSessionDiffSummary = {
   sessionId: string;
@@ -257,19 +268,30 @@ async function getPendingSessionDiff(
   env: Env,
   completedRunSessionIdsNewestFirst: string[],
 ): Promise<PendingSessionDiffSummary> {
-  for (const sessionId of completedRunSessionIdsNewestFirst) {
-    if (!isValidOpaqueId(sessionId)) {
-      continue;
-    }
+  const candidateIds = completedRunSessionIdsNewestFirst.filter((id) =>
+    isValidOpaqueId(id)
+  );
+  if (candidateIds.length === 0) {
+    return null;
+  }
 
-    try {
-      const db = threadHistoryDeps.getDb(env.DB);
-      const session = await db.select({
-        id: sessions.id,
-        status: sessions.status,
-        repoId: sessions.repoId,
-      }).from(sessions).where(eq(sessions.id, sessionId)).get();
+  try {
+    const db = threadHistoryDeps.getDb(env.DB);
+    // Single (chunked) lookup instead of one SELECT per completed run; pick the
+    // first non-discarded session in newest-first run order.
+    const rows = await Promise.all(
+      chunkForInClause(candidateIds).map((chunk) =>
+        db.select({
+          id: sessions.id,
+          status: sessions.status,
+          repoId: sessions.repoId,
+        }).from(sessions).where(inArray(sessions.id, chunk)).all()
+      ),
+    ).then((batches) => batches.flat());
+    const byId = new Map(rows.map((row) => [row.id, row]));
 
+    for (const sessionId of completedRunSessionIdsNewestFirst) {
+      const session = byId.get(sessionId);
       if (session && session.status !== "discarded") {
         return {
           sessionId: session.id,
@@ -277,16 +299,15 @@ async function getPendingSessionDiff(
           git_mode: !!session.repoId,
         };
       }
-    } catch (err) {
-      threadHistoryDeps.logError(
-        "Failed to get session info for thread history",
-        err,
-        {
-          module: "services/threads/threads/thread-history",
-          extra: ["session_id:", sessionId],
-        },
-      );
     }
+  } catch (err) {
+    threadHistoryDeps.logError(
+      "Failed to get session info for thread history",
+      err,
+      {
+        module: "services/threads/threads/thread-history",
+      },
+    );
   }
 
   return null;
@@ -365,6 +386,7 @@ export async function getThreadHistory(
   const threadRunRows = await db.select().from(runs)
     .where(eq(runs.threadId, threadId))
     .orderBy(desc(runs.createdAt), desc(runs.id))
+    .limit(MAX_THREAD_HISTORY_RUNS)
     .all();
   const threadRunsNewestFirst = threadRunRows.map((row) =>
     toHistoryRunSnapshot(row)
@@ -375,6 +397,7 @@ export async function getThreadHistory(
   const allRootRunRows = await db.select().from(runs)
     .where(eq(runs.rootThreadId, effectiveRootThreadId))
     .orderBy(desc(runs.createdAt), desc(runs.id))
+    .limit(MAX_THREAD_HISTORY_RUNS)
     .all();
   const allRunsNewestFirst = allRootRunRows.map((row) =>
     toHistoryRunSnapshot(row)
@@ -399,30 +422,45 @@ export async function getThreadHistory(
   const runIds = runsNewestFirst.map((row) => row.id);
   const focus = buildThreadHistoryFocus(runsNewestFirst);
 
-  const artifactRowsPromise: Promise<RunHistoryArtifactRow[]> =
-    runIds.length === 0 ? Promise.resolve([]) : db.select({
-      id: artifacts.id,
-      runId: artifacts.runId,
-      type: artifacts.type,
-      title: artifacts.title,
-      fileId: artifacts.fileId,
-      createdAt: artifacts.createdAt,
-    }).from(artifacts).where(inArray(artifacts.runId, runIds)).orderBy(
-      asc(artifacts.createdAt),
-      asc(artifacts.id),
-    ).all();
+  // D1 caps bound params at 100/query and drizzle does not chunk inArray, so the
+  // runId set (one per turn + per delegated child run, unbounded in a long-lived
+  // tree) must be split into ≤90-id batches or a normal history read 500s. Each
+  // runId falls entirely within one batch, so per-run event/artifact ordering is
+  // preserved when the batches are concatenated and grouped by run_id below.
+  const artifactRowsPromise: Promise<RunHistoryArtifactRow[]> = runIds.length ===
+      0
+    ? Promise.resolve([])
+    : Promise.all(
+      chunkForInClause(runIds).map((chunk) =>
+        db.select({
+          id: artifacts.id,
+          runId: artifacts.runId,
+          type: artifacts.type,
+          title: artifacts.title,
+          fileId: artifacts.fileId,
+          createdAt: artifacts.createdAt,
+        }).from(artifacts).where(inArray(artifacts.runId, chunk)).orderBy(
+          asc(artifacts.createdAt),
+          asc(artifacts.id),
+        ).all()
+      ),
+    ).then((batches) => batches.flat());
   const eventRowsPromise: Promise<RunHistoryEventRow[]> = runIds.length === 0
     ? Promise.resolve([])
-    : db.select({
-      id: runEvents.id,
-      runId: runEvents.runId,
-      type: runEvents.type,
-      data: runEvents.data,
-      createdAt: runEvents.createdAt,
-    }).from(runEvents).where(inArray(runEvents.runId, runIds)).orderBy(
-      asc(runEvents.createdAt),
-      asc(runEvents.id),
-    ).all();
+    : Promise.all(
+      chunkForInClause(runIds).map((chunk) =>
+        db.select({
+          id: runEvents.id,
+          runId: runEvents.runId,
+          type: runEvents.type,
+          data: runEvents.data,
+          createdAt: runEvents.createdAt,
+        }).from(runEvents).where(inArray(runEvents.runId, chunk)).orderBy(
+          asc(runEvents.createdAt),
+          asc(runEvents.id),
+        ).all()
+      ),
+    ).then((batches) => batches.flat());
 
   const [artifactRows, eventRows, taskContext, pendingSessionDiff] =
     await Promise.all([
