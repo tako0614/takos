@@ -9,6 +9,7 @@ import type { Env, RunStatus } from "../../../shared/types/index.ts";
 import type { AgentMessage, AgentUsage, ToolCall } from "./agent-models.ts";
 import { getDb, messages, runs, threads } from "../../../infra/db/index.ts";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { affectedRowCount } from "../../../shared/utils/affected-row-count.ts";
 import { resolveHistoryTokenBudget } from "./model-catalog.ts";
 import { estimateTokens } from "./prompt-budget.ts";
 import { readMessageFromR2 } from "../offload/messages.ts";
@@ -33,7 +34,32 @@ import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 // ── Run status persistence ──────────────────────────────────────────
 
 /**
+ * Lease identity of the caller, threaded from the token-bound `serviceId`
+ * (and, when the agent echoes it, `leaseVersion`) that executor-host stamps on
+ * every control RPC body. When present, the status write is fenced to this
+ * lease so a re-enqueued (zombie) container — whose proxy token stays valid for
+ * STALE_PROXY_TOKEN_MS after stale-recovery reclaims the run under a NEW lease —
+ * cannot clobber a run that a fresh lease now owns. Mirrors the WHERE-clause
+ * fences in handleHeartbeat / handleRunFail / handleRunReset.
+ */
+export type RunStatusLease = {
+  serviceId?: string | null;
+  leaseVersion?: number | null;
+};
+
+export type UpdateRunStatusResult = {
+  /** Whether the run row was written by this call (or already idempotent). */
+  updated: boolean;
+  /** True when a lease was supplied but the run is no longer owned by it. */
+  leaseLost: boolean;
+};
+
+/**
  * Update run status in the database.
+ *
+ * When `lease.serviceId` is supplied the update is fenced to that lease and
+ * returns `{ leaseLost: true }` (the caller maps this to HTTP 409) instead of
+ * silently writing on behalf of a superseded container.
  */
 export async function updateRunStatusImpl(
   db: SqlDatabaseBinding,
@@ -42,9 +68,18 @@ export async function updateRunStatusImpl(
   status: RunStatus,
   output?: string,
   error?: string,
-): Promise<void> {
+  lease?: RunStatusLease,
+): Promise<UpdateRunStatusResult> {
   const drizzleDb = getDb(db);
   const now = new Date().toISOString();
+
+  const leaseServiceId =
+    typeof lease?.serviceId === "string" && lease.serviceId.length > 0
+      ? lease.serviceId
+      : null;
+  const leaseVersion = typeof lease?.leaseVersion === "number"
+    ? lease.leaseVersion
+    : null;
 
   const updateData: {
     status: string;
@@ -80,22 +115,61 @@ export async function updateRunStatusImpl(
       usage: runs.usage,
       output: runs.output,
       error: runs.error,
+      serviceId: runs.serviceId,
+      leaseVersion: runs.leaseVersion,
     }).from(runs).where(eq(runs.id, runId)).get();
+
+    // Lease fence: reject a terminal write from a superseded lease before it
+    // can flip a reclaimed run's status / output / usage.
+    if (leaseServiceId !== null) {
+      if (
+        !existing || existing.serviceId !== leaseServiceId ||
+        (leaseVersion !== null && existing.leaseVersion !== leaseVersion)
+      ) {
+        return { updated: false, leaseLost: true };
+      }
+    }
+
     if (
       existing?.status === status &&
       existing.usage === updateData.usage &&
       (output === undefined || existing.output === output) &&
       (error === undefined || existing.error === error)
     ) {
-      return;
+      return { updated: true, leaseLost: false };
     }
   }
 
-  const condition = status === "cancelled"
-    ? eq(runs.id, runId)
-    : and(eq(runs.id, runId), sql`${runs.status} != 'cancelled'`);
+  const conditions = [eq(runs.id, runId)];
+  if (status !== "cancelled") {
+    conditions.push(sql`${runs.status} != 'cancelled'`);
+  }
+  if (leaseServiceId !== null) {
+    conditions.push(eq(runs.serviceId, leaseServiceId));
+    if (leaseVersion !== null) {
+      conditions.push(eq(runs.leaseVersion, leaseVersion));
+    }
+  }
 
-  await drizzleDb.update(runs).set(updateData).where(condition);
+  const result = await drizzleDb.update(runs).set(updateData).where(
+    and(...conditions),
+  );
+  const updated = affectedRowCount(result) > 0;
+  if (updated || leaseServiceId === null) {
+    return { updated, leaseLost: false };
+  }
+
+  // 0 rows with a lease present: distinguish a lost lease (the run was reclaimed
+  // under a new serviceId/leaseVersion) from a benign no-op (the run was already
+  // cancelled, which the `status != 'cancelled'` guard filters). Only a genuine
+  // lease mismatch surfaces as lease-lost / 409.
+  const current = await drizzleDb.select({
+    serviceId: runs.serviceId,
+    leaseVersion: runs.leaseVersion,
+  }).from(runs).where(eq(runs.id, runId)).get();
+  const leaseLost = !current || current.serviceId !== leaseServiceId ||
+    (leaseVersion !== null && current.leaseVersion !== leaseVersion);
+  return { updated: false, leaseLost };
 }
 
 // ── Conversation history helpers ────────────────────────────────────

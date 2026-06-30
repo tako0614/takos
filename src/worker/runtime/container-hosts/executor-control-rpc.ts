@@ -47,8 +47,54 @@ import {
   getRunNotifierStub,
 } from "../../application/services/run-notifier/index.ts";
 import type { Env, IndexJobQueueMessage } from "../../shared/types/index.ts";
-import { classifyProxyError, err, ok } from "./executor-utils.ts";
+import {
+  classifyProxyError,
+  err,
+  ok,
+  readRunServiceId,
+} from "./executor-utils.ts";
 import { getRunBootstrap } from "./executor-run-state.ts";
+
+/**
+ * Fence a run-scoped, side-effecting control RPC to the caller's token-bound
+ * lease before it mutates or continues executing the run.
+ *
+ * executor-host overwrites `body.serviceId` with the verified per-run proxy
+ * token, but that token stays valid for STALE_PROXY_TOKEN_MS (15min) after the
+ * stale-recovery path re-enqueues the run under a NEW serviceId/leaseVersion
+ * (stale-worker threshold 5min) — a 5-15min window in which a re-claimed run is
+ * owned by a fresh lease while the original container is still alive with a
+ * valid token. Without this fence that zombie container could keep writing
+ * messages, finalizing memory, emitting events, or executing side-effecting
+ * tools for a run that no longer belongs to it. Mirrors the WHERE-clause fences
+ * on handleHeartbeat / handleRunFail / handleRunReset.
+ *
+ * Returns an error Response to short-circuit with, or null when the lease is
+ * current. When the body carries no token-bound serviceId (e.g. the in-process
+ * local-platform dev path, which is single-process and has no zombie window)
+ * the fence is skipped.
+ */
+async function ensureRunLease(
+  env: Env,
+  runId: string,
+  body: Record<string, unknown>,
+): Promise<Response | null> {
+  const serviceId = readRunServiceId(body);
+  if (!serviceId) return null;
+  const leaseVersion = typeof body.leaseVersion === "number"
+    ? body.leaseVersion
+    : null;
+  const run = await getDb(env.DB).select({
+    serviceId: runs.serviceId,
+    leaseVersion: runs.leaseVersion,
+  }).from(runs).where(eq(runs.id, runId)).get();
+  if (!run) return err("Run not found", 404);
+  if (run.serviceId !== serviceId) return err("Lease lost", 409);
+  if (leaseVersion !== null && run.leaseVersion !== leaseVersion) {
+    return err("Lease lost", 409);
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Remote tool executor cache
@@ -621,6 +667,9 @@ export async function handleMemoryFinalize(
     return err("Missing runId, claims, or evidence", 400);
   }
 
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
+
   // Tenant is derived from the token-bound run, not from caller-supplied
   // spaceId / per-claim accountId, so a compromised container cannot write
   // claims or evidence into another tenant's memory graph.
@@ -723,6 +772,9 @@ export async function handleAddMessage(
     return err("Invalid message payload", 400);
   }
 
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
+
   // Bind the target thread to the token's run: the thread must belong to the
   // same account as the run, so a compromised container cannot inject messages
   // into another tenant's threads.
@@ -792,8 +844,16 @@ export async function handleUpdateRunStatus(
     return err("Missing usage", 400);
   }
 
+  // Lease identity is token-bound: executor-host stamps body.serviceId from the
+  // verified per-run proxy token, so a stale (re-enqueued) container cannot
+  // forge it. leaseVersion is only present when the agent echoes it.
+  const serviceId = readRunServiceId(body);
+  const leaseVersion = typeof body.leaseVersion === "number"
+    ? body.leaseVersion
+    : undefined;
+
   try {
-    await updateRunStatusImpl(
+    const result = await updateRunStatusImpl(
       env.DB,
       runId,
       {
@@ -809,8 +869,12 @@ export async function handleUpdateRunStatus(
       status,
       output,
       errorMessage,
+      serviceId ? { serviceId, leaseVersion } : undefined,
     );
-    return ok({ success: true });
+    if (result.leaseLost) {
+      return err("Lease lost", 409);
+    }
+    return ok({ success: true, updated: result.updated });
   } catch (e: unknown) {
     logError("Update run status RPC error", e, { module: "executor-host" });
     const classified = classifyProxyError(e);
@@ -854,6 +918,12 @@ export async function handleToolExecute(
   ) {
     return err("Invalid toolCall payload", 400);
   }
+
+  // A superseded container must not keep running side-effecting tools (deploys,
+  // space-file writes) for a run a fresh lease now owns — idempotency.ts only
+  // dedups identical runId+tool+args, not divergent A-vs-B calls.
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
 
   try {
     const executor = await getOrCreateRemoteToolExecutor(runId, env);
@@ -909,6 +979,9 @@ export async function handleRunEvent(
   ) {
     return err("Missing runId, type, data, or sequence", 400);
   }
+
+  const leaseError = await ensureRunLease(env, runId, body);
+  if (leaseError) return leaseError;
 
   const dedupKey = buildRunEventDedupKey(runId, type, sequence);
   const nowMs = Date.now();

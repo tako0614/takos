@@ -739,9 +739,21 @@ async fn handle_success(
     }
 
     let output = response.assistant_message.clone().unwrap_or_default();
-    client
+    if let Err(status_err) = client
         .update_run_status(status, usage.clone(), Some(&output), None)
-        .await?;
+        .await
+    {
+        // The control plane fences the terminal status write to the run lease.
+        // A 409 lease-lost here means stale-recovery reclaimed this run under a
+        // new lease while we were finishing; the fresh lease owns the outcome,
+        // so the superseded container exits cleanly instead of letting the outer
+        // last-resort net re-report a failure with zeroed usage.
+        if is_lease_lost(status_err.as_ref()) {
+            warn!(run_id = client.run_id(), error = %status_err, "executor lease lost during run finalization; skipping terminal status write");
+            return Ok(());
+        }
+        return Err(status_err);
+    }
     client
         .emit_run_event(
             if status == "completed" {
@@ -782,9 +794,18 @@ async fn handle_failure(
         "failed"
     };
     let error_message = sanitize_failure_error_message(&raw_error_message);
-    client
+    if let Err(update_err) = client
         .update_run_status(status, usage.clone(), None, Some(&error_message))
-        .await?;
+        .await
+    {
+        // See handle_success: a lease-lost terminal write means the run was
+        // reclaimed under a new lease, so this superseded container stops here.
+        if is_lease_lost(update_err.as_ref()) {
+            warn!(run_id = client.run_id(), error = %update_err, "executor lease lost during failure finalization; skipping terminal status write");
+            return Ok(());
+        }
+        return Err(update_err);
+    }
 
     if status == "failed" {
         if let Some(thread_id) = thread_id {
