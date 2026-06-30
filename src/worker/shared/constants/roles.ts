@@ -24,6 +24,13 @@ export const ADMIN_ROLES: SpaceRole[] = ["owner", "admin"];
 export const EDITOR_PLUS_ROLES: SpaceRole[] = ["owner", "admin", "editor"];
 
 /**
+ * Canonical write-role set. Alias of {@link EDITOR_PLUS_ROLES}; named for
+ * authorization call sites that gate create/update ("write") operations so the
+ * write-role policy has a single source of truth instead of per-file copies.
+ */
+export const WRITE_ROLES: SpaceRole[] = EDITOR_PLUS_ROLES;
+
+/**
  * Returns `true` when `role` is at least as privileged as `minimum`.
  */
 export function hasMinimumRole(role: SpaceRole, minimum: SpaceRole): boolean {

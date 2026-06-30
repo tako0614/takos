@@ -14,16 +14,17 @@ import {
 } from "../../../application/services/source/repos.ts";
 import type { Env } from "../../../shared/types/index.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import { ADMIN_ROLES, WRITE_ROLES } from "../../../shared/constants/roles.ts";
 
 export type RepoContext = Context<AuthenticatedRouteEnv>;
 
 /**
- * Single source of truth for repo role policy. `WRITE_ROLES` gates
- * create/update operations; `ADMIN_ROLES` gates destructive/admin operations.
- * Read/write/admin policy changes are a one-line edit here.
+ * Repo role policy is sourced from the canonical roles chokepoint
+ * (`shared/constants/roles.ts`): `WRITE_ROLES` gates create/update operations;
+ * `ADMIN_ROLES` gates destructive/admin operations. Re-exported here for the
+ * existing repo-route import sites.
  */
-export const WRITE_ROLES = ["owner", "admin", "editor"] as const;
-export const ADMIN_ROLES = ["owner", "admin"] as const;
+export { ADMIN_ROLES, WRITE_ROLES };
 
 /**
  * Resolve repo access for a read request, throwing `NotFoundError("Repository")`

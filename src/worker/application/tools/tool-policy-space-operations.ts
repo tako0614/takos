@@ -1,12 +1,12 @@
-import type { SpaceRole } from "../../shared/types/index.ts";
 import type {
   SpaceOperationId,
   SpaceOperationPolicy,
 } from "./tool-policy-types.ts";
-
-const ALL_SPACE_ROLES: SpaceRole[] = ["owner", "admin", "editor", "viewer"];
-const EDITOR_PLUS_ROLES: SpaceRole[] = ["owner", "admin", "editor"];
-const ADMIN_ROLES: SpaceRole[] = ["owner", "admin"];
+import {
+  ADMIN_ROLES,
+  ALL_ROLES as ALL_SPACE_ROLES,
+  EDITOR_PLUS_ROLES,
+} from "../../shared/constants/roles.ts";
 
 export const SPACE_OPERATION_POLICIES: Record<
   SpaceOperationId,
