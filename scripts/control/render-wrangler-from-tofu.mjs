@@ -201,6 +201,57 @@ export function applyReplacements(toml, replacements) {
   return { toml: next, applied, missing };
 }
 
+function requireWorkerNameOutput(outputs) {
+  const value = outputValue(outputs.worker_name);
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error('tofu output "worker_name" is missing or empty');
+  }
+  return value.trim();
+}
+
+function wranglerTargetSection(toml, env) {
+  if (env === "production") {
+    return toml.split(/\n\[env\.staging\]\n/u)[0] ?? toml;
+  }
+  const marker = "\n[env.staging]\n";
+  const index = toml.indexOf(marker);
+  if (index < 0) {
+    throw new Error("wrangler.toml is missing [env.staging]");
+  }
+  return toml.slice(index + 1);
+}
+
+function findTakosEgressService(section, env) {
+  const header = env === "staging" ? "[[env.staging.services]]" : "[[services]]";
+  for (const block of section.split(/\n(?=\[)/u)) {
+    if (!block.startsWith(header)) continue;
+    if (!/^\s*binding\s*=\s*"TAKOS_EGRESS"\s*$/mu.test(block)) continue;
+    return block.match(/^\s*service\s*=\s*"([^"]+)"\s*$/mu)?.[1];
+  }
+  return undefined;
+}
+
+export function assertRenderedWorkerTarget(toml, env, workerName) {
+  const section = wranglerTargetSection(toml, env);
+  const renderedName = section.match(/^\s*name\s*=\s*"([^"]+)"\s*$/mu)?.[1];
+  if (renderedName !== workerName) {
+    throw new Error(
+      `rendered wrangler ${env} worker name mismatch: expected ${JSON.stringify(
+        workerName,
+      )}, got ${JSON.stringify(renderedName ?? null)}`,
+    );
+  }
+
+  const egressService = findTakosEgressService(section, env);
+  if (egressService !== workerName) {
+    throw new Error(
+      `rendered wrangler ${env} TAKOS_EGRESS service mismatch: expected ${JSON.stringify(
+        workerName,
+      )}, got ${JSON.stringify(egressService ?? null)}`,
+    );
+  }
+}
+
 function outputValue(entry) {
   if (entry == null) return undefined;
   if (
@@ -266,6 +317,7 @@ function readOutputs() {
 export function main(argv = process.argv.slice(2)) {
   const { env, zoneId, dryRun } = parseArgs(argv);
   const outputs = readOutputs();
+  const workerName = requireWorkerNameOutput(outputs);
   const replacements = buildReplacements(outputs, env, { zoneId });
   const toml = readFileSync(WRANGLER_CONFIG, "utf8");
   const {
@@ -273,6 +325,7 @@ export function main(argv = process.argv.slice(2)) {
     applied,
     missing,
   } = applyReplacements(toml, replacements);
+  assertRenderedWorkerTarget(next, env, workerName);
 
   for (const { placeholder, value } of applied) {
     console.log(`  ${placeholder} -> ${value}`);

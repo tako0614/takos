@@ -243,7 +243,7 @@ function wranglerEnvArgs(environment) {
   return environment === "staging" ? ["--env", "staging"] : [];
 }
 
-function putSecret({ environment, config, name, value }) {
+function putSecret({ environment, config, workerName, name, value }) {
   const result = spawnSync(
     "bunx",
     [
@@ -253,6 +253,8 @@ function putSecret({ environment, config, name, value }) {
       name,
       "--config",
       config,
+      "--name",
+      workerName,
       ...wranglerEnvArgs(environment),
     ],
     {
@@ -287,7 +289,7 @@ async function main() {
   );
   const secrets = await ensureSecrets(resolvedSecretDir);
   for (const name of SECRET_ORDER) {
-    putSecret({ environment, config, name, value: secrets[name] });
+    putSecret({ environment, config, workerName, name, value: secrets[name] });
     console.log(`Ensured Cloudflare secret ${name}`);
   }
   console.log(`Takos release secrets ensured for ${workerName}`);

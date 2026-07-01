@@ -203,6 +203,7 @@ export function buildTakosumiReleaseCommands(
     throw new Error(`Unknown environment "${environment}"`);
   }
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
+  const workerName = requireStringOutput(outputs, "worker_name");
   requireStringOutput(outputs, "cloudflare_accounts_d1_database_id");
   const vectorizeIndexName = requireStringOutput(
     outputs,
@@ -301,6 +302,8 @@ export function buildTakosumiReleaseCommands(
       "deploy",
       "--config",
       WRANGLER_CONFIG,
+      "--name",
+      workerName,
       ...wranglerEnvArgs,
       ...(containersRollout
         ? ["--containers-rollout", containersRollout]

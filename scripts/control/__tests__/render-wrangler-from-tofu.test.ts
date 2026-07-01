@@ -2,6 +2,7 @@ import { test } from "bun:test";
 import assert from "node:assert/strict";
 
 import {
+  assertRenderedWorkerTarget,
   buildReplacements,
   parseTakosumiOutputsJson,
 } from "../render-wrangler-from-tofu.mjs";
@@ -109,4 +110,56 @@ test("buildReplacements accepts Takosumi release raw outputs", () => {
 
 test("parseTakosumiOutputsJson rejects non-object payloads", () => {
   assert.throws(() => parseTakosumiOutputsJson("[]"));
+});
+
+test("assertRenderedWorkerTarget rejects stale rendered worker names", () => {
+  const toml = [
+    'name = "old-worker"',
+    "",
+    "[[services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "old-worker"',
+    "",
+    "[env.staging]",
+    'name = "old-worker-staging"',
+    "",
+    "[[env.staging.services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "old-worker-staging"',
+    "",
+  ].join("\n");
+
+  assert.throws(
+    () => assertRenderedWorkerTarget(toml, "production", "takos-test"),
+    /worker name mismatch/,
+  );
+  assert.throws(
+    () => assertRenderedWorkerTarget(toml, "staging", "takos-test-staging"),
+    /worker name mismatch/,
+  );
+});
+
+test("assertRenderedWorkerTarget accepts matching worker target and self-service", () => {
+  const toml = [
+    'name = "takos-test"',
+    "",
+    "[[services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "takos-test"',
+    "",
+    "[env.staging]",
+    'name = "takos-test-staging"',
+    "",
+    "[[env.staging.services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "takos-test-staging"',
+    "",
+  ].join("\n");
+
+  assert.doesNotThrow(() =>
+    assertRenderedWorkerTarget(toml, "production", "takos-test"),
+  );
+  assert.doesNotThrow(() =>
+    assertRenderedWorkerTarget(toml, "staging", "takos-test-staging"),
+  );
 });

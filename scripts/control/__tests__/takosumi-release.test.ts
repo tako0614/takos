@@ -54,7 +54,7 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml'",
       `'bun' 'run' '--cwd' '../takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' 'deploy/cloudflare/wrangler.toml'",
     ],
   );
@@ -76,7 +76,7 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
       `'bun' 'run' '--cwd' '/opt/takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote' '--env' 'staging'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
     ],
   );
@@ -97,7 +97,7 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging' '--containers-rollout' 'none'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging' '--containers-rollout' 'none'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
     ],
   );
