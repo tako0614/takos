@@ -35,12 +35,12 @@ export function createTakosWorker() {
   const background = createWorkerRuntime();
 
   return {
-    fetch(
+    async fetch(
       request: Request,
       env: Parameters<typeof web.fetch>[1] & Parameters<typeof background.fetch>[1],
       ctx: PlatformExecutionContext,
     ): Promise<Response> {
-      return web.fetch(request, env, ctx);
+      return await web.fetch(request, env, ctx);
     },
 
     async queue(

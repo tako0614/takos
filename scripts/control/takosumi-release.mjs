@@ -385,7 +385,65 @@ function isIgnorableDestroyFailure(command, output) {
   return false;
 }
 
-export function main(argv = process.argv.slice(2), env = process.env) {
+function shouldEnableWorkersDev(outputs) {
+  const launchUrl = outputValue(outputs.launch_url ?? outputs.url);
+  if (typeof launchUrl !== "string" || !launchUrl.trim()) return false;
+  try {
+    return new URL(launchUrl).hostname.endsWith(".workers.dev");
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureWorkersDevSubdomain(
+  outputs,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  if (!shouldEnableWorkersDev(outputs)) {
+    return { skipped: true, reason: "no_workers_dev_launch_url" };
+  }
+  const workerName = requireStringOutput(outputs, "worker_name");
+  const accountId = requireStringOutput(outputs, "cloudflare_account_id");
+  const apiToken = env.CF_API_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
+  if (typeof apiToken !== "string" || apiToken.trim() === "") {
+    throw new Error(
+      "CF_API_TOKEN or CLOUDFLARE_API_TOKEN is required to enable workers.dev launch URL",
+    );
+  }
+
+  const response = await fetchImpl(
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
+      accountId,
+    )}/workers/scripts/${encodeURIComponent(workerName)}/subdomain`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiToken.trim()}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ enabled: true }),
+    },
+  );
+  const text = await response.text();
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { success: false, errors: [{ message: text }] };
+  }
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      `Failed to enable workers.dev for ${workerName}: HTTP ${response.status} ${JSON.stringify(
+        payload?.errors ?? payload,
+      )}`,
+    );
+  }
+  console.log(`workers.dev subdomain enabled for ${workerName}.`);
+  return { skipped: false, result: payload?.result };
+}
+
+export async function main(argv = process.argv.slice(2), env = process.env) {
   const { environment, debug, destroy } = parseReleaseArgs(argv);
   const outputs = readReleaseOutputs(env);
   const takosumiRepoDir =
@@ -421,11 +479,14 @@ export function main(argv = process.argv.slice(2), env = process.env) {
     if (destroy) runDestroyCommand(command);
     else run(command);
   }
+  if (!destroy) {
+    await ensureWorkersDevSubdomain(outputs, env);
+  }
   console.log(
     `\nTakos ${destroy ? "release cleanup" : "release activation"} completed for ${environment}.`,
   );
 }
 
 if (import.meta.main) {
-  main();
+  await main();
 }

@@ -15,6 +15,7 @@ import {
   buildTakosumiDestroyCommands,
   buildTakosumiReleaseCommands,
   ensureTakosumiSourceModule,
+  ensureWorkersDevSubdomain,
   readReleaseOutputs,
 } from "../takosumi-release.mjs";
 
@@ -124,6 +125,66 @@ test("Cloudflare release template enables production workers.dev launch URLs", (
   );
   const [productionTemplate] = wranglerTemplate.split(/\n\[env\.staging\]\n/);
   assert.match(productionTemplate, /\nworkers_dev\s*=\s*true\n/);
+});
+
+test("ensureWorkersDevSubdomain enables launch URL scripts without logging tokens", async () => {
+  const requests = [];
+  const result = await ensureWorkersDevSubdomain(
+    {
+      worker_name: "takos-test",
+      cloudflare_account_id: "acc_123",
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    { CLOUDFLARE_API_TOKEN: "token_123" },
+    async (url, init) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          result: { enabled: true, previews_enabled: false },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    },
+  );
+
+  assert.deepEqual(result, {
+    skipped: false,
+    result: { enabled: true, previews_enabled: false },
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/subdomain",
+  );
+  assert.equal(requests[0].init.method, "POST");
+  assert.equal(
+    requests[0].init.headers.authorization,
+    "Bearer token_123",
+  );
+  assert.equal(requests[0].init.body, JSON.stringify({ enabled: true }));
+});
+
+test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
+  let called = false;
+  const result = await ensureWorkersDevSubdomain(
+    {
+      worker_name: "takos-test",
+      cloudflare_account_id: "acc_123",
+      launch_url: "https://app.example.com",
+    },
+    {},
+    async () => {
+      called = true;
+      return new Response("{}");
+    },
+  );
+
+  assert.deepEqual(result, {
+    skipped: true,
+    reason: "no_workers_dev_launch_url",
+  });
+  assert.equal(called, false);
 });
 
 test("readReleaseOutputs requires Takosumi non-sensitive outputs", () => {
