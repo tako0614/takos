@@ -16,16 +16,17 @@ terraform {
 # here is takos/deploy/cloudflare/wrangler.toml (the self-host template); keep
 # the two in sync.
 #
-# Module contract: this module owns ALL durable backing infrastructure the
+# Module contract: this module owns the durable backing infrastructure the
 # worker needs (D1, KV, R2, Queues) — the equivalent of the AWS RDS/SQS/S3 and
-# GCP CloudSQL/PubSub/GCS modules. `tofu apply` of this module provisions every
-# durable resource; the worker artifact itself (the Worker script + static
-# assets + container images + Durable Object class migrations + the Vectorize
-# index) is uploaded in ONE follow-up `wrangler deploy` that reads the IDs/names
-# exported below. That upload is the single step the cloudflare/cloudflare
-# provider cannot express today: it has no managed resource for Workers static
-# assets, Containers, DO class migrations, or Vectorize indexes. Revisit and
-# fold those into this module when the provider catches up.
+# GCP CloudSQL/PubSub/GCS modules. `tofu apply` of this module provisions those
+# resources and exports the binding map consumed by the worker artifact upload.
+#
+# Current Takos still performs one app-owned follow-up deploy step because the
+# full distribution artifact includes container images, Durable Object
+# migrations, and a Vectorize index; the Cloudflare provider does not expose a
+# Vectorize index resource. As provider coverage improves, Worker script/assets,
+# queue consumers, routes, and other expressible resources should move into
+# OpenTofu rather than remaining hidden behind the follow-up command.
 #
 # Takosumi is OPTIONAL: running this same module through Takosumi adds the
 # Workspace / Project / Capsule / Run / StateVersion / Output ledger, policy decisions, audit
@@ -53,7 +54,7 @@ locals {
     tenant_source  = "${var.project_name}-tenant-source"
     git_objects    = "${var.project_name}-git-objects"
     offload        = "${var.project_name}-offload"
-    # Account-plane Installation export download artifacts — binding
+    # Account-plane export download artifacts — binding
     # TAKOSUMI_ACCOUNTS_EXPORTS.
     accounts_exports = "${var.project_name}-accounts-exports"
     # Deploy-control OpenTofu plan artifacts — binding R2_ARTIFACTS. The
@@ -128,5 +129,6 @@ resource "cloudflare_queue" "this" {
 # Vectorize index — binding VECTORIZE.
 # The cloudflare/cloudflare v5 provider has no managed resource for Vectorize
 # indexes; the index is created out-of-band (wrangler `vectorize create` /
-# Cloudflare API as part of the ProviderConnection / ProviderBinding / policy-controlled apply flow). Its expected name
-# is exported below so the binding map stays complete.
+# Cloudflare API as part of the ProviderConnection / ProviderBinding /
+# policy-controlled apply flow). Its expected name is exported below so the
+# binding map stays complete.

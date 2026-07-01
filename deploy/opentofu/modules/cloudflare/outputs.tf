@@ -1,9 +1,8 @@
-# OutputSnapshot surface: non-secret resource IDs/names that the Worker
-# artifact (uploaded by the follow-up `wrangler deploy`) and Takosumi's
-# Deployment record consume as the binding map.
+# Output surface: non-secret resource IDs/names that the Worker artifact
+# upload and Takosumi Run/StateVersion/Output ledger consume as the binding map.
 
-# Cloudflare account id — echoed from the input so the follow-up wrangler
-# materialization can read CF_ACCOUNT_ID from the same OutputSnapshot. Not a
+# Cloudflare account id — echoed from the input so the follow-up artifact
+# materialization can read CF_ACCOUNT_ID from the same Output value. Not a
 # managed resource; this is the account the durable resources were created in.
 output "account_id" {
   description = "Cloudflare account ID the resources were provisioned in (for the CF_ACCOUNT_ID worker var)."
