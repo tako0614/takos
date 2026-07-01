@@ -17,6 +17,7 @@ import {
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
   readReleaseOutputs,
+  verifyReleaseDeployment,
 } from "../takosumi-release.mjs";
 
 const rawOutputs = {
@@ -54,8 +55,8 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml'",
       `'bun' 'run' '--cwd' '../takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test'",
-      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' 'deploy/cloudflare/wrangler.toml' '--secrets-file' '.takos-release-secrets.production.json'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json'",
     ],
   );
 });
@@ -76,8 +77,8 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
       "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
       `'bun' 'run' '--cwd' '/opt/takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote' '--env' 'staging'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging'",
-      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml' '--secrets-file' '.takos-release-secrets.staging.json'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging'",
     ],
   );
 });
@@ -97,8 +98,8 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging' '--containers-rollout' 'none'",
-      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml' '--secrets-file' '.takos-release-secrets.staging.json'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging' '--containers-rollout' 'none'",
     ],
   );
 });
@@ -186,6 +187,69 @@ test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
     reason: "no_workers_dev_launch_url",
   });
   assert.equal(called, false);
+});
+
+test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () => {
+  const requests = [];
+  await assert.rejects(
+    verifyReleaseDeployment(
+      {
+        ...rawOutputs,
+        launch_url: "https://takos-test.example-subdomain.workers.dev",
+      },
+      "production",
+      {
+        CLOUDFLARE_API_TOKEN: "token_123",
+        TAKOS_RELEASE_MIN_WORKER_CONTENT_BYTES: "0",
+        TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+      },
+      async (url, init) => {
+        requests.push({ url, init });
+        return new Response("export default { fetch() {} }", { status: 200 });
+      },
+    ),
+    /secret-update stub/,
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+  );
+  assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
+});
+
+test("verifyReleaseDeployment checks uploaded artifact and public health", async () => {
+  const requests = [];
+  const result = await verifyReleaseDeployment(
+    {
+      ...rawOutputs,
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    "production",
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      if (String(url).includes("/content")) {
+        return new Response("/* real worker */\n".repeat(128), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    },
+  );
+
+  assert.equal(result.artifact.workerName, "takos-test");
+  assert.equal(result.health.status, 200);
+  assert.deepEqual(
+    requests.map((request) => String(request.url)),
+    [
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://takos-test.example-subdomain.workers.dev/health",
+    ],
+  );
 });
 
 test("readReleaseOutputs requires Takosumi non-sensitive outputs", () => {

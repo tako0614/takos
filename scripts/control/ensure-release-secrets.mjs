@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 
 import { parseTakosumiOutputsJson } from "./render-wrangler-from-tofu.mjs";
@@ -45,11 +45,12 @@ const SECRET_ORDER = [
 
 function usage() {
   console.error(`
-Usage: bun scripts/control/ensure-release-secrets.mjs <environment> [--config <path>] [--secret-dir <path>]
+Usage: bun scripts/control/ensure-release-secrets.mjs <environment> [--config <path>] [--secret-dir <path>] [--secrets-file <path>]
 
-Creates or reuses per-worker Takos runtime secrets outside the repo, then pushes
-them to Cloudflare with wrangler secret put. The worker name is read from
-TAKOSUMI_OUTPUTS_JSON.
+Creates or reuses per-worker Takos runtime secrets outside the repo. By default
+it pushes them to Cloudflare with wrangler secret put. When --secrets-file is
+provided, it writes a temporary JSON file for wrangler deploy --secrets-file
+instead. The worker name is read from TAKOSUMI_OUTPUTS_JSON.
 `);
   process.exit(1);
 }
@@ -59,18 +60,21 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (!environment || !ENVIRONMENTS.has(environment)) usage();
   let config = DEFAULT_CONFIG;
   let secretDir;
+  let secretsFile;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
     if (arg === "--config") {
       config = rest[++i];
     } else if (arg === "--secret-dir") {
       secretDir = rest[++i];
+    } else if (arg === "--secrets-file") {
+      secretsFile = rest[++i];
     } else {
       usage();
     }
     if (!rest[i]) usage();
   }
-  return { environment, config, secretDir };
+  return { environment, config, secretDir, secretsFile };
 }
 
 function outputValue(entry) {
@@ -186,6 +190,17 @@ function writeSecret(secretDir, name, value) {
   chmodSync(path, 0o600);
 }
 
+function writeDeploySecretsFile(path, secrets) {
+  const resolved = resolve(path);
+  const parent = dirname(resolved);
+  if (!existsSync(parent)) {
+    mkdirSync(parent, { recursive: true, mode: 0o700 });
+  }
+  writeFileSync(resolved, `${JSON.stringify(secrets)}\n`, { mode: 0o600 });
+  chmodSync(resolved, 0o600);
+  console.log(`Wrote Cloudflare deploy secrets file ${resolved}`);
+}
+
 async function ensureSecrets(secretDir) {
   ensureDir(secretDir);
   const existing = new Map();
@@ -274,7 +289,7 @@ function putSecret({ environment, config, workerName, name, value }) {
 }
 
 async function main() {
-  const { environment, config, secretDir } = parseArgs();
+  const { environment, config, secretDir, secretsFile } = parseArgs();
   const outputs = readOutputs();
   const workerName = requireWorkerName(outputs);
   const resolvedSecretDir = resolve(
@@ -288,6 +303,10 @@ async function main() {
       ),
   );
   const secrets = await ensureSecrets(resolvedSecretDir);
+  if (secretsFile) {
+    writeDeploySecretsFile(secretsFile, secrets);
+    return;
+  }
   for (const name of SECRET_ORDER) {
     putSecret({ environment, config, workerName, name, value: secrets[name] });
     console.log(`Ensured Cloudflare secret ${name}`);
