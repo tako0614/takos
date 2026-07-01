@@ -124,6 +124,7 @@ test("Cloudflare release template enables production workers.dev launch URLs", (
     "utf8",
   );
   const [productionTemplate] = wranglerTemplate.split(/\n\[env\.staging\]\n/);
+  assert.match(productionTemplate, /\naccount_id\s*=\s*"replace-with-account-id"\n/);
   assert.match(productionTemplate, /\nworkers_dev\s*=\s*true\n/);
 });
 
