@@ -45,6 +45,12 @@ variable "manage_vectorize_index" {
   default     = true
 }
 
+variable "wrangler_containers_rollout" {
+  description = "Optional value passed to wrangler deploy --containers-rollout during release activation. Use \"none\" when container image rollout is managed outside the first synchronous deploy."
+  type        = string
+  default     = null
+}
+
 variable "opentofu_plan_mode" {
   description = "Use deterministic provider-free inputs for CI OpenTofu plan review. Do not use for apply."
   type        = bool

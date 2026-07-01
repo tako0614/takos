@@ -326,12 +326,13 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"manage_vectorize_index"\s*\{/);
+  assert.match(rootVariables, /variable\s+"wrangler_containers_rollout"\s*\{/);
   assert.match(rootModule, /post_apply\s*=\s*\[/);
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-destroy"/);
   assert.match(rootModule, /executor\s*=\s*"runner"/);
-  assert.match(rootModule, /env\s*=\s*\{/);
+  assert.match(rootModule, /env\s*=\s*merge\(\{/);
   assert.match(
     rootModule,
     /TAKOS_RELEASE_TAKOSUMI_REPO_URL\s*=\s*var\.takosumi_source_repo_url/,
@@ -343,6 +344,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     rootModule,
     /TAKOS_MANAGE_VECTORIZE_INDEX\s*=\s*tostring\(var\.manage_vectorize_index\)/,
+  );
+  assert.match(
+    rootModule,
+    /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.wrangler_containers_rollout/,
   );
   assert.match(rootVariables, /variable\s+"release_working_directory"\s*\{/);
   assert.match(
@@ -375,6 +380,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(productionModule, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(productionModule, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(productionModule, /variable\s+"manage_vectorize_index"\s*\{/);
+  assert.match(productionModule, /variable\s+"wrangler_containers_rollout"\s*\{/);
   assert.match(
     productionModule,
     /TAKOS_RELEASE_TAKOSUMI_REPO_URL\s*=\s*var\.takosumi_source_repo_url/,
@@ -386,6 +392,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     productionModule,
     /TAKOS_MANAGE_VECTORIZE_INDEX\s*=\s*tostring\(var\.manage_vectorize_index\)/,
+  );
+  assert.match(
+    productionModule,
+    /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.wrangler_containers_rollout/,
   );
   assert.match(
     productionModule,

@@ -48,6 +48,11 @@ variable "manage_vectorize_index" {
   default = true
 }
 
+variable "wrangler_containers_rollout" {
+  type    = string
+  default = null
+}
+
 output "target" {
   value = "cloudflare"
 }
@@ -113,11 +118,13 @@ output "takosumi_release" {
         executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production"]
         working_directory = var.release_working_directory
-        env = {
+        env = merge({
           TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
           TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
           TAKOS_MANAGE_VECTORIZE_INDEX    = tostring(var.manage_vectorize_index)
-        }
+        }, var.wrangler_containers_rollout != null ? {
+          TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.wrangler_containers_rollout
+        } : {})
       },
     ]
     pre_destroy = [
@@ -126,11 +133,13 @@ output "takosumi_release" {
         executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production", "--destroy"]
         working_directory = var.release_working_directory
-        env = {
+        env = merge({
           TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
           TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
           TAKOS_MANAGE_VECTORIZE_INDEX    = tostring(var.manage_vectorize_index)
-        }
+        }, var.wrangler_containers_rollout != null ? {
+          TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.wrangler_containers_rollout
+        } : {})
       },
     ]
   }
