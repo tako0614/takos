@@ -262,7 +262,7 @@ export function buildTakosumiReleaseCommands(
     : [
         commandLine([
           "bunx",
-          "wrangler",
+          "wrangler@latest",
           "d1",
           "migrations",
           "apply",
@@ -316,7 +316,7 @@ export function buildTakosumiReleaseCommands(
     commandLine(ensureSecretsArgs),
     commandLine([
       "bunx",
-      "wrangler",
+      "wrangler@latest",
       "deploy",
       "--config",
       WRANGLER_CONFIG,
@@ -354,7 +354,7 @@ export function buildTakosumiDestroyCommands(
     ...queues.map((queueName) =>
       commandLine([
         "bunx",
-        "wrangler",
+        "wrangler@latest",
         "queues",
         "consumer",
         "remove",
@@ -362,12 +362,12 @@ export function buildTakosumiDestroyCommands(
         workerName,
       ]),
     ),
-    commandLine(["bunx", "wrangler", "delete", workerName, "--force"]),
+    commandLine(["bunx", "wrangler@latest", "delete", workerName, "--force"]),
     ...(manageVectorizeIndex
       ? [
           commandLine([
             "bunx",
-            "wrangler",
+            "wrangler@latest",
             "vectorize",
             "delete",
             vectorizeIndexName,

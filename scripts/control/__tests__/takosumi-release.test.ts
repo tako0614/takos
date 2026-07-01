@@ -52,11 +52,11 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
       "'bun' 'install' '--cwd' '../takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
-      "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bunx' 'wrangler@latest' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml'",
       `'bun' 'run' '--cwd' '../takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' 'deploy/cloudflare/wrangler.toml' '--secrets-file' '.takos-release-secrets.production.json'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json'",
+      "'bunx' 'wrangler@latest' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json'",
     ],
   );
 });
@@ -74,11 +74,11 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
       "'bun' 'install' '--cwd' '/opt/takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build' '--mode' 'staging-debug'",
       "'bun' 'run' 'containers:build'",
-      "'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
+      "'bunx' 'wrangler@latest' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' 'deploy/cloudflare/wrangler.toml' '--env' 'staging'",
       `'bun' 'run' '--cwd' '/opt/takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${wranglerConfigPath}' '--account-id' 'acc_123' '--remote' '--env' 'staging'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml' '--secrets-file' '.takos-release-secrets.staging.json'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging'",
+      "'bunx' 'wrangler@latest' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging'",
     ],
   );
 });
@@ -99,7 +99,7 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
       "'bun' 'run' 'containers:build'",
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml' '--secrets-file' '.takos-release-secrets.staging.json'",
-      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging' '--containers-rollout' 'none'",
+      "'bunx' 'wrangler@latest' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging' '--containers-rollout' 'none'",
     ],
   );
 });
@@ -114,23 +114,23 @@ test("buildTakosumiReleaseCommands can use an externally managed Vectorize index
     false,
   );
   assert.equal(
-    commands.some((command) => command.includes("'wrangler' 'deploy'")),
+    commands.some((command) => command.includes("'wrangler@latest' 'deploy'")),
     true,
   );
 });
 
 test("buildTakosumiDestroyCommands removes consumers and uploaded resources before OpenTofu destroy", () => {
   assert.deepEqual(buildTakosumiDestroyCommands(rawOutputs), [
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-runs' 'takos-test'",
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-runs-dlq' 'takos-test'",
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-index-jobs' 'takos-test'",
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-index-jobs-dlq' 'takos-test'",
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-workflow-jobs' 'takos-test'",
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-workflow-jobs-dlq' 'takos-test'",
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-deployment-jobs' 'takos-test'",
-    "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-deployment-jobs-dlq' 'takos-test'",
-    "'bunx' 'wrangler' 'delete' 'takos-test' '--force'",
-    "'bunx' 'wrangler' 'vectorize' 'delete' 'takos-test-embeddings' '--force'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-runs' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-runs-dlq' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-index-jobs' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-index-jobs-dlq' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-workflow-jobs' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-workflow-jobs-dlq' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-deployment-jobs' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'queues' 'consumer' 'remove' 'takos-test-deployment-jobs-dlq' 'takos-test'",
+    "'bunx' 'wrangler@latest' 'delete' 'takos-test' '--force'",
+    "'bunx' 'wrangler@latest' 'vectorize' 'delete' 'takos-test-embeddings' '--force'",
   ]);
 });
 
@@ -143,7 +143,7 @@ test("buildTakosumiDestroyCommands can leave externally managed Vectorize indexe
     false,
   );
   assert.equal(
-    commands.some((command) => command.includes("'wrangler' 'delete'")),
+    commands.some((command) => command.includes("'wrangler@latest' 'delete'")),
     true,
   );
 });
