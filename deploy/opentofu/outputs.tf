@@ -30,6 +30,178 @@ output "launch_url" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
 }
 
+output "app_deployment" {
+  description = "Installable Takos app declaration consumed from tofu output -json by Takosumi install flows."
+  value = {
+    contractVersion = 1
+    name            = "takos"
+    version         = "0.10.0"
+
+    compute = {
+      web = {
+        kind      = "worker"
+        readiness = "/health"
+        triggers = {
+          queues = [
+            {
+              binding         = "RUN_QUEUE"
+              deadLetterQueue = "runs_dlq"
+            },
+            {
+              binding         = "INDEX_QUEUE"
+              deadLetterQueue = "index_jobs_dlq"
+            },
+            {
+              binding         = "WORKFLOW_QUEUE"
+              deadLetterQueue = "workflow_dlq"
+            },
+            {
+              binding         = "DEPLOY_QUEUE"
+              deadLetterQueue = "deployment_dlq"
+            },
+          ]
+        }
+      }
+    }
+
+    resources = {
+      db = {
+        type = "sql"
+        bind = "DB"
+        to   = ["web"]
+      }
+      accounts = {
+        type = "sql"
+        bind = "TAKOSUMI_ACCOUNTS_DB"
+        to   = ["web"]
+      }
+      deploy_control = {
+        type = "sql"
+        bind = "TAKOSUMI_CONTROL_DB"
+        to   = ["web"]
+      }
+      hostname_routing = {
+        type = "key-value"
+        bind = "HOSTNAME_ROUTING"
+        to   = ["web"]
+      }
+      rollout_health = {
+        type = "key-value"
+        bind = "ROLLOUT_HEALTH_KV"
+        to   = ["web"]
+      }
+      worker_bundles = {
+        type = "object-store"
+        bind = "WORKER_BUNDLES"
+        to   = ["web"]
+      }
+      tenant_builds = {
+        type = "object-store"
+        bind = "TENANT_BUILDS"
+        to   = ["web"]
+      }
+      tenant_source = {
+        type = "object-store"
+        bind = "TENANT_SOURCE"
+        to   = ["web"]
+      }
+      git_objects = {
+        type = "object-store"
+        bind = "GIT_OBJECTS"
+        to   = ["web"]
+      }
+      offload = {
+        type = "object-store"
+        bind = "TAKOS_OFFLOAD"
+        to   = ["web"]
+      }
+      accounts_exports = {
+        type = "object-store"
+        bind = "TAKOSUMI_ACCOUNTS_EXPORTS"
+        to   = ["web"]
+      }
+      artifacts = {
+        type = "object-store"
+        bind = "R2_ARTIFACTS"
+        to   = ["web"]
+      }
+      vector = {
+        type = "vector-index"
+        bind = "VECTORIZE"
+        to   = ["web"]
+        vectorIndex = {
+          dimensions = 1536
+          metric     = "cosine"
+        }
+      }
+      runs = {
+        type = "queue"
+        bind = "RUN_QUEUE"
+        to   = ["web"]
+        queue = {
+          deadLetterQueue = "runs_dlq"
+        }
+      }
+      index_jobs = {
+        type = "queue"
+        bind = "INDEX_QUEUE"
+        to   = ["web"]
+        queue = {
+          deadLetterQueue = "index_jobs_dlq"
+        }
+      }
+      workflow = {
+        type = "queue"
+        bind = "WORKFLOW_QUEUE"
+        to   = ["web"]
+        queue = {
+          deadLetterQueue = "workflow_dlq"
+        }
+      }
+      deployment = {
+        type = "queue"
+        bind = "DEPLOY_QUEUE"
+        to   = ["web"]
+        queue = {
+          deadLetterQueue = "deployment_dlq"
+        }
+      }
+    }
+
+    routes = [
+      {
+        id     = "root"
+        target = "web"
+        path   = "/"
+      },
+    ]
+
+    publish = [
+      {
+        name      = "launcher"
+        publisher = "web"
+        type      = "interface.ui.surface"
+        outputs = {
+          url = {
+            kind     = "url"
+            routeRef = "root"
+          }
+        }
+        display = {
+          title       = "Takos"
+          description = "Self-hostable AI workspace with chat, agents, memory, Git, storage, and app launcher."
+          category    = "workspace"
+        }
+        spec = {
+          launcher = true
+        }
+      },
+    ]
+
+    env = {}
+  }
+}
+
 output "cloudflare_d1_database_id" {
   description = "D1 database ID for the DB binding (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null
