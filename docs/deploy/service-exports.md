@@ -12,6 +12,11 @@ A Capsule can expose services with the optional `service_exports` OpenTofu
 output. Takosumi reads the evaluated JSON from `tofu output -json` after apply
 and records ServiceExport rows from allowlisted, non-secret output values.
 
+Installable apps can also publish an `app_deployment` OpenTofu output. That
+output is a typed app declaration for install discovery and plan UI: compute,
+resources, routes, publications, and non-secret env defaults. It is still plain
+OpenTofu output, not a separate Takosumi source file.
+
 ```hcl
 output "service_exports" {
   value = [
@@ -82,6 +87,8 @@ Takos treats these files as installable OpenTofu source signals, in order:
 - `opentofu/outputs.tf`
 - `infra/main.tf`
 - `infra/outputs.tf`
+- `deploy/opentofu/main.tf`
+- `deploy/opentofu/outputs.tf`
 
 OpenTofu modules may use variables, locals, and modules. Takos consumes the
 evaluated output JSON and Takosumi Service Graph records, not raw HCL.

@@ -121,6 +121,13 @@ test("selectInstallableSourcePathFromRepo prefers OpenTofu module files", () => 
     selectInstallableSourcePathFromRepo(["package.json", "infra/outputs.tf"]),
     "infra/outputs.tf",
   );
+  assertEquals(
+    selectInstallableSourcePathFromRepo([
+      "package.json",
+      "deploy/opentofu/main.tf",
+    ]),
+    "deploy/opentofu/main.tf",
+  );
   assertEquals(selectInstallableSourcePathFromRepo(["package.json"]), null);
 });
 
