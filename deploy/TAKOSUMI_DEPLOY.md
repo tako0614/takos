@@ -40,6 +40,11 @@ That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
 the product-owned activation steps, and uploads the Worker artifact using the
 dispatch-only Cloudflare credential material minted for the run. Any D1 or
 schema work remains Takos script behavior, not a Takosumi resource type.
+Because the Takos Worker imports Takosumi source modules at build time, the
+release command first looks for a sibling Takosumi checkout. If the restored
+runner source snapshot does not contain one, it clones the non-secret
+`takosumi_source_repo_url` / `takosumi_source_ref` declared by the OpenTofu
+module into the release workspace.
 
 ## Cloudflare Self-Host Runbook
 
@@ -74,7 +79,9 @@ numbered steps below document what each phase does.
 - A Cloudflare account id and, if using a custom domain, the DNS zone id.
 - The sibling `takosumi/` repo checked out. The Takos distribution worker imports
   Takosumi source via tsconfig aliases and wrangler builds the OpenTofu runner
-  image from `../../../takosumi/runner/Dockerfile`.
+  image from `../../../takosumi/runner/Dockerfile`. Takosumi-hosted release
+  runs can instead clone this source module from the OpenTofu
+  `takosumi_source_repo_url` / `takosumi_source_ref` variables.
 
 ### 1. Provision Durable Infra
 

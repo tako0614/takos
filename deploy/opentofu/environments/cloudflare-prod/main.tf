@@ -33,6 +33,16 @@ variable "release_working_directory" {
   default = "."
 }
 
+variable "takosumi_source_repo_url" {
+  type    = string
+  default = "https://github.com/tako0614/takosumi.git"
+}
+
+variable "takosumi_source_ref" {
+  type    = string
+  default = "main"
+}
+
 output "target" {
   value = "cloudflare"
 }
@@ -98,6 +108,10 @@ output "takosumi_release" {
         executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production"]
         working_directory = var.release_working_directory
+        env = {
+          TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+          TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+        }
       },
     ]
     pre_destroy = [
@@ -106,6 +120,10 @@ output "takosumi_release" {
         executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production", "--destroy"]
         working_directory = var.release_working_directory
+        env = {
+          TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+          TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+        }
       },
     ]
   }

@@ -27,6 +27,18 @@ variable "release_working_directory" {
   default     = "."
 }
 
+variable "takosumi_source_repo_url" {
+  description = "Takosumi source module Git URL used by the Takos release activation when no sibling checkout exists in the runner snapshot."
+  type        = string
+  default     = "https://github.com/tako0614/takosumi.git"
+}
+
+variable "takosumi_source_ref" {
+  description = "Takosumi source module Git ref used by the Takos release activation."
+  type        = string
+  default     = "main"
+}
+
 variable "opentofu_plan_mode" {
   description = "Use deterministic provider-free inputs for CI OpenTofu plan review. Do not use for apply."
   type        = bool
