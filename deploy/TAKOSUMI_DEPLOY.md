@@ -27,10 +27,10 @@ separate product-only deploy authority; it consumes the module outputs and must
 stay in sync with them.
 
 When Takos is installed through Takosumi, the OpenTofu module exports a
-`takosumi_release.post_apply` command with `executor = "runner"`. Takosumi
+`takosumi_release.post_apply` command with `executor = "operator"`. Takosumi
 does not learn a DB-specific migration resource. It records an opaque
-post-apply command, and the runner release activator runs it in the same
-ProviderConnection boundary as the reviewed apply:
+post-apply command, and the operator release activator runs it from the
+operator publication boundary after the reviewed OpenTofu apply has committed:
 
 ```sh
 bun scripts/control/takosumi-release.mjs <environment>
@@ -38,8 +38,8 @@ bun scripts/control/takosumi-release.mjs <environment>
 
 That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
 the product-owned activation steps, and uploads the Worker artifact using the
-dispatch-only Cloudflare credential material minted for the run. Any D1 or
-schema work remains Takos script behavior, not a Takosumi resource type.
+operator-owned Cloudflare publication environment. Any D1 or schema work remains
+Takos script behavior, not a Takosumi resource type.
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
 runner source snapshot does not contain one, it clones the non-secret
