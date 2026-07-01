@@ -1,8 +1,9 @@
-// The Takosumi platform worker hosts every public surface (account-plane,
-// dashboard, and dashboard-owned install prefill entrypoint) on its bare
-// origin: app.takosumi.com in production, app.takosumi.test in
-// local-substrate. There is no separate "accounts." subdomain. The add flow
-// reads only the well-known OpenTofu deep-link params git / ref / path.
+// The Takosumi platform worker hosts the account-plane, dashboard, and
+// dashboard-owned install prefill entrypoint on its bare origin:
+// app.takosumi.com in production, app.takosumi.test in local-substrate. Takos
+// product surfaces stay on the Takos worker or the self-hoster's own origin.
+// There is no separate "accounts." subdomain. The add flow reads only the
+// well-known OpenTofu deep-link params git / ref / path / var*.
 const PLATFORM_HOST = "app.takosumi.com";
 const LOCAL_PLATFORM_HOST = "app.takosumi.test";
 
@@ -21,6 +22,13 @@ function installUrl(host: string): string {
   url.searchParams.set("git", takosInstallGitUrl());
   url.searchParams.set("ref", takosInstallRef());
   url.searchParams.set("path", takosInstallModulePath());
+  url.searchParams.set("name", "takos");
+  url.searchParams.set("var.project_name", "takos");
+  url.searchParams.set("varjson.cloudflare", "{}");
+  const workersSubdomain = takosInstallWorkersSubdomain();
+  if (workersSubdomain) {
+    url.searchParams.set("var.cloudflare.workers_subdomain", workersSubdomain);
+  }
   return url.toString();
 }
 
@@ -30,7 +38,7 @@ const LOCAL_CLOUD_HOME_FALLBACK = `https://${LOCAL_PLATFORM_HOST}/`;
 
 /**
  * Git/install links land on the Takosumi add flow:
- * app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module>
+ * app.takosumi.com/install?git=<repo>&ref=<tag-or-commit>&path=<module>&varjson.cloudflare={}
  * pre-fills `/new` with the repo coordinates. The visitor reviews the Capsule
  * compatibility result and explicitly creates/plans there.
  */
@@ -97,6 +105,10 @@ function takosInstallModulePath(): string {
   return (
     envString("VITE_TAKOS_INSTALL_MODULE_PATH") ?? DEFAULT_TAKOS_MODULE_PATH
   );
+}
+
+function takosInstallWorkersSubdomain(): string | undefined {
+  return envString("VITE_TAKOS_INSTALL_WORKERS_SUBDOMAIN");
 }
 
 function envString(key: string): string | undefined {
