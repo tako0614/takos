@@ -117,6 +117,15 @@ test("buildTakosumiDestroyCommands removes consumers and uploaded resources befo
   ]);
 });
 
+test("Cloudflare release template enables production workers.dev launch URLs", () => {
+  const wranglerTemplate = readFileSync(
+    new URL("../../../deploy/cloudflare/wrangler.toml", import.meta.url),
+    "utf8",
+  );
+  const [productionTemplate] = wranglerTemplate.split(/\n\[env\.staging\]\n/);
+  assert.match(productionTemplate, /\nworkers_dev\s*=\s*true\n/);
+});
+
 test("readReleaseOutputs requires Takosumi non-sensitive outputs", () => {
   assert.deepEqual(
     readReleaseOutputs({
