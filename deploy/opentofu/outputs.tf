@@ -82,6 +82,7 @@ output "takosumi_release" {
         env = {
           TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
           TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+          TAKOS_MANAGE_VECTORIZE_INDEX    = tostring(var.manage_vectorize_index)
         }
       },
     ]
@@ -94,6 +95,7 @@ output "takosumi_release" {
         env = {
           TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
           TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+          TAKOS_MANAGE_VECTORIZE_INDEX    = tostring(var.manage_vectorize_index)
         }
       },
     ]

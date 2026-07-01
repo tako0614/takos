@@ -104,6 +104,21 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
   );
 });
 
+test("buildTakosumiReleaseCommands can use an externally managed Vectorize index", () => {
+  const commands = buildTakosumiReleaseCommands(rawOutputs, "production", {
+    skipD1Migrations: true,
+    manageVectorizeIndex: false,
+  });
+  assert.equal(
+    commands.some((command) => command.includes("'ensure-vectorize-index.mjs'")),
+    false,
+  );
+  assert.equal(
+    commands.some((command) => command.includes("'wrangler' 'deploy'")),
+    true,
+  );
+});
+
 test("buildTakosumiDestroyCommands removes consumers and uploaded resources before OpenTofu destroy", () => {
   assert.deepEqual(buildTakosumiDestroyCommands(rawOutputs), [
     "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-runs' 'takos-test'",
@@ -117,6 +132,20 @@ test("buildTakosumiDestroyCommands removes consumers and uploaded resources befo
     "'bunx' 'wrangler' 'delete' 'takos-test' '--force'",
     "'bunx' 'wrangler' 'vectorize' 'delete' 'takos-test-embeddings' '--force'",
   ]);
+});
+
+test("buildTakosumiDestroyCommands can leave externally managed Vectorize indexes", () => {
+  const commands = buildTakosumiDestroyCommands(rawOutputs, {
+    manageVectorizeIndex: false,
+  });
+  assert.equal(
+    commands.some((command) => command.includes("'vectorize' 'delete'")),
+    false,
+  );
+  assert.equal(
+    commands.some((command) => command.includes("'wrangler' 'delete'")),
+    true,
+  );
 });
 
 test("Cloudflare release template enables production workers.dev launch URLs", () => {
@@ -296,6 +325,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
+  assert.match(rootVariables, /variable\s+"manage_vectorize_index"\s*\{/);
   assert.match(rootModule, /post_apply\s*=\s*\[/);
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
@@ -309,6 +339,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     rootModule,
     /TAKOS_RELEASE_TAKOSUMI_REF\s*=\s*var\.takosumi_source_ref/,
+  );
+  assert.match(
+    rootModule,
+    /TAKOS_MANAGE_VECTORIZE_INDEX\s*=\s*tostring\(var\.manage_vectorize_index\)/,
   );
   assert.match(rootVariables, /variable\s+"release_working_directory"\s*\{/);
   assert.match(
@@ -340,6 +374,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(productionModule, /variable\s+"release_working_directory"\s*\{/);
   assert.match(productionModule, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(productionModule, /variable\s+"takosumi_source_ref"\s*\{/);
+  assert.match(productionModule, /variable\s+"manage_vectorize_index"\s*\{/);
   assert.match(
     productionModule,
     /TAKOS_RELEASE_TAKOSUMI_REPO_URL\s*=\s*var\.takosumi_source_repo_url/,
@@ -347,6 +382,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     productionModule,
     /TAKOS_RELEASE_TAKOSUMI_REF\s*=\s*var\.takosumi_source_ref/,
+  );
+  assert.match(
+    productionModule,
+    /TAKOS_MANAGE_VECTORIZE_INDEX\s*=\s*tostring\(var\.manage_vectorize_index\)/,
   );
   assert.match(
     productionModule,

@@ -39,6 +39,12 @@ variable "takosumi_source_ref" {
   default     = "main"
 }
 
+variable "manage_vectorize_index" {
+  description = "When true, the post-apply release command creates and destroys the Vectorize index. Set false when the operator provisions the exported index name outside the release command."
+  type        = bool
+  default     = true
+}
+
 variable "opentofu_plan_mode" {
   description = "Use deterministic provider-free inputs for CI OpenTofu plan review. Do not use for apply."
   type        = bool

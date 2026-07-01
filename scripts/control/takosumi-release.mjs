@@ -44,6 +44,9 @@ Optional env:
                                           (legacy fallback).
   TAKOS_SKIP_D1_MIGRATIONS                Set to 1/true to skip D1 migration
                                           commands in constrained sandboxes.
+  TAKOS_MANAGE_VECTORIZE_INDEX            Set to 0/false when the Vectorize
+                                          index is managed outside this release
+                                          command.
   TAKOS_WRANGLER_CONTAINERS_ROLLOUT       Optional value for wrangler deploy
                                           --containers-rollout, for example
                                           "none" in operator sandboxes where
@@ -203,6 +206,7 @@ export function buildTakosumiReleaseCommands(
     zoneId,
     takosumiRepoDir = "../takosumi",
     skipD1Migrations = false,
+    manageVectorizeIndex = true,
     containersRollout,
   } = {},
 ) {
@@ -212,10 +216,9 @@ export function buildTakosumiReleaseCommands(
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
   const workerName = requireStringOutput(outputs, "worker_name");
   requireStringOutput(outputs, "cloudflare_accounts_d1_database_id");
-  const vectorizeIndexName = requireStringOutput(
-    outputs,
-    "cloudflare_vectorize_index_name",
-  );
+  const vectorizeIndexName = manageVectorizeIndex
+    ? requireStringOutput(outputs, "cloudflare_vectorize_index_name")
+    : undefined;
   const wranglerConfigPath = resolve(WRANGLER_CONFIG);
   const wranglerEnvArgs = environment === "staging" ? ["--env", "staging"] : [];
   const releaseSecretsFile = releaseSecretsFilePath(environment);
@@ -297,15 +300,19 @@ export function buildTakosumiReleaseCommands(
     commandLine(buildArgs),
     commandLine(containerBuildArgs),
     ...migrationCommands,
-    commandLine([
-      "bun",
-      "scripts/control/ensure-vectorize-index.mjs",
-      vectorizeIndexName,
-      "--dimensions",
-      "768",
-      "--metric",
-      "cosine",
-    ]),
+    ...(manageVectorizeIndex
+      ? [
+          commandLine([
+            "bun",
+            "scripts/control/ensure-vectorize-index.mjs",
+            vectorizeIndexName,
+            "--dimensions",
+            "768",
+            "--metric",
+            "cosine",
+          ]),
+        ]
+      : []),
     commandLine(ensureSecretsArgs),
     commandLine([
       "bunx",
@@ -325,12 +332,14 @@ export function buildTakosumiReleaseCommands(
   ];
 }
 
-export function buildTakosumiDestroyCommands(outputs) {
+export function buildTakosumiDestroyCommands(
+  outputs,
+  { manageVectorizeIndex = true } = {},
+) {
   const workerName = requireStringOutput(outputs, "worker_name");
-  const vectorizeIndexName = requireStringOutput(
-    outputs,
-    "cloudflare_vectorize_index_name",
-  );
+  const vectorizeIndexName = manageVectorizeIndex
+    ? requireStringOutput(outputs, "cloudflare_vectorize_index_name")
+    : undefined;
   const queues = [
     requireNestedStringOutput(outputs, "queue_bindings", "runs"),
     requireNestedStringOutput(outputs, "queue_bindings", "runs_dlq"),
@@ -354,14 +363,18 @@ export function buildTakosumiDestroyCommands(outputs) {
       ]),
     ),
     commandLine(["bunx", "wrangler", "delete", workerName, "--force"]),
-    commandLine([
-      "bunx",
-      "wrangler",
-      "vectorize",
-      "delete",
-      vectorizeIndexName,
-      "--force",
-    ]),
+    ...(manageVectorizeIndex
+      ? [
+          commandLine([
+            "bunx",
+            "wrangler",
+            "vectorize",
+            "delete",
+            vectorizeIndexName,
+            "--force",
+          ]),
+        ]
+      : []),
   ];
 }
 
@@ -477,6 +490,12 @@ function integerEnv(env, name, fallback) {
   if (typeof raw !== "string" || raw.trim() === "") return fallback;
   const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function enabledByDefaultEnv(env, name) {
+  const raw = env[name];
+  if (typeof raw !== "string" || raw.trim() === "") return true;
+  return !["0", "false", "no", "off"].includes(raw.trim().toLowerCase());
 }
 
 function releaseApiToken(env) {
@@ -631,8 +650,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     env.TAKOS_RELEASE_TAKOSUMI_REF ??
     env.TAKOSUMI_REPO_REF ??
     DEFAULT_TAKOSUMI_REPO_REF;
+  const manageVectorizeIndex = enabledByDefaultEnv(
+    env,
+    "TAKOS_MANAGE_VECTORIZE_INDEX",
+  );
   const commands = destroy
-    ? buildTakosumiDestroyCommands(outputs)
+    ? buildTakosumiDestroyCommands(outputs, { manageVectorizeIndex })
     : (() => {
         ensureTakosumiSourceModule(takosumiRepoDir, {
           repoUrl: takosumiRepoUrl,
@@ -645,6 +668,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           skipD1Migrations:
             env.TAKOS_SKIP_D1_MIGRATIONS === "1" ||
             env.TAKOS_SKIP_D1_MIGRATIONS === "true",
+          manageVectorizeIndex,
           containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
         });
       })();
