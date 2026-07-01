@@ -205,7 +205,10 @@ function normalizeNodeSqliteArg(value: unknown): NodeSqliteArg {
 async function createNodeSqliteClient(
   dbPath: string,
 ): Promise<SqliteLikeClient> {
-  const sqlite = await import("node:sqlite");
+  // Keep this fallback available for Node/Bun local-platform runs without
+  // making Wrangler's Worker bundler resolve node:sqlite, which is not part of
+  // the Workers runtime even with nodejs_compat.
+  const sqlite = await import("node:" + "sqlite");
   const db = new sqlite.DatabaseSync(dbPath);
 
   const execute = async (
