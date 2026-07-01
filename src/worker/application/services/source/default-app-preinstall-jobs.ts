@@ -2,8 +2,8 @@ import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
 import {
-  TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
-  TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
+  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
 } from "@takosjp/takosumi-accounts-contract";
 import {
   defaultAppDistributionConfig,
@@ -165,15 +165,15 @@ function endpointWithPath(baseUrl: string, path: string): string {
 function planRunUrlFromInstallUrl(installUrl: string): string {
   const url = new URL(installUrl);
   const path = url.pathname.replace(/\/+$/, "");
-  if (path.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)) {
+  if (path.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)) {
     return endpointWithPath(
       installUrl,
-      TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+      TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
     );
   }
   return endpointWithPath(
     installUrl,
-    `${path}${TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH}`,
+    `${path}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH}`,
   );
 }
 

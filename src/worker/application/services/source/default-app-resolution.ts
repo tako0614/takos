@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 
 import { type Clock, systemClock } from "@takos/worker-platform-utils/clock";
-import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
+import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 import {
   defaultAppDistributionConfig,
   defaultAppDistributionEntries,
@@ -100,9 +100,9 @@ function normalizeInstallationsUrl(value: string, field: string): string {
   const normalized = normalizeHttpUrl(value, field);
   const url = new URL(normalized);
   const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
+  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)
     ? basePath
-    : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
+    : `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
   url.search = "";
   return url.toString();
 }

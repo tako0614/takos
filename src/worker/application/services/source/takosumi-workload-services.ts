@@ -1,4 +1,4 @@
-import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
+import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 
 /**
  * Workload service display, derived from a Capsule's deployment OUTPUTS
@@ -57,10 +57,10 @@ export function accountsInstallationProjectionUrl(
   const url = new URL(baseUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
   const installationsPath = basePath.endsWith(
-    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
   )
     ? basePath
-    : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
+    : `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
   url.pathname = `${installationsPath}/${encodeURIComponent(installationId)}`;
   url.search = "";
   return url;

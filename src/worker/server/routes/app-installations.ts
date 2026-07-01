@@ -7,8 +7,8 @@ import {
   ServiceUnavailableError,
 } from "@takos/worker-platform-utils/errors";
 import {
-  TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
-  TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
+  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
 } from "@takosjp/takosumi-accounts-contract";
 
 import {
@@ -384,10 +384,10 @@ async function resolveAccountsSessionCaller(
 
 function accountsInstallationsPath(installationId?: string): string {
   return installationId
-    ? `${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}/${encodeURIComponent(
+    ? `${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}/${encodeURIComponent(
         installationId,
       )}`
-    : TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH;
+    : TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH;
 }
 
 function readAccountsExpectedGuard(
@@ -460,7 +460,7 @@ async function applyDefaultAppInstallationForRoute(
   const plan = await postAccountsInstallationJson(
     c,
     caller,
-    TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
     planBody,
   );
   if (plan.status >= 400) return plan;
@@ -478,7 +478,7 @@ async function applyDefaultAppInstallationForRoute(
   return await postAccountsInstallationJson(
     c,
     caller,
-    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
     applyBody,
   );
 }
@@ -491,7 +491,7 @@ async function listInstallableAppInstallationsForRoute(
   if (caller) {
     return await accountsPlaneGetJson(
       c,
-      TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+      TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
       caller.headers,
       { space_id: spaceId },
     );
@@ -540,7 +540,7 @@ async function listInstallableAppInstallationsWithServicesForRoute(
   }
   const upstream = await accountsPlaneGetJson(
     c,
-    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
     caller.headers,
     { space_id: spaceId },
   );
@@ -802,7 +802,7 @@ appInstallationsRouter.post(
       const upstream = await postAccountsInstallationJson(
         c,
         caller,
-        TAKOSUMI_ACCOUNTS_INSTALLATION_PLAN_RUNS_PATH,
+        TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
         {
           workspaceId: space.id,
           spaceId: space.id,
@@ -864,7 +864,7 @@ appInstallationsRouter.post(
       const upstream = await postAccountsInstallationJson(
         c,
         caller,
-        TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+        TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
         {
           accountId: space.id,
           workspaceId: space.id,

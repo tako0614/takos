@@ -614,7 +614,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
           previousToken: params.previousToken,
         });
         return {
-          baseUrl: "https://takos.example.test/v1/installation-projections",
+          baseUrl: "https://takos.example.test/v1/capsule-projections",
           token: "taksrv_runtime_token",
         };
       },
@@ -644,7 +644,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
     capturedVariables.find((entry) => entry.name === "TAKOSUMI_CONTROL_URL"),
     {
       name: "TAKOSUMI_CONTROL_URL",
-      value: "https://takos.example.test/v1/installation-projections",
+      value: "https://takos.example.test/v1/capsule-projections",
       secret: false,
     },
   );

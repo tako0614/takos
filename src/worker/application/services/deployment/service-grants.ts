@@ -1,5 +1,5 @@
 import {
-  TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+  TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
   TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_CONTROL_API,
   takosumiAccountsCapsulePath,
 } from "@takosjp/takosumi-accounts-contract";
@@ -56,15 +56,15 @@ function accountsApiUrl(baseUrl: string, path: string): URL {
   const basePath = url.pathname.replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   if (
-    basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH) &&
-    normalizedPath.startsWith(`${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}/`)
+    basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH) &&
+    normalizedPath.startsWith(`${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}/`)
   ) {
     url.pathname = `${basePath}${normalizedPath.slice(
-      TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH.length,
+      TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH.length,
     )}`;
   } else if (
-    basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH) &&
-    normalizedPath === TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH
+    basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH) &&
+    normalizedPath === TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH
   ) {
     url.pathname = basePath;
   } else {
@@ -77,7 +77,7 @@ function accountsApiUrl(baseUrl: string, path: string): URL {
 function accountsInstallationBaseUrl(baseUrl: string): string {
   return accountsApiUrl(
     baseUrl,
-    TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH,
+    TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
   ).toString();
 }
 

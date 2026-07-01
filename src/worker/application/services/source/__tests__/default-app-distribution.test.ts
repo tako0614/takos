@@ -397,7 +397,7 @@ test("resolveDefaultAppInstallConfig reuses the shared Takosumi Accounts install
       }),
     ),
     {
-      installUrl: "https://accounts.internal/v1/installation-projections",
+      installUrl: "https://accounts.internal/v1/capsule-projections",
       token: "accounts-token",
       subject: "tsub_operator",
       mode: "shared-cell",
@@ -408,7 +408,7 @@ test("resolveDefaultAppInstallConfig reuses the shared Takosumi Accounts install
     resolveDefaultAppInstallConfig(
       makeEnv({
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/installation-projections",
+          "https://installer.internal/v1/capsule-projections",
         TAKOS_DEFAULT_APP_INSTALL_TOKEN: "default-token",
         TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_default",
         TAKOS_APP_INSTALLATIONS_URL: "https://accounts.internal",
@@ -417,7 +417,7 @@ test("resolveDefaultAppInstallConfig reuses the shared Takosumi Accounts install
       }),
     ),
     {
-      installUrl: "https://installer.internal/v1/installation-projections",
+      installUrl: "https://installer.internal/v1/capsule-projections",
       token: "default-token",
       subject: "tsub_default",
     },
@@ -1298,7 +1298,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/installation-projections",
+          "https://installer.internal/v1/capsule-projections",
         TAKOS_DEFAULT_APP_INSTALL_TOKEN: "install-token",
         TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_operator",
         TAKOS_DEFAULT_APP_INSTALL_MODE: "shared-cell",
@@ -1312,7 +1312,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
     assertEquals(sentRequests.length, 6);
     assertEquals(
       sentRequests[0].url,
-      "https://installer.internal/v1/installation-projections/plan-runs",
+      "https://installer.internal/v1/capsule-projections/plan-runs",
     );
     assertEquals(
       sentRequests[0].headers.get("authorization"),
@@ -1329,7 +1329,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
     });
     assertEquals(
       sentRequests[1].url,
-      "https://installer.internal/v1/installation-projections",
+      "https://installer.internal/v1/capsule-projections",
     );
     const applyBody = await sentRequests[1].json();
     assertEquals(applyBody, {
@@ -1427,7 +1427,7 @@ test("processDefaultAppPreinstallJobs blocks incomplete Installation install con
           },
         ]),
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/installation-projections",
+          "https://installer.internal/v1/capsule-projections",
       }),
       { timestamp: "2026-01-01T00:00:00.000Z" },
     );
@@ -1661,7 +1661,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
       makeEnv({
         TAKOS_DEFAULT_APPS_PREINSTALL: "true",
         TAKOS_DEFAULT_APP_INSTALL_URL:
-          "https://installer.internal/v1/installation-projections",
+          "https://installer.internal/v1/capsule-projections",
         TAKOS_DEFAULT_APP_INSTALL_TOKEN: "install-token",
         TAKOS_DEFAULT_APP_INSTALL_SUBJECT: "tsub_operator",
         TAKOS_DEFAULT_APP_INSTALL_MODE: "shared-cell",
@@ -1681,11 +1681,11 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Installati
     assertEquals(fetchCalls.length, 6);
     assertEquals(
       fetchCalls[0].url,
-      "https://installer.internal/v1/installation-projections/plan-runs",
+      "https://installer.internal/v1/capsule-projections/plan-runs",
     );
     assertEquals(
       fetchCalls[1].url,
-      "https://installer.internal/v1/installation-projections",
+      "https://installer.internal/v1/capsule-projections",
     );
     assertEquals(
       fetchCalls.every((call) => call.authorization === "Bearer install-token"),

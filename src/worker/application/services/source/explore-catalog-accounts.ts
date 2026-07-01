@@ -1,4 +1,4 @@
-import { TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH } from "@takosjp/takosumi-accounts-contract";
+import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-accounts-contract";
 
 import type { Env } from "../../../shared/types/index.ts";
 import { sourceServiceDeps } from "./deps.ts";
@@ -96,9 +96,9 @@ function buildAccountsInstallationsListUrl(
 ): URL {
   const url = new URL(baseUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH)
+  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)
     ? basePath
-    : `${basePath}${TAKOSUMI_ACCOUNTS_INSTALLATIONS_PATH}`;
+    : `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
   url.search = "";
   url.searchParams.set("space_id", spaceId);
   return url;

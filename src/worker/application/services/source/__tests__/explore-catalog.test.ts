@@ -735,7 +735,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
           url,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        if (url.endsWith("/v1/installation-projections/inst_docs")) {
+        if (url.endsWith("/v1/capsule-projections/inst_docs")) {
           // Deploy decision D3: workload services are projected from the
           // installation deployment-output projection.
           return Response.json({
@@ -778,12 +778,12 @@ test("listCatalogItems overlays default app installation state from Accounts led
 
   assertEquals(
     requests[0]?.url,
-    "https://accounts.internal/base/v1/installation-projections?space_id=space-1",
+    "https://accounts.internal/base/v1/capsule-projections?space_id=space-1",
   );
   assertEquals(requests[0]?.authorization, "Bearer accounts-token");
   assertEquals(
     requests[1]?.url,
-    "https://accounts.internal/base/v1/installation-projections/inst_docs",
+    "https://accounts.internal/base/v1/capsule-projections/inst_docs",
   );
   assertEquals(result.items[0]?.installation, {
     installed: true,
