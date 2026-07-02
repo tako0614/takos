@@ -592,16 +592,21 @@ export async function waitForWranglerDeployment(
     const result = runShellCommand(command, env);
     lastOutput = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
     if (!result.error && result.status === 0) {
-      const status = parseWranglerJsonOutput(result.stdout ?? "");
-      if (wranglerDeploymentReady(status)) {
-        console.log(
-          `Verified Wrangler deployment for ${workerName}: ${wranglerDeploymentSummary(
-            status,
-          )}`,
-        );
-        return status;
+      const parseResult = parseWranglerJsonOutput(result.stdout ?? "");
+      if (parseResult.ok) {
+        const status = parseResult.value;
+        if (wranglerDeploymentReady(status)) {
+          console.log(
+            `Verified Wrangler deployment for ${workerName}: ${wranglerDeploymentSummary(
+              status,
+            )}`,
+          );
+          return status;
+        }
+        lastOutput = `${lastOutput}\nWrangler deployment status did not include an active version.`;
+      } else {
+        lastOutput = `${lastOutput}\n${parseResult.error}`;
       }
-      lastOutput = `${lastOutput}\nWrangler deployment status did not include an active version.`;
     }
 
     if (
@@ -630,9 +635,21 @@ export async function waitForWranglerDeployment(
 function parseWranglerJsonOutput(output) {
   const trimmed = output.trim();
   if (!trimmed) {
-    throw new Error("wrangler deployments status returned no JSON output");
+    return {
+      ok: false,
+      error: "wrangler deployments status returned no JSON output",
+    };
   }
-  return JSON.parse(trimmed);
+  try {
+    return { ok: true, value: JSON.parse(trimmed) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: `wrangler deployments status returned invalid JSON output: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    };
+  }
 }
 
 function wranglerDeploymentReady(status) {
@@ -660,7 +677,7 @@ function wranglerDeploymentSummary(status) {
 }
 
 function isRetryableWranglerDeploymentStatusFailure(output) {
-  return /does not exist|not found|fetch failed|fetch request failed|connect ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up|HTTP 429|HTTP 5\d\d|Internal error|temporarily unavailable/i.test(
+  return /does not exist|not found|no JSON output|invalid JSON output|fetch failed|fetch request failed|connect ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up|HTTP 429|HTTP 5\d\d|Internal error|temporarily unavailable/i.test(
     output,
   );
 }

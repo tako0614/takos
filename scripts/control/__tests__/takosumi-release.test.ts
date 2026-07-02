@@ -498,6 +498,44 @@ JSON
   }
 });
 
+test("waitForWranglerDeployment treats empty successful Wrangler JSON as retryable", async () => {
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-deployment-empty-"));
+  const bin = resolve(root, "bin");
+  const state = resolve(root, "state");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+count=0
+if [ -f '${state}' ]; then
+  count=$(cat '${state}')
+fi
+count=$((count + 1))
+printf '%s' "$count" > '${state}'
+if [ "$count" = "1" ]; then
+  exit 0
+fi
+cat <<'JSON'
+{"id":"dep_456","versions":[{"version_id":"ver_456","percentage":100}]}
+JSON
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    process.chdir(root);
+    const status = await waitForWranglerDeployment(rawOutputs, "production", {
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+      TAKOS_RELEASE_WORKER_API_ATTEMPTS: "2",
+      TAKOS_RELEASE_WORKER_API_INTERVAL_MS: "0",
+    });
+    assert.equal(status.id, "dep_456");
+  } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () => {
   const requests = [];
   await assert.rejects(
