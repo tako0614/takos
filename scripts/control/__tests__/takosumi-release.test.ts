@@ -23,6 +23,7 @@ import {
   releaseChildEnv,
   readReleaseOutputs,
   verifyReleaseDeployment,
+  waitForWranglerDeployment,
 } from "../takosumi-release.mjs";
 import { applyReleaseContainerImagesToToml } from "../apply-release-container-images.mjs";
 
@@ -449,6 +450,52 @@ test("ensureWorkersDevSubdomain skips API enablement when Wrangler-owned Worker 
     reason: "workers_dev_api_unavailable",
   });
   assert.equal(requests.length, 1);
+});
+
+test("waitForWranglerDeployment retries until Wrangler reports an active version", async () => {
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-deployment-"));
+  const bin = resolve(root, "bin");
+  const state = resolve(root, "state");
+  const log = resolve(root, "commands.log");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+printf '%s\\n' "$*" >> '${log}'
+count=0
+if [ -f '${state}' ]; then
+  count=$(cat '${state}')
+fi
+count=$((count + 1))
+printf '%s' "$count" > '${state}'
+if [ "$count" = "1" ]; then
+  echo 'This Worker does not exist on your account. [code: 10007]' >&2
+  exit 1
+fi
+cat <<'JSON'
+{"id":"dep_123","versions":[{"version_id":"ver_123","percentage":100}]}
+JSON
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    process.chdir(root);
+    const status = await waitForWranglerDeployment(rawOutputs, "production", {
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+      TAKOS_RELEASE_WORKER_API_ATTEMPTS: "2",
+      TAKOS_RELEASE_WORKER_API_INTERVAL_MS: "0",
+    });
+    assert.equal(status.id, "dep_123");
+    assert.equal(status.versions[0].version_id, "ver_123");
+    const commands = readFileSync(log, "utf8");
+    assert.match(commands, /wrangler deployments status/);
+    assert.match(commands, /--name takos-test/);
+    assert.match(commands, /--json/);
+  } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () => {

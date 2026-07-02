@@ -566,6 +566,105 @@ function runShellCommand(command, env) {
   });
 }
 
+export async function waitForWranglerDeployment(
+  outputs,
+  environment,
+  env = process.env,
+) {
+  const workerName = requireStringOutput(outputs, "worker_name");
+  const command = commandLine([
+    "bunx",
+    "wrangler",
+    "deployments",
+    "status",
+    "--config",
+    releaseWranglerConfigPath(environment),
+    "--name",
+    workerName,
+    ...wranglerEnvironmentArgs(environment),
+    "--json",
+  ]);
+  const attempts = releaseWorkerApiAttempts(env);
+  const intervalMs = releaseWorkerApiIntervalMs(env);
+  let lastOutput = "";
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = runShellCommand(command, env);
+    lastOutput = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    if (!result.error && result.status === 0) {
+      const status = parseWranglerJsonOutput(result.stdout ?? "");
+      if (wranglerDeploymentReady(status)) {
+        console.log(
+          `Verified Wrangler deployment for ${workerName}: ${wranglerDeploymentSummary(
+            status,
+          )}`,
+        );
+        return status;
+      }
+      lastOutput = `${lastOutput}\nWrangler deployment status did not include an active version.`;
+    }
+
+    if (
+      attempt >= attempts ||
+      !isRetryableWranglerDeploymentStatusFailure(lastOutput)
+    ) {
+      throw new Error(
+        `Wrangler deployment for ${workerName} was not visible after ${attempt} attempt(s): ${boundedCommandLog(
+          lastOutput.trim(),
+          env,
+        )}`,
+      );
+    }
+
+    if (intervalMs > 0) await wait(intervalMs);
+  }
+
+  throw new Error(
+    `Wrangler deployment for ${workerName} was not visible: ${boundedCommandLog(
+      lastOutput.trim(),
+      env,
+    )}`,
+  );
+}
+
+function parseWranglerJsonOutput(output) {
+  const trimmed = output.trim();
+  if (!trimmed) {
+    throw new Error("wrangler deployments status returned no JSON output");
+  }
+  return JSON.parse(trimmed);
+}
+
+function wranglerDeploymentReady(status) {
+  if (!status || typeof status !== "object") return false;
+  return (
+    typeof status.id === "string" &&
+    Array.isArray(status.versions) &&
+    status.versions.some(
+      (version) =>
+        typeof version?.version_id === "string" &&
+        Number(version?.percentage) > 0,
+    )
+  );
+}
+
+function wranglerDeploymentSummary(status) {
+  const versions = Array.isArray(status?.versions) ? status.versions : [];
+  const versionSummary = versions
+    .map(
+      (version) =>
+        `${version.version_id ?? "unknown"}:${version.percentage ?? 0}%`,
+    )
+    .join(", ");
+  return `${status?.id ?? "unknown"}${versionSummary ? ` (${versionSummary})` : ""}`;
+}
+
+function isRetryableWranglerDeploymentStatusFailure(output) {
+  return /does not exist|not found|fetch failed|fetch request failed|connect ETIMEDOUT|ECONNRESET|EAI_AGAIN|socket hang up|HTTP 429|HTTP 5\d\d|Internal error|temporarily unavailable/i.test(
+    output,
+  );
+}
+
 function emitCommandOutput(result, env) {
   const stdout = boundedCommandLog(result.stdout ?? "", env);
   const stderr = boundedCommandLog(result.stderr ?? "", env);
@@ -1109,6 +1208,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         }),
         childEnv,
       );
+      await waitForWranglerDeployment(outputs, environment, childEnv);
       await verifyCloudflareWorkerContent(outputs, environment, childEnv);
       await ensureWorkersDevSubdomain(outputs, childEnv);
       await verifyReleaseHealth(outputs, childEnv);
