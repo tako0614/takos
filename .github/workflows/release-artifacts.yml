@@ -16,6 +16,11 @@ on:
         required: false
         default: false
         type: boolean
+      publish_cloudflare_registry:
+        description: "Publish Takos runtime/executor images to the Cloudflare Containers registry"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: takos-release-artifacts-${{ github.ref }}
@@ -94,10 +99,14 @@ jobs:
             context: takos/containers/runtime
             dockerfile: takos/containers/runtime/Dockerfile
             prebuild: bun run containers:build:runtime
+            cloudflare_container: true
+            cloudflare_build_path: containers/runtime
           - image: takos-executor
             context: takos/containers/executor
             dockerfile: takos/containers/executor/Dockerfile
             prebuild: bun run containers:build:executor
+            cloudflare_container: true
+            cloudflare_build_path: containers/executor
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
@@ -206,6 +215,50 @@ jobs:
               provenance: true
             }' > "dist/image-digests/${{ matrix.image }}.json"
 
+      - name: Build and publish Cloudflare Container image
+        if: (github.event_name == 'push' || inputs.publish == true) && matrix.cloudflare_container == true && (github.event_name == 'push' || inputs.publish_cloudflare_registry == true)
+        shell: bash
+        working-directory: takos
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
+            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are required to publish Cloudflare Container images." >&2
+            exit 1
+          fi
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            release_version="${GITHUB_REF_NAME#v}"
+          else
+            release_version="${INPUT_VERSION}"
+          fi
+          cf_tag="${release_version}-${GITHUB_SHA::12}"
+          local_tag="${{ matrix.image }}:${cf_tag}"
+          set +e
+          output="$(bunx wrangler containers build -p -t "${local_tag}" "${{ matrix.cloudflare_build_path }}" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "${output}"
+          if [[ ${status} -ne 0 ]]; then
+            exit "${status}"
+          fi
+          cloudflare_ref="$(printf '%s\n' "${output}" | grep -Eo 'registry\.cloudflare\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+(:[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})' | tail -n 1 || true)"
+          if [[ -z "${cloudflare_ref}" ]]; then
+            cloudflare_ref="registry.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/${local_tag}"
+          fi
+          tmp="$(mktemp)"
+          jq \
+            --arg cloudflareRegistryRef "${cloudflare_ref}" \
+            --arg cloudflareRegistryTag "${cf_tag}" \
+            '. + {
+              cloudflareRegistryRef: $cloudflareRegistryRef,
+              cloudflareRegistryTag: $cloudflareRegistryTag
+            }' \
+            "dist/image-digests/${{ matrix.image }}.json" > "${tmp}"
+          mv "${tmp}" "dist/image-digests/${{ matrix.image }}.json"
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         if: github.event_name == 'push' || inputs.publish == true
         with:
@@ -245,6 +298,7 @@ jobs:
         working-directory: takos
         env:
           VERSION: ${{ inputs.version }}
+          REQUIRE_CLOUDFLARE_CONTAINER_IMAGES: ${{ github.event_name == 'push' || inputs.publish_cloudflare_registry == true }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
@@ -258,11 +312,16 @@ jobs:
             echo "Invalid SemVer release version: ${release_version}" >&2
             exit 1
           fi
+          extra_args=()
+          if [[ "${REQUIRE_CLOUDFLARE_CONTAINER_IMAGES}" == "true" ]]; then
+            extra_args+=(--require-cloudflare-container-images)
+          fi
           bun scripts/build-release-manifest.ts \
             --image-digest-dir dist/image-digests \
             --release-version "${release_version}" \
             --release-tag "${release_tag}" \
             --require-image-digests \
+            "${extra_args[@]}" \
             --output dist/release-manifest.json
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)

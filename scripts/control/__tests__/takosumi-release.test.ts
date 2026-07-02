@@ -131,25 +131,30 @@ test("buildTakosumiReleaseCommands uses prebuilt CI container images when suppli
   );
 });
 
-test("normalizeReleaseContainerImages accepts aliases and requires digest pins", () => {
+test("normalizeReleaseContainerImages accepts aliases and supported registry refs", () => {
   assert.deepEqual(
     normalizeReleaseContainerImages({
       runtime: runtimeImage,
-      executor: executorImage,
+      executor:
+        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
     }),
     {
       TakosRuntimeContainer: runtimeImage,
-      ExecutorContainerTier1: executorImage,
-      ExecutorContainerTier2: executorImage,
-      ExecutorContainerTier3: executorImage,
+      ExecutorContainerTier1:
+        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
+      ExecutorContainerTier2:
+        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
+      ExecutorContainerTier3:
+        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
     },
   );
   assert.throws(
     () =>
       normalizeReleaseContainerImages({
-        runtime: "docker.io/takos/runtime:latest",
+        runtime:
+          "ghcr.io/takos/runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111",
       }),
-    /digest-pinned/,
+    /Cloudflare Containers-supported registry ref/,
   );
 });
 

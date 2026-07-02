@@ -39,16 +39,16 @@ variable "release_containers_rollout" {
 }
 
 variable "release_container_images" {
-  description = "Optional digest-pinned prebuilt Cloudflare container image refs produced by Git CI or an operator release pipeline. Keys may be runtime/executor aliases or Wrangler container class names. When unset, the release activator builds from the Git source snapshot."
+  description = "Optional prebuilt Cloudflare Containers image refs produced by Git CI or an operator release pipeline. Keys may be runtime/executor aliases or Wrangler container class names. When unset, the release activator builds from the Git source snapshot."
   type        = map(string)
   default     = {}
 
   validation {
     condition = alltrue([
       for image in values(var.release_container_images) :
-      can(regex("@sha256:[0-9a-f]{64}$", image))
+      can(regex("^(registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+|docker\\.io/[A-Za-z0-9._/-]+|[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+|[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+)(@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$", image))
     ])
-    error_message = "release_container_images values must be digest-pinned image refs ending with @sha256:<64-hex>."
+    error_message = "release_container_images values must use Cloudflare Containers-supported registry refs."
   }
 }
 

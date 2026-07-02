@@ -57,6 +57,7 @@ type BuildReleaseManifestOptions = {
   releaseVersion: string | null;
   releaseTag: string | null;
   requireImageDigests: boolean;
+  requireCloudflareContainerImages: boolean;
   requireCleanGit: boolean;
 };
 
@@ -101,6 +102,8 @@ type ImageDigestRecord = {
   image?: string;
   digest?: string;
   digestRef?: string;
+  cloudflareRegistryRef?: string;
+  cloudflareRegistryTag?: string;
   tags?: string[];
   commit?: string;
   workflowRun?: string;
@@ -135,6 +138,10 @@ const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
     dockerfile: "containers/executor/Dockerfile",
   },
 ];
+const CLOUDFLARE_CONTAINER_IMAGE_NAMES = new Set([
+  "takos-runtime",
+  "takos-executor",
+]);
 
 const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [
   {
@@ -207,6 +214,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
     releaseVersion: null,
     releaseTag: null,
     requireImageDigests: false,
+    requireCloudflareContainerImages: false,
     requireCleanGit: false,
   };
 
@@ -240,6 +248,10 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
       options.requireImageDigests = true;
       continue;
     }
+    if (flag === "--require-cloudflare-container-images") {
+      options.requireCloudflareContainerImages = true;
+      continue;
+    }
     if (flag === "--require-clean-git") {
       options.requireCleanGit = true;
       continue;
@@ -252,7 +264,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
 function usage(): never {
   console.error(
-    "Usage: bun scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]",
+    "Usage: bun scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-cloudflare-container-images] [--require-clean-git]",
   );
   runtime.exit(2);
 }
@@ -531,6 +543,9 @@ async function collectOfficialImages(
     const record = digestRecords.get(image.name);
     const digest = record?.record.digest ?? null;
     const digestRef = digest ? `${repository}@${digest}` : null;
+    const cloudflareRegistryRef = record?.record.cloudflareRegistryRef ?? null;
+    const cloudflareContainerImageRequired =
+      CLOUDFLARE_CONTAINER_IMAGE_NAMES.has(image.name);
 
     if (!record) {
       errors.push(`${image.name}: missing image digest metadata`);
@@ -541,6 +556,8 @@ async function collectOfficialImages(
         record.record,
         gitInfo,
         release.version,
+        cloudflareContainerImageRequired,
+        options.requireCloudflareContainerImages,
         errors,
       );
     }
@@ -552,6 +569,9 @@ async function collectOfficialImages(
       tagPolicy: ["semver", `sha-${gitInfo.shortCommit ?? "<commit>"}`],
       digest,
       digestRef,
+      cloudflareRegistryRef,
+      cloudflareRegistryTag: record?.record.cloudflareRegistryTag ?? null,
+      cloudflareContainerImageRequired,
       tags: record?.record.tags ?? [],
       sbom: {
         required: true,
@@ -585,6 +605,7 @@ async function collectOfficialImages(
     required: OFFICIAL_TAKOS_IMAGES.map((image) => image.name),
     imageDigestDir: options.imageDigestDir,
     requireImageDigests: options.requireImageDigests,
+    requireCloudflareContainerImages: options.requireCloudflareContainerImages,
     complete: errors.length === 0,
     errors,
     images,
@@ -621,6 +642,8 @@ function validateImageDigestRecord(
   record: ImageDigestRecord,
   gitInfo: GitInfo,
   releaseVersion: string | null,
+  cloudflareContainerImageRequired: boolean,
+  requireCloudflareContainerImages: boolean,
   errors: string[],
 ): void {
   if (record.image !== repository) {
@@ -655,6 +678,23 @@ function validateImageDigestRecord(
   if (record.provenance !== true) {
     errors.push(`${name}: provenance attestation must be recorded`);
   }
+  if (cloudflareContainerImageRequired && requireCloudflareContainerImages) {
+    if (!record.cloudflareRegistryRef) {
+      errors.push(
+        `${name}: Cloudflare registry image ref is required for Cloudflare Container deploys`,
+      );
+    } else if (!isCloudflareRegistryImageRef(record.cloudflareRegistryRef)) {
+      errors.push(
+        `${name}: Cloudflare registry image ref must be registry.cloudflare.com/<account>/<image>:<tag> or @sha256:<digest>`,
+      );
+    }
+  }
+}
+
+function isCloudflareRegistryImageRef(value: string): boolean {
+  return /^registry\.cloudflare\.com\/[A-Za-z0-9_-]+\/[A-Za-z0-9._/-]+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}|@sha256:[0-9a-f]{64})$/u.test(
+    value,
+  );
 }
 
 async function collectGitHubOwner(): Promise<string> {

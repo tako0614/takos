@@ -56,16 +56,20 @@ The module exposes `release_executor`:
   should happen through the operator release activator materializer.
 
 For fast installs, prefer prebuilt container images produced by Git CI or the
-operator release pipeline. Pass those digest-pinned image refs through the
-OpenTofu variable `release_container_images`; Takosumi only injects the variable
-into the release command and records the Run evidence.
+operator release pipeline. Pass those Cloudflare Containers-supported image refs
+through the OpenTofu variable `release_container_images`; Takosumi only injects
+the variable into the release command and records the Run evidence.
 
 ```hcl
 release_container_images = {
-  runtime  = "ghcr.io/<owner>/takos-runtime@sha256:<digest>"
-  executor = "ghcr.io/<owner>/takos-executor@sha256:<digest>"
+  runtime  = "registry.cloudflare.com/<account-id>/takos-runtime:<git-ci-tag>"
+  executor = "registry.cloudflare.com/<account-id>/takos-executor:<git-ci-tag>"
 }
 ```
+
+Use digest refs when the CI pipeline can resolve them. Otherwise use a unique
+version + commit tag from the Git CI run and keep the release manifest as the
+evidence binding that tag to the source commit and image digest.
 
 When `release_container_images` is set, the release activator rewrites the
 generated Wrangler config to use those image refs and skips the local
@@ -74,9 +78,12 @@ Git/OpenTofu-native: the release command builds from the reviewed source
 snapshot. Takosumi does not select, fetch, or rewrite artifacts outside the
 declared OpenTofu module and release command.
 The canonical artifact source for hosted Takos installs is the Takos Git CI
-release workflow: it publishes digest metadata for `takos-runtime` and
-`takos-executor`, and the operator passes those immutable refs into OpenTofu as
-plain module variables.
+release workflow: it publishes `takos-runtime` and `takos-executor` to the
+Cloudflare managed container registry with `wrangler containers build --push`,
+records the resulting registry refs in the release manifest, and the operator
+passes those refs into OpenTofu as plain module variables. GHCR images may remain
+as provenance / SBOM evidence, but Cloudflare Worker deploys should consume the
+Cloudflare registry refs.
 
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
@@ -177,7 +184,7 @@ bun run containers:build
 
 Wrangler builds only Takos runtime / executor containers from this repo. In
 hosted/operator installs, Git CI should usually build those container images
-first and pass the resulting digest-pinned refs through
+first and pass the resulting Cloudflare registry refs through
 `release_container_images`; this step is then skipped during release activation.
 
 ### 5. Run Product Activation

@@ -50,9 +50,9 @@ variable "release_container_images" {
   validation {
     condition = alltrue([
       for image in values(var.release_container_images) :
-      can(regex("@sha256:[0-9a-f]{64}$", image))
+      can(regex("^(registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+|docker\\.io/[A-Za-z0-9._/-]+|[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+|[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+)(@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$", image))
     ])
-    error_message = "release_container_images values must be digest-pinned image refs ending with @sha256:<64-hex>."
+    error_message = "release_container_images values must use Cloudflare Containers-supported registry refs."
   }
 }
 

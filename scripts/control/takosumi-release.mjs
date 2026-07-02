@@ -54,10 +54,12 @@ Optional env:
                                           --containers-rollout, for example
                                           "none" in operator sandboxes where
                                           Docker image builds are unavailable.
-  TAKOS_RELEASE_CONTAINER_IMAGES_JSON     Optional JSON object of digest-pinned
-                                          prebuilt container image refs from CI.
-                                          Keys may be Wrangler class names or
-                                          "runtime" / "executor" aliases.
+  TAKOS_RELEASE_CONTAINER_IMAGES_JSON     Optional JSON object of prebuilt
+                                          container image refs from Git CI.
+                                          Use Cloudflare Containers-supported
+                                          registries. Keys may be Wrangler
+                                          class names or "runtime" /
+                                          "executor" aliases.
 `);
   runtime.exit(1);
 }
@@ -377,9 +379,9 @@ export function normalizeReleaseContainerImages(value) {
   if (entries.length === 0) return {};
 
   for (const [key, image] of entries) {
-    if (!/@sha256:[0-9a-f]{64}$/u.test(image)) {
+    if (!isSupportedCloudflareContainerImageRef(image)) {
       throw new Error(
-        `release container image "${key}" must be digest-pinned with @sha256:<64-hex>`,
+        `release container image "${key}" must use a Cloudflare Containers-supported registry ref`,
       );
     }
   }
@@ -391,6 +393,33 @@ export function normalizeReleaseContainerImages(value) {
     if (image) resolved[className] = image;
   }
   return resolved;
+}
+
+export function isSupportedCloudflareContainerImageRef(image) {
+  if (typeof image !== "string") return false;
+  const trimmed = image.trim();
+  if (trimmed !== image || trimmed.length === 0 || /\s/u.test(trimmed)) {
+    return false;
+  }
+  const digest = "@sha256:[0-9a-f]{64}";
+  const tag = ":[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}";
+  const suffix = `(?:${digest}|${tag})`;
+  const patterns = [
+    new RegExp(
+      `^registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+${suffix}$`,
+      "u",
+    ),
+    new RegExp(`^docker\\.io/[A-Za-z0-9._/-]+${suffix}$`, "u"),
+    new RegExp(
+      `^[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+${suffix}$`,
+      "u",
+    ),
+    new RegExp(
+      `^[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+${suffix}$`,
+      "u",
+    ),
+  ];
+  return patterns.some((pattern) => pattern.test(trimmed));
 }
 
 function wranglerEnvironmentArgs(environment) {
