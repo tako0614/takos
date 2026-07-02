@@ -69,9 +69,9 @@ function commandLine(parts) {
   return parts.map(shellArg).join(" ");
 }
 
-function runFile(command, args) {
+function runFile(command, args, env = process.env) {
   console.log(`\n> ${commandLine([command, ...args])}\n`);
-  execFileSync(command, args, { stdio: "inherit" });
+  execFileSync(command, args, { stdio: "inherit", env });
 }
 
 function outputValue(entry) {
@@ -229,7 +229,6 @@ export function buildTakosumiReleaseCommands(
     throw new Error(`Unknown environment "${environment}"`);
   }
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
-  const workerName = requireStringOutput(outputs, "worker_name");
   requireStringOutput(outputs, "cloudflare_accounts_d1_database_id");
   const vectorizeIndexName = requireStringOutput(
     outputs,
@@ -243,8 +242,7 @@ export function buildTakosumiReleaseCommands(
     outputs,
     "cloudflare_vectorize_index_metric",
   );
-  const wranglerEnvArgs =
-    environment === "staging" ? ["--env", "staging"] : ["--env", ""];
+  const wranglerEnvArgs = wranglerEnvironmentArgs(environment);
   const releaseSecretsFile = releaseSecretsFilePath(environment);
   const releaseWranglerConfig = releaseWranglerConfigPath(environment);
   const releaseWranglerConfigPathResolved = resolve(releaseWranglerConfig);
@@ -342,19 +340,34 @@ export function buildTakosumiReleaseCommands(
     commandLine(ensureSecretsArgs),
     commandLine([
       "bunx",
-      "wrangler",
-      "deploy",
-      "--config",
-      releaseWranglerConfig,
-      "--name",
-      workerName,
-      "--secrets-file",
-      releaseSecretsFile,
-      ...wranglerEnvArgs,
-      ...(containersRollout
-        ? ["--containers-rollout", containersRollout]
-        : []),
+      ...wranglerDeployArgs(outputs, environment, {
+        containersRollout,
+      }),
     ]),
+  ];
+}
+
+function wranglerEnvironmentArgs(environment) {
+  return environment === "staging" ? ["--env", "staging"] : ["--env", ""];
+}
+
+function wranglerDeployArgs(
+  outputs,
+  environment,
+  { containersRollout } = {},
+) {
+  const workerName = requireStringOutput(outputs, "worker_name");
+  return [
+    "wrangler",
+    "deploy",
+    "--config",
+    releaseWranglerConfigPath(environment),
+    "--name",
+    workerName,
+    "--secrets-file",
+    releaseSecretsFilePath(environment),
+    ...wranglerEnvironmentArgs(environment),
+    ...(containersRollout ? ["--containers-rollout", containersRollout] : []),
   ];
 }
 
@@ -813,11 +826,19 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       })();
   const childEnv = releaseChildEnv(outputs, env);
   try {
-    for (const command of commands) {
+    const commandsToRun = destroy ? commands : commands.slice(0, -1);
+    for (const command of commandsToRun) {
       if (destroy) runDestroyCommand(command, childEnv);
       else run(command, childEnv);
     }
     if (!destroy) {
+      runFile(
+        "bunx",
+        wranglerDeployArgs(outputs, environment, {
+          containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+        }),
+        childEnv,
+      );
       await verifyCloudflareWorkerContent(outputs, environment, childEnv);
       await ensureWorkersDevSubdomain(outputs, childEnv);
       await verifyReleaseHealth(outputs, childEnv);
