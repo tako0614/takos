@@ -394,7 +394,7 @@ export function normalizeReleaseContainerImages(value) {
 }
 
 function wranglerEnvironmentArgs(environment) {
-  return environment === "staging" ? ["--env", "staging"] : [];
+  return environment === "staging" ? ["--env", "staging"] : ["--env", ""];
 }
 
 function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
