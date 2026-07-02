@@ -16,6 +16,7 @@ import {
   buildTakosumiReleaseCommands,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
+  isRetryableDestroyFailure,
   releaseChildEnv,
   readReleaseOutputs,
   verifyReleaseDeployment,
@@ -123,6 +124,34 @@ test("buildTakosumiDestroyCommands removes consumers and uploaded resources befo
     "'bunx' 'wrangler' 'delete' 'takos-test' '--force'",
     "'bunx' 'wrangler' 'vectorize' 'delete' 'takos-test-embeddings' '--force'",
   ]);
+});
+
+test("destroy retry classifier matches transient Wrangler network failures", () => {
+  assert.equal(
+    isRetryableDestroyFailure(
+      "'bunx' 'wrangler' 'queues' 'consumer' 'remove' 'takos-test-runs' 'takos-test'",
+      `
+▲ [WARNING] A fetch request failed, likely due to a connectivity issue.
+
+✘ [ERROR] fetch failed
+`,
+    ),
+    true,
+  );
+  assert.equal(
+    isRetryableDestroyFailure(
+      "'bunx' 'wrangler' 'delete' 'takos-test' '--force'",
+      "Cloudflare API failed: HTTP 500 Internal error",
+    ),
+    true,
+  );
+  assert.equal(
+    isRetryableDestroyFailure(
+      "'bunx' 'wrangler' 'vectorize' 'delete' 'takos-test-embeddings' '--force'",
+      "No such Worker exists",
+    ),
+    false,
+  );
 });
 
 test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {

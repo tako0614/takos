@@ -19,6 +19,8 @@ const RELEASE_WORKER_API_ATTEMPTS = 12;
 const RELEASE_WORKER_API_INTERVAL_MS = 2500;
 const RELEASE_COMMAND_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
 const RELEASE_COMMAND_LOG_MAX_CHARS = 20_000;
+const DESTROY_COMMAND_RETRY_ATTEMPTS = 3;
+const DESTROY_COMMAND_RETRY_INTERVAL_MS = 2000;
 
 function usage() {
   console.error(`
@@ -424,23 +426,54 @@ function run(command, env = process.env) {
   }
 }
 
-function runDestroyCommand(command, env = process.env) {
-  console.log(`\n> ${command}\n`);
-  const result = runShellCommand(command, env);
-  const stdout = result.stdout ?? "";
-  const stderr = result.stderr ?? "";
-  emitCommandOutput(result, env);
-  if (result.error || result.status !== 0) {
-    if (isIgnorableDestroyFailure(command, `${stdout}\n${stderr}`)) {
+async function runDestroyCommand(command, env = process.env) {
+  const attempts = destroyCommandRetryAttempts(env);
+  const intervalMs = destroyCommandRetryIntervalMs(env);
+  let lastResult;
+  let lastOutput = "";
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (attempt > 1) {
+      console.warn(
+        `Retrying release destroy command (${attempt}/${attempts}): ${command}`,
+      );
+    }
+    console.log(`\n> ${command}\n`);
+    const result = runShellCommand(command, env);
+    lastResult = result;
+    const stdout = result.stdout ?? "";
+    const stderr = result.stderr ?? "";
+    const errorText =
+      result.error instanceof Error ? result.error.message : "";
+    lastOutput = `${stdout}\n${stderr}\n${errorText}`;
+    emitCommandOutput(result, env);
+    if (!result.error && result.status === 0) return;
+    if (isIgnorableDestroyFailure(command, lastOutput)) {
       console.warn("Ignoring missing release resource during destroy.");
       return;
     }
-    if (result.error) throw result.error;
-    const error = new Error(`Command failed: ${command}`);
-    error.status = result.status;
-    error.signal = result.signal;
-    throw error;
+    if (
+      attempt < attempts &&
+      isRetryableDestroyFailure(command, lastOutput)
+    ) {
+      if (intervalMs > 0) await wait(intervalMs);
+      continue;
+    }
+    break;
   }
+  if (
+    isQueueConsumerRemoveCommand(command) &&
+    isRetryableDestroyFailure(command, lastOutput)
+  ) {
+    console.warn(
+      "Continuing release cleanup after transient queue consumer removal failure; worker deletion will remove remaining bindings.",
+    );
+    return;
+  }
+  if (lastResult?.error) throw lastResult.error;
+  const error = new Error(`Command failed: ${command}`);
+  error.status = lastResult?.status;
+  error.signal = lastResult?.signal;
+  throw error;
 }
 
 function runShellCommand(command, env) {
@@ -473,7 +506,7 @@ function boundedCommandLog(text, env) {
 }
 
 function isIgnorableDestroyFailure(command, output) {
-  if (command.includes("'queues' 'consumer' 'remove'")) {
+  if (isQueueConsumerRemoveCommand(command)) {
     return /No worker consumer .* exists for queue/u.test(output);
   }
   if (command.includes("'wrangler' 'delete'")) {
@@ -483,6 +516,35 @@ function isIgnorableDestroyFailure(command, output) {
     return /not found|does not exist|vectorize\.index\.deleted/i.test(output);
   }
   return false;
+}
+
+function isQueueConsumerRemoveCommand(command) {
+  return command.includes("'queues' 'consumer' 'remove'");
+}
+
+export function isRetryableDestroyFailure(_command, output) {
+  return /fetch failed|fetch request failed|connect ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|socket hang up|network connectivity|HTTP 429|HTTP 5\d\d|Internal error|temporarily unavailable/i.test(
+    output,
+  );
+}
+
+function destroyCommandRetryAttempts(env) {
+  return Math.max(
+    1,
+    integerEnv(
+      env,
+      "TAKOS_RELEASE_DESTROY_RETRY_ATTEMPTS",
+      DESTROY_COMMAND_RETRY_ATTEMPTS,
+    ),
+  );
+}
+
+function destroyCommandRetryIntervalMs(env) {
+  return integerEnv(
+    env,
+    "TAKOS_RELEASE_DESTROY_RETRY_INTERVAL_MS",
+    DESTROY_COMMAND_RETRY_INTERVAL_MS,
+  );
 }
 
 function releaseWorkerApiAttempts(env) {
@@ -840,7 +902,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   try {
     const commandsToRun = destroy ? commands : commands.slice(0, -1);
     for (const command of commandsToRun) {
-      if (destroy) runDestroyCommand(command, childEnv);
+      if (destroy) await runDestroyCommand(command, childEnv);
       else run(command, childEnv);
     }
     if (!destroy) {
