@@ -60,6 +60,10 @@ Optional env:
                                           registries. Keys may be Wrangler
                                           class names or "runtime" /
                                           "executor" aliases.
+  TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES Set to 1/true for hosted/operator
+                                          materializers that must consume Git
+                                          CI images and must not build
+                                          containers inside the activation run.
 `);
   runtime.exit(1);
 }
@@ -232,6 +236,7 @@ export function buildTakosumiReleaseCommands(
     skipD1Migrations = false,
     containersRollout,
     containerImages,
+    requirePrebuiltContainerImages = false,
   } = {},
 ) {
   if (!ENVIRONMENTS.includes(environment)) {
@@ -269,6 +274,14 @@ export function buildTakosumiReleaseCommands(
   const containerBuildArgs = ["bun", "run", "containers:build"];
   const prebuiltContainerImages =
     normalizeReleaseContainerImages(containerImages);
+  if (
+    requirePrebuiltContainerImages &&
+    Object.keys(prebuiltContainerImages).length === 0
+  ) {
+    throw new Error(
+      "TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES is set, but TAKOS_RELEASE_CONTAINER_IMAGES_JSON is empty. Generate release_container_images from the Git CI release manifest and pass it through OpenTofu.",
+    );
+  }
   const ensureSecretsArgs = [
     "bun",
     "scripts/control/ensure-release-secrets.mjs",
@@ -1073,6 +1086,9 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             env.TAKOS_SKIP_D1_MIGRATIONS === "true",
           containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
           containerImages: env.TAKOS_RELEASE_CONTAINER_IMAGES_JSON,
+          requirePrebuiltContainerImages:
+            env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "1" ||
+            env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "true",
         });
       })();
   const childEnv = releaseChildEnv(outputs, env);

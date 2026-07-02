@@ -53,7 +53,9 @@ The module exposes `release_executor`:
   publish Cloudflare Worker artifacts from the restored source snapshot.
 - `operator`: use for Takosumi Cloud / hosted operators where the OpenTofu
   runner is a constrained execution sandbox and Worker artifact publication
-  should happen through the operator release activator materializer.
+  should happen through the operator release activator materializer. In this
+  mode, prebuilt container images from the Git CI release manifest are required;
+  the materializer fails closed instead of running `containers:build`.
 
 For fast installs, prefer prebuilt container images produced by Git CI or the
 operator release pipeline. Pass those Cloudflare Containers-supported image refs
@@ -73,10 +75,13 @@ evidence binding that tag to the source commit and image digest.
 
 When `release_container_images` is set, the release activator rewrites the
 generated Wrangler config to use those image refs and skips the local
-`containers:build` step. When it is unset, the fallback remains fully
-Git/OpenTofu-native: the release command builds from the reviewed source
-snapshot. Takosumi does not select, fetch, or rewrite artifacts outside the
-declared OpenTofu module and release command.
+`containers:build` step. When it is unset under `release_executor = "runner"`,
+the fallback remains fully Git/OpenTofu-native: the release command builds from
+the reviewed source snapshot. When `release_executor = "operator"`,
+`release_container_images` is mandatory so Takosumi Cloud / hosted operators do
+not spend activation time or container-build capacity producing app artifacts.
+Takosumi does not select, fetch, or rewrite artifacts outside the declared
+OpenTofu module and release command.
 The canonical artifact source for hosted Takos installs is the Takos Git CI
 release workflow: it publishes `takos-runtime` and `takos-executor` to the
 Cloudflare managed container registry with `wrangler containers build --push`,

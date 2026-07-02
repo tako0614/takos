@@ -107,6 +107,16 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
   );
 });
 
+test("buildTakosumiReleaseCommands fails closed when operator mode requires CI images", () => {
+  assert.throws(
+    () =>
+      buildTakosumiReleaseCommands(rawOutputs, "production", {
+        requirePrebuiltContainerImages: true,
+      }),
+    /Generate release_container_images from the Git CI release manifest/,
+  );
+});
+
 test("buildTakosumiReleaseCommands uses prebuilt CI container images when supplied", () => {
   const commands = buildTakosumiReleaseCommands(rawOutputs, "production", {
     containerImages: {
@@ -687,6 +697,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     rootModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,
   );
+  assert.match(rootModule, /TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES\s*=\s*"1"/);
   assert.match(
     rootModule,
     /TAKOS_RELEASE_CONTAINER_IMAGES_JSON\s*=\s*jsonencode\(var\.release_container_images\)/,
@@ -736,6 +747,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     productionModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,
+  );
+  assert.match(
+    productionModule,
+    /TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES\s*=\s*"1"/,
   );
   assert.match(
     productionModule,
