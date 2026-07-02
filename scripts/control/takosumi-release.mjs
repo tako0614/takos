@@ -326,6 +326,8 @@ export function buildTakosumiReleaseCommands(
       String(vectorizeDimensions),
       "--metric",
       vectorizeMetric,
+      "--account-id",
+      accountId,
     ]),
     commandLine(installArgs),
     commandLine(takosumiInstallArgs),
