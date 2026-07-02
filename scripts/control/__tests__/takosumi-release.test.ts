@@ -423,7 +423,7 @@ test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () 
   assert.equal(requests.length, 1);
   assert.equal(
     requests[0].url,
-    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
   );
   assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
 });
@@ -467,7 +467,7 @@ test("verifyReleaseDeployment waits until Worker content is visible", async () =
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
       "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
       "https://takos-test.example-subdomain.workers.dev/health",
     ],
@@ -502,7 +502,7 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
       "https://takos-test.example-subdomain.workers.dev/health",
     ],
   );

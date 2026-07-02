@@ -772,40 +772,58 @@ async function verifyCloudflareWorkerContent(
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
   const workerEnvironment = releaseWorkerEnvironment(environment);
   const apiToken = releaseApiToken(env);
-  const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
+  const urls = workerContentVerificationUrls({
     accountId,
-  )}/workers/services/${encodeURIComponent(
     workerName,
-  )}/environments/${encodeURIComponent(workerEnvironment)}/content`;
+    workerEnvironment,
+    environment,
+  });
   const attempts = releaseWorkerApiAttempts(env);
   const intervalMs = releaseWorkerApiIntervalMs(env);
   let bytes = new Uint8Array();
   let text = "";
+  let lastUrl = urls[0];
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const response = await fetchImpl(url, {
-      headers: { authorization: `Bearer ${apiToken}` },
-    });
-    bytes = new Uint8Array(await response.arrayBuffer());
-    text = new TextDecoder("utf8", { fatal: false }).decode(bytes);
-    if (response.ok) break;
-    let payload;
-    try {
-      payload = text ? JSON.parse(text) : {};
-    } catch {
-      payload = { errors: [{ message: text }] };
+    let shouldRetry = false;
+    for (const url of urls) {
+      lastUrl = url;
+      const response = await fetchImpl(url, {
+        headers: { authorization: `Bearer ${apiToken}` },
+      });
+      bytes = new Uint8Array(await response.arrayBuffer());
+      text = new TextDecoder("utf8", { fatal: false }).decode(bytes);
+      if (response.ok) {
+        shouldRetry = false;
+        break;
+      }
+      let payload;
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch {
+        payload = { errors: [{ message: text }] };
+      }
+      shouldRetry = shouldRetryCloudflareWorkerApi(response, payload);
+      if (!shouldRetry) {
+        throw new Error(
+          `Cloudflare Worker content verification failed for ${workerName}: HTTP ${response.status} ${text.slice(
+            0,
+            240,
+          )}`,
+        );
+      }
     }
-    if (
-      attempt >= attempts ||
-      !shouldRetryCloudflareWorkerApi(response, payload)
-    ) {
+    if (text && bytes.byteLength > 0 && !looksLikeCloudflareApiError(text)) {
+      break;
+    }
+    if (attempt >= attempts) {
       throw new Error(
-        `Cloudflare Worker content verification failed for ${workerName}: HTTP ${response.status} ${text.slice(
+        `Cloudflare Worker content verification failed for ${workerName} at ${lastUrl}: ${text.slice(
           0,
           240,
         )}`,
       );
     }
-    if (intervalMs > 0) await wait(intervalMs);
+    if (shouldRetry && intervalMs > 0) await wait(intervalMs);
   }
   if (text.includes("export default { fetch() {} }")) {
     throw new Error(
@@ -827,6 +845,34 @@ async function verifyCloudflareWorkerContent(
     `Verified Cloudflare Worker artifact for ${workerName}: ${bytes.byteLength} bytes, sha256:${sha256}`,
   );
   return { workerName, bytes: bytes.byteLength, sha256 };
+}
+
+function workerContentVerificationUrls({
+  accountId,
+  workerName,
+  workerEnvironment,
+  environment,
+}) {
+  const account = encodeURIComponent(accountId);
+  const worker = encodeURIComponent(workerName);
+  const serviceEnvironmentUrl =
+    `https://api.cloudflare.com/client/v4/accounts/${account}` +
+    `/workers/services/${worker}/environments/${encodeURIComponent(workerEnvironment)}/content`;
+  const scriptUrl =
+    `https://api.cloudflare.com/client/v4/accounts/${account}` +
+    `/workers/scripts/${worker}/content`;
+  return environment === "staging"
+    ? [serviceEnvironmentUrl, scriptUrl]
+    : [scriptUrl, serviceEnvironmentUrl];
+}
+
+function looksLikeCloudflareApiError(text) {
+  try {
+    const payload = JSON.parse(text);
+    return payload?.success === false || Array.isArray(payload?.errors);
+  } catch {
+    return false;
+  }
 }
 
 async function wait(ms) {
