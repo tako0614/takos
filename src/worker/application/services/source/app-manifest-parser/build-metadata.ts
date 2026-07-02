@@ -3,8 +3,8 @@ import { isRecord } from "../../../../shared/utils/guards.ts";
 export function buildMetadataDisabledMessage(field: string): string {
   return (
     `${field} is no longer supported by the Takos desired-state projection parser; ` +
-    `resolve artifacts upstream with the Takosumi OpenTofu module plan Run flow and ` +
-    `apply the reviewed expected guard returned by that Run.`
+    `publish build artifacts in the app repo's Git CI/release pipeline, then ` +
+    `pass the reviewed artifact URL/ref and digest through the OpenTofu module.`
   );
 }
 

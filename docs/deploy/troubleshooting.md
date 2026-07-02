@@ -1,7 +1,7 @@
 # トラブルシューティング
 
 **Takos は OpenTofu-native, Takosumi-managed な first-party AI workspace distribution です。** 基本の deploy topology は
-`deploy/opentofu` の OpenTofu Capsule と wrangler artifact step です。Takosumi の Capsule /
+`deploy/opentofu` の OpenTofu Capsule と、Takos repo の Git CI/release pipeline が発行する release artifacts / container images です。Takosumi の Capsule /
 Run / StateVersion / Output ledger を起点に状態を確認します。
 
 ## Current Flow

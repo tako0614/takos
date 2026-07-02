@@ -1,7 +1,7 @@
 # API リファレンス
 
 **Premise: Takos は OpenTofu-native, Takosumi-managed な first-party AI workspace distribution です。** 基本の deploy topology は
-`deploy/opentofu` の OpenTofu Capsule と wrangler artifact step です。Takosumi は Takos distribution を Capsule として扱い、
+`deploy/opentofu` の OpenTofu Capsule と、Takos repo の Git CI/release pipeline が発行する release artifacts / container images です。Takosumi は Takos distribution を Capsule として扱い、
 OpenTofu-native な deploy control plane として run ledger
 **Capsule -> Run -> StateVersion -> Output** を記録します。Connection が credential reference を保持し、
 ProviderBinding が provider (+ optional alias) ごとに explicit provider connection (an explicit ProviderConnection) を解決し、policy が provider allowlist / state backend / Cloudflare Container execution を解決します。

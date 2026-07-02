@@ -32,7 +32,8 @@ routes:
 
   assertStringIncludes(error.message, "compute.web.build");
   assertStringIncludes(error.message, "no longer supported");
-  assertStringIncludes(error.message, "Takosumi OpenTofu module plan Run flow");
+  assertStringIncludes(error.message, "Git CI/release pipeline");
+  assertStringIncludes(error.message, "artifact URL/ref and digest");
 });
 
 test("public source contract - rejects override build.fromWorkflow", () => {
@@ -63,7 +64,8 @@ overrides:
 
   assertStringIncludes(error.message, "overrides.compute.web.build");
   assertStringIncludes(error.message, "no longer supported");
-  assertStringIncludes(error.message, "Takosumi OpenTofu module plan Run flow");
+  assertStringIncludes(error.message, "Git CI/release pipeline");
+  assertStringIncludes(error.message, "artifact URL/ref and digest");
 });
 
 test("public source contract - raw source objects reject legacy build metadata", () => {
@@ -86,7 +88,8 @@ test("public source contract - raw source objects reject legacy build metadata",
 
   assertStringIncludes(error.message, "compute.web.build");
   assertStringIncludes(error.message, "no longer supported");
-  assertStringIncludes(error.message, "Takosumi OpenTofu module plan Run flow");
+  assertStringIncludes(error.message, "Git CI/release pipeline");
+  assertStringIncludes(error.message, "artifact URL/ref and digest");
 });
 
 test("public source contract - allows compute depends to reference compute entries", () => {
