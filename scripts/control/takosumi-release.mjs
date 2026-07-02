@@ -348,7 +348,7 @@ export function buildTakosumiReleaseCommands(
 }
 
 function wranglerEnvironmentArgs(environment) {
-  return environment === "staging" ? ["--env", "staging"] : ["--env", ""];
+  return environment === "staging" ? ["--env", "staging"] : [];
 }
 
 function wranglerDeployArgs(
