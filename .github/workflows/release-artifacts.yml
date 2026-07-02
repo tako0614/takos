@@ -122,18 +122,20 @@ jobs:
         working-directory: takos
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_CONTAINERS_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          if [[ -z "${CLOUDFLARE_API_TOKEN}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
-            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are required to publish Cloudflare Container images." >&2
+          effective_token="${CLOUDFLARE_CONTAINERS_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
+          if [[ -z "${effective_token}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
+            echo "CLOUDFLARE_CONTAINERS_API_TOKEN or CLOUDFLARE_API_TOKEN, plus CLOUDFLARE_ACCOUNT_ID, are required to publish Cloudflare Container images." >&2
             exit 1
           fi
 
           preflight_log="$(mktemp)"
           trap 'rm -f "${preflight_log}"' EXIT
           set +e
-          bunx wrangler containers registries credentials --push --expiration-minutes 15 >"${preflight_log}" 2>&1
+          CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers registries credentials --push --expiration-minutes 15 >"${preflight_log}" 2>&1
           status=$?
           set -e
           if [[ ${status} -ne 0 ]]; then
@@ -295,12 +297,14 @@ jobs:
         working-directory: takos
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_CONTAINERS_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          if [[ -z "${CLOUDFLARE_API_TOKEN}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
-            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are required to publish Cloudflare Container images." >&2
+          effective_token="${CLOUDFLARE_CONTAINERS_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
+          if [[ -z "${effective_token}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
+            echo "CLOUDFLARE_CONTAINERS_API_TOKEN or CLOUDFLARE_API_TOKEN, plus CLOUDFLARE_ACCOUNT_ID, are required to publish Cloudflare Container images." >&2
             exit 1
           fi
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
@@ -311,7 +315,7 @@ jobs:
           cf_tag="${release_version}-${GITHUB_SHA::12}"
           local_tag="${{ matrix.image }}:${cf_tag}"
           set +e
-          output="$(bunx wrangler containers build -p -t "${local_tag}" "${{ matrix.cloudflare_build_path }}" 2>&1)"
+          output="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers build -p -t "${local_tag}" "${{ matrix.cloudflare_build_path }}" 2>&1)"
           status=$?
           set -e
           printf '%s\n' "${output}"
