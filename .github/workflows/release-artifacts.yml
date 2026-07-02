@@ -66,6 +66,25 @@ jobs:
 
       - run: bun install --frozen-lockfile
         working-directory: takos
+      - name: Validate release identity
+        if: github.event_name == 'push' || inputs.publish == true
+        shell: bash
+        working-directory: takos
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            release_version="${GITHUB_REF_NAME#v}"
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            release_version="${VERSION}"
+            release_tag="v${VERSION}"
+          fi
+          bun scripts/build-release-manifest.ts \
+            --release-version "${release_version}" \
+            --release-tag "${release_tag}" \
+            --output /tmp/takos-release-identity-check.json
       - run: bun run check
         working-directory: takos
 
