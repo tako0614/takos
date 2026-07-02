@@ -106,5 +106,12 @@ export function releaseContainerImagesFromManifest(manifest) {
 }
 
 if (import.meta.main) {
-  main();
+  try {
+    main();
+  } catch (error) {
+    console.error(
+      error instanceof Error ? error.message : String(error ?? "unknown error"),
+    );
+    process.exit(1);
+  }
 }
