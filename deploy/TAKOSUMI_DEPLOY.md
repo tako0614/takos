@@ -47,7 +47,9 @@ provider can express stay in the module, while provider gaps such as Vectorize
 index creation are run from the reviewed app source and the reviewed
 OpenTofu outputs. Takosumi does not choose an artifact URL, fetch app assets, or
 replace the Git/OpenTofu source of truth.
-The module exposes `release_executor`:
+The module exposes `release_executor` and defaults it to `operator` so the
+normal Takosumi Cloud install path publishes Worker artifacts through the
+operator release activator after OpenTofu has committed durable infrastructure:
 
 - `runner`: use only when the selected runner can run `wrangler deploy` and
   publish Cloudflare Worker artifacts from the restored source snapshot.

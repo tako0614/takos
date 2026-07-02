@@ -807,6 +807,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_container_images"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_executor"\s*\{/);
+  assert.match(rootVariables, /default\s*=\s*"operator"/);
   assert.match(
     rootVariables,
     /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,
@@ -874,6 +875,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   );
   assert.match(productionModule, /variable\s+"release_container_images"\s*\{/);
   assert.match(productionModule, /variable\s+"release_executor"\s*\{/);
+  assert.match(productionModule, /default\s*=\s*"operator"/);
   assert.match(
     productionModule,
     /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,

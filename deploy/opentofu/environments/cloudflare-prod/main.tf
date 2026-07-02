@@ -58,7 +58,7 @@ variable "release_container_images" {
 
 variable "release_executor" {
   type    = string
-  default = "runner"
+  default = "operator"
 
   validation {
     condition     = contains(["runner", "operator"], var.release_executor)

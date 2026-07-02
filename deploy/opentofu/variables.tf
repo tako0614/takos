@@ -53,9 +53,9 @@ variable "release_container_images" {
 }
 
 variable "release_executor" {
-  description = "Executor for Takosumi release activation commands. Use operator for hosted Takosumi Cloud materializers; use runner only when the runner environment can run wrangler deploy."
+  description = "Executor for Takosumi release activation commands. Defaults to operator for hosted Takosumi Cloud materializers; set runner only when the runner environment intentionally owns wrangler deploy."
   type        = string
-  default     = "runner"
+  default     = "operator"
 
   validation {
     condition     = contains(["runner", "operator"], var.release_executor)
