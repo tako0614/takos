@@ -6,7 +6,7 @@ import * as runtime from "../runtime.ts";
 // TAKOSUMI_OUTPUTS_JSON, so this script can run without reading local tofu state.
 //
 // Usage:
-//   bun scripts/control/render-wrangler-from-tofu.mjs <environment> [--zone-id <id>] [--dry-run]
+//   bun scripts/control/render-wrangler-from-tofu.mjs <environment> [--zone-id <id>] [--out <path>] [--dry-run]
 //
 // Environments: production (base config placeholders) | staging
 // ([env.staging] placeholders). Run `tofu apply` in deploy/opentofu FIRST, then
@@ -39,7 +39,7 @@ const WRANGLER_CONFIG = resolve(
 
 function usage() {
   console.error(`
-Usage: bun scripts/control/render-wrangler-from-tofu.mjs <environment> [--zone-id <id>] [--dry-run]
+Usage: bun scripts/control/render-wrangler-from-tofu.mjs <environment> [--zone-id <id>] [--out <path>] [--dry-run]
 
 Environments:
   production     Fill the base [vars]/bindings placeholders.
@@ -47,6 +47,8 @@ Environments:
 
 Flags:
   --zone-id <id> Fill CF_ZONE_ID (the module does not manage your DNS zone).
+  --out <path>   Write the rendered config to this path instead of mutating
+                 deploy/cloudflare/wrangler.toml.
   --dry-run      Print the replacements without writing wrangler.toml.
 
 Run \`tofu apply\` in deploy/opentofu first, then run this from that dir so
@@ -275,6 +277,7 @@ export function parseTakosumiOutputsJson(text) {
 export function parseArgs(argv = process.argv.slice(2)) {
   const positional = [];
   let zoneId;
+  let outPath;
   let dryRun = false;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -282,6 +285,15 @@ export function parseArgs(argv = process.argv.slice(2)) {
       dryRun = true;
     } else if (arg === "--zone-id") {
       zoneId = argv[i + 1];
+      if (!zoneId || zoneId.startsWith("--")) {
+        fail('Error: --zone-id requires a value.');
+      }
+      i += 1;
+    } else if (arg === "--out") {
+      outPath = argv[i + 1];
+      if (!outPath || outPath.startsWith("--")) {
+        fail('Error: --out requires a value.');
+      }
       i += 1;
     } else if (arg.startsWith("--")) {
       fail(`Error: unknown flag "${arg}".`);
@@ -298,7 +310,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
       `Error: unknown environment "${env}". Valid: ${ENVIRONMENTS.join(", ")}`,
     );
   }
-  return { env, zoneId, dryRun };
+  return { env, zoneId, outPath, dryRun };
 }
 
 function readTofuOutputs() {
@@ -315,10 +327,11 @@ function readOutputs() {
 }
 
 export function main(argv = process.argv.slice(2)) {
-  const { env, zoneId, dryRun } = parseArgs(argv);
+  const { env, zoneId, outPath, dryRun } = parseArgs(argv);
   const outputs = readOutputs();
   const workerName = requireWorkerNameOutput(outputs);
   const replacements = buildReplacements(outputs, env, { zoneId });
+  const targetPath = outPath ? resolve(outPath) : WRANGLER_CONFIG;
   const toml = readFileSync(WRANGLER_CONFIG, "utf8");
   const {
     toml: next,
@@ -349,12 +362,12 @@ export function main(argv = process.argv.slice(2)) {
   }
 
   if (dryRun) {
-    console.log("\n--dry-run: wrangler.toml not written.");
+    console.log(`\n--dry-run: ${targetPath} not written.`);
     return;
   }
-  writeFileSync(WRANGLER_CONFIG, next);
+  writeFileSync(targetPath, next);
   console.log(
-    `\nWrote ${applied.length} replacement(s) to ${WRANGLER_CONFIG}.`,
+    `\nWrote ${applied.length} replacement(s) to ${targetPath}.`,
   );
 }
 

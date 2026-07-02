@@ -108,7 +108,11 @@ cd ../..
 ```
 
 The render script fills resource id placeholders in
-[`cloudflare/wrangler.toml`](cloudflare/wrangler.toml). Hostname vars such as
+[`cloudflare/wrangler.toml`](cloudflare/wrangler.toml). In Takosumi release
+activation it writes a generated
+`deploy/cloudflare/.takos-release-wrangler.<environment>.toml` and all Wrangler
+commands use that generated config, so repeated installs do not preserve stale
+resource ids in the Git template. Hostname vars such as
 `ADMIN_DOMAIN`, `TENANT_BASE_DOMAIN`, `AUTH_PUBLIC_BASE_URL`,
 `TAKOSUMI_ACCOUNTS_ISSUER`, `OIDC_ISSUER_URL`, redirect URIs, and route patterns
 are operator-owned values and must be set explicitly.

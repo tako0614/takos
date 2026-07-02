@@ -206,6 +206,10 @@ export function releaseSecretsFilePath(environment) {
   return `.takos-release-secrets.${environment}.json`;
 }
 
+export function releaseWranglerConfigPath(environment) {
+  return `deploy/cloudflare/.takos-release-wrangler.${environment}.toml`;
+}
+
 export function buildTakosumiReleaseCommands(
   outputs,
   environment,
@@ -235,13 +239,16 @@ export function buildTakosumiReleaseCommands(
     outputs,
     "cloudflare_vectorize_index_metric",
   );
-  const wranglerConfigPath = resolve(WRANGLER_CONFIG);
   const wranglerEnvArgs = environment === "staging" ? ["--env", "staging"] : [];
   const releaseSecretsFile = releaseSecretsFilePath(environment);
+  const releaseWranglerConfig = releaseWranglerConfigPath(environment);
+  const releaseWranglerConfigPathResolved = resolve(releaseWranglerConfig);
   const renderArgs = [
     "bun",
     "scripts/control/render-wrangler-from-tofu.mjs",
     environment,
+    "--out",
+    releaseWranglerConfig,
     ...(zoneId ? ["--zone-id", zoneId] : []),
   ];
   const installArgs = ["bun", "install", "--frozen-lockfile"];
@@ -269,7 +276,7 @@ export function buildTakosumiReleaseCommands(
     "scripts/control/ensure-release-secrets.mjs",
     environment,
     "--config",
-    WRANGLER_CONFIG,
+    releaseWranglerConfig,
     "--secrets-file",
     releaseSecretsFile,
   ];
@@ -285,7 +292,7 @@ export function buildTakosumiReleaseCommands(
           "DB",
           "--remote",
           "--config",
-          WRANGLER_CONFIG,
+          releaseWranglerConfig,
           ...wranglerEnvArgs,
         ]),
         commandLine([
@@ -300,7 +307,7 @@ export function buildTakosumiReleaseCommands(
           "--database-id",
           "TAKOSUMI_ACCOUNTS_DB",
           "--wrangler-config",
-          wranglerConfigPath,
+          releaseWranglerConfigPathResolved,
           "--account-id",
           accountId,
           "--remote",
@@ -331,7 +338,7 @@ export function buildTakosumiReleaseCommands(
       "wrangler",
       "deploy",
       "--config",
-      WRANGLER_CONFIG,
+      releaseWranglerConfig,
       "--name",
       workerName,
       "--secrets-file",
@@ -635,6 +642,12 @@ function cleanupReleaseSecretsFile(environment) {
   unlinkSync(path);
 }
 
+function cleanupReleaseWranglerConfig(environment) {
+  const path = resolve(releaseWranglerConfigPath(environment));
+  if (!existsSync(path)) return;
+  unlinkSync(path);
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { environment, debug, destroy } = parseReleaseArgs(argv);
   const outputs = readReleaseOutputs(env);
@@ -677,7 +690,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       await verifyReleaseDeployment(outputs, environment, env);
     }
   } finally {
-    if (!destroy) cleanupReleaseSecretsFile(environment);
+    if (!destroy) {
+      cleanupReleaseSecretsFile(environment);
+      cleanupReleaseWranglerConfig(environment);
+    }
   }
   console.log(
     `\nTakos ${destroy ? "release cleanup" : "release activation"} completed for ${environment}.`,

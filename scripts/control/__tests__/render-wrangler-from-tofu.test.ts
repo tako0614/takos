@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   assertRenderedWorkerTarget,
   buildReplacements,
+  parseArgs,
   parseTakosumiOutputsJson,
 } from "../render-wrangler-from-tofu.mjs";
 
@@ -110,6 +111,24 @@ test("buildReplacements accepts Takosumi release raw outputs", () => {
 
 test("parseTakosumiOutputsJson rejects non-object payloads", () => {
   assert.throws(() => parseTakosumiOutputsJson("[]"));
+});
+
+test("parseArgs accepts generated wrangler output path", () => {
+  assert.deepEqual(
+    parseArgs([
+      "production",
+      "--out",
+      "deploy/cloudflare/.takos-release-wrangler.production.toml",
+      "--zone-id",
+      "zone_123",
+    ]),
+    {
+      env: "production",
+      zoneId: "zone_123",
+      outPath: "deploy/cloudflare/.takos-release-wrangler.production.toml",
+      dryRun: false,
+    },
+  );
 });
 
 test("assertRenderedWorkerTarget rejects stale rendered worker names", () => {
