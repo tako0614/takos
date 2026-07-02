@@ -69,11 +69,66 @@ jobs:
       - run: bun run check
         working-directory: takos
 
+  cloudflare-container-registry-preflight:
+    name: Cloudflare Container registry preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+    if: github.event_name == 'push' || inputs.publish_cloudflare_registry == true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        with:
+          path: takos
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun deps
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
+        with:
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
+          key: ${{ runner.os }}-bun-takos-release-artifacts-${{ hashFiles('takos/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-takos-release-artifacts-
+
+      - run: bun install --frozen-lockfile
+        working-directory: takos
+
+      - name: Verify Cloudflare Container registry permissions
+        shell: bash
+        working-directory: takos
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
+            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are required to publish Cloudflare Container images." >&2
+            exit 1
+          fi
+
+          preflight_log="$(mktemp)"
+          trap 'rm -f "${preflight_log}"' EXIT
+          set +e
+          bunx wrangler containers registries credentials --push --expiration-minutes 15 >"${preflight_log}" 2>&1
+          status=$?
+          set -e
+          if [[ ${status} -ne 0 ]]; then
+            sed -E 's/[A-Za-z0-9_+=./:-]{24,}/[redacted]/g' "${preflight_log}" >&2
+            echo "Cloudflare Container registry publish requires an account-scoped API token with Containers Write permission." >&2
+            exit "${status}"
+          fi
+
   oci-images:
     name: OCI image (${{ matrix.image }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: validate
+    needs: [validate, cloudflare-container-registry-preflight]
+    if: always() && needs.validate.result == 'success' && (needs.cloudflare-container-registry-preflight.result == 'success' || needs.cloudflare-container-registry-preflight.result == 'skipped')
     permissions:
       contents: read
       packages: write
@@ -144,32 +199,6 @@ jobs:
       - run: bun install --frozen-lockfile
         if: matrix.prebuild != ''
         working-directory: takos
-
-      - name: Preflight Cloudflare Container registry permissions
-        if: (github.event_name == 'push' || inputs.publish == true) && matrix.cloudflare_container == true && (github.event_name == 'push' || inputs.publish_cloudflare_registry == true)
-        shell: bash
-        working-directory: takos
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${CLOUDFLARE_API_TOKEN}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
-            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are required to publish Cloudflare Container images." >&2
-            exit 1
-          fi
-
-          preflight_log="$(mktemp)"
-          trap 'rm -f "${preflight_log}"' EXIT
-          set +e
-          bunx wrangler containers registries credentials --push --expiration-minutes 15 >"${preflight_log}" 2>&1
-          status=$?
-          set -e
-          if [[ ${status} -ne 0 ]]; then
-            sed -E 's/[A-Za-z0-9_+=./:-]{24,}/[redacted]/g' "${preflight_log}" >&2
-            echo "Cloudflare Container registry publish requires an account-scoped API token with Containers Write permission." >&2
-            exit "${status}"
-          fi
 
       - name: Build container dist
         if: matrix.prebuild != ''

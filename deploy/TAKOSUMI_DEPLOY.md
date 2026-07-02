@@ -89,7 +89,8 @@ The Git CI token used for Cloudflare registry publication must include the
 account-scoped `Containers Write` permission. A regular Workers deploy token can
 successfully publish scripts while still failing container registry operations
 with `ApiError: Forbidden`; the release workflow preflights this before running
-the expensive container builds.
+any image matrix job, so a registry permission gap does not publish partial
+release artifacts.
 
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
