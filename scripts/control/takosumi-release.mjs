@@ -239,7 +239,8 @@ export function buildTakosumiReleaseCommands(
     outputs,
     "cloudflare_vectorize_index_metric",
   );
-  const wranglerEnvArgs = environment === "staging" ? ["--env", "staging"] : [];
+  const wranglerEnvArgs =
+    environment === "staging" ? ["--env", "staging"] : ["--env", ""];
   const releaseSecretsFile = releaseSecretsFilePath(environment);
   const releaseWranglerConfig = releaseWranglerConfigPath(environment);
   const releaseWranglerConfigPathResolved = resolve(releaseWranglerConfig);
