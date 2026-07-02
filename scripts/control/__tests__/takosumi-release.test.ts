@@ -56,6 +56,7 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test'",
     ],
   );
 });
@@ -78,6 +79,7 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging'",
     ],
   );
 });
@@ -99,6 +101,7 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine'",
       "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging' '--containers-rollout' 'none'",
       "'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' 'deploy/cloudflare/wrangler.toml'",
+      "'bunx' 'wrangler' 'deploy' '--config' 'deploy/cloudflare/wrangler.toml' '--name' 'takos-test' '--env' 'staging' '--containers-rollout' 'none'",
     ],
   );
 });

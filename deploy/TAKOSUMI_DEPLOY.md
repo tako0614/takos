@@ -29,8 +29,8 @@ stay in sync with them.
 When Takos is installed through Takosumi, the OpenTofu module exports a
 `takosumi_release.post_apply` command with `executor = "runner"`. Takosumi
 does not learn a DB-specific migration resource. It records an opaque
-post-apply command, and the runner release activator runs it in the same
-ProviderConnection boundary as the reviewed apply:
+post-apply command, and the release runner runs it from the reviewed source
+snapshot after the reviewed OpenTofu apply has committed:
 
 ```sh
 bun scripts/control/takosumi-release.mjs <environment>
@@ -38,8 +38,8 @@ bun scripts/control/takosumi-release.mjs <environment>
 
 That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
 the product-owned activation steps, and uploads the Worker artifact using the
-dispatch-only Cloudflare credential material minted for the run. Any D1 or
-schema work remains Takos script behavior, not a Takosumi resource type.
+run-scoped Provider Connection credentials. Any D1 or schema work remains Takos
+script behavior, not a Takosumi resource type.
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
 runner source snapshot does not contain one, it clones the non-secret
@@ -168,6 +168,11 @@ Required:
 - `TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET`: pairwise subject HMAC.
 - `TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET`: launch token HMAC.
 - `TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET`: export download signing secret.
+
+Run `wrangler deploy` again after rotating secrets. Cloudflare creates a new
+Worker version for `secret put`; the final published version must be a
+code-backed deploy with the rendered bindings, compatibility flags, containers,
+and assets intact.
 
 Feature-gated:
 

@@ -310,6 +310,21 @@ export function buildTakosumiReleaseCommands(
         : []),
     ]),
     commandLine(ensureSecretsArgs),
+    // `wrangler secret put` creates a new Worker version. Keep the final
+    // release version code-backed by deploying once more after secret rotation.
+    commandLine([
+      "bunx",
+      "wrangler",
+      "deploy",
+      "--config",
+      WRANGLER_CONFIG,
+      "--name",
+      workerName,
+      ...wranglerEnvArgs,
+      ...(containersRollout
+        ? ["--containers-rollout", containersRollout]
+        : []),
+    ]),
   ];
 }
 
