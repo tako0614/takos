@@ -380,6 +380,28 @@ test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
   assert.equal(called, false);
 });
 
+test("ensureWorkersDevSubdomain skips API enablement without Cloudflare API token", async () => {
+  let called = false;
+  const result = await ensureWorkersDevSubdomain(
+    {
+      worker_name: "takos-test",
+      cloudflare_account_id: "acc_123",
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    {},
+    async () => {
+      called = true;
+      return new Response("{}");
+    },
+  );
+
+  assert.deepEqual(result, {
+    skipped: true,
+    reason: "api_token_unavailable",
+  });
+  assert.equal(called, false);
+});
+
 test("ensureWorkersDevSubdomain waits until the uploaded Worker is visible", async () => {
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
@@ -692,6 +714,34 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
       "https://takos-test.example-subdomain.workers.dev/health",
     ],
   );
+});
+
+test("verifyReleaseDeployment falls back to health when Cloudflare API token is unavailable", async () => {
+  const requests = [];
+  const result = await verifyReleaseDeployment(
+    {
+      ...rawOutputs,
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    "production",
+    {
+      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+    },
+    async (url) => {
+      requests.push(String(url));
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    },
+  );
+
+  assert.deepEqual(result.artifact, {
+    workerName: "takos-test",
+    skipped: true,
+    reason: "api_token_unavailable",
+  });
+  assert.equal(result.health.status, 200);
+  assert.deepEqual(requests, [
+    "https://takos-test.example-subdomain.workers.dev/health",
+  ]);
 });
 
 test("verifyReleaseDeployment falls back to health when Worker content API is unavailable", async () => {

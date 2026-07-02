@@ -866,9 +866,10 @@ export async function ensureWorkersDevSubdomain(
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
   const apiToken = env.CF_API_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
   if (typeof apiToken !== "string" || apiToken.trim() === "") {
-    throw new Error(
-      "CF_API_TOKEN or CLOUDFLARE_API_TOKEN is required to enable workers.dev launch URL",
+    console.warn(
+      `Skipped workers.dev API enablement for ${workerName}: CF_API_TOKEN or CLOUDFLARE_API_TOKEN is not available.`,
     );
+    return { skipped: true, reason: "api_token_unavailable" };
   }
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
@@ -970,9 +971,7 @@ function integerEnv(env, name, fallback) {
 function releaseApiToken(env) {
   const token = env.CF_API_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
   if (typeof token !== "string" || token.trim() === "") {
-    throw new Error(
-      "CF_API_TOKEN or CLOUDFLARE_API_TOKEN is required for release artifact verification",
-    );
+    return undefined;
   }
   return token.trim();
 }
@@ -994,6 +993,16 @@ async function verifyCloudflareWorkerContent(
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
   const workerEnvironment = releaseWorkerEnvironment(environment);
   const apiToken = releaseApiToken(env);
+  if (!apiToken) {
+    console.warn(
+      `Skipped Cloudflare Worker content API verification for ${workerName}: CF_API_TOKEN or CLOUDFLARE_API_TOKEN is not available.`,
+    );
+    return {
+      workerName,
+      skipped: true,
+      reason: "api_token_unavailable",
+    };
+  }
   const urls = workerContentVerificationUrls({
     accountId,
     workerName,
