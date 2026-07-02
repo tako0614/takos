@@ -1,4 +1,5 @@
 #!/usr/bin/env -S bun
+import { dirname } from "node:path";
 import * as runtime from "./runtime.ts";
 
 type JsonValue =
@@ -202,6 +203,8 @@ const manifest = {
 
 const json = `${JSON.stringify(manifest, null, 2)}\n`;
 if (options.output) {
+  const outputDir = dirname(options.output);
+  if (outputDir !== ".") await runtime.mkdir(outputDir, { recursive: true });
   await runtime.writeTextFile(options.output, json);
 } else {
   console.log(json.trimEnd());
