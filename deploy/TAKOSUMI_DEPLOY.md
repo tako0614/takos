@@ -62,8 +62,8 @@ into the release command and records the Run evidence.
 
 ```hcl
 release_container_images = {
-  runtime  = "registry.cloudflare.com/<account>/takos-runtime@sha256:<digest>"
-  executor = "registry.cloudflare.com/<account>/takos-executor@sha256:<digest>"
+  runtime  = "ghcr.io/<owner>/takos-runtime@sha256:<digest>"
+  executor = "ghcr.io/<owner>/takos-executor@sha256:<digest>"
 }
 ```
 
@@ -73,6 +73,10 @@ generated Wrangler config to use those image refs and skips the local
 Git/OpenTofu-native: the release command builds from the reviewed source
 snapshot. Takosumi does not select, fetch, or rewrite artifacts outside the
 declared OpenTofu module and release command.
+The canonical artifact source for hosted Takos installs is the Takos Git CI
+release workflow: it publishes digest metadata for `takos-runtime` and
+`takos-executor`, and the operator passes those immutable refs into OpenTofu as
+plain module variables.
 
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored

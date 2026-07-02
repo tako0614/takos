@@ -2,12 +2,7 @@
 import * as runtime from "./runtime.ts";
 
 type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 type RootPackageJsonConfig = {
   name?: string;
@@ -52,7 +47,7 @@ type CommandManifest = {
 type ReleaseComponentConfig = {
   id: string;
   path: string;
-  kind: 'cargo' | 'package';
+  kind: "cargo" | "package";
   expectedName?: string;
 };
 
@@ -84,9 +79,9 @@ type GitInfo = {
 
 type CanonicalLayoutCheck = {
   path: string;
-  kind: 'required' | 'legacy';
+  kind: "required" | "legacy";
   ok: boolean;
-  state: 'present' | 'missing' | 'removed';
+  state: "present" | "missing" | "removed";
 };
 
 type CanonicalLayoutSummary = {
@@ -115,37 +110,62 @@ type ImageDigestRecord = {
 
 const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
   {
-    name: 'takos-worker',
-    context: '..',
-    dockerfile: 'takos/deploy/docker/takos-worker.Dockerfile',
+    name: "takos-worker",
+    context: "..",
+    dockerfile: "takos/deploy/docker/takos-worker.Dockerfile",
   },
   {
-    name: 'takos-git',
-    context: '..',
-    dockerfile: 'takos/containers/git/Dockerfile',
+    name: "takos-git",
+    context: "..",
+    dockerfile: "takos/containers/git/Dockerfile",
   },
   {
-    name: 'takos-agent',
-    context: '..',
-    dockerfile: 'takos/containers/agent/Dockerfile',
+    name: "takos-agent",
+    context: "..",
+    dockerfile: "takos/containers/agent/Dockerfile",
+  },
+  {
+    name: "takos-runtime",
+    context: "containers/runtime",
+    dockerfile: "containers/runtime/Dockerfile",
+  },
+  {
+    name: "takos-executor",
+    context: "containers/executor",
+    dockerfile: "containers/executor/Dockerfile",
   },
 ];
 
 const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [
-  { id: 'takos-worker', path: 'package.json', kind: 'package', expectedName: '@takos/takos' },
-  { id: 'takos-git', path: 'containers/git/package.json', kind: 'package', expectedName: '@takos/containers/git' },
-  { id: 'takos-agent', path: 'containers/agent/Cargo.toml', kind: 'cargo', expectedName: 'takos-agent' },
+  {
+    id: "takos-worker",
+    path: "package.json",
+    kind: "package",
+    expectedName: "@takos/takos",
+  },
+  {
+    id: "takos-git",
+    path: "containers/git/package.json",
+    kind: "package",
+    expectedName: "@takos/containers/git",
+  },
+  {
+    id: "takos-agent",
+    path: "containers/agent/Cargo.toml",
+    kind: "cargo",
+    expectedName: "takos-agent",
+  },
 ];
 
 const REQUIRED_CANONICAL_LAYOUT_PATHS = [
-  'src/worker',
-  'src/routes',
-  'src/contracts',
-  'web',
-  'containers/git',
-  'containers/agent',
+  "src/worker",
+  "src/routes",
+  "src/contracts",
+  "web",
+  "containers/git",
+  "containers/agent",
 ] as const;
-const LEGACY_SOURCE_ROOTS = ['app', 'git', 'agent'] as const;
+const LEGACY_SOURCE_ROOTS = ["app", "git", "agent"] as const;
 
 const root = runtime.cwd();
 const options = parseArgs(runtime.args);
@@ -183,7 +203,7 @@ if (options.output) {
 function parseArgs(args: string[]): BuildReleaseManifestOptions {
   const options: BuildReleaseManifestOptions = {
     output: null,
-    imageDigestDir: 'dist/image-digests',
+    imageDigestDir: "dist/image-digests",
     releaseVersion: null,
     releaseTag: null,
     requireImageDigests: false,
@@ -192,35 +212,35 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
-    if (flag === '--output') {
+    if (flag === "--output") {
       const value = args[++index];
       if (!value) usage();
       options.output = value;
       continue;
     }
-    if (flag === '--image-digest-dir') {
+    if (flag === "--image-digest-dir") {
       const value = args[++index];
       if (!value) usage();
       options.imageDigestDir = value;
       continue;
     }
-    if (flag === '--release-version') {
+    if (flag === "--release-version") {
       const value = args[++index];
       if (!value) usage();
       options.releaseVersion = value;
       continue;
     }
-    if (flag === '--release-tag') {
+    if (flag === "--release-tag") {
       const value = args[++index];
       if (!value) usage();
       options.releaseTag = value;
       continue;
     }
-    if (flag === '--require-image-digests') {
+    if (flag === "--require-image-digests") {
       options.requireImageDigests = true;
       continue;
     }
-    if (flag === '--require-clean-git') {
+    if (flag === "--require-clean-git") {
       options.requireCleanGit = true;
       continue;
     }
@@ -232,7 +252,7 @@ function parseArgs(args: string[]): BuildReleaseManifestOptions {
 
 function usage(): never {
   console.error(
-    'Usage: bun scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]',
+    "Usage: bun scripts/build-release-manifest.ts [--output <path>] [--image-digest-dir <path>] [--release-version <semver>] [--release-tag <vsemver>] [--require-image-digests] [--require-clean-git]",
   );
   runtime.exit(2);
 }
@@ -240,42 +260,46 @@ function usage(): never {
 async function collectReleaseIdentity(
   options: BuildReleaseManifestOptions,
 ): Promise<ReleaseIdentity> {
-  const rootConfig = await readJson<RootPackageJsonConfig>('package.json');
+  const rootConfig = await readJson<RootPackageJsonConfig>("package.json");
   const metadata = packageReleaseMetadata(rootConfig);
   const errors: string[] = [];
   const version = metadata.version ?? null;
   const canonicalTag = version ? `v${version}` : null;
 
   if (!metadata.name) {
-    errors.push('release root package name is required');
+    errors.push("release root package name is required");
   }
   if (!version || !isSemver(version)) {
-    errors.push('release root package version must be a semver string');
+    errors.push("release root package version must be a semver string");
   }
   if (
     options.releaseVersion !== null &&
     (!isSemver(options.releaseVersion) || options.releaseVersion !== version)
   ) {
     errors.push(
-      `--release-version must match package.json takosRelease.version (${version ?? '<missing>'})`,
+      `--release-version must match package.json takosRelease.version (${version ?? "<missing>"})`,
     );
   }
   if (options.releaseTag !== null) {
     const tagVersion = releaseVersionFromTag(options.releaseTag);
     if (tagVersion === null) {
-      errors.push('--release-tag must use v<semver>');
+      errors.push("--release-tag must use v<semver>");
     } else if (tagVersion !== version) {
       errors.push(
-        `--release-tag must match package.json takosRelease.version (${version ?? '<missing>'})`,
+        `--release-tag must match package.json takosRelease.version (${version ?? "<missing>"})`,
       );
     }
-    if (options.releaseVersion !== null && tagVersion !== null && tagVersion !== options.releaseVersion) {
-      errors.push('--release-tag must match --release-version');
+    if (
+      options.releaseVersion !== null &&
+      tagVersion !== null &&
+      tagVersion !== options.releaseVersion
+    ) {
+      errors.push("--release-tag must match --release-version");
     }
   }
 
   if (errors.length > 0) {
-    console.error('Release identity validation failed:');
+    console.error("Release identity validation failed:");
     for (const error of errors) console.error(`- ${error}`);
     runtime.exit(1);
   }
@@ -290,13 +314,13 @@ async function collectReleaseIdentity(
 }
 
 async function collectPackageManifest(): Promise<JsonValue> {
-  const rootConfig = await readJson<RootPackageJsonConfig>('package.json');
+  const rootConfig = await readJson<RootPackageJsonConfig>("package.json");
   const workspace = rootConfig.workspaces ?? [];
   const rootReleaseMetadata = packageReleaseMetadata(rootConfig);
   const packages = [];
 
   for (const workspacePath of workspace) {
-    const configPath = `${workspacePath.replace(/\/$/, '')}/package.json`;
+    const configPath = `${workspacePath.replace(/\/$/, "")}/package.json`;
     const config = await readJson<PackageJsonConfig>(configPath);
     const releaseMetadata = packageReleaseMetadata(config);
     packages.push({
@@ -311,7 +335,7 @@ async function collectPackageManifest(): Promise<JsonValue> {
 
   return {
     root,
-    config: 'package.json',
+    config: "package.json",
     name: rootReleaseMetadata.name ?? null,
     version: rootReleaseMetadata.version ?? null,
     scripts: Object.keys(rootConfig.scripts ?? {}).sort(),
@@ -324,9 +348,14 @@ async function collectReleaseComponents(): Promise<JsonValue> {
   const components = [];
   const errors: string[] = [];
   for (const component of RELEASE_COMPONENT_CONFIGS) {
-    if (component.kind === 'package') {
+    if (component.kind === "package") {
       const config = await readJson<PackageJsonConfig>(component.path);
-      validateReleaseComponentMetadata(component, config.name, config.version, errors);
+      validateReleaseComponentMetadata(
+        component,
+        config.name,
+        config.version,
+        errors,
+      );
       components.push({
         id: component.id,
         kind: component.kind,
@@ -341,7 +370,12 @@ async function collectReleaseComponents(): Promise<JsonValue> {
     }
 
     const cargoPackage = await readCargoPackage(component.path);
-    validateReleaseComponentMetadata(component, cargoPackage.name, cargoPackage.version, errors);
+    validateReleaseComponentMetadata(
+      component,
+      cargoPackage.name,
+      cargoPackage.version,
+      errors,
+    );
     components.push({
       id: component.id,
       kind: component.kind,
@@ -354,7 +388,7 @@ async function collectReleaseComponents(): Promise<JsonValue> {
   }
 
   if (errors.length > 0) {
-    console.error('Release component metadata validation failed:');
+    console.error("Release component metadata validation failed:");
     for (const error of errors) console.error(`- ${error}`);
     runtime.exit(1);
   }
@@ -365,7 +399,10 @@ async function collectReleaseComponents(): Promise<JsonValue> {
   };
 }
 
-function packageReleaseMetadata(config: PackageJsonConfig): { name?: string; version?: string } {
+function packageReleaseMetadata(config: PackageJsonConfig): {
+  name?: string;
+  version?: string;
+} {
   return {
     name: config.takosRelease?.name ?? config.name,
     version: config.takosRelease?.version ?? config.version,
@@ -379,29 +416,35 @@ function validateReleaseComponentMetadata(
   errors: string[],
 ): void {
   if (component.expectedName !== undefined && name !== component.expectedName) {
-    errors.push(`${component.id}: ${component.path} name must be ${component.expectedName}`);
+    errors.push(
+      `${component.id}: ${component.path} name must be ${component.expectedName}`,
+    );
   }
   if (!version || !isSemver(version)) {
-    errors.push(`${component.id}: ${component.path} version must be a semver string`);
+    errors.push(
+      `${component.id}: ${component.path} version must be a semver string`,
+    );
   }
 }
 
 function isSemver(version: string): boolean {
-  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
+  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(
+    version,
+  );
 }
 
 function releaseVersionFromTag(tag: string): string | null {
-  if (!tag.startsWith('v')) return null;
+  if (!tag.startsWith("v")) return null;
   const version = tag.slice(1);
   return isSemver(version) ? version : null;
 }
 
 async function collectGitInfo(): Promise<GitInfo> {
-  const commit = await git(['rev-parse', 'HEAD']);
-  const shortCommit = await git(['rev-parse', '--short', 'HEAD']);
-  const branch = await git(['branch', '--show-current']);
-  const describe = await git(['describe', '--tags', '--always', '--dirty']);
-  const status = await git(['status', '--short']);
+  const commit = await git(["rev-parse", "HEAD"]);
+  const shortCommit = await git(["rev-parse", "--short", "HEAD"]);
+  const branch = await git(["branch", "--show-current"]);
+  const describe = await git(["describe", "--tags", "--always", "--dirty"]);
+  const status = await git(["status", "--short"]);
 
   if (!commit && !shortCommit && !branch && !describe && status === null) {
     return { available: false };
@@ -423,18 +466,18 @@ async function collectCanonicalLayout(): Promise<CanonicalLayoutSummary> {
     const present = await exists(path);
     paths.push({
       path,
-      kind: 'required',
+      kind: "required",
       ok: present,
-      state: present ? 'present' : 'missing',
+      state: present ? "present" : "missing",
     });
   }
   for (const path of LEGACY_SOURCE_ROOTS) {
     const present = await exists(path);
     paths.push({
       path,
-      kind: 'legacy',
+      kind: "legacy",
       ok: !present,
-      state: present ? 'present' : 'removed',
+      state: present ? "present" : "removed",
     });
   }
 
@@ -454,9 +497,9 @@ function assertCleanGitState(
 
   const errors: string[] = [];
   if (!gitInfo.available) {
-    errors.push('git metadata must be available');
+    errors.push("git metadata must be available");
   } else if (gitInfo.dirty !== false) {
-    errors.push('git working tree must be clean');
+    errors.push("git working tree must be clean");
   }
 
   if (canonicalLayout.clean !== true) {
@@ -464,13 +507,13 @@ function assertCleanGitState(
       .filter((path) => !path.ok)
       .map((path) => `${path.path}:${path.state}`);
     errors.push(
-      `canonical layout must be complete${mismatches.length > 0 ? ` (${mismatches.join(', ')})` : ''}`,
+      `canonical layout must be complete${mismatches.length > 0 ? ` (${mismatches.join(", ")})` : ""}`,
     );
   }
 
   if (errors.length === 0) return;
 
-  console.error('Release manifest clean git validation failed:');
+  console.error("Release manifest clean git validation failed:");
   for (const error of errors) console.error(`- ${error}`);
   runtime.exit(1);
 }
@@ -506,7 +549,7 @@ async function collectOfficialImages(
       ...image,
       repository,
       commitPin: gitInfo.commit ?? null,
-      tagPolicy: ['semver', `sha-${gitInfo.shortCommit ?? '<commit>'}`],
+      tagPolicy: ["semver", `sha-${gitInfo.shortCommit ?? "<commit>"}`],
       digest,
       digestRef,
       tags: record?.record.tags ?? [],
@@ -520,20 +563,20 @@ async function collectOfficialImages(
       },
       evidence: record
         ? {
-          path: record.path,
-          expectedPath: null,
-          workflowRun: record.record.workflowRun ?? null,
-        }
+            path: record.path,
+            expectedPath: null,
+            workflowRun: record.record.workflowRun ?? null,
+          }
         : {
-          path: null,
-          expectedPath: `${options.imageDigestDir}/${image.name}.json`,
-          workflowRun: null,
-        },
+            path: null,
+            expectedPath: `${options.imageDigestDir}/${image.name}.json`,
+            workflowRun: null,
+          },
     };
   });
 
   if (options.requireImageDigests && errors.length > 0) {
-    console.error('Release manifest image digest validation failed:');
+    console.error("Release manifest image digest validation failed:");
     for (const error of errors) console.error(`- ${error}`);
     runtime.exit(1);
   }
@@ -551,14 +594,17 @@ async function collectOfficialImages(
 async function collectImageDigestRecords(
   dir: string,
 ): Promise<Map<string, { path: string; record: ImageDigestRecord }>> {
-  const records = new Map<string, { path: string; record: ImageDigestRecord }>();
+  const records = new Map<
+    string,
+    { path: string; record: ImageDigestRecord }
+  >();
 
   try {
     for await (const entry of runtime.readDir(dir)) {
-      if (!entry.isFile || !entry.name.endsWith('.json')) continue;
+      if (!entry.isFile || !entry.name.endsWith(".json")) continue;
       const path = `${dir}/${entry.name}`;
       const parsed = await readJson<ImageDigestRecord>(path);
-      const name = parsed.name ?? entry.name.replace(/\.json$/, '');
+      const name = parsed.name ?? entry.name.replace(/\.json$/, "");
       records.set(name, { path, record: parsed });
     }
   } catch (error) {
@@ -590,7 +636,9 @@ function validateImageDigestRecord(
   if (tags.length === 0) {
     errors.push(`${name}: tags must include semver and sha-* references`);
   } else {
-    const expectedVersionTag = releaseVersion ? `${repository}:${releaseVersion}` : null;
+    const expectedVersionTag = releaseVersion
+      ? `${repository}:${releaseVersion}`
+      : null;
     if (expectedVersionTag && !tags.includes(expectedVersionTag)) {
       errors.push(`${name}: tags must include ${expectedVersionTag}`);
     }
@@ -610,8 +658,8 @@ function validateImageDigestRecord(
 }
 
 async function collectGitHubOwner(): Promise<string> {
-  const remote = await git(['config', '--get', 'remote.origin.url']);
-  return parseGitHubOwner(remote) ?? '<owner>';
+  const remote = await git(["config", "--get", "remote.origin.url"]);
+  return parseGitHubOwner(remote) ?? "<owner>";
 }
 
 function parseGitHubOwner(remote: string | null): string | null {
@@ -625,41 +673,34 @@ function parseGitHubOwner(remote: string | null): string | null {
 
 function validationCommands(): CommandManifest[] {
   return [
-    { name: 'check', command: ['bun', 'run', 'check'] },
+    { name: "check", command: ["bun", "run", "check"] },
     {
-      name: 'lint:agent-docs',
-      command: ['bun', 'run', 'lint:agent-docs'],
+      name: "lint:agent-docs",
+      command: ["bun", "run", "lint:agent-docs"],
     },
     {
-      name: 'validate-architecture',
-      command: ['bun', 'run', 'validate:architecture'],
+      name: "validate-architecture",
+      command: ["bun", "run", "validate:architecture"],
     },
     {
-      name: 'lint:docs',
-      command: ['bun', 'run', 'lint:docs'],
+      name: "lint:docs",
+      command: ["bun", "run", "lint:docs"],
     },
     {
-      name: 'opentofu-plan-gate',
-      command: ['bun', 'run', 'opentofu:plan-gate'],
+      name: "opentofu-plan-gate",
+      command: ["bun", "run", "opentofu:plan-gate"],
     },
     {
-      name: 'opentofu-secret-policy',
-      command: ['bun', 'run', 'validate:opentofu-secrets'],
+      name: "opentofu-secret-policy",
+      command: ["bun", "run", "validate:opentofu-secrets"],
     },
     {
-      name: 'release-gate',
-      command: [
-        'bun',
-        'scripts/release-gate.ts',
-        '--keep-going',
-      ],
+      name: "release-gate",
+      command: ["bun", "scripts/release-gate.ts", "--keep-going"],
     },
     {
-      name: 'release-manifest',
-      command: [
-        'bun',
-        'scripts/build-release-manifest.ts',
-      ],
+      name: "release-manifest",
+      command: ["bun", "scripts/build-release-manifest.ts"],
     },
   ];
 }
@@ -669,11 +710,11 @@ function assertRequiredValidationCommands(
 ) {
   const byName = new Map(commands.map((command) => [command.name, command]));
   const required: Record<string, readonly string[]> = {
-    'lint:agent-docs': ['bun', 'run', 'lint:agent-docs'],
-    'validate-architecture': ['bun', 'run', 'validate:architecture'],
-    'opentofu-plan-gate': ['bun', 'run', 'opentofu:plan-gate'],
-    'opentofu-secret-policy': ['bun', 'run', 'validate:opentofu-secrets'],
-    'lint:docs': ['bun', 'run', 'lint:docs'],
+    "lint:agent-docs": ["bun", "run", "lint:agent-docs"],
+    "validate-architecture": ["bun", "run", "validate:architecture"],
+    "opentofu-plan-gate": ["bun", "run", "opentofu:plan-gate"],
+    "opentofu-secret-policy": ["bun", "run", "validate:opentofu-secrets"],
+    "lint:docs": ["bun", "run", "lint:docs"],
   };
   const errors: string[] = [];
 
@@ -685,23 +726,23 @@ function assertRequiredValidationCommands(
     }
     if (!stringArraysEqual(actual.command, expectedCommand)) {
       errors.push(
-        `release manifest validationCommands.${name} must be ${expectedCommand.join(' ')}`,
+        `release manifest validationCommands.${name} must be ${expectedCommand.join(" ")}`,
       );
     }
   }
 
   if (errors.length > 0) {
-    console.error(errors.join('\n'));
+    console.error(errors.join("\n"));
     runtime.exit(1);
   }
 }
 
 async function collectDistributionManifests(): Promise<JsonValue> {
-  const dir = 'deploy/distributions';
+  const dir = "deploy/distributions";
   const manifests: Array<Record<string, JsonValue>> = [];
   try {
     for await (const entry of runtime.readDir(dir)) {
-      if (!entry.isFile || !entry.name.endsWith('.json')) continue;
+      if (!entry.isFile || !entry.name.endsWith(".json")) continue;
       const path = `${dir}/${entry.name}`;
       const text = await runtime.readTextFile(path);
       const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -717,38 +758,43 @@ async function collectDistributionManifests(): Promise<JsonValue> {
         profile: jsonString(parsed.profile),
         operatorProfile: operatorProfile
           ? {
-            distribution: jsonString(operatorProfile.distribution),
-            profileId: jsonString(operatorProfile.profileId),
-            implementationIds: jsonStringArray(operatorProfile.implementationIds),
-          }
+              distribution: jsonString(operatorProfile.distribution),
+              profileId: jsonString(operatorProfile.profileId),
+              implementationIds: jsonStringArray(
+                operatorProfile.implementationIds,
+              ),
+            }
           : null,
         services: Array.isArray(parsed.services)
           ? parsed.services.map((service) => {
-            const record = asRecord(service);
-            return record
-              ? {
-                serviceId: jsonString(record.serviceId),
-                runtime: jsonString(record.runtime),
-                hostingTargetId: jsonString(record.hostingTargetId),
-                hasSmoke: asRecord(record.smoke) !== null,
-                artifact: jsonString(record.image) ??
-                  jsonString(record.artifactRef),
-              }
-              : null;
-          })
+              const record = asRecord(service);
+              return record
+                ? {
+                    serviceId: jsonString(record.serviceId),
+                    runtime: jsonString(record.runtime),
+                    hostingTargetId: jsonString(record.hostingTargetId),
+                    hasSmoke: asRecord(record.smoke) !== null,
+                    artifact:
+                      jsonString(record.image) ??
+                      jsonString(record.artifactRef),
+                  }
+                : null;
+            })
           : [],
         routing: routing
           ? {
-            publicBaseUrl: jsonString(routing.publicBaseUrl),
-            adminBaseUrl: jsonString(routing.adminBaseUrl),
-            dnsProvider: jsonString(routing.dnsProvider),
-          }
+              publicBaseUrl: jsonString(routing.publicBaseUrl),
+              adminBaseUrl: jsonString(routing.adminBaseUrl),
+              dnsProvider: jsonString(routing.dnsProvider),
+            }
           : null,
         providerProof: providerProof
           ? {
-            liveEnvPrefix: jsonString(providerProof.liveEnvPrefix),
-            deployControlProofTask: jsonString(providerProof.deployControlProofTask),
-          }
+              liveEnvPrefix: jsonString(providerProof.liveEnvPrefix),
+              deployControlProofTask: jsonString(
+                providerProof.deployControlProofTask,
+              ),
+            }
           : null,
       });
     }
@@ -757,12 +803,15 @@ async function collectDistributionManifests(): Promise<JsonValue> {
   }
   return {
     available: true,
-    manifests: manifests.sort((a, b) => String(a.targetId).localeCompare(String(b.targetId))),
+    manifests: manifests.sort((a, b) =>
+      String(a.targetId).localeCompare(String(b.targetId)),
+    ),
   };
 }
 
 async function collectDistributionContract(): Promise<JsonValue> {
-  const path = 'deploy/distribution-contract/takos-distribution-profile-v1.schema.json';
+  const path =
+    "deploy/distribution-contract/takos-distribution-profile-v1.schema.json";
   try {
     const text = await runtime.readTextFile(path);
     const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -788,26 +837,24 @@ function stringArraysEqual(
   left: readonly string[],
   right: readonly string[],
 ): boolean {
-  return left.length === right.length &&
-    left.every((item, index) => item === right[index]);
+  return (
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  );
 }
 
 async function collectServiceSet(): Promise<JsonValue> {
-  const expected = [
-    'takos-worker',
-    'takos-git',
-    'takos-agent',
-  ];
+  const expected = ["takos-worker", "takos-git", "takos-agent"];
   return { expected };
 }
 
 function collectServiceObservations(
   file: string,
   text: string,
-): Array<{ serviceId: string; kind: 'label'; file: string; line: number }> {
+): Array<{ serviceId: string; kind: "label"; file: string; line: number }> {
   const observations: Array<{
     serviceId: string;
-    kind: 'label';
+    kind: "label";
     file: string;
     line: number;
   }> = [];
@@ -816,20 +863,22 @@ function collectServiceObservations(
   for (const match of text.matchAll(pattern)) {
     observations.push({
       serviceId: unquote(stripInlineComment(match[1])),
-      kind: 'label',
+      kind: "label",
       file,
       line: lineOf(text, match.index ?? 0),
     });
   }
 
-  return observations.sort((a, b) =>
-    a.file.localeCompare(b.file) || a.line - b.line ||
-    a.kind.localeCompare(b.kind)
+  return observations.sort(
+    (a, b) =>
+      a.file.localeCompare(b.file) ||
+      a.line - b.line ||
+      a.kind.localeCompare(b.kind),
   );
 }
 
 async function collectDomainDirs(): Promise<JsonValue> {
-  const domainRoot = '../takosumi/core/domains';
+  const domainRoot = "../takosumi/core/domains";
   const dirs: Array<{ name: string; path: string; files: string[] }> = [];
 
   try {
@@ -850,24 +899,23 @@ async function collectDomainDirs(): Promise<JsonValue> {
 }
 
 async function collectSmokeScripts(): Promise<JsonValue> {
-  const kernelSmokeScripts = new Set([
-    'local-smoke.mjs',
-  ]);
+  const kernelSmokeScripts = new Set(["local-smoke.mjs"]);
   const knownEnv: Record<string, Record<string, string>> = {};
   const knownCommands: Record<string, string[]> = {
-    'local-smoke.mjs': ['bun', 'scripts/local-smoke.mjs'],
+    "local-smoke.mjs": ["bun", "scripts/local-smoke.mjs"],
   };
   const scripts: Array<CommandManifest & { path: string }> = [];
 
-  for await (const entry of runtime.readDir('scripts')) {
+  for await (const entry of runtime.readDir("scripts")) {
     if (!entry.isFile) continue;
     if (!/(smoke|e2e).*\.(ts|mjs)$/.test(entry.name)) continue;
     if (!kernelSmokeScripts.has(entry.name)) continue;
     const path = `scripts/${entry.name}`;
-    const command = knownCommands[entry.name] ??
-      (entry.name.endsWith('.ts') ? ['bun', path] : ['bun', path]);
+    const command =
+      knownCommands[entry.name] ??
+      (entry.name.endsWith(".ts") ? ["bun", path] : ["bun", path]);
     scripts.push({
-      name: entry.name.replace(/\.(ts|mjs)$/, ''),
+      name: entry.name.replace(/\.(ts|mjs)$/, ""),
       path,
       command,
       ...(knownEnv[entry.name] ? { env: knownEnv[entry.name] } : {}),
@@ -879,10 +927,10 @@ async function collectSmokeScripts(): Promise<JsonValue> {
 
 async function git(args: string[]): Promise<string | null> {
   try {
-    const output = await runtime.runCommand('git', {
+    const output = await runtime.runCommand("git", {
       args,
-      stdout: 'pipe',
-      stderr: 'ignore',
+      stdout: "pipe",
+      stderr: "ignore",
     });
     if (!output.success) return null;
     return new TextDecoder().decode(output.stdout).trim();
@@ -897,20 +945,25 @@ async function readJson<T>(path: string): Promise<T> {
 
 async function readCargoPackage(path: string): Promise<CargoPackageConfig> {
   const text = await runtime.readTextFile(path);
-  const packageSection = cargoSection(text, 'package');
+  const packageSection = cargoSection(text, "package");
   return {
     name: cargoString(packageSection.name),
     version: cargoString(packageSection.version),
-    publish: cargoBoolean(packageSection.publish) ?? cargoStringArray(packageSection.publish),
+    publish:
+      cargoBoolean(packageSection.publish) ??
+      cargoStringArray(packageSection.publish),
     license: cargoString(packageSection.license),
   };
 }
 
-function cargoSection(text: string, sectionName: string): Record<string, string> {
+function cargoSection(
+  text: string,
+  sectionName: string,
+): Record<string, string> {
   const values: Record<string, string> = {};
   let inSection = false;
   for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.replace(/\s+#.*$/, '').trim();
+    const line = rawLine.replace(/\s+#.*$/, "").trim();
     if (!line) continue;
     const heading = /^\[([^\]]+)\]$/.exec(line);
     if (heading) {
@@ -932,8 +985,8 @@ function cargoString(value: string | undefined): string | undefined {
 }
 
 function cargoBoolean(value: string | undefined): boolean | undefined {
-  if (value === 'true') return true;
-  if (value === 'false') return false;
+  if (value === "true") return true;
+  if (value === "false") return false;
   return undefined;
 }
 
@@ -941,7 +994,8 @@ function cargoStringArray(value: string | undefined): string[] | undefined {
   if (!value) return undefined;
   const match = /^\[(.*)\]$/.exec(value);
   if (!match) return undefined;
-  return match[1].split(',')
+  return match[1]
+    .split(",")
     .map((item) => cargoString(item.trim()))
     .filter((item): item is string => item !== undefined);
 }
@@ -978,36 +1032,39 @@ function emptyToNull(value: string | null): string | null {
 }
 
 function lineOf(text: string, index: number): number {
-  return text.slice(0, index).split('\n').length;
+  return text.slice(0, index).split("\n").length;
 }
 
 function stripInlineComment(value: string): string {
   const quote = value.trimStart()[0];
   if (quote === '"' || quote === "'") return value.trim();
-  return value.replace(/\s+#.*$/, '').trim();
+  return value.replace(/\s+#.*$/, "").trim();
 }
 
 async function sha256(value: string): Promise<string> {
   const bytes = await crypto.subtle.digest(
-    'SHA-256',
+    "SHA-256",
     new TextEncoder().encode(value),
   );
-  return `sha256:${
-    [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0'))
-      .join('')
-  }`;
+  return `sha256:${[...new Uint8Array(bytes)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")}`;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function jsonString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
+  return typeof value === "string" ? value : null;
 }
 
 function jsonStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
 }
 
 function unquote(value: string): string {

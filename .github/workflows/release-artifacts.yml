@@ -3,16 +3,16 @@ name: Release Artifacts
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer used for the dry-run release manifest on manual runs'
+        description: "SemVer used for the dry-run release manifest on manual runs"
         required: false
-        default: '0.0.0-dev'
+        default: "0.0.0-dev"
         type: string
       publish:
-        description: 'Publish OCI images instead of dry-run build only'
+        description: "Publish OCI images instead of dry-run build only"
         required: false
         default: false
         type: boolean
@@ -25,8 +25,8 @@ permissions:
   contents: read
 
 env:
-  BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/takos/.bun-cache
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   validate:
@@ -38,6 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
+          path: takos
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        with:
+          repository: tako0614/takosumi
+          path: takosumi
           persist-credentials: false
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
@@ -48,12 +55,14 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
         with:
           path: ${{ env.BUN_INSTALL_CACHE_DIR }}
-          key: ${{ runner.os }}-bun-takos-release-artifacts-${{ hashFiles('bun.lock') }}
+          key: ${{ runner.os }}-bun-takos-release-artifacts-${{ hashFiles('takos/bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-bun-takos-release-artifacts-
 
       - run: bun install --frozen-lockfile
+        working-directory: takos
       - run: bun run check
+        working-directory: takos
 
   oci-images:
     name: OCI image (${{ matrix.image }})
@@ -70,20 +79,67 @@ jobs:
       matrix:
         include:
           - image: takos-worker
-            context: ..
+            context: .
             dockerfile: takos/deploy/docker/takos-worker.Dockerfile
+            prebuild: ""
           - image: takos-git
-            context: ..
+            context: .
             dockerfile: takos/containers/git/Dockerfile
+            prebuild: ""
           - image: takos-agent
-            context: ..
+            context: .
             dockerfile: takos/containers/agent/Dockerfile
+            prebuild: ""
+          - image: takos-runtime
+            context: takos/containers/runtime
+            dockerfile: takos/containers/runtime/Dockerfile
+            prebuild: bun run containers:build:runtime
+          - image: takos-executor
+            context: takos/containers/executor
+            dockerfile: takos/containers/executor/Dockerfile
+            prebuild: bun run containers:build:executor
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
+          path: takos
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        with:
+          repository: tako0614/takosumi
+          path: takosumi
+          persist-credentials: false
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        with:
+          repository: tako0614/takos-agent-engine
+          path: takos-agent-engine
           persist-credentials: false
 
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
+
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
+        if: matrix.prebuild != ''
+        with:
+          bun-version: latest
+
+      - name: Cache Bun deps
+        if: matrix.prebuild != ''
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
+        with:
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
+          key: ${{ runner.os }}-bun-takos-release-artifacts-${{ hashFiles('takos/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-takos-release-artifacts-
+
+      - run: bun install --frozen-lockfile
+        if: matrix.prebuild != ''
+        working-directory: takos
+
+      - name: Build container dist
+        if: matrix.prebuild != ''
+        run: ${{ matrix.prebuild }}
+        working-directory: takos
 
       - name: Login to GHCR
         if: github.event_name == 'push' || inputs.publish == true
@@ -168,6 +224,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
+          path: takos
           persist-credentials: false
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
@@ -175,15 +232,17 @@ jobs:
           bun-version: latest
 
       - run: bun install --frozen-lockfile
+        working-directory: takos
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pinned: v8.0.1 (2026)
         with:
           pattern: takos-image-digest-*
-          path: dist/image-digests
+          path: takos/dist/image-digests
           merge-multiple: true
 
       - name: Build release manifest
         shell: bash
+        working-directory: takos
         env:
           VERSION: ${{ inputs.version }}
         run: |
@@ -209,5 +268,5 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         with:
           name: takos-release-manifest
-          path: dist/release-manifest.json
+          path: takos/dist/release-manifest.json
           if-no-files-found: error
