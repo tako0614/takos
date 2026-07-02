@@ -131,6 +131,11 @@ jobs:
             echo "CLOUDFLARE_CONTAINERS_API_TOKEN or CLOUDFLARE_API_TOKEN, plus CLOUDFLARE_ACCOUNT_ID, are required to publish Cloudflare Container images." >&2
             exit 1
           fi
+          if [[ -n "${CLOUDFLARE_CONTAINERS_API_TOKEN:-}" ]]; then
+            echo "Using dedicated CLOUDFLARE_CONTAINERS_API_TOKEN for Cloudflare Container registry preflight."
+          else
+            echo "Using fallback CLOUDFLARE_API_TOKEN for Cloudflare Container registry preflight."
+          fi
 
           preflight_log="$(mktemp)"
           trap 'rm -f "${preflight_log}"' EXIT
@@ -306,6 +311,11 @@ jobs:
           if [[ -z "${effective_token}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
             echo "CLOUDFLARE_CONTAINERS_API_TOKEN or CLOUDFLARE_API_TOKEN, plus CLOUDFLARE_ACCOUNT_ID, are required to publish Cloudflare Container images." >&2
             exit 1
+          fi
+          if [[ -n "${CLOUDFLARE_CONTAINERS_API_TOKEN:-}" ]]; then
+            echo "Using dedicated CLOUDFLARE_CONTAINERS_API_TOKEN for Cloudflare Container image publish."
+          else
+            echo "Using fallback CLOUDFLARE_API_TOKEN for Cloudflare Container image publish."
           fi
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             release_version="${GITHUB_REF_NAME#v}"
