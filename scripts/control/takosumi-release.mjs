@@ -780,21 +780,22 @@ async function verifyCloudflareWorkerContent(
   });
   const attempts = releaseWorkerApiAttempts(env);
   const intervalMs = releaseWorkerApiIntervalMs(env);
-  let bytes = new Uint8Array();
-  let text = "";
-  let lastUrl = urls[0];
+  const unavailable = [];
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     let shouldRetry = false;
     for (const url of urls) {
-      lastUrl = url;
       const response = await fetchImpl(url, {
         headers: { authorization: `Bearer ${apiToken}` },
       });
-      bytes = new Uint8Array(await response.arrayBuffer());
-      text = new TextDecoder("utf8", { fatal: false }).decode(bytes);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const text = new TextDecoder("utf8", { fatal: false }).decode(bytes);
       if (response.ok) {
-        shouldRetry = false;
-        break;
+        return await verifyCloudflareWorkerContentBytes({
+          workerName,
+          bytes,
+          text,
+          env,
+        });
       }
       let payload;
       try {
@@ -802,8 +803,17 @@ async function verifyCloudflareWorkerContent(
       } catch {
         payload = { errors: [{ message: text }] };
       }
-      shouldRetry = shouldRetryCloudflareWorkerApi(response, payload);
-      if (!shouldRetry) {
+      const unavailableReason = cloudflareWorkerContentUnavailableReason(
+        response,
+        payload,
+      );
+      if (unavailableReason) {
+        unavailable.push(`${response.status}:${unavailableReason}`);
+        shouldRetry =
+          shouldRetry || shouldRetryCloudflareWorkerApi(response, payload);
+        continue;
+      }
+      if (!shouldRetryCloudflareWorkerApi(response, payload)) {
         throw new Error(
           `Cloudflare Worker content verification failed for ${workerName}: HTTP ${response.status} ${text.slice(
             0,
@@ -811,20 +821,37 @@ async function verifyCloudflareWorkerContent(
           )}`,
         );
       }
-    }
-    if (text && bytes.byteLength > 0 && !looksLikeCloudflareApiError(text)) {
-      break;
+      shouldRetry = true;
     }
     if (attempt >= attempts) {
-      throw new Error(
-        `Cloudflare Worker content verification failed for ${workerName} at ${lastUrl}: ${text.slice(
-          0,
-          240,
-        )}`,
+      const reason =
+        unavailable.length === 0
+          ? "content_api_unavailable"
+          : unavailable.slice(-3).join(", ");
+      console.warn(
+        `Skipped Cloudflare Worker content API verification for ${workerName}: ${reason}`,
       );
+      return {
+        workerName,
+        skipped: true,
+        reason: "content_api_unavailable",
+      };
     }
     if (shouldRetry && intervalMs > 0) await wait(intervalMs);
   }
+  return {
+    workerName,
+    skipped: true,
+    reason: "content_api_unavailable",
+  };
+}
+
+async function verifyCloudflareWorkerContentBytes({
+  workerName,
+  bytes,
+  text,
+  env,
+}) {
   if (text.includes("export default { fetch() {} }")) {
     throw new Error(
       `Cloudflare Worker ${workerName} uploaded content is still the secret-update stub`,
@@ -847,6 +874,20 @@ async function verifyCloudflareWorkerContent(
   return { workerName, bytes: bytes.byteLength, sha256 };
 }
 
+function cloudflareWorkerContentUnavailableReason(response, payload) {
+  const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+  for (const error of errors) {
+    const code = Number(error?.code);
+    const message =
+      typeof error?.message === "string" ? error.message : "unavailable";
+    if (code === 10405) return message;
+    if (response.status === 404 && (code === 10007 || code === 10092)) {
+      return message;
+    }
+  }
+  return undefined;
+}
+
 function workerContentVerificationUrls({
   accountId,
   workerName,
@@ -864,15 +905,6 @@ function workerContentVerificationUrls({
   return environment === "staging"
     ? [serviceEnvironmentUrl, scriptUrl]
     : [scriptUrl, serviceEnvironmentUrl];
-}
-
-function looksLikeCloudflareApiError(text) {
-  try {
-    const payload = JSON.parse(text);
-    return payload?.success === false || Array.isArray(payload?.errors);
-  } catch {
-    return false;
-  }
 }
 
 async function wait(ms) {

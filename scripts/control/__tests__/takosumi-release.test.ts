@@ -508,6 +508,72 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
   );
 });
 
+test("verifyReleaseDeployment falls back to health when Worker content API is unavailable", async () => {
+  const requests = [];
+  const result = await verifyReleaseDeployment(
+    {
+      ...rawOutputs,
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    "production",
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_RELEASE_WORKER_API_ATTEMPTS: "1",
+      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      const value = String(url);
+      if (value.includes("/workers/scripts/")) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [
+              {
+                code: 10405,
+                message: "Method not allowed for this authentication scheme",
+              },
+            ],
+            result: null,
+          }),
+          { status: 405, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (value.includes("/workers/services/")) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [
+              {
+                code: 10092,
+                message: "This environment does not exist on this Worker.",
+              },
+            ],
+            result: null,
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    },
+  );
+
+  assert.deepEqual(result.artifact, {
+    workerName: "takos-test",
+    skipped: true,
+    reason: "content_api_unavailable",
+  });
+  assert.equal(result.health.status, 200);
+  assert.deepEqual(
+    requests.map((request) => String(request.url)),
+    [
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://takos-test.example-subdomain.workers.dev/health",
+    ],
+  );
+});
+
 test("readReleaseOutputs requires Takosumi non-sensitive outputs", () => {
   assert.deepEqual(
     readReleaseOutputs({
