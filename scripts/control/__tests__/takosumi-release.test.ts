@@ -16,6 +16,7 @@ import {
   buildTakosumiReleaseCommands,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
+  releaseChildEnv,
   readReleaseOutputs,
   verifyReleaseDeployment,
 } from "../takosumi-release.mjs";
@@ -122,6 +123,28 @@ test("buildTakosumiDestroyCommands removes consumers and uploaded resources befo
     "'bunx' 'wrangler' 'delete' 'takos-test' '--force'",
     "'bunx' 'wrangler' 'vectorize' 'delete' 'takos-test-embeddings' '--force'",
   ]);
+});
+
+test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
+  assert.deepEqual(
+    releaseChildEnv(
+      { cloudflare_account_id: "acc_from_outputs" },
+      {
+        PATH: "/bin",
+        CF_API_TOKEN: "token_from_cf_alias",
+        CF_ACCOUNT_ID: "acc_from_cf_alias",
+      },
+    ),
+    {
+      PATH: "/bin",
+      CF_API_TOKEN: "token_from_cf_alias",
+      CF_ACCOUNT_ID: "acc_from_outputs",
+      CI: "true",
+      WRANGLER_SEND_METRICS: "false",
+      CLOUDFLARE_API_TOKEN: "token_from_cf_alias",
+      CLOUDFLARE_ACCOUNT_ID: "acc_from_outputs",
+    },
+  );
 });
 
 test("Cloudflare release template enables production workers.dev launch URLs", () => {

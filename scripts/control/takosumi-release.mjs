@@ -504,18 +504,30 @@ function releaseWorkerApiIntervalMs(env) {
   );
 }
 
-function releaseChildEnv(outputs, env = process.env) {
+export function releaseChildEnv(outputs, env = process.env) {
   let accountId;
   try {
     accountId = requireStringOutput(outputs, "cloudflare_account_id");
   } catch {
-    accountId = undefined;
+    accountId = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID;
   }
+  const apiToken = env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN;
   return {
     ...env,
     CI: env.CI ?? "true",
     WRANGLER_SEND_METRICS: env.WRANGLER_SEND_METRICS ?? "false",
-    ...(accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : {}),
+    ...(apiToken
+      ? {
+          CLOUDFLARE_API_TOKEN: apiToken,
+          CF_API_TOKEN: env.CF_API_TOKEN ?? apiToken,
+        }
+      : {}),
+    ...(accountId
+      ? {
+          CLOUDFLARE_ACCOUNT_ID: accountId,
+          CF_ACCOUNT_ID: accountId,
+        }
+      : {}),
   };
 }
 
