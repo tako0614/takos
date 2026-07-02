@@ -64,9 +64,9 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
       "'bun' 'install' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
-      `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}' '--env='`,
+      `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}'`,
       `'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' '${productionWranglerConfig}' '--secrets-file' '.takos-release-secrets.production.json'`,
-      `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env='`,
+      `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json'`,
     ],
   );
 });
@@ -121,9 +121,9 @@ test("buildTakosumiReleaseCommands uses prebuilt CI container images when suppli
     "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
     "'bun' 'install' '--frozen-lockfile'",
     "'bun' 'run' 'build'",
-    `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}' '--env='`,
+    `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}'`,
     `'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' '${productionWranglerConfig}' '--secrets-file' '.takos-release-secrets.production.json'`,
-    `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env='`,
+    `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json'`,
   ]);
   assert.equal(
     commands.some((command) => command.includes("containers:build")),
