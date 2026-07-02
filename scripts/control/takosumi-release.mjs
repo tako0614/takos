@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import * as runtime from "../runtime.ts";
 
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, symlinkSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
@@ -17,6 +17,8 @@ const RELEASE_HEALTH_ATTEMPTS = 12;
 const RELEASE_HEALTH_INTERVAL_MS = 2500;
 const RELEASE_WORKER_API_ATTEMPTS = 12;
 const RELEASE_WORKER_API_INTERVAL_MS = 2500;
+const RELEASE_COMMAND_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
+const RELEASE_COMMAND_LOG_MAX_CHARS = 20_000;
 
 function usage() {
   console.error(`
@@ -398,24 +400,63 @@ export function buildTakosumiDestroyCommands(outputs) {
 
 function run(command, env = process.env) {
   console.log(`\n> ${command}\n`);
-  execSync(command, { stdio: "inherit", env });
+  const result = runShellCommand(command, env);
+  emitCommandOutput(result, env);
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    const error = new Error(`Command failed: ${command}`);
+    error.status = result.status;
+    error.signal = result.signal;
+    throw error;
+  }
 }
 
 function runDestroyCommand(command, env = process.env) {
   console.log(`\n> ${command}\n`);
-  try {
-    execSync(command, { stdio: "pipe", env });
-  } catch (error) {
-    const stdout = error?.stdout ? String(error.stdout) : "";
-    const stderr = error?.stderr ? String(error.stderr) : "";
-    process.stdout.write(stdout);
-    process.stderr.write(stderr);
+  const result = runShellCommand(command, env);
+  const stdout = result.stdout ?? "";
+  const stderr = result.stderr ?? "";
+  emitCommandOutput(result, env);
+  if (result.error || result.status !== 0) {
     if (isIgnorableDestroyFailure(command, `${stdout}\n${stderr}`)) {
       console.warn("Ignoring missing release resource during destroy.");
       return;
     }
+    if (result.error) throw result.error;
+    const error = new Error(`Command failed: ${command}`);
+    error.status = result.status;
+    error.signal = result.signal;
     throw error;
   }
+}
+
+function runShellCommand(command, env) {
+  return spawnSync(command, {
+    shell: true,
+    env,
+    encoding: "utf8",
+    maxBuffer: RELEASE_COMMAND_OUTPUT_MAX_BYTES,
+  });
+}
+
+function emitCommandOutput(result, env) {
+  const stdout = boundedCommandLog(result.stdout ?? "", env);
+  const stderr = boundedCommandLog(result.stderr ?? "", env);
+  if (stdout) process.stdout.write(stdout.endsWith("\n") ? stdout : `${stdout}\n`);
+  if (stderr) process.stderr.write(stderr.endsWith("\n") ? stderr : `${stderr}\n`);
+}
+
+function boundedCommandLog(text, env) {
+  if (!text) return "";
+  const max = integerEnv(
+    env,
+    "TAKOS_RELEASE_COMMAND_LOG_MAX_CHARS",
+    RELEASE_COMMAND_LOG_MAX_CHARS,
+  );
+  if (max <= 0 || text.length <= max) return text;
+  const head = text.slice(0, Math.floor(max / 4));
+  const tail = text.slice(text.length - Math.ceil((max * 3) / 4));
+  return `${head}\n... [takos release command log truncated: ${text.length} chars] ...\n${tail}`;
 }
 
 function isIgnorableDestroyFailure(command, output) {
