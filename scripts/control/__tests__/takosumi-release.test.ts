@@ -24,6 +24,8 @@ const rawOutputs = {
   cloudflare_account_id: "acc_123",
   cloudflare_accounts_d1_database_id: "d1_accounts",
   cloudflare_vectorize_index_name: "takos-test-embeddings",
+  cloudflare_vectorize_index_dimensions: 768,
+  cloudflare_vectorize_index_metric: "cosine",
   worker_name: "takos-test",
   queue_bindings: {
     runs: "takos-test-runs",

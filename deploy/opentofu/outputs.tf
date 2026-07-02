@@ -130,8 +130,8 @@ output "app_deployment" {
         bind = "VECTORIZE"
         to   = ["web"]
         vectorIndex = {
-          dimensions = 1536
-          metric     = "cosine"
+          dimensions = var.target == "cloudflare" ? module.cloudflare[0].vectorize_index_dimensions : null
+          metric     = var.target == "cloudflare" ? module.cloudflare[0].vectorize_index_metric : null
         }
       }
       runs = {
@@ -230,6 +230,16 @@ output "cloudflare_kv_namespace_ids" {
 output "cloudflare_vectorize_index_name" {
   description = "Vectorize index name for the VECTORIZE binding (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].vectorize_index_name : null
+}
+
+output "cloudflare_vectorize_index_dimensions" {
+  description = "Vector dimensions for the VECTORIZE binding (cloudflare target)."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].vectorize_index_dimensions : null
+}
+
+output "cloudflare_vectorize_index_metric" {
+  description = "Vector distance metric for the VECTORIZE binding (cloudflare target)."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].vectorize_index_metric : null
 }
 
 output "object_storage_buckets" {

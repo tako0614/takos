@@ -93,6 +93,12 @@ locals {
     hostname_routing = "${var.project_name}-hostname-routing"
     rollout_health   = "${var.project_name}-rollout-health"
   }
+
+  vectorize = {
+    index_name = "${var.project_name}-embeddings"
+    dimensions = 768
+    metric     = "cosine"
+  }
 }
 
 # D1 databases — bindings DB, TAKOSUMI_ACCOUNTS_DB, TAKOSUMI_CONTROL_DB

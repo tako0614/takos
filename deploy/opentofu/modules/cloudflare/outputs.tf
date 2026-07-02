@@ -75,5 +75,15 @@ output "queue_names" {
 
 output "vectorize_index_name" {
   description = "Expected Vectorize index name for the VECTORIZE binding (created out-of-band; not provider-managed)."
-  value       = "${var.project_name}-embeddings"
+  value       = local.vectorize.index_name
+}
+
+output "vectorize_index_dimensions" {
+  description = "Vector dimensions expected by the VECTORIZE binding."
+  value       = local.vectorize.dimensions
+}
+
+output "vectorize_index_metric" {
+  description = "Vector distance metric expected by the VECTORIZE binding."
+  value       = local.vectorize.metric
 }

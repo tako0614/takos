@@ -127,7 +127,9 @@ running expensive build or migration work:
 bunx wrangler vectorize create takos-embeddings --dimensions=768 --metric=cosine
 ```
 
-Match dimensions and metric to the embedding model configured for the deploy.
+The index name, dimensions, and metric are exported from the OpenTofu module and
+consumed by `takosumi-release.mjs`. Match dimensions and metric to the embedding
+model configured for the deploy.
 
 ### 4. Build Assets And Containers
 

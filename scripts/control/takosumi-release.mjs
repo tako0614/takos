@@ -92,6 +92,17 @@ function requireStringOutput(outputs, name) {
   return value;
 }
 
+function requireIntegerOutput(outputs, name) {
+  const value = outputValue(outputs[name]);
+  if (Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string" && /^[1-9]\d*$/u.test(value.trim())) {
+    return Number(value.trim());
+  }
+  throw new Error(
+    `TAKOSUMI_OUTPUTS_JSON must include positive integer output "${name}"`,
+  );
+}
+
 function requireObjectOutput(outputs, name) {
   const value = outputValue(outputs[name]);
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -216,6 +227,14 @@ export function buildTakosumiReleaseCommands(
     outputs,
     "cloudflare_vectorize_index_name",
   );
+  const vectorizeDimensions = requireIntegerOutput(
+    outputs,
+    "cloudflare_vectorize_index_dimensions",
+  );
+  const vectorizeMetric = requireStringOutput(
+    outputs,
+    "cloudflare_vectorize_index_metric",
+  );
   const wranglerConfigPath = resolve(WRANGLER_CONFIG);
   const wranglerEnvArgs = environment === "staging" ? ["--env", "staging"] : [];
   const releaseSecretsFile = releaseSecretsFilePath(environment);
@@ -296,9 +315,9 @@ export function buildTakosumiReleaseCommands(
       "scripts/control/ensure-vectorize-index.mjs",
       vectorizeIndexName,
       "--dimensions",
-      "768",
+      String(vectorizeDimensions),
       "--metric",
-      "cosine",
+      vectorizeMetric,
     ]),
     commandLine(installArgs),
     commandLine(takosumiInstallArgs),

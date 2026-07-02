@@ -133,8 +133,8 @@ output "app_deployment" {
         bind = "VECTORIZE"
         to   = ["web"]
         vectorIndex = {
-          dimensions = 1536
-          metric     = "cosine"
+          dimensions = module.takos.vectorize_index_dimensions
+          metric     = module.takos.vectorize_index_metric
         }
       }
       runs = {
@@ -239,6 +239,26 @@ output "queue_bindings" {
 
 output "vectorize_index_name" {
   value = module.takos.vectorize_index_name
+}
+
+output "vectorize_index_dimensions" {
+  value = module.takos.vectorize_index_dimensions
+}
+
+output "vectorize_index_metric" {
+  value = module.takos.vectorize_index_metric
+}
+
+output "cloudflare_vectorize_index_name" {
+  value = module.takos.vectorize_index_name
+}
+
+output "cloudflare_vectorize_index_dimensions" {
+  value = module.takos.vectorize_index_dimensions
+}
+
+output "cloudflare_vectorize_index_metric" {
+  value = module.takos.vectorize_index_metric
 }
 
 output "takosumi_release" {
