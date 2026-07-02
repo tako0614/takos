@@ -262,10 +262,15 @@ output "takosumi_release" {
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment]
         working_directory = var.release_working_directory
         timeout_seconds   = 1200
-        env = {
-          TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
-          TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-        }
+        env = merge(
+          {
+            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+          },
+          var.release_containers_rollout == null ? {} : {
+            TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
+          },
+        )
       },
     ]
     pre_destroy = [
@@ -275,10 +280,15 @@ output "takosumi_release" {
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment, "--destroy"]
         working_directory = var.release_working_directory
         timeout_seconds   = 600
-        env = {
-          TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
-          TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-        }
+        env = merge(
+          {
+            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+          },
+          var.release_containers_rollout == null ? {} : {
+            TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
+          },
+        )
       },
     ]
   }

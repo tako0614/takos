@@ -27,6 +27,17 @@ variable "release_working_directory" {
   default     = "."
 }
 
+variable "release_containers_rollout" {
+  description = "Optional wrangler --containers-rollout value for Takos release activation. Set to none in runner sandboxes that cannot build or publish Cloudflare Containers."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.release_containers_rollout == null || contains(["immediate", "gradual", "none"], var.release_containers_rollout)
+    error_message = "release_containers_rollout must be immediate, gradual, none, or null."
+  }
+}
+
 variable "takosumi_source_repo_url" {
   description = "Takosumi source module Git URL used by the Takos release activation when no sibling checkout exists in the runner snapshot."
   type        = string

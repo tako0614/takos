@@ -33,6 +33,16 @@ variable "release_working_directory" {
   default = "."
 }
 
+variable "release_containers_rollout" {
+  type    = string
+  default = null
+
+  validation {
+    condition     = var.release_containers_rollout == null || contains(["immediate", "gradual", "none"], var.release_containers_rollout)
+    error_message = "release_containers_rollout must be immediate, gradual, none, or null."
+  }
+}
+
 variable "takosumi_source_repo_url" {
   type    = string
   default = "https://github.com/tako0614/takosumi.git"
@@ -271,10 +281,15 @@ output "takosumi_release" {
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production"]
         working_directory = var.release_working_directory
         timeout_seconds   = 1200
-        env = {
-          TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
-          TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-        }
+        env = merge(
+          {
+            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+          },
+          var.release_containers_rollout == null ? {} : {
+            TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
+          },
+        )
       },
     ]
     pre_destroy = [
@@ -284,10 +299,15 @@ output "takosumi_release" {
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production", "--destroy"]
         working_directory = var.release_working_directory
         timeout_seconds   = 600
-        env = {
-          TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
-          TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-        }
+        env = merge(
+          {
+            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+          },
+          var.release_containers_rollout == null ? {} : {
+            TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
+          },
+        )
       },
     ]
   }
