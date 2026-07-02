@@ -54,6 +54,10 @@ Optional env:
                                           --containers-rollout, for example
                                           "none" in operator sandboxes where
                                           Docker image builds are unavailable.
+  TAKOS_RELEASE_CONTAINER_IMAGES_JSON     Optional JSON object of digest-pinned
+                                          prebuilt container image refs from CI.
+                                          Keys may be Wrangler class names or
+                                          "runtime" / "executor" aliases.
 `);
   runtime.exit(1);
 }
@@ -69,6 +73,10 @@ function shellArg(value) {
 
 function commandLine(parts) {
   return parts.map(shellArg).join(" ");
+}
+
+function envShellAssignment(name, value) {
+  return `${name}=${shellArg(value)}`;
 }
 
 function runFile(command, args, env = process.env) {
@@ -131,10 +139,7 @@ function requireNestedStringOutput(outputs, name, key) {
 
 export function ensureTakosumiSourceModule(
   takosumiRepoDir,
-  {
-    repoUrl = DEFAULT_TAKOSUMI_REPO_URL,
-    ref = DEFAULT_TAKOSUMI_REPO_REF,
-  } = {},
+  { repoUrl = DEFAULT_TAKOSUMI_REPO_URL, ref = DEFAULT_TAKOSUMI_REPO_REF } = {},
 ) {
   const expected = resolve("..", "takosumi");
   if (existsSync(expected)) return;
@@ -224,6 +229,7 @@ export function buildTakosumiReleaseCommands(
     zoneId,
     skipD1Migrations = false,
     containersRollout,
+    containerImages,
   } = {},
 ) {
   if (!ENVIRONMENTS.includes(environment)) {
@@ -259,6 +265,8 @@ export function buildTakosumiReleaseCommands(
       ? ["bun", "run", "build", "--mode", "staging-debug"]
       : ["bun", "run", "build"];
   const containerBuildArgs = ["bun", "run", "containers:build"];
+  const prebuiltContainerImages =
+    normalizeReleaseContainerImages(containerImages);
   const ensureSecretsArgs = [
     "bun",
     "scripts/control/ensure-release-secrets.mjs",
@@ -287,6 +295,18 @@ export function buildTakosumiReleaseCommands(
 
   return [
     commandLine(renderArgs),
+    ...(Object.keys(prebuiltContainerImages).length === 0
+      ? []
+      : [
+          `${envShellAssignment(
+            "TAKOS_RELEASE_CONTAINER_IMAGES_JSON",
+            JSON.stringify(prebuiltContainerImages),
+          )} ${commandLine([
+            "bun",
+            "scripts/control/apply-release-container-images.mjs",
+            releaseWranglerConfig,
+          ])}`,
+        ]),
     commandLine([
       "bun",
       "scripts/control/ensure-vectorize-index.mjs",
@@ -300,7 +320,9 @@ export function buildTakosumiReleaseCommands(
     ]),
     commandLine(installArgs),
     commandLine(buildArgs),
-    commandLine(containerBuildArgs),
+    ...(Object.keys(prebuiltContainerImages).length === 0
+      ? [commandLine(containerBuildArgs)]
+      : []),
     ...migrationCommands,
     commandLine(ensureSecretsArgs),
     commandLine([
@@ -312,15 +334,70 @@ export function buildTakosumiReleaseCommands(
   ];
 }
 
+const CONTAINER_IMAGE_ALIASES = {
+  TakosRuntimeContainer: ["TakosRuntimeContainer", "runtime", "takos-runtime"],
+  ExecutorContainerTier1: [
+    "ExecutorContainerTier1",
+    "executor",
+    "takos-executor",
+    "executor-tier1",
+  ],
+  ExecutorContainerTier2: [
+    "ExecutorContainerTier2",
+    "executor",
+    "takos-executor",
+    "executor-tier2",
+  ],
+  ExecutorContainerTier3: [
+    "ExecutorContainerTier3",
+    "executor",
+    "takos-executor",
+    "executor-tier3",
+  ],
+};
+
+export function normalizeReleaseContainerImages(value) {
+  if (value == null || value === "") return {};
+  let parsed = value;
+  if (typeof value === "string") {
+    parsed = JSON.parse(value);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(
+      "TAKOS_RELEASE_CONTAINER_IMAGES_JSON must be a JSON object",
+    );
+  }
+
+  const entries = Object.entries(parsed)
+    .map(([key, image]) => [
+      key.trim(),
+      typeof image === "string" ? image.trim() : "",
+    ])
+    .filter(([key, image]) => key && image);
+  if (entries.length === 0) return {};
+
+  for (const [key, image] of entries) {
+    if (!/@sha256:[0-9a-f]{64}$/u.test(image)) {
+      throw new Error(
+        `release container image "${key}" must be digest-pinned with @sha256:<64-hex>`,
+      );
+    }
+  }
+
+  const lookup = new Map(entries);
+  const resolved = {};
+  for (const [className, aliases] of Object.entries(CONTAINER_IMAGE_ALIASES)) {
+    const image = aliases.map((alias) => lookup.get(alias)).find(Boolean);
+    if (image) resolved[className] = image;
+  }
+  return resolved;
+}
+
 function wranglerEnvironmentArgs(environment) {
   return environment === "staging" ? ["--env", "staging"] : ["--env="];
 }
 
-function wranglerDeployArgs(
-  outputs,
-  environment,
-  { containersRollout } = {},
-) {
+function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
   const workerName = requireStringOutput(outputs, "worker_name");
   return [
     "wrangler",
@@ -405,8 +482,7 @@ async function runDestroyCommand(command, env = process.env) {
     lastResult = result;
     const stdout = result.stdout ?? "";
     const stderr = result.stderr ?? "";
-    const errorText =
-      result.error instanceof Error ? result.error.message : "";
+    const errorText = result.error instanceof Error ? result.error.message : "";
     lastOutput = `${stdout}\n${stderr}\n${errorText}`;
     emitCommandOutput(result, env);
     if (!result.error && result.status === 0) return;
@@ -414,10 +490,7 @@ async function runDestroyCommand(command, env = process.env) {
       console.warn("Ignoring missing release resource during destroy.");
       return;
     }
-    if (
-      attempt < attempts &&
-      isRetryableDestroyFailure(command, lastOutput)
-    ) {
+    if (attempt < attempts && isRetryableDestroyFailure(command, lastOutput)) {
       if (intervalMs > 0) await wait(intervalMs);
       continue;
     }
@@ -451,8 +524,10 @@ function runShellCommand(command, env) {
 function emitCommandOutput(result, env) {
   const stdout = boundedCommandLog(result.stdout ?? "", env);
   const stderr = boundedCommandLog(result.stderr ?? "", env);
-  if (stdout) process.stdout.write(stdout.endsWith("\n") ? stdout : `${stdout}\n`);
-  if (stderr) process.stderr.write(stderr.endsWith("\n") ? stderr : `${stderr}\n`);
+  if (stdout)
+    process.stdout.write(stdout.endsWith("\n") ? stdout : `${stdout}\n`);
+  if (stderr)
+    process.stderr.write(stderr.endsWith("\n") ? stderr : `${stderr}\n`);
 }
 
 function boundedCommandLog(text, env) {
@@ -650,7 +725,8 @@ export async function ensureWorkersDevSubdomain(
 
 function releaseHealthUrl(outputs) {
   const launchUrl = outputValue(outputs.launch_url ?? outputs.url);
-  if (typeof launchUrl !== "string" || launchUrl.trim() === "") return undefined;
+  if (typeof launchUrl !== "string" || launchUrl.trim() === "")
+    return undefined;
   const url = new URL(launchUrl);
   url.pathname = "/health";
   url.search = "";
@@ -696,12 +772,11 @@ async function verifyCloudflareWorkerContent(
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
   const workerEnvironment = releaseWorkerEnvironment(environment);
   const apiToken = releaseApiToken(env);
-  const url =
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
-      accountId,
-    )}/workers/services/${encodeURIComponent(
-      workerName,
-    )}/environments/${encodeURIComponent(workerEnvironment)}/content`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
+    accountId,
+  )}/workers/services/${encodeURIComponent(
+    workerName,
+  )}/environments/${encodeURIComponent(workerEnvironment)}/content`;
   const attempts = releaseWorkerApiAttempts(env);
   const intervalMs = releaseWorkerApiIntervalMs(env);
   let bytes = new Uint8Array();
@@ -862,6 +937,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             env.TAKOS_SKIP_D1_MIGRATIONS === "1" ||
             env.TAKOS_SKIP_D1_MIGRATIONS === "true",
           containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+          containerImages: env.TAKOS_RELEASE_CONTAINER_IMAGES_JSON,
         });
       })();
   const childEnv = releaseChildEnv(outputs, env);

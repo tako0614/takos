@@ -240,6 +240,9 @@ output "takosumi_release" {
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
           },
+          length(var.release_container_images) == 0 ? {} : {
+            TAKOS_RELEASE_CONTAINER_IMAGES_JSON = jsonencode(var.release_container_images)
+          },
         )
       },
     ]

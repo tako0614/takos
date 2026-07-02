@@ -19,10 +19,12 @@ import {
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
   isRetryableDestroyFailure,
+  normalizeReleaseContainerImages,
   releaseChildEnv,
   readReleaseOutputs,
   verifyReleaseDeployment,
 } from "../takosumi-release.mjs";
+import { applyReleaseContainerImagesToToml } from "../apply-release-container-images.mjs";
 
 const rawOutputs = {
   cloudflare_account_id: "acc_123",
@@ -42,8 +44,14 @@ const rawOutputs = {
   },
 };
 
-const productionWranglerConfig = "deploy/cloudflare/.takos-release-wrangler.production.toml";
-const stagingWranglerConfig = "deploy/cloudflare/.takos-release-wrangler.staging.toml";
+const productionWranglerConfig =
+  "deploy/cloudflare/.takos-release-wrangler.production.toml";
+const stagingWranglerConfig =
+  "deploy/cloudflare/.takos-release-wrangler.staging.toml";
+const runtimeImage =
+  "registry.cloudflare.com/acc_123/takos-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
+const executorImage =
+  "registry.cloudflare.com/acc_123/takos-executor@sha256:2222222222222222222222222222222222222222222222222222222222222222";
 
 test("buildTakosumiReleaseCommands runs generic operator activation steps", () => {
   assert.deepEqual(
@@ -97,6 +105,79 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
       `'bunx' 'wrangler' 'deploy' '--config' '${stagingWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging' '--containers-rollout' 'none'`,
     ],
   );
+});
+
+test("buildTakosumiReleaseCommands uses prebuilt CI container images when supplied", () => {
+  const commands = buildTakosumiReleaseCommands(rawOutputs, "production", {
+    containerImages: {
+      runtime: runtimeImage,
+      executor: executorImage,
+    },
+  });
+
+  assert.deepEqual(commands, [
+    `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'production' '--out' '${productionWranglerConfig}'`,
+    `TAKOS_RELEASE_CONTAINER_IMAGES_JSON='{"TakosRuntimeContainer":"${runtimeImage}","ExecutorContainerTier1":"${executorImage}","ExecutorContainerTier2":"${executorImage}","ExecutorContainerTier3":"${executorImage}"}' 'bun' 'scripts/control/apply-release-container-images.mjs' '${productionWranglerConfig}'`,
+    "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
+    "'bun' 'install' '--frozen-lockfile'",
+    "'bun' 'run' 'build'",
+    `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}' '--env='`,
+    `'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' '${productionWranglerConfig}' '--secrets-file' '.takos-release-secrets.production.json'`,
+    `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env='`,
+  ]);
+  assert.equal(
+    commands.some((command) => command.includes("containers:build")),
+    false,
+  );
+});
+
+test("normalizeReleaseContainerImages accepts aliases and requires digest pins", () => {
+  assert.deepEqual(
+    normalizeReleaseContainerImages({
+      runtime: runtimeImage,
+      executor: executorImage,
+    }),
+    {
+      TakosRuntimeContainer: runtimeImage,
+      ExecutorContainerTier1: executorImage,
+      ExecutorContainerTier2: executorImage,
+      ExecutorContainerTier3: executorImage,
+    },
+  );
+  assert.throws(
+    () =>
+      normalizeReleaseContainerImages({
+        runtime: "docker.io/takos/runtime:latest",
+      }),
+    /digest-pinned/,
+  );
+});
+
+test("applyReleaseContainerImagesToToml rewrites container images and removes build contexts", () => {
+  const rendered = applyReleaseContainerImagesToToml(
+    [
+      "[[containers]]",
+      'class_name = "TakosRuntimeContainer"',
+      'image = "../../containers/runtime/Dockerfile"',
+      'image_build_context = "../../containers/runtime"',
+      'instance_type = "standard-2"',
+      "",
+      "[[containers]]",
+      'class_name = "ExecutorContainerTier1"',
+      'image = "../../containers/executor/Dockerfile"',
+      'image_build_context = "../../containers/executor"',
+      'instance_type = "lite"',
+      "",
+    ].join("\n"),
+    {
+      TakosRuntimeContainer: runtimeImage,
+      ExecutorContainerTier1: executorImage,
+    },
+  );
+
+  assert.ok(rendered.includes(`image = "${runtimeImage}"`));
+  assert.ok(rendered.includes(`image = "${executorImage}"`));
+  assert.doesNotMatch(rendered, /image_build_context/);
 });
 
 test("buildTakosumiDestroyCommands removes consumers and uploaded resources before OpenTofu destroy", () => {
@@ -173,7 +254,10 @@ esac
       TAKOS_RELEASE_DESTROY_RETRY_INTERVAL_MS: "0",
     });
     const commands = readFileSync(log, "utf8");
-    assert.match(commands, /queues consumer remove takos-test-runs-dlq takos-test/);
+    assert.match(
+      commands,
+      /queues consumer remove takos-test-runs-dlq takos-test/,
+    );
     assert.match(commands, /wrangler delete takos-test --force/);
     assert.match(commands, /vectorize delete takos-test-embeddings --force/);
   } finally {
@@ -210,7 +294,10 @@ test("Cloudflare release template enables production workers.dev launch URLs", (
     "utf8",
   );
   const [productionTemplate] = wranglerTemplate.split(/\n\[env\.staging\]\n/);
-  assert.match(productionTemplate, /\naccount_id\s*=\s*"replace-with-account-id"\n/);
+  assert.match(
+    productionTemplate,
+    /\naccount_id\s*=\s*"replace-with-account-id"\n/,
+  );
   assert.match(productionTemplate, /\nworkers_dev\s*=\s*true\n/);
 });
 
@@ -245,10 +332,7 @@ test("ensureWorkersDevSubdomain enables launch URL scripts without logging token
     "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/subdomain",
   );
   assert.equal(requests[0].init.method, "POST");
-  assert.equal(
-    requests[0].init.headers.authorization,
-    "Bearer token_123",
-  );
+  assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
   assert.equal(requests[0].init.body, JSON.stringify({ enabled: true }));
 });
 
@@ -469,8 +553,12 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
+  assert.match(rootVariables, /variable\s+"release_container_images"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_executor"\s*\{/);
-  assert.match(rootVariables, /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/);
+  assert.match(
+    rootVariables,
+    /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,
+  );
   assert.match(rootModule, /post_apply\s*=\s*\[/);
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
@@ -490,6 +578,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     rootModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,
+  );
+  assert.match(
+    rootModule,
+    /TAKOS_RELEASE_CONTAINER_IMAGES_JSON\s*=\s*jsonencode\(var\.release_container_images\)/,
   );
   assert.match(rootVariables, /variable\s+"release_working_directory"\s*\{/);
   assert.match(
@@ -523,12 +615,23 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(productionModule, /variable\s+"release_working_directory"\s*\{/);
   assert.match(productionModule, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(productionModule, /variable\s+"takosumi_source_ref"\s*\{/);
-  assert.match(productionModule, /variable\s+"release_containers_rollout"\s*\{/);
+  assert.match(
+    productionModule,
+    /variable\s+"release_containers_rollout"\s*\{/,
+  );
+  assert.match(productionModule, /variable\s+"release_container_images"\s*\{/);
   assert.match(productionModule, /variable\s+"release_executor"\s*\{/);
-  assert.match(productionModule, /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/);
+  assert.match(
+    productionModule,
+    /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,
+  );
   assert.match(
     productionModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,
+  );
+  assert.match(
+    productionModule,
+    /TAKOS_RELEASE_CONTAINER_IMAGES_JSON\s*=\s*jsonencode\(var\.release_container_images\)/,
   );
   assert.match(
     productionModule,

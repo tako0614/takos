@@ -43,6 +43,19 @@ variable "release_containers_rollout" {
   }
 }
 
+variable "release_container_images" {
+  type    = map(string)
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for image in values(var.release_container_images) :
+      can(regex("@sha256:[0-9a-f]{64}$", image))
+    ])
+    error_message = "release_container_images values must be digest-pinned image refs ending with @sha256:<64-hex>."
+  }
+}
+
 variable "release_executor" {
   type    = string
   default = "runner"
@@ -275,6 +288,9 @@ output "takosumi_release" {
           },
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
+          },
+          length(var.release_container_images) == 0 ? {} : {
+            TAKOS_RELEASE_CONTAINER_IMAGES_JSON = jsonencode(var.release_container_images)
           },
         )
       },

@@ -55,6 +55,25 @@ The module exposes `release_executor`:
   runner is a constrained execution sandbox and Worker artifact publication
   should happen through the operator release activator materializer.
 
+For fast installs, prefer prebuilt container images produced by Git CI or the
+operator release pipeline. Pass those digest-pinned image refs through the
+OpenTofu variable `release_container_images`; Takosumi only injects the variable
+into the release command and records the Run evidence.
+
+```hcl
+release_container_images = {
+  runtime  = "registry.cloudflare.com/<account>/takos-runtime@sha256:<digest>"
+  executor = "registry.cloudflare.com/<account>/takos-executor@sha256:<digest>"
+}
+```
+
+When `release_container_images` is set, the release activator rewrites the
+generated Wrangler config to use those image refs and skips the local
+`containers:build` step. When it is unset, the fallback remains fully
+Git/OpenTofu-native: the release command builds from the reviewed source
+snapshot. Takosumi does not select, fetch, or rewrite artifacts outside the
+declared OpenTofu module and release command.
+
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
 runner source snapshot does not contain one, it clones the non-secret
@@ -152,7 +171,10 @@ bun run build
 bun run containers:build
 ```
 
-Wrangler builds only Takos runtime / executor containers from this repo.
+Wrangler builds only Takos runtime / executor containers from this repo. In
+hosted/operator installs, Git CI should usually build those container images
+first and pass the resulting digest-pinned refs through
+`release_container_images`; this step is then skipped during release activation.
 
 ### 5. Run Product Activation
 
