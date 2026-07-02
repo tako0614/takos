@@ -412,11 +412,13 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
+  assert.match(rootVariables, /variable\s+"release_executor"\s*\{/);
+  assert.match(rootVariables, /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/);
   assert.match(rootModule, /post_apply\s*=\s*\[/);
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-destroy"/);
-  assert.match(rootModule, /executor\s*=\s*"runner"/);
+  assert.match(rootModule, /executor\s*=\s*var\.release_executor/);
   assert.match(rootModule, /timeout_seconds\s*=\s*1200/);
   assert.match(rootModule, /timeout_seconds\s*=\s*600/);
   assert.match(rootModule, /env\s*=\s*\{/);
@@ -458,13 +460,15 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(productionModule, /pre_destroy\s*=\s*\[/);
   assert.match(productionModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(productionModule, /id\s*=\s*"takos-worker-destroy"/);
-  assert.match(productionModule, /executor\s*=\s*"runner"/);
+  assert.match(productionModule, /executor\s*=\s*var\.release_executor/);
   assert.match(productionModule, /timeout_seconds\s*=\s*1200/);
   assert.match(productionModule, /timeout_seconds\s*=\s*600/);
   assert.match(productionModule, /variable\s+"release_working_directory"\s*\{/);
   assert.match(productionModule, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(productionModule, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(productionModule, /variable\s+"release_containers_rollout"\s*\{/);
+  assert.match(productionModule, /variable\s+"release_executor"\s*\{/);
+  assert.match(productionModule, /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/);
   assert.match(
     productionModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,

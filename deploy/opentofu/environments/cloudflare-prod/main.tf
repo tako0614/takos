@@ -43,6 +43,16 @@ variable "release_containers_rollout" {
   }
 }
 
+variable "release_executor" {
+  type    = string
+  default = "runner"
+
+  validation {
+    condition     = contains(["runner", "operator"], var.release_executor)
+    error_message = "release_executor must be runner or operator."
+  }
+}
+
 variable "takosumi_source_repo_url" {
   type    = string
   default = "https://github.com/tako0614/takosumi.git"
@@ -277,7 +287,7 @@ output "takosumi_release" {
     post_apply = [
       {
         id                = "takos-worker-release"
-        executor          = "runner"
+        executor          = var.release_executor
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production"]
         working_directory = var.release_working_directory
         timeout_seconds   = 1200
@@ -295,7 +305,7 @@ output "takosumi_release" {
     pre_destroy = [
       {
         id                = "takos-worker-destroy"
-        executor          = "runner"
+        executor          = var.release_executor
         command           = ["bun", "scripts/control/takosumi-release.mjs", "production", "--destroy"]
         working_directory = var.release_working_directory
         timeout_seconds   = 600

@@ -27,10 +27,10 @@ separate product-only deploy authority; it consumes the module outputs and must
 stay in sync with them.
 
 When Takos is installed through Takosumi, the OpenTofu module exports a
-`takosumi_release.post_apply` command with `executor = "runner"`. Takosumi
-does not learn a DB-specific migration resource. It records an opaque
-post-apply command, and the release runner runs it from the reviewed source
-snapshot after the reviewed OpenTofu apply has committed:
+`takosumi_release.post_apply` command. Takosumi does not learn a DB-specific
+migration resource. It records an opaque post-apply command, and the configured
+release executor runs it from the reviewed source snapshot after the reviewed
+OpenTofu apply has committed:
 
 ```sh
 bun scripts/control/takosumi-release.mjs <environment>
@@ -38,13 +38,21 @@ bun scripts/control/takosumi-release.mjs <environment>
 
 That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
 the product-owned activation steps, and uploads the Worker artifact using the
-run-scoped Provider Connection credentials. Any D1 or schema work remains Takos
-script behavior, not a Takosumi resource type.
+authorized Cloudflare credentials. Any D1 or schema work remains Takos script
+behavior, not a Takosumi resource type.
 This bridge is intentionally narrow: durable resources that the OpenTofu
 provider can express stay in the module, while provider gaps such as Vectorize
 index creation are run from the reviewed app source and the reviewed
 OpenTofu outputs. Takosumi does not choose an artifact URL, fetch app assets, or
 replace the Git/OpenTofu source of truth.
+The module exposes `release_executor`:
+
+- `runner`: use only when the selected runner can run `wrangler deploy` and
+  publish Cloudflare Worker artifacts from the restored source snapshot.
+- `operator`: use for Takosumi Cloud / hosted operators where the OpenTofu
+  runner is a constrained execution sandbox and Worker artifact publication
+  should happen through the operator release activator materializer.
+
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
 runner source snapshot does not contain one, it clones the non-secret

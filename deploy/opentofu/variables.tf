@@ -38,6 +38,17 @@ variable "release_containers_rollout" {
   }
 }
 
+variable "release_executor" {
+  description = "Executor for Takosumi release activation commands. Use operator for hosted Takosumi Cloud materializers; use runner only when the runner environment can run wrangler deploy."
+  type        = string
+  default     = "runner"
+
+  validation {
+    condition     = contains(["runner", "operator"], var.release_executor)
+    error_message = "release_executor must be runner or operator."
+  }
+}
+
 variable "takosumi_source_repo_url" {
   description = "Takosumi source module Git URL used by the Takos release activation when no sibling checkout exists in the runner snapshot."
   type        = string

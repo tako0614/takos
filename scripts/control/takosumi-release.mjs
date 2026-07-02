@@ -480,7 +480,7 @@ function isIgnorableDestroyFailure(command, output) {
     return /not found|does not exist|No such Worker/i.test(output);
   }
   if (command.includes("'vectorize' 'delete'")) {
-    return /not found|does not exist/i.test(output);
+    return /not found|does not exist|vectorize\.index\.deleted/i.test(output);
   }
   return false;
 }
