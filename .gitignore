@@ -26,6 +26,7 @@ deploy/opentofu/environments/**/*.auto.tfvars.json
 deploy/local-substrate/
 .takos-local/
 .takos-git/
+.takos-release-secrets.*.json
 *.log
 tmp/
 temp/

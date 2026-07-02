@@ -2,7 +2,7 @@
 import * as runtime from "../runtime.ts";
 
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync, symlinkSync } from "node:fs";
+import { existsSync, symlinkSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 
@@ -12,6 +12,9 @@ const ENVIRONMENTS = ["production", "staging"];
 const WRANGLER_CONFIG = "deploy/cloudflare/wrangler.toml";
 const DEFAULT_TAKOSUMI_REPO_URL = "https://github.com/tako0614/takosumi.git";
 const DEFAULT_TAKOSUMI_REPO_REF = "main";
+const MIN_WORKER_CONTENT_BYTES = 1024;
+const RELEASE_HEALTH_ATTEMPTS = 12;
+const RELEASE_HEALTH_INTERVAL_MS = 2500;
 
 function usage() {
   console.error(`
@@ -188,6 +191,10 @@ export function readReleaseOutputs(env = process.env) {
   return parseTakosumiOutputsJson(raw);
 }
 
+export function releaseSecretsFilePath(environment) {
+  return `.takos-release-secrets.${environment}.json`;
+}
+
 export function buildTakosumiReleaseCommands(
   outputs,
   environment,
@@ -211,6 +218,7 @@ export function buildTakosumiReleaseCommands(
   );
   const wranglerConfigPath = resolve(WRANGLER_CONFIG);
   const wranglerEnvArgs = environment === "staging" ? ["--env", "staging"] : [];
+  const releaseSecretsFile = releaseSecretsFilePath(environment);
   const renderArgs = [
     "bun",
     "scripts/control/render-wrangler-from-tofu.mjs",
@@ -243,6 +251,8 @@ export function buildTakosumiReleaseCommands(
     environment,
     "--config",
     WRANGLER_CONFIG,
+    "--secrets-file",
+    releaseSecretsFile,
   ];
   const migrationCommands = skipD1Migrations
     ? []
@@ -296,22 +306,7 @@ export function buildTakosumiReleaseCommands(
       "--metric",
       "cosine",
     ]),
-    commandLine([
-      "bunx",
-      "wrangler",
-      "deploy",
-      "--config",
-      WRANGLER_CONFIG,
-      "--name",
-      workerName,
-      ...wranglerEnvArgs,
-      ...(containersRollout
-        ? ["--containers-rollout", containersRollout]
-        : []),
-    ]),
     commandLine(ensureSecretsArgs),
-    // `wrangler secret put` creates a new Worker version. Keep the final
-    // release version code-backed by deploying once more after secret rotation.
     commandLine([
       "bunx",
       "wrangler",
@@ -320,6 +315,8 @@ export function buildTakosumiReleaseCommands(
       WRANGLER_CONFIG,
       "--name",
       workerName,
+      "--secrets-file",
+      releaseSecretsFile,
       ...wranglerEnvArgs,
       ...(containersRollout
         ? ["--containers-rollout", containersRollout]
@@ -461,6 +458,164 @@ export async function ensureWorkersDevSubdomain(
   return { skipped: false, result: payload?.result };
 }
 
+function releaseHealthUrl(outputs) {
+  const launchUrl = outputValue(outputs.launch_url ?? outputs.url);
+  if (typeof launchUrl !== "string" || launchUrl.trim() === "") return undefined;
+  const url = new URL(launchUrl);
+  url.pathname = "/health";
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function releaseWorkerEnvironment(environment) {
+  return environment === "staging" ? "staging" : "production";
+}
+
+function integerEnv(env, name, fallback) {
+  const raw = env[name];
+  if (typeof raw !== "string" || raw.trim() === "") return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function releaseApiToken(env) {
+  const token = env.CF_API_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
+  if (typeof token !== "string" || token.trim() === "") {
+    throw new Error(
+      "CF_API_TOKEN or CLOUDFLARE_API_TOKEN is required for release artifact verification",
+    );
+  }
+  return token.trim();
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function verifyCloudflareWorkerContent(
+  outputs,
+  environment,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  const workerName = requireStringOutput(outputs, "worker_name");
+  const accountId = requireStringOutput(outputs, "cloudflare_account_id");
+  const workerEnvironment = releaseWorkerEnvironment(environment);
+  const apiToken = releaseApiToken(env);
+  const url =
+    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
+      accountId,
+    )}/workers/services/${encodeURIComponent(
+      workerName,
+    )}/environments/${encodeURIComponent(workerEnvironment)}/content`;
+  const response = await fetchImpl(url, {
+    headers: { authorization: `Bearer ${apiToken}` },
+  });
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!response.ok) {
+    throw new Error(
+      `Cloudflare Worker content verification failed for ${workerName}: HTTP ${response.status}`,
+    );
+  }
+  const text = new TextDecoder("utf8", { fatal: false }).decode(bytes);
+  if (text.includes("export default { fetch() {} }")) {
+    throw new Error(
+      `Cloudflare Worker ${workerName} uploaded content is still the secret-update stub`,
+    );
+  }
+  const minBytes = integerEnv(
+    env,
+    "TAKOS_RELEASE_MIN_WORKER_CONTENT_BYTES",
+    MIN_WORKER_CONTENT_BYTES,
+  );
+  if (bytes.byteLength < minBytes) {
+    throw new Error(
+      `Cloudflare Worker ${workerName} uploaded content is too small (${bytes.byteLength} bytes; expected at least ${minBytes})`,
+    );
+  }
+  const sha256 = await sha256Hex(bytes);
+  console.log(
+    `Verified Cloudflare Worker artifact for ${workerName}: ${bytes.byteLength} bytes, sha256:${sha256}`,
+  );
+  return { workerName, bytes: bytes.byteLength, sha256 };
+}
+
+async function wait(ms) {
+  await new Promise((resolveWait) => setTimeout(resolveWait, ms));
+}
+
+async function verifyReleaseHealth(
+  outputs,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  const url = releaseHealthUrl(outputs);
+  if (!url) {
+    return { skipped: true, reason: "no_launch_url" };
+  }
+  const attempts = Math.max(
+    1,
+    integerEnv(env, "TAKOS_RELEASE_HEALTH_ATTEMPTS", RELEASE_HEALTH_ATTEMPTS),
+  );
+  const intervalMs = integerEnv(
+    env,
+    "TAKOS_RELEASE_HEALTH_INTERVAL_MS",
+    RELEASE_HEALTH_INTERVAL_MS,
+  );
+  let lastStatus = 0;
+  let lastBody = "";
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetchImpl(url, {
+        headers: { "cache-control": "no-cache" },
+      });
+      lastStatus = response.status;
+      lastBody = await response.text();
+      if (response.ok) {
+        console.log(`Verified Takos release health at ${url}`);
+        return { skipped: false, url, status: response.status };
+      }
+    } catch (error) {
+      lastBody = error instanceof Error ? error.message : String(error);
+    }
+    if (attempt < attempts && intervalMs > 0) {
+      await wait(intervalMs);
+    }
+  }
+  throw new Error(
+    `Takos release health check failed at ${url}: HTTP ${lastStatus || "network"} ${lastBody.slice(
+      0,
+      240,
+    )}`,
+  );
+}
+
+export async function verifyReleaseDeployment(
+  outputs,
+  environment,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  const artifact = await verifyCloudflareWorkerContent(
+    outputs,
+    environment,
+    env,
+    fetchImpl,
+  );
+  const health = await verifyReleaseHealth(outputs, env, fetchImpl);
+  return { artifact, health };
+}
+
+function cleanupReleaseSecretsFile(environment) {
+  const path = resolve(releaseSecretsFilePath(environment));
+  if (!existsSync(path)) return;
+  unlinkSync(path);
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { environment, debug, destroy } = parseReleaseArgs(argv);
   const outputs = readReleaseOutputs(env);
@@ -493,12 +648,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
         });
       })();
-  for (const command of commands) {
-    if (destroy) runDestroyCommand(command);
-    else run(command);
-  }
-  if (!destroy) {
-    await ensureWorkersDevSubdomain(outputs, env);
+  try {
+    for (const command of commands) {
+      if (destroy) runDestroyCommand(command);
+      else run(command);
+    }
+    if (!destroy) {
+      await ensureWorkersDevSubdomain(outputs, env);
+      await verifyReleaseDeployment(outputs, environment, env);
+    }
+  } finally {
+    if (!destroy) cleanupReleaseSecretsFile(environment);
   }
   console.log(
     `\nTakos ${destroy ? "release cleanup" : "release activation"} completed for ${environment}.`,

@@ -45,11 +45,12 @@ const SECRET_ORDER = [
 
 function usage() {
   console.error(`
-Usage: bun scripts/control/ensure-release-secrets.mjs <environment> [--config <path>] [--secret-dir <path>]
+Usage: bun scripts/control/ensure-release-secrets.mjs <environment> [--config <path>] [--secret-dir <path>] [--secrets-file <path>]
 
 Creates or reuses per-worker Takos runtime secrets outside the repo, then pushes
-them to Cloudflare with wrangler secret put. The worker name is read from
-TAKOSUMI_OUTPUTS_JSON.
+them to Cloudflare with wrangler secret put, or writes a temporary
+wrangler-compatible secrets file for a single deploy upload. The worker name is
+read from TAKOSUMI_OUTPUTS_JSON.
 `);
   process.exit(1);
 }
@@ -59,18 +60,21 @@ function parseArgs(argv = process.argv.slice(2)) {
   if (!environment || !ENVIRONMENTS.has(environment)) usage();
   let config = DEFAULT_CONFIG;
   let secretDir;
+  let secretsFile;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
     if (arg === "--config") {
       config = rest[++i];
     } else if (arg === "--secret-dir") {
       secretDir = rest[++i];
+    } else if (arg === "--secrets-file") {
+      secretsFile = rest[++i];
     } else {
       usage();
     }
     if (!rest[i]) usage();
   }
-  return { environment, config, secretDir };
+  return { environment, config, secretDir, secretsFile };
 }
 
 function outputValue(entry) {
@@ -274,7 +278,7 @@ function putSecret({ environment, config, workerName, name, value }) {
 }
 
 async function main() {
-  const { environment, config, secretDir } = parseArgs();
+  const { environment, config, secretDir, secretsFile } = parseArgs();
   const outputs = readOutputs();
   const workerName = requireWorkerName(outputs);
   const resolvedSecretDir = resolve(
@@ -288,6 +292,13 @@ async function main() {
       ),
   );
   const secrets = await ensureSecrets(resolvedSecretDir);
+  if (secretsFile) {
+    const path = resolve(secretsFile);
+    writeFileSync(path, JSON.stringify(secrets, null, 2), { mode: 0o600 });
+    chmodSync(path, 0o600);
+    console.log(`Wrote Cloudflare release secrets file ${path}`);
+    return;
+  }
   for (const name of SECRET_ORDER) {
     putSecret({ environment, config, workerName, name, value: secrets[name] });
     console.log(`Ensured Cloudflare secret ${name}`);
