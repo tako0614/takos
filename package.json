@@ -8,9 +8,6 @@
   "license": "AGPL-3.0-only",
   "type": "module",
   "private": true,
-  "workspaces": [
-    "mobile"
-  ],
   "scripts": {
     "dev": "bun src/worker/local-platform/unified-entrypoint.ts",
     "dev:web": "bunx vite --host 0.0.0.0 --config web/vite.config.ts",
