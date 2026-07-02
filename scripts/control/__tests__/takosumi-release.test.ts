@@ -399,6 +399,43 @@ test("ensureWorkersDevSubdomain waits until the uploaded Worker is visible", asy
   });
 });
 
+test("ensureWorkersDevSubdomain skips API enablement when Wrangler-owned Worker is not yet visible", async () => {
+  const requests = [];
+  const result = await ensureWorkersDevSubdomain(
+    {
+      worker_name: "takos-test",
+      cloudflare_account_id: "acc_123",
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_RELEASE_WORKER_API_ATTEMPTS: "1",
+      TAKOS_RELEASE_WORKER_API_INTERVAL_MS: "0",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          errors: [
+            {
+              code: 10007,
+              message: "This Worker does not exist on your account.",
+            },
+          ],
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      );
+    },
+  );
+
+  assert.deepEqual(result, {
+    skipped: true,
+    reason: "workers_dev_api_unavailable",
+  });
+  assert.equal(requests.length, 1);
+});
+
 test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () => {
   const requests = [];
   await assert.rejects(

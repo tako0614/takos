@@ -684,6 +684,7 @@ export async function ensureWorkersDevSubdomain(
   const intervalMs = releaseWorkerApiIntervalMs(env);
   let payload;
   let responseStatus = 0;
+  let lastMissingWorker = false;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const response = await fetchImpl(url, {
       method: "POST",
@@ -704,10 +705,17 @@ export async function ensureWorkersDevSubdomain(
       console.log(`workers.dev subdomain enabled for ${workerName}.`);
       return { skipped: false, result: payload?.result };
     }
+    lastMissingWorker = cloudflareWorkerApiMissingResource(payload);
     if (
       attempt >= attempts ||
       !shouldRetryCloudflareWorkerApi(response, payload)
     ) {
+      if (lastMissingWorker) {
+        console.warn(
+          `Skipped workers.dev API enablement for ${workerName}: Worker was not visible to the API after ${attempt} attempt(s).`,
+        );
+        return { skipped: true, reason: "workers_dev_api_unavailable" };
+      }
       throw new Error(
         `Failed to enable workers.dev for ${workerName}: HTTP ${response.status} ${JSON.stringify(
           payload?.errors ?? payload,
@@ -716,11 +724,31 @@ export async function ensureWorkersDevSubdomain(
     }
     if (intervalMs > 0) await wait(intervalMs);
   }
+  if (lastMissingWorker) {
+    console.warn(
+      `Skipped workers.dev API enablement for ${workerName}: Worker was not visible to the API.`,
+    );
+    return { skipped: true, reason: "workers_dev_api_unavailable" };
+  }
   throw new Error(
     `Failed to enable workers.dev for ${workerName}: HTTP ${responseStatus} ${JSON.stringify(
       payload?.errors ?? payload,
     )}`,
   );
+}
+
+function cloudflareWorkerApiMissingResource(payload) {
+  const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+  return errors.some((error) => {
+    const code = typeof error?.code === "number" ? error.code : undefined;
+    const message = typeof error?.message === "string" ? error.message : "";
+    return (
+      code === 10007 ||
+      code === 10090 ||
+      code === 10092 ||
+      /does not exist|not found/i.test(message)
+    );
+  });
 }
 
 function releaseHealthUrl(outputs) {
