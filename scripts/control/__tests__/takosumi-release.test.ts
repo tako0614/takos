@@ -24,6 +24,7 @@ import {
   readReleaseOutputs,
   verifyReleaseDeployment,
   waitForWranglerDeployment,
+  waitForWranglerDeploymentBestEffort,
 } from "../takosumi-release.mjs";
 import { applyReleaseContainerImagesToToml } from "../apply-release-container-images.mjs";
 
@@ -536,6 +537,49 @@ JSON
     });
     assert.equal(status.id, "dep_456");
   } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("waitForWranglerDeploymentBestEffort does not fail release on empty Wrangler status", async () => {
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-deployment-best-effort-"));
+  const bin = resolve(root, "bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+exit 0
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => {
+    warnings.push(String(message));
+  };
+  try {
+    process.chdir(root);
+    const result = await waitForWranglerDeploymentBestEffort(
+      rawOutputs,
+      "production",
+      {
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        TAKOS_RELEASE_WORKER_API_ATTEMPTS: "1",
+        TAKOS_RELEASE_WORKER_API_INTERVAL_MS: "0",
+      },
+    );
+    assert.deepEqual(result, {
+      skipped: true,
+      reason: "wrangler_deployment_status_unavailable",
+      message:
+        "Wrangler deployment for takos-test was not visible after 1 attempt(s): wrangler deployments status returned no JSON output",
+    });
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /Skipping Wrangler deployment status verification/);
+  } finally {
+    console.warn = originalWarn;
     process.chdir(previousCwd);
     rmSync(root, { recursive: true, force: true });
   }

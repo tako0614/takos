@@ -632,6 +632,39 @@ export async function waitForWranglerDeployment(
   );
 }
 
+export async function waitForWranglerDeploymentBestEffort(
+  outputs,
+  environment,
+  env = process.env,
+) {
+  try {
+    return {
+      skipped: false,
+      status: await waitForWranglerDeployment(outputs, environment, env),
+    };
+  } catch (error) {
+    if (
+      env.TAKOS_RELEASE_REQUIRE_WRANGLER_DEPLOYMENT_STATUS === "1" ||
+      env.TAKOS_RELEASE_REQUIRE_WRANGLER_DEPLOYMENT_STATUS === "true"
+    ) {
+      throw error;
+    }
+    const workerName = requireStringOutput(outputs, "worker_name");
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `Skipping Wrangler deployment status verification for ${workerName}: ${boundedCommandLog(
+        message,
+        env,
+      )}`,
+    );
+    return {
+      skipped: true,
+      reason: "wrangler_deployment_status_unavailable",
+      message,
+    };
+  }
+}
+
 function parseWranglerJsonOutput(output) {
   const trimmed = output.trim();
   if (!trimmed) {
@@ -1225,7 +1258,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         }),
         childEnv,
       );
-      await waitForWranglerDeployment(outputs, environment, childEnv);
+      await waitForWranglerDeploymentBestEffort(outputs, environment, childEnv);
       await verifyCloudflareWorkerContent(outputs, environment, childEnv);
       await ensureWorkersDevSubdomain(outputs, childEnv);
       await verifyReleaseHealth(outputs, childEnv);
