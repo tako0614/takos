@@ -315,6 +315,11 @@ test("Cloudflare release template enables production workers.dev launch URLs", (
     /\naccount_id\s*=\s*"replace-with-account-id"\n/,
   );
   assert.match(productionTemplate, /\nworkers_dev\s*=\s*true\n/);
+  assert.match(productionTemplate, /\n\[alias\]\n/);
+  assert.match(
+    productionTemplate,
+    /\n"node:sqlite"\s*=\s*"\.\.\/\.\.\/src\/worker\/cloudflare\/node-sqlite-unavailable\.ts"\n/,
+  );
 });
 
 test("ensureWorkersDevSubdomain enables launch URL scripts without logging tokens", async () => {

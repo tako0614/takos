@@ -22,6 +22,9 @@ workers_dev = true
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
 
+[alias]
+"node:sqlite" = "../../src/worker/cloudflare/node-sqlite-unavailable.ts"
+
 # Single public hostname for the Takos product worker. Takosumi owns the
 # account/control-plane origin that installs this Worker as a normal Capsule;
 # this Worker is an OIDC client/resource server, not its own Takosumi issuer.
