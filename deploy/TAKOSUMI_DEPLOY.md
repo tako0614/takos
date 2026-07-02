@@ -40,6 +40,11 @@ That command consumes `TAKOSUMI_OUTPUTS_JSON`, renders Wrangler bindings, runs
 the product-owned activation steps, and uploads the Worker artifact using the
 run-scoped Provider Connection credentials. Any D1 or schema work remains Takos
 script behavior, not a Takosumi resource type.
+This bridge is intentionally narrow: durable resources that the OpenTofu
+provider can express stay in the module, while provider gaps such as Vectorize
+index creation are run from the reviewed app source and the reviewed
+OpenTofu outputs. Takosumi does not choose an artifact URL, fetch app assets, or
+replace the Git/OpenTofu source of truth.
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
 runner source snapshot does not contain one, it clones the non-secret
@@ -115,7 +120,8 @@ requiring local `tofu output -json`.
 ### 3. Create Vectorize
 
 Cloudflare's OpenTofu provider does not currently manage Vectorize indexes, so
-create the expected index out of band:
+create the expected index through the app-owned activation bridge before
+running expensive build or migration work:
 
 ```sh
 bunx wrangler vectorize create takos-embeddings --dimensions=768 --metric=cosine

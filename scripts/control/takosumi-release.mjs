@@ -291,12 +291,6 @@ export function buildTakosumiReleaseCommands(
 
   return [
     commandLine(renderArgs),
-    commandLine(installArgs),
-    commandLine(takosumiInstallArgs),
-    commandLine(takosumiDashboardInstallArgs),
-    commandLine(buildArgs),
-    commandLine(containerBuildArgs),
-    ...migrationCommands,
     commandLine([
       "bun",
       "scripts/control/ensure-vectorize-index.mjs",
@@ -306,6 +300,12 @@ export function buildTakosumiReleaseCommands(
       "--metric",
       "cosine",
     ]),
+    commandLine(installArgs),
+    commandLine(takosumiInstallArgs),
+    commandLine(takosumiDashboardInstallArgs),
+    commandLine(buildArgs),
+    commandLine(containerBuildArgs),
+    ...migrationCommands,
     commandLine(ensureSecretsArgs),
     commandLine([
       "bunx",

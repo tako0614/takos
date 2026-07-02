@@ -127,8 +127,8 @@ resource "cloudflare_queue" "this" {
 }
 
 # Vectorize index — binding VECTORIZE.
-# The cloudflare/cloudflare v5 provider has no managed resource for Vectorize
-# indexes; the index is created out-of-band (wrangler `vectorize create` /
-# Cloudflare API as part of the ProviderConnection / ProviderBinding /
-# policy-controlled apply flow). Its expected name is exported below so the
-# binding map stays complete.
+# The cloudflare/cloudflare v5 provider does not currently expose a Vectorize
+# index resource. Until it does, the reviewed app-owned release activation
+# bridge creates this provider-gap resource with wrangler before uploading the
+# Worker artifact. The expected name is still exported from this OpenTofu module
+# so the binding map, output ledger, and destroy bridge stay deterministic.
