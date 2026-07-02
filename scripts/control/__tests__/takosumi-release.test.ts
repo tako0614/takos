@@ -1,11 +1,13 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -152,6 +154,46 @@ test("destroy retry classifier matches transient Wrangler network failures", () 
     ),
     false,
   );
+});
+
+test("destroy commands are idempotent when queue resources already disappeared", async () => {
+  const { main } = await import("../takosumi-release.mjs");
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-destroy-"));
+  const bin = resolve(root, "bin");
+  const log = resolve(root, "commands.log");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+printf '%s\\n' "$*" >> '${log}'
+case "$*" in
+  *"takos-test-runs-dlq takos-test"*)
+    echo 'Queue "takos-test-runs-dlq" does not exist. To create it, run: wrangler queues create takos-test-runs-dlq' >&2
+    exit 1
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    process.chdir(root);
+    await main(["production", "--destroy"], {
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+      TAKOSUMI_OUTPUTS_JSON: JSON.stringify(rawOutputs),
+      TAKOS_RELEASE_DESTROY_RETRY_INTERVAL_MS: "0",
+    });
+    const commands = readFileSync(log, "utf8");
+    assert.match(commands, /queues consumer remove takos-test-runs-dlq takos-test/);
+    assert.match(commands, /wrangler delete takos-test --force/);
+    assert.match(commands, /vectorize delete takos-test-embeddings --force/);
+  } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {

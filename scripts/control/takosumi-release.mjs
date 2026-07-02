@@ -507,7 +507,10 @@ function boundedCommandLog(text, env) {
 
 function isIgnorableDestroyFailure(command, output) {
   if (isQueueConsumerRemoveCommand(command)) {
-    return /No worker consumer .* exists for queue/u.test(output);
+    return (
+      /No worker consumer .* exists for queue/u.test(output) ||
+      /Queue ["']?.+["']? does not exist/i.test(output)
+    );
   }
   if (command.includes("'wrangler' 'delete'")) {
     return /not found|does not exist|No such Worker/i.test(output);
