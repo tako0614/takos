@@ -261,6 +261,7 @@ output "takosumi_release" {
         executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment]
         working_directory = var.release_working_directory
+        timeout_seconds   = 1200
         env = {
           TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
           TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
@@ -273,6 +274,7 @@ output "takosumi_release" {
         executor          = "runner"
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment, "--destroy"]
         working_directory = var.release_working_directory
+        timeout_seconds   = 600
         env = {
           TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
           TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
