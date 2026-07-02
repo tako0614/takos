@@ -17,9 +17,9 @@ on:
         default: false
         type: boolean
       publish_cloudflare_registry:
-        description: "Publish Takos runtime/executor images to the Cloudflare Containers registry"
+        description: "Publish Takos runtime/executor images to the Cloudflare Containers registry for Takosumi Cloud deploys"
         required: false
-        default: false
+        default: true
         type: boolean
 
 concurrency:
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate
-    if: github.event_name == 'push' || inputs.publish_cloudflare_registry == true
+    if: github.event_name == 'push' || (inputs.publish == true && inputs.publish_cloudflare_registry == true)
     permissions:
       contents: read
     steps:
