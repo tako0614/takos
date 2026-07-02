@@ -166,7 +166,7 @@ const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [
 
 const REQUIRED_CANONICAL_LAYOUT_PATHS = [
   "src/worker",
-  "src/routes",
+  "src/worker/server/routes",
   "src/contracts",
   "web",
   "containers/git",

@@ -65,7 +65,7 @@ stack で container callback helper endpoint が見える場合も、これは c
 
 compose を使わず個別に起動したい場合は、Takos repo 内の source owner から起動します。
 
-- `src/worker/` / `src/routes/` — Takos Worker (`bun run dev`)
+- `src/worker/` / `src/worker/server/routes/` — Takos Worker (`bun run dev`)
 - `web/` — browser UI (`bun run --cwd web dev`)
 - `containers/git/` — Git ホスティング (`cd containers/git && bun run dev`)
 - `containers/agent/` —エージェント (`cd containers/agent && cargo run`)
