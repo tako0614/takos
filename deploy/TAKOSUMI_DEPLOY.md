@@ -85,6 +85,12 @@ passes those refs into OpenTofu as plain module variables. GHCR images may remai
 as provenance / SBOM evidence, but Cloudflare Worker deploys should consume the
 Cloudflare registry refs.
 
+The Git CI token used for Cloudflare registry publication must include the
+account-scoped `Containers Write` permission. A regular Workers deploy token can
+successfully publish scripts while still failing container registry operations
+with `ApiError: Forbidden`; the release workflow preflights this before running
+the expensive container builds.
+
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
 runner source snapshot does not contain one, it clones the non-secret

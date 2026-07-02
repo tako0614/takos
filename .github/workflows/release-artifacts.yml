@@ -145,6 +145,32 @@ jobs:
         if: matrix.prebuild != ''
         working-directory: takos
 
+      - name: Preflight Cloudflare Container registry permissions
+        if: (github.event_name == 'push' || inputs.publish == true) && matrix.cloudflare_container == true && (github.event_name == 'push' || inputs.publish_cloudflare_registry == true)
+        shell: bash
+        working-directory: takos
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN}" || -z "${CLOUDFLARE_ACCOUNT_ID}" ]]; then
+            echo "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets are required to publish Cloudflare Container images." >&2
+            exit 1
+          fi
+
+          preflight_log="$(mktemp)"
+          trap 'rm -f "${preflight_log}"' EXIT
+          set +e
+          bunx wrangler containers registries credentials --push --expiration-minutes 15 >"${preflight_log}" 2>&1
+          status=$?
+          set -e
+          if [[ ${status} -ne 0 ]]; then
+            sed -E 's/[A-Za-z0-9_+=./:-]{24,}/[redacted]/g' "${preflight_log}" >&2
+            echo "Cloudflare Container registry publish requires an account-scoped API token with Containers Write permission." >&2
+            exit "${status}"
+          fi
+
       - name: Build container dist
         if: matrix.prebuild != ''
         run: ${{ matrix.prebuild }}
