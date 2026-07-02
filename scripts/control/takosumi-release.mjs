@@ -472,7 +472,12 @@ function shouldRetryCloudflareWorkerApi(response, payload) {
   return errors.some((error) => {
     const code = typeof error?.code === "number" ? error.code : undefined;
     const message = typeof error?.message === "string" ? error.message : "";
-    return code === 10007 || /does not exist|not found/i.test(message);
+    return (
+      code === 10007 ||
+      code === 10090 ||
+      code === 10092 ||
+      /does not exist|not found/i.test(message)
+    );
   });
 }
 
