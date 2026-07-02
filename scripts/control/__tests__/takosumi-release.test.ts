@@ -194,6 +194,47 @@ test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
   assert.equal(called, false);
 });
 
+test("ensureWorkersDevSubdomain waits until the uploaded Worker is visible", async () => {
+  const requests = [];
+  const result = await ensureWorkersDevSubdomain(
+    {
+      worker_name: "takos-test",
+      cloudflare_account_id: "acc_123",
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_RELEASE_WORKER_API_ATTEMPTS: "2",
+      TAKOS_RELEASE_WORKER_API_INTERVAL_MS: "0",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      if (requests.length === 1) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ code: 10007, message: "This Worker does not exist" }],
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          success: true,
+          result: { enabled: true, previews_enabled: true },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    },
+  );
+
+  assert.equal(requests.length, 2);
+  assert.deepEqual(result, {
+    skipped: false,
+    result: { enabled: true, previews_enabled: true },
+  });
+});
+
 test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () => {
   const requests = [];
   await assert.rejects(
@@ -221,6 +262,52 @@ test("verifyReleaseDeployment rejects Cloudflare secret-update stubs", async () 
     "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
   );
   assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
+});
+
+test("verifyReleaseDeployment waits until Worker content is visible", async () => {
+  const requests = [];
+  const result = await verifyReleaseDeployment(
+    {
+      ...rawOutputs,
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    "production",
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_RELEASE_WORKER_API_ATTEMPTS: "2",
+      TAKOS_RELEASE_WORKER_API_INTERVAL_MS: "0",
+      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      if (String(url).includes("/content") && requests.length === 1) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [{ code: 10007, message: "This Worker does not exist" }],
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (String(url).includes("/content")) {
+        return new Response("/* real worker */\n".repeat(128), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    },
+  );
+
+  assert.equal(result.artifact.workerName, "takos-test");
+  assert.equal(result.health.status, 200);
+  assert.deepEqual(
+    requests.map((request) => String(request.url)),
+    [
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test/environments/production/content",
+      "https://takos-test.example-subdomain.workers.dev/health",
+    ],
+  );
 });
 
 test("verifyReleaseDeployment checks uploaded artifact and public health", async () => {

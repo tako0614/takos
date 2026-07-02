@@ -15,6 +15,8 @@ const DEFAULT_TAKOSUMI_REPO_REF = "main";
 const MIN_WORKER_CONTENT_BYTES = 1024;
 const RELEASE_HEALTH_ATTEMPTS = 12;
 const RELEASE_HEALTH_INTERVAL_MS = 2500;
+const RELEASE_WORKER_API_ATTEMPTS = 12;
+const RELEASE_WORKER_API_INTERVAL_MS = 2500;
 
 function usage() {
   console.error(`
@@ -394,15 +396,15 @@ export function buildTakosumiDestroyCommands(outputs) {
   ];
 }
 
-function run(command) {
+function run(command, env = process.env) {
   console.log(`\n> ${command}\n`);
-  execSync(command, { stdio: "inherit" });
+  execSync(command, { stdio: "inherit", env });
 }
 
-function runDestroyCommand(command) {
+function runDestroyCommand(command, env = process.env) {
   console.log(`\n> ${command}\n`);
   try {
-    execSync(command, { stdio: "pipe" });
+    execSync(command, { stdio: "pipe", env });
   } catch (error) {
     const stdout = error?.stdout ? String(error.stdout) : "";
     const stderr = error?.stderr ? String(error.stderr) : "";
@@ -427,6 +429,51 @@ function isIgnorableDestroyFailure(command, output) {
     return /not found|does not exist/i.test(output);
   }
   return false;
+}
+
+function releaseWorkerApiAttempts(env) {
+  return Math.max(
+    1,
+    integerEnv(
+      env,
+      "TAKOS_RELEASE_WORKER_API_ATTEMPTS",
+      RELEASE_WORKER_API_ATTEMPTS,
+    ),
+  );
+}
+
+function releaseWorkerApiIntervalMs(env) {
+  return integerEnv(
+    env,
+    "TAKOS_RELEASE_WORKER_API_INTERVAL_MS",
+    RELEASE_WORKER_API_INTERVAL_MS,
+  );
+}
+
+function releaseChildEnv(outputs, env = process.env) {
+  let accountId;
+  try {
+    accountId = requireStringOutput(outputs, "cloudflare_account_id");
+  } catch {
+    accountId = undefined;
+  }
+  return {
+    ...env,
+    CI: env.CI ?? "true",
+    WRANGLER_SEND_METRICS: env.WRANGLER_SEND_METRICS ?? "false",
+    ...(accountId ? { CLOUDFLARE_ACCOUNT_ID: accountId } : {}),
+  };
+}
+
+function shouldRetryCloudflareWorkerApi(response, payload) {
+  if (response.status === 404 || response.status === 409) return true;
+  if (response.status === 429 || response.status >= 500) return true;
+  const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+  return errors.some((error) => {
+    const code = typeof error?.code === "number" ? error.code : undefined;
+    const message = typeof error?.message === "string" ? error.message : "";
+    return code === 10007 || /does not exist|not found/i.test(message);
+  });
 }
 
 function shouldEnableWorkersDev(outputs) {
@@ -456,35 +503,50 @@ export async function ensureWorkersDevSubdomain(
     );
   }
 
-  const response = await fetchImpl(
-    `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
-      accountId,
-    )}/workers/scripts/${encodeURIComponent(workerName)}/subdomain`,
-    {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
+    accountId,
+  )}/workers/scripts/${encodeURIComponent(workerName)}/subdomain`;
+  const attempts = releaseWorkerApiAttempts(env);
+  const intervalMs = releaseWorkerApiIntervalMs(env);
+  let payload;
+  let responseStatus = 0;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const response = await fetchImpl(url, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiToken.trim()}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({ enabled: true }),
-    },
+    });
+    responseStatus = response.status;
+    const text = await response.text();
+    try {
+      payload = text ? JSON.parse(text) : {};
+    } catch {
+      payload = { success: false, errors: [{ message: text }] };
+    }
+    if (response.ok && payload?.success !== false) {
+      console.log(`workers.dev subdomain enabled for ${workerName}.`);
+      return { skipped: false, result: payload?.result };
+    }
+    if (
+      attempt >= attempts ||
+      !shouldRetryCloudflareWorkerApi(response, payload)
+    ) {
+      throw new Error(
+        `Failed to enable workers.dev for ${workerName}: HTTP ${response.status} ${JSON.stringify(
+          payload?.errors ?? payload,
+        )}`,
+      );
+    }
+    if (intervalMs > 0) await wait(intervalMs);
+  }
+  throw new Error(
+    `Failed to enable workers.dev for ${workerName}: HTTP ${responseStatus} ${JSON.stringify(
+      payload?.errors ?? payload,
+    )}`,
   );
-  const text = await response.text();
-  let payload;
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch {
-    payload = { success: false, errors: [{ message: text }] };
-  }
-  if (!response.ok || payload?.success === false) {
-    throw new Error(
-      `Failed to enable workers.dev for ${workerName}: HTTP ${response.status} ${JSON.stringify(
-        payload?.errors ?? payload,
-      )}`,
-    );
-  }
-  console.log(`workers.dev subdomain enabled for ${workerName}.`);
-  return { skipped: false, result: payload?.result };
 }
 
 function releaseHealthUrl(outputs) {
@@ -541,16 +603,36 @@ async function verifyCloudflareWorkerContent(
     )}/workers/services/${encodeURIComponent(
       workerName,
     )}/environments/${encodeURIComponent(workerEnvironment)}/content`;
-  const response = await fetchImpl(url, {
-    headers: { authorization: `Bearer ${apiToken}` },
-  });
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (!response.ok) {
-    throw new Error(
-      `Cloudflare Worker content verification failed for ${workerName}: HTTP ${response.status}`,
-    );
+  const attempts = releaseWorkerApiAttempts(env);
+  const intervalMs = releaseWorkerApiIntervalMs(env);
+  let bytes = new Uint8Array();
+  let text = "";
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const response = await fetchImpl(url, {
+      headers: { authorization: `Bearer ${apiToken}` },
+    });
+    bytes = new Uint8Array(await response.arrayBuffer());
+    text = new TextDecoder("utf8", { fatal: false }).decode(bytes);
+    if (response.ok) break;
+    let payload;
+    try {
+      payload = text ? JSON.parse(text) : {};
+    } catch {
+      payload = { errors: [{ message: text }] };
+    }
+    if (
+      attempt >= attempts ||
+      !shouldRetryCloudflareWorkerApi(response, payload)
+    ) {
+      throw new Error(
+        `Cloudflare Worker content verification failed for ${workerName}: HTTP ${response.status} ${text.slice(
+          0,
+          240,
+        )}`,
+      );
+    }
+    if (intervalMs > 0) await wait(intervalMs);
   }
-  const text = new TextDecoder("utf8", { fatal: false }).decode(bytes);
   if (text.includes("export default { fetch() {} }")) {
     throw new Error(
       `Cloudflare Worker ${workerName} uploaded content is still the secret-update stub`,
@@ -683,14 +765,16 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
         });
       })();
+  const childEnv = releaseChildEnv(outputs, env);
   try {
     for (const command of commands) {
-      if (destroy) runDestroyCommand(command);
-      else run(command);
+      if (destroy) runDestroyCommand(command, childEnv);
+      else run(command, childEnv);
     }
     if (!destroy) {
-      await ensureWorkersDevSubdomain(outputs, env);
-      await verifyReleaseDeployment(outputs, environment, env);
+      await verifyCloudflareWorkerContent(outputs, environment, childEnv);
+      await ensureWorkersDevSubdomain(outputs, childEnv);
+      await verifyReleaseHealth(outputs, childEnv);
     }
   } finally {
     if (!destroy) {
