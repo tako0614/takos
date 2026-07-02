@@ -326,7 +326,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [validate, oci-images]
-    if: github.event_name == 'push' || inputs.publish == true
+    if: always() && needs.validate.result == 'success' && needs.oci-images.result == 'success' && (github.event_name == 'push' || inputs.publish == true)
     permissions:
       contents: read
     steps:
