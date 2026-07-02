@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Takos
   text: AI と話しながら作る、セルフホスト型プロダクト
-  tagline: チャット・AI エージェント・メモリ・スペースを中心機能に持つ、自分で持てる AI プロダクト。新しい Space を作ると便利なアプリが自動でそろいます。
+  tagline: チャット・AI エージェント・メモリ・Workspace を中心機能に持つ、自分で持てる AI プロダクト。新しい Workspace を作ると便利なアプリが自動でそろいます。
   actions:
     - theme: brand
       text: Takos 全体像
@@ -26,7 +26,7 @@ features:
   - title: スペース
     details: 個人・チーム・組織ごとに分けられる作業領域。アプリはスペース単位で管理します。
   - title: アプリが自動でそろう
-    details: 新しい Space を作ると、ドキュメント・スライド・表計算・PC 操作・自分のための ActivityPub SNS といった便利なアプリ (takos-docs / takos-slide / takos-excel / takos-computer / yurucommu) が自動でインストールされます。不要なものはいつでも外せます。
+    details: 新しい Workspace を作ると、Office (docs / slide / sheet)、PC 操作、自分のための ActivityPub SNS といった便利なアプリ (takos-office / takos-computer / yurucommu) が自動でインストールされます。不要なものはいつでも外せます。
   - title: 自分で持てる
     details: Takos はあなたのサーバーにまるごとデプロイできます。データ・ログイン・運用を自分の手元で管理できます。
 ---
@@ -34,9 +34,9 @@ features:
 ## Takos とは
 
 Takos は、AI エージェントと会話しながらソフトウェアを作成・編集できる、セルフホスト型のプロダクトです。**チャット・AI
-エージェント・メモリ・スペース**の 4 つを中心機能として持ちます。
+エージェント・メモリ・Workspace**の 4 つを中心機能として持ちます。
 
-新しい Space を作ると、便利なアプリ (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`)
+新しい Workspace を作ると、便利なアプリ (`takos-office` / `takos-computer` / `yurucommu`)
 が自動的にインストールされます。不要なアプリはいつでもアンインストールできます。
 
 ::: warning すぐに使える公開サービスについて

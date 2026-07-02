@@ -8,8 +8,8 @@
 | ---------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
 | account identity       | Takosumi Accounts       | user / organization / OIDC subject / account profile                                    |
 | billing                | Takosumi Accounts       | BillingPort / Stripe customer マッピング                                                |
-| Installation ledger    | Takosumi Accounts       | source identity / app plan snapshot digest / retained evidence refs / grants / bindings |
-| deployment 記録        | Takosumi deploy-control | Deployment / activation pointer / provider observation / operation journal              |
+| Capsule Run ledger    | Takosumi deploy-control | source identity / plan digest / StateVersion / Output / provider observation / audit    |
+| account projection    | Takosumi Accounts       | OIDC client projection / billing projection / account-plane audit                       |
 | Git リポジトリ         | Git service profile     | リポジトリ metadata / refs / object storage 参照。Takos は UX/profile を所有する        |
 | agent run              | Agent runtime profile   | プロダクト agent ワークフロー状態。Takos は UX/profile を所有する                       |
 | app-local プロファイル | Takos app               | Takos UI プロファイルとプロダクトローカル設定                                           |
@@ -17,7 +17,7 @@
 
 ## ルール
 
-- Takos app は account / billing / Installation ledger テーブルを所有しません。
+- Takos app は account / billing / Capsule Run ledger テーブルを所有しません。
 - Takosumi kernel はプロダクトユーザーのプロファイルや billing
   テーブルを所有しません。
 - `takosumi-private/` は operator state only の private repo であり、publish 済みパッケージ・image・API・source
@@ -29,4 +29,4 @@
 - [API Reference](/reference/api)
 - [Takosumi operator model](https://takosumi.com/docs/reference/operator)
 - [Takosumi model](https://takosumi.com/docs/reference/model)
-- [Installation ledger](https://takosumi.com/docs/reference/model)
+- [Capsule Run ledger](https://takosumi.com/docs/reference/model)

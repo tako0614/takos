@@ -3,15 +3,17 @@
 ## Overview
 
 Takos is the first-party AI Workspace distribution on Takosumi. A self-hosted
-Takos deployment materializes one same-origin Worker that composes:
+Takos deployment materializes a Takos product Worker that exposes:
 
 - Takos product routes: chat, agents, memory, Git, Workspace projection, app
   launcher, and MCP tools.
-- Takosumi Accounts: login, OIDC issuer, billing/account contracts, and launch
-  tokens.
-- Takosumi deploy-control: Workspace / Source / ProviderConnection / Capsule /
-  Run / StateVersion / Output ledger and in-process control seam.
-- Takosumi dashboard and OpenTofu runner container.
+- Takos runtime resources: product D1, KV/R2 storage, queues, Durable Objects,
+  runtime containers, and worker assets.
+
+Takosumi remains the control plane outside this Worker. It owns Accounts, OIDC
+issuer/client policy, dashboard, ProviderConnection / ProviderBinding, the
+OpenTofu runner, and the Capsule / Run / StateVersion / Output ledger. Takos
+consumes that external Takosumi origin through OIDC and Capsule projection APIs.
 
 The Cloudflare target is split into two mechanical phases:
 
@@ -79,11 +81,11 @@ bun run selfhost:bootstrap -- --dry-run
 bun run selfhost:bootstrap -- --account-id <account-id> --zone-id <zone-id>
 ```
 
-Useful flags: `staging` (positional), `--vectorize-index <name>`,
-`--takosumi-repo-dir <path>`, and `--skip-provision` / `--skip-migrations` /
-`--skip-secrets` to resume a partial run. The feature-gated secrets in step 6
-remain operator-provided; the command prints the list to set by hand. The
-numbered steps below document what each phase does.
+Useful flags: `staging` (positional), `--vectorize-index <name>`, and
+`--skip-provision` / `--skip-migrations` / `--skip-secrets` to resume a partial
+run. The feature-gated secrets in step 6 remain operator-provided; the command
+prints the list to set by hand. The numbered steps below document what each
+phase does.
 
 ### 0. Prerequisites
 
@@ -91,9 +93,8 @@ numbered steps below document what each phase does.
 - `wrangler login` completed for the target Cloudflare account.
 - A Cloudflare account id and, if using a custom domain, the DNS zone id.
 - The sibling `takosumi/` repo checked out. The Takos distribution worker imports
-  Takosumi source via tsconfig aliases and wrangler builds the OpenTofu runner
-  image from `../../../takosumi/runner/Dockerfile`. Takosumi-hosted release
-  runs can instead clone this source module from the OpenTofu
+  Takosumi contract source via tsconfig aliases. Takosumi-hosted release runs
+  can instead clone this source module from the OpenTofu
   `takosumi_source_repo_url` / `takosumi_source_ref` variables.
 
 ### 1. Provision Durable Infra
@@ -104,8 +105,9 @@ tofu init
 tofu apply -var 'target=cloudflare' -var 'cloudflare={account_id="<account-id>"}'
 ```
 
-The module provisions the D1, KV, R2, Queue, Durable Object, and container
-backing resources and exposes their ids through `tofu output -json`.
+The module provisions the Takos product D1, KV, R2, and Queue backing resources
+and exposes their ids through `tofu output -json`. Durable Object migrations and
+container artifact publication remain in the Wrangler artifact step.
 
 ### 2. Render Wrangler Bindings
 
@@ -122,7 +124,7 @@ activation it writes a generated
 commands use that generated config, so repeated installs do not preserve stale
 resource ids in the Git template. Hostname vars such as
 `ADMIN_DOMAIN`, `TENANT_BASE_DOMAIN`, `AUTH_PUBLIC_BASE_URL`,
-`TAKOSUMI_ACCOUNTS_ISSUER`, `OIDC_ISSUER_URL`, redirect URIs, and route patterns
+`TAKOSUMI_ACCOUNTS_URL`, `OIDC_ISSUER_URL`, redirect URIs, and route patterns
 are operator-owned values and must be set explicitly.
 
 In Takosumi release activation, `TAKOSUMI_OUTPUTS_JSON` is injected by the
@@ -150,22 +152,15 @@ bun run build
 bun run containers:build
 ```
 
-Wrangler builds the OpenTofu runner image from the sibling `takosumi/` checkout
-during deploy.
+Wrangler builds only Takos runtime / executor containers from this repo.
 
 ### 5. Run Product Activation
 
 ```sh
 bunx wrangler d1 migrations apply DB --remote --config deploy/cloudflare/wrangler.toml
-
-cd ../takosumi
-bun run cli -- accounts migrate-d1 --database-id <accounts-d1-id> --account-id <account-id> --remote
-cd ../takos
 ```
 
-`<accounts-d1-id>` is the `cloudflare_accounts_d1_database_id` OpenTofu output.
-The deploy-control DB binding (`TAKOSUMI_CONTROL_DB`) self-creates its tables lazily.
-These are product-owned activation commands. Takosumi does not model them as
+This is a Takos product-owned activation command. Takosumi does not model it as
 database migration resources; when installed through Takosumi, the same class of
 work is executed through the opaque `takosumi_release.post_apply` command.
 
@@ -179,15 +174,10 @@ bunx wrangler secret put <NAME> --config deploy/cloudflare/wrangler.toml
 
 Required:
 
-- `TAKOSUMI_DEPLOY_CONTROL_TOKEN`: internal bearer shared by the in-process
-  Accounts proxy and deploy-control handler.
 - `OIDC_CLIENT_SECRET`: OIDC client secret for the worker's installation client.
 - `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY`: platform signing pair.
 - `EXECUTOR_PROXY_SECRET`: shared secret for executor container calls.
-- `TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK`: OIDC token signing private key.
-- `TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET`: pairwise subject HMAC.
-- `TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET`: launch token HMAC.
-- `TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET`: export download signing secret.
+- `TAKOS_INTERNAL_API_SECRET`: internal Takos API secret.
 
 Run `wrangler deploy` again after rotating secrets. Cloudflare creates a new
 Worker version for `secret put`; the final published version must be a
@@ -196,18 +186,10 @@ and assets intact.
 
 Feature-gated:
 
-- `TAKOSUMI_ACCOUNTS_ES256_KEY_ID`
+- `TAKOSUMI_ACCOUNTS_TOKEN`: optional server-to-server Capsule projection token
+  issued by the external Takosumi control plane.
 - `OCI_ORCHESTRATOR_TOKEN`
 - `CF_API_TOKEN`
-- `TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY`
-- `TAKOSUMI_ACCOUNTS_STRIPE_WEBHOOK_SECRET`
-- `TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_ID`
-- `TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_SECRET`
-- `TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_ID`
-- `TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_SECRET`
-- `TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID`
-- `TAKOSUMI_ACCOUNTS_PASSKEY_RP_NAME`
-- `TAKOSUMI_ACCOUNTS_PASSKEY_ORIGIN`
 
 ### 7. Deploy The Worker Artifact
 

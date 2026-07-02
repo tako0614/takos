@@ -12,14 +12,13 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
 ## 実行の仕組み
 
 - **Takos product API と agent runtime profile** が Thread / Run
-  のライフサイクル、キュー、DB、認証、Space の状態を管理します
+  のライフサイクル、キュー、DB、認証、Workspace の状態を管理します
 - **`takos-agent`** (ランタイムコンテナ)
   が実際のプロンプト構築、スキル選択、ツール実行を担当します
 - agent-control RPC (`/api/internal/v1/agent-control/*`) で両者が連携します
 
-Run の起動には `spaceId` が必須です。Installation 経由の Run では
-`installationId` と `runtimeNamespace`
-が追加され、メモリストアがインストール単位で隔離されます。
+Run の起動には current API では Workspace を指す legacy field `spaceId` が必須です。Capsule/app 経由の Run では
+Capsule/app context と `runtimeNamespace` が追加され、メモリストアが app 単位で隔離されます。
 
 managed skill は Takos app / API gateway から渡されたカタログが優先されます。
 control payload に managed skill が無い場合だけ、`takos-agent` 内のローカル

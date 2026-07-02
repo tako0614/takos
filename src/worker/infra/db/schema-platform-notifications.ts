@@ -74,6 +74,45 @@ export const mobilePushRegistrations = sqliteTable(
   }),
 );
 
+// 57b. NotificationPusher
+export const notificationPushers = sqliteTable(
+  "notification_pushers",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    product: text("product"),
+    scope: text("scope"),
+    kind: text("kind").notNull(),
+    appId: text("app_id").notNull(),
+    pushkey: text("pushkey").notNull(),
+    pushkeyHash: text("pushkey_hash").notNull(),
+    appDisplayName: text("app_display_name"),
+    deviceDisplayName: text("device_display_name"),
+    profileTag: text("profile_tag"),
+    lang: text("lang"),
+    gatewayUrl: text("gateway_url").notNull(),
+    data: text("data").notNull().default("{}"),
+    ...timestamps,
+    lastSeenAt: text("last_seen_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    uniqAccountAppPushkey: uniqueIndex(
+      "idx_notification_pushers_account_app_pushkey",
+    ).on(table.accountId, table.appId, table.pushkeyHash),
+    idxAccount: index("idx_notification_pushers_account_id").on(
+      table.accountId,
+    ),
+    idxProduct: index("idx_notification_pushers_product").on(table.product),
+    idxLastSeen: index("idx_notification_pushers_last_seen_at").on(
+      table.lastSeenAt,
+    ),
+  }),
+);
+
 // 58. Notification
 export const notifications = sqliteTable("notifications", {
   id: text("id").primaryKey(),

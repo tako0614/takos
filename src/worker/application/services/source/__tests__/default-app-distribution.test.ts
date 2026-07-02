@@ -1223,7 +1223,7 @@ test("processDefaultAppPreinstallJobs pauses queued jobs when preinstall is disa
   }
 });
 
-test("processDefaultAppPreinstallJobs applies default apps through Installation install when configured", async () => {
+test("processDefaultAppPreinstallJobs applies default apps through Capsule install when configured", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();
@@ -1360,7 +1360,7 @@ test("processDefaultAppPreinstallJobs applies default apps through Installation 
   }
 });
 
-test("processDefaultAppPreinstallJobs blocks incomplete Installation install config", async () => {
+test("processDefaultAppPreinstallJobs blocks incomplete Capsule install config", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();
@@ -1588,7 +1588,7 @@ test("processDefaultAppPreinstallJobs blocks invalid config without permanent fa
   }
 });
 
-test("preinstallDefaultAppsForSpace requires Installation config", async () => {
+test("preinstallDefaultAppsForSpace requires Capsule install config", async () => {
   await assertRejects(
     () =>
       preinstallDefaultAppsForSpace(
@@ -1600,11 +1600,11 @@ test("preinstallDefaultAppsForSpace requires Installation config", async () => {
         },
       ),
     Error,
-    "Default app preinstall requires Installation API config",
+    "Default app preinstall requires Capsule install API config",
   );
 });
 
-test("preinstallDefaultAppsForSpace applies every bundled app through Installation when configured", async () => {
+test("preinstallDefaultAppsForSpace applies every bundled app through Capsule install when configured", async () => {
   const originalGetDb = defaultAppDistributionDeps.getDb;
   const originalFetch = defaultAppDistributionDeps.fetch;
   clearDefaultAppDistributionCache();

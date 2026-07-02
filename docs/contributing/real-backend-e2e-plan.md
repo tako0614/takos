@@ -23,8 +23,8 @@ Then choose the matching live path:
   `local:smoke` / browser / provider-run evidence in the private runbook
 - Takosumi deploy-control proof: `cd ../takosumi && bun run opentofu:live-local-proof`
   (local plan/apply proof; per-provider provisioning is proven by the deploy-control
-  plan/apply/destroy run against the operator Connection / Installation provider connection / policy)
-- Public hosted Takosumi Takos:
+  plan/apply/destroy run against the operator ProviderConnection / ProviderBinding / policy)
+- Public hosted operator evidence for Takos:
   run the private operator platform-access status check for the target
   environment/date and attach the resulting evidence ref.
 

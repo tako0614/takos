@@ -3,16 +3,15 @@
 > このページでわかること: Takos product docs が Takosumi v1 と operator-owned
 > infrastructure の境界を崩していないか確認するチェックリスト。
 
-Takos は Takosumi に Installation / Run / Deployment /
-OutputSnapshot として deploy される product です。OpenTofu state、Cloudflare
-credential、runtime-agent runtime handler、Connection / Installation provider connection / policy で解決する provider
-allowlist は in-process deploy-control plane の Connection / Installation provider connection / policy の責務です。
+Takos は Takosumi に Capsule / Run / StateVersion / Output として deploy される product です。OpenTofu state、Cloudflare
+credential、runtime-agent runtime handler、ProviderConnection / ProviderBinding / policy で解決する provider
+allowlist は Takosumi deploy-control plane の ProviderConnection / ProviderBinding / policy の責務です。
 
 ## Source of truth
 
 - `../takosumi` は Takosumi public contract、OpenTofu-native deploy control
-  API、Installation / Run / Deployment / OutputSnapshot の run
-  ledger の **実装 source owner**。単一 Takos worker が in-process import する。
+  API、Capsule / Run / StateVersion / Output の run
+  ledger の **実装 source owner**。Takos worker は contract を参照し、runtime では Takosumi API を消費する。
 - `takos/deploy/cloudflare`、`takos/deploy/opentofu` (Cloudflare module)、
   `takos/deploy/distributions/cloudflare.json` は Takos product の Cloudflare
   deploy artifacts を所有する。
@@ -25,12 +24,12 @@ allowlist は in-process deploy-control plane の Connection / Installation prov
 - Takos distribution が必要とする backing resource topology、Cloudflare
   OpenTofu output bridge、provider proof task。
 - self-host / cloud proof を source-controlled plan review と live operator
-  evidence (`apply` type Run / OutputSnapshot) に分けること。
+  evidence (`apply` type Run / Output) に分けること。
 
 ## NG パターン
 
 - provider / backend / adapter selection を Takos の public deploy API
-  authoring field として露出すること (それは Connection / Installation provider connection / policy の責務)。
+  authoring field として露出すること (それは ProviderConnection / ProviderBinding / policy の責務)。
 - OpenTofu が state を持つ resource lifecycle を Takosumi public contract の一部
   として説明すること。
 - cloud provider credential を Takos product repo の deploy artifact に埋め込むこと。
@@ -39,9 +38,9 @@ allowlist は in-process deploy-control plane の Connection / Installation prov
 ## Current Audit
 
 - runtime / routing docs は Takos service ports、backing resource topology、
-  OutputSnapshot を説明する。
+  Output を説明する。
 - 実 backend と self-host docs は operator-owned proof として扱う。
-- README / current-state / hosting docs は `Connection / Installation provider connection / policy` / OpenTofu /
-  Deployment / OutputSnapshot の語彙を使う。
+- README / current-state / hosting docs は `ProviderConnection / ProviderBinding / policy` / OpenTofu /
+  StateVersion / Output の語彙を使う。
 - Takos product release gate は source-controlled plan review までを扱い、live
-  provider proof は operator evidence (`apply` type Run / OutputSnapshot) として分離する。
+  provider proof は operator evidence (`apply` type Run / Output) として分離する。

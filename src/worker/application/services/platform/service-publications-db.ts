@@ -29,11 +29,11 @@ import {
 export type PublicationRow = SelectOf<typeof publications>;
 export type ServiceConsumeRow = SelectOf<typeof serviceConsumes>;
 
-export const SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE = "service_graph" as const;
+export const RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE = "service_graph" as const;
 export const API_PUBLICATION_SOURCE_TYPE = "api" as const;
 
 export type PublicationSourceType =
-  | typeof SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE
+  | typeof RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE
   | typeof API_PUBLICATION_SOURCE_TYPE;
 
 export interface PublicationRecord {

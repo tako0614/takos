@@ -48,7 +48,7 @@ function createManagedStateDbMock(rows: unknown[] = []) {
   };
 }
 
-test("syncGroupPublicationDesiredState restores service graph publications when publication sync fails", async () => {
+test("syncGroupPublicationDesiredState restores runtime projection publications when publication sync fails", async () => {
   const publicationRows = [
     {
       id: "pub-1",
@@ -71,7 +71,7 @@ test("syncGroupPublicationDesiredState restores service graph publications when 
       updatedAt: "2026-04-20T00:00:00.000Z",
     },
   ];
-  const replaceServiceGraphPublicationsCalls: Array<{
+  const replaceRuntimeProjectionPublicationsCalls: Array<{
     publish: AppPublication[];
     routes: AppRoute[];
   }> = [];
@@ -133,12 +133,12 @@ test("syncGroupPublicationDesiredState restores service graph publications when 
       },
     },
     {
-      replaceServiceGraphPublications: async (_env, params) => {
-        replaceServiceGraphPublicationsCalls.push({
+      replaceRuntimeProjectionPublications: async (_env, params) => {
+        replaceRuntimeProjectionPublicationsCalls.push({
           publish: params.manifest.publish ?? [],
           routes: params.manifest.routes ?? [],
         });
-        if (replaceServiceGraphPublicationsCalls.length === 1) {
+        if (replaceRuntimeProjectionPublicationsCalls.length === 1) {
           throw new Error("publication sync failed");
         }
       },
@@ -148,8 +148,8 @@ test("syncGroupPublicationDesiredState restores service graph publications when 
   assertEquals(failures, [
     { name: "publications", error: "publication sync failed" },
   ]);
-  assertEquals(replaceServiceGraphPublicationsCalls.length, 2);
-  assertEquals(replaceServiceGraphPublicationsCalls[0].publish, [
+  assertEquals(replaceRuntimeProjectionPublicationsCalls.length, 2);
+  assertEquals(replaceRuntimeProjectionPublicationsCalls[0].publish, [
     {
       name: "tools",
       publisher: "web",
@@ -158,14 +158,14 @@ test("syncGroupPublicationDesiredState restores service graph publications when 
       spec: { transport: "streamable-http" },
     },
   ]);
-  assertEquals(replaceServiceGraphPublicationsCalls[0].routes, [
+  assertEquals(replaceRuntimeProjectionPublicationsCalls[0].routes, [
     {
       id: "web",
       target: "web",
       path: "/mcp-v2",
     },
   ]);
-  assertEquals(replaceServiceGraphPublicationsCalls[1].publish, [
+  assertEquals(replaceRuntimeProjectionPublicationsCalls[1].publish, [
     {
       name: "tools",
       publisher: "web",
@@ -174,7 +174,7 @@ test("syncGroupPublicationDesiredState restores service graph publications when 
       spec: { transport: "streamable-http" },
     },
   ]);
-  assertEquals(replaceServiceGraphPublicationsCalls[1].routes, [
+  assertEquals(replaceRuntimeProjectionPublicationsCalls[1].routes, [
     {
       id: "web",
       target: "web",
@@ -272,7 +272,7 @@ test("syncGroupManagedDesiredState keeps linked common env out of local env vars
       }),
       listServiceConsumes: async () => [],
       previewServiceConsumeEnvVars: async () => [],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({
@@ -375,7 +375,7 @@ test("syncGroupManagedDesiredState keeps consumed publication env out of local e
       previewServiceConsumeEnvVars: async () => [
         { name: "SEARCH_URL", secret: false },
       ],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [
         {
@@ -507,7 +507,7 @@ test("syncGroupManagedDesiredState provisions MCP bearer secretRef as service se
       }),
       listServiceConsumes: async () => [],
       previewServiceConsumeEnvVars: async () => [],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({
@@ -597,7 +597,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
       }),
       listServiceConsumes: async () => [],
       previewServiceConsumeEnvVars: async () => [],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({
@@ -658,7 +658,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
   );
 });
 
-test("syncGroupManagedDesiredState fails closed for service binding grants without an Installation id", async () => {
+test("syncGroupManagedDesiredState fails closed for service binding grants without a Capsule projection id", async () => {
   const desiredState = compileGroupDesiredState({
     name: "docs",
     compute: {
@@ -720,7 +720,7 @@ test("syncGroupManagedDesiredState fails closed for service binding grants witho
       }),
       listServiceConsumes: async () => [],
       previewServiceConsumeEnvVars: async () => [],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({
@@ -735,7 +735,7 @@ test("syncGroupManagedDesiredState fails closed for service binding grants witho
     {
       name: "web",
       error:
-        "service binding 'space-control' (control.api) targets compute 'web' but no Takosumi Accounts Installation id is available",
+        "service binding 'space-control' (control.api) targets compute 'web' but no Takosumi Accounts Capsule projection id is available",
     },
   ]);
 });
@@ -805,7 +805,7 @@ test("syncGroupManagedDesiredState rejects service binding env collisions", asyn
       }),
       listServiceConsumes: async () => [],
       previewServiceConsumeEnvVars: async () => [],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({
@@ -876,7 +876,7 @@ test("syncGroupManagedDesiredState checks service binding env collisions before 
         }),
         listServiceConsumes: async () => [],
         previewServiceConsumeEnvVars: async () => params.previewEnv ?? [],
-        replaceServiceGraphPublications: async () => undefined,
+        replaceRuntimeProjectionPublications: async () => undefined,
         replaceServiceConsumes: async (_env, replaceParams) => {
           if ((replaceParams.consumes ?? []).length > 0) {
             forwardReplaceServiceConsumesCalls += 1;
@@ -1104,7 +1104,7 @@ test("syncGroupManagedDesiredState binds manifest resources to target workloads"
       }),
       listServiceConsumes: async () => [],
       previewServiceConsumeEnvVars: async () => [],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({

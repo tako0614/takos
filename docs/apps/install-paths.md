@@ -16,8 +16,8 @@ takos.jp
 https://app.takosumi.com/install?git=https://github.com/tako0614/takos.git&ref=<release-tag-or-commit>&path=deploy/opentofu
   ↓ client-handled prefill
 https://app.takosumi.com/new
-  ↓ sign in / Space / compatibility check / provider connection / explicit approval
-Installation plan → apply
+  ↓ sign in / Workspace / compatibility check / provider binding / explicit approval
+Capsule plan → apply
   ↓
 Takos launch URL / Apps launcher / Chat
 ```
@@ -75,9 +75,9 @@ production install は tag または commit に pin します。moving ref (`mai
 
 ## Self-host
 
-Self-host は Takos distribution 全体を自分の origin で動かす path です。`takos/deploy/opentofu` が backing resources を作り、
-wrangler が worker artifact を上げます。この worker は Takos product surface と embedded Takosumi Accounts / deploy-control /
-dashboard / OpenTofu runner を同一 origin に compose します。
+Self-host は Takos distribution worker を自分の origin で動かす path です。`takos/deploy/opentofu` が Takos product の
+backing resources を作り、wrangler が worker artifact を上げます。Accounts / deploy-control / dashboard / OpenTofu runner は、
+self-hoster または operator が運用する外部 Takosumi control plane が所有します。
 
 Self-host operator が決めるもの:
 

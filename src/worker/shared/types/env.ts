@@ -161,32 +161,8 @@ export interface Env
   TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
   TAKOSUMI_ACCOUNTS_URL?: string;
   TAKOSUMI_ACCOUNTS_TOKEN?: string;
-  // ---------------------------------------------------------------------------
-  // Account-plane (in-process Takosumi Accounts handler) bindings + config.
-  // The unified Takos worker runs the Takosumi Accounts handler in-process at
-  // the origin root; these are read by the handler (handler.ts) via the env it
-  // receives. Optional here because non-web entrypoints (queue/executor
-  // workers) do not bind them. Var names mirror
-  // takosumi/deploy/accounts-cloudflare/wrangler.toml.
-  // ---------------------------------------------------------------------------
-  /** Account-plane D1 (document-store buckets). Separate from the product `DB`. */
-  TAKOSUMI_ACCOUNTS_DB?: SqlDatabaseBinding;
-  /** Account-plane R2 for /__takosumi/exports/* download artifacts. */
-  TAKOSUMI_ACCOUNTS_EXPORTS?: ObjectStoreBinding;
-  /** OIDC issuer for the in-process account plane (= bare origin, no /accounts). */
-  TAKOSUMI_ACCOUNTS_ISSUER?: string;
+  /** Optional Takosumi subject used by default-app Capsule install jobs. */
   TAKOSUMI_ACCOUNTS_SUBJECT?: string;
-  TAKOSUMI_ACCOUNTS_CLIENT_ID?: string;
-  TAKOSUMI_ACCOUNTS_REDIRECT_URIS?: string;
-  TAKOSUMI_ACCOUNTS_PLATFORM_ACCESS?: string;
-  TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS?: string;
-  // Account-plane secrets (wrangler secret put). The handler reads these; they
-  // are never committed as vars.
-  TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK?: string;
-  TAKOSUMI_ACCOUNTS_ES256_KEY_ID?: string;
-  TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET?: string;
-  TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET?: string;
-  TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
   /**
@@ -265,14 +241,14 @@ export interface Env
   TAKOS_DEFAULT_APP_REF_TYPE?: string;
   TAKOS_DEFAULT_APP_BACKEND?: string;
   TAKOS_DEFAULT_APP_ENV?: string;
-  /** Takosumi Accounts Installation API endpoint for bundled app seed installs. */
+  /** Takosumi Accounts Capsule projection endpoint for bundled app seed installs. */
   TAKOS_DEFAULT_APP_INSTALL_URL?: string;
   TAKOS_DEFAULT_APP_INSTALL_TOKEN?: string;
   TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID?: string;
   TAKOS_DEFAULT_APP_INSTALL_SUBJECT?: string;
   TAKOS_DEFAULT_APP_INSTALL_MODE?: string;
   TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL?: string;
-  /** Takosumi Accounts Installation API base URL for third-party Git URL installs. */
+  /** Takosumi Accounts Capsule projection API base URL for third-party Git URL installs. */
   TAKOS_APP_INSTALLATIONS_URL?: string;
   TAKOS_APP_INSTALL_TOKEN?: string;
   TAKOS_APP_INSTALL_ACCOUNT_ID?: string;

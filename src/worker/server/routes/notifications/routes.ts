@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import type { Context } from "hono";
+import {
+  parseNotificationPusherDeleteRequest,
+  parseNotificationPusherSetRequest,
+} from "takosumi-contract";
 import type { Env } from "../../../shared/types/index.ts";
 import {
   AppError,
@@ -15,10 +19,15 @@ import {
   getNotificationsMutedUntil,
   getUnreadCount,
   listNotifications,
+  markAllNotificationsRead,
   markNotificationRead,
   setNotificationsMutedUntil,
   updateNotificationPreferences,
 } from "../../../application/services/notifications/service.ts";
+import {
+  registerNotificationPusher,
+  unregisterNotificationPusher,
+} from "../../../application/services/notifications/pushers.ts";
 import {
   isNotificationChannel,
   isNotificationType,
@@ -31,38 +40,48 @@ import { buildSanitizedDOHeaders } from "../../../runtime/durable-objects/do-hea
 
 type NotificationContext = Context<{ Bindings: Env; Variables: BaseVariables }>;
 
+async function readJson(c: {
+  readonly req: { readonly json: () => Promise<unknown> };
+}): Promise<unknown> {
+  try {
+    return await c.req.json();
+  } catch {
+    return undefined;
+  }
+}
 
-const notificationsWsHandler: (c: NotificationContext) => Promise<Response> =
-  async (c) => {
-    const user = c.get("user");
+const notificationsWsHandler: (
+  c: NotificationContext,
+) => Promise<Response> = async (c) => {
+  const user = c.get("user");
 
-    if (!c.env.NOTIFICATION_NOTIFIER) {
-      throw new InternalError("Notifications WebSocket not configured");
-    }
+  if (!c.env.NOTIFICATION_NOTIFIER) {
+    throw new InternalError("Notifications WebSocket not configured");
+  }
 
-    const upgradeHeader = c.req.header("Upgrade");
-    if (!upgradeHeader || upgradeHeader !== "websocket") {
-      throw new AppError("Expected WebSocket upgrade", undefined, 426);
-    }
+  const upgradeHeader = c.req.header("Upgrade");
+  if (!upgradeHeader || upgradeHeader !== "websocket") {
+    throw new AppError("Expected WebSocket upgrade", undefined, 426);
+  }
 
-    const namespace = c.env.NOTIFICATION_NOTIFIER;
-    if (!namespace) {
-      throw new InternalError("Notification notifier is not configured");
-    }
-    const id = namespace.idFromName(user.id);
-    const stub = namespace.get(id);
+  const namespace = c.env.NOTIFICATION_NOTIFIER;
+  if (!namespace) {
+    throw new InternalError("Notification notifier is not configured");
+  }
+  const id = namespace.idFromName(user.id);
+  const stub = namespace.get(id);
 
-    const headers = buildSanitizedDOHeaders(c.req.raw.headers, {
-      "X-WS-Auth-Validated": "true",
-      "X-WS-User-Id": user.id,
-    });
+  const headers = buildSanitizedDOHeaders(c.req.raw.headers, {
+    "X-WS-Auth-Validated": "true",
+    "X-WS-User-Id": user.id,
+  });
 
-    return stub.fetch(c.req.raw.url, {
-      method: c.req.raw.method,
-      headers,
-      body: c.req.raw.body ?? undefined,
-    });
-  };
+  return stub.fetch(c.req.raw.url, {
+    method: c.req.raw.method,
+    headers,
+    body: c.req.raw.body ?? undefined,
+  });
+};
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   // GET /api/notifications
@@ -72,10 +91,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       "query",
       z.object({
         limit: z.string().optional(),
-        before: z.string().refine(
-          (v) => !v || Number.isFinite(Date.parse(v)),
-          { message: "before must be a valid datetime" },
-        ).optional(),
+        before: z
+          .string()
+          .refine((v) => !v || Number.isFinite(Date.parse(v)), {
+            message: "before must be a valid datetime",
+          })
+          .optional(),
         // Optional composite-cursor tiebreaker: the id of the last row from the
         // previous page (paired with `before`) so same-millisecond rows at a
         // page boundary are not skipped. Omitting it keeps the legacy
@@ -93,41 +114,85 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const before = validatedQuery.before || null;
       const beforeId = validatedQuery.before_id || null;
 
-      const result = await listNotifications(
-        c.env.DB,
-        user.id,
-        { limit, before, beforeId },
-      );
+      const result = await listNotifications(c.env.DB, user.id, {
+        limit,
+        before,
+        beforeId,
+      });
       return c.json(result);
     },
   )
   // GET /api/notifications/unread-count
   .get("/notifications/unread-count", async (c) => {
     const user = c.get("user");
-    const unreadCount = await getUnreadCount(
-      c.env.DB,
-      user.id,
-    );
+    const unreadCount = await getUnreadCount(c.env.DB, user.id);
     return c.json({ unread_count: unreadCount });
+  })
+  // POST /api/notifications/pushers
+  .post("/notifications/pushers", async (c) => {
+    const user = c.get("user");
+    const parsed = parseNotificationPusherSetRequest(await readJson(c));
+    if (!parsed.ok) return c.json(parsed.error, 400);
+    if (parsed.value.product && parsed.value.product !== "takos") {
+      return c.json(
+        {
+          code: "BAD_REQUEST",
+          error: "product must be takos",
+          field: "product",
+        },
+        400,
+      );
+    }
+
+    const pusher = await registerNotificationPusher(c.env.DB, {
+      accountId: user.id,
+      product: parsed.value.product ?? "takos",
+      scope: parsed.value.scope,
+      pusher: parsed.value.pusher,
+      gatewayUrl: parsed.value.gatewayUrl,
+    });
+    return c.json({ pusher });
+  })
+  // DELETE /api/notifications/pushers
+  .delete("/notifications/pushers", async (c) => {
+    const user = c.get("user");
+    const parsed = parseNotificationPusherDeleteRequest(await readJson(c));
+    if (!parsed.ok) return c.json(parsed.error, 400);
+    if (parsed.value.product && parsed.value.product !== "takos") {
+      return c.json(
+        {
+          code: "BAD_REQUEST",
+          error: "product must be takos",
+          field: "product",
+        },
+        400,
+      );
+    }
+
+    const result = await unregisterNotificationPusher(c.env.DB, {
+      accountId: user.id,
+      appId: parsed.value.appId,
+      pushkey: parsed.value.pushkey,
+    });
+    return c.json(result);
+  })
+  // PATCH /api/notifications/read-all
+  .patch("/notifications/read-all", async (c) => {
+    const user = c.get("user");
+    const result = await markAllNotificationsRead(c.env.DB, user.id);
+    return c.json(result);
   })
   // PATCH /api/notifications/:id/read
   .patch("/notifications/:id/read", async (c) => {
     const user = c.get("user");
     const id = c.req.param("id");
-    const result = await markNotificationRead(
-      c.env.DB,
-      user.id,
-      id,
-    );
+    const result = await markNotificationRead(c.env.DB, user.id, id);
     return c.json(result);
   })
   // GET /api/notifications/preferences
   .get("/notifications/preferences", async (c) => {
     const user = c.get("user");
-    const prefs = await getNotificationPreferences(
-      c.env.DB,
-      user.id,
-    );
+    const prefs = await getNotificationPreferences(c.env.DB, user.id);
     return c.json({
       types: NOTIFICATION_TYPES,
       channels: NOTIFICATION_CHANNELS,
@@ -140,34 +205,30 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     zValidator(
       "json",
       z.object({
-        updates: z.array(z.object({
-          type: z.string(),
-          channel: z.string(),
-          enabled: z.boolean(),
-        })),
+        updates: z.array(
+          z.object({
+            type: z.string(),
+            channel: z.string(),
+            enabled: z.boolean(),
+          }),
+        ),
       }),
     ),
     async (c) => {
       const user = c.get("user");
       const body = c.req.valid("json");
 
-      const updates: Array<
-        {
-          type: NotificationType;
-          channel: NotificationChannel;
-          enabled: boolean;
-        }
-      > = [];
+      const updates: Array<{
+        type: NotificationType;
+        channel: NotificationChannel;
+        enabled: boolean;
+      }> = [];
       for (const row of body.updates) {
         if (!isNotificationType(row.type)) {
-          throw new BadRequestError(
-            `Invalid type: ${String(row.type)}`,
-          );
+          throw new BadRequestError(`Invalid type: ${String(row.type)}`);
         }
         if (!isNotificationChannel(row.channel)) {
-          throw new BadRequestError(
-            `Invalid channel: ${String(row.channel)}`,
-          );
+          throw new BadRequestError(`Invalid channel: ${String(row.channel)}`);
         }
         updates.push({
           type: row.type,
@@ -191,10 +252,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   // GET /api/notifications/settings
   .get("/notifications/settings", async (c) => {
     const user = c.get("user");
-    const mutedUntil = await getNotificationsMutedUntil(
-      c.env.DB,
-      user.id,
-    );
+    const mutedUntil = await getNotificationsMutedUntil(c.env.DB, user.id);
     return c.json({ muted_until: mutedUntil });
   })
   // PATCH /api/notifications/settings
@@ -203,10 +261,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     zValidator(
       "json",
       z.object({
-        muted_until: z.string().refine(
-          (v) => Number.isFinite(Date.parse(v)),
-          { message: "muted_until must be a valid datetime" },
-        ).nullable(),
+        muted_until: z
+          .string()
+          .refine((v) => Number.isFinite(Date.parse(v)), {
+            message: "muted_until must be a valid datetime",
+          })
+          .nullable(),
       }),
     ),
     async (c) => {

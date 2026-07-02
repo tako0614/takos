@@ -77,6 +77,7 @@ export const common = {
   appStatusUnknown: "Unknown",
   appStatusDeployed: "Deployed",
   appStatusActive: "Active",
+  appStatusReady: "Ready",
   appStatusFailed: "Failed",
   appStatusError: "Error",
   appStatusDegraded: "Degraded",

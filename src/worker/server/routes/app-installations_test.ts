@@ -82,13 +82,13 @@ const roadToMeCatalogEntry = {
 } satisfies DefaultAppDistributionEntry;
 
 const installConfig = {
-  installUrl: "https://installer.internal/v1/installation-projections",
+  installUrl: "https://installer.internal/v1/capsule-projections",
   token: "install-token",
   subject: "operator-subject",
   mode: "shared-cell",
 } satisfies DefaultAppInstallConfig;
 
-test("app-installations route applies a default app through Installation", async () => {
+test("app-installations route applies a default app through Capsule install", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -234,7 +234,7 @@ test("app-installations route applies catalog-only road-to-me by app_id", async 
   }
 });
 
-test("app-installations route requires Installation install config", async () => {
+test("app-installations route requires Capsule install config", async () => {
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
   appInstallationsRouteDeps.resolveDefaultAppDistributionForBootstrap =
@@ -257,7 +257,7 @@ test("app-installations route requires Installation install config", async () =>
     assertObjectMatch(body, {
       error: {
         code: "SERVICE_UNAVAILABLE",
-        message: "Installation install is not configured",
+        message: "Capsule install is not configured",
       },
     });
   } finally {
@@ -349,7 +349,7 @@ test("app-installations route proxies Git URL install plan Run", async () => {
       {
         DB: {},
         TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/installation-projections",
+          "https://installer.internal/v1/capsule-projections",
         TAKOS_APP_INSTALL_TOKEN: "install-token",
       } as Env,
     );
@@ -369,7 +369,7 @@ test("app-installations route proxies Git URL install plan Run", async () => {
       {
         kind: "fetch",
         input:
-          "https://installer.internal/v1/installation-projections/plan-runs",
+          "https://installer.internal/v1/capsule-projections/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -440,7 +440,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
       {
         DB: {},
         TAKOS_APP_INSTALLATIONS_URL:
-          "https://installer.internal/v1/installation-projections",
+          "https://installer.internal/v1/capsule-projections",
         TAKOS_APP_INSTALL_TOKEN: "install-token",
         TAKOS_APP_INSTALL_ACCOUNT_ID: "acct_operator",
         TAKOS_APP_INSTALL_SUBJECT: "operator-subject",
@@ -466,7 +466,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
       },
       {
         kind: "fetch",
-        input: "https://installer.internal/v1/installation-projections",
+        input: "https://installer.internal/v1/capsule-projections",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -492,7 +492,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
   }
 });
 
-test("app-installations route applies Git URL install with same-origin Accounts session", async () => {
+test("app-installations route applies Git URL install with Takosumi Accounts session", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -501,7 +501,7 @@ test("app-installations route applies Git URL install with same-origin Accounts 
       membership: { role: "editor" },
     } as never;
   };
-  appInstallationsRouteDeps.handleAccountsPlaneRequest = async (request) => {
+  appInstallationsRouteDeps.accountsPlaneFetch = async (request) => {
     const url = new URL(request.url);
     const body =
       request.method === "POST" ? JSON.parse(await request.text()) : null;
@@ -519,7 +519,7 @@ test("app-installations route applies Git URL install with same-origin Accounts 
       });
     }
     if (
-      url.pathname === "/v1/installation-projections" &&
+      url.pathname === "/v1/capsule-projections" &&
       request.method === "POST"
     ) {
       return Response.json(
@@ -564,7 +564,10 @@ test("app-installations route applies Git URL install with same-origin Accounts 
           },
         }),
       },
-      { DB: {} } as Env,
+      {
+        DB: {},
+        TAKOSUMI_ACCOUNTS_URL: "https://accounts.example",
+      } as Env,
     );
     const body = (await response.json()) as Record<PropertyKey, unknown>;
 
@@ -592,7 +595,7 @@ test("app-installations route applies Git URL install with same-origin Accounts 
       },
       {
         kind: "accounts",
-        path: "/v1/installation-projections",
+        path: "/v1/capsule-projections",
         method: "POST",
         cookie: "takosumi_session=sess_owner",
         body: {
@@ -676,7 +679,7 @@ test("app-installations route proxies Git URL deployment plan Run and apply", as
     const env = {
       DB: {},
       TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/installation-projections",
+        "https://installer.internal/v1/capsule-projections",
       TAKOS_APP_INSTALL_TOKEN: "install-token",
       TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
       TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",
@@ -724,7 +727,7 @@ test("app-installations route proxies Git URL deployment plan Run and apply", as
       },
       {
         kind: "fetch",
-        input: "https://accounts.internal/v1/installation-projections",
+        input: "https://accounts.internal/v1/capsule-projections",
         method: "GET",
         authorization: "Bearer accounts-token",
         body: null,
@@ -732,7 +735,7 @@ test("app-installations route proxies Git URL deployment plan Run and apply", as
       {
         kind: "fetch",
         input:
-          "https://installer.internal/v1/installation-projections/inst_1/deployments/plan-runs",
+          "https://installer.internal/v1/capsule-projections/inst_1/deployments/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -751,7 +754,7 @@ test("app-installations route proxies Git URL deployment plan Run and apply", as
       },
       {
         kind: "fetch",
-        input: "https://accounts.internal/v1/installation-projections",
+        input: "https://accounts.internal/v1/capsule-projections",
         method: "GET",
         authorization: "Bearer accounts-token",
         body: null,
@@ -759,7 +762,7 @@ test("app-installations route proxies Git URL deployment plan Run and apply", as
       {
         kind: "fetch",
         input:
-          "https://installer.internal/v1/installation-projections/inst_1/rollback",
+          "https://installer.internal/v1/capsule-projections/inst_1/rollback",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -873,7 +876,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections",
+        pathname: "/v1/capsule-projections",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -881,7 +884,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections/inst_1",
+        pathname: "/v1/capsule-projections/inst_1",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -895,7 +898,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections",
+        pathname: "/v1/capsule-projections",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -903,7 +906,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections/inst_1",
+        pathname: "/v1/capsule-projections/inst_1",
         spaceId: null,
         method: "DELETE",
         authorization: "Bearer accounts-token",
@@ -915,7 +918,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
   }
 });
 
-test("app-installations route lists Installation services through Takosumi Accounts", async () => {
+test("app-installations route lists Capsule services through Takosumi Accounts", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -988,14 +991,14 @@ test("app-installations route lists Installation services through Takosumi Accou
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections",
+        pathname: "/v1/capsule-projections",
         spaceId: "space-1",
         method: "GET",
         authorization: "Bearer accounts-token",
       },
       {
         kind: "fetch",
-        pathname: "/v1/installation-projections/inst_1",
+        pathname: "/v1/capsule-projections/inst_1",
         spaceId: null,
         method: "GET",
         authorization: "Bearer accounts-token",
@@ -1010,7 +1013,7 @@ test("app-installations route rejects cross-space installation_id with 404", asy
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
-  // The authorized space owns no Installation matching the supplied id.
+  // The authorized workspace owns no Capsule projection matching the supplied id.
   appInstallationsRouteDeps.listInstallableAppInstallations = async (
     spaceId,
   ) => {
@@ -1029,7 +1032,7 @@ test("app-installations route rejects cross-space installation_id with 404", asy
     const env = {
       DB: {},
       TAKOS_APP_INSTALLATIONS_URL:
-        "https://installer.internal/v1/installation-projections",
+        "https://installer.internal/v1/capsule-projections",
       TAKOS_APP_INSTALL_TOKEN: "install-token",
       TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://accounts.internal",
       TAKOSUMI_ACCOUNTS_TOKEN: "accounts-token",

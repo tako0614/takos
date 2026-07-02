@@ -5,8 +5,8 @@
 
 **前提: Takos は OpenTofu-native, Takosumi-managed な first-party AI workspace distribution です。** Takosumi は OpenTofu-native な deploy
 control plane で、Git URL の OpenTofu Capsule を install / plan / apply し、run ledger
-(**Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment**) を記録します。provider
-allowlist / credential / state backend / Cloudflare Container execution は **Connection / Installation provider connection /
+(**Capsule -> Run -> StateVersion -> Output**) を記録します。provider
+allowlist / credential / state backend / Cloudflare Container execution は **ProviderConnection / ProviderBinding /
 policy** が所有します。アプリの「ユーザーに見えるメタデータ」自体は Takos product surface が所有します。
 
 ## Capsule Runtime Projection Profile
@@ -25,11 +25,11 @@ Takosumi が所有し、Takos はそれらの Output を app launcher、MCP regi
   `interface.file.handler` / `interface.ui.surface`)
 - chat / agent / memory / Workspace に紐づくアプリ内データ
 
-これらは Takos product の DB / UI に閉じた特殊機能ではなく、Takosumi Service Graph に投影されます。bundled app は通常の
+これらは Takos product の DB / UI に閉じた特殊機能ではなく、Capsule output projection に投影されます。bundled app は通常の
 AppInstallation として記録され、ユーザーが uninstall できます。
 
-OpenTofu Capsule が producer-neutral service metadata を渡す場合は Service Graph の optional well-known output
-`service_exports`、または service-side InstallConfig mapping を使います。標準 capability id は Service Graph の
+OpenTofu Capsule が producer-neutral service metadata を渡す場合は Capsule output projection の optional well-known output
+`service_exports`、または service-side InstallConfig mapping を使います。標準 capability id は Capsule output projection の
 `protocol.mcp.server` / `interface.file.handler` / `interface.ui.surface` / `storage.*` / `source.*` /
 `automation.*` を使います。
 
@@ -37,9 +37,9 @@ OpenTofu Capsule が producer-neutral service metadata を渡す場合は Servic
 
 アプリの「実体」をどこに materialize するかは、Takosumi の run ledger 側の関心です。
 
-- どの OpenTofu module をどの Git URL / commit / tag / module path で install したか（Installation）
-- plan / apply / destroy の run（typed Runs）と、適用後の Deployment / OutputSnapshot
-- Connection / Installation provider connection / policy に紐づく provider allowlist / state backend / execution 境界
+- どの OpenTofu module をどの Git URL / commit / tag / module path で install したか（Source / Capsule）
+- plan / apply / destroy の run（typed Runs）と、適用後の StateVersion / Output
+- ProviderConnection / ProviderBinding / policy に紐づく provider allowlist / state backend / execution 境界
 
 Takos の deploy topology 自体も `deploy/opentofu` の OpenTofu module
 (`var.target = cloudflare`) として Takosumi が install / apply し、cloudflare target
@@ -47,8 +47,7 @@ Takos の deploy topology 自体も `deploy/opentofu` の OpenTofu module
 distribute pipeline はこの同じ topology の **interim materialization** であり、別の source of
 truth ではありません。
 
-account-plane policy（account / billing / OIDC / dashboard）は embedded Takosumi Accounts
-plane が持ちます。
+account-plane policy（account / billing / OIDC / dashboard）は Takosumi Accounts plane が持ちます。
 
 ## References
 

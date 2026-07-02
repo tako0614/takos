@@ -123,16 +123,6 @@ output "app_deployment" {
         bind = "DB"
         to   = ["web"]
       }
-      accounts = {
-        type = "sql"
-        bind = "TAKOSUMI_ACCOUNTS_DB"
-        to   = ["web"]
-      }
-      deploy_control = {
-        type = "sql"
-        bind = "TAKOSUMI_CONTROL_DB"
-        to   = ["web"]
-      }
       hostname_routing = {
         type = "key-value"
         bind = "HOSTNAME_ROUTING"
@@ -141,11 +131,6 @@ output "app_deployment" {
       rollout_health = {
         type = "key-value"
         bind = "ROLLOUT_HEALTH_KV"
-        to   = ["web"]
-      }
-      artifacts = {
-        type = "object-store"
-        bind = "R2_ARTIFACTS"
         to   = ["web"]
       }
       vector = {
@@ -231,14 +216,6 @@ output "d1_database_id" {
 
 output "d1_database_name" {
   value = module.takos.d1_database_name
-}
-
-output "accounts_d1_database_id" {
-  value = module.takos.accounts_d1_database_id
-}
-
-output "deploy_d1_database_id" {
-  value = module.takos.deploy_d1_database_id
 }
 
 output "d1_database_ids" {

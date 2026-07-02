@@ -3,7 +3,8 @@
 > このページでわかること: Takos の runtime 境界と、local Compose が起動する開発用 process の違い。
 
 Takos の product 境界は **単一の Takos distribution worker** です。self-host / hosted distribution では Takos product
-surface、Takosumi Accounts、Takosumi deploy-control、dashboard、OpenTofu runner が同一 origin に compose されます。
+surface をこの worker が提供し、Takosumi Accounts、Takosumi deploy-control、dashboard、OpenTofu runner は外部 Takosumi
+control plane が提供します。
 `takos-git` と `takos-agent` は別 product ではなく、Takos product 内で使う container capability です。
 
 local Compose は実装と smoke を扱いやすくするため、Takosumi control-plane source を `takosumi` dev sidecar process として
@@ -38,8 +39,7 @@ Do not treat them as hosted product subdomains or as a reason to reintroduce spl
 ## Ownership Rules
 
 - Takos owns the product surface: chat, agent, memory, Workspace, app launcher, Git/agent container UX, and the first-party
-  Takos Service Graph profile.
-- Takosumi owns Space / Source / Connection / Installation / Dependency / Run / RunGroup / Deployment / OutputSnapshot /
-  Activity, the provider resolver, policy, audit, Service Graph standard, and Accounts plane.
+  Takos Capsule output projection profile.
+- Takosumi owns Workspace, Project, Capsule, Source, ProviderConnection, ProviderBinding, Run, StateVersion, Output, policy, and audit, the provider resolver, policy, audit, Capsule output projection standard, and Accounts plane.
 - Production and staging deploy config and secrets live outside this repo in the operator environment.
 - Do not add standalone deploy/runtime services to the product model. Local sidecars must stay local dev conveniences.

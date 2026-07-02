@@ -23,28 +23,8 @@
       "name": "DB"
     },
     {
-      "kind": "cloudflare-d1",
-      "name": "TAKOSUMI_ACCOUNTS_DB"
-    },
-    {
-      "kind": "cloudflare-d1",
-      "name": "TAKOSUMI_CONTROL_DB"
-    },
-    {
-      "kind": "cloudflare-r2",
-      "name": "R2_ARTIFACTS"
-    },
-    {
       "kind": "cloudflare-queue",
       "name": "RUN_QUEUE"
-    },
-    {
-      "kind": "cloudflare-durable-object",
-      "name": "COORDINATION"
-    },
-    {
-      "kind": "cloudflare-durable-object",
-      "name": "RUNNER"
     }
   ],
   "target": {
@@ -100,6 +80,14 @@
         "name": "road-to-me",
         "title": "Road to Me",
         "repositoryUrl": "https://github.com/tako0614/road-to-me.git",
+        "ref": "v0.1.0",
+        "refType": "tag",
+        "preinstall": false
+      },
+      {
+        "name": "takosumi-store",
+        "title": "Takosumi Store",
+        "repositoryUrl": "https://github.com/tako0614/takosumi-store.git",
         "ref": "v0.1.0",
         "refType": "tag",
         "preinstall": false

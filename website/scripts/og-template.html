@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      :root {
+        --bg: #0a0a0a;
+        --fg: #fafafa;
+        --muted: #a3a3a3;
+        --subtle: #6b6b6b;
+        --accent: #dc2626;
+        --accent-text: #ff8a7a;
+      }
+      html, body { width: 1200px; height: 630px; }
+      .og {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        background: linear-gradient(135deg, #0a0a0a 0%, #000000 100%);
+        overflow: hidden;
+        font-family: "Bricolage Grotesque", system-ui, sans-serif;
+        color: var(--fg);
+      }
+      .glow {
+        position: absolute;
+        top: -160px;
+        right: -120px;
+        width: 720px;
+        height: 620px;
+        background: radial-gradient(closest-side, rgba(220, 38, 38, 0.35), transparent);
+      }
+      .dots {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1.4px, transparent 1.4px);
+        background-size: 26px 26px;
+        -webkit-mask-image: radial-gradient(ellipse 90% 80% at 20% 50%, #000 40%, transparent 85%);
+        mask-image: radial-gradient(ellipse 90% 80% at 20% 50%, #000 40%, transparent 85%);
+      }
+      .row {
+        position: absolute;
+        left: 96px;
+        top: 232px;
+        display: flex;
+        align-items: center;
+        gap: 40px;
+      }
+      .mark {
+        width: 176px;
+        height: 176px;
+        border-radius: 28px;
+        object-fit: cover;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 16px 48px rgba(0, 0, 0, 0.65);
+        flex: none;
+      }
+      .col { display: flex; flex-direction: column; }
+      h1 {
+        font-size: 118px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: -4px;
+        color: var(--fg);
+      }
+      .tagline {
+        margin-top: 18px;
+        font-size: 38px;
+        font-weight: 600;
+        color: var(--muted);
+        letter-spacing: -0.5px;
+      }
+      .chip {
+        margin-top: 26px;
+        align-self: flex-start;
+        border: 1px solid rgba(220, 38, 38, 0.4);
+        background: rgba(220, 38, 38, 0.14);
+        border-radius: 23px;
+        padding: 10px 24px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 3px;
+        color: var(--accent-text);
+      }
+      .foot {
+        position: absolute;
+        left: 96px;
+        bottom: 56px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 26px;
+        color: var(--subtle);
+        letter-spacing: 0.5px;
+      }
+      .accent-line {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 6px;
+        background: linear-gradient(to right, var(--accent), rgba(220, 38, 38, 0));
+      }
+    </style>
+  </head>
+  <body>
+    <div class="og" role="img" aria-label="Takos OG">
+      <div class="glow"></div>
+      <div class="dots"></div>
+      <div class="row">
+        <img class="mark" src="file:///root/dev/takos/takos/website/public/logo.png" alt="" />
+        <div class="col">
+          <h1>Takos</h1>
+          <div class="tagline">AI-first chat &amp; agent, your own server.</div>
+          <div class="chip">CHAT · AGENT · MEMORY · SPACE</div>
+        </div>
+      </div>
+      <div class="foot">self-hostable · open source · AGPL · takos.jp</div>
+      <div class="accent-line"></div>
+    </div>
+  </body>
+</html>

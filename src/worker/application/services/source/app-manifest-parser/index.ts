@@ -15,7 +15,7 @@
 //   - resources  (optional runtime bindings for the flat app contract)
 //   - routes     (optional)
 //   - publish    (optional)
-//   - serviceBindings (optional ServiceBinding grant requests)
+//   - serviceBindings (optional runtime authority binding requests)
 //   - env        (optional — flat Record<string, string>)
 //   - overrides  (optional)
 //

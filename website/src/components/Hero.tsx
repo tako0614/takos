@@ -17,7 +17,6 @@ export default function Hero() {
         <SplatField density='hero' />
       </div>
       <div class='container hero-center'>
-        <span class='eyebrow'>{t.hero.eyebrow}</span>
         <h1>
           <For each={t.hero.title}>
             {(line) => <span class='hero-line' classList={{ 'grad-text': line.grad }}>{line.t}</span>}

@@ -15,8 +15,8 @@ import { accounts } from "../../../infra/db/schema.ts";
 import { publications, services } from "../../../infra/db/schema-services.ts";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
-  SERVICE_GRAPH_CAPABILITIES,
-  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+  RUNTIME_PROJECTION_CAPABILITIES,
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
 } from "../../../application/services/platform/service-publications.ts";
 
 type Variables = {
@@ -73,7 +73,7 @@ type PublicApp = {
 };
 
 const UI_SURFACE_PUBLICATION_TYPES = [
-  SERVICE_GRAPH_CAPABILITIES.interfaceUiSurface,
+  RUNTIME_PROJECTION_CAPABILITIES.interfaceUiSurface,
 ];
 const DEFAULT_APP_ICON = "";
 
@@ -171,7 +171,7 @@ function resolveLauncherIcon(
 }
 
 function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {
-  if (row.sourceType !== SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE) return null;
+  if (row.sourceType !== RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE) return null;
   if (!UI_SURFACE_PUBLICATION_TYPES.includes(row.publicationType ?? "")) {
     return null;
   }
@@ -267,7 +267,7 @@ async function listPublicationAppRows(
     .where(
       and(
         eq(publications.accountId, accountId),
-        eq(publications.sourceType, SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE),
+        eq(publications.sourceType, RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE),
         inArray(publications.publicationType, UI_SURFACE_PUBLICATION_TYPES),
       ),
     )
@@ -305,7 +305,7 @@ async function findPublicationAppRow(
       and(
         eq(publications.id, appId),
         eq(publications.accountId, accountId),
-        eq(publications.sourceType, SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE),
+        eq(publications.sourceType, RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE),
         inArray(publications.publicationType, UI_SURFACE_PUBLICATION_TYPES),
       ),
     )

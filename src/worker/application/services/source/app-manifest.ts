@@ -28,7 +28,7 @@ export {
 export {
   APP_DEPLOYMENT_OUTPUT_KEY,
   APP_DEPLOYMENT_OUTPUT_KEYS,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
   TAKOS_APP_AUTH_KINDS,
   TAKOS_APP_CONTRACT_VERSION,
   TAKOS_APP_PUBLICATION_TYPES,
@@ -43,7 +43,7 @@ export type {
   TakosAppPublicationType,
   TakosAppServiceBindingCapability,
   TakosAppServiceGrantScope,
-  ServiceGraphCapability,
+  RuntimeProjectionCapability,
 } from "./app-interface-contract.ts";
 
 export {

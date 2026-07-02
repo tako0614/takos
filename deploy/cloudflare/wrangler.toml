@@ -22,11 +22,9 @@ workers_dev = true
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
 
-# Single public hostname for the self-hosted Takos product worker (Takos product
-# + in-process embedded accounts plane at the origin root + in-process
-# deploy-control). The self-hoster sets THEIR OWN hostname here; this worker is
-# its own OIDC issuer at that origin. (app.takosumi.com is the operator's
-# Takosumi platform worker — a separate build target — not this product worker.)
+# Single public hostname for the Takos product worker. Takosumi owns the
+# account/control-plane origin that installs this Worker as a normal Capsule;
+# this Worker is an OIDC client/resource server, not its own Takosumi issuer.
 # custom_domain provisions the DNS record + TLS cert automatically on deploy.
 # [[routes]]
 # pattern = "app.your-domain.example"
@@ -56,36 +54,27 @@ TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://app.your-domain.example"
 # redirect_uri is checked against the per-client redirectUris allowlist
 # (auth/oidc.ts) and return_to is constrained by sanitizeReturnTo
 # (auth/provisioning.ts). No separate domain-allowlist env var is consumed.
-# Root-unified single app: the embedded account plane runs in-process and this
-# self-hosted Takos worker is its OWN OIDC issuer at the bare origin (no /accounts
-# suffix). The accounts handler derives all discovery + OIDC endpoints from the
-# issuer, so these put discovery and the OAuth endpoints at the root.
-# self-host: this instance's own origin (the embedded accounts plane is the issuer).
-TAKOSUMI_ACCOUNTS_ISSUER = "https://app.your-domain.example"
-OIDC_ISSUER_URL = "https://app.your-domain.example"
+# Takosumi Accounts / control-plane endpoint. Takos consumes this external
+# origin for OIDC and Capsule projection APIs. Set TAKOSUMI_ACCOUNTS_TOKEN as a
+# secret when server-to-server Capsule install/projection calls are enabled.
+TAKOSUMI_ACCOUNTS_URL = "https://app.takosumi.example"
+OIDC_ISSUER_URL = "https://app.takosumi.example"
 OIDC_CLIENT_ID = "takos-worker-installation-client"
 OIDC_REDIRECT_URI = "https://app.your-domain.example/auth/oidc/callback"
-# Account-plane (in-process embedded Accounts handler) non-secret config. The
-# handler reads these directly from env (handler.ts); var names mirror
-# takosumi/deploy/accounts-cloudflare/wrangler.toml. Secrets are pushed via
-# `wrangler secret put` (see the secrets block below), never committed here.
+# Optional subject used by Takos default-app Capsule installation jobs when the
+# operator chooses to run them from this worker.
 TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_subject"
-TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-selfhost-installation-client"
-# self-host: this instance's own origin (the embedded accounts plane is the issuer).
-TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://app.your-domain.example/auth/oidc/callback"
-TAKOSUMI_ACCOUNTS_PLATFORM_ACCESS = "closed"
-TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 # OCI deployment adapter for image-backed services / containers.
 OCI_ORCHESTRATOR_URL = ""
 CF_ACCOUNT_ID = "replace-with-account-id"
 CF_ZONE_ID = "replace-with-zone-id"
-R2_ARTIFACTS_BUCKET_NAME = "takos-artifacts"
 
 [triggers]
 crons = ["3,18,33,48 * * * *", "5 * * * *"]
 
 # IMPORTANT: The following sensitive values must be set via `wrangler secret put`:
 # - OIDC_CLIENT_SECRET: Takosumi Accounts OIDC client secret (required)
+# - TAKOSUMI_ACCOUNTS_TOKEN: optional server-to-server Capsule API token
 # Static assets (routed through Worker for hostname-based routing)
 [assets]
 directory = "../../dist"
@@ -98,42 +87,6 @@ binding = "DB"
 database_name = "takos-control-db"
 database_id = "replace-with-d1-database-id"
 migrations_dir = "../../db/migrations-control/migrations"
-
-# Account-plane D1 (in-process embedded Accounts handler). Separate D1 from the
-# product `DB`: the schemas are namespace-incompatible (accounts = document-store
-# buckets; product = relational tables), so they stay as two bindings in this one
-# worker. No migrations_dir: the accounts schema is applied by the accounts
-# `migrate-d1` runner and the in-process handler fail-closes on schema-version
-# drift (handler.ts ensureD1SchemaVersion). Create your own with
-# `wrangler d1 create takos-accounts` and fill the id.
-[[d1_databases]]
-binding = "TAKOSUMI_ACCOUNTS_DB"
-database_name = "takos-accounts"
-database_id = "replace-with-accounts-d1-database-id"
-
-# Account-plane R2 (metadata-only Installation export download artifacts served
-# from `/__takosumi/exports/*`). Create your own with
-# `wrangler r2 bucket create takos-accounts-exports`.
-[[r2_buckets]]
-binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
-bucket_name = "takos-accounts-exports"
-
-# Deploy-control D1 (in-process embedded deploy-control plane). Separate DB from
-# the product `DB` and from `TAKOSUMI_ACCOUNTS_DB`: the OpenTofu run ledger has
-# its own schema. No migrations_dir — d1_opentofu_store.ts + d1_deploy_stores.ts
-# self-create their namespaced key/value + run tables lazily. Create with
-# `wrangler d1 create takos-deploy`. Binding name is read verbatim by the
-# Takosumi deploy handler (bindings.ts TAKOSUMI_CONTROL_DB).
-[[d1_databases]]
-binding = "TAKOSUMI_CONTROL_DB"
-database_name = "takos-deploy"
-database_id = "replace-with-deploy-d1-database-id"
-
-# Deploy-control R2 (OpenTofu plan artifacts). Default bucket name expected by
-# opentofu_runner_container.ts (DEFAULT_PLAN_ARTIFACT_BUCKET = "takos-artifacts").
-[[r2_buckets]]
-binding = "R2_ARTIFACTS"
-bucket_name = "takos-artifacts"
 
 # KV for hostname routing
 [[kv_namespaces]]
@@ -185,18 +138,6 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-# Deploy-control Durable Objects (in-process Takosumi deploy-control plane).
-# Binding names are read verbatim by the takosumi deploy handler (bindings.ts:
-# COORDINATION, RUNNER). The class_name values must match
-# the DO classes re-exported from src/worker/index.ts.
-[[durable_objects.bindings]]
-name = "COORDINATION"
-class_name = "CoordinationObject"
-
-[[durable_objects.bindings]]
-name = "RUNNER"
-class_name = "OpenTofuRunnerObject"
-
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SessionDO"]
@@ -225,17 +166,6 @@ new_sqlite_classes = [
   "ExecutorContainerTier2",
   "ExecutorContainerTier3",
 ]
-
-# Deploy-control Durable Objects — appended as the NEXT tags after takos v6 (do
-# NOT reuse the takosumi v1/v2 tags; renumbering corrupts existing DO migration
-# state). Both DOs use SQLite storage (matches takosumi's new_sqlite_classes).
-[[migrations]]
-tag = "v7"
-new_sqlite_classes = ["CoordinationObject"]
-
-[[migrations]]
-tag = "v8"
-new_sqlite_classes = ["OpenTofuRunnerObject"]
 
 # Runtime / executor images build from this repo's Dockerfiles. image /
 # image_build_context are wrangler-config-relative (resolved from
@@ -269,17 +199,6 @@ image = "../../containers/executor/Dockerfile"
 image_build_context = "../../containers/executor"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
-
-# Deploy-control OpenTofu run executor (in-process Takosumi deploy-control
-# plane). The embedded deploy service drives this container-backed DO through its
-# OpenTofu runner adapter. Paths are takosumi-relative;
-# rewritten here; build context = takosumi repo root (the runner Dockerfile
-[[containers]]
-class_name = "OpenTofuRunnerObject"
-image = "../../../takosumi/runner/Dockerfile"
-image_build_context = "../../../takosumi"
-instance_type = "basic"
-max_instances = 10
 
 # R2 Bucket for worker bundles (optional - for production)
 [[r2_buckets]]
@@ -330,26 +249,9 @@ bucket_name = "takos-offload"
 # - CF_API_TOKEN: optional Cloudflare API token for Workers-for-Platforms
 #   workload deployment when that backend is explicitly enabled.
 #
-# Account-plane (in-process Takosumi Accounts handler) secrets — var names
-# mirror takosumi/deploy/accounts-cloudflare/wrangler.toml; push via
-# `wrangler secret put`:
-# - TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK: ES256 private JWK for OIDC token signing
-# - TAKOSUMI_ACCOUNTS_ES256_KEY_ID: optional kid for the signing key
-# - TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET: pairwise OIDC subject HMAC secret
-# - TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET: launch-token pairwise HMAC secret
-# - TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET: signs /__takosumi/exports/* download URLs
-# Deploy-control plane (in-process Takosumi deploy-control handler) handshake —
-# push via `wrangler secret put`:
-# - TAKOSUMI_DEPLOY_CONTROL_TOKEN: REQUIRED to enable remote deploy-control
-#   fallback routes when they are explicitly exposed. The normal self-host Takos
-#   path uses the in-process typed operations seam, but this secret still gates
-#   bearer-protected fallback/callback surfaces. Must ship in the same deploy as
-#   the TAKOSUMI_CONTROL_DB binding.
-# Optional account-plane integrations (push only when enabled):
-# - TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY / _STRIPE_WEBHOOK_SECRET: Stripe billing
-# - TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_ID / _CLIENT_SECRET: upstream Google OAuth
-# - TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_ID / _CLIENT_SECRET: upstream generic OIDC
-# - TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID / _PASSKEY_RP_NAME / _PASSKEY_ORIGIN: passkey auth
+# Takosumi Accounts API:
+# - TAKOSUMI_ACCOUNTS_TOKEN: optional server-to-server Capsule API token issued
+#   by the external Takosumi control plane.
 
 # Queue for agent run execution
 [[queues.producers]]
@@ -370,11 +272,6 @@ binding = "WORKFLOW_QUEUE"
 [[queues.producers]]
 queue = "takos-deployment-jobs"
 binding = "DEPLOY_QUEUE"
-
-# The embedded Takosumi deploy-control plane intentionally has no queue binding
-# in the self-host Takos worker. `RUN_QUEUE` is owned by the Takos agent runtime;
-# the Takosumi controller falls back to its inline dispatcher when its optional
-# queue producer is absent and drives the RUNNER Durable Object directly.
 
 [[queues.consumers]]
 queue = "takos-runs"
@@ -450,58 +347,22 @@ PROXY_BASE_URL = "https://staging-admin.example.com"
 TAKOS_AGENT_CONTROL_RPC_BASE_URL = "https://staging-admin.example.com"
 # TODO: AUTH_ALLOWED_REDIRECT_DOMAINS — see production [vars] comment.
 # AUTH_ALLOWED_REDIRECT_DOMAINS = "staging-app.example.com"
-# Root-unified single app: bare-origin issuer (no /accounts suffix). See the
-# production [vars] note above.
-# self-host: this instance's own origin (the embedded accounts plane is the issuer).
-TAKOSUMI_ACCOUNTS_ISSUER = "https://staging-app.your-domain.example"
-OIDC_ISSUER_URL = "https://staging-app.your-domain.example"
+# External Takosumi Accounts/control-plane origin. See the production [vars]
+# note above.
+TAKOSUMI_ACCOUNTS_URL = "https://staging-app.takosumi.example"
+OIDC_ISSUER_URL = "https://staging-app.takosumi.example"
 OIDC_CLIENT_ID = "takos-staging-installation-client"
 OIDC_REDIRECT_URI = "https://staging-admin.example.com/auth/oidc/callback"
-# Account-plane (in-process embedded Accounts handler) non-secret config —
-# staging mirror of the production [vars] block. Secrets via `wrangler secret
-# put --env staging`.
+# Optional subject used by default-app Capsule installation jobs.
 TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_staging_subject"
-TAKOSUMI_ACCOUNTS_CLIENT_ID = "takos-selfhost-staging-client"
-# self-host: this instance's own origin (the embedded accounts plane is the issuer).
-TAKOSUMI_ACCOUNTS_REDIRECT_URIS = "https://staging-app.your-domain.example/auth/oidc/callback"
-TAKOSUMI_ACCOUNTS_PLATFORM_ACCESS = "closed"
-TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_TTL_MS = "86400000"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"
-R2_ARTIFACTS_BUCKET_NAME = "takos-artifacts-staging"
 
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "takos-control-staging-db"
 database_id = "replace-with-staging-d1-database-id"
 migrations_dir = "../../db/migrations-control/migrations"
-
-# Account-plane D1 (staging). Separate takos-accounts staging D1 — create
-# with `wrangler d1 create takos-accounts-staging` and fill the id. No
-# migrations_dir (applied by the accounts migrate-d1 runner; handler fail-closes
-# on schema drift). See the production [[d1_databases]] note above.
-[[env.staging.d1_databases]]
-binding = "TAKOSUMI_ACCOUNTS_DB"
-database_name = "takos-accounts-staging"
-database_id = "replace-with-staging-accounts-d1-database-id"
-
-# Account-plane R2 (staging) for /__takosumi/exports/* download artifacts.
-[[env.staging.r2_buckets]]
-binding = "TAKOSUMI_ACCOUNTS_EXPORTS"
-bucket_name = "takos-accounts-exports-staging"
-
-# Deploy-control D1 (staging). Separate takos-deploy staging DB — create with
-# `wrangler d1 create takos-deploy-staging` and fill the id. No migrations_dir
-# (stores self-create their tables). See the production [[d1_databases]] note.
-[[env.staging.d1_databases]]
-binding = "TAKOSUMI_CONTROL_DB"
-database_name = "takos-deploy-staging"
-database_id = "replace-with-staging-deploy-d1-database-id"
-
-# Deploy-control R2 (staging) for OpenTofu plan artifacts.
-[[env.staging.r2_buckets]]
-binding = "R2_ARTIFACTS"
-bucket_name = "takos-artifacts-staging"
 
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
@@ -547,15 +408,6 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-# Deploy-control Durable Objects (staging). Binding/class names mirror production.
-[[env.staging.durable_objects.bindings]]
-name = "COORDINATION"
-class_name = "CoordinationObject"
-
-[[env.staging.durable_objects.bindings]]
-name = "RUNNER"
-class_name = "OpenTofuRunnerObject"
-
 # Runtime / executor images (staging) build from this repo's Dockerfiles, same
 # as production. Build each container's dist/ (`bun build.mjs` in
 # containers/runtime and containers/executor) before deploying.
@@ -586,14 +438,6 @@ image = "../../containers/executor/Dockerfile"
 image_build_context = "../../containers/executor"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
-
-# Deploy-control OpenTofu run executor (staging). Paths mirror production.
-[[env.staging.containers]]
-class_name = "OpenTofuRunnerObject"
-image = "../../../takosumi/runner/Dockerfile"
-image_build_context = "../../../takosumi"
-instance_type = "basic"
-max_instances = 5
 
 [[env.staging.r2_buckets]]
 binding = "WORKER_BUNDLES"
@@ -630,9 +474,6 @@ binding = "WORKFLOW_QUEUE"
 [[env.staging.queues.producers]]
 queue = "takos-deployment-jobs-staging"
 binding = "DEPLOY_QUEUE"
-
-# The embedded Takosumi deploy-control plane intentionally has no queue binding
-# in the self-host staging worker. See the production note.
 
 [[env.staging.queues.consumers]]
 queue = "takos-runs-staging"

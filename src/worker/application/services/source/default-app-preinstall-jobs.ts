@@ -248,7 +248,7 @@ export async function applyDefaultAppInstallation(
     planBody,
   ).catch((error) => {
     throw new Error(
-      `default app Installation plan failed for ${entry.name}: ${
+      `default app Capsule plan failed for ${entry.name}: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
@@ -270,7 +270,7 @@ export async function applyDefaultAppInstallation(
   return await postJson(config.installUrl, config.token, applyBody).catch(
     (error) => {
       throw new Error(
-        `default app Installation apply failed for ${entry.name}: ${
+        `default app Capsule apply failed for ${entry.name}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -455,7 +455,7 @@ async function preinstallDefaultAppsForSpaceDetailed(
   const installConfig = resolveDefaultAppInstallConfig(env);
   if (!installConfig) {
     throw new DefaultAppDistributionInvalidError(
-      "Default app preinstall requires Installation API config",
+      "Default app preinstall requires Capsule install API config",
     );
   }
 

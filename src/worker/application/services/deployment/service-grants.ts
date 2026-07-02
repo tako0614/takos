@@ -5,7 +5,7 @@ import {
 } from "@takosjp/takosumi-accounts-contract";
 
 import type { Env } from "../../../shared/types/env.ts";
-import { SERVICE_GRAPH_CAPABILITIES } from "../source/app-interface-contract.ts";
+import { RUNTIME_PROJECTION_CAPABILITIES } from "../source/app-interface-contract.ts";
 import type { AppServiceBinding } from "../source/app-manifest-types.ts";
 
 export type ServiceGrantMaterialization = {
@@ -46,8 +46,7 @@ function readString(value: unknown): string | null {
 function accountsBaseUrl(env: Env): string | null {
   return (
     readEnvString(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
-    readEnvString(env.TAKOSUMI_ACCOUNTS_URL) ??
-    readEnvString(env.TAKOSUMI_ACCOUNTS_ISSUER)
+    readEnvString(env.TAKOSUMI_ACCOUNTS_URL)
   );
 }
 
@@ -107,7 +106,7 @@ function accountsErrorMessage(body: unknown, fallback: string): string {
 function accountsServiceIdForCapability(
   serviceBinding: AppServiceBinding,
 ): string {
-  if (serviceBinding.capability === SERVICE_GRAPH_CAPABILITIES.controlApi) {
+  if (serviceBinding.capability === RUNTIME_PROJECTION_CAPABILITIES.controlApi) {
     return TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_CONTROL_API;
   }
   throw new Error(
@@ -155,13 +154,13 @@ export const materializeTakosumiServiceGrant: ServiceGrantMaterializer = async (
   const installationId = readEnvString(params.installationId);
   if (!installationId) {
     throw new Error(
-      `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) targets compute '${params.workloadName}' but no Takosumi Accounts Installation id is available`,
+      `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) targets compute '${params.workloadName}' but no Takosumi Accounts Capsule projection id is available`,
     );
   }
   const baseUrl = accountsBaseUrl(env);
   if (!baseUrl) {
     throw new Error(
-      `service binding '${params.serviceBinding.name}' requires TAKOSUMI_ACCOUNTS_INTERNAL_URL, TAKOSUMI_ACCOUNTS_URL, or TAKOSUMI_ACCOUNTS_ISSUER`,
+      `service binding '${params.serviceBinding.name}' requires TAKOSUMI_ACCOUNTS_INTERNAL_URL or TAKOSUMI_ACCOUNTS_URL`,
     );
   }
 
@@ -185,13 +184,13 @@ export const materializeTakosumiServiceGrant: ServiceGrantMaterializer = async (
     }
   }
 
-  // Deploy decision D3: Takosumi OSS removed the Service Graph service-token
+  // Deploy decision D3: Takosumi OSS removed the runtime projection service-token
   // issuance (the `/installations/{id}/services/{serviceId}/rotate-token`
-  // endpoint). A `control.api` ServiceGrant token can therefore only be REUSED
+  // endpoint). A `control.api` runtime authority token can therefore only be REUSED
   // (validated above), not minted, against an OSS control plane. Operators that
   // need control.api token vending use Takosumi Cloud. Fail closed here rather
   // than silently calling a removed endpoint.
   throw new Error(
-    `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) cannot mint a new ServiceGrant token: Takosumi OSS removed Service Graph service-token issuance. Supply a current token via previousToken, or use Takosumi Cloud.`,
+    `service binding '${params.serviceBinding.name}' (${params.serviceBinding.capability}) cannot mint a new runtime authority token: Takosumi OSS removed runtime projection service-token issuance. Supply a current token via previousToken, or use Takosumi Cloud.`,
   );
 };

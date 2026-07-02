@@ -28,7 +28,7 @@ import {
   assertPublicationHasNoConsumers,
   deletePublicationRow,
   deleteServiceConsumeRow,
-  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
   getPublicationRowByRef,
   getServiceGroupId,
   listPublicationRows,
@@ -49,7 +49,10 @@ import {
   syncConsumersForPublication,
   syncConsumeState,
 } from "./service-publications-consume.ts";
-import { resolveServiceGraphExportDefinition } from "./service-graph-exports.ts";
+import {
+  isRuntimeProjectionPublicationName,
+  resolveRuntimeProjectionExportDefinition,
+} from "./runtime-projection-exports.ts";
 
 export {
   buildPublicUrl,
@@ -61,15 +64,16 @@ export {
   publicationAllowedFields,
   type PublicationOutputDescriptor,
   resolveConsumeOutputEnvName,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
 } from "./service-publications-normalize.ts";
 
 export {
-  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
   publicationOutputContract,
   type PublicationRecord,
   publicationResolvedUrl,
 } from "./service-publications-db.ts";
+export { isRuntimeProjectionPublicationName } from "./runtime-projection-exports.ts";
 
 function findRouteTargetForPublication(
   publication: AppPublication,
@@ -189,7 +193,7 @@ export async function getPublicationByName(
   return row ? toPublicationRecord(row) : null;
 }
 
-export async function replaceServiceGraphPublications(
+export async function replaceRuntimeProjectionPublications(
   env: Pick<
     Env,
     "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN" | "TENANT_BASE_DOMAIN"
@@ -220,7 +224,7 @@ export async function replaceServiceGraphPublications(
   const staleRows = existingRows.filter(
     (row) =>
       row.groupId === params.groupId &&
-      row.sourceType === SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE &&
+      row.sourceType === RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE &&
       !desiredByName.has(row.name),
   );
   for (const row of staleRows) {
@@ -237,7 +241,7 @@ export async function replaceServiceGraphPublications(
       spaceId: params.spaceId,
       groupId: params.groupId,
       ownerServiceId: routeResolved.ownerServiceId,
-      sourceType: SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+      sourceType: RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
       publication,
       resolved: routeResolved.resolved,
     });
@@ -252,7 +256,7 @@ export async function replaceServiceGraphPublications(
   }
 }
 
-export async function assertServiceGraphPublicationPrerequisites(
+export async function assertRuntimeProjectionPublicationPrerequisites(
   env: Pick<Env, "DB"> &
     Partial<
       Pick<Env, "TENANT_BASE_DOMAIN" | "AUTH_PUBLIC_BASE_URL" | "ADMIN_DOMAIN">
@@ -308,9 +312,6 @@ export async function assertServiceGraphPublicationPrerequisites(
     outputs: PublicationOutputDescriptor[];
   } | null> {
     const name = consume.publication;
-    if (isReservedTakosPublicationSource(name)) {
-      throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
-    }
     const manifestPublication = desiredByName.get(name);
     if (manifestPublication) {
       return {
@@ -327,18 +328,25 @@ export async function assertServiceGraphPublicationPrerequisites(
       );
     }
     const record = publicationRecordCache.get(name) ?? null;
-    const serviceGraphExport = record
+    const runtimeProjectionExport = record
       ? null
-      : resolveServiceGraphExportDefinition(env, {
+      : resolveRuntimeProjectionExportDefinition(env, {
           spaceId: params.spaceId,
           name,
         });
+    if (
+      isReservedTakosPublicationSource(name) &&
+      !runtimeProjectionExport &&
+      !isRuntimeProjectionPublicationName(name)
+    ) {
+      throw new GoneError(RESERVED_TAKOS_PUBLICATION_MESSAGE);
+    }
     return record
       ? { publication: record.publication, outputs: record.outputs }
-      : serviceGraphExport
+      : runtimeProjectionExport
         ? {
-            publication: serviceGraphExport.publication,
-            outputs: serviceGraphExport.outputs,
+            publication: runtimeProjectionExport.publication,
+            outputs: runtimeProjectionExport.outputs,
           }
         : null;
   }

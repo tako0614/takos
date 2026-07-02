@@ -3,7 +3,7 @@
  *
  * `ja` is the source-of-truth voice (Takos is JP-first); `en` mirrors it for
  * discoverability. Both locales are prerendered as separate routes (`/` and
- * `/en/`). Keep product nouns (chat / agent / memory / space, bundled apps,
+ * `/en/`). Keep product nouns (chat / agent / memory / Workspace, bundled apps,
  * Takosumi, Installation) identical across locales — only the connective prose
  * is translated. Do NOT describe Takosumi concepts as Takos features, and do
  * not soften the platform-readiness launch gate (see AGENTS.md 中核原則).
@@ -30,16 +30,21 @@ export interface Item {
   readonly body: string;
 }
 
+/** A product-core showcase row (chat / agent / memory / Workspace). The `key`
+ *  selects which abstract CSS visual the Showcase component renders. */
+export interface ShowcaseItem {
+  readonly key: "chat" | "agent" | "memory" | "space";
+  readonly name: string;
+  readonly tagline: string;
+  readonly body: Rich;
+  readonly points: readonly string[];
+}
+
 export interface AppItem {
   readonly name: string;
   readonly tag: string;
+  readonly role: string;
   readonly body: string;
-}
-
-export interface Stat {
-  readonly num: string;
-  readonly label: string;
-  readonly note: string;
 }
 
 export interface CompareRow {
@@ -73,7 +78,6 @@ export interface Strings {
     readonly closeMenu: string;
   };
   readonly hero: {
-    readonly eyebrow: string;
     readonly title: readonly TitleLine[];
     readonly lede: Rich;
     readonly useTakos: string;
@@ -87,36 +91,21 @@ export interface Strings {
     readonly copied: string;
   };
   readonly why: {
-    readonly eyebrow: string;
     readonly title: string;
     readonly lede: Rich;
     readonly points: readonly Item[];
   };
-  readonly pillars: {
-    readonly eyebrow: string;
+  readonly showcase: {
     readonly title: string;
     readonly lede: string;
-    readonly items: readonly Item[];
-  };
-  readonly features: {
-    readonly eyebrow: string;
-    readonly title: string;
-    readonly lede: string;
-    readonly items: readonly Item[];
+    readonly items: readonly ShowcaseItem[];
   };
   readonly apps: {
-    readonly eyebrow: string;
     readonly title: string;
     readonly lede: string;
     readonly items: readonly AppItem[];
   };
-  readonly stats: {
-    readonly eyebrow: string;
-    readonly title: string;
-    readonly items: readonly Stat[];
-  };
   readonly compare: {
-    readonly eyebrow: string;
     readonly title: string;
     readonly lede: string;
     readonly colUs: string;
@@ -124,7 +113,6 @@ export interface Strings {
     readonly rows: readonly CompareRow[];
   };
   readonly install: {
-    readonly eyebrow: string;
     readonly title: string;
     readonly lede: Rich;
     readonly cards: readonly InstallCard[];
@@ -146,14 +134,14 @@ const ja: Strings = {
   meta: {
     title: "Takos — AI と話す場所は、あなたのサーバーで。",
     description:
-      "Takos は self-hostable な AI-first chat & agent product。chat / agent / memory / Git / product space / app launcher / MCP tools を core に持ち、docs / slide / excel / computer / social などの bundled apps が新規 product space に seed される。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
+      "Takos は self-hostable な AI-first chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの bundled apps が新規 Workspace に seed される。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
     ogTitle: "Takos — AI-first chat & agent, your own server.",
     ogDescription:
       "Self-hostable な AI-first chat & agent。history も memory も自分のサーバーの中。OpenTofu module + Worker artifact で self-host。AGPL の OSS。",
   },
   nav: {
     why: "なぜ Takos",
-    features: "特徴",
+    features: "中身",
     apps: "Bundled apps",
     docs: "Docs",
     install: "Install",
@@ -161,10 +149,9 @@ const ja: Strings = {
     closeMenu: "メニューを閉じる",
   },
   hero: {
-    eyebrow: "墨 · OPEN SOURCE · AI-FIRST",
     title: [{ t: "AI agent" }, { t: "for me", grad: true }],
     lede: [
-      { t: "自分のための AI agent。chat / agent / memory / space を、" },
+      { t: "自分のための AI agent。chat / agent / memory / Workspace を、" },
       { t: "自分のサーバーの中で", em: true },
       { t: "。ログインしてすぐ始められます。" },
     ],
@@ -180,7 +167,6 @@ const ja: Strings = {
     copied: "コピーしました",
   },
   why: {
-    eyebrow: "why takos",
     title: "ソフトウェアを、自分の手に。",
     lede: [
       { t: "AI は日常のインフラになりつつある。だからこそ、" },
@@ -194,124 +180,109 @@ const ja: Strings = {
     points: [
       {
         title: "データ主権",
-        body: "会話・memory・file はすべて自分の VM / cloud の中。ベンダーに預けず、いつでも export・移行できる。",
+        body: "会話・memory・file は、すべて自分の VM / cloud の中に置かれる。ベンダーのサーバーに溜まり続けることがなく、いつでも丸ごと export して別の環境へ移せる。",
       },
       {
         title: "ロックインしない",
-        body: "SaaS lock-in も vendor lock-in も無し。Cloudflare / AWS / GCP / K8s / 自前 VM、同じ Takos がどこでも動く。",
+        body: "SaaS にも特定ベンダーにも縛られない。同じ Takos が Cloudflare / AWS / GCP / Kubernetes / 自前 VM の上で動き、substrate は後からでも乗り換えられる。",
       },
       {
         title: "fork できる自由",
-        body: "AGPL でコードは全部 public。自分仕様に fork して、機能を足しても、外しても、あなたの自由。",
+        body: "AGPL でコードは全部 public。自分の用途に合わせて fork し、機能を足しても外しても自由。ブラックボックスの「提供される範囲」に閉じ込められない。",
       },
     ],
   },
-  pillars: {
-    eyebrow: "core",
-    title: "4 つの core で、AI を日常に。",
-    lede: "Takos product が提供するのは chat / agent / memory / space。この 4 つが噛み合って、AI とのやり取りがあなたの作業空間に積み上がる。",
+  showcase: {
+    title: "4 つの core が、噛み合う。",
+    lede: "chat で話し、agent が動き、memory が積み上がり、Workspace がぜんぶを束ねる。単体の機能ではなく、噛み合って初めて「自分の AI 環境」になる。",
     items: [
       {
-        title: "Chat",
-        body: "LLM との会話を、thread として space に整理。複数モデルを切り替えながら使える。",
+        key: "chat",
+        name: "Chat",
+        tagline: "複数モデルを、1 つのスレッドで。",
+        body: [
+          { t: "クラウドの LLM もローカルモデルも、同じ会話の中で切り替えながら使える。会話は thread として Workspace に整理され、" },
+          { t: "履歴はすべて自分のサーバーの中", em: true },
+          { t: "。どのモデルに何を話したかが、他社に渡らない。" },
+        ],
+        points: [
+          "複数 LLM をスレッド内で切り替え",
+          "thread 単位で Workspace に整理",
+          "履歴は自分のサーバーに保存",
+        ],
       },
       {
-        title: "Agent",
-        body: "tool を呼び、file を触り、長い手順を回す agent。Rust 製の agent engine が実行を担う。",
+        key: "agent",
+        name: "Agent",
+        tagline: "tool を呼び、file を触り、手順を回す。",
+        body: [
+          { t: "Rust 製の agent engine が、" },
+          { t: "tool 呼び出し・ファイル操作・複数ステップの実行", em: true },
+          { t: " を担う。MCP 経由で bundled app にも繋がり、docs を書いたり sheet を更新したりを agent に任せられる。" },
+        ],
+        points: [
+          "Rust 製 agent engine が実行",
+          "MCP で app / tool に接続",
+          "長い手順を自動化",
+        ],
       },
       {
-        title: "Memory",
-        body: "やり取りから memory が space に積み上がる。次の会話に文脈が引き継がれ、データは外に出ない。",
+        key: "memory",
+        name: "Memory",
+        tagline: "話すほど、文脈が育つ。",
+        body: [
+          { t: "やり取りから memory が Workspace に積み上がり、次の会話へ文脈が引き継がれる。" },
+          { t: "memory も自分のサーバーの中", em: true },
+          { t: " にあり、学習に使われたり外に出たりしない。" },
+        ],
+        points: [
+          "会話から memory が蓄積",
+          "次のチャットへ文脈を引き継ぎ",
+          "ベンダー学習に使われない",
+        ],
       },
       {
-        title: "Space",
-        body: "人・agent・app・data の単位。space ごとに分離され、bundled app が auto-install される。",
-      },
-    ],
-  },
-  features: {
-    eyebrow: "features",
-    title: "所有しながら、繋がる。",
-    lede: "自分のサーバーで完結しつつ、必要なところでは fediverse とも繋がる。Takos が大事にしているのはこの両立。",
-    items: [
-      {
-        title: "プライバシー by default",
-        body: "history も memory も file も、自分のサーバーの中。第三者に渡らないのが既定の挙動。",
-      },
-      {
-        title: "Bundled apps が auto-install",
-        body: "takos-docs / slide / excel / computer / yurucommu が新規 space 作成と同時に揃う。不要なら uninstall。",
-      },
-      {
-        title: "Federation で繋がる",
-        body: "ActivityPub 経由で他の Takos や fediverse と connection。サイロ化しないが、data は自分の中。",
-      },
-      {
-        title: "Cloudflare module が正本",
-        body: "Takos self-host は OpenTofu module + Worker artifact。まず Cloudflare target を正本にして、binding と route を明確に保つ。",
-      },
-      {
-        title: "Takosumi は任意",
-        body: "reviewed plan / audit / dependency ledger が必要なら、同じ module を Takosumi Space に Installation として入れられる。",
-      },
-      {
-        title: "OSS / forkable",
-        body: "AGPL。コードは全部 public で、fork してあなた仕様にできる。contributor も歓迎。",
+        key: "space",
+        name: "Workspace",
+        tagline: "人・agent・app・data の単位。",
+        body: [
+          { t: "Workspace は活動の単位。" },
+          { t: "Workspace ごとに分離・権限管理", em: true },
+          { t: " され、新規作成と同時に bundled app が auto-install される。必要なら ActivityPub で他の Takos や fediverse とも繋がれる。" },
+        ],
+        points: [
+          "Workspace ごとに分離・権限管理",
+          "bundled app が auto-install",
+          "ActivityPub で federation",
+        ],
       },
     ],
   },
   apps: {
-    eyebrow: "bundled apps",
-    title: "新規 space で、すぐ揃う。",
-    lede: "Takos distribution と一緒に ship される 1st-party の InstallableApp。新規 space 作成と同時に install 済みで、必要なければ uninstall できる。",
+    title: "新規 Workspace で、すぐ揃う。",
+    lede: "Takos distribution と一緒に ship される 1st-party の InstallableApp。新規 Workspace 作成と同時に install 済みで、必要なければ uninstall できる。",
     items: [
       {
-        name: "takos-docs",
-        tag: "docs",
-        body: "ノート + ドキュメント。Tiptap ベースのリッチテキストエディタで、agent からの編集にも対応していく。",
-      },
-      {
-        name: "takos-slide",
-        tag: "slides",
-        body: "プレゼン作成。keynote / Google Slides の代替を、自分の space の中で。",
-      },
-      {
-        name: "takos-excel",
-        tag: "sheet",
-        body: "スプレッドシート。calc + formula 対応で、data を space に閉じたまま扱える。",
+        name: "takos-office",
+        tag: "office",
+        role: "docs / slide / sheet",
+        body: "文書 (docs)・プレゼン (slide)・表計算 (sheet) を 1 つの worker に統合した office suite。MCP 経由で agent が直接ファイルを編集でき、Google Docs / Slides / Sheets の代替を自分の Workspace の中で完結させる。",
       },
       {
         name: "takos-computer",
         tag: "agent-tool",
-        body: "agent から呼び出せる computer use 環境。手順の自動化を agent に任せられる。",
+        role: "computer use",
+        body: "agent から呼び出せる computer use 環境。ブラウザ操作やコマンド実行といった手順を agent に渡し、定型作業をまるごと自動化できる。",
       },
       {
         name: "yurucommu",
         tag: "social",
-        body: "self-hosted な ActivityPub / community social。fediverse に繋がる独立 product。",
-      },
-    ],
-  },
-  stats: {
-    eyebrow: "by the numbers",
-    title: "足し算ではなく、所有。",
-    items: [
-      { num: "4", label: "core", note: "chat · agent · memory · space" },
-      {
-        num: "5",
-        label: "bundled apps",
-        note: "docs · slide · excel · computer · social",
-      },
-      { num: "AGPL", label: "license", note: "コードは全部 public · forkable" },
-      {
-        num: "5",
-        label: "substrates",
-        note: "Cloudflare · AWS · GCP · K8s · VM",
+        role: "ActivityPub social",
+        body: "self-hosted な ActivityPub / community social。fediverse に繋がる独立 product で、新規 Workspace に seed される。data は自分の中に置いたまま外と繋がれる。",
       },
     ],
   },
   compare: {
-    eyebrow: "why self-host",
     title: "預けるか、所有するか。",
     lede: "自分のサーバーで動かす Takos と、提供元に預ける SaaS chat の典型的な違い。data が誰のものか、という観点で並べています (すべての SaaS に当てはまるわけではありません)。",
     colUs: "Takos (self-host)",
@@ -324,7 +295,7 @@ const ja: Strings = {
       },
       {
         label: "memory / 履歴",
-        us: "自分の space に保持",
+        us: "自分の Workspace に保持",
         them: "提供元が保持・学習に利用しうる",
       },
       {
@@ -346,7 +317,6 @@ const ja: Strings = {
     ],
   },
   install: {
-    eyebrow: "install",
     title: "始めるのは、ボタン 1 つから。",
     lede: [
       { t: "むずかしい設定はいりません。リンクを押すと " },
@@ -396,14 +366,14 @@ const en: Strings = {
   meta: {
     title: "Takos — AI-first chat & agent, on your own server.",
     description:
-      "Takos is a self-hostable, AI-first chat & agent product. Its core is chat / agent / memory / space, and bundled apps like docs / slide / excel / computer / social auto-install with every new space. It runs on Takosumi, so you can install it on Cloudflare, AWS, GCP, or your own VM — and your history and memory never leave your server. Open source under AGPL.",
+      "Takos is a self-hostable, AI-first chat & agent product. Its core is chat / agent / memory / Workspace, and bundled apps like office (docs / slide / sheet) / computer / social auto-install with every new Workspace. It runs on Takosumi, so you can install it on Cloudflare, AWS, GCP, or your own VM — and your history and memory never leave your server. Open source under AGPL.",
     ogTitle: "Takos — AI-first chat & agent, your own server.",
     ogDescription:
       "A self-hostable AI chat & agent. Your history and memory stay on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
   },
   nav: {
     why: "Why Takos",
-    features: "Features",
+    features: "Inside",
     apps: "Bundled apps",
     docs: "Docs",
     install: "Install",
@@ -411,10 +381,9 @@ const en: Strings = {
     closeMenu: "Close menu",
   },
   hero: {
-    eyebrow: "墨 · OPEN SOURCE · AI-FIRST",
     title: [{ t: "AI agent" }, { t: "for me", grad: true }],
     lede: [
-      { t: "Your own AI agent — chat, agent, memory, and space, " },
+      { t: "Your own AI agent — chat, agent, memory, and Workspace, " },
       { t: "on a server you own", em: true },
       { t: ". Log in and start in seconds." },
     ],
@@ -431,7 +400,6 @@ const en: Strings = {
     copied: "Copied",
   },
   why: {
-    eyebrow: "why takos",
     title: "Own your software.",
     lede: [
       { t: "AI is becoming everyday infrastructure. So it is strange that " },
@@ -445,124 +413,109 @@ const en: Strings = {
     points: [
       {
         title: "Data sovereignty",
-        body: "Conversations, memory, and files all live inside your own VM or cloud. Nothing is entrusted to a vendor, and you can export or migrate anytime.",
+        body: "Conversations, memory, and files all sit inside your own VM or cloud. Nothing piles up on a vendor’s servers, and you can export everything and move to another environment anytime.",
       },
       {
         title: "No lock-in",
-        body: "No SaaS lock-in, no vendor lock-in. The same Takos runs on Cloudflare, AWS, GCP, Kubernetes, or your own VM.",
+        body: "Tied to neither a SaaS nor a single vendor. The same Takos runs on Cloudflare, AWS, GCP, Kubernetes, or your own VM — and you can switch substrate later.",
       },
       {
         title: "Freedom to fork",
-        body: "AGPL, with all code public. Fork it to fit you — add features, remove them, make it yours.",
+        body: "AGPL, with all code public. Fork it for your needs — add features or remove them. You are never boxed into a black-box “as offered” scope.",
       },
     ],
   },
-  pillars: {
-    eyebrow: "core",
-    title: "Four core ideas bring AI into daily work.",
-    lede: "The Takos product gives you chat / agent / memory / space. The four mesh together so your interactions with AI accumulate inside your own workspace.",
+  showcase: {
+    title: "Four cores that mesh.",
+    lede: "Chat to talk, agents to act, memory that accumulates, and a Workspace that ties it together. They become your own AI environment only when they mesh — not as standalone features.",
     items: [
       {
-        title: "Chat",
-        body: "Conversations with LLMs, organized as threads inside a space. Switch between multiple models as you go.",
+        key: "chat",
+        name: "Chat",
+        tagline: "Many models, one thread.",
+        body: [
+          { t: "Use cloud LLMs and local models, switching between them in the same conversation. Threads are organized inside a Workspace, and " },
+          { t: "all history stays on your own server", em: true },
+          { t: ". What you said to which model never leaves for a vendor." },
+        ],
+        points: [
+          "Switch LLMs within a thread",
+          "Organized as threads per Workspace",
+          "History stays on your server",
+        ],
       },
       {
-        title: "Agent",
-        body: "Agents that call tools, touch files, and run long procedures — executed by a Rust agent engine.",
+        key: "agent",
+        name: "Agent",
+        tagline: "Calls tools, touches files, runs steps.",
+        body: [
+          { t: "A Rust agent engine handles " },
+          { t: "tool calls, file operations, and multi-step runs", em: true },
+          { t: ". Over MCP it reaches the bundled apps too — let an agent write docs or update a sheet." },
+        ],
+        points: [
+          "Rust agent engine executes",
+          "Connects to apps / tools via MCP",
+          "Automates long procedures",
+        ],
       },
       {
-        title: "Memory",
-        body: "Memory accumulates in your space from your interactions; context carries into the next chat, and data stays in.",
+        key: "memory",
+        name: "Memory",
+        tagline: "The more you talk, the more context grows.",
+        body: [
+          { t: "Memory accumulates in the Workspace from your interactions and carries context into the next chat. " },
+          { t: "Memory also lives on your own server", em: true },
+          { t: " — never trained on, never sent out." },
+        ],
+        points: [
+          "Memory accrues from chats",
+          "Context carries to the next chat",
+          "Not used for vendor training",
+        ],
       },
       {
-        title: "Space",
-        body: "The unit of people, agents, apps, and data. Each space is isolated, and bundled apps auto-install into it.",
-      },
-    ],
-  },
-  features: {
-    eyebrow: "features",
-    title: "Own it, yet stay connected.",
-    lede: "Self-contained on your own server, yet connected to the fediverse where it matters. Takos cares about having both.",
-    items: [
-      {
-        title: "Privacy by default",
-        body: "History, memory, and files stay inside your own server. Not sharing them with third parties is the default behavior.",
-      },
-      {
-        title: "Bundled apps auto-install",
-        body: "takos-docs / slide / excel / computer / yurucommu arrive the moment you create a space. Uninstall any you don’t need.",
-      },
-      {
-        title: "Connected by federation",
-        body: "Connect to other Takos instances and the fediverse via ActivityPub. No silos — but your data stays with you.",
-      },
-      {
-        title: "Any substrate",
-        body: "From a personal small VM to an enterprise Kubernetes cluster, the same Takos runs. Choose by your scale.",
-      },
-      {
-        title: "Runs on Takosumi",
-        body: "Install and deploy are handled by the OpenTofu-native Takosumi. Review the plan before you apply.",
-      },
-      {
-        title: "Open source / forkable",
-        body: "AGPL. All code is public — fork it to make it yours. Contributors welcome.",
+        key: "space",
+        name: "Workspace",
+        tagline: "The unit of people, agents, apps, and data.",
+        body: [
+          { t: "A Workspace is the unit of activity. " },
+          { t: "Each Workspace is isolated, with its own permissions", em: true },
+          { t: ", and bundled apps auto-install the moment you create one. Connect to other Takos and the fediverse over ActivityPub when you want." },
+        ],
+        points: [
+          "Isolation & permissions per Workspace",
+          "Bundled apps auto-install",
+          "Federation via ActivityPub",
+        ],
       },
     ],
   },
   apps: {
-    eyebrow: "bundled apps",
     title: "Ready the moment you start.",
-    lede: "First-party InstallableApps shipped with the Takos distribution. Included with every new space, and removable if you don’t need them.",
+    lede: "First-party InstallableApps shipped with the Takos distribution. Included with every new Workspace, and removable if you don’t need them.",
     items: [
       {
-        name: "takos-docs",
-        tag: "docs",
-        body: "Notes and documents. A Tiptap-based rich-text editor, growing toward agent-driven editing.",
-      },
-      {
-        name: "takos-slide",
-        tag: "slides",
-        body: "Build presentations. A Keynote / Google Slides alternative, inside your own space.",
-      },
-      {
-        name: "takos-excel",
-        tag: "sheet",
-        body: "Spreadsheets with calc and formulas, keeping your data inside your space.",
+        name: "takos-office",
+        tag: "office",
+        role: "docs / slide / sheet",
+        body: "An office suite that unifies docs, slides, and sheets in one worker. Agents can edit files directly over MCP, so you replace Google Docs / Slides / Sheets inside your own Workspace.",
       },
       {
         name: "takos-computer",
         tag: "agent-tool",
-        body: "A computer-use environment your agents can call to automate multi-step work.",
+        role: "computer use",
+        body: "A computer-use environment your agents can call — hand off browser actions and command execution to automate routine, multi-step work.",
       },
       {
         name: "yurucommu",
         tag: "social",
-        body: "Self-hosted ActivityPub / community social — an independent product that connects to the fediverse.",
-      },
-    ],
-  },
-  stats: {
-    eyebrow: "by the numbers",
-    title: "Not more features — ownership.",
-    items: [
-      { num: "4", label: "core", note: "chat · agent · memory · space" },
-      {
-        num: "5",
-        label: "bundled apps",
-        note: "docs · slide · excel · computer · social",
-      },
-      { num: "AGPL", label: "license", note: "all code public · forkable" },
-      {
-        num: "5",
-        label: "substrates",
-        note: "Cloudflare · AWS · GCP · K8s · VM",
+        role: "ActivityPub social",
+        body: "Self-hosted ActivityPub / community social. An independent product that connects to the fediverse, seeded into new Workspaces — your data stays in while you reach out.",
       },
     ],
   },
   compare: {
-    eyebrow: "why self-host",
     title: "Entrust it, or own it.",
     lede: "How running Takos on your own server differs from delegating to a SaaS provider — typical trade-offs framed around who owns the data (not true of every product).",
     colUs: "Takos (self-host)",
@@ -575,7 +528,7 @@ const en: Strings = {
       },
       {
         label: "Memory / history",
-        us: "Kept in your space",
+        us: "Kept in your Workspace",
         them: "Held by the provider, may train on it",
       },
       {
@@ -601,7 +554,6 @@ const en: Strings = {
     ],
   },
   install: {
-    eyebrow: "install",
     title: "It starts with one button.",
     lede: [
       { t: "No tricky setup. Press the link and " },

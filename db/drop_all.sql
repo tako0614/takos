@@ -68,6 +68,7 @@ DROP TABLE IF EXISTS auth_identities;
 -- Notifications / moderation / social / billing
 DROP TABLE IF EXISTS notification_preferences;
 DROP TABLE IF EXISTS notification_settings;
+DROP TABLE IF EXISTS notification_pushers;
 DROP TABLE IF EXISTS mobile_push_registrations;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS moderation_audit_logs;

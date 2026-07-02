@@ -1,22 +1,21 @@
 # ルーティング
 
-Takos deploys from `takos/deploy/opentofu` plus one wrangler artifact upload. The resulting worker composes Takos
-product routes with Takosumi Accounts, deploy-control, dashboard, and the OpenTofu runner in one origin. Takosumi
-records **Run**, **StateSnapshot**, **OutputSnapshot**, and **Deployment** evidence. Repository metadata comes from
+Takos deploys from `takos/deploy/opentofu` plus one wrangler artifact upload. The resulting worker exposes Takos
+product routes and consumes the external Takosumi Accounts / deploy-control / dashboard / OpenTofu runner surfaces. Takosumi
+records **Run**, **StateVersion**, and **Output** evidence. Repository metadata comes from
 generic information such as Git URL, ref, commit, tag, and well-known OpenTofu outputs.
 
 ## Current Flow
 
 1. Run the Takos OpenTofu module and upload the worker artifact.
-2. Use the embedded Takosumi Accounts / deploy-control surface to create Workspaces and app Installations.
+2. Use the external Takosumi Accounts / deploy-control surface to create Workspaces and app Capsules.
 3. Choose provider ownership, then run a plan. Review the resulting **`plan` type Run** changes and warnings.
-4. Apply the reviewed plan. A successful **`apply` type Run** updates the **Deployment** and **OutputSnapshot**.
+4. Apply the reviewed plan. A successful **`apply` type Run** records StateVersion and Output.
 5. Billing, OIDC clients, domains, and dashboard belong to the Takosumi Accounts plane, not to the Takos chat product surface.
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takosumi records Installation / Run / StateSnapshot / OutputSnapshot /
-Deployment state and policy decisions for the Takos distribution and app Installations. The account plane owns account,
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and policy decisions for the Takos distribution and app Capsules. The account plane owns account,
 billing, OIDC, and dashboard.
 
 ## API Shape

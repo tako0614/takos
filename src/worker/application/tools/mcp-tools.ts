@@ -20,7 +20,7 @@ import {
   isPublicationType,
   listPublications,
   publicationResolvedUrl,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
 } from "../services/platform/service-publications.ts";
 import { combineSignals } from "@takos/worker-platform-utils/abort";
 
@@ -112,7 +112,7 @@ export async function loadMcpTools(
       .filter((record) =>
         isPublicationType(
           record.publicationType,
-          SERVICE_GRAPH_CAPABILITIES.mcpServer,
+          RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
         ),
       )
       .map((record): McpServerLoadRecord | null => {
@@ -145,7 +145,7 @@ export async function loadMcpTools(
   }
 
   // Deterministic and contract-aligned ordering:
-  // Takos custom tools are resolved first (outside this loader), then Service Graph MCP, then external MCP.
+  // Takos custom tools are resolved first, then Capsule-projected MCP, then external MCP.
   servers.sort((a, b) => {
     const sourceRank = (sourceType: string) =>
       sourceType === "external" ? 1 : 0;

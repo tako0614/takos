@@ -47,6 +47,9 @@ import {
   setDistributionCacheEntry,
 } from "./default-app-distribution-internal.ts";
 
+const LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH =
+  "/v1/installation-projections";
+
 export function readDefaults(
   env: DefaultAppDistributionEnv,
 ): DefaultAppDistributionDefaults {
@@ -100,9 +103,16 @@ function normalizeInstallationsUrl(value: string, field: string): string {
   const normalized = normalizeHttpUrl(value, field);
   const url = new URL(normalized);
   const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)
-    ? basePath
-    : `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
+  if (basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)) {
+    url.pathname = basePath;
+  } else if (basePath.endsWith(LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH)) {
+    url.pathname = `${basePath.slice(
+      0,
+      -LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH.length,
+    )}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
+  } else {
+    url.pathname = `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
+  }
   url.search = "";
   return url.toString();
 }
@@ -138,7 +148,7 @@ export function resolveDefaultAppInstallConfig(
   if (!configured) return null;
   if (!installUrl || !token || !subject) {
     throw new DefaultAppDistributionInvalidError(
-      "Default app Installation install requires endpoint, token, and subject: configure TAKOS_DEFAULT_APP_INSTALL_URL/TOKEN/SUBJECT, shared TAKOS_APP_INSTALLATIONS_URL/TOKEN/SUBJECT, or TAKOSUMI_ACCOUNTS_INTERNAL_URL + TAKOSUMI_ACCOUNTS_TOKEN/SUBJECT",
+      "Default app Capsule install requires endpoint, token, and subject: configure TAKOS_DEFAULT_APP_INSTALL_URL/TOKEN/SUBJECT, shared TAKOS_APP_INSTALLATIONS_URL/TOKEN/SUBJECT, or TAKOSUMI_ACCOUNTS_INTERNAL_URL + TAKOSUMI_ACCOUNTS_TOKEN/SUBJECT",
     );
   }
   return {

@@ -91,6 +91,7 @@ export {
   infraEndpoints,
   infraWorkers,
   mobilePushRegistrations,
+  notificationPushers,
   moderationAuditLogs,
   nodes,
   notificationPreferences,

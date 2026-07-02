@@ -1,38 +1,36 @@
 # API リファレンス
 
 **Premise: Takos は OpenTofu-native, Takosumi-managed な first-party AI workspace distribution です。** 基本の deploy topology は
-`deploy/opentofu` の OpenTofu Capsule と wrangler artifact step です。Takosumi は Takos distribution を Installation として扱い、
+`deploy/opentofu` の OpenTofu Capsule と wrangler artifact step です。Takosumi は Takos distribution を Capsule として扱い、
 OpenTofu-native な deploy control plane として run ledger
-**Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment** を記録します。Connection が credential reference を保持し、
-Installation provider connection が provider (+ optional alias) ごとに explicit provider connection (`own_key` or `takos_provided`) を解決し、policy が provider allowlist / state backend / Cloudflare Container execution を解決します。
+**Capsule -> Run -> StateVersion -> Output** を記録します。Connection が credential reference を保持し、
+ProviderBinding が provider (+ optional alias) ごとに explicit provider connection (an explicit ProviderConnection) を解決し、policy が provider allowlist / state backend / Cloudflare Container execution を解決します。
 
 ## Current Flow
 
 1. Takos の OpenTofu module (`deploy/opentofu`、`var.target = cloudflare`) を指す
-   **Installation** を作る。module metadata は Git URL / commit / tag / module path と well-known OpenTofu outputs から解決する。
+   **Capsule** を作る。module metadata は Git URL / commit / tag / module path と well-known OpenTofu outputs から解決する。
 2. `plan` を実行すると **`plan` type Run** が記録され、reviewed plan として diff / warning / policy decision を確認する。
-3. reviewed plan を `apply` すると **`apply` type Run** が記録され、成功した apply が **Deployment** を更新する。
-4. apply が公開した non-secret service URL / binding map は **OutputSnapshot** として記録される。
-5. Connection が credential reference を保持し、Installation provider connection が provider (+ optional alias) ごとに explicit provider connection を解決し、policy が provider allowlist / state backend / Cloudflare Container execution を解決し、
-   account / billing / OIDC / dashboard は embedded Takosumi Accounts plane が所有する。
+3. reviewed plan を `apply` すると **`apply` type Run** が記録され、成功した apply が StateVersion と Output を更新する。
+4. apply が公開した non-secret service URL / binding map は **Output** として記録される。
+5. Connection が credential reference を保持し、ProviderBinding が provider (+ optional alias) ごとに explicit provider connection を解決し、policy が provider allowlist / state backend / Cloudflare Container execution を解決し、
+   account / billing / OIDC / dashboard は Takosumi Accounts plane が所有する。
 
 ## Takos Boundary
 
 Takos owns product UI, chat, agent, memory, Workspaces, and bundled app launcher UX. Git, storage, agent runtime,
-file handlers, UI surfaces, and MCP are exposed through Takosumi Service Graph as ServiceExport / ServiceBinding /
-ServiceGrant records rather than product-local service classes。Takosumi records Installation / Run / Deployment /
-OutputSnapshot と audit ledger。Connections hold credential references, Installation provider connections resolve each
+file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts rather than product-local service classes。Takosumi records Capsule / Run / StateVersion / Output と audit ledger。Connections hold credential references, ProviderBindings resolve each
 provider (and optional alias), and policy resolves provider allowlists, state handling, and runner execution。
-account-plane policy (account / billing / OIDC / dashboard) は embedded Takosumi Accounts plane が所有する。
+account-plane policy (account / billing / OIDC / dashboard) は Takosumi Accounts plane が所有する。
 
 ## Current Boundary
 
 Takos product routes expose workspace, thread, run, tools, resource, app-installation, and workspace service APIs. Takosumi Accounts
 owns account-plane identity, account/billing policy, OIDC issuer behavior, and dashboard-backed installation flow. Takos
-product routes should call the same-origin Takosumi Accounts / deploy-control seam instead of creating a separate
+product routes should call the external Takosumi Accounts / deploy-control APIs instead of creating a separate
 product-local deployment surface.
 
-## Installation API
+## Capsule API
 
 Current public/product API markers:
 

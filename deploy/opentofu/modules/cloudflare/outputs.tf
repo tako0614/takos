@@ -30,31 +30,9 @@ output "d1_database_name" {
   value       = cloudflare_d1_database.this["db"].name
 }
 
-# Account-plane D1 — binding TAKOSUMI_ACCOUNTS_DB.
-output "accounts_d1_database_id" {
-  description = "D1 database ID for the TAKOSUMI_ACCOUNTS_DB binding (account plane)."
-  value       = cloudflare_d1_database.this["accounts"].id
-}
-
-output "accounts_d1_database_name" {
-  description = "D1 database name for the TAKOSUMI_ACCOUNTS_DB binding (account plane)."
-  value       = cloudflare_d1_database.this["accounts"].name
-}
-
-# Deploy-control D1 — binding TAKOSUMI_CONTROL_DB.
-output "deploy_d1_database_id" {
-  description = "D1 database ID for the TAKOSUMI_CONTROL_DB binding (deploy-control run ledger)."
-  value       = cloudflare_d1_database.this["deploy"].id
-}
-
-output "deploy_d1_database_name" {
-  description = "D1 database name for the TAKOSUMI_CONTROL_DB binding (deploy-control run ledger)."
-  value       = cloudflare_d1_database.this["deploy"].name
-}
-
-# All D1 database IDs keyed by logical binding (db, accounts, deploy).
+# All D1 database IDs keyed by logical binding (db).
 output "d1_database_ids" {
-  description = "D1 database IDs keyed by logical binding (db, accounts, deploy)."
+  description = "D1 database IDs keyed by logical binding (db)."
   value       = { for k, v in cloudflare_d1_database.this : k => v.id }
 }
 
@@ -64,12 +42,12 @@ output "kv_namespace_ids" {
 }
 
 output "r2_bucket_names" {
-  description = "R2 bucket names keyed by logical binding (incl. accounts_exports, artifacts)."
+  description = "R2 bucket names keyed by logical binding."
   value       = { for k, v in cloudflare_r2_bucket.this : k => v.name }
 }
 
 output "queue_names" {
-  description = "Queue names keyed by logical binding (incl. *_dlq, control_plane, opentofu_runs)."
+  description = "Queue names keyed by logical binding (incl. *_dlq)."
   value       = { for k, v in cloudflare_queue.this : k => v.queue_name }
 }
 

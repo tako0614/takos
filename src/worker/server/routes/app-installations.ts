@@ -40,10 +40,6 @@ import {
   spaceAccess,
   type SpaceAccessRouteEnv,
 } from "./route-auth.ts";
-import {
-  handleAccountsPlaneRequest,
-  type CloudflareWorkerEnv as AccountsWorkerEnv,
-} from "./accounts/mount.ts";
 
 type InstallableAppApplyBody = {
   app_id?: unknown;
@@ -96,7 +92,7 @@ export const appInstallationsRouteDeps = {
   applyInstallableAppRevision,
   listInstallableAppInstallationsWithServices,
   listInstallableAppInstallationServices,
-  handleAccountsPlaneRequest,
+  accountsPlaneFetch: (request: Request) => fetch(request),
 };
 
 function readString(value: unknown): string | null {
@@ -312,14 +308,20 @@ async function accountsPlaneJson(
   path: string,
   init: RequestInit,
 ): Promise<InstallableAppUpstreamResponse> {
-  const url = new URL(c.req.url);
+  const config = appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(
+    c.env,
+  );
+  if (!config) {
+    return {
+      status: 503,
+      body: { error: "Takosumi Accounts API is not configured" },
+    };
+  }
+  const url = new URL(config.baseUrl);
   url.pathname = path;
   url.search = "";
   const request = new Request(url.toString(), init);
-  const response = await appInstallationsRouteDeps.handleAccountsPlaneRequest(
-    request,
-    c.env as unknown as AccountsWorkerEnv,
-  );
+  const response = await appInstallationsRouteDeps.accountsPlaneFetch(request);
   return {
     status: response.status,
     body: await readUpstreamBody(response),
@@ -332,15 +334,23 @@ async function accountsPlaneGetJson(
   headers: Headers,
   search?: Record<string, string>,
 ): Promise<InstallableAppUpstreamResponse> {
-  const url = new URL(c.req.url);
+  const config = appInstallationsRouteDeps.resolveInstallableAppAccountsConfig(
+    c.env,
+  );
+  if (!config) {
+    return {
+      status: 503,
+      body: { error: "Takosumi Accounts API is not configured" },
+    };
+  }
+  const url = new URL(config.baseUrl);
   url.pathname = path;
   url.search = "";
   for (const [key, value] of Object.entries(search ?? {})) {
     url.searchParams.set(key, value);
   }
-  const response = await appInstallationsRouteDeps.handleAccountsPlaneRequest(
+  const response = await appInstallationsRouteDeps.accountsPlaneFetch(
     new Request(url.toString(), { method: "GET", headers }),
-    c.env as unknown as AccountsWorkerEnv,
   );
   return {
     status: response.status,
@@ -396,7 +406,7 @@ function readAccountsExpectedGuard(
   const expected = readRecord(value?.expected);
   if (!expected) {
     throw new ServiceUnavailableError(
-      "Installation plan Run response is missing expected guard",
+      "Capsule plan Run response is missing expected guard",
     );
   }
   return expected;
@@ -816,7 +826,7 @@ appInstallationsRouter.post(
       appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Installation plan Run is not configured",
+        "Third-party Capsule plan Run is not configured",
       );
     }
     const upstream =
@@ -888,12 +898,12 @@ appInstallationsRouter.post(
       appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Installation apply is not configured",
+        "Third-party Capsule apply is not configured",
       );
     }
     if (!installConfig.subject) {
       throw new ServiceUnavailableError(
-        "Third-party Installation subject is not configured",
+        "Third-party Capsule subject is not configured",
       );
     }
     const mode = readOptionalBodyMode(body) ?? installConfig.mode;
@@ -1042,7 +1052,7 @@ appInstallationsRouter.post(
       appInstallationsRouteDeps.resolveInstallableAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Third-party Installation deployment apply is not configured",
+        "Third-party Capsule revision apply is not configured",
       );
     }
     const upstream =
@@ -1116,7 +1126,7 @@ appInstallationsRouter.post(
       appInstallationsRouteDeps.resolveDefaultAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
-        "Installation install is not configured",
+        "Capsule install is not configured",
       );
     }
 

@@ -1,19 +1,19 @@
 # Takos の概念
 
-Takos is the OpenTofu-native AI Workspace distribution managed by embedded Takosumi services. Takos Workspaces project chat, agents, memory, Git, and
-bundled apps over a Takosumi Space, which is the owner namespace for OpenTofu Capsule Installations.
+Takos is the OpenTofu-native AI Workspace distribution managed by external Takosumi control plane. Takos Workspaces provide
+the user-facing chat, agents, memory, Git, files, and bundled app launcher experience. Takosumi owns the OpenTofu
+Source / Project / Capsule / Run / StateVersion / Output authority behind that Workspace.
 
 ## Current Flow
 
 1. Deploy the Takos distribution topology with `deploy/opentofu` and the worker artifact.
-2. The worker composes Takos product routes with Takosumi Accounts, deploy-control, dashboard, and the OpenTofu runner in one origin.
-3. Create a Takos Workspace; bundled apps are seeded as normal Takosumi Installations through plan/apply Runs.
+2. The worker exposes Takos product routes and consumes external Takosumi Accounts / deploy-control / dashboard / OpenTofu runner services.
+3. Create a Takos Workspace; bundled apps are seeded as normal Takosumi Capsules through plan/apply Runs.
 4. Infrastructure lifecycle credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takosumi owns Space / Source / Connection / Installation / Run /
-StateSnapshot / Deployment / OutputSnapshot authority. The Takosumi Accounts plane owns account-plane policy,
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi owns Workspace / Project / Capsule / Source / ProviderConnection / ProviderBinding / Run / StateVersion / Output authority. The Takosumi Accounts plane owns account-plane policy,
 billing, and OIDC.
 
 ## API Shape
@@ -28,7 +28,7 @@ billing, and OIDC.
 }
 ```
 
-An Installation created this way is materialized through typed Runs. Takos product routes call the Takosumi deploy
+A Capsule created this way is materialized through typed Runs. Takos product routes call the Takosumi deploy
 control plane or the Takosumi account-plane install flow instead of exposing a separate deployment authority.
 
 ## References

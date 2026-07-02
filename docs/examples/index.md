@@ -1,6 +1,6 @@
 # サンプル集
 
-Takosumi v1 uses OpenTofu Capsules. Takosumi is an OpenTofu-native deploy control plane: it registers a Git Source, creates a Capsule, records typed Runs for plan/apply/destroy, and stores StateVersion / Output evidence after a successful apply. Module display metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
 
 ## Current Flow
 
@@ -12,7 +12,7 @@ Takosumi v1 uses OpenTofu Capsules. Takosumi is an OpenTofu-native deploy contro
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are projected from Capsule outputs and Takos runtime contracts. Takosumi records Capsule / Run / StateVersion / Output state and policy decisions for each run. The embedded Takosumi Accounts plane owns account-plane policy such as accounts, billing, OIDC, and the dashboard.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are projected from Capsule outputs and Takos runtime contracts. Takosumi records Run, StateVersion, Output, policy, and audit evidence and policy decisions for each run. The Takosumi Accounts plane owns account-plane policy such as accounts, billing, OIDC, and the dashboard.
 
 ## API Shape
 

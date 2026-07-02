@@ -59,15 +59,15 @@ modules stay OpenTofu's responsibility.
 
 ## Capability mapping
 
-| Takos surface                    | capability                                                  |
-| -------------------------------- | ----------------------------------------------------------- |
-| MCP registry                     | `protocol.mcp.server`                                       |
-| app launcher / embedded UI       | `interface.ui.surface`                                      |
-| file handlers                    | `interface.file.handler`                                    |
-| file / object storage            | `storage.filesystem`, `storage.object`                      |
-| key-value / SQL resources        | `storage.key_value`, `storage.sql`                          |
-| Git UX / clone / refs            | `source.repository`, `source.git.smart_http`                |
-| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`      |
+| Takos surface                    | service identity / capability                              |
+| -------------------------------- | ---------------------------------------------------------- |
+| MCP registry                     | app-provided `protocol.mcp.server` publications            |
+| app launcher / embedded UI       | app-provided `interface.ui.surface` publications           |
+| file handlers                    | app-provided `interface.file.handler` publications         |
+| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`   |
+| object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`       |
+| Git UX / clone / refs            | `source.repository`, `source.git.smart_http`               |
+| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`     |
 | same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api` |
 
 ## Consuming services
@@ -76,6 +76,27 @@ A Capsule consumes services through the `service_bindings` Output (or `takos_app
 exports, pins them into the consumer's plan-time output-to-input snapshot, and wires only non-secret endpoint values into
 the consumer. The projection is read-only and store-free: it issues no credentials. Secret values fail closed and are
 delivered by the deployed workload's own runtime, not by a Takosumi grant.
+
+For Takos Workspace files, apps consume the Takos-owned service identity and map its URL output into their workload env:
+
+```hcl
+consume = [
+  {
+    publication = "takos.storage.workspace"
+    request = {
+      scopes = ["files:read", "files:write"]
+    }
+    inject = {
+      env = {
+        url = "TAKOS_STORAGE_API_URL"
+      }
+    }
+  }
+]
+```
+
+This maps endpoint discovery only. Bearer authority is not projected from OpenTofu Outputs; apps use
+`TAKOS_STORAGE_ACCESS_TOKEN` or the existing `TAKOS_ACCESS_TOKEN` runtime binding supplied by their workload runtime.
 
 ## Security invariants
 

@@ -13,7 +13,10 @@ function prefersReducedMotion(): boolean {
 export function reveal(el: HTMLElement, accessor?: () => number | true): void {
   const raw = accessor?.();
   const delay = typeof raw === 'number' ? raw : 0;
-  el.classList.add('reveal');
+  // Arm the hidden state from JS so it only applies when this directive actually
+  // runs (i.e. client hydration is alive). If hydration is unavailable the
+  // element is never armed and stays visible — content can't get stuck hidden.
+  el.classList.add('reveal', 'reveal-armed');
   if (delay) el.style.setProperty('--reveal-delay', `${delay}ms`);
 
   if (prefersReducedMotion() || typeof IntersectionObserver === 'undefined') {

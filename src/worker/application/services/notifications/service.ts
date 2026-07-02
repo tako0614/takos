@@ -482,6 +482,30 @@ export async function markNotificationRead(
   return { success: true };
 }
 
+export async function markAllNotificationsRead(
+  dbBinding: SqlDatabaseBinding,
+  userId: string,
+): Promise<{ success: true }> {
+  const db = getDb(dbBinding);
+  try {
+    await db
+      .update(notifications)
+      .set({ readAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(notifications.recipientAccountId, userId),
+          isNull(notifications.readAt),
+        ),
+      );
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      throwMissingNotificationTable(err, "notifications");
+    }
+    throw err;
+  }
+  return { success: true };
+}
+
 export async function createNotification(
   env: Env,
   input: {

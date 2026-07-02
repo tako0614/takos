@@ -52,6 +52,7 @@ export function formatAppStatusLabel(
   const known: Record<string, TranslationKey> = {
     deployed: "appStatusDeployed",
     active: "appStatusActive",
+    ready: "appStatusReady",
     failed: "appStatusFailed",
     error: "appStatusError",
     degraded: "appStatusDegraded",

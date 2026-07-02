@@ -8,7 +8,7 @@ import { normalizeEnvName } from "../common-env/crypto.ts";
 
 export { normalizeEnvName };
 export {
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
   TAKOS_APP_PUBLICATION_TYPES,
 } from "../source/app-interface-contract.ts";
 
@@ -247,9 +247,14 @@ function normalizeRoutePublication(
   const type = canonicalPublicationType(
     normalizeName(publication.type || "", "publication.type"),
   );
+  if (isReservedTakosPublicationSource(name)) {
+    throw new Error(
+      `publication '${name}' uses reserved Takos service identity; use the Takos runtime binding contract instead`,
+    );
+  }
   if (publisher === "takos") {
     throw new Error(
-      `publication '${name}' uses reserved publisher 'takos'; use ServiceBinding and ServiceGrant for runtime authority instead`,
+      `publication '${name}' uses reserved publisher 'takos'; use the Takos runtime binding contract for runtime authority instead`,
     );
   }
   if (!publication.outputs || Object.keys(publication.outputs).length === 0) {
@@ -345,7 +350,7 @@ export function normalizeApiPublicationDefinition(
     : undefined;
   if (publisher === "takos") {
     throw new Error(
-      `publication '${name}' uses reserved publisher 'takos'; use ServiceBinding and ServiceGrant for runtime authority instead`,
+      `publication '${name}' uses reserved publisher 'takos'; use the Takos runtime binding contract for runtime authority instead`,
     );
   }
   const type = canonicalPublicationType(

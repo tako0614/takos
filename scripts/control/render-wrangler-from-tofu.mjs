@@ -16,7 +16,7 @@ import * as runtime from "../runtime.ts";
 //   bun ../../scripts/control/render-wrangler-from-tofu.mjs production --zone-id <zone>
 //
 // What it fills (per environment): Worker script name, CF_ACCOUNT_ID, the D1
-// database ids, KV namespace ids, R2 bucket names, Queue names, and Vectorize
+// database id, KV namespace ids, R2 bucket names, Queue names, and Vectorize
 // index name. CF_ZONE_ID is NOT a module-managed resource (it is the
 // self-hoster's existing DNS zone), so pass it with --zone-id or fill the
 // remaining `replace-with-*zone-id` placeholder by hand. Container images, SPA
@@ -89,7 +89,7 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
 
   const accountId = read("cloudflare_account_id");
   const workerName = read("worker_name");
-  const d1 = read("cloudflare_d1_database_ids"); // { db, accounts, deploy }
+  const d1 = read("cloudflare_d1_database_ids"); // { db }
   const kv = read("cloudflare_kv_namespace_ids"); // { hostname_routing, rollout_health }
   const r2 = read("object_storage_buckets");
   const queues = read("queue_bindings");
@@ -113,16 +113,6 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
       "db",
       "cloudflare_d1_database_ids",
     ),
-    [`replace-with-${prefix}accounts-d1-database-id`]: requireKey(
-      d1,
-      "accounts",
-      "cloudflare_d1_database_ids",
-    ),
-    [`replace-with-${prefix}deploy-d1-database-id`]: requireKey(
-      d1,
-      "deploy",
-      "cloudflare_d1_database_ids",
-    ),
     [`replace-with-${prefix}hostname-routing-kv-namespace-id`]: requireKey(
       kv,
       "hostname_routing",
@@ -132,12 +122,6 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
       kv,
       "rollout_health",
       "cloudflare_kv_namespace_ids",
-    ),
-    [`"${legacy.replace("{name}", "accounts-exports")}"`]: tomlString(
-      requireKey(r2, "accounts_exports", "object_storage_buckets"),
-    ),
-    [`"${legacy.replace("{name}", "artifacts")}"`]: tomlString(
-      requireKey(r2, "artifacts", "object_storage_buckets"),
     ),
     [`"${legacy.replace("{name}", "worker-bundles")}"`]: tomlString(
       requireKey(r2, "worker_bundles", "object_storage_buckets"),

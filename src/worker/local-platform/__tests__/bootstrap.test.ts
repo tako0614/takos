@@ -306,7 +306,7 @@ const originalEnv = {
 };
 let tempDataDir: string | null = null;
 localBootstrapTest(
-  "local bootstrap - serves takos health without Installation provider connection policy",
+  "local bootstrap - serves takos health without ProviderBinding policy",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;

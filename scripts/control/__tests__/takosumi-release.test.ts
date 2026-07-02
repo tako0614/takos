@@ -26,7 +26,6 @@ import {
 
 const rawOutputs = {
   cloudflare_account_id: "acc_123",
-  cloudflare_accounts_d1_database_id: "d1_accounts",
   cloudflare_vectorize_index_name: "takos-test-embeddings",
   cloudflare_vectorize_index_dimensions: 768,
   cloudflare_vectorize_index_metric: "cosine",
@@ -45,25 +44,19 @@ const rawOutputs = {
 
 const productionWranglerConfig = "deploy/cloudflare/.takos-release-wrangler.production.toml";
 const stagingWranglerConfig = "deploy/cloudflare/.takos-release-wrangler.staging.toml";
-const productionWranglerConfigPath = resolve(productionWranglerConfig);
-const stagingWranglerConfigPath = resolve(stagingWranglerConfig);
 
 test("buildTakosumiReleaseCommands runs generic operator activation steps", () => {
   assert.deepEqual(
     buildTakosumiReleaseCommands(rawOutputs, "production", {
       zoneId: "zone_123",
-      takosumiRepoDir: "../takosumi",
     }),
     [
       `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'production' '--out' '${productionWranglerConfig}' '--zone-id' 'zone_123'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
       "'bun' 'install' '--frozen-lockfile'",
-      "'bun' 'install' '--cwd' '../takosumi' '--frozen-lockfile'",
-      "'bun' 'install' '--cwd' '../takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}' '--env='`,
-      `'bun' 'run' '--cwd' '../takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${productionWranglerConfigPath}' '--account-id' 'acc_123' '--remote' '--env='`,
       `'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' '${productionWranglerConfig}' '--secrets-file' '.takos-release-secrets.production.json'`,
       `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env='`,
     ],
@@ -74,18 +67,14 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
   assert.deepEqual(
     buildTakosumiReleaseCommands(rawOutputs, "staging", {
       debug: true,
-      takosumiRepoDir: "/opt/takosumi",
     }),
     [
       `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging' '--out' '${stagingWranglerConfig}'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
       "'bun' 'install' '--frozen-lockfile'",
-      "'bun' 'install' '--cwd' '/opt/takosumi' '--frozen-lockfile'",
-      "'bun' 'install' '--cwd' '/opt/takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build' '--mode' 'staging-debug'",
       "'bun' 'run' 'containers:build'",
       `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${stagingWranglerConfig}' '--env' 'staging'`,
-      `'bun' 'run' '--cwd' '/opt/takosumi' 'cli' '--' 'accounts' 'migrate-d1' '--database-id' 'TAKOSUMI_ACCOUNTS_DB' '--wrangler-config' '${stagingWranglerConfigPath}' '--account-id' 'acc_123' '--remote' '--env' 'staging'`,
       `'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' '${stagingWranglerConfig}' '--secrets-file' '.takos-release-secrets.staging.json'`,
       `'bunx' 'wrangler' 'deploy' '--config' '${stagingWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging'`,
     ],
@@ -96,15 +85,12 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
   assert.deepEqual(
     buildTakosumiReleaseCommands(rawOutputs, "staging", {
       skipD1Migrations: true,
-      takosumiRepoDir: "/opt/takosumi",
       containersRollout: "none",
     }),
     [
       `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging' '--out' '${stagingWranglerConfig}'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
       "'bun' 'install' '--frozen-lockfile'",
-      "'bun' 'install' '--cwd' '/opt/takosumi' '--frozen-lockfile'",
-      "'bun' 'install' '--cwd' '/opt/takosumi/dashboard' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       `'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' '${stagingWranglerConfig}' '--secrets-file' '.takos-release-secrets.staging.json'`,

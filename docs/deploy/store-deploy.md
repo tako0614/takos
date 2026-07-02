@@ -66,7 +66,7 @@ production install は tag または commit SHA に pin します。`main` / `la
 
 ## 管理者向け detail
 
-operator / admin は install 管理画面で Source / Installation / Run / Deployment / OutputSnapshot / Activity を確認します。
+operator / admin は install 管理画面で Source / Capsule / Run / StateVersion / Output / Activity を確認します。
 Workspace ユーザー向けの主導線では、この台帳を最初の説明にしません。
 
 ## 関連ページ

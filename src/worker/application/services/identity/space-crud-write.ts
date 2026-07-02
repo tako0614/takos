@@ -29,12 +29,12 @@ import {
   enqueueDefaultAppPreinstallJob,
   processDefaultAppPreinstallJobs,
 } from "../source/default-app-distribution.ts";
-import { ensureServiceGraphExports } from "../platform/service-graph-exports.ts";
+import { ensureRuntimeProjectionExports } from "../platform/runtime-projection-exports.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 
 export const spaceCrudWriteDeps = {
   enqueueDefaultAppPreinstallJob,
-  ensureServiceGraphExports,
+  ensureRuntimeProjectionExports,
   processDefaultAppPreinstallJobs,
 };
 
@@ -209,16 +209,16 @@ async function processDefaultAppsAfterCommit(
   }
 }
 
-async function ensureServiceGraphExportsAfterCommit(
+async function ensureRuntimeProjectionExportsAfterCommit(
   env: Env,
   spaceId: string,
 ): Promise<void> {
   try {
-    await spaceCrudWriteDeps.ensureServiceGraphExports(env, {
+    await spaceCrudWriteDeps.ensureRuntimeProjectionExports(env, {
       spaceId,
     });
   } catch (error) {
-    logWarn("Failed to seed service graph exports", {
+    logWarn("Failed to seed runtime projection exports", {
       module: "spaces",
       spaceId,
       error: error instanceof Error ? error.message : String(error),
@@ -287,7 +287,7 @@ export async function createWorkspaceWithDefaultRepo(
     timestamp,
   });
 
-  await ensureServiceGraphExportsAfterCommit(env, spaceId);
+  await ensureRuntimeProjectionExportsAfterCommit(env, spaceId);
 
   if (shouldInstallDefaultApps) {
     try {
@@ -423,7 +423,7 @@ export async function getOrCreatePersonalWorkspace(
 ): Promise<SpaceListItem | null> {
   const workspace = await getPersonalWorkspace(env, userId);
   if (workspace) {
-    await ensureServiceGraphExportsAfterCommit(env, userId);
+    await ensureRuntimeProjectionExportsAfterCommit(env, userId);
     await enqueuePersonalWorkspaceDefaultApps(env, userId);
   }
   return workspace;

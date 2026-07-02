@@ -11,7 +11,7 @@ import {
   listPublications,
   type PublicationRecord,
   publicationResolvedUrl,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
 } from "./service-publications.ts";
 
 export interface UIExtension {
@@ -85,7 +85,7 @@ export async function getUISidebarItems(
     .filter((record) =>
       isPublicationType(
         record.publicationType,
-        SERVICE_GRAPH_CAPABILITIES.interfaceUiSurface,
+        RUNTIME_PROJECTION_CAPABILITIES.interfaceUiSurface,
       ),
     )
     .map(sidebarItemFromUiSurfacePublication)

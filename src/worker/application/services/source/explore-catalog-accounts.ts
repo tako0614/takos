@@ -76,7 +76,7 @@ export function resolveCatalogAccountsInstallationsReadConfig(
   const baseUrl = normalizeAccountsBaseUrl(rawBaseUrl);
   if (!baseUrl) {
     sourceServiceDeps.logWarn(
-      "Skipping Installation catalog readback because Accounts URL is invalid",
+      "Skipping Capsule projection readback because Accounts URL is invalid",
       { baseUrl: rawBaseUrl },
     );
     return null;
@@ -144,7 +144,7 @@ export async function fetchAccountsInstallationsForSpace(
     const fetchImpl = config.fetch ?? fetch;
     const response = await fetchImpl(url, { headers });
     if (!response.ok) {
-      sourceServiceDeps.logWarn("Failed to list Installation readback", {
+      sourceServiceDeps.logWarn("Failed to list Capsule projection readback", {
         status: response.status,
         url: url.toString(),
       });
@@ -166,7 +166,7 @@ export async function fetchAccountsInstallationsForSpace(
       ),
     })));
   } catch (error) {
-    sourceServiceDeps.logWarn("Failed to list Installation readback", {
+    sourceServiceDeps.logWarn("Failed to list Capsule projection readback", {
       url: url.toString(),
       error: error instanceof Error ? error.message : String(error),
     });

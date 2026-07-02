@@ -2,14 +2,14 @@
 
 Takos は OpenTofu-native, Takosumi-managed な first-party AI Workspace distribution です。AI エージェントとの会話を通じて
 ソフトウェアを作成・編集でき、すべての変更は Git で追跡されます。app / deploy topology は Git-hosted OpenTofu Capsule
-として扱い、Takosumi 専用 manifest や DSL を要求しません。self-host は embedded Takosumi services (Accounts /
-deploy-control / dashboard / OpenTofu runner / Run ledger / policy / audit) と Takos product surface (chat / agent /
-memory / Git / Workspace / app launcher / MCP tools) を同じ origin の Worker として compose します。
+として扱い、Takosumi 専用 manifest や DSL を要求しません。Takos は chat / agent / memory / Git / Workspace /
+app launcher / MCP tools を持つ product Worker で、Accounts / dashboard / Run ledger / OpenTofu runner は外部の
+Takosumi control plane が管理します。
 
 Takos product の実行実装とスクリプトは Bun を前提としており、`src/worker` / `web` /
 `containers/git` / `scripts` のローカル実行は `bun` コマンドで行います。
 
-バンドルアプリ (`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu`) は新しい Workspace
+バンドルアプリ (`takos-office` / `takos-computer` / `yurucommu`) は新しい Workspace
 作成時に distribution seed として install されます。
 
 📖 ドキュメント: <https://docs.takos.jp/>
@@ -34,7 +34,7 @@ bun run local:up
 | `takos-agent`  | agent execution container                                           |
 
 ログインや課金は Takosumi Accounts が担当し、デプロイ制御は Takosumi (`../takosumi`) の OpenTofu-native
-Deploy Control API が担当します。self-host worker ではこれらを in-process で同居させます。
+Deploy Control API が担当します。Takos worker は OIDC client / resource server として外部 Takosumi origin を利用します。
 
 Takos distribution の deploy topology は `deploy/opentofu` の OpenTofu Capsule です。Takosumi v1 は Git URL /
 commit / module path / well-known OpenTofu outputs などの汎用 metadata から Run を作り、apply 成功後に StateVersion と

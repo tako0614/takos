@@ -233,6 +233,11 @@ export function parsePublicationEntry(
   assertAllowedFields(record, prefix, PUBLICATION_FIELDS);
 
   const name = asRequiredString(record.name, `${prefix}.name`);
+  if (name.startsWith("takos.")) {
+    throw new Error(
+      `${prefix}.name '${name}' is reserved for Takos runtime services; use the Takos runtime binding contract instead`,
+    );
+  }
   const rawType = partial
     ? asString(record.type, `${prefix}.type`)
     : asRequiredString(record.type, `${prefix}.type`);
@@ -240,7 +245,7 @@ export function parsePublicationEntry(
   const publisher = asString(record.publisher, `${prefix}.publisher`);
   if (publisher === "takos") {
     throw new Error(
-      `${prefix}.publisher 'takos' is not supported in Capsule desired-state projections; use ServiceBinding and ServiceGrant for runtime authority instead`,
+      `${prefix}.publisher 'takos' is not supported in Capsule desired-state projections; use the Takos runtime binding contract for runtime authority instead`,
     );
   }
   const outputs =

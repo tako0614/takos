@@ -21,7 +21,7 @@ store.
 
 > **Internal processor boundary note.** Within the Takosumi / Takos ecosystem
 > itself, **Takosumi kernel** is treated as the Installation / typed Runs /
-> Deployment / OutputSnapshot run-ledger processor and never holds identity,
+> Deployment / Output run-ledger processor and never holds identity,
 > billing, or customer account state. **Takosumi Accounts** (`takosumi.identity.oidc` /
 > `takosumi.billing.usage`) is the separate identity / billing processor that
 > owns OIDC issuance, Installation ownership, and operator BillingPort billing.

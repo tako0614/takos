@@ -11,7 +11,7 @@ Platforms signup が closed の間も、rehearsal / self-host では同じ produ
 
 最初に見るもの:
 
-- **Apps**: `takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` など、すぐ開ける bundled app
+- **Apps**: `takos-office` / `takos-computer` / `yurucommu` など、すぐ開ける bundled app
 - **Chat**: agent に作業を依頼する入口
 - **Memory**: project notes、決定事項、繰り返し使う context
 - **Repos / Files**: agent が作ったコードやファイルを確認する場所
@@ -26,7 +26,7 @@ memory、app の状態に反映されます。
 例:
 
 - `この Workspace の README を読んで、次にやることを整理して`
-- `takos-docs に新しいメモページを作って`
+- `takos-office の Docs に新しいメモページを作って`
 - `この app の設定を確認して、必要な変更を PR にして`
 
 Takos は chat だけの UI ではなく、agent が使う Git / files / memory / apps を同じ Workspace に置くための product です。
@@ -34,7 +34,7 @@ Takos は chat だけの UI ではなく、agent が使う Git / files / memory 
 ## 3. Apps から成果物を開く
 
 Apps 画面は Workspace の launcher です。bundled app や Git URL から追加した app がここに並びます。app に launch URL がある場合は、
-ここから直接開けます。install 中のものは管理 link から Installation detail に進めます。
+ここから直接開けます。install 中のものは管理 link から Capsule detail に進めます。
 
 新しい app を追加したい場合は、Apps 画面から Source / Git URL の追加導線に進みます。Takos に中央の公式 app store はありません。
 Store / Source 画面は、Git URL の OpenTofu Capsule を見つけて追加するための discovery surface です。
@@ -53,20 +53,20 @@ Git URL を入力
 Apps launcher に表示
 ```
 
-裏側では Takosumi が compatibility check、plan、apply、Deployment / OutputSnapshot 記録を行います。ただし product 導線では、
+裏側では Takosumi が compatibility check、plan、apply、StateVersion / Output 記録を行います。ただし product 導線では、
 まず「何が追加され、どこから開けるか」を確認できることが重要です。詳細は [はじめてのアプリ](/get-started/your-first-app) を参照してください。
 
 ## 5. 管理者向けの裏側
 
 operator / self-host 管理者は、Takos distribution を OpenTofu module と wrangler artifact upload で deploy します。この worker は
-Takos product surface と embedded Takosumi Accounts / deploy-control / dashboard / OpenTofu runner を同一 origin に compose します。
+Takos product surface を提供し、Accounts / deploy-control / dashboard / OpenTofu runner は外部 Takosumi control plane が所有します。
 
 管理者が見るもの:
 
-- backing resources: D1 / KV / R2 / Queues / Durable Objects / containers
+- backing resources: D1 / KV / R2 / Queues / Worker assets / containers
 - account / OIDC / billing / domain policy
-- Source / Connection / Installation / Run / Deployment / OutputSnapshot / Activity
-- provider connection outcome: Gateway coverage, Space-owned Connection, or policy block
+- Source / Connection / Capsule / Run / StateVersion / Output / Activity
+- provider binding outcome: explicit ProviderConnection, required manual input, or policy block
 
 Workspace ユーザー向けの導線では、これらは Apps、Chat、Memory、Git、Files の裏側に隠れます。
 

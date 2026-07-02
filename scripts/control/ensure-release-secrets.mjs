@@ -22,10 +22,6 @@ const SIMPLE_SECRET_GENERATORS = {
   ENCRYPTION_KEY: () => randomBase64(32),
   EXECUTOR_PROXY_SECRET: () => randomHex(32),
   TAKOS_INTERNAL_API_SECRET: () => randomHex(32),
-  TAKOSUMI_DEPLOY_CONTROL_TOKEN: () => randomHex(32),
-  TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET: () => randomBase64(32),
-  TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET: () => randomBase64(32),
-  TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET: () => randomBase64(32),
 };
 
 const SECRET_ORDER = [
@@ -35,12 +31,6 @@ const SECRET_ORDER = [
   "ENCRYPTION_KEY",
   "EXECUTOR_PROXY_SECRET",
   "TAKOS_INTERNAL_API_SECRET",
-  "TAKOSUMI_DEPLOY_CONTROL_TOKEN",
-  "TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK",
-  "TAKOSUMI_ACCOUNTS_ES256_KEY_ID",
-  "TAKOSUMI_ACCOUNTS_OIDC_PAIRWISE_SUBJECT_SECRET",
-  "TAKOSUMI_ACCOUNTS_LAUNCH_TOKEN_PAIRWISE_SECRET",
-  "TAKOSUMI_ACCOUNTS_EXPORT_DOWNLOAD_SECRET",
 ];
 
 function usage() {
@@ -153,22 +143,6 @@ async function generateRsaPemPair() {
   };
 }
 
-async function generateEs256Jwk() {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "ECDSA", namedCurve: "P-256" },
-    true,
-    ["sign", "verify"],
-  );
-  const jwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
-  jwk.alg = "ES256";
-  jwk.use = "sig";
-  jwk.kid = `takos-${randomHex(8)}`;
-  return {
-    TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK: JSON.stringify(jwk),
-    TAKOSUMI_ACCOUNTS_ES256_KEY_ID: jwk.kid,
-  };
-}
-
 function ensureDir(path) {
   mkdirSync(path, { recursive: true, mode: 0o700 });
   chmodSync(path, 0o700);
@@ -203,19 +177,6 @@ async function ensureSecrets(secretDir) {
     !existing.has("PLATFORM_PUBLIC_KEY")
   ) {
     const pair = await generateRsaPemPair();
-    for (const [name, value] of Object.entries(pair)) {
-      if (!existing.has(name)) {
-        writeSecret(secretDir, name, value);
-        existing.set(name, value);
-      }
-    }
-  }
-
-  if (
-    !existing.has("TAKOSUMI_ACCOUNTS_ES256_PRIVATE_JWK") ||
-    !existing.has("TAKOSUMI_ACCOUNTS_ES256_KEY_ID")
-  ) {
-    const pair = await generateEs256Jwk();
     for (const [name, value] of Object.entries(pair)) {
       if (!existing.has(name)) {
         writeSecret(secretDir, name, value);

@@ -7,14 +7,16 @@ export default function BundledApps() {
   const t = useT();
   void reveal;
   return (
-    <Section splat id='apps' eyebrow={t.apps.eyebrow} title={t.apps.title} lede={t.apps.lede}>
-      <div class='features'>
+    <Section id='apps' title={t.apps.title} lede={t.apps.lede}>
+      <div class='app-cards'>
         <For each={t.apps.items}>
           {(a, i) => (
-            <article class='feature reveal' use:reveal={i() * 60}>
-              <h4>
-                {a.name} <span class='feature-tag'>{a.tag}</span>
-              </h4>
+            <article class='app-card reveal' use:reveal={i() * 80}>
+              <div class='app-card-head'>
+                <h3>{a.name}</h3>
+                <span class='feature-tag'>{a.tag}</span>
+              </div>
+              <div class='app-card-role'>{a.role}</div>
               <p>{a.body}</p>
             </article>
           )}

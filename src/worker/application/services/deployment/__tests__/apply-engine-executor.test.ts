@@ -229,7 +229,7 @@ test(
         failedRoutes: [],
       }),
       previewServiceConsumeEnvVars: async () => [],
-      replaceServiceGraphPublications: async () => undefined,
+      replaceRuntimeProjectionPublications: async () => undefined,
       replaceServiceConsumes: async () => [],
       resolveServiceConsumeEnvVars: async () => [],
       resolveLinkedCommonEnvState: async () => ({

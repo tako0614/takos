@@ -7,7 +7,7 @@
  * - `default-app-distribution-internal.ts` — error classes, cache, deps
  * - `default-app-resolution.ts` — env / DB / fallback distribution resolution
  *   and status reporting
- * - `default-app-preinstall-jobs.ts` — preinstall Installation lifecycle
+ * - `default-app-preinstall-jobs.ts` — preinstall Capsule lifecycle
  *   (apply / save / clear / enqueue / process)
  */
 

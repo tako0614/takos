@@ -11,11 +11,11 @@ import {
   listPublications,
   listServiceConsumes,
   previewServiceConsumeEnvVars,
-  replaceServiceGraphPublications,
+  replaceRuntimeProjectionPublications,
   replaceServiceConsumes,
   resolveServiceConsumeEnvVars,
-  SERVICE_GRAPH_CAPABILITIES,
-  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+  RUNTIME_PROJECTION_CAPABILITIES,
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
 } from "../platform/service-publications.ts";
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
 import { randomHex } from "../../../shared/utils/encoding-utils.ts";
@@ -71,7 +71,7 @@ type DesiredResourceBinding = {
 
 function readMcpAuthSecretRef(publication: AppPublication): string | null {
   if (
-    !isPublicationType(publication.type, SERVICE_GRAPH_CAPABILITIES.mcpServer)
+    !isPublicationType(publication.type, RUNTIME_PROJECTION_CAPABILITIES.mcpServer)
   ) {
     return null;
   }
@@ -263,7 +263,7 @@ export type GroupManagedDesiredStateDeps = {
   createDesiredStateService: (env: Env) => DesiredStateService;
   listServiceConsumes: typeof listServiceConsumes;
   previewServiceConsumeEnvVars: typeof previewServiceConsumeEnvVars;
-  replaceServiceGraphPublications: typeof replaceServiceGraphPublications;
+  replaceRuntimeProjectionPublications: typeof replaceRuntimeProjectionPublications;
   replaceServiceConsumes: typeof replaceServiceConsumes;
   resolveServiceConsumeEnvVars: typeof resolveServiceConsumeEnvVars;
   resolveLinkedCommonEnvState: typeof resolveLinkedCommonEnvState;
@@ -284,7 +284,7 @@ const defaultGroupManagedDesiredStateDeps: GroupManagedDesiredStateDeps = {
   createDesiredStateService: (env: Env) => new ServiceDesiredStateService(env),
   listServiceConsumes,
   previewServiceConsumeEnvVars,
-  replaceServiceGraphPublications,
+  replaceRuntimeProjectionPublications,
   replaceServiceConsumes,
   resolveServiceConsumeEnvVars,
   resolveLinkedCommonEnvState,
@@ -315,7 +315,7 @@ async function captureManagedPublicationSnapshot(
     .filter(
       (publication) =>
         publication.groupId === groupId &&
-        publication.sourceType === SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+        publication.sourceType === RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
     )
     .map((publication) => publication.publication);
 }
@@ -466,12 +466,12 @@ export async function syncGroupPublicationDesiredState(
     observedState: ObservedGroupState;
   },
   deps: Partial<
-    Pick<GroupManagedDesiredStateDeps, "replaceServiceGraphPublications">
+    Pick<GroupManagedDesiredStateDeps, "replaceRuntimeProjectionPublications">
   > = {},
 ): Promise<PublicationSyncFailure[]> {
   const resolvedDeps = {
-    replaceServiceGraphPublications:
-      deps.replaceServiceGraphPublications ?? replaceServiceGraphPublications,
+    replaceRuntimeProjectionPublications:
+      deps.replaceRuntimeProjectionPublications ?? replaceRuntimeProjectionPublications,
   };
   let snapshot: AppPublication[];
   try {
@@ -490,7 +490,7 @@ export async function syncGroupPublicationDesiredState(
   }
 
   try {
-    await resolvedDeps.replaceServiceGraphPublications(env, {
+    await resolvedDeps.replaceRuntimeProjectionPublications(env, {
       spaceId: input.spaceId,
       groupId: input.observedState.groupId,
       manifest: {
@@ -501,7 +501,7 @@ export async function syncGroupPublicationDesiredState(
     });
   } catch (error) {
     try {
-      await resolvedDeps.replaceServiceGraphPublications(env, {
+      await resolvedDeps.replaceRuntimeProjectionPublications(env, {
         spaceId: input.spaceId,
         groupId: input.observedState.groupId,
         manifest: {
@@ -930,8 +930,8 @@ export async function syncGroupManagedDesiredState(
           observedState: input.observedState,
         },
         {
-          replaceServiceGraphPublications:
-            resolvedDeps.replaceServiceGraphPublications,
+          replaceRuntimeProjectionPublications:
+            resolvedDeps.replaceRuntimeProjectionPublications,
         },
       )),
     );

@@ -25,13 +25,13 @@ Source 画面が行わないこと:
 - provider credential や secret output を保持する
 - app を公式審査済みとして保証する
 - app を公開・発見・連合する(Takos は単一オーナー product で store network を持たない)
-- Takosumi の Source / Installation / Run ledger を置き換える
+- Takosumi の Source / Capsule / Run ledger を置き換える
 
 つまり product copy では「Store から追加」と言ってよいですが、architecture と policy の意味では「Git URL の Capsule を追加する」が正本です。
 
 ## first-party app も同じ仕組みに乗る
 
-`takos-docs` / `takos-slide` / `takos-excel` / `takos-computer` / `yurucommu` は、新規 Workspace で seed される
+`takos-office` / `takos-computer` / `yurucommu` は、新規 Workspace で seed される
 first-party bundled app です。Takos product では最初から使える convenience として扱いますが、install の仕組みとしては通常の
 Git URL Capsule と同じです。user は不要なら uninstall できます。
 
@@ -65,7 +65,7 @@ Apps launcher に表示
 app を開く、または Chat で使う
 ```
 
-裏側では compatibility check、plan、apply、Deployment / OutputSnapshot 記録が走ります。これらは audit と operator 管理には重要ですが、
+裏側では compatibility check、plan、apply、StateVersion / Output 記録が走ります。これらは audit と operator 管理には重要ですが、
 Source 画面では「追加して使えるか」を先に見せます。
 
 ## 関連ページ

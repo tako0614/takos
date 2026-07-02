@@ -162,12 +162,6 @@
       "@takosjp/takosumi-accounts-service": [
         "../takosumi/accounts/service/src/mod.ts"
       ],
-      "@takosjp/takosumi-accounts-worker": [
-        "../takosumi/deploy/accounts-cloudflare/src/handler.ts"
-      ],
-      "@takosjp/takosumi-deploy-worker": [
-        "../takosumi/worker/src/handler.ts"
-      ],
       "takos-git-contract": [
         "./src/contracts/git/index.ts"
       ],

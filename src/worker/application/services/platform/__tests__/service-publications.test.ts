@@ -2,16 +2,16 @@ import { test } from "bun:test";
 import { assertEquals, assertRejects, assertThrows } from "@takos/test/assert";
 
 import {
-  assertServiceGraphPublicationPrerequisites,
+  assertRuntimeProjectionPublicationPrerequisites,
   canonicalPublicationType,
   normalizePublicationDefinition,
   normalizeServiceConsumes,
   publicationAllowedFields,
   publicationOutputContract,
-  replaceServiceGraphPublications,
+  replaceRuntimeProjectionPublications,
   resolveConsumeOutputEnvName,
   resolveRoutePublication,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
 } from "../service-publications.ts";
 import { toPublicationRecord } from "../service-publications-db.ts";
 import { publications, serviceConsumes } from "../../../../infra/db/index.ts";
@@ -148,10 +148,10 @@ test("service publications reject Takos publisher and keep route type open-ended
   );
 });
 
-test("publication type canonicalization preserves service graph capability tokens", () => {
+test("publication type canonicalization preserves runtime projection capability tokens", () => {
   assertEquals(
-    canonicalPublicationType(SERVICE_GRAPH_CAPABILITIES.mcpServer),
-    SERVICE_GRAPH_CAPABILITIES.mcpServer,
+    canonicalPublicationType(RUNTIME_PROJECTION_CAPABILITIES.mcpServer),
+    RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
   );
   assertEquals(
     canonicalPublicationType("com.example.custom"),
@@ -159,12 +159,12 @@ test("publication type canonicalization preserves service graph capability token
   );
 });
 
-test("api Service Graph exports can be restored without route refs", () => {
+test("api runtime projection exports can be restored without route refs", () => {
   const row = makePublicationRow(
     {
-      name: "storage.filesystem",
-      publisher: "service-graph",
-      type: SERVICE_GRAPH_CAPABILITIES.storageFilesystem,
+      name: "takos.storage.workspace",
+      publisher: "runtime-projection",
+      type: RUNTIME_PROJECTION_CAPABILITIES.storageFilesystem,
       outputs: { url: { kind: "url" } },
       spec: {
         scopes: { read: ["files:read"], write: ["files:write"] },
@@ -177,19 +177,19 @@ test("api Service Graph exports can be restored without route refs", () => {
   row.groupId = null;
   row.ownerServiceId = null;
   row.sourceType = "api";
-  row.publicationType = SERVICE_GRAPH_CAPABILITIES.storageFilesystem;
+  row.publicationType = RUNTIME_PROJECTION_CAPABILITIES.storageFilesystem;
 
   const record = toPublicationRecord(row as never);
 
-  assertEquals(record.name, "storage.filesystem");
+  assertEquals(record.name, "takos.storage.workspace");
   assertEquals(
     record.publicationType,
-    SERVICE_GRAPH_CAPABILITIES.storageFilesystem,
+    RUNTIME_PROJECTION_CAPABILITIES.storageFilesystem,
   );
   assertEquals(record.outputs, [
     {
       name: "url",
-      defaultEnv: "PUBLICATION_STORAGE_FILESYSTEM_URL",
+      defaultEnv: "PUBLICATION_TAKOS_STORAGE_WORKSPACE_URL",
       secret: false,
       kind: "url",
     },
@@ -200,8 +200,27 @@ test("api Service Graph exports can be restored without route refs", () => {
   );
 });
 
-test("publication prerequisites allow built-in Service Graph consumes without catalog rows", async () => {
-  await assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
+test("publication prerequisites allow Takos workspace storage runtime projection consumes without catalog rows", async () => {
+  await assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
+    spaceId: "space_1",
+    manifest: {
+      compute: {
+        web: {
+          kind: "worker",
+          consume: [
+            {
+              publication: "takos.storage.workspace",
+              inject: { env: { url: "TAKOS_STORAGE_API_URL" } },
+            },
+          ],
+        },
+      },
+    },
+  });
+});
+
+test("publication prerequisites allow legacy storage.filesystem runtime projection consumes", async () => {
+  await assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
     spaceId: "space_1",
     manifest: {
       compute: {
@@ -355,7 +374,7 @@ test("route publications resolve URLs from the group hostname", () => {
 });
 
 test("publication prerequisites allow external catalog route consumes", async () => {
-  await assertServiceGraphPublicationPrerequisites(
+  await assertRuntimeProjectionPublicationPrerequisites(
     makePublicationEnv(
       makePublicationRow(
         {
@@ -394,7 +413,7 @@ test("publication prerequisites validate aliases for external catalog route cons
     ),
   );
 
-  await assertServiceGraphPublicationPrerequisites(env, {
+  await assertRuntimeProjectionPublicationPrerequisites(env, {
     spaceId: "space_1",
     manifest: {
       compute: {
@@ -413,7 +432,7 @@ test("publication prerequisites validate aliases for external catalog route cons
 
   await assertRejects(
     () =>
-      assertServiceGraphPublicationPrerequisites(env, {
+      assertRuntimeProjectionPublicationPrerequisites(env, {
         spaceId: "space_1",
         manifest: {
           compute: {
@@ -435,7 +454,7 @@ test("publication prerequisites validate aliases for external catalog route cons
 });
 
 test("publication prerequisites allow same-manifest consumes before catalog write", async () => {
-  await assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
+  await assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
     spaceId: "space_1",
     manifest: {
       publish: [
@@ -459,7 +478,7 @@ test("publication prerequisites allow same-manifest consumes before catalog writ
 test("publication prerequisites require a group hostname for same-manifest route consumes", async () => {
   await assertRejects(
     () =>
-      assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
+      assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
         spaceId: "space_1",
         groupId: "group_1",
         manifest: {
@@ -487,7 +506,7 @@ test("publication prerequisites require a group hostname for same-manifest route
 test("publication prerequisites reject missing catalog consumes", async () => {
   await assertRejects(
     () =>
-      assertServiceGraphPublicationPrerequisites(makePublicationEnv(null), {
+      assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
         spaceId: "space_1",
         manifest: {
           compute: {
@@ -506,7 +525,7 @@ test("publication prerequisites reject missing catalog consumes", async () => {
 test("publication prerequisites reject unknown aliases from catalog metadata", async () => {
   await assertRejects(
     () =>
-      assertServiceGraphPublicationPrerequisites(
+      assertRuntimeProjectionPublicationPrerequisites(
         makePublicationEnv(
           makePublicationRow(
             {
@@ -597,7 +616,7 @@ test("service publications allow same publication name in different groups", asy
     TENANT_BASE_DOMAIN: "",
   };
 
-  await replaceServiceGraphPublications(env, {
+  await replaceRuntimeProjectionPublications(env, {
     spaceId: "space_1",
     groupId: "group_current",
     manifest: {
@@ -705,7 +724,7 @@ test("service publications reject manifest removal while still consumed", async 
 
   await assertRejects(
     () =>
-      replaceServiceGraphPublications(env, {
+      replaceRuntimeProjectionPublications(env, {
         spaceId: "space_1",
         groupId: "group_current",
         manifest: { publish: [], routes: [] },
@@ -795,7 +814,7 @@ test("service publications preflight consumed removals before manifest writes", 
 
   await assertRejects(
     () =>
-      replaceServiceGraphPublications(env, {
+      replaceRuntimeProjectionPublications(env, {
         spaceId: "space_1",
         groupId: "group_current",
         manifest: {

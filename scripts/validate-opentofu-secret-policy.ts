@@ -31,7 +31,7 @@ async function checkRequiredDocs(): Promise<void> {
   const envExample = await readText(envExamplePath);
   const requiredRunbookTerms = [
     'wrangler secret put',
-    'TAKOSUMI_DEPLOY_CONTROL_TOKEN',
+    'TAKOSUMI_ACCOUNTS_TOKEN',
     'The OpenTofu module owns durable topology',
     'deploy/cloudflare/wrangler.toml',
   ];

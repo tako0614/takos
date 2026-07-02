@@ -19,6 +19,7 @@ export {
 
 export {
   mobilePushRegistrations,
+  notificationPushers,
   notificationPreferences,
   notifications,
   notificationSettings,

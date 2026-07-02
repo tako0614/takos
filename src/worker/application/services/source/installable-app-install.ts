@@ -6,6 +6,10 @@ import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-ac
 
 import type { Env } from "../../../shared/types/index.ts";
 import { installationProjectionToServicesBody } from "./takosumi-workload-services.ts";
+import { readEnvString } from "./default-app-validation.ts";
+
+const LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH =
+  "/v1/installation-projections";
 
 type InstallableAppInstallEnv = Pick<
   Env,
@@ -89,11 +93,6 @@ export type InstallableAppUpstreamResponse = {
   body: Record<string, unknown> | null;
 };
 
-function readEnvString(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-  return normalized || undefined;
-}
-
 function readRecordString(value: unknown): string | undefined {
   return typeof value === "string" ? readEnvString(value) : undefined;
 }
@@ -118,9 +117,16 @@ function normalizeInstallationsUrl(value: string, field: string): string {
   const normalized = normalizeHttpUrl(value, field);
   const url = new URL(normalized);
   const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)
-    ? basePath
-    : `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
+  if (basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)) {
+    url.pathname = basePath;
+  } else if (basePath.endsWith(LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH)) {
+    url.pathname = `${basePath.slice(
+      0,
+      -LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH.length,
+    )}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
+  } else {
+    url.pathname = `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
+  }
   url.search = "";
   return url.toString();
 }
@@ -131,7 +137,13 @@ function appendInstallationsPath(
 ): string {
   const url = new URL(installationsUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
-  url.pathname = `${basePath}${suffix}`;
+  if (basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)) {
+    url.pathname = suffix.startsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)
+      ? suffix
+      : `${basePath}${suffix}`;
+  } else {
+    url.pathname = `${basePath}${suffix}`;
+  }
   url.search = "";
   return url.toString();
 }
@@ -227,7 +239,7 @@ export function resolveInstallableAppInstallConfig(
 function requireInstallationsUrl(config: InstallableAppInstallConfig): string {
   if (!config.installationsUrl) {
     throw new ServiceUnavailableError(
-      "Third-party Installation API is not configured",
+      "Third-party Capsule install API is not configured",
     );
   }
   return config.installationsUrl;
@@ -239,7 +251,7 @@ function requireApplyConfig(config: InstallableAppInstallConfig): {
 } {
   if (!config.installationsUrl || !config.token) {
     throw new ServiceUnavailableError(
-      "Third-party Installation apply is not configured",
+      "Third-party Capsule apply is not configured",
     );
   }
   return { installUrl: config.installationsUrl, token: config.token };
@@ -250,7 +262,7 @@ function requireRevisionApplyConfig(config: InstallableAppInstallConfig): {
 } {
   if (!config.installationsUrl || !config.token) {
     throw new ServiceUnavailableError(
-      "Third-party Installation deployment apply is not configured",
+      "Third-party Capsule revision apply is not configured",
     );
   }
   return { token: config.token };
@@ -261,7 +273,7 @@ function requireAccountsConfig(
 ): InstallableAppAccountsConfig {
   if (!config) {
     throw new ServiceUnavailableError(
-      "Takosumi Accounts Installation ledger API is not configured",
+      "Takosumi Accounts Capsule projection API is not configured",
     );
   }
   return config;

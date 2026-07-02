@@ -2,15 +2,14 @@ import type { JSX } from 'solid-js';
 import type { Locale } from '~/content/site';
 import { LocaleProvider } from '~/lib/i18n';
 import { CloudProvider } from '~/lib/cloud';
+import SplatField from './SplatField';
 import Seo from './Seo';
 import JsonLd from './JsonLd';
 import Nav from './Nav';
 import Hero from './Hero';
 import Why from './Why';
-import Pillars from './Pillars';
-import FeatureGrid from './FeatureGrid';
+import Showcase from './Showcase';
 import BundledApps from './BundledApps';
-import Stats from './Stats';
 import Comparison from './Comparison';
 import InstallCTA from './InstallCTA';
 import Footer from './Footer';
@@ -24,13 +23,14 @@ export default function Home(props: { locale: Locale }): JSX.Element {
         <Nav />
         <main>
           <Hero />
-          <Why />
-          <Pillars />
-          <FeatureGrid />
-          <BundledApps />
-          <Stats />
-          <Comparison />
-          <InstallCTA />
+          <div class='ink-canvas'>
+            <SplatField density='page' />
+            <Why />
+            <Showcase />
+            <BundledApps />
+            <Comparison />
+            <InstallCTA />
+          </div>
         </main>
         <Footer />
         <JsonLd locale={props.locale} />

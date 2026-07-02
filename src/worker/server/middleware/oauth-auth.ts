@@ -62,8 +62,8 @@ export function requireOAuthAuth(
           401,
         );
       // App-local managed tokens are not a current credential channel, and any
-      // non-Accounts bearer is unsupported. Human, automation, and service
-      // credentials are Takosumi Accounts bearer or ServiceGrant material.
+      // non-Accounts bearer is unsupported. Human and automation credentials
+      // come from Takosumi Accounts or operator-managed runtime bindings.
       case "unsupported-app-local-bearer":
       case "not-accounts":
         return c.json(

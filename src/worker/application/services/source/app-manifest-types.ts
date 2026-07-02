@@ -194,7 +194,7 @@ export type AppRoute = {
   timeoutMs?: number;
 };
 
-// --- ServiceBinding grant requests ---
+// --- Runtime authority binding requests ---
 
 export type AppServiceBindingInject = {
   baseUrlEnv?: string;

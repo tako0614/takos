@@ -54,7 +54,7 @@ function parseServiceBindingCapability(
 ): TakosAppServiceBindingCapability {
   const value = asRequiredString(raw, field);
   if (!/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/.test(value)) {
-    throw new Error(`${field} must be a Service Graph capability token`);
+    throw new Error(`${field} must be a runtime projection capability token`);
   }
   if (
     !(TAKOS_APP_SERVICE_BINDING_CAPABILITIES as readonly string[]).includes(
@@ -62,7 +62,7 @@ function parseServiceBindingCapability(
     )
   ) {
     throw new Error(
-      `${field} '${value}' is not supported by the Takos Service Graph profile`,
+      `${field} '${value}' is not supported by the Takos runtime projection profile`,
     );
   }
   return value as TakosAppServiceBindingCapability;
@@ -109,7 +109,7 @@ function parseScopes(
   );
   const normalized = scopes.map((scope, index) => {
     if (!/^[a-z][a-z0-9_.:-]{0,95}$/.test(scope)) {
-      throw new Error(`${field}[${index}] must be a ServiceGrant scope token`);
+      throw new Error(`${field}[${index}] must be a runtime authority scope token`);
     }
     if (!allowed.has(scope)) {
       throw new Error(

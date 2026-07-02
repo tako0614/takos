@@ -4,16 +4,16 @@
 
 ## アーキテクチャ
 
-- [`current-state.md`](./current-state.md) — Takos product shell と embedded Takosumi services の実装スナップショット。
+- [`current-state.md`](./current-state.md) — Takos product shell と external Takosumi control plane の実装スナップショット。
 - [`api-surface.md`](./api-surface.md) — Takos product routes と、Takos が消費する Takosumi deploy-control /
   account-plane surface。
 - Takosumi deploy topology notes (`takosumi/docs/operations/deploy-topology-notes.md`)
   — hosted operator / self-host distribution の deploy target と ownership boundary。
 - [`operator-boundary-audit.md`](./operator-boundary-audit.md) — Takos product と operator-owned infrastructure の境界を
   docs / 実装間で揃えるためのチェックリスト。
-- runner boundary: OpenTofu state backend、provider credential、Connection / Installation provider connection /
-  policy / runtime-agent handler wiring は embedded Takosumi services が解決します。Takos product routes は Takosumi
-  の Deployment / OutputSnapshot / Service Graph records を消費します。
+- runner boundary: OpenTofu state backend、provider credential、Connection / ProviderBinding /
+  policy / runtime-agent handler wiring は external Takosumi control plane が解決します。Takos product routes は Takosumi
+  の StateVersion / Output / Capsule output projection records を消費します。
 
 ## 検証
 
@@ -47,11 +47,11 @@ self-host / cloud 接続は Takos product source checks と live operator proof 
 `bun run release-gate` / `bun scripts/build-release-manifest.ts` / `bun run validate:opentofu-secrets` です。実機 proof は
 target URL、provider credential、operator が編集した env file、private evidence ref を持つ runbook に添付します。
 
-## Takosumi Installation Lifecycle
+## Takosumi Capsule Lifecycle
 
-Takosumi Installation Lifecycle の正本は
+Takosumi Capsule Lifecycle の正本は
 [Takosumi core spec](https://takosumi.com/docs/core-spec) と
 [core conformance](https://takosumi.com/docs/core-conformance) です。Takos 側では
-[Takosumi Service Graph profile](../architecture/app-interface.md) と
+[Capsule output projection profile](../architecture/app-interface.md) と
 [OpenTofu Service Exports](../deploy/service-exports.md) を、app launcher / MCP / file handler / storage / Git / agent runtime の
 product profile として扱います。

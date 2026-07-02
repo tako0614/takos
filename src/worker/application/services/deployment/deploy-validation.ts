@@ -46,9 +46,10 @@ import {
   normalizePublicationDefinition,
   publicationAllowedFields,
   publicationOutputContract,
+  isRuntimeProjectionPublicationName,
   type PublicationOutputDescriptor,
   resolveConsumeOutputEnvName,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
 } from "../platform/service-publications.ts";
 import { RESERVED_TAKOS_PUBLICATION_MESSAGE } from "../identity/takos-access-tokens.ts";
 import { isDigestPinnedImageRef } from "./image-ref.ts";
@@ -137,7 +138,7 @@ function getPublications(manifest: ParsedManifest): AppPublication[] {
 }
 
 const FILE_HANDLER_PUBLICATION_TYPE =
-  SERVICE_GRAPH_CAPABILITIES.interfaceFileHandler;
+  RUNTIME_PROJECTION_CAPABILITIES.interfaceFileHandler;
 
 const FILE_HANDLER_SPEC_FIELDS = new Set(["mimeTypes", "extensions"]);
 
@@ -509,7 +510,8 @@ export function validateConsumeReferences(
       const publication = publicationMap.get(consume.publication) ?? null;
       if (
         !publication &&
-        isReservedTakosPublicationSource(consume.publication)
+        isReservedTakosPublicationSource(consume.publication) &&
+        !isRuntimeProjectionPublicationName(consume.publication)
       ) {
         errors.push({
           code: "publication_reserved",
@@ -575,7 +577,8 @@ export function validateConsumeEnvCollision(
       const publication = publicationMap.get(consume.publication) ?? null;
       if (
         !publication &&
-        isReservedTakosPublicationSource(consume.publication)
+        isReservedTakosPublicationSource(consume.publication) &&
+        !isRuntimeProjectionPublicationName(consume.publication)
       ) {
         continue;
       }

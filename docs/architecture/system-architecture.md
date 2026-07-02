@@ -1,18 +1,18 @@
 # システムアーキテクチャ
 
-**Premise: Takos is the OpenTofu-native AI workspace distribution managed by embedded Takosumi services.** Takosumi is the OpenTofu-native deploy control plane: it installs an **OpenTofu Capsule** and records the run ledger **Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment**. Connections hold credential references, Installation provider connections resolve each provider (+ optional alias) to an explicit provider connection (`own_key` or `takos_provided`), and policy resolves provider allowlists, state backend, and Cloudflare Container execution. install metadata is read from generic repository information (Git URL, ref, commit, tag) and well-known OpenTofu outputs.
+**Premise: Takos is the OpenTofu-native AI workspace distribution managed by external Takosumi control plane.** Takosumi is the OpenTofu-native deploy control plane: it installs an **OpenTofu Capsule** and records the run ledger **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and Cloudflare Container execution. install metadata is read from generic repository information (Git URL, ref, commit, tag) and well-known OpenTofu outputs.
 
 ## Current Flow
 
 1. Takos's deploy topology — the worker, its Durable Objects, the egress proxy, container callback endpoints, container execution, bindings, and routes — is an OpenTofu module in `deploy/opentofu` (`var.target = cloudflare`; the `cloudflare` target provisions the D1 / KV / R2 / Queues backing resources).
-2. Takosumi creates an **Installation** from that module (Git URL/ref + module path) under a **Connection / Installation provider connection / policy**.
+2. Takosumi creates a **Capsule** from that module (Git URL/ref + module path) under a **ProviderConnection / ProviderBinding / policy**.
 3. A **`plan` type Run** computes the OpenTofu plan; a reviewer approves it.
-4. The reviewed plan is applied as an **`apply` type Run**; a successful apply records **StateSnapshot**, **OutputSnapshot**, and **Deployment** (including the non-secret service URLs / binding map).
-5. Connections hold credential references, Installation provider connections resolve each provider (+ optional alias) to an explicit provider connection (`own_key` or `takos_provided`), and policy resolves provider allowlists, state backend, and Cloudflare Container execution. Account-plane policy — billing, OIDC clients, domains, and dashboard — belongs to the embedded Takosumi Accounts plane.
+4. The reviewed plan is applied as an **`apply` type Run**; a successful apply records **StateVersion** and **Output** (including the non-secret service URLs / binding map).
+5. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and Cloudflare Container execution. Account-plane policy — billing, OIDC clients, domains, and dashboard — belongs to the Takosumi Accounts plane.
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takosumi records the run ledger (Installation / Run / Deployment / OutputSnapshot) and the policy decisions that authorize each run. The embedded Takosumi Accounts plane owns account-plane policy: billing, OIDC, domains, and dashboard.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) and the policy decisions that authorize each run. The Takosumi Accounts plane owns account-plane policy: billing, OIDC, domains, and dashboard.
 
 ## Materialization
 

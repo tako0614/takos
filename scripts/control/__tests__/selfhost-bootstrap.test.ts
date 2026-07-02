@@ -27,7 +27,6 @@ test("parseBootstrapArgs defaults to production and parses flags", () => {
       vectorizeIndex: undefined,
       vectorizeDimensions: "768",
       vectorizeMetric: "cosine",
-      takosumiRepoDir: "../takosumi",
       skipProvision: false,
       skipMigrations: false,
       skipSecrets: false,
@@ -66,6 +65,9 @@ test("buildBootstrapPlan emits the full ordered self-host runbook", () => {
       "render-wrangler-from-tofu.mjs' 'production' '--zone-id' 'zone_1'",
     ),
   );
+  const migrate = phases.find((p) => p.id === "migrate");
+  assert.equal(migrate?.commands.length, 1);
+  assert.ok(!migrate?.commands.join("\n").includes("accounts migrate-d1"));
   // Deploy is always last and uploads the artifact.
   assert.equal(phases.at(-1)?.id, "deploy");
   assert.ok(phases.at(-1)?.commands[0].includes("wrangler' 'deploy'"));

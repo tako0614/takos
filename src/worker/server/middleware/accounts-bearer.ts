@@ -100,13 +100,10 @@ export type ResolveAccountsBearerResult =
 /**
  * Single-sourced Takosumi Accounts Bearer pipeline: extraction →
  * unsupported app-local bearer / Accounts-candidate classification →
- * in-process self-issued verification (the
- * unified worker is its own OIDC issuer, so tokens are verified against the
- * local JWKS served by the in-process accounts handler — no remote
- * introspection) →
- * `getCachedUser` (+ optional scope gate). Both `resolveRequestUser`
- * (cookie-or-bearer) and `requireOAuthAuth` (bearer-only, scoped) consume this
- * and map the returned `kind` to their own status codes / response shapes.
+ * configured-issuer JWT verification → `getCachedUser` (+ optional scope gate).
+ * Both `resolveRequestUser` (cookie-or-bearer) and `requireOAuthAuth`
+ * (bearer-only, scoped) consume this and map the returned `kind` to their own
+ * status codes / response shapes.
  */
 export async function resolveAccountsBearer<TVariables extends object>(
   c: Context<{ Bindings: Env; Variables: TVariables }>,
@@ -127,10 +124,6 @@ export async function resolveAccountsBearer<TVariables extends object>(
   const dbBinding = deps.getPlatformServices(c).sql?.binding;
   if (!dbBinding) return { kind: "no-db" };
 
-  // The account plane runs in-process inside this worker. The hosted platform
-  // issuer is app.takosumi.com; a self-hosted Takos worker is its own issuer at
-  // its own origin. Tokens are verified against the same worker's local JWKS;
-  // there is no remote /oauth/introspect call.
   const issuer = normalizeConfiguredUrl(
     deps.getPlatformConfig(c).oidcIssuerUrl,
   );

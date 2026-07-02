@@ -1,7 +1,7 @@
-// control.api ServiceGrant scope contract. Re-localized in the Takos product
-// after Takosumi OSS removed the Service Graph (deploy decision D3): the
-// permission token set is the Takos manifest contract for a `control.api`
-// service binding and no longer lives in the accounts contract.
+// control.api runtime-authority scope contract. Re-localized in the Takos
+// product after Takosumi OSS removed the runtime projection ledger (deploy decision
+// D3): the permission token set is the Takos manifest contract for a
+// `control.api` runtime binding and no longer lives in the accounts contract.
 export const TAKOS_CONTROL_API_PERMISSIONS = [
   "installations.list.same-space",
   "installations.read.same-space",
@@ -19,7 +19,15 @@ export const APP_DEPLOYMENT_OUTPUT_KEYS = [
   TAKOS_APP_OUTPUT_KEY,
 ] as const;
 
-export const SERVICE_GRAPH_CAPABILITIES = {
+export const TAKOS_RUNTIME_PROJECTION_PUBLICATIONS = {
+  workspaceStorage: "takos.storage.workspace",
+} as const;
+
+export const LEGACY_RUNTIME_PROJECTION_PUBLICATIONS = {
+  workspaceStorage: "storage.filesystem",
+} as const;
+
+export const RUNTIME_PROJECTION_CAPABILITIES = {
   mcpServer: "protocol.mcp.server",
   httpApi: "protocol.http.api",
   interfaceFileHandler: "interface.file.handler",
@@ -40,7 +48,7 @@ export const SERVICE_GRAPH_CAPABILITIES = {
   controlApi: "control.api",
 } as const;
 
-export const TAKOS_APP_PUBLICATION_TYPES = SERVICE_GRAPH_CAPABILITIES;
+export const TAKOS_APP_PUBLICATION_TYPES = RUNTIME_PROJECTION_CAPABILITIES;
 
 export const TAKOS_APP_AUTH_KINDS = {
   bearer: "bearer",
@@ -48,11 +56,11 @@ export const TAKOS_APP_AUTH_KINDS = {
 } as const;
 
 export const TAKOS_APP_SERVICE_BINDING_CAPABILITIES = [
-  SERVICE_GRAPH_CAPABILITIES.controlApi,
+  RUNTIME_PROJECTION_CAPABILITIES.controlApi,
 ] as const;
 
 export const TAKOS_APP_SERVICE_GRANT_SCOPES = {
-  [SERVICE_GRAPH_CAPABILITIES.controlApi]: TAKOS_CONTROL_API_PERMISSIONS,
+  [RUNTIME_PROJECTION_CAPABILITIES.controlApi]: TAKOS_CONTROL_API_PERMISSIONS,
 } as const;
 
 export type TakosAppContractVersion = typeof TAKOS_APP_CONTRACT_VERSION;
@@ -60,8 +68,8 @@ export type AppDeploymentOutputKey =
   (typeof APP_DEPLOYMENT_OUTPUT_KEYS)[number];
 export type TakosAppPublicationType =
   (typeof TAKOS_APP_PUBLICATION_TYPES)[keyof typeof TAKOS_APP_PUBLICATION_TYPES];
-export type ServiceGraphCapability =
-  (typeof SERVICE_GRAPH_CAPABILITIES)[keyof typeof SERVICE_GRAPH_CAPABILITIES];
+export type RuntimeProjectionCapability =
+  (typeof RUNTIME_PROJECTION_CAPABILITIES)[keyof typeof RUNTIME_PROJECTION_CAPABILITIES];
 export type TakosAppAuthKind =
   (typeof TAKOS_APP_AUTH_KINDS)[keyof typeof TAKOS_APP_AUTH_KINDS];
 export type TakosAppServiceBindingCapability =

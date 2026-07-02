@@ -253,6 +253,26 @@ test("validateConsumeReferences rejects reserved Takos publication consumes", ()
   assertEquals(errors[0].path, "compute.web.consume[1]");
 });
 
+test("validateConsumeReferences allows built-in Takos runtime projection consumes", () => {
+  const manifest = makeManifest({
+    compute: {
+      web: {
+        kind: "worker",
+        consume: [
+          {
+            publication: "takos.storage.workspace",
+            request: { scopes: ["files:read", "files:write"] },
+            inject: { env: { url: "TAKOS_STORAGE_API_URL" } },
+          },
+        ],
+      },
+    },
+  });
+  const errors = validateConsumeReferences(manifest);
+  assertEquals(errors.length, 0);
+  assertDeployValid(manifest);
+});
+
 test("validateConsumeReferences allows external catalog publication references", () => {
   const manifest = makeManifest({
     compute: {

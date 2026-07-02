@@ -10,7 +10,8 @@ projects runtime services from those Outputs through
 
 A Capsule can expose services with the optional `service_exports` OpenTofu
 output. Takosumi reads the evaluated JSON from `tofu output -json` after apply
-and records ServiceExport rows from allowlisted, non-secret output values.
+and Takos projects allowlisted, non-secret output values into runtime service
+metadata.
 
 Installable apps can also publish an `app_deployment` OpenTofu output. That
 output is a typed app declaration for install discovery and plan UI: compute,
@@ -46,35 +47,44 @@ output "service_exports" {
 }
 ```
 
-The token value is not an OpenTofu output. Runtime authority is created through
-ServiceGrant and delivered through the runtime secret path.
+The token value is not an OpenTofu output. Runtime authority is delivered
+through the workload runtime secret materialization path.
 
 ## Takos Capabilities
 
-Takos uses the Service Graph capability catalog directly:
+Takos uses the Capsule output projection capability catalog directly:
 
-| Takos surface                    | Capability                                                                 |
-| -------------------------------- | -------------------------------------------------------------------------- |
-| MCP tools                        | `protocol.mcp.server`                                                      |
-| launcher / embedded UI           | `interface.ui.surface`                                                     |
-| file handlers                    | `interface.file.handler`                                                   |
-| storage                          | `storage.filesystem`, `storage.object`, `storage.key_value`, `storage.sql` |
-| Git                              | `source.repository`, `source.git.smart_http`                               |
-| agent runtime                    | `automation.agent_runtime`, `automation.tool_provider`                     |
-| same-space output/control access | `deployment.outputs`, `auth.bootstrap_token`, `control.api`                |
+| Takos surface                    | Service identity / capability                                               |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| MCP tools                        | app-provided `protocol.mcp.server` publications                             |
+| launcher / embedded UI           | app-provided `interface.ui.surface` publications                            |
+| file handlers                    | app-provided `interface.file.handler` publications                          |
+| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`                    |
+| object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`                        |
+| Git                              | `source.repository`, `source.git.smart_http`                                |
+| agent runtime                    | `automation.agent_runtime`, `automation.tool_provider`                      |
+| same-Workspace output/control access | `deployment.outputs`, `auth.bootstrap_token`, `control.api`             |
 
 ## Bindings And Grants
 
-Consumers do not receive API keys from outputs. Takos creates ServiceBinding
-records for the services it needs. Takosumi pins the selected ServiceExport in
-DependencySnapshot and issues ServiceGrant records for runtime authority.
+Consumers do not receive API keys from outputs. Takos records which projected
+service capability it consumes, and Takosumi keeps the Capsule Output, policy,
+and audit evidence that authorized the run.
 
-Endpoint discovery and token issuance are part of the same binding flow, but
-they remain distinct ledger facts:
+Endpoint discovery and runtime authority are separate facts:
 
-- ServiceExport describes what a producer Installation exposes.
-- ServiceBinding records what a consumer Installation requests.
-- ServiceGrant records the scoped runtime authority issued by Accounts/Vault.
+- `service_exports` describes what a producer Capsule exposes.
+- `service_bindings` or product-side runtime config records what a consumer app requests.
+- Scoped runtime authority is delivered through workload runtime secret materialization, not through OpenTofu Outputs.
+
+Takos-owned runtime services use `takos.*` service identities. For example, a document app should consume
+`takos.storage.workspace` and request `files:read` / `files:write`, while Takos exposes that service as a
+`storage.filesystem` capability. The legacy `storage.filesystem` publication name is accepted only as a compatibility
+alias; new apps should use `takos.storage.workspace`.
+
+That consume maps the storage endpoint URL. It does not mint a bearer token from OpenTofu Outputs; storage authority
+must arrive through workload runtime secret materialization such as `TAKOS_STORAGE_ACCESS_TOKEN` or
+`TAKOS_ACCESS_TOKEN`.
 
 ## Source Detection
 
@@ -91,14 +101,14 @@ Takos treats these files as installable OpenTofu source signals, in order:
 - `deploy/opentofu/outputs.tf`
 
 OpenTofu modules may use variables, locals, and modules. Takos consumes the
-evaluated output JSON and Takosumi Service Graph records, not raw HCL.
+evaluated output JSON and Capsule output projection records, not raw HCL.
 
 ## Boundary
 
 OpenTofu state, provider credentials, resource apply, OIDC clients, billing,
-domains, and provider allowlists belong to Takosumi Connection / Installation
-provider connection / policy, the Takosumi Accounts plane, or operator-private
-config outside this repo. Takos consumes Service Graph records, and Takosumi
+domains, and provider allowlists belong to Takosumi ProviderConnection /
+CredentialRecipe / ProviderBinding / policy, the Takosumi Accounts plane, or operator-private
+config outside this repo. Takos consumes Capsule output projection records, and Takosumi
 records the run ledger for each plan and apply.
 
 ## References

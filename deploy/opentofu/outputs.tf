@@ -8,7 +8,7 @@ output "database_endpoint" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null
 }
 
-# Cloudflare-specific binding map (OutputSnapshot consumed by the Worker-script layer).
+# Cloudflare-specific binding map (Output consumed by the Worker-script layer).
 
 output "cloudflare_account_id" {
   description = "Cloudflare account ID the resources were provisioned in (for the CF_ACCOUNT_ID worker var)."
@@ -70,16 +70,6 @@ output "app_deployment" {
         bind = "DB"
         to   = ["web"]
       }
-      accounts = {
-        type = "sql"
-        bind = "TAKOSUMI_ACCOUNTS_DB"
-        to   = ["web"]
-      }
-      deploy_control = {
-        type = "sql"
-        bind = "TAKOSUMI_CONTROL_DB"
-        to   = ["web"]
-      }
       hostname_routing = {
         type = "key-value"
         bind = "HOSTNAME_ROUTING"
@@ -113,16 +103,6 @@ output "app_deployment" {
       offload = {
         type = "object-store"
         bind = "TAKOS_OFFLOAD"
-        to   = ["web"]
-      }
-      accounts_exports = {
-        type = "object-store"
-        bind = "TAKOSUMI_ACCOUNTS_EXPORTS"
-        to   = ["web"]
-      }
-      artifacts = {
-        type = "object-store"
-        bind = "R2_ARTIFACTS"
         to   = ["web"]
       }
       vector = {
@@ -207,18 +187,8 @@ output "cloudflare_d1_database_id" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null
 }
 
-output "cloudflare_accounts_d1_database_id" {
-  description = "D1 database ID for the TAKOSUMI_ACCOUNTS_DB binding (cloudflare target)."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].accounts_d1_database_id : null
-}
-
-output "cloudflare_deploy_d1_database_id" {
-  description = "D1 database ID for the TAKOSUMI_CONTROL_DB binding (cloudflare target)."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].deploy_d1_database_id : null
-}
-
 output "cloudflare_d1_database_ids" {
-  description = "All D1 database IDs by logical binding: db, accounts, deploy (cloudflare target)."
+  description = "All D1 database IDs by logical binding: db (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_ids : null
 }
 

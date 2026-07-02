@@ -6,14 +6,10 @@ import { reveal } from '~/lib/interactions';
 
 export default function Why() {
   const t = useT();
-  // referenced so the `use:reveal` directive is retained by the compiler
   void reveal;
   return (
     <Section
-      splat
       id='why'
-      class='band'
-      eyebrow={t.why.eyebrow}
       title={t.why.title}
       lede={<RichText value={t.why.lede} />}
     >

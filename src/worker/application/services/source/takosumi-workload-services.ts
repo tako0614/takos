@@ -2,10 +2,11 @@ import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-ac
 
 /**
  * Workload service display, derived from a Capsule's deployment OUTPUTS
- * (deploy decision D3). The OSS "Service Graph" service projection was removed
- * from Takosumi Accounts; the Takos product now reads the installation's
- * deployment-output projection (`deployment_outputs` on the installation
- * envelope) instead of the retired `/installations/{id}/services` endpoint.
+ * (deploy decision D3). The OSS service projection ledger was removed from
+ * Takosumi Accounts; the Takos product now reads the Capsule projection's
+ * deployment-output payload (`deployment_outputs` on the legacy-named
+ * projection envelope) instead of the retired `/installations/{id}/services`
+ * endpoint.
  *
  * The functional env/URL material reaching workloads is owned separately by the
  * local service-publication catalog (apply-engine + group-managed-desired-state)
@@ -46,9 +47,9 @@ function readString(value: unknown): string | null {
 }
 
 /**
- * Builds the `/installations/{id}` projection URL on the accounts plane. The
- * installation envelope carries the deployment-output projection that backs the
- * workload service display.
+ * Builds the legacy-named installed-service projection URL on the accounts
+ * plane. The projection envelope carries the deployment-output projection that
+ * backs the workload service display.
  */
 export function accountsInstallationProjectionUrl(
   baseUrl: string,

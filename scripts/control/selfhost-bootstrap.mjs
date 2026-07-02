@@ -4,9 +4,8 @@ import * as runtime from "../runtime.ts";
 //
 // The Cloudflare self-host runbook (deploy/TAKOSUMI_DEPLOY.md) is ~7 manual
 // phases: tofu init/apply -> render wrangler bindings -> create the Vectorize
-// index out of band -> build assets + containers -> two migration systems
-// (wrangler d1 + accounts migrate-d1) -> push runtime secrets -> deploy the
-// Worker artifact. This wraps them into one ordered, guided command that
+// index out of band -> build assets + containers -> product D1 migrations ->
+// push runtime secrets -> deploy the Worker artifact. This wraps them into one ordered, guided command that
 // reuses the existing control scripts in this directory.
 //
 // Usage:
@@ -22,10 +21,9 @@ import * as runtime from "../runtime.ts";
 //                               takos-embeddings-staging for staging).
 //   --vectorize-dimensions <n>  Embedding dimensions (default 768).
 //   --vectorize-metric <m>      Distance metric (default cosine).
-//   --takosumi-repo-dir <path>  Sibling Takosumi checkout (default ../takosumi).
 //   --skip-provision            Skip the tofu init/apply + render phases
 //                               (infra already provisioned, wrangler.toml filled).
-//   --skip-migrations           Skip the D1 + accounts migration phase.
+//   --skip-migrations           Skip the product D1 migration phase.
 //   --skip-secrets              Skip pushing generated runtime secrets.
 //   --dry-run                   Print the ordered command list without running.
 //
@@ -41,21 +39,13 @@ const ENVIRONMENTS = ["production", "staging"];
 const WRANGLER_CONFIG = "deploy/cloudflare/wrangler.toml";
 const OPENTOFU_DIR = "deploy/opentofu";
 
-// Feature-gated secrets are operator-provided (upstream OAuth, Stripe, OCI,
-// passkeys). The bootstrap generates the always-required runtime secrets via
-// ensure-release-secrets.mjs and only reminds the operator about these.
+// Feature-gated secrets are operator-provided. The bootstrap generates the
+// always-required Takos runtime secrets via ensure-release-secrets.mjs and only
+// reminds the operator about these.
 const FEATURE_GATED_SECRETS = [
   "OCI_ORCHESTRATOR_TOKEN",
   "CF_API_TOKEN",
-  "TAKOSUMI_ACCOUNTS_STRIPE_SECRET_KEY",
-  "TAKOSUMI_ACCOUNTS_STRIPE_WEBHOOK_SECRET",
-  "TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_ID",
-  "TAKOSUMI_ACCOUNTS_UPSTREAM_GOOGLE_CLIENT_SECRET",
-  "TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_ID",
-  "TAKOSUMI_ACCOUNTS_UPSTREAM_OIDC_CLIENT_SECRET",
-  "TAKOSUMI_ACCOUNTS_PASSKEY_RP_ID",
-  "TAKOSUMI_ACCOUNTS_PASSKEY_RP_NAME",
-  "TAKOSUMI_ACCOUNTS_PASSKEY_ORIGIN",
+  "TAKOSUMI_ACCOUNTS_TOKEN",
 ];
 
 function usage() {
@@ -75,9 +65,8 @@ Flags:
   --vectorize-index <name>    Vectorize index name (default per environment).
   --vectorize-dimensions <n>  Embedding dimensions (default 768).
   --vectorize-metric <m>      Distance metric (default cosine).
-  --takosumi-repo-dir <path>  Sibling Takosumi checkout (default ../takosumi).
   --skip-provision            Skip the tofu apply + render phases.
-  --skip-migrations           Skip the D1 + accounts migration phase.
+  --skip-migrations           Skip the product D1 migration phase.
   --skip-secrets              Skip pushing generated runtime secrets.
   --dry-run                   Print the ordered command list without running.
 `);
@@ -105,7 +94,6 @@ export function parseBootstrapArgs(argv = process.argv.slice(2)) {
     vectorizeIndex: undefined,
     vectorizeDimensions: "768",
     vectorizeMetric: "cosine",
-    takosumiRepoDir: "../takosumi",
     skipProvision: false,
     skipMigrations: false,
     skipSecrets: false,
@@ -117,7 +105,6 @@ export function parseBootstrapArgs(argv = process.argv.slice(2)) {
     "--vectorize-index": "vectorizeIndex",
     "--vectorize-dimensions": "vectorizeDimensions",
     "--vectorize-metric": "vectorizeMetric",
-    "--takosumi-repo-dir": "takosumiRepoDir",
   };
   const boolFlags = {
     "--skip-provision": "skipProvision",
@@ -169,7 +156,6 @@ export function buildBootstrapPlan(options) {
     vectorizeIndex,
     vectorizeDimensions = "768",
     vectorizeMetric = "cosine",
-    takosumiRepoDir = "../takosumi",
     skipProvision = false,
     skipMigrations = false,
     skipSecrets = false,
@@ -244,7 +230,7 @@ export function buildBootstrapPlan(options) {
   if (!skipMigrations) {
     phases.push({
       id: "migrate",
-      title: "Run product activation (D1 + accounts migrations)",
+      title: "Run product DB migrations",
       cwd: ".",
       commands: [
         commandLine([
@@ -257,24 +243,6 @@ export function buildBootstrapPlan(options) {
           "--remote",
           "--config",
           WRANGLER_CONFIG,
-          ...wranglerEnvArgs,
-        ]),
-        commandLine([
-          "bun",
-          "run",
-          "--cwd",
-          takosumiRepoDir,
-          "cli",
-          "--",
-          "accounts",
-          "migrate-d1",
-          "--database-id",
-          "TAKOSUMI_ACCOUNTS_DB",
-          "--wrangler-config",
-          resolve(WRANGLER_CONFIG),
-          "--account-id",
-          account,
-          "--remote",
           ...wranglerEnvArgs,
         ]),
       ],

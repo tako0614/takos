@@ -9,7 +9,7 @@ Takos の課金はオペレーターの account plane (BillingPort) が担当し
 - 契約・支払い方法は Takosumi operator account plane に紐づく
 - Takos 自体は課金主体ではなく、利用量をオペレーターの BillingPort
   に報告する立場
-- アプリの利用量は Installation 単位で計上
+- アプリの利用量は Capsule / installed-service projection 単位で計上
 
 ::: warning Public paid access このページの Plus / Pay As You Go と Stripe
 Checkout は operator account plane (リファレンス実装: Takosumi Accounts) の current contract
@@ -53,7 +53,7 @@ webhook で billing 状態を更新します。
 
 ::: info Billing portal / invoice API Billing portal、invoice list、usage read
 API は将来の拡張予定です。現在の Accounts HTTP surface は Stripe checkout /
-webhook と Installation-scoped usage report ingest を公開します。 :::
+webhook と legacy-named installed-service usage report ingest を公開します。 :::
 
 ## Billing line item の構造
 
@@ -62,7 +62,7 @@ operator invoice は以下の line item から構成されます:
 ```ts
 type BillingLineItem = {
   accountId: string;
-  installationId?: string; // bundled / third-party app usage の場合だけ入る
+  capsuleId?: string; // bundled / third-party app usage の場合だけ入る
   product: "takos";
   kind: "subscription" | "compute_usage" | "storage_usage" | "model_usage";
 
@@ -72,7 +72,7 @@ type BillingLineItem = {
 ```
 
 `product: "takos"` の line item が Takos product plan / usage を表します。
-bundled / third-party app usage は `installationId` と app id を別 metadata
+bundled / third-party app usage は `capsuleId` と app id を別 metadata
 に持つ line item として並列に積み上がります。
 
 ### プランの課金モード
@@ -327,14 +327,14 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 ## API 一覧
 
 current `takosumi` Accounts reference implementation の billing HTTP
-surface は、Stripe checkout / webhook と Installation scoped usage report ingest
+surface は、Stripe checkout / webhook と legacy-named installed-service usage report ingest
 です。
 
 | エンドポイント                                            | メソッド | 説明                                                                                                              |
 | --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
 | `/v1/billing/stripe/checkout`                             | POST     | Stripe Checkout session 作成                                                                                      |
 | `/v1/billing/stripe/webhook`                              | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                                       |
-| `/v1/installation-projections/{id}/billing/usage-reports` | POST     | Installation OIDC access token + `billing.usage.report` account-plane capability record で保護された使用量 report |
+| `/v1/installation-projections/{id}/billing/usage-reports` | POST     | legacy-named installed-service projection token + `billing.usage.report` account-plane capability record で保護された使用量 report |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。
@@ -348,9 +348,9 @@ hardening として扱います。
 
 - [Takosumi operator model](https://takosumi.com/docs/reference/operator)
   —契約主体 / billing owner / OIDC issuer の詳細
-- [Takosumi Installation Lifecycle](https://takosumi.com/docs/reference/model)
+- [Takosumi Capsule Lifecycle](https://takosumi.com/docs/reference/model)
   — Takos app installation と billing の関係
-- [App Installation Ledger](https://takosumi.com/docs/reference/model)
+- [Capsule Run Ledger](https://takosumi.com/docs/reference/model)
   — installation 単位の usage / billing 紐付け
 - [Upgrade と Export](/platform/upgrade-export) — plan 変更・materialize /
   export 時の billing 再紐付け

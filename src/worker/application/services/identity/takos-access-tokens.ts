@@ -3,4 +3,4 @@
  * are not an app-local credential channel.
  */
 export const RESERVED_TAKOS_PUBLICATION_MESSAGE =
-  "Reserved Takos publication names are not a credential channel; request runtime authority through ServiceBinding and ServiceGrant.";
+  "Reserved Takos publication names are not a credential channel; request runtime authority through the Takos runtime binding contract.";

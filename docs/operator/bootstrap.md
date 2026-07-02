@@ -2,21 +2,20 @@
 
 > このページでわかること: self-host / operator-managed Takos を新規に立ち上げるときの Web ベース確認。
 
-Takos distribution worker は Takos product surface と embedded Takosumi Accounts / deploy-control / dashboard を同一
-origin に compose します。self-host ではその origin 自身が OIDC issuer です。hosted Takosumi の public platform では
-`https://app.takosumi.com` が issuer になります。
+Takos distribution worker は Takos product surface を提供し、Accounts / deploy-control / dashboard は外部 Takosumi
+control plane が所有します。self-host では self-hoster または operator が運用する Takosumi Accounts origin が OIDC issuer
+です。hosted Takosumi の public platform では `https://app.takosumi.com` が issuer になります。
 
 Takos runtime は外部 hosted Takosumi Accounts を必須にしません。upstream Google / GitHub / enterprise OIDC / passkey は
-embedded Takosumi Accounts plane の upstream IdP / credential policy として扱い、Takos product routes は account-plane subject
+Takosumi Accounts plane の upstream IdP / credential policy として扱い、Takos product routes は account-plane subject
 から app-local profile / session を作ります。
 
 ## Prerequisites
 
-- Takos OpenTofu module が backing resources (D1 / KV / R2 / Queues / DO / containers) を provision 済み
+- Takos OpenTofu module が product backing resources (D1 / KV / R2 / Queues) を provision 済み
 - worker artifact が同じ origin に deploy 済み
-- `BASE_URL` / `TAKOSUMI_ACCOUNTS_ISSUER` / `OIDC_ISSUER_URL` がその worker origin を指す
-- embedded Accounts plane の signing key / pairwise secret / launch-token secret / export download secret が operator secret store にある
-- `DB` / `TAKOSUMI_ACCOUNTS_DB` / `TAKOSUMI_CONTROL_DB` / `SESSION_DO` などの bindings が production または staging profile にある
+- `BASE_URL` が Takos worker origin、`TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` が Takosumi Accounts origin を指す
+- `DB` / `SESSION_DO` などの Takos product bindings が production または staging profile にある
 - trusted edge / internal service secret は public internet へ露出していない
 
 `takos/` shell から本番・staging deploy を直接進めません。deploy 設定と secret 操作は operator-local secret store と
@@ -26,20 +25,17 @@ Takosumi operations runbook で管理してください。
 
 | key                        | secret  | scope                 | 用途                                               |
 | -------------------------- | ------- | --------------------- | -------------------------------------------------- |
-| `BASE_URL`                 | no      | worker origin         | Takos / embedded Takosumi の public origin         |
-| `TAKOSUMI_ACCOUNTS_ISSUER` | no      | Accounts plane        | 同一 origin issuer                                 |
-| `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | 通常は `TAKOSUMI_ACCOUNTS_ISSUER` と同じ           |
-| `OIDC_CLIENT_ID`           | no      | Accounts projection   | 同一 origin Accounts plane が発行した client id    |
+| `BASE_URL`                 | no      | worker origin         | Takos public origin                                |
+| `TAKOSUMI_ACCOUNTS_URL`    | no      | Accounts plane        | external Takosumi Accounts API / issuer origin     |
+| `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | Takosumi Accounts issuer                           |
+| `OIDC_CLIENT_ID`           | no      | Accounts projection   | Takosumi Accounts plane が発行した client id       |
 | `OIDC_CLIENT_SECRET`       | yes     | Accounts projection   | confidential client secret                         |
 | `OIDC_REDIRECT_URI`        | no      | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                    |
-| `TAKOS_INSTALLATION_ID`    | no      | Takos runtime         | Installation id (app-local profile の FK)          |
+| `TAKOS_INSTALLATION_ID`    | no      | Takos runtime         | legacy-named app-local Capsule/profile id          |
 | `DB`                       | binding | Takos product         | app-local persistence                              |
-| `TAKOSUMI_ACCOUNTS_DB`     | binding | Accounts plane        | account / OIDC / billing ledger                    |
-| `TAKOSUMI_CONTROL_DB`      | binding | deploy-control plane  | Installation / Run / State / Output / audit ledger |
 | `SESSION_DO`               | binding | Takos product session | browser session store                              |
 
-`OIDC_*` は「外部 Accounts service を注入する」ための値ではなく、同一 origin Accounts plane が Takos product routes に投影する
-consumer metadata です。
+`OIDC_*` は Takosumi Accounts plane が Takos product routes に投影する consumer metadata です。
 
 ## 1. Admin Web に入る
 
@@ -49,7 +45,7 @@ browser で worker origin を開きます。
 https://<BASE_URL>/
 ```
 
-未ログインなら `/auth/oidc/login` へ進み、同一 origin の Accounts issuer で認証します。Takos は
+未ログインなら `/auth/oidc/login` へ進み、Takosumi Accounts issuer で認証します。Takos は
 `/auth/oidc/login` / `/auth/oidc/callback` / `/auth/logout` を consumer route として受けます。upstream IdP は Accounts
 plane 側の policy で扱います。
 
@@ -78,5 +74,5 @@ curl -fsS \
 
 ## Boundary
 
-Takos bootstrap の primary path は Web UI / public API です。OpenTofu module typed Runs、Installation、Deployment、
-OutputSnapshot、provider connection、Gateway coverage、billing / OIDC policy は embedded Takosumi services が扱います。
+Takos bootstrap の primary path は Web UI / public API です。OpenTofu module Source / Capsule / typed Runs、
+StateVersion、Output、ProviderConnection / ProviderBinding、billing / OIDC policy は external Takosumi control plane が扱います。

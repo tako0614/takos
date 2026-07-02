@@ -16,7 +16,7 @@
 
 | 内容                                      | 詳細ドキュメント                                                                                                                             |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Takosumi Installation / typed Runs model  | [Takosumi model](https://takosumi.com/docs/reference/model)                                                                                  |
+| Takosumi Capsule / typed Runs model  | [Takosumi model](https://takosumi.com/docs/reference/model)                                                                                  |
 | Takosumi Accounts / billing / OIDC issuer | [Takosumi operator model](https://takosumi.com/docs/reference/operator)                                                                       |
 | Takosumi deploy-control API               | [Deploy Control API](https://takosumi.com/docs/reference/deploy-control-api)                                                                 |
 | production deploy runbook / secrets       | `takosumi-private/operations/` and operator-local secret store                                                                                |

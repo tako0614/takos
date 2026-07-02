@@ -1,18 +1,18 @@
 # Takos Product Current State
 
-Takosumi v1 uses OpenTofu Capsules. Takosumi is an OpenTofu-native deploy control plane: it installs an OpenTofu Capsule repo as an **Installation** and records `plan`, `apply`, `destroy_plan`, and `destroy_apply` as distinct typed Runs. A successful apply updates the **Deployment** and its **OutputSnapshot**. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
+Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Capsule, records plan/apply/destroy Runs, and captures StateVersion / Output evidence. Module metadata comes from generic repository information such as Git URL, ref, commit, tag, module path, and well-known OpenTofu outputs.
 
 ## Current Flow
 
-1. Point an Installation at a Git URL/ref and module path for an OpenTofu Capsule repo.
+1. Register a Source for a Git URL/ref and module path for an OpenTofu Capsule repo.
 2. Run a `plan` and review the resulting `plan` type Run and policy decision.
-3. Run `apply` as an `apply` type Run against the reviewed plan; a successful apply updates the Deployment and OutputSnapshot. Destroy uses `destroy_plan` followed by approved `destroy_apply`.
-4. Repeat plan/apply against the Installation; typed Run entries form the audit ledger for that Deployment.
-5. Connections hold credential references, Installation provider connections bind each provider (and optional alias) to an explicit provider connection (`own_key` or `takos_provided`), and runner policy resolves provider allowlists, state backend, and Cloudflare Container execution. Account-plane policy, OIDC clients, billing, and domains belong to the in-process Accounts plane in the single Takos worker.
+3. Run `apply` as an `apply` type Run against the reviewed plan; a successful apply updates the StateVersion and Output. Destroy uses `destroy_plan` followed by approved `destroy_apply`.
+4. Repeat plan/apply against the Capsule; typed Run entries form the audit ledger for StateVersion and Output changes.
+5. Connections hold credential references, ProviderBindings bind each provider (and optional alias) to an explicit provider connection (an explicit ProviderConnection), and runner policy resolves provider allowlists, state backend, and Cloudflare Container execution. Account-plane policy, OIDC clients, billing, and domains belong to the Takosumi Accounts plane.
 
 ## Takos Boundary
 
-Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Takosumi Service Graph as ServiceExport, ServiceBinding, and ServiceGrant records. Takos is delivered as an OpenTofu-native, Takosumi-managed distribution: `deploy/opentofu` (`var.target = cloudflare`) provisions D1/KV/R2/Queues backing resources, while embedded Takosumi services record Installation / Run / StateSnapshot / OutputSnapshot / Deployment state, policy decisions, and audit trail.
+Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takos is delivered as an OpenTofu-native, Takosumi-managed distribution: `deploy/opentofu` (`var.target = cloudflare`) provisions Takos product D1/KV/R2/Queues backing resources, while an external Takosumi control plane records Capsule / Run / StateVersion / Output state, policy decisions, and audit trail.
 
 ## Canonical Layout
 
@@ -51,7 +51,7 @@ and Cloudflare distribution artifacts.
 }
 ```
 
-An Installation points at an OpenTofu Capsule repo; `plan`, `apply`, `destroy_plan`, and `destroy_apply` runs are recorded as typed Run entries. Takos product routes should call the Takosumi deploy control API or Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
+A Capsule points at an OpenTofu Capsule repo; `plan`, `apply`, `destroy_plan`, and `destroy_apply` runs are recorded as typed Run entries. Takos product routes should call the Takosumi deploy control API or Takosumi account-plane install flow instead of exposing a separate product-local deployment surface.
 
 ## References
 

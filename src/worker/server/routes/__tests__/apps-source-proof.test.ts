@@ -28,9 +28,9 @@ type PublicationAppRow = {
 
 // Source-to-launcher proof (Takos boundary): a manifest-free OpenTofu Capsule
 // retrieved from a Git source applies through OpenTofu, exposes a
-// `service_exports` output, and the Service Graph projection surfaces as a
+// `service_exports` output, and the runtime projection surfaces as a
 // launcher app on the Takos `/apps` route. The Takosumi-side install bookkeeping
-// (plan/apply Runs, Deployment, and OutputSnapshot from the same module) is proven
+// (plan/apply Runs, StateVersion, and Output from the same module) is proven
 // separately by `takosumi run opentofu:deployment-output-proof`; this proof owns
 // the Takos consumption boundary and does not reach into Takosumi internals.
 test("OpenTofu Git source installs through Takosumi and appears on Takos launcher route", async () => {
@@ -38,7 +38,7 @@ test("OpenTofu Git source installs through Takosumi and appears on Takos launche
   const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;
   const workdir = await mkdtemp(join(tmpdir(), "takos-source-launcher-proof-"));
   const sourceUrl = "https://github.com/tako0614/opentofu-only-fixture.git";
-  // The deployed launcher URL that the Takosumi OutputSnapshot projection binds
+  // The deployed launcher URL that the Takosumi Output projection binds
   // to the manifest's `launcher` publication (routeRef "root" -> route path "/").
   const launcherUrl = "https://opentofu-only.fixture.test/";
   const fixture = await createOpenTofuOnlyGitFixture(workdir);
@@ -55,7 +55,7 @@ test("OpenTofu Git source installs through Takosumi and appears on Takos launche
     assertEquals(await pathExists(`${checkout}/.takosumi`), false);
     assertEquals(await pathExists(`${checkout}/.takosumi.yml`), false);
 
-    // Apply with OpenTofu and read the well-known Service Graph output.
+    // Apply with OpenTofu and read the well-known runtime projection output.
     runTofu(["init", "-backend=false", "-input=false"], checkout);
     runTofu(["validate", "-no-color"], checkout);
     runTofu(

@@ -31,7 +31,7 @@ import {
   isPublicationType,
   listPublications,
   publicationResolvedUrl,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
 } from "../service-publications.ts";
 import {
   readPublicationAuthSecretRef,
@@ -399,7 +399,7 @@ export async function getMcpServerWithTokens(
       !publication ||
       !isPublicationType(
         publication.publicationType,
-        SERVICE_GRAPH_CAPABILITIES.mcpServer,
+        RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
       )
     ) {
       return null;
@@ -452,7 +452,7 @@ export async function resolvePublicationMcpServerAccessToken(
     !publication ||
     !isPublicationType(
       publication.publicationType,
-      SERVICE_GRAPH_CAPABILITIES.mcpServer,
+      RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
     )
   ) {
     return null;
@@ -483,7 +483,7 @@ export async function listMcpServers(
     .filter((record) =>
       isPublicationType(
         record.publicationType,
-        SERVICE_GRAPH_CAPABILITIES.mcpServer,
+        RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
       ),
     )
     .map((record): McpServerRecord | null => {
@@ -595,7 +595,7 @@ async function assertNoPublishedMcpServerNameCollision(
   ).filter((record) =>
     isPublicationType(
       record.publicationType,
-      SERVICE_GRAPH_CAPABILITIES.mcpServer,
+      RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
     ),
   );
   if (publishedServers.some((record) => record.name === name)) {

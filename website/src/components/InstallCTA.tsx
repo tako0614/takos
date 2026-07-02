@@ -16,10 +16,8 @@ export default function InstallCTA() {
 
   return (
     <Section
-      splat
       id='install'
       class='end-cta'
-      eyebrow={t.install.eyebrow}
       title={t.install.title}
       lede={<RichText value={t.install.lede} />}
     >

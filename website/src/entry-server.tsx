@@ -26,8 +26,8 @@ export default createHandler(() => (
           <meta property="og:type" content="website" />
           <meta property="og:image" content="https://takos.jp/brand/og.png" />
           <meta name="twitter:card" content="summary_large_image" />
-          <link rel="icon" href="/brand/favicon.svg" />
-          <link rel="apple-touch-icon" href="/brand/favicon.svg" />
+          <link rel="icon" href="/logo.png" />
+          <link rel="apple-touch-icon" href="/logo.png" />
           {/* Render-blocking, CSP-safe (script-src 'self'): restores theme +
               marks JS-enabled before first paint to avoid FOUC. */}
           <script src="/theme-init.js"></script>

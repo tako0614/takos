@@ -4,7 +4,7 @@
  * GitHub Actions 互換ワークフローの in-process な parser / validator / planner。
  *
  * NOTE: runnable な式評価エンジン (tokenizer / evaluator / 実行コンテキストビルダー)
- * は提供しない。Takos の control plane は queue 分散・remote-runtime な独自 executor
+ * は提供しない。Takosumi-backed workflow runtime は queue 分散・remote-runtime な独自 executor
  * を実装しており、step の `if:` 条件評価は worker runtime 側の
  * `src/worker/runtime/queues/workflow-expressions.ts` が担う (always/success/failure/
  * cancelled と限定的な `${{ ... }}` lookup のみをサポートする subset)。この module が

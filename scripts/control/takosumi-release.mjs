@@ -222,7 +222,6 @@ export function buildTakosumiReleaseCommands(
   {
     debug = false,
     zoneId,
-    takosumiRepoDir = "../takosumi",
     skipD1Migrations = false,
     containersRollout,
   } = {},
@@ -231,7 +230,6 @@ export function buildTakosumiReleaseCommands(
     throw new Error(`Unknown environment "${environment}"`);
   }
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
-  requireStringOutput(outputs, "cloudflare_accounts_d1_database_id");
   const vectorizeIndexName = requireStringOutput(
     outputs,
     "cloudflare_vectorize_index_name",
@@ -247,7 +245,6 @@ export function buildTakosumiReleaseCommands(
   const wranglerEnvArgs = wranglerEnvironmentArgs(environment);
   const releaseSecretsFile = releaseSecretsFilePath(environment);
   const releaseWranglerConfig = releaseWranglerConfigPath(environment);
-  const releaseWranglerConfigPathResolved = resolve(releaseWranglerConfig);
   const renderArgs = [
     "bun",
     "scripts/control/render-wrangler-from-tofu.mjs",
@@ -257,20 +254,6 @@ export function buildTakosumiReleaseCommands(
     ...(zoneId ? ["--zone-id", zoneId] : []),
   ];
   const installArgs = ["bun", "install", "--frozen-lockfile"];
-  const takosumiInstallArgs = [
-    "bun",
-    "install",
-    "--cwd",
-    takosumiRepoDir,
-    "--frozen-lockfile",
-  ];
-  const takosumiDashboardInstallArgs = [
-    "bun",
-    "install",
-    "--cwd",
-    `${takosumiRepoDir}/dashboard`,
-    "--frozen-lockfile",
-  ];
   const buildArgs =
     debug && environment === "staging"
       ? ["bun", "run", "build", "--mode", "staging-debug"]
@@ -300,24 +283,6 @@ export function buildTakosumiReleaseCommands(
           releaseWranglerConfig,
           ...wranglerEnvArgs,
         ]),
-        commandLine([
-          "bun",
-          "run",
-          "--cwd",
-          takosumiRepoDir,
-          "cli",
-          "--",
-          "accounts",
-          "migrate-d1",
-          "--database-id",
-          "TAKOSUMI_ACCOUNTS_DB",
-          "--wrangler-config",
-          releaseWranglerConfigPathResolved,
-          "--account-id",
-          accountId,
-          "--remote",
-          ...wranglerEnvArgs,
-        ]),
       ];
 
   return [
@@ -334,8 +299,6 @@ export function buildTakosumiReleaseCommands(
       accountId,
     ]),
     commandLine(installArgs),
-    commandLine(takosumiInstallArgs),
-    commandLine(takosumiDashboardInstallArgs),
     commandLine(buildArgs),
     commandLine(containerBuildArgs),
     ...migrationCommands,

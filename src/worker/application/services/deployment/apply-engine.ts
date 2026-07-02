@@ -2,8 +2,8 @@
  * In-worker desired-state reconciler (internal helper — NOT the deploy authority).
  *
  * Takos itself is deployed by Takosumi: its infrastructure is an OpenTofu module
- * Takosumi installs and applies (Installation -> plan/apply Runs -> Deployment),
- * with Provider connection / runner policy owning
+ * Takosumi installs and applies (Capsule -> plan/apply Runs -> StateVersion /
+ * Output), with ProviderConnection / ProviderBinding / runner policy owning
  * provider credentials and execution. This reconciler only compiles in-app desired
  * state, diffs it against current resources/services state, and reconciles through
  * backend ops. See
@@ -19,9 +19,9 @@ import { groups } from "../../../infra/db/schema-groups.ts";
 import { deployments } from "../../../infra/db/schema-workers.ts";
 import type { AppManifest } from "../source/app-manifest-types.ts";
 import {
-  assertServiceGraphPublicationPrerequisites,
+  assertRuntimeProjectionPublicationPrerequisites,
   listPublications,
-  SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
 } from "../platform/service-publications.ts";
 import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 import {
@@ -482,16 +482,16 @@ export async function applyDesiredState(
       );
     }
     const publicationRows = await listPublications(env, group.spaceId);
-    const hasExistingServiceGraphPublications = publicationRows.some(
+    const hasExistingRuntimeProjectionPublications = publicationRows.some(
       (row) =>
         row.groupId === groupId &&
-        row.sourceType === SERVICE_GRAPH_PUBLICATION_SOURCE_TYPE,
+        row.sourceType === RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
     );
     const hasDesiredPublications =
       (plan.desiredState.manifest.publish?.length ?? 0) > 0;
-    if (hasExistingServiceGraphPublications || hasDesiredPublications) {
+    if (hasExistingRuntimeProjectionPublications || hasDesiredPublications) {
       throw new BadRequestError(
-        "Partial deploys cannot synchronize service graph publications. Deploy without target scoping, or remove publish[] entries before using targeted applies.",
+        "Partial deploys cannot synchronize runtime projection publications. Deploy without target scoping, or remove publish[] entries before using targeted applies.",
       );
     }
   }
@@ -508,7 +508,7 @@ export async function applyDesiredState(
     plan.desiredState,
     targetWorkloadNames,
   );
-  await assertServiceGraphPublicationPrerequisites(env, {
+  await assertRuntimeProjectionPublicationPrerequisites(env, {
     spaceId: group.spaceId,
     groupId,
     manifest: scopedPublicationManifest,
@@ -752,7 +752,7 @@ export async function planManifest(
       plan.desiredState,
       targetWorkloadNames,
     );
-    await assertServiceGraphPublicationPrerequisites(env, {
+    await assertRuntimeProjectionPublicationPrerequisites(env, {
       spaceId: group.spaceId,
       groupId: group.id,
       manifest: scopedPublicationManifest,

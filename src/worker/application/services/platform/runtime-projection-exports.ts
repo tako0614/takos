@@ -1,4 +1,8 @@
 import type { AppPublication } from "../source/app-manifest-types.ts";
+import {
+  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS,
+  TAKOS_RUNTIME_PROJECTION_PUBLICATIONS,
+} from "../source/app-interface-contract.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import {
   publicationOutputContract,
@@ -6,23 +10,27 @@ import {
   upsertPublicationRow,
   type PublicationRow,
 } from "./service-publications-db.ts";
-import { SERVICE_GRAPH_CAPABILITIES } from "./service-publications-normalize.ts";
+import { RUNTIME_PROJECTION_CAPABILITIES } from "./service-publications-normalize.ts";
 
-type ServiceGraphExport = {
+type RuntimeProjectionExport = {
   publication: AppPublication;
   urlPath: string;
 };
 
-type ServiceGraphExportEnv = Pick<
+type RuntimeProjectionExportEnv = Pick<
   Env,
   "AUTH_PUBLIC_BASE_URL" | "ADMIN_DOMAIN" | "DB"
 >;
 
-type ServiceGraphExportBaseUrlEnv = Partial<
+type RuntimeProjectionExportBaseUrlEnv = Partial<
   Pick<Env, "AUTH_PUBLIC_BASE_URL" | "ADMIN_DOMAIN">
 >;
 
-const SERVICE_GRAPH_PUBLISHER = "service-graph";
+const RUNTIME_PROJECTION_PUBLISHER = "runtime-projection";
+export const TAKOS_WORKSPACE_STORAGE_PUBLICATION =
+  TAKOS_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage;
+export const LEGACY_WORKSPACE_STORAGE_PUBLICATION =
+  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage;
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
@@ -30,7 +38,7 @@ function readString(value: unknown): string | null {
     : null;
 }
 
-function publicBaseUrl(env: ServiceGraphExportEnv): string | null {
+function publicBaseUrl(env: RuntimeProjectionExportEnv): string | null {
   const configured = readString(env.AUTH_PUBLIC_BASE_URL);
   if (configured) return configured.replace(/\/+$/, "");
   const adminDomain = readString(env.ADMIN_DOMAIN);
@@ -38,7 +46,7 @@ function publicBaseUrl(env: ServiceGraphExportEnv): string | null {
 }
 
 function optionalPublicBaseUrl(
-  env: ServiceGraphExportBaseUrlEnv,
+  env: RuntimeProjectionExportBaseUrlEnv,
 ): string | null {
   const configured = readString(env.AUTH_PUBLIC_BASE_URL);
   if (configured) return configured.replace(/\/+$/, "");
@@ -50,19 +58,19 @@ function spaceApiPath(spaceId: string, path: string): string {
   return `/api/spaces/${encodeURIComponent(spaceId)}${path}`;
 }
 
-export function serviceGraphExportsForSpace(
+export function runtimeProjectionExportsForSpace(
   spaceId: string,
-): ServiceGraphExport[] {
+): RuntimeProjectionExport[] {
   return [
     {
       publication: {
-        name: "storage.filesystem",
-        publisher: SERVICE_GRAPH_PUBLISHER,
-        type: SERVICE_GRAPH_CAPABILITIES.storageFilesystem,
+        name: TAKOS_WORKSPACE_STORAGE_PUBLICATION,
+        publisher: RUNTIME_PROJECTION_PUBLISHER,
+        type: RUNTIME_PROJECTION_CAPABILITIES.storageFilesystem,
         outputs: { url: { kind: "url" } },
         display: {
           title: "File Storage",
-          category: "service-graph",
+          category: "runtime-projection",
         },
         spec: {
           scopes: {
@@ -76,12 +84,12 @@ export function serviceGraphExportsForSpace(
     {
       publication: {
         name: "source.repository",
-        publisher: SERVICE_GRAPH_PUBLISHER,
-        type: SERVICE_GRAPH_CAPABILITIES.sourceRepository,
+        publisher: RUNTIME_PROJECTION_PUBLISHER,
+        type: RUNTIME_PROJECTION_CAPABILITIES.sourceRepository,
         outputs: { url: { kind: "url" } },
         display: {
           title: "Git Repository",
-          category: "service-graph",
+          category: "runtime-projection",
         },
         spec: {
           scopes: {
@@ -95,12 +103,12 @@ export function serviceGraphExportsForSpace(
     {
       publication: {
         name: "automation.agent_runtime",
-        publisher: SERVICE_GRAPH_PUBLISHER,
-        type: SERVICE_GRAPH_CAPABILITIES.automationAgentRuntime,
+        publisher: RUNTIME_PROJECTION_PUBLISHER,
+        type: RUNTIME_PROJECTION_CAPABILITIES.automationAgentRuntime,
         outputs: { url: { kind: "url" } },
         display: {
           title: "Agent Runtime",
-          category: "service-graph",
+          category: "runtime-projection",
         },
         spec: {
           scopes: {
@@ -114,26 +122,43 @@ export function serviceGraphExportsForSpace(
   ];
 }
 
-function serviceGraphExportByName(
+function runtimeProjectionExportByName(
   spaceId: string,
   name: string,
-): ServiceGraphExport | null {
-  return (
-    serviceGraphExportsForSpace(spaceId).find(
+): RuntimeProjectionExport | null {
+  const service =
+    runtimeProjectionExportsForSpace(spaceId).find(
       (service) => service.publication.name === name,
-    ) ?? null
+    ) ?? null;
+  if (service) return service;
+  if (name !== LEGACY_WORKSPACE_STORAGE_PUBLICATION) return null;
+  const canonical = runtimeProjectionExportsForSpace(spaceId).find(
+    (service) =>
+      service.publication.name === TAKOS_WORKSPACE_STORAGE_PUBLICATION,
   );
+  if (!canonical) return null;
+  return {
+    ...canonical,
+    publication: {
+      ...canonical.publication,
+      name: LEGACY_WORKSPACE_STORAGE_PUBLICATION,
+    },
+  };
 }
 
-export function resolveServiceGraphExportDefinition(
-  env: ServiceGraphExportBaseUrlEnv,
+export function isRuntimeProjectionPublicationName(name: string): boolean {
+  return runtimeProjectionExportByName("", name.trim()) !== null;
+}
+
+export function resolveRuntimeProjectionExportDefinition(
+  env: RuntimeProjectionExportBaseUrlEnv,
   params: { spaceId: string; name: string },
 ): {
   publication: AppPublication;
   outputs: ReturnType<typeof publicationOutputContract>;
   record?: PublicationRecord;
 } | null {
-  const service = serviceGraphExportByName(params.spaceId, params.name);
+  const service = runtimeProjectionExportByName(params.spaceId, params.name);
   if (!service) return null;
   const baseUrl = optionalPublicBaseUrl(env);
   const resolved: Record<string, string> = baseUrl
@@ -145,12 +170,12 @@ export function resolveServiceGraphExportDefinition(
     ...(baseUrl
       ? {
           record: {
-            id: `service-graph:${params.spaceId}:${service.publication.name}`,
+            id: `runtime-projection:${params.spaceId}:${service.publication.name}`,
             name: service.publication.name,
             sourceType: "api",
             groupId: null,
             ownerServiceId: null,
-            catalogName: "service-graph",
+            catalogName: "runtime-projection",
             publicationType: service.publication.type,
             publication: service.publication,
             outputs: publicationOutputContract(service.publication),
@@ -163,14 +188,14 @@ export function resolveServiceGraphExportDefinition(
   };
 }
 
-export async function ensureServiceGraphExports(
-  env: ServiceGraphExportEnv,
+export async function ensureRuntimeProjectionExports(
+  env: RuntimeProjectionExportEnv,
   params: { spaceId: string },
 ): Promise<PublicationRow[]> {
   const baseUrl = publicBaseUrl(env);
   if (!baseUrl) return [];
   const rows: PublicationRow[] = [];
-  for (const service of serviceGraphExportsForSpace(params.spaceId)) {
+  for (const service of runtimeProjectionExportsForSpace(params.spaceId)) {
     rows.push(
       await upsertPublicationRow(env, {
         spaceId: params.spaceId,

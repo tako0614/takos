@@ -31,11 +31,11 @@ GCP / Kubernetes target では同じ概念を source に露出しません。
 
 | 概念               | 所有者                     | 役割                                  |
 | ------------------ | -------------------------- | ------------------------------------- |
-| Deployment history | Takosumi kernel            | retained Deployment / current pointer |
+| Run/state history  | Takosumi kernel            | retained StateVersion / current Output |
 | Container host     | `takos-worker`             | Cloudflare Containers DO classes      |
 | Dispatch namespace | Cloudflare operator config | optional Workers backend placement    |
 
 ## Next
 
 - [デプロイ / セルフホスト](/deploy/)
-- [Deployment History](/deploy/deploy-group)
+- [Run History](/deploy/deploy-group)

@@ -27,7 +27,7 @@ credentials, and grants no runtime authority. Runtime authority for a deployed w
 runtime (and from the operator/Cloud secret boundary), not from a Takosumi-issued grant record.
 
 The reference implementation is `takosumi/core/domains/output-projection/service-projection.ts`
-(`projectServicesFromOutputs`, `validateProjectedServiceExportsFromOutputSnapshot`,
+(`projectServicesFromOutputs`, `validateProjectedServiceExportsFromOutput`,
 `STANDARD_PROJECTED_CAPABILITIES`).
 
 ## 2. Ownership
@@ -43,7 +43,9 @@ The reference implementation is `takosumi/core/domains/output-projection/service
 
 Takos consumes these projections to build its app launcher, MCP registry, file handling, storage, Git, and agent
 experiences. Takos may also publish first-party services through the same Outputs, but it does not define a separate
-Takosumi public standard.
+Takosumi public standard. For Takos-owned runtime services, the concrete service identity uses the `takos.*` namespace
+while the capability remains product-neutral; for example `takos.storage.workspace` is a Takos Workspace Storage service
+with the `storage.filesystem` capability.
 
 ## 3. Non-Goals
 
@@ -197,7 +199,7 @@ Rules:
 - `service_exports` is optional. A repo without it is still a valid OpenTofu Capsule.
 - Secret values, API keys, bearer tokens, private keys, and provider credentials must not appear in `service_exports`.
 - The Output passes the same sensitive-flag and output allowlist checks as other Output projections. Takosumi validates
-  the shape at apply time (`validateProjectedServiceExportsFromOutputSnapshot`) and fails closed on a malformed Output.
+  the shape at apply time (`validateProjectedServiceExportsFromOutput`) and fails closed on a malformed Output.
 - If an endpoint is sensitive, do not publish it as an export; let the deployed workload deliver it through its own
   runtime secret path.
 - Unknown capability tokens are recorded only when policy explicitly allows extension capabilities.
@@ -228,16 +230,16 @@ here — they authorize OpenTofu plan/apply/destroy and stay in the ProviderConn
 
 Takos is a first-party consumer/producer profile over this projection:
 
-| Takos surface                    | capability                                                  |
-| -------------------------------- | ----------------------------------------------------------- |
-| MCP registry                     | `protocol.mcp.server`                                       |
-| app launcher / embedded UI       | `interface.ui.surface`                                      |
-| file handlers                    | `interface.file.handler`                                    |
-| file / object storage            | `storage.filesystem`, `storage.object`                      |
-| key-value / SQL resources        | `storage.key_value`, `storage.sql`                          |
-| Git UX / clone / refs            | `source.repository`, `source.git.smart_http`                |
-| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`      |
-| same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api` |
+| Takos surface                    | service identity / capability                                          |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| MCP registry                     | app-provided `protocol.mcp.server` publications                        |
+| app launcher / embedded UI       | app-provided `interface.ui.surface` publications                       |
+| file handlers                    | app-provided `interface.file.handler` publications                     |
+| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`               |
+| object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`                   |
+| Git UX / clone / refs            | `source.repository`, `source.git.smart_http`                           |
+| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`                 |
+| same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api`            |
 
 Takos-specific UI decisions, launcher ranking, bundled-app seeding, chat/agent UX, and memory behavior stay in Takos.
 Output capture, output-to-input wiring, dependency pinning, and audit stay in Takosumi. MCP is represented by the

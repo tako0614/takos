@@ -17,7 +17,7 @@ export default function JsonLd(props: { locale: Locale }): JSX.Element {
         '@id': 'https://takos.jp/#org',
         name: 'Takos',
         url: 'https://takos.jp/',
-        logo: 'https://takos.jp/brand/inkdrop.svg',
+        logo: 'https://takos.jp/logo.png',
         sameAs: ['https://github.com/tako0614/takos'],
       },
       {

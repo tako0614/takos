@@ -12,9 +12,14 @@ import { RateLimiters } from "./shared/utils/rate-limiter.ts";
 import { authSessionRouter } from "./server/routes/auth/session.ts";
 import { authOidcRouter } from "./server/routes/auth/oidc.ts";
 import {
-  type CloudflareWorkerEnv,
-  handleAccountsPlaneRequest,
-} from "./server/routes/accounts/mount.ts";
+  TAKOSUMI_PRODUCT_CAPABILITIES_PATH,
+  TAKOSUMI_WELL_KNOWN_PATH,
+} from "takosumi-contract";
+import {
+  createTakosDistributionProductCapabilities,
+  createTakosDistributionWellKnown,
+  createTakosProductWellKnown,
+} from "./server/routes/takosumi-discovery.ts";
 import { runCommonEnvScheduledMaintenance } from "./application/services/common-env/index.ts";
 import { dispatchScheduledComputeTriggers } from "./application/services/deployment/scheduled-triggers.ts";
 import { triggerScheduledWorkflows } from "./application/services/actions/actions-triggers.ts";
@@ -268,50 +273,18 @@ app.use("*", staticAssetsMiddleware);
 // Health check
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-// ============================================================================
-// Takosumi Accounts plane (in-process, at the ORIGIN ROOT — no /accounts prefix)
-// ============================================================================
-// The worker origin is the OIDC issuer: app.takosumi.com for the hosted platform
-// worker, or the self-hoster's own origin for a Takos distribution worker. The
-// account plane owns these root prefixes in-process; everything else is the
-// Takos product. The product has no root /oauth or /.well-known handler, so
-// there is no collision. `/internal/*` is NOT delegated here: account-plane
-// internals are in-process calls, and `/internal` HTTP routes are reserved for
-// opentofu-runner / executor container callbacks.
-app.all("/.well-known/*", (c) =>
-  handleAccountsPlaneRequest(
-    c.req.raw,
-    c.env as unknown as CloudflareWorkerEnv,
-  ),
+app.get(TAKOSUMI_WELL_KNOWN_PATH, (c) =>
+  c.json(createTakosDistributionWellKnown(new URL(c.req.url).origin)),
 );
-app.all("/oauth/*", (c) =>
-  handleAccountsPlaneRequest(
-    c.req.raw,
-    c.env as unknown as CloudflareWorkerEnv,
-  ),
+
+app.get(TAKOSUMI_PRODUCT_CAPABILITIES_PATH, (c) =>
+  c.json(createTakosDistributionProductCapabilities(new URL(c.req.url).origin)),
 );
-app.all("/v1/*", (c) =>
-  handleAccountsPlaneRequest(
-    c.req.raw,
-    c.env as unknown as CloudflareWorkerEnv,
-  ),
-);
-// `/api/v1/*` is the account plane's edge-public deploy-control surface (the
-// dashboard control surface served by accounts-service). It is NOT under `/v1`,
-// so it needs its own delegation here, registered BEFORE the Takos product
-// `/api` router mount below, or the product router would shadow it (and answer
-// with its own 404 before the request could reach the account plane).
-app.all("/api/v1/*", (c) =>
-  handleAccountsPlaneRequest(
-    c.req.raw,
-    c.env as unknown as CloudflareWorkerEnv,
-  ),
-);
-app.all("/__takosumi/*", (c) =>
-  handleAccountsPlaneRequest(
-    c.req.raw,
-    c.env as unknown as CloudflareWorkerEnv,
-  ),
+
+app.get("/.well-known/takos", (c) =>
+  c.json(createTakosProductWellKnown(new URL(c.req.url).origin), 200, {
+    "Cache-Control": "public, max-age=300",
+  }),
 );
 
 // ============================================================================
@@ -460,8 +433,7 @@ app.put("/internal/default-app-distribution", async (c) => {
   }
 
   const body = (await c.req.json().catch(() => null)) as
-    | { entries?: unknown; repositories?: unknown }
-    | unknown[];
+    { entries?: unknown; repositories?: unknown } | unknown[];
   const entries = Array.isArray(body)
     ? body
     : Array.isArray(body?.entries)

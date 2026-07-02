@@ -1,40 +1,29 @@
-// In-process Bearer self-validation for the unified worker.
+// Takosumi Accounts Bearer validation for the Takos product worker.
 //
-// Because the unified worker origin is its own OIDC issuer (the account plane
-// runs in-process inside this worker), Bearer tokens it issued can be verified
-// without any external HTTP call: the JWKS is served by the same in-process
-// accounts handler at `/oauth/jwks`. Hosted Takosumi uses app.takosumi.com;
-// self-hosted Takos uses its own origin. This module fetches that key set
-// through the in-process handler (NOT a remote URL), verifies the JWT
-// signature/claims with `jose`, and resolves the local user via the existing
-// `authIdentities` lookup keyed by `${issuer}#${sub}`.
+// Takos no longer embeds the Takosumi Accounts handler. JWT access tokens are
+// verified against the configured issuer's JWKS over HTTP, then resolved to the
+// local app user via `authIdentities` keyed by `${issuer}#${sub}`.
 import * as jose from "jose";
 import { and, eq } from "drizzle-orm";
 import type { Env, User } from "../../../shared/types/index.ts";
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { accounts, authIdentities, getDb } from "../../../infra/db/index.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
-import {
-  type CloudflareWorkerEnv,
-  handleAccountsPlaneRequest,
-} from "../accounts/mount.ts";
 import { extractBearerToken } from "../../middleware/bearer-token-classification.ts";
 
 const SELF_BEARER_ALGORITHMS = ["RS256", "PS256", "ES256", "EdDSA"] as const;
 
-// In-process JWKS path served by the accounts handler (mirrors
-// TAKOSUMI_ACCOUNTS_JWKS_PATH). Kept local to avoid a contract import for a
-// single literal that is part of this worker's own route surface.
+// Mirrors TAKOSUMI_ACCOUNTS_JWKS_PATH without importing the account worker.
 const SELF_JWKS_PATH = "/oauth/jwks";
 
 export type SelfIssuedBearerResult =
   /** No `Bearer` token on the request. */
   | { kind: "no-bearer" }
-  /** Issuer is not configured, so self-validation cannot run. */
+  /** Issuer is not configured, so issuer JWT validation cannot run. */
   | { kind: "no-issuer" }
   /** Bearer present but failed local verification / user resolution. */
   | { kind: "invalid" }
-  /** Token verified against the local JWKS and the local user resolved. */
+  /** Token verified against the issuer JWKS and the local user resolved. */
   | {
       kind: "ok";
       user: User;
@@ -47,11 +36,10 @@ export type SelfIssuedBearerResult =
  * Whether a verified JWT payload is an OIDC `id_token` rather than an OAuth
  * access token.
  *
- * The in-process accounts plane signs `id_token`s (`issueIdToken`) with the same
- * key it publishes at `/oauth/jwks`, but it NEVER mints JWT access tokens —
- * OAuth access/refresh tokens are opaque (`takat_` / `takrt_`) and can never
- * satisfy `jwtVerify`. So any JWT presented as a Bearer here can only be an
- * `id_token`, which must NOT be accepted as a full API access token: `id_token`s
+ * Takosumi Accounts signs `id_token`s with the same key it publishes at
+ * `/oauth/jwks`, while some deployments may also mint JWT access tokens. A JWT
+ * `id_token` presented as a Bearer here must NOT be accepted as a full API
+ * access token: `id_token`s
  * routinely leak through front-channel redirect URLs, `id_token_hint`
  * parameters, and logs, and are treated as lower-sensitivity than access tokens.
  *
@@ -76,9 +64,9 @@ export function isOidcIdToken(payload: jose.JWTPayload): boolean {
 }
 
 /**
- * Parse the OAuth scope claim from a verified self-issued token payload. Mirrors
+ * Parse the OAuth scope claim from a verified issuer JWT payload. Mirrors
  * the `scope` / `scopes` / `scp` precedence used by the remote introspection
- * path so the scope gate behaves identically for self-issued tokens.
+ * path so the scope gate behaves identically for issuer JWT tokens.
  */
 function parseTokenScopes(payload: jose.JWTPayload): string[] {
   const source =
@@ -103,19 +91,16 @@ function parseTokenScopes(payload: jose.JWTPayload): string[] {
 }
 
 /**
- * Fetch the issuer JWKS from the in-process accounts handler. This is a direct
- * function call into the same worker — no external URL, no self-loopback fetch.
+ * Fetch the configured Takosumi Accounts issuer JWKS.
  */
-async function loadLocalJwks(
-  origin: string,
-  env: CloudflareWorkerEnv,
+async function loadIssuerJwks(
+  issuer: string,
+  _env: Env,
 ): Promise<jose.JSONWebKeySet | null> {
-  const response = await handleAccountsPlaneRequest(
-    new Request(`${origin}${SELF_JWKS_PATH}`, {
-      headers: { accept: "application/json" },
-    }),
-    env,
-  );
+  const base = issuer.replace(/\/+$/g, "");
+  const response = await fetch(`${base}${SELF_JWKS_PATH}`, {
+    headers: { accept: "application/json" },
+  });
   if (!response.ok) return null;
   const body = (await response
     .json()
@@ -169,11 +154,10 @@ async function resolveSelfIssuedUser(input: {
 }
 
 /**
- * Verify a self-issued Bearer token in-process and resolve the local user.
+ * Verify a Takosumi Accounts JWT Bearer token and resolve the local user.
  *
- * `issuer` must be the normalized self origin (the unified worker is both
- * issuer and verifier). JWKS is loaded from the in-process accounts handler;
- * the user is resolved via the existing `authIdentities` lookup.
+ * `issuer` must be the normalized Takosumi Accounts issuer. The user is
+ * resolved via the existing `authIdentities` lookup.
  */
 export async function resolveSelfIssuedBearer(input: {
   authorizationHeader: string | null | undefined;
@@ -182,13 +166,12 @@ export async function resolveSelfIssuedBearer(input: {
   db: SqlDatabaseBinding | undefined;
   env: Env;
   /**
-   * Test seam: override the in-process JWKS loader. Production callers omit this
-   * and the real {@link loadLocalJwks} (which calls the in-process accounts
-   * handler) is used.
+   * Test seam: override the JWKS loader. Production callers omit this and the
+   * real {@link loadIssuerJwks} is used.
    */
   loadJwks?: (
-    origin: string,
-    env: CloudflareWorkerEnv,
+    issuer: string,
+    env: Env,
   ) => Promise<jose.JSONWebKeySet | null>;
 }): Promise<SelfIssuedBearerResult> {
   const token = extractBearerToken(input.authorizationHeader);
@@ -196,9 +179,9 @@ export async function resolveSelfIssuedBearer(input: {
   if (!input.issuer) return { kind: "no-issuer" };
   if (!input.db) return { kind: "invalid" };
 
-  const jwks = await (input.loadJwks ?? loadLocalJwks)(
-    input.origin,
-    input.env as unknown as CloudflareWorkerEnv,
+  const jwks = await (input.loadJwks ?? loadIssuerJwks)(
+    input.issuer,
+    input.env,
   );
   if (!jwks) return { kind: "invalid" };
 
@@ -213,7 +196,7 @@ export async function resolveSelfIssuedBearer(input: {
     return { kind: "invalid" };
   }
 
-  // Refuse OIDC id_tokens: they are signed by the same in-process key the JWKS
+  // Refuse OIDC id_tokens: they are signed by the same issuer key the JWKS
   // serves, so a relying party's id_token (or any captured id_token) would
   // otherwise be accepted as a full API access token. Only opaque access tokens
   // are legitimate, and those never reach this JWT path.

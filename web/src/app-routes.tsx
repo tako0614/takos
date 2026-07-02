@@ -1,5 +1,5 @@
 import { createMemo, type JSX, lazy, Match, Show, Switch } from "solid-js";
-import { Navigate, Route, useLocation, useParams } from "@solidjs/router";
+import { Navigate, Route, useParams } from "@solidjs/router";
 import { LoadingScreen } from "./components/common/LoadingScreen.tsx";
 import {
   type AppRouteComponentKey,
@@ -95,63 +95,6 @@ const SharedThreadPage = lazy(() =>
   })),
 );
 
-// ---------------------------------------------------------------------------
-// Admin screens folded from the takosumi dashboard SPA (the app-centric
-// rebuild: app list / app detail / add flow / run screen / space settings).
-//
-// These screens self-gate on the account-plane cookie session via their ported
-// `<Page>` / `<AuthGuard>` wrapper (distinct from the takos product
-// `ProtectedRouteLayout`, which gates on `useAuth()`), and drive navigation
-// with `@solidjs/router` directly rather than the takos navigation-context.
-// They are registered as plain `<Route>` elements appended in `AppRoutes()`
-// (see `AccountPlaneRoutes`) that bypass the schema/navigation-context system.
-// Their static segments out-rank the schema's `/:username/:repoName` and
-// `*rest` fallbacks in the @solidjs/router specificity match.
-//
-// One deliberate divergence from the takosumi platform worker: "/" belongs to
-// the takos PRODUCT here, so the admin app list lives at `/installations`
-// (and links inside the embedded shell that point at "/" land on the product
-// home — which is the right "home" for a takos deployment).
-// ---------------------------------------------------------------------------
-const AccountView = lazy(
-  () => import("@takosumi/dashboard/views/account/AccountView.tsx"),
-);
-const AppListView = lazy(
-  () => import("@takosumi/dashboard/views/apps/AppListView.tsx"),
-);
-const AppDetailView = lazy(
-  () => import("@takosumi/dashboard/views/apps/AppDetailView.tsx"),
-);
-const NewAppView = lazy(
-  () => import("@takosumi/dashboard/views/new/NewAppView.tsx"),
-);
-const RunView = lazy(
-  () => import("@takosumi/dashboard/views/runs/RunView.tsx"),
-);
-const RunGroupView = lazy(
-  () => import("@takosumi/dashboard/views/runs/RunGroupView.tsx"),
-);
-const GraphView = lazy(
-  () => import("@takosumi/dashboard/views/graph/GraphView.tsx"),
-);
-const ActivityView = lazy(
-  () => import("@takosumi/dashboard/views/activity/ActivityView.tsx"),
-);
-const SpaceSettingsView = lazy(
-  () =>
-    import("@takosumi/dashboard/views/workspace/WorkspaceSettingsView.tsx"),
-);
-const SignInView = lazy(
-  () => import("@takosumi/dashboard/views/auth/SignInView.tsx"),
-);
-const SignInCallbackView = lazy(() =>
-  import("@takosumi/dashboard/views/auth/SignInView.tsx").then((module) => ({
-    default: module.SignInCallbackView,
-  })),
-);
-const NotificationsView = lazy(
-  () => import("@takosumi/dashboard/views/notifications/NotificationsView.tsx"),
-);
 function HomeRoute() {
   const auth = useAuth();
   const navigation = useNavigation();
@@ -773,68 +716,6 @@ function renderRouteSchemaGroup(
   });
 }
 
-/**
- * Account / Installations routes folded from the takosumi dashboard SPA.
- *
- * Registered as plain `<Route>` elements (no schema entry, no
- * `ProtectedRouteLayout`) because each view owns its own account-plane session
- * gate. Patterns mirror the dashboard paths so the dashboard's own deep-links
- * keep working; static segments (`/install`, `/installations`, `/account/...`)
- * out-rank the schema's `/:username/:repoName` and `*rest` fallbacks in the
- * @solidjs/router specificity match.
- */
-/** Redirect preserving the query string (the external install link's
- * `/install?git=…` prefill and the Cloudflare OAuth callback's
- * `/connections?connected=1` both carry load-bearing params). */
-function RedirectWithQuery(props: { readonly to: string }) {
-  const loc = useLocation();
-  return <Navigate href={`${props.to}${loc.search}`} />;
-}
-
-function AccountPlaneRoutes() {
-  return (
-    <>
-      {/* Public — no session required. */}
-      <Route path="/sign-in" component={SignInView} />
-      <Route path="/sign-in/callback" component={SignInCallbackView} />
-
-      {/* Self-gated (redirect to /sign-in when no account-plane session). */}
-      <Route path="/notifications" component={NotificationsView} />
-      <Route path="/account" component={AccountView} />
-      <Route path="/new" component={NewAppView} />
-      <Route path="/installations" component={AppListView} />
-      <Route path="/installations/:id" component={AppDetailView} />
-      <Route path="/installations/:id/:tab" component={AppDetailView} />
-      <Route path="/runs/:id" component={RunView} />
-      <Route path="/run-groups/:id" component={RunGroupView} />
-      <Route path="/graph" component={GraphView} />
-      <Route path="/activity" component={ActivityView} />
-      <Route path="/space/settings" component={SpaceSettingsView} />
-      <Route path="/space/settings/:tab" component={SpaceSettingsView} />
-
-      {/* /install is the external install link (client-handled): forwards its
-          query to /new, where the dashboard's install-link parser seeds the
-          Git form — pre-fill only, the visitor always confirms. */}
-      <Route
-        path="/install"
-        component={() => <RedirectWithQuery to="/new" />}
-      />
-      <Route
-        path="/connections"
-        component={() => <RedirectWithQuery to="/space/settings/connections" />}
-      />
-      <Route
-        path="/account/profile"
-        component={() => <Navigate href="/account" />}
-      />
-      <Route
-        path="/account/sessions"
-        component={() => <Navigate href="/account" />}
-      />
-    </>
-  );
-}
-
 export function AppRoutes() {
   return (
     <>
@@ -843,8 +724,6 @@ export function AppRoutes() {
       <Route path="/" component={ProtectedRouteLayout}>
         {renderRouteSchemaGroup(PROTECTED_APP_ROUTE_SCHEMAS)}
       </Route>
-
-      {AccountPlaneRoutes()}
 
       {renderRouteSchemaGroup(FALLBACK_APP_ROUTE_SCHEMAS)}
     </>

@@ -1640,6 +1640,37 @@ compute:
   );
 });
 
+test("public source contract - allows Takos workspace storage consume", () => {
+  const manifest = parseAppManifestYaml(`
+name: takos-storage-consume-app
+
+compute:
+  web:
+    kind: worker
+    consume:
+      - publication: takos.storage.workspace
+        request:
+          scopes:
+            - files:read
+            - files:write
+        inject:
+          env:
+            url: TAKOS_STORAGE_API_URL
+`);
+
+  assertEquals(manifest.compute.web?.consume?.[0], {
+    publication: "takos.storage.workspace",
+    request: {
+      scopes: ["files:read", "files:write"],
+    },
+    inject: {
+      env: {
+        url: "TAKOS_STORAGE_API_URL",
+      },
+    },
+  });
+});
+
 test("public source contract - parses inject env and rejects retired consume env aliases", () => {
   const manifest = parseAppManifestYaml(`
 name: consume-inject-env-app
@@ -1779,6 +1810,32 @@ compute:
 `),
     Error,
     "publish[0].scopes is not supported by the publish/consume contract",
+  );
+});
+
+test("public source contract - rejects Takos-owned publication names", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: reserved-takos-publication-name-app
+publish:
+  - name: takos.storage.workspace
+    publisher: web
+    type: storage.filesystem
+    outputs:
+      url:
+        kind: url
+        routeRef: storage
+compute:
+  web:
+    kind: worker
+routes:
+  - id: storage
+    target: web
+    path: /storage
+`),
+    Error,
+    "publish[0].name 'takos.storage.workspace' is reserved for Takos runtime services",
   );
 });
 
@@ -2099,7 +2156,7 @@ serviceBindings:
       - memory.read
 `),
     Error,
-    "serviceBindings[0].capability 'takos.memory.workspace' is not supported by the Takos Service Graph profile",
+    "serviceBindings[0].capability 'takos.memory.workspace' is not supported by the Takos runtime projection profile",
   );
 
   assertThrows(

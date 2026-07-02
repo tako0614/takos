@@ -79,6 +79,7 @@ export const common = {
   appStatusUnknown: "不明",
   appStatusDeployed: "デプロイ済み",
   appStatusActive: "有効",
+  appStatusReady: "準備完了",
   appStatusFailed: "失敗",
   appStatusError: "エラー",
   appStatusDegraded: "劣化",

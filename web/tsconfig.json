@@ -17,7 +17,6 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@takosumi/dashboard/*": ["../../takosumi/dashboard/src/*"],
       "@takosjp/takosumi-accounts-contract": [
         "../../takosumi/accounts/contract/src/mod.ts"
       ],

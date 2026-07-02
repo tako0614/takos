@@ -30,7 +30,7 @@ import {
   listPublications,
   type PublicationRecord,
   publicationResolvedUrl,
-  SERVICE_GRAPH_CAPABILITIES,
+  RUNTIME_PROJECTION_CAPABILITIES,
 } from "../../../application/services/platform/service-publications.ts";
 
 export const storageManagementRouteDeps = {
@@ -95,7 +95,7 @@ export function projectFileHandlerPublication(
   if (
     !isPublicationType(
       record.publicationType,
-      SERVICE_GRAPH_CAPABILITIES.interfaceFileHandler,
+      RUNTIME_PROJECTION_CAPABILITIES.interfaceFileHandler,
     )
   ) {
     return null;

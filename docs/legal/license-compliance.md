@@ -19,10 +19,8 @@ drift across the ecosystem checkout.
 | `takos/containers/agent/`    | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
 | `takosumi/`                  | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm package metadata                                  |
 | `takos-agent-engine/`        | `MIT`                 | `LICENSE`, `.reuse/dep5`, Cargo package metadata                                |
+| `takos-apps/takos-office/`   | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata; aligns with HyperFormula GPLv3 use      |
 | `takos-apps/takos-computer/` | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm package metadata                                  |
-| `takos-apps/takos-docs/`     | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                          |
-| `takos-apps/takos-slide/`    | `MIT`                 | `LICENSE`, `.reuse/dep5`, npm metadata                                          |
-| `takos-apps/takos-excel/`    | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata; aligns with HyperFormula GPLv3 use      |
 | `yurucommu/`                 | `GPL-3.0-only`        | `LICENSE`, `.reuse/dep5`, npm metadata                                          |
 | `road-to-me/`                | `AGPL-3.0-only`       | `LICENSE`, `.reuse/dep5`, npm / Cargo metadata                                  |
 | `takosumi-private/`          | private / unpublished | operator state only; realized config and secrets evidence remain private       |

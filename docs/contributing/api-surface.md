@@ -5,7 +5,7 @@
 
 `../takosumi/core/api/openapi.ts` が Takosumi reference service の
 route snapshot を保持します。Takosumi public conformance surface は
-Space / Source / Connection / Installation / Dependency / Run / RunGroup / Deployment / OutputSnapshot / Activity を扱う
+Workspace / Project / Capsule / Source / ProviderConnection / ProviderBinding / Run / StateVersion / Output / AuditEvent を扱う
 deploy-control API です。 `/api/public/v1/*` の Takos product gateway route は
 `takos` 側で管理しており、Takosumi 公開 API としては扱いません。
 
@@ -15,7 +15,7 @@ snapshot generator は plain TypeScript object として実装してあり、ker
 snapshot がカバーする route グループ。
 
 - プロセス probe: `GET /health`, `GET /capabilities`
-- deploy-control API: Installation / Run / OutputSnapshot routes
+- deploy-control API: Workspace / Project / Source / Capsule / Run / StateVersion / Output routes
 - Takos 側 gateway route は `takos` の public API contract で扱う
 - removed plan / apply / snapshot alias は current kernel surface に含めない
 - internal service API は kernel public contract として扱わない

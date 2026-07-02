@@ -1,8 +1,8 @@
 # Architecture Diagrams
 
-**Takos is the OpenTofu-native AI workspace distribution managed by embedded Takosumi services.** Takosumi is the OpenTofu-native deploy control plane: Takos's deploy
+**Takos is the OpenTofu-native AI workspace distribution managed by external Takosumi control plane.** Takosumi is the OpenTofu-native deploy control plane: Takos's deploy
 topology is an OpenTofu Capsule (`deploy/opentofu`, `var.target = cloudflare`)
-that Takosumi **installs and applies**, recording the run ledger as **Installation -> Run -> StateSnapshot -> OutputSnapshot -> Deployment**. Connections hold credential references, Installation provider connections resolve each provider (+ optional alias) to an explicit provider connection (`own_key` or `takos_provided`), and policy resolves provider allowlists, state backend, and Cloudflare Container execution.
+that Takosumi **installs and applies**, recording the run ledger as **Capsule -> Run -> StateVersion -> Output**. Connections hold credential references, ProviderBindings resolve each provider (+ optional alias) to an explicit provider connection (an explicit ProviderConnection), and policy resolves provider allowlists, state backend, and Cloudflare Container execution.
 
 ## Deploy flow (Takosumi run ledger)
 
@@ -10,15 +10,14 @@ that Takosumi **installs and applies**, recording the run ledger as **Installati
 flowchart LR
   M["Takos OpenTofu module<br/>deploy/opentofu (var.target)"]
   subgraph TS["Takosumi (deploy control plane)"]
-    I["Installation"]
+    I["Capsule"]
     P["`plan` type Run<br/>(tofu plan)"]
     A["`apply` type Run<br/>(tofu apply)"]
     DP["`destroy_plan` / `destroy_apply`<br/>(teardown)"]
-    D["Deployment"]
-    O["OutputSnapshot<br/>(non-secret URLs / binding map)"]
+    O["Output<br/>(non-secret URLs / binding map)"]
   end
-  RP["Connection / Installation provider connection / policy<br/>provider allowlist · credentials ·<br/>state backend · Container execution"]
-  M --> I --> P --> A --> D --> O
+  RP["ProviderConnection / ProviderBinding / policy<br/>provider allowlist · credentials ·<br/>state backend · Container execution"]
+  M --> I --> P --> A --> S["StateVersion"] --> O
   I --> DP
   RP -. owns execution & credentials .-> P
   RP -. owns execution & credentials .-> A
@@ -55,9 +54,8 @@ tier 2 (per-run capability token), and tier 3 (signed-request envelope).
 
 ## Boundary
 
-Takos owns the product surface (chat, agent, memory, spaces, Git service profile UX, bundled-app launcher metadata,
-file-handler metadata, MCP-facing product metadata). Takosumi records the run ledger (Installation / Run / Deployment /
-OutputSnapshot) and the Connection / Installation provider connection / policy-owned execution. The embedded Takosumi Accounts plane owns
+Takos owns the product surface (chat, agent, memory, Workspaces, Git service profile UX, bundled-app launcher metadata,
+file-handler metadata, MCP-facing product metadata). Takosumi records the run ledger (Capsule / Run / StateVersion / Output) and the ProviderConnection / ProviderBinding / policy-owned execution. The Takosumi Accounts plane owns
 account-plane policy: account, billing, OIDC, and dashboard.
 
 ## References
