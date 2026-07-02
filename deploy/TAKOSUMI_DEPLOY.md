@@ -85,6 +85,23 @@ passes those refs into OpenTofu as plain module variables. GHCR images may remai
 as provenance / SBOM evidence, but Cloudflare Worker deploys should consume the
 Cloudflare registry refs.
 
+To turn the Git CI release manifest into OpenTofu input, generate a tfvars JSON
+file from the downloaded `takos-release-manifest` artifact:
+
+```sh
+bun scripts/control/release-container-images-from-manifest.mjs \
+  release-manifest.json \
+  --output release.auto.tfvars.json
+
+tofu apply -var-file=release.auto.tfvars.json
+```
+
+This helper is intentionally mechanical. It only reads the Git CI release
+manifest, requires `cloudflareRegistryRef` for `takos-runtime` and
+`takos-executor`, and writes the `release_container_images` variable. It does
+not fetch artifacts, choose alternate images, or bypass the Git/OpenTofu source
+of truth.
+
 The Git CI token used for Cloudflare registry publication must include the
 account-scoped `Containers Write` / `Containers Edit` permission. Prefer storing
 that as the narrower GitHub Actions secret `CLOUDFLARE_CONTAINERS_API_TOKEN`;
