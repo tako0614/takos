@@ -146,6 +146,31 @@ output "app_deployment" {
         bind = "ROLLOUT_HEALTH_KV"
         to   = ["web"]
       }
+      worker_bundles = {
+        type = "object-store"
+        bind = "WORKER_BUNDLES"
+        to   = ["web"]
+      }
+      tenant_builds = {
+        type = "object-store"
+        bind = "TENANT_BUILDS"
+        to   = ["web"]
+      }
+      tenant_source = {
+        type = "object-store"
+        bind = "TENANT_SOURCE"
+        to   = ["web"]
+      }
+      git_objects = {
+        type = "object-store"
+        bind = "GIT_OBJECTS"
+        to   = ["web"]
+      }
+      offload = {
+        type = "object-store"
+        bind = "TAKOS_OFFLOAD"
+        to   = ["web"]
+      }
       vector = {
         type = "vector-index"
         bind = "VECTORIZE"
