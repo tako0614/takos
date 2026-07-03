@@ -11,13 +11,12 @@ terraform {
   # State backend and provider credentials are resolved by Takosumi ProviderConnection / ProviderBinding / policy during the typed Run. Takosumi records StateVersion, Output, and audit/run evidence after a successful apply.
 }
 
-provider "cloudflare" {
-  # Credentials are supplied outside the module by Takosumi ProviderConnection
-  # env injection.
-}
-
 module "takos" {
   source = "../../modules/cloudflare"
+
+  providers = {
+    cloudflare = cloudflare
+  }
 
   account_id   = var.account_id
   project_name = "takos"

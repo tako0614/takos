@@ -9,14 +9,13 @@ terraform {
   }
 }
 
-provider "cloudflare" {
-  # Credentials are supplied outside the module by Takosumi ProviderConnection
-  # env injection, or by the CI plan gate's temporary CLOUDFLARE_API_TOKEN.
-}
-
 module "cloudflare" {
   count  = var.target == "cloudflare" ? 1 : 0
   source = "./modules/cloudflare"
+
+  providers = {
+    cloudflare = cloudflare
+  }
 
   account_id        = var.cloudflare.account_id
   project_name      = var.project_name
