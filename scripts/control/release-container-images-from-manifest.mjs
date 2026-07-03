@@ -5,8 +5,8 @@ import process from "node:process";
 import { normalizeReleaseContainerImages } from "./takosumi-release.mjs";
 
 const RELEASE_IMAGE_ALIASES = {
-  "takos-runtime": "runtime",
-  "takos-executor": "executor",
+  "takos-worker-runtime": "runtime",
+  "takos-agent-executor": "executor",
 };
 
 function usage() {

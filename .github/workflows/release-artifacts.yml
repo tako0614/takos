@@ -17,7 +17,7 @@ on:
         default: false
         type: boolean
       publish_cloudflare_registry:
-        description: "Publish Takos runtime/executor images to the Cloudflare Containers registry for Takosumi Cloud deploys"
+        description: "Publish Takos worker runtime / agent executor container images to the Cloudflare Containers registry for Takosumi Cloud deploys"
         required: false
         default: true
         type: boolean
@@ -176,13 +176,13 @@ jobs:
             context: .
             dockerfile: takos/containers/agent/Dockerfile
             prebuild: ""
-          - image: takos-runtime
+          - image: takos-worker-runtime
             context: takos/containers/runtime
             dockerfile: takos/containers/runtime/Dockerfile
             prebuild: bun run containers:build:runtime
             cloudflare_container: true
             cloudflare_build_path: containers/runtime
-          - image: takos-executor
+          - image: takos-agent-executor
             context: takos/containers/executor
             dockerfile: takos/containers/executor/Dockerfile
             prebuild: bun run containers:build:executor

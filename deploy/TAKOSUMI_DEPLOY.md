@@ -66,8 +66,8 @@ the variable into the release command and records the Run evidence.
 
 ```hcl
 release_container_images = {
-  runtime  = "registry.cloudflare.com/<account-id>/takos-runtime:<git-ci-tag>"
-  executor = "registry.cloudflare.com/<account-id>/takos-executor:<git-ci-tag>"
+  runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime:<git-ci-tag>"
+  executor = "registry.cloudflare.com/<account-id>/takos-agent-executor:<git-ci-tag>"
 }
 ```
 
@@ -85,12 +85,12 @@ not spend activation time or container-build capacity producing app artifacts.
 Takosumi does not select, fetch, or rewrite artifacts outside the declared
 OpenTofu module and release command.
 The canonical artifact source for hosted Takos installs is the Takos Git CI
-release workflow: it publishes `takos-runtime` and `takos-executor` to the
-Cloudflare managed container registry with `wrangler containers build --push`,
-records the resulting registry refs in the release manifest, and the operator
-passes those refs into OpenTofu as plain module variables. GHCR images may remain
-as provenance / SBOM evidence, but Cloudflare Worker deploys should consume the
-Cloudflare registry refs.
+release workflow: it publishes `takos-worker-runtime` and
+`takos-agent-executor` to the Cloudflare managed container registry with
+`wrangler containers build --push`, records the resulting registry refs in the
+release manifest, and the operator passes those refs into OpenTofu as plain
+module variables. GHCR images may remain as provenance / SBOM evidence, but
+Cloudflare Worker deploys should consume the Cloudflare registry refs.
 
 To turn the Git CI release manifest into OpenTofu input, generate a tfvars JSON
 file from the downloaded `takos-release-manifest` artifact:
@@ -104,10 +104,10 @@ tofu apply -var-file=release.auto.tfvars.json
 ```
 
 This helper is intentionally mechanical. It only reads the Git CI release
-manifest, requires `cloudflareRegistryRef` for `takos-runtime` and
-`takos-executor`, and writes the `release_container_images` variable. It does
-not fetch artifacts, choose alternate images, or bypass the Git/OpenTofu source
-of truth.
+manifest, requires `cloudflareRegistryRef` for `takos-worker-runtime` and
+`takos-agent-executor`, and writes the `release_container_images` variable. It
+does not fetch artifacts, choose alternate images, or bypass the Git/OpenTofu
+source of truth.
 
 The Git CI token used for Cloudflare registry publication must include the
 account-scoped `Containers Write` / `Containers Edit` permission. Prefer storing

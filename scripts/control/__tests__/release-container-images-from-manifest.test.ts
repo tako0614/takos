@@ -11,9 +11,9 @@ import {
 } from "../release-container-images-from-manifest.mjs";
 
 const runtimeRef =
-  "registry.cloudflare.com/acc_123/takos-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
+  "registry.cloudflare.com/acc_123/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const executorRef =
-  "registry.cloudflare.com/acc_123/takos-executor:0.10.0-abcdef123456";
+  "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-abcdef123456";
 
 function releaseManifest(overrides: Record<string, unknown> = {}) {
   return {
@@ -25,11 +25,11 @@ function releaseManifest(overrides: Record<string, unknown> = {}) {
           cloudflareRegistryRef: null,
         },
         {
-          name: "takos-runtime",
+          name: "takos-worker-runtime",
           cloudflareRegistryRef: runtimeRef,
         },
         {
-          name: "takos-executor",
+          name: "takos-agent-executor",
           cloudflareRegistryRef: executorRef,
         },
       ],
@@ -52,13 +52,16 @@ test("releaseContainerImagesFromManifest fails closed without Cloudflare registr
         releaseManifest({
           officialImages: {
             images: [
-              { name: "takos-runtime", cloudflareRegistryRef: null },
-              { name: "takos-executor", cloudflareRegistryRef: executorRef },
+              { name: "takos-worker-runtime", cloudflareRegistryRef: null },
+              {
+                name: "takos-agent-executor",
+                cloudflareRegistryRef: executorRef,
+              },
             ],
           },
         }),
       ),
-    /takos-runtime: missing cloudflareRegistryRef/,
+    /takos-worker-runtime: missing cloudflareRegistryRef/,
   );
 });
 
@@ -70,11 +73,14 @@ test("releaseContainerImagesFromManifest rejects non-Cloudflare deploy refs", ()
           officialImages: {
             images: [
               {
-                name: "takos-runtime",
+                name: "takos-worker-runtime",
                 cloudflareRegistryRef:
-                  "ghcr.io/tako0614/takos-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+                  "ghcr.io/tako0614/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111",
               },
-              { name: "takos-executor", cloudflareRegistryRef: executorRef },
+              {
+                name: "takos-agent-executor",
+                cloudflareRegistryRef: executorRef,
+              },
             ],
           },
         }),

@@ -51,9 +51,9 @@ const productionWranglerConfig =
 const stagingWranglerConfig =
   "deploy/cloudflare/.takos-release-wrangler.staging.toml";
 const runtimeImage =
-  "registry.cloudflare.com/acc_123/takos-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
+  "registry.cloudflare.com/acc_123/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const executorImage =
-  "registry.cloudflare.com/acc_123/takos-executor@sha256:2222222222222222222222222222222222222222222222222222222222222222";
+  "registry.cloudflare.com/acc_123/takos-agent-executor@sha256:2222222222222222222222222222222222222222222222222222222222222222";
 
 test("buildTakosumiReleaseCommands runs generic operator activation steps", () => {
   assert.deepEqual(
@@ -148,16 +148,16 @@ test("normalizeReleaseContainerImages accepts aliases and supported registry ref
     normalizeReleaseContainerImages({
       runtime: runtimeImage,
       executor:
-        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
+        "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-b636a67728c8",
     }),
     {
       TakosRuntimeContainer: runtimeImage,
       ExecutorContainerTier1:
-        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
+        "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-b636a67728c8",
       ExecutorContainerTier2:
-        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
+        "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-b636a67728c8",
       ExecutorContainerTier3:
-        "registry.cloudflare.com/acc_123/takos-executor:0.10.0-b636a67728c8",
+        "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-b636a67728c8",
     },
   );
   assert.throws(

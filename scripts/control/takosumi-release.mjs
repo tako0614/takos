@@ -350,23 +350,27 @@ export function buildTakosumiReleaseCommands(
 }
 
 const CONTAINER_IMAGE_ALIASES = {
-  TakosRuntimeContainer: ["TakosRuntimeContainer", "runtime", "takos-runtime"],
+  TakosRuntimeContainer: [
+    "TakosRuntimeContainer",
+    "runtime",
+    "takos-worker-runtime",
+  ],
   ExecutorContainerTier1: [
     "ExecutorContainerTier1",
     "executor",
-    "takos-executor",
+    "takos-agent-executor",
     "executor-tier1",
   ],
   ExecutorContainerTier2: [
     "ExecutorContainerTier2",
     "executor",
-    "takos-executor",
+    "takos-agent-executor",
     "executor-tier2",
   ],
   ExecutorContainerTier3: [
     "ExecutorContainerTier3",
     "executor",
-    "takos-executor",
+    "takos-agent-executor",
     "executor-tier3",
   ],
 };
