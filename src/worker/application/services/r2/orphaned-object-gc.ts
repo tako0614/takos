@@ -175,9 +175,8 @@ export async function runR2OrphanedObjectGcBatch(
     offload,
     STATE_KEY,
   );
-  const cursors = prior?.version === 1 && prior.cursors
-    ? { ...prior.cursors }
-    : {};
+  const cursors =
+    prior?.version === 1 && prior.cursors ? { ...prior.cursors } : {};
 
   const db = r2OrphanedObjectGcDeps.getDb(env.DB);
 
@@ -226,22 +225,29 @@ export async function runR2OrphanedObjectGcBatch(
     if (hashes.length === 0) continue;
 
     const existing = new Set(
-      (await db.select({ hash: blobs.hash }).from(blobs)
-        .where(and(eq(blobs.accountId, spaceId), inArray(blobs.hash, hashes)))
-        .all()).map((b) => b.hash),
+      (
+        await db
+          .select({ hash: blobs.hash })
+          .from(blobs)
+          .where(and(eq(blobs.accountId, spaceId), inArray(blobs.hash, hashes)))
+          .all()
+      ).map((b) => b.hash),
     );
 
     const referenced = new Set(
-      (await db.selectDistinct({ hash: sessionFiles.hash })
-        .from(sessionFiles)
-        .innerJoin(sessions, eq(sessionFiles.sessionId, sessions.id))
-        .where(
-          and(
-            inArray(sessionFiles.hash, hashes),
-            eq(sessions.accountId, spaceId),
-          ),
-        )
-        .all()).map((r) => r.hash),
+      (
+        await db
+          .selectDistinct({ hash: sessionFiles.hash })
+          .from(sessionFiles)
+          .innerJoin(sessions, eq(sessionFiles.sessionId, sessions.id))
+          .where(
+            and(
+              inArray(sessionFiles.hash, hashes),
+              eq(sessions.accountId, spaceId),
+            ),
+          )
+          .all()
+      ).map((r) => r.hash),
     );
 
     for (const item of items) {
@@ -268,9 +274,11 @@ export async function runR2OrphanedObjectGcBatch(
     ? treesPage.cursor
     : undefined;
 
-  const treeCandidates: Array<
-    { key: string; spaceId: string; snapshotId: string }
-  > = [];
+  const treeCandidates: Array<{
+    key: string;
+    spaceId: string;
+    snapshotId: string;
+  }> = [];
   for (const obj of treesPage.objects) {
     summary.scanned.trees += 1;
     if (minAgeMinutes > 0) {
@@ -288,11 +296,15 @@ export async function runR2OrphanedObjectGcBatch(
     if (ids.length === 0) continue;
 
     const existingIds = new Set(
-      (await db.select({ id: snapshots.id }).from(snapshots)
-        .where(
-          and(eq(snapshots.accountId, spaceId), inArray(snapshots.id, ids)),
-        )
-        .all()).map((s) => s.id),
+      (
+        await db
+          .select({ id: snapshots.id })
+          .from(snapshots)
+          .where(
+            and(eq(snapshots.accountId, spaceId), inArray(snapshots.id, ids)),
+          )
+          .all()
+      ).map((s) => s.id),
     );
 
     for (const item of items) {
@@ -317,15 +329,20 @@ export async function runR2OrphanedObjectGcBatch(
     nextCursors.trees = summary.next_cursors.trees;
   }
 
-  await writeJson(
-    offload,
-    STATE_KEY,
-    {
+  const hasStateToPersist = Boolean(
+    prior ||
+    nextCursors.blobs ||
+    nextCursors.trees ||
+    deletedKeys.blobs.length > 0 ||
+    deletedKeys.trees.length > 0,
+  );
+  if (hasStateToPersist) {
+    await writeJson(offload, STATE_KEY, {
       version: 1,
       last_success_at: stableIsoNoMillis(new Date()),
       cursors: nextCursors,
-    } satisfies CursorState,
-  );
+    } satisfies CursorState);
+  }
 
   if (deletedKeys.blobs.length > 0 || deletedKeys.trees.length > 0) {
     await writeJson(
