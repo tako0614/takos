@@ -71,7 +71,7 @@ const DEFAULT_APP_SOURCES = [
     name: "yurucommu",
     path: "yurucommu/package.json",
     packageName: "@takos/yurucommu",
-    ref: "master",
+    ref: "main",
     refType: "branch",
     sourcePath: undefined,
     modulePath: ".",
@@ -1711,7 +1711,7 @@ test("preinstallDefaultAppsForSpace applies every bundled app through Capsule in
           (call) =>
             objectRecord(call.body.source, "install request source").ref,
         ),
-      ["v0.1.0", "v2.1.2", "master"],
+      ["v0.1.0", "v2.1.2", "main"],
     );
     assertEquals(
       fetchCalls

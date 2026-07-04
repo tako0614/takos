@@ -74,7 +74,7 @@ export const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     tags: ["default-app", "takos", "yurucommu", "social", "activitypub"],
     repositoryUrl: "https://github.com/tako0614/yurucommu.git",
     repositoryEnvKey: "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
-    ref: "master",
+    ref: "main",
     refType: "branch",
     modulePath: ".",
     variables: {
