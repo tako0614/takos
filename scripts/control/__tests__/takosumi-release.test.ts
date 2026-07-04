@@ -869,7 +869,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootModule, /executor\s*=\s*var\.release_executor/);
   assert.match(rootModule, /timeout_seconds\s*=\s*1200/);
   assert.match(rootModule, /timeout_seconds\s*=\s*600/);
-  assert.match(rootModule, /env\s*=\s*\{/);
+  assert.match(rootModule, /env\s*=\s*merge\(/);
   assert.match(
     rootModule,
     /TAKOS_RELEASE_TAKOSUMI_REPO_URL\s*=\s*var\.takosumi_source_repo_url/,
