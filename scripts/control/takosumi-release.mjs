@@ -2,8 +2,14 @@
 import * as runtime from "../runtime.ts";
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, symlinkSync, unlinkSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, resolve } from "node:path";
 import process from "node:process";
 
 import { parseTakosumiOutputsJson } from "./render-wrangler-from-tofu.mjs";
@@ -64,6 +70,9 @@ Optional env:
                                           materializers that must consume Git
                                           CI images and must not build
                                           containers inside the activation run.
+  TAKOS_RELEASE_TIMINGS_FILE              Optional path for a sanitized JSON
+                                          timing summary. The same summary is
+                                          always emitted to stdout.
 `);
   runtime.exit(1);
 }
@@ -536,6 +545,22 @@ function run(command, env = process.env) {
   }
 }
 
+async function timeReleaseStep(timings, step, action) {
+  const startedAt = Date.now();
+  try {
+    const result = await action();
+    const durationMs = Date.now() - startedAt;
+    timings.push({ step, status: "succeeded", durationMs });
+    console.log(`Takos release step "${step}" completed in ${durationMs}ms.`);
+    return result;
+  } catch (error) {
+    const durationMs = Date.now() - startedAt;
+    timings.push({ step, status: "failed", durationMs });
+    console.warn(`Takos release step "${step}" failed after ${durationMs}ms.`);
+    throw error;
+  }
+}
+
 async function runDestroyCommand(command, env = process.env) {
   const attempts = destroyCommandRetryAttempts(env);
   const intervalMs = destroyCommandRetryIntervalMs(env);
@@ -580,6 +605,65 @@ async function runDestroyCommand(command, env = process.env) {
   error.status = lastResult?.status;
   error.signal = lastResult?.signal;
   throw error;
+}
+
+export function releaseCommandStepName(command) {
+  if (command.includes("render-wrangler-from-tofu.mjs")) {
+    return "render-wrangler-config";
+  }
+  if (command.includes("apply-release-container-images.mjs")) {
+    return "apply-prebuilt-container-images";
+  }
+  if (command.includes("ensure-vectorize-index.mjs")) {
+    return "ensure-vectorize-index";
+  }
+  if (command.includes("'bun' 'install'")) return "bun-install";
+  if (command.includes("'bun' 'run' 'build'")) return "build-worker";
+  if (command.includes("containers:build")) return "build-containers";
+  if (command.includes("'d1' 'migrations' 'apply'")) {
+    return "d1-migrations-apply";
+  }
+  if (command.includes("ensure-release-secrets.mjs")) {
+    return "ensure-release-secrets";
+  }
+  if (command.includes("'queues' 'consumer' 'remove'")) {
+    return "destroy-queue-consumer";
+  }
+  if (command.includes("'wrangler' 'delete'")) return "destroy-worker";
+  if (command.includes("'vectorize' 'delete'"))
+    return "destroy-vectorize-index";
+  return "operator-command";
+}
+
+function releaseTimingSummary({
+  environment,
+  destroy,
+  status,
+  startedAt,
+  finishedAt,
+  timings,
+}) {
+  return {
+    kind: "takos.release-activation-timings@v1",
+    environment,
+    operation: destroy ? "destroy" : "activate",
+    status,
+    startedAt: new Date(startedAt).toISOString(),
+    finishedAt: new Date(finishedAt).toISOString(),
+    totalDurationMs: finishedAt - startedAt,
+    steps: timings,
+  };
+}
+
+function emitReleaseTimingSummary(summary, env = process.env) {
+  const json = JSON.stringify(summary);
+  const file = env.TAKOS_RELEASE_TIMINGS_FILE?.trim();
+  if (file) {
+    const path = resolve(file);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(summary, null, 2)}\n`);
+  }
+  console.log(`\nTAKOS_RELEASE_TIMINGS_JSON=${json}\n`);
 }
 
 function runShellCommand(command, env) {
@@ -1242,6 +1326,9 @@ function cleanupReleaseWranglerConfig(environment) {
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { environment, debug, destroy } = parseReleaseArgs(argv);
+  const timings = [];
+  const releaseStartedAt = Date.now();
+  let releaseStatus = "succeeded";
   const outputs = readReleaseOutputs(env);
   const takosumiRepoDir =
     env.TAKOS_RELEASE_TAKOSUMI_REPO_DIR ??
@@ -1280,27 +1367,52 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   try {
     const commandsToRun = destroy ? commands : commands.slice(0, -1);
     for (const command of commandsToRun) {
-      if (destroy) await runDestroyCommand(command, childEnv);
-      else run(command, childEnv);
+      await timeReleaseStep(timings, releaseCommandStepName(command), () =>
+        destroy ? runDestroyCommand(command, childEnv) : run(command, childEnv),
+      );
     }
     if (!destroy) {
-      runFile(
-        "bunx",
-        wranglerDeployArgs(outputs, environment, {
-          containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
-        }),
-        childEnv,
+      await timeReleaseStep(timings, "wrangler-deploy", () =>
+        runFile(
+          "bunx",
+          wranglerDeployArgs(outputs, environment, {
+            containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+          }),
+          childEnv,
+        ),
       );
-      await waitForWranglerDeploymentBestEffort(outputs, environment, childEnv);
-      await verifyCloudflareWorkerContent(outputs, environment, childEnv);
-      await ensureWorkersDevSubdomain(outputs, childEnv);
-      await verifyReleaseHealth(outputs, childEnv);
+      await timeReleaseStep(timings, "wrangler-deployment-status", () =>
+        waitForWranglerDeploymentBestEffort(outputs, environment, childEnv),
+      );
+      await timeReleaseStep(timings, "worker-content-verification", () =>
+        verifyCloudflareWorkerContent(outputs, environment, childEnv),
+      );
+      await timeReleaseStep(timings, "workers-dev-enable", () =>
+        ensureWorkersDevSubdomain(outputs, childEnv),
+      );
+      await timeReleaseStep(timings, "public-health-check", () =>
+        verifyReleaseHealth(outputs, childEnv),
+      );
     }
+  } catch (error) {
+    releaseStatus = "failed";
+    throw error;
   } finally {
     if (!destroy) {
       cleanupReleaseSecretsFile(environment);
       cleanupReleaseWranglerConfig(environment);
     }
+    emitReleaseTimingSummary(
+      releaseTimingSummary({
+        environment,
+        destroy,
+        status: releaseStatus,
+        startedAt: releaseStartedAt,
+        finishedAt: Date.now(),
+        timings,
+      }),
+      env,
+    );
   }
   console.log(
     `\nTakos ${destroy ? "release cleanup" : "release activation"} completed for ${environment}.`,

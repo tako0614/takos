@@ -21,6 +21,7 @@ import {
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
   releaseChildEnv,
+  releaseCommandStepName,
   readReleaseOutputs,
   verifyReleaseDeployment,
   waitForWranglerDeployment,
@@ -281,6 +282,75 @@ esac
     process.chdir(previousCwd);
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("release timing summary is written for operator destroy commands", async () => {
+  const { main } = await import("../takosumi-release.mjs");
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-timing-"));
+  const bin = resolve(root, "bin");
+  const timingFile = resolve(root, "timings", "release.json");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+exit 0
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    process.chdir(root);
+    await main(["production", "--destroy"], {
+      PATH: `${bin}:${process.env.PATH ?? ""}`,
+      TAKOSUMI_OUTPUTS_JSON: JSON.stringify(rawOutputs),
+      TAKOS_RELEASE_TIMINGS_FILE: timingFile,
+      TAKOS_RELEASE_DESTROY_RETRY_INTERVAL_MS: "0",
+    });
+    const summary = JSON.parse(readFileSync(timingFile, "utf8"));
+    assert.equal(summary.kind, "takos.release-activation-timings@v1");
+    assert.equal(summary.operation, "destroy");
+    assert.equal(summary.status, "succeeded");
+    assert.ok(summary.totalDurationMs >= 0);
+    assert.deepEqual(
+      summary.steps.map((step) => step.step),
+      [
+        "destroy-queue-consumer",
+        "destroy-queue-consumer",
+        "destroy-queue-consumer",
+        "destroy-queue-consumer",
+        "destroy-queue-consumer",
+        "destroy-queue-consumer",
+        "destroy-queue-consumer",
+        "destroy-queue-consumer",
+        "destroy-worker",
+        "destroy-vectorize-index",
+      ],
+    );
+  } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("releaseCommandStepName classifies activation bottleneck steps", () => {
+  assert.equal(
+    releaseCommandStepName(
+      "'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'production'",
+    ),
+    "render-wrangler-config",
+  );
+  assert.equal(
+    releaseCommandStepName("'bun' 'install' '--frozen-lockfile'"),
+    "bun-install",
+  );
+  assert.equal(
+    releaseCommandStepName("'bun' 'run' 'containers:build'"),
+    "build-containers",
+  );
+  assert.equal(
+    releaseCommandStepName("'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB'"),
+    "d1-migrations-apply",
+  );
 });
 
 test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
@@ -557,7 +627,9 @@ JSON
 
 test("waitForWranglerDeployment treats empty successful Wrangler JSON as retryable", async () => {
   const previousCwd = process.cwd();
-  const root = mkdtempSync(resolve(tmpdir(), "takos-release-deployment-empty-"));
+  const root = mkdtempSync(
+    resolve(tmpdir(), "takos-release-deployment-empty-"),
+  );
   const bin = resolve(root, "bin");
   const state = resolve(root, "state");
   mkdirSync(bin, { recursive: true });
@@ -595,7 +667,9 @@ JSON
 
 test("waitForWranglerDeploymentBestEffort does not fail release on empty Wrangler status", async () => {
   const previousCwd = process.cwd();
-  const root = mkdtempSync(resolve(tmpdir(), "takos-release-deployment-best-effort-"));
+  const root = mkdtempSync(
+    resolve(tmpdir(), "takos-release-deployment-best-effort-"),
+  );
   const bin = resolve(root, "bin");
   mkdirSync(bin, { recursive: true });
   writeFileSync(
@@ -628,7 +702,10 @@ exit 0
         "Wrangler deployment for takos-test was not visible after 1 attempt(s): wrangler deployments status returned no JSON output",
     });
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /Skipping Wrangler deployment status verification/);
+    assert.match(
+      warnings[0],
+      /Skipping Wrangler deployment status verification/,
+    );
   } finally {
     console.warn = originalWarn;
     process.chdir(previousCwd);
