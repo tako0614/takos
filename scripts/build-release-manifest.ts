@@ -783,16 +783,19 @@ function assertRequiredValidationCommands(
 async function collectDistributionManifests(): Promise<JsonValue> {
   const dir = "deploy/distributions";
   const manifests: Array<Record<string, JsonValue>> = [];
+  const errors: string[] = [];
   try {
     for await (const entry of runtime.readDir(dir)) {
       if (!entry.isFile || !entry.name.endsWith(".json")) continue;
       const path = `${dir}/${entry.name}`;
       const text = await runtime.readTextFile(path);
       const parsed = JSON.parse(text) as Record<string, unknown>;
+      errors.push(...validateDistributionShapeTopology(path, parsed));
       const target = asRecord(parsed.target);
       const routing = asRecord(parsed.routing);
       const operatorProfile = asRecord(parsed.operatorProfile);
       const providerProof = asRecord(parsed.providerProof);
+      const shapeTopology = asRecord(parsed.shapeTopology);
       manifests.push({
         path,
         digest: await sha256(text),
@@ -824,6 +827,38 @@ async function collectDistributionManifests(): Promise<JsonValue> {
                 : null;
             })
           : [],
+        shapeTopology: shapeTopology
+          ? {
+              version: jsonString(shapeTopology.version),
+              resources: Array.isArray(shapeTopology.resources)
+                ? shapeTopology.resources.map((resource) => {
+                    const record = asRecord(resource);
+                    return record
+                      ? {
+                          name: jsonString(record.name),
+                          shape: jsonString(record.shape),
+                          serviceId: jsonString(record.serviceId),
+                          purpose: jsonString(record.purpose),
+                        }
+                      : null;
+                  })
+                : [],
+              connections: Array.isArray(shapeTopology.connections)
+                ? shapeTopology.connections.map((connection) => {
+                    const record = asRecord(connection);
+                    return record
+                      ? {
+                          from: jsonString(record.from),
+                          to: jsonString(record.to),
+                          name: jsonString(record.name),
+                          permissions: jsonStringArray(record.permissions),
+                          projection: jsonString(record.projection),
+                        }
+                      : null;
+                  })
+                : [],
+            }
+          : null,
         routing: routing
           ? {
               publicBaseUrl: jsonString(routing.publicBaseUrl),
@@ -844,12 +879,86 @@ async function collectDistributionManifests(): Promise<JsonValue> {
   } catch {
     return { available: false, manifests: [] };
   }
+  if (errors.length > 0) {
+    console.error(errors.join("\n"));
+    runtime.exit(1);
+  }
   return {
     available: true,
     manifests: manifests.sort((a, b) =>
       String(a.targetId).localeCompare(String(b.targetId)),
     ),
   };
+}
+
+function validateDistributionShapeTopology(
+  path: string,
+  parsed: Record<string, unknown>,
+): string[] {
+  if (parsed.kind !== "TakosDistribution") return [];
+  const topology = asRecord(parsed.shapeTopology);
+  if (!topology) {
+    return [`${path}: shapeTopology is required for TakosDistribution`];
+  }
+
+  const errors: string[] = [];
+  if (topology.version !== "takos.resource-shapes.v1") {
+    errors.push(
+      `${path}: shapeTopology.version must be takos.resource-shapes.v1`,
+    );
+  }
+
+  const resources = Array.isArray(topology.resources)
+    ? topology.resources
+        .map(asRecord)
+        .filter((item): item is Record<string, unknown> => item !== null)
+    : [];
+  if (resources.length === 0) {
+    errors.push(`${path}: shapeTopology.resources must not be empty`);
+  }
+
+  const shapeCounts = new Map<string, number>();
+  const serviceShapes = new Map<string, string>();
+  for (const resource of resources) {
+    const shape = jsonString(resource.shape);
+    const serviceId = jsonString(resource.serviceId);
+    if (shape) shapeCounts.set(shape, (shapeCounts.get(shape) ?? 0) + 1);
+    if (serviceId && shape) serviceShapes.set(serviceId, shape);
+    if (shape === "Takos" || shape === "TakosDistribution") {
+      errors.push(`${path}: ${shape} is not a generic Resource Shape`);
+    }
+  }
+
+  for (const shape of [
+    "EdgeWorker",
+    "SQLDatabase",
+    "KVStore",
+    "ObjectBucket",
+    "Queue",
+    "ContainerService",
+  ]) {
+    if (!shapeCounts.has(shape)) {
+      errors.push(`${path}: shapeTopology must include ${shape}`);
+    }
+  }
+
+  const expectedServiceShapes: Record<string, string> = {
+    "takos-worker": "EdgeWorker",
+    "takos-git": "ContainerService",
+    "takos-agent": "ContainerService",
+  };
+  for (const [serviceId, expectedShape] of Object.entries(
+    expectedServiceShapes,
+  )) {
+    const actual = serviceShapes.get(serviceId);
+    if (actual !== expectedShape) {
+      errors.push(
+        `${path}: shapeTopology service ${serviceId} must map to ${expectedShape}`,
+      );
+    }
+  }
+
+  return errors;
 }
 
 async function collectDistributionContract(): Promise<JsonValue> {

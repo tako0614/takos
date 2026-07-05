@@ -12,6 +12,25 @@ This directory owns the Takos product distribution profile contract.
   Takos product distribution overlays and the evidence needed to prove each
   target.
 
+## Resource Shape Topology
+
+`shapeTopology` records how the Takos distribution maps to Takosumi generic
+Resource Shapes:
+
+```text
+takos-worker -> EdgeWorker
+takos-git    -> ContainerService
+takos-agent  -> ContainerService
+backing data -> SQLDatabase / KVStore / ObjectBucket / Queue
+```
+
+This is distribution-profile evidence, not a new Takos-specific Resource Shape
+and not a replacement for the OpenTofu module under `deploy/opentofu`. Takos
+must not introduce a catch-all `takosumi_takos` resource. If the distribution
+needs a service form that the current generic shapes cannot express, add the
+missing generic shape in Takosumi only after the Resource Shape prior-art gate
+passes.
+
 ## Artifact Ownership
 
 The only shipped distribution target is Cloudflare. Distribution artifacts are

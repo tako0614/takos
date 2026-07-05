@@ -158,6 +158,105 @@
       }
     }
   ],
+  "shapeTopology": {
+    "version": "takos.resource-shapes.v1",
+    "resources": [
+      {
+        "name": "takos-worker",
+        "shape": "EdgeWorker",
+        "serviceId": "takos-worker",
+        "purpose": "Takos product Worker and public workspace surface"
+      },
+      {
+        "name": "workspace-control-db",
+        "shape": "SQLDatabase",
+        "purpose": "Workspace, account projection, and product control data"
+      },
+      {
+        "name": "session-cache-state",
+        "shape": "KVStore",
+        "purpose": "Session, cache, and lightweight state bindings"
+      },
+      {
+        "name": "workspace-objects",
+        "shape": "ObjectBucket",
+        "purpose": "Files, workspace objects, and Git object backing storage"
+      },
+      {
+        "name": "agent-jobs",
+        "shape": "Queue",
+        "purpose": "Agent execution jobs and async runtime work"
+      },
+      {
+        "name": "product-events",
+        "shape": "Queue",
+        "purpose": "Product events, workflows, and deployment work"
+      },
+      {
+        "name": "takos-git",
+        "shape": "ContainerService",
+        "serviceId": "takos-git",
+        "purpose": "Git Smart HTTP and repository service"
+      },
+      {
+        "name": "takos-agent",
+        "shape": "ContainerService",
+        "serviceId": "takos-agent",
+        "purpose": "Agent execution service"
+      }
+    ],
+    "connections": [
+      {
+        "from": "takos-worker",
+        "to": "workspace-control-db",
+        "name": "DB",
+        "permissions": ["connect"],
+        "projection": "runtime_binding"
+      },
+      {
+        "from": "takos-worker",
+        "to": "session-cache-state",
+        "name": "CACHE",
+        "permissions": ["read", "write"],
+        "projection": "runtime_binding"
+      },
+      {
+        "from": "takos-worker",
+        "to": "workspace-objects",
+        "name": "OBJECTS",
+        "permissions": ["read", "write"],
+        "projection": "runtime_binding"
+      },
+      {
+        "from": "takos-worker",
+        "to": "agent-jobs",
+        "name": "RUN_QUEUE",
+        "permissions": ["publish", "consume"],
+        "projection": "runtime_binding"
+      },
+      {
+        "from": "takos-worker",
+        "to": "product-events",
+        "name": "EVENT_QUEUE",
+        "permissions": ["publish", "consume"],
+        "projection": "runtime_binding"
+      },
+      {
+        "from": "takos-worker",
+        "to": "takos-git",
+        "name": "TAKOS_GIT_INTERNAL_URL",
+        "permissions": ["connect"],
+        "projection": "internal_url"
+      },
+      {
+        "from": "takos-worker",
+        "to": "takos-agent",
+        "name": "TAKOS_AGENT_INTERNAL_URL",
+        "permissions": ["connect"],
+        "projection": "internal_url"
+      }
+    ]
+  },
   "metadata": {
     "official": true,
     "releaseGateTask": "bun run release-gate"

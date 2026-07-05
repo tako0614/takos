@@ -10,6 +10,75 @@
       "type": "string",
       "enum": ["takos-agent", "takos-git", "takos-worker"]
     },
+    "resourceShapeKind": {
+      "description": "Takosumi generic Resource Shape kind used to describe a Takos distribution constituent. This is profile evidence only; deploy source of truth remains the Git-hosted OpenTofu module.",
+      "type": "string",
+      "enum": [
+        "EdgeWorker",
+        "ObjectBucket",
+        "KVStore",
+        "Queue",
+        "SQLDatabase",
+        "ContainerService"
+      ]
+    },
+    "shapeResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "shape", "purpose"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "shape": {
+          "$ref": "#/$defs/resourceShapeKind"
+        },
+        "serviceId": {
+          "$ref": "#/$defs/serviceId"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "shapeConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "name", "permissions", "projection"],
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "permissions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_-]*$"
+          }
+        },
+        "projection": {
+          "type": "string",
+          "enum": ["runtime_binding", "env", "internal_url"]
+        }
+      }
+    },
     "jsonValue": {
       "anyOf": [
         {
@@ -52,6 +121,7 @@
     "routing",
     "defaultApps",
     "services",
+    "shapeTopology",
     "metadata"
   ],
   "properties": {
@@ -447,6 +517,30 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "shapeTopology": {
+      "description": "Takos distribution topology expressed as Takosumi generic Resource Shapes. It must not introduce a Takos-specific catch-all shape and does not replace the OpenTofu source of truth.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "resources"],
+      "properties": {
+        "version": {
+          "const": "takos.resource-shapes.v1"
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/shapeResource"
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/shapeConnection"
           }
         }
       }
