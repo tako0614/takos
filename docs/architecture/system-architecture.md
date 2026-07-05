@@ -14,6 +14,16 @@
 
 Takos owns the user-facing workspace experience: chat, agents, memory, Workspaces, and app launcher. Git, storage, agent runtime, file handlers, UI surfaces, and MCP are exposed through the Capsule Outputs and Takos runtime contracts. Takosumi records the run ledger (Capsule / Run / StateVersion / Output) and the policy decisions that authorize each run. The Takosumi Accounts plane owns account-plane policy: billing, OIDC, domains, and dashboard.
 
+Takos is also a useful Resource Shape example, but it is not a special Takosumi
+shape. When Takos is described through the Takosumi Resource Shape flow, it is a
+composition of provider-neutral service forms: `EdgeWorker` for `takos-worker`,
+`SQLDatabase` for workspace/control data, `KVStore` for session/cache/state
+bindings, `ObjectBucket` for files and workspace objects, `Queue` for agent jobs
+and product events, and `ContainerService` for `takos-git` / `takos-agent`.
+Do not introduce a `takosumi_takos` catch-all resource; add a new generic
+service form only when Takos and third-party apps both need semantics that the
+existing shapes cannot express.
+
 ## Materialization
 
 The hand-maintained `takosumi-private/platform/wrangler.toml` plus operator-local secrets outside the repo is the **interim reference materialization** of the same topology described by the OpenTofu module. It converges onto the Takosumi-applied module and is **not** a separate source of truth; the trust-boundary and deploy invariants are properties of the Takosumi-applied module, validated by the reviewed plan.
