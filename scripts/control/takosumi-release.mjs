@@ -112,6 +112,27 @@ function requireStringOutput(outputs, name) {
   return value;
 }
 
+function optionalStringOutput(outputs, name) {
+  const value = outputValue(outputs[name]);
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+function releaseLaunchUrl(outputs) {
+  const explicitLaunchUrl =
+    optionalStringOutput(outputs, "launch_url") ??
+    optionalStringOutput(outputs, "url");
+  if (explicitLaunchUrl) return explicitLaunchUrl;
+
+  const workerName = optionalStringOutput(outputs, "worker_name");
+  const workersSubdomain =
+    optionalStringOutput(outputs, "cloudflare_workers_subdomain") ??
+    optionalStringOutput(outputs, "workers_subdomain");
+  if (!workerName || !workersSubdomain) return undefined;
+  return `https://${workerName}.${workersSubdomain}.workers.dev`;
+}
+
 function requireIntegerOutput(outputs, name) {
   const value = outputValue(outputs[name]);
   if (Number.isInteger(value) && value > 0) return value;
@@ -849,8 +870,8 @@ function shouldRetryCloudflareWorkerApi(response, payload) {
 }
 
 function shouldEnableWorkersDev(outputs) {
-  const launchUrl = outputValue(outputs.launch_url ?? outputs.url);
-  if (typeof launchUrl !== "string" || !launchUrl.trim()) return false;
+  const launchUrl = releaseLaunchUrl(outputs);
+  if (!launchUrl) return false;
   try {
     return new URL(launchUrl).hostname.endsWith(".workers.dev");
   } catch {
@@ -951,9 +972,8 @@ function cloudflareWorkerApiMissingResource(payload) {
 }
 
 function releaseHealthUrl(outputs) {
-  const launchUrl = outputValue(outputs.launch_url ?? outputs.url);
-  if (typeof launchUrl !== "string" || launchUrl.trim() === "")
-    return undefined;
+  const launchUrl = releaseLaunchUrl(outputs);
+  if (!launchUrl) return undefined;
   const url = new URL(launchUrl);
   url.pathname = "/health";
   url.search = "";

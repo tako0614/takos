@@ -358,6 +358,35 @@ test("ensureWorkersDevSubdomain enables launch URL scripts without logging token
   assert.equal(requests[0].init.body, JSON.stringify({ enabled: true }));
 });
 
+test("ensureWorkersDevSubdomain derives workers.dev URL from subdomain outputs", async () => {
+  const requests = [];
+  const result = await ensureWorkersDevSubdomain(
+    {
+      worker_name: "takos-test",
+      cloudflare_account_id: "acc_123",
+      cloudflare_workers_subdomain: "example-subdomain",
+    },
+    { CLOUDFLARE_API_TOKEN: "token_123" },
+    async (url, init) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          result: { enabled: true, previews_enabled: false },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    },
+  );
+
+  assert.equal(result.skipped, false);
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/subdomain",
+  );
+});
+
 test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
   let called = false;
   const result = await ensureWorkersDevSubdomain(
@@ -714,6 +743,37 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
       "https://takos-test.example-subdomain.workers.dev/health",
     ],
   );
+});
+
+test("verifyReleaseDeployment derives health URL from workers subdomain outputs", async () => {
+  const requests = [];
+  const result = await verifyReleaseDeployment(
+    {
+      ...rawOutputs,
+      cloudflare_workers_subdomain: "example-subdomain",
+    },
+    "production",
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+    },
+    async (url) => {
+      requests.push(String(url));
+      if (String(url).includes("/content")) {
+        return new Response("/* real worker */\n".repeat(128), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    },
+  );
+
+  assert.equal(result.artifact.workerName, "takos-test");
+  assert.equal(result.health.status, 200);
+  assert.deepEqual(requests, [
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/content",
+    "https://takos-test.example-subdomain.workers.dev/health",
+  ]);
 });
 
 test("verifyReleaseDeployment falls back to health when Cloudflare API token is unavailable", async () => {

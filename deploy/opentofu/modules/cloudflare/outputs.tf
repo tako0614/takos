@@ -19,6 +19,11 @@ output "launch_url" {
   value       = var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.worker_name}.${var.workers_subdomain}.workers.dev" : null
 }
 
+output "workers_subdomain" {
+  description = "workers.dev account subdomain used to derive the public Takos URL."
+  value       = var.workers_subdomain
+}
+
 output "app_deployment" {
   description = "Installable Takos app declaration consumed from tofu output -json by Takosumi install flows."
   value = {

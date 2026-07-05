@@ -30,6 +30,16 @@ output "launch_url" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
 }
 
+output "cloudflare_workers_subdomain" {
+  description = "workers.dev account subdomain used to derive the public Takos URL."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].workers_subdomain : null
+}
+
+output "workers_subdomain" {
+  description = "Alias of cloudflare_workers_subdomain for generic release helpers."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].workers_subdomain : null
+}
+
 output "app_deployment" {
   description = "Installable Takos app declaration consumed from tofu output -json by Takosumi install flows."
   value       = var.target == "cloudflare" ? module.cloudflare[0].app_deployment : null
