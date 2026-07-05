@@ -49,9 +49,13 @@ async function validateDefaultApp(app: DefaultAppSource): Promise<{
 }> {
   const sourceDir = join(repoRoot, app.path);
   const outputText = await runtime.readTextFile(join(sourceDir, "outputs.tf"));
-  const hasLegacyManifestOutput =
-    outputText.includes('output "app_deployment"') ||
-    outputText.includes('output "takos_app"');
+  const hasLegacyTakosAppOutput = outputText.includes('output "takos_app"');
+  const hasAppDeploymentOutput = outputText.includes('output "app_deployment"');
+  if (hasLegacyTakosAppOutput) {
+    throw new Error(
+      `${app.name}: outputs.tf must not declare legacy output "takos_app"; use "app_deployment"`,
+    );
+  }
   if (!outputText.includes('output "service_exports"')) {
     throw new Error(
       `${app.name}: outputs.tf must declare generic output "service_exports"`,
@@ -102,7 +106,7 @@ async function validateDefaultApp(app: DefaultAppSource): Promise<{
 
     let manifestName: string | undefined;
     let publications = 0;
-    if (hasLegacyManifestOutput) {
+    if (hasAppDeploymentOutput) {
       const manifest = parseOpenTofuAppManifestOutputs(outputJson, source);
       if (manifest.name !== app.name) {
         throw new Error(

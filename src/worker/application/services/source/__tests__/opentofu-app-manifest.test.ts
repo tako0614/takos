@@ -79,21 +79,6 @@ test("parseOpenTofuAppManifestOutputs reads app_deployment output", () => {
   assertEquals(manifest.env.FEATURE_FLAG, "on");
 });
 
-test("parseOpenTofuAppManifestOutputs reads takos_app output", () => {
-  const manifest = parseOpenTofuAppManifestOutputs({
-    takos_app: {
-      sensitive: false,
-      type: "object",
-      value: manifestValue,
-    },
-  });
-
-  assertEquals(manifest.name, "opentofu-app");
-  assertEquals(manifest.compute.web?.kind, "worker");
-  assertEquals(manifest.routes[0]?.id, "root");
-  assertEquals(manifest.publish[0]?.name, "ui");
-});
-
 test("parseOpenTofuAppManifestOutputs rejects sensitive desired-state projection output", () => {
   assertThrows(
     () =>
