@@ -62,11 +62,11 @@ production install は tag または commit SHA に pin します。`main` / `la
 ## App launcher への反映
 
 追加が完了すると、Apps launcher に app が表示されます。launch URL が projection されている app は launcher から直接開けます。
-準備中、失敗、確認待ちの app は launcher では状態を短く見せ、詳細は `/installations/:id` の install 管理画面に分けます。
+準備中、失敗、確認待ちの app は launcher では状態を短く見せ、詳細は `/installations/:id` の install 詳細に分けます。
 
-## 管理者向け detail
+## Install detail
 
-operator / admin は install 管理画面で Source / Capsule / Run / StateVersion / Output / Activity を確認します。
+Workspace ユーザーは install 詳細で Source / Capsule / Run / StateVersion / Output / Activity を確認します。
 Workspace ユーザー向けの主導線では、この台帳を最初の説明にしません。
 
 ## 関連ページ

@@ -68,8 +68,9 @@ Takosumi Accounts / dashboard / deploy-control / OpenTofu runner は外部 Takos
 - **OpenTofu runner / Run ledger は Takosumi 側**。Takos deploy artifacts は product `DB`、KV/R2、queues、runtime/executor
   containers、Vectorize など Takos worker の backing resources だけを宣言する。`TAKOSUMI_CONTROL_DB`、`COORDINATION`、
   `RUNNER`、Takosumi runner container image は Takos deploy artifact に持ち込まない。
-- **UI は Takos product UI**。account / billing / install run / graph / activity の operator UI は Takosumi dashboard に残す。
-  Takos の Source/App 画面は必要に応じて外部 Takosumi Capsule projection API を呼び、dashboard component を直接 import しない。
+- **UI は Takos product UI**。account / billing / install run / graph / activity のユーザー向け surface は Takosumi 側に置き、
+  Operator-only 操作は DB-backed config / CLI / API / runbook / audit evidence で扱う。Takos の Source/App 画面は必要に応じて
+  外部 Takosumi Capsule projection API を呼び、dashboard component を直接 import しない。
 - **bearer は session cookie + configured issuer JWKS verification**。JWT bearer validation は `OIDC_ISSUER_URL` の JWKS を
   fetch し、local `authIdentities` に紐付く user に解決する。Takos worker 自身が JWKS / OAuth token issuer にはならない。
 
