@@ -1321,7 +1321,7 @@ localBootstrapTest(
         bundleContent: `
         export default {
           async fetch(_request, env) {
-            const instance = await env.ONBOARDING.create({ params: { plan: 'starter' } });
+            const instance = await env.ONBOARDING.create({ params: { plan: 'lite' } });
             const status = await instance.status();
             return Response.json({
               ok: true,
