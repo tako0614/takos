@@ -20,12 +20,14 @@ import {
   ensureWorkersDevSubdomain,
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
+  releaseContextHeaders,
   releaseChildEnv,
   releaseCommandStepName,
   readReleaseOutputs,
   verifyReleaseDeployment,
   waitForWranglerDeployment,
   waitForWranglerDeploymentBestEffort,
+  withCloudflareApiBaseProxy,
 } from "../takosumi-release.mjs";
 import { applyReleaseContainerImagesToToml } from "../apply-release-container-images.mjs";
 
@@ -393,6 +395,7 @@ test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers",
         "https://app.takosumi.com/compat/cloudflare/client/v4",
       CLOUDFLARE_API_BASE_URL:
         "https://app.takosumi.com/compat/cloudflare/client/v4",
+      CF_API_BASE_URL: "https://app.takosumi.com/compat/cloudflare/client/v4",
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
@@ -400,6 +403,105 @@ test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers",
       CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
     },
   );
+});
+
+test("releaseContextHeaders derives managed compat billing context", () => {
+  assert.deepEqual(
+    releaseContextHeaders({
+      TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
+        workspaceId: "space_release",
+        installation: { id: "inst_release" },
+      }),
+    }),
+    {
+      "x-takosumi-cloud-billing-workspace-id": "space_release",
+      "x-takosumi-cloud-space-id": "space_release",
+      "x-takosumi-cloud-billing-installation-id": "inst_release",
+      "x-takosumi-cloud-installation-id": "inst_release",
+    },
+  );
+});
+
+test("withCloudflareApiBaseProxy injects managed compat auth and release context", async () => {
+  const calls: {
+    readonly method: string;
+    readonly url: string;
+    readonly authorization: string | null;
+    readonly workspace: string | null;
+    readonly installation: string | null;
+    readonly body: unknown;
+  }[] = [];
+  const upstream = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      calls.push({
+        method: request.method,
+        url: request.url,
+        authorization: request.headers.get("authorization"),
+        workspace: request.headers.get(
+          "x-takosumi-cloud-billing-workspace-id",
+        ),
+        installation: request.headers.get(
+          "x-takosumi-cloud-billing-installation-id",
+        ),
+        body: request.body ? await request.json() : undefined,
+      });
+      return Response.json({ success: true, result: { id: "ok" } });
+    },
+  });
+  const upstreamPort = upstream.port;
+  try {
+    await withCloudflareApiBaseProxy(
+      {
+        CLOUDFLARE_API_TOKEN: "takmpt_test",
+        TAKOS_CLOUDFLARE_API_BASE_URL: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4`,
+        TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
+          workspaceId: "space_proxy",
+          installation: { id: "inst_proxy" },
+        }),
+      },
+      async (releaseEnv) => {
+        assert.match(
+          releaseEnv.CLOUDFLARE_API_BASE_URL,
+          /^http:\/\/127\.0\.0\.1:\d+$/u,
+        );
+        assert.equal(
+          releaseEnv.TAKOS_CLOUDFLARE_API_BASE_URL,
+          releaseEnv.CLOUDFLARE_API_BASE_URL,
+        );
+        assert.equal(
+          releaseEnv.CF_API_BASE_URL,
+          releaseEnv.CLOUDFLARE_API_BASE_URL,
+        );
+        const response = await fetch(
+          `${releaseEnv.CLOUDFLARE_API_BASE_URL}/accounts/ts_acc_takosumi_cloud/queues`,
+          {
+            method: "POST",
+            headers: {
+              authorization: "Bearer wrong-token",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ queue_name: "jobs" }),
+          },
+        );
+        assert.equal(response.status, 200);
+      },
+    );
+  } finally {
+    upstream.stop(true);
+  }
+
+  assert.deepEqual(calls, [
+    {
+      method: "POST",
+      url: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/queues`,
+      authorization: "Bearer takmpt_test",
+      workspace: "space_proxy",
+      installation: "inst_proxy",
+      body: { queue_name: "jobs" },
+    },
+  ]);
 });
 
 test("Cloudflare release template enables production workers.dev launch URLs", () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import * as runtime from "../runtime.ts";
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 import { parseTakosumiOutputsJson } from "./render-wrangler-from-tofu.mjs";
 
@@ -27,6 +28,8 @@ const RELEASE_COMMAND_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
 const RELEASE_COMMAND_LOG_MAX_CHARS = 20_000;
 const DESTROY_COMMAND_RETRY_ATTEMPTS = 3;
 const DESTROY_COMMAND_RETRY_INTERVAL_MS = 2000;
+const CLOUDFLARE_API_PROXY_READY_PREFIX =
+  "TAKOS_CLOUDFLARE_API_PROXY_READY=";
 
 function usage() {
   console.error(`
@@ -931,6 +934,7 @@ export function releaseChildEnv(outputs, env = process.env) {
       ? {
           TAKOS_CLOUDFLARE_API_BASE_URL: apiBase,
           CLOUDFLARE_API_BASE_URL: apiBase,
+          CF_API_BASE_URL: apiBase,
         }
       : {}),
     ...(apiToken
@@ -946,6 +950,168 @@ export function releaseChildEnv(outputs, env = process.env) {
         }
       : {}),
   };
+}
+
+export function releaseContextHeaders(env = process.env) {
+  const context = parseReleaseContext(env.TAKOSUMI_RELEASE_CONTEXT_JSON);
+  const installation =
+    context && typeof context.installation === "object"
+      ? context.installation
+      : undefined;
+  const workspaceId =
+    stringValue(context?.workspaceId) ??
+    stringValue(context?.spaceId) ??
+    stringValue(env.TAKOSUMI_WORKSPACE_ID) ??
+    stringValue(env.TAKOSUMI_SPACE_ID);
+  const installationId =
+    stringValue(installation?.id) ??
+    stringValue(context?.installationId) ??
+    stringValue(env.TAKOSUMI_CAPSULE_ID) ??
+    stringValue(env.TAKOSUMI_INSTALLATION_ID);
+  return {
+    ...(workspaceId
+      ? {
+          "x-takosumi-cloud-billing-workspace-id": workspaceId,
+          "x-takosumi-cloud-space-id": workspaceId,
+        }
+      : {}),
+    ...(installationId
+      ? {
+          "x-takosumi-cloud-billing-installation-id": installationId,
+          "x-takosumi-cloud-installation-id": installationId,
+        }
+      : {}),
+  };
+}
+
+function parseReleaseContext(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function stringValue(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+export async function withCloudflareApiBaseProxy(env, action) {
+  const targetBase = cloudflareApiBaseProxyTarget(env);
+  if (!targetBase) return action(env);
+  const apiToken = releaseApiToken(env);
+  if (!apiToken) {
+    throw new Error(
+      "Takosumi Cloud compat API release requires CLOUDFLARE_API_TOKEN or CF_API_TOKEN",
+    );
+  }
+  const proxyScript = fileURLToPath(
+    new URL("./cloudflare-api-base-proxy.mjs", import.meta.url),
+  );
+  const child = spawn("bun", [proxyScript], {
+    env: {
+      ...process.env,
+      TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE: targetBase,
+      TAKOS_CLOUDFLARE_API_PROXY_TOKEN: apiToken,
+      TAKOS_CLOUDFLARE_API_PROXY_CONTEXT_HEADERS: JSON.stringify(
+        releaseContextHeaders(env),
+      ),
+    },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  let closePromise;
+  try {
+    closePromise = new Promise((resolveClose) => {
+      child.once("close", (code, signal) => resolveClose({ code, signal }));
+    });
+    const ready = await waitForCloudflareApiProxyReady(child);
+    const proxyBase = `http://${ready.hostname}:${ready.port}`;
+    return await action({
+      ...env,
+      TAKOS_CLOUDFLARE_API_BASE_URL: proxyBase,
+      CLOUDFLARE_API_BASE_URL: proxyBase,
+      CF_API_BASE_URL: proxyBase,
+    });
+  } finally {
+    child.kill("SIGTERM");
+    if (closePromise) await closePromise;
+  }
+}
+
+function cloudflareApiBaseProxyTarget(env) {
+  const configured =
+    env.TAKOS_CLOUDFLARE_API_BASE_URL ??
+    env.CLOUDFLARE_API_BASE_URL ??
+    env.CF_API_BASE_URL;
+  if (typeof configured !== "string" || !configured.trim()) return undefined;
+  const base = configured.trim().replace(/\/+$/u, "");
+  if (!isTakosumiCloudflareCompatBase(base)) return undefined;
+  return base;
+}
+
+function isTakosumiCloudflareCompatBase(base) {
+  try {
+    const url = new URL(base);
+    return url.pathname.includes("/compat/cloudflare/");
+  } catch {
+    return false;
+  }
+}
+
+async function waitForCloudflareApiProxyReady(child) {
+  if (!child.stdout) {
+    throw new Error("Cloudflare API proxy stdout is unavailable");
+  }
+  let buffered = "";
+  return await new Promise((resolveReady, rejectReady) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      rejectReady(new Error("Timed out waiting for Cloudflare API proxy"));
+    }, 10_000);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      child.stdout?.off("data", onData);
+      child.off("error", onError);
+      child.off("exit", onExit);
+    };
+    const onError = (error) => {
+      cleanup();
+      rejectReady(error);
+    };
+    const onExit = (code, signal) => {
+      cleanup();
+      rejectReady(
+        new Error(
+          `Cloudflare API proxy exited before ready (code=${code}, signal=${signal})`,
+        ),
+      );
+    };
+    const onData = (chunk) => {
+      buffered += chunk.toString("utf8");
+      let newline = buffered.indexOf("\n");
+      while (newline !== -1) {
+        const line = buffered.slice(0, newline).trim();
+        buffered = buffered.slice(newline + 1);
+        if (line.startsWith(CLOUDFLARE_API_PROXY_READY_PREFIX)) {
+          cleanup();
+          try {
+            resolveReady(
+              JSON.parse(line.slice(CLOUDFLARE_API_PROXY_READY_PREFIX.length)),
+            );
+          } catch (error) {
+            rejectReady(error);
+          }
+          return;
+        }
+        newline = buffered.indexOf("\n");
+      }
+    };
+    child.stdout.on("data", onData);
+    child.once("error", onError);
+    child.once("exit", onExit);
+  });
 }
 
 function cloudflareApiBaseUrl(env = process.env) {
@@ -1387,35 +1553,39 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       })();
   const childEnv = releaseChildEnv(outputs, env);
   try {
-    const commandsToRun = destroy ? commands : commands.slice(0, -1);
-    for (const command of commandsToRun) {
-      await timeReleaseStep(timings, releaseCommandStepName(command), () =>
-        destroy ? runDestroyCommand(command, childEnv) : run(command, childEnv),
-      );
-    }
-    if (!destroy) {
-      await timeReleaseStep(timings, "wrangler-deploy", () =>
-        runFile(
-          "bunx",
-          wranglerDeployArgs(outputs, environment, {
-            containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
-          }),
-          childEnv,
-        ),
-      );
-      await timeReleaseStep(timings, "wrangler-deployment-status", () =>
-        waitForWranglerDeploymentBestEffort(outputs, environment, childEnv),
-      );
-      await timeReleaseStep(timings, "worker-content-verification", () =>
-        verifyCloudflareWorkerContent(outputs, environment, childEnv),
-      );
-      await timeReleaseStep(timings, "workers-dev-enable", () =>
-        ensureWorkersDevSubdomain(outputs, childEnv),
-      );
-      await timeReleaseStep(timings, "public-health-check", () =>
-        verifyReleaseHealth(outputs, childEnv),
-      );
-    }
+    await withCloudflareApiBaseProxy(childEnv, async (releaseEnv) => {
+      const commandsToRun = destroy ? commands : commands.slice(0, -1);
+      for (const command of commandsToRun) {
+        await timeReleaseStep(timings, releaseCommandStepName(command), () =>
+          destroy
+            ? runDestroyCommand(command, releaseEnv)
+            : run(command, releaseEnv),
+        );
+      }
+      if (!destroy) {
+        await timeReleaseStep(timings, "wrangler-deploy", () =>
+          runFile(
+            "bunx",
+            wranglerDeployArgs(outputs, environment, {
+              containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+            }),
+            releaseEnv,
+          ),
+        );
+        await timeReleaseStep(timings, "wrangler-deployment-status", () =>
+          waitForWranglerDeploymentBestEffort(outputs, environment, releaseEnv),
+        );
+        await timeReleaseStep(timings, "worker-content-verification", () =>
+          verifyCloudflareWorkerContent(outputs, environment, releaseEnv),
+        );
+        await timeReleaseStep(timings, "workers-dev-enable", () =>
+          ensureWorkersDevSubdomain(outputs, releaseEnv),
+        );
+        await timeReleaseStep(timings, "public-health-check", () =>
+          verifyReleaseHealth(outputs, releaseEnv),
+        );
+      }
+    });
   } catch (error) {
     releaseStatus = "failed";
     throw error;
