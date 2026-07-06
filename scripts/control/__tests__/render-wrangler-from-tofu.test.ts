@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import {
   assertRenderedWorkerTarget,
   buildReplacements,
+  containerApplicationName,
   parseArgs,
   parseTakosumiOutputsJson,
+  renderContainerApplicationNames,
 } from "../render-wrangler-from-tofu.mjs";
 
 const rawOutputs = {
@@ -174,6 +176,126 @@ test("parseArgs accepts generated wrangler output path", () => {
       outPath: "deploy/cloudflare/.takos-release-wrangler.production.toml",
       dryRun: false,
     },
+  );
+});
+
+test("containerApplicationName uses worker-scoped stable names", () => {
+  assert.equal(
+    containerApplicationName("takos-test", "TakosRuntimeContainer"),
+    "takos-test-runtime",
+  );
+  assert.equal(
+    containerApplicationName("takos-test", "ExecutorContainerTier1"),
+    "takos-test-executor-tier1",
+  );
+  assert.equal(
+    containerApplicationName("takos-test", "UnknownContainer"),
+    undefined,
+  );
+});
+
+test("renderContainerApplicationNames fills only the selected environment", () => {
+  const toml = [
+    'name = "takos-prod"',
+    "",
+    "[[containers]]",
+    'class_name = "TakosRuntimeContainer"',
+    'image = "../../containers/runtime/Dockerfile"',
+    "",
+    "[[containers]]",
+    'class_name = "ExecutorContainerTier1"',
+    'image = "../../containers/executor/Dockerfile"',
+    "",
+    "[env.staging]",
+    'name = "takos-stage"',
+    "",
+    "[[env.staging.containers]]",
+    'class_name = "TakosRuntimeContainer"',
+    'image = "../../containers/runtime/Dockerfile"',
+    "",
+  ].join("\n");
+
+  const production = renderContainerApplicationNames(
+    toml,
+    "production",
+    "takos-prod",
+  );
+  assert.match(
+    production,
+    /class_name = "TakosRuntimeContainer"\nname = "takos-prod-runtime"/,
+  );
+  assert.match(
+    production,
+    /class_name = "ExecutorContainerTier1"\nname = "takos-prod-executor-tier1"/,
+  );
+  assert.doesNotMatch(production, /takos-stage-runtime/);
+
+  const staging = renderContainerApplicationNames(
+    toml,
+    "staging",
+    "takos-stage",
+  );
+  assert.match(
+    staging,
+    /class_name = "TakosRuntimeContainer"\nname = "takos-stage-runtime"/,
+  );
+  assert.doesNotMatch(staging, /takos-prod-runtime/);
+});
+
+test("renderContainerApplicationNames replaces stale generated names", () => {
+  const toml = [
+    'name = "takos-prod"',
+    "",
+    "[[containers]]",
+    'class_name = "TakosRuntimeContainer"',
+    'name = "takos-takosruntimecontainer"',
+    'image = "registry.cloudflare.com/example/old:tag"',
+    "",
+  ].join("\n");
+
+  const rendered = renderContainerApplicationNames(
+    toml,
+    "production",
+    "takos-prod",
+  );
+  assert.match(rendered, /name = "takos-prod-runtime"/);
+  assert.doesNotMatch(rendered, /takos-takosruntimecontainer/);
+});
+
+test("assertRenderedWorkerTarget verifies rendered container application names", () => {
+  const toml = renderContainerApplicationNames(
+    [
+      'name = "takos-prod"',
+      "",
+      "[[services]]",
+      'binding = "TAKOS_EGRESS"',
+      'service = "takos-prod"',
+      "",
+      "[[containers]]",
+      'class_name = "TakosRuntimeContainer"',
+      'image = "registry.cloudflare.com/example/runtime:tag"',
+      "",
+      "[[containers]]",
+      'class_name = "ExecutorContainerTier1"',
+      'image = "registry.cloudflare.com/example/executor:tag"',
+      "",
+    ].join("\n"),
+    "production",
+    "takos-prod",
+  );
+
+  assert.doesNotThrow(() =>
+    assertRenderedWorkerTarget(toml, "production", "takos-prod"),
+  );
+
+  assert.throws(
+    () =>
+      assertRenderedWorkerTarget(
+        toml.replace('name = "takos-prod-executor-tier1"', 'name = "stale"'),
+        "production",
+        "takos-prod",
+      ),
+    /container ExecutorContainerTier1 name mismatch/,
   );
 });
 

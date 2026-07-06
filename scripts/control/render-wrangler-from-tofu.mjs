@@ -28,6 +28,12 @@ import { resolve } from "node:path";
 import process from "node:process";
 
 const ENVIRONMENTS = ["production", "staging"];
+const CONTAINER_APP_NAME_SUFFIX_BY_CLASS = {
+  TakosRuntimeContainer: "runtime",
+  ExecutorContainerTier1: "executor-tier1",
+  ExecutorContainerTier2: "executor-tier2",
+  ExecutorContainerTier3: "executor-tier3",
+};
 
 // Wrangler config is resolved relative to THIS script (takos/scripts/control/),
 // so the command works from any cwd (in particular from deploy/opentofu where
@@ -229,6 +235,105 @@ export function applyReplacements(toml, replacements) {
   return { toml: next, applied, missing };
 }
 
+export function containerApplicationName(workerName, className) {
+  const suffix = CONTAINER_APP_NAME_SUFFIX_BY_CLASS[className];
+  if (!suffix) return undefined;
+  return `${workerName}-${suffix}`;
+}
+
+function containerHeaderForEnv(env) {
+  return env === "staging" ? "[[env.staging.containers]]" : "[[containers]]";
+}
+
+function isTomlHeader(line) {
+  return /^\s*\[\[?[^\]]+\]\]?\s*$/u.test(line);
+}
+
+function renderContainerBlockName(lines, workerName) {
+  const block = lines.join("\n");
+  const className = block.match(/^\s*class_name\s*=\s*"([^"]+)"\s*$/mu)?.[1];
+  const appName = className
+    ? containerApplicationName(workerName, className)
+    : undefined;
+  if (!appName) return lines;
+
+  const nameLine = `name = ${tomlString(appName)}`;
+  const rendered = [];
+  let inserted = false;
+
+  for (const line of lines) {
+    if (/^\s*name\s*=/u.test(line)) {
+      if (!inserted) {
+        rendered.push(nameLine);
+        inserted = true;
+      }
+      continue;
+    }
+    rendered.push(line);
+    if (!inserted && /^\s*class_name\s*=/u.test(line)) {
+      rendered.push(nameLine);
+      inserted = true;
+    }
+  }
+
+  if (!inserted) {
+    rendered.splice(1, 0, nameLine);
+  }
+
+  return rendered;
+}
+
+function eachTomlBlock(toml, visit) {
+  const lines = toml.split("\n");
+  let block = { header: undefined, lines: [] };
+
+  const flush = () => {
+    if (!block || block.lines.length === 0) return;
+    visit(block);
+    block = undefined;
+  };
+
+  for (const line of lines) {
+    if (isTomlHeader(line)) {
+      flush();
+      block = {
+        header: line.trim(),
+        lines: [line],
+      };
+      continue;
+    }
+    block ??= { header: undefined, lines: [] };
+    block.lines.push(line);
+  }
+  flush();
+}
+
+function targetContainerBlocks(toml, env) {
+  const targetHeader = containerHeaderForEnv(env);
+  const blocks = [];
+  eachTomlBlock(toml, (block) => {
+    if (block.header === targetHeader) {
+      blocks.push(block.lines);
+    }
+  });
+  return blocks;
+}
+
+export function renderContainerApplicationNames(toml, env, workerName) {
+  const targetHeader = containerHeaderForEnv(env);
+  const rendered = [];
+
+  eachTomlBlock(toml, (block) => {
+    rendered.push(
+      ...(block.header === targetHeader
+        ? renderContainerBlockName(block.lines, workerName)
+        : block.lines),
+    );
+  });
+
+  return rendered.join("\n");
+}
+
 function requireWorkerNameOutput(outputs) {
   const value = outputValue(outputs.worker_name);
   if (typeof value !== "string" || value.trim() === "") {
@@ -278,6 +383,23 @@ export function assertRenderedWorkerTarget(toml, env, workerName) {
         workerName,
       )}, got ${JSON.stringify(egressService ?? null)}`,
     );
+  }
+
+  for (const lines of targetContainerBlocks(section, env)) {
+    const block = lines.join("\n");
+    const className = block.match(/^\s*class_name\s*=\s*"([^"]+)"\s*$/mu)?.[1];
+    if (!className || !CONTAINER_APP_NAME_SUFFIX_BY_CLASS[className]) continue;
+    const expectedName = containerApplicationName(workerName, className);
+    const renderedContainerName = block.match(
+      /^\s*name\s*=\s*"([^"]+)"\s*$/mu,
+    )?.[1];
+    if (renderedContainerName !== expectedName) {
+      throw new Error(
+        `rendered wrangler ${env} container ${className} name mismatch: expected ${JSON.stringify(
+          expectedName,
+        )}, got ${JSON.stringify(renderedContainerName ?? null)}`,
+      );
+    }
   }
 }
 
@@ -368,7 +490,8 @@ export function main(argv = process.argv.slice(2)) {
     applied,
     missing,
   } = applyReplacements(toml, replacements);
-  assertRenderedWorkerTarget(next, env, workerName);
+  const renderedToml = renderContainerApplicationNames(next, env, workerName);
+  assertRenderedWorkerTarget(renderedToml, env, workerName);
 
   for (const { placeholder, value } of applied) {
     console.log(`  ${placeholder} -> ${value}`);
@@ -383,7 +506,7 @@ export function main(argv = process.argv.slice(2)) {
       env === "staging"
         ? "replace-with-staging-zone-id"
         : "replace-with-zone-id";
-    if (next.includes(zonePlaceholder)) {
+    if (renderedToml.includes(zonePlaceholder)) {
       console.log(
         `\nNOTE: ${zonePlaceholder} is unset. The module does not manage your DNS zone; ` +
           `re-run with --zone-id <id> or fill CF_ZONE_ID by hand.`,
@@ -395,7 +518,7 @@ export function main(argv = process.argv.slice(2)) {
     console.log(`\n--dry-run: ${targetPath} not written.`);
     return;
   }
-  writeFileSync(targetPath, next);
+  writeFileSync(targetPath, renderedToml);
   console.log(`\nWrote ${applied.length} replacement(s) to ${targetPath}.`);
 }
 
