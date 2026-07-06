@@ -22,6 +22,7 @@ import {
   inferCloudflareContainerRegistryAccountId,
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
+  preflightWranglerDeployAuth,
   releaseContextHeaders,
   releaseChildEnv,
   releaseWranglerAccountId,
@@ -416,6 +417,83 @@ test("wranglerDeployEnv leaves provider auth untouched without a deploy-only tok
   };
 
   assert.deepEqual(wranglerDeployEnv(input), input);
+});
+
+test("preflightWranglerDeployAuth skips when deploy-only token is not configured", async () => {
+  let called = false;
+  const result = await preflightWranglerDeployAuth(
+    rawOutputs,
+    { CLOUDFLARE_API_TOKEN: "provider-token" },
+    async () => {
+      called = true;
+      return new Response("{}");
+    },
+  );
+
+  assert.deepEqual(result, {
+    skipped: true,
+    reason: "deploy_token_not_configured",
+  });
+  assert.equal(called, false);
+});
+
+test("preflightWranglerDeployAuth accepts Worker service 404 as an authorized token", async () => {
+  const requests = [];
+  const result = await preflightWranglerDeployAuth(
+    rawOutputs,
+    {
+      CLOUDFLARE_CONTAINERS_API_TOKEN: "deploy-token",
+      CLOUDFLARE_ACCOUNT_ID: "acc_123",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          errors: [
+            {
+              code: 10090,
+              message: "This Worker does not exist on this account.",
+            },
+          ],
+        }),
+        { status: 404, headers: { "content-type": "application/json" } },
+      );
+    },
+  );
+
+  assert.equal(result.skipped, false);
+  assert.equal(result.status, 404);
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test",
+  );
+  assert.equal(requests[0].init.headers.authorization, "Bearer deploy-token");
+});
+
+test("preflightWranglerDeployAuth fails fast on a token without Workers service access", async () => {
+  await assert.rejects(
+    () =>
+      preflightWranglerDeployAuth(
+        rawOutputs,
+        {
+          CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-only-token",
+          CLOUDFLARE_ACCOUNT_ID: "acc_123",
+        },
+        async () =>
+          new Response(
+            JSON.stringify({
+              success: false,
+              errors: [{ code: 10000, message: "Authentication error" }],
+            }),
+            { status: 403, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    new RegExp(
+      "single Cloudflare API token that can deploy Workers scripts/assets and roll out Cloudflare Containers",
+    ),
+  );
 });
 
 test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers", () => {

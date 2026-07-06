@@ -1010,13 +1010,76 @@ export function releaseChildEnv(outputs, env = process.env) {
 
 export function wranglerDeployEnv(env = process.env) {
   const deployToken =
-    stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN) ??
-    stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN);
+    wranglerDeployToken(env);
   if (!deployToken) return env;
   return {
     ...env,
     CLOUDFLARE_API_TOKEN: deployToken,
     CF_API_TOKEN: deployToken,
+  };
+}
+
+function wranglerDeployToken(env = process.env) {
+  return (
+    stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN) ??
+    stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN)
+  );
+}
+
+export async function preflightWranglerDeployAuth(
+  outputs,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  const deployToken = wranglerDeployToken(env);
+  if (!deployToken) {
+    return { skipped: true, reason: "deploy_token_not_configured" };
+  }
+  const workerName = requireStringOutput(outputs, "worker_name");
+  const accountId = releaseWranglerAccountId(outputs, env);
+  if (!accountId) {
+    return { skipped: true, reason: "account_id_unavailable" };
+  }
+  const url = `${cloudflareApiBaseUrl(env)}/accounts/${encodeURIComponent(
+    accountId,
+  )}/workers/services/${encodeURIComponent(workerName)}`;
+  const response = await fetchImpl(url, {
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${deployToken}`,
+      accept: "application/json",
+    },
+  });
+  const text = await response.text();
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { success: false, errors: [{ message: text }] };
+  }
+  const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+  const hasAuthError = errors.some((error) => {
+    const code = typeof error?.code === "number" ? error.code : undefined;
+    const message = typeof error?.message === "string" ? error.message : "";
+    return code === 10000 || /authentication error/i.test(message);
+  });
+  if (hasAuthError) {
+    throw new Error(
+      "Wrangler deploy token cannot access Cloudflare Workers services. " +
+        "Use TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN, or replace " +
+        "CLOUDFLARE_CONTAINERS_API_TOKEN, with a single Cloudflare API token " +
+        "that can deploy Workers scripts/assets and roll out Cloudflare Containers.",
+    );
+  }
+  return {
+    skipped: false,
+    status: response.status,
+    success: payload?.success === true,
+    errors: errors.map((error) => ({
+      code: typeof error?.code === "number" ? error.code : undefined,
+      message:
+        typeof error?.message === "string" ? error.message : undefined,
+    })),
   };
 }
 
@@ -1641,13 +1704,17 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
         );
       }
       if (!destroy) {
+        const deployEnv = wranglerDeployEnv(releaseEnv);
+        await timeReleaseStep(timings, "wrangler-deploy-auth-preflight", () =>
+          preflightWranglerDeployAuth(outputs, deployEnv),
+        );
         await timeReleaseStep(timings, "wrangler-deploy", () =>
           runFile(
             "bunx",
             wranglerDeployArgs(outputs, environment, {
               containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
             }),
-            wranglerDeployEnv(releaseEnv),
+            deployEnv,
           ),
         );
         await timeReleaseStep(timings, "wrangler-deployment-status", () =>
