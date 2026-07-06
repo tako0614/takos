@@ -5,6 +5,7 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -1016,6 +1017,84 @@ export function wranglerDeployEnv(env = process.env) {
   };
 }
 
+// Existing Workers already own their Durable Object namespaces; replaying the
+// bootstrap migration list makes Cloudflare reject the deploy before upload.
+export function removeExistingWorkerMigrationsFromToml(toml, environment) {
+  if (environment !== "production") {
+    return { toml, removed: 0 };
+  }
+  const lines = toml.split("\n");
+  const output = [];
+  let removed = 0;
+  for (let index = 0; index < lines.length; ) {
+    const line = lines[index] ?? "";
+    if (/^\s*\[env\.[^\]]+\]\s*$/u.test(line)) {
+      output.push(...lines.slice(index));
+      break;
+    }
+    if (/^\s*\[\[migrations\]\]\s*$/u.test(line)) {
+      removed += 1;
+      index += 1;
+      while (index < lines.length && !/^\s*\[/.test(lines[index] ?? "")) {
+        index += 1;
+      }
+      continue;
+    }
+    output.push(line);
+    index += 1;
+  }
+  return { toml: output.join("\n"), removed };
+}
+
+export async function pruneWranglerMigrationsForExistingWorker(
+  outputs,
+  environment,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  if (env.TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS === "0") {
+    return { skipped: true, reason: "disabled" };
+  }
+  const workerName = requireStringOutput(outputs, "worker_name");
+  const accountId = releaseWranglerAccountId(outputs, env);
+  const apiToken = wranglerDeployToken(env) ?? releaseApiToken(env);
+  if (!accountId || !apiToken) {
+    return { skipped: true, reason: "cloudflare_api_unavailable" };
+  }
+  const endpoint =
+    `${cloudflareApiBaseUrl(env)}/accounts/${encodeURIComponent(accountId)}` +
+    `/workers/scripts/${encodeURIComponent(workerName)}`;
+  const response = await fetchImpl(endpoint, {
+    method: "GET",
+    headers: { authorization: `Bearer ${apiToken}` },
+  });
+  if (response.status === 404) {
+    return { skipped: true, reason: "worker_not_found", status: 404 };
+  }
+  if (!response.ok) {
+    return {
+      skipped: true,
+      reason: "worker_probe_failed",
+      status: response.status,
+    };
+  }
+  const path = releaseWranglerConfigPath(environment);
+  const current = readFileSync(path, "utf8");
+  const result = removeExistingWorkerMigrationsFromToml(current, environment);
+  if (result.removed === 0) {
+    return { skipped: true, reason: "no_migrations", status: response.status };
+  }
+  writeFileSync(path, result.toml);
+  console.log(
+    `Pruned ${result.removed} Durable Object migration block(s) from ${path} for existing Worker ${workerName}.`,
+  );
+  return {
+    skipped: false,
+    status: response.status,
+    removed: result.removed,
+  };
+}
+
 function wranglerDeployToken(env = process.env) {
   return (
     stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN) ??
@@ -1751,11 +1830,21 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     await withCloudflareApiBaseProxy(childEnv, async (releaseEnv) => {
       const commandsToRun = destroy ? commands : commands.slice(0, -1);
       for (const command of commandsToRun) {
-        await timeReleaseStep(timings, releaseCommandStepName(command), () =>
+        const stepName = releaseCommandStepName(command);
+        await timeReleaseStep(timings, stepName, () =>
           destroy
             ? runDestroyCommand(command, releaseEnv)
             : run(command, releaseEnv),
         );
+        if (!destroy && stepName === "render-wrangler-config") {
+          await timeReleaseStep(timings, "existing-worker-migration-prune", () =>
+            pruneWranglerMigrationsForExistingWorker(
+              outputs,
+              environment,
+              releaseEnv,
+            ),
+          );
+        }
       }
       if (!destroy) {
         const deployEnv = wranglerDeployEnv(releaseEnv);

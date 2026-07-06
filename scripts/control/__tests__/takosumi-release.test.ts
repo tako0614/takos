@@ -23,11 +23,13 @@ import {
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
   preflightWranglerDeployAuth,
+  pruneWranglerMigrationsForExistingWorker,
   releaseContextHeaders,
   releaseChildEnv,
   releaseWranglerAccountId,
   releaseCommandStepName,
   readReleaseOutputs,
+  removeExistingWorkerMigrationsFromToml,
   verifyReleaseDeployment,
   waitForWranglerDeployment,
   waitForWranglerDeploymentBestEffort,
@@ -149,6 +151,126 @@ test("buildTakosumiReleaseCommands uses prebuilt CI container images when suppli
     commands.some((command) => command.includes("containers:build")),
     false,
   );
+});
+
+test("removeExistingWorkerMigrationsFromToml prunes only production migration blocks", () => {
+  const input = [
+    'name = "takos"',
+    "",
+    "[[migrations]]",
+    'tag = "v1"',
+    'new_classes = ["SessionDO"]',
+    "",
+    "[[migrations]]",
+    'tag = "v2"',
+    'new_classes = ["RunNotifierDO"]',
+    "",
+    "[[containers]]",
+    'class_name = "Runtime"',
+    "",
+    "[env.staging]",
+    'name = "takos-staging"',
+  ].join("\n");
+
+  const result = removeExistingWorkerMigrationsFromToml(input, "production");
+
+  assert.equal(result.removed, 2);
+  assert.doesNotMatch(result.toml, /\[\[migrations\]\]/);
+  assert.match(result.toml, /\[\[containers\]\]/);
+  assert.match(result.toml, /\[env\.staging\]/);
+});
+
+test("pruneWranglerMigrationsForExistingWorker leaves fresh workers untouched", async () => {
+  const dir = mkdtempSync(resolve(tmpdir(), "takos-release-migrations-"));
+  const oldCwd = process.cwd();
+  try {
+    process.chdir(dir);
+    mkdirSync("deploy/cloudflare", { recursive: true });
+    const path = productionWranglerConfig;
+    writeFileSync(
+      path,
+      [
+        'name = "takos-test"',
+        "",
+        "[[migrations]]",
+        'tag = "v1"',
+        'new_classes = ["SessionDO"]',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await pruneWranglerMigrationsForExistingWorker(
+      rawOutputs,
+      "production",
+      {
+        CLOUDFLARE_API_TOKEN: "token",
+        CLOUDFLARE_ACCOUNT_ID: "acc_123",
+      },
+      async () => new Response("not found", { status: 404 }),
+    );
+
+    assert.deepEqual(result, {
+      skipped: true,
+      reason: "worker_not_found",
+      status: 404,
+    });
+    assert.match(readFileSync(path, "utf8"), /\[\[migrations\]\]/);
+  } finally {
+    process.chdir(oldCwd);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("pruneWranglerMigrationsForExistingWorker removes bootstrap migrations for existing workers", async () => {
+  const dir = mkdtempSync(resolve(tmpdir(), "takos-release-migrations-"));
+  const oldCwd = process.cwd();
+  try {
+    process.chdir(dir);
+    mkdirSync("deploy/cloudflare", { recursive: true });
+    const path = productionWranglerConfig;
+    writeFileSync(
+      path,
+      [
+        'name = "takos-test"',
+        "",
+        "[[migrations]]",
+        'tag = "v1"',
+        'new_classes = ["SessionDO"]',
+        "",
+        "[[containers]]",
+        'class_name = "Runtime"',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await pruneWranglerMigrationsForExistingWorker(
+      rawOutputs,
+      "production",
+      {
+        CLOUDFLARE_API_TOKEN: "token",
+        CLOUDFLARE_ACCOUNT_ID: "acc_123",
+      },
+      async (url, init) => {
+        assert.equal(
+          String(url),
+          "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test",
+        );
+        assert.equal(
+          new Headers(init?.headers).get("authorization"),
+          "Bearer token",
+        );
+        return new Response("ok", { status: 200 });
+      },
+    );
+
+    assert.deepEqual(result, { skipped: false, status: 200, removed: 1 });
+    const next = readFileSync(path, "utf8");
+    assert.doesNotMatch(next, /\[\[migrations\]\]/);
+    assert.match(next, /\[\[containers\]\]/);
+  } finally {
+    process.chdir(oldCwd);
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("normalizeReleaseContainerImages accepts aliases and supported registry refs", () => {
