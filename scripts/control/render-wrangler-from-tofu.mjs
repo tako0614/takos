@@ -172,6 +172,12 @@ export function buildReplacements(
   if (zoneId) {
     replacements[`replace-with-${prefix}zone-id`] = zoneId;
   }
+  if (env === "staging") {
+    // Wrangler still reads the top-level account_id when deploying an env.
+    // The staging-specific CF_ACCOUNT_ID var is not enough for API routes such
+    // as D1 migrations, so render the base placeholder too.
+    replacements["replace-with-account-id"] = accountId;
+  }
   return replacements;
 }
 
@@ -212,7 +218,8 @@ function wranglerTargetSection(toml, env) {
 }
 
 function findTakosEgressService(section, env) {
-  const header = env === "staging" ? "[[env.staging.services]]" : "[[services]]";
+  const header =
+    env === "staging" ? "[[env.staging.services]]" : "[[services]]";
   for (const block of section.split(/\n(?=\[)/u)) {
     if (!block.startsWith(header)) continue;
     if (!/^\s*binding\s*=\s*"TAKOS_EGRESS"\s*$/mu.test(block)) continue;
@@ -274,13 +281,13 @@ export function parseArgs(argv = process.argv.slice(2)) {
     } else if (arg === "--zone-id") {
       zoneId = argv[i + 1];
       if (!zoneId || zoneId.startsWith("--")) {
-        fail('Error: --zone-id requires a value.');
+        fail("Error: --zone-id requires a value.");
       }
       i += 1;
     } else if (arg === "--out") {
       outPath = argv[i + 1];
       if (!outPath || outPath.startsWith("--")) {
-        fail('Error: --out requires a value.');
+        fail("Error: --out requires a value.");
       }
       i += 1;
     } else if (arg.startsWith("--")) {
@@ -357,9 +364,7 @@ export function main(argv = process.argv.slice(2)) {
     return;
   }
   writeFileSync(targetPath, next);
-  console.log(
-    `\nWrote ${applied.length} replacement(s) to ${targetPath}.`,
-  );
+  console.log(`\nWrote ${applied.length} replacement(s) to ${targetPath}.`);
 }
 
 if (import.meta.main) {

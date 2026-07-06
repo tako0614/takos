@@ -74,6 +74,7 @@ test("buildReplacements accepts Takosumi release raw outputs", () => {
     buildReplacements(rawOutputs, "staging", { zoneId: "zone_123" }),
     {
       '"takos-staging"': '"takos-test"',
+      "replace-with-account-id": "acc_123",
       "replace-with-staging-account-id": "acc_123",
       "replace-with-staging-d1-database-id": "d1_db",
       "replace-with-staging-hostname-routing-kv-namespace-id": "kv_host",
