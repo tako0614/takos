@@ -45,6 +45,7 @@ if (apiBase?.trim()) {
     accountId: accountIdOption.value ?? env.CLOUDFLARE_ACCOUNT_ID,
     apiBase,
     apiToken: env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN,
+    billingContext: billingContextFromEnv(env),
   });
   process.exit(0);
 }
@@ -89,6 +90,7 @@ async function ensureVectorizeIndexViaApi({
   accountId,
   apiBase,
   apiToken,
+  billingContext,
 }) {
   if (!accountId?.trim()) {
     throw new Error("--account-id or CLOUDFLARE_ACCOUNT_ID is required");
@@ -114,6 +116,7 @@ async function ensureVectorizeIndexViaApi({
     headers: {
       authorization: `Bearer ${apiToken.trim()}`,
       "content-type": "application/json",
+      ...billingContextHeaders(billingContext),
     },
     body: JSON.stringify(body),
   });
@@ -133,6 +136,7 @@ async function ensureVectorizeIndexViaApi({
     headers: {
       authorization: `Bearer ${apiToken.trim()}`,
       accept: "application/json",
+      ...billingContextHeaders(billingContext),
     },
   });
   const verifyPayload = await readJson(verify);
@@ -144,6 +148,53 @@ async function ensureVectorizeIndexViaApi({
     );
   }
   console.log(JSON.stringify(verifyPayload));
+}
+
+function billingContextFromEnv(env) {
+  const context = parseReleaseContext(env.TAKOSUMI_RELEASE_CONTEXT_JSON);
+  const workspaceId =
+    stringValue(context?.workspaceId) ??
+    stringValue(context?.spaceId) ??
+    stringValue(env.TAKOSUMI_WORKSPACE_ID) ??
+    stringValue(env.TAKOSUMI_SPACE_ID);
+  const installation =
+    context && typeof context.installation === "object"
+      ? context.installation
+      : undefined;
+  const installationId =
+    stringValue(installation?.id) ??
+    stringValue(context?.installationId) ??
+    stringValue(env.TAKOSUMI_CAPSULE_ID) ??
+    stringValue(env.TAKOSUMI_INSTALLATION_ID);
+  return {
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(installationId ? { installationId } : {}),
+  };
+}
+
+function parseReleaseContext(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function billingContextHeaders(context) {
+  return {
+    ...(context?.workspaceId
+      ? { "x-takosumi-cloud-billing-workspace-id": context.workspaceId }
+      : {}),
+    ...(context?.installationId
+      ? { "x-takosumi-cloud-billing-installation-id": context.installationId }
+      : {}),
+  };
+}
+
+function stringValue(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function readRequiredValue(parts, option) {
