@@ -29,6 +29,8 @@ const RELEASE_COMMAND_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
 const RELEASE_COMMAND_LOG_MAX_CHARS = 20_000;
 const DESTROY_COMMAND_RETRY_ATTEMPTS = 3;
 const DESTROY_COMMAND_RETRY_INTERVAL_MS = 2000;
+const BUN_INSTALL_RETRY_ATTEMPTS = 3;
+const BUN_INSTALL_RETRY_INTERVAL_MS = 2000;
 const CLOUDFLARE_API_PROXY_READY_PREFIX = "TAKOS_CLOUDFLARE_API_PROXY_READY=";
 
 function usage() {
@@ -83,6 +85,14 @@ Optional env:
                                           materializers that must consume Git
                                           CI images and must not build
                                           containers inside the activation run.
+  TAKOS_RELEASE_BUN_INSTALL_CACHE_DIR     Cache root used by bun install during
+                                          activation. Each retry gets its own
+                                          subdirectory to avoid corrupt cache
+                                          reuse.
+  TAKOS_RELEASE_BUN_INSTALL_ATTEMPTS      bun install attempts. Default: 3.
+  TAKOS_RELEASE_BUN_INSTALL_RETRY_INTERVAL_MS
+                                          Delay between retryable bun install
+                                          failures. Default: 2000.
   TAKOS_RELEASE_TIMINGS_FILE              Optional path for a sanitized JSON
                                           timing summary. The same summary is
                                           always emitted to stdout.
@@ -576,7 +586,15 @@ export function buildTakosumiDestroyCommands(outputs) {
   ];
 }
 
-function run(command, env = process.env) {
+async function run(command, env = process.env) {
+  if (isBunInstallCommand(command)) {
+    await runBunInstallCommand(command, env);
+    return;
+  }
+  runCommandOnce(command, env);
+}
+
+function runCommandOnce(command, env = process.env) {
   console.log(`\n> ${command}\n`);
   const result = runShellCommand(command, env);
   emitCommandOutput(result, env);
@@ -587,6 +605,81 @@ function run(command, env = process.env) {
     error.signal = result.signal;
     throw error;
   }
+}
+
+async function runBunInstallCommand(command, env = process.env) {
+  const attempts = releaseBunInstallAttempts(env);
+  const intervalMs = releaseBunInstallRetryIntervalMs(env);
+  let lastResult;
+  let lastOutput = "";
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (attempt > 1) {
+      console.warn(`Retrying bun install (${attempt}/${attempts}).`);
+    }
+    const installEnv = bunInstallCommandEnv(env, attempt);
+    console.log(`\n> ${command}\n`);
+    const result = runShellCommand(command, installEnv);
+    lastResult = result;
+    lastOutput = `${result.stdout ?? ""}\n${result.stderr ?? ""}\n${
+      result.error instanceof Error ? result.error.message : ""
+    }`;
+    emitCommandOutput(result, installEnv);
+    if (!result.error && result.status === 0) return;
+    if (attempt >= attempts || !isRetryableBunInstallFailure(lastOutput)) {
+      break;
+    }
+    if (intervalMs > 0) await wait(intervalMs);
+  }
+  if (lastResult?.error) throw lastResult.error;
+  const error = new Error(`Command failed: ${command}`);
+  error.status = lastResult?.status;
+  error.signal = lastResult?.signal;
+  throw error;
+}
+
+function isBunInstallCommand(command) {
+  return command.includes("'bun' 'install'");
+}
+
+function bunInstallCommandEnv(env, attempt) {
+  const cacheRoot =
+    env.TAKOS_RELEASE_BUN_INSTALL_CACHE_DIR?.trim() ||
+    resolve(".takos-release-cache", "bun-install");
+  const tmpRoot =
+    env.TAKOS_RELEASE_BUN_TMPDIR?.trim() ||
+    resolve(".takos-release-cache", "tmp");
+  const cacheDir = resolve(cacheRoot, `attempt-${attempt}`);
+  const tmpDir = resolve(tmpRoot, `attempt-${attempt}`);
+  mkdirSync(cacheDir, { recursive: true });
+  mkdirSync(tmpDir, { recursive: true });
+  return {
+    ...env,
+    BUN_INSTALL_CACHE_DIR: cacheDir,
+    TMPDIR: tmpDir,
+  };
+}
+
+export function isRetryableBunInstallFailure(output) {
+  return /Fail extracting tarball|failed extracting tarball|tarball|ECONNRESET|EAI_AGAIN|ETIMEDOUT|socket hang up|network connection|HTTP 429|HTTP 5\d\d|temporarily unavailable|unexpected end of file|integrity check/i.test(
+    output,
+  );
+}
+
+function releaseBunInstallAttempts(env) {
+  const attempts = integerEnv(
+    env,
+    "TAKOS_RELEASE_BUN_INSTALL_ATTEMPTS",
+    BUN_INSTALL_RETRY_ATTEMPTS,
+  );
+  return Math.max(1, attempts);
+}
+
+function releaseBunInstallRetryIntervalMs(env) {
+  return integerEnv(
+    env,
+    "TAKOS_RELEASE_BUN_INSTALL_RETRY_INTERVAL_MS",
+    BUN_INSTALL_RETRY_INTERVAL_MS,
+  );
 }
 
 async function timeReleaseStep(timings, step, action) {

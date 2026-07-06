@@ -20,6 +20,7 @@ import {
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
   inferCloudflareContainerRegistryAccountId,
+  isRetryableBunInstallFailure,
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
   preflightWranglerDeployAuth,
@@ -479,6 +480,21 @@ test("releaseCommandStepName classifies activation bottleneck steps", () => {
   assert.equal(
     releaseCommandStepName("'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB'"),
     "d1-migrations-apply",
+  );
+});
+
+test("bun install retry classifier only retries transient install failures", () => {
+  assert.equal(
+    isRetryableBunInstallFailure(
+      "error: Fail extracting tarball from @rolldown/binding-linux-x64-gnu",
+    ),
+    true,
+  );
+  assert.equal(
+    isRetryableBunInstallFailure(
+      "error: lockfile had changes, but lockfile is frozen",
+    ),
+    false,
   );
 });
 
