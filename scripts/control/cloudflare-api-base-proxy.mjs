@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 import process from "node:process";
 
-const targetBase = requiredEnv("TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE")
-  .replace(/\/+$/u, "");
+const targetBase = requiredEnv(
+  "TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE",
+).replace(/\/+$/u, "");
 const apiToken = requiredEnv("TAKOS_CLOUDFLARE_API_PROXY_TOKEN");
 const contextHeaders = parseContextHeaders(
   process.env.TAKOS_CLOUDFLARE_API_PROXY_CONTEXT_HEADERS,
@@ -61,7 +62,7 @@ async function proxyRequest(request) {
   const input = new URL(request.url);
   const target = new URL(`${targetBase}${rewriteAccountPath(input.pathname)}`);
   target.search = input.search;
-  const headers = upstreamHeaders(request.headers);
+  const headers = upstreamHeaders(request.headers, input.pathname);
   const upstream = await fetch(target, {
     method: request.method,
     headers,
@@ -90,16 +91,37 @@ function rewriteAccountPath(pathname) {
   return parts.join("/");
 }
 
-function upstreamHeaders(source) {
+function upstreamHeaders(source, pathname) {
   const headers = new Headers(source);
+  const originalAuthorization = headers.get("authorization");
   headers.delete("host");
   headers.delete("content-length");
   headers.set("accept-encoding", "identity");
   headers.set("authorization", `Bearer ${apiToken}`);
+  if (isWorkerAssetsUploadPath(pathname) && originalAuthorization) {
+    headers.set(
+      "x-takosumi-cloudflare-assets-authorization",
+      originalAuthorization,
+    );
+  }
   for (const [name, value] of Object.entries(contextHeaders)) {
     headers.set(name, value);
   }
   return headers;
+}
+
+function isWorkerAssetsUploadPath(pathname) {
+  const parts = pathname.split("/").map(safeDecodeURIComponent);
+  for (let index = 0; index <= parts.length - 3; index += 1) {
+    if (
+      parts[index] === "workers" &&
+      parts[index + 1] === "assets" &&
+      parts[index + 2] === "upload"
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function downstreamHeaders(source) {

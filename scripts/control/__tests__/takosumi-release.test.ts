@@ -488,6 +488,7 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
     readonly method: string;
     readonly url: string;
     readonly authorization: string | null;
+    readonly assetAuthorization: string | null;
     readonly acceptEncoding: string | null;
     readonly workspace: string | null;
     readonly installation: string | null;
@@ -501,6 +502,9 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
         method: request.method,
         url: request.url,
         authorization: request.headers.get("authorization"),
+        assetAuthorization: request.headers.get(
+          "x-takosumi-cloudflare-assets-authorization",
+        ),
         acceptEncoding: request.headers.get("accept-encoding"),
         workspace: request.headers.get("x-takosumi-cloud-billing-workspace-id"),
         installation: request.headers.get(
@@ -568,6 +572,18 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
           success: true,
           result: { id: "ok" },
         });
+        const assetUpload = await fetch(
+          `${releaseEnv.CLOUDFLARE_API_BASE_URL}/accounts/backend_acc/workers/assets/upload?base64=true`,
+          {
+            method: "POST",
+            headers: {
+              authorization: "Bearer asset-upload-session",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ asset: true }),
+          },
+        );
+        assert.equal(assetUpload.status, 200);
       },
     );
   } finally {
@@ -579,10 +595,21 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
       method: "POST",
       url: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/queues`,
       authorization: "Bearer takmpt_test",
+      assetAuthorization: null,
       acceptEncoding: "identity",
       workspace: "space_proxy",
       installation: "inst_proxy",
       body: { queue_name: "jobs" },
+    },
+    {
+      method: "POST",
+      url: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/workers/assets/upload?base64=true`,
+      authorization: "Bearer takmpt_test",
+      assetAuthorization: "Bearer asset-upload-session",
+      acceptEncoding: "identity",
+      workspace: "space_proxy",
+      installation: "inst_proxy",
+      body: { asset: true },
     },
   ]);
 });
