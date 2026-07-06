@@ -399,6 +399,8 @@ test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers",
       CLOUDFLARE_API_BASE_URL:
         "https://app.takosumi.com/compat/cloudflare/client/v4",
       CF_API_BASE_URL: "https://app.takosumi.com/compat/cloudflare/client/v4",
+      CLOUDFLARE_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4",
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
@@ -412,10 +414,8 @@ test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers",
 
 test("releaseChildEnv uses Cloudflare container registry account for managed compat Wrangler validation", () => {
   const containerImages = JSON.stringify({
-    runtime:
-      "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
-    executor:
-      "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
+    runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
+    executor: "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
   });
 
   assert.equal(
@@ -453,6 +453,8 @@ test("releaseChildEnv uses Cloudflare container registry account for managed com
       CLOUDFLARE_API_BASE_URL:
         "https://app.takosumi.com/compat/cloudflare/client/v4",
       CF_API_BASE_URL: "https://app.takosumi.com/compat/cloudflare/client/v4",
+      CLOUDFLARE_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4",
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
@@ -500,9 +502,7 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
         url: request.url,
         authorization: request.headers.get("authorization"),
         acceptEncoding: request.headers.get("accept-encoding"),
-        workspace: request.headers.get(
-          "x-takosumi-cloud-billing-workspace-id",
-        ),
+        workspace: request.headers.get("x-takosumi-cloud-billing-workspace-id"),
         installation: request.headers.get(
           "x-takosumi-cloud-billing-installation-id",
         ),
@@ -544,6 +544,10 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
         );
         assert.equal(
           releaseEnv.CF_API_BASE_URL,
+          releaseEnv.CLOUDFLARE_API_BASE_URL,
+        );
+        assert.equal(
+          releaseEnv.CLOUDFLARE_BASE_URL,
           releaseEnv.CLOUDFLARE_API_BASE_URL,
         );
         const response = await fetch(

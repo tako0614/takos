@@ -28,8 +28,7 @@ const RELEASE_COMMAND_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
 const RELEASE_COMMAND_LOG_MAX_CHARS = 20_000;
 const DESTROY_COMMAND_RETRY_ATTEMPTS = 3;
 const DESTROY_COMMAND_RETRY_INTERVAL_MS = 2000;
-const CLOUDFLARE_API_PROXY_READY_PREFIX =
-  "TAKOS_CLOUDFLARE_API_PROXY_READY=";
+const CLOUDFLARE_API_PROXY_READY_PREFIX = "TAKOS_CLOUDFLARE_API_PROXY_READY=";
 
 function usage() {
   console.error(`
@@ -460,9 +459,7 @@ export function inferCloudflareContainerRegistryAccountId(containerImages) {
 
 function cloudflareContainerRegistryAccountId(image) {
   if (typeof image !== "string") return undefined;
-  return image
-    .trim()
-    .match(/^registry\.cloudflare\.com\/([^/]+)\//u)?.[1];
+  return image.trim().match(/^registry\.cloudflare\.com\/([^/]+)\//u)?.[1];
 }
 
 export function releaseWranglerAccountId(outputs, env = process.env) {
@@ -976,6 +973,7 @@ export function releaseChildEnv(outputs, env = process.env) {
           TAKOS_CLOUDFLARE_API_BASE_URL: apiBase,
           CLOUDFLARE_API_BASE_URL: apiBase,
           CF_API_BASE_URL: apiBase,
+          CLOUDFLARE_BASE_URL: apiBase,
         }
       : {}),
     ...(apiToken
@@ -1086,6 +1084,7 @@ export async function withCloudflareApiBaseProxy(env, action) {
       TAKOS_CLOUDFLARE_API_BASE_URL: proxyBase,
       CLOUDFLARE_API_BASE_URL: proxyBase,
       CF_API_BASE_URL: proxyBase,
+      CLOUDFLARE_BASE_URL: proxyBase,
     });
   } finally {
     child.kill("SIGTERM");
