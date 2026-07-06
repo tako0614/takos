@@ -1040,13 +1040,81 @@ export async function preflightWranglerDeployAuth(
   if (!accountId) {
     return { skipped: true, reason: "account_id_unavailable" };
   }
-  const url = `${cloudflareApiBaseUrl(env)}/accounts/${encodeURIComponent(
-    accountId,
-  )}/workers/services/${encodeURIComponent(workerName)}`;
-  const response = await fetchImpl(url, {
+  const checks = wranglerDeployAuthChecks(accountId, workerName);
+  const results = [];
+  for (const check of checks) {
+    results.push(
+      await preflightCloudflareApiAccess(check, env, deployToken, fetchImpl),
+    );
+  }
+  const failed = results.filter((result) => result.authenticated === false);
+  if (failed.length > 0) {
+    throw new Error(
+      `Wrangler deploy token cannot access required Cloudflare resource APIs: ${failed
+        .map((result) => result.name)
+        .join(", ")}. ` +
+        "Use TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN, or replace " +
+        "CLOUDFLARE_CONTAINERS_API_TOKEN, with a single Cloudflare API token " +
+        "that can deploy Workers scripts/assets, read/update KV, R2, D1, Queues, " +
+        "Vectorize, and roll out Cloudflare Containers.",
+    );
+  }
+  return {
+    skipped: false,
+    checks: results.map((result) => ({
+      name: result.name,
+      status: result.status,
+      success: result.success,
+    })),
+  };
+}
+
+function wranglerDeployAuthChecks(accountId, workerName) {
+  const encodedAccountId = encodeURIComponent(accountId);
+  return [
+    {
+      name: "Workers Services",
+      path: `/accounts/${encodedAccountId}/workers/services/${encodeURIComponent(workerName)}`,
+      authorizedStatuses: new Set([200, 404]),
+    },
+    {
+      name: "R2 Buckets",
+      path: `/accounts/${encodedAccountId}/r2/buckets`,
+      authorizedStatuses: new Set([200]),
+    },
+    {
+      name: "D1 Databases",
+      path: `/accounts/${encodedAccountId}/d1/database`,
+      authorizedStatuses: new Set([200]),
+    },
+    {
+      name: "KV Namespaces",
+      path: `/accounts/${encodedAccountId}/storage/kv/namespaces`,
+      authorizedStatuses: new Set([200]),
+    },
+    {
+      name: "Queues",
+      path: `/accounts/${encodedAccountId}/queues`,
+      authorizedStatuses: new Set([200]),
+    },
+    {
+      name: "Vectorize Indexes",
+      path: `/accounts/${encodedAccountId}/vectorize/v2/indexes`,
+      authorizedStatuses: new Set([200]),
+    },
+  ];
+}
+
+async function preflightCloudflareApiAccess(
+  check,
+  env,
+  apiToken,
+  fetchImpl,
+) {
+  const response = await fetchImpl(`${cloudflareApiBaseUrl(env)}${check.path}`, {
     method: "GET",
     headers: {
-      authorization: `Bearer ${deployToken}`,
+      authorization: `Bearer ${apiToken}`,
       accept: "application/json",
     },
   });
@@ -1063,23 +1131,12 @@ export async function preflightWranglerDeployAuth(
     const message = typeof error?.message === "string" ? error.message : "";
     return code === 10000 || /authentication error/i.test(message);
   });
-  if (hasAuthError) {
-    throw new Error(
-      "Wrangler deploy token cannot access Cloudflare Workers services. " +
-        "Use TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN, or replace " +
-        "CLOUDFLARE_CONTAINERS_API_TOKEN, with a single Cloudflare API token " +
-        "that can deploy Workers scripts/assets and roll out Cloudflare Containers.",
-    );
-  }
   return {
-    skipped: false,
+    name: check.name,
     status: response.status,
     success: payload?.success === true,
-    errors: errors.map((error) => ({
-      code: typeof error?.code === "number" ? error.code : undefined,
-      message:
-        typeof error?.message === "string" ? error.message : undefined,
-    })),
+    authenticated:
+      check.authorizedStatuses.has(response.status) && !hasAuthError,
   };
 }
 

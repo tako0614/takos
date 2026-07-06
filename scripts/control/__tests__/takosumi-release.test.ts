@@ -447,32 +447,78 @@ test("preflightWranglerDeployAuth accepts Worker service 404 as an authorized to
     },
     async (url, init) => {
       requests.push({ url, init });
+      if (url.includes("/workers/services/")) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            errors: [
+              {
+                code: 10090,
+                message: "This Worker does not exist on this account.",
+              },
+            ],
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      }
       return new Response(
         JSON.stringify({
-          success: false,
-          errors: [
-            {
-              code: 10090,
-              message: "This Worker does not exist on this account.",
-            },
-          ],
+          success: true,
+          result: [],
         }),
-        { status: 404, headers: { "content-type": "application/json" } },
+        { status: 200, headers: { "content-type": "application/json" } },
       );
     },
   );
 
   assert.equal(result.skipped, false);
-  assert.equal(result.status, 404);
-  assert.equal(requests.length, 1);
+  assert.deepEqual(result.checks, [
+    {
+      name: "Workers Services",
+      status: 404,
+      success: false,
+    },
+    {
+      name: "R2 Buckets",
+      status: 200,
+      success: true,
+    },
+    {
+      name: "D1 Databases",
+      status: 200,
+      success: true,
+    },
+    {
+      name: "KV Namespaces",
+      status: 200,
+      success: true,
+    },
+    {
+      name: "Queues",
+      status: 200,
+      success: true,
+    },
+    {
+      name: "Vectorize Indexes",
+      status: 200,
+      success: true,
+    },
+  ]);
+  assert.equal(requests.length, 6);
   assert.equal(
     requests[0].url,
     "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test",
   );
-  assert.equal(requests[0].init.headers.authorization, "Bearer deploy-token");
+  assert.equal(
+    requests.every(
+      (request) =>
+        request.init.headers.authorization === "Bearer deploy-token",
+    ),
+    true,
+  );
 });
 
-test("preflightWranglerDeployAuth fails fast on a token without Workers service access", async () => {
+test("preflightWranglerDeployAuth fails fast on a token without resource API access", async () => {
   await assert.rejects(
     () =>
       preflightWranglerDeployAuth(
@@ -481,17 +527,24 @@ test("preflightWranglerDeployAuth fails fast on a token without Workers service 
           CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-only-token",
           CLOUDFLARE_ACCOUNT_ID: "acc_123",
         },
-        async () =>
-          new Response(
-            JSON.stringify({
-              success: false,
-              errors: [{ code: 10000, message: "Authentication error" }],
-            }),
-            { status: 403, headers: { "content-type": "application/json" } },
-          ),
+        async (url) => {
+          if (url.includes("/r2/buckets")) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                errors: [{ code: 10000, message: "Authentication error" }],
+              }),
+              { status: 403, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(JSON.stringify({ success: true, result: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
       ),
     new RegExp(
-      "single Cloudflare API token that can deploy Workers scripts/assets and roll out Cloudflare Containers",
+      "R2 Buckets.*single Cloudflare API token that can deploy Workers scripts/assets, read/update KV, R2, D1, Queues, Vectorize, and roll out Cloudflare Containers",
     ),
   );
 });
