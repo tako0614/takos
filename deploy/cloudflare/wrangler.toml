@@ -179,19 +179,19 @@ storage = "sqlite"
 
 [exports.RunNotifierDO]
 type = "durable-object"
-storage = "sqlite"
+storage = "legacy-kv"
 
 [exports.NotificationNotifierDO]
 type = "durable-object"
-storage = "sqlite"
+storage = "legacy-kv"
 
 [exports.RateLimiterDO]
 type = "durable-object"
-storage = "sqlite"
+storage = "legacy-kv"
 
 [exports.RoutingDO]
 type = "durable-object"
-storage = "sqlite"
+storage = "legacy-kv"
 
 [exports.TakosRuntimeContainer]
 type = "durable-object"
