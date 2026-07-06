@@ -72,7 +72,11 @@ function fail(message) {
  * (`name -> { value, sensitive, type }`) or Takosumi release output shape
  * (`name -> rawValue`). Throws if a required Cloudflare output is missing.
  */
-export function buildReplacements(outputs, env, { zoneId } = {}) {
+export function buildReplacements(
+  outputs,
+  env,
+  { zoneId, accountIdOverride } = {},
+) {
   if (!ENVIRONMENTS.includes(env)) {
     throw new Error(`Unknown environment "${env}"`);
   }
@@ -87,7 +91,7 @@ export function buildReplacements(outputs, env, { zoneId } = {}) {
     return value;
   };
 
-  const accountId = read("cloudflare_account_id");
+  const accountId = accountIdOverride?.trim() || read("cloudflare_account_id");
   const workerName = read("worker_name");
   const d1 = read("cloudflare_d1_database_ids"); // { db }
   const kv = read("cloudflare_kv_namespace_ids"); // { hostname_routing, rollout_health }
@@ -314,7 +318,10 @@ export function main(argv = process.argv.slice(2)) {
   const { env, zoneId, outPath, dryRun } = parseArgs(argv);
   const outputs = readOutputs();
   const workerName = requireWorkerNameOutput(outputs);
-  const replacements = buildReplacements(outputs, env, { zoneId });
+  const replacements = buildReplacements(outputs, env, {
+    zoneId,
+    accountIdOverride: process.env.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID,
+  });
   const targetPath = outPath ? resolve(outPath) : WRANGLER_CONFIG;
   const toml = readFileSync(WRANGLER_CONFIG, "utf8");
   const {

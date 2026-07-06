@@ -97,6 +97,16 @@ test("buildReplacements accepts Takosumi release raw outputs", () => {
   );
 });
 
+test("buildReplacements can render a Wrangler-only account override", () => {
+  assert.equal(
+    buildReplacements(rawOutputs, "production", {
+      accountIdOverride: "backend_acc",
+    })["replace-with-account-id"],
+    "backend_acc",
+  );
+  assert.equal(rawOutputs.cloudflare_account_id, "acc_123");
+});
+
 test("parseTakosumiOutputsJson rejects non-object payloads", () => {
   assert.throws(() => parseTakosumiOutputsJson("[]"));
 });

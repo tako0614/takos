@@ -19,10 +19,12 @@ import {
   buildTakosumiReleaseCommands,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
+  inferCloudflareContainerRegistryAccountId,
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
   releaseContextHeaders,
   releaseChildEnv,
+  releaseWranglerAccountId,
   releaseCommandStepName,
   readReleaseOutputs,
   verifyReleaseDeployment,
@@ -402,6 +404,62 @@ test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers",
       CF_API_TOKEN: "token",
       CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
       CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+    },
+  );
+});
+
+test("releaseChildEnv uses Cloudflare container registry account for managed compat Wrangler validation", () => {
+  const containerImages = JSON.stringify({
+    runtime:
+      "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
+    executor:
+      "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
+  });
+
+  assert.equal(
+    inferCloudflareContainerRegistryAccountId(containerImages),
+    "backend_acc",
+  );
+  assert.equal(
+    releaseWranglerAccountId(
+      { cloudflare_account_id: "ts_acc_takosumi_cloud" },
+      {
+        TAKOS_CLOUDFLARE_API_BASE_URL:
+          "https://app.takosumi.com/compat/cloudflare/client/v4",
+        TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
+      },
+    ),
+    "backend_acc",
+  );
+  assert.deepEqual(
+    releaseChildEnv(
+      { cloudflare_account_id: "ts_acc_takosumi_cloud" },
+      {
+        PATH: "/bin",
+        CLOUDFLARE_API_TOKEN: "token",
+        TAKOS_CLOUDFLARE_API_BASE_URL:
+          "https://app.takosumi.com/compat/cloudflare/client/v4",
+        TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
+      },
+    ),
+    {
+      PATH: "/bin",
+      CLOUDFLARE_API_TOKEN: "token",
+      TAKOS_CLOUDFLARE_API_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4",
+      TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
+      CLOUDFLARE_API_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4",
+      CF_API_BASE_URL: "https://app.takosumi.com/compat/cloudflare/client/v4",
+      CI: "true",
+      WRANGLER_SEND_METRICS: "false",
+      CF_API_TOKEN: "token",
+      CLOUDFLARE_ACCOUNT_ID: "backend_acc",
+      CF_ACCOUNT_ID: "backend_acc",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
+      TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID: "ts_acc_takosumi_cloud",
     },
   );
 });
@@ -467,6 +525,8 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
     await withCloudflareApiBaseProxy(
       {
         CLOUDFLARE_API_TOKEN: "takmpt_test",
+        TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
+        TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID: "ts_acc_takosumi_cloud",
         TAKOS_CLOUDFLARE_API_BASE_URL: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4`,
         TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
           workspaceId: "space_proxy",
@@ -487,7 +547,7 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
           releaseEnv.CLOUDFLARE_API_BASE_URL,
         );
         const response = await fetch(
-          `${releaseEnv.CLOUDFLARE_API_BASE_URL}/accounts/ts_acc_takosumi_cloud/queues`,
+          `${releaseEnv.CLOUDFLARE_API_BASE_URL}/accounts/backend_acc/queues`,
           {
             method: "POST",
             headers: {

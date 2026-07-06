@@ -7,6 +7,9 @@ const apiToken = requiredEnv("TAKOS_CLOUDFLARE_API_PROXY_TOKEN");
 const contextHeaders = parseContextHeaders(
   process.env.TAKOS_CLOUDFLARE_API_PROXY_CONTEXT_HEADERS,
 );
+const accountRewrite = parseAccountRewrite(
+  process.env.TAKOS_CLOUDFLARE_API_PROXY_ACCOUNT_REWRITE,
+);
 const hostname = process.env.TAKOS_CLOUDFLARE_API_PROXY_HOST ?? "127.0.0.1";
 const port = Number.parseInt(
   process.env.TAKOS_CLOUDFLARE_API_PROXY_PORT ?? "0",
@@ -56,7 +59,7 @@ process.on("SIGINT", () => {
 
 async function proxyRequest(request) {
   const input = new URL(request.url);
-  const target = new URL(`${targetBase}${input.pathname}`);
+  const target = new URL(`${targetBase}${rewriteAccountPath(input.pathname)}`);
   target.search = input.search;
   const headers = upstreamHeaders(request.headers);
   const upstream = await fetch(target, {
@@ -73,6 +76,18 @@ async function proxyRequest(request) {
     statusText: upstream.statusText,
     headers: downstreamHeaders(upstream.headers),
   });
+}
+
+function rewriteAccountPath(pathname) {
+  if (!accountRewrite) return pathname;
+  const parts = pathname.split("/");
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    if (parts[index] !== "accounts") continue;
+    const decoded = safeDecodeURIComponent(parts[index + 1]);
+    if (decoded !== accountRewrite.from) continue;
+    parts[index + 1] = encodeURIComponent(accountRewrite.to);
+  }
+  return parts.join("/");
 }
 
 function upstreamHeaders(source) {
@@ -125,6 +140,31 @@ function parseContextHeaders(raw) {
       ])
       .filter(([name, value]) => name && value),
   );
+}
+
+function parseAccountRewrite(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return undefined;
+  }
+  const from = typeof parsed.from === "string" ? parsed.from.trim() : "";
+  const to = typeof parsed.to === "string" ? parsed.to.trim() : "";
+  if (!from || !to || from === to) return undefined;
+  return { from, to };
+}
+
+function safeDecodeURIComponent(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function requiredEnv(name) {
