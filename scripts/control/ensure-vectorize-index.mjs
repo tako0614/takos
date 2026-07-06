@@ -35,6 +35,20 @@ const env = {
     : {}),
 };
 
+const apiBase =
+  process.env.TAKOS_CLOUDFLARE_API_BASE_URL ??
+  process.env.CLOUDFLARE_API_BASE_URL;
+if (apiBase?.trim()) {
+  await ensureVectorizeIndexViaApi({
+    name,
+    args: wranglerArgs,
+    accountId: accountIdOption.value ?? env.CLOUDFLARE_ACCOUNT_ID,
+    apiBase,
+    apiToken: env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN,
+  });
+  process.exit(0);
+}
+
 const result = spawnSync(
   "bunx",
   ["wrangler", "vectorize", "create", name, ...wranglerArgs],
@@ -68,3 +82,91 @@ if (result.status === 0 || combined.includes("vectorize.index.duplicate_name")) 
 }
 
 process.exit(result.status ?? 1);
+
+async function ensureVectorizeIndexViaApi({
+  name,
+  args,
+  accountId,
+  apiBase,
+  apiToken,
+}) {
+  if (!accountId?.trim()) {
+    throw new Error("--account-id or CLOUDFLARE_ACCOUNT_ID is required");
+  }
+  if (!apiToken?.trim()) {
+    throw new Error("CLOUDFLARE_API_TOKEN or CF_API_TOKEN is required");
+  }
+  const dimensions = readRequiredValue(args, "--dimensions");
+  const metric = readRequiredValue(args, "--metric");
+  const base = apiBase.replace(/\/+$/u, "");
+  const url = `${base}/accounts/${encodeURIComponent(
+    accountId.trim(),
+  )}/vectorize/v2/indexes`;
+  const body = {
+    name,
+    config: {
+      dimensions: Number(dimensions),
+      metric,
+    },
+  };
+  const create = await fetch(url, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${apiToken.trim()}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const createPayload = await readJson(create);
+  if (!create.ok && !isDuplicateVectorizeIndex(createPayload)) {
+    throw new Error(
+      `Vectorize index create failed: HTTP ${create.status} ${JSON.stringify(
+        createPayload.errors ?? createPayload,
+      )}`,
+    );
+  }
+  if (isDuplicateVectorizeIndex(createPayload)) {
+    console.log(`Vectorize index ${name} already exists; continuing.`);
+  }
+
+  const verify = await fetch(`${url}/${encodeURIComponent(name)}`, {
+    headers: {
+      authorization: `Bearer ${apiToken.trim()}`,
+      accept: "application/json",
+    },
+  });
+  const verifyPayload = await readJson(verify);
+  if (!verify.ok) {
+    throw new Error(
+      `Vectorize index verify failed: HTTP ${verify.status} ${JSON.stringify(
+        verifyPayload.errors ?? verifyPayload,
+      )}`,
+    );
+  }
+  console.log(JSON.stringify(verifyPayload));
+}
+
+function readRequiredValue(parts, option) {
+  const { value } = readOption(parts, option);
+  if (!value?.trim()) usage();
+  return value.trim();
+}
+
+async function readJson(response) {
+  const text = await response.text();
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { success: false, errors: [{ message: text }] };
+  }
+}
+
+function isDuplicateVectorizeIndex(payload) {
+  const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+  return errors.some((error) => {
+    const message =
+      typeof error?.message === "string" ? error.message : String(error ?? "");
+    return /duplicate_name|already exists/i.test(message);
+  });
+}

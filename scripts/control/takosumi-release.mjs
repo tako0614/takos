@@ -66,6 +66,9 @@ Optional env:
                                           registries. Keys may be Wrangler
                                           class names or "runtime" /
                                           "executor" aliases.
+  TAKOS_CLOUDFLARE_API_BASE_URL           Optional Cloudflare-compatible API
+                                          base URL used by managed compat
+                                          release helper steps.
   TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES Set to 1/true for hosted/operator
                                           materializers that must consume Git
                                           CI images and must not build
@@ -918,10 +921,18 @@ export function releaseChildEnv(outputs, env = process.env) {
     accountId = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID;
   }
   const apiToken = env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN;
+  const apiBase =
+    env.TAKOS_CLOUDFLARE_API_BASE_URL ?? env.CLOUDFLARE_API_BASE_URL;
   return {
     ...env,
     CI: env.CI ?? "true",
     WRANGLER_SEND_METRICS: env.WRANGLER_SEND_METRICS ?? "false",
+    ...(apiBase
+      ? {
+          TAKOS_CLOUDFLARE_API_BASE_URL: apiBase,
+          CLOUDFLARE_API_BASE_URL: apiBase,
+        }
+      : {}),
     ...(apiToken
       ? {
           CLOUDFLARE_API_TOKEN: apiToken,
@@ -935,6 +946,16 @@ export function releaseChildEnv(outputs, env = process.env) {
         }
       : {}),
   };
+}
+
+function cloudflareApiBaseUrl(env = process.env) {
+  const configured =
+    env.TAKOS_CLOUDFLARE_API_BASE_URL ?? env.CLOUDFLARE_API_BASE_URL;
+  const base =
+    typeof configured === "string" && configured.trim()
+      ? configured.trim()
+      : "https://api.cloudflare.com/client/v4";
+  return base.replace(/\/+$/u, "");
 }
 
 function shouldRetryCloudflareWorkerApi(response, payload) {
@@ -981,7 +1002,7 @@ export async function ensureWorkersDevSubdomain(
     return { skipped: true, reason: "api_token_unavailable" };
   }
 
-  const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(
+  const url = `${cloudflareApiBaseUrl(env)}/accounts/${encodeURIComponent(
     accountId,
   )}/workers/scripts/${encodeURIComponent(workerName)}/subdomain`;
   const attempts = releaseWorkerApiAttempts(env);
@@ -1116,6 +1137,7 @@ async function verifyCloudflareWorkerContent(
     workerName,
     workerEnvironment,
     environment,
+    apiBase: cloudflareApiBaseUrl(env),
   });
   const attempts = releaseWorkerApiAttempts(env);
   const intervalMs = releaseWorkerApiIntervalMs(env);
@@ -1232,15 +1254,15 @@ function workerContentVerificationUrls({
   workerName,
   workerEnvironment,
   environment,
+  apiBase = "https://api.cloudflare.com/client/v4",
 }) {
+  const base = apiBase.replace(/\/+$/u, "");
   const account = encodeURIComponent(accountId);
   const worker = encodeURIComponent(workerName);
   const serviceEnvironmentUrl =
-    `https://api.cloudflare.com/client/v4/accounts/${account}` +
+    `${base}/accounts/${account}` +
     `/workers/services/${worker}/environments/${encodeURIComponent(workerEnvironment)}/content`;
-  const scriptUrl =
-    `https://api.cloudflare.com/client/v4/accounts/${account}` +
-    `/workers/scripts/${worker}/content`;
+  const scriptUrl = `${base}/accounts/${account}/workers/scripts/${worker}/content`;
   return environment === "staging"
     ? [serviceEnvironmentUrl, scriptUrl]
     : [scriptUrl, serviceEnvironmentUrl];

@@ -26,3 +26,14 @@ variable "workers_subdomain" {
   type        = string
   default     = null
 }
+
+variable "app_url" {
+  description = "Canonical public URL for the Takos worker. When unset, launch_url is derived from workers_subdomain."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.app_url == null || can(regex("^https://[^[:space:]]+$", var.app_url))
+    error_message = "app_url must be unset or an https URL."
+  }
+}

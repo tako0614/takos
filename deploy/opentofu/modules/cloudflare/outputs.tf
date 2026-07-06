@@ -15,8 +15,13 @@ output "worker_name" {
 }
 
 output "launch_url" {
-  description = "Public workers.dev URL when a workers_subdomain input is supplied."
-  value       = var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.worker_name}.${var.workers_subdomain}.workers.dev" : null
+  description = "Canonical public Takos URL when app_url or workers_subdomain is supplied."
+  value       = local.app_url != null ? local.app_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.worker_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
+}
+
+output "app_url" {
+  description = "Alias of launch_url for app-surface projection."
+  value       = local.app_url != null ? local.app_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.worker_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
 }
 
 output "workers_subdomain" {

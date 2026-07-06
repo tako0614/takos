@@ -35,6 +35,7 @@ terraform {
 locals {
   name        = var.project_name
   worker_name = var.project_name
+  app_url     = var.app_url != null && trimspace(var.app_url) != "" ? trimspace(var.app_url) : null
 
   # D1 databases keyed by logical binding:
   #   db — binding DB (Takos product control-plane relational tables)

@@ -375,6 +375,33 @@ test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
   );
 });
 
+test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers", () => {
+  assert.deepEqual(
+    releaseChildEnv(
+      { cloudflare_account_id: "ts_acc_takosumi_cloud" },
+      {
+        PATH: "/bin",
+        CLOUDFLARE_API_TOKEN: "token",
+        TAKOS_CLOUDFLARE_API_BASE_URL:
+          "https://app.takosumi.com/compat/cloudflare/client/v4",
+      },
+    ),
+    {
+      PATH: "/bin",
+      CLOUDFLARE_API_TOKEN: "token",
+      TAKOS_CLOUDFLARE_API_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4",
+      CLOUDFLARE_API_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4",
+      CI: "true",
+      WRANGLER_SEND_METRICS: "false",
+      CF_API_TOKEN: "token",
+      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+    },
+  );
+});
+
 test("Cloudflare release template enables production workers.dev launch URLs", () => {
   const wranglerTemplate = readFileSync(
     new URL("../../../deploy/cloudflare/wrangler.toml", import.meta.url),
@@ -454,6 +481,42 @@ test("ensureWorkersDevSubdomain derives workers.dev URL from subdomain outputs",
   assert.equal(
     requests[0].url,
     "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test/subdomain",
+  );
+});
+
+test("ensureWorkersDevSubdomain uses configured Cloudflare-compatible API base", async () => {
+  const requests = [];
+  const result = await ensureWorkersDevSubdomain(
+    {
+      worker_name: "takos-test",
+      cloudflare_account_id: "ts_acc_takosumi_cloud",
+      launch_url: "https://takos-test.example-subdomain.workers.dev",
+    },
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_CLOUDFLARE_API_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4/",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          result: { enabled: true, previews_enabled: false },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    },
+  );
+
+  assert.deepEqual(result, {
+    skipped: false,
+    result: { enabled: true, previews_enabled: false },
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    "https://app.takosumi.com/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/subdomain",
   );
 });
 
@@ -822,6 +885,44 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
   );
 });
 
+test("verifyReleaseDeployment uses configured Cloudflare-compatible API base for artifact checks", async () => {
+  const requests = [];
+  const result = await verifyReleaseDeployment(
+    {
+      ...rawOutputs,
+      cloudflare_account_id: "ts_acc_takosumi_cloud",
+      launch_url: "https://takos-test.app.takos.jp",
+    },
+    "production",
+    {
+      CLOUDFLARE_API_TOKEN: "token_123",
+      TAKOS_CLOUDFLARE_API_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4/",
+      TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
+    },
+    async (url, init) => {
+      requests.push({ url, init });
+      if (String(url).includes("/content")) {
+        return new Response("/* real worker */\n".repeat(128), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ status: "ok" }), { status: 200 });
+    },
+  );
+
+  assert.equal(result.artifact.workerName, "takos-test");
+  assert.equal(result.health.status, 200);
+  assert.deepEqual(
+    requests.map((request) => String(request.url)),
+    [
+      "https://app.takosumi.com/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content",
+      "https://takos-test.app.takos.jp/health",
+    ],
+  );
+  assert.equal(requests[0].init.headers.authorization, "Bearer token_123");
+});
+
 test("verifyReleaseDeployment derives health URL from workers subdomain outputs", async () => {
   const requests = [];
   const result = await verifyReleaseDeployment(
@@ -984,16 +1085,22 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     new URL("../../../deploy/opentofu/outputs.tf", import.meta.url),
     "utf8",
   );
+  const rootMain = readFileSync(
+    new URL("../../../deploy/opentofu/main.tf", import.meta.url),
+    "utf8",
+  );
   const rootVariables = readFileSync(
     new URL("../../../deploy/opentofu/variables.tf", import.meta.url),
     "utf8",
   );
   assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
+  assert.match(rootMain, /app_url\s*=\s*var\.app_url/);
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_container_images"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_executor"\s*\{/);
+  assert.match(rootVariables, /variable\s+"app_url"\s*\{/);
   assert.match(rootVariables, /default\s*=\s*"operator"/);
   assert.match(
     rootVariables,
@@ -1001,6 +1108,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   );
   assert.match(rootModule, /post_apply\s*=\s*\[/);
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
+  assert.match(rootModule, /output\s+"app_url"\s*\{/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-destroy"/);
   assert.match(rootModule, /executor\s*=\s*var\.release_executor/);
@@ -1062,11 +1170,14 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   );
   assert.match(productionModule, /variable\s+"release_container_images"\s*\{/);
   assert.match(productionModule, /variable\s+"release_executor"\s*\{/);
+  assert.match(productionModule, /variable\s+"app_url"\s*\{/);
   assert.match(productionModule, /default\s*=\s*"operator"/);
   assert.match(
     productionModule,
     /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,
   );
+  assert.match(productionModule, /app_url\s*=\s*var\.app_url/);
+  assert.match(productionModule, /output\s+"app_url"\s*\{/);
   assert.match(
     productionModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,

@@ -19,12 +19,23 @@ module "takos" {
   }
 
   account_id   = var.account_id
+  app_url      = var.app_url
   project_name = "takos"
   environment  = "production"
 }
 
 variable "account_id" {
   type = string
+}
+
+variable "app_url" {
+  type    = string
+  default = null
+
+  validation {
+    condition     = var.app_url == null || can(regex("^https://[^[:space:]]+$", var.app_url))
+    error_message = "app_url must be unset or an https URL."
+  }
 }
 
 variable "release_working_directory" {
@@ -93,6 +104,10 @@ output "url" {
 
 output "launch_url" {
   value = module.takos.launch_url
+}
+
+output "app_url" {
+  value = module.takos.app_url
 }
 
 output "app_deployment" {

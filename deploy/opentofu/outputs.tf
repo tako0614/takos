@@ -21,13 +21,18 @@ output "worker_name" {
 }
 
 output "url" {
-  description = "Public URL for smoke checks when cloudflare.workers_subdomain is supplied."
+  description = "Public URL for smoke checks when app_url or cloudflare.workers_subdomain is supplied."
   value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
 }
 
 output "launch_url" {
   description = "Alias of url for Takosumi public output projection."
   value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
+}
+
+output "app_url" {
+  description = "Canonical public Takos URL projected from app_url or the derived workers.dev URL."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].app_url : null
 }
 
 output "cloudflare_workers_subdomain" {
@@ -100,6 +105,9 @@ output "takosumi_release" {
             TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
             TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
           },
+          try(var.cloudflare.api_base_url, null) == null ? {} : {
+            TAKOS_CLOUDFLARE_API_BASE_URL = var.cloudflare.api_base_url
+          },
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
           },
@@ -123,6 +131,9 @@ output "takosumi_release" {
           {
             TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
             TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
+          },
+          try(var.cloudflare.api_base_url, null) == null ? {} : {
+            TAKOS_CLOUDFLARE_API_BASE_URL = var.cloudflare.api_base_url
           },
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
