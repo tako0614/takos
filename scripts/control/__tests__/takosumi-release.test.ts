@@ -533,6 +533,14 @@ test("wranglerDeployEnv uses a deploy-only token for the final Wrangler deploy",
   assert.equal(env.CF_API_TOKEN, "containers-token");
   assert.equal(env.CLOUDFLARE_CONTAINERS_API_TOKEN, "containers-token");
   assert.equal(env.CLOUDFLARE_ACCOUNT_ID, "acc_123");
+  assert.equal(
+    env.CLOUDFLARE_API_BASE_URL,
+    "https://api.cloudflare.com/client/v4",
+  );
+  assert.equal(
+    env.TAKOS_CLOUDFLARE_API_BASE_URL,
+    "https://api.cloudflare.com/client/v4",
+  );
 });
 
 test("wranglerDeployEnv prefers explicit Takos deploy token over containers alias", () => {
@@ -552,9 +560,19 @@ test("wranglerDeployEnv leaves provider auth untouched without a deploy-only tok
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
     CF_API_TOKEN: "provider-token",
+    TAKOS_CLOUDFLARE_API_BASE_URL:
+      "https://app.takosumi.com/compat/cloudflare/client/v4",
+    CLOUDFLARE_API_BASE_URL:
+      "https://app.takosumi.com/compat/cloudflare/client/v4",
   };
 
-  assert.deepEqual(wranglerDeployEnv(input), input);
+  assert.deepEqual(wranglerDeployEnv(input), {
+    ...input,
+    TAKOS_CLOUDFLARE_API_BASE_URL: "https://api.cloudflare.com/client/v4",
+    CLOUDFLARE_API_BASE_URL: "https://api.cloudflare.com/client/v4",
+    CF_API_BASE_URL: "https://api.cloudflare.com/client/v4",
+    CLOUDFLARE_BASE_URL: "https://api.cloudflare.com/client/v4",
+  });
 });
 
 test("preflightWranglerDeployAuth skips when deploy-only token is not configured", async () => {

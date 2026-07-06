@@ -31,6 +31,7 @@ const DESTROY_COMMAND_RETRY_ATTEMPTS = 3;
 const DESTROY_COMMAND_RETRY_INTERVAL_MS = 2000;
 const BUN_INSTALL_RETRY_ATTEMPTS = 3;
 const BUN_INSTALL_RETRY_INTERVAL_MS = 2000;
+const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
 const CLOUDFLARE_API_PROXY_READY_PREFIX = "TAKOS_CLOUDFLARE_API_PROXY_READY=";
 
 function usage() {
@@ -1104,11 +1105,17 @@ export function releaseChildEnv(outputs, env = process.env) {
 }
 
 export function wranglerDeployEnv(env = process.env) {
-  const deployToken =
-    wranglerDeployToken(env);
-  if (!deployToken) return env;
-  return {
+  const deployToken = wranglerDeployToken(env);
+  const next = {
     ...env,
+    TAKOS_CLOUDFLARE_API_BASE_URL: CLOUDFLARE_API_BASE,
+    CLOUDFLARE_API_BASE_URL: CLOUDFLARE_API_BASE,
+    CF_API_BASE_URL: CLOUDFLARE_API_BASE,
+    CLOUDFLARE_BASE_URL: CLOUDFLARE_API_BASE,
+  };
+  if (!deployToken) return next;
+  return {
+    ...next,
     CLOUDFLARE_API_TOKEN: deployToken,
     CF_API_TOKEN: deployToken,
   };
@@ -1491,7 +1498,7 @@ function cloudflareApiBaseUrl(env = process.env) {
   const base =
     typeof configured === "string" && configured.trim()
       ? configured.trim()
-      : "https://api.cloudflare.com/client/v4";
+      : CLOUDFLARE_API_BASE;
   return base.replace(/\/+$/u, "");
 }
 
@@ -1958,16 +1965,16 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           ),
         );
         await timeReleaseStep(timings, "wrangler-deployment-status", () =>
-          waitForWranglerDeploymentBestEffort(outputs, environment, releaseEnv),
+          waitForWranglerDeploymentBestEffort(outputs, environment, deployEnv),
         );
         await timeReleaseStep(timings, "worker-content-verification", () =>
-          verifyCloudflareWorkerContent(outputs, environment, releaseEnv),
+          verifyCloudflareWorkerContent(outputs, environment, deployEnv),
         );
         await timeReleaseStep(timings, "workers-dev-enable", () =>
-          ensureWorkersDevSubdomain(outputs, releaseEnv),
+          ensureWorkersDevSubdomain(outputs, deployEnv),
         );
         await timeReleaseStep(timings, "public-health-check", () =>
-          verifyReleaseHealth(outputs, releaseEnv),
+          verifyReleaseHealth(outputs, deployEnv),
         );
       }
     });
