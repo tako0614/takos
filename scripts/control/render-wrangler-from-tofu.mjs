@@ -93,6 +93,7 @@ export function buildReplacements(
 
   const accountId = accountIdOverride?.trim() || read("cloudflare_account_id");
   const workerName = read("worker_name");
+  const publicUrl = optionalPublicUrl(outputs);
   const d1 = read("cloudflare_d1_database_ids"); // { db }
   const kv = read("cloudflare_kv_namespace_ids"); // { hostname_routing, rollout_health }
   const r2 = read("object_storage_buckets");
@@ -172,6 +173,9 @@ export function buildReplacements(
   if (zoneId) {
     replacements[`replace-with-${prefix}zone-id`] = zoneId;
   }
+  if (publicUrl) {
+    Object.assign(replacements, publicUrlReplacements(env, publicUrl));
+  }
   if (env === "staging") {
     // Wrangler still reads the top-level account_id when deploying an env.
     // The staging-specific CF_ACCOUNT_ID var is not enough for API routes such
@@ -179,6 +183,34 @@ export function buildReplacements(
     replacements["replace-with-account-id"] = accountId;
   }
   return replacements;
+}
+
+function optionalPublicUrl(outputs) {
+  const value = outputValue(outputs.app_url) ?? outputValue(outputs.launch_url);
+  if (typeof value !== "string" || value.trim() === "") return undefined;
+  let parsed;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    throw new Error("tofu output app_url/launch_url must be a valid URL");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error("tofu output app_url/launch_url must be an https URL");
+  }
+  return parsed;
+}
+
+function publicUrlReplacements(env, url) {
+  const host = url.hostname;
+  if (env === "staging") {
+    return {
+      "staging-admin.example.com": host,
+      "staging-app.example.com": host,
+    };
+  }
+  return {
+    "app.your-domain.example": host,
+  };
 }
 
 /** Apply { placeholder: value } literally to the wrangler.toml text. */

@@ -108,6 +108,53 @@ test("buildReplacements can render a Wrangler-only account override", () => {
   assert.equal(rawOutputs.cloudflare_account_id, "acc_123");
 });
 
+test("buildReplacements projects app_url into public Takos worker env placeholders", () => {
+  assert.deepEqual(
+    buildReplacements(
+      {
+        ...rawOutputs,
+        app_url: "https://takos-test.app.takos.jp",
+      },
+      "production",
+    )["app.your-domain.example"],
+    "takos-test.app.takos.jp",
+  );
+  assert.equal(
+    buildReplacements(
+      {
+        ...rawOutputs,
+        launch_url: "https://takos-test.app-staging.takos.jp",
+      },
+      "staging",
+    )["staging-admin.example.com"],
+    "takos-test.app-staging.takos.jp",
+  );
+  assert.equal(
+    buildReplacements(
+      {
+        ...rawOutputs,
+        launch_url: "https://takos-test.app-staging.takos.jp",
+      },
+      "staging",
+    )["staging-app.example.com"],
+    "takos-test.app-staging.takos.jp",
+  );
+});
+
+test("buildReplacements rejects non-https public launch URLs", () => {
+  assert.throws(
+    () =>
+      buildReplacements(
+        {
+          ...rawOutputs,
+          launch_url: "http://takos-test.example.com",
+        },
+        "production",
+      ),
+    /must be an https URL/,
+  );
+});
+
 test("parseTakosumiOutputsJson rejects non-object payloads", () => {
   assert.throws(() => parseTakosumiOutputsJson("[]"));
 });
