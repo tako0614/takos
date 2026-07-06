@@ -141,38 +141,9 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-[[migrations]]
-tag = "v1"
-new_classes = ["SessionDO"]
-
-[[migrations]]
-tag = "v2"
-new_classes = ["RunNotifierDO"]
-
-[[migrations]]
-tag = "v3"
-new_classes = ["RateLimiterDO"]
-
-[[migrations]]
-tag = "v4"
-new_classes = ["NotificationNotifierDO"]
-
-[[migrations]]
-tag = "v5"
-new_classes = ["RoutingDO"]
-
-[[migrations]]
-tag = "v6"
-new_sqlite_classes = [
-  "TakosRuntimeContainer",
-  "ExecutorContainerTier1",
-  "ExecutorContainerTier2",
-  "ExecutorContainerTier3",
-]
-
-# Live module exports for Durable Objects. Wrangler's upload/version metadata
-# uses these entries to associate container classes with the namespaces created
-# by the migrations above.
+# Live module exports for Durable Objects. Wrangler uses these entries for the
+# Durable Object lifecycle; do not combine them with legacy [[migrations]]
+# blocks in generated release configs.
 [exports.SessionDO]
 type = "durable-object"
 storage = "sqlite"
