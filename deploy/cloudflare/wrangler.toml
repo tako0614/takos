@@ -141,44 +141,22 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-# Live module exports for Durable Objects. Wrangler uses these entries for the
-# Durable Object lifecycle; do not combine them with legacy [[migrations]]
-# blocks in generated release configs.
-[exports.SessionDO]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.RunNotifierDO]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.NotificationNotifierDO]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.RateLimiterDO]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.RoutingDO]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.TakosRuntimeContainer]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.ExecutorContainerTier1]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.ExecutorContainerTier2]
-type = "durable-object"
-storage = "sqlite"
-
-[exports.ExecutorContainerTier3]
-type = "durable-object"
-storage = "sqlite"
+# Durable Object lifecycle. Container-backed Durable Objects must be created as
+# SQLite classes through migrations; do not replace this with [exports.*]
+# lifecycle blocks because Workers Containers are tied to DO migrations.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = [
+  "SessionDO",
+  "RunNotifierDO",
+  "NotificationNotifierDO",
+  "RateLimiterDO",
+  "RoutingDO",
+  "TakosRuntimeContainer",
+  "ExecutorContainerTier1",
+  "ExecutorContainerTier2",
+  "ExecutorContainerTier3",
+]
 
 # Runtime / executor images build from this repo's Dockerfiles. image /
 # image_build_context are wrangler-config-relative (resolved from

@@ -1127,8 +1127,10 @@ export function wranglerDeployEnv(env = process.env) {
   };
 }
 
-// Existing Workers already own their Durable Object namespaces; replaying the
-// bootstrap migration list makes Cloudflare reject the deploy before upload.
+// Durable Object migrations are the Worker artifact lifecycle source of truth.
+// Keep the migration history in normal releases; pruning exists only as an
+// explicit legacy repair knob for Workers that were created outside the current
+// wrangler lifecycle.
 export function removeExistingWorkerMigrationsFromToml(toml, environment) {
   if (environment !== "production") {
     return { toml, removed: 0 };
@@ -1207,7 +1209,7 @@ export async function pruneWranglerMigrationsForExistingWorker(
   env = process.env,
   fetchImpl = globalThis.fetch,
 ) {
-  if (env.TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS === "0") {
+  if (env.TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS !== "1") {
     return { skipped: true, reason: "disabled" };
   }
   const workerName = requireStringOutput(outputs, "worker_name");
