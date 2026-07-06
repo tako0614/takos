@@ -143,7 +143,7 @@ class_name = "ExecutorContainerTier3"
 
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["SessionDO"]
+new_classes = ["SessionDO"]
 
 [[migrations]]
 tag = "v2"
