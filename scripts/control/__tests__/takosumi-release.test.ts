@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import process from "node:process";
+import { gzipSync } from "node:zlib";
 
 import {
   buildTakosumiDestroyCommands,
@@ -427,6 +428,7 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
     readonly method: string;
     readonly url: string;
     readonly authorization: string | null;
+    readonly acceptEncoding: string | null;
     readonly workspace: string | null;
     readonly installation: string | null;
     readonly body: unknown;
@@ -439,6 +441,7 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
         method: request.method,
         url: request.url,
         authorization: request.headers.get("authorization"),
+        acceptEncoding: request.headers.get("accept-encoding"),
         workspace: request.headers.get(
           "x-takosumi-cloud-billing-workspace-id",
         ),
@@ -447,7 +450,16 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
         ),
         body: request.body ? await request.json() : undefined,
       });
-      return Response.json({ success: true, result: { id: "ok" } });
+      return new Response(
+        gzipSync(JSON.stringify({ success: true, result: { id: "ok" } })),
+        {
+          headers: {
+            "content-encoding": "gzip",
+            "content-length": "999999",
+            "content-type": "application/json",
+          },
+        },
+      );
     },
   });
   const upstreamPort = upstream.port;
@@ -486,6 +498,12 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
           },
         );
         assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-encoding"), null);
+        assert.notEqual(response.headers.get("content-length"), "999999");
+        assert.deepEqual(await response.json(), {
+          success: true,
+          result: { id: "ok" },
+        });
       },
     );
   } finally {
@@ -497,6 +515,7 @@ test("withCloudflareApiBaseProxy injects managed compat auth and release context
       method: "POST",
       url: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/queues`,
       authorization: "Bearer takmpt_test",
+      acceptEncoding: "identity",
       workspace: "space_proxy",
       installation: "inst_proxy",
       body: { queue_name: "jobs" },

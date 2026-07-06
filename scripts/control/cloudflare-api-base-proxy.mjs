@@ -71,7 +71,7 @@ async function proxyRequest(request) {
   return new Response(upstream.body, {
     status: upstream.status,
     statusText: upstream.statusText,
-    headers: upstream.headers,
+    headers: downstreamHeaders(upstream.headers),
   });
 }
 
@@ -79,9 +79,29 @@ function upstreamHeaders(source) {
   const headers = new Headers(source);
   headers.delete("host");
   headers.delete("content-length");
+  headers.set("accept-encoding", "identity");
   headers.set("authorization", `Bearer ${apiToken}`);
   for (const [name, value] of Object.entries(contextHeaders)) {
     headers.set(name, value);
+  }
+  return headers;
+}
+
+function downstreamHeaders(source) {
+  const headers = new Headers(source);
+  for (const name of [
+    "connection",
+    "content-encoding",
+    "content-length",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+  ]) {
+    headers.delete(name);
   }
   return headers;
 }
