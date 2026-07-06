@@ -170,6 +170,45 @@ new_sqlite_classes = [
   "ExecutorContainerTier3",
 ]
 
+# Live module exports for Durable Objects. Wrangler's upload/version metadata
+# uses these entries to associate container classes with the namespaces created
+# by the migrations above.
+[exports.SessionDO]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.RunNotifierDO]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.NotificationNotifierDO]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.RateLimiterDO]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.RoutingDO]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.TakosRuntimeContainer]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.ExecutorContainerTier1]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.ExecutorContainerTier2]
+type = "durable-object"
+storage = "sqlite"
+
+[exports.ExecutorContainerTier3]
+type = "durable-object"
+storage = "sqlite"
+
 # Runtime / executor images build from this repo's Dockerfiles. image /
 # image_build_context are wrangler-config-relative (resolved from
 # takos/deploy/cloudflare). Before deploying, build each container's dist/ so
