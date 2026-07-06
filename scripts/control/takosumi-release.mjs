@@ -516,10 +516,7 @@ export function isSupportedCloudflareContainerImageRef(image) {
 }
 
 function wranglerEnvironmentArgs(environment) {
-  // The release config contains [env.staging]. Wrangler warns, and can route
-  // follow-up API checks ambiguously, when production deploys omit --env.
-  // An empty env explicitly targets the top-level production environment.
-  return environment === "staging" ? ["--env", "staging"] : ["--env", ""];
+  return environment === "staging" ? ["--env", "staging"] : [];
 }
 
 function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
