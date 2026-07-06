@@ -71,6 +71,13 @@ Optional env:
   TAKOS_CLOUDFLARE_API_BASE_URL           Optional Cloudflare-compatible API
                                           base URL used by managed compat
                                           release helper steps.
+  TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN
+                                          Optional token used only for the
+                                          final wrangler deploy step. Use this
+                                          or CLOUDFLARE_CONTAINERS_API_TOKEN
+                                          when Cloudflare Containers require a
+                                          narrower deploy-capable token than
+                                          the Provider Connection token.
   TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES Set to 1/true for hosted/operator
                                           materializers that must consume Git
                                           CI images and must not build
@@ -1001,6 +1008,18 @@ export function releaseChildEnv(outputs, env = process.env) {
   };
 }
 
+export function wranglerDeployEnv(env = process.env) {
+  const deployToken =
+    stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN) ??
+    stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN);
+  if (!deployToken) return env;
+  return {
+    ...env,
+    CLOUDFLARE_API_TOKEN: deployToken,
+    CF_API_TOKEN: deployToken,
+  };
+}
+
 export function releaseContextHeaders(env = process.env) {
   const context = parseReleaseContext(env.TAKOSUMI_RELEASE_CONTEXT_JSON);
   const installation =
@@ -1628,7 +1647,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             wranglerDeployArgs(outputs, environment, {
               containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
             }),
-            releaseEnv,
+            wranglerDeployEnv(releaseEnv),
           ),
         );
         await timeReleaseStep(timings, "wrangler-deployment-status", () =>

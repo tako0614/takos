@@ -118,6 +118,14 @@ while still failing container registry operations with `ApiError: Forbidden`;
 the release workflow preflights this before running any image matrix job, so a
 registry permission gap does not publish partial release artifacts.
 
+Hosted Takosumi release activation also needs the operator-held containers token
+when `release_containers_rollout` is `immediate` or `gradual`. Forward
+`CLOUDFLARE_CONTAINERS_API_TOKEN` through the release activator command env
+allowlist; `scripts/control/takosumi-release.mjs` uses it only for the final
+`wrangler deploy` step. The normal Provider Connection token remains the
+credential for OpenTofu, D1 migrations, workers.dev enablement, and verification
+calls.
+
 Because the Takos Worker imports Takosumi source modules at build time, the
 release command first looks for a sibling Takosumi checkout. If the restored
 runner source snapshot does not contain one, it clones the non-secret

@@ -31,6 +31,7 @@ import {
   waitForWranglerDeployment,
   waitForWranglerDeploymentBestEffort,
   withCloudflareApiBaseProxy,
+  wranglerDeployEnv,
 } from "../takosumi-release.mjs";
 import { applyReleaseContainerImagesToToml } from "../apply-release-container-images.mjs";
 
@@ -378,6 +379,43 @@ test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
       CLOUDFLARE_ACCOUNT_ID: "acc_from_outputs",
     },
   );
+});
+
+test("wranglerDeployEnv uses a deploy-only token for the final Wrangler deploy", () => {
+  const env = wranglerDeployEnv({
+    PATH: "/bin",
+    CLOUDFLARE_API_TOKEN: "provider-token",
+    CF_API_TOKEN: "provider-token",
+    CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-token",
+    CLOUDFLARE_ACCOUNT_ID: "acc_123",
+  });
+
+  assert.equal(env.CLOUDFLARE_API_TOKEN, "containers-token");
+  assert.equal(env.CF_API_TOKEN, "containers-token");
+  assert.equal(env.CLOUDFLARE_CONTAINERS_API_TOKEN, "containers-token");
+  assert.equal(env.CLOUDFLARE_ACCOUNT_ID, "acc_123");
+});
+
+test("wranglerDeployEnv prefers explicit Takos deploy token over containers alias", () => {
+  const env = wranglerDeployEnv({
+    PATH: "/bin",
+    CLOUDFLARE_API_TOKEN: "provider-token",
+    CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-token",
+    TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN: "deploy-token",
+  });
+
+  assert.equal(env.CLOUDFLARE_API_TOKEN, "deploy-token");
+  assert.equal(env.CF_API_TOKEN, "deploy-token");
+});
+
+test("wranglerDeployEnv leaves provider auth untouched without a deploy-only token", () => {
+  const input = {
+    PATH: "/bin",
+    CLOUDFLARE_API_TOKEN: "provider-token",
+    CF_API_TOKEN: "provider-token",
+  };
+
+  assert.deepEqual(wranglerDeployEnv(input), input);
 });
 
 test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers", () => {
