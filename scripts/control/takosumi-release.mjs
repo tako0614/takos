@@ -281,6 +281,10 @@ export function releaseWranglerConfigPath(environment) {
   return `deploy/cloudflare/.takos-release-wrangler.${environment}.toml`;
 }
 
+export function releaseD1MigrationsWranglerConfigPath(environment) {
+  return `deploy/cloudflare/.takos-release-wrangler.${environment}.d1-migrations.toml`;
+}
+
 export function buildTakosumiReleaseCommands(
   outputs,
   environment,
@@ -312,6 +316,8 @@ export function buildTakosumiReleaseCommands(
   const wranglerEnvArgs = wranglerEnvironmentArgs(environment);
   const releaseSecretsFile = releaseSecretsFilePath(environment);
   const releaseWranglerConfig = releaseWranglerConfigPath(environment);
+  const releaseD1WranglerConfig =
+    releaseD1MigrationsWranglerConfigPath(environment);
   const renderArgs = [
     "bun",
     "scripts/control/render-wrangler-from-tofu.mjs",
@@ -357,7 +363,7 @@ export function buildTakosumiReleaseCommands(
           "DB",
           "--remote",
           "--config",
-          releaseWranglerConfig,
+          releaseD1WranglerConfig,
           ...wranglerEnvArgs,
         ]),
       ];
@@ -1150,6 +1156,51 @@ export function removeExistingWorkerMigrationsFromToml(toml, environment) {
   return { toml: output.join("\n"), removed };
 }
 
+export function removeWranglerDurableObjectLifecycleFromToml(toml) {
+  const lines = toml.split("\n");
+  const output = [];
+  let removedMigrations = 0;
+  let removedExports = 0;
+  for (let index = 0; index < lines.length; ) {
+    const line = lines[index] ?? "";
+    if (/^\s*\[\[migrations\]\]\s*$/u.test(line)) {
+      removedMigrations += 1;
+      index += 1;
+      while (index < lines.length && !/^\s*\[/.test(lines[index] ?? "")) {
+        index += 1;
+      }
+      continue;
+    }
+    if (/^\s*\[exports\.[^\]]+\]\s*$/u.test(line)) {
+      removedExports += 1;
+      index += 1;
+      while (index < lines.length && !/^\s*\[/.test(lines[index] ?? "")) {
+        index += 1;
+      }
+      continue;
+    }
+    output.push(line);
+    index += 1;
+  }
+  return {
+    toml: output.join("\n"),
+    removedMigrations,
+    removedExports,
+  };
+}
+
+export function writeD1MigrationsWranglerConfig(environment) {
+  const sourcePath = releaseWranglerConfigPath(environment);
+  const d1Path = releaseD1MigrationsWranglerConfigPath(environment);
+  const source = readFileSync(sourcePath, "utf8");
+  const result = removeWranglerDurableObjectLifecycleFromToml(source);
+  writeFileSync(d1Path, result.toml);
+  console.log(
+    `Wrote D1 migrations wrangler config ${d1Path} without ${result.removedMigrations} Durable Object migration block(s) and ${result.removedExports} export block(s).`,
+  );
+  return { path: d1Path, ...result };
+}
+
 export async function pruneWranglerMigrationsForExistingWorker(
   outputs,
   environment,
@@ -1890,6 +1941,12 @@ function cleanupReleaseWranglerConfig(environment) {
   unlinkSync(path);
 }
 
+function cleanupReleaseD1MigrationsWranglerConfig(environment) {
+  const path = resolve(releaseD1MigrationsWranglerConfigPath(environment));
+  if (!existsSync(path)) return;
+  unlinkSync(path);
+}
+
 export async function main(argv = process.argv.slice(2), env = process.env) {
   const { environment, debug, destroy } = parseReleaseArgs(argv);
   const timings = [];
@@ -1949,6 +2006,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             ),
           );
         }
+        if (!destroy && stepName === "build-worker") {
+          await timeReleaseStep(timings, "d1-wrangler-config", () =>
+            writeD1MigrationsWranglerConfig(environment),
+          );
+        }
       }
       if (!destroy) {
         const deployEnv = wranglerDeployEnv(releaseEnv);
@@ -1985,6 +2047,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     if (!destroy) {
       cleanupReleaseSecretsFile(environment);
       cleanupReleaseWranglerConfig(environment);
+      cleanupReleaseD1MigrationsWranglerConfig(environment);
     }
     emitReleaseTimingSummary(
       releaseTimingSummary({

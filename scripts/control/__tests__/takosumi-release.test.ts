@@ -25,12 +25,14 @@ import {
   normalizeReleaseContainerImages,
   preflightWranglerDeployAuth,
   pruneWranglerMigrationsForExistingWorker,
+  releaseD1MigrationsWranglerConfigPath,
   releaseContextHeaders,
   releaseChildEnv,
   releaseWranglerAccountId,
   releaseCommandStepName,
   readReleaseOutputs,
   removeExistingWorkerMigrationsFromToml,
+  removeWranglerDurableObjectLifecycleFromToml,
   verifyReleaseDeployment,
   waitForWranglerDeployment,
   waitForWranglerDeploymentBestEffort,
@@ -61,6 +63,10 @@ const productionWranglerConfig =
   "deploy/cloudflare/.takos-release-wrangler.production.toml";
 const stagingWranglerConfig =
   "deploy/cloudflare/.takos-release-wrangler.staging.toml";
+const productionD1WranglerConfig =
+  "deploy/cloudflare/.takos-release-wrangler.production.d1-migrations.toml";
+const stagingD1WranglerConfig =
+  "deploy/cloudflare/.takos-release-wrangler.staging.d1-migrations.toml";
 const runtimeImage =
   "registry.cloudflare.com/acc_123/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const executorImage =
@@ -77,7 +83,7 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
       "'bun' 'install' '--frozen-lockfile'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
-      `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}'`,
+      `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionD1WranglerConfig}'`,
       `'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' '${productionWranglerConfig}' '--secrets-file' '.takos-release-secrets.production.json'`,
       `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env' ''`,
     ],
@@ -95,7 +101,7 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
       "'bun' 'install' '--frozen-lockfile'",
       "'bun' 'run' 'build' '--mode' 'staging-debug'",
       "'bun' 'run' 'containers:build'",
-      `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${stagingWranglerConfig}' '--env' 'staging'`,
+      `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${stagingD1WranglerConfig}' '--env' 'staging'`,
       `'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' '${stagingWranglerConfig}' '--secrets-file' '.takos-release-secrets.staging.json'`,
       `'bunx' 'wrangler' 'deploy' '--config' '${stagingWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.staging.json' '--env' 'staging'`,
     ],
@@ -144,7 +150,7 @@ test("buildTakosumiReleaseCommands uses prebuilt CI container images when suppli
     "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
     "'bun' 'install' '--frozen-lockfile'",
     "'bun' 'run' 'build'",
-    `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionWranglerConfig}'`,
+    `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionD1WranglerConfig}'`,
     `'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' '${productionWranglerConfig}' '--secrets-file' '.takos-release-secrets.production.json'`,
     `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env' ''`,
   ]);
@@ -179,6 +185,48 @@ test("removeExistingWorkerMigrationsFromToml prunes only production migration bl
   assert.doesNotMatch(result.toml, /\[\[migrations\]\]/);
   assert.match(result.toml, /\[\[containers\]\]/);
   assert.match(result.toml, /\[env\.staging\]/);
+});
+
+test("removeWranglerDurableObjectLifecycleFromToml creates a D1-only config without touching bindings", () => {
+  const input = [
+    'name = "takos"',
+    "",
+    "[[durable_objects.bindings]]",
+    'name = "SESSION_DO"',
+    'class_name = "SessionDO"',
+    "",
+    "[[migrations]]",
+    'tag = "v1"',
+    'new_classes = ["SessionDO"]',
+    "",
+    "[exports.SessionDO]",
+    'type = "durable-object"',
+    'storage = "sqlite"',
+    "",
+    "[[d1_databases]]",
+    'binding = "DB"',
+    'database_name = "takos-db"',
+    "",
+    "[env.staging]",
+    'name = "takos-staging"',
+  ].join("\n");
+
+  const result = removeWranglerDurableObjectLifecycleFromToml(input);
+
+  assert.equal(result.removedMigrations, 1);
+  assert.equal(result.removedExports, 1);
+  assert.doesNotMatch(result.toml, /\[\[migrations\]\]/);
+  assert.doesNotMatch(result.toml, /\[exports\./);
+  assert.match(result.toml, /\[\[durable_objects\.bindings\]\]/);
+  assert.match(result.toml, /\[\[d1_databases\]\]/);
+  assert.match(result.toml, /\[env\.staging\]/);
+});
+
+test("releaseD1MigrationsWranglerConfigPath is isolated from the deploy config", () => {
+  assert.equal(
+    releaseD1MigrationsWranglerConfigPath("production"),
+    productionD1WranglerConfig,
+  );
 });
 
 test("pruneWranglerMigrationsForExistingWorker leaves fresh workers untouched", async () => {
