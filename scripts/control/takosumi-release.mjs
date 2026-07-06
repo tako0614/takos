@@ -530,6 +530,10 @@ function wranglerEnvironmentArgs(environment) {
   return environment === "staging" ? ["--env", "staging"] : [];
 }
 
+function wranglerDeployEnvironmentArgs(environment) {
+  return environment === "staging" ? ["--env", "staging"] : ["--env", ""];
+}
+
 function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
   const workerName = requireStringOutput(outputs, "worker_name");
   return [
@@ -541,7 +545,7 @@ function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
     workerName,
     "--secrets-file",
     releaseSecretsFilePath(environment),
-    ...wranglerEnvironmentArgs(environment),
+    ...wranglerDeployEnvironmentArgs(environment),
     ...(containersRollout ? ["--containers-rollout", containersRollout] : []),
   ];
 }
