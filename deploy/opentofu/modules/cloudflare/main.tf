@@ -86,6 +86,10 @@ resource "cloudflare_d1_database" "this" {
   for_each   = local.d1_databases
   account_id = var.account_id
   name       = each.value
+
+  read_replication = {
+    mode = "disabled"
+  }
 }
 
 # KV namespaces — bindings HOSTNAME_ROUTING, ROLLOUT_HEALTH_KV
