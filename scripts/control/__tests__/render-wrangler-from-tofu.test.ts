@@ -8,6 +8,7 @@ import {
   parseArgs,
   parseTakosumiOutputsJson,
   renderContainerApplicationNames,
+  renderPublicRoute,
 } from "../render-wrangler-from-tofu.mjs";
 
 const rawOutputs = {
@@ -155,6 +156,89 @@ test("buildReplacements rejects non-https public launch URLs", () => {
       ),
     /must be an https URL/,
   );
+});
+
+test("renderPublicRoute adds a production route from non-workers.dev app_url", () => {
+  const toml = [
+    'name = "takos-test"',
+    "workers_dev = true",
+    "",
+    "[[services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "takos-test"',
+    "",
+  ].join("\n");
+
+  const rendered = renderPublicRoute(
+    toml,
+    "production",
+    {
+      ...rawOutputs,
+      app_url: "https://takos-test.app.takos.jp",
+    },
+    { zoneId: "zone_123" },
+  );
+
+  assert.match(
+    rendered,
+    /\[\[routes\]\]\npattern = "takos-test\.app\.takos\.jp\/\*"\nzone_id = "zone_123"/,
+  );
+});
+
+test("renderPublicRoute adds a staging route only inside env.staging", () => {
+  const toml = [
+    'name = "takos-test"',
+    "workers_dev = true",
+    "",
+    "[[services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "takos-test"',
+    "",
+    "[env.staging]",
+    'name = "takos-test-staging"',
+    "workers_dev = true",
+    "",
+    "[[env.staging.services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "takos-test-staging"',
+    "",
+  ].join("\n");
+
+  const rendered = renderPublicRoute(toml, "staging", {
+    ...rawOutputs,
+    launch_url: "https://takos-test.app-staging.takos.jp",
+  });
+
+  assert.doesNotMatch(rendered, /\[\[routes\]\]/);
+  assert.match(
+    rendered,
+    /\[\[env\.staging\.routes\]\]\npattern = "takos-test\.app-staging\.takos\.jp\/\*"/,
+  );
+});
+
+test("renderPublicRoute strips stale generated routes and skips workers.dev", () => {
+  const toml = [
+    'name = "takos-test"',
+    "workers_dev = true",
+    "",
+    "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE",
+    "[[routes]]",
+    'pattern = "old.example.com/*"',
+    "# END TAKOSUMI GENERATED PUBLIC ROUTE",
+    "",
+    "[[services]]",
+    'binding = "TAKOS_EGRESS"',
+    'service = "takos-test"',
+    "",
+  ].join("\n");
+
+  const rendered = renderPublicRoute(toml, "production", {
+    ...rawOutputs,
+    launch_url: "https://takos-test.example-subdomain.workers.dev",
+  });
+
+  assert.doesNotMatch(rendered, /old\.example\.com/);
+  assert.doesNotMatch(rendered, /\[\[routes\]\]/);
 });
 
 test("parseTakosumiOutputsJson rejects non-object payloads", () => {

@@ -219,6 +219,58 @@ function publicUrlReplacements(env, url) {
   };
 }
 
+function publicRouteForOutputs(outputs, zoneId) {
+  const publicUrl = optionalPublicUrl(outputs);
+  if (!publicUrl) return undefined;
+  if (publicUrl.hostname.endsWith(".workers.dev")) return undefined;
+  return {
+    pattern: `${publicUrl.hostname}/*`,
+    ...(zoneId ? { zoneId } : {}),
+  };
+}
+
+const GENERATED_PUBLIC_ROUTE_BEGIN = "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE";
+const GENERATED_PUBLIC_ROUTE_END = "# END TAKOSUMI GENERATED PUBLIC ROUTE";
+
+function generatedPublicRouteBlock(env, route) {
+  const header = env === "staging" ? "[[env.staging.routes]]" : "[[routes]]";
+  return [
+    GENERATED_PUBLIC_ROUTE_BEGIN,
+    "# Generated from OpenTofu app_url/launch_url during Takos release activation.",
+    header,
+    `pattern = ${tomlString(route.pattern)}`,
+    ...(route.zoneId ? [`zone_id = ${tomlString(route.zoneId)}`] : []),
+    GENERATED_PUBLIC_ROUTE_END,
+  ].join("\n");
+}
+
+function stripGeneratedPublicRoutes(toml) {
+  const pattern = new RegExp(
+    `\\n?${GENERATED_PUBLIC_ROUTE_BEGIN.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}[\\s\\S]*?${GENERATED_PUBLIC_ROUTE_END.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\n?`,
+    "gu",
+  );
+  return toml.replace(pattern, "\n");
+}
+
+export function renderPublicRoute(toml, env, outputs, { zoneId } = {}) {
+  const route = publicRouteForOutputs(outputs, zoneId);
+  const withoutGeneratedRoutes = stripGeneratedPublicRoutes(toml);
+  if (!route) return withoutGeneratedRoutes;
+
+  const block = generatedPublicRouteBlock(env, route);
+  if (env === "production") {
+    return withoutGeneratedRoutes.replace(
+      /^workers_dev\s*=\s*(?:true|false)\s*$/mu,
+      (line) => `${line}\n\n${block}`,
+    );
+  }
+
+  return withoutGeneratedRoutes.replace(
+    /(\n\[env\.staging\]\n[\s\S]*?^workers_dev\s*=\s*(?:true|false)\s*$)/mu,
+    (match) => `${match}\n\n${block}`,
+  );
+}
+
 /** Apply { placeholder: value } literally to the wrangler.toml text. */
 export function applyReplacements(toml, replacements) {
   let next = toml;
@@ -491,7 +543,8 @@ export function main(argv = process.argv.slice(2)) {
     missing,
   } = applyReplacements(toml, replacements);
   const renderedToml = renderContainerApplicationNames(next, env, workerName);
-  assertRenderedWorkerTarget(renderedToml, env, workerName);
+  const routedToml = renderPublicRoute(renderedToml, env, outputs, { zoneId });
+  assertRenderedWorkerTarget(routedToml, env, workerName);
 
   for (const { placeholder, value } of applied) {
     console.log(`  ${placeholder} -> ${value}`);
@@ -506,7 +559,7 @@ export function main(argv = process.argv.slice(2)) {
       env === "staging"
         ? "replace-with-staging-zone-id"
         : "replace-with-zone-id";
-    if (renderedToml.includes(zonePlaceholder)) {
+    if (routedToml.includes(zonePlaceholder)) {
       console.log(
         `\nNOTE: ${zonePlaceholder} is unset. The module does not manage your DNS zone; ` +
           `re-run with --zone-id <id> or fill CF_ZONE_ID by hand.`,
@@ -518,7 +571,7 @@ export function main(argv = process.argv.slice(2)) {
     console.log(`\n--dry-run: ${targetPath} not written.`);
     return;
   }
-  writeFileSync(targetPath, renderedToml);
+  writeFileSync(targetPath, routedToml);
   console.log(`\nWrote ${applied.length} replacement(s) to ${targetPath}.`);
 }
 
