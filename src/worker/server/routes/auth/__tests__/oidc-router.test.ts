@@ -349,6 +349,7 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
     assertEquals(response.status, 302);
     assertEquals(response.headers.get("location"), "/setup");
     const setCookies = response.headers.getSetCookie();
+    assertEquals(setCookies[0]?.startsWith("__Host-tp_session="), true);
     assertEquals(
       setCookies.some((cookie) => cookie.startsWith("__Host-tp_session=")),
       true,

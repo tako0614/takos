@@ -423,13 +423,16 @@ authOidcRouter.get("/oidc/callback", async (c) => {
       ? sanitizeReturnTo(oidcState.return_to)
       : "/setup",
   });
-  // Clear the single-use state cookie and install the session cookie. A raw
-  // Response bypasses the c.header(...) clear set above, so append it here.
-  successHeaders.append("Set-Cookie", clearOIDCStateCookie());
+  // Install the session cookie before clearing the single-use state cookie.
+  // Some dispatch/service-binding runtimes only expose the first Set-Cookie
+  // across a Worker boundary; login must keep working even in that degraded
+  // transport.
   successHeaders.append(
     "Set-Cookie",
     setSessionCookie(session.id, SESSION_MAX_AGE_SECONDS),
   );
+  // A raw Response bypasses the c.header(...) clear set above, so append it here.
+  successHeaders.append("Set-Cookie", clearOIDCStateCookie());
 
   return new Response(null, {
     status: 302,
