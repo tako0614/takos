@@ -1114,12 +1114,13 @@ export function releaseChildEnv(outputs, env = process.env) {
 
 export function wranglerDeployEnv(env = process.env) {
   const deployToken = wranglerDeployToken(env);
+  const apiBase = cloudflareApiBaseUrl(env);
   const next = {
     ...env,
-    TAKOS_CLOUDFLARE_API_BASE_URL: CLOUDFLARE_API_BASE,
-    CLOUDFLARE_API_BASE_URL: CLOUDFLARE_API_BASE,
-    CF_API_BASE_URL: CLOUDFLARE_API_BASE,
-    CLOUDFLARE_BASE_URL: CLOUDFLARE_API_BASE,
+    TAKOS_CLOUDFLARE_API_BASE_URL: apiBase,
+    CLOUDFLARE_API_BASE_URL: apiBase,
+    CF_API_BASE_URL: apiBase,
+    CLOUDFLARE_BASE_URL: apiBase,
   };
   if (!deployToken) return next;
   return {

@@ -614,23 +614,41 @@ test("wranglerDeployEnv prefers explicit Takos deploy token over containers alia
 });
 
 test("wranglerDeployEnv leaves provider auth untouched without a deploy-only token", () => {
+  const compatBase = "https://app.takosumi.com/compat/cloudflare/client/v4";
   const input = {
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
     CF_API_TOKEN: "provider-token",
-    TAKOS_CLOUDFLARE_API_BASE_URL:
-      "https://app.takosumi.com/compat/cloudflare/client/v4",
-    CLOUDFLARE_API_BASE_URL:
-      "https://app.takosumi.com/compat/cloudflare/client/v4",
+    TAKOS_CLOUDFLARE_API_BASE_URL: compatBase,
+    CLOUDFLARE_API_BASE_URL: compatBase,
   };
 
   assert.deepEqual(wranglerDeployEnv(input), {
     ...input,
-    TAKOS_CLOUDFLARE_API_BASE_URL: "https://api.cloudflare.com/client/v4",
-    CLOUDFLARE_API_BASE_URL: "https://api.cloudflare.com/client/v4",
-    CF_API_BASE_URL: "https://api.cloudflare.com/client/v4",
-    CLOUDFLARE_BASE_URL: "https://api.cloudflare.com/client/v4",
+    TAKOS_CLOUDFLARE_API_BASE_URL: compatBase,
+    CLOUDFLARE_API_BASE_URL: compatBase,
+    CF_API_BASE_URL: compatBase,
+    CLOUDFLARE_BASE_URL: compatBase,
   });
+});
+
+test("wranglerDeployEnv preserves a managed compat proxy for final Wrangler deploy", () => {
+  const proxyBase = "http://127.0.0.1:45871";
+  const env = wranglerDeployEnv({
+    PATH: "/bin",
+    CLOUDFLARE_API_TOKEN: "provider-token",
+    CF_API_TOKEN: "provider-token",
+    CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-token",
+    TAKOS_CLOUDFLARE_API_BASE_URL: proxyBase,
+    CLOUDFLARE_API_BASE_URL: proxyBase,
+  });
+
+  assert.equal(env.CLOUDFLARE_API_TOKEN, "containers-token");
+  assert.equal(env.CF_API_TOKEN, "containers-token");
+  assert.equal(env.TAKOS_CLOUDFLARE_API_BASE_URL, proxyBase);
+  assert.equal(env.CLOUDFLARE_API_BASE_URL, proxyBase);
+  assert.equal(env.CF_API_BASE_URL, proxyBase);
+  assert.equal(env.CLOUDFLARE_BASE_URL, proxyBase);
 });
 
 test("preflightWranglerDeployAuth skips when deploy-only token is not configured", async () => {
