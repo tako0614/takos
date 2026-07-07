@@ -175,9 +175,8 @@ output "takosumi_release" {
         timeout_seconds   = 1200
         env = merge(
           {
-            TAKOS_RELEASE_TAKOSUMI_REPO_URL                = var.takosumi_source_repo_url
-            TAKOS_RELEASE_TAKOSUMI_REF                     = var.takosumi_source_ref
-            TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS = "1"
+            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
           },
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
@@ -200,9 +199,8 @@ output "takosumi_release" {
         timeout_seconds   = 600
         env = merge(
           {
-            TAKOS_RELEASE_TAKOSUMI_REPO_URL                = var.takosumi_source_repo_url
-            TAKOS_RELEASE_TAKOSUMI_REF                     = var.takosumi_source_ref
-            TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS = "1"
+            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
+            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
           },
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout

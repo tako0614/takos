@@ -1791,9 +1791,9 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     rootModule,
     /TAKOS_RELEASE_TAKOSUMI_REF\s*=\s*var\.takosumi_source_ref/,
   );
-  assert.match(
+  assert.doesNotMatch(
     rootModule,
-    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS\s*=\s*"1"/,
+    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS/,
   );
   assert.match(
     rootModule,
@@ -1870,9 +1870,9 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     productionModule,
     /TAKOS_RELEASE_TAKOSUMI_REF\s*=\s*var\.takosumi_source_ref/,
   );
-  assert.match(
+  assert.doesNotMatch(
     productionModule,
-    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS\s*=\s*"1"/,
+    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS/,
   );
   assert.match(
     productionModule,
