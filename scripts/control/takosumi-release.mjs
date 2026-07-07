@@ -1138,10 +1138,13 @@ export function wranglerDeployEnv(env = process.env) {
   };
 }
 
-// Durable Object migrations are the Worker artifact lifecycle source of truth.
-// Keep the migration history in normal releases; pruning exists only as an
-// explicit legacy repair knob for Workers that were created outside the current
-// wrangler lifecycle.
+// Durable Object migrations are the fresh Worker artifact lifecycle source of
+// truth. Once a Worker already exists, Wrangler must not replay bootstrap
+// `new_classes` / `new_sqlite_classes` migrations for classes Cloudflare has
+// already materialized. The release command therefore probes the target Worker
+// after rendering and strips only the deploy-time migration blocks for existing
+// Workers. The checked-in wrangler.toml and OpenTofu module remain the source of
+// truth for first deploys.
 export function removeExistingWorkerMigrationsFromToml(toml, environment) {
   if (environment !== "production") {
     return { toml, removed: 0 };
@@ -1243,9 +1246,6 @@ export async function pruneWranglerMigrationsForExistingWorker(
   env = process.env,
   fetchImpl = globalThis.fetch,
 ) {
-  if (env.TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS !== "1") {
-    return { skipped: true, reason: "disabled" };
-  }
   const workerName = requireStringOutput(outputs, "worker_name");
   const accountId = releaseWranglerAccountId(outputs, env);
   const apiToken = wranglerDeployToken(env) ?? releaseApiToken(env);

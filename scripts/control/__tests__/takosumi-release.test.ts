@@ -243,7 +243,7 @@ test("releaseD1MigrationsWranglerConfigPath is isolated from the deploy config",
   );
 });
 
-test("pruneWranglerMigrationsForExistingWorker is disabled by default", async () => {
+test("pruneWranglerMigrationsForExistingWorker keeps bootstrap migrations for new workers", async () => {
   const dir = mkdtempSync(resolve(tmpdir(), "takos-release-migrations-"));
   const oldCwd = process.cwd();
   try {
@@ -269,16 +269,23 @@ test("pruneWranglerMigrationsForExistingWorker is disabled by default", async ()
         CLOUDFLARE_API_TOKEN: "token",
         CLOUDFLARE_ACCOUNT_ID: "acc_123",
       },
-      async () => {
-        throw new Error(
-          "should not probe Cloudflare unless explicitly enabled",
+      async (url, init) => {
+        assert.equal(
+          String(url),
+          "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/scripts/takos-test",
         );
+        assert.equal(
+          new Headers(init?.headers).get("authorization"),
+          "Bearer token",
+        );
+        return new Response("not found", { status: 404 });
       },
     );
 
     assert.deepEqual(result, {
       skipped: true,
-      reason: "disabled",
+      reason: "worker_not_found",
+      status: 404,
     });
     assert.match(readFileSync(path, "utf8"), /\[\[migrations\]\]/);
   } finally {
@@ -315,7 +322,6 @@ test("pruneWranglerMigrationsForExistingWorker removes bootstrap migrations for 
       {
         CLOUDFLARE_API_TOKEN: "token",
         CLOUDFLARE_ACCOUNT_ID: "acc_123",
-        TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS: "1",
       },
       async (url, init) => {
         assert.equal(
