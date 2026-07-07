@@ -15,6 +15,17 @@ variable "project_name" {
   default     = "takos"
 }
 
+variable "worker_name" {
+  description = "Optional public Worker/script subdomain label. When unset, project_name is used."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.worker_name == null || trimspace(var.worker_name) == "" || can(regex("^[a-z0-9][a-z0-9-]{0,62}$", trimspace(var.worker_name)))
+    error_message = "worker_name must be unset or a lowercase DNS label using letters, numbers, and hyphens."
+  }
+}
+
 variable "environment" {
   description = "Deployment environment name."
   type        = string
