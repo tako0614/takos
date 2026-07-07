@@ -1152,7 +1152,7 @@ export function removeExistingWorkerMigrationsFromToml(toml, environment) {
   const lines = toml.split("\n");
   const output = [];
   let removed = 0;
-  for (let index = 0; index < lines.length; ) {
+  for (let index = 0; index < lines.length;) {
     const line = lines[index] ?? "";
     if (/^\s*\[env\.[^\]]+\]\s*$/u.test(line)) {
       output.push(...lines.slice(index));
@@ -1178,7 +1178,7 @@ export function removeWranglerDurableObjectLifecycleFromToml(toml) {
   const output = [];
   let removedMigrations = 0;
   let removedExports = 0;
-  for (let index = 0; index < lines.length; ) {
+  for (let index = 0; index < lines.length;) {
     const line = lines[index] ?? "";
     if (/^\s*\[\[migrations\]\]\s*$/u.test(line)) {
       removedMigrations += 1;
@@ -1224,6 +1224,28 @@ function stripGeneratedPublicRouteBlocks(toml) {
   };
 }
 
+export function removeWranglerQueueConsumerTriggersFromToml(toml) {
+  const lines = toml.split("\n");
+  const output = [];
+  let removed = 0;
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index] ?? "";
+    if (
+      /^\s*\[\[(?:env\.[A-Za-z0-9_-]+\.)?queues\.consumers\]\]\s*$/u.test(line)
+    ) {
+      removed += 1;
+      index += 1;
+      while (index < lines.length && !/^\s*\[/.test(lines[index] ?? "")) {
+        index += 1;
+      }
+      continue;
+    }
+    output.push(line);
+    index += 1;
+  }
+  return { toml: output.join("\n"), removed };
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -1238,6 +1260,20 @@ export function writeD1MigrationsWranglerConfig(environment) {
     `Wrote D1 migrations wrangler config ${d1Path} without ${result.removedMigrations} Durable Object migration block(s), ${result.removedExports} export block(s), and ${result.removedRoutes} generated route block(s).`,
   );
   return { path: d1Path, ...result };
+}
+
+export function pruneWranglerQueueConsumersForRelease(environment) {
+  const path = releaseWranglerConfigPath(environment);
+  const source = readFileSync(path, "utf8");
+  const result = removeWranglerQueueConsumerTriggersFromToml(source);
+  if (result.removed === 0) {
+    return { skipped: true, reason: "no_queue_consumers" };
+  }
+  writeFileSync(path, result.toml);
+  console.log(
+    `Pruned ${result.removed} Queue consumer trigger block(s) from ${path}; release activation reconciles them after Worker deploy.`,
+  );
+  return { skipped: false, removed: result.removed };
 }
 
 export async function pruneWranglerMigrationsForExistingWorker(
@@ -1400,19 +1436,17 @@ function wranglerDeployOutputAuthChecks(accountId, outputs) {
   return checks;
 }
 
-async function preflightCloudflareApiAccess(
-  check,
-  env,
-  apiToken,
-  fetchImpl,
-) {
-  const response = await fetchImpl(`${cloudflareApiBaseUrl(env)}${check.path}`, {
-    method: "GET",
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      accept: "application/json",
+async function preflightCloudflareApiAccess(check, env, apiToken, fetchImpl) {
+  const response = await fetchImpl(
+    `${cloudflareApiBaseUrl(env)}${check.path}`,
+    {
+      method: "GET",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        accept: "application/json",
+      },
     },
-  });
+  );
   const text = await response.text();
   let payload;
   try {
@@ -2070,12 +2104,18 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             : run(command, releaseEnv),
         );
         if (!destroy && stepName === "render-wrangler-config") {
-          await timeReleaseStep(timings, "existing-worker-migration-prune", () =>
-            pruneWranglerMigrationsForExistingWorker(
-              outputs,
-              environment,
-              releaseEnv,
-            ),
+          await timeReleaseStep(
+            timings,
+            "existing-worker-migration-prune",
+            () =>
+              pruneWranglerMigrationsForExistingWorker(
+                outputs,
+                environment,
+                releaseEnv,
+              ),
+          );
+          await timeReleaseStep(timings, "queue-consumer-trigger-prune", () =>
+            pruneWranglerQueueConsumersForRelease(environment),
           );
         }
         if (!destroy && stepName === "build-worker") {
@@ -2095,6 +2135,18 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             wranglerDeployArgs(outputs, environment, {
               containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
             }),
+            deployEnv,
+          ),
+        );
+        await timeReleaseStep(timings, "queue-consumers-sync", () =>
+          runFile(
+            "bun",
+            [
+              "scripts/control/ensure-queue-consumers.mjs",
+              environment,
+              "--config",
+              releaseWranglerConfigPath(environment),
+            ],
             deployEnv,
           ),
         );

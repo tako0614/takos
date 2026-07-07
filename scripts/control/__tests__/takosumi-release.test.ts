@@ -33,6 +33,7 @@ import {
   readReleaseOutputs,
   removeExistingWorkerMigrationsFromToml,
   removeWranglerDurableObjectLifecycleFromToml,
+  removeWranglerQueueConsumerTriggersFromToml,
   verifyReleaseDeployment,
   waitForWranglerDeployment,
   waitForWranglerDeploymentBestEffort,
@@ -40,6 +41,8 @@ import {
   wranglerDeployEnv,
 } from "../takosumi-release.mjs";
 import { applyReleaseContainerImagesToToml } from "../apply-release-container-images.mjs";
+
+const repoRoot = resolve(import.meta.dir, "../../..");
 
 const rawOutputs = {
   cloudflare_account_id: "acc_123",
@@ -234,6 +237,120 @@ test("removeWranglerDurableObjectLifecycleFromToml creates a D1-only config with
   assert.match(result.toml, /\[\[durable_objects\.bindings\]\]/);
   assert.match(result.toml, /\[\[d1_databases\]\]/);
   assert.match(result.toml, /\[env\.staging\]/);
+});
+
+test("removeWranglerQueueConsumerTriggersFromToml keeps producer bindings and removes consumer triggers", () => {
+  const input = [
+    'name = "takos"',
+    "",
+    "[[queues.producers]]",
+    'queue = "takos-runs"',
+    'binding = "RUN_QUEUE"',
+    "",
+    "[[queues.consumers]]",
+    'queue = "takos-runs"',
+    "max_batch_size = 1",
+    'dead_letter_queue = "takos-runs-dlq"',
+    "",
+    "[[env.staging.queues.producers]]",
+    'queue = "takos-runs-staging"',
+    'binding = "RUN_QUEUE"',
+    "",
+    "[[env.staging.queues.consumers]]",
+    'queue = "takos-runs-staging"',
+    "max_batch_size = 1",
+    "",
+    "[[vectorize]]",
+    'binding = "VECTORIZE"',
+  ].join("\n");
+
+  const result = removeWranglerQueueConsumerTriggersFromToml(input);
+
+  assert.equal(result.removed, 2);
+  assert.match(result.toml, /\[\[queues\.producers\]\]/);
+  assert.match(result.toml, /\[\[env\.staging\.queues\.producers\]\]/);
+  assert.doesNotMatch(
+    result.toml,
+    /\[\[(?:env\.[^\]]+\.)?queues\.consumers\]\]/,
+  );
+  assert.match(result.toml, /\[\[vectorize\]\]/);
+});
+
+test("ensure-queue-consumers skips existing Worker consumers and adds missing ones", async () => {
+  const root = mkdtempSync(resolve(tmpdir(), "takos-release-queues-"));
+  const bin = resolve(root, "bin");
+  const log = resolve(root, "commands.log");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    resolve(bin, "bunx"),
+    `#!/bin/sh
+printf '%s\\n' "$*" >> '${log}'
+case "$*" in
+  *"consumer list takos-test-runs "*)
+    printf 'Resolving dependencies\\n'
+    printf 'Resolved, downloaded and extracted [2]\\n'
+    printf '[{"script_name":"takos-test"}]\\n'
+    ;;
+  *"consumer list "*)
+    printf '[]\\n'
+    ;;
+  *"consumer add "*)
+    ;;
+  *)
+    echo "unexpected command: $*" >&2
+    exit 1
+    ;;
+esac
+`,
+  );
+  chmodSync(resolve(bin, "bunx"), 0o755);
+  try {
+    const proc = Bun.spawn(
+      [
+        "bun",
+        "scripts/control/ensure-queue-consumers.mjs",
+        "production",
+        "--config",
+        productionWranglerConfig,
+      ],
+      {
+        cwd: repoRoot,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+          TAKOSUMI_OUTPUTS_JSON: JSON.stringify(rawOutputs),
+        },
+      },
+    );
+    const [status, stdout, stderr] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+
+    assert.equal(status, 0, `${stdout}\n${stderr}`.trim());
+    const commands = readFileSync(log, "utf8");
+    assert.match(
+      commands,
+      /queues consumer list takos-test-runs --json --config/,
+    );
+    assert.doesNotMatch(
+      commands,
+      /queues consumer add takos-test-runs takos-test/,
+    );
+    assert.match(
+      commands,
+      /queues consumer add takos-test-index-jobs takos-test --batch-size 5 --batch-timeout 60 --config/,
+    );
+    assert.match(
+      commands,
+      /--message-retries 2 --dead-letter-queue takos-test-index-jobs-dlq/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("releaseD1MigrationsWranglerConfigPath is isolated from the deploy config", () => {
@@ -684,14 +801,10 @@ test("wranglerDeployEnv preserves a managed compat proxy for final Wrangler depl
 
 test("preflightWranglerDeployAuth skips when no deploy token is configured", async () => {
   let called = false;
-  const result = await preflightWranglerDeployAuth(
-    rawOutputs,
-    {},
-    async () => {
-      called = true;
-      return new Response("{}");
-    },
-  );
+  const result = await preflightWranglerDeployAuth(rawOutputs, {}, async () => {
+    called = true;
+    return new Response("{}");
+  });
 
   assert.deepEqual(result, {
     skipped: true,
