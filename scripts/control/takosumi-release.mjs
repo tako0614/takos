@@ -1287,10 +1287,14 @@ export async function pruneWranglerMigrationsForExistingWorker(
 }
 
 function wranglerDeployToken(env = process.env) {
-  return (
-    stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN) ??
-    stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN)
-  );
+  const explicit = stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN);
+  if (explicit) return explicit;
+  const providerToken =
+    stringValue(env.CLOUDFLARE_API_TOKEN) ?? stringValue(env.CF_API_TOKEN);
+  if (providerToken && !cloudflareCompatProxyActive(env)) {
+    return providerToken;
+  }
+  return stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN) ?? providerToken;
 }
 
 export async function preflightWranglerDeployAuth(
@@ -1511,6 +1515,7 @@ export async function withCloudflareApiBaseProxy(env, action) {
     const proxyBase = `http://${ready.hostname}:${ready.port}`;
     return await action({
       ...env,
+      TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE: targetBase,
       TAKOS_CLOUDFLARE_API_BASE_URL: proxyBase,
       CLOUDFLARE_API_BASE_URL: proxyBase,
       CF_API_BASE_URL: proxyBase,
@@ -1547,6 +1552,13 @@ function isTakosumiCloudflareCompatBase(base) {
   } catch {
     return false;
   }
+}
+
+function cloudflareCompatProxyActive(env) {
+  return (
+    Boolean(stringValue(env.TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE)) ||
+    Boolean(cloudflareApiBaseProxyTarget(env))
+  );
 }
 
 async function waitForCloudflareApiProxyReady(child) {

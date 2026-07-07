@@ -607,7 +607,7 @@ test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
   );
 });
 
-test("wranglerDeployEnv uses a deploy-only token for the final Wrangler deploy", () => {
+test("wranglerDeployEnv uses provider token for real Cloudflare deploys", () => {
   const env = wranglerDeployEnv({
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
@@ -616,8 +616,8 @@ test("wranglerDeployEnv uses a deploy-only token for the final Wrangler deploy",
     CLOUDFLARE_ACCOUNT_ID: "acc_123",
   });
 
-  assert.equal(env.CLOUDFLARE_API_TOKEN, "containers-token");
-  assert.equal(env.CF_API_TOKEN, "containers-token");
+  assert.equal(env.CLOUDFLARE_API_TOKEN, "provider-token");
+  assert.equal(env.CF_API_TOKEN, "provider-token");
   assert.equal(env.CLOUDFLARE_CONTAINERS_API_TOKEN, "containers-token");
   assert.equal(env.CLOUDFLARE_ACCOUNT_ID, "acc_123");
   assert.equal(
@@ -668,6 +668,8 @@ test("wranglerDeployEnv preserves a managed compat proxy for final Wrangler depl
     CLOUDFLARE_API_TOKEN: "provider-token",
     CF_API_TOKEN: "provider-token",
     CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-token",
+    TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE:
+      "https://app.takosumi.com/compat/cloudflare/client/v4",
     TAKOS_CLOUDFLARE_API_BASE_URL: proxyBase,
     CLOUDFLARE_API_BASE_URL: proxyBase,
   });
@@ -680,11 +682,11 @@ test("wranglerDeployEnv preserves a managed compat proxy for final Wrangler depl
   assert.equal(env.CLOUDFLARE_BASE_URL, proxyBase);
 });
 
-test("preflightWranglerDeployAuth skips when deploy-only token is not configured", async () => {
+test("preflightWranglerDeployAuth skips when no deploy token is configured", async () => {
   let called = false;
   const result = await preflightWranglerDeployAuth(
     rawOutputs,
-    { CLOUDFLARE_API_TOKEN: "provider-token" },
+    {},
     async () => {
       called = true;
       return new Response("{}");
