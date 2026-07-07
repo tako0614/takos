@@ -270,7 +270,9 @@ test("pruneWranglerMigrationsForExistingWorker is disabled by default", async ()
         CLOUDFLARE_ACCOUNT_ID: "acc_123",
       },
       async () => {
-        throw new Error("should not probe Cloudflare unless explicitly enabled");
+        throw new Error(
+          "should not probe Cloudflare unless explicitly enabled",
+        );
       },
     );
 
@@ -336,6 +338,21 @@ test("pruneWranglerMigrationsForExistingWorker removes bootstrap migrations for 
     process.chdir(oldCwd);
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("base wrangler Durable Object migrations do not convert existing app classes to SQLite", () => {
+  const toml = readFileSync("deploy/cloudflare/wrangler.toml", "utf8");
+
+  assert.match(toml, /new_classes = \["SessionDO"\]/);
+  assert.match(toml, /new_classes = \["RunNotifierDO"\]/);
+  assert.match(toml, /new_classes = \["NotificationNotifierDO"\]/);
+  assert.match(toml, /new_classes = \["RateLimiterDO"\]/);
+  assert.match(toml, /new_classes = \["RoutingDO"\]/);
+  assert.doesNotMatch(toml, /new_sqlite_classes = \[[^\]]*"SessionDO"/s);
+  assert.match(
+    toml,
+    /new_sqlite_classes = \[[^\]]*"TakosRuntimeContainer"[^\]]*"ExecutorContainerTier1"[^\]]*"ExecutorContainerTier2"[^\]]*"ExecutorContainerTier3"/s,
+  );
 });
 
 test("normalizeReleaseContainerImages accepts aliases and supported registry refs", () => {
@@ -769,8 +786,7 @@ test("preflightWranglerDeployAuth accepts Worker service 404 as an authorized to
   );
   assert.equal(
     requests.every(
-      (request) =>
-        request.init.headers.authorization === "Bearer deploy-token",
+      (request) => request.init.headers.authorization === "Bearer deploy-token",
     ),
     true,
   );
