@@ -48,3 +48,42 @@ variable "app_url" {
     error_message = "app_url must be unset or an https URL."
   }
 }
+
+variable "takosumi_accounts_url" {
+  description = "Optional Takosumi Accounts/control-plane URL consumed by the Takos Worker for OIDC and Capsule projection APIs."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = trimspace(var.takosumi_accounts_url) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.takosumi_accounts_url)))
+    error_message = "takosumi_accounts_url must be empty or an https URL."
+  }
+}
+
+variable "takosumi_accounts_issuer_url" {
+  description = "Optional Takosumi Accounts OIDC issuer URL consumed by the Takos Worker."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = trimspace(var.takosumi_accounts_issuer_url) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.takosumi_accounts_issuer_url)))
+    error_message = "takosumi_accounts_issuer_url must be empty or an https URL."
+  }
+}
+
+variable "takosumi_accounts_client_id" {
+  description = "Optional Takosumi Accounts public OIDC client id issued for this Takos Capsule."
+  type        = string
+  default     = ""
+}
+
+variable "takosumi_accounts_redirect_uri" {
+  description = "Optional Takosumi Accounts OIDC redirect URI. When unset, it is derived from app_url when available."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = trimspace(var.takosumi_accounts_redirect_uri) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.takosumi_accounts_redirect_uri)))
+    error_message = "takosumi_accounts_redirect_uri must be empty or an https URL."
+  }
+}

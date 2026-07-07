@@ -144,6 +144,78 @@ test("buildReplacements projects app_url into public Takos worker env placeholde
   );
 });
 
+test("buildReplacements projects app_deployment env into OIDC worker placeholders", () => {
+  assert.deepEqual(
+    {
+      accountsUrl: buildReplacements(
+        {
+          ...rawOutputs,
+          app_deployment: {
+            env: {
+              TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.com",
+              OIDC_ISSUER_URL: "https://app.takosumi.com",
+              OIDC_CLIENT_ID: "toc_install",
+              OIDC_REDIRECT_URI:
+                "https://takos-test.app.takos.jp/auth/oidc/callback",
+            },
+          },
+        },
+        "production",
+      )['"https://app.takosumi.example"'],
+      clientId: buildReplacements(
+        {
+          ...rawOutputs,
+          app_deployment: {
+            env: {
+              OIDC_ISSUER_URL: "https://app.takosumi.com",
+              OIDC_CLIENT_ID: "toc_install",
+              OIDC_REDIRECT_URI:
+                "https://takos-test.app.takos.jp/auth/oidc/callback",
+            },
+          },
+        },
+        "production",
+      )['"takos-worker-installation-client"'],
+      redirectUri: buildReplacements(
+        {
+          ...rawOutputs,
+          app_deployment: {
+            env: {
+              OIDC_ISSUER_URL: "https://app.takosumi.com",
+              OIDC_CLIENT_ID: "toc_install",
+              OIDC_REDIRECT_URI:
+                "https://takos-test.app.takos.jp/auth/oidc/callback",
+            },
+          },
+        },
+        "production",
+      )['"https://app.your-domain.example/auth/oidc/callback"'],
+    },
+    {
+      accountsUrl: '"https://app.takosumi.com"',
+      clientId: '"toc_install"',
+      redirectUri: '"https://takos-test.app.takos.jp/auth/oidc/callback"',
+    },
+  );
+  assert.equal(
+    buildReplacements(
+      {
+        ...rawOutputs,
+        app_deployment: {
+          env: {
+            OIDC_ISSUER_URL: "https://app.takosumi.com",
+            OIDC_CLIENT_ID: "toc_staging",
+            OIDC_REDIRECT_URI:
+              "https://takos-staging.app.takos.jp/auth/oidc/callback",
+          },
+        },
+      },
+      "staging",
+    )['"takos-staging-installation-client"'],
+    '"toc_staging"',
+  );
+});
+
 test("buildReplacements rejects non-https public launch URLs", () => {
   assert.throws(
     () =>

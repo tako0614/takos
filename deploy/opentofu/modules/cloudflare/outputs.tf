@@ -169,6 +169,7 @@ output "app_deployment" {
         display = {
           title       = "Takos"
           description = "Self-hostable AI workspace with chat, agents, memory, Git, storage, and app launcher."
+          icon        = "/logo.png"
           category    = "workspace"
         }
         spec = {
@@ -177,7 +178,7 @@ output "app_deployment" {
       },
     ]
 
-    env = {}
+    env = local.app_deployment_env
   }
 }
 

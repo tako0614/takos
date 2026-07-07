@@ -24,4 +24,9 @@ module "cloudflare" {
   environment       = var.environment
   plan_mode         = var.opentofu_plan_mode
   workers_subdomain = try(var.cloudflare.workers_subdomain, null)
+
+  takosumi_accounts_url          = var.takosumi_accounts_url
+  takosumi_accounts_issuer_url   = var.takosumi_accounts_issuer_url
+  takosumi_accounts_client_id    = var.takosumi_accounts_client_id
+  takosumi_accounts_redirect_uri = var.takosumi_accounts_redirect_uri
 }

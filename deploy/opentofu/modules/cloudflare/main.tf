@@ -37,6 +37,24 @@ locals {
   worker_name = var.worker_name != null && trimspace(var.worker_name) != "" ? trimspace(var.worker_name) : var.project_name
   app_url     = var.app_url != null && trimspace(var.app_url) != "" ? trimspace(var.app_url) : null
 
+  takosumi_accounts_issuer_url   = trimspace(var.takosumi_accounts_issuer_url)
+  takosumi_accounts_client_id    = trimspace(var.takosumi_accounts_client_id)
+  takosumi_accounts_url          = trimspace(var.takosumi_accounts_url) != "" ? trimspace(var.takosumi_accounts_url) : local.takosumi_accounts_issuer_url
+  takosumi_accounts_redirect_uri = trimspace(var.takosumi_accounts_redirect_uri) != "" ? trimspace(var.takosumi_accounts_redirect_uri) : (local.app_url != null ? "${local.app_url}/auth/oidc/callback" : "")
+  takosumi_accounts_oidc_enabled = local.takosumi_accounts_issuer_url != "" && local.takosumi_accounts_client_id != ""
+  app_deployment_env = merge(
+    local.takosumi_accounts_oidc_enabled && local.takosumi_accounts_url != "" ? {
+      TAKOSUMI_ACCOUNTS_URL = local.takosumi_accounts_url
+    } : {},
+    local.takosumi_accounts_oidc_enabled ? {
+      OIDC_ISSUER_URL = local.takosumi_accounts_issuer_url
+      OIDC_CLIENT_ID  = local.takosumi_accounts_client_id
+    } : {},
+    local.takosumi_accounts_oidc_enabled && local.takosumi_accounts_redirect_uri != "" ? {
+      OIDC_REDIRECT_URI = local.takosumi_accounts_redirect_uri
+    } : {},
+  )
+
   # D1 databases keyed by logical binding:
   #   db — binding DB (Takos product control-plane relational tables)
   d1_databases = {

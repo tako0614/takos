@@ -105,6 +105,7 @@ export function buildReplacements(
   const r2 = read("object_storage_buckets");
   const queues = read("queue_bindings");
   const vectorizeIndexName = read("cloudflare_vectorize_index_name");
+  const deploymentEnv = appDeploymentEnv(outputs);
   const requireKey = (obj, key, outputName) => {
     if (obj[key] == null) {
       throw new Error(`tofu output "${outputName}" has no "${key}" key`);
@@ -182,12 +183,53 @@ export function buildReplacements(
   if (publicUrl) {
     Object.assign(replacements, publicUrlReplacements(env, publicUrl));
   }
+  Object.assign(replacements, workerEnvReplacements(env, deploymentEnv));
   if (env === "staging") {
     // Wrangler still reads the top-level account_id when deploying an env.
     // The staging-specific CF_ACCOUNT_ID var is not enough for API routes such
     // as D1 migrations, so render the base placeholder too.
     replacements["replace-with-account-id"] = accountId;
   }
+  return replacements;
+}
+
+function appDeploymentEnv(outputs) {
+  const appDeployment = outputValue(outputs.app_deployment);
+  const env = appDeployment?.env;
+  if (!env || typeof env !== "object" || Array.isArray(env)) return {};
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      ([, value]) => typeof value === "string" && value.trim() !== "",
+    ),
+  );
+}
+
+function workerEnvReplacements(env, deploymentEnv) {
+  const replacements = {};
+  const put = (placeholders, value) => {
+    if (typeof value !== "string" || value.trim() === "") return;
+    for (const placeholder of placeholders) {
+      replacements[tomlString(placeholder)] = tomlString(value.trim());
+    }
+  };
+  const accountsUrl =
+    deploymentEnv.TAKOSUMI_ACCOUNTS_URL ?? deploymentEnv.OIDC_ISSUER_URL;
+  const accountsPlaceholders =
+    env === "staging"
+      ? ["https://staging-app.takosumi.example"]
+      : ["https://app.takosumi.example"];
+  const clientIdPlaceholders =
+    env === "staging"
+      ? ["takos-staging-installation-client"]
+      : ["takos-worker-installation-client"];
+  const redirectPlaceholders =
+    env === "staging"
+      ? ["https://staging-admin.example.com/auth/oidc/callback"]
+      : ["https://app.your-domain.example/auth/oidc/callback"];
+
+  put(accountsPlaceholders, accountsUrl);
+  put(clientIdPlaceholders, deploymentEnv.OIDC_CLIENT_ID);
+  put(redirectPlaceholders, deploymentEnv.OIDC_REDIRECT_URI);
   return replacements;
 }
 
