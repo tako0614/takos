@@ -194,20 +194,12 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const error = c.req.query("error");
   const cookieState = getOIDCStateFromCookie(c.req.header("Cookie"));
 
-  // The single-use state cookie is consumed on every callback exit. Setting it
-  // here means each c.html(...) error response below also clears it; the success
-  // path clears it explicitly alongside the session cookie.
-  c.header("Set-Cookie", clearOIDCStateCookie());
-
   if (error) {
     await auditLog("oidc_error", { error });
-    return c.html(errorPage("OIDC Error", String(error), "/", "Back"), 400);
+    return oidcErrorResponse("OIDC Error", String(error), 400);
   }
   if (!code || !state) {
-    return c.html(
-      errorPage("OIDC Error", "Missing OIDC code or state.", "/", "Back"),
-      400,
-    );
+    return oidcErrorResponse("OIDC Error", "Missing OIDC code or state.", 400);
   }
   // Browser-binding check (A2): the `state` returned by the issuer must equal
   // the value bound to this browser at login initiation. A missing or mismatched
@@ -217,22 +209,15 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     await auditLog("oidc_state_cookie_mismatch", {
       hasCookie: Boolean(cookieState),
     });
-    return c.html(
-      errorPage("OIDC Error", "Invalid OIDC state.", "/", "Back"),
-      400,
-    );
+    return oidcErrorResponse("OIDC Error", "Invalid OIDC state.", 400);
   }
   if (
     !dbBinding || !sessionStore || !issuer || !discoveryBaseUrl || !clientId ||
     !redirectUri
   ) {
-    return c.html(
-      errorPage(
-        "OIDC Error",
-        "Takosumi Accounts OIDC is not configured.",
-        "/",
-        "Back",
-      ),
+    return oidcErrorResponse(
+      "OIDC Error",
+      "Takosumi Accounts OIDC is not configured.",
       500,
     );
   }
@@ -240,10 +225,7 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const oidcState = await getOIDCState(sessionStore, state);
   if (!oidcState) {
     await auditLog("oidc_invalid_state", { state });
-    return c.html(
-      errorPage("OIDC Error", "Invalid OIDC state.", "/", "Back"),
-      400,
-    );
+    return oidcErrorResponse("OIDC Error", "Invalid OIDC state.", 400);
   }
   await deleteOIDCState(sessionStore, state);
 
@@ -251,13 +233,9 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   try {
     discovery = await discoverOidc(discoveryBaseUrl, issuer);
   } catch {
-    return c.html(
-      errorPage(
-        "OIDC Error",
-        "Takosumi Accounts discovery failed.",
-        "/",
-        "Back",
-      ),
+    return oidcErrorResponse(
+      "OIDC Error",
+      "Takosumi Accounts discovery failed.",
       502,
     );
   }
@@ -288,10 +266,7 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     logError("OIDC token exchange failed", error, {
       module: "routes/auth/oidc",
     });
-    return c.html(
-      errorPage("OIDC Error", "Token exchange failed.", "/", "Back"),
-      400,
-    );
+    return oidcErrorResponse("OIDC Error", "Token exchange failed.", 400);
   }
 
   let claims;
@@ -307,10 +282,7 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     logError("OIDC id_token verification failed", error, {
       module: "routes/auth/oidc",
     });
-    return c.html(
-      errorPage("OIDC Error", "Invalid ID token.", "/", "Back"),
-      400,
-    );
+    return oidcErrorResponse("OIDC Error", "Invalid ID token.", 400);
   }
 
   const subject = requireString(claims.sub);
@@ -323,10 +295,7 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     logError("OIDC userinfo validation failed", error, {
       module: "routes/auth/oidc",
     });
-    return c.html(
-      errorPage("OIDC Error", "Invalid UserInfo response.", "/", "Back"),
-      400,
-    );
+    return oidcErrorResponse("OIDC Error", "Invalid UserInfo response.", 400);
   }
   const profile = resolveOidcProfile(claims, userInfo);
   const db = getDb(dbBinding);
@@ -361,13 +330,9 @@ authOidcRouter.get("/oidc/callback", async (c) => {
           userId: userRow.id,
           status: userRow.status,
         });
-        return c.html(
-          errorPage(
-            "OIDC Error",
-            "This account is not available.",
-            "/",
-            "Back",
-          ),
+        return oidcErrorResponse(
+          "OIDC Error",
+          "This account is not available.",
           403,
         );
       }
@@ -405,8 +370,9 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   }
 
   if (!user) {
-    return c.html(
-      errorPage("OIDC Error", "Failed to resolve user account.", "/", "Back"),
+    return oidcErrorResponse(
+      "OIDC Error",
+      "Failed to resolve user account.",
       500,
     );
   }
@@ -439,6 +405,19 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     headers: successHeaders,
   });
 });
+
+function oidcErrorResponse(
+  title: string,
+  message: string,
+  status: number,
+): Response {
+  const headers = new Headers({ "Content-Type": "text/html; charset=UTF-8" });
+  headers.append("Set-Cookie", clearOIDCStateCookie());
+  return new Response(errorPage(title, message, "/", "Back"), {
+    status,
+    headers,
+  });
+}
 
 function defaultOidcRedirectUri(adminDomain: string): string | undefined {
   const domain = nonEmptyString(adminDomain);
