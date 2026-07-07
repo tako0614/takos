@@ -189,6 +189,14 @@ function requireObjectOutput(outputs, name) {
   return value;
 }
 
+function optionalObjectOutput(outputs, name) {
+  const value = outputValue(outputs[name]);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value;
+}
+
 function requireNestedStringOutput(outputs, name, key) {
   const value = requireObjectOutput(outputs, name)[key];
   if (typeof value !== "string" || value.trim() === "") {
@@ -1299,7 +1307,10 @@ export async function preflightWranglerDeployAuth(
   if (!accountId) {
     return { skipped: true, reason: "account_id_unavailable" };
   }
-  const checks = wranglerDeployAuthChecks(accountId, workerName);
+  const checks = [
+    ...wranglerDeployAuthChecks(accountId, workerName),
+    ...wranglerDeployOutputAuthChecks(accountId, outputs),
+  ];
   const results = [];
   for (const check of checks) {
     results.push(
@@ -1362,6 +1373,27 @@ function wranglerDeployAuthChecks(accountId, workerName) {
       authorizedStatuses: new Set([200]),
     },
   ];
+}
+
+function wranglerDeployOutputAuthChecks(accountId, outputs) {
+  const encodedAccountId = encodeURIComponent(accountId);
+  const bucketMap = optionalObjectOutput(outputs, "object_storage_buckets");
+  const seenBuckets = new Set();
+  const checks = [];
+  for (const [key, value] of Object.entries(bucketMap ?? {})) {
+    if (typeof value !== "string" || value.trim() === "") continue;
+    const bucket = value.trim();
+    if (seenBuckets.has(bucket)) continue;
+    seenBuckets.add(bucket);
+    checks.push({
+      name: `R2 Bucket ${key}`,
+      path:
+        `/accounts/${encodedAccountId}/r2/buckets/` +
+        encodeURIComponent(bucket),
+      authorizedStatuses: new Set([200]),
+    });
+  }
+  return checks;
 }
 
 async function preflightCloudflareApiAccess(

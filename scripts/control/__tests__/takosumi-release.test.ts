@@ -57,6 +57,12 @@ const rawOutputs = {
     deployment: "takos-test-deployment-jobs",
     deployment_dlq: "takos-test-deployment-jobs-dlq",
   },
+  object_storage_buckets: {
+    worker_bundles: "takos-test-worker-bundles",
+    tenant_builds: "takos-test-tenant-builds",
+    git_objects: "takos-test-git-objects",
+    offload: "takos-test-offload",
+  },
 };
 
 const productionWranglerConfig =
@@ -735,8 +741,28 @@ test("preflightWranglerDeployAuth accepts Worker service 404 as an authorized to
       status: 200,
       success: true,
     },
+    {
+      name: "R2 Bucket worker_bundles",
+      status: 200,
+      success: true,
+    },
+    {
+      name: "R2 Bucket tenant_builds",
+      status: 200,
+      success: true,
+    },
+    {
+      name: "R2 Bucket git_objects",
+      status: 200,
+      success: true,
+    },
+    {
+      name: "R2 Bucket offload",
+      status: 200,
+      success: true,
+    },
   ]);
-  assert.equal(requests.length, 6);
+  assert.equal(requests.length, 10);
   assert.equal(
     requests[0].url,
     "https://api.cloudflare.com/client/v4/accounts/acc_123/workers/services/takos-test",
@@ -778,6 +804,35 @@ test("preflightWranglerDeployAuth fails fast on a token without resource API acc
     new RegExp(
       "R2 Buckets.*single Cloudflare API token that can deploy Workers scripts/assets, read/update KV, R2, D1, Queues, Vectorize, and roll out Cloudflare Containers",
     ),
+  );
+});
+
+test("preflightWranglerDeployAuth checks individual R2 bucket access used by wrangler deploy", async () => {
+  await assert.rejects(
+    () =>
+      preflightWranglerDeployAuth(
+        rawOutputs,
+        {
+          CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-only-token",
+          CLOUDFLARE_ACCOUNT_ID: "acc_123",
+        },
+        async (url) => {
+          if (url.endsWith("/r2/buckets/takos-test-worker-bundles")) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                errors: [{ code: 10000, message: "Authentication error" }],
+              }),
+              { status: 403, headers: { "content-type": "application/json" } },
+            );
+          }
+          return new Response(JSON.stringify({ success: true, result: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        },
+      ),
+    /R2 Bucket worker_bundles.*single Cloudflare API token/,
   );
 });
 
@@ -1738,6 +1793,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   );
   assert.match(
     rootModule,
+    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS\s*=\s*"1"/,
+  );
+  assert.match(
+    rootModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,
   );
   assert.match(rootModule, /TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES\s*=\s*"1"/);
@@ -1810,6 +1869,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     productionModule,
     /TAKOS_RELEASE_TAKOSUMI_REF\s*=\s*var\.takosumi_source_ref/,
+  );
+  assert.match(
+    productionModule,
+    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS\s*=\s*"1"/,
   );
   assert.match(
     productionModule,
