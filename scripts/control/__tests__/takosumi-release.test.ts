@@ -203,6 +203,12 @@ test("removeWranglerDurableObjectLifecycleFromToml creates a D1-only config with
     'type = "durable-object"',
     'storage = "sqlite"',
     "",
+    "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE",
+    "routes = [",
+    '  { pattern = "takos.app.takos.jp/*", zone_name = "takos.jp" },',
+    "]",
+    "# END TAKOSUMI GENERATED PUBLIC ROUTE",
+    "",
     "[[d1_databases]]",
     'binding = "DB"',
     'database_name = "takos-db"',
@@ -215,8 +221,10 @@ test("removeWranglerDurableObjectLifecycleFromToml creates a D1-only config with
 
   assert.equal(result.removedMigrations, 1);
   assert.equal(result.removedExports, 1);
+  assert.equal(result.removedRoutes, 1);
   assert.doesNotMatch(result.toml, /\[\[migrations\]\]/);
   assert.doesNotMatch(result.toml, /\[exports\./);
+  assert.doesNotMatch(result.toml, /takos\.app\.takos\.jp/);
   assert.match(result.toml, /\[\[durable_objects\.bindings\]\]/);
   assert.match(result.toml, /\[\[d1_databases\]\]/);
   assert.match(result.toml, /\[env\.staging\]/);

@@ -181,7 +181,7 @@ test("renderPublicRoute adds a production route from non-workers.dev app_url", (
 
   assert.match(
     rendered,
-    /\[\[routes\]\]\npattern = "takos-test\.app\.takos\.jp\/\*"\nzone_id = "zone_123"/,
+    /routes = \[\n  \{ pattern = "takos-test\.app\.takos\.jp\/\*", zone_id = "zone_123" \},\n\]/,
   );
 });
 
@@ -212,7 +212,7 @@ test("renderPublicRoute adds a staging route only inside env.staging", () => {
   assert.doesNotMatch(rendered, /\[\[routes\]\]/);
   assert.match(
     rendered,
-    /\[\[env\.staging\.routes\]\]\npattern = "takos-test\.app-staging\.takos\.jp\/\*"/,
+    /\[env\.staging\][\s\S]*routes = \[\n  \{ pattern = "takos-test\.app-staging\.takos\.jp\/\*", zone_name = "takos\.jp" \},\n\]/,
   );
 });
 
@@ -222,8 +222,9 @@ test("renderPublicRoute strips stale generated routes and skips workers.dev", ()
     "workers_dev = true",
     "",
     "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE",
-    "[[routes]]",
-    'pattern = "old.example.com/*"',
+    "routes = [",
+    '  { pattern = "old.example.com/*", zone_name = "example.com" },',
+    "]",
     "# END TAKOSUMI GENERATED PUBLIC ROUTE",
     "",
     "[[services]]",

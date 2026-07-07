@@ -226,20 +226,33 @@ function publicRouteForOutputs(outputs, zoneId) {
   return {
     pattern: `${publicUrl.hostname}/*`,
     ...(zoneId ? { zoneId } : {}),
+    ...(!zoneId ? { zoneName: zoneNameFromHostname(publicUrl.hostname) } : {}),
   };
+}
+
+function zoneNameFromHostname(hostname) {
+  const labels = hostname.split(".").filter(Boolean);
+  if (labels.length < 2) return hostname;
+  return labels.slice(-2).join(".");
 }
 
 const GENERATED_PUBLIC_ROUTE_BEGIN = "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE";
 const GENERATED_PUBLIC_ROUTE_END = "# END TAKOSUMI GENERATED PUBLIC ROUTE";
 
 function generatedPublicRouteBlock(env, route) {
-  const header = env === "staging" ? "[[env.staging.routes]]" : "[[routes]]";
+  const routeFields = [
+    `pattern = ${tomlString(route.pattern)}`,
+    ...(route.zoneId ? [`zone_id = ${tomlString(route.zoneId)}`] : []),
+    ...(!route.zoneId && route.zoneName
+      ? [`zone_name = ${tomlString(route.zoneName)}`]
+      : []),
+  ].join(", ");
   return [
     GENERATED_PUBLIC_ROUTE_BEGIN,
     "# Generated from OpenTofu app_url/launch_url during Takos release activation.",
-    header,
-    `pattern = ${tomlString(route.pattern)}`,
-    ...(route.zoneId ? [`zone_id = ${tomlString(route.zoneId)}`] : []),
+    "routes = [",
+    `  { ${routeFields} },`,
+    "]",
     GENERATED_PUBLIC_ROUTE_END,
   ].join("\n");
 }

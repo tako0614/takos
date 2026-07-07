@@ -33,6 +33,8 @@ const BUN_INSTALL_RETRY_ATTEMPTS = 3;
 const BUN_INSTALL_RETRY_INTERVAL_MS = 2000;
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
 const CLOUDFLARE_API_PROXY_READY_PREFIX = "TAKOS_CLOUDFLARE_API_PROXY_READY=";
+const GENERATED_PUBLIC_ROUTE_BEGIN = "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE";
+const GENERATED_PUBLIC_ROUTE_END = "# END TAKOSUMI GENERATED PUBLIC ROUTE";
 
 function usage() {
   console.error(`
@@ -1159,7 +1161,8 @@ export function removeExistingWorkerMigrationsFromToml(toml, environment) {
 }
 
 export function removeWranglerDurableObjectLifecycleFromToml(toml) {
-  const lines = toml.split("\n");
+  const routeStripped = stripGeneratedPublicRouteBlocks(toml);
+  const lines = routeStripped.toml.split("\n");
   const output = [];
   let removedMigrations = 0;
   let removedExports = 0;
@@ -1188,7 +1191,29 @@ export function removeWranglerDurableObjectLifecycleFromToml(toml) {
     toml: output.join("\n"),
     removedMigrations,
     removedExports,
+    removedRoutes: routeStripped.removedRoutes,
   };
+}
+
+function stripGeneratedPublicRouteBlocks(toml) {
+  let removedRoutes = 0;
+  const pattern = new RegExp(
+    `\\n?${escapeRegExp(GENERATED_PUBLIC_ROUTE_BEGIN)}[\\s\\S]*?${escapeRegExp(
+      GENERATED_PUBLIC_ROUTE_END,
+    )}\\n?`,
+    "gu",
+  );
+  return {
+    toml: toml.replace(pattern, () => {
+      removedRoutes += 1;
+      return "\n";
+    }),
+    removedRoutes,
+  };
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 export function writeD1MigrationsWranglerConfig(environment) {
@@ -1198,7 +1223,7 @@ export function writeD1MigrationsWranglerConfig(environment) {
   const result = removeWranglerDurableObjectLifecycleFromToml(source);
   writeFileSync(d1Path, result.toml);
   console.log(
-    `Wrote D1 migrations wrangler config ${d1Path} without ${result.removedMigrations} Durable Object migration block(s) and ${result.removedExports} export block(s).`,
+    `Wrote D1 migrations wrangler config ${d1Path} without ${result.removedMigrations} Durable Object migration block(s), ${result.removedExports} export block(s), and ${result.removedRoutes} generated route block(s).`,
   );
   return { path: d1Path, ...result };
 }
