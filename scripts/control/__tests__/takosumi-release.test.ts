@@ -12,21 +12,18 @@ import {
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import process from "node:process";
-import { gzipSync } from "node:zlib";
 
 import {
   buildTakosumiDestroyCommands,
   buildTakosumiReleaseCommands,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
-  inferCloudflareContainerRegistryAccountId,
   isRetryableBunInstallFailure,
   isRetryableDestroyFailure,
   normalizeReleaseContainerImages,
   preflightWranglerDeployAuth,
   pruneWranglerMigrationsForExistingWorker,
   releaseD1MigrationsWranglerConfigPath,
-  releaseContextHeaders,
   releaseChildEnv,
   releaseWranglerAccountId,
   releaseCommandStepName,
@@ -37,7 +34,6 @@ import {
   verifyReleaseDeployment,
   waitForWranglerDeployment,
   waitForWranglerDeploymentBestEffort,
-  withCloudflareApiBaseProxy,
   wranglerDeployEnv,
 } from "../takosumi-release.mjs";
 import { applyReleaseContainerImagesToToml } from "../apply-release-container-images.mjs";
@@ -778,25 +774,23 @@ test("wranglerDeployEnv leaves provider auth untouched without a deploy-only tok
   });
 });
 
-test("wranglerDeployEnv preserves a managed compat proxy for final Wrangler deploy", () => {
-  const proxyBase = "http://127.0.0.1:45871";
+test("wranglerDeployEnv keeps provider auth with a custom Cloudflare API base", () => {
+  const apiBase = "https://app.takosumi.com/compat/cloudflare/client/v4";
   const env = wranglerDeployEnv({
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
     CF_API_TOKEN: "provider-token",
     CLOUDFLARE_CONTAINERS_API_TOKEN: "containers-token",
-    TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE:
-      "https://app.takosumi.com/compat/cloudflare/client/v4",
-    TAKOS_CLOUDFLARE_API_BASE_URL: proxyBase,
-    CLOUDFLARE_API_BASE_URL: proxyBase,
+    TAKOS_CLOUDFLARE_API_BASE_URL: apiBase,
+    CLOUDFLARE_API_BASE_URL: apiBase,
   });
 
-  assert.equal(env.CLOUDFLARE_API_TOKEN, "containers-token");
-  assert.equal(env.CF_API_TOKEN, "containers-token");
-  assert.equal(env.TAKOS_CLOUDFLARE_API_BASE_URL, proxyBase);
-  assert.equal(env.CLOUDFLARE_API_BASE_URL, proxyBase);
-  assert.equal(env.CF_API_BASE_URL, proxyBase);
-  assert.equal(env.CLOUDFLARE_BASE_URL, proxyBase);
+  assert.equal(env.CLOUDFLARE_API_TOKEN, "provider-token");
+  assert.equal(env.CF_API_TOKEN, "provider-token");
+  assert.equal(env.TAKOS_CLOUDFLARE_API_BASE_URL, apiBase);
+  assert.equal(env.CLOUDFLARE_API_BASE_URL, apiBase);
+  assert.equal(env.CF_API_BASE_URL, apiBase);
+  assert.equal(env.CLOUDFLARE_BASE_URL, apiBase);
 });
 
 test("preflightWranglerDeployAuth skips when no deploy token is configured", async () => {
@@ -999,22 +993,16 @@ test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers",
       CF_API_TOKEN: "token",
       CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
       CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-      TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID: "ts_acc_takosumi_cloud",
     },
   );
 });
 
-test("releaseChildEnv uses Cloudflare container registry account for managed compat Wrangler validation", () => {
+test("releaseChildEnv keeps the OpenTofu output account for custom API bases", () => {
   const containerImages = JSON.stringify({
     runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
     executor: "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
   });
 
-  assert.equal(
-    inferCloudflareContainerRegistryAccountId(containerImages),
-    "backend_acc",
-  );
   assert.equal(
     releaseWranglerAccountId(
       { cloudflare_account_id: "ts_acc_takosumi_cloud" },
@@ -1024,7 +1012,7 @@ test("releaseChildEnv uses Cloudflare container registry account for managed com
         TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       },
     ),
-    "backend_acc",
+    "ts_acc_takosumi_cloud",
   );
   assert.deepEqual(
     releaseChildEnv(
@@ -1051,160 +1039,10 @@ test("releaseChildEnv uses Cloudflare container registry account for managed com
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
-      CLOUDFLARE_ACCOUNT_ID: "backend_acc",
-      CF_ACCOUNT_ID: "backend_acc",
-      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
-      TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
     },
   );
-});
-
-test("releaseContextHeaders derives managed compat billing context", () => {
-  assert.deepEqual(
-    releaseContextHeaders({
-      TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
-        workspaceId: "space_release",
-        installation: { id: "inst_release" },
-      }),
-    }),
-    {
-      "x-takosumi-cloud-billing-workspace-id": "space_release",
-      "x-takosumi-cloud-space-id": "space_release",
-      "x-takosumi-cloud-billing-installation-id": "inst_release",
-      "x-takosumi-cloud-installation-id": "inst_release",
-    },
-  );
-});
-
-test("withCloudflareApiBaseProxy injects managed compat auth and release context", async () => {
-  const calls: {
-    readonly method: string;
-    readonly url: string;
-    readonly authorization: string | null;
-    readonly assetAuthorization: string | null;
-    readonly acceptEncoding: string | null;
-    readonly workspace: string | null;
-    readonly installation: string | null;
-    readonly body: unknown;
-  }[] = [];
-  const upstream = Bun.serve({
-    hostname: "127.0.0.1",
-    port: 0,
-    async fetch(request) {
-      calls.push({
-        method: request.method,
-        url: request.url,
-        authorization: request.headers.get("authorization"),
-        assetAuthorization: request.headers.get(
-          "x-takosumi-cloudflare-assets-authorization",
-        ),
-        acceptEncoding: request.headers.get("accept-encoding"),
-        workspace: request.headers.get("x-takosumi-cloud-billing-workspace-id"),
-        installation: request.headers.get(
-          "x-takosumi-cloud-billing-installation-id",
-        ),
-        body: request.body ? await request.json() : undefined,
-      });
-      return new Response(
-        gzipSync(JSON.stringify({ success: true, result: { id: "ok" } })),
-        {
-          headers: {
-            "content-encoding": "gzip",
-            "content-length": "999999",
-            "content-type": "application/json",
-          },
-        },
-      );
-    },
-  });
-  const upstreamPort = upstream.port;
-  try {
-    await withCloudflareApiBaseProxy(
-      {
-        CLOUDFLARE_API_TOKEN: "takmpt_test",
-        TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
-        TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-        TAKOS_CLOUDFLARE_API_BASE_URL: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4`,
-        TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
-          workspaceId: "space_proxy",
-          installation: { id: "inst_proxy" },
-        }),
-      },
-      async (releaseEnv) => {
-        assert.match(
-          releaseEnv.CLOUDFLARE_API_BASE_URL,
-          /^http:\/\/127\.0\.0\.1:\d+$/u,
-        );
-        assert.equal(
-          releaseEnv.TAKOS_CLOUDFLARE_API_BASE_URL,
-          releaseEnv.CLOUDFLARE_API_BASE_URL,
-        );
-        assert.equal(
-          releaseEnv.CF_API_BASE_URL,
-          releaseEnv.CLOUDFLARE_API_BASE_URL,
-        );
-        assert.equal(
-          releaseEnv.CLOUDFLARE_BASE_URL,
-          releaseEnv.CLOUDFLARE_API_BASE_URL,
-        );
-        const response = await fetch(
-          `${releaseEnv.CLOUDFLARE_API_BASE_URL}/accounts/backend_acc/queues`,
-          {
-            method: "POST",
-            headers: {
-              authorization: "Bearer wrong-token",
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({ queue_name: "jobs" }),
-          },
-        );
-        assert.equal(response.status, 200);
-        assert.equal(response.headers.get("content-encoding"), null);
-        assert.notEqual(response.headers.get("content-length"), "999999");
-        assert.deepEqual(await response.json(), {
-          success: true,
-          result: { id: "ok" },
-        });
-        const assetUpload = await fetch(
-          `${releaseEnv.CLOUDFLARE_API_BASE_URL}/accounts/backend_acc/workers/assets/upload?base64=true`,
-          {
-            method: "POST",
-            headers: {
-              authorization: "Bearer asset-upload-session",
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({ asset: true }),
-          },
-        );
-        assert.equal(assetUpload.status, 200);
-      },
-    );
-  } finally {
-    upstream.stop(true);
-  }
-
-  assert.deepEqual(calls, [
-    {
-      method: "POST",
-      url: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/queues`,
-      authorization: "Bearer takmpt_test",
-      assetAuthorization: null,
-      acceptEncoding: "identity",
-      workspace: "space_proxy",
-      installation: "inst_proxy",
-      body: { queue_name: "jobs" },
-    },
-    {
-      method: "POST",
-      url: `http://127.0.0.1:${upstreamPort}/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/workers/assets/upload?base64=true`,
-      authorization: "Bearer takmpt_test",
-      assetAuthorization: "Bearer asset-upload-session",
-      acceptEncoding: "identity",
-      workspace: "space_proxy",
-      installation: "inst_proxy",
-      body: { asset: true },
-    },
-  ]);
 });
 
 test("Cloudflare release template enables production workers.dev launch URLs", () => {

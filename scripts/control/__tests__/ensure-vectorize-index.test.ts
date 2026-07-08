@@ -1,64 +1,48 @@
 import { test } from "bun:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "../../..");
 
-test("ensure-vectorize-index forwards Takosumi billing context to compat API", async () => {
-  const requests: Array<{
-    method: string;
-    pathname: string;
-    headers: Headers;
-    body: unknown;
-  }> = [];
-  const server = Bun.serve({
-    port: 0,
-    async fetch(request) {
-      const url = new URL(request.url);
-      const body =
-        request.method === "POST" ? await request.json() : undefined;
-      requests.push({
-        method: request.method,
-        pathname: url.pathname,
-        headers: new Headers(request.headers),
-        body,
-      });
-      if (
-        request.method === "POST" &&
-        url.pathname ===
-          "/client/v4/accounts/ts_acc_takosumi_cloud/vectorize/v2/indexes"
-      ) {
-        return Response.json({
-          success: true,
-          errors: [],
-          messages: [],
-          result: body,
-        });
-      }
-      if (
-        request.method === "GET" &&
-        url.pathname ===
-          "/client/v4/accounts/ts_acc_takosumi_cloud/vectorize/v2/indexes/takos-test-embeddings"
-      ) {
-        return Response.json({
-          success: true,
-          errors: [],
-          messages: [],
-          result: {
-            name: "takos-test-embeddings",
-            config: {
-              dimensions: 768,
-              metric: "cosine",
-            },
-          },
-        });
-      }
-      return Response.json(
-        { success: false, errors: [{ message: "unexpected request" }] },
-        { status: 404 },
-      );
-    },
-  });
+test("ensure-vectorize-index delegates to Wrangler with Cloudflare-native env", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "takos-vectorize-test-"));
+  const bin = join(dir, "bin");
+  const captureFile = join(dir, "calls.json");
+  mkdirSync(bin);
+  writeFileSync(
+    join(bin, "bunx"),
+    `#!/usr/bin/env bash
+node - "$BUNX_CAPTURE_FILE" "$@" <<'NODE'
+const fs = require("node:fs");
+const [file, ...args] = process.argv.slice(2);
+const calls = fs.existsSync(file)
+  ? JSON.parse(fs.readFileSync(file, "utf8"))
+  : [];
+calls.push({
+  args,
+  env: {
+    CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_API_BASE_URL: process.env.CLOUDFLARE_API_BASE_URL,
+    CF_API_BASE_URL: process.env.CF_API_BASE_URL,
+    CLOUDFLARE_BASE_URL: process.env.CLOUDFLARE_BASE_URL,
+    CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
+  },
+});
+fs.writeFileSync(file, JSON.stringify(calls));
+NODE
+echo '{"success":true}'
+`,
+  );
+  chmodSync(join(bin, "bunx"), 0o755);
 
   try {
     const proc = Bun.spawn(
@@ -79,15 +63,11 @@ test("ensure-vectorize-index forwards Takosumi billing context to compat API", a
         stderr: "pipe",
         env: {
           ...process.env,
-          TAKOS_CLOUDFLARE_API_BASE_URL: `http://127.0.0.1:${server.port}/client/v4`,
+          PATH: `${bin}:${process.env.PATH ?? ""}`,
+          BUNX_CAPTURE_FILE: captureFile,
+          TAKOS_CLOUDFLARE_API_BASE_URL:
+            "https://app.takosumi.com/compat/cloudflare/client/v4",
           CLOUDFLARE_API_TOKEN: "test-token",
-          TAKOSUMI_RELEASE_CONTEXT_JSON: JSON.stringify({
-            kind: "takosumi.release-context@v1",
-            workspaceId: "space_test",
-            installation: {
-              id: "inst_test",
-            },
-          }),
         },
       },
     );
@@ -97,26 +77,36 @@ test("ensure-vectorize-index forwards Takosumi billing context to compat API", a
       new Response(proc.stderr).text(),
     ]);
 
-    assert.equal(
-      status,
-      0,
-      `${stdout}\n${stderr}`.trim(),
+    assert.equal(status, 0, `${stdout}\n${stderr}`.trim());
+    const calls = JSON.parse(readFileSync(captureFile, "utf8"));
+    assert.deepEqual(
+      calls.map((call: { args: readonly string[] }) => call.args),
+      [
+        [
+          "wrangler",
+          "vectorize",
+          "create",
+          "takos-test-embeddings",
+          "--dimensions",
+          "768",
+          "--metric",
+          "cosine",
+        ],
+        ["wrangler", "vectorize", "get", "takos-test-embeddings", "--json"],
+      ],
     );
-    assert.equal(requests.length, 2);
-    assert.equal(requests[0]?.method, "POST");
-    assert.equal(requests[1]?.method, "GET");
-    for (const request of requests) {
-      assert.equal(
-        request.headers.get("x-takosumi-cloud-billing-workspace-id"),
-        "space_test",
-      );
-      assert.equal(
-        request.headers.get("x-takosumi-cloud-billing-installation-id"),
-        "inst_test",
-      );
-      assert.equal(request.headers.get("authorization"), "Bearer test-token");
+    for (const call of calls) {
+      assert.deepEqual(call.env, {
+        CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+        CLOUDFLARE_API_BASE_URL:
+          "https://app.takosumi.com/compat/cloudflare/client/v4",
+        CF_API_BASE_URL: "https://app.takosumi.com/compat/cloudflare/client/v4",
+        CLOUDFLARE_BASE_URL:
+          "https://app.takosumi.com/compat/cloudflare/client/v4",
+        CLOUDFLARE_API_TOKEN: "test-token",
+      });
     }
   } finally {
-    server.stop(true);
+    rmSync(dir, { recursive: true, force: true });
   }
 });

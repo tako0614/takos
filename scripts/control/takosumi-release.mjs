@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import * as runtime from "../runtime.ts";
 
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -12,7 +12,6 @@ import {
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 
 import { parseTakosumiOutputsJson } from "./render-wrangler-from-tofu.mjs";
 
@@ -32,7 +31,6 @@ const DESTROY_COMMAND_RETRY_INTERVAL_MS = 2000;
 const BUN_INSTALL_RETRY_ATTEMPTS = 3;
 const BUN_INSTALL_RETRY_INTERVAL_MS = 2000;
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
-const CLOUDFLARE_API_PROXY_READY_PREFIX = "TAKOS_CLOUDFLARE_API_PROXY_READY=";
 const GENERATED_PUBLIC_ROUTE_BEGIN = "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE";
 const GENERATED_PUBLIC_ROUTE_END = "# END TAKOSUMI GENERATED PUBLIC ROUTE";
 
@@ -74,9 +72,9 @@ Optional env:
                                           registries. Keys may be Wrangler
                                           class names or "runtime" /
                                           "executor" aliases.
-  TAKOS_CLOUDFLARE_API_BASE_URL           Optional Cloudflare-compatible API
-                                          base URL used by managed compat
-                                          release helper steps.
+  TAKOS_CLOUDFLARE_API_BASE_URL           Optional Cloudflare API base URL
+                                          passed to Cloudflare-native release
+                                          tooling.
   TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN
                                           Optional token used only for the
                                           final wrangler deploy step. Use this
@@ -482,21 +480,6 @@ export function normalizeReleaseContainerImages(value) {
   return resolved;
 }
 
-export function inferCloudflareContainerRegistryAccountId(containerImages) {
-  const normalized = normalizeReleaseContainerImages(containerImages);
-  const accountIds = new Set(
-    Object.values(normalized)
-      .map(cloudflareContainerRegistryAccountId)
-      .filter(Boolean),
-  );
-  return accountIds.size === 1 ? [...accountIds][0] : undefined;
-}
-
-function cloudflareContainerRegistryAccountId(image) {
-  if (typeof image !== "string") return undefined;
-  return image.trim().match(/^registry\.cloudflare\.com\/([^/]+)\//u)?.[1];
-}
-
 export function releaseWranglerAccountId(outputs, env = process.env) {
   let outputAccountId;
   try {
@@ -506,14 +489,9 @@ export function releaseWranglerAccountId(outputs, env = process.env) {
   }
   const explicit =
     stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID) ??
-    stringValue(env.TAKOS_CLOUDFLARE_BACKEND_ACCOUNT_ID) ??
     stringValue(env.TAKOS_CLOUDFLARE_REAL_ACCOUNT_ID);
   if (explicit) return explicit;
-  if (!cloudflareApiBaseProxyTarget(env)) return outputAccountId;
-  const inferred = inferCloudflareContainerRegistryAccountId(
-    env.TAKOS_RELEASE_CONTAINER_IMAGES_JSON,
-  );
-  return inferred ?? outputAccountId;
+  return outputAccountId;
 }
 
 export function isSupportedCloudflareContainerImageRef(image) {
@@ -1079,10 +1057,6 @@ export function releaseChildEnv(outputs, env = process.env) {
   const apiToken = env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN;
   const apiBase =
     env.TAKOS_CLOUDFLARE_API_BASE_URL ?? env.CLOUDFLARE_API_BASE_URL;
-  const managedCompatApiBase =
-    typeof apiBase === "string" &&
-    apiBase.trim() &&
-    isTakosumiCloudflareCompatBase(apiBase.trim());
   return {
     ...env,
     CI: env.CI ?? "true",
@@ -1105,16 +1079,6 @@ export function releaseChildEnv(outputs, env = process.env) {
       ? {
           CLOUDFLARE_ACCOUNT_ID: wranglerAccountId,
           CF_ACCOUNT_ID: wranglerAccountId,
-        }
-      : {}),
-    ...(managedCompatApiBase && wranglerAccountId
-      ? {
-          TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: wranglerAccountId,
-        }
-      : {}),
-    ...(managedCompatApiBase && virtualAccountId
-      ? {
-          TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID: virtualAccountId,
         }
       : {}),
   };
@@ -1327,10 +1291,7 @@ function wranglerDeployToken(env = process.env) {
   if (explicit) return explicit;
   const providerToken =
     stringValue(env.CLOUDFLARE_API_TOKEN) ?? stringValue(env.CF_API_TOKEN);
-  if (providerToken && !cloudflareCompatProxyActive(env)) {
-    return providerToken;
-  }
-  return stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN) ?? providerToken;
+  return providerToken ?? stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN);
 }
 
 export async function preflightWranglerDeployAuth(
@@ -1469,184 +1430,8 @@ async function preflightCloudflareApiAccess(check, env, apiToken, fetchImpl) {
   };
 }
 
-export function releaseContextHeaders(env = process.env) {
-  const context = parseReleaseContext(env.TAKOSUMI_RELEASE_CONTEXT_JSON);
-  const installation =
-    context && typeof context.installation === "object"
-      ? context.installation
-      : undefined;
-  const workspaceId =
-    stringValue(context?.workspaceId) ??
-    stringValue(context?.spaceId) ??
-    stringValue(env.TAKOSUMI_WORKSPACE_ID) ??
-    stringValue(env.TAKOSUMI_SPACE_ID);
-  const installationId =
-    stringValue(installation?.id) ??
-    stringValue(context?.installationId) ??
-    stringValue(env.TAKOSUMI_CAPSULE_ID) ??
-    stringValue(env.TAKOSUMI_INSTALLATION_ID);
-  return {
-    ...(workspaceId
-      ? {
-          "x-takosumi-cloud-billing-workspace-id": workspaceId,
-          "x-takosumi-cloud-space-id": workspaceId,
-        }
-      : {}),
-    ...(installationId
-      ? {
-          "x-takosumi-cloud-billing-installation-id": installationId,
-          "x-takosumi-cloud-installation-id": installationId,
-        }
-      : {}),
-  };
-}
-
-function parseReleaseContext(raw) {
-  if (typeof raw !== "string" || !raw.trim()) return undefined;
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function stringValue(value) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-export async function withCloudflareApiBaseProxy(env, action) {
-  const targetBase = cloudflareApiBaseProxyTarget(env);
-  if (!targetBase) return action(env);
-  const apiToken = releaseApiToken(env);
-  if (!apiToken) {
-    throw new Error(
-      "Takosumi Cloud compat API release requires CLOUDFLARE_API_TOKEN or CF_API_TOKEN",
-    );
-  }
-  const proxyScript = fileURLToPath(
-    new URL("./cloudflare-api-base-proxy.mjs", import.meta.url),
-  );
-  const child = spawn("bun", [proxyScript], {
-    env: {
-      ...process.env,
-      TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE: targetBase,
-      TAKOS_CLOUDFLARE_API_PROXY_TOKEN: apiToken,
-      TAKOS_CLOUDFLARE_API_PROXY_CONTEXT_HEADERS: JSON.stringify(
-        releaseContextHeaders(env),
-      ),
-      TAKOS_CLOUDFLARE_API_PROXY_ACCOUNT_REWRITE:
-        releaseAccountRewriteJson(env) ?? "",
-    },
-    stdio: ["ignore", "pipe", "inherit"],
-  });
-  let closePromise;
-  try {
-    closePromise = new Promise((resolveClose) => {
-      child.once("close", (code, signal) => resolveClose({ code, signal }));
-    });
-    const ready = await waitForCloudflareApiProxyReady(child);
-    const proxyBase = `http://${ready.hostname}:${ready.port}`;
-    return await action({
-      ...env,
-      TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE: targetBase,
-      TAKOS_CLOUDFLARE_API_BASE_URL: proxyBase,
-      CLOUDFLARE_API_BASE_URL: proxyBase,
-      CF_API_BASE_URL: proxyBase,
-      CLOUDFLARE_BASE_URL: proxyBase,
-    });
-  } finally {
-    child.kill("SIGTERM");
-    if (closePromise) await closePromise;
-  }
-}
-
-function releaseAccountRewriteJson(env) {
-  const from = stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID);
-  const to = stringValue(env.TAKOS_CLOUDFLARE_VIRTUAL_ACCOUNT_ID);
-  if (!from || !to || from === to) return undefined;
-  return JSON.stringify({ from, to });
-}
-
-function cloudflareApiBaseProxyTarget(env) {
-  const configured =
-    env.TAKOS_CLOUDFLARE_API_BASE_URL ??
-    env.CLOUDFLARE_API_BASE_URL ??
-    env.CF_API_BASE_URL;
-  if (typeof configured !== "string" || !configured.trim()) return undefined;
-  const base = configured.trim().replace(/\/+$/u, "");
-  if (!isTakosumiCloudflareCompatBase(base)) return undefined;
-  return base;
-}
-
-function isTakosumiCloudflareCompatBase(base) {
-  try {
-    const url = new URL(base);
-    return url.pathname.includes("/compat/cloudflare/");
-  } catch {
-    return false;
-  }
-}
-
-function cloudflareCompatProxyActive(env) {
-  return (
-    Boolean(stringValue(env.TAKOS_CLOUDFLARE_API_PROXY_TARGET_BASE)) ||
-    Boolean(cloudflareApiBaseProxyTarget(env))
-  );
-}
-
-async function waitForCloudflareApiProxyReady(child) {
-  if (!child.stdout) {
-    throw new Error("Cloudflare API proxy stdout is unavailable");
-  }
-  let buffered = "";
-  return await new Promise((resolveReady, rejectReady) => {
-    const timeout = setTimeout(() => {
-      cleanup();
-      rejectReady(new Error("Timed out waiting for Cloudflare API proxy"));
-    }, 10_000);
-    const cleanup = () => {
-      clearTimeout(timeout);
-      child.stdout?.off("data", onData);
-      child.off("error", onError);
-      child.off("exit", onExit);
-    };
-    const onError = (error) => {
-      cleanup();
-      rejectReady(error);
-    };
-    const onExit = (code, signal) => {
-      cleanup();
-      rejectReady(
-        new Error(
-          `Cloudflare API proxy exited before ready (code=${code}, signal=${signal})`,
-        ),
-      );
-    };
-    const onData = (chunk) => {
-      buffered += chunk.toString("utf8");
-      let newline = buffered.indexOf("\n");
-      while (newline !== -1) {
-        const line = buffered.slice(0, newline).trim();
-        buffered = buffered.slice(newline + 1);
-        if (line.startsWith(CLOUDFLARE_API_PROXY_READY_PREFIX)) {
-          cleanup();
-          try {
-            resolveReady(
-              JSON.parse(line.slice(CLOUDFLARE_API_PROXY_READY_PREFIX.length)),
-            );
-          } catch (error) {
-            rejectReady(error);
-          }
-          return;
-        }
-        newline = buffered.indexOf("\n");
-      }
-    };
-    child.stdout.on("data", onData);
-    child.once("error", onError);
-    child.once("exit", onExit);
-  });
 }
 
 function cloudflareApiBaseUrl(env = process.env) {
@@ -2094,7 +1879,8 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       })();
   const childEnv = releaseChildEnv(outputs, env);
   try {
-    await withCloudflareApiBaseProxy(childEnv, async (releaseEnv) => {
+    const releaseEnv = childEnv;
+    {
       const commandsToRun = destroy ? commands : commands.slice(0, -1);
       for (const command of commandsToRun) {
         const stepName = releaseCommandStepName(command);
@@ -2163,7 +1949,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           verifyReleaseHealth(outputs, deployEnv),
         );
       }
-    });
+    }
   } catch (error) {
     releaseStatus = "failed";
     throw error;
