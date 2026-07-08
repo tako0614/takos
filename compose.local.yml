@@ -29,7 +29,6 @@ services:
       - -c
       - |
           psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takosumi'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takosumi"
-          psql -h postgres -U takos -d takos_app -tc "SELECT 1 FROM pg_database WHERE datname = 'takos_git'" | grep -q 1 || psql -h postgres -U takos -d takos_app -c "CREATE DATABASE takos_git"
 
   redis:
     image: redis:7-alpine
@@ -65,7 +64,6 @@ services:
     environment:
       PORT: '${TAKOS_WORKER_PORT:-8787}'
       TAKOS_WORKER_URL: '${TAKOS_WORKER_URL:-http://localhost:8787}'
-      TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
       TAKOS_AGENT_INTERNAL_URL: 'http://takos-agent:${TAKOS_AGENT_PORT:-8789}'
       TAKOS_AGENT_START_TOKEN: '${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}'
@@ -78,42 +76,6 @@ services:
     volumes:
       - .:/workspace
       - ../takosumi:/takosumi:ro
-
-  takos-git:
-    build:
-      context: ..
-      dockerfile: takos/containers/git/Dockerfile
-    depends_on:
-      postgres-init:
-        condition: service_completed_successfully
-    working_dir: /workspace/containers/git
-    command: ['bun', 'run', 'dev']
-    healthcheck:
-      test:
-        - 'CMD'
-        - 'bun'
-        - '-e'
-        - 'const r = await fetch(`http://localhost:$${process.env.PORT ?? "8790"}/health`); if (!r.ok) process.exit(1);'
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    environment:
-      PORT: '${TAKOS_GIT_PORT:-8790}'
-      TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
-      TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
-      TAKOS_GIT_REPOSITORY_ROOT: '/var/lib/takos-git/repositories'
-      TAKOS_GIT_DATABASE_URL: 'sqlite:///var/lib/takos-git/repositories/.takos/containers/git.sqlite'
-      GIT_CONFIG_COUNT: '1'
-      GIT_CONFIG_KEY_0: 'safe.directory'
-      GIT_CONFIG_VALUE_0: '*'
-    ports:
-      - '${TAKOS_GIT_PORT:-8790}:${TAKOS_GIT_PORT:-8790}'
-    volumes:
-      - .:/workspace
-      - ../takosumi:/takosumi:ro
-      - takos-git-node-modules:/workspace/containers/git/node_modules
-      - '${TAKOS_GIT_REPOSITORY_HOST_ROOT:-./.takos-git/repositories}:/var/lib/takos-git/repositories'
 
   takosumi:
     image: oven/bun:1
@@ -156,7 +118,6 @@ services:
     environment:
       PORT: '${TAKOS_AGENT_PORT:-8789}'
       TAKOSUMI_INTERNAL_URL: 'http://takosumi:${TAKOSUMI_PORT:-8788}'
-      TAKOS_GIT_INTERNAL_URL: 'http://takos-git:${TAKOS_GIT_PORT:-8790}'
       TAKOS_INTERNAL_SERVICE_SECRET: '${TAKOS_INTERNAL_SERVICE_SECRET:-local-dev-secret}'
       TAKOS_AGENT_START_TOKEN: '${TAKOS_AGENT_START_TOKEN:-local-agent-start-token}'
     ports:
@@ -171,4 +132,3 @@ services:
 volumes:
   takos-postgres:
   takos-redis:
-  takos-git-node-modules:

@@ -11,7 +11,6 @@ const expectedLayoutPaths = [
   "src/worker/server/routes",
   "src/contracts",
   "web",
-  "containers/git",
   "containers/agent",
 ];
 const legacySourceRoots = ["agent", "app", "git"];
@@ -20,7 +19,6 @@ const expectedServices = [
   "postgres-init",
   "redis",
   "takos-worker",
-  "takos-git",
   "takosumi",
   "takos-agent",
 ];
@@ -28,12 +26,10 @@ const expectedPortMarkers = [
   "${TAKOS_WORKER_PORT:-8787}",
   "${TAKOSUMI_PORT:-8788}",
   "${TAKOS_AGENT_PORT:-8789}",
-  "${TAKOS_GIT_PORT:-8790}",
   "${TAKOS_POSTGRES_PORT:-15432}",
   "${TAKOS_REDIS_PORT:-16379}",
 ];
 const expectedInternalUrlMarkers = [
-  "TAKOS_GIT_INTERNAL_URL",
   "TAKOSUMI_INTERNAL_URL",
   "TAKOS_AGENT_INTERNAL_URL",
   "TAKOS_INTERNAL_SERVICE_SECRET",

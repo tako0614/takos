@@ -12,11 +12,11 @@ import {
 } from "@takosjp/takosumi-accounts-contract";
 
 import {
-  applyDefaultAppInstallation,
-  type DefaultAppDistributionEntry,
-  resolveDefaultAppDistributionForBootstrap,
-  resolveDefaultAppInstallConfig,
-} from "../../application/services/source/default-app-distribution.ts";
+  applyFeaturedAppInstallation,
+  type FeaturedAppCatalogEntry,
+  resolveFeaturedAppCatalogForBootstrap,
+  resolveFeaturedAppInstallConfig,
+} from "../../application/services/source/featured-app-catalog.ts";
 import {
   applyInstallableAppInstallation,
   applyInstallableAppRevision,
@@ -79,9 +79,9 @@ type InstallationApiRecord = {
 };
 
 export const appInstallationsRouteDeps = {
-  applyDefaultAppInstallation,
-  resolveDefaultAppDistributionForBootstrap,
-  resolveDefaultAppInstallConfig,
+  applyFeaturedAppInstallation,
+  resolveFeaturedAppCatalogForBootstrap,
+  resolveFeaturedAppInstallConfig,
   resolveInstallableAppAccountsConfig,
   resolveInstallableAppInstallConfig,
   listInstallableAppInstallations,
@@ -115,7 +115,7 @@ function readOptionalBodyAppId(body: InstallableAppApplyBody): string | null {
 
 function readBodyMode(
   body: InstallableAppApplyBody,
-  entry: DefaultAppDistributionEntry,
+  entry: FeaturedAppCatalogEntry,
 ): string | undefined {
   const mode = readString(body.mode);
   if (!mode) return undefined;
@@ -412,8 +412,8 @@ function readAccountsExpectedGuard(
   return expected;
 }
 
-function defaultAppMode(
-  entry: DefaultAppDistributionEntry,
+function featuredAppMode(
+  entry: FeaturedAppCatalogEntry,
   requestedMode: string | undefined,
 ): string {
   if (requestedMode) return requestedMode;
@@ -421,7 +421,7 @@ function defaultAppMode(
   return firstMode || "shared-cell";
 }
 
-function defaultAppOpenTofuSource(entry: DefaultAppDistributionEntry): {
+function featuredAppOpenTofuSource(entry: FeaturedAppCatalogEntry): {
   kind: "git";
   url: string;
   ref: string;
@@ -435,7 +435,7 @@ function defaultAppOpenTofuSource(entry: DefaultAppDistributionEntry): {
   };
 }
 
-function hasDefaultAppVariables(entry: DefaultAppDistributionEntry): boolean {
+function hasFeaturedAppVariables(entry: FeaturedAppCatalogEntry): boolean {
   return Boolean(entry.variables && Object.keys(entry.variables).length > 0);
 }
 
@@ -452,21 +452,21 @@ async function postAccountsInstallationJson(
   });
 }
 
-async function applyDefaultAppInstallationForRoute(
+async function applyFeaturedAppInstallationForRoute(
   c: Context<SpaceAccessRouteEnv>,
   caller: AccountsSessionCaller,
-  entry: DefaultAppDistributionEntry,
+  entry: FeaturedAppCatalogEntry,
   params: {
     spaceId: string;
     mode: string;
   },
 ): Promise<InstallableAppUpstreamResponse> {
-  const source = defaultAppOpenTofuSource(entry);
+  const source = featuredAppOpenTofuSource(entry);
   const planBody: Record<string, unknown> = {
     spaceId: params.spaceId,
     source,
   };
-  if (hasDefaultAppVariables(entry)) planBody.variables = entry.variables;
+  if (hasFeaturedAppVariables(entry)) planBody.variables = entry.variables;
   const plan = await postAccountsInstallationJson(
     c,
     caller,
@@ -484,7 +484,7 @@ async function applyDefaultAppInstallationForRoute(
     mode: params.mode,
   };
   if (entry.modulePath) applyBody.modulePath = entry.modulePath;
-  if (hasDefaultAppVariables(entry)) applyBody.vars = entry.variables;
+  if (hasFeaturedAppVariables(entry)) applyBody.vars = entry.variables;
   return await postAccountsInstallationJson(
     c,
     caller,
@@ -591,10 +591,10 @@ async function listInstallableAppInstallationsWithServicesForRoute(
   };
 }
 
-function findDefaultAppEntry(
-  entries: DefaultAppDistributionEntry[],
+function findFeaturedAppEntry(
+  entries: FeaturedAppCatalogEntry[],
   appId: string,
-): DefaultAppDistributionEntry | null {
+): FeaturedAppCatalogEntry | null {
   return (
     entries.find((entry) => entry.appId === appId || entry.name === appId) ??
     null
@@ -737,7 +737,7 @@ function extractInstallationStatus(value: unknown): string {
 }
 
 function toInstallationRecord(
-  entry: DefaultAppDistributionEntry,
+  entry: FeaturedAppCatalogEntry,
   upstream: unknown,
   params: {
     mode: string | null;
@@ -1087,10 +1087,10 @@ appInstallationsRouter.post(
 
     const appId = readBodyAppId(body);
     const entries =
-      await appInstallationsRouteDeps.resolveDefaultAppDistributionForBootstrap(
+      await appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap(
         c.env,
       );
-    const entry = findDefaultAppEntry(entries, appId);
+    const entry = findFeaturedAppEntry(entries, appId);
     if (!entry?.appId) {
       throw new NotFoundError("Installable app");
     }
@@ -1098,8 +1098,8 @@ appInstallationsRouter.post(
     const mode = readBodyMode(body, entry);
     const caller = await resolveAccountsSessionCaller(c);
     if (caller) {
-      const selectedMode = defaultAppMode(entry, mode);
-      const upstream = await applyDefaultAppInstallationForRoute(
+      const selectedMode = featuredAppMode(entry, mode);
+      const upstream = await applyFeaturedAppInstallationForRoute(
         c,
         caller,
         entry,
@@ -1123,7 +1123,7 @@ appInstallationsRouter.post(
     }
 
     const installConfig =
-      appInstallationsRouteDeps.resolveDefaultAppInstallConfig(c.env);
+      appInstallationsRouteDeps.resolveFeaturedAppInstallConfig(c.env);
     if (!installConfig) {
       throw new ServiceUnavailableError(
         "Capsule install is not configured",
@@ -1131,7 +1131,7 @@ appInstallationsRouter.post(
     }
 
     const upstream =
-      await appInstallationsRouteDeps.applyDefaultAppInstallation(
+      await appInstallationsRouteDeps.applyFeaturedAppInstallation(
         entry,
         installConfig,
         {

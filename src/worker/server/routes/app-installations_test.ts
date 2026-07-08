@@ -9,9 +9,9 @@ import appInstallationsRouter, {
 import { routeAuthDeps } from "./route-auth.ts";
 import type { Env } from "../../shared/types/index.ts";
 import type {
-  DefaultAppDistributionEntry,
-  DefaultAppInstallConfig,
-} from "../../application/services/source/default-app-distribution.ts";
+  FeaturedAppCatalogEntry,
+  FeaturedAppInstallConfig,
+} from "../../application/services/source/featured-app-catalog.ts";
 import { installableAppInstallDeps } from "../../application/services/source/installable-app-install.ts";
 
 const originalRouteAuthDeps = { ...routeAuthDeps };
@@ -59,16 +59,16 @@ function createApp() {
   return app;
 }
 
-const defaultAppEntry = {
-  name: "takos-docs",
-  title: "Takos Docs",
-  appId: "jp.takos.docs",
-  repositoryUrl: "https://github.com/tako0614/takos-docs",
+const featuredAppEntry = {
+  name: "takos-office",
+  title: "Office",
+  appId: "jp.takos.office",
+  repositoryUrl: "https://github.com/tako0614/takos-office.git",
   ref: "v0.1.2",
   refType: "tag",
   runtimeModes: ["shared-cell", "dedicated", "self-hosted"],
-  preinstall: true,
-} satisfies DefaultAppDistributionEntry;
+  preinstall: false,
+} satisfies FeaturedAppCatalogEntry;
 
 const roadToMeCatalogEntry = {
   name: "road-to-me",
@@ -79,16 +79,16 @@ const roadToMeCatalogEntry = {
   refType: "tag",
   runtimeModes: ["dedicated", "self-hosted"],
   preinstall: false,
-} satisfies DefaultAppDistributionEntry;
+} satisfies FeaturedAppCatalogEntry;
 
 const installConfig = {
   installUrl: "https://installer.internal/v1/capsule-projections",
   token: "install-token",
   subject: "operator-subject",
   mode: "shared-cell",
-} satisfies DefaultAppInstallConfig;
+} satisfies FeaturedAppInstallConfig;
 
-test("app-installations route applies a default app through Capsule install", async () => {
+test("app-installations route applies a featured app through Capsule install", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -97,11 +97,11 @@ test("app-installations route applies a default app through Capsule install", as
       membership: { role: "editor" },
     } as never;
   };
-  appInstallationsRouteDeps.resolveDefaultAppDistributionForBootstrap =
-    async () => [defaultAppEntry];
-  appInstallationsRouteDeps.resolveDefaultAppInstallConfig = () =>
+  appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap =
+    async () => [featuredAppEntry];
+  appInstallationsRouteDeps.resolveFeaturedAppInstallConfig = () =>
     installConfig;
-  appInstallationsRouteDeps.applyDefaultAppInstallation = async (
+  appInstallationsRouteDeps.applyFeaturedAppInstallation = async (
     entry,
     config,
     params,
@@ -122,7 +122,7 @@ test("app-installations route applies a default app through Capsule install", as
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          app_id: "jp.takos.docs",
+          app_id: "jp.takos.office",
           mode: "shared-cell",
         }),
       },
@@ -135,7 +135,7 @@ test("app-installations route applies a default app through Capsule install", as
       installation: {
         installed: true,
         installation_id: "inst_1",
-        app_id: "jp.takos.docs",
+        app_id: "jp.takos.office",
         status: "ready",
         runtime_mode: "shared-cell",
         installed_version: "v0.1.2",
@@ -151,7 +151,7 @@ test("app-installations route applies a default app through Capsule install", as
       },
       {
         kind: "apply",
-        entry: defaultAppEntry,
+        entry: featuredAppEntry,
         config: installConfig,
         params: {
           spaceId: "space-1",
@@ -174,11 +174,11 @@ test("app-installations route applies catalog-only road-to-me by app_id", async 
       membership: { role: "editor" },
     } as never;
   };
-  appInstallationsRouteDeps.resolveDefaultAppDistributionForBootstrap =
-    async () => [defaultAppEntry, roadToMeCatalogEntry];
-  appInstallationsRouteDeps.resolveDefaultAppInstallConfig = () =>
+  appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap =
+    async () => [featuredAppEntry, roadToMeCatalogEntry];
+  appInstallationsRouteDeps.resolveFeaturedAppInstallConfig = () =>
     installConfig;
-  appInstallationsRouteDeps.applyDefaultAppInstallation = async (
+  appInstallationsRouteDeps.applyFeaturedAppInstallation = async (
     entry,
     config,
     params,
@@ -237,9 +237,9 @@ test("app-installations route applies catalog-only road-to-me by app_id", async 
 test("app-installations route requires Capsule install config", async () => {
   routeAuthDeps.requireSpaceAccess = async () =>
     ({ space: { id: "space-1" }, membership: { role: "editor" } }) as never;
-  appInstallationsRouteDeps.resolveDefaultAppDistributionForBootstrap =
-    async () => [defaultAppEntry];
-  appInstallationsRouteDeps.resolveDefaultAppInstallConfig = () => null;
+  appInstallationsRouteDeps.resolveFeaturedAppCatalogForBootstrap =
+    async () => [featuredAppEntry];
+  appInstallationsRouteDeps.resolveFeaturedAppInstallConfig = () => null;
 
   try {
     const response = await createApp().request(
@@ -247,7 +247,7 @@ test("app-installations route requires Capsule install config", async () => {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ app_id: "jp.takos.docs" }),
+        body: JSON.stringify({ app_id: "jp.takos.office" }),
       },
       { DB: {} } as Env,
     );
@@ -275,7 +275,7 @@ test("app-installations route rejects camelCase request aliases", async () => {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ appId: "jp.takos.docs" }),
+        body: JSON.stringify({ appId: "jp.takos.office" }),
       },
       { DB: {} } as Env,
     );
@@ -368,8 +368,7 @@ test("app-installations route proxies Git URL install plan Run", async () => {
       },
       {
         kind: "fetch",
-        input:
-          "https://installer.internal/v1/capsule-projections/plan-runs",
+        input: "https://installer.internal/v1/capsule-projections/plan-runs",
         method: "POST",
         authorization: "Bearer install-token",
         body: {
@@ -651,7 +650,7 @@ test("app-installations route proxies Git URL deployment plan Run and apply", as
         body: null,
       });
       return Response.json({
-        installations: [{ id: "inst_1", app_id: "jp.takos.docs" }],
+        installations: [{ id: "inst_1", app_id: "jp.takos.office" }],
       });
     }
     const isMutation =
@@ -822,7 +821,7 @@ test("app-installations route lists and deletes through Takosumi Accounts", asyn
       installations: [
         {
           id: "inst_1",
-          app_id: "jp.takos.docs",
+          app_id: "jp.takos.office",
           status: "ready",
         },
       ],
@@ -952,7 +951,7 @@ test("app-installations route lists Capsule services through Takosumi Accounts",
       });
     }
     return Response.json({
-      installations: [{ id: "inst_1", app_id: "jp.takos.docs" }],
+      installations: [{ id: "inst_1", app_id: "jp.takos.office" }],
     });
   };
 

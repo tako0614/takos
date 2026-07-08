@@ -6,7 +6,6 @@ const defaults = {
   takosWorkerPort: '8787',
   takosumiPort: '8788',
   takosAgentPort: '8789',
-  takosGitPort: '8790',
 };
 
 function loadEnvFile(filePath) {
@@ -66,15 +65,10 @@ async function main() {
     'TAKOS_AGENT_PUBLIC_URL',
     baseUrl(env('TAKOS_AGENT_PORT', defaults.takosAgentPort)),
   );
-  const takosGitUrl = env(
-    'TAKOS_GIT_PUBLIC_URL',
-    baseUrl(env('TAKOS_GIT_PORT', defaults.takosGitPort)),
-  );
 
   await expectJsonHealth('takos-worker', `${takosWorkerUrl}/health`);
   await expectJsonHealth('takosumi', `${takosumiUrl}/health`);
   await expectJsonHealth('takos-agent', `${takosAgentUrl}/health`);
-  await expectJsonHealth('takos-git', `${takosGitUrl}/health`);
 }
 
 main().catch((error) => {

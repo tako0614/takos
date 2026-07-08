@@ -21,7 +21,7 @@ function AppShell(props: { children: JSX.Element }) {
   const handleCreateSpace = async (
     name: string,
     description: string,
-    installDefaultApps: boolean,
+    installFeaturedApps: boolean,
   ) => {
     const trimmedName = name.trim();
     const trimmedDescription = description.trim();
@@ -32,7 +32,7 @@ function AppShell(props: { children: JSX.Element }) {
         json: {
           name: trimmedName,
           description: trimmedDescription || undefined,
-          installDefaultApps,
+          installFeaturedApps,
         },
       });
       const data = await rpcJson<{ space: Space }>(response);

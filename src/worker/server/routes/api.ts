@@ -11,7 +11,6 @@ import spacesMembers from "./spaces/members.ts";
 import spacesRepos from "./spaces/repositories.ts";
 import spacesStorage from "./spaces/storage.ts";
 import spacesTools from "./spaces/tools.ts";
-import seedRepositories from "./seed-repositories.ts";
 import threads from "./threads.ts";
 import runs from "./runs/routes.ts";
 import search from "./search/index.ts";
@@ -337,7 +336,6 @@ export function createApiRouter({
   apiRouter.route("/spaces", spacesStorage);
   apiRouter.route("/spaces", spacesTools);
   apiRouter.route("/spaces", workersSpaceRoutes);
-  apiRouter.route("/", seedRepositories);
   apiRouter.route("/shortcuts", shortcuts);
   apiRouter.route("/", shortcutGroupRoutes); // Shortcut groups at /api/spaces/:id/shortcuts/groups
   apiRouter.route("/services", services);

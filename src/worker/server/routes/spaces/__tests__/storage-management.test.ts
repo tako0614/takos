@@ -144,7 +144,7 @@ function createPublicationRecord(options: {
   return {
     id: options.id,
     name: options.name,
-    sourceType: "service_graph",
+    sourceType: "runtime_projection",
     groupId: "space_1",
     ownerServiceId: "svc_1",
     catalogName: null,

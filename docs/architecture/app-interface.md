@@ -8,7 +8,7 @@
 ## Ownership
 
 Takosumi treats a Git-URL OpenTofu Capsule as Source / Capsule / Run / StateVersion / Output and records the result of
-`tofu output -json`. Takos reads a Capsule's published `service_exports` / `service_bindings` / `takos_app` Outputs and
+`tofu output -json`. Takos reads a Capsule's published `service_exports` / `service_bindings` / `app_deployment` Outputs and
 projects them into its app launcher, MCP registry, file handlers, Git, storage, and agent runtime.
 
 This boundary is fixed.
@@ -23,7 +23,7 @@ This boundary is fixed.
 
 ## Publishing services
 
-A Capsule publishes a service through the `service_exports` Output (or the `takos_app` publish convenience).
+A Capsule publishes a service through the `service_exports` Output (or the `app_deployment` publish convenience).
 
 ```hcl
 output "service_exports" {
@@ -72,7 +72,7 @@ modules stay OpenTofu's responsibility.
 
 ## Consuming services
 
-A Capsule consumes services through the `service_bindings` Output (or `takos_app` consume). Takos selects matching
+A Capsule consumes services through the `service_bindings` Output (or `app_deployment` consume). Takos selects matching
 exports, pins them into the consumer's plan-time output-to-input snapshot, and wires only non-secret endpoint values into
 the consumer. The projection is read-only and store-free: it issues no credentials. Secret values fail closed and are
 delivered by the deployed workload's own runtime, not by a Takosumi grant.
@@ -100,7 +100,7 @@ This maps endpoint discovery only. Bearer authority is not projected from OpenTo
 
 ## Security invariants
 
-- No secret literal in `service_exports` / `service_bindings` / `takos_app` Outputs.
+- No secret literal in `service_exports` / `service_bindings` / `app_deployment` Outputs.
 - The projection grants no runtime authority; runtime service tokens come from the deployed workload's runtime, not from
   OpenTofu Outputs.
 - Provider credentials remain in the ProviderConnection / CredentialRecipe / ProviderBinding / vault / runner phase

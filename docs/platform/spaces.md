@@ -15,18 +15,18 @@ Takos
   ├─ user Workspace
   ├─ team Workspace
   └─ system Workspace
-        └─ bundled app / user content
+        └─ installed app / user content
 ```
 
 Capsule lifecycle の詳細は [Takosumi model](https://takosumi.com/docs/reference/model) を参照。
 
 ## Workspace の種類
 
-| kind     | 説明                                                                   |
-| -------- | ---------------------------------------------------------------------- |
+| kind     | 説明                                                                    |
+| -------- | ----------------------------------------------------------------------- |
 | `user`   | 個人用 space。ユーザー作成時に自動生成され、UI では personal と表示する |
-| `team`   | チーム用 space。複数メンバーで共同利用する                             |
-| `system` | システム管理用 space                                                   |
+| `team`   | チーム用 space。複数メンバーで共同利用する                              |
+| `system` | システム管理用 space                                                    |
 
 Organization は Workspace kind ではなく membership / billing / policy の上位構造です。大規模な組織利用でも、Takos
 Workspace の kind は `user` / `team` / `system` のいずれかに閉じます。

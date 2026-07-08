@@ -510,7 +510,7 @@ test("listCatalogItems marks release catalog entries unavailable when git object
   assertEquals(deployable.items, []);
 });
 
-test("listCatalogItems includes default app distribution entries in the catalog", async () => {
+test("listCatalogItems includes featured app catalog entries in the catalog", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -525,19 +525,19 @@ test("listCatalogItems includes default app distribution entries in the catalog"
     type: "deployable-app",
     certifiedOnly: true,
     searchQuery: "docs",
-    tagsRaw: "default-app",
-    defaultAppEntries: [
+    tagsRaw: "featured-app",
+    featuredAppEntries: [
       {
-        name: "takos-docs",
-        title: "Docs",
-        appId: "jp.takos.docs",
-        description: "Rich text document editor",
+        name: "takos-office",
+        title: "Office",
+        appId: "jp.takos.office",
+        description: "Docs, slides, and spreadsheets in one worker",
         publisher: "takos",
-        homepage: "https://github.com/tako0614/takos-docs",
+        homepage: "https://github.com/tako0614/takos-office",
         icon: "/icons/docs.svg",
         category: "app",
         tags: ["office"],
-        repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+        repositoryUrl: "https://github.com/tako0614/takos-office.git",
         ref: "main",
         refType: "branch",
         sourcePath: "outputs.tf",
@@ -550,7 +550,7 @@ test("listCatalogItems includes default app distribution entries in the catalog"
             required: true,
           },
         ],
-        preinstall: true,
+        preinstall: false,
         backendName: "cloudflare",
         envName: "staging",
       },
@@ -560,22 +560,25 @@ test("listCatalogItems includes default app distribution entries in the catalog"
 
   assertEquals(result.total, 1);
   const item = result.items[0]!;
-  assertEquals(item.repo.id, "default-app:takos-docs");
-  assertEquals(item.repo.name, "Docs");
-  assertEquals(item.repo.catalog_origin, "default_app");
+  assertEquals(item.repo.id, "featured-app:takos-office");
+  assertEquals(item.repo.name, "Office");
+  assertEquals(item.repo.catalog_origin, "featured_app");
   assertEquals(item.package.available, true);
-  assertEquals(item.package.app_id, "jp.takos.docs");
-  assertEquals(item.package.description, "Rich text document editor");
+  assertEquals(item.package.app_id, "jp.takos.office");
+  assertEquals(
+    item.package.description,
+    "Docs, slides, and spreadsheets in one worker",
+  );
   assertEquals(item.package.icon, "/icons/docs.svg");
   assertEquals(item.package.tags.includes("office"), true);
   assertEquals(item.package.certified, true);
   assertEquals(item.package.publish_status, "approved");
   assertEquals(item.installable_app, {
-    app_id: "jp.takos.docs",
-    name: "Docs",
-    description: "Rich text document editor",
+    app_id: "jp.takos.office",
+    name: "Office",
+    description: "Docs, slides, and spreadsheets in one worker",
     publisher: "takos",
-    homepage: "https://github.com/tako0614/takos-docs",
+    homepage: "https://github.com/tako0614/takos-office",
     source_path: "outputs.tf",
     runtime_modes: ["shared-cell", "dedicated", "self-hosted"],
     bindings: [
@@ -585,7 +588,7 @@ test("listCatalogItems includes default app distribution entries in the catalog"
   });
   assertEquals(item.source, {
     kind: "git_ref",
-    repository_url: "https://github.com/tako0614/takos-docs.git",
+    repository_url: "https://github.com/tako0614/takos-office.git",
     ref: "main",
     ref_type: "branch",
     backend: "cloudflare",
@@ -608,7 +611,7 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
     type: "deployable-app",
     certifiedOnly: false,
     searchQuery: "road",
-    defaultAppEntries: [
+    featuredAppEntries: [
       {
         name: "road-to-me",
         title: "Road to Me",
@@ -640,8 +643,8 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
 
   assertEquals(result.total, 1);
   const item = result.items[0]!;
-  assertEquals(item.repo.id, "default-app:road-to-me");
-  assertEquals(item.repo.catalog_origin, "default_app");
+  assertEquals(item.repo.id, "featured-app:road-to-me");
+  assertEquals(item.repo.catalog_origin, "featured_app");
   assertEquals(item.package.app_id, "jp.takos.road-to-me");
   assertEquals(item.package.latest_version, "v0.1.0");
   assertEquals(item.installable_app, {
@@ -668,7 +671,7 @@ test("listCatalogItems exposes road-to-me as catalog-only InstallableApp", async
   });
 });
 
-test("listCatalogItems does not infer default app installation without Accounts ledger readback", async () => {
+test("listCatalogItems does not infer featured app installation without Accounts ledger readback", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -683,14 +686,14 @@ test("listCatalogItems does not infer default app installation without Accounts 
     type: "deployable-app",
     certifiedOnly: false,
     spaceId: "space-1",
-    defaultAppEntries: [
+    featuredAppEntries: [
       {
-        name: "takos-docs",
-        title: "Docs",
-        repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+        name: "takos-office",
+        title: "Office",
+        repositoryUrl: "https://github.com/tako0614/takos-office.git",
         ref: "main",
         refType: "branch",
-        preinstall: true,
+        preinstall: false,
       },
     ],
     now: "2026-04-22T00:00:00.000Z",
@@ -699,7 +702,7 @@ test("listCatalogItems does not infer default app installation without Accounts 
   assertEquals(result.items[0]?.installation, undefined);
 });
 
-test("listCatalogItems overlays default app installation state from Accounts ledger", async () => {
+test("listCatalogItems overlays featured app installation state from Accounts ledger", async () => {
   const db = createCatalogDb({
     repos: [],
     releases: [],
@@ -715,15 +718,15 @@ test("listCatalogItems overlays default app installation state from Accounts led
     type: "deployable-app",
     certifiedOnly: false,
     spaceId: "space-1",
-    defaultAppEntries: [
+    featuredAppEntries: [
       {
-        name: "takos-docs",
-        title: "Docs",
-        appId: "jp.takos.docs",
-        repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+        name: "takos-office",
+        title: "Office",
+        appId: "jp.takos.office",
+        repositoryUrl: "https://github.com/tako0614/takos-office.git",
         ref: "v1.2.6",
         refType: "tag",
-        preinstall: true,
+        preinstall: false,
       },
     ],
     accountsInstallations: {
@@ -735,17 +738,17 @@ test("listCatalogItems overlays default app installation state from Accounts led
           url,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        if (url.endsWith("/v1/capsule-projections/inst_docs")) {
+        if (url.endsWith("/v1/capsule-projections/inst_office")) {
           // Deploy decision D3: workload services are projected from the
           // installation deployment-output projection.
           return Response.json({
             installation: {
-              id: "inst_docs",
+              id: "inst_office",
               deployment_outputs: [
                 {
                   name: "launch_url",
                   kind: "launch_url",
-                  value: "https://docs.example.test",
+                  value: "https://office.example.test",
                   sensitive: false,
                 },
               ],
@@ -755,14 +758,14 @@ test("listCatalogItems overlays default app installation state from Accounts led
         return Response.json({
           installations: [
             {
-              id: "inst_docs",
+              id: "inst_office",
               space_id: "space-1",
-              app_id: "jp.takos.docs",
+              app_id: "jp.takos.office",
               source: {
                 type: "git",
-                url: "https://github.com/tako0614/takos-docs.git",
+                url: "https://github.com/tako0614/takos-office.git",
                 ref: "v1.2.6",
-                commit: "commit-docs",
+                commit: "commit-office",
               },
               mode: "shared-cell",
               status: "ready",
@@ -783,18 +786,18 @@ test("listCatalogItems overlays default app installation state from Accounts led
   assertEquals(requests[0]?.authorization, "Bearer accounts-token");
   assertEquals(
     requests[1]?.url,
-    "https://accounts.internal/base/v1/capsule-projections/inst_docs",
+    "https://accounts.internal/base/v1/capsule-projections/inst_office",
   );
   assertEquals(result.items[0]?.installation, {
     installed: true,
-    installation_id: "inst_docs",
-    app_id: "jp.takos.docs",
+    installation_id: "inst_office",
+    app_id: "jp.takos.office",
     status: "ready",
     runtime_mode: "shared-cell",
     group_id: null,
     group_name: null,
     installed_version: "v1.2.6",
-    installed_commit: "commit-docs",
+    installed_commit: "commit-office",
     deployed_at: null,
     installed_at: "2026-04-22T01:00:00.000Z",
     updated_at: "2026-04-22T01:05:00.000Z",
@@ -803,7 +806,7 @@ test("listCatalogItems overlays default app installation state from Accounts led
         id: "launch_url",
         capability: "deployment.outputs",
         status: "ready",
-        endpoint: "https://docs.example.test",
+        endpoint: "https://office.example.test",
         secret_configured: false,
         token_expires_at: null,
       },

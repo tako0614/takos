@@ -19,10 +19,14 @@ Resource Shapes:
 
 ```text
 takos-worker -> EdgeWorker
-takos-git    -> ContainerService
 takos-agent  -> ContainerService
 backing data -> SQLDatabase / KVStore / ObjectBucket / Queue
 ```
+
+Git hosting is worker-native: read-only Smart HTTP clone/fetch is served by
+`takos-worker` from the `ObjectBucket` (R2) git object store, so it maps to the
+`EdgeWorker` + `ObjectBucket` shapes above rather than a separate container
+service. Push goes through the Takos repository API, not Git Smart HTTP.
 
 This is distribution-profile evidence, not a new Takos-specific Resource Shape
 and not a replacement for the OpenTofu module under `deploy/opentofu`. Takos

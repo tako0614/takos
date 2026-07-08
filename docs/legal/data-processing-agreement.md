@@ -40,20 +40,20 @@ or master agreement. The Takosumi Account holder is the legal counter-party for
 contract, billing, and DPA signature purposes, and is fixed for the life of the
 DPA.
 
-`Installation owner` means the operational owner of a specific Takos
-Installation under that Takosumi Account (per Space). The Installation owner
+`Capsule owner` means the operational owner of a specific Takos Capsule under
+that Takosumi Account (per Space). The Capsule owner
 acts as Customer's **delegated agent** for app-local configuration and data
 subject request handling, but is not itself the DPA signatory.
 
 `Takos` means the Takos service operator identified in the signed order form or
 master agreement.
 
-Legal continuity rule: Installation export, dedicated materialization, or
-re-binding may move the Installation owner role within the Customer's scope, but
+Legal continuity rule: Capsule export, dedicated materialization, or
+re-binding may move the Capsule owner role within the Customer's scope, but
 the **DPA Customer remains the Takosumi Account holder**. Transferring the DPA
-Customer to a different Takosumi Account (e.g., Installation export to a
+Customer to a different Takosumi Account (e.g., Capsule export to a
 separate takosumi instance owned by a different account) requires a separate
-contract assignment, not an Installation lifecycle event.
+contract assignment, not a Capsule lifecycle event.
 
 For Customer Personal Data processed through Takos spaces, repositories,
 deployments, agent runs, support requests, and customer-managed applications:
@@ -61,14 +61,14 @@ deployments, agent runs, support requests, and customer-managed applications:
 | Party                              | Default role                                                                                                        |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Customer (Takosumi Account holder) | Controller, or processor where Customer processes data for its own end customer                                     |
-| Installation owner                 | Customer's delegated agent for app-local processing decisions; does not change Customer's controller/processor role |
+| Capsule owner                      | Customer's delegated agent for app-local processing decisions; does not change Customer's controller/processor role |
 | Takos                              | Processor, or sub-processor where Customer is a processor                                                           |
 
 The Takos service operator or operator account-plane provider may act as an
 independent controller for account administration, security, billing, fraud
 prevention, service analytics, and legal compliance. Those controller activities
 belong in the Privacy Policy and Terms of Service, not this DPA template. This
-does not make the Takos product the OIDC issuer, billing owner, or Installation
+does not make the Takos product the OIDC issuer, billing owner, or Capsule
 ledger owner.
 
 ## 2. Customer Instructions

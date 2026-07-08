@@ -51,7 +51,8 @@ function makePublicationRow(
     accountId: "space_1",
     groupId: publication.publisher === "takos" ? null : "group_other",
     ownerServiceId: publication.publisher === "takos" ? null : "svc_other",
-    sourceType: publication.publisher === "takos" ? "api" : "service_graph",
+    sourceType:
+      publication.publisher === "takos" ? "api" : "runtime_projection",
     name: publication.name,
     catalogName: publication.publisher === "takos" ? "takos" : null,
     publicationType: publication.type,
@@ -201,41 +202,47 @@ test("api runtime projection exports can be restored without route refs", () => 
 });
 
 test("publication prerequisites allow Takos workspace storage runtime projection consumes without catalog rows", async () => {
-  await assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
-    spaceId: "space_1",
-    manifest: {
-      compute: {
-        web: {
-          kind: "worker",
-          consume: [
-            {
-              publication: "takos.storage.workspace",
-              inject: { env: { url: "TAKOS_STORAGE_API_URL" } },
-            },
-          ],
+  await assertRuntimeProjectionPublicationPrerequisites(
+    makePublicationEnv(null),
+    {
+      spaceId: "space_1",
+      manifest: {
+        compute: {
+          web: {
+            kind: "worker",
+            consume: [
+              {
+                publication: "takos.storage.workspace",
+                inject: { env: { url: "TAKOS_STORAGE_API_URL" } },
+              },
+            ],
+          },
         },
       },
     },
-  });
+  );
 });
 
 test("publication prerequisites allow legacy storage.filesystem runtime projection consumes", async () => {
-  await assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
-    spaceId: "space_1",
-    manifest: {
-      compute: {
-        web: {
-          kind: "worker",
-          consume: [
-            {
-              publication: "storage.filesystem",
-              inject: { defaults: true },
-            },
-          ],
+  await assertRuntimeProjectionPublicationPrerequisites(
+    makePublicationEnv(null),
+    {
+      spaceId: "space_1",
+      manifest: {
+        compute: {
+          web: {
+            kind: "worker",
+            consume: [
+              {
+                publication: "storage.filesystem",
+                inject: { defaults: true },
+              },
+            ],
+          },
         },
       },
     },
-  });
+  );
 });
 
 test("service consumes normalize aliases and reject duplicates", () => {
@@ -454,50 +461,56 @@ test("publication prerequisites validate aliases for external catalog route cons
 });
 
 test("publication prerequisites allow same-manifest consumes before catalog write", async () => {
-  await assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
-    spaceId: "space_1",
-    manifest: {
-      publish: [
-        {
-          name: "search",
-          publisher: "web",
-          type: "com.example.McpEndpoint",
-          outputs: { url: { kind: "url", routeRef: "mcp" } },
-        },
-      ],
-      compute: {
-        web: {
-          kind: "worker",
-          consume: [{ publication: "search" }],
+  await assertRuntimeProjectionPublicationPrerequisites(
+    makePublicationEnv(null),
+    {
+      spaceId: "space_1",
+      manifest: {
+        publish: [
+          {
+            name: "search",
+            publisher: "web",
+            type: "com.example.McpEndpoint",
+            outputs: { url: { kind: "url", routeRef: "mcp" } },
+          },
+        ],
+        compute: {
+          web: {
+            kind: "worker",
+            consume: [{ publication: "search" }],
+          },
         },
       },
     },
-  });
+  );
 });
 
 test("publication prerequisites require a group hostname for same-manifest route consumes", async () => {
   await assertRejects(
     () =>
-      assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
-        spaceId: "space_1",
-        groupId: "group_1",
-        manifest: {
-          publish: [
-            {
-              name: "search",
-              publisher: "web",
-              type: "com.example.McpEndpoint",
-              outputs: { url: { kind: "url", routeRef: "mcp" } },
-            },
-          ],
-          compute: {
-            web: {
-              kind: "worker",
-              consume: [{ publication: "search" }],
+      assertRuntimeProjectionPublicationPrerequisites(
+        makePublicationEnv(null),
+        {
+          spaceId: "space_1",
+          groupId: "group_1",
+          manifest: {
+            publish: [
+              {
+                name: "search",
+                publisher: "web",
+                type: "com.example.McpEndpoint",
+                outputs: { url: { kind: "url", routeRef: "mcp" } },
+              },
+            ],
+            compute: {
+              web: {
+                kind: "worker",
+                consume: [{ publication: "search" }],
+              },
             },
           },
         },
-      }),
+      ),
     Error,
     "consume references same-manifest route publication 'search' but the group hostname is unavailable",
   );
@@ -506,17 +519,20 @@ test("publication prerequisites require a group hostname for same-manifest route
 test("publication prerequisites reject missing catalog consumes", async () => {
   await assertRejects(
     () =>
-      assertRuntimeProjectionPublicationPrerequisites(makePublicationEnv(null), {
-        spaceId: "space_1",
-        manifest: {
-          compute: {
-            web: {
-              kind: "worker",
-              consume: [{ publication: "missing" }],
+      assertRuntimeProjectionPublicationPrerequisites(
+        makePublicationEnv(null),
+        {
+          spaceId: "space_1",
+          manifest: {
+            compute: {
+              web: {
+                kind: "worker",
+                consume: [{ publication: "missing" }],
+              },
             },
           },
         },
-      }),
+      ),
     Error,
     "consume references unknown publication 'missing' in this space",
   );
@@ -671,7 +687,7 @@ test("service publications reject manifest removal while still consumed", async 
     ),
     groupId: "group_current",
     ownerServiceId: "svc_api",
-    sourceType: "service_graph",
+    sourceType: "runtime_projection",
   };
   const env = {
     DB: {
@@ -757,7 +773,7 @@ test("service publications preflight consumed removals before manifest writes", 
     ),
     groupId: "group_current",
     ownerServiceId: "svc_api",
-    sourceType: "service_graph",
+    sourceType: "runtime_projection",
   };
   let writeCount = 0;
   const env = {

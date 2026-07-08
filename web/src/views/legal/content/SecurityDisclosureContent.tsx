@@ -30,7 +30,7 @@ export function SecurityDisclosureContent() {
       <p>
         Takos Web/API、Git service profile、agent runtime profile、Takos の
         managed deployment artifacts、および Takos managed service
-        として提供される default apps を対象とします。
+        として提供される featured apps を対象とします。
       </p>
 
       <h2>対象外</h2>

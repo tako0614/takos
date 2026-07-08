@@ -80,10 +80,10 @@ function createWorkspaceDb() {
   };
 }
 
-test("createWorkspaceWithDefaultRepo enqueues default app preinstall after space bootstrap", async () => {
+test("createWorkspaceWithDefaultRepo enqueues featured app preinstall after space bootstrap", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
-  const originalEnqueue = spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  const originalProcess = spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  const originalEnqueue = spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  const originalProcess = spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
   const { db, accountRows, membershipRows, repositoryRows } =
     createWorkspaceDb();
   const enqueueCalls: Array<{
@@ -94,11 +94,11 @@ test("createWorkspaceWithDefaultRepo enqueues default app preinstall after space
   const processCalls: Array<{ spaceId?: string; limit?: number }> = [];
 
   spaceCrudDeps.resolveUserPrincipalId = (() => "principal-1") as any;
-  spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob = (async (_env, params) => {
+  spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = (async (_env, params) => {
     enqueueCalls.push(params);
-    return "default-app-preinstall:space-1";
-  }) as typeof spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  spaceCrudWriteDeps.processDefaultAppPreinstallJobs = (async (
+    return "featured-app-preinstall:space-1";
+  }) as typeof spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = (async (
     _env,
     options,
   ) => {
@@ -112,14 +112,14 @@ test("createWorkspaceWithDefaultRepo enqueues default app preinstall after space
       requeued: 0,
       failed: 0,
     };
-  }) as typeof spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
     const result = await createWorkspaceWithDefaultRepo(
       { DB: db } as Env,
       "user-1",
       "Docs Team",
-      { id: "space-1", skipIdCheck: true },
+      { id: "space-1", skipIdCheck: true, installFeaturedApps: true },
     );
 
     assertEquals(result.workspace.id, "space-1");
@@ -134,29 +134,29 @@ test("createWorkspaceWithDefaultRepo enqueues default app preinstall after space
     assertEquals(processCalls, [{ limit: 1, spaceId: "space-1" }]);
   } finally {
     spaceCrudDeps.resolveUserPrincipalId = originalResolveUserPrincipalId;
-    spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob = originalEnqueue;
-    spaceCrudWriteDeps.processDefaultAppPreinstallJobs = originalProcess;
+    spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = originalEnqueue;
+    spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = originalProcess;
   }
 });
 
-test("createWorkspaceWithDefaultRepo skips default app preinstall when explicitly disabled", async () => {
+test("createWorkspaceWithDefaultRepo skips featured app preinstall when explicitly disabled", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
-  const originalEnqueue = spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  const originalProcess = spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  const originalEnqueue = spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  const originalProcess = spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
   const { db, accountRows, membershipRows, repositoryRows } =
     createWorkspaceDb();
   let enqueueCalled = false;
   let processCalled = false;
 
   spaceCrudDeps.resolveUserPrincipalId = (() => "principal-1") as any;
-  spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob = (async () => {
+  spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = (async () => {
     enqueueCalled = true;
     throw new Error("enqueue should not run");
-  }) as typeof spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  spaceCrudWriteDeps.processDefaultAppPreinstallJobs = (async () => {
+  }) as typeof spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = (async () => {
     processCalled = true;
     throw new Error("processor should not run");
-  }) as typeof spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
     const result = await createWorkspaceWithDefaultRepo(
@@ -166,7 +166,7 @@ test("createWorkspaceWithDefaultRepo skips default app preinstall when explicitl
       {
         id: "space-blank",
         skipIdCheck: true,
-        installDefaultApps: false,
+        installFeaturedApps: false,
       },
     );
 
@@ -179,38 +179,38 @@ test("createWorkspaceWithDefaultRepo skips default app preinstall when explicitl
     assertEquals(processCalled, false);
   } finally {
     spaceCrudDeps.resolveUserPrincipalId = originalResolveUserPrincipalId;
-    spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob = originalEnqueue;
-    spaceCrudWriteDeps.processDefaultAppPreinstallJobs = originalProcess;
+    spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = originalEnqueue;
+    spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = originalProcess;
   }
 });
 
-test("createWorkspaceWithDefaultRepo still creates the space when default app enqueue fails (idempotent compensation)", async () => {
+test("createWorkspaceWithDefaultRepo still creates the space when featured app enqueue fails (idempotent compensation)", async () => {
   // The space bundle is committed atomically via drizzle.batch before the
   // preinstall job is enqueued. The enqueue is deterministic-id +
   // onConflictDoNothing, so a transient enqueue failure is recoverable on a
   // later access; it must NOT tear down a valid, already-committed space.
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
-  const originalEnqueue = spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  const originalProcess = spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  const originalEnqueue = spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  const originalProcess = spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
   const { db, accountRows, membershipRows, repositoryRows } =
     createWorkspaceDb();
   let processCalled = false;
 
   spaceCrudDeps.resolveUserPrincipalId = (() => "principal-1") as any;
-  spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob = (async () => {
-    throw new Error("default app job table unavailable");
-  }) as typeof spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  spaceCrudWriteDeps.processDefaultAppPreinstallJobs = (async () => {
+  spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = (async () => {
+    throw new Error("featured app job table unavailable");
+  }) as typeof spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = (async () => {
     processCalled = true;
     throw new Error("processor should not run when enqueue fails");
-  }) as typeof spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
     const result = await createWorkspaceWithDefaultRepo(
       { DB: db } as Env,
       "user-1",
       "Docs Team",
-      { id: "space-1", skipIdCheck: true, installDefaultApps: true },
+      { id: "space-1", skipIdCheck: true, installFeaturedApps: true },
     );
 
     assertEquals(result.workspace.id, "space-1");
@@ -222,32 +222,32 @@ test("createWorkspaceWithDefaultRepo still creates the space when default app en
     assertEquals(processCalled, false);
   } finally {
     spaceCrudDeps.resolveUserPrincipalId = originalResolveUserPrincipalId;
-    spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob = originalEnqueue;
-    spaceCrudWriteDeps.processDefaultAppPreinstallJobs = originalProcess;
+    spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = originalEnqueue;
+    spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = originalProcess;
   }
 });
 
 test("createWorkspaceWithDefaultRepo succeeds when immediate preinstall processing fails", async () => {
   const originalResolveUserPrincipalId = spaceCrudDeps.resolveUserPrincipalId;
-  const originalEnqueue = spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  const originalProcess = spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  const originalEnqueue = spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  const originalProcess = spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
   const { db, accountRows, membershipRows, repositoryRows } =
     createWorkspaceDb();
 
   spaceCrudDeps.resolveUserPrincipalId = (() => "principal-1") as any;
-  spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob =
+  spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob =
     (async () =>
-      "default-app-preinstall:space-1") as typeof spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob;
-  spaceCrudWriteDeps.processDefaultAppPreinstallJobs = (async () => {
+      "featured-app-preinstall:space-1") as typeof spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob;
+  spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = (async () => {
     throw new Error("queue temporarily unavailable");
-  }) as typeof spaceCrudWriteDeps.processDefaultAppPreinstallJobs;
+  }) as typeof spaceCrudWriteDeps.processFeaturedAppPreinstallJobs;
 
   try {
     const result = await createWorkspaceWithDefaultRepo(
       { DB: db } as Env,
       "user-1",
       "Docs Team",
-      { id: "space-1", skipIdCheck: true, installDefaultApps: true },
+      { id: "space-1", skipIdCheck: true, installFeaturedApps: true },
     );
 
     assertEquals(result.workspace.id, "space-1");
@@ -257,7 +257,7 @@ test("createWorkspaceWithDefaultRepo succeeds when immediate preinstall processi
     assertEquals(repositoryRows.length, 1);
   } finally {
     spaceCrudDeps.resolveUserPrincipalId = originalResolveUserPrincipalId;
-    spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob = originalEnqueue;
-    spaceCrudWriteDeps.processDefaultAppPreinstallJobs = originalProcess;
+    spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob = originalEnqueue;
+    spaceCrudWriteDeps.processFeaturedAppPreinstallJobs = originalProcess;
   }
 });

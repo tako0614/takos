@@ -27,19 +27,6 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: "docker"
-    directory: "/containers/git"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "04:35"
-      timezone: "Etc/UTC"
-    labels:
-      - "dependencies"
-      - "containers"
-      - "security"
-    open-pull-requests-limit: 5
-
-  - package-ecosystem: "docker"
     directory: "/containers/agent"
     schedule:
       interval: "weekly"

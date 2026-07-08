@@ -74,19 +74,21 @@ function createFakeSqlDatabase(initialRows: AppRow[]) {
           if (!row) return [];
 
           const sql = record.sql.toLowerCase();
-          return [[
-            row.id,
-            row.name,
-            row.description,
-            row.icon,
-            row.appType,
-            row.accountId,
-            row.serviceHostname,
-            row.serviceStatus,
-            row.accountName,
-            row.accountSlug,
-            row.accountType,
-          ]];
+          return [
+            [
+              row.id,
+              row.name,
+              row.description,
+              row.icon,
+              row.appType,
+              row.accountId,
+              row.serviceHostname,
+              row.serviceStatus,
+              row.accountName,
+              row.accountSlug,
+              row.accountType,
+            ],
+          ];
         },
       };
 
@@ -110,17 +112,19 @@ function createFakeSqlDatabase(initialRows: AppRow[]) {
     const sql = record.sql.toLowerCase();
     if (!sql.includes("apps") && !sql.includes("publications")) return [];
 
-    const appId = record.args.find((value) =>
-      typeof value === "string" && source.some((row) => row.id === value)
+    const appId = record.args.find(
+      (value) =>
+        typeof value === "string" && source.some((row) => row.id === value),
     ) as string | undefined;
-    const accountId = record.args.find((value) =>
-      typeof value === "string" &&
-      source.some((row) => row.accountId === value)
+    const accountId = record.args.find(
+      (value) =>
+        typeof value === "string" &&
+        source.some((row) => row.accountId === value),
     ) as string | undefined;
 
     if (appId && accountId) {
-      return source.filter((row) =>
-        row.id === appId && row.accountId === accountId
+      return source.filter(
+        (row) => row.id === appId && row.accountId === accountId,
       );
     }
 
@@ -147,144 +151,149 @@ function createFakeSqlDatabase(initialRows: AppRow[]) {
   return { db, prepared, rows };
 }
 
-test(
-  "app mutations resolve the requested space before returning not found",
-  async () => {
-    const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;
-    const accessCalls: Array<{ spaceId: string; userId: string }> = [];
+test("app mutations resolve the requested space before returning not found", async () => {
+  const originalRequireSpaceAccess = appsRouteDeps.requireSpaceAccess;
+  const accessCalls: Array<{ spaceId: string; userId: string }> = [];
 
-    const { db, prepared } = createFakeSqlDatabase([
-      {
-        id: "app-space-1",
+  const { db, prepared } = createFakeSqlDatabase([
+    {
+      id: "app-space-1",
+      name: "space-app",
+      description: "Workspace app",
+      icon: "📦",
+      appType: "custom",
+      accountId: "space-123",
+      groupId: "group-1",
+      sourceType: "runtime_projection",
+      publicationType: "interface.ui.surface",
+      specJson: JSON.stringify({
         name: "space-app",
-        description: "Workspace app",
-        icon: "📦",
-        appType: "custom",
-        accountId: "space-123",
-        groupId: "group-1",
-        sourceType: "service_graph",
-        publicationType: "interface.ui.surface",
-        specJson: JSON.stringify({
-          name: "space-app",
-          type: "interface.ui.surface",
-          publisher: "web",
-          outputs: { url: { kind: "url", routeRef: "root" } },
-          display: {
-            title: "Workspace app",
-            icon: "📦",
-          },
-        }),
-        resolvedJson: JSON.stringify({
-          url: "https://app.example",
-        }),
-        serviceConfig: JSON.stringify({}),
-        serviceHostname: null,
-        serviceStatus: null,
-        accountName: "Workspace",
-        accountSlug: "workspace",
-        accountType: "workspace",
-        createdAt: "2026-04-20T00:00:00.000Z",
-        updatedAt: "2026-04-20T00:00:00.000Z",
-      },
-    ]);
+        type: "interface.ui.surface",
+        publisher: "web",
+        outputs: { url: { kind: "url", routeRef: "root" } },
+        display: {
+          title: "Workspace app",
+          icon: "📦",
+        },
+      }),
+      resolvedJson: JSON.stringify({
+        url: "https://app.example",
+      }),
+      serviceConfig: JSON.stringify({}),
+      serviceHostname: null,
+      serviceStatus: null,
+      accountName: "Workspace",
+      accountSlug: "workspace",
+      accountType: "workspace",
+      createdAt: "2026-04-20T00:00:00.000Z",
+      updatedAt: "2026-04-20T00:00:00.000Z",
+    },
+  ]);
 
-    const app = new Hono<{
-      Bindings: { DB: unknown };
-      Variables: {
-        user: { id: string; principal_id: string };
-      };
-    }>();
+  const app = new Hono<{
+    Bindings: { DB: unknown };
+    Variables: {
+      user: { id: string; principal_id: string };
+    };
+  }>();
 
-    app.onError((error, c) => {
-      if (isAppError(error)) {
-        return c.json(
-          error.toResponse(),
-          error.statusCode as
-            | 400
-            | 401
-            | 403
-            | 404
-            | 409
-            | 410
-            | 422
-            | 429
-            | 500
-            | 501
-            | 502
-            | 503
-            | 504,
-        );
-      }
-      throw error;
+  app.onError((error, c) => {
+    if (isAppError(error)) {
+      return c.json(
+        error.toResponse(),
+        error.statusCode as
+          | 400
+          | 401
+          | 403
+          | 404
+          | 409
+          | 410
+          | 422
+          | 429
+          | 500
+          | 501
+          | 502
+          | 503
+          | 504,
+      );
+    }
+    throw error;
+  });
+
+  app.use("*", async (c, next) => {
+    c.set("user", {
+      id: "user-1",
+      principal_id: "principal-1",
     });
+    await next();
+  });
 
-    app.use("*", async (c, next) => {
-      c.set("user", {
-        id: "user-1",
-        principal_id: "principal-1",
-      });
-      await next();
-    });
+  registerAppApiRoutes(app as never);
 
-    registerAppApiRoutes(app as never);
+  try {
+    appsRouteDeps.requireSpaceAccess = async (_c, spaceId, userId) => {
+      accessCalls.push({ spaceId, userId });
+      return {
+        space: { id: "space-123" },
+      } as never;
+    };
 
-    try {
-      appsRouteDeps.requireSpaceAccess = async (_c, spaceId, userId) => {
-        accessCalls.push({ spaceId, userId });
-        return {
-          space: { id: "space-123" },
-        } as never;
-      };
+    const env = { DB: db };
 
-      const env = { DB: db };
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Takos-Space-Id": "space-123",
+    };
 
-      const headers = {
-        "Content-Type": "application/json",
-        "X-Takos-Space-Id": "space-123",
-      };
-
-      const patchResponse = await app.request("/apps/app-space-1", {
+    const patchResponse = await app.request(
+      "/apps/app-space-1",
+      {
         method: "PATCH",
         headers,
         body: JSON.stringify({ description: "Updated" }),
-      }, env);
-      assertEquals(patchResponse.status, 404);
+      },
+      env,
+    );
+    assertEquals(patchResponse.status, 404);
 
-      const clientKeyResponse = await app.request(
-        "/apps/app-space-1/client-key",
-        {
-          method: "POST",
-          headers: {
-            "X-Takos-Space-Id": "space-123",
-          },
+    const clientKeyResponse = await app.request(
+      "/apps/app-space-1/client-key",
+      {
+        method: "POST",
+        headers: {
+          "X-Takos-Space-Id": "space-123",
         },
-        env,
-      );
-      assertEquals(clientKeyResponse.status, 404);
+      },
+      env,
+    );
+    assertEquals(clientKeyResponse.status, 404);
 
-      const deleteResponse = await app.request("/apps/app-space-1", {
+    const deleteResponse = await app.request(
+      "/apps/app-space-1",
+      {
         method: "DELETE",
         headers: {
           "X-Takos-Space-Id": "space-123",
         },
-      }, env);
-      assertEquals(deleteResponse.status, 404);
+      },
+      env,
+    );
+    assertEquals(deleteResponse.status, 404);
 
-      assertEquals(accessCalls, [
-        { spaceId: "space-123", userId: "user-1" },
-        { spaceId: "space-123", userId: "user-1" },
-      ]);
+    assertEquals(accessCalls, [
+      { spaceId: "space-123", userId: "user-1" },
+      { spaceId: "space-123", userId: "user-1" },
+    ]);
 
-      const selectCalls = prepared.filter((entry) =>
-        entry.sql.trim().toLowerCase().startsWith("select")
-      );
-      assertEquals(selectCalls.length >= 2, true);
-      assertEquals(
-        selectCalls.every((entry) => entry.args.includes("space-123")),
-        true,
-      );
-    } finally {
-      appsRouteDeps.requireSpaceAccess = originalRequireSpaceAccess;
-    }
-  },
-);
+    const selectCalls = prepared.filter((entry) =>
+      entry.sql.trim().toLowerCase().startsWith("select"),
+    );
+    assertEquals(selectCalls.length >= 2, true);
+    assertEquals(
+      selectCalls.every((entry) => entry.args.includes("space-123")),
+      true,
+    );
+  } finally {
+    appsRouteDeps.requireSpaceAccess = originalRequireSpaceAccess;
+  }
+});

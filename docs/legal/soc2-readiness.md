@@ -10,15 +10,15 @@ claim SOC 2 compliance until a qualified auditor completes the engagement.
 
 Initial SOC 2 readiness scope:
 
-| Area                    | In scope                                                          | Owner            |
-| ----------------------- | ----------------------------------------------------------------- | ---------------- |
-| Application security    | `takos-worker`, `takos-git`, `takos-agent`, Takosumi API boundary | service owners   |
-| Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles     | operator         |
-| Change management       | PR review, release gate, staging promotion, rollback              | release owner    |
-| Incident response       | SEV policy, incident runbook, postmortem evidence                 | on-call owner    |
-| Availability            | SLOs, capacity planning, backup / restore, DR plan                | operations owner |
-| Confidentiality         | secret rotation, access control, private deploy boundary          | security owner   |
-| Processing integrity    | deploy audit trail, migration safety, usage / billing integrity   | product owner    |
+| Area                    | In scope                                                        | Owner            |
+| ----------------------- | --------------------------------------------------------------- | ---------------- |
+| Application security    | `takos-worker`, `takos-agent`, Takosumi API boundary            | service owners   |
+| Infrastructure security | managed cloud / Kubernetes / Cloudflare distribution profiles   | operator         |
+| Change management       | PR review, release gate, staging promotion, rollback            | release owner    |
+| Incident response       | SEV policy, incident runbook, postmortem evidence               | on-call owner    |
+| Availability            | SLOs, capacity planning, backup / restore, DR plan              | operations owner |
+| Confidentiality         | secret rotation, access control, private deploy boundary        | security owner   |
+| Processing integrity    | deploy audit trail, migration safety, usage / billing integrity | product owner    |
 
 Out of scope for the first readiness pass:
 
@@ -53,10 +53,10 @@ Out of scope for the first readiness pass:
 - Service owner map exists for every product root.
 - Policy exception process exists with owner and expiry.
 - Quarterly risk review meeting is scheduled.
-- Installation ledger and Takosumi Account billing model are listed in the data
-  protection owner audit checklist (Takosumi Installation Lifecycle: identity / billing
+- Capsule ledger and Takosumi Account billing model are listed in the data
+  protection owner audit checklist (Takosumi Capsule lifecycle: identity / billing
   owner = the operator-selected account plane, managed example: takosumi
-  の Takosumi Accounts; Installation 台帳 = ownership primitive).
+  の Takosumi Accounts; Capsule 台帳 = ownership primitive).
 
 ### Access Control
 
@@ -109,17 +109,17 @@ Out of scope for the first readiness pass:
 
 ## Evidence Register
 
-| Evidence          | Owning docs                                                                                                                                                | Private evidence          |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| On-call policy    | `takosumi-private/operations/oncall.md`                    | incident paging config    |
-| Incident response | `takosumi-private/operations/incident-response.md`         | incident records          |
-| Backup drills     | `takosumi-private/operations/backup-restore-drills.md`     | restore logs              |
-| DR plan           | `takosumi-private/operations/disaster-recovery.md`         | failover run logs         |
-| Capacity plan     | `takosumi-private/operations/capacity.md`                  | traffic reports           |
-| Cost monitoring   | `takosumi-private/operations/cost-monitoring.md`           | billing reconciliation    |
-| Patch management  | `takosumi-private/operations/patch-management.md`          | vulnerability exceptions  |
-| Migration safety  | `takosumi-private/operations/online-db-migrations.md`      | production migration logs |
-| Release gate      | ecosystem root `docs/quality/release-gate.md`                    | CI run artifacts          |
+| Evidence          | Owning docs                                            | Private evidence          |
+| ----------------- | ------------------------------------------------------ | ------------------------- |
+| On-call policy    | `takosumi-private/operations/oncall.md`                | incident paging config    |
+| Incident response | `takosumi-private/operations/incident-response.md`     | incident records          |
+| Backup drills     | `takosumi-private/operations/backup-restore-drills.md` | restore logs              |
+| DR plan           | `takosumi-private/operations/disaster-recovery.md`     | failover run logs         |
+| Capacity plan     | `takosumi-private/operations/capacity.md`              | traffic reports           |
+| Cost monitoring   | `takosumi-private/operations/cost-monitoring.md`       | billing reconciliation    |
+| Patch management  | `takosumi-private/operations/patch-management.md`      | vulnerability exceptions  |
+| Migration safety  | `takosumi-private/operations/online-db-migrations.md`  | production migration logs |
+| Release gate      | ecosystem root `docs/quality/release-gate.md`          | CI run artifacts          |
 
 ## Audit Preparation Backlog
 

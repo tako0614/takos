@@ -163,7 +163,7 @@ export interface Env
   TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
   TAKOSUMI_ACCOUNTS_URL?: string;
   TAKOSUMI_ACCOUNTS_TOKEN?: string;
-  /** Optional Takosumi subject used by default-app Capsule install jobs. */
+  /** Optional Takosumi subject used by featured-app Capsule install jobs. */
   TAKOSUMI_ACCOUNTS_SUBJECT?: string;
   ADMIN_DOMAIN: string;
   AUTH_PUBLIC_BASE_URL?: string;
@@ -232,24 +232,24 @@ export interface Env
   TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_RESULT_MAX_BYTES?: string;
   TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_CHAIN_MAX_DEPTH?: string;
   TAKOS_APP_DEPLOY_REMOTE_ARCHIVE_MAX_BYTES?: string;
-  /** Operator-replaceable default app distribution JSON; wins over DB config. */
-  TAKOS_DEFAULT_APP_DISTRIBUTION_JSON?: string;
-  /** Operator-replaceable default app repository list JSON; wins over DB config. */
-  TAKOS_DEFAULT_APP_REPOSITORIES_JSON?: string;
-  /** Set to "false" to skip default app preinstall on new spaces. */
-  TAKOS_DEFAULT_APPS_PREINSTALL?: string;
-  /** Default git ref for preinstalled default app repositories. */
-  TAKOS_DEFAULT_APP_REF?: string;
-  TAKOS_DEFAULT_APP_REF_TYPE?: string;
-  TAKOS_DEFAULT_APP_BACKEND?: string;
-  TAKOS_DEFAULT_APP_ENV?: string;
-  /** Takosumi Accounts Capsule projection endpoint for bundled app seed installs. */
-  TAKOS_DEFAULT_APP_INSTALL_URL?: string;
-  TAKOS_DEFAULT_APP_INSTALL_TOKEN?: string;
-  TAKOS_DEFAULT_APP_INSTALL_ACCOUNT_ID?: string;
-  TAKOS_DEFAULT_APP_INSTALL_SUBJECT?: string;
-  TAKOS_DEFAULT_APP_INSTALL_MODE?: string;
-  TAKOS_DEFAULT_APP_INSTALL_RUNTIME_BASE_URL?: string;
+  /** Operator-replaceable featured app catalog JSON; wins over DB config. */
+  TAKOS_FEATURED_APP_CATALOG_JSON?: string;
+  /** Operator-replaceable featured app repository list JSON; wins over DB config. */
+  TAKOS_FEATURED_APP_REPOSITORIES_JSON?: string;
+  /** Set to "true" only when an operator explicitly preinstalls selected apps. */
+  TAKOS_FEATURED_APPS_PREINSTALL?: string;
+  /** Default git ref for preinstalled featured app repositories. */
+  TAKOS_FEATURED_APP_REF?: string;
+  TAKOS_FEATURED_APP_REF_TYPE?: string;
+  TAKOS_FEATURED_APP_BACKEND?: string;
+  TAKOS_FEATURED_APP_ENV?: string;
+  /** Takosumi Accounts Capsule projection endpoint for operator-enabled app preinstall. */
+  TAKOS_FEATURED_APP_INSTALL_URL?: string;
+  TAKOS_FEATURED_APP_INSTALL_TOKEN?: string;
+  TAKOS_FEATURED_APP_INSTALL_ACCOUNT_ID?: string;
+  TAKOS_FEATURED_APP_INSTALL_SUBJECT?: string;
+  TAKOS_FEATURED_APP_INSTALL_MODE?: string;
+  TAKOS_FEATURED_APP_INSTALL_RUNTIME_BASE_URL?: string;
   /** Takosumi Accounts Capsule projection API base URL for third-party Git URL installs. */
   TAKOS_APP_INSTALLATIONS_URL?: string;
   TAKOS_APP_INSTALL_TOKEN?: string;
@@ -257,10 +257,6 @@ export interface Env
   TAKOS_APP_INSTALL_SUBJECT?: string;
   TAKOS_APP_INSTALL_MODE?: string;
   TAKOS_APP_INSTALL_RUNTIME_BASE_URL?: string;
-  TAKOS_DEFAULT_OFFICE_APP_REPOSITORY_URL?: string;
-  TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL?: string;
-  TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL?: string;
-  TAKOS_DEFAULT_ROAD_TO_ME_APP_REPOSITORY_URL?: string;
   HOSTNAME_ROUTING: KvStoreBinding;
   ROLLOUT_HEALTH_KV?: KvStoreBinding;
   ROUTING_STORE?: RoutingStore;

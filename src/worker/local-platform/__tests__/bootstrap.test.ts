@@ -300,9 +300,6 @@ const originalEnv = {
   TAKOS_LOCAL_DATA_DIR: getEnv("TAKOS_LOCAL_DATA_DIR"),
   TAKOS_LOCAL_RUNTIME_URL: getEnv("TAKOS_LOCAL_RUNTIME_URL"),
   TAKOS_LOCAL_EXECUTOR_URL: getEnv("TAKOS_LOCAL_EXECUTOR_URL"),
-  TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL: getEnv(
-    "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
-  ),
 };
 let tempDataDir: string | null = null;
 localBootstrapTest(
@@ -363,25 +360,6 @@ localBootstrapTest(
   },
 );
 
-localBootstrapTest(
-  "local bootstrap - passes through yurucommu default app repository override",
-  async () => {
-    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
-      void tempDataDir;
-      setEnv(
-        "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
-        "https://example.com/yurucommu.git",
-      );
-
-      const env = await createNodeWebEnv();
-
-      assertEquals(
-        env.TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL,
-        "https://example.com/yurucommu.git",
-      );
-    });
-  },
-);
 localBootstrapTest(
   "local bootstrap - does not synthesize fake provider credentials in local mode",
   async () => {

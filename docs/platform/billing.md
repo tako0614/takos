@@ -327,14 +327,14 @@ operator account-plane billing webhook (reference impl: Takosumi Accounts)
 ## API 一覧
 
 current `takosumi` Accounts reference implementation の billing HTTP
-surface は、Stripe checkout / webhook と legacy-named installed-service usage report ingest
+surface は、Stripe checkout / webhook と installed-service usage report ingest
 です。
 
 | エンドポイント                                            | メソッド | 説明                                                                                                              |
 | --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
 | `/v1/billing/stripe/checkout`                             | POST     | Stripe Checkout session 作成                                                                                      |
 | `/v1/billing/stripe/webhook`                              | POST     | Stripe Webhook（認証不要・Stripe 署名検証）                                                                       |
-| `/v1/installation-projections/{id}/billing/usage-reports` | POST     | legacy-named installed-service projection token + `billing.usage.report` account-plane capability record で保護された使用量 report |
+| `/v1/capsule-projections/{id}/billing/usage-reports` | POST     | installed-service projection token + `billing.usage.report` account-plane capability record で保護された使用量 report |
 
 checkout body は `subject`, `priceId`, `mode`, `successUrl`, `cancelUrl`
 が必須です。

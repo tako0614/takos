@@ -1,6 +1,6 @@
 # API リファレンス
 
-**Premise: Takos は OpenTofu-native, Takosumi-managed な first-party AI workspace distribution です。** 基本の deploy topology は
+**Premise: Takos は OpenTofu-native, Takosumi-managed な AI workspace distribution です。** 基本の deploy topology は
 `deploy/opentofu` の OpenTofu Capsule と、Takos repo の Git CI/release pipeline が発行する release artifacts / container images です。Takosumi は Takos distribution を Capsule として扱い、
 OpenTofu-native な deploy control plane として run ledger
 **Capsule -> Run -> StateVersion -> Output** を記録します。Connection が credential reference を保持し、
@@ -18,7 +18,7 @@ ProviderBinding が provider (+ optional alias) ごとに explicit provider conn
 
 ## Takos Boundary
 
-Takos owns product UI, chat, agent, memory, Workspaces, and bundled app launcher UX. Git, storage, agent runtime,
+Takos owns product UI, chat, agent, memory, Workspaces, and app launcher UX. Git, storage, agent runtime,
 file handlers, UI surfaces, and MCP are exposed through Capsule Outputs and Takos runtime contracts rather than product-local service classes。Takosumi records Capsule / Run / StateVersion / Output と audit ledger。Connections hold credential references, ProviderBindings resolve each
 provider (and optional alias), and policy resolves provider allowlists, state handling, and runner execution。
 account-plane policy (account / billing / OIDC / dashboard) は Takosumi Accounts plane が所有する。

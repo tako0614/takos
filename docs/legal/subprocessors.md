@@ -20,11 +20,11 @@ store.
 | Change notice target | At least 30 days before new production processing where Customer notice rights apply                                                                                                    |
 
 > **Internal processor boundary note.** Within the Takosumi / Takos ecosystem
-> itself, **Takosumi kernel** is treated as the Installation / typed Runs /
-> Deployment / Output run-ledger processor and never holds identity,
+> itself, **Takosumi kernel** is treated as the Capsule / typed Runs /
+> StateVersion / Output run-ledger processor and never holds identity,
 > billing, or customer account state. **Takosumi Accounts** (`takosumi.identity.oidc` /
 > `takosumi.billing.usage`) is the separate identity / billing processor that
-> owns OIDC issuance, Installation ownership, and operator BillingPort billing.
+> owns OIDC issuance, Capsule ownership, and operator BillingPort billing.
 > External sub-processors below are referenced by both planes only when the
 > relevant feature is enabled.
 

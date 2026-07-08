@@ -17,7 +17,7 @@ import {
 } from "./index.ts";
 import { runR2OrphanedObjectGcBatch } from "../r2/orphaned-object-gc.ts";
 import { runWorkflowArtifactGcBatch } from "../execution/workflow-storage.ts";
-import { processDefaultAppPreinstallJobs } from "../source/default-app-distribution.ts";
+import { processFeaturedAppPreinstallJobs } from "../source/featured-app-catalog.ts";
 import { logInfo } from "../../../shared/utils/logger.ts";
 
 // Cron schedule classifiers.
@@ -60,7 +60,7 @@ export type ScheduledFamilyMaintenanceDeps = {
   runR2OrphanedObjectGcBatch: typeof runR2OrphanedObjectGcBatch;
   runSnapshotGcBatch: typeof runSnapshotGcBatch;
   runWorkflowArtifactGcBatch: typeof runWorkflowArtifactGcBatch;
-  processDefaultAppPreinstallJobs: typeof processDefaultAppPreinstallJobs;
+  processFeaturedAppPreinstallJobs: typeof processFeaturedAppPreinstallJobs;
   logInfo: typeof logInfo;
 };
 
@@ -71,7 +71,7 @@ const defaultScheduledFamilyMaintenanceDeps: ScheduledFamilyMaintenanceDeps = {
   runR2OrphanedObjectGcBatch,
   runSnapshotGcBatch,
   runWorkflowArtifactGcBatch,
-  processDefaultAppPreinstallJobs,
+  processFeaturedAppPreinstallJobs,
   logInfo,
 };
 
@@ -121,12 +121,12 @@ export async function runScheduledFamilyMaintenance(
     }
 
     try {
-      const summary = await deps.processDefaultAppPreinstallJobs(env, {
+      const summary = await deps.processFeaturedAppPreinstallJobs(env, {
         limit: 10,
       });
 
       if (logSuccesses && summary.processed > 0) {
-        deps.logInfo("default app preinstall jobs processed", {
+        deps.logInfo("featured app preinstall jobs processed", {
           module: "cron",
           cron,
           ...summary,
@@ -134,7 +134,7 @@ export async function runScheduledFamilyMaintenance(
       }
     } catch (error) {
       errors.push({
-        job: "default-app-preinstall",
+        job: "featured-app-preinstall",
         error: toScheduledError(error),
       });
     }

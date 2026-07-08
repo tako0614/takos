@@ -10,13 +10,13 @@ counsel and replace all placeholder fields before publishing to end users.
 
 ## Status
 
-| Field            | Value                                                                     |
-| ---------------- | ------------------------------------------------------------------------- |
-| Owner            | Operator legal owner                                                      |
-| Last reviewed    | `[EFFECTIVE_DATE]`                                                        |
-| Scope            | Takos Web / API, Git service profile, agent runtime profile, bundled apps |
-| Current status   | Template — pre-public-launch baseline                                     |
-| Signature status | Click-through acceptance; not a signed master contract                    |
+| Field            | Value                                                                       |
+| ---------------- | --------------------------------------------------------------------------- |
+| Owner            | Operator legal owner                                                        |
+| Last reviewed    | `[EFFECTIVE_DATE]`                                                          |
+| Scope            | Takos Web / API, Git service profile, agent runtime profile, installed apps |
+| Current status   | Template — pre-public-launch baseline                                       |
+| Signature status | Click-through acceptance; not a signed master contract                      |
 
 ## 1. 定義
 
@@ -26,7 +26,7 @@ Takosumi リファレンスディストリビューション (以下「本サー
 
 - **「利用者」**: 本サービスを利用するために Takosumi Account を作成した自然人または法人
 - **「アカウント保有者」**: Takosumi Account の所有者であり、契約上の counter-party
-- **「Installation」**: Takosumi が source input を読み取って Space に作成する deployment unit
+- **「Capsule」**: Takosumi が source input を読み取って Space に作成する OpenTofu execution unit
 - **「Customer Personal Data」**: 利用者が本サービスに投入した個人データ
   ([Data Processing Agreement](/legal/data-processing-agreement) を参照)
 
@@ -35,7 +35,7 @@ Takosumi リファレンスディストリビューション (以下「本サー
 - アカウント作成には有効なメールアドレスと、対応する OIDC IdP (Google / Apple / GitHub
   等) または passkey の登録が必要です。
 - 利用者は登録情報を正確かつ最新に保つ義務があります。
-- 一つのアカウントを複数人で共有することはできません。組織利用の場合は Installation owner
+- 一つのアカウントを複数人で共有することはできません。組織利用の場合は Capsule owner
   delegation を使用してください。
 - 13 歳未満 (`[JURISDICTION_OVERRIDE]` により異なる) の方は本サービスを利用できません。
 

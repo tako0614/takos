@@ -51,9 +51,9 @@ export const settings = {
   spaceDeleted: "Space deleted",
   createSpace: "Create Space",
   createSpaceHint: "Create a team space to collaborate with others",
-  installDefaultAppsOnCreate: "Install default apps",
-  installDefaultAppsOnCreateHint:
-    "Add Docs, Excel, Slide, Computer, and Yurucommu to this space.",
+  installFeaturedAppsOnCreate: "Install featured apps",
+  installFeaturedAppsOnCreateHint:
+    "Add operator-selected apps from the connected app catalog.",
   spaceCreated: "Space created",
   targetSpace: "Target Space",
 

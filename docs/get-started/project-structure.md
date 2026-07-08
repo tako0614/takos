@@ -6,8 +6,8 @@ external Takosumi control plane が Capsule / Run / StateVersion / Output / Caps
 
 ## Current Flow
 
-1. Create a Workspace and use the seeded first-party apps, chat, memory, Git, and tools.
-2. Install more apps or services by selecting a Git URL/ref and module path for an OpenTofu Capsule.
+1. Create a Workspace and use chat, memory, Git, and tools.
+2. Install apps or services by selecting a Git URL/ref and module path for an OpenTofu Capsule.
 3. Review the Takosumi `plan` Run and approve the saved plan before `apply`.
 4. Takos reads non-secret outputs and Capsule output projection records to show app launcher entries, MCP tools, file handlers, storage, Git, and agent runtime capabilities.
 5. Accounts, billing, OIDC clients, dashboard, provider credentials, state, and audit evidence stay in external Takosumi control plane.

@@ -139,7 +139,7 @@ export const source = {
   categoryLabel: "Category",
   myRepos: "My Repos",
   usersLabel: "Users",
-  defaultApp: "Default app",
+  featuredApp: "Featured app",
   sourceLabel: "Source",
   trackingLabel: "Tracking",
   trackingBranch: "branch",

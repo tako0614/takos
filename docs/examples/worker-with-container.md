@@ -4,9 +4,9 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 
 ## Current Flow
 
-1. Create an Installation from a OpenTofu Capsule repository (Git URL/ref or module path).
+1. Create a Capsule from an OpenTofu Capsule repository (Git URL/ref or module path).
 2. Trigger a plan; Takosumi records a `plan` type Run with the reviewed plan, warnings, and policy decision.
-3. Apply the reviewed plan; Takosumi records an `apply` type Run, and on success records `StateVersion`, `Output`, and `Deployment`.
+3. Apply the reviewed plan; Takosumi records an `apply` type Run, and on success records `StateVersion` and `Output`.
 4. Connections hold credential references, ProviderBindings resolve each provider (plus optional alias) the module uses, and policy resolves provider allowlists, state backend, and Cloudflare Container execution for each run.
 5. Account-plane policy, credentials, OIDC clients, billing, and domains belong to the Takosumi Accounts plane.
 

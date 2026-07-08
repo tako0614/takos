@@ -29,11 +29,11 @@ Source 画面が行わないこと:
 
 つまり product copy では「Store から追加」と言ってよいですが、architecture と policy の意味では「Git URL の Capsule を追加する」が正本です。
 
-## first-party app も同じ仕組みに乗る
+## 関連 app も同じ仕組みに乗る
 
-`takos-office` / `takos-computer` / `yurucommu` は、新規 Workspace で seed される
-first-party bundled app です。Takos product では最初から使える convenience として扱いますが、install の仕組みとしては通常の
-Git URL Capsule と同じです。user は不要なら uninstall できます。
+`takos-office` / `takos-computer` / `yurucommu` は、ユーザーが選んで追加できる installable app です。
+新規 Workspace に自動 install されるものではありません。install の仕組みとしては通常の Git URL Capsule と同じで、
+user は不要なら uninstall できます。
 
 ## install policy は「何を作れるか」の天井
 
@@ -73,5 +73,5 @@ Source 画面では「追加して使えるか」を先に見せます。
 - [Install Paths](/apps/install-paths)
 - [Source / Git URL install 手順](/deploy/store-deploy)
 - [はじめてのアプリ](/get-started/your-first-app)
-- [Bundled Apps](/platform/default-apps)
+- [Installable Apps](/platform/featured-apps)
 - [課金](/platform/billing)

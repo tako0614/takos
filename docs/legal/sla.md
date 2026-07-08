@@ -85,7 +85,7 @@ and operations owners before publishing.
 1. **発見**: 顧客は可用性違反を発見してから **30 日以内** に請求を提出する必要があります。
 2. **提出**: `[SLA_CLAIM_EMAIL]` に以下を記載したメールを送付:
    - 顧客 Takosumi Account ID
-   - 影響を受けた Installation ID と期間 (UTC 時刻)
+   - 影響を受けた Capsule ID と期間 (UTC 時刻)
    - 観察した症状と再現手順
 3. **検証**: 当社は受領後 **14 営業日以内** に Status Page および内部監視データと
    突合し、可否を判定して通知します。

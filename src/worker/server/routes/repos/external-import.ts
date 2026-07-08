@@ -13,8 +13,8 @@ import {
   importExternalRepository,
 } from "../../../application/services/source/external-import.ts";
 import { buildAuthHeader } from "../../../application/services/source/external-import-utils.ts";
-import { createTakosGitClient } from "../../../application/services/takos-git/client.ts";
-import { requireRepoWrite, WRITE_ROLES } from "./git-shared.ts";
+import { toGitBucket } from "../../../application/services/takos-git/index.ts";
+import { requireBucket, requireRepoWrite, WRITE_ROLES } from "./git-shared.ts";
 import { getDb, repositories } from "../../../infra/db/index.ts";
 import { eq } from "drizzle-orm";
 import { logError } from "../../../shared/utils/logger.ts";
@@ -86,12 +86,8 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const authHeader = buildAuthHeader(auth);
     try {
-      const gitClient = createTakosGitClient(c.env, {
-        user,
-        spaceId,
-        roles: ["owner"],
-      });
-      const result = await importExternalRepository(c.env.DB, gitClient, {
+      const bucket = toGitBucket(requireBucket(c));
+      const result = await importExternalRepository(c.env.DB, bucket, {
         accountId: spaceId,
         url,
         name: typeof name === "string" ? name : undefined,
@@ -147,7 +143,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     // remote fetch (closes the IDOR where any authenticated caller could
     // re-fetch / overwrite refs on an arbitrary repo). Returns 404 for both
     // missing repos and non-members, avoiding an existence leak.
-    const access = await requireRepoWrite(c.env, repoId, user.id);
+    await requireRepoWrite(c.env, repoId, user.id);
 
     // The access-shaped Repository does not expose remote_clone_url, so keep
     // the targeted column select for the BadRequest presence check.
@@ -163,12 +159,8 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const gitClient = createTakosGitClient(c.env, {
-        user,
-        spaceId: access.spaceId,
-        roles: ["owner"],
-      });
-      const result = await fetchRemoteUpdates(c.env.DB, gitClient, repoId);
+      const bucket = toGitBucket(requireBucket(c));
+      const result = await fetchRemoteUpdates(c.env.DB, bucket, repoId);
 
       return c.json({
         new_commits: result.newCommits,

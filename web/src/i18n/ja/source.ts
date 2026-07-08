@@ -141,7 +141,7 @@ export const source = {
   categoryLabel: "カテゴリ",
   myRepos: "マイリポジトリ",
   usersLabel: "ユーザー",
-  defaultApp: "デフォルトアプリ",
+  featuredApp: "デフォルトアプリ",
   sourceLabel: "ソース",
   trackingLabel: "追跡",
   trackingBranch: "ブランチ",

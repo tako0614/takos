@@ -86,8 +86,8 @@ function createDeps(
         errors: 0,
       };
     },
-    processDefaultAppPreinstallJobs: async () => {
-      calls.push("default-app");
+    processFeaturedAppPreinstallJobs: async () => {
+      calls.push("featured-app");
       return {
         scanned: 0,
         processed: 0,

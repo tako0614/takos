@@ -1,12 +1,12 @@
 /**
- * External Git Repository Import Service.
+ * External Git Repository Import Service (worker-native).
  *
- * Imports a repository from any Git HTTPS server into the Takos store.
- * Delegates remote clone/fetch and Git object ownership to takos-git, then
- * mirrors repository metadata needed by the Takos app database.
- *
- * After import, the repository is fully browsable, forkable, and
- * accessible by agents through the standard Takos APIs.
+ * Imports a repository from any Git HTTPS server directly into the Takos
+ * R2-backed object store: the worker speaks git-upload-pack to the remote,
+ * unpacks the received packfile, ingests every object into R2, indexes commits,
+ * and mirrors branch/tag metadata into D1. There is no separate filesystem git
+ * store — the same object store then serves browse, fork, agent access, and
+ * read-only `git clone`.
  */
 
 import {
@@ -21,7 +21,18 @@ import { and, eq } from "drizzle-orm";
 import { ConflictError } from "@takos/worker-platform-utils/errors";
 import { generateId } from "../../../shared/utils/index.ts";
 import { logError, logInfo } from "../../../shared/utils/logger.ts";
-import type { TakosGitClient } from "../takos-git/client.ts";
+import type {
+  ObjectStoreBinding,
+  SqlDatabaseBinding,
+} from "../../../shared/types/bindings.ts";
+import {
+  fetchRemoteRepository,
+  ingestObjects,
+  type RemoteRef,
+} from "../takos-git/local/remote-fetch.ts";
+import { indexCommit } from "../takos-git/index.ts";
+import { decodeCommit } from "../takos-git/local/core/object.ts";
+import type { UnpackedObject } from "../takos-git/local/core/pack-reader.ts";
 import {
   inferRepoName,
   normalizeGitUrl,
@@ -55,23 +66,65 @@ export interface FetchRemoteResult {
   newTags: string[];
 }
 
-type ImportedGitRef = {
-  name: string;
-  target: string;
-};
-
 // ── Import ──────────────────────────────────────────────────────────
+
+function resolveDefaultBranch(
+  refs: readonly RemoteRef[],
+  advertised: string | null,
+): string {
+  if (advertised) return advertised;
+  const heads = refs
+    .filter((ref) => ref.name.startsWith("refs/heads/"))
+    .map((ref) => ref.name.slice("refs/heads/".length));
+  if (heads.includes("main")) return "main";
+  if (heads.includes("master")) return "master";
+  return heads[0] ?? "main";
+}
+
+function countBranches(refs: readonly RemoteRef[]): number {
+  return refs.filter((ref) => ref.name.startsWith("refs/heads/")).length;
+}
+
+function countTags(refs: readonly RemoteRef[]): number {
+  return refs.filter(
+    (ref) => ref.name.startsWith("refs/tags/") && !ref.name.endsWith("^{}"),
+  ).length;
+}
+
+/**
+ * Index every commit object from the fetched pack into the D1 commit index so
+ * history/log views work without re-reading the object store. Returns the count
+ * of commits newly added to the index.
+ */
+async function indexCommitObjects(
+  dbBinding: SqlDatabaseLike,
+  repoId: string,
+  objects: readonly UnpackedObject[],
+): Promise<number> {
+  let indexed = 0;
+  for (const object of objects) {
+    if (object.type !== "commit") continue;
+    try {
+      const commit = decodeCommit(object.content);
+      commit.sha = object.sha;
+      await indexCommit(dbBinding as SqlDatabaseBinding, repoId, commit);
+      indexed += 1;
+    } catch (err) {
+      logError("Failed to index imported commit", err, {
+        module: "external-import",
+        sha: object.sha,
+      });
+    }
+  }
+  return indexed;
+}
 
 /**
  * Import an external Git repository into the Takos store.
- *
- * 1. Asks takos-git to clone/fetch and ingest the remote repository
- * 2. Creates the app repository record
- * 3. Mirrors branch, tag, and origin metadata for app-side list views
  */
 export async function importExternalRepository(
   dbBinding: SqlDatabaseLike,
-  gitClient: TakosGitClient,
+  bucket: ObjectStoreBinding,
   input: ImportExternalRepoInput,
 ): Promise<ImportExternalRepoResult> {
   const gitUrl = normalizeGitUrl(input.url);
@@ -104,24 +157,29 @@ export async function importExternalRepository(
     module: "external-import",
   });
 
-  const repoId = generateId();
-  const imported = await gitClient.importExternalRepository({
-    id: repoId,
-    name: localName,
-    ownerSpaceId: input.accountId,
-    remoteUrl: gitUrl,
+  const fetched = await fetchRemoteRepository({
+    url: gitUrl,
     authHeader: input.authHeader ?? null,
-    initialization: { mode: "bare" },
   });
+  const defaultBranch = resolveDefaultBranch(
+    fetched.refs,
+    fetched.defaultBranch,
+  );
 
+  const repoId = generateId();
   const timestamp = new Date().toISOString();
+
+  // Ingest objects into R2 before writing metadata so a repo row never points
+  // at objects that failed to land.
+  await ingestObjects(bucket, fetched.objects);
+
   await db.insert(repositories).values({
     id: repoId,
     accountId: input.accountId,
     name: localName,
     description: input.description || `Imported from ${gitUrl}`,
     visibility: input.visibility || "private",
-    defaultBranch: imported.defaultBranch,
+    defaultBranch,
     remoteCloneUrl: gitUrl,
     gitEnabled: true,
     stars: 0,
@@ -134,14 +192,14 @@ export async function importExternalRepository(
     await replaceStoredRefs(
       dbBinding,
       repoId,
-      imported.repository.refs,
-      imported.defaultBranch,
+      fetched.refs,
+      defaultBranch,
       timestamp,
     );
+    await indexCommitObjects(dbBinding, repoId, fetched.objects);
 
-    const remoteId = generateId();
     await db.insert(repoRemotes).values({
-      id: remoteId,
+      id: generateId(),
       repoId,
       name: "origin",
       upstreamRepoId: "",
@@ -165,18 +223,22 @@ export async function importExternalRepository(
     throw err;
   }
 
+  const branchCount = countBranches(fetched.refs);
+  const tagCount = countTags(fetched.refs);
+  const commitCount = fetched.objects.filter((o) => o.type === "commit").length;
+
   logInfo(
-    `Import complete: ${localName} - ${imported.branchCount} branches, ${imported.tagCount} tags, ${imported.commitCount} commits`,
+    `Import complete: ${localName} - ${branchCount} branches, ${tagCount} tags, ${commitCount} commits`,
     { module: "external-import" },
   );
 
   return {
     repositoryId: repoId,
     name: localName,
-    defaultBranch: imported.defaultBranch,
-    branchCount: imported.branchCount,
-    tagCount: imported.tagCount,
-    commitCount: imported.commitCount,
+    defaultBranch,
+    branchCount,
+    tagCount,
+    commitCount,
     remoteUrl: gitUrl,
   };
 }
@@ -185,10 +247,11 @@ export async function importExternalRepository(
 
 /**
  * Fetch updates from the remote origin for an already-imported repository.
+ * Re-ingests reachable objects (idempotent) and replaces stored refs.
  */
 export async function fetchRemoteUpdates(
   dbBinding: SqlDatabaseLike,
-  gitClient: TakosGitClient,
+  bucket: ObjectStoreBinding,
   repoId: string,
 ): Promise<FetchRemoteResult> {
   const db = getDb(dbBinding);
@@ -203,27 +266,39 @@ export async function fetchRemoteUpdates(
     throw new Error("Repository does not have a remote clone URL");
   }
 
+  const existingBranches = await db.select({
+    name: branches.name,
+    commitSha: branches.commitSha,
+  }).from(branches).where(eq(branches.repoId, repoId)).all();
+  const beforeBranch = new Map(
+    existingBranches.map((b) => [b.name, b.commitSha]),
+  );
+  const existingTags = await db.select({ name: tags.name })
+    .from(tags).where(eq(tags.repoId, repoId)).all();
+  const beforeTags = new Set(existingTags.map((t) => t.name));
+
   const remote = await db.select({
     id: repoRemotes.id,
   }).from(repoRemotes)
     .where(and(eq(repoRemotes.repoId, repoId), eq(repoRemotes.name, "origin")))
     .get();
 
-  const result = await gitClient.fetchExternalRepository({
-    repositoryId: repoId,
-    request: { remoteUrl: repo.remoteCloneUrl, authHeader: null },
+  const fetched = await fetchRemoteRepository({
+    url: repo.remoteCloneUrl,
+    authHeader: null,
   });
+  const defaultBranch = resolveDefaultBranch(
+    fetched.refs,
+    fetched.defaultBranch,
+  );
   const timestamp = new Date().toISOString();
 
-  await replaceStoredRefs(
-    dbBinding,
-    repoId,
-    result.refs,
-    result.defaultBranch,
-    timestamp,
-  );
+  await ingestObjects(bucket, fetched.objects);
+  const newCommits = await indexCommitObjects(dbBinding, repoId, fetched.objects);
+
+  await replaceStoredRefs(dbBinding, repoId, fetched.refs, defaultBranch, timestamp);
   await db.update(repositories)
-    .set({ defaultBranch: result.defaultBranch, updatedAt: timestamp })
+    .set({ defaultBranch, updatedAt: timestamp })
     .where(eq(repositories.id, repoId));
 
   if (remote) {
@@ -232,11 +307,20 @@ export async function fetchRemoteUpdates(
       .where(eq(repoRemotes.id, remote.id));
   }
 
-  return {
-    newCommits: result.newCommits,
-    updatedBranches: result.updatedBranches,
-    newTags: result.newTags,
-  };
+  const updatedBranches: string[] = [];
+  for (const ref of fetched.refs) {
+    if (!ref.name.startsWith("refs/heads/")) continue;
+    const name = ref.name.slice("refs/heads/".length);
+    if (beforeBranch.get(name) !== ref.target) updatedBranches.push(name);
+  }
+  const newTags: string[] = [];
+  for (const ref of fetched.refs) {
+    if (!ref.name.startsWith("refs/tags/") || ref.name.endsWith("^{}")) continue;
+    const name = ref.name.slice("refs/tags/".length);
+    if (!beforeTags.has(name)) newTags.push(name);
+  }
+
+  return { newCommits, updatedBranches, newTags };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -244,14 +328,14 @@ export async function fetchRemoteUpdates(
 async function replaceStoredRefs(
   dbBinding: SqlDatabaseLike,
   repoId: string,
-  refs: ImportedGitRef[],
+  refs: readonly RemoteRef[],
   defaultBranch: string,
   timestamp: string,
 ): Promise<void> {
   const db = getDb(dbBinding);
   const branchRefs = refs.filter((ref) => ref.name.startsWith("refs/heads/"));
   const tagRefs = refs.filter((ref) =>
-    ref.name.startsWith("refs/tags/") && !ref.name.includes("^{}")
+    ref.name.startsWith("refs/tags/") && !ref.name.endsWith("^{}")
   );
 
   await db.delete(branches).where(eq(branches.repoId, repoId));

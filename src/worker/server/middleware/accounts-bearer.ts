@@ -105,12 +105,34 @@ export type ResolveAccountsBearerResult =
  * (bearer-only, scoped) consume this and map the returned `kind` to their own
  * status codes / response shapes.
  */
-export async function resolveAccountsBearer<TVariables extends object>(
+export function resolveAccountsBearer<TVariables extends object>(
   c: Context<{ Bindings: Env; Variables: TVariables }>,
   deps: AccountsBearerResolverDeps,
   options: { requiredScopes?: string[] } = {},
 ): Promise<ResolveAccountsBearerResult> {
-  const bearer = extractBearerToken(c.req.header("Authorization"));
+  return resolveAccountsBearerFromHeader(
+    c,
+    deps,
+    c.req.header("Authorization"),
+    options,
+  );
+}
+
+/**
+ * Same pipeline as {@link resolveAccountsBearer} but with an explicit
+ * `Authorization` header string. Git Smart HTTP authenticates with HTTP Basic
+ * (`password` = access token), so the git route decodes Basic → `Bearer
+ * <token>` and reuses this single-sourced verification path.
+ */
+export async function resolveAccountsBearerFromHeader<
+  TVariables extends object,
+>(
+  c: Context<{ Bindings: Env; Variables: TVariables }>,
+  deps: AccountsBearerResolverDeps,
+  authorizationHeader: string | null | undefined,
+  options: { requiredScopes?: string[] } = {},
+): Promise<ResolveAccountsBearerResult> {
+  const bearer = extractBearerToken(authorizationHeader);
   if (!bearer) return { kind: "no-bearer" };
 
   if (isUnsupportedAppLocalBearerToken(bearer)) {
@@ -130,7 +152,7 @@ export async function resolveAccountsBearer<TVariables extends object>(
   const origin = requestOrigin(c.req.url);
 
   const selfBearer = await deps.resolveSelfIssuedBearer({
-    authorizationHeader: c.req.header("Authorization"),
+    authorizationHeader,
     origin: origin ?? issuer ?? "",
     issuer: issuer ?? null,
     db: dbBinding,

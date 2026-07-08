@@ -222,13 +222,13 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
 
   const handleCreateSpace = async (
     name: string,
-    installDefaultApps: boolean,
+    installFeaturedApps: boolean,
   ) => {
     if (!name) return;
     try {
       setCreatingSpace(true);
       const res = await rpc.spaces.$post({
-        json: { name, installDefaultApps },
+        json: { name, installFeaturedApps },
       });
       const data = await rpcJson<{ space: { slug: string } }>(res);
       showToast("success", t("spaceCreated"));

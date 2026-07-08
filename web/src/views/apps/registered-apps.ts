@@ -14,7 +14,7 @@ export interface RegisteredApp {
   space_name: string | null;
   service_hostname: string | null;
   service_status: string | null;
-  source_type?: "service_graph";
+  source_type?: "runtime_projection";
   group_id?: string | null;
   publication_name?: string | null;
   category?: string | null;

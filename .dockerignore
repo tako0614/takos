@@ -14,8 +14,6 @@
 !db/**
 
 !containers/
-!containers/git/
-!containers/git/**
 !containers/agent/
 !containers/agent/**
 

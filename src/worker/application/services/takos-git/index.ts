@@ -24,6 +24,7 @@ export {
   applyTreeChanges,
   buildTreeFromPaths,
   checkSyncStatus,
+  collectReachableObjects,
   collectReachableObjectShas,
   countCommitsBetween,
   createBranch,
@@ -50,6 +51,7 @@ export {
   isAncestor,
   isValidGitPath,
   isValidRefName,
+  listAllRefs,
   listBranches,
   listDirectory,
   listTags,
@@ -60,4 +62,3 @@ export {
   setDefaultBranch,
   updateBranch,
 } from "./local/index.ts";
-export * from "./client.ts";

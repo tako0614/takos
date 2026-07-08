@@ -328,16 +328,16 @@ export function PersonalSpaceNote() {
 
 export function CreateSpaceModal(props: {
   onClose: () => void;
-  onCreate: (name: string, installDefaultApps: boolean) => void;
+  onCreate: (name: string, installFeaturedApps: boolean) => void;
   creating: boolean;
 }) {
   const { t } = useI18n();
   const [newSpaceName, setNewSpaceName] = createSignal("");
-  const [installDefaultApps, setInstallDefaultApps] = createSignal(true);
+  const [installFeaturedApps, setInstallFeaturedApps] = createSignal(false);
 
   const handleClose = () => {
     setNewSpaceName("");
-    setInstallDefaultApps(true);
+    setInstallFeaturedApps(false);
     props.onClose();
   };
 
@@ -367,7 +367,7 @@ export function CreateSpaceModal(props: {
             autofocus
             onKeyDown={(e) => {
               if (e.key === "Enter" && newSpaceName().trim()) {
-                props.onCreate(newSpaceName().trim(), installDefaultApps());
+                props.onCreate(newSpaceName().trim(), installFeaturedApps());
               }
             }}
           />
@@ -378,15 +378,15 @@ export function CreateSpaceModal(props: {
             <input
               type="checkbox"
               class="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:focus:ring-zinc-100"
-              checked={installDefaultApps()}
-              onChange={(e) => setInstallDefaultApps(e.currentTarget.checked)}
+              checked={installFeaturedApps()}
+              onChange={(e) => setInstallFeaturedApps(e.currentTarget.checked)}
             />
             <span class="space-y-1">
               <span class="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                {t("installDefaultAppsOnCreate")}
+                {t("installFeaturedAppsOnCreate")}
               </span>
               <span class="block text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                {t("installDefaultAppsOnCreateHint")}
+                {t("installFeaturedAppsOnCreateHint")}
               </span>
             </span>
           </label>
@@ -403,7 +403,7 @@ export function CreateSpaceModal(props: {
             variant="primary"
             size="sm"
             onClick={() =>
-              props.onCreate(newSpaceName().trim(), installDefaultApps())}
+              props.onCreate(newSpaceName().trim(), installFeaturedApps())}
             isLoading={props.creating}
             disabled={!newSpaceName().trim()}
           >

@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Mobile-only Takos native capability set",
+  "windows": ["main"],
+  "platforms": ["iOS", "android"],
+  "permissions": [
+    "barcode-scanner:allow-cancel",
+    "barcode-scanner:allow-scan",
+    "biometric:default",
+    "clipboard-manager:allow-write-text",
+    "core:event:default",
+    "core:path:default",
+    "deep-link:default",
+    "keystore:default",
+    "mobile-push:default",
+    "notification:default",
+    "opener:allow-default-urls",
+    "os:default",
+    "store:default",
+    "stronghold:default"
+  ]
+}

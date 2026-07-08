@@ -7,7 +7,7 @@ interface CreateSpaceModalProps {
   onCreate: (
     name: string,
     description: string,
-    installDefaultApps: boolean,
+    installFeaturedApps: boolean,
   ) => Promise<void>;
 }
 
@@ -18,8 +18,8 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
     setName,
     description,
     setDescription,
-    installDefaultApps,
-    setInstallDefaultApps,
+    installFeaturedApps,
+    setInstallFeaturedApps,
     loading,
     error,
     clearError,
@@ -111,15 +111,15 @@ export function CreateSpaceModal(props: CreateSpaceModalProps) {
               <input
                 type="checkbox"
                 class="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:focus:ring-zinc-100"
-                checked={installDefaultApps()}
-                onChange={(e) => setInstallDefaultApps(e.currentTarget.checked)}
+                checked={installFeaturedApps()}
+                onChange={(e) => setInstallFeaturedApps(e.currentTarget.checked)}
               />
               <span class="space-y-1">
                 <span class="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                  {t("installDefaultAppsOnCreate")}
+                  {t("installFeaturedAppsOnCreate")}
                 </span>
                 <span class="block text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-                  {t("installDefaultAppsOnCreateHint")}
+                  {t("installFeaturedAppsOnCreateHint")}
                 </span>
               </span>
             </label>

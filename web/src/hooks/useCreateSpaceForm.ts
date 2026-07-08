@@ -5,7 +5,7 @@ interface UseCreateSpaceFormOptions {
   onCreate: (
     name: string,
     description: string,
-    installDefaultApps: boolean,
+    installFeaturedApps: boolean,
   ) => Promise<void>;
   nameRequiredMessage: string;
   failedToCreateMessage: string;
@@ -18,7 +18,7 @@ export function useCreateSpaceForm({
 }: UseCreateSpaceFormOptions) {
   const [name, setName] = createSignal("");
   const [description, setDescription] = createSignal("");
-  const [installDefaultApps, setInstallDefaultApps] = createSignal(true);
+  const [installFeaturedApps, setInstallFeaturedApps] = createSignal(false);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
@@ -27,7 +27,7 @@ export function useCreateSpaceForm({
   const resetForm = () => {
     setName("");
     setDescription("");
-    setInstallDefaultApps(true);
+    setInstallFeaturedApps(false);
     setLoading(false);
     setError(null);
   };
@@ -44,7 +44,7 @@ export function useCreateSpaceForm({
     setLoading(true);
     setError(null);
     try {
-      await onCreate(name(), description(), installDefaultApps());
+      await onCreate(name(), description(), installFeaturedApps());
     } catch (err: unknown) {
       setError(getErrorMessage(err, failedToCreateMessage));
     } finally {
@@ -57,8 +57,8 @@ export function useCreateSpaceForm({
     setName,
     description,
     setDescription,
-    installDefaultApps,
-    setInstallDefaultApps,
+    installFeaturedApps,
+    setInstallFeaturedApps,
     loading,
     error,
     clearError,

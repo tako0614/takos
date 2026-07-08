@@ -12,7 +12,7 @@ review and customize for jurisdiction-specific prohibitions before publishing.
 | ------------- | ------------------------------------- |
 | Owner         | Operator trust & safety owner         |
 | Last reviewed | `[EFFECTIVE_DATE]`                    |
-| Scope         | All Takos services and bundled apps   |
+| Scope         | All Takos services and installed apps |
 | Status        | Template — pre-public-launch baseline |
 
 ## 1. 適用範囲

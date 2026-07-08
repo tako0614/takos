@@ -162,12 +162,6 @@
       "@takosjp/takosumi-accounts-service": [
         "../takosumi/accounts/service/src/mod.ts"
       ],
-      "takos-git-contract": [
-        "./src/contracts/git/index.ts"
-      ],
-      "takos-git-contract/*": [
-        "./src/contracts/git/*"
-      ],
       "takos-api-contract": [
         "./src/contracts/public/index.ts"
       ],

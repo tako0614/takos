@@ -11,7 +11,7 @@ interface AppModalsProps {
   onCreateSpace: (
     name: string,
     description: string,
-    installDefaultApps: boolean,
+    installFeaturedApps: boolean,
   ) => Promise<void>;
 }
 

@@ -16,9 +16,8 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 
 ## Canonical Layout
 
-- `src/worker`: Takos Worker source owner and Hono route composition.
+- `src/worker`: Takos Worker source owner and Hono route composition, including worker-native Git Smart HTTP (read-only clone/fetch served from the R2 object store; push via the repository API).
 - `web`: browser UI.
-- `containers/git`: Git hosting container.
 - `containers/agent`: agent execution container.
 - `deploy/cloudflare`, `deploy/opentofu` (Cloudflare module), and `deploy/distributions/cloudflare.json`: product deploy artifacts.
 

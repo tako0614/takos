@@ -51,7 +51,7 @@ export interface CatalogRepoResponse {
     username: string;
     avatar_url: string | null;
   };
-  catalog_origin: "repository" | "default_app";
+  catalog_origin: "repository" | "featured_app";
 }
 
 export interface CatalogPackageResponse {

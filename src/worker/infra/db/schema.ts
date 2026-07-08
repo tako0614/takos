@@ -80,9 +80,9 @@ export { mcpOauthPending, mcpServers } from "./schema-oauth.ts";
 
 // Platform
 export {
-  defaultAppDistributionConfig,
-  defaultAppDistributionEntries,
-  defaultAppPreinstallJobs,
+  featuredAppCatalogConfig,
+  featuredAppCatalogEntries,
+  featuredAppPreinstallJobs,
   dlqEntries,
   edges,
   interfaceFileHandlerMatchers,

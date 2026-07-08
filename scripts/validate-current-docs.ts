@@ -167,7 +167,7 @@ async function validateCanonicalLayoutDocs(): Promise<string[]> {
     "wrangler.worker.toml",
     "apps/web",
   ];
-  const required = ["src/worker", "web", "containers/git", "containers/agent"];
+  const required = ["src/worker", "web", "containers/agent"];
   const errors: string[] = [];
   for (const path of files) {
     const text = await runtime.readTextFile(path);

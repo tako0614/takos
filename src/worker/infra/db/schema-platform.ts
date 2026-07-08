@@ -42,7 +42,7 @@ export { repoGrants } from "./schema-platform-store.ts";
 export { dlqEntries } from "./schema-platform-dlq.ts";
 
 export {
-  defaultAppDistributionConfig,
-  defaultAppDistributionEntries,
-  defaultAppPreinstallJobs,
-} from "./schema-default-app-distribution.ts";
+  featuredAppCatalogConfig,
+  featuredAppCatalogEntries,
+  featuredAppPreinstallJobs,
+} from "./schema-featured-app-catalog.ts";

@@ -168,10 +168,6 @@ jobs:
             context: .
             dockerfile: takos/deploy/docker/takos-worker.Dockerfile
             prebuild: ""
-          - image: takos-git
-            context: .
-            dockerfile: takos/containers/git/Dockerfile
-            prebuild: ""
           - image: takos-agent
             context: .
             dockerfile: takos/containers/agent/Dockerfile

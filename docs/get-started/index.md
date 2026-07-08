@@ -1,6 +1,6 @@
 # はじめる
 
-Takos の最初の成功状態は、Workspace を開いて、bundled app を起動し、chat で agent に作業を頼み、その結果が Git / files /
+Takos の最初の成功状態は、Workspace を開いて、必要な app を追加し、chat で agent に作業を頼み、その結果が Git / files /
 memory / app launcher に残ることです。OpenTofu や Takosumi の実行台帳は重要ですが、通常の Workspace ユーザーが最初に理解するものではありません。
 
 ## 1. Workspace を開く
@@ -11,12 +11,12 @@ Platforms signup が closed の間も、rehearsal / self-host では同じ produ
 
 最初に見るもの:
 
-- **Apps**: `takos-office` / `takos-computer` / `yurucommu` など、すぐ開ける bundled app
+- **Apps**: Git URL から追加した app や、`takos-office` / `takos-computer` / `yurucommu` などの installable app
 - **Chat**: agent に作業を依頼する入口
 - **Memory**: project notes、決定事項、繰り返し使う context
 - **Repos / Files**: agent が作ったコードやファイルを確認する場所
 
-新規 Workspace では bundled app が seed されます。install の途中状態や失敗は Apps 画面から管理できますが、通常は「開ける app」が主役です。
+新規 Workspace に app は自動 install されません。必要な app を選んで追加し、install の途中状態や失敗は Apps 画面から管理します。
 
 ## 2. Chat で最初の作業を頼む
 
@@ -33,7 +33,7 @@ Takos は chat だけの UI ではなく、agent が使う Git / files / memory 
 
 ## 3. Apps から成果物を開く
 
-Apps 画面は Workspace の launcher です。bundled app や Git URL から追加した app がここに並びます。app に launch URL がある場合は、
+Apps 画面は Workspace の launcher です。Git URL から明示的に追加した app がここに並びます。app に launch URL がある場合は、
 ここから直接開けます。install 中のものは管理 link から Capsule detail に進めます。
 
 新しい app を追加したい場合は、Apps 画面から Source / Git URL の追加導線に進みます。Takos に中央の公式 app store はありません。

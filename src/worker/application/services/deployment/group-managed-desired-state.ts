@@ -8,6 +8,7 @@ import type {
 } from "../source/app-manifest-types.ts";
 import {
   isPublicationType,
+  isRuntimeProjectionPublicationSourceType,
   listPublications,
   listServiceConsumes,
   previewServiceConsumeEnvVars,
@@ -48,7 +49,6 @@ function buildInjectedEnv(
   };
 }
 
-
 type DesiredEnvVar = { name: string; value: string; secret: boolean };
 
 type ManagedResourceRow = {
@@ -71,7 +71,10 @@ type DesiredResourceBinding = {
 
 function readMcpAuthSecretRef(publication: AppPublication): string | null {
   if (
-    !isPublicationType(publication.type, RUNTIME_PROJECTION_CAPABILITIES.mcpServer)
+    !isPublicationType(
+      publication.type,
+      RUNTIME_PROJECTION_CAPABILITIES.mcpServer,
+    )
   ) {
     return null;
   }
@@ -315,7 +318,7 @@ async function captureManagedPublicationSnapshot(
     .filter(
       (publication) =>
         publication.groupId === groupId &&
-        publication.sourceType === RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
+        isRuntimeProjectionPublicationSourceType(publication.sourceType),
     )
     .map((publication) => publication.publication);
 }
@@ -471,7 +474,8 @@ export async function syncGroupPublicationDesiredState(
 ): Promise<PublicationSyncFailure[]> {
   const resolvedDeps = {
     replaceRuntimeProjectionPublications:
-      deps.replaceRuntimeProjectionPublications ?? replaceRuntimeProjectionPublications,
+      deps.replaceRuntimeProjectionPublications ??
+      replaceRuntimeProjectionPublications,
   };
   let snapshot: AppPublication[];
   try {

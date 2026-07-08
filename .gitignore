@@ -25,7 +25,6 @@ deploy/opentofu/environments/**/*.auto.tfvars
 deploy/opentofu/environments/**/*.auto.tfvars.json
 deploy/local-substrate/
 .takos-local/
-.takos-git/
 .takos-release-secrets.*.json
 deploy/cloudflare/.takos-release-wrangler.*.toml
 *.log

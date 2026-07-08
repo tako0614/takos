@@ -27,8 +27,7 @@ TAKOS_LOCAL_ENV_FILE=.env.local bun run local:down
 
 ## Expected Product Services
 
-- `takos-worker`
-- `takos-git`
+- `takos-worker` (serves worker-native Git Smart HTTP)
 - `takos-agent`
 
 Takosumi kernel / Takosumi Accounts are substrate / account-plane services, not

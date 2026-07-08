@@ -6,10 +6,7 @@ import { TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH } from "@takosjp/takosumi-ac
 
 import type { Env } from "../../../shared/types/index.ts";
 import { installationProjectionToServicesBody } from "./takosumi-workload-services.ts";
-import { readEnvString } from "./default-app-validation.ts";
-
-const LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH =
-  "/v1/installation-projections";
+import { readEnvString } from "./featured-app-validation.ts";
 
 type InstallableAppInstallEnv = Pick<
   Env,
@@ -119,11 +116,6 @@ function normalizeInstallationsUrl(value: string, field: string): string {
   const basePath = url.pathname.replace(/\/+$/, "");
   if (basePath.endsWith(TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH)) {
     url.pathname = basePath;
-  } else if (basePath.endsWith(LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH)) {
-    url.pathname = `${basePath.slice(
-      0,
-      -LEGACY_ACCOUNTS_INSTALLATION_PROJECTIONS_PATH.length,
-    )}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
   } else {
     url.pathname = `${basePath}${TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH}`;
   }

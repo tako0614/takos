@@ -10,7 +10,6 @@ const privatePatchRunbookPath =
 
 const dockerfiles = [
   'deploy/docker/takos-worker.Dockerfile',
-  'containers/git/Dockerfile',
   'containers/agent/Dockerfile',
 ];
 
@@ -24,7 +23,6 @@ validateTextIncludes('.github/dependabot.yml', [
   'package-ecosystem: "github-actions"',
   'package-ecosystem: "docker"',
   'directory: "/deploy/docker"',
-  'directory: "/containers/git"',
   'directory: "/containers/agent"',
   'package-ecosystem: "cargo"',
 ]);

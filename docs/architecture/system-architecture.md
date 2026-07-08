@@ -18,8 +18,9 @@ Takos is also a useful Resource Shape example, but it is not a special Takosumi
 shape. When Takos is described through the Takosumi Resource Shape flow, it is a
 composition of provider-neutral service forms: `EdgeWorker` for `takos-worker`,
 `SQLDatabase` for workspace/control data, `KVStore` for session/cache/state
-bindings, `ObjectBucket` for files and workspace objects, `Queue` for agent jobs
-and product events, and `ContainerService` for `takos-git` / `takos-agent`.
+bindings, `ObjectBucket` for files, workspace objects, and worker-native Git
+object storage, `Queue` for agent jobs and product events, and `ContainerService`
+for `takos-agent`.
 Do not introduce a `takosumi_takos` catch-all resource; add a new generic
 service form only when Takos and third-party apps both need semantics that the
 existing shapes cannot express.

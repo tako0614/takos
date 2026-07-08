@@ -80,7 +80,7 @@ function publicationRow(overrides: Record<string, unknown> = {}) {
     accountId: "space_1",
     groupId: null,
     ownerServiceId: "svc_1",
-    sourceType: "service_graph",
+    sourceType: "runtime_projection",
     name: "shared-mcp",
     catalogName: null,
     publicationType: "protocol.mcp.server",
@@ -252,7 +252,7 @@ test("resolvePublicationMcpServerAccessToken rejects dangling bearer-auth public
       resolvePublicationMcpServerAccessToken(env.DB, env, {
         spaceId: "space_1",
         serverId: "publication:pub_1",
-    }),
+      }),
     Error,
     "declares bearer auth secretRef but has no owner service",
   );

@@ -27,7 +27,7 @@ Takos owns the user-facing workspace experience: chat, agents, memory, Workspace
 }
 ```
 
-Creating the Installation records the module reference; subsequent typed Runs record `plan` type Run / `apply` type Run entries against the bound ProviderConnection / ProviderBinding / policy. Takos product routes should call the Takosumi deploy control plane or Takosumi account-plane flow instead of exposing a separate product-local deployment surface.
+Creating the Capsule records the module reference; subsequent typed Runs record `plan` type Run / `apply` type Run entries against the bound ProviderConnection / ProviderBinding / policy. Takos product routes should call the Takosumi deploy control plane or Takosumi account-plane flow instead of exposing a separate product-local deployment surface.
 
 ## References
 

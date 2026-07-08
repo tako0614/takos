@@ -1,0 +1,5 @@
+dist/
+node_modules/
+src-tauri/target/
+release/*.json
+!release/mobile-release-evidence.example.json

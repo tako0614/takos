@@ -64,7 +64,7 @@ TAKOSUMI_ACCOUNTS_URL = "https://app.takosumi.example"
 OIDC_ISSUER_URL = "https://app.takosumi.example"
 OIDC_CLIENT_ID = "takos-worker-installation-client"
 OIDC_REDIRECT_URI = "https://app.your-domain.example/auth/oidc/callback"
-# Optional subject used by Takos default-app Capsule installation jobs when the
+# Optional subject used by Takos featured-app Capsule installation jobs when the
 # operator chooses to run them from this worker.
 TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_subject"
 # OCI deployment adapter for image-backed services / containers.
@@ -360,7 +360,7 @@ TAKOSUMI_ACCOUNTS_URL = "https://staging-app.takosumi.example"
 OIDC_ISSUER_URL = "https://staging-app.takosumi.example"
 OIDC_CLIENT_ID = "takos-staging-installation-client"
 OIDC_REDIRECT_URI = "https://staging-admin.example.com/auth/oidc/callback"
-# Optional subject used by default-app Capsule installation jobs.
+# Optional subject used by featured-app Capsule installation jobs.
 TAKOSUMI_ACCOUNTS_SUBJECT = "tsub_replace_with_staging_subject"
 CF_ACCOUNT_ID = "replace-with-staging-account-id"
 CF_ZONE_ID = "replace-with-staging-zone-id"

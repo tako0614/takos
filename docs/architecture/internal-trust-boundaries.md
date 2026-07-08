@@ -93,7 +93,7 @@ untrusted party, so it keeps a real credential:
 
 ### 3. Cross-service implementation calls → worker → ONE signed-envelope
 
-Takos still has product-internal implementation calls such as scheduled jobs, default-app distribution checks, and
+Takos still has product-internal implementation calls such as scheduled jobs, featured-app catalog checks, and
 agent-control backend calls. They are not Takosumi's canonical `/internal/*` public route family; Takosumi reserves
 `/internal/*` HTTP routes for runner / executor container callbacks inside each worker. Closed hosted deployments may
 have provider endpoint bridges outside the OSS/Takos self-host public model, but those routes are not Takos product

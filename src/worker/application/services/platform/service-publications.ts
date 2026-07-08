@@ -28,6 +28,7 @@ import {
   assertPublicationHasNoConsumers,
   deletePublicationRow,
   deleteServiceConsumeRow,
+  isRuntimeProjectionPublicationSourceType,
   RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
   getPublicationRowByRef,
   getServiceGroupId,
@@ -69,6 +70,8 @@ export {
 
 export {
   RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES,
+  isRuntimeProjectionPublicationSourceType,
   publicationOutputContract,
   type PublicationRecord,
   publicationResolvedUrl,
@@ -224,7 +227,7 @@ export async function replaceRuntimeProjectionPublications(
   const staleRows = existingRows.filter(
     (row) =>
       row.groupId === params.groupId &&
-      row.sourceType === RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE &&
+      isRuntimeProjectionPublicationSourceType(row.sourceType) &&
       !desiredByName.has(row.name),
   );
   for (const row of staleRows) {

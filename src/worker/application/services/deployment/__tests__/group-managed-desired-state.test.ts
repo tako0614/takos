@@ -54,7 +54,7 @@ test("syncGroupPublicationDesiredState restores runtime projection publications 
       id: "pub-1",
       accountId: "space-1",
       name: "tools",
-      sourceType: "service_graph",
+      sourceType: "runtime_projection",
       groupId: "group-1",
       ownerServiceId: "svc-web",
       catalogName: null,
@@ -567,8 +567,8 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
       spaceId: "space-1",
       desiredState,
       observedState: {
-        groupId: "inst_docs",
-        groupName: "docs",
+        groupId: "inst_office",
+        groupName: "office",
         backend: "cloudflare",
         env: "default",
         updatedAt: "2026-04-20T00:00:00.000Z",
@@ -625,7 +625,7 @@ test("syncGroupManagedDesiredState materializes service binding grants", async (
   assertEquals(materializeCalls, [
     {
       spaceId: "space-1",
-      installationId: "inst_docs",
+      installationId: "inst_office",
       workloadName: "web",
       serviceBinding: {
         name: "space-control",

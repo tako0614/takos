@@ -14,12 +14,11 @@ license strings where available.
 | ------------------------------------- | -----------: | -----------: | -------------: |
 | `deno.lock`                           |          177 |            5 |             27 |
 | `takos/deno.lock`                     |          676 |            7 |              0 |
-| `takos/containers/git/deno.lock`      |            2 |            1 |              0 |
 | `takosumi/deno.lock`                  |           16 |           12 |              0 |
 | `takosumi/deno.lock`                  |            0 |            5 |              0 |
 | `takos-apps/takos-office/bun.lock`    |          n/a |          n/a |            n/a |
 | `takos-apps/takos-computer/deno.lock` |          333 |            2 |              0 |
-| `yurucommu/deno.lock`                 |          452 |           12 |              9 |
+| `yurucommu-core/deno.lock`            |          452 |           12 |              9 |
 | `road-to-me/backend/deno.lock`        |          316 |            2 |              0 |
 | `road-to-me/app/deno.lock`            |          598 |            3 |              0 |
 | `takos/containers/agent/Cargo.lock`   |  Rust crates |          n/a |            n/a |

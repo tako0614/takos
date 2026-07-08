@@ -1,22 +1,22 @@
 # Capsule Update / Rollback / Export
 
-このページは、Takos 上の installed app / bundled app を更新・巻き戻し・持ち出すときの authority を整理します。deploy の正本は
+このページは、Takos 上の installed app を更新・巻き戻し・持ち出すときの authority を整理します。deploy の正本は
 Takosumi control plane の Workspace / Project / Capsule / Run / StateVersion / Output / AuditEvent です。provider access は
 ProviderBinding が provider (+ optional alias) を explicit ProviderConnection に解決します。Accounts plane の
-`/v1/installation-projections` は legacy-named installed-service projection route です。OIDC client metadata、billing
+`/v1/capsule-projections` は installed service 向けの Capsule projection route です。OIDC client metadata、billing
 usage endpoint、runtime token/secret delivery metadata、export handoff を installed service に渡す supporting route であり、
 deploy-control Capsule API ではありません。
 
 ## Authority Split
 
-| 操作                               | 正本                                                                                   | 補足                                                                                                |
-| ---------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Git URL から install               | dashboard `/install?git=...` -> `/new` -> Capsule create / plan / apply flow             | 作成は compatibility check と明示確認後。`/install` は prefill link。                               |
-| ローカル作業 tree の upload        | `takosumi deploy ./dir` -> upload-origin Source snapshot -> `POST /api/v1/deploy`       | developer / operator helper。標準 product flow は Git URL install。                                 |
-| update                             | Source sync -> plan Run -> approval -> apply Run -> StateVersion / Output              | Accounts は結果を projection するだけで、Run ledger の正本ではない。                                |
-| rollback                           | retained StateVersion/source identity -> rollback plan -> approval -> apply Run        | reviewed state/source に pin した新しい Run / StateVersion / Output ledger entry を作る。           |
-| export / import                    | Takosumi Accounts projection API と operator helper                                    | portability handoff。source/target の Accounts plane が secret/OIDC/runtime material を再発行する。 |
-| billing / OIDC / runtime material 配布 | `/v1/installation-projections/*`                                                    | legacy-named supporting projection。Workspace / Source / Capsule / Run の正本ではない。             |
+| 操作                                   | 正本                                                                              | 補足                                                                                                |
+| -------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Git URL から install                   | dashboard `/install?git=...` -> `/new` -> Capsule create / plan / apply flow      | 作成は compatibility check と明示確認後。`/install` は prefill link。                               |
+| ローカル作業 tree の upload            | `takosumi deploy ./dir` -> upload-origin Source snapshot -> `POST /api/v1/deploy` | developer / operator helper。標準 product flow は Git URL install。                                 |
+| update                                 | Source sync -> plan Run -> approval -> apply Run -> StateVersion / Output         | Accounts は結果を projection するだけで、Run ledger の正本ではない。                                |
+| rollback                               | retained StateVersion/source identity -> rollback plan -> approval -> apply Run   | reviewed state/source に pin した新しい Run / StateVersion / Output ledger entry を作る。           |
+| export / import                        | Takosumi Accounts projection API と operator helper                               | portability handoff。source/target の Accounts plane が secret/OIDC/runtime material を再発行する。 |
+| billing / OIDC / runtime material 配布 | `/v1/capsule-projections/*`                                                       | supporting projection。Workspace / Source / Capsule / Run の正本ではない。                          |
 
 ## Update Flow
 
@@ -93,7 +93,7 @@ takosumi logs <run-id>
 
 Update / rollback / export は deploy-control ledger と Accounts projection の両方にまたがります。current implementation では、
 Source snapshot / plan digest / dependency evidence / base StateVersion / Output を pin した reviewed apply が
-新しい Deployment ledger revision (StateVersion / Output revision) を作る唯一の update authority です。Accounts 台帳操作は OIDC client、billing usage
+新しい StateVersion / Output revision を作る唯一の update authority です。Accounts 台帳操作は OIDC client、billing usage
 endpoint、runtime material delivery metadata、export handoff を installed service に投影する supporting flow であり、deploy-control
 の Capsule / Run 正本ではありません。
 

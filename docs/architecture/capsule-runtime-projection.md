@@ -17,8 +17,8 @@ table, no capability-token grant issuance, and no vault-minted runtime service t
 publish non-secret service descriptors through well-known OpenTofu Outputs, and a host like Takos **projects** those
 Outputs into transient, read-only runtime objects:
 
-- a producer Capsule publishes services through the `service_exports` (or the `takos_app` publish convenience) Output;
-- a consumer Capsule requests services through the `service_bindings` (or `takos_app` consume) Output;
+- a producer Capsule publishes services through the `service_exports` (or the `app_deployment` publish convenience) Output;
+- a consumer Capsule requests services through the `service_bindings` (or `app_deployment` consume) Output;
 - Takos reads the deployed Outputs and projects them into `ProjectedServiceExport` / `ProjectedServiceBinding` objects
   that drive its launcher, MCP registry, file handling, storage, Git, and agent surfaces.
 
@@ -32,14 +32,14 @@ The reference implementation is `takosumi/core/domains/output-projection/service
 
 ## 2. Ownership
 
-| Concern                | Owner                                                                  |
-| ---------------------- | ---------------------------------------------------------------------- |
-| Producer identity      | `Capsule` + successful `Run` + `StateVersion` + `Output`               |
-| Producer data source   | `tofu output -json`, filtered through the Capsule output allowlist     |
-| Consumer dependency     | output-to-input wiring pinned at plan time                            |
-| Runtime authority      | the deployed workload's own runtime / operator-Cloud secret boundary   |
-| Audit                  | `Run` / `AuditEvent`                                                    |
-| Projection             | Takos host (transient, read-only; outside the Takosumi ledger)         |
+| Concern              | Owner                                                                |
+| -------------------- | -------------------------------------------------------------------- |
+| Producer identity    | `Capsule` + successful `Run` + `StateVersion` + `Output`             |
+| Producer data source | `tofu output -json`, filtered through the Capsule output allowlist   |
+| Consumer dependency  | output-to-input wiring pinned at plan time                           |
+| Runtime authority    | the deployed workload's own runtime / operator-Cloud secret boundary |
+| Audit                | `Run` / `AuditEvent`                                                 |
+| Projection           | Takos host (transient, read-only; outside the Takosumi ledger)       |
 
 Takos consumes these projections to build its app launcher, MCP registry, file handling, storage, Git, and agent
 experiences. Takos may also publish first-party services through the same Outputs, but it does not define a separate
@@ -64,32 +64,32 @@ The runtime projection is not:
 ### 4.1 ProjectedServiceExport
 
 A projected export is a non-secret, allowlist-checked description of a service exposed by one producer Capsule, derived
-from that Capsule's `service_exports` (or `takos_app` publish) Output.
+from that Capsule's `service_exports` (or `app_deployment` publish) Output.
 
-| field          | meaning                                                          |
-| -------------- | ---------------------------------------------------------------- |
-| `name`         | producer-local stable name, unique within the Capsule            |
+| field          | meaning                                                             |
+| -------------- | ------------------------------------------------------------------- |
+| `name`         | producer-local stable name, unique within the Capsule               |
 | `capabilities` | capability tokens such as `protocol.mcp.server` or `storage.object` |
-| `visibility`   | `private`, `space`, `public`, or `shared`                        |
-| `endpoints`    | non-secret endpoint descriptors                                  |
-| `auth`         | accepted auth schemes, without secret values                     |
-| `labels`       | display/selector labels                                          |
-| `metadata`     | display and protocol metadata, never authority                   |
+| `visibility`   | `private`, `space`, `public`, or `shared`                           |
+| `endpoints`    | non-secret endpoint descriptors                                     |
+| `auth`         | accepted auth schemes, without secret values                        |
+| `labels`       | display/selector labels                                             |
+| `metadata`     | display and protocol metadata, never authority                      |
 
 `visibility = "space"` means Workspace-visible. The wire keeps the historical `space` token; it is not a reintroduction
 of the retired Takosumi Space public concept.
 
 ### 4.2 ProjectedServiceBinding
 
-A projected binding is a consumer Capsule's request to use a service, derived from its `service_bindings` (or `takos_app`
+A projected binding is a consumer Capsule's request to use a service, derived from its `service_bindings` (or `app_deployment`
 consume) Output. It is read-only configuration, not a required repo manifest.
 
 | field            | meaning                                                                  |
 | ---------------- | ------------------------------------------------------------------------ |
 | `name`           | binding name                                                             |
 | `target`         | `generated_root`, `workload`, or `runtime` target that receives the wire |
-| `selector`       | capability / producer / name / label constraints                        |
-| `dependencyMode` | `variable_injection`, `remote_state`, or `published_output`             |
+| `selector`       | capability / producer / name / label constraints                         |
+| `dependencyMode` | `variable_injection`, `remote_state`, or `published_output`              |
 | `grantRequest`   | requested scopes / audience / env names / ttl hints (descriptive)        |
 
 `grantRequest` records what a consumer asks for. In OSS it is descriptive projection metadata only: Takos uses it to wire
@@ -162,7 +162,7 @@ in the closed `takosumi-cloud` package; it is not an OpenTofu provider credentia
 ## 6. OpenTofu projection
 
 Takosumi requires no manifest. A Capsule may optionally publish service descriptors through a well-known OpenTofu Output
-named `service_exports` (and request services through `service_bindings`), or use the `takos_app` publish/consume
+named `service_exports` (and request services through `service_bindings`), or use the `app_deployment` publish/consume
 convenience Output.
 
 ```hcl
@@ -230,24 +230,24 @@ here — they authorize OpenTofu plan/apply/destroy and stay in the ProviderConn
 
 Takos is a first-party consumer/producer profile over this projection:
 
-| Takos surface                    | service identity / capability                                          |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| MCP registry                     | app-provided `protocol.mcp.server` publications                        |
-| app launcher / embedded UI       | app-provided `interface.ui.surface` publications                       |
-| file handlers                    | app-provided `interface.file.handler` publications                     |
-| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`               |
-| object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`                   |
-| Git UX / clone / refs            | `source.repository`, `source.git.smart_http`                           |
-| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`                 |
-| same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api`            |
+| Takos surface                    | service identity / capability                               |
+| -------------------------------- | ----------------------------------------------------------- |
+| MCP registry                     | app-provided `protocol.mcp.server` publications             |
+| app launcher / embedded UI       | app-provided `interface.ui.surface` publications            |
+| file handlers                    | app-provided `interface.file.handler` publications          |
+| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`    |
+| object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`        |
+| Git UX / clone / refs            | `source.repository`, `source.git.smart_http`                |
+| agent execution                  | `automation.agent_runtime`, `automation.tool_provider`      |
+| same-Workspace output / control  | `deployment.outputs`, `auth.bootstrap_token`, `control.api` |
 
-Takos-specific UI decisions, launcher ranking, bundled-app seeding, chat/agent UX, and memory behavior stay in Takos.
+Takos-specific UI decisions, launcher ranking, explicit app install UX, chat/agent UX, and memory behavior stay in Takos.
 Output capture, output-to-input wiring, dependency pinning, and audit stay in Takosumi. MCP is represented by the
 `protocol.mcp.server` capability in this profile; it is not a Takosumi-specific repo manifest or OSS resource driver.
 
 ## 10. Security invariants
 
-- No secret literal in `service_exports` / `service_bindings` / `takos_app` Outputs.
+- No secret literal in `service_exports` / `service_bindings` / `app_deployment` Outputs.
 - The projection is read-only and store-free: it issues no credentials and grants no runtime authority.
 - Runtime service tokens come from the deployed workload's own runtime (and the operator/Cloud secret boundary), not from
   OpenTofu Outputs and not from a Takosumi grant ledger.

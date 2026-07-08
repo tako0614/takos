@@ -11,6 +11,7 @@ import { createApiRouter } from "./server/routes/api.ts";
 import { RateLimiters } from "./shared/utils/rate-limiter.ts";
 import { authSessionRouter } from "./server/routes/auth/session.ts";
 import { authOidcRouter } from "./server/routes/auth/oidc.ts";
+import gitSmartHttp from "./server/routes/git-smart-http.ts";
 import {
   TAKOSUMI_PRODUCT_CAPABILITIES_PATH,
   TAKOSUMI_WELL_KNOWN_PATH,
@@ -28,12 +29,12 @@ import {
   scheduledWorkflowWindowMinutes,
 } from "./application/services/maintenance/scheduled-cron.ts";
 import {
-  clearDefaultAppDistributionEntries,
-  getDefaultAppReconcileStatus,
-  hasDefaultAppDistributionEnvOverride,
-  isDefaultAppDistributionInvalidError,
-  saveDefaultAppDistributionEntries,
-} from "./application/services/source/default-app-distribution.ts";
+  clearFeaturedAppCatalogEntries,
+  getFeaturedAppReconcileStatus,
+  hasFeaturedAppCatalogEnvOverride,
+  isFeaturedAppCatalogInvalidError,
+  saveFeaturedAppCatalogEntries,
+} from "./application/services/source/featured-app-catalog.ts";
 import { optionalAuth, requireAuth } from "./server/middleware/auth.ts";
 import { staticAssetsMiddleware } from "./server/middleware/static-assets.ts";
 import {
@@ -114,15 +115,15 @@ function withUnifiedContainerHostEnv(env: Env): Env {
   } as Env;
 }
 
-function isDefaultAppDistributionSaveValidationError(error: unknown): boolean {
-  if (isDefaultAppDistributionInvalidError(error)) return true;
+function isFeaturedAppCatalogSaveValidationError(error: unknown): boolean {
+  if (isFeaturedAppCatalogInvalidError(error)) return true;
   if (!(error instanceof Error)) return false;
   return [
-    "default app distribution ",
-    "default app group name is invalid:",
-    "default app repository URL must ",
-    "duplicate default app group name:",
-    "duplicate default app repository URL:",
+    "featured app catalog ",
+    "featured app group name is invalid:",
+    "featured app repository URL must ",
+    "duplicate featured app group name:",
+    "duplicate featured app repository URL:",
   ].some((prefix) => error.message.startsWith(prefix));
 }
 
@@ -281,6 +282,11 @@ app.get(TAKOSUMI_WELL_KNOWN_PATH, (c) =>
   c.json(createTakosDistributionWellKnown(new URL(c.req.url).origin)),
 );
 
+// Git Smart HTTP (read-only clone/fetch) served from the R2-backed object store.
+// Mounted at the top level so `git clone https://<host>/git/<owner>/<repo>.git`
+// works; push is refused inside the router.
+app.route("/", gitSmartHttp);
+
 app.get(TAKOSUMI_PRODUCT_CAPABILITIES_PATH, (c) =>
   c.json(createTakosDistributionProductCapabilities(new URL(c.req.url).origin)),
 );
@@ -406,7 +412,7 @@ app.post("/internal/scheduled", async (c) => {
   });
 });
 
-app.put("/internal/default-app-distribution", async (c) => {
+app.put("/internal/featured-app-catalog", async (c) => {
   const env = c.env;
   const access = validateInternalApiAccess(c.req.url, env, (name) =>
     c.req.header(name),
@@ -423,13 +429,13 @@ app.put("/internal/default-app-distribution", async (c) => {
     );
   }
 
-  if (hasDefaultAppDistributionEnvOverride(env)) {
+  if (hasFeaturedAppCatalogEnvOverride(env)) {
     return c.json(
       {
         error: {
           code: "CONFLICT",
           message:
-            "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON or TAKOS_DEFAULT_APP_REPOSITORIES_JSON is configured; env overrides DB-operator-provided coverage app distribution. Remove the env override before saving DB distribution.",
+            "TAKOS_FEATURED_APP_CATALOG_JSON or TAKOS_FEATURED_APP_REPOSITORIES_JSON is configured; env overrides DB-operator-provided coverage app catalog. Remove the env override before saving DB catalog.",
         },
       },
       409,
@@ -460,9 +466,9 @@ app.put("/internal/default-app-distribution", async (c) => {
 
   let saved;
   try {
-    saved = await saveDefaultAppDistributionEntries(env, entries);
+    saved = await saveFeaturedAppCatalogEntries(env, entries);
   } catch (error) {
-    if (isDefaultAppDistributionSaveValidationError(error)) {
+    if (isFeaturedAppCatalogSaveValidationError(error)) {
       return c.json(
         {
           error: {
@@ -478,7 +484,7 @@ app.put("/internal/default-app-distribution", async (c) => {
   return c.json({ entries: saved });
 });
 
-app.delete("/internal/default-app-distribution", async (c) => {
+app.delete("/internal/featured-app-catalog", async (c) => {
   const env = c.env;
   const access = validateInternalApiAccess(c.req.url, env, (name) =>
     c.req.header(name),
@@ -495,24 +501,24 @@ app.delete("/internal/default-app-distribution", async (c) => {
     );
   }
 
-  if (hasDefaultAppDistributionEnvOverride(env)) {
+  if (hasFeaturedAppCatalogEnvOverride(env)) {
     return c.json(
       {
         error: {
           code: "CONFLICT",
           message:
-            "TAKOS_DEFAULT_APP_DISTRIBUTION_JSON or TAKOS_DEFAULT_APP_REPOSITORIES_JSON is configured; env overrides DB-operator-provided coverage app distribution. Remove the env override before clearing DB distribution.",
+            "TAKOS_FEATURED_APP_CATALOG_JSON or TAKOS_FEATURED_APP_REPOSITORIES_JSON is configured; env overrides DB-operator-provided coverage app catalog. Remove the env override before clearing DB catalog.",
         },
       },
       409,
     );
   }
 
-  await clearDefaultAppDistributionEntries(env);
+  await clearFeaturedAppCatalogEntries(env);
   return c.json({ status: "ok" });
 });
 
-app.get("/api/internal/v1/default-apps/status", async (c) => {
+app.get("/api/internal/v1/featured-apps/status", async (c) => {
   const env = c.env;
   const access = validateInternalApiAccess(c.req.url, env, (name) =>
     c.req.header(name),
@@ -530,11 +536,11 @@ app.get("/api/internal/v1/default-apps/status", async (c) => {
   }
 
   try {
-    return c.json(await getDefaultAppReconcileStatus(env));
+    return c.json(await getFeaturedAppReconcileStatus(env));
   } catch (error) {
-    if (isDefaultAppDistributionInvalidError(error)) {
+    if (isFeaturedAppCatalogInvalidError(error)) {
       return c.json({
-        distribution: {
+        catalog: {
           source: "invalid",
           preinstallEnabled: null,
           entries: [],
@@ -573,9 +579,10 @@ app.notFound(async (c) => {
   const path = new URL(c.req.url).pathname;
 
   // If it's an API/auth/reserved route, return a JSON error instead of the SPA
-  // shell. `/git/` (Git Smart HTTP container) is edge-fronted ahead of this app
-  // router; it is listed here so that any request that does fall through is
-  // answered as a machine-readable 404 rather than HTML.
+  // shell. `/git/` (worker-native Git Smart HTTP, read-only clone/fetch) is
+  // handled by the gitSmartHttp router above; it is listed here so that any
+  // request that does fall through is answered as a machine-readable 404
+  // rather than HTML.
   if (
     path.startsWith("/api/") ||
     path.startsWith("/auth/") ||

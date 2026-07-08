@@ -25,7 +25,7 @@ function makeRegisteredApp(overrides: Partial<RegisteredApp> = {}) {
     space_name: "Personal",
     service_hostname: "docs.example.com",
     service_status: "deployed",
-    source_type: "service_graph",
+    source_type: "runtime_projection",
     group_id: "group-docs",
     publication_name: "docs-ui",
     category: "office",

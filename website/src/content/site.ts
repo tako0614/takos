@@ -3,7 +3,7 @@
  *
  * `ja` is the source-of-truth voice (Takos is JP-first); `en` mirrors it for
  * discoverability. Both locales are prerendered as separate routes (`/` and
- * `/en/`). Keep product nouns (chat / agent / memory / Workspace, bundled apps,
+ * `/en/`). Keep product nouns (chat / agent / memory / Workspace, installable apps,
  * Takosumi, Installation) identical across locales — only the connective prose
  * is translated. Do NOT describe Takosumi concepts as Takos features, and do
  * not soften the platform-readiness launch gate (see AGENTS.md 中核原則).
@@ -134,7 +134,7 @@ const ja: Strings = {
   meta: {
     title: "Takos — AI と話す場所は、あなたのサーバーで。",
     description:
-      "Takos は self-hostable な AI-first chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの bundled apps が新規 Workspace に seed される。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
+      "Takos は self-hostable な AI-first chat & agent product。chat / agent / memory / Git / Workspace / app launcher / MCP tools を core に持ち、office (docs / slide / sheet) / computer / social などの installable apps を選んで追加できる。OpenTofu module + Worker artifact で self-host できる AGPL の OSS。",
     ogTitle: "Takos — AI-first chat & agent, your own server.",
     ogDescription:
       "Self-hostable な AI-first chat & agent。history も memory も自分のサーバーの中。OpenTofu module + Worker artifact で self-host。AGPL の OSS。",
@@ -142,7 +142,7 @@ const ja: Strings = {
   nav: {
     why: "なぜ Takos",
     features: "中身",
-    apps: "Bundled apps",
+    apps: "Installable apps",
     docs: "Docs",
     install: "Install",
     openMenu: "メニューを開く",
@@ -201,7 +201,9 @@ const ja: Strings = {
         name: "Chat",
         tagline: "複数モデルを、1 つのスレッドで。",
         body: [
-          { t: "クラウドの LLM もローカルモデルも、同じ会話の中で切り替えながら使える。会話は thread として Workspace に整理され、" },
+          {
+            t: "クラウドの LLM もローカルモデルも、同じ会話の中で切り替えながら使える。会話は thread として Workspace に整理され、",
+          },
           { t: "履歴はすべて自分のサーバーの中", em: true },
           { t: "。どのモデルに何を話したかが、他社に渡らない。" },
         ],
@@ -218,7 +220,9 @@ const ja: Strings = {
         body: [
           { t: "Rust 製の agent engine が、" },
           { t: "tool 呼び出し・ファイル操作・複数ステップの実行", em: true },
-          { t: " を担う。MCP 経由で bundled app にも繋がり、docs を書いたり sheet を更新したりを agent に任せられる。" },
+          {
+            t: " を担う。MCP 経由で installable app にも繋がり、docs を書いたり sheet を更新したりを agent に任せられる。",
+          },
         ],
         points: [
           "Rust 製 agent engine が実行",
@@ -231,7 +235,9 @@ const ja: Strings = {
         name: "Memory",
         tagline: "話すほど、文脈が育つ。",
         body: [
-          { t: "やり取りから memory が Workspace に積み上がり、次の会話へ文脈が引き継がれる。" },
+          {
+            t: "やり取りから memory が Workspace に積み上がり、次の会話へ文脈が引き継がれる。",
+          },
           { t: "memory も自分のサーバーの中", em: true },
           { t: " にあり、学習に使われたり外に出たりしない。" },
         ],
@@ -248,19 +254,21 @@ const ja: Strings = {
         body: [
           { t: "Workspace は活動の単位。" },
           { t: "Workspace ごとに分離・権限管理", em: true },
-          { t: " され、新規作成と同時に bundled app が auto-install される。必要なら ActivityPub で他の Takos や fediverse とも繋がれる。" },
+          {
+            t: " され、必要な app を選んで Workspace に追加できる。必要なら ActivityPub で他の Takos や fediverse とも繋がれる。",
+          },
         ],
         points: [
           "Workspace ごとに分離・権限管理",
-          "bundled app が auto-install",
+          "必要な app を選んで追加",
           "ActivityPub で federation",
         ],
       },
     ],
   },
   apps: {
-    title: "新規 Workspace で、すぐ揃う。",
-    lede: "Takos distribution と一緒に ship される 1st-party の InstallableApp。新規 Workspace 作成と同時に install 済みで、必要なければ uninstall できる。",
+    title: "必要な app を、選んで追加。",
+    lede: "Takos distribution と一緒に扱える 1st-party の InstallableApp。通常の Capsule として選んで install し、必要なければ uninstall できる。",
     items: [
       {
         name: "takos-office",
@@ -278,7 +286,7 @@ const ja: Strings = {
         name: "yurucommu",
         tag: "social",
         role: "ActivityPub social",
-        body: "self-hosted な ActivityPub / community social。fediverse に繋がる独立 product で、新規 Workspace に seed される。data は自分の中に置いたまま外と繋がれる。",
+        body: "self-hosted な ActivityPub / community social。fediverse に繋がる独立 product で、通常の Capsule として Workspace に追加できる。data は自分の中に置いたまま外と繋がれる。",
       },
     ],
   },
@@ -366,7 +374,7 @@ const en: Strings = {
   meta: {
     title: "Takos — AI-first chat & agent, on your own server.",
     description:
-      "Takos is a self-hostable, AI-first chat & agent product. Its core is chat / agent / memory / Workspace, and bundled apps like office (docs / slide / sheet) / computer / social auto-install with every new Workspace. It runs on Takosumi, so you can install it on Cloudflare, AWS, GCP, or your own VM — and your history and memory never leave your server. Open source under AGPL.",
+      "Takos is a self-hostable, AI-first chat & agent product. Its core is chat / agent / memory / Workspace, and installable apps like office (docs / slide / sheet), computer, and social can be added when you need them. It runs on Takosumi, so you can install it on Cloudflare, AWS, GCP, or your own VM — and your history and memory never leave your server. Open source under AGPL.",
     ogTitle: "Takos — AI-first chat & agent, your own server.",
     ogDescription:
       "A self-hostable AI chat & agent. Your history and memory stay on your own server. One-click install on Takosumi, or install from a Git source on your own substrate. Open source, AGPL.",
@@ -374,7 +382,7 @@ const en: Strings = {
   nav: {
     why: "Why Takos",
     features: "Inside",
-    apps: "Bundled apps",
+    apps: "Installable apps",
     docs: "Docs",
     install: "Install",
     openMenu: "Open menu",
@@ -434,7 +442,9 @@ const en: Strings = {
         name: "Chat",
         tagline: "Many models, one thread.",
         body: [
-          { t: "Use cloud LLMs and local models, switching between them in the same conversation. Threads are organized inside a Workspace, and " },
+          {
+            t: "Use cloud LLMs and local models, switching between them in the same conversation. Threads are organized inside a Workspace, and ",
+          },
           { t: "all history stays on your own server", em: true },
           { t: ". What you said to which model never leaves for a vendor." },
         ],
@@ -451,7 +461,9 @@ const en: Strings = {
         body: [
           { t: "A Rust agent engine handles " },
           { t: "tool calls, file operations, and multi-step runs", em: true },
-          { t: ". Over MCP it reaches the bundled apps too — let an agent write docs or update a sheet." },
+          {
+            t: ". Over MCP it reaches installable apps too — let an agent write docs or update a sheet.",
+          },
         ],
         points: [
           "Rust agent engine executes",
@@ -464,7 +476,9 @@ const en: Strings = {
         name: "Memory",
         tagline: "The more you talk, the more context grows.",
         body: [
-          { t: "Memory accumulates in the Workspace from your interactions and carries context into the next chat. " },
+          {
+            t: "Memory accumulates in the Workspace from your interactions and carries context into the next chat. ",
+          },
           { t: "Memory also lives on your own server", em: true },
           { t: " — never trained on, never sent out." },
         ],
@@ -480,20 +494,25 @@ const en: Strings = {
         tagline: "The unit of people, agents, apps, and data.",
         body: [
           { t: "A Workspace is the unit of activity. " },
-          { t: "Each Workspace is isolated, with its own permissions", em: true },
-          { t: ", and bundled apps auto-install the moment you create one. Connect to other Takos and the fediverse over ActivityPub when you want." },
+          {
+            t: "Each Workspace is isolated, with its own permissions",
+            em: true,
+          },
+          {
+            t: ", and you can add the apps you need to it. Connect to other Takos and the fediverse over ActivityPub when you want.",
+          },
         ],
         points: [
           "Isolation & permissions per Workspace",
-          "Bundled apps auto-install",
+          "Add the apps you need",
           "Federation via ActivityPub",
         ],
       },
     ],
   },
   apps: {
-    title: "Ready the moment you start.",
-    lede: "First-party InstallableApps shipped with the Takos distribution. Included with every new Workspace, and removable if you don’t need them.",
+    title: "Add apps when you need them.",
+    lede: "First-party InstallableApps that work with the Takos distribution. Install them as normal Capsules, and remove them when you do not need them.",
     items: [
       {
         name: "takos-office",
@@ -511,7 +530,7 @@ const en: Strings = {
         name: "yurucommu",
         tag: "social",
         role: "ActivityPub social",
-        body: "Self-hosted ActivityPub / community social. An independent product that connects to the fediverse, seeded into new Workspaces — your data stays in while you reach out.",
+        body: "Self-hosted ActivityPub / community social. An independent product that connects to the fediverse and can be installed as a normal Capsule — your data stays in while you reach out.",
       },
     ],
   },

@@ -9,12 +9,12 @@ test("capsule installations - parses Takosumi projection services", () => {
   const rows = parseCapsuleInstallationsResponse({
     installations: [
       {
-        id: "inst_docs",
-        app_id: "jp.takos.docs",
+        id: "inst_office",
+        app_id: "jp.takos.office",
         status: "ready",
         source: {
           git: {
-            url: "https://github.com/tako0614/takos-docs.git",
+            url: "https://github.com/tako0614/takos-office.git",
             ref: "v1.2.6",
             commit: "1111111111111111111111111111111111111111",
           },
@@ -26,7 +26,7 @@ test("capsule installations - parses Takosumi projection services", () => {
             id: "launch_url",
             capability: "deployment.outputs",
             status: "ready",
-            endpoint: "https://docs.example.test",
+            endpoint: "https://office.example.test",
             secret_configured: false,
             token_expires_at: null,
           },
@@ -37,13 +37,13 @@ test("capsule installations - parses Takosumi projection services", () => {
 
   assertEquals(rows, [
     {
-      id: "inst_docs",
-      name: "jp.takos.docs",
+      id: "inst_office",
+      name: "jp.takos.office",
       status: "ready",
       freshness: null,
       environment: "production",
       mode: "shared-cell",
-      sourceUrl: "https://github.com/tako0614/takos-docs.git",
+      sourceUrl: "https://github.com/tako0614/takos-office.git",
       sourceRef: "v1.2.6",
       sourceCommit: "1111111111111111111111111111111111111111",
       createdAt: null,
@@ -53,7 +53,7 @@ test("capsule installations - parses Takosumi projection services", () => {
           id: "launch_url",
           capability: "deployment.outputs",
           status: "ready",
-          endpoint: "https://docs.example.test",
+          endpoint: "https://office.example.test",
           secret_configured: false,
           token_expires_at: null,
         },

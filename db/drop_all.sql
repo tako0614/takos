@@ -123,9 +123,9 @@ DROP TABLE IF EXISTS store_inventory_items;
 DROP TABLE IF EXISTS store_registry_updates;
 DROP TABLE IF EXISTS store_registry;
 DROP TABLE IF EXISTS groups;
-DROP TABLE IF EXISTS default_app_preinstall_jobs;
-DROP TABLE IF EXISTS default_app_distribution_entries;
-DROP TABLE IF EXISTS default_app_distribution_config;
+DROP TABLE IF EXISTS featured_app_preinstall_jobs;
+DROP TABLE IF EXISTS featured_app_catalog_entries;
+DROP TABLE IF EXISTS featured_app_catalog_config;
 
 -- Files / repositories / account hierarchy
 DROP TABLE IF EXISTS files;

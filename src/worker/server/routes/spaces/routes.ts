@@ -26,7 +26,7 @@ import {
 } from "../../../application/services/agent/index.ts";
 import { getUISidebarItems } from "../../../application/services/platform/ui-extensions.ts";
 import { toWorkspaceResponse } from "../../../application/services/identity/response-formatters.ts";
-import { processDefaultAppPreinstallJobs } from "../../../application/services/source/default-app-distribution.ts";
+import { processFeaturedAppPreinstallJobs } from "../../../application/services/source/featured-app-catalog.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
 import {
@@ -98,16 +98,16 @@ async function validateSelectableModel(
   return { model, catalog };
 }
 
-function scheduleDefaultAppPreinstallTick(
+function scheduleFeaturedAppPreinstallTick(
   c: Context<AuthenticatedRouteEnv>,
   spaceId: string,
 ): void {
   c.executionCtx?.waitUntil(
-    processDefaultAppPreinstallJobs(c.env, {
+    processFeaturedAppPreinstallJobs(c.env, {
       limit: 3,
       spaceId,
     }).catch((error) => {
-      logWarn("Default app preinstall background tick failed", {
+      logWarn("Featured app preinstall background tick failed", {
         module: "routes/spaces",
         error: error instanceof Error ? error.message : String(error),
       });
@@ -136,7 +136,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           ),
         ];
       }
-      scheduleDefaultAppPreinstallTick(c, personalWorkspace.id);
+      scheduleFeaturedAppPreinstallTick(c, personalWorkspace.id);
     }
 
     return c.json({ spaces: workspaces.map(toWorkspaceResponse) });
@@ -149,7 +149,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         name: z.string(),
         id: z.string().optional(),
         description: z.string().optional(),
-        installDefaultApps: z.boolean().optional(),
+        installFeaturedApps: z.boolean().optional(),
       }),
     ),
     async (c) => {
@@ -168,7 +168,7 @@ export default new Hono<AuthenticatedRouteEnv>()
             {
               id: body.id,
               description: body.description,
-              installDefaultApps: body.installDefaultApps ?? true,
+              installFeaturedApps: body.installFeaturedApps ?? false,
             },
           );
 
@@ -189,7 +189,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     if (!await getOrCreatePersonalWorkspace(c.env, user.id)) {
       throw new NotFoundError("Personal space");
     }
-    scheduleDefaultAppPreinstallTick(c, user.id);
+    scheduleFeaturedAppPreinstallTick(c, user.id);
 
     const access = await requireSpaceAccess(c, "me", user.id);
 

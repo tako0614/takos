@@ -20,8 +20,8 @@ import { deployments } from "../../../infra/db/schema-workers.ts";
 import type { AppManifest } from "../source/app-manifest-types.ts";
 import {
   assertRuntimeProjectionPublicationPrerequisites,
+  isRuntimeProjectionPublicationSourceType,
   listPublications,
-  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
 } from "../platform/service-publications.ts";
 import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 import {
@@ -239,9 +239,7 @@ export async function getGroupState(
             serviceId: record.row.id,
             name: record.config.manifestName as string,
             category: record.config.componentKind as
-              | "worker"
-              | "container"
-              | "service",
+              "worker" | "container" | "service",
             status: record.row.status,
             ...(record.row.hostname ? { hostname: record.row.hostname } : {}),
             ...(record.row.routeRef ? { routeRef: record.row.routeRef } : {}),
@@ -485,7 +483,7 @@ export async function applyDesiredState(
     const hasExistingRuntimeProjectionPublications = publicationRows.some(
       (row) =>
         row.groupId === groupId &&
-        row.sourceType === RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
+        isRuntimeProjectionPublicationSourceType(row.sourceType),
     );
     const hasDesiredPublications =
       (plan.desiredState.manifest.publish?.length ?? 0) > 0;

@@ -5,7 +5,7 @@
 // use the binding/DO-stub transport as their trust boundary and send no header.
 // The only HTTP entry that crosses into the worker from outside is an EXTERNAL
 // SCHEDULER callback (a k8s CronJob / EventBridge / Cloud Scheduler hitting
-// `/internal/scheduled` and the default-app-distribution endpoints). That is the
+// `/internal/scheduled` and the featured-app-catalog endpoints). That is the
 // one gate here: the request must originate from loopback, or from an
 // authenticated cluster-internal hostname presenting the shared
 // `X-Takos-Internal-Secret`. The shared secret is the only defense against

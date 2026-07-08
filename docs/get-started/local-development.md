@@ -50,8 +50,7 @@ bun run local:e2e      # E2E スモークテスト
 
 | サービス       | 役割                                    |
 | -------------- | --------------------------------------- |
-| `takos-worker` | Web UI / API / queue / scheduled Worker |
-| `takos-git`    | Git ホスティング (Smart HTTP)           |
+| `takos-worker` | Web UI / API / queue / scheduled Worker / Git ホスティング (worker-native Smart HTTP) |
 | `takos-agent`  | エージェント実行                        |
 | `takosumi`     | デプロイエンジン                        |
 | `postgres`     | データベース                            |
@@ -65,9 +64,8 @@ stack で container callback helper endpoint が見える場合も、これは c
 
 compose を使わず個別に起動したい場合は、Takos repo 内の source owner から起動します。
 
-- `src/worker/` / `src/worker/server/routes/` — Takos Worker (`bun run dev`)
+- `src/worker/` / `src/worker/server/routes/` — Takos Worker、worker-native Git Smart HTTP を含む (`bun run dev`)
 - `web/` — browser UI (`bun run --cwd web dev`)
-- `containers/git/` — Git ホスティング (`cd containers/git && bun run dev`)
 - `containers/agent/` —エージェント (`cd containers/agent && cargo run`)
 - `../takosumi/` —デプロイエンジン
 

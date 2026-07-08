@@ -60,9 +60,9 @@ The squashed baseline should include the following tables (alphabetical):
 - common_env_audit_logs
 - common_env_reconcile_jobs
 - custom_domains
-- default_app_distribution_config
-- default_app_distribution_entries
-- default_app_preinstall_jobs
+- featured_app_catalog_config
+- featured_app_catalog_entries
+- featured_app_preinstall_jobs
 - deployment_events
 - deployments
 - edges

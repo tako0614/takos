@@ -14,8 +14,8 @@ module は distribution worker の durable backing infrastructure を provision 
 ledger と policy evidence を記録します。公開 hosted operator を使う場合も、ユーザー体験は Workspace / Apps / Chat に収束し、
 operator が Takosumi Account、Workspace / Project / Capsule、compatibility capability、provider policy を運用します。
 
-バンドルアプリ (`takos-office`, `takos-computer`, `yurucommu`) は新しい Workspace に
-distribution seed として install されます。ledger 上は通常の Capsule app なので、不要なアプリはアンインストールできます。
+`takos-office`, `takos-computer`, `yurucommu` は、ユーザーが選んで追加できる installable app です。
+新しい Workspace に自動 install されるものではなく、追加された後は ledger 上も通常の Capsule app として扱われます。
 
 ## 基本概念
 
@@ -42,11 +42,11 @@ Takos runtime contract から投影される product surface です。
 
 ## 始め方
 
-| 方法             | 対象             | 概要                                                                                     |
-| ---------------- | ---------------- | ---------------------------------------------------------------------------------------- |
-| Use Takos        | すぐに使いたい人 | 公開 operator または rehearsal 環境で Account / Workspace を作成して chat へ進む |
+| 方法             | 対象             | 概要                                                                                   |
+| ---------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| Use Takos        | すぐに使いたい人 | 公開 operator または rehearsal 環境で Account / Workspace を作成して chat へ進む       |
 | Install from Git | 開発者           | Git URL の Capsule を Workspace / Project に install し、reviewed plan を approve する |
-| Self-host        | 自前運用したい人 | OpenTofu module + wrangler artifact upload で Takos を deploy する                       |
+| Self-host        | 自前運用したい人 | OpenTofu module + wrangler artifact upload で Takos を deploy する                     |
 
 3 path は同じ ownership model に収束します。違うのは operator が誰か、どの runtime mode を選ぶか、どの Connection / policy を使うかです。
 
@@ -54,8 +54,8 @@ Takos runtime contract から投影される product surface です。
 
 ### すぐに Takos を使いたい
 
-公開 operator が signup を開いている場合、「Use Takos」から Takosumi Account / Takos Workspace を作成し、バンドルアプリが
-seed された状態で chat を始めます。public signup が closed の間は、operator が用意した rehearsal 環境または Self-host path で同じ
+公開 operator が signup を開いている場合、「Use Takos」から Takosumi Account / Takos Workspace を作成し、必要な app を選んで
+追加してから chat を始めます。public signup が closed の間は、operator が用意した rehearsal 環境または Self-host path で同じ
 journey を検証します。
 
 ### 自分のアプリをデプロイしたい

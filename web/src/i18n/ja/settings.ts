@@ -49,9 +49,9 @@ export const settings = {
   spaceDeleted: "スペースを削除しました",
   createSpace: "スペースを作成",
   createSpaceHint: "チームで作業するにはチームスペースを作成してください",
-  installDefaultAppsOnCreate: "default app をインストールする",
-  installDefaultAppsOnCreateHint:
-    "Docs / Excel / Slide / Computer / Yurucommu をこのスペースに追加します。",
+  installFeaturedAppsOnCreate: "おすすめアプリをインストールする",
+  installFeaturedAppsOnCreateHint:
+    "接続済みのアプリカタログから、運営者が選んだアプリを追加します。",
   spaceCreated: "スペースを作成しました",
   targetSpace: "対象スペース",
 

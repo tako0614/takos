@@ -1,6 +1,6 @@
 # takos-office
 
-`takos-office` is the first-party Office Capsule app seeded into new Takos Workspaces. It combines Docs, Slide, and
+`takos-office` is an Office Capsule app users can explicitly install into a Takos Workspace. It combines Docs, Slide, and
 Sheet surfaces in one worker and publishes one MCP endpoint for agent use.
 
 ## Runtime contract
@@ -20,10 +20,10 @@ is delivered by the workload runtime through `TAKOS_STORAGE_ACCESS_TOKEN` or the
 - `/mcp` for the unified Office MCP server
 
 The historical storage folders `/takos-docs/`, `/takos-slide/`, and `/takos-excel/` remain data compatibility paths.
-They are not separate current bundled apps.
+They are not separate current apps.
 
 ## References
 
-- [Bundled Apps](/platform/default-apps)
+- [Installable Apps](/platform/featured-apps)
 - [Takos App Interface](/architecture/app-interface)
 - [Capsule Runtime Projection](/architecture/capsule-runtime-projection)

@@ -6,7 +6,6 @@ const servicePorts = [
   { label: 'takos-worker', env: 'TAKOS_WORKER_PORT', defaultPort: 8787 },
   { label: 'takosumi', env: 'TAKOSUMI_PORT', defaultPort: 8788 },
   { label: 'takos-agent', env: 'TAKOS_AGENT_PORT', defaultPort: 8789 },
-  { label: 'takos-git', env: 'TAKOS_GIT_PORT', defaultPort: 8790 },
   { label: 'postgres', env: 'TAKOS_POSTGRES_PORT', defaultPort: 15432 },
   { label: 'redis', env: 'TAKOS_REDIS_PORT', defaultPort: 16379 },
 ];
@@ -130,7 +129,6 @@ async function waitForHealth(ports) {
     { label: 'takos-worker', url: `http://127.0.0.1:${ports.TAKOS_WORKER_PORT}/health` },
     { label: 'takosumi', url: `http://127.0.0.1:${ports.TAKOSUMI_PORT}/health` },
     { label: 'takos-agent', url: `http://127.0.0.1:${ports.TAKOS_AGENT_PORT}/health` },
-    { label: 'takos-git', url: `http://127.0.0.1:${ports.TAKOS_GIT_PORT}/health` },
   ];
   const pending = new Map(healthChecks.map((check) => [check.label, check]));
   const lastErrors = new Map();
@@ -196,53 +194,6 @@ async function runGatewayChecks(ports, secret) {
   );
 }
 
-async function seedGitRepository(hostRoot) {
-  await runCommand('bash', ['containers/git/scripts/seed-dev-git.sh', 'local/demo'], {
-    env: {
-      TAKOS_GIT_REPOSITORY_ROOT: hostRoot,
-      TAKOS_GIT_OWNER_SPACE_ID: 'local',
-      TAKOS_GIT_SEED_FORCE: '1',
-    },
-    timeoutMs: 120_000,
-  });
-  console.log('[local-e2e] seeded takos-git repository local/demo');
-}
-
-async function makeTreeWritableForContainer(path) {
-  await runtime.chmod(path, 0o777);
-  for await (const entry of runtime.readDir(path)) {
-    const entryPath = `${path}/${entry.name}`;
-    if (entry.isDirectory) {
-      await makeTreeWritableForContainer(entryPath);
-    } else if (!entry.isSymlink) {
-      await runtime.chmod(entryPath, 0o666);
-    }
-  }
-}
-
-async function runGitCloneCheck(ports, secret) {
-  const cloneDir = await runtime.makeTempDir({ prefix: 'takos-git-clone-' });
-  const remoteUrl = `http://127.0.0.1:${ports.TAKOS_WORKER_PORT}/local/demo.git`;
-  try {
-    await runCommand('git', [
-      '-c',
-      `http.extraHeader=x-takos-internal-secret: ${secret}`,
-      '-c',
-      'http.extraHeader=x-takos-account-id: acct_local_e2e',
-      'clone',
-      remoteUrl,
-      cloneDir,
-    ], { timeoutMs: 120_000 });
-    const readme = await runtime.readTextFile(`${cloneDir}/README.md`);
-    if (!readme.includes('Seed repository for local takos-git verification.')) {
-      throw new Error('cloned repository README did not match seed content');
-    }
-    console.log('[local-e2e] git clone through takos-worker Smart HTTP ok');
-  } finally {
-    await runtime.remove(cloneDir, { recursive: true });
-  }
-}
-
 async function printDiagnostics(composeArgs, commandEnv) {
   const ps = await runDocker([...composeArgs, 'ps'], {
     check: false,
@@ -267,9 +218,6 @@ async function main() {
     `takos-e2e-${Date.now()}-${runtime.pid}`,
   );
   const envFile = env('TAKOS_LOCAL_ENV_FILE', '.env.local.example');
-  const sourceRepositoryHostRoot = await runtime.makeTempDir({
-    prefix: 'takos-git-repositories-',
-  });
   const ports = await selectPorts();
   const secret = env('TAKOS_INTERNAL_SERVICE_SECRET', 'local-dev-secret');
   const commandEnv = {
@@ -279,22 +227,17 @@ async function main() {
     TAKOS_INTERNAL_API_SECRET: env('TAKOS_INTERNAL_API_SECRET', secret),
     TAKOSUMI_INTERNAL_API_SECRET: env('TAKOSUMI_INTERNAL_API_SECRET', secret),
     TAKOS_ALLOW_NO_LLM: env('TAKOS_ALLOW_NO_LLM', '1'),
-    TAKOS_GIT_REPOSITORY_HOST_ROOT: sourceRepositoryHostRoot,
   };
   const composeArgs = composeBaseArgs(project, envFile);
   const keepStack = runtime.env.get('TAKOS_LOCAL_E2E_KEEP_STACK') === '1';
   let started = false;
 
   console.log(`[local-e2e] project=${project}`);
-  console.log(`[local-e2e] sourceRepositoryHostRoot=${sourceRepositoryHostRoot}`);
   console.log(
-    `[local-e2e] ports worker=${ports.TAKOS_WORKER_PORT} takosumi=${ports.TAKOSUMI_PORT} agent=${ports.TAKOS_AGENT_PORT} git=${ports.TAKOS_GIT_PORT}`,
+    `[local-e2e] ports worker=${ports.TAKOS_WORKER_PORT} takosumi=${ports.TAKOSUMI_PORT} agent=${ports.TAKOS_AGENT_PORT}`,
   );
 
   try {
-    await seedGitRepository(sourceRepositoryHostRoot);
-    await makeTreeWritableForContainer(sourceRepositoryHostRoot);
-
     const config = await runDocker([...composeArgs, 'config', '--services'], {
       env: commandEnv,
       timeoutMs: 120_000,
@@ -306,7 +249,6 @@ async function main() {
       'redis',
       'takos-agent',
       'takos-worker',
-      'takos-git',
       'takosumi',
     ];
     for (const expected of expectedServices) {
@@ -325,7 +267,6 @@ async function main() {
 
     await waitForHealth(ports);
     await runGatewayChecks(ports, commandEnv.TAKOS_INTERNAL_API_SECRET);
-    await runGitCloneCheck(ports, commandEnv.TAKOS_INTERNAL_API_SECRET);
     console.log('[local-e2e] completed');
   } catch (error) {
     console.error(`[local-e2e] failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -344,15 +285,8 @@ async function main() {
         { check: false, env: commandEnv, timeoutMs: 120_000 },
       );
       console.log('[local-e2e] compose stack cleaned up');
-      await runtime.remove(sourceRepositoryHostRoot, { recursive: true });
-      console.log('[local-e2e] git repository seed cleaned up');
     } else if (started) {
       console.log('[local-e2e] keeping compose stack for inspection');
-      console.log(
-        `[local-e2e] keeping git repository seed at ${sourceRepositoryHostRoot}`,
-      );
-    } else {
-      await runtime.remove(sourceRepositoryHostRoot, { recursive: true });
     }
   }
 }

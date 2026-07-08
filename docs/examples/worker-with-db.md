@@ -4,10 +4,10 @@ Takosumi runs plain OpenTofu Capsules. It registers a Git Source, creates a Caps
 
 ## Current Flow
 
-1. Point an Installation at a Git URL/ref for the OpenTofu Capsule repo.
+1. Create a Capsule from a Git URL/ref for the OpenTofu Capsule repo.
 2. Run a plan and review the resulting `plan` type Run, its proposed changes, and warnings.
 3. Apply the reviewed plan; the apply is recorded as an `apply` type Run against that `plan` type Run.
-4. A successful `apply` type Run updates the Deployment and writes a new Output, which surfaces the database connection details produced by the module; destroy is recorded as `destroy_plan` followed by `destroy_apply`.
+4. A successful `apply` type Run writes a new StateVersion and Output, which surfaces the database connection details produced by the module; destroy is recorded as `destroy_plan` followed by `destroy_apply`.
 5. Connections hold external credential references, ProviderBindings resolve each provider (plus optional alias) to an explicit ProviderConnection provider connection, and policy resolves provider allowlists, state backend, and Cloudflare Container execution. OIDC clients, billing, domains, and the dashboard belong to the Takosumi Accounts plane.
 
 ## Takos Boundary

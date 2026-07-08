@@ -1,0 +1,76 @@
+{
+  "schema": "takos.mobile-release-evidence.v1",
+  "product": "takos",
+  "productName": "Takos",
+  "bundleId": "jp.takos.mobile",
+  "releaseVersion": "1.0.0",
+  "generatedAt": "2026-07-01T00:00:00.000Z",
+  "artifacts": {
+    "iosArchive": {
+      "evidenceRef": "private:mobile/takos/ios/Takos.xcarchive",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "androidAab": {
+      "evidenceRef": "private:mobile/takos/android/takos-release.aab",
+      "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "signing": {
+    "ios": {
+      "teamRef": "private:mobile/takos/apple-team",
+      "provisioningProfileRef": "private:mobile/takos/ios/provisioning-profile"
+    },
+    "android": {
+      "keystoreRef": "private:mobile/takos/android/upload-keystore",
+      "playAppSigning": true
+    }
+  },
+  "store": {
+    "appStore": {
+      "appRef": "private:app-store-connect/takos",
+      "uploadedBuildRef": "private:app-store-connect/takos/build/1.0.0",
+      "listingReviewed": true,
+      "privacyNutritionReviewed": true,
+      "screenshots": [
+        {
+          "locale": "ja-JP",
+          "device": "iphone-6.7",
+          "evidenceRef": "private:mobile/takos/store/app-store/ja-JP/iphone-6.7/home.png",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    "googlePlay": {
+      "packageName": "jp.takos.mobile",
+      "uploadedArtifactRef": "private:google-play/takos/internal/takos-release.aab",
+      "listingReviewed": true,
+      "dataSafetyReviewed": true,
+      "screenshots": [
+        {
+          "locale": "ja-JP",
+          "device": "phone",
+          "evidenceRef": "private:mobile/takos/store/google-play/ja-JP/phone/home.png",
+          "sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    }
+  },
+  "deviceSmoke": [
+    {
+      "platform": "ios",
+      "device": "iPhone 15",
+      "osVersion": "17.5",
+      "result": "passed",
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/device-smoke/ios/iphone-15"
+    },
+    {
+      "platform": "android",
+      "device": "Pixel 8",
+      "osVersion": "14",
+      "result": "passed",
+      "capturedAt": "2026-07-01T00:00:00.000Z",
+      "evidenceRef": "private:mobile/takos/device-smoke/android/pixel-8"
+    }
+  ]
+}

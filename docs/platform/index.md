@@ -1,14 +1,14 @@
 # Takos の概念
 
 Takos is the OpenTofu-native AI Workspace distribution managed by external Takosumi control plane. Takos Workspaces provide
-the user-facing chat, agents, memory, Git, files, and bundled app launcher experience. Takosumi owns the OpenTofu
+the user-facing chat, agents, memory, Git, files, and app launcher experience. Takosumi owns the OpenTofu
 Source / Project / Capsule / Run / StateVersion / Output authority behind that Workspace.
 
 ## Current Flow
 
 1. Deploy the Takos distribution topology with `deploy/opentofu` and the worker artifact.
 2. The worker exposes Takos product routes and consumes external Takosumi Accounts / deploy-control / dashboard / OpenTofu runner services.
-3. Create a Takos Workspace; bundled apps are seeded as normal Takosumi Capsules through plan/apply Runs.
+3. Create a Takos Workspace; users explicitly add Capsule apps through plan/apply Runs.
 4. Infrastructure lifecycle credentials, OIDC clients, billing, domains, and account-plane policy belong to the Takosumi Accounts plane.
 
 ## Takos Boundary

@@ -8,7 +8,7 @@
     "serviceId": {
       "description": "Logical service slot for the Takos distribution profile. The slot names are fixed for Takos release validation; replaceable operator distributions vary by artifact, endpoint, and implementation behind the slot, not by changing this service-id vocabulary.",
       "type": "string",
-      "enum": ["takos-agent", "takos-git", "takos-worker"]
+      "enum": ["takos-agent", "takos-worker"]
     },
     "resourceShapeKind": {
       "description": "Takosumi generic Resource Shape kind used to describe a Takos distribution constituent. This is profile evidence only; deploy source of truth remains the Git-hosted OpenTofu module.",
@@ -119,7 +119,7 @@
     "requiredBindings",
     "target",
     "routing",
-    "defaultApps",
+    "featuredApps",
     "services",
     "shapeTopology",
     "metadata"
@@ -259,7 +259,7 @@
         }
       }
     },
-    "defaultApps": {
+    "featuredApps": {
       "type": "object",
       "additionalProperties": false,
       "required": ["entries", "environmentOverrides"],

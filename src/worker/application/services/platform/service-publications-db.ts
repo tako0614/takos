@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { BadRequestError } from "@takos/worker-platform-utils/errors";
 
 import type {
@@ -29,7 +29,11 @@ import {
 export type PublicationRow = SelectOf<typeof publications>;
 export type ServiceConsumeRow = SelectOf<typeof serviceConsumes>;
 
-export const RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE = "service_graph" as const;
+export const RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE =
+  "runtime_projection" as const;
+export const RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES = [
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
+] as const;
 export const API_PUBLICATION_SOURCE_TYPE = "api" as const;
 
 export type PublicationSourceType =
@@ -73,6 +77,25 @@ export function publicationOutputContract(
   }));
 }
 
+export function isRuntimeProjectionPublicationSourceType(
+  sourceType: string | null | undefined,
+): boolean {
+  return RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES.includes(
+    sourceType as (typeof RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES)[number],
+  );
+}
+
+export function normalizePublicationSourceType(
+  sourceType: string | null | undefined,
+): PublicationSourceType {
+  if (sourceType === API_PUBLICATION_SOURCE_TYPE)
+    return API_PUBLICATION_SOURCE_TYPE;
+  if (isRuntimeProjectionPublicationSourceType(sourceType)) {
+    return RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE;
+  }
+  return sourceType as PublicationSourceType;
+}
+
 export function toPublicationRecord(row: PublicationRow): PublicationRecord {
   const parsedPublication = parsePublicationRecord(row.specJson);
   const publication =
@@ -88,7 +111,7 @@ export function toPublicationRecord(row: PublicationRow): PublicationRecord {
   return {
     id: row.id,
     name: row.name,
-    sourceType: row.sourceType as PublicationSourceType,
+    sourceType: normalizePublicationSourceType(row.sourceType),
     groupId: row.groupId ?? null,
     ownerServiceId: row.ownerServiceId ?? null,
     catalogName: row.catalogName ?? null,
@@ -185,13 +208,18 @@ export async function listPublicationRows(
       .all();
   }
   if (opts.sourceType) {
+    const sourceTypes = isRuntimeProjectionPublicationSourceType(
+      opts.sourceType,
+    )
+      ? [...RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES]
+      : [opts.sourceType];
     return db
       .select()
       .from(publications)
       .where(
         and(
           eq(publications.accountId, spaceId),
-          eq(publications.sourceType, opts.sourceType),
+          inArray(publications.sourceType, sourceTypes),
         ),
       )
       .orderBy(asc(publications.createdAt), asc(publications.id))
@@ -360,8 +388,14 @@ export async function upsertPublicationRow(
 
   if (existing) {
     const existingGroupId = existing.groupId ?? null;
+    const existingSourceType = normalizePublicationSourceType(
+      existing.sourceType,
+    );
+    const requestedSourceType = normalizePublicationSourceType(
+      params.sourceType,
+    );
     if (
-      existing.sourceType !== params.sourceType ||
+      existingSourceType !== requestedSourceType ||
       existingGroupId !== groupId
     ) {
       throw new BadRequestError(

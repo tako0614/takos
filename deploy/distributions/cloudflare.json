@@ -44,7 +44,7 @@
     "wildcardDomain": "*.app.takos.example.com",
     "dnsProvider": "cloudflare"
   },
-  "defaultApps": {
+  "featuredApps": {
     "entries": [
       {
         "name": "takos-office",
@@ -52,7 +52,7 @@
         "repositoryUrl": "https://github.com/tako0614/takos-office.git",
         "ref": "v0.1.0",
         "refType": "tag",
-        "preinstall": true
+        "preinstall": false
       },
       {
         "name": "takos-computer",
@@ -60,7 +60,7 @@
         "repositoryUrl": "https://github.com/tako0614/takos-computer.git",
         "ref": "v2.1.2",
         "refType": "tag",
-        "preinstall": true
+        "preinstall": false
       },
       {
         "name": "yurucommu",
@@ -69,11 +69,25 @@
         "ref": "main",
         "refType": "branch",
         "modulePath": ".",
-        "preinstall": true,
+        "preinstall": false,
         "variables": {
           "enable_cloudflare_resources": true,
           "project_name": "yurucommu",
           "worker_name": "yurucommu"
+        }
+      },
+      {
+        "name": "yurumeet",
+        "title": "Yurumeet",
+        "repositoryUrl": "https://github.com/tako0614/yurumeet.git",
+        "ref": "main",
+        "refType": "branch",
+        "modulePath": ".",
+        "preinstall": false,
+        "variables": {
+          "enable_cloudflare_resources": true,
+          "project_name": "yurumeet",
+          "worker_name": "yurumeet"
         }
       },
       {
@@ -90,18 +104,10 @@
         "preinstall": []
       },
       "staging": {
-        "preinstall": [
-          "takos-office",
-          "takos-computer",
-          "yurucommu"
-        ]
+        "preinstall": []
       },
       "production": {
-        "preinstall": [
-          "takos-office",
-          "takos-computer",
-          "yurucommu"
-        ]
+        "preinstall": []
       }
     }
   },
@@ -118,20 +124,6 @@
         "expectedStatus": 200,
         "expectedJson": {
           "service": "takos-worker"
-        }
-      }
-    },
-    {
-      "serviceId": "takos-git",
-      "runtime": "container",
-      "hostingTargetId": "cloudflare",
-      "image": "ghcr.io/takos/takos-git:latest",
-      "internalUrl": "https://takos-git.internal.takos.example",
-      "smoke": {
-        "healthPath": "/health",
-        "expectedStatus": 200,
-        "expectedJson": {
-          "service": "takos-git"
         }
       }
     },
@@ -185,12 +177,6 @@
         "purpose": "Product events, workflows, and deployment work"
       },
       {
-        "name": "takos-git",
-        "shape": "ContainerService",
-        "serviceId": "takos-git",
-        "purpose": "Git Smart HTTP and repository service"
-      },
-      {
         "name": "takos-agent",
         "shape": "ContainerService",
         "serviceId": "takos-agent",
@@ -235,13 +221,6 @@
       },
       {
         "from": "takos-worker",
-        "to": "takos-git",
-        "name": "TAKOS_GIT_INTERNAL_URL",
-        "permissions": ["connect"],
-        "projection": "internal_url"
-      },
-      {
-        "from": "takos-worker",
         "to": "takos-agent",
         "name": "TAKOS_AGENT_INTERNAL_URL",
         "permissions": ["connect"],
@@ -256,8 +235,6 @@
   "operatorProfile": {
     "distribution": "takos",
     "profileId": "operator.takosumi.cloudflare",
-    "implementationIds": [
-      "operator.takosumi.cloudflare"
-    ]
+    "implementationIds": ["operator.takosumi.cloudflare"]
   }
 }

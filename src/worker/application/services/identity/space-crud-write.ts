@@ -26,16 +26,16 @@ import {
   loadSpaceById,
 } from "./space-crud-read.ts";
 import {
-  enqueueDefaultAppPreinstallJob,
-  processDefaultAppPreinstallJobs,
-} from "../source/default-app-distribution.ts";
+  enqueueFeaturedAppPreinstallJob,
+  processFeaturedAppPreinstallJobs,
+} from "../source/featured-app-catalog.ts";
 import { ensureRuntimeProjectionExports } from "../platform/runtime-projection-exports.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 
 export const spaceCrudWriteDeps = {
-  enqueueDefaultAppPreinstallJob,
+  enqueueFeaturedAppPreinstallJob,
   ensureRuntimeProjectionExports,
-  processDefaultAppPreinstallJobs,
+  processFeaturedAppPreinstallJobs,
 };
 
 async function generateUniqueSlug(
@@ -191,17 +191,17 @@ async function ensureSelfMembership(
   }
 }
 
-async function processDefaultAppsAfterCommit(
+async function processFeaturedAppsAfterCommit(
   env: Env,
   spaceId: string,
 ): Promise<void> {
   try {
-    await spaceCrudWriteDeps.processDefaultAppPreinstallJobs(env, {
+    await spaceCrudWriteDeps.processFeaturedAppPreinstallJobs(env, {
       limit: 1,
       spaceId,
     });
   } catch (error) {
-    logWarn("Default app preinstall immediate processing failed", {
+    logWarn("Featured app preinstall immediate processing failed", {
       module: "spaces",
       spaceId,
       error: error instanceof Error ? error.message : String(error),
@@ -235,7 +235,7 @@ export async function createWorkspaceWithDefaultRepo(
     skipIdCheck?: boolean;
     kind?: "team";
     description?: string;
-    installDefaultApps?: boolean;
+    installFeaturedApps?: boolean;
   },
 ): Promise<{ workspace: Space; repository: Repository | null }> {
   const spaceId = options?.id || generateId();
@@ -264,10 +264,10 @@ export async function createWorkspaceWithDefaultRepo(
   }
 
   let preinstallJobId: string | null = null;
-  const shouldInstallDefaultApps = options?.installDefaultApps ?? true;
+  const shouldInstallFeaturedApps = options?.installFeaturedApps ?? false;
 
   // Persist the space bundle atomically (single D1 batch; see createSpaceBundle).
-  // The default-app preinstall job is intentionally a SEPARATE step rather than
+  // The featured-app preinstall job is intentionally a SEPARATE step rather than
   // part of the bundle write: it is enqueued with a deterministic id +
   // onConflictDoNothing, so it acts as idempotent service-layer compensation —
   // a failure here cannot corrupt the already-committed space, and a retry of
@@ -289,9 +289,9 @@ export async function createWorkspaceWithDefaultRepo(
 
   await ensureRuntimeProjectionExportsAfterCommit(env, spaceId);
 
-  if (shouldInstallDefaultApps) {
+  if (shouldInstallFeaturedApps) {
     try {
-      preinstallJobId = await spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob(
+      preinstallJobId = await spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob(
         env,
         {
           spaceId,
@@ -303,7 +303,7 @@ export async function createWorkspaceWithDefaultRepo(
       // The space bundle is already durably committed; a failed preinstall
       // enqueue is recoverable (idempotent re-enqueue on next access), so log
       // and continue rather than tearing down a valid space.
-      logWarn("Failed to enqueue default app preinstall job", {
+      logWarn("Failed to enqueue featured app preinstall job", {
         module: "spaces",
         spaceId,
         error: error instanceof Error ? error.message : String(error),
@@ -312,7 +312,7 @@ export async function createWorkspaceWithDefaultRepo(
   }
 
   if (preinstallJobId) {
-    await processDefaultAppsAfterCommit(env, spaceId);
+    await processFeaturedAppsAfterCommit(env, spaceId);
   }
 
   const space = await loadSpaceById(env.DB, spaceId);
@@ -394,22 +394,22 @@ export async function getPersonalWorkspace(
   return toPersonalWorkspaceListItem(userAccount, repo);
 }
 
-async function enqueuePersonalWorkspaceDefaultApps(
+async function enqueuePersonalWorkspaceFeaturedApps(
   env: Env,
   userId: string,
 ): Promise<void> {
   try {
     const preinstallJobId =
-      await spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob(env, {
+      await spaceCrudWriteDeps.enqueueFeaturedAppPreinstallJob(env, {
         spaceId: userId,
         createdByAccountId: userId,
         timestamp: new Date().toISOString(),
       });
     if (preinstallJobId) {
-      await processDefaultAppsAfterCommit(env, userId);
+      await processFeaturedAppsAfterCommit(env, userId);
     }
   } catch (error) {
-    logWarn("Failed to enqueue personal default app preinstall job", {
+    logWarn("Failed to enqueue personal featured app preinstall job", {
       module: "spaces",
       spaceId: userId,
       error: error instanceof Error ? error.message : String(error),
@@ -424,7 +424,7 @@ export async function getOrCreatePersonalWorkspace(
   const workspace = await getPersonalWorkspace(env, userId);
   if (workspace) {
     await ensureRuntimeProjectionExportsAfterCommit(env, userId);
-    await enqueuePersonalWorkspaceDefaultApps(env, userId);
+    await enqueuePersonalWorkspaceFeaturedApps(env, userId);
   }
   return workspace;
 }

@@ -7,10 +7,12 @@ app launcher / MCP tools を持つ product Worker で、Accounts / dashboard / R
 Takosumi control plane が管理します。
 
 Takos product の実行実装とスクリプトは Bun を前提としており、`src/worker` / `web` /
-`containers/git` / `scripts` のローカル実行は `bun` コマンドで行います。
+`scripts` のローカル実行は `bun` コマンドで行います。
 
-バンドルアプリ (`takos-office` / `takos-computer` / `yurucommu`) は新しい Workspace
-作成時に distribution seed として install されます。
+関連アプリ (`takos-office` / `takos-computer` / `yurucommu` など) は通常の
+Git-hosted OpenTofu Capsule として、Store や Git URL からユーザーが明示的に
+install します。Takos が Workspace 作成時に中央定義の app を自動投入する
+ことはありません。
 
 📖 ドキュメント: <https://docs.takos.jp/>
 
@@ -28,9 +30,8 @@ bun run local:up
 
 | Component      | 責務                                                                |
 | -------------- | ------------------------------------------------------------------- |
-| `takos-worker` | 単一の public/control Worker、Hono API、OIDC consumer、internal RPC |
+| `takos-worker` | 単一の public/control Worker、Hono API、OIDC consumer、internal RPC、worker-native Git Smart HTTP (read-only clone/fetch を R2 object store から配信; push は repository API 経由) |
 | Takos UI       | browser UI source (`web/`)                                          |
-| `takos-git`    | Git hosting container (Smart HTTP、リポジトリ、refs、object store)  |
 | `takos-agent`  | agent execution container                                           |
 
 ログインや課金は Takosumi Accounts が担当し、デプロイ制御は Takosumi (`../takosumi`) の OpenTofu-native
@@ -46,7 +47,7 @@ Output を記録します。
 bun run local:up
 ```
 
-`takos-worker`、`takos-git`、`takos-agent`、`takosumi` と、Postgres / Redis のサポートサービスが起動します。
+`takos-worker`、`takos-agent`、`takosumi` と、Postgres / Redis のサポートサービスが起動します。Git ホスティングは `takos-worker` が worker-native で配信します。
 
 ## レイアウト
 
@@ -58,7 +59,6 @@ takos/
     contracts/ -> Worker と containers の wire contract
   web/          -> browser UI
   containers/
-    git/        -> Git hosting container
     agent/      -> agent execution container
   deploy/       -> デプロイ用アーティファクト (OpenTofu / distribution)
   docs/         -> プロダクトドキュメント (VitePress site → docs.takos.jp)

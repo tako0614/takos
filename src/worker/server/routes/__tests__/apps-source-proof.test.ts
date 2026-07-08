@@ -86,7 +86,7 @@ test("OpenTofu Git source installs through Takosumi and appears on Takos launche
           id: "pub_source_launcher",
           name: launcherExport.name,
           groupId: "inst_source_launcher",
-          sourceType: "service_graph",
+          sourceType: "runtime_projection",
           publicationType: "interface.ui.surface",
           specJson: JSON.stringify({
             name: launcherExport.name,
@@ -126,7 +126,7 @@ test("OpenTofu Git source installs through Takosumi and appears on Takos launche
     assertEquals(body.apps[0].id, "pub_source_launcher");
     assertEquals(body.apps[0].name, "OpenTofu Only");
     assertEquals(body.apps[0].url, launcherUrl);
-    assertEquals(body.apps[0].source_type, "service_graph");
+    assertEquals(body.apps[0].source_type, "runtime_projection");
     assertEquals(body.apps[0].publication_name, "launcher");
     assertEquals(body.apps[0].category, "test");
     assertEquals(body.apps[0].space_id, "source-proof");

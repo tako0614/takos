@@ -119,11 +119,6 @@ const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
     dockerfile: "takos/deploy/docker/takos-worker.Dockerfile",
   },
   {
-    name: "takos-git",
-    context: "..",
-    dockerfile: "takos/containers/git/Dockerfile",
-  },
-  {
     name: "takos-agent",
     context: "..",
     dockerfile: "takos/containers/agent/Dockerfile",
@@ -152,12 +147,6 @@ const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [
     expectedName: "@takos/takos",
   },
   {
-    id: "takos-git",
-    path: "containers/git/package.json",
-    kind: "package",
-    expectedName: "@takos/containers/git",
-  },
-  {
     id: "takos-agent",
     path: "containers/agent/Cargo.toml",
     kind: "cargo",
@@ -170,7 +159,6 @@ const REQUIRED_CANONICAL_LAYOUT_PATHS = [
   "src/worker/server/routes",
   "src/contracts",
   "web",
-  "containers/git",
   "containers/agent",
 ] as const;
 const LEGACY_SOURCE_ROOTS = ["app", "git", "agent"] as const;
@@ -944,7 +932,6 @@ function validateDistributionShapeTopology(
 
   const expectedServiceShapes: Record<string, string> = {
     "takos-worker": "EdgeWorker",
-    "takos-git": "ContainerService",
     "takos-agent": "ContainerService",
   };
   for (const [serviceId, expectedShape] of Object.entries(
@@ -996,7 +983,7 @@ function stringArraysEqual(
 }
 
 async function collectServiceSet(): Promise<JsonValue> {
-  const expected = ["takos-worker", "takos-git", "takos-agent"];
+  const expected = ["takos-worker", "takos-agent"];
   return { expected };
 }
 

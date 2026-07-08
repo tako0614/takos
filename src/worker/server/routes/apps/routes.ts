@@ -15,8 +15,10 @@ import { accounts } from "../../../infra/db/schema.ts";
 import { publications, services } from "../../../infra/db/schema-services.ts";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
+  isRuntimeProjectionPublicationSourceType,
   RUNTIME_PROJECTION_CAPABILITIES,
   RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
+  RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES,
 } from "../../../application/services/platform/service-publications.ts";
 
 type Variables = {
@@ -63,7 +65,7 @@ type PublicApp = {
   space_name: string | null;
   service_hostname: string | null;
   service_status: string | null;
-  source_type: "service_graph";
+  source_type: "runtime_projection";
   group_id: string | null;
   publication_name: string | null;
   category: string | null;
@@ -75,7 +77,7 @@ type PublicApp = {
 const UI_SURFACE_PUBLICATION_TYPES = [
   RUNTIME_PROJECTION_CAPABILITIES.interfaceUiSurface,
 ];
-const DEFAULT_APP_ICON = "";
+const FEATURED_APP_ICON = "";
 
 function getSpaceIdentifierFromAccount(
   account: { slug: string | null; type?: string } | null | undefined,
@@ -171,7 +173,7 @@ function resolveLauncherIcon(
 }
 
 function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {
-  if (row.sourceType !== RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE) return null;
+  if (!isRuntimeProjectionPublicationSourceType(row.sourceType)) return null;
   if (!UI_SURFACE_PUBLICATION_TYPES.includes(row.publicationType ?? "")) {
     return null;
   }
@@ -201,7 +203,7 @@ function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {
     stringOrNull(display.icon) ??
     stringOrNull(desiredSpec?.icon) ??
     stringOrNull(serviceConfig.icon);
-  const icon = resolveLauncherIcon(rawIcon, url) ?? DEFAULT_APP_ICON;
+  const icon = resolveLauncherIcon(rawIcon, url) ?? FEATURED_APP_ICON;
   const category = stringOrNull(display.category);
   const sortOrder = numberOrNull(display.sortOrder) ?? null;
 
@@ -220,7 +222,7 @@ function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {
     space_name: row.accountName || null,
     service_hostname: row.serviceHostname || hostnameFromUrl(url),
     service_status: row.serviceStatus || (url ? "deployed" : null),
-    source_type: "service_graph",
+    source_type: RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE,
     group_id: row.groupId,
     publication_name: row.name,
     category,
@@ -267,7 +269,9 @@ async function listPublicationAppRows(
     .where(
       and(
         eq(publications.accountId, accountId),
-        eq(publications.sourceType, RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE),
+        inArray(publications.sourceType, [
+          ...RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES,
+        ]),
         inArray(publications.publicationType, UI_SURFACE_PUBLICATION_TYPES),
       ),
     )
@@ -305,7 +309,9 @@ async function findPublicationAppRow(
       and(
         eq(publications.id, appId),
         eq(publications.accountId, accountId),
-        eq(publications.sourceType, RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPE),
+        inArray(publications.sourceType, [
+          ...RUNTIME_PROJECTION_PUBLICATION_SOURCE_TYPES,
+        ]),
         inArray(publications.publicationType, UI_SURFACE_PUBLICATION_TYPES),
       ),
     )

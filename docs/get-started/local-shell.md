@@ -5,7 +5,7 @@
 
 ## 1. リポジトリを確認
 
-Takos repo 内の canonical layout は `src/worker`、`web`、`containers/git`、`containers/agent` です。 clone 後に追加の
+Takos repo 内の canonical layout は `src/worker`、`web`、`containers/agent` です。 clone 後に追加の
 submodule 初期化は不要です。
 
 ## 2. 環境を診断
@@ -43,8 +43,8 @@ bun run local:logs   # ログ表示
 bun run local:down   # 停止
 ```
 
-`takos-worker`、`takosumi`、`takos-git`、`takos-agent`、Postgres、Redis
-が起動します。
+`takos-worker`、`takosumi`、`takos-agent`、Postgres、Redis
+が起動します。Git ホスティングは `takos-worker` が worker-native で配信するため、別 service にはなりません。
 
 ## 各プロダクトのコマンド
 
@@ -53,7 +53,6 @@ bun run local:down   # 停止
 ```sh
 cd . && bun run ...               # Takos Worker / validators
 cd web && bun run ...             # Browser UI
-cd containers/git && bun run ...  # Git hosting container
 cd containers/agent && cargo ...  # Agent execution container
 cd ../takosumi && bun run ...     # Takosumi カーネル
 ```

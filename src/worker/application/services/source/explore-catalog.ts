@@ -27,7 +27,7 @@ import {
 } from "./source-exploration.ts";
 import { fetchPublishStatuses } from "./explore-stats.ts";
 import { sourceServiceDeps } from "./deps.ts";
-import type { DefaultAppDistributionEntry } from "./default-app-distribution.ts";
+import type { FeaturedAppCatalogEntry } from "./featured-app-catalog.ts";
 import {
   type AccountsInstallationProjection,
   type CatalogAccountsInstallationsReadConfig,
@@ -37,14 +37,14 @@ import {
 import {
   accountsSourceKeys,
   type CatalogInstallationProjection,
-  defaultAppPackageAppId,
-  defaultAppSourceKey,
+  featuredAppPackageAppId,
+  featuredAppSourceKey,
   mapCatalogInstallationResponse,
-  mapDefaultAppCatalogItem,
+  mapFeaturedAppCatalogItem,
   normalizeCatalogRepositoryUrlKey,
-  shouldIncludeDefaultAppEntry,
+  shouldIncludeFeaturedAppEntry,
   toCatalogInstallationProjection,
-} from "./explore-catalog-default-apps.ts";
+} from "./explore-catalog-featured-apps.ts";
 
 export type {
   CatalogAccountsInstallationsEnv,
@@ -195,7 +195,7 @@ export async function listCatalogItems(
     userId?: string;
     gitObjects?: ObjectStoreBinding;
     repositoryBaseUrl?: string;
-    defaultAppEntries?: DefaultAppDistributionEntry[];
+    featuredAppEntries?: FeaturedAppCatalogEntry[];
     accountsInstallations?: CatalogAccountsInstallationsReadConfig;
     now?: string;
   },
@@ -391,7 +391,7 @@ export async function listCatalogItems(
     );
     const sourceAppInstallation = source
       ? appInstallationMap.get(
-          defaultAppSourceKey({
+          featuredAppSourceKey({
             repositoryUrl: source.repository_url,
             ref: source.ref,
             refType: source.ref_type,
@@ -474,23 +474,23 @@ export async function listCatalogItems(
       .filter((url): url is string => typeof url === "string" && !!url.trim())
       .map(normalizeCatalogRepositoryUrlKey),
   );
-  const defaultAppTimestamp = options.now ?? new Date().toISOString();
-  const defaultAppItems = (options.defaultAppEntries ?? [])
+  const featuredAppTimestamp = options.now ?? new Date().toISOString();
+  const featuredAppItems = (options.featuredAppEntries ?? [])
     .filter(
       (entry) =>
         !repositoryUrlKeys.has(
           normalizeCatalogRepositoryUrlKey(entry.repositoryUrl),
-        ) && shouldIncludeDefaultAppEntry(entry, options, parsedTags),
+        ) && shouldIncludeFeaturedAppEntry(entry, options, parsedTags),
     )
     .map((entry) =>
-      mapDefaultAppCatalogItem(
+      mapFeaturedAppCatalogItem(
         entry,
-        appInstallationMap.get(defaultAppPackageAppId(entry)) ??
-          appInstallationMap.get(defaultAppSourceKey(entry)),
-        defaultAppTimestamp,
+        appInstallationMap.get(featuredAppPackageAppId(entry)) ??
+          appInstallationMap.get(featuredAppSourceKey(entry)),
+        featuredAppTimestamp,
       ),
     );
-  items = [...items, ...defaultAppItems];
+  items = [...items, ...featuredAppItems];
 
   if (options.type === "deployable-app") {
     items = items.filter((item) => item.package.available);
