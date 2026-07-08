@@ -28,6 +28,7 @@ module "takos" {
   takosumi_accounts_issuer_url   = var.takosumi_accounts_issuer_url
   takosumi_accounts_client_id    = var.takosumi_accounts_client_id
   takosumi_accounts_redirect_uri = var.takosumi_accounts_redirect_uri
+  env                            = var.env
 }
 
 variable "account_id" {
@@ -77,6 +78,27 @@ variable "takosumi_accounts_issuer_url" {
 variable "takosumi_accounts_client_id" {
   type    = string
   default = ""
+}
+
+variable "env" {
+  description = "Additional non-secret Takos Worker environment variables projected into the release activation env. Secrets must use dedicated sensitive variables or Provider Connections."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for name, value in var.env :
+      can(regex("^[A-Z_][A-Z0-9_]{0,127}$", name)) &&
+      !can(regex("(SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE_?KEY|API_?KEY)", upper(name))) &&
+      !contains([
+        "TAKOSUMI_ACCOUNTS_URL",
+        "OIDC_ISSUER_URL",
+        "OIDC_CLIENT_ID",
+        "OIDC_REDIRECT_URI",
+      ], name)
+    ])
+    error_message = "env keys must be uppercase Worker plain-text variable names and must not be secret-like or reserved by the Takos production wrapper."
+  }
 }
 
 variable "takosumi_accounts_redirect_uri" {

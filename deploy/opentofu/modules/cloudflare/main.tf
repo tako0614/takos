@@ -42,7 +42,9 @@ locals {
   takosumi_accounts_url          = trimspace(var.takosumi_accounts_url) != "" ? trimspace(var.takosumi_accounts_url) : local.takosumi_accounts_issuer_url
   takosumi_accounts_redirect_uri = trimspace(var.takosumi_accounts_redirect_uri) != "" ? trimspace(var.takosumi_accounts_redirect_uri) : (local.app_url != null ? "${local.app_url}/auth/oidc/callback" : "")
   takosumi_accounts_oidc_enabled = local.takosumi_accounts_issuer_url != "" && local.takosumi_accounts_client_id != ""
+  extra_worker_env               = { for name, value in var.env : name => value if trimspace(value) != "" }
   app_deployment_env = merge(
+    local.extra_worker_env,
     local.takosumi_accounts_oidc_enabled && local.takosumi_accounts_url != "" ? {
       TAKOSUMI_ACCOUNTS_URL = local.takosumi_accounts_url
     } : {},
