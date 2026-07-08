@@ -83,14 +83,6 @@
         "ref": "v0.1.0",
         "refType": "tag",
         "preinstall": false
-      },
-      {
-        "name": "takosumi-store",
-        "title": "Takosumi Store",
-        "repositoryUrl": "https://github.com/tako0614/takosumi-store.git",
-        "ref": "v0.1.0",
-        "refType": "tag",
-        "preinstall": false
       }
     ],
     "environmentOverrides": {
