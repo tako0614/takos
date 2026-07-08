@@ -2,7 +2,7 @@
   "schemaVersion": "tcs.repo/v1",
   "id": "takos",
   "modulePath": "deploy/opentofu",
-  "kind": "app",
+  "kind": "worker",
   "surface": "service",
   "provider": "cloudflare",
   "category": "workspace",
