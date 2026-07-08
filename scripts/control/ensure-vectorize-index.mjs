@@ -28,20 +28,15 @@ function readOption(parts, option) {
 
 const accountIdOption = readOption(args, "--account-id");
 const wranglerArgs = accountIdOption.rest;
-const apiBase =
-  process.env.CLOUDFLARE_API_BASE_URL ??
-  process.env.TAKOS_CLOUDFLARE_API_BASE_URL;
+const nativeProcessEnv = { ...process.env };
+delete nativeProcessEnv.TAKOS_CLOUDFLARE_API_BASE_URL;
+delete nativeProcessEnv.CLOUDFLARE_API_BASE_URL;
+delete nativeProcessEnv.CF_API_BASE_URL;
+delete nativeProcessEnv.CLOUDFLARE_BASE_URL;
 const env = {
-  ...process.env,
+  ...nativeProcessEnv,
   ...(accountIdOption.value
     ? { CLOUDFLARE_ACCOUNT_ID: accountIdOption.value }
-    : {}),
-  ...(apiBase?.trim()
-    ? {
-        CLOUDFLARE_API_BASE_URL: apiBase.trim(),
-        CF_API_BASE_URL: apiBase.trim(),
-        CLOUDFLARE_BASE_URL: apiBase.trim(),
-      }
     : {}),
 };
 

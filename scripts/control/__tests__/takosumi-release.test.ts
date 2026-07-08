@@ -733,14 +733,10 @@ test("wranglerDeployEnv uses provider token for real Cloudflare deploys", () => 
   assert.equal(env.CF_API_TOKEN, "provider-token");
   assert.equal(env.CLOUDFLARE_CONTAINERS_API_TOKEN, "containers-token");
   assert.equal(env.CLOUDFLARE_ACCOUNT_ID, "acc_123");
-  assert.equal(
-    env.CLOUDFLARE_API_BASE_URL,
-    "https://api.cloudflare.com/client/v4",
-  );
-  assert.equal(
-    env.TAKOS_CLOUDFLARE_API_BASE_URL,
-    "https://api.cloudflare.com/client/v4",
-  );
+  assert.equal(env.CLOUDFLARE_API_BASE_URL, undefined);
+  assert.equal(env.TAKOS_CLOUDFLARE_API_BASE_URL, undefined);
+  assert.equal(env.CF_API_BASE_URL, undefined);
+  assert.equal(env.CLOUDFLARE_BASE_URL, undefined);
 });
 
 test("wranglerDeployEnv prefers explicit Takos deploy token over containers alias", () => {
@@ -755,8 +751,8 @@ test("wranglerDeployEnv prefers explicit Takos deploy token over containers alia
   assert.equal(env.CF_API_TOKEN, "deploy-token");
 });
 
-test("wranglerDeployEnv leaves provider auth untouched without a deploy-only token", () => {
-  const compatBase = "https://app.takosumi.com/compat/cloudflare/client/v4";
+test("wranglerDeployEnv strips Cloudflare API base overrides from native release helpers", () => {
+  const compatBase = "https://compat.example.test/client/v4";
   const input = {
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
@@ -766,16 +762,14 @@ test("wranglerDeployEnv leaves provider auth untouched without a deploy-only tok
   };
 
   assert.deepEqual(wranglerDeployEnv(input), {
-    ...input,
-    TAKOS_CLOUDFLARE_API_BASE_URL: compatBase,
-    CLOUDFLARE_API_BASE_URL: compatBase,
-    CF_API_BASE_URL: compatBase,
-    CLOUDFLARE_BASE_URL: compatBase,
+    PATH: "/bin",
+    CLOUDFLARE_API_TOKEN: "provider-token",
+    CF_API_TOKEN: "provider-token",
   });
 });
 
-test("wranglerDeployEnv keeps provider auth with a custom Cloudflare API base", () => {
-  const apiBase = "https://app.takosumi.com/compat/cloudflare/client/v4";
+test("wranglerDeployEnv keeps provider auth while ignoring custom Cloudflare API bases", () => {
+  const apiBase = "https://compat.example.test/client/v4";
   const env = wranglerDeployEnv({
     PATH: "/bin",
     CLOUDFLARE_API_TOKEN: "provider-token",
@@ -787,10 +781,11 @@ test("wranglerDeployEnv keeps provider auth with a custom Cloudflare API base", 
 
   assert.equal(env.CLOUDFLARE_API_TOKEN, "provider-token");
   assert.equal(env.CF_API_TOKEN, "provider-token");
-  assert.equal(env.TAKOS_CLOUDFLARE_API_BASE_URL, apiBase);
-  assert.equal(env.CLOUDFLARE_API_BASE_URL, apiBase);
-  assert.equal(env.CF_API_BASE_URL, apiBase);
-  assert.equal(env.CLOUDFLARE_BASE_URL, apiBase);
+  assert.equal(env.CLOUDFLARE_CONTAINERS_API_TOKEN, "containers-token");
+  assert.equal(env.TAKOS_CLOUDFLARE_API_BASE_URL, undefined);
+  assert.equal(env.CLOUDFLARE_API_BASE_URL, undefined);
+  assert.equal(env.CF_API_BASE_URL, undefined);
+  assert.equal(env.CLOUDFLARE_BASE_URL, undefined);
 });
 
 test("preflightWranglerDeployAuth skips when no deploy token is configured", async () => {
@@ -967,27 +962,19 @@ test("preflightWranglerDeployAuth checks individual R2 bucket access used by wra
   );
 });
 
-test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers", () => {
+test("releaseChildEnv strips Takosumi Cloud compat API base from native release helpers", () => {
   assert.deepEqual(
     releaseChildEnv(
       { cloudflare_account_id: "ts_acc_takosumi_cloud" },
       {
         PATH: "/bin",
         CLOUDFLARE_API_TOKEN: "token",
-        TAKOS_CLOUDFLARE_API_BASE_URL:
-          "https://app.takosumi.com/compat/cloudflare/client/v4",
+        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
       },
     ),
     {
       PATH: "/bin",
       CLOUDFLARE_API_TOKEN: "token",
-      TAKOS_CLOUDFLARE_API_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4",
-      CLOUDFLARE_API_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4",
-      CF_API_BASE_URL: "https://app.takosumi.com/compat/cloudflare/client/v4",
-      CLOUDFLARE_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4",
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
@@ -997,7 +984,7 @@ test("releaseChildEnv passes Takosumi Cloud compat API base to release helpers",
   );
 });
 
-test("releaseChildEnv keeps the OpenTofu output account for custom API bases", () => {
+test("releaseChildEnv keeps the OpenTofu output account for native Cloudflare releases", () => {
   const containerImages = JSON.stringify({
     runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
     executor: "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
@@ -1007,8 +994,7 @@ test("releaseChildEnv keeps the OpenTofu output account for custom API bases", (
     releaseWranglerAccountId(
       { cloudflare_account_id: "ts_acc_takosumi_cloud" },
       {
-        TAKOS_CLOUDFLARE_API_BASE_URL:
-          "https://app.takosumi.com/compat/cloudflare/client/v4",
+        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
         TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       },
     ),
@@ -1020,22 +1006,14 @@ test("releaseChildEnv keeps the OpenTofu output account for custom API bases", (
       {
         PATH: "/bin",
         CLOUDFLARE_API_TOKEN: "token",
-        TAKOS_CLOUDFLARE_API_BASE_URL:
-          "https://app.takosumi.com/compat/cloudflare/client/v4",
+        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
         TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       },
     ),
     {
       PATH: "/bin",
       CLOUDFLARE_API_TOKEN: "token",
-      TAKOS_CLOUDFLARE_API_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4",
       TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
-      CLOUDFLARE_API_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4",
-      CF_API_BASE_URL: "https://app.takosumi.com/compat/cloudflare/client/v4",
-      CLOUDFLARE_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4",
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
@@ -1127,7 +1105,7 @@ test("ensureWorkersDevSubdomain derives workers.dev URL from subdomain outputs",
   );
 });
 
-test("ensureWorkersDevSubdomain uses configured Cloudflare-compatible API base", async () => {
+test("ensureWorkersDevSubdomain ignores Cloudflare-compatible API base overrides", async () => {
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
     {
@@ -1137,8 +1115,7 @@ test("ensureWorkersDevSubdomain uses configured Cloudflare-compatible API base",
     },
     {
       CLOUDFLARE_API_TOKEN: "token_123",
-      TAKOS_CLOUDFLARE_API_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4/",
+      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
     },
     async (url, init) => {
       requests.push({ url, init });
@@ -1159,7 +1136,7 @@ test("ensureWorkersDevSubdomain uses configured Cloudflare-compatible API base",
   assert.equal(requests.length, 1);
   assert.equal(
     requests[0].url,
-    "https://app.takosumi.com/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/subdomain",
+    "https://api.cloudflare.com/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/subdomain",
   );
 });
 
@@ -1528,7 +1505,7 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
   );
 });
 
-test("verifyReleaseDeployment uses configured Cloudflare-compatible API base for artifact checks", async () => {
+test("verifyReleaseDeployment ignores Cloudflare-compatible API base overrides", async () => {
   const requests = [];
   const result = await verifyReleaseDeployment(
     {
@@ -1539,8 +1516,7 @@ test("verifyReleaseDeployment uses configured Cloudflare-compatible API base for
     "production",
     {
       CLOUDFLARE_API_TOKEN: "token_123",
-      TAKOS_CLOUDFLARE_API_BASE_URL:
-        "https://app.takosumi.com/compat/cloudflare/client/v4/",
+      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
       TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
     },
     async (url, init) => {
@@ -1559,7 +1535,7 @@ test("verifyReleaseDeployment uses configured Cloudflare-compatible API base for
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://app.takosumi.com/compat/cloudflare/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content",
+      "https://api.cloudflare.com/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content",
       "https://takos-test.app.takos.jp/health",
     ],
   );

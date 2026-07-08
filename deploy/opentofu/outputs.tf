@@ -105,9 +105,6 @@ output "takosumi_release" {
             TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
             TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
           },
-          try(var.cloudflare.api_base_url, null) == null ? {} : {
-            TAKOS_CLOUDFLARE_API_BASE_URL = var.cloudflare.api_base_url
-          },
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
           },
@@ -131,9 +128,6 @@ output "takosumi_release" {
           {
             TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
             TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-          },
-          try(var.cloudflare.api_base_url, null) == null ? {} : {
-            TAKOS_CLOUDFLARE_API_BASE_URL = var.cloudflare.api_base_url
           },
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout

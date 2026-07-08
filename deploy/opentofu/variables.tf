@@ -146,7 +146,6 @@ variable "cloudflare" {
   description = "Cloudflare-specific backing-resource settings (provisioned by Takosumi Run with type `apply`)."
   type = object({
     account_id        = optional(string, "takos-placeholder")
-    api_base_url      = optional(string)
     workers_subdomain = optional(string)
   })
   default = {}
@@ -156,8 +155,4 @@ variable "cloudflare" {
     error_message = "cloudflare.account_id must be set when target is cloudflare."
   }
 
-  validation {
-    condition     = try(var.cloudflare.api_base_url, null) == null || can(regex("^https://[^[:space:]]+$", var.cloudflare.api_base_url))
-    error_message = "cloudflare.api_base_url must be unset or an https URL."
-  }
 }

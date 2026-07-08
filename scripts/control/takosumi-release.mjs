@@ -72,9 +72,6 @@ Optional env:
                                           registries. Keys may be Wrangler
                                           class names or "runtime" /
                                           "executor" aliases.
-  TAKOS_CLOUDFLARE_API_BASE_URL           Optional Cloudflare API base URL
-                                          passed to Cloudflare-native release
-                                          tooling.
   TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN
                                           Optional token used only for the
                                           final wrangler deploy step. Use this
@@ -1055,20 +1052,11 @@ export function releaseChildEnv(outputs, env = process.env) {
   }
   const wranglerAccountId = releaseWranglerAccountId(outputs, env);
   const apiToken = env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN;
-  const apiBase =
-    env.TAKOS_CLOUDFLARE_API_BASE_URL ?? env.CLOUDFLARE_API_BASE_URL;
+  const nativeEnv = cloudflareNativeEnv(env);
   return {
-    ...env,
+    ...nativeEnv,
     CI: env.CI ?? "true",
     WRANGLER_SEND_METRICS: env.WRANGLER_SEND_METRICS ?? "false",
-    ...(apiBase
-      ? {
-          TAKOS_CLOUDFLARE_API_BASE_URL: apiBase,
-          CLOUDFLARE_API_BASE_URL: apiBase,
-          CF_API_BASE_URL: apiBase,
-          CLOUDFLARE_BASE_URL: apiBase,
-        }
-      : {}),
     ...(apiToken
       ? {
           CLOUDFLARE_API_TOKEN: apiToken,
@@ -1086,14 +1074,7 @@ export function releaseChildEnv(outputs, env = process.env) {
 
 export function wranglerDeployEnv(env = process.env) {
   const deployToken = wranglerDeployToken(env);
-  const apiBase = cloudflareApiBaseUrl(env);
-  const next = {
-    ...env,
-    TAKOS_CLOUDFLARE_API_BASE_URL: apiBase,
-    CLOUDFLARE_API_BASE_URL: apiBase,
-    CF_API_BASE_URL: apiBase,
-    CLOUDFLARE_BASE_URL: apiBase,
-  };
+  const next = cloudflareNativeEnv(env);
   if (!deployToken) return next;
   return {
     ...next,
@@ -1253,7 +1234,7 @@ export async function pruneWranglerMigrationsForExistingWorker(
     return { skipped: true, reason: "cloudflare_api_unavailable" };
   }
   const endpoint =
-    `${cloudflareApiBaseUrl(env)}/accounts/${encodeURIComponent(accountId)}` +
+    `${cloudflareApiBaseUrl()}/accounts/${encodeURIComponent(accountId)}` +
     `/workers/scripts/${encodeURIComponent(workerName)}`;
   const response = await fetchImpl(endpoint, {
     method: "GET",
@@ -1398,16 +1379,13 @@ function wranglerDeployOutputAuthChecks(accountId, outputs) {
 }
 
 async function preflightCloudflareApiAccess(check, env, apiToken, fetchImpl) {
-  const response = await fetchImpl(
-    `${cloudflareApiBaseUrl(env)}${check.path}`,
-    {
-      method: "GET",
-      headers: {
-        authorization: `Bearer ${apiToken}`,
-        accept: "application/json",
-      },
+  const response = await fetchImpl(`${cloudflareApiBaseUrl()}${check.path}`, {
+    method: "GET",
+    headers: {
+      authorization: `Bearer ${apiToken}`,
+      accept: "application/json",
     },
-  );
+  });
   const text = await response.text();
   let payload;
   try {
@@ -1434,14 +1412,17 @@ function stringValue(value) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function cloudflareApiBaseUrl(env = process.env) {
-  const configured =
-    env.TAKOS_CLOUDFLARE_API_BASE_URL ?? env.CLOUDFLARE_API_BASE_URL;
-  const base =
-    typeof configured === "string" && configured.trim()
-      ? configured.trim()
-      : CLOUDFLARE_API_BASE;
-  return base.replace(/\/+$/u, "");
+function cloudflareApiBaseUrl() {
+  return CLOUDFLARE_API_BASE;
+}
+
+function cloudflareNativeEnv(env = process.env) {
+  const nativeEnv = { ...env };
+  delete nativeEnv.TAKOS_CLOUDFLARE_API_BASE_URL;
+  delete nativeEnv.CLOUDFLARE_API_BASE_URL;
+  delete nativeEnv.CF_API_BASE_URL;
+  delete nativeEnv.CLOUDFLARE_BASE_URL;
+  return nativeEnv;
 }
 
 function shouldRetryCloudflareWorkerApi(response, payload) {
@@ -1488,7 +1469,7 @@ export async function ensureWorkersDevSubdomain(
     return { skipped: true, reason: "api_token_unavailable" };
   }
 
-  const url = `${cloudflareApiBaseUrl(env)}/accounts/${encodeURIComponent(
+  const url = `${cloudflareApiBaseUrl()}/accounts/${encodeURIComponent(
     accountId,
   )}/workers/scripts/${encodeURIComponent(workerName)}/subdomain`;
   const attempts = releaseWorkerApiAttempts(env);
@@ -1623,7 +1604,7 @@ async function verifyCloudflareWorkerContent(
     workerName,
     workerEnvironment,
     environment,
-    apiBase: cloudflareApiBaseUrl(env),
+    apiBase: cloudflareApiBaseUrl(),
   });
   const attempts = releaseWorkerApiAttempts(env);
   const intervalMs = releaseWorkerApiIntervalMs(env);
