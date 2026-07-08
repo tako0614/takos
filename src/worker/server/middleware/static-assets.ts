@@ -6,9 +6,15 @@ import { getPlatformServices } from "../../platform/accessors.ts";
 // Without this wrapping the assets-binding response has immutable headers, so
 // the upstream security-header middleware in web.ts has no effect on JS/CSS/
 // font/image responses (they would ship with no CSP, no nosniff, no XFO).
+function publicAssetResourcePolicy(path: string): "cross-origin" | "same-site" {
+  if (path === "/logo.png" || path === "/favicon.ico") return "cross-origin";
+  return "same-site";
+}
+
 function applySecurityHeaders(
   response: Response,
   contentType: string | null,
+  path: string,
 ): Response {
   const headers = new Headers(response.headers);
   if (!headers.has("X-Content-Type-Options")) {
@@ -21,7 +27,7 @@ function applySecurityHeaders(
     headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   }
   if (!headers.has("Cross-Origin-Resource-Policy")) {
-    headers.set("Cross-Origin-Resource-Policy", "same-site");
+    headers.set("Cross-Origin-Resource-Policy", publicAssetResourcePolicy(path));
   }
   // Conservative CSP for static assets — no scripts (HTML responses follow a
   // separate per-route CSP with nonces). SVG must still allow inline styles.
@@ -68,7 +74,7 @@ export const staticAssetsMiddleware: MiddlewareHandler<{
       );
       const contentType = assetResponse.headers.get("content-type");
       if (assetResponse.ok && contentType !== "text/html") {
-        return applySecurityHeaders(assetResponse, contentType);
+        return applySecurityHeaders(assetResponse, contentType, path);
       }
     } catch {
       // Asset not found, fall through to next handler

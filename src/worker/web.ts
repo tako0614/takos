@@ -250,9 +250,13 @@ app.use("*", async (c, next): Promise<Response | void> => {
   );
   // Cross-origin isolation. COOP=same-origin protects against malicious
   // window.opener references from OAuth popups; CORP=same-site limits
-  // cross-origin embedding of admin-served resources.
+  // cross-origin embedding of admin-served resources. Static public brand
+  // assets may set a narrower cross-origin exception before this middleware
+  // resumes.
   headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  headers.set("Cross-Origin-Resource-Policy", "same-site");
+  if (!headers.has("Cross-Origin-Resource-Policy")) {
+    headers.set("Cross-Origin-Resource-Policy", "same-site");
+  }
 
   // HSTS: only set in production (env-controlled). Operators on edges
   // without TLS termination (local dev) shouldn't get this header.
