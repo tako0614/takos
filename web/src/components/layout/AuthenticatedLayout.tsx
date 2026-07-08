@@ -19,16 +19,12 @@ import type { View } from "../../types/index.ts";
 
 function getMobileActiveItem(view: View): NavItem | undefined {
   switch (view) {
-    case "apps":
-      return "apps";
     case "memory":
       return "memory";
-    case "store":
-    case "repo":
-      return "store";
     case "chat":
       return "chat";
-    // Views without a bottom-nav tab (storage / deploy / repos / settings /
+    // Views without a bottom-nav tab (apps / storage / deploy / repos /
+    // store / settings /
     // profile / legal …) highlight nothing rather than falsely lighting chat.
     default:
       return undefined;
@@ -50,21 +46,11 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
   const handleMobileNavigate = (item: NavItem) => {
     navigation.setShowMobileNavDrawer(false);
     switch (item) {
-      case "apps":
-        navigation.navigate({
-          view: "apps",
-          spaceId: navigation.selectedSpaceId ?? undefined,
-          threadId: undefined,
-        });
-        break;
       case "chat":
         navigation.navigateToChat(navigation.selectedSpaceId ?? undefined);
         break;
       case "memory":
         navigation.navigate({ view: "memory" });
-        break;
-      case "store":
-        navigation.navigate({ view: "store", storeTab: "discover" });
         break;
     }
   };

@@ -108,7 +108,7 @@ function HomeRoute() {
       return null;
     }
     return {
-      view: "apps",
+      view: "chat",
       spaceId: navigation.preferredSpaceId,
     };
   });

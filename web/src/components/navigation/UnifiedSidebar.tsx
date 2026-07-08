@@ -23,10 +23,6 @@ const PRIMARY_ROW_ACTIVE =
 
 const SECTION_LABEL = "text-xs font-medium text-zinc-500 dark:text-zinc-400";
 
-const STORE_VIEWS = new Set(["store"]);
-const REPOS_VIEWS = new Set(["repos"]);
-const DEPLOY_VIEWS = new Set(["deploy"]);
-
 export interface UnifiedSidebarProps {
   activeView: View;
   spaceId: string | null;
@@ -47,11 +43,6 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
 
   const isNewChatActive = () =>
     props.activeView === "chat" && props.selectedThreadId === null;
-  const isStorageActive = () => props.activeView === "storage";
-  const isDeployActive = () => DEPLOY_VIEWS.has(props.activeView);
-  const isStoreActive = () => STORE_VIEWS.has(props.activeView);
-  const isReposActive = () => REPOS_VIEWS.has(props.activeView);
-  const isAppsActive = () => props.activeView === "apps";
   const isMemoryActive = () => props.activeView === "memory";
   const isWsSettingsActive = () => props.activeView === "space-settings";
   const isChatActive = () => props.activeView === "chat";
@@ -117,43 +108,11 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <div class="px-3 space-y-0.5">
               <button
                 type="button"
-                class={isAppsActive() ? ROW_ACTIVE : ROW_DEFAULT}
-                onClick={callbacks.onNavigateSpaceApps}
-              >
-                <Icons.Grid class="w-4 h-4 shrink-0" />
-                <span>{t("apps")}</span>
-              </button>
-              <button
-                type="button"
                 class={isMemoryActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateMemory}
               >
                 <Icons.Database class="w-4 h-4 shrink-0" />
                 <span>{t("memory")}</span>
-              </button>
-              <button
-                type="button"
-                class={isStorageActive() ? ROW_ACTIVE : ROW_DEFAULT}
-                onClick={callbacks.onNavigateSpaceStorage}
-              >
-                <Icons.Folder class="w-4 h-4 shrink-0" />
-                <span>{t("storage")}</span>
-              </button>
-              <button
-                type="button"
-                class={isReposActive() ? ROW_ACTIVE : ROW_DEFAULT}
-                onClick={callbacks.onNavigateSpaceRepos}
-              >
-                <Icons.GitBranch class="w-4 h-4 shrink-0" />
-                <span>{t("repos")}</span>
-              </button>
-              <button
-                type="button"
-                class={isDeployActive() ? ROW_ACTIVE : ROW_DEFAULT}
-                onClick={callbacks.onNavigateSpaceDeploy}
-              >
-                <Icons.Server class="w-4 h-4 shrink-0" />
-                <span>{t("deployNav")}</span>
               </button>
             </div>
 
@@ -208,15 +167,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
         <div class="px-3 pb-2 space-y-1">
           <button
             type="button"
-            class={isAppsActive() ? PRIMARY_ROW_ACTIVE : PRIMARY_ROW_DEFAULT}
-            onClick={callbacks.onNavigateApps}
-          >
-            <Icons.Grid class="w-4 h-4 shrink-0" />
-            <span>{t("apps")}</span>
-          </button>
-          <button
-            type="button"
-            class={isNewChatActive() ? ROW_ACTIVE : ROW_DEFAULT}
+            class={isNewChatActive() ? PRIMARY_ROW_ACTIVE : PRIMARY_ROW_DEFAULT}
             onClick={callbacks.onNewChat}
           >
             <Icons.Edit class="w-4 h-4 shrink-0" />
@@ -240,22 +191,6 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
           >
             <Icons.Search class="w-4 h-4 shrink-0" />
             <span>{t("search")}</span>
-          </button>
-          <button
-            type="button"
-            class={isStorageActive() ? ROW_ACTIVE : ROW_DEFAULT}
-            onClick={callbacks.onNavigateStorage}
-          >
-            <Icons.Folder class="w-4 h-4 shrink-0" />
-            <span>{t("storage")}</span>
-          </button>
-          <button
-            type="button"
-            class={isStoreActive() ? ROW_ACTIVE : ROW_DEFAULT}
-            onClick={callbacks.onNavigateStore}
-          >
-            <Icons.Download class="w-4 h-4 shrink-0" />
-            <span>{t("install")}</span>
           </button>
         </div>
 
@@ -377,22 +312,6 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
         </div>
 
         <div class="border-t border-zinc-100 dark:border-zinc-800 p-3 space-y-0.5">
-          <button
-            type="button"
-            class={isDeployActive() ? ROW_ACTIVE : ROW_DEFAULT}
-            onClick={callbacks.onNavigateDeploy}
-          >
-            <Icons.Server class="w-4 h-4 shrink-0" />
-            <span>{t("deployNav")}</span>
-          </button>
-          <button
-            type="button"
-            class={isReposActive() ? ROW_ACTIVE : ROW_DEFAULT}
-            onClick={callbacks.onNavigateRepos}
-          >
-            <Icons.GitBranch class="w-4 h-4 shrink-0" />
-            <span>{t("repos")}</span>
-          </button>
           <button
             type="button"
             class={ROW_DEFAULT}

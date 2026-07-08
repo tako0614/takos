@@ -6,6 +6,36 @@ export type ModelOption = {
   id: string;
   name: string;
   description?: string;
+  source?: ModelCatalogSource;
+  disabled?: boolean;
+};
+
+export type ModelCatalogSource = "models_api" | "gateway" | "fallback";
+export type ModelCatalogStatus =
+  | "fresh"
+  | "cached"
+  | "fallback"
+  | "unconfigured";
+
+export type AvailableModelsByBackend = Readonly<
+  Record<ModelBackend, ReadonlyArray<ModelOption>>
+>;
+
+export type ModelCatalog = {
+  status: ModelCatalogStatus;
+  availableModelsByBackend: AvailableModelsByBackend;
+};
+
+type ModelCatalogEnv = {
+  OPENAI_API_KEY?: string;
+  OPENAI_BASE_URL?: string;
+  TAKOS_ALLOWED_MODELS?: string;
+};
+
+type ResolveModelCatalogOptions = {
+  currentModel?: string | null;
+  fetchImpl?: typeof fetch;
+  now?: number;
 };
 
 export const SUPPORTED_MODEL_IDS = [
@@ -52,9 +82,7 @@ export const OPENAI_COMPATIBLE_MODELS: ReadonlyArray<ModelOption> = [
 
 export const OPENAI_MODELS = OPENAI_COMPATIBLE_MODELS;
 
-export const AVAILABLE_MODELS_BY_BACKEND: Readonly<
-  Record<ModelBackend, ReadonlyArray<ModelOption>>
-> = {
+export const AVAILABLE_MODELS_BY_BACKEND: AvailableModelsByBackend = {
   openai: OPENAI_COMPATIBLE_MODELS,
   anthropic: [],
   google: [],
@@ -65,7 +93,7 @@ export const DEFAULT_MODEL_ID = OPENAI_MODELS[0].id;
 export function normalizeModelId(model?: string | null): string | null {
   if (!model) return null;
   const normalized = model.toLowerCase().trim();
-  return (SUPPORTED_MODEL_IDS as readonly string[]).includes(normalized)
+  return /^[a-z0-9][a-z0-9._:/-]{0,127}$/.test(normalized)
     ? normalized
     : null;
 }
@@ -82,6 +110,251 @@ export function getModelBackend(model: string): ModelBackend {
     return "google";
   }
   return "openai";
+}
+
+const MODEL_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
+const modelCatalogCache = new Map<
+  string,
+  { expiresAt: number; catalog: ModelCatalog }
+>();
+
+export function clearModelCatalogCacheForTests(): void {
+  modelCatalogCache.clear();
+}
+
+function modelCatalogCacheKey(env: ModelCatalogEnv): string {
+  return JSON.stringify({
+    baseUrl: env.OPENAI_BASE_URL?.trim() || "",
+    allowed: env.TAKOS_ALLOWED_MODELS?.trim() || "",
+  });
+}
+
+function withFallbackSource(
+  option: ModelOption,
+  source: ModelCatalogSource = "fallback",
+): ModelOption {
+  return { ...option, source };
+}
+
+function fallbackModelCatalog(status: ModelCatalogStatus): ModelCatalog {
+  return {
+    status,
+    availableModelsByBackend: {
+      openai: OPENAI_COMPATIBLE_MODELS.map((option) =>
+        withFallbackSource(option)
+      ),
+      anthropic: [],
+      google: [],
+    },
+  };
+}
+
+function parseAllowedModels(value?: string | null): Set<string> | null {
+  if (!value?.trim()) return null;
+  const raw = value.trim();
+  let parts: unknown[];
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      parts = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      parts = [];
+    }
+  } else {
+    parts = raw.split(",");
+  }
+
+  const allowed = new Set<string>();
+  for (const part of parts) {
+    if (typeof part !== "string") continue;
+    const normalized = normalizeModelId(part);
+    if (normalized) allowed.add(normalized);
+  }
+  return allowed.size > 0 ? allowed : null;
+}
+
+function openAiModelsUrl(baseUrl?: string): string {
+  const trimmed = baseUrl?.trim();
+  if (!trimmed) return "https://api.openai.com/v1/models";
+
+  const parsed = new URL(trimmed);
+  if (parsed.username || parsed.password) {
+    throw new Error("OPENAI_BASE_URL must not embed credentials");
+  }
+  const normalized = parsed.toString().replace(/\/+$/, "");
+  if (normalized.endsWith("/chat/completions")) {
+    return `${normalized.slice(0, -"/chat/completions".length)}/models`;
+  }
+  if (normalized.endsWith("/models")) {
+    return normalized;
+  }
+  return `${normalized}/models`;
+}
+
+function isDirectOpenAiChatModel(modelId: string): boolean {
+  const normalized = modelId.toLowerCase();
+  if (
+    normalized.includes("embedding") ||
+    normalized.includes("moderation") ||
+    normalized.includes("tts") ||
+    normalized.includes("transcribe") ||
+    normalized.includes("whisper") ||
+    normalized.includes("image") ||
+    normalized.includes("realtime")
+  ) {
+    return false;
+  }
+  return (
+    normalized.startsWith("gpt-") ||
+    /^o[0-9]/.test(normalized) ||
+    normalized.startsWith("chatgpt-")
+  );
+}
+
+function modelDisplayName(modelId: string): string {
+  const fallback = OPENAI_COMPATIBLE_MODELS.find((model) =>
+    model.id === modelId
+  );
+  if (fallback) return fallback.name;
+  return modelId
+    .split(/[._:/-]+/)
+    .filter(Boolean)
+    .map((part) => part.length <= 3 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeFetchedModels(
+  body: unknown,
+  source: ModelCatalogSource,
+  allowedModels: Set<string> | null,
+  trustGatewayCatalog: boolean,
+): ModelOption[] {
+  const data = (body as { data?: unknown })?.data;
+  if (!Array.isArray(data)) return [];
+
+  const seen = new Set<string>();
+  const out: ModelOption[] = [];
+  for (const entry of data) {
+    const rawId = typeof entry === "string"
+      ? entry
+      : (entry as { id?: unknown })?.id;
+    const id = normalizeModelId(typeof rawId === "string" ? rawId : null);
+    if (!id || seen.has(id)) continue;
+    if (allowedModels && !allowedModels.has(id)) continue;
+    if (!trustGatewayCatalog && !isDirectOpenAiChatModel(id)) continue;
+    seen.add(id);
+    out.push({
+      id,
+      name: modelDisplayName(id),
+      source,
+    });
+  }
+  return out;
+}
+
+function withCurrentModel(
+  catalog: ModelCatalog,
+  currentModel?: string | null,
+): ModelCatalog {
+  const model = normalizeModelId(currentModel);
+  if (!model) return catalog;
+  const models = catalog.availableModelsByBackend.openai;
+  if (models.some((option) => option.id === model)) return catalog;
+  return {
+    ...catalog,
+    availableModelsByBackend: {
+      ...catalog.availableModelsByBackend,
+      openai: [
+        {
+          id: model,
+          name: modelDisplayName(model),
+          description: "Saved model is not in the current model catalog",
+          source: "fallback",
+          disabled: true,
+        },
+        ...models,
+      ],
+    },
+  };
+}
+
+export async function resolveModelCatalog(
+  env: ModelCatalogEnv,
+  options: ResolveModelCatalogOptions = {},
+): Promise<ModelCatalog> {
+  const now = options.now ?? Date.now();
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const key = modelCatalogCacheKey(env);
+  const cached = modelCatalogCache.get(key);
+  const withCurrent = (catalog: ModelCatalog) =>
+    withCurrentModel(catalog, options.currentModel);
+
+  if (cached && cached.expiresAt > now) {
+    return withCurrent({ ...cached.catalog, status: "cached" });
+  }
+
+  if (!env.OPENAI_API_KEY) {
+    return withCurrent(fallbackModelCatalog("unconfigured"));
+  }
+
+  try {
+    const trustGatewayCatalog = Boolean(env.OPENAI_BASE_URL?.trim());
+    const source: ModelCatalogSource = trustGatewayCatalog
+      ? "gateway"
+      : "models_api";
+    const response = await fetchImpl(openAiModelsUrl(env.OPENAI_BASE_URL), {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
+        "Accept": "application/json",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Model catalog API returned ${response.status}`);
+    }
+    const models = normalizeFetchedModels(
+      await response.json(),
+      source,
+      parseAllowedModels(env.TAKOS_ALLOWED_MODELS),
+      trustGatewayCatalog,
+    );
+    if (models.length === 0) {
+      throw new Error("Model catalog API returned no selectable models");
+    }
+    const catalog: ModelCatalog = {
+      status: "fresh",
+      availableModelsByBackend: {
+        openai: models,
+        anthropic: [],
+        google: [],
+      },
+    };
+    modelCatalogCache.set(key, {
+      expiresAt: now + MODEL_CATALOG_CACHE_TTL_MS,
+      catalog,
+    });
+    return withCurrent(catalog);
+  } catch (error) {
+    logWarn("Model catalog fetch failed; using fallback catalog", {
+      module: "services/agent/model-catalog",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    if (cached) {
+      return withCurrent({ ...cached.catalog, status: "cached" });
+    }
+    return withCurrent(fallbackModelCatalog("fallback"));
+  }
+}
+
+export function isModelSelectable(
+  catalog: Pick<ModelCatalog, "availableModelsByBackend">,
+  model: string,
+): boolean {
+  const normalized = normalizeModelId(model);
+  if (!normalized) return false;
+  return catalog.availableModelsByBackend.openai.some((option) =>
+    option.id === normalized && !option.disabled
+  );
 }
 
 // --- Model token limits ---

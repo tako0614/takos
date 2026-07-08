@@ -8,7 +8,7 @@ import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { useMobileHeader } from "../../store/mobile-header.ts";
 import { rpc, rpcJson } from "../../lib/rpc.ts";
-import { DEFAULT_MODEL_ID } from "../../lib/modelCatalog.ts";
+import { useChatModelSelection } from "../../hooks/useChatModelSelection.ts";
 import {
   findSpaceByIdentifier,
   getPersonalSpace,
@@ -42,11 +42,6 @@ export function ChatPage(props: ChatPageProps) {
     props.initialSpaceId || null,
   );
 
-  // Model state for WelcomeView header
-  const [selectedModel, setSelectedModel] = createSignal<string>(
-    DEFAULT_MODEL_ID,
-  );
-
   const selectedSpace = createMemo(() => {
     const spaceId = selectedSpaceId();
     if (spaceId) {
@@ -74,6 +69,9 @@ export function ChatPage(props: ChatPageProps) {
     const space = selectedSpace();
     return thread && space ? { thread, space } : undefined;
   });
+  const modelSelection = useChatModelSelection({
+    spaceId: () => selectedSpaceId() ?? "",
+  });
 
   createEffect(() => {
     const routeSpaceId = props.initialSpaceId ?? null;
@@ -90,38 +88,16 @@ export function ChatPage(props: ChatPageProps) {
     }
   });
 
-  createEffect(() => {
-    const spaceId = selectedSpaceId();
-    if (!spaceId) return;
-    let cancelled = false;
-    const fetchModel = async () => {
-      try {
-        const res = await rpc.spaces[":spaceId"].model.$get({
-          param: { spaceId },
-        });
-        const data = await rpcJson<{ ai_model?: string; model?: string }>(res);
-        if (cancelled) return;
-        const model = data.ai_model || data.model || DEFAULT_MODEL_ID;
-        setSelectedModel(model);
-      } catch {
-        // keep default
-      }
-    };
-    fetchModel();
-    onCleanup(() => {
-      cancelled = true;
-    });
-  });
-
   // WelcomeView表示時のみモバイルヘッダーにモデル切り替えを注入（スレッドがあるときはChatViewが担当）
   createEffect(() => {
     if (selectedThread()) return;
     mobileHeader.setHeaderContent(
       <ModelSwitcher
-        selectedModel={selectedModel()}
+        selectedModel={modelSelection.selectedModel()}
+        models={modelSelection.availableModels()}
         isLoading={false}
         onModelChange={async (model) => {
-          setSelectedModel(model);
+          modelSelection.setSelectedModel(model);
           const spaceId = selectedSpaceId();
           if (spaceId) {
             try {

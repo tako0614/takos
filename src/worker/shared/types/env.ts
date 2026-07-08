@@ -39,6 +39,8 @@ export interface AiEnv {
   OPENAI_API_KEY?: string;
   /** OpenAI-compatible base URL, e.g. Takosumi AI Gateway `/gateway/ai/v1`. */
   OPENAI_BASE_URL?: string;
+  /** Optional comma-separated or JSON array allowlist for selectable chat models. */
+  TAKOS_ALLOWED_MODELS?: string;
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   SERPER_API_KEY?: string;
@@ -273,8 +275,6 @@ export interface Env
   TAKOS_INTERNAL_API_SECRET?: string;
   /** Shared HMAC secret for split-service internal requests. */
   TAKOS_INTERNAL_SERVICE_SECRET?: string;
-  /** Internal takos-git service URL for signed Git hosting RPC calls. */
-  TAKOS_GIT_INTERNAL_URL?: string;
   /** Shared secret for executor container host -> takos internal executor RPC. */
   EXECUTOR_PROXY_SECRET?: string;
   AUDIT_IP_HASH_KEY?: string;

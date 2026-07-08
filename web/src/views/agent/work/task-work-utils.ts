@@ -38,7 +38,7 @@ export function ensureModelOption(
   if (!normalized || options.some((option) => option.id === normalized)) {
     return [...options];
   }
-  return [{ id: normalized, label: normalized }, ...options];
+  return [{ id: normalized, label: normalized, disabled: true }, ...options];
 }
 
 export function getLocalDateInputMin(date = new Date()): string {
@@ -111,7 +111,13 @@ export function getModelsForModelBackend(
       if (typeof entry === "string") {
         return { id: entry, label: entry };
       }
-      return { id: entry.id, label: entry.name || entry.id };
+      return {
+        id: entry.id,
+        label: entry.name || entry.id,
+        description: entry.description,
+        source: entry.source,
+        disabled: entry.disabled,
+      };
     })
     .filter((entry) => entry.id);
 }

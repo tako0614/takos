@@ -9,19 +9,26 @@ export type {
   ToolResult,
 } from "./agent-models.ts";
 export type {
+  AvailableModelsByBackend,
+  ModelCatalog,
+  ModelCatalogSource,
+  ModelCatalogStatus,
   ModelBackend,
   ModelOption,
   SupportedModelId,
 } from "./model-catalog.ts";
 export {
   AVAILABLE_MODELS_BY_BACKEND,
+  clearModelCatalogCacheForTests,
   DEFAULT_MODEL_ID,
   getModelBackend,
   getModelTokenLimit,
+  isModelSelectable,
   MODEL_TOKEN_LIMITS,
   normalizeModelId,
   OPENAI_COMPATIBLE_MODELS,
   OPENAI_MODELS,
+  resolveModelCatalog,
   resolveHistoryTokenBudget,
   SUPPORTED_MODEL_IDS,
 } from "./model-catalog.ts";

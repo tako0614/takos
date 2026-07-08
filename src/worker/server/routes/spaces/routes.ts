@@ -17,10 +17,11 @@ import {
   updateWorkspaceModel,
 } from "../../../application/services/identity/spaces.ts";
 import {
-  AVAILABLE_MODELS_BY_BACKEND,
   DEFAULT_MODEL_ID,
   getModelBackend as getModelBackendForModel,
+  isModelSelectable,
   normalizeModelId,
+  resolveModelCatalog,
   resolveHistoryTokenBudget,
 } from "../../../application/services/agent/index.ts";
 import { getUISidebarItems } from "../../../application/services/platform/ui-extensions.ts";
@@ -63,6 +64,39 @@ function resolveModelBackendAlias(
     : "__conflicting_model_backend__";
 }
 
+async function buildModelSettingsResponse(
+  c: Context<AuthenticatedRouteEnv>,
+  model: string,
+  modelBackend: ModelBackend,
+) {
+  const catalog = await resolveModelCatalog(c.env, { currentModel: model });
+  return {
+    ai_model: model,
+    model,
+    model_backend: modelBackend,
+    available_models: catalog.availableModelsByBackend,
+    catalog_status: catalog.status,
+    token_limit: resolveHistoryTokenBudget(
+      model,
+      c.env.MODEL_CONTEXT_WINDOWS,
+    ),
+  };
+}
+
+async function validateSelectableModel(
+  c: Context<AuthenticatedRouteEnv>,
+  requestedModel: string,
+) {
+  const model = normalizeModelId(requestedModel);
+  if (!model) {
+    throw new BadRequestError("Invalid model");
+  }
+  const catalog = await resolveModelCatalog(c.env);
+  if (!isModelSelectable(catalog, model)) {
+    throw new BadRequestError("Model is not available");
+  }
+  return { model, catalog };
+}
 
 function scheduleDefaultAppPreinstallTick(
   c: Context<AuthenticatedRouteEnv>,
@@ -341,10 +375,10 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
 
       if (body.ai_model) {
-        const normalizedModel = normalizeModelId(body.ai_model);
-        if (!normalizedModel) {
-          throw new BadRequestError("Invalid model");
-        }
+        const { model: normalizedModel } = await validateSelectableModel(
+          c,
+          body.ai_model,
+        );
         updates.ai_model = normalizedModel;
 
         const inferredModelBackend = getModelBackendForModel(normalizedModel);
@@ -415,16 +449,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       ? storedModelBackend
       : inferredModelBackend;
 
-    return c.json({
-      ai_model: model,
-      model,
-      model_backend: modelBackend,
-      available_models: AVAILABLE_MODELS_BY_BACKEND,
-      token_limit: resolveHistoryTokenBudget(
-        model,
-        c.env.MODEL_CONTEXT_WINDOWS,
-      ),
-    });
+    return c.json(await buildModelSettingsResponse(c, model, modelBackend));
   })
   .patch(
     "/:spaceId/model",
@@ -455,10 +480,10 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("Model is required");
       }
 
-      const model = normalizeModelId(requestedModel);
-      if (!model) {
-        throw new BadRequestError("Invalid model");
-      }
+      const { model, catalog } = await validateSelectableModel(
+        c,
+        requestedModel,
+      );
 
       const inferredModelBackend = getModelBackendForModel(model);
       const modelBackendInput = requestedModelBackend
@@ -483,7 +508,8 @@ export default new Hono<AuthenticatedRouteEnv>()
         ai_model: model,
         model,
         model_backend: modelBackend,
-        available_models: AVAILABLE_MODELS_BY_BACKEND,
+        available_models: catalog.availableModelsByBackend,
+        catalog_status: catalog.status,
         token_limit: resolveHistoryTokenBudget(
           model,
           c.env.MODEL_CONTEXT_WINDOWS,

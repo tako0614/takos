@@ -241,7 +241,12 @@ export const NavigationProvider: ParentComponent = (props) => {
 
   const handleExitSpace = () => {
     mutateSidebarSpace(null);
-    router.replace({ view: "apps", spaceId: preferredSpaceId() });
+    router.replace({
+      view: "chat",
+      spaceId: preferredSpaceId(),
+      runId: undefined,
+      messageId: undefined,
+    });
   };
 
   const handleNewThread = () => {

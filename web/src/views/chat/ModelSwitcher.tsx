@@ -35,6 +35,7 @@ export function ModelSwitcher(props: ModelSwitcherProps) {
             {(opt) => (
               <option
                 value={opt.id}
+                disabled={opt.disabled}
                 class="bg-white dark:bg-zinc-900 text-base font-normal"
               >
                 {opt.label}

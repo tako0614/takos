@@ -69,6 +69,8 @@ export function useChatModelSelection({
             id: entry.id,
             label: entry.name || entry.id,
             description: entry.description,
+            source: entry.source,
+            disabled: entry.disabled,
           };
         })
         .filter((entry) => entry.id);
@@ -78,6 +80,9 @@ export function useChatModelSelection({
       setAvailableModels(resolvedModels);
 
       const resolvedIds = resolvedModels.map((model) => model.id);
+      const selectableIds = resolvedModels
+        .filter((model) => !model.disabled)
+        .map((model) => model.id);
       if (seedModel && resolvedIds.includes(seedModel)) {
         if (isCancelled?.()) return;
         setSelectedModel(seedModel);
@@ -90,7 +95,10 @@ export function useChatModelSelection({
           if (isCancelled?.()) return;
           setSelectedModel((
             prev,
-          ) => (resolvedIds.includes(prev) ? prev : resolvedModels[0].id));
+          ) =>
+            resolvedIds.includes(prev)
+              ? prev
+              : (selectableIds[0] ?? resolvedModels[0].id));
         }
       }
     } catch (err) {

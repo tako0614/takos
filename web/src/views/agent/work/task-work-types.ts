@@ -8,6 +8,8 @@ export type ModelOption = string | {
   id: string;
   name?: string;
   description?: string;
+  source?: "models_api" | "gateway" | "fallback";
+  disabled?: boolean;
 };
 export type { ModelSelectOption };
 
@@ -20,6 +22,7 @@ export interface ModelSettings {
     anthropic: ModelOption[];
     google: ModelOption[];
   };
+  catalog_status?: "fresh" | "cached" | "fallback" | "unconfigured";
 }
 
 export type TaskFilter = "all" | AgentTaskStatus;

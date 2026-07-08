@@ -3,14 +3,21 @@ import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { rpc, rpcJson } from "../../lib/rpc.ts";
 import { Icons } from "../../lib/Icons.tsx";
-import { MODEL_OPTIONS } from "../../lib/modelCatalog.ts";
+import {
+  FALLBACK_MODELS,
+  type ModelSelectOption,
+} from "../../lib/modelCatalog.ts";
+import type { ModelOption } from "./work/task-work-types.ts";
 
 export function ModelTab(props: { spaceId: string }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [loading, setLoading] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
-  const [selectedModel, setSelectedModel] = createSignal(MODEL_OPTIONS[0].id);
+  const [selectedModel, setSelectedModel] = createSignal(FALLBACK_MODELS[0].id);
+  const [modelOptions, setModelOptions] = createSignal<ModelSelectOption[]>([
+    ...FALLBACK_MODELS,
+  ]);
   const [tokenLimit, setContextWindow] = createSignal<number | null>(null);
   let modelSettingsSeq = 0;
 
@@ -29,11 +36,40 @@ export function ModelTab(props: { spaceId: string }) {
         ai_model?: string;
         model?: string;
         token_limit?: number;
+        model_backend?: string;
+        available_models?: {
+          openai: ModelOption[];
+          anthropic: ModelOption[];
+          google: ModelOption[];
+        };
       }>(res);
       if (seq !== modelSettingsSeq || spaceId !== props.spaceId) return;
+      const backend = data.model_backend || "openai";
+      const raw = data.available_models?.[
+        backend as keyof NonNullable<typeof data.available_models>
+      ] ?? data.available_models?.openai ?? [];
+      const models = raw.map((entry) => {
+        if (typeof entry === "string") return { id: entry, label: entry };
+        return {
+          id: entry.id,
+          label: entry.name || entry.id,
+          description: entry.description,
+          source: entry.source,
+          disabled: entry.disabled,
+        };
+      }).filter((entry) => entry.id);
+      const resolvedOptions = models.length > 0
+        ? models
+        : [...FALLBACK_MODELS];
+      setModelOptions(resolvedOptions);
       const model = data.ai_model || data.model || "";
-      if (MODEL_OPTIONS.some((opt) => opt.id === model)) {
+      if (resolvedOptions.some((opt) => opt.id === model)) {
         setSelectedModel(model);
+      } else {
+        setSelectedModel(
+          resolvedOptions.find((opt) => !opt.disabled)?.id ??
+            resolvedOptions[0].id,
+        );
       }
       if (typeof data.token_limit === "number") {
         setContextWindow(data.token_limit);
@@ -83,7 +119,7 @@ export function ModelTab(props: { spaceId: string }) {
             {t("modelBackend")}
           </h4>
           <div class="grid grid-cols-3 gap-3">
-            {MODEL_OPTIONS.map((opt) => (
+            {modelOptions().map((opt) => (
               <button
                 type="button"
                 class={`flex flex-col items-start gap-1 p-4 rounded-lg border transition-colors text-left ${
@@ -92,7 +128,7 @@ export function ModelTab(props: { spaceId: string }) {
                     : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-900/50 dark:hover:border-zinc-400 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                 }`}
                 onClick={() => setSelectedModel(opt.id)}
-                disabled={saving()}
+                disabled={saving() || opt.disabled}
               >
                 <span class="text-base font-semibold">{opt.label}</span>
                 {opt.description && (

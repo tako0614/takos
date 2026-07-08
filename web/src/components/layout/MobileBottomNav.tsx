@@ -3,7 +3,7 @@ import type { JSX } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 
-type NavItem = "store" | "chat" | "apps" | "memory";
+type NavItem = "chat" | "memory";
 
 interface MobileBottomNavProps {
   activeItem?: NavItem;
@@ -20,7 +20,6 @@ export function MobileBottomNav(props: MobileBottomNavProps) {
   const menuAriaLabel = t("openMenu");
   const menuLabel = t("menu");
   const navItems: { id: NavItem; icon: JSX.Element; label: string }[] = [
-    { id: "apps", icon: <Icons.Grid class="w-5 h-5" />, label: t("apps") },
     {
       id: "chat",
       icon: <Icons.MessageSquare class="w-5 h-5" />,
@@ -30,11 +29,6 @@ export function MobileBottomNav(props: MobileBottomNavProps) {
       id: "memory",
       icon: <Icons.Database class="w-5 h-5" />,
       label: t("memory"),
-    },
-    {
-      id: "store",
-      icon: <Icons.Download class="w-5 h-5" />,
-      label: t("store"),
     },
   ];
 

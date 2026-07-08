@@ -2,6 +2,8 @@ export type ModelSelectOption = {
   id: string;
   label: string;
   description?: string;
+  source?: "models_api" | "gateway" | "fallback";
+  disabled?: boolean;
 };
 
 const OPENAI_COMPATIBLE_MODEL_OPTIONS: ReadonlyArray<ModelSelectOption> = [
