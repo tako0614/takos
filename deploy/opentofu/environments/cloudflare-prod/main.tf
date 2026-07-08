@@ -20,8 +20,14 @@ module "takos" {
 
   account_id   = var.account_id
   app_url      = var.app_url
+  worker_name  = var.worker_name
   project_name = "takos"
   environment  = "production"
+
+  takosumi_accounts_url          = var.takosumi_accounts_url
+  takosumi_accounts_issuer_url   = var.takosumi_accounts_issuer_url
+  takosumi_accounts_client_id    = var.takosumi_accounts_client_id
+  takosumi_accounts_redirect_uri = var.takosumi_accounts_redirect_uri
 }
 
 variable "account_id" {
@@ -35,6 +41,51 @@ variable "app_url" {
   validation {
     condition     = var.app_url == null || can(regex("^https://[^[:space:]]+$", var.app_url))
     error_message = "app_url must be unset or an https URL."
+  }
+}
+
+variable "worker_name" {
+  type    = string
+  default = null
+
+  validation {
+    condition     = var.worker_name == null || trimspace(var.worker_name) == "" || can(regex("^[a-z0-9][a-z0-9-]{0,62}$", trimspace(var.worker_name)))
+    error_message = "worker_name must be unset or a lowercase DNS label using letters, numbers, and hyphens."
+  }
+}
+
+variable "takosumi_accounts_url" {
+  type    = string
+  default = ""
+
+  validation {
+    condition     = trimspace(var.takosumi_accounts_url) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.takosumi_accounts_url)))
+    error_message = "takosumi_accounts_url must be empty or an https URL."
+  }
+}
+
+variable "takosumi_accounts_issuer_url" {
+  type    = string
+  default = ""
+
+  validation {
+    condition     = trimspace(var.takosumi_accounts_issuer_url) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.takosumi_accounts_issuer_url)))
+    error_message = "takosumi_accounts_issuer_url must be empty or an https URL."
+  }
+}
+
+variable "takosumi_accounts_client_id" {
+  type    = string
+  default = ""
+}
+
+variable "takosumi_accounts_redirect_uri" {
+  type    = string
+  default = ""
+
+  validation {
+    condition     = trimspace(var.takosumi_accounts_redirect_uri) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.takosumi_accounts_redirect_uri)))
+    error_message = "takosumi_accounts_redirect_uri must be empty or an https URL."
   }
 }
 
