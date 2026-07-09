@@ -155,7 +155,7 @@ function releaseLaunchUrl(outputs) {
     optionalStringOutput(outputs, "url");
   if (explicitLaunchUrl) return explicitLaunchUrl;
 
-  const workerName = optionalStringOutput(outputs, "worker_name");
+  const workerName = optionalStringOutput(outputs, "service_runtime_name");
   const workersSubdomain =
     optionalStringOutput(outputs, "cloudflare_workers_subdomain") ??
     optionalStringOutput(outputs, "workers_subdomain");
@@ -527,7 +527,7 @@ function wranglerDeployEnvironmentArgs(environment) {
 }
 
 function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
-  const workerName = requireStringOutput(outputs, "worker_name");
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
   return [
     "wrangler",
     "deploy",
@@ -543,7 +543,7 @@ function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
 }
 
 export function buildTakosumiDestroyCommands(outputs) {
-  const workerName = requireStringOutput(outputs, "worker_name");
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
   const vectorizeIndexName = requireStringOutput(
     outputs,
     "cloudflare_vectorize_index_name",
@@ -813,7 +813,7 @@ export async function waitForWranglerDeployment(
   environment,
   env = process.env,
 ) {
-  const workerName = requireStringOutput(outputs, "worker_name");
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
   const command = commandLine([
     "bunx",
     "wrangler",
@@ -891,7 +891,7 @@ export async function waitForWranglerDeploymentBestEffort(
     ) {
       throw error;
     }
-    const workerName = requireStringOutput(outputs, "worker_name");
+    const workerName = requireStringOutput(outputs, "service_runtime_name");
     const message = error instanceof Error ? error.message : String(error);
     console.warn(
       `Skipping Wrangler deployment status verification for ${workerName}: ${boundedCommandLog(
@@ -1227,7 +1227,7 @@ export async function pruneWranglerMigrationsForExistingWorker(
   env = process.env,
   fetchImpl = globalThis.fetch,
 ) {
-  const workerName = requireStringOutput(outputs, "worker_name");
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
   const accountId = releaseWranglerAccountId(outputs, env);
   const apiToken = wranglerDeployToken(env) ?? releaseApiToken(env);
   if (!accountId || !apiToken) {
@@ -1284,7 +1284,7 @@ export async function preflightWranglerDeployAuth(
   if (!deployToken) {
     return { skipped: true, reason: "deploy_token_not_configured" };
   }
-  const workerName = requireStringOutput(outputs, "worker_name");
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
   const accountId = releaseWranglerAccountId(outputs, env);
   if (!accountId) {
     return { skipped: true, reason: "account_id_unavailable" };
@@ -1459,7 +1459,7 @@ export async function ensureWorkersDevSubdomain(
   if (!shouldEnableWorkersDev(outputs)) {
     return { skipped: true, reason: "no_workers_dev_launch_url" };
   }
-  const workerName = requireStringOutput(outputs, "worker_name");
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
   const apiToken = env.CF_API_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
   if (typeof apiToken !== "string" || apiToken.trim() === "") {
@@ -1585,7 +1585,7 @@ async function verifyCloudflareWorkerContent(
   env = process.env,
   fetchImpl = globalThis.fetch,
 ) {
-  const workerName = requireStringOutput(outputs, "worker_name");
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
   const accountId = requireStringOutput(outputs, "cloudflare_account_id");
   const workerEnvironment = releaseWorkerEnvironment(environment);
   const apiToken = releaseApiToken(env);

@@ -15,14 +15,14 @@ variable "project_name" {
   default     = "takos"
 }
 
-variable "worker_name" {
-  description = "Optional public Worker/script subdomain label. When unset, project_name is used."
+variable "public_subdomain" {
+  description = "Optional public subdomain label. When unset, project_name is used."
   type        = string
   default     = null
 
   validation {
-    condition     = var.worker_name == null || trimspace(var.worker_name) == "" || can(regex("^[a-z0-9][a-z0-9-]{0,62}$", trimspace(var.worker_name)))
-    error_message = "worker_name must be unset or a lowercase DNS label using letters, numbers, and hyphens."
+    condition     = var.public_subdomain == null || trimspace(var.public_subdomain) == "" || can(regex("^[a-z0-9][a-z0-9-]{0,62}$", trimspace(var.public_subdomain)))
+    error_message = "public_subdomain must be unset or a lowercase DNS label using letters, numbers, and hyphens."
   }
 }
 
@@ -92,14 +92,14 @@ variable "opentofu_plan_mode" {
   default     = false
 }
 
-variable "app_url" {
+variable "public_url" {
   description = "Canonical public URL for the Takos worker. Takosumi Cloud managed installs set this to an app.takos.jp URL; when unset, launch_url is derived from cloudflare.workers_subdomain."
   type        = string
   default     = null
 
   validation {
-    condition     = var.app_url == null || can(regex("^https://[^[:space:]]+$", var.app_url))
-    error_message = "app_url must be unset or an https URL."
+    condition     = var.public_url == null || can(regex("^https://[^[:space:]]+$", var.public_url))
+    error_message = "public_url must be unset or an https URL."
   }
 }
 
@@ -153,7 +153,7 @@ variable "env" {
 }
 
 variable "takosumi_accounts_redirect_uri" {
-  description = "Optional Takosumi Accounts OIDC redirect URI. When unset, the Cloudflare module derives <app_url>/auth/oidc/callback when app_url is available."
+  description = "Optional Takosumi Accounts OIDC redirect URI. When unset, the Cloudflare module derives <public_url>/auth/oidc/callback when public_url is available."
   type        = string
   default     = ""
 

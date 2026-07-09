@@ -33,14 +33,14 @@ terraform {
 # OpenTofu module app.
 
 locals {
-  name        = var.project_name
-  worker_name = var.worker_name != null && trimspace(var.worker_name) != "" ? trimspace(var.worker_name) : var.project_name
-  app_url     = var.app_url != null && trimspace(var.app_url) != "" ? trimspace(var.app_url) : null
+  name                 = var.project_name
+  service_runtime_name = var.public_subdomain != null && trimspace(var.public_subdomain) != "" ? trimspace(var.public_subdomain) : var.project_name
+  public_url           = var.public_url != null && trimspace(var.public_url) != "" ? trimspace(var.public_url) : null
 
   takosumi_accounts_issuer_url   = trimspace(var.takosumi_accounts_issuer_url)
   takosumi_accounts_client_id    = trimspace(var.takosumi_accounts_client_id)
   takosumi_accounts_url          = trimspace(var.takosumi_accounts_url) != "" ? trimspace(var.takosumi_accounts_url) : local.takosumi_accounts_issuer_url
-  takosumi_accounts_redirect_uri = trimspace(var.takosumi_accounts_redirect_uri) != "" ? trimspace(var.takosumi_accounts_redirect_uri) : (local.app_url != null ? "${local.app_url}/auth/oidc/callback" : "")
+  takosumi_accounts_redirect_uri = trimspace(var.takosumi_accounts_redirect_uri) != "" ? trimspace(var.takosumi_accounts_redirect_uri) : (local.public_url != null ? "${local.public_url}/auth/oidc/callback" : "")
   takosumi_accounts_oidc_enabled = local.takosumi_accounts_issuer_url != "" && local.takosumi_accounts_client_id != ""
   extra_worker_env               = { for name, value in var.env : name => value if trimspace(value) != "" }
   app_deployment_env = merge(

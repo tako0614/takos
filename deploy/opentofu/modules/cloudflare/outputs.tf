@@ -9,19 +9,19 @@ output "account_id" {
   value       = var.account_id
 }
 
-output "worker_name" {
-  description = "Worker script name rendered into wrangler.toml for the artifact upload."
-  value       = local.worker_name
+output "service_runtime_name" {
+  description = "service runtime name rendered into wrangler.toml for the artifact upload."
+  value       = local.service_runtime_name
 }
 
 output "launch_url" {
-  description = "Canonical public Takos URL when app_url or workers_subdomain is supplied."
-  value       = local.app_url != null ? local.app_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.worker_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
+  description = "Canonical public Takos URL when public_url or workers_subdomain is supplied."
+  value       = local.public_url != null ? local.public_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.service_runtime_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
 }
 
-output "app_url" {
+output "public_url" {
   description = "Alias of launch_url for app-surface projection."
-  value       = local.app_url != null ? local.app_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.worker_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
+  value       = local.public_url != null ? local.public_url : (var.workers_subdomain != null && trimspace(var.workers_subdomain) != "" ? "https://${local.service_runtime_name}.${trimspace(var.workers_subdomain)}.workers.dev" : null)
 }
 
 output "workers_subdomain" {

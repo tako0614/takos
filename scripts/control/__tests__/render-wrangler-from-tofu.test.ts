@@ -13,7 +13,7 @@ import {
 
 const rawOutputs = {
   cloudflare_account_id: "acc_123",
-  worker_name: "takos-test",
+  service_runtime_name: "takos-test",
   cloudflare_d1_database_ids: {
     db: "d1_db",
   },
@@ -111,12 +111,12 @@ test("buildReplacements can render a Wrangler-only account override", () => {
   assert.equal(rawOutputs.cloudflare_account_id, "acc_123");
 });
 
-test("buildReplacements projects app_url into public Takos worker env placeholders", () => {
+test("buildReplacements projects public_url into public Takos worker env placeholders", () => {
   assert.deepEqual(
     buildReplacements(
       {
         ...rawOutputs,
-        app_url: "https://takos-test.app.takos.jp",
+        public_url: "https://takos-test.app.takos.jp",
       },
       "production",
     )["app.your-domain.example"],
@@ -230,7 +230,7 @@ test("buildReplacements rejects non-https public launch URLs", () => {
   );
 });
 
-test("renderPublicRoute adds a production route from non-workers.dev app_url", () => {
+test("renderPublicRoute adds a production route from non-workers.dev public_url", () => {
   const toml = [
     'name = "takos-test"',
     "workers_dev = true",
@@ -246,7 +246,7 @@ test("renderPublicRoute adds a production route from non-workers.dev app_url", (
     "production",
     {
       ...rawOutputs,
-      app_url: "https://takos-test.app.takos.jp",
+      public_url: "https://takos-test.app.takos.jp",
     },
     { zoneId: "zone_123" },
   );

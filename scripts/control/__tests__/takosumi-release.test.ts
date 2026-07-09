@@ -45,7 +45,7 @@ const rawOutputs = {
   cloudflare_vectorize_index_name: "takos-test-embeddings",
   cloudflare_vectorize_index_dimensions: 768,
   cloudflare_vectorize_index_metric: "cosine",
-  worker_name: "takos-test",
+  service_runtime_name: "takos-test",
   queue_bindings: {
     runs: "takos-test-runs",
     runs_dlq: "takos-test-runs-dlq",
@@ -1045,7 +1045,7 @@ test("ensureWorkersDevSubdomain enables launch URL scripts without logging token
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
     {
-      worker_name: "takos-test",
+      service_runtime_name: "takos-test",
       cloudflare_account_id: "acc_123",
       launch_url: "https://takos-test.example-subdomain.workers.dev",
     },
@@ -1080,7 +1080,7 @@ test("ensureWorkersDevSubdomain derives workers.dev URL from subdomain outputs",
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
     {
-      worker_name: "takos-test",
+      service_runtime_name: "takos-test",
       cloudflare_account_id: "acc_123",
       cloudflare_workers_subdomain: "example-subdomain",
     },
@@ -1109,7 +1109,7 @@ test("ensureWorkersDevSubdomain ignores Cloudflare-compatible API base overrides
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
     {
-      worker_name: "takos-test",
+      service_runtime_name: "takos-test",
       cloudflare_account_id: "ts_acc_takosumi_cloud",
       launch_url: "https://takos-test.example-subdomain.workers.dev",
     },
@@ -1144,7 +1144,7 @@ test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
   let called = false;
   const result = await ensureWorkersDevSubdomain(
     {
-      worker_name: "takos-test",
+      service_runtime_name: "takos-test",
       cloudflare_account_id: "acc_123",
       launch_url: "https://app.example.com",
     },
@@ -1166,7 +1166,7 @@ test("ensureWorkersDevSubdomain skips API enablement without Cloudflare API toke
   let called = false;
   const result = await ensureWorkersDevSubdomain(
     {
-      worker_name: "takos-test",
+      service_runtime_name: "takos-test",
       cloudflare_account_id: "acc_123",
       launch_url: "https://takos-test.example-subdomain.workers.dev",
     },
@@ -1188,7 +1188,7 @@ test("ensureWorkersDevSubdomain waits until the uploaded Worker is visible", asy
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
     {
-      worker_name: "takos-test",
+      service_runtime_name: "takos-test",
       cloudflare_account_id: "acc_123",
       launch_url: "https://takos-test.example-subdomain.workers.dev",
     },
@@ -1229,7 +1229,7 @@ test("ensureWorkersDevSubdomain skips API enablement when Wrangler-owned Worker 
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
     {
-      worker_name: "takos-test",
+      service_runtime_name: "takos-test",
       cloudflare_account_id: "acc_123",
       launch_url: "https://takos-test.example-subdomain.workers.dev",
     },
@@ -1713,13 +1713,13 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     "utf8",
   );
   assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
-  assert.match(rootMain, /app_url\s*=\s*var\.app_url/);
+  assert.match(rootMain, /public_url\s*=\s*var\.public_url/);
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_container_images"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_executor"\s*\{/);
-  assert.match(rootVariables, /variable\s+"app_url"\s*\{/);
+  assert.match(rootVariables, /variable\s+"public_url"\s*\{/);
   assert.match(rootVariables, /default\s*=\s*"operator"/);
   assert.match(
     rootVariables,
@@ -1727,7 +1727,7 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   );
   assert.match(rootModule, /post_apply\s*=\s*\[/);
   assert.match(rootModule, /pre_destroy\s*=\s*\[/);
-  assert.match(rootModule, /output\s+"app_url"\s*\{/);
+  assert.match(rootModule, /output\s+"public_url"\s*\{/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-release"/);
   assert.match(rootModule, /id\s*=\s*"takos-worker-destroy"/);
   assert.match(rootModule, /executor\s*=\s*var\.release_executor/);
@@ -1793,14 +1793,14 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   );
   assert.match(productionModule, /variable\s+"release_container_images"\s*\{/);
   assert.match(productionModule, /variable\s+"release_executor"\s*\{/);
-  assert.match(productionModule, /variable\s+"app_url"\s*\{/);
+  assert.match(productionModule, /variable\s+"public_url"\s*\{/);
   assert.match(productionModule, /default\s*=\s*"operator"/);
   assert.match(
     productionModule,
     /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,
   );
-  assert.match(productionModule, /app_url\s*=\s*var\.app_url/);
-  assert.match(productionModule, /output\s+"app_url"\s*\{/);
+  assert.match(productionModule, /public_url\s*=\s*var\.public_url/);
+  assert.match(productionModule, /output\s+"public_url"\s*\{/);
   assert.match(
     productionModule,
     /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,

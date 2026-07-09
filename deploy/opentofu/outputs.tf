@@ -15,13 +15,13 @@ output "cloudflare_account_id" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].account_id : null
 }
 
-output "worker_name" {
-  description = "Worker script name rendered into wrangler.toml by the release activation step."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].worker_name : null
+output "service_runtime_name" {
+  description = "service runtime name rendered into wrangler.toml by the release activation step."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].service_runtime_name : null
 }
 
 output "url" {
-  description = "Public URL for smoke checks when app_url or cloudflare.workers_subdomain is supplied."
+  description = "Public URL for smoke checks when public_url or cloudflare.workers_subdomain is supplied."
   value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
 }
 
@@ -30,9 +30,9 @@ output "launch_url" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].launch_url : null
 }
 
-output "app_url" {
-  description = "Canonical public Takos URL projected from app_url or the derived workers.dev URL."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].app_url : null
+output "public_url" {
+  description = "Canonical public Takos URL projected from public_url or the derived workers.dev URL."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].public_url : null
 }
 
 output "cloudflare_workers_subdomain" {

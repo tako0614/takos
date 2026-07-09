@@ -88,9 +88,9 @@ function readOutputs() {
 }
 
 function requireWorkerName(outputs) {
-  const value = outputValue(outputs.worker_name);
+  const value = outputValue(outputs.service_runtime_name);
   if (typeof value !== "string" || value.trim() === "") {
-    throw new Error('TAKOSUMI_OUTPUTS_JSON must include "worker_name"');
+    throw new Error('TAKOSUMI_OUTPUTS_JSON must include "service_runtime_name"');
   }
   return value;
 }

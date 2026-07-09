@@ -15,7 +15,7 @@ import * as runtime from "../runtime.ts";
 //   cd deploy/opentofu && tofu apply -var 'cloudflare={account_id="<acct>"}'
 //   bun ../../scripts/control/render-wrangler-from-tofu.mjs production --zone-id <zone>
 //
-// What it fills (per environment): Worker script name, CF_ACCOUNT_ID, the D1
+// What it fills (per environment): service runtime name, CF_ACCOUNT_ID, the D1
 // database id, KV namespace ids, R2 bucket names, Queue names, and Vectorize
 // index name. CF_ZONE_ID is NOT a module-managed resource (it is the
 // self-hoster's existing DNS zone), so pass it with --zone-id or fill the
@@ -98,7 +98,7 @@ export function buildReplacements(
   };
 
   const accountId = accountIdOverride?.trim() || read("cloudflare_account_id");
-  const workerName = read("worker_name");
+  const workerName = read("service_runtime_name");
   const publicUrl = optionalPublicUrl(outputs);
   const d1 = read("cloudflare_d1_database_ids"); // { db }
   const kv = read("cloudflare_kv_namespace_ids"); // { hostname_routing, rollout_health }
@@ -234,16 +234,16 @@ function workerEnvReplacements(env, deploymentEnv) {
 }
 
 function optionalPublicUrl(outputs) {
-  const value = outputValue(outputs.app_url) ?? outputValue(outputs.launch_url);
+  const value = outputValue(outputs.public_url) ?? outputValue(outputs.launch_url);
   if (typeof value !== "string" || value.trim() === "") return undefined;
   let parsed;
   try {
     parsed = new URL(value.trim());
   } catch {
-    throw new Error("tofu output app_url/launch_url must be a valid URL");
+    throw new Error("tofu output public_url/launch_url must be a valid URL");
   }
   if (parsed.protocol !== "https:") {
-    throw new Error("tofu output app_url/launch_url must be an https URL");
+    throw new Error("tofu output public_url/launch_url must be an https URL");
   }
   return parsed;
 }
@@ -291,7 +291,7 @@ function generatedPublicRouteBlock(env, route) {
   ].join(", ");
   return [
     GENERATED_PUBLIC_ROUTE_BEGIN,
-    "# Generated from OpenTofu app_url/launch_url during Takos release activation.",
+    "# Generated from OpenTofu public_url/launch_url during Takos release activation.",
     "routes = [",
     `  { ${routeFields} },`,
     "]",
@@ -442,9 +442,9 @@ export function renderContainerApplicationNames(toml, env, workerName) {
 }
 
 function requireWorkerNameOutput(outputs) {
-  const value = outputValue(outputs.worker_name);
+  const value = outputValue(outputs.service_runtime_name);
   if (typeof value !== "string" || value.trim() === "") {
-    throw new Error('tofu output "worker_name" is missing or empty');
+    throw new Error('tofu output "service_runtime_name" is missing or empty');
   }
   return value.trim();
 }

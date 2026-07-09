@@ -18,11 +18,11 @@ module "takos" {
     cloudflare = cloudflare
   }
 
-  account_id   = var.account_id
-  app_url      = var.app_url
-  worker_name  = var.worker_name
-  project_name = "takos"
-  environment  = "production"
+  account_id       = var.account_id
+  public_url       = var.public_url
+  public_subdomain = var.public_subdomain
+  project_name     = "takos"
+  environment      = "production"
 
   takosumi_accounts_url          = var.takosumi_accounts_url
   takosumi_accounts_issuer_url   = var.takosumi_accounts_issuer_url
@@ -35,23 +35,23 @@ variable "account_id" {
   type = string
 }
 
-variable "app_url" {
+variable "public_url" {
   type    = string
   default = null
 
   validation {
-    condition     = var.app_url == null || can(regex("^https://[^[:space:]]+$", var.app_url))
-    error_message = "app_url must be unset or an https URL."
+    condition     = var.public_url == null || can(regex("^https://[^[:space:]]+$", var.public_url))
+    error_message = "public_url must be unset or an https URL."
   }
 }
 
-variable "worker_name" {
+variable "public_subdomain" {
   type    = string
   default = null
 
   validation {
-    condition     = var.worker_name == null || trimspace(var.worker_name) == "" || can(regex("^[a-z0-9][a-z0-9-]{0,62}$", trimspace(var.worker_name)))
-    error_message = "worker_name must be unset or a lowercase DNS label using letters, numbers, and hyphens."
+    condition     = var.public_subdomain == null || trimspace(var.public_subdomain) == "" || can(regex("^[a-z0-9][a-z0-9-]{0,62}$", trimspace(var.public_subdomain)))
+    error_message = "public_subdomain must be unset or a lowercase DNS label using letters, numbers, and hyphens."
   }
 }
 
@@ -167,8 +167,8 @@ output "cloudflare_account_id" {
   value = var.account_id
 }
 
-output "worker_name" {
-  value = module.takos.worker_name
+output "service_runtime_name" {
+  value = module.takos.service_runtime_name
 }
 
 output "url" {
@@ -179,8 +179,8 @@ output "launch_url" {
   value = module.takos.launch_url
 }
 
-output "app_url" {
-  value = module.takos.app_url
+output "public_url" {
+  value = module.takos.public_url
 }
 
 output "app_deployment" {

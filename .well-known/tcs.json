@@ -33,7 +33,7 @@
       }
     },
     {
-      "name": "worker_name",
+      "name": "public_subdomain",
       "type": "string",
       "format": "subdomain",
       "required": true,
@@ -44,7 +44,7 @@
       }
     },
     {
-      "name": "app_url",
+      "name": "public_url",
       "type": "string",
       "format": "url",
       "required": true,
@@ -96,9 +96,14 @@
       "name": "release_container_images",
       "type": "json",
       "advanced": true,
+      "defaultValue": "{\"runtime\":\"registry.cloudflare.com/a10162d23653f1ad1193dabf520a5dd0/takos-worker-runtime:0.10.0-bfdd9f8bb79c\",\"executor\":\"registry.cloudflare.com/a10162d23653f1ad1193dabf520a5dd0/takos-agent-executor:0.10.0-bfdd9f8bb79c\"}",
       "label": {
         "ja": "Release container images",
         "en": "Release container images"
+      },
+      "helper": {
+        "ja": "Git CI が公開した Takos release container image refs。通常は変更不要です。",
+        "en": "Takos release container image refs published by Git CI. Usually leave unchanged."
       }
     }
   ],
@@ -111,8 +116,8 @@
       {
         "kind": "public_endpoint",
         "variables": {
-          "subdomain": "worker_name",
-          "url": "app_url"
+          "subdomain": "public_subdomain",
+          "url": "public_url"
         },
         "baseDomain": "app.takos.jp"
       },
@@ -140,8 +145,8 @@
       "type": "url"
     },
     {
-      "key": "app_url",
-      "from": "app_url",
+      "key": "public_url",
+      "from": "public_url",
       "type": "url"
     },
     {

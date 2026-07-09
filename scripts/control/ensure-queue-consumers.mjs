@@ -83,7 +83,7 @@ const configOption = readOption(args, "--config");
 if (configOption.rest.length > 0) usage();
 
 const outputs = readReleaseOutputs();
-const workerName = requireStringOutput(outputs, "worker_name");
+const workerName = requireStringOutput(outputs, "service_runtime_name");
 const queues = requireObjectOutput(outputs, "queue_bindings");
 const wranglerGlobalArgs = [
   ...(configOption.value ? ["--config", configOption.value] : []),
