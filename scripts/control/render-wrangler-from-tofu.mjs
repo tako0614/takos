@@ -108,11 +108,8 @@ export function buildReplacements(
     "key_value_stores",
     "cloudflare_kv_namespace_ids",
   ]); // { hostname_routing, rollout_health }
-  const r2 = readFirstOutput(outputs, [
-    "object_buckets",
-    "object_storage_buckets",
-  ]);
-  const queues = readFirstOutput(outputs, ["queues", "queue_bindings"]);
+  const r2 = read("object_buckets");
+  const queues = read("queues");
   const vectorizeIndexName = readVectorIndexName(outputs);
   const deploymentEnv = appDeploymentEnv(outputs);
   const requireKey = (obj, key, outputName) => {
@@ -145,43 +142,43 @@ export function buildReplacements(
       "key_value_stores/cloudflare_kv_namespace_ids",
     ),
     [`"${legacy.replace("{name}", "worker-bundles")}"`]: tomlString(
-      requireKey(r2, "worker_bundles", "object_buckets/object_storage_buckets"),
+      requireKey(r2, "worker_bundles", "object_buckets"),
     ),
     [`"${legacy.replace("{name}", "tenant-builds")}"`]: tomlString(
-      requireKey(r2, "tenant_builds", "object_buckets/object_storage_buckets"),
+      requireKey(r2, "tenant_builds", "object_buckets"),
     ),
     [`"${legacy.replace("{name}", "tenant-source")}"`]: tomlString(
-      requireKey(r2, "tenant_source", "object_buckets/object_storage_buckets"),
+      requireKey(r2, "tenant_source", "object_buckets"),
     ),
     [`"${legacy.replace("{name}", "git-objects")}"`]: tomlString(
-      requireKey(r2, "git_objects", "object_buckets/object_storage_buckets"),
+      requireKey(r2, "git_objects", "object_buckets"),
     ),
     [`"${legacy.replace("{name}", "offload")}"`]: tomlString(
-      requireKey(r2, "offload", "object_buckets/object_storage_buckets"),
+      requireKey(r2, "offload", "object_buckets"),
     ),
     [`"${legacy.replace("{name}", "runs")}"`]: tomlString(
-      requireKey(queues, "runs", "queues/queue_bindings"),
+      requireKey(queues, "runs", "queues"),
     ),
     [`"${legacy.replace("{name}", "runs-dlq")}"`]: tomlString(
-      requireKey(queues, "runs_dlq", "queues/queue_bindings"),
+      requireKey(queues, "runs_dlq", "queues"),
     ),
     [`"${legacy.replace("{name}", "index-jobs")}"`]: tomlString(
-      requireKey(queues, "index_jobs", "queues/queue_bindings"),
+      requireKey(queues, "index_jobs", "queues"),
     ),
     [`"${legacy.replace("{name}", "index-jobs-dlq")}"`]: tomlString(
-      requireKey(queues, "index_jobs_dlq", "queues/queue_bindings"),
+      requireKey(queues, "index_jobs_dlq", "queues"),
     ),
     [`"${legacy.replace("{name}", "workflow-jobs")}"`]: tomlString(
-      requireKey(queues, "workflow", "queues/queue_bindings"),
+      requireKey(queues, "workflow", "queues"),
     ),
     [`"${legacy.replace("{name}", "workflow-jobs-dlq")}"`]: tomlString(
-      requireKey(queues, "workflow_dlq", "queues/queue_bindings"),
+      requireKey(queues, "workflow_dlq", "queues"),
     ),
     [`"${legacy.replace("{name}", "deployment-jobs")}"`]: tomlString(
-      requireKey(queues, "deployment", "queues/queue_bindings"),
+      requireKey(queues, "deployment", "queues"),
     ),
     [`"${legacy.replace("{name}", "deployment-jobs-dlq")}"`]: tomlString(
-      requireKey(queues, "deployment_dlq", "queues/queue_bindings"),
+      requireKey(queues, "deployment_dlq", "queues"),
     ),
     [`"${legacy.replace("{name}", "embeddings")}"`]:
       tomlString(vectorizeIndexName),

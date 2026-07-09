@@ -1,8 +1,5 @@
 import type { AppPublication } from "../source/app-manifest-types.ts";
-import {
-  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS,
-  TAKOS_RUNTIME_PROJECTION_PUBLICATIONS,
-} from "../source/app-interface-contract.ts";
+import { TAKOS_RUNTIME_PROJECTION_PUBLICATIONS } from "../source/app-interface-contract.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import {
   publicationOutputContract,
@@ -29,8 +26,6 @@ type RuntimeProjectionExportBaseUrlEnv = Partial<
 const RUNTIME_PROJECTION_PUBLISHER = "runtime-projection";
 export const TAKOS_WORKSPACE_STORAGE_PUBLICATION =
   TAKOS_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage;
-export const LEGACY_WORKSPACE_STORAGE_PUBLICATION =
-  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage;
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
@@ -130,20 +125,7 @@ function runtimeProjectionExportByName(
     runtimeProjectionExportsForSpace(spaceId).find(
       (service) => service.publication.name === name,
     ) ?? null;
-  if (service) return service;
-  if (name !== LEGACY_WORKSPACE_STORAGE_PUBLICATION) return null;
-  const canonical = runtimeProjectionExportsForSpace(spaceId).find(
-    (service) =>
-      service.publication.name === TAKOS_WORKSPACE_STORAGE_PUBLICATION,
-  );
-  if (!canonical) return null;
-  return {
-    ...canonical,
-    publication: {
-      ...canonical.publication,
-      name: LEGACY_WORKSPACE_STORAGE_PUBLICATION,
-    },
-  };
+  return service;
 }
 
 export function isRuntimeProjectionPublicationName(name: string): boolean {

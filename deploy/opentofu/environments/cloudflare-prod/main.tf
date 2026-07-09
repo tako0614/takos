@@ -133,9 +133,9 @@ variable "release_container_images" {
   validation {
     condition = alltrue([
       for image in values(var.release_container_images) :
-      can(regex("^(registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+|docker\\.io/[A-Za-z0-9._/-]+|[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+|[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+)(@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})$", image))
+      can(regex("^(registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+|docker\\.io/[A-Za-z0-9._/-]+|[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+|[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+)@sha256:[0-9a-f]{64}$", image))
     ])
-    error_message = "release_container_images values must use Cloudflare Containers-supported registry refs."
+    error_message = "release_container_images values must use digest-pinned Cloudflare Containers-supported registry refs."
   }
 }
 
@@ -156,7 +156,12 @@ variable "takosumi_source_repo_url" {
 
 variable "takosumi_source_ref" {
   type    = string
-  default = "main"
+  default = ""
+
+  validation {
+    condition     = trimspace(var.takosumi_source_ref) != ""
+    error_message = "takosumi_source_ref is required. Pass a release tag or commit instead of relying on a mutable default."
+  }
 }
 
 output "target" {
@@ -212,16 +217,8 @@ output "key_value_stores" {
   value = module.takos.key_value_stores
 }
 
-output "object_storage_buckets" {
-  value = module.takos.r2_bucket_names
-}
-
 output "object_buckets" {
   value = module.takos.object_buckets
-}
-
-output "queue_bindings" {
-  value = module.takos.queue_names
 }
 
 output "queues" {

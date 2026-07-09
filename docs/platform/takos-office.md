@@ -18,7 +18,7 @@ is delivered by the workload runtime through `TAKOS_STORAGE_ACCESS_TOKEN` or the
 - `/sheet` for `.takossheet`
 - `/mcp` for the unified Office MCP server
 
-The historical storage folders `/takos-docs/`, `/takos-slide/`, and `/takos-excel/` remain data compatibility paths.
+Office stores document, slide, and sheet data through the same Workspace file storage publication.
 They are not separate current apps.
 
 ## References

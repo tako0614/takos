@@ -223,25 +223,30 @@ test("publication prerequisites allow workspace storage runtime projection consu
   );
 });
 
-test("publication prerequisites allow legacy takos.storage.workspace runtime projection consumes", async () => {
-  await assertRuntimeProjectionPublicationPrerequisites(
-    makePublicationEnv(null),
-    {
-      spaceId: "space_1",
-      manifest: {
-        compute: {
-          web: {
-            kind: "worker",
-            consume: [
-              {
-                publication: "takos.storage.workspace",
-                inject: { defaults: true },
+test("publication prerequisites reject retired Takos storage runtime projection consumes", async () => {
+  await assertRejects(
+    () =>
+      assertRuntimeProjectionPublicationPrerequisites(
+        makePublicationEnv(null),
+        {
+          spaceId: "space_1",
+          manifest: {
+            compute: {
+              web: {
+                kind: "worker",
+                consume: [
+                  {
+                    publication: "takos.storage.workspace",
+                    inject: { defaults: true },
+                  },
+                ],
               },
-            ],
+            },
           },
         },
-      },
-    },
+    ),
+    Error,
+    "Reserved Takos publication names are not a credential channel",
   );
 });
 

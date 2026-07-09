@@ -3,7 +3,6 @@ import type {
   AppPublicationOutput,
 } from "../app-manifest-types.ts";
 import {
-  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS,
   TAKOS_APP_AUTH_KINDS,
   TAKOS_APP_PUBLICATION_TYPES,
   TAKOS_RUNTIME_PROJECTION_PUBLICATIONS,
@@ -31,7 +30,6 @@ const FILE_HANDLER_PUBLICATION_TYPE =
 
 const RUNTIME_OWNED_PUBLICATION_NAMES = new Set<string>([
   TAKOS_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage,
-  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage,
 ]);
 
 const FILE_HANDLER_SPEC_FIELDS = new Set(["mimeTypes", "extensions"]);

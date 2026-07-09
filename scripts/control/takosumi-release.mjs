@@ -202,38 +202,11 @@ function optionalObjectOutput(outputs, name) {
   return value;
 }
 
-function optionalObjectOutputAny(outputs, names) {
-  for (const name of names) {
-    const value = optionalObjectOutput(outputs, name);
-    if (value) return value;
-  }
-  return undefined;
-}
-
-function requireObjectOutputAny(outputs, names) {
-  const value = optionalObjectOutputAny(outputs, names);
-  if (value) return value;
-  throw new Error(
-    `TAKOSUMI_OUTPUTS_JSON must include object output "${names.join('" or "')}"`,
-  );
-}
-
 function requireNestedStringOutput(outputs, name, key) {
   const value = requireObjectOutput(outputs, name)[key];
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(
       `TAKOSUMI_OUTPUTS_JSON must include string output "${name}.${key}"`,
-    );
-  }
-  return value;
-}
-
-function requireNestedStringOutputAny(outputs, names, key) {
-  const output = requireObjectOutputAny(outputs, names);
-  const value = output[key];
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(
-      `TAKOSUMI_OUTPUTS_JSON must include string output "${names.join('" or "')}.${key}"`,
     );
   }
   return value;
@@ -629,20 +602,18 @@ export function isSupportedCloudflareContainerImageRef(image) {
     return false;
   }
   const digest = "@sha256:[0-9a-f]{64}";
-  const tag = ":[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}";
-  const suffix = `(?:${digest}|${tag})`;
   const patterns = [
     new RegExp(
-      `^registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+${suffix}$`,
+      `^registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+${digest}$`,
       "u",
     ),
-    new RegExp(`^docker\\.io/[A-Za-z0-9._/-]+${suffix}$`, "u"),
+    new RegExp(`^docker\\.io/[A-Za-z0-9._/-]+${digest}$`, "u"),
     new RegExp(
-      `^[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+${suffix}$`,
+      `^[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+${digest}$`,
       "u",
     ),
     new RegExp(
-      `^[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+${suffix}$`,
+      `^[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+${digest}$`,
       "u",
     ),
   ];
@@ -695,16 +666,15 @@ function wranglerReleaseArtifactArgs(
 export function buildTakosumiDestroyCommands(outputs) {
   const workerName = requireStringOutput(outputs, "service_runtime_name");
   const vectorizeIndexName = requireVectorIndexName(outputs);
-  const queueOutputNames = ["queues", "queue_bindings"];
   const queues = [
-    requireNestedStringOutputAny(outputs, queueOutputNames, "runs"),
-    requireNestedStringOutputAny(outputs, queueOutputNames, "runs_dlq"),
-    requireNestedStringOutputAny(outputs, queueOutputNames, "index_jobs"),
-    requireNestedStringOutputAny(outputs, queueOutputNames, "index_jobs_dlq"),
-    requireNestedStringOutputAny(outputs, queueOutputNames, "workflow"),
-    requireNestedStringOutputAny(outputs, queueOutputNames, "workflow_dlq"),
-    requireNestedStringOutputAny(outputs, queueOutputNames, "deployment"),
-    requireNestedStringOutputAny(outputs, queueOutputNames, "deployment_dlq"),
+    requireNestedStringOutput(outputs, "queues", "runs"),
+    requireNestedStringOutput(outputs, "queues", "runs_dlq"),
+    requireNestedStringOutput(outputs, "queues", "index_jobs"),
+    requireNestedStringOutput(outputs, "queues", "index_jobs_dlq"),
+    requireNestedStringOutput(outputs, "queues", "workflow"),
+    requireNestedStringOutput(outputs, "queues", "workflow_dlq"),
+    requireNestedStringOutput(outputs, "queues", "deployment"),
+    requireNestedStringOutput(outputs, "queues", "deployment_dlq"),
   ];
   return [
     ...queues.map((queueName) =>
@@ -1540,10 +1510,7 @@ function wranglerDeployAuthChecks(accountId, workerName) {
 
 function wranglerDeployOutputAuthChecks(accountId, outputs) {
   const encodedAccountId = encodeURIComponent(accountId);
-  const bucketMap = optionalObjectOutputAny(outputs, [
-    "object_buckets",
-    "object_storage_buckets",
-  ]);
+  const bucketMap = optionalObjectOutput(outputs, "object_buckets");
   const seenBuckets = new Set();
   const checks = [];
   for (const [key, value] of Object.entries(bucketMap ?? {})) {

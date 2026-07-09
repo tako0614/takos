@@ -84,7 +84,7 @@ if (configOption.rest.length > 0) usage();
 
 const outputs = readReleaseOutputs();
 const workerName = requireStringOutput(outputs, "service_runtime_name");
-const queues = requireObjectOutputAny(outputs, ["queues", "queue_bindings"]);
+const queues = requireObjectOutput(outputs, "queues");
 const wranglerGlobalArgs = [
   ...(configOption.value ? ["--config", configOption.value] : []),
   ...(environment === "production" ? [] : ["--env", environment]),
@@ -94,7 +94,7 @@ for (const consumer of QUEUE_CONSUMERS) {
   const queueName = requireStringProperty(
     queues,
     consumer.queueKey,
-    "queues/queue_bindings",
+    "queues",
   );
   if (
     await queueAlreadyHasConsumer(queueName, workerName, wranglerGlobalArgs)
@@ -126,7 +126,7 @@ for (const consumer of QUEUE_CONSUMERS) {
       requireStringProperty(
         queues,
         consumer.deadLetterQueueKey,
-        "queues/queue_bindings",
+        "queues",
       ),
     );
   }
@@ -242,14 +242,12 @@ function consumerMatchesWorker(consumer, workerName) {
   ].some((value) => value === workerName);
 }
 
-function requireObjectOutputAny(outputs, keys) {
-  for (const key of keys) {
-    const value = outputValue(outputs[key]);
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      return value;
-    }
+function requireObjectOutput(outputs, key) {
+  const value = outputValue(outputs[key]);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
   }
-  throw new Error(`tofu output "${keys.join('" or "')}" must be an object`);
+  throw new Error(`tofu output "${key}" must be an object`);
 }
 
 function requireStringOutput(outputs, key) {

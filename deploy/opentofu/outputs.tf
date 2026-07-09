@@ -3,11 +3,6 @@ output "target" {
   value       = var.target
 }
 
-output "database_endpoint" {
-  description = "Non-secret D1 database id for the selected target."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_id : null
-}
-
 # Cloudflare-specific binding map (Output consumed by the Worker-script layer).
 
 output "cloudflare_account_id" {
@@ -95,19 +90,9 @@ output "vector_indexes" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].vector_indexes : null
 }
 
-output "object_storage_buckets" {
-  description = "Compatibility alias for object_buckets."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].r2_bucket_names : null
-}
-
 output "object_buckets" {
   description = "Provider-neutral object bucket names keyed by logical binding."
   value       = var.target == "cloudflare" ? module.cloudflare[0].object_buckets : null
-}
-
-output "queue_bindings" {
-  description = "Compatibility alias for queues."
-  value       = var.target == "cloudflare" ? module.cloudflare[0].queue_names : null
 }
 
 output "queues" {

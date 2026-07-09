@@ -21,10 +21,6 @@ export const TAKOS_RUNTIME_PROJECTION_PUBLICATIONS = {
   workspaceStorage: "storage.filesystem",
 } as const;
 
-export const LEGACY_RUNTIME_PROJECTION_PUBLICATIONS = {
-  workspaceStorage: "takos.storage.workspace",
-} as const;
-
 export const RUNTIME_PROJECTION_CAPABILITIES = {
   mcpServer: "protocol.mcp.server",
   httpApi: "protocol.http.api",

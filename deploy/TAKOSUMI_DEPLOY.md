@@ -66,14 +66,14 @@ the variable into the release command and records the Run evidence.
 
 ```hcl
 release_container_images = {
-  runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime:<git-ci-tag>"
-  executor = "registry.cloudflare.com/<account-id>/takos-agent-executor:<git-ci-tag>"
+  runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime@sha256:<digest>"
+  executor = "registry.cloudflare.com/<account-id>/takos-agent-executor@sha256:<digest>"
 }
 ```
 
-Use digest refs when the CI pipeline can resolve them. Otherwise use a unique
-version + commit tag from the Git CI run and keep the release manifest as the
-evidence binding that tag to the source commit and image digest.
+Use digest refs from the CI pipeline. Tags are useful as human-facing release
+labels, but the OpenTofu variable should carry the immutable digest ref so the
+reviewed Run and the deployed container image stay bound to the same artifact.
 
 When `release_container_images` is set, the release activator rewrites the
 generated Wrangler config to use those image refs and skips the local
@@ -188,9 +188,8 @@ queues
 vector_indexes
 ```
 
-Provider-specific outputs such as `cloudflare_d1_database_ids` and legacy
-aliases such as `object_storage_buckets` / `queue_bindings` are compatibility
-outputs for older release helpers. New consumers should read the generic names.
+Provider-specific outputs such as `cloudflare_d1_database_ids` may exist for
+Cloudflare-native helper steps, but release helpers read the generic names above.
 Durable Object migrations and container artifact publication remain in the
 Wrangler artifact step.
 
