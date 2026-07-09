@@ -41,7 +41,7 @@ const ASSET_UPLOAD_AUTHORIZATION_HEADER =
   "x-takosumi-cloudflare-assets-authorization";
 
 const require = createRequire(import.meta.url);
-const blake3 = require("blake3-wasm");
+let blake3Module;
 
 function usage() {
   console.error(`
@@ -2416,10 +2416,15 @@ function walkFiles(directory) {
 function managedCompatAssetHash(filePath) {
   const base64Contents = readFileSync(filePath).toString("base64");
   const extension = extname(filePath).slice(1);
-  return blake3
+  return loadBlake3()
     .hash(base64Contents + extension)
     .toString("hex")
     .slice(0, 32);
+}
+
+function loadBlake3() {
+  blake3Module ??= require("blake3-wasm");
+  return blake3Module;
 }
 
 function managedCompatAssetsConfig(assetsConfig) {
