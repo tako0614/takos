@@ -963,6 +963,12 @@ test("preflightWranglerDeployAuth checks individual R2 bucket access used by wra
 });
 
 test("releaseChildEnv strips Takosumi Cloud compat API base from native release helpers", () => {
+  const containerImages = JSON.stringify({
+    runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
+    executor:
+      "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
+  });
+
   assert.deepEqual(
     releaseChildEnv(
       { cloudflare_account_id: "ts_acc_takosumi_cloud" },
@@ -970,21 +976,23 @@ test("releaseChildEnv strips Takosumi Cloud compat API base from native release 
         PATH: "/bin",
         CLOUDFLARE_API_TOKEN: "token",
         TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
+        TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       },
     ),
     {
       PATH: "/bin",
       CLOUDFLARE_API_TOKEN: "token",
+      TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
-      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      CLOUDFLARE_ACCOUNT_ID: "backend_acc",
+      CF_ACCOUNT_ID: "backend_acc",
     },
   );
 });
 
-test("releaseChildEnv keeps the OpenTofu output account for native Cloudflare releases", () => {
+test("releaseChildEnv derives native account from prebuilt images for compat-backed releases", () => {
   const containerImages = JSON.stringify({
     runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
     executor: "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
@@ -998,7 +1006,7 @@ test("releaseChildEnv keeps the OpenTofu output account for native Cloudflare re
         TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       },
     ),
-    "ts_acc_takosumi_cloud",
+    "backend_acc",
   );
   assert.deepEqual(
     releaseChildEnv(
@@ -1017,9 +1025,25 @@ test("releaseChildEnv keeps the OpenTofu output account for native Cloudflare re
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
-      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
-      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      CLOUDFLARE_ACCOUNT_ID: "backend_acc",
+      CF_ACCOUNT_ID: "backend_acc",
     },
+  );
+});
+
+test("releaseChildEnv requires a real account for virtual Cloudflare outputs", () => {
+  assert.throws(
+    () =>
+      releaseChildEnv(
+        { cloudflare_account_id: "ts_acc_takosumi_cloud" },
+        {
+          PATH: "/bin",
+          CLOUDFLARE_API_TOKEN: "token",
+          TAKOS_CLOUDFLARE_API_BASE_URL:
+            "https://compat.example.test/client/v4",
+        },
+      ),
+    /requires a real Cloudflare account id/,
   );
 });
 

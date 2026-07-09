@@ -477,17 +477,54 @@ export function normalizeReleaseContainerImages(value) {
   return resolved;
 }
 
+function isTakosumiVirtualCloudflareAccountId(value) {
+  return typeof value === "string" && /^ts_acc_/u.test(value.trim());
+}
+
+function cloudflareRegistryAccountId(image) {
+  if (typeof image !== "string") return undefined;
+  const match = /^registry\.cloudflare\.com\/([^/]+)\//u.exec(image.trim());
+  return match?.[1];
+}
+
+function releaseContainerImagesAccountId(env = process.env) {
+  const images = normalizeReleaseContainerImages(
+    env.TAKOS_RELEASE_CONTAINER_IMAGES_JSON,
+  );
+  const accountIds = new Set(
+    Object.values(images)
+      .map((image) => cloudflareRegistryAccountId(image))
+      .filter((value) => typeof value === "string" && value.length > 0),
+  );
+  if (accountIds.size === 0) return undefined;
+  if (accountIds.size > 1) {
+    throw new Error(
+      "TAKOS_RELEASE_CONTAINER_IMAGES_JSON must use one Cloudflare registry account when deriving Wrangler account id.",
+    );
+  }
+  return [...accountIds][0];
+}
+
 export function releaseWranglerAccountId(outputs, env = process.env) {
+  const explicit =
+    stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID) ??
+    stringValue(env.TAKOS_CLOUDFLARE_REAL_ACCOUNT_ID) ??
+    stringValue(env.TAKOSUMI_CLOUDFLARE_ACCOUNT_ID);
+  if (explicit) return explicit;
+
   let outputAccountId;
   try {
     outputAccountId = requireStringOutput(outputs, "cloudflare_account_id");
   } catch {
     outputAccountId = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID;
   }
-  const explicit =
-    stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID) ??
-    stringValue(env.TAKOS_CLOUDFLARE_REAL_ACCOUNT_ID);
-  if (explicit) return explicit;
+  if (isTakosumiVirtualCloudflareAccountId(outputAccountId)) {
+    const imageAccountId = releaseContainerImagesAccountId(env);
+    if (imageAccountId) return imageAccountId;
+    throw new Error(
+      "Takos release requires a real Cloudflare account id for native Wrangler operations when cloudflare_account_id is a Takosumi virtual account. Set TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID or TAKOSUMI_CLOUDFLARE_ACCOUNT_ID, or pass registry.cloudflare.com release_container_images from Git CI.",
+    );
+  }
   return outputAccountId;
 }
 
