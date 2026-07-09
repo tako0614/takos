@@ -300,12 +300,16 @@ export function buildTakosumiReleaseCommands(
     containersRollout,
     containerImages,
     requirePrebuiltContainerImages = false,
+    wranglerAccountId,
   } = {},
 ) {
   if (!ENVIRONMENTS.includes(environment)) {
     throw new Error(`Unknown environment "${environment}"`);
   }
-  const accountId = requireStringOutput(outputs, "cloudflare_account_id");
+  const accountId =
+    typeof wranglerAccountId === "string" && wranglerAccountId.trim() !== ""
+      ? wranglerAccountId.trim()
+      : requireStringOutput(outputs, "cloudflare_account_id");
   const vectorizeIndexName = requireStringOutput(
     outputs,
     "cloudflare_vectorize_index_name",
@@ -1102,6 +1106,7 @@ export function releaseChildEnv(outputs, env = process.env) {
       : {}),
     ...(wranglerAccountId
       ? {
+          TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: wranglerAccountId,
           CLOUDFLARE_ACCOUNT_ID: wranglerAccountId,
           CF_ACCOUNT_ID: wranglerAccountId,
         }
@@ -1497,7 +1502,7 @@ export async function ensureWorkersDevSubdomain(
     return { skipped: true, reason: "no_workers_dev_launch_url" };
   }
   const workerName = requireStringOutput(outputs, "service_runtime_name");
-  const accountId = requireStringOutput(outputs, "cloudflare_account_id");
+  const accountId = releaseWranglerAccountId(outputs, env);
   const apiToken = env.CF_API_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
   if (typeof apiToken !== "string" || apiToken.trim() === "") {
     console.warn(
@@ -1623,7 +1628,7 @@ async function verifyCloudflareWorkerContent(
   fetchImpl = globalThis.fetch,
 ) {
   const workerName = requireStringOutput(outputs, "service_runtime_name");
-  const accountId = requireStringOutput(outputs, "cloudflare_account_id");
+  const accountId = releaseWranglerAccountId(outputs, env);
   const workerEnvironment = releaseWorkerEnvironment(environment);
   const apiToken = releaseApiToken(env);
   if (!apiToken) {
@@ -1862,6 +1867,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const releaseStartedAt = Date.now();
   let releaseStatus = "succeeded";
   const outputs = readReleaseOutputs(env);
+  const childEnv = releaseChildEnv(outputs, env);
   const takosumiRepoDir =
     env.TAKOS_RELEASE_TAKOSUMI_REPO_DIR ??
     env.TAKOSUMI_REPO_DIR ??
@@ -1893,9 +1899,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           requirePrebuiltContainerImages:
             env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "1" ||
             env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "true",
+          wranglerAccountId:
+            childEnv.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID ??
+            childEnv.CLOUDFLARE_ACCOUNT_ID,
         });
       })();
-  const childEnv = releaseChildEnv(outputs, env);
   try {
     const releaseEnv = childEnv;
     {

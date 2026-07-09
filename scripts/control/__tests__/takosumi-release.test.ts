@@ -715,6 +715,7 @@ test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CLOUDFLARE_API_TOKEN: "token_from_cf_alias",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "acc_from_outputs",
       CLOUDFLARE_ACCOUNT_ID: "acc_from_outputs",
     },
   );
@@ -986,6 +987,7 @@ test("releaseChildEnv strips Takosumi Cloud compat API base from native release 
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
       CLOUDFLARE_ACCOUNT_ID: "backend_acc",
       CF_ACCOUNT_ID: "backend_acc",
     },
@@ -1025,9 +1027,28 @@ test("releaseChildEnv derives native account from prebuilt images for compat-bac
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
       CF_API_TOKEN: "token",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
       CLOUDFLARE_ACCOUNT_ID: "backend_acc",
       CF_ACCOUNT_ID: "backend_acc",
     },
+  );
+});
+
+test("buildTakosumiReleaseCommands uses the native Wrangler account for Vectorize", () => {
+  const commands = buildTakosumiReleaseCommands(
+    {
+      ...rawOutputs,
+      cloudflare_account_id: "ts_acc_takosumi_cloud",
+    },
+    "production",
+    {
+      wranglerAccountId: "backend_acc",
+    },
+  );
+
+  assert.equal(
+    commands[1],
+    "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'backend_acc'",
   );
 });
 
@@ -1140,6 +1161,7 @@ test("ensureWorkersDevSubdomain ignores Cloudflare-compatible API base overrides
     {
       CLOUDFLARE_API_TOKEN: "token_123",
       TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
     },
     async (url, init) => {
       requests.push({ url, init });
@@ -1160,7 +1182,7 @@ test("ensureWorkersDevSubdomain ignores Cloudflare-compatible API base overrides
   assert.equal(requests.length, 1);
   assert.equal(
     requests[0].url,
-    "https://api.cloudflare.com/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/subdomain",
+    "https://api.cloudflare.com/client/v4/accounts/backend_acc/workers/scripts/takos-test/subdomain",
   );
 });
 
@@ -1541,6 +1563,7 @@ test("verifyReleaseDeployment ignores Cloudflare-compatible API base overrides",
     {
       CLOUDFLARE_API_TOKEN: "token_123",
       TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
       TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
     },
     async (url, init) => {
@@ -1559,7 +1582,7 @@ test("verifyReleaseDeployment ignores Cloudflare-compatible API base overrides",
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://api.cloudflare.com/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content",
+      "https://api.cloudflare.com/client/v4/accounts/backend_acc/workers/scripts/takos-test/content",
       "https://takos-test.app.takos.jp/health",
     ],
   );
