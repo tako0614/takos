@@ -81,6 +81,7 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@solid-primitives/storage": "^4.3.4",
     "@solidjs/router": "^0.16.1",
+    "blake3-wasm": "^2.1.5",
     "drizzle-orm": "^0.45.1",
     "fflate": "^0.8.2",
     "google-auth-library": "^10.6.2",

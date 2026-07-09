@@ -5,12 +5,16 @@ import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
+  rmSync,
   readFileSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 
 import { parseTakosumiOutputsJson } from "./render-wrangler-from-tofu.mjs";
@@ -33,6 +37,11 @@ const BUN_INSTALL_RETRY_INTERVAL_MS = 2000;
 const CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4";
 const GENERATED_PUBLIC_ROUTE_BEGIN = "# BEGIN TAKOSUMI GENERATED PUBLIC ROUTE";
 const GENERATED_PUBLIC_ROUTE_END = "# END TAKOSUMI GENERATED PUBLIC ROUTE";
+const ASSET_UPLOAD_AUTHORIZATION_HEADER =
+  "x-takosumi-cloudflare-assets-authorization";
+
+const require = createRequire(import.meta.url);
+const blake3 = require("blake3-wasm");
 
 function usage() {
   console.error(`
@@ -291,6 +300,10 @@ export function releaseD1MigrationsWranglerConfigPath(environment) {
   return `deploy/cloudflare/.takos-release-wrangler.${environment}.d1-migrations.toml`;
 }
 
+export function releaseWranglerBundleDir(environment) {
+  return `deploy/cloudflare/.takos-release-bundle.${environment}`;
+}
+
 export function buildTakosumiReleaseCommands(
   outputs,
   environment,
@@ -412,7 +425,7 @@ export function buildTakosumiReleaseCommands(
     commandLine(ensureSecretsArgs),
     commandLine([
       "bunx",
-      ...wranglerDeployArgs(outputs, environment, {
+      ...wranglerReleaseArtifactArgs(outputs, environment, {
         containersRollout,
       }),
     ]),
@@ -607,6 +620,25 @@ function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
     ...wranglerDeployEnvironmentArgs(environment),
     ...(containersRollout ? ["--containers-rollout", containersRollout] : []),
   ];
+}
+
+function wranglerBundleArgs(outputs, environment, { containersRollout } = {}) {
+  return [
+    ...wranglerDeployArgs(outputs, environment, { containersRollout }),
+    "--dry-run",
+    "--outdir",
+    releaseWranglerBundleDir(environment),
+  ];
+}
+
+function wranglerReleaseArtifactArgs(
+  outputs,
+  environment,
+  { containersRollout } = {},
+) {
+  return isTakosumiManagedCloudflareTarget(outputs)
+    ? wranglerBundleArgs(outputs, environment, { containersRollout })
+    : wranglerDeployArgs(outputs, environment, { containersRollout });
 }
 
 export function buildTakosumiDestroyCommands(outputs) {
@@ -1947,6 +1979,511 @@ export async function verifyReleaseDeployment(
   return { artifact, health };
 }
 
+export async function deployManagedCompatWorker(
+  outputs,
+  environment,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
+  const accountId = releaseCloudflareApiAccountId(outputs, env);
+  const apiToken = releaseApiToken(env) ?? wranglerDeployToken(env);
+  if (!apiToken) {
+    throw new Error(
+      "Takosumi managed Worker upload requires CLOUDFLARE_API_TOKEN or CF_API_TOKEN for the compatibility API.",
+    );
+  }
+
+  const apiBase = releaseCloudflareApiBaseUrl(outputs, env);
+  const configPath = releaseWranglerConfigPath(environment);
+  const bundlePath = join(releaseWranglerBundleDir(environment), "index.js");
+  if (!existsSync(bundlePath)) {
+    throw new Error(
+      `Wrangler dry-run bundle was not found at ${bundlePath}; run the managed compat bundle step before upload.`,
+    );
+  }
+
+  const targetConfig = readReleaseWranglerTargetConfig(environment);
+  const assets = await uploadManagedCompatAssets({
+    accountId,
+    workerName,
+    apiBase,
+    apiToken,
+    configPath,
+    targetConfig,
+    fetchImpl,
+  });
+  const metadata = managedCompatWorkerUploadMetadata(targetConfig, {
+    mainModule: "index.js",
+    assets,
+  });
+  const form = new FormData();
+  form.set(
+    "metadata",
+    new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+  );
+  form.set(
+    "index.js",
+    new Blob([readFileSync(bundlePath)], {
+      type: "application/javascript+module",
+    }),
+    "index.js",
+  );
+  const response = await fetchImpl(
+    `${apiBase}/accounts/${encodeURIComponent(
+      accountId,
+    )}/workers/scripts/${encodeURIComponent(workerName)}`,
+    {
+      method: "PUT",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+      },
+      body: form,
+    },
+  );
+  const payload = await cloudflareApiPayload(response);
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      `Takosumi managed Worker upload failed for ${workerName}: HTTP ${response.status} ${JSON.stringify(
+        payload?.errors ?? payload,
+      )}`,
+    );
+  }
+  console.log(
+    `Uploaded Takos Worker ${workerName} through Takosumi Cloud compatibility API.`,
+  );
+  return {
+    workerName,
+    status: response.status,
+    result: payload?.result,
+    assets:
+      assets?.jwt && assets.manifestEntryCount > 0
+        ? {
+            uploaded: assets.uploadedCount,
+            manifestEntries: assets.manifestEntryCount,
+          }
+        : undefined,
+  };
+}
+
+function readReleaseWranglerTargetConfig(environment) {
+  const parsed = Bun.TOML.parse(
+    readFileSync(releaseWranglerConfigPath(environment), "utf8"),
+  );
+  return wranglerTargetConfig(parsed, environment);
+}
+
+function wranglerTargetConfig(parsed, environment) {
+  if (environment === "production") return parsed;
+  const envConfig = parsed?.env?.[environment];
+  if (!envConfig || typeof envConfig !== "object" || Array.isArray(envConfig)) {
+    throw new Error(`wrangler config is missing [env.${environment}]`);
+  }
+  return {
+    ...parsed,
+    ...envConfig,
+    vars: {
+      ...(isPlainObject(parsed.vars) ? parsed.vars : {}),
+      ...(isPlainObject(envConfig.vars) ? envConfig.vars : {}),
+    },
+    durable_objects: {
+      ...(isPlainObject(parsed.durable_objects) ? parsed.durable_objects : {}),
+      ...(isPlainObject(envConfig.durable_objects)
+        ? envConfig.durable_objects
+        : {}),
+      bindings:
+        envConfig.durable_objects?.bindings ??
+        parsed.durable_objects?.bindings ??
+        [],
+    },
+    queues: {
+      ...(isPlainObject(parsed.queues) ? parsed.queues : {}),
+      ...(isPlainObject(envConfig.queues) ? envConfig.queues : {}),
+      producers: envConfig.queues?.producers ?? parsed.queues?.producers ?? [],
+      consumers: envConfig.queues?.consumers ?? parsed.queues?.consumers ?? [],
+    },
+    migrations: envConfig.migrations ?? parsed.migrations ?? [],
+    assets: envConfig.assets ?? parsed.assets,
+    observability: envConfig.observability ?? parsed.observability,
+  };
+}
+
+function managedCompatWorkerUploadMetadata(
+  targetConfig,
+  { mainModule, assets },
+) {
+  return dropUndefined({
+    main_module: mainModule,
+    bindings: wranglerMetadataBindings(targetConfig),
+    containers: Array.isArray(targetConfig.containers)
+      ? targetConfig.containers.map((container) => ({
+          class_name: container.class_name,
+        }))
+      : undefined,
+    compatibility_date: targetConfig.compatibility_date,
+    compatibility_flags: targetConfig.compatibility_flags,
+    migrations: wranglerMigrationsMetadata(targetConfig.migrations),
+    assets: assets?.jwt
+      ? {
+          jwt: assets.jwt,
+          config: managedCompatAssetsConfig(targetConfig.assets),
+        }
+      : undefined,
+    observability: targetConfig.observability,
+    placement: targetConfig.placement,
+    limits: targetConfig.limits,
+  });
+}
+
+function wranglerMetadataBindings(targetConfig) {
+  const bindings = [];
+  for (const [name, value] of Object.entries(
+    isPlainObject(targetConfig.vars) ? targetConfig.vars : {},
+  )) {
+    bindings.push(
+      typeof value === "string"
+        ? { name, type: "plain_text", text: value }
+        : { name, type: "json", json: value },
+    );
+  }
+  for (const binding of arrayValue(targetConfig.kv_namespaces)) {
+    bindings.push({
+      name: binding.binding,
+      type: "kv_namespace",
+      namespace_id: binding.id,
+    });
+  }
+  for (const binding of arrayValue(targetConfig.durable_objects?.bindings)) {
+    bindings.push(
+      dropUndefined({
+        name: binding.name,
+        type: "durable_object_namespace",
+        class_name: binding.class_name,
+        script_name: binding.script_name,
+        environment: binding.environment,
+      }),
+    );
+  }
+  for (const binding of arrayValue(targetConfig.queues?.producers)) {
+    bindings.push(
+      dropUndefined({
+        name: binding.binding,
+        type: "queue",
+        queue_name: binding.queue,
+        delivery_delay: binding.delivery_delay,
+      }),
+    );
+  }
+  for (const binding of arrayValue(targetConfig.r2_buckets)) {
+    bindings.push(
+      dropUndefined({
+        name: binding.binding,
+        type: "r2_bucket",
+        bucket_name: binding.bucket_name,
+        jurisdiction: binding.jurisdiction,
+      }),
+    );
+  }
+  for (const binding of arrayValue(targetConfig.d1_databases)) {
+    bindings.push(
+      dropUndefined({
+        name: binding.binding,
+        type: "d1",
+        id: binding.database_id,
+        internalEnv: binding.database_internal_env,
+      }),
+    );
+  }
+  for (const binding of arrayValue(targetConfig.vectorize)) {
+    bindings.push({
+      name: binding.binding,
+      type: "vectorize",
+      index_name: binding.index_name,
+    });
+  }
+  for (const binding of arrayValue(targetConfig.services)) {
+    bindings.push(
+      dropUndefined({
+        name: binding.binding,
+        type: "service",
+        service: binding.service,
+        environment: binding.environment,
+        entrypoint: binding.entrypoint,
+        props: binding.props,
+      }),
+    );
+  }
+  if (targetConfig.ai?.binding) {
+    bindings.push(
+      dropUndefined({
+        name: targetConfig.ai.binding,
+        type: "ai",
+        staging: targetConfig.ai.staging,
+        raw: targetConfig.ai.raw,
+      }),
+    );
+  }
+  if (targetConfig.assets?.binding) {
+    bindings.push({ name: targetConfig.assets.binding, type: "assets" });
+  }
+  return bindings.filter((binding) => binding.name);
+}
+
+function wranglerMigrationsMetadata(migrations) {
+  const entries = arrayValue(migrations);
+  if (entries.length === 0) return undefined;
+  const last = entries.at(-1);
+  if (!last?.tag) return undefined;
+  return {
+    new_tag: last.tag,
+    steps: entries.map(({ tag: _tag, ...step }) => step),
+  };
+}
+
+async function uploadManagedCompatAssets({
+  accountId,
+  workerName,
+  apiBase,
+  apiToken,
+  configPath,
+  targetConfig,
+  fetchImpl,
+}) {
+  const assetsConfig = targetConfig.assets;
+  const directory = stringValue(assetsConfig?.directory);
+  if (!directory) return undefined;
+  const assetDirectory = resolve(dirname(configPath), directory);
+  if (!existsSync(assetDirectory)) return undefined;
+  const manifest = buildManagedCompatAssetManifest(assetDirectory);
+  const sessionResponse = await fetchImpl(
+    `${apiBase}/accounts/${encodeURIComponent(
+      accountId,
+    )}/workers/scripts/${encodeURIComponent(workerName)}/assets-upload-session`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ manifest }),
+    },
+  );
+  const session = cloudflareResult(await cloudflareApiPayload(sessionResponse));
+  if (!sessionResponse.ok || !session?.jwt) {
+    throw new Error(
+      `Takosumi managed assets upload session failed for ${workerName}: HTTP ${sessionResponse.status} ${JSON.stringify(
+        session,
+      )}`,
+    );
+  }
+  const filesToUpload = arrayValue(session.buckets).flat();
+  const manifestByHash = new Map(
+    Object.entries(manifest).map(([path, entry]) => [
+      entry.hash,
+      { path, entry },
+    ]),
+  );
+  let completionJwt = session.jwt;
+  let uploadedCount = 0;
+  if (filesToUpload.length > 0) {
+    if (isSingleAssetUploadMode(session.jwt)) {
+      for (const hash of filesToUpload) {
+        const manifestEntry = manifestByHash.get(hash);
+        if (!manifestEntry) {
+          throw new Error(`Assets upload requested unknown hash ${hash}`);
+        }
+        const filePath = join(assetDirectory, manifestEntry.path.slice(1));
+        const response = await fetchImpl(
+          `${apiBase}/accounts/${encodeURIComponent(
+            accountId,
+          )}/workers/assets/upload/${encodeURIComponent(hash)}`,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${apiToken}`,
+              [ASSET_UPLOAD_AUTHORIZATION_HEADER]: `Bearer ${session.jwt}`,
+              "content-type": contentTypeForPath(filePath),
+            },
+            body: readFileSync(filePath),
+          },
+        );
+        const payload = cloudflareResult(await cloudflareApiPayload(response));
+        if (!response.ok || !payload?.jwt) {
+          throw new Error(
+            `Takosumi managed asset upload failed for ${hash}: HTTP ${response.status} ${JSON.stringify(
+              payload,
+            )}`,
+          );
+        }
+        completionJwt = payload.jwt;
+        uploadedCount += 1;
+      }
+    } else {
+      for (const bucket of arrayValue(session.buckets)) {
+        const form = new FormData();
+        for (const hash of arrayValue(bucket)) {
+          const manifestEntry = manifestByHash.get(hash);
+          if (!manifestEntry) {
+            throw new Error(`Assets upload requested unknown hash ${hash}`);
+          }
+          const filePath = join(assetDirectory, manifestEntry.path.slice(1));
+          form.set(
+            hash,
+            new Blob([readFileSync(filePath).toString("base64")], {
+              type: contentTypeForPath(filePath),
+            }),
+            hash,
+          );
+          uploadedCount += 1;
+        }
+        const response = await fetchImpl(
+          `${apiBase}/accounts/${encodeURIComponent(
+            accountId,
+          )}/workers/assets/upload?base64=true`,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${apiToken}`,
+              [ASSET_UPLOAD_AUTHORIZATION_HEADER]: `Bearer ${session.jwt}`,
+            },
+            body: form,
+          },
+        );
+        const payload = cloudflareResult(await cloudflareApiPayload(response));
+        if (!response.ok || !payload?.jwt) {
+          throw new Error(
+            `Takosumi managed bulk asset upload failed: HTTP ${response.status} ${JSON.stringify(
+              payload,
+            )}`,
+          );
+        }
+        completionJwt = payload.jwt;
+      }
+    }
+  }
+  return {
+    jwt: completionJwt,
+    uploadedCount,
+    manifestEntryCount: Object.keys(manifest).length,
+  };
+}
+
+function buildManagedCompatAssetManifest(assetDirectory) {
+  const manifest = {};
+  for (const filePath of walkFiles(assetDirectory)) {
+    const key = `/${relative(assetDirectory, filePath).split(sep).join("/")}`;
+    const stat = statSync(filePath);
+    manifest[key] = {
+      hash: managedCompatAssetHash(filePath),
+      size: stat.size,
+    };
+  }
+  return manifest;
+}
+
+function walkFiles(directory) {
+  const output = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      output.push(...walkFiles(path));
+    } else if (entry.isFile()) {
+      output.push(path);
+    }
+  }
+  return output.sort();
+}
+
+function managedCompatAssetHash(filePath) {
+  const base64Contents = readFileSync(filePath).toString("base64");
+  const extension = extname(filePath).slice(1);
+  return blake3
+    .hash(base64Contents + extension)
+    .toString("hex")
+    .slice(0, 32);
+}
+
+function managedCompatAssetsConfig(assetsConfig) {
+  if (!assetsConfig) return undefined;
+  return dropUndefined({
+    html_handling: assetsConfig.html_handling,
+    not_found_handling: assetsConfig.not_found_handling,
+    run_worker_first: assetsConfig.run_worker_first,
+    _redirects: assetsConfig._redirects,
+    _headers: assetsConfig._headers,
+  });
+}
+
+async function cloudflareApiPayload(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { success: false, errors: [{ message: text }] };
+  }
+}
+
+function cloudflareResult(payload) {
+  return payload?.result ?? payload;
+}
+
+function arrayValue(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function dropUndefined(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  );
+}
+
+function isSingleAssetUploadMode(jwt) {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(String(jwt).split(".")[1] ?? "", "base64").toString("utf8"),
+    );
+    return payload?.wrangler_single_asset_uploads === true;
+  } catch {
+    return false;
+  }
+}
+
+function contentTypeForPath(filePath) {
+  const extension = extname(filePath).toLowerCase();
+  switch (extension) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+    case ".mjs":
+      return "application/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".json":
+    case ".map":
+      return "application/json";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".webp":
+      return "image/webp";
+    case ".ico":
+      return "image/x-icon";
+    case ".txt":
+      return "text/plain; charset=utf-8";
+    default:
+      return "application/null";
+  }
+}
+
 function cleanupReleaseSecretsFile(environment) {
   const path = resolve(releaseSecretsFilePath(environment));
   if (!existsSync(path)) return;
@@ -1963,6 +2500,12 @@ function cleanupReleaseD1MigrationsWranglerConfig(environment) {
   const path = resolve(releaseD1MigrationsWranglerConfigPath(environment));
   if (!existsSync(path)) return;
   unlinkSync(path);
+}
+
+function cleanupReleaseWranglerBundleDir(environment) {
+  const path = resolve(releaseWranglerBundleDir(environment));
+  if (!existsSync(path)) return;
+  rmSync(path, { recursive: true, force: true });
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
@@ -2040,18 +2583,35 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       }
       if (!destroy) {
         const deployEnv = wranglerDeployEnv(releaseEnv);
+        const managedCompat =
+          releaseEnv.TAKOS_CLOUDFLARE_TARGET_MODE === "managed_compat";
         await timeReleaseStep(timings, "wrangler-deploy-auth-preflight", () =>
           preflightWranglerDeployAuth(outputs, deployEnv),
         );
-        await timeReleaseStep(timings, "wrangler-deploy", () =>
-          runFile(
-            "bunx",
-            wranglerDeployArgs(outputs, environment, {
-              containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
-            }),
-            deployEnv,
-          ),
-        );
+        if (managedCompat) {
+          await timeReleaseStep(timings, "wrangler-bundle", () =>
+            runFile(
+              "bunx",
+              wranglerBundleArgs(outputs, environment, {
+                containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+              }),
+              deployEnv,
+            ),
+          );
+          await timeReleaseStep(timings, "takosumi-managed-worker-upload", () =>
+            deployManagedCompatWorker(outputs, environment, deployEnv),
+          );
+        } else {
+          await timeReleaseStep(timings, "wrangler-deploy", () =>
+            runFile(
+              "bunx",
+              wranglerDeployArgs(outputs, environment, {
+                containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+              }),
+              deployEnv,
+            ),
+          );
+        }
         await timeReleaseStep(timings, "queue-consumers-sync", () =>
           runFile(
             "bun",
@@ -2086,6 +2646,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       cleanupReleaseSecretsFile(environment);
       cleanupReleaseWranglerConfig(environment);
       cleanupReleaseD1MigrationsWranglerConfig(environment);
+      cleanupReleaseWranglerBundleDir(environment);
     }
     emitReleaseTimingSummary(
       releaseTimingSummary({

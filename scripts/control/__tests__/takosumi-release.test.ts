@@ -16,6 +16,7 @@ import process from "node:process";
 import {
   buildTakosumiDestroyCommands,
   buildTakosumiReleaseCommands,
+  deployManagedCompatWorker,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
   isRetryableBunInstallFailure,
@@ -25,6 +26,7 @@ import {
   pruneWranglerMigrationsForExistingWorker,
   releaseD1MigrationsWranglerConfigPath,
   releaseChildEnv,
+  releaseWranglerBundleDir,
   releaseWranglerAccountId,
   releaseCommandStepName,
   readReleaseOutputs,
@@ -1083,6 +1085,24 @@ test("buildTakosumiReleaseCommands uses the native Wrangler account for Vectoriz
   );
 });
 
+test("buildTakosumiReleaseCommands bundles instead of uploading through Wrangler for managed targets", () => {
+  const commands = buildTakosumiReleaseCommands(
+    {
+      ...rawOutputs,
+      cloudflare_account_id: "ts_acc_takosumi_cloud",
+    },
+    "production",
+    {
+      containersRollout: "none",
+    },
+  );
+
+  assert.equal(
+    commands.at(-1),
+    `'bunx' 'wrangler' 'deploy' '--config' '${productionWranglerConfig}' '--name' 'takos-test' '--secrets-file' '.takos-release-secrets.production.json' '--env' '' '--containers-rollout' 'none' '--dry-run' '--outdir' '${releaseWranglerBundleDir("production")}'`,
+  );
+});
+
 test("releaseChildEnv requires a compat API base for virtual Cloudflare outputs", () => {
   assert.throws(
     () =>
@@ -1334,6 +1354,216 @@ test("ensureWorkersDevSubdomain skips API enablement when Wrangler-owned Worker 
     reason: "workers_dev_api_unavailable",
   });
   assert.equal(requests.length, 1);
+});
+
+test("deployManagedCompatWorker uploads Wrangler bundle and assets through the compatibility API", async () => {
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-managed-upload-"));
+  const requests: {
+    url: string;
+    method: string;
+    authorization: string | null;
+    assetAuthorization: string | null;
+    metadata?: Record<string, unknown>;
+    manifest?: Record<string, { hash: string; size: number }>;
+    assetHashes?: string[];
+  }[] = [];
+  try {
+    process.chdir(root);
+    mkdirSync("deploy/cloudflare", { recursive: true });
+    mkdirSync("dist/assets", { recursive: true });
+    mkdirSync(releaseWranglerBundleDir("production"), { recursive: true });
+    writeFileSync("dist/index.html", "<main>Takos</main>");
+    writeFileSync("dist/assets/app.js", "console.log('takos');");
+    writeFileSync(
+      resolve(releaseWranglerBundleDir("production"), "index.js"),
+      "export default { fetch() { return new Response('ok'); } };",
+    );
+    writeFileSync(
+      productionWranglerConfig,
+      [
+        'name = "takos-test"',
+        'main = "../../src/worker/index.ts"',
+        'compatibility_date = "2026-04-01"',
+        'compatibility_flags = ["nodejs_compat"]',
+        "",
+        "[vars]",
+        'ADMIN_DOMAIN = "takos-test.app.takos.jp"',
+        "",
+        "[assets]",
+        'directory = "../../dist"',
+        'binding = "ASSETS"',
+        "run_worker_first = true",
+        "",
+        "[[kv_namespaces]]",
+        'binding = "HOSTNAME_ROUTING"',
+        'id = "kv_hostname"',
+        "",
+        "[[durable_objects.bindings]]",
+        'name = "RUNTIME_CONTAINER"',
+        'class_name = "TakosRuntimeContainer"',
+        "",
+        "[[migrations]]",
+        'tag = "v1"',
+        'new_sqlite_classes = ["TakosRuntimeContainer"]',
+        "",
+        "[[containers]]",
+        'class_name = "TakosRuntimeContainer"',
+        "",
+        "[[r2_buckets]]",
+        'binding = "WORKER_BUNDLES"',
+        'bucket_name = "takos-test-worker-bundles"',
+        "",
+        "[[queues.producers]]",
+        'binding = "RUN_QUEUE"',
+        'queue = "takos-test-runs"',
+        "",
+        "[[d1_databases]]",
+        'binding = "DB"',
+        'database_id = "d1_db"',
+        "",
+        "[[vectorize]]",
+        'binding = "VECTORIZE"',
+        'index_name = "takos-test-embeddings"',
+        "",
+        "[ai]",
+        'binding = "AI"',
+        "",
+        "[[services]]",
+        'binding = "TAKOS_EGRESS"',
+        'service = "takos-test"',
+        "",
+      ].join("\n"),
+    );
+
+    const result = await deployManagedCompatWorker(
+      {
+        ...rawOutputs,
+        cloudflare_account_id: "ts_acc_takosumi_cloud",
+      },
+      "production",
+      {
+        CLOUDFLARE_API_TOKEN: "compat-token",
+        TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
+      },
+      async (url, init) => {
+        const request = new Request(url, init);
+        const entry = {
+          url: request.url,
+          method: request.method,
+          authorization: request.headers.get("authorization"),
+          assetAuthorization: request.headers.get(
+            "x-takosumi-cloudflare-assets-authorization",
+          ),
+        };
+        requests.push(entry);
+        if (request.url.endsWith("/assets-upload-session")) {
+          const body = await request.json();
+          entry.manifest = body.manifest;
+          return new Response(
+            JSON.stringify({
+              success: true,
+              result: {
+                buckets: [
+                  Object.values(body.manifest).map((item) => item.hash),
+                ],
+                jwt: "assets-session-jwt",
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (request.url.endsWith("/workers/assets/upload?base64=true")) {
+          const form = await request.formData();
+          entry.assetHashes = [...form.keys()];
+          return new Response(
+            JSON.stringify({
+              success: true,
+              result: { jwt: "assets-complete-jwt" },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (request.url.endsWith("/workers/scripts/takos-test")) {
+          const form = await request.formData();
+          const metadata = JSON.parse(
+            await (form.get("metadata") as Blob).text(),
+          );
+          entry.metadata = metadata;
+          assert.equal(
+            await (form.get("index.js") as Blob).text(),
+            "export default { fetch() { return new Response('ok'); } };",
+          );
+          return new Response(
+            JSON.stringify({
+              success: true,
+              result: { id: "takos-test", script_name: "takos-test" },
+            }),
+            { status: 201, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ success: false }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    );
+
+    assert.equal(result.workerName, "takos-test");
+    assert.equal(result.assets?.manifestEntries, 2);
+    assert.equal(requests.length, 3);
+    assert.equal(
+      requests.every(
+        (request) => request.authorization === "Bearer compat-token",
+      ),
+      true,
+    );
+    assert.equal(requests[1].assetAuthorization, "Bearer assets-session-jwt");
+    assert.deepEqual(Object.keys(requests[0].manifest ?? {}).sort(), [
+      "/assets/app.js",
+      "/index.html",
+    ]);
+    assert.deepEqual(
+      requests[1].assetHashes?.sort(),
+      Object.values(requests[0].manifest ?? {})
+        .map((entry) => entry.hash)
+        .sort(),
+    );
+    const metadata = requests[2].metadata ?? {};
+    assert.equal(metadata.main_module, "index.js");
+    assert.deepEqual(metadata.assets, {
+      jwt: "assets-complete-jwt",
+      config: { run_worker_first: true },
+    });
+    assert.deepEqual(metadata.containers, [
+      { class_name: "TakosRuntimeContainer" },
+    ]);
+    assert.deepEqual(metadata.migrations, {
+      new_tag: "v1",
+      steps: [{ new_sqlite_classes: ["TakosRuntimeContainer"] }],
+    });
+    assert.deepEqual(
+      (metadata.bindings as Array<Record<string, unknown>>).map((binding) => [
+        binding.name,
+        binding.type,
+      ]),
+      [
+        ["ADMIN_DOMAIN", "plain_text"],
+        ["HOSTNAME_ROUTING", "kv_namespace"],
+        ["RUNTIME_CONTAINER", "durable_object_namespace"],
+        ["RUN_QUEUE", "queue"],
+        ["WORKER_BUNDLES", "r2_bucket"],
+        ["DB", "d1"],
+        ["VECTORIZE", "vectorize"],
+        ["TAKOS_EGRESS", "service"],
+        ["AI", "ai"],
+        ["ASSETS", "assets"],
+      ],
+    );
+  } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("waitForWranglerDeployment retries until Wrangler reports an active version", async () => {
