@@ -26,7 +26,7 @@ console.log(JSON.stringify({ ok: true, checked: checks.length }, null, 2));
 
 async function checkRequiredDocs(): Promise<void> {
   const runbookPath = 'deploy/TAKOSUMI_DEPLOY.md';
-  const envExamplePath = 'deploy/opentofu/environments/cloudflare-prod/opentofu.tfvars.example';
+  const envExamplePath = 'deploy/opentofu/opentofu.tfvars.example';
   const runbook = await readText(runbookPath);
   const envExample = await readText(envExamplePath);
   const requiredRunbookTerms = [

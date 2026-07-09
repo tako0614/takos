@@ -16,11 +16,6 @@ on:
         required: false
         default: false
         type: boolean
-      publish_cloudflare_registry:
-        description: "Publish Takos worker runtime / agent executor container images to the Cloudflare Containers registry for Takosumi Cloud deploys"
-        required: false
-        default: true
-        type: boolean
 
 concurrency:
   group: takos-release-artifacts-${{ github.ref }}
@@ -32,6 +27,7 @@ permissions:
 env:
   BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache/takos
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  TAKOSUMI_SOURCE_REF: f01eea7e6f43bf6bbe6a980fe04c21492f9f417e
 
 jobs:
   validate:
@@ -49,6 +45,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           repository: tako0614/takosumi
+          ref: ${{ env.TAKOSUMI_SOURCE_REF }}
           path: takosumi
           persist-credentials: false
 
@@ -93,7 +90,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate
-    if: github.event_name == 'push' || (inputs.publish == true && inputs.publish_cloudflare_registry == true)
+    if: github.event_name == 'push' || inputs.publish == true
     permissions:
       contents: read
     steps:
@@ -193,6 +190,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           repository: tako0614/takosumi
+          ref: ${{ env.TAKOSUMI_SOURCE_REF }}
           path: takosumi
           persist-credentials: false
 
@@ -293,7 +291,7 @@ jobs:
             }' > "dist/image-digests/${{ matrix.image }}.json"
 
       - name: Build and publish Cloudflare Container image
-        if: (github.event_name == 'push' || inputs.publish == true) && matrix.cloudflare_container == true && (github.event_name == 'push' || inputs.publish_cloudflare_registry == true)
+        if: (github.event_name == 'push' || inputs.publish == true) && matrix.cloudflare_container == true
         shell: bash
         working-directory: takos
         env:
@@ -356,22 +354,37 @@ jobs:
           if-no-files-found: error
 
   release-manifest:
-    name: Release manifest
+    name: Worker artifact and release manifest
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [validate, oci-images]
     if: always() && needs.validate.result == 'success' && needs.oci-images.result == 'success' && (github.event_name == 'push' || inputs.publish == true)
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
           path: takos
           persist-credentials: false
 
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
+        with:
+          repository: tako0614/takosumi
+          ref: ${{ env.TAKOSUMI_SOURCE_REF }}
+          path: takosumi
+          persist-credentials: false
+
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
         with:
           bun-version: latest
+
+      - name: Cache Bun deps
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # pinned: v5.0.5 (2026)
+        with:
+          path: ${{ env.BUN_INSTALL_CACHE_DIR }}
+          key: ${{ runner.os }}-bun-takos-worker-release-${{ hashFiles('takos/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-takos-worker-release-
 
       - run: bun install --frozen-lockfile
         working-directory: takos
@@ -382,12 +395,55 @@ jobs:
           path: release-inputs/image-digests
           merge-multiple: true
 
+      - name: Build Worker release artifact
+        shell: bash
+        working-directory: takos
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+          else
+            release_tag="v${VERSION}"
+          fi
+
+          bun run build
+          runtime_ref="$(jq -r 'select(.name == "takos-worker-runtime") | .cloudflareRegistryRef // empty' ../release-inputs/image-digests/*.json | head -n 1)"
+          executor_ref="$(jq -r 'select(.name == "takos-agent-executor") | .cloudflareRegistryRef // empty' ../release-inputs/image-digests/*.json | head -n 1)"
+          if [[ -z "${runtime_ref}" || -z "${executor_ref}" ]]; then
+            echo "Cloudflare runtime/executor image refs are required before bundling the Worker artifact." >&2
+            exit 1
+          fi
+          container_images_json="$(jq -cn --arg runtime "${runtime_ref}" --arg executor "${executor_ref}" '{runtime: $runtime, executor: $executor}')"
+          release_config="deploy/cloudflare/.takos-release-wrangler.release-ci.toml"
+          trap 'rm -f "${release_config}"' EXIT
+          cp deploy/cloudflare/wrangler.toml "${release_config}"
+          TAKOS_RELEASE_CONTAINER_IMAGES_JSON="${container_images_json}" \
+            bun scripts/control/apply-release-container-images.mjs "${release_config}"
+          rm -rf /tmp/takos-worker-bundle
+          bunx wrangler deploy \
+            --config "${release_config}" \
+            --name takos-release-artifact \
+            --env="" \
+            --dry-run \
+            --outdir /tmp/takos-worker-bundle \
+            --containers-rollout none
+          rm -f "${release_config}"
+
+          bun scripts/build-worker-release-artifact.ts \
+            --release-tag "${release_tag}" \
+            --bundle-dir /tmp/takos-worker-bundle \
+            --assets-dir dist \
+            --image-digest-dir ../release-inputs/image-digests \
+            --output-dir dist/takosumi-artifact \
+            --require-cloudflare-container-images
+
       - name: Build release manifest
         shell: bash
         working-directory: takos
         env:
           VERSION: ${{ inputs.version }}
-          REQUIRE_CLOUDFLARE_CONTAINER_IMAGES: ${{ github.event_name == 'push' || inputs.publish_cloudflare_registry == true }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
@@ -401,21 +457,47 @@ jobs:
             echo "Invalid SemVer release version: ${release_version}" >&2
             exit 1
           fi
-          extra_args=()
-          if [[ "${REQUIRE_CLOUDFLARE_CONTAINER_IMAGES}" == "true" ]]; then
-            extra_args+=(--require-cloudflare-container-images)
-          fi
           bun scripts/build-release-manifest.ts \
             --image-digest-dir ../release-inputs/image-digests \
             --release-version "${release_version}" \
             --release-tag "${release_tag}" \
             --require-image-digests \
             --require-clean-git \
-            "${extra_args[@]}" \
+            --require-cloudflare-container-images \
             --output dist/release-manifest.json
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pinned: v7.0.1 (2026)
         with:
-          name: takos-release-manifest
-          path: takos/dist/release-manifest.json
+          name: takos-release-assets
+          path: |
+            takos/dist/release-manifest.json
+            takos/dist/takosumi-artifact/
           if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        shell: bash
+        working-directory: takos
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            release_tag="${GITHUB_REF_NAME}"
+            prerelease_flag=()
+          else
+            release_tag="v${VERSION}"
+            prerelease_flag=(--prerelease)
+          fi
+          if ! gh release view "${release_tag}" >/dev/null 2>&1; then
+            gh release create "${release_tag}" \
+              --title "Takos ${release_tag}" \
+              --notes "Takosumi/OpenTofu release artifacts for ${GITHUB_SHA}." \
+              "${prerelease_flag[@]}"
+          fi
+          gh release upload "${release_tag}" \
+            dist/release-manifest.json \
+            dist/takosumi-artifact/takos-worker-release.tar.gz \
+            dist/takosumi-artifact/takos-worker-release.tar.gz.sha256 \
+            dist/takosumi-artifact/takosumi-artifact.json \
+            --clobber

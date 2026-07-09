@@ -38,8 +38,8 @@ passes.
 ## Artifact Ownership
 
 The only shipped distribution target is Cloudflare. Distribution artifacts are
-the Takos product OpenTofu module + environment under `takos/deploy/opentofu`
-(`modules/cloudflare`, `environments/cloudflare-prod`) and the wrangler worker
+the single Takos product OpenTofu root module under `takos/deploy/opentofu`
+(`modules/cloudflare` is its target implementation) and the wrangler worker
 template under `takos/deploy/cloudflare`, recorded as the official profile
 `takos/deploy/distributions/cloudflare.json`. There are no AWS/GCP OpenTofu
 environments and no Helm overlays under `takos/deploy/` — multi-cloud topology

@@ -10,6 +10,9 @@ product surface (chat / agent / memory / Workspace / app launcher / Takos Capsul
 通常の Capsule / distribution Worker として deploy される。deploy の正本は
 [`deploy/opentofu`](deploy/opentofu) module (`var.target = cloudflare`): `tofu apply` が Takos distribution worker の
 durable backing infra を provision し、worker artifact (`deploy/cloudflare` の wrangler step) はその module output を読む。
+通常 install は Git tag の release workflow が生成した SHA-256 固定の Worker + SPA artifact と prebuilt container images を
+OpenTofu module が選択し、release step は再ビルドせずに materialize する。`build_from_source = true` は同じ Git snapshot を
+frozen dependency install でビルドする明示的 fallback であり、別の deploy authority や Takosumi 独自 source format ではない。
 Takos worker は **OIDC issuer ではなく client/resource server** であり、Takosumi Accounts / Capsule projection API は
 `TAKOSUMI_ACCOUNTS_URL` / `OIDC_ISSUER_URL` で指す外部 Takosumi origin から消費する。Takosumi / Takos の
 identity と vocabulary は root docs [`../docs/reference/design-principles.md`](../docs/reference/design-principles.md) と

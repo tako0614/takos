@@ -50,6 +50,17 @@
         "ja": "独自ドメインを使う場合だけ入力します。",
         "en": "Set this only when using a custom domain."
       }
+    },
+    {
+      "name": "build_from_source",
+      "type": "boolean",
+      "defaultValue": false,
+      "advanced": true,
+      "label": { "ja": "ソースからビルド", "en": "Build from source" },
+      "helper": {
+        "ja": "通常は高速なリリース成果物を使います。Gitのソースをその場でビルドする場合だけ有効にします。",
+        "en": "Normally installs use the faster release artifact. Enable this only to build the pinned Git source during install."
+      }
     }
   ],
   "installExperience": {

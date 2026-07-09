@@ -111,18 +111,22 @@ output "takosumi_release" {
         working_directory = var.release_working_directory
         timeout_seconds   = 1200
         env = merge(
-          {
+          var.build_from_source ? {
             TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
             TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-          },
+          } : {},
           var.release_containers_rollout == null ? {} : {
             TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
           },
           var.release_executor == "operator" ? {
             TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES = "1"
           } : {},
-          length(var.release_container_images) == 0 ? {} : {
-            TAKOS_RELEASE_CONTAINER_IMAGES_JSON = jsonencode(var.release_container_images)
+          local.worker_release_artifact_url == "" ? {} : {
+            TAKOS_RELEASE_WORKER_ARTIFACT_URL    = local.worker_release_artifact_url
+            TAKOS_RELEASE_WORKER_ARTIFACT_SHA256 = local.worker_release_artifact_sha256
+          },
+          length(local.release_container_images) == 0 ? {} : {
+            TAKOS_RELEASE_CONTAINER_IMAGES_JSON = jsonencode(local.release_container_images)
           },
         )
       },
@@ -134,18 +138,9 @@ output "takosumi_release" {
         command           = ["bun", "scripts/control/takosumi-release.mjs", var.environment, "--destroy"]
         working_directory = var.release_working_directory
         timeout_seconds   = 600
-        env = merge(
-          {
-            TAKOS_RELEASE_TAKOSUMI_REPO_URL = var.takosumi_source_repo_url
-            TAKOS_RELEASE_TAKOSUMI_REF      = var.takosumi_source_ref
-          },
-          var.release_containers_rollout == null ? {} : {
-            TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
-          },
-          length(var.release_container_images) == 0 ? {} : {
-            TAKOS_RELEASE_CONTAINER_IMAGES_JSON = jsonencode(var.release_container_images)
-          },
-        )
+        env = var.release_containers_rollout == null ? {} : {
+          TAKOS_WRANGLER_CONTAINERS_ROLLOUT = var.release_containers_rollout
+        }
       },
     ]
   }

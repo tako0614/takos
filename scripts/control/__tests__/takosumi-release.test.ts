@@ -95,7 +95,7 @@ test("buildTakosumiReleaseCommands runs generic operator activation steps", () =
     [
       `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'production' '--out' '${productionWranglerConfig}' '--zone-id' 'zone_123'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
-      "'bun' 'install' '--frozen-lockfile'",
+      "'bun' 'install' '--frozen-lockfile' '--ignore-scripts'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionD1WranglerConfig}'`,
@@ -113,7 +113,7 @@ test("buildTakosumiReleaseCommands supports staging debug deploys", () => {
     [
       `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging' '--out' '${stagingWranglerConfig}'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
-      "'bun' 'install' '--frozen-lockfile'",
+      "'bun' 'install' '--frozen-lockfile' '--ignore-scripts'",
       "'bun' 'run' 'build' '--mode' 'staging-debug'",
       "'bun' 'run' 'containers:build'",
       `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${stagingD1WranglerConfig}' '--env' 'staging'`,
@@ -132,7 +132,7 @@ test("buildTakosumiReleaseCommands supports sandbox deploys without D1 migration
     [
       `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'staging' '--out' '${stagingWranglerConfig}'`,
       "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
-      "'bun' 'install' '--frozen-lockfile'",
+      "'bun' 'install' '--frozen-lockfile' '--ignore-scripts'",
       "'bun' 'run' 'build'",
       "'bun' 'run' 'containers:build'",
       `'bun' 'scripts/control/ensure-release-secrets.mjs' 'staging' '--config' '${stagingWranglerConfig}' '--secrets-file' '.takos-release-secrets.staging.json'`,
@@ -151,6 +151,17 @@ test("buildTakosumiReleaseCommands fails closed when operator mode requires CI i
   );
 });
 
+test("buildTakosumiReleaseCommands rejects partial prebuilt image sets", () => {
+  assert.throws(
+    () =>
+      buildTakosumiReleaseCommands(rawOutputs, "production", {
+        requirePrebuiltContainerImages: true,
+        containerImages: { runtime: runtimeImage },
+      }),
+    /ExecutorContainerTier1, ExecutorContainerTier2, ExecutorContainerTier3/,
+  );
+});
+
 test("buildTakosumiReleaseCommands uses prebuilt CI container images when supplied", () => {
   const commands = buildTakosumiReleaseCommands(rawOutputs, "production", {
     containerImages: {
@@ -163,7 +174,7 @@ test("buildTakosumiReleaseCommands uses prebuilt CI container images when suppli
     `'bun' 'scripts/control/render-wrangler-from-tofu.mjs' 'production' '--out' '${productionWranglerConfig}'`,
     `TAKOS_RELEASE_CONTAINER_IMAGES_JSON='{"TakosRuntimeContainer":"${runtimeImage}","ExecutorContainerTier1":"${executorImage}","ExecutorContainerTier2":"${executorImage}","ExecutorContainerTier3":"${executorImage}"}' 'bun' 'scripts/control/apply-release-container-images.mjs' '${productionWranglerConfig}'`,
     "'bun' 'scripts/control/ensure-vectorize-index.mjs' 'takos-test-embeddings' '--dimensions' '768' '--metric' 'cosine' '--account-id' 'acc_123'",
-    "'bun' 'install' '--frozen-lockfile'",
+    "'bun' 'install' '--frozen-lockfile' '--ignore-scripts'",
     "'bun' 'run' 'build'",
     `'bunx' 'wrangler' 'd1' 'migrations' 'apply' 'DB' '--remote' '--config' '${productionD1WranglerConfig}'`,
     `'bun' 'scripts/control/ensure-release-secrets.mjs' 'production' '--config' '${productionWranglerConfig}' '--secrets-file' '.takos-release-secrets.production.json'`,
@@ -173,6 +184,30 @@ test("buildTakosumiReleaseCommands uses prebuilt CI container images when suppli
     commands.some((command) => command.includes("containers:build")),
     false,
   );
+});
+
+test("buildTakosumiReleaseCommands activates a prebuilt Worker without source build steps", () => {
+  const commands = buildTakosumiReleaseCommands(rawOutputs, "production", {
+    containerImages: {
+      runtime: runtimeImage,
+      executor: executorImage,
+    },
+    workerArtifact: true,
+  });
+
+  assert.equal(
+    commands.some((command) => command.includes("'bun' 'install'")),
+    false,
+  );
+  assert.equal(
+    commands.some((command) => command.includes("'bun' 'run' 'build'")),
+    false,
+  );
+  assert.equal(
+    commands.some((command) => command.includes("containers:build")),
+    false,
+  );
+  assert.match(commands.at(-1) ?? "", /'--no-bundle'/u);
 });
 
 test("removeExistingWorkerMigrationsFromToml prunes only production migration blocks", () => {
@@ -2048,6 +2083,8 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_container_images"\s*\{/);
+  assert.match(rootVariables, /variable\s+"build_from_source"\s*\{/);
+  assert.match(rootVariables, /variable\s+"worker_release_tag"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_executor"\s*\{/);
   assert.match(rootVariables, /variable\s+"public_url"\s*\{/);
   assert.match(rootVariables, /default\s*=\s*"operator"/);
@@ -2083,7 +2120,11 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(rootModule, /TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES\s*=\s*"1"/);
   assert.match(
     rootModule,
-    /TAKOS_RELEASE_CONTAINER_IMAGES_JSON\s*=\s*jsonencode\(var\.release_container_images\)/,
+    /TAKOS_RELEASE_CONTAINER_IMAGES_JSON\s*=\s*jsonencode\(local\.release_container_images\)/,
+  );
+  assert.match(
+    rootModule,
+    /TAKOS_RELEASE_WORKER_ARTIFACT_URL\s*=\s*local\.worker_release_artifact_url/,
   );
   assert.match(rootVariables, /variable\s+"release_working_directory"\s*\{/);
   assert.match(
@@ -2097,74 +2138,5 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   assert.match(
     rootModule,
     /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*var\.environment,\s*"--destroy"\]/,
-  );
-
-  const productionModule = readFileSync(
-    new URL(
-      "../../../deploy/opentofu/environments/cloudflare-prod/main.tf",
-      import.meta.url,
-    ),
-    "utf8",
-  );
-  assert.match(productionModule, /output\s+"takosumi_release"\s*\{/);
-  assert.match(productionModule, /post_apply\s*=\s*\[/);
-  assert.match(productionModule, /pre_destroy\s*=\s*\[/);
-  assert.match(productionModule, /id\s*=\s*"takos-worker-release"/);
-  assert.match(productionModule, /id\s*=\s*"takos-worker-destroy"/);
-  assert.match(productionModule, /executor\s*=\s*var\.release_executor/);
-  assert.match(productionModule, /timeout_seconds\s*=\s*1200/);
-  assert.match(productionModule, /timeout_seconds\s*=\s*600/);
-  assert.match(productionModule, /variable\s+"release_working_directory"\s*\{/);
-  assert.match(productionModule, /variable\s+"takosumi_source_repo_url"\s*\{/);
-  assert.match(productionModule, /variable\s+"takosumi_source_ref"\s*\{/);
-  assert.match(
-    productionModule,
-    /variable\s+"release_containers_rollout"\s*\{/,
-  );
-  assert.match(productionModule, /variable\s+"release_container_images"\s*\{/);
-  assert.match(productionModule, /variable\s+"release_executor"\s*\{/);
-  assert.match(productionModule, /variable\s+"public_url"\s*\{/);
-  assert.match(productionModule, /default\s*=\s*"operator"/);
-  assert.match(
-    productionModule,
-    /contains\(\["runner",\s*"operator"\],\s*var\.release_executor\)/,
-  );
-  assert.match(productionModule, /public_url\s*=\s*var\.public_url/);
-  assert.match(productionModule, /output\s+"public_url"\s*\{/);
-  assert.match(
-    productionModule,
-    /TAKOS_WRANGLER_CONTAINERS_ROLLOUT\s*=\s*var\.release_containers_rollout/,
-  );
-  assert.match(
-    productionModule,
-    /TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES\s*=\s*"1"/,
-  );
-  assert.match(
-    productionModule,
-    /TAKOS_RELEASE_CONTAINER_IMAGES_JSON\s*=\s*jsonencode\(var\.release_container_images\)/,
-  );
-  assert.match(
-    productionModule,
-    /TAKOS_RELEASE_TAKOSUMI_REPO_URL\s*=\s*var\.takosumi_source_repo_url/,
-  );
-  assert.match(
-    productionModule,
-    /TAKOS_RELEASE_TAKOSUMI_REF\s*=\s*var\.takosumi_source_ref/,
-  );
-  assert.doesNotMatch(
-    productionModule,
-    /TAKOS_RELEASE_PRUNE_EXISTING_WORKER_MIGRATIONS/,
-  );
-  assert.match(
-    productionModule,
-    /working_directory\s*=\s*var\.release_working_directory/,
-  );
-  assert.match(
-    productionModule,
-    /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*"production"\]/,
-  );
-  assert.match(
-    productionModule,
-    /command\s*=\s*\["bun",\s*"scripts\/control\/takosumi-release\.mjs",\s*"production",\s*"--destroy"\]/,
   );
 });

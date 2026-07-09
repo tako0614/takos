@@ -50,7 +50,7 @@ variable "release_containers_rollout" {
 }
 
 variable "release_container_images" {
-  description = "Optional prebuilt Cloudflare Containers image refs produced by Git CI or an operator release pipeline. Cloudflare managed registry refs may use CI-published tags or digest refs; external registry refs must be digest-pinned. Keys may be runtime/executor aliases or Wrangler container class names. When unset, the release activator builds from the Git source snapshot."
+  description = "Optional overrides for prebuilt Cloudflare Containers image refs. The default release manifest supplies runtime/executor refs; explicit entries override matching manifest keys."
   type        = map(string)
   default     = {}
 
@@ -60,6 +60,45 @@ variable "release_container_images" {
       can(regex("^(registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+(@sha256:[0-9a-f]{64}|:[A-Za-z0-9_][A-Za-z0-9._-]{0,127})|(docker\\.io/[A-Za-z0-9._/-]+|[0-9]{12}\\.dkr\\.ecr\\.[A-Za-z0-9-]+\\.amazonaws\\.com/[A-Za-z0-9._/-]+|[A-Za-z0-9-]+-docker\\.pkg\\.dev/[A-Za-z0-9._/-]+)@sha256:[0-9a-f]{64})$", image))
     ])
     error_message = "release_container_images values must use Cloudflare managed registry tag/digest refs or digest-pinned external registry refs."
+  }
+}
+
+variable "build_from_source" {
+  description = "Build the Takos Worker and web assets from the pinned Git Source during release activation instead of using the CI Worker archive. By default worker_release_tag still supplies prebuilt runtime/executor container images."
+  type        = bool
+  default     = false
+}
+
+variable "worker_release_tag" {
+  description = "GitHub release tag whose takosumi-artifact.json selects the Worker bundle, web assets, SHA-256, and container image refs. In source-build mode only its container image refs are consumed. Set empty only for a runner that intentionally builds every artifact from source."
+  type        = string
+  default     = "v0.10.1"
+
+  validation {
+    condition     = trimspace(var.worker_release_tag) == "" || can(regex("^v[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$", trimspace(var.worker_release_tag)))
+    error_message = "worker_release_tag must be empty or a SemVer-like Git tag beginning with v."
+  }
+}
+
+variable "worker_release_artifact_url" {
+  description = "Optional HTTPS override for a prebuilt Takos Worker release archive. The SHA-256 override is required with this value."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = trimspace(var.worker_release_artifact_url) == "" || can(regex("^https://[^[:space:]]+$", trimspace(var.worker_release_artifact_url)))
+    error_message = "worker_release_artifact_url must be empty or an https URL."
+  }
+}
+
+variable "worker_release_artifact_sha256" {
+  description = "Expected SHA-256 for worker_release_artifact_url. Accepts lowercase hex or sha256:<hex>."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = trimspace(var.worker_release_artifact_sha256) == "" || can(regex("^(sha256:)?[a-f0-9]{64}$", trimspace(var.worker_release_artifact_sha256)))
+    error_message = "worker_release_artifact_sha256 must be empty, lowercase SHA-256 hex, or sha256:<hex>."
   }
 }
 
@@ -81,14 +120,9 @@ variable "takosumi_source_repo_url" {
 }
 
 variable "takosumi_source_ref" {
-  description = "Takosumi source module Git tag or commit used by the Takos release activation. Hosted releases must pass an explicit immutable ref."
+  description = "Takosumi source module Git tag or commit used only when build_from_source is true. Source builds require an explicit immutable ref."
   type        = string
-  default     = ""
-
-  validation {
-    condition     = trimspace(var.takosumi_source_ref) != ""
-    error_message = "takosumi_source_ref is required. Pass a release tag or commit instead of relying on a mutable default."
-  }
+  default     = "f01eea7e6f43bf6bbe6a980fe04c21492f9f417e"
 }
 
 variable "opentofu_plan_mode" {

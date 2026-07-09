@@ -6,7 +6,7 @@
   "artifacts": [
     {
       "kind": "opentofu",
-      "ref": "deploy/opentofu/environments/cloudflare-prod"
+      "ref": "deploy/opentofu"
     },
     {
       "kind": "wrangler",

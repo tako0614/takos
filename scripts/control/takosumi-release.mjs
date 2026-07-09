@@ -18,11 +18,16 @@ import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 
 import { parseTakosumiOutputsJson } from "./render-wrangler-from-tofu.mjs";
+import {
+  cleanupWorkerReleaseArtifact,
+  prepareWorkerReleaseArtifact,
+  workerReleaseArtifactConfig,
+} from "./worker-release-artifact.mjs";
 
 const ENVIRONMENTS = ["production", "staging"];
 const WRANGLER_CONFIG = "deploy/cloudflare/wrangler.toml";
 const DEFAULT_TAKOSUMI_REPO_URL = "https://github.com/tako0614/takosumi.git";
-const DEFAULT_TAKOSUMI_REPO_REF = "main";
+const DEFAULT_TAKOSUMI_REPO_REF = "";
 const MIN_WORKER_CONTENT_BYTES = 1024;
 const RELEASE_HEALTH_ATTEMPTS = 12;
 const RELEASE_HEALTH_INTERVAL_MS = 2500;
@@ -93,6 +98,11 @@ Optional env:
                                           materializers that must consume Git
                                           CI images and must not build
                                           containers inside the activation run.
+  TAKOS_RELEASE_WORKER_ARTIFACT_URL        Optional CI-built Worker/assets
+                                          archive selected by OpenTofu.
+  TAKOS_RELEASE_WORKER_ARTIFACT_SHA256     Required SHA-256 for the archive.
+                                          When both are absent, activation
+                                          builds the pinned Git source.
   TAKOS_RELEASE_BUN_INSTALL_CACHE_DIR     Cache root used by bun install during
                                           activation. Each retry gets its own
                                           subdirectory to avoid corrupt cache
@@ -250,7 +260,10 @@ export function ensureTakosumiSourceModule(
   { repoUrl = DEFAULT_TAKOSUMI_REPO_URL, ref = DEFAULT_TAKOSUMI_REPO_REF } = {},
 ) {
   const expected = resolve("..", "takosumi");
-  if (existsSync(expected)) return;
+  if (existsSync(expected)) {
+    assertCleanGitCheckout(expected, ref);
+    return;
+  }
   const source = resolve(takosumiRepoDir);
   if (!existsSync(source)) {
     const trimmedRepoUrl = repoUrl?.trim();
@@ -261,6 +274,12 @@ export function ensureTakosumiSourceModule(
           "TAKOS_RELEASE_TAKOSUMI_REPO_URL in the operator release environment",
       );
     }
+    const trimmedRef = ref?.trim();
+    if (!trimmedRef) {
+      throw new Error(
+        "TAKOS_RELEASE_TAKOSUMI_REF is required when the Takosumi source module must be cloned.",
+      );
+    }
     runFile("git", [
       "clone",
       "--filter=blob:none",
@@ -268,24 +287,58 @@ export function ensureTakosumiSourceModule(
       trimmedRepoUrl,
       expected,
     ]);
-    const trimmedRef = ref?.trim();
+    runFile("git", [
+      "-C",
+      expected,
+      "fetch",
+      "--depth",
+      "1",
+      "origin",
+      trimmedRef,
+    ]);
+    runFile("git", ["-C", expected, "checkout", "--detach", "FETCH_HEAD"]);
+    assertCleanGitCheckout(expected, trimmedRef);
+    return;
+  }
+  assertCleanGitCheckout(source, ref);
+  symlinkSync(source, expected, "dir");
+}
+
+function assertCleanGitCheckout(directory, ref) {
+  const gitDirectory = resolve(directory, ".git");
+  const trimmedRef = ref?.trim();
+  if (!existsSync(gitDirectory)) {
     if (trimmedRef) {
-      runFile("git", [
-        "-C",
-        expected,
-        "fetch",
-        "--depth",
-        "1",
-        "origin",
-        trimmedRef,
-      ]);
-      runFile("git", ["-C", expected, "checkout", "--detach", "FETCH_HEAD"]);
-    } else {
-      runFile("git", ["-C", expected, "checkout"]);
+      throw new Error(
+        `Takosumi source at ${directory} is not a Git checkout and cannot be verified against ${trimmedRef}.`,
+      );
     }
     return;
   }
-  symlinkSync(source, expected, "dir");
+  const dirty = execFileSync(
+    "git",
+    ["-C", directory, "status", "--porcelain", "--untracked-files=all"],
+    { encoding: "utf8" },
+  ).trim();
+  if (dirty) {
+    throw new Error(
+      `Takosumi source checkout at ${directory} contains uncommitted files. Use a clean checkout for a reproducible source build.`,
+    );
+  }
+  if (!trimmedRef) return;
+  const head = execFileSync("git", ["-C", directory, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+  const expected = execFileSync(
+    "git",
+    ["-C", directory, "rev-parse", "--verify", `${trimmedRef}^{commit}`],
+    { encoding: "utf8" },
+  ).trim();
+  if (head !== expected) {
+    throw new Error(
+      `Takosumi source checkout at ${directory} is ${head}, but the reviewed source build requires ${expected}.`,
+    );
+  }
 }
 
 export function parseReleaseArgs(argv = process.argv.slice(2)) {
@@ -348,6 +401,7 @@ export function buildTakosumiReleaseCommands(
     containerImages,
     requirePrebuiltContainerImages = false,
     wranglerAccountId,
+    workerArtifact = false,
   } = {},
 ) {
   if (!ENVIRONMENTS.includes(environment)) {
@@ -373,7 +427,12 @@ export function buildTakosumiReleaseCommands(
     releaseWranglerConfig,
     ...(zoneId ? ["--zone-id", zoneId] : []),
   ];
-  const installArgs = ["bun", "install", "--frozen-lockfile"];
+  const installArgs = [
+    "bun",
+    "install",
+    "--frozen-lockfile",
+    "--ignore-scripts",
+  ];
   const buildArgs =
     debug && environment === "staging"
       ? ["bun", "run", "build", "--mode", "staging-debug"]
@@ -381,12 +440,15 @@ export function buildTakosumiReleaseCommands(
   const containerBuildArgs = ["bun", "run", "containers:build"];
   const prebuiltContainerImages =
     normalizeReleaseContainerImages(containerImages);
-  if (
-    requirePrebuiltContainerImages &&
-    Object.keys(prebuiltContainerImages).length === 0
-  ) {
+  const missingPrebuiltContainerImages = [
+    "TakosRuntimeContainer",
+    "ExecutorContainerTier1",
+    "ExecutorContainerTier2",
+    "ExecutorContainerTier3",
+  ].filter((name) => !prebuiltContainerImages[name]);
+  if (requirePrebuiltContainerImages && missingPrebuiltContainerImages.length) {
     throw new Error(
-      "TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES is set, but TAKOS_RELEASE_CONTAINER_IMAGES_JSON is empty. Generate release_container_images from the Git CI release manifest and pass it through OpenTofu.",
+      `TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES is set, but prebuilt images are missing for: ${missingPrebuiltContainerImages.join(", ")}. Generate release_container_images from the Git CI release manifest and pass it through OpenTofu.`,
     );
   }
   const ensureSecretsArgs = [
@@ -440,8 +502,9 @@ export function buildTakosumiReleaseCommands(
       "--account-id",
       accountId,
     ]),
-    commandLine(installArgs),
-    commandLine(buildArgs),
+    ...(workerArtifact
+      ? []
+      : [commandLine(installArgs), commandLine(buildArgs)]),
     ...(Object.keys(prebuiltContainerImages).length === 0
       ? [commandLine(containerBuildArgs)]
       : []),
@@ -451,6 +514,7 @@ export function buildTakosumiReleaseCommands(
       "bunx",
       ...wranglerReleaseArtifactArgs(outputs, environment, {
         containersRollout,
+        prebuiltWorker: workerArtifact,
       }),
     ]),
   ];
@@ -629,7 +693,11 @@ function wranglerDeployEnvironmentArgs(environment) {
   return environment === "staging" ? ["--env", "staging"] : ["--env", ""];
 }
 
-function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
+function wranglerDeployArgs(
+  outputs,
+  environment,
+  { containersRollout, prebuiltWorker = false } = {},
+) {
   const workerName = requireStringOutput(outputs, "service_runtime_name");
   return [
     "wrangler",
@@ -641,13 +709,21 @@ function wranglerDeployArgs(outputs, environment, { containersRollout } = {}) {
     "--secrets-file",
     releaseSecretsFilePath(environment),
     ...wranglerDeployEnvironmentArgs(environment),
+    ...(prebuiltWorker ? ["--no-bundle"] : []),
     ...(containersRollout ? ["--containers-rollout", containersRollout] : []),
   ];
 }
 
-function wranglerBundleArgs(outputs, environment, { containersRollout } = {}) {
+function wranglerBundleArgs(
+  outputs,
+  environment,
+  { containersRollout, prebuiltWorker = false } = {},
+) {
   return [
-    ...wranglerDeployArgs(outputs, environment, { containersRollout }),
+    ...wranglerDeployArgs(outputs, environment, {
+      containersRollout,
+      prebuiltWorker,
+    }),
     "--dry-run",
     "--outdir",
     releaseWranglerBundleDir(environment),
@@ -657,11 +733,17 @@ function wranglerBundleArgs(outputs, environment, { containersRollout } = {}) {
 function wranglerReleaseArtifactArgs(
   outputs,
   environment,
-  { containersRollout } = {},
+  { containersRollout, prebuiltWorker = false } = {},
 ) {
   return isTakosumiManagedCloudflareTarget(outputs)
-    ? wranglerBundleArgs(outputs, environment, { containersRollout })
-    : wranglerDeployArgs(outputs, environment, { containersRollout });
+    ? wranglerBundleArgs(outputs, environment, {
+        containersRollout,
+        prebuiltWorker,
+      })
+    : wranglerDeployArgs(outputs, environment, {
+        containersRollout,
+        prebuiltWorker,
+      });
 }
 
 export function buildTakosumiDestroyCommands(outputs) {
@@ -2031,6 +2113,7 @@ export async function deployManagedCompatWorker(
     apiToken,
     configPath,
     targetConfig,
+    assetManifestPath: env.TAKOS_RELEASE_ASSET_MANIFEST_PATH,
     fetchImpl,
   });
   const metadata = managedCompatWorkerUploadMetadata(targetConfig, {
@@ -2267,6 +2350,7 @@ async function uploadManagedCompatAssets({
   apiToken,
   configPath,
   targetConfig,
+  assetManifestPath,
   fetchImpl,
 }) {
   const assetsConfig = targetConfig.assets;
@@ -2274,7 +2358,10 @@ async function uploadManagedCompatAssets({
   if (!directory) return undefined;
   const assetDirectory = resolve(dirname(configPath), directory);
   if (!existsSync(assetDirectory)) return undefined;
-  const manifest = buildManagedCompatAssetManifest(assetDirectory);
+  const manifest = buildManagedCompatAssetManifest(
+    assetDirectory,
+    assetManifestPath,
+  );
   const sessionResponse = await fetchImpl(
     `${apiBase}/accounts/${encodeURIComponent(
       accountId,
@@ -2388,7 +2475,14 @@ async function uploadManagedCompatAssets({
   };
 }
 
-function buildManagedCompatAssetManifest(assetDirectory) {
+function buildManagedCompatAssetManifest(assetDirectory, assetManifestPath) {
+  if (typeof assetManifestPath === "string" && assetManifestPath.trim()) {
+    const parsed = JSON.parse(readFileSync(assetManifestPath, "utf8"));
+    if (!isPlainObject(parsed)) {
+      throw new Error("Takos release asset manifest must be an object.");
+    }
+    return parsed;
+  }
   const manifest = {};
   for (const filePath of walkFiles(assetDirectory)) {
     const key = `/${relative(assetDirectory, filePath).split(sep).join("/")}`;
@@ -2540,6 +2634,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   let releaseStatus = "succeeded";
   const outputs = readReleaseOutputs(env);
   const childEnv = releaseChildEnv(outputs, env);
+  const workerArtifact = destroy ? undefined : workerReleaseArtifactConfig(env);
   const takosumiRepoDir =
     env.TAKOS_RELEASE_TAKOSUMI_REPO_DIR ??
     env.TAKOSUMI_REPO_DIR ??
@@ -2555,10 +2650,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const commands = destroy
     ? buildTakosumiDestroyCommands(outputs)
     : (() => {
-        ensureTakosumiSourceModule(takosumiRepoDir, {
-          repoUrl: takosumiRepoUrl,
-          ref: takosumiRef,
-        });
+        if (!workerArtifact) {
+          ensureTakosumiSourceModule(takosumiRepoDir, {
+            repoUrl: takosumiRepoUrl,
+            ref: takosumiRef,
+          });
+        }
         return buildTakosumiReleaseCommands(outputs, environment, {
           debug,
           zoneId: env.TAKOS_CLOUDFLARE_ZONE_ID ?? env.CF_ZONE_ID,
@@ -2572,10 +2669,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "1" ||
             env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "true",
           wranglerAccountId: childEnv.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID,
+          workerArtifact: Boolean(workerArtifact),
         });
       })();
+  let preparedWorkerArtifact;
   try {
-    const releaseEnv = childEnv;
+    let releaseEnv = childEnv;
     {
       const commandsToRun = destroy ? commands : commands.slice(0, -1);
       for (const command of commandsToRun) {
@@ -2586,6 +2685,23 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
             : run(command, releaseEnv),
         );
         if (!destroy && stepName === "render-wrangler-config") {
+          if (workerArtifact) {
+            preparedWorkerArtifact = await timeReleaseStep(
+              timings,
+              "worker-release-artifact",
+              () =>
+                prepareWorkerReleaseArtifact({
+                  config: workerArtifact,
+                  environment,
+                  wranglerConfigPath: releaseWranglerConfigPath(environment),
+                }),
+            );
+            releaseEnv = {
+              ...releaseEnv,
+              TAKOS_RELEASE_ASSET_MANIFEST_PATH:
+                preparedWorkerArtifact.assetManifestPath,
+            };
+          }
           await timeReleaseStep(
             timings,
             "existing-worker-migration-prune",
@@ -2599,8 +2715,6 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           await timeReleaseStep(timings, "queue-consumer-trigger-prune", () =>
             pruneWranglerQueueConsumersForRelease(environment),
           );
-        }
-        if (!destroy && stepName === "build-worker") {
           await timeReleaseStep(timings, "d1-wrangler-config", () =>
             writeD1MigrationsWranglerConfig(environment),
           );
@@ -2619,6 +2733,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
               "bunx",
               wranglerBundleArgs(outputs, environment, {
                 containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+                prebuiltWorker: Boolean(preparedWorkerArtifact),
               }),
               deployEnv,
             ),
@@ -2632,6 +2747,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
               "bunx",
               wranglerDeployArgs(outputs, environment, {
                 containersRollout: env.TAKOS_WRANGLER_CONTAINERS_ROLLOUT,
+                prebuiltWorker: Boolean(preparedWorkerArtifact),
               }),
               deployEnv,
             ),
@@ -2672,6 +2788,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       cleanupReleaseWranglerConfig(environment);
       cleanupReleaseD1MigrationsWranglerConfig(environment);
       cleanupReleaseWranglerBundleDir(environment);
+      cleanupWorkerReleaseArtifact(environment);
     }
     emitReleaseTimingSummary(
       releaseTimingSummary({

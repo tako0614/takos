@@ -27,6 +27,8 @@ deploy/local-substrate/
 .takos-local/
 .takos-release-secrets.*.json
 deploy/cloudflare/.takos-release-wrangler.*.toml
+deploy/cloudflare/.takos-release-artifact.*/
+deploy/cloudflare/.takos-release-bundle.*/
 *.log
 tmp/
 temp/

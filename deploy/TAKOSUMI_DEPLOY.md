@@ -45,8 +45,10 @@ behavior, not a Takosumi resource type.
 This bridge is intentionally narrow: durable resources that the OpenTofu
 provider can express stay in the module, while provider gaps such as Vectorize
 index creation are run from the reviewed app source and the reviewed
-OpenTofu outputs. Takosumi does not choose an artifact URL, fetch app assets, or
-replace the Git/OpenTofu source of truth.
+OpenTofu outputs. The OpenTofu module selects either a SHA-256-pinned Git release
+artifact or an explicit source build. Takosumi executes that reviewed module and
+its declared release command; it does not infer build commands, choose a newer
+artifact, or replace Git as the source of truth.
 The module exposes `release_executor` and defaults it to `operator` so the
 normal Takosumi Cloud install path publishes Worker artifacts through the
 operator release activator after OpenTofu has committed durable infrastructure:
@@ -59,10 +61,32 @@ operator release activator after OpenTofu has committed durable infrastructure:
   mode, prebuilt container images from the Git CI release manifest are required;
   the materializer fails closed instead of running `containers:build`.
 
-For fast installs, prefer prebuilt container images produced by Git CI or the
-operator release pipeline. Pass those Cloudflare Containers-supported image refs
-through the OpenTofu variable `release_container_images`; Takosumi only injects
-the variable into the release command and records the Run evidence.
+The default install path uses `worker_release_tag`. The tagged Git release
+contains `takosumi-artifact.json`, a Worker + SPA archive, its SHA-256, and the
+Cloudflare Container image refs produced by the same workflow. OpenTofu reads
+that manifest during plan and seals the selected URL, digest, and image refs into
+the reviewed release command. Apply then skips `bun install`, the SPA build,
+Worker bundling, and all container builds.
+
+```hcl
+worker_release_tag = "v0.10.1"
+build_from_source  = false
+```
+
+Set `build_from_source = true` to build the Worker and SPA from the selected Git
+snapshot. This mode still reuses the tagged release's runtime and executor
+container images, because rebuilding those images inside an install run is the
+dominant latency and capacity cost. The source path uses a frozen dependency
+install with lifecycle scripts disabled, and may reuse a persistent Bun cache
+through `TAKOS_RELEASE_BUN_INSTALL_CACHE_DIR`.
+
+```hcl
+worker_release_tag = "v0.10.1"
+build_from_source  = true
+```
+
+`release_container_images` remains an explicit override for an operator-owned
+registry or a release without the standard image metadata:
 
 ```hcl
 release_container_images = {
@@ -76,15 +100,13 @@ currently exposes those managed registry images as CI-published tags; if the
 registry ref is from an external registry, use an immutable digest ref so the
 reviewed Run and the deployed container image stay bound to the same artifact.
 
-When `release_container_images` is set, the release activator rewrites the
+When prebuilt container images are selected, the release activator rewrites the
 generated Wrangler config to use those image refs and skips the local
-`containers:build` step. When it is unset under `release_executor = "runner"`,
-the fallback remains fully Git/OpenTofu-native: the release command builds from
-the reviewed source snapshot. When `release_executor = "operator"`,
-`release_container_images` is mandatory so Takosumi Cloud / hosted operators do
-not spend activation time or container-build capacity producing app artifacts.
-Takosumi does not select, fetch, or rewrite artifacts outside the declared
-OpenTofu module and release command.
+`containers:build` step. `release_executor = "operator"` fails at plan time if
+the runtime or executor image is missing, so Takosumi Cloud never starts an
+accidental container build. A self-hosted `runner` may intentionally clear
+`worker_release_tag` and omit image refs to build every artifact from source,
+but that is the slow fallback rather than the normal install path.
 The canonical artifact source for hosted Takos installs is the Takos Git CI
 release workflow: it publishes `takos-worker-runtime` and
 `takos-agent-executor` to the Cloudflare managed container registry with
@@ -93,8 +115,9 @@ release manifest, and the operator passes those refs into OpenTofu as plain
 module variables. GHCR images may remain as provenance / SBOM evidence, but
 Cloudflare Worker deploys should consume the Cloudflare registry refs.
 
-To turn the Git CI release manifest into OpenTofu input, generate a tfvars JSON
-file from the downloaded `takos-release-manifest` artifact:
+Normal installs do not need a generated tfvars file. For an explicit operator
+override, the mechanical helper can still turn a downloaded release manifest
+into `release_container_images` input:
 
 ```sh
 bun scripts/control/release-container-images-from-manifest.mjs \
@@ -127,11 +150,10 @@ allowlist; `scripts/control/takosumi-release.mjs` uses it only for the final
 credential for OpenTofu, D1 migrations, workers.dev enablement, and verification
 calls.
 
-Because the Takos Worker imports Takosumi source modules at build time, the
-release command first looks for a sibling Takosumi checkout. If the restored
-runner source snapshot does not contain one, it clones the non-secret
-`takosumi_source_repo_url` / `takosumi_source_ref` declared by the OpenTofu
-module into the release workspace.
+Only source builds need the Takosumi source modules imported by the Worker. The
+release command accepts a clean sibling checkout at the exact reviewed ref, or
+clones `takosumi_source_repo_url` at the immutable `takosumi_source_ref` declared
+by OpenTofu. Artifact installs do not clone Takosumi source.
 
 ## Cloudflare Self-Host Runbook
 
@@ -164,10 +186,10 @@ phase does.
 - `tofu` (OpenTofu >= 1.5), `bun`, and `wrangler` (`bunx wrangler`) installed.
 - `wrangler login` completed for the target Cloudflare account.
 - A Cloudflare account id and, if using a custom domain, the DNS zone id.
-- The sibling `takosumi/` repo checked out. The Takos distribution worker imports
-  Takosumi contract source via tsconfig aliases. Takosumi-hosted release runs
-  can instead clone this source module from the OpenTofu
-  `takosumi_source_repo_url` / `takosumi_source_ref` variables.
+- A clean sibling `takosumi/` checkout only when building from source. Hosted
+  source builds may instead clone the exact OpenTofu
+  `takosumi_source_repo_url` / `takosumi_source_ref` pin. Artifact installs do
+  not require this checkout.
 
 ### 1. Provision Durable Infra
 
@@ -230,17 +252,19 @@ The index name, dimensions, and metric are exported from the OpenTofu module and
 consumed by `takosumi-release.mjs`. Match dimensions and metric to the embedding
 model configured for the deploy.
 
-### 4. Build Assets And Containers
+### 4. Select A Release Artifact Or Build Source
+
+The normal install selects `worker_release_tag` and does not build locally. To
+exercise the source fallback, set `build_from_source = true`; the activation
+command runs:
 
 ```sh
+bun install --frozen-lockfile --ignore-scripts
 bun run build
-bun run containers:build
 ```
 
-Wrangler builds only Takos runtime / executor containers from this repo. In
-hosted/operator installs, Git CI should usually build those container images
-first and pass the resulting Cloudflare registry refs through
-`release_container_images`; this step is then skipped during release activation.
+Container images remain prebuilt by default in both modes. Only an intentional
+self-hosted runner with no release image refs runs `bun run containers:build`.
 
 ### 5. Run Product Activation
 
