@@ -602,9 +602,10 @@ export function isSupportedCloudflareContainerImageRef(image) {
     return false;
   }
   const digest = "@sha256:[0-9a-f]{64}";
+  const tag = ":[A-Za-z0-9_][A-Za-z0-9._-]{0,127}";
   const patterns = [
     new RegExp(
-      `^registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+${digest}$`,
+      `^registry\\.cloudflare\\.com/[A-Za-z0-9_-]+/[A-Za-z0-9._/-]+(?:${digest}|${tag})$`,
       "u",
     ),
     new RegExp(`^docker\\.io/[A-Za-z0-9._/-]+${digest}$`, "u"),

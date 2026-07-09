@@ -66,13 +66,14 @@ the variable into the release command and records the Run evidence.
 
 ```hcl
 release_container_images = {
-  runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime@sha256:<digest>"
-  executor = "registry.cloudflare.com/<account-id>/takos-agent-executor@sha256:<digest>"
+  runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime:0.10.0-<commit>"
+  executor = "registry.cloudflare.com/<account-id>/takos-agent-executor:0.10.0-<commit>"
 }
 ```
 
-Use digest refs from the CI pipeline. Tags are useful as human-facing release
-labels, but the OpenTofu variable should carry the immutable digest ref so the
+Use the Cloudflare managed registry refs from the CI release manifest. Wrangler
+currently exposes those managed registry images as CI-published tags; if the
+registry ref is from an external registry, use an immutable digest ref so the
 reviewed Run and the deployed container image stay bound to the same artifact.
 
 When `release_container_images` is set, the release activator rewrites the

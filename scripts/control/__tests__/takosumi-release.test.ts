@@ -82,6 +82,10 @@ const runtimeImage =
   "registry.cloudflare.com/acc_123/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const executorImage =
   "registry.cloudflare.com/acc_123/takos-agent-executor@sha256:2222222222222222222222222222222222222222222222222222222222222222";
+const runtimeTaggedImage =
+  "registry.cloudflare.com/acc_123/takos-worker-runtime:0.10.0-da3f231b8135";
+const executorTaggedImage =
+  "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-da3f231b8135";
 
 test("buildTakosumiReleaseCommands runs generic operator activation steps", () => {
   assert.deepEqual(
@@ -493,11 +497,23 @@ test("normalizeReleaseContainerImages accepts aliases and supported registry ref
       ExecutorContainerTier3: executorImage,
     },
   );
+  assert.deepEqual(
+    normalizeReleaseContainerImages({
+      runtime: runtimeTaggedImage,
+      executor: executorTaggedImage,
+    }),
+    {
+      TakosRuntimeContainer: runtimeTaggedImage,
+      ExecutorContainerTier1: executorTaggedImage,
+      ExecutorContainerTier2: executorTaggedImage,
+      ExecutorContainerTier3: executorTaggedImage,
+    },
+  );
   assert.throws(
     () =>
       normalizeReleaseContainerImages({
         executor:
-          "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-b636a67728c8",
+          "registry.cloudflare.com/acc_123/takos-agent-executor:bad tag",
       }),
     /Cloudflare Containers-supported registry ref/,
   );
