@@ -13,7 +13,7 @@ import { join, resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dir, "../../..");
 
-test("ensure-vectorize-index delegates to Wrangler and strips API base overrides", async () => {
+test("ensure-vectorize-index preserves compat API base for virtual accounts", async () => {
   const dir = mkdtempSync(join(tmpdir(), "takos-vectorize-test-"));
   const bin = join(dir, "bin");
   const captureFile = join(dir, "calls.json");
@@ -101,6 +101,9 @@ echo '{"success":true}'
     for (const call of calls) {
       assert.deepEqual(call.env, {
         CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+        CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
+        CF_API_BASE_URL: "https://compat.example.test/client/v4",
+        CLOUDFLARE_BASE_URL: "https://compat.example.test/client/v4",
         CLOUDFLARE_API_TOKEN: "test-token",
       });
     }

@@ -28,11 +28,16 @@ function readOption(parts, option) {
 
 const accountIdOption = readOption(args, "--account-id");
 const wranglerArgs = accountIdOption.rest;
+const useCompatApi =
+  process.env.TAKOS_CLOUDFLARE_TARGET_MODE === "managed_compat" ||
+  /^ts_acc_/u.test(accountIdOption.value ?? "");
 const nativeProcessEnv = { ...process.env };
-delete nativeProcessEnv.TAKOS_CLOUDFLARE_API_BASE_URL;
-delete nativeProcessEnv.CLOUDFLARE_API_BASE_URL;
-delete nativeProcessEnv.CF_API_BASE_URL;
-delete nativeProcessEnv.CLOUDFLARE_BASE_URL;
+if (!useCompatApi) {
+  delete nativeProcessEnv.TAKOS_CLOUDFLARE_API_BASE_URL;
+  delete nativeProcessEnv.CLOUDFLARE_API_BASE_URL;
+  delete nativeProcessEnv.CF_API_BASE_URL;
+  delete nativeProcessEnv.CLOUDFLARE_BASE_URL;
+}
 const env = {
   ...nativeProcessEnv,
   ...(accountIdOption.value

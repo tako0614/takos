@@ -510,6 +510,29 @@ function releaseContainerImagesAccountId(env = process.env) {
   return [...accountIds][0];
 }
 
+function releaseOutputOrEnvCloudflareAccountId(outputs, env = process.env) {
+  try {
+    return requireStringOutput(outputs, "cloudflare_account_id");
+  } catch {
+    return (
+      stringValue(env.CLOUDFLARE_ACCOUNT_ID) ?? stringValue(env.CF_ACCOUNT_ID)
+    );
+  }
+}
+
+export function isTakosumiManagedCloudflareTarget(outputs, env = process.env) {
+  return isTakosumiVirtualCloudflareAccountId(
+    releaseOutputOrEnvCloudflareAccountId(outputs, env),
+  );
+}
+
+function takosumiManagedCloudflareAccountId(outputs, env = process.env) {
+  const accountId = releaseOutputOrEnvCloudflareAccountId(outputs, env);
+  return isTakosumiVirtualCloudflareAccountId(accountId)
+    ? accountId
+    : undefined;
+}
+
 export function releaseWranglerAccountId(outputs, env = process.env) {
   const explicit =
     stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID) ??
@@ -517,12 +540,7 @@ export function releaseWranglerAccountId(outputs, env = process.env) {
     stringValue(env.TAKOSUMI_CLOUDFLARE_ACCOUNT_ID);
   if (explicit) return explicit;
 
-  let outputAccountId;
-  try {
-    outputAccountId = requireStringOutput(outputs, "cloudflare_account_id");
-  } catch {
-    outputAccountId = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID;
-  }
+  const outputAccountId = releaseOutputOrEnvCloudflareAccountId(outputs, env);
   if (isTakosumiVirtualCloudflareAccountId(outputAccountId)) {
     const imageAccountId = releaseContainerImagesAccountId(env);
     if (imageAccountId) return imageAccountId;
@@ -531,6 +549,13 @@ export function releaseWranglerAccountId(outputs, env = process.env) {
     );
   }
   return outputAccountId;
+}
+
+function releaseCloudflareApiAccountId(outputs, env = process.env) {
+  return (
+    takosumiManagedCloudflareAccountId(outputs, env) ??
+    releaseWranglerAccountId(outputs, env)
+  );
 }
 
 export function isSupportedCloudflareContainerImageRef(image) {
@@ -1086,11 +1111,24 @@ function releaseWorkerApiIntervalMs(env) {
 }
 
 export function releaseChildEnv(outputs, env = process.env) {
-  let virtualAccountId;
-  try {
-    virtualAccountId = requireStringOutput(outputs, "cloudflare_account_id");
-  } catch {
-    virtualAccountId = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID;
+  const managedAccountId = takosumiManagedCloudflareAccountId(outputs, env);
+  if (managedAccountId) {
+    const apiBase = releaseCloudflareApiBaseUrl(outputs, env);
+    const apiToken = releaseApiToken(env);
+    return {
+      ...cloudflareCompatEnv(env, apiBase),
+      CI: env.CI ?? "true",
+      WRANGLER_SEND_METRICS: env.WRANGLER_SEND_METRICS ?? "false",
+      TAKOS_CLOUDFLARE_TARGET_MODE: "managed_compat",
+      ...(apiToken
+        ? {
+            CLOUDFLARE_API_TOKEN: apiToken,
+            CF_API_TOKEN: apiToken,
+          }
+        : {}),
+      CLOUDFLARE_ACCOUNT_ID: managedAccountId,
+      CF_ACCOUNT_ID: managedAccountId,
+    };
   }
   const wranglerAccountId = releaseWranglerAccountId(outputs, env);
   const apiToken = wranglerNativeApiToken(env);
@@ -1126,7 +1164,10 @@ function wranglerNativeApiToken(env = process.env) {
 
 export function wranglerDeployEnv(env = process.env) {
   const deployToken = wranglerDeployToken(env);
-  const next = cloudflareNativeEnv(env);
+  const next =
+    env.TAKOS_CLOUDFLARE_TARGET_MODE === "managed_compat"
+      ? cloudflareCompatEnv(env, customCloudflareApiBaseUrl(env))
+      : cloudflareNativeEnv(env);
   if (!deployToken) return next;
   return {
     ...next,
@@ -1280,13 +1321,13 @@ export async function pruneWranglerMigrationsForExistingWorker(
   fetchImpl = globalThis.fetch,
 ) {
   const workerName = requireStringOutput(outputs, "service_runtime_name");
-  const accountId = releaseWranglerAccountId(outputs, env);
+  const accountId = releaseCloudflareApiAccountId(outputs, env);
   const apiToken = wranglerDeployToken(env) ?? releaseApiToken(env);
   if (!accountId || !apiToken) {
     return { skipped: true, reason: "cloudflare_api_unavailable" };
   }
   const endpoint =
-    `${cloudflareApiBaseUrl()}/accounts/${encodeURIComponent(accountId)}` +
+    `${releaseCloudflareApiBaseUrl(outputs, env)}/accounts/${encodeURIComponent(accountId)}` +
     `/workers/scripts/${encodeURIComponent(workerName)}`;
   const response = await fetchImpl(endpoint, {
     method: "GET",
@@ -1337,10 +1378,11 @@ export async function preflightWranglerDeployAuth(
     return { skipped: true, reason: "deploy_token_not_configured" };
   }
   const workerName = requireStringOutput(outputs, "service_runtime_name");
-  const accountId = releaseWranglerAccountId(outputs, env);
+  const accountId = releaseCloudflareApiAccountId(outputs, env);
   if (!accountId) {
     return { skipped: true, reason: "account_id_unavailable" };
   }
+  const apiBase = releaseCloudflareApiBaseUrl(outputs, env);
   const checks = [
     ...wranglerDeployAuthChecks(accountId, workerName),
     ...wranglerDeployOutputAuthChecks(accountId, outputs),
@@ -1348,7 +1390,13 @@ export async function preflightWranglerDeployAuth(
   const results = [];
   for (const check of checks) {
     results.push(
-      await preflightCloudflareApiAccess(check, env, deployToken, fetchImpl),
+      await preflightCloudflareApiAccess(
+        check,
+        env,
+        deployToken,
+        fetchImpl,
+        apiBase,
+      ),
     );
   }
   const failed = results.filter((result) => result.authenticated === false);
@@ -1430,8 +1478,14 @@ function wranglerDeployOutputAuthChecks(accountId, outputs) {
   return checks;
 }
 
-async function preflightCloudflareApiAccess(check, env, apiToken, fetchImpl) {
-  const response = await fetchImpl(`${cloudflareApiBaseUrl()}${check.path}`, {
+async function preflightCloudflareApiAccess(
+  check,
+  env,
+  apiToken,
+  fetchImpl,
+  apiBase = CLOUDFLARE_API_BASE,
+) {
+  const response = await fetchImpl(`${apiBase}${check.path}`, {
     method: "GET",
     headers: {
       authorization: `Bearer ${apiToken}`,
@@ -1464,8 +1518,30 @@ function stringValue(value) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function cloudflareApiBaseUrl() {
-  return CLOUDFLARE_API_BASE;
+function customCloudflareApiBaseUrl(env = process.env) {
+  return (
+    stringValue(env.TAKOS_CLOUDFLARE_API_BASE_URL) ??
+    stringValue(env.CLOUDFLARE_API_BASE_URL) ??
+    stringValue(env.CF_API_BASE_URL) ??
+    stringValue(env.CLOUDFLARE_BASE_URL)
+  );
+}
+
+function normalizeCloudflareApiBaseUrl(value) {
+  return value.replace(/\/+$/u, "");
+}
+
+function releaseCloudflareApiBaseUrl(outputs, env = process.env) {
+  if (!isTakosumiManagedCloudflareTarget(outputs, env)) {
+    return CLOUDFLARE_API_BASE;
+  }
+  const custom = customCloudflareApiBaseUrl(env);
+  if (!custom) {
+    throw new Error(
+      "Takosumi managed Cloudflare targets require TAKOS_CLOUDFLARE_API_BASE_URL or CLOUDFLARE_API_BASE_URL so release helpers use the compatibility API.",
+    );
+  }
+  return normalizeCloudflareApiBaseUrl(custom);
 }
 
 function cloudflareNativeEnv(env = process.env) {
@@ -1474,7 +1550,25 @@ function cloudflareNativeEnv(env = process.env) {
   delete nativeEnv.CLOUDFLARE_API_BASE_URL;
   delete nativeEnv.CF_API_BASE_URL;
   delete nativeEnv.CLOUDFLARE_BASE_URL;
+  delete nativeEnv.TAKOS_CLOUDFLARE_TARGET_MODE;
   return nativeEnv;
+}
+
+function cloudflareCompatEnv(env = process.env, apiBase) {
+  const compatEnv = { ...env };
+  const normalizedApiBase = apiBase
+    ? normalizeCloudflareApiBaseUrl(apiBase)
+    : customCloudflareApiBaseUrl(env);
+  delete compatEnv.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID;
+  delete compatEnv.TAKOS_CLOUDFLARE_REAL_ACCOUNT_ID;
+  delete compatEnv.TAKOSUMI_CLOUDFLARE_ACCOUNT_ID;
+  if (normalizedApiBase) {
+    compatEnv.TAKOS_CLOUDFLARE_API_BASE_URL = normalizedApiBase;
+    compatEnv.CLOUDFLARE_API_BASE_URL = normalizedApiBase;
+    compatEnv.CF_API_BASE_URL = normalizedApiBase;
+    compatEnv.CLOUDFLARE_BASE_URL = normalizedApiBase;
+  }
+  return compatEnv;
 }
 
 function shouldRetryCloudflareWorkerApi(response, payload) {
@@ -1512,7 +1606,7 @@ export async function ensureWorkersDevSubdomain(
     return { skipped: true, reason: "no_workers_dev_launch_url" };
   }
   const workerName = requireStringOutput(outputs, "service_runtime_name");
-  const accountId = releaseWranglerAccountId(outputs, env);
+  const accountId = releaseCloudflareApiAccountId(outputs, env);
   const apiToken = env.CF_API_TOKEN ?? env.CLOUDFLARE_API_TOKEN;
   if (typeof apiToken !== "string" || apiToken.trim() === "") {
     console.warn(
@@ -1521,7 +1615,7 @@ export async function ensureWorkersDevSubdomain(
     return { skipped: true, reason: "api_token_unavailable" };
   }
 
-  const url = `${cloudflareApiBaseUrl()}/accounts/${encodeURIComponent(
+  const url = `${releaseCloudflareApiBaseUrl(outputs, env)}/accounts/${encodeURIComponent(
     accountId,
   )}/workers/scripts/${encodeURIComponent(workerName)}/subdomain`;
   const attempts = releaseWorkerApiAttempts(env);
@@ -1638,7 +1732,7 @@ async function verifyCloudflareWorkerContent(
   fetchImpl = globalThis.fetch,
 ) {
   const workerName = requireStringOutput(outputs, "service_runtime_name");
-  const accountId = releaseWranglerAccountId(outputs, env);
+  const accountId = releaseCloudflareApiAccountId(outputs, env);
   const workerEnvironment = releaseWorkerEnvironment(environment);
   const apiToken = releaseApiToken(env);
   if (!apiToken) {
@@ -1656,7 +1750,7 @@ async function verifyCloudflareWorkerContent(
     workerName,
     workerEnvironment,
     environment,
-    apiBase: cloudflareApiBaseUrl(),
+    apiBase: releaseCloudflareApiBaseUrl(outputs, env),
   });
   const attempts = releaseWorkerApiAttempts(env);
   const intervalMs = releaseWorkerApiIntervalMs(env);
@@ -1909,9 +2003,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           requirePrebuiltContainerImages:
             env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "1" ||
             env.TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES === "true",
-          wranglerAccountId:
-            childEnv.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID ??
-            childEnv.CLOUDFLARE_ACCOUNT_ID,
+          wranglerAccountId: childEnv.TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID,
         });
       })();
   try {

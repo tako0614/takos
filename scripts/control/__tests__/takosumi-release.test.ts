@@ -987,11 +987,10 @@ test("preflightWranglerDeployAuth checks individual R2 bucket access used by wra
   );
 });
 
-test("releaseChildEnv strips Takosumi Cloud compat API base from native release helpers", () => {
+test("releaseChildEnv preserves Takosumi Cloud compat API base for managed targets", () => {
   const containerImages = JSON.stringify({
     runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
-    executor:
-      "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
+    executor: "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
   });
 
   assert.deepEqual(
@@ -1007,18 +1006,22 @@ test("releaseChildEnv strips Takosumi Cloud compat API base from native release 
     {
       PATH: "/bin",
       CLOUDFLARE_API_TOKEN: "token",
+      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
+      CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
+      CF_API_BASE_URL: "https://compat.example.test/client/v4",
+      CLOUDFLARE_BASE_URL: "https://compat.example.test/client/v4",
       TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
+      TAKOS_CLOUDFLARE_TARGET_MODE: "managed_compat",
       CF_API_TOKEN: "token",
-      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
-      CLOUDFLARE_ACCOUNT_ID: "backend_acc",
-      CF_ACCOUNT_ID: "backend_acc",
+      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
     },
   );
 });
 
-test("releaseChildEnv derives native account from prebuilt images for compat-backed releases", () => {
+test("releaseWranglerAccountId can derive a native account for explicit native helper operations", () => {
   const containerImages = JSON.stringify({
     runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
     executor: "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
@@ -1047,13 +1050,17 @@ test("releaseChildEnv derives native account from prebuilt images for compat-bac
     {
       PATH: "/bin",
       CLOUDFLARE_API_TOKEN: "token",
+      TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
+      CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4",
+      CF_API_BASE_URL: "https://compat.example.test/client/v4",
+      CLOUDFLARE_BASE_URL: "https://compat.example.test/client/v4",
       TAKOS_RELEASE_CONTAINER_IMAGES_JSON: containerImages,
       CI: "true",
       WRANGLER_SEND_METRICS: "false",
+      TAKOS_CLOUDFLARE_TARGET_MODE: "managed_compat",
       CF_API_TOKEN: "token",
-      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
-      CLOUDFLARE_ACCOUNT_ID: "backend_acc",
-      CF_ACCOUNT_ID: "backend_acc",
+      CLOUDFLARE_ACCOUNT_ID: "ts_acc_takosumi_cloud",
+      CF_ACCOUNT_ID: "ts_acc_takosumi_cloud",
     },
   );
 });
@@ -1076,7 +1083,7 @@ test("buildTakosumiReleaseCommands uses the native Wrangler account for Vectoriz
   );
 });
 
-test("releaseChildEnv requires a real account for virtual Cloudflare outputs", () => {
+test("releaseChildEnv requires a compat API base for virtual Cloudflare outputs", () => {
   assert.throws(
     () =>
       releaseChildEnv(
@@ -1084,11 +1091,9 @@ test("releaseChildEnv requires a real account for virtual Cloudflare outputs", (
         {
           PATH: "/bin",
           CLOUDFLARE_API_TOKEN: "token",
-          TAKOS_CLOUDFLARE_API_BASE_URL:
-            "https://compat.example.test/client/v4",
         },
       ),
-    /requires a real Cloudflare account id/,
+    /require TAKOS_CLOUDFLARE_API_BASE_URL or CLOUDFLARE_API_BASE_URL/,
   );
 });
 
@@ -1174,7 +1179,7 @@ test("ensureWorkersDevSubdomain derives workers.dev URL from subdomain outputs",
   );
 });
 
-test("ensureWorkersDevSubdomain ignores Cloudflare-compatible API base overrides", async () => {
+test("ensureWorkersDevSubdomain uses Cloudflare-compatible API base for managed targets", async () => {
   const requests = [];
   const result = await ensureWorkersDevSubdomain(
     {
@@ -1185,7 +1190,6 @@ test("ensureWorkersDevSubdomain ignores Cloudflare-compatible API base overrides
     {
       CLOUDFLARE_API_TOKEN: "token_123",
       TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
-      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
     },
     async (url, init) => {
       requests.push({ url, init });
@@ -1206,7 +1210,7 @@ test("ensureWorkersDevSubdomain ignores Cloudflare-compatible API base overrides
   assert.equal(requests.length, 1);
   assert.equal(
     requests[0].url,
-    "https://api.cloudflare.com/client/v4/accounts/backend_acc/workers/scripts/takos-test/subdomain",
+    "https://compat.example.test/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/subdomain",
   );
 });
 
@@ -1575,7 +1579,7 @@ test("verifyReleaseDeployment checks uploaded artifact and public health", async
   );
 });
 
-test("verifyReleaseDeployment ignores Cloudflare-compatible API base overrides", async () => {
+test("verifyReleaseDeployment uses Cloudflare-compatible API base for managed targets", async () => {
   const requests = [];
   const result = await verifyReleaseDeployment(
     {
@@ -1587,7 +1591,6 @@ test("verifyReleaseDeployment ignores Cloudflare-compatible API base overrides",
     {
       CLOUDFLARE_API_TOKEN: "token_123",
       TAKOS_CLOUDFLARE_API_BASE_URL: "https://compat.example.test/client/v4/",
-      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "backend_acc",
       TAKOS_RELEASE_HEALTH_ATTEMPTS: "1",
     },
     async (url, init) => {
@@ -1606,7 +1609,7 @@ test("verifyReleaseDeployment ignores Cloudflare-compatible API base overrides",
   assert.deepEqual(
     requests.map((request) => String(request.url)),
     [
-      "https://api.cloudflare.com/client/v4/accounts/backend_acc/workers/scripts/takos-test/content",
+      "https://compat.example.test/client/v4/accounts/ts_acc_takosumi_cloud/workers/scripts/takos-test/content",
       "https://takos-test.app.takos.jp/health",
     ],
   );
