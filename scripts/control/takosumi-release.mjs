@@ -73,12 +73,13 @@ Optional env:
                                           class names or "runtime" /
                                           "executor" aliases.
   TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN
-                                          Optional token used only for the
-                                          final wrangler deploy step. Use this
-                                          or CLOUDFLARE_CONTAINERS_API_TOKEN
-                                          when Cloudflare Containers require a
-                                          narrower deploy-capable token than
-                                          the Provider Connection token.
+                                          Optional native Wrangler token used
+                                          for release-time Cloudflare API
+                                          operations. Use this or
+                                          CLOUDFLARE_CONTAINERS_API_TOKEN when
+                                          the Provider Connection token points
+                                          at a compatibility endpoint or has a
+                                          narrower scope.
   TAKOS_REQUIRE_PREBUILT_CONTAINER_IMAGES Set to 1/true for hosted/operator
                                           materializers that must consume Git
                                           CI images and must not build
@@ -1092,7 +1093,7 @@ export function releaseChildEnv(outputs, env = process.env) {
     virtualAccountId = env.CLOUDFLARE_ACCOUNT_ID ?? env.CF_ACCOUNT_ID;
   }
   const wranglerAccountId = releaseWranglerAccountId(outputs, env);
-  const apiToken = env.CLOUDFLARE_API_TOKEN ?? env.CF_API_TOKEN;
+  const apiToken = wranglerNativeApiToken(env);
   const nativeEnv = cloudflareNativeEnv(env);
   return {
     ...nativeEnv,
@@ -1112,6 +1113,15 @@ export function releaseChildEnv(outputs, env = process.env) {
         }
       : {}),
   };
+}
+
+function wranglerNativeApiToken(env = process.env) {
+  return (
+    stringValue(env.TAKOS_CLOUDFLARE_WRANGLER_DEPLOY_API_TOKEN) ??
+    stringValue(env.CLOUDFLARE_CONTAINERS_API_TOKEN) ??
+    stringValue(env.CLOUDFLARE_API_TOKEN) ??
+    stringValue(env.CF_API_TOKEN)
+  );
 }
 
 export function wranglerDeployEnv(env = process.env) {

@@ -721,6 +721,30 @@ test("releaseChildEnv normalizes Cloudflare auth aliases for Wrangler", () => {
   );
 });
 
+test("releaseChildEnv prefers the native Containers token for release helpers", () => {
+  assert.deepEqual(
+    releaseChildEnv(
+      { cloudflare_account_id: "acc_from_outputs" },
+      {
+        PATH: "/bin",
+        CLOUDFLARE_API_TOKEN: "provider-token",
+        CLOUDFLARE_CONTAINERS_API_TOKEN: "native-token",
+      },
+    ),
+    {
+      PATH: "/bin",
+      CLOUDFLARE_API_TOKEN: "native-token",
+      CLOUDFLARE_CONTAINERS_API_TOKEN: "native-token",
+      CF_API_TOKEN: "native-token",
+      CI: "true",
+      WRANGLER_SEND_METRICS: "false",
+      TAKOS_CLOUDFLARE_WRANGLER_ACCOUNT_ID: "acc_from_outputs",
+      CLOUDFLARE_ACCOUNT_ID: "acc_from_outputs",
+      CF_ACCOUNT_ID: "acc_from_outputs",
+    },
+  );
+});
+
 test("wranglerDeployEnv uses provider token for real Cloudflare deploys", () => {
   const env = wranglerDeployEnv({
     PATH: "/bin",
