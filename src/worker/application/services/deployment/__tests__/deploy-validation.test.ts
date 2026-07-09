@@ -260,7 +260,7 @@ test("validateConsumeReferences allows built-in Takos runtime projection consume
         kind: "worker",
         consume: [
           {
-            publication: "takos.storage.workspace",
+            publication: "storage.filesystem",
             request: { scopes: ["files:read", "files:write"] },
             inject: { env: { url: "TAKOS_STORAGE_API_URL" } },
           },

@@ -64,7 +64,7 @@ modules stay OpenTofu's responsibility.
 | MCP registry                     | app-provided `protocol.mcp.server` publications            |
 | app launcher / embedded UI       | app-provided `interface.ui.surface` publications           |
 | file handlers                    | app-provided `interface.file.handler` publications         |
-| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`   |
+| Workspace file storage           | `storage.filesystem`                                      |
 | object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`       |
 | Git UX / clone / refs            | `source.repository`, `source.git.smart_http`               |
 | agent execution                  | `automation.agent_runtime`, `automation.tool_provider`     |
@@ -82,7 +82,7 @@ For Takos Workspace files, apps consume the Takos-owned service identity and map
 ```hcl
 consume = [
   {
-    publication = "takos.storage.workspace"
+    publication = "storage.filesystem"
     request = {
       scopes = ["files:read", "files:write"]
     }

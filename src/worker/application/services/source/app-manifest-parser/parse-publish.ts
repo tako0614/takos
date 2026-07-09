@@ -3,8 +3,10 @@ import type {
   AppPublicationOutput,
 } from "../app-manifest-types.ts";
 import {
+  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS,
   TAKOS_APP_AUTH_KINDS,
   TAKOS_APP_PUBLICATION_TYPES,
+  TAKOS_RUNTIME_PROJECTION_PUBLICATIONS,
 } from "../app-interface-contract.ts";
 import {
   asOptionalInteger,
@@ -26,6 +28,11 @@ const PUBLICATION_FIELDS = new Set([
 
 const FILE_HANDLER_PUBLICATION_TYPE =
   TAKOS_APP_PUBLICATION_TYPES.interfaceFileHandler;
+
+const RUNTIME_OWNED_PUBLICATION_NAMES = new Set<string>([
+  TAKOS_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage,
+  LEGACY_RUNTIME_PROJECTION_PUBLICATIONS.workspaceStorage,
+]);
 
 const FILE_HANDLER_SPEC_FIELDS = new Set(["mimeTypes", "extensions"]);
 
@@ -233,7 +240,7 @@ export function parsePublicationEntry(
   assertAllowedFields(record, prefix, PUBLICATION_FIELDS);
 
   const name = asRequiredString(record.name, `${prefix}.name`);
-  if (name.startsWith("takos.")) {
+  if (name.startsWith("takos.") || RUNTIME_OWNED_PUBLICATION_NAMES.has(name)) {
     throw new Error(
       `${prefix}.name '${name}' is reserved for Takos runtime services; use the Takos runtime binding contract instead`,
     );

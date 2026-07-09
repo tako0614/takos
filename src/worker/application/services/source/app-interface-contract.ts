@@ -18,11 +18,11 @@ export const APP_DEPLOYMENT_OUTPUT_KEYS = [
 ] as const;
 
 export const TAKOS_RUNTIME_PROJECTION_PUBLICATIONS = {
-  workspaceStorage: "takos.storage.workspace",
+  workspaceStorage: "storage.filesystem",
 } as const;
 
 export const LEGACY_RUNTIME_PROJECTION_PUBLICATIONS = {
-  workspaceStorage: "storage.filesystem",
+  workspaceStorage: "takos.storage.workspace",
 } as const;
 
 export const RUNTIME_PROJECTION_CAPABILITIES = {

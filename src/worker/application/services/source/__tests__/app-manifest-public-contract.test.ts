@@ -1643,7 +1643,7 @@ compute:
   );
 });
 
-test("public source contract - allows Takos workspace storage consume", () => {
+test("public source contract - allows workspace filesystem storage consume", () => {
   const manifest = parseAppManifestYaml(`
 name: takos-storage-consume-app
 
@@ -1651,7 +1651,7 @@ compute:
   web:
     kind: worker
     consume:
-      - publication: takos.storage.workspace
+      - publication: storage.filesystem
         request:
           scopes:
             - files:read
@@ -1662,7 +1662,7 @@ compute:
 `);
 
   assertEquals(manifest.compute.web?.consume?.[0], {
-    publication: "takos.storage.workspace",
+    publication: "storage.filesystem",
     request: {
       scopes: ["files:read", "files:write"],
     },
@@ -1822,7 +1822,7 @@ test("public source contract - rejects Takos-owned publication names", () => {
       parseAppManifestYaml(`
 name: reserved-takos-publication-name-app
 publish:
-  - name: takos.storage.workspace
+  - name: storage.filesystem
     publisher: web
     type: storage.filesystem
     outputs:
@@ -1838,7 +1838,7 @@ routes:
     path: /storage
 `),
     Error,
-    "publish[0].name 'takos.storage.workspace' is reserved for Takos runtime services",
+    "publish[0].name 'storage.filesystem' is reserved for Takos runtime services",
   );
 });
 

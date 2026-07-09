@@ -43,9 +43,8 @@ The reference implementation is `takosumi/core/domains/output-projection/service
 
 Takos consumes these projections to build its app launcher, MCP registry, file handling, storage, Git, and agent
 experiences. Takos may also publish first-party services through the same Outputs, but it does not define a separate
-Takosumi public standard. For Takos-owned runtime services, the concrete service identity uses the `takos.*` namespace
-while the capability remains product-neutral; for example `takos.storage.workspace` is a Takos Workspace Storage service
-with the `storage.filesystem` capability.
+Takosumi public standard. Where a product-neutral service-form identity exists, Takos uses it directly; for example
+Workspace file storage is published as `storage.filesystem`.
 
 ## 3. Non-Goals
 
@@ -235,7 +234,7 @@ Takos is a first-party consumer/producer profile over this projection:
 | MCP registry                     | app-provided `protocol.mcp.server` publications             |
 | app launcher / embedded UI       | app-provided `interface.ui.surface` publications            |
 | file handlers                    | app-provided `interface.file.handler` publications          |
-| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`    |
+| Workspace file storage           | `storage.filesystem`                                        |
 | object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`        |
 | Git UX / clone / refs            | `source.repository`, `source.git.smart_http`                |
 | agent execution                  | `automation.agent_runtime`, `automation.tool_provider`      |

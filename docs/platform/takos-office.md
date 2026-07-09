@@ -6,8 +6,7 @@ Sheet surfaces in one worker and publishes one MCP endpoint for agent use.
 ## Runtime contract
 
 Takos Office is a normal removable Capsule app. It publishes UI surfaces, file handlers, and a `protocol.mcp.server`
-publication. It consumes Takos Workspace Storage through `takos.storage.workspace`, whose capability is
-`storage.filesystem`.
+publication. It consumes Takos Workspace Storage through the `storage.filesystem` service-form publication.
 
 The storage URL is projected into the worker as `TAKOS_STORAGE_API_URL`. Bearer authority is not an OpenTofu output and
 is delivered by the workload runtime through `TAKOS_STORAGE_ACCESS_TOKEN` or the existing `TAKOS_ACCESS_TOKEN` binding.

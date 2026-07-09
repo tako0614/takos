@@ -163,7 +163,7 @@ test("publication type canonicalization preserves runtime projection capability 
 test("api runtime projection exports can be restored without route refs", () => {
   const row = makePublicationRow(
     {
-      name: "takos.storage.workspace",
+      name: "storage.filesystem",
       publisher: "runtime-projection",
       type: RUNTIME_PROJECTION_CAPABILITIES.storageFilesystem,
       outputs: { url: { kind: "url" } },
@@ -182,7 +182,7 @@ test("api runtime projection exports can be restored without route refs", () => 
 
   const record = toPublicationRecord(row as never);
 
-  assertEquals(record.name, "takos.storage.workspace");
+  assertEquals(record.name, "storage.filesystem");
   assertEquals(
     record.publicationType,
     RUNTIME_PROJECTION_CAPABILITIES.storageFilesystem,
@@ -190,7 +190,7 @@ test("api runtime projection exports can be restored without route refs", () => 
   assertEquals(record.outputs, [
     {
       name: "url",
-      defaultEnv: "PUBLICATION_TAKOS_STORAGE_WORKSPACE_URL",
+      defaultEnv: "PUBLICATION_STORAGE_FILESYSTEM_URL",
       secret: false,
       kind: "url",
     },
@@ -201,29 +201,7 @@ test("api runtime projection exports can be restored without route refs", () => 
   );
 });
 
-test("publication prerequisites allow Takos workspace storage runtime projection consumes without catalog rows", async () => {
-  await assertRuntimeProjectionPublicationPrerequisites(
-    makePublicationEnv(null),
-    {
-      spaceId: "space_1",
-      manifest: {
-        compute: {
-          web: {
-            kind: "worker",
-            consume: [
-              {
-                publication: "takos.storage.workspace",
-                inject: { env: { url: "TAKOS_STORAGE_API_URL" } },
-              },
-            ],
-          },
-        },
-      },
-    },
-  );
-});
-
-test("publication prerequisites allow legacy storage.filesystem runtime projection consumes", async () => {
+test("publication prerequisites allow workspace storage runtime projection consumes without catalog rows", async () => {
   await assertRuntimeProjectionPublicationPrerequisites(
     makePublicationEnv(null),
     {
@@ -235,6 +213,28 @@ test("publication prerequisites allow legacy storage.filesystem runtime projecti
             consume: [
               {
                 publication: "storage.filesystem",
+                inject: { env: { url: "TAKOS_STORAGE_API_URL" } },
+              },
+            ],
+          },
+        },
+      },
+    },
+  );
+});
+
+test("publication prerequisites allow legacy takos.storage.workspace runtime projection consumes", async () => {
+  await assertRuntimeProjectionPublicationPrerequisites(
+    makePublicationEnv(null),
+    {
+      spaceId: "space_1",
+      manifest: {
+        compute: {
+          web: {
+            kind: "worker",
+            consume: [
+              {
+                publication: "takos.storage.workspace",
                 inject: { defaults: true },
               },
             ],

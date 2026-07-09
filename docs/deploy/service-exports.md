@@ -59,7 +59,7 @@ Takos uses the Capsule output projection capability catalog directly:
 | MCP tools                        | app-provided `protocol.mcp.server` publications                             |
 | launcher / embedded UI           | app-provided `interface.ui.surface` publications                            |
 | file handlers                    | app-provided `interface.file.handler` publications                          |
-| Workspace file storage           | `takos.storage.workspace` providing `storage.filesystem`                    |
+| Workspace file storage           | `storage.filesystem`                                                        |
 | object / key-value / SQL storage | `storage.object`, `storage.key_value`, `storage.sql`                        |
 | Git                              | `source.repository`, `source.git.smart_http`                                |
 | agent runtime                    | `automation.agent_runtime`, `automation.tool_provider`                      |
@@ -77,10 +77,8 @@ Endpoint discovery and runtime authority are separate facts:
 - `service_bindings` or product-side runtime config records what a consumer app requests.
 - Scoped runtime authority is delivered through workload runtime secret materialization, not through OpenTofu Outputs.
 
-Takos-owned runtime services use `takos.*` service identities. For example, a document app should consume
-`takos.storage.workspace` and request `files:read` / `files:write`, while Takos exposes that service as a
-`storage.filesystem` capability. The legacy `storage.filesystem` publication name is accepted only as a compatibility
-alias; new apps should use `takos.storage.workspace`.
+Takos runtime services use product-neutral service-form identities where they exist. For example, a document app should
+consume `storage.filesystem` and request `files:read` / `files:write`.
 
 That consume maps the storage endpoint URL. It does not mint a bearer token from OpenTofu Outputs; storage authority
 must arrive through workload runtime secret materialization such as `TAKOS_STORAGE_ACCESS_TOKEN` or
