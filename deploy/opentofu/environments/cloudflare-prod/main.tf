@@ -200,16 +200,32 @@ output "d1_database_ids" {
   value = module.takos.d1_database_ids
 }
 
+output "sql_databases" {
+  value = module.takos.sql_databases
+}
+
 output "kv_namespace_ids" {
   value = module.takos.kv_namespace_ids
+}
+
+output "key_value_stores" {
+  value = module.takos.key_value_stores
 }
 
 output "object_storage_buckets" {
   value = module.takos.r2_bucket_names
 }
 
+output "object_buckets" {
+  value = module.takos.object_buckets
+}
+
 output "queue_bindings" {
   value = module.takos.queue_names
+}
+
+output "queues" {
+  value = module.takos.queues
 }
 
 output "vectorize_index_name" {
@@ -222,6 +238,10 @@ output "vectorize_index_dimensions" {
 
 output "vectorize_index_metric" {
   value = module.takos.vectorize_index_metric
+}
+
+output "vector_indexes" {
+  value = module.takos.vector_indexes
 }
 
 output "cloudflare_vectorize_index_name" {

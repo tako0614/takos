@@ -14,21 +14,21 @@ import {
 const rawOutputs = {
   cloudflare_account_id: "acc_123",
   service_runtime_name: "takos-test",
-  cloudflare_d1_database_ids: {
+  sql_databases: {
     db: "d1_db",
   },
-  cloudflare_kv_namespace_ids: {
+  key_value_stores: {
     hostname_routing: "kv_host",
     rollout_health: "kv_rollout",
   },
-  object_storage_buckets: {
+  object_buckets: {
     worker_bundles: "r2_worker_bundles",
     tenant_builds: "r2_tenant_builds",
     tenant_source: "r2_tenant_source",
     git_objects: "r2_git_objects",
     offload: "r2_offload",
   },
-  queue_bindings: {
+  queues: {
     runs: "q_runs",
     runs_dlq: "q_runs_dlq",
     index_jobs: "q_index",
@@ -38,7 +38,13 @@ const rawOutputs = {
     deployment: "q_deploy",
     deployment_dlq: "q_deploy_dlq",
   },
-  cloudflare_vectorize_index_name: "vec_takos",
+  vector_indexes: {
+    vector: {
+      name: "vec_takos",
+      dimensions: 768,
+      metric: "cosine",
+    },
+  },
 };
 
 test("buildReplacements accepts tofu output envelopes", () => {

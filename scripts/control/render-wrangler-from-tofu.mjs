@@ -15,9 +15,9 @@ import * as runtime from "../runtime.ts";
 //   cd deploy/opentofu && tofu apply -var 'cloudflare={account_id="<acct>"}'
 //   bun ../../scripts/control/render-wrangler-from-tofu.mjs production --zone-id <zone>
 //
-// What it fills (per environment): service runtime name, CF_ACCOUNT_ID, the D1
-// database id, KV namespace ids, R2 bucket names, Queue names, and Vectorize
-// index name. CF_ZONE_ID is NOT a module-managed resource (it is the
+// What it fills (per environment): service runtime name, CF_ACCOUNT_ID, SQL
+// database ids, key-value store ids, object bucket names, queue names, and
+// vector index name. CF_ZONE_ID is NOT a module-managed resource (it is the
 // self-hoster's existing DNS zone), so pass it with --zone-id or fill the
 // remaining `replace-with-*zone-id` placeholder by hand. Container images, SPA
 // build, secrets, and D1 migrations are handled by the release command.
@@ -100,11 +100,20 @@ export function buildReplacements(
   const accountId = accountIdOverride?.trim() || read("cloudflare_account_id");
   const workerName = read("service_runtime_name");
   const publicUrl = optionalPublicUrl(outputs);
-  const d1 = read("cloudflare_d1_database_ids"); // { db }
-  const kv = read("cloudflare_kv_namespace_ids"); // { hostname_routing, rollout_health }
-  const r2 = read("object_storage_buckets");
-  const queues = read("queue_bindings");
-  const vectorizeIndexName = read("cloudflare_vectorize_index_name");
+  const d1 = readFirstOutput(outputs, [
+    "sql_databases",
+    "cloudflare_d1_database_ids",
+  ]); // { db }
+  const kv = readFirstOutput(outputs, [
+    "key_value_stores",
+    "cloudflare_kv_namespace_ids",
+  ]); // { hostname_routing, rollout_health }
+  const r2 = readFirstOutput(outputs, [
+    "object_buckets",
+    "object_storage_buckets",
+  ]);
+  const queues = readFirstOutput(outputs, ["queues", "queue_bindings"]);
+  const vectorizeIndexName = readVectorIndexName(outputs);
   const deploymentEnv = appDeploymentEnv(outputs);
   const requireKey = (obj, key, outputName) => {
     if (obj[key] == null) {
@@ -123,56 +132,56 @@ export function buildReplacements(
     [`replace-with-${prefix}d1-database-id`]: requireKey(
       d1,
       "db",
-      "cloudflare_d1_database_ids",
+      "sql_databases/cloudflare_d1_database_ids",
     ),
     [`replace-with-${prefix}hostname-routing-kv-namespace-id`]: requireKey(
       kv,
       "hostname_routing",
-      "cloudflare_kv_namespace_ids",
+      "key_value_stores/cloudflare_kv_namespace_ids",
     ),
     [`replace-with-${prefix}rollout-health-kv-namespace-id`]: requireKey(
       kv,
       "rollout_health",
-      "cloudflare_kv_namespace_ids",
+      "key_value_stores/cloudflare_kv_namespace_ids",
     ),
     [`"${legacy.replace("{name}", "worker-bundles")}"`]: tomlString(
-      requireKey(r2, "worker_bundles", "object_storage_buckets"),
+      requireKey(r2, "worker_bundles", "object_buckets/object_storage_buckets"),
     ),
     [`"${legacy.replace("{name}", "tenant-builds")}"`]: tomlString(
-      requireKey(r2, "tenant_builds", "object_storage_buckets"),
+      requireKey(r2, "tenant_builds", "object_buckets/object_storage_buckets"),
     ),
     [`"${legacy.replace("{name}", "tenant-source")}"`]: tomlString(
-      requireKey(r2, "tenant_source", "object_storage_buckets"),
+      requireKey(r2, "tenant_source", "object_buckets/object_storage_buckets"),
     ),
     [`"${legacy.replace("{name}", "git-objects")}"`]: tomlString(
-      requireKey(r2, "git_objects", "object_storage_buckets"),
+      requireKey(r2, "git_objects", "object_buckets/object_storage_buckets"),
     ),
     [`"${legacy.replace("{name}", "offload")}"`]: tomlString(
-      requireKey(r2, "offload", "object_storage_buckets"),
+      requireKey(r2, "offload", "object_buckets/object_storage_buckets"),
     ),
     [`"${legacy.replace("{name}", "runs")}"`]: tomlString(
-      requireKey(queues, "runs", "queue_bindings"),
+      requireKey(queues, "runs", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "runs-dlq")}"`]: tomlString(
-      requireKey(queues, "runs_dlq", "queue_bindings"),
+      requireKey(queues, "runs_dlq", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "index-jobs")}"`]: tomlString(
-      requireKey(queues, "index_jobs", "queue_bindings"),
+      requireKey(queues, "index_jobs", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "index-jobs-dlq")}"`]: tomlString(
-      requireKey(queues, "index_jobs_dlq", "queue_bindings"),
+      requireKey(queues, "index_jobs_dlq", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "workflow-jobs")}"`]: tomlString(
-      requireKey(queues, "workflow", "queue_bindings"),
+      requireKey(queues, "workflow", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "workflow-jobs-dlq")}"`]: tomlString(
-      requireKey(queues, "workflow_dlq", "queue_bindings"),
+      requireKey(queues, "workflow_dlq", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "deployment-jobs")}"`]: tomlString(
-      requireKey(queues, "deployment", "queue_bindings"),
+      requireKey(queues, "deployment", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "deployment-jobs-dlq")}"`]: tomlString(
-      requireKey(queues, "deployment_dlq", "queue_bindings"),
+      requireKey(queues, "deployment_dlq", "queues/queue_bindings"),
     ),
     [`"${legacy.replace("{name}", "embeddings")}"`]:
       tomlString(vectorizeIndexName),
@@ -191,6 +200,39 @@ export function buildReplacements(
     replacements["replace-with-account-id"] = accountId;
   }
   return replacements;
+}
+
+function readFirstOutput(outputs, names) {
+  for (const name of names) {
+    const value = outputValue(outputs[name]);
+    if (value != null) return value;
+  }
+  throw new Error(
+    `tofu output "${names.join('" or "')}" is missing or null. Did you \`tofu apply\` the cloudflare target first?`,
+  );
+}
+
+function readVectorIndexName(outputs) {
+  const indexes = outputValue(outputs.vector_indexes);
+  if (indexes && typeof indexes === "object" && !Array.isArray(indexes)) {
+    for (const key of ["vector", "embeddings", "default"]) {
+      const entry = indexes[key];
+      if (typeof entry === "string" && entry.trim() !== "") return entry;
+      if (
+        entry &&
+        typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        typeof entry.name === "string" &&
+        entry.name.trim() !== ""
+      ) {
+        return entry.name;
+      }
+    }
+  }
+  return readFirstOutput(outputs, [
+    "cloudflare_vectorize_index_name",
+    "vectorize_index_name",
+  ]);
 }
 
 function appDeploymentEnv(outputs) {

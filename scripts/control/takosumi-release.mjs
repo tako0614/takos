@@ -202,6 +202,22 @@ function optionalObjectOutput(outputs, name) {
   return value;
 }
 
+function optionalObjectOutputAny(outputs, names) {
+  for (const name of names) {
+    const value = optionalObjectOutput(outputs, name);
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function requireObjectOutputAny(outputs, names) {
+  const value = optionalObjectOutputAny(outputs, names);
+  if (value) return value;
+  throw new Error(
+    `TAKOSUMI_OUTPUTS_JSON must include object output "${names.join('" or "')}"`,
+  );
+}
+
 function requireNestedStringOutput(outputs, name, key) {
   const value = requireObjectOutput(outputs, name)[key];
   if (typeof value !== "string" || value.trim() === "") {
@@ -210,6 +226,50 @@ function requireNestedStringOutput(outputs, name, key) {
     );
   }
   return value;
+}
+
+function requireNestedStringOutputAny(outputs, names, key) {
+  const output = requireObjectOutputAny(outputs, names);
+  const value = output[key];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(
+      `TAKOSUMI_OUTPUTS_JSON must include string output "${names.join('" or "')}.${key}"`,
+    );
+  }
+  return value;
+}
+
+function optionalVectorIndex(outputs) {
+  const indexes = optionalObjectOutput(outputs, "vector_indexes");
+  if (!indexes) return undefined;
+  for (const key of ["vector", "embeddings", "default"]) {
+    const value = indexes[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function requireVectorIndexName(outputs) {
+  const value = optionalVectorIndex(outputs)?.name;
+  if (typeof value === "string" && value.trim() !== "") return value.trim();
+  return requireStringOutput(outputs, "cloudflare_vectorize_index_name");
+}
+
+function requireVectorIndexDimensions(outputs) {
+  const value = optionalVectorIndex(outputs)?.dimensions;
+  if (Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string" && /^[1-9]\d*$/u.test(value.trim())) {
+    return Number(value.trim());
+  }
+  return requireIntegerOutput(outputs, "cloudflare_vectorize_index_dimensions");
+}
+
+function requireVectorIndexMetric(outputs) {
+  const value = optionalVectorIndex(outputs)?.metric;
+  if (typeof value === "string" && value.trim() !== "") return value.trim();
+  return requireStringOutput(outputs, "cloudflare_vectorize_index_metric");
 }
 
 export function ensureTakosumiSourceModule(
@@ -324,18 +384,9 @@ export function buildTakosumiReleaseCommands(
     typeof wranglerAccountId === "string" && wranglerAccountId.trim() !== ""
       ? wranglerAccountId.trim()
       : requireStringOutput(outputs, "cloudflare_account_id");
-  const vectorizeIndexName = requireStringOutput(
-    outputs,
-    "cloudflare_vectorize_index_name",
-  );
-  const vectorizeDimensions = requireIntegerOutput(
-    outputs,
-    "cloudflare_vectorize_index_dimensions",
-  );
-  const vectorizeMetric = requireStringOutput(
-    outputs,
-    "cloudflare_vectorize_index_metric",
-  );
+  const vectorizeIndexName = requireVectorIndexName(outputs);
+  const vectorizeDimensions = requireVectorIndexDimensions(outputs);
+  const vectorizeMetric = requireVectorIndexMetric(outputs);
   const wranglerEnvArgs = wranglerEnvironmentArgs(environment);
   const releaseSecretsFile = releaseSecretsFilePath(environment);
   const releaseWranglerConfig = releaseWranglerConfigPath(environment);
@@ -643,19 +694,17 @@ function wranglerReleaseArtifactArgs(
 
 export function buildTakosumiDestroyCommands(outputs) {
   const workerName = requireStringOutput(outputs, "service_runtime_name");
-  const vectorizeIndexName = requireStringOutput(
-    outputs,
-    "cloudflare_vectorize_index_name",
-  );
+  const vectorizeIndexName = requireVectorIndexName(outputs);
+  const queueOutputNames = ["queues", "queue_bindings"];
   const queues = [
-    requireNestedStringOutput(outputs, "queue_bindings", "runs"),
-    requireNestedStringOutput(outputs, "queue_bindings", "runs_dlq"),
-    requireNestedStringOutput(outputs, "queue_bindings", "index_jobs"),
-    requireNestedStringOutput(outputs, "queue_bindings", "index_jobs_dlq"),
-    requireNestedStringOutput(outputs, "queue_bindings", "workflow"),
-    requireNestedStringOutput(outputs, "queue_bindings", "workflow_dlq"),
-    requireNestedStringOutput(outputs, "queue_bindings", "deployment"),
-    requireNestedStringOutput(outputs, "queue_bindings", "deployment_dlq"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "runs"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "runs_dlq"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "index_jobs"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "index_jobs_dlq"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "workflow"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "workflow_dlq"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "deployment"),
+    requireNestedStringOutputAny(outputs, queueOutputNames, "deployment_dlq"),
   ];
   return [
     ...queues.map((queueName) =>
@@ -1491,7 +1540,10 @@ function wranglerDeployAuthChecks(accountId, workerName) {
 
 function wranglerDeployOutputAuthChecks(accountId, outputs) {
   const encodedAccountId = encodeURIComponent(accountId);
-  const bucketMap = optionalObjectOutput(outputs, "object_storage_buckets");
+  const bucketMap = optionalObjectOutputAny(outputs, [
+    "object_buckets",
+    "object_storage_buckets",
+  ]);
   const seenBuckets = new Set();
   const checks = [];
   for (const [key, value] of Object.entries(bucketMap ?? {})) {

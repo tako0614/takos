@@ -60,9 +60,19 @@ output "cloudflare_d1_database_ids" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].d1_database_ids : null
 }
 
+output "sql_databases" {
+  description = "Provider-neutral SQL database identifiers keyed by logical binding."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].sql_databases : null
+}
+
 output "cloudflare_kv_namespace_ids" {
   description = "KV namespace IDs by logical binding (cloudflare target)."
   value       = var.target == "cloudflare" ? module.cloudflare[0].kv_namespace_ids : null
+}
+
+output "key_value_stores" {
+  description = "Provider-neutral key-value store identifiers keyed by logical binding."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].key_value_stores : null
 }
 
 output "cloudflare_vectorize_index_name" {
@@ -80,14 +90,29 @@ output "cloudflare_vectorize_index_metric" {
   value       = var.target == "cloudflare" ? module.cloudflare[0].vectorize_index_metric : null
 }
 
+output "vector_indexes" {
+  description = "Provider-neutral vector index descriptors keyed by logical binding."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].vector_indexes : null
+}
+
 output "object_storage_buckets" {
-  description = "R2 bucket names for Git, bundles, builds, and offload data."
+  description = "Compatibility alias for object_buckets."
   value       = var.target == "cloudflare" ? module.cloudflare[0].r2_bucket_names : null
 }
 
+output "object_buckets" {
+  description = "Provider-neutral object bucket names keyed by logical binding."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].object_buckets : null
+}
+
 output "queue_bindings" {
-  description = "Queue bindings for Takos product jobs (runs, index, workflow, deployment)."
+  description = "Compatibility alias for queues."
   value       = var.target == "cloudflare" ? module.cloudflare[0].queue_names : null
+}
+
+output "queues" {
+  description = "Provider-neutral queue names keyed by logical binding."
+  value       = var.target == "cloudflare" ? module.cloudflare[0].queues : null
 }
 
 output "takosumi_release" {

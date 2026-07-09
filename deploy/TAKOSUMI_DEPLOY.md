@@ -177,8 +177,22 @@ tofu apply -var 'target=cloudflare' -var 'cloudflare={account_id="<account-id>"}
 ```
 
 The module provisions the Takos product D1, KV, R2, and Queue backing resources
-and exposes their ids through `tofu output -json`. Durable Object migrations and
-container artifact publication remain in the Wrangler artifact step.
+and exposes their ids through `tofu output -json`. The generic output contract
+is service-form based:
+
+```text
+sql_databases
+key_value_stores
+object_buckets
+queues
+vector_indexes
+```
+
+Provider-specific outputs such as `cloudflare_d1_database_ids` and legacy
+aliases such as `object_storage_buckets` / `queue_bindings` are compatibility
+outputs for older release helpers. New consumers should read the generic names.
+Durable Object migrations and container artifact publication remain in the
+Wrangler artifact step.
 
 ### 2. Render Wrangler Bindings
 

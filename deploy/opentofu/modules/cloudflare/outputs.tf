@@ -199,8 +199,18 @@ output "d1_database_ids" {
   value       = { for k, v in cloudflare_d1_database.this : k => v.id }
 }
 
+output "sql_databases" {
+  description = "Provider-neutral SQL database identifiers keyed by logical binding."
+  value       = { for k, v in cloudflare_d1_database.this : k => v.id }
+}
+
 output "kv_namespace_ids" {
   description = "KV namespace IDs keyed by logical binding (hostname_routing, rollout_health)."
+  value       = { for k, v in cloudflare_workers_kv_namespace.this : k => v.id }
+}
+
+output "key_value_stores" {
+  description = "Provider-neutral key-value store identifiers keyed by logical binding."
   value       = { for k, v in cloudflare_workers_kv_namespace.this : k => v.id }
 }
 
@@ -209,8 +219,18 @@ output "r2_bucket_names" {
   value       = { for k, v in cloudflare_r2_bucket.this : k => v.name }
 }
 
+output "object_buckets" {
+  description = "Provider-neutral object bucket names keyed by logical binding."
+  value       = { for k, v in cloudflare_r2_bucket.this : k => v.name }
+}
+
 output "queue_names" {
   description = "Queue names keyed by logical binding (incl. *_dlq)."
+  value       = { for k, v in cloudflare_queue.this : k => v.queue_name }
+}
+
+output "queues" {
+  description = "Provider-neutral queue names keyed by logical binding (incl. *_dlq)."
   value       = { for k, v in cloudflare_queue.this : k => v.queue_name }
 }
 
@@ -227,4 +247,15 @@ output "vectorize_index_dimensions" {
 output "vectorize_index_metric" {
   description = "Vector distance metric expected by the VECTORIZE binding."
   value       = local.vectorize.metric
+}
+
+output "vector_indexes" {
+  description = "Provider-neutral vector index descriptors keyed by logical binding."
+  value = {
+    vector = {
+      name       = local.vectorize.index_name
+      dimensions = local.vectorize.dimensions
+      metric     = local.vectorize.metric
+    }
+  }
 }

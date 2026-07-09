@@ -44,11 +44,15 @@ const repoRoot = resolve(import.meta.dir, "../../..");
 
 const rawOutputs = {
   cloudflare_account_id: "acc_123",
-  cloudflare_vectorize_index_name: "takos-test-embeddings",
-  cloudflare_vectorize_index_dimensions: 768,
-  cloudflare_vectorize_index_metric: "cosine",
+  vector_indexes: {
+    vector: {
+      name: "takos-test-embeddings",
+      dimensions: 768,
+      metric: "cosine",
+    },
+  },
   service_runtime_name: "takos-test",
-  queue_bindings: {
+  queues: {
     runs: "takos-test-runs",
     runs_dlq: "takos-test-runs-dlq",
     index_jobs: "takos-test-index-jobs",
@@ -58,7 +62,7 @@ const rawOutputs = {
     deployment: "takos-test-deployment-jobs",
     deployment_dlq: "takos-test-deployment-jobs-dlq",
   },
-  object_storage_buckets: {
+  object_buckets: {
     worker_bundles: "takos-test-worker-bundles",
     tenant_builds: "takos-test-tenant-builds",
     git_objects: "takos-test-git-objects",
