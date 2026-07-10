@@ -38,10 +38,7 @@ pub fn part_contains_secret_token(part: &str) -> bool {
     // Common provider key shapes. Substring (not whole-token) so embedded
     // tokens inside JSON-like fragments (`"key":"sk-…"`) are still redacted.
     const PREFIX_NEEDLES: &[&str] = &[
-        "sk-",
-        "sk_live_",
-        "sk_test_",
-        "ghp_",
+        "sk-", "sk_live_", "sk_test_", "ghp_",
         // Google API keys (Gemini / GCP) — `AIza` + 35 chars.
         "AIza",
     ];
