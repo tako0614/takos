@@ -261,6 +261,7 @@ export async function resolveRunOpenAiRuntimeCredential(
 ): Promise<OpenAiRuntimeCredential | undefined> {
   const issuer = nonEmptyString(input.env.OIDC_ISSUER_URL);
   const clientId = nonEmptyString(input.env.OIDC_CLIENT_ID);
+  const clientSecret = nonEmptyString(input.env.OIDC_CLIENT_SECRET);
   const encryptionKey = nonEmptyString(input.env.ENCRYPTION_KEY);
   const publicAccountsUrl =
     nonEmptyString(input.env.TAKOSUMI_ACCOUNTS_URL) ?? issuer;
@@ -290,6 +291,7 @@ export async function resolveRunOpenAiRuntimeCredential(
     userId: bootstrap.userId,
     issuer: issuer.replace(/\/+$/u, ""),
     clientId,
+    clientSecret,
     access: "write",
   });
   const capsuleId = await capsuleIdForAccountsAccessToken({

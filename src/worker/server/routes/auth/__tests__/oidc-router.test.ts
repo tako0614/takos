@@ -499,6 +499,7 @@ test("Accounts delegation refreshes once and reuses the encrypted access token",
       userId: "user-delegation",
       issuer: "https://accounts.example.test",
       clientId: "takos-client",
+      clientSecret: "takos-client-secret",
       access: "write" as const,
     };
     assertEquals(await accountsDelegatedAuthorization(input), {
@@ -512,6 +513,10 @@ test("Accounts delegation refreshes once and reuses the encrypted access token",
     assertEquals(requests.length, 1);
     assertEquals(requests[0].get("grant_type"), "refresh_token");
     assertEquals(requests[0].get("client_id"), "takos-client");
+    assertEquals(
+      requests[0].get("client_secret"),
+      "takos-client-secret",
+    );
     assertEquals(
       requests[0].get("refresh_token"),
       "refresh-token-before-rotation",

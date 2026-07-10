@@ -5,8 +5,8 @@ mod internal_rpc;
 mod managed_skills;
 mod model;
 mod prompt_assets;
-mod redaction;
 mod prompts;
+mod redaction;
 mod skills;
 mod tool_bridge;
 
@@ -535,7 +535,7 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
     );
     std::fs::create_dir_all(&store_root)?;
 
-    let api_keys = client.api_keys().await.unwrap_or_default();
+    let api_keys = client.api_keys().await?;
     let embedding_config =
         resolve_embedding_backend_config(&run_config, api_keys.openai.as_deref())?;
     let usage_tracker = Arc::new(engine_support::UsageTracker::default());

@@ -164,6 +164,7 @@ export async function accountsDelegatedAuthorization(input: {
   readonly userId: string;
   readonly issuer: string;
   readonly clientId: string;
+  readonly clientSecret?: string;
   readonly access: DelegationAccess;
 }): Promise<AccountsDelegatedAuthorization> {
   const key = `${input.userId}:${input.issuer}:${input.access}`;
@@ -182,6 +183,7 @@ async function resolveAccountsDelegatedAuthorization(input: {
   readonly userId: string;
   readonly issuer: string;
   readonly clientId: string;
+  readonly clientSecret?: string;
   readonly access: DelegationAccess;
 }): Promise<AccountsDelegatedAuthorization> {
   if (!input.encryptionKey) {
@@ -274,17 +276,21 @@ async function resolveAccountsDelegatedAuthorization(input: {
       tokenSalt(identity.id, "refresh"),
     );
     const tokenUrl = new URL("/oauth/token", input.issuer);
+    const tokenBody = new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: input.clientId,
+    });
+    if (input.clientSecret?.trim()) {
+      tokenBody.set("client_secret", input.clientSecret.trim());
+    }
     const response = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         accept: "application/json",
         "content-type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: input.clientId,
-      }),
+      body: tokenBody,
       signal: AbortSignal.timeout(TOKEN_FETCH_TIMEOUT_MS),
     });
     const tokens = (await response
