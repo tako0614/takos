@@ -211,6 +211,8 @@ pub struct RunConfigResponse {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ApiKeysResponse {
     pub openai: Option<String>,
+    #[serde(default, alias = "openaiEndpoint")]
+    pub openai_endpoint: Option<String>,
     pub anthropic: Option<String>,
     pub google: Option<String>,
 }

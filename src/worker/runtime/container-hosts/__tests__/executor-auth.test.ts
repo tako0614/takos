@@ -1,6 +1,9 @@
 import { test } from "bun:test";
 import { assertEquals } from "@takos/test/assert";
-import { dispatchControlRpc } from "../../executor-proxy-api.ts";
+import {
+  dispatchControlRpc,
+  resolveRunOpenAiRuntimeCredential,
+} from "../../executor-proxy-api.ts";
 import {
   claimsMatchRequestBody,
   CONTROL_RPC_ENDPOINT_NAMES,
@@ -312,8 +315,101 @@ test("api-keys hands out provider keys for an active token-bound run", async () 
   assertEquals(res.status, 200);
   assertEquals(await res.json(), {
     openai: "openai-test-key",
+    openaiEndpoint: null,
     anthropic: null,
     google: null,
+  });
+});
+
+test("api-keys projects a configured OpenAI-compatible base URL", async () => {
+  const res = await apiKeysDispatch(
+    { runId: "run_direct" },
+    {
+      OPENAI_API_KEY: "openai-test-key",
+      OPENAI_BASE_URL: "https://models.example.test/v1/",
+      DB: createRunStatusDb("running"),
+    },
+  );
+
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), {
+    openai: "openai-test-key",
+    openaiEndpoint: "https://models.example.test/v1/chat/completions",
+    anthropic: null,
+    google: null,
+  });
+});
+
+test("runtime AI credential is minted for the run owner's Capsule", async () => {
+  const requests: Request[] = [];
+  const credential = await resolveRunOpenAiRuntimeCredential(
+    {
+      runId: "run_gateway",
+      env: {
+        DB: {} as never,
+        RUN_QUEUE: {} as never,
+        RUN_NOTIFIER: {} as never,
+        HOSTNAME_ROUTING: {} as never,
+        ADMIN_DOMAIN: "takos.example.test",
+        TENANT_BASE_DOMAIN: "takos.example.test",
+        OIDC_ISSUER_URL: "https://app.takosumi.test",
+        OIDC_CLIENT_ID: "toc_takos",
+        ENCRYPTION_KEY: "encryption-key",
+        TAKOSUMI_ACCOUNTS_INTERNAL_URL: "https://internal-app.takosumi.test",
+        TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.test",
+      },
+    },
+    {
+      getRunBootstrap: async (_env, runId) => ({
+        status: "running",
+        spaceId: "takos-space",
+        sessionId: "session",
+        threadId: "thread",
+        userId: "takos-user",
+        agentType: "default",
+        ...(runId === "run_gateway" ? {} : { installationId: "wrong" }),
+      }),
+      accountsDelegatedAuthorization: async (input) => {
+        assertEquals(input.userId, "takos-user");
+        assertEquals(input.access, "write");
+        return {
+          accessToken: "takat_capsule_owner",
+          workspaceId: "workspace_owner",
+        };
+      },
+      fetch: (async (input, init) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        if (new URL(request.url).pathname === "/oauth/userinfo") {
+          return Response.json({
+            sub: "pairwise-user",
+            takosumi: { installation_id: "inst_takos_capsule" },
+          });
+        }
+        return Response.json({
+          token: "taksrv_runtime_token",
+          token_type: "Bearer",
+        });
+      }) as typeof fetch,
+    },
+  );
+
+  assertEquals(credential, {
+    apiKey: "taksrv_runtime_token",
+    endpoint: "https://app.takosumi.test/gateway/ai/v1/chat/completions",
+  });
+  assertEquals(requests.length, 2);
+  assertEquals(
+    requests[1]?.url,
+    "https://internal-app.takosumi.test/v1/capsule-projections/inst_takos_capsule/services/takosumi.ai.gateway/rotate-token",
+  );
+  assertEquals(
+    requests[1]?.headers.get("authorization"),
+    "Bearer takat_capsule_owner",
+  );
+  assertEquals(await requests[1]?.json(), {
+    scopes: ["ai.models.read", "ai.chat", "ai.embeddings"],
+    ttlSeconds: 900,
   });
 });
 

@@ -16,6 +16,7 @@ import { logError } from "../shared/utils/logger.ts";
 // Handler imports from the existing executor subsystem — these contain the
 // actual business logic (DB queries, tool execution, memory graph, billing, etc.)
 import {
+  getRunBootstrap,
   handleCurrentSession,
   handleHeartbeat,
   handleIsCancelled,
@@ -27,6 +28,13 @@ import {
   handleRunReset,
   handleRunStatus,
 } from "./container-hosts/executor-run-state.ts";
+
+import {
+  TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_AI_GATEWAY,
+  TAKOSUMI_ACCOUNTS_USERINFO_PATH,
+  takosumiAccountsCapsuleServiceRotateTokenPath,
+} from "@takosjp/takosumi-accounts-contract";
+import { accountsDelegatedAuthorization } from "../server/routes/auth/accounts-delegation.ts";
 
 import {
   handleAddMessage,
@@ -59,6 +67,30 @@ import { eq } from "drizzle-orm";
 // deployment-global provider keys. Mirrors isTerminalRunStatus in
 // container-hosts/executor-host.ts (the proxy-token revocation gate).
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const ACCOUNTS_FETCH_TIMEOUT_MS = 10_000;
+const AI_GATEWAY_TOKEN_TTL_SECONDS = 15 * 60;
+const AI_GATEWAY_TOKEN_SCOPES = [
+  "ai.models.read",
+  "ai.chat",
+  "ai.embeddings",
+] as const;
+
+type OpenAiRuntimeCredential = {
+  readonly apiKey: string;
+  readonly endpoint: string;
+};
+
+type RuntimeCredentialDeps = {
+  readonly getRunBootstrap: typeof getRunBootstrap;
+  readonly accountsDelegatedAuthorization: typeof accountsDelegatedAuthorization;
+  readonly fetch: typeof fetch;
+};
+
+const runtimeCredentialDeps: RuntimeCredentialDeps = {
+  getRunBootstrap,
+  accountsDelegatedAuthorization,
+  fetch: (input, init) => fetch(input, init),
+};
 
 /**
  * Least-privilege gate for the deployment-global provider key handout.
@@ -78,16 +110,16 @@ async function rejectApiKeysIfRunInactive(
   body: Record<string, unknown>,
   env: Env,
 ): Promise<Response | null> {
-  const runId = typeof body.runId === "string" && body.runId.length > 0
-    ? body.runId
-    : null;
+  const runId =
+    typeof body.runId === "string" && body.runId.length > 0 ? body.runId : null;
   if (!runId) {
     return err("Missing runId", 400);
   }
   let status: string | null;
   try {
     const db = getDb(env.DB);
-    const row = await db.select({ status: runs.status })
+    const row = await db
+      .select({ status: runs.status })
       .from(runs)
       .where(eq(runs.id, runId))
       .get();
@@ -122,7 +154,7 @@ const CONTROL_RPC_HANDLERS: Record<
   (body: Record<string, unknown>, env: Env) => Response | Promise<Response>
 > = {
   // run lifecycle / status
-  "heartbeat": handleHeartbeat,
+  heartbeat: handleHeartbeat,
   "run-status": handleRunStatus,
   "run-record": handleRunRecord,
   "run-bootstrap": handleRunBootstrap,
@@ -182,11 +214,181 @@ async function handleApiKeys(
   // run is still active; a missing/terminal run is rejected.
   const inactive = await rejectApiKeysIfRunInactive(body, env);
   if (inactive) return inactive;
+
+  const directOpenAiKey = nonEmptyString(env.OPENAI_API_KEY);
+  let openAiCredential: OpenAiRuntimeCredential | undefined;
+  if (directOpenAiKey) {
+    const endpoint = openAiChatCompletionsEndpoint(env.OPENAI_BASE_URL);
+    openAiCredential = endpoint
+      ? { apiKey: directOpenAiKey, endpoint }
+      : undefined;
+  } else {
+    const runId = nonEmptyString(body.runId)!;
+    try {
+      openAiCredential = await resolveRunOpenAiRuntimeCredential(
+        { runId, env },
+        runtimeCredentialDeps,
+      );
+    } catch (error) {
+      logError("Takosumi AI Gateway runtime credential mint failed", error, {
+        module: "executor-proxy-api",
+        runId,
+      });
+      return err("Takosumi AI Gateway authorization is unavailable", 503);
+    }
+  }
+
   return ok({
-    openai: env.OPENAI_API_KEY ?? null,
+    openai: directOpenAiKey ?? openAiCredential?.apiKey ?? null,
+    openaiEndpoint: openAiCredential?.endpoint ?? null,
     anthropic: env.ANTHROPIC_API_KEY ?? null,
     google: env.GOOGLE_API_KEY ?? null,
   });
+}
+
+/**
+ * Mint a short-lived, Capsule-scoped AI Gateway token for one active run.
+ *
+ * The triggering user's delegated Accounts token identifies the Capsule that
+ * owns the Takos worker. Accounts then vends a runtime token whose metadata
+ * carries Capsule, Workspace, owner, scopes, and expiry into the Cloud billing
+ * guard. No operator/provider credential enters the tenant worker or pooled
+ * agent container.
+ */
+export async function resolveRunOpenAiRuntimeCredential(
+  input: { readonly runId: string; readonly env: Env },
+  deps: RuntimeCredentialDeps = runtimeCredentialDeps,
+): Promise<OpenAiRuntimeCredential | undefined> {
+  const issuer = nonEmptyString(input.env.OIDC_ISSUER_URL);
+  const clientId = nonEmptyString(input.env.OIDC_CLIENT_ID);
+  const encryptionKey = nonEmptyString(input.env.ENCRYPTION_KEY);
+  const publicAccountsUrl =
+    nonEmptyString(input.env.TAKOSUMI_ACCOUNTS_URL) ?? issuer;
+  const internalAccountsUrl =
+    nonEmptyString(input.env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ??
+    publicAccountsUrl;
+  if (
+    !issuer ||
+    !clientId ||
+    !encryptionKey ||
+    !publicAccountsUrl ||
+    !internalAccountsUrl
+  ) {
+    return undefined;
+  }
+
+  const bootstrap = await deps.getRunBootstrap(input.env, input.runId);
+  if (
+    bootstrap.status === null ||
+    TERMINAL_RUN_STATUSES.has(bootstrap.status)
+  ) {
+    throw new Error("run is not active");
+  }
+  const authorization = await deps.accountsDelegatedAuthorization({
+    db: input.env.DB,
+    encryptionKey,
+    userId: bootstrap.userId,
+    issuer: issuer.replace(/\/+$/u, ""),
+    clientId,
+    access: "write",
+  });
+  const capsuleId = await capsuleIdForAccountsAccessToken({
+    accountsUrl: internalAccountsUrl,
+    accessToken: authorization.accessToken,
+    fetchImpl: deps.fetch,
+  });
+  const rotateUrl = new URL(
+    takosumiAccountsCapsuleServiceRotateTokenPath(
+      capsuleId,
+      TAKOSUMI_ACCOUNTS_PLATFORM_SERVICE_AI_GATEWAY,
+    ),
+    internalAccountsUrl,
+  );
+  const rotateResponse = await deps.fetch(rotateUrl, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${authorization.accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      scopes: AI_GATEWAY_TOKEN_SCOPES,
+      ttlSeconds: AI_GATEWAY_TOKEN_TTL_SECONDS,
+    }),
+    signal: AbortSignal.timeout(ACCOUNTS_FETCH_TIMEOUT_MS),
+  });
+  const rotateBody = await readJsonRecord(rotateResponse);
+  const token = nonEmptyString(rotateBody.token);
+  if (!rotateResponse.ok || !token?.startsWith("taksrv_")) {
+    throw new Error(`runtime token rotation failed (${rotateResponse.status})`);
+  }
+  return {
+    apiKey: token,
+    endpoint: new URL(
+      "/gateway/ai/v1/chat/completions",
+      publicAccountsUrl,
+    ).toString(),
+  };
+}
+
+async function capsuleIdForAccountsAccessToken(input: {
+  readonly accountsUrl: string;
+  readonly accessToken: string;
+  readonly fetchImpl: typeof fetch;
+}): Promise<string> {
+  const userInfoResponse = await input.fetchImpl(
+    new URL(TAKOSUMI_ACCOUNTS_USERINFO_PATH, input.accountsUrl),
+    {
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${input.accessToken}`,
+      },
+      signal: AbortSignal.timeout(ACCOUNTS_FETCH_TIMEOUT_MS),
+    },
+  );
+  const userInfo = await readJsonRecord(userInfoResponse);
+  const takosumi = recordValue(userInfo.takosumi);
+  const capsuleId = nonEmptyString(
+    takosumi?.capsule_id ?? takosumi?.installation_id,
+  );
+  if (!userInfoResponse.ok || !capsuleId) {
+    throw new Error(
+      `Capsule identity lookup failed (${userInfoResponse.status})`,
+    );
+  }
+  return capsuleId;
+}
+
+function openAiChatCompletionsEndpoint(
+  baseUrl: string | undefined,
+): string | undefined {
+  const value = nonEmptyString(baseUrl);
+  if (!value) return undefined;
+  const url = new URL(value);
+  const path = url.pathname.replace(/\/+$/u, "");
+  if (!path.endsWith("/chat/completions")) {
+    url.pathname = `${path}/chat/completions`;
+  }
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+async function readJsonRecord(
+  response: Response,
+): Promise<Record<string, unknown>> {
+  const value = await response.json().catch(() => ({}));
+  return recordValue(value) ?? {};
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 /**
@@ -202,12 +404,13 @@ const CONTROL_RPC_DISPATCH: ReadonlyMap<
   (body: Record<string, unknown>, env: Env) => Response | Promise<Response>
 > = new Map(
   CONTROL_RPC_ENDPOINTS.map(({ name }) => {
-    const handler = CONTROL_RPC_HANDLERS[name] ??
+    const handler =
+      CONTROL_RPC_HANDLERS[name] ??
       (name === "run-usage"
         ? handleRunUsage
         : name === "api-keys"
-        ? handleApiKeys
-        : undefined);
+          ? handleApiKeys
+          : undefined);
     if (!handler) {
       throw new Error(`No control-RPC handler registered for "${name}"`);
     }

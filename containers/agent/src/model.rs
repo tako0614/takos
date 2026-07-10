@@ -56,12 +56,31 @@ pub struct TakosModelRunner {
 }
 
 impl TakosModelRunner {
+    #[cfg(test)]
     pub fn new_with_openai_api_keys(
         model: impl Into<String>,
         temperature: Option<f32>,
         openai_api_keys: Vec<String>,
         tools: Vec<ToolDefinition>,
         usage_tracker: Arc<UsageTracker>,
+    ) -> Self {
+        Self::new_with_openai_api_keys_and_endpoint(
+            model,
+            temperature,
+            openai_api_keys,
+            tools,
+            usage_tracker,
+            None,
+        )
+    }
+
+    pub fn new_with_openai_api_keys_and_endpoint(
+        model: impl Into<String>,
+        temperature: Option<f32>,
+        openai_api_keys: Vec<String>,
+        tools: Vec<ToolDefinition>,
+        usage_tracker: Arc<UsageTracker>,
+        endpoint: Option<String>,
     ) -> Self {
         let resolved_model = get_model_name_override().unwrap_or_else(|| model.into());
         Self {
@@ -71,7 +90,12 @@ impl TakosModelRunner {
             openai_api_keys: Arc::new(sanitize_api_keys(openai_api_keys)),
             tools: Arc::new(tools),
             usage_tracker,
-            endpoint: Arc::new(get_model_endpoint()),
+            endpoint: Arc::new(
+                endpoint
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or_else(get_model_endpoint),
+            ),
         }
     }
 
@@ -570,6 +594,23 @@ mod tests {
         assert!(!is_openai_auth_failure(
             "OpenAI chat completions failed: 429 Too Many Requests",
         ));
+    }
+
+    #[test]
+    fn run_scoped_endpoint_overrides_the_container_default() {
+        let runner = TakosModelRunner::new_with_openai_api_keys_and_endpoint(
+            "gateway-model",
+            None,
+            vec!["runtime-token".to_string()],
+            Vec::new(),
+            Arc::new(UsageTracker::default()),
+            Some(" https://gateway.example.test/v1/chat/completions ".to_string()),
+        );
+
+        assert_eq!(
+            runner.endpoint.as_str(),
+            "https://gateway.example.test/v1/chat/completions"
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]

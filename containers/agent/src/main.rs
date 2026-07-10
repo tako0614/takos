@@ -550,12 +550,13 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
     )
     .with_cancellation_token(cancellation_token.clone());
     let exposed_tools = select_model_tools(&composite_tool_executor.exposed_tools());
-    let model_runner = TakosModelRunner::new_with_openai_api_keys(
+    let model_runner = TakosModelRunner::new_with_openai_api_keys_and_endpoint(
         payload.resolved_model(),
         run_config.temperature,
         collect_openai_api_keys(api_keys.openai, env::var("OPENAI_API_KEY").ok()),
         exposed_tools.clone(),
         usage_tracker,
+        api_keys.openai_endpoint,
     );
     let deps = build_engine_deps(
         &store_root,
