@@ -113,7 +113,7 @@ async function validateCurrentInstallDocs(): Promise<string[]> {
   for (const required of [
     "Accounts 台帳操作",
     "binding-level review",
-    "Deployment ledger revision",
+    "StateVersion / Output revision",
     "current guarantee としては扱わない",
   ]) {
     if (!includesRequiredText(upgradeExport, required)) {
