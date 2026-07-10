@@ -30,6 +30,7 @@ async function sendRunQueueMessage(env: Env, run: StaleRun): Promise<void> {
     env.DB,
     run.accountId,
     undefined,
+    env,
   );
   await env.RUN_QUEUE.send({
     version: RUN_QUEUE_MESSAGE_VERSION,
@@ -46,14 +47,17 @@ export async function reenqueueStaleRunningRuns(
 ): Promise<void> {
   const db = getDb(env.DB);
 
-  const staleRuns = await db.select({ id: runs.id, accountId: runs.accountId })
-    .from(runs).where(
+  const staleRuns = await db
+    .select({ id: runs.id, accountId: runs.accountId })
+    .from(runs)
+    .where(
       and(
         eq(runs.status, "running"),
         lt(runs.serviceHeartbeat, staleThreshold),
       ),
     )
-    .limit(50).all();
+    .limit(50)
+    .all();
 
   if (staleRuns.length === 0) return;
 
@@ -63,17 +67,20 @@ export async function reenqueueStaleRunningRuns(
 
   for (const run of staleRuns) {
     // Atomically reset status to queued (only if still running and stale)
-    const resetResult = await db.update(runs).set({
-      status: "queued",
-      serviceId: null,
-      serviceHeartbeat: null,
-    }).where(
-      and(
-        eq(runs.id, run.id),
-        eq(runs.status, "running"),
-        lt(runs.serviceHeartbeat, staleThreshold),
-      ),
-    );
+    const resetResult = await db
+      .update(runs)
+      .set({
+        status: "queued",
+        serviceId: null,
+        serviceHeartbeat: null,
+      })
+      .where(
+        and(
+          eq(runs.id, run.id),
+          eq(runs.status, "running"),
+          lt(runs.serviceHeartbeat, staleThreshold),
+        ),
+      );
 
     if (affectedRowCount(resetResult) > 0) {
       try {
@@ -89,10 +96,13 @@ export async function reenqueueStaleRunningRuns(
           { module: "runner_cron" },
         );
         try {
-          await db.update(runs).set({
-            status: "running",
-            serviceHeartbeat: new Date(0).toISOString(), // Keep stale so cron picks it up again
-          }).where(and(eq(runs.id, run.id), eq(runs.status, "queued")));
+          await db
+            .update(runs)
+            .set({
+              status: "running",
+              serviceHeartbeat: new Date(0).toISOString(), // Keep stale so cron picks it up again
+            })
+            .where(and(eq(runs.id, run.id), eq(runs.status, "queued")));
         } catch (revertErr) {
           logError(
             `Failed to revert run ${run.id} after queue send failure`,
@@ -112,12 +122,14 @@ export async function reenqueueStaleUnclaimedRuns(
   const db = getDb(env.DB);
   const recoveryHeartbeat = new Date().toISOString();
 
-  const staleRuns = await db.select({
-    id: runs.id,
-    accountId: runs.accountId,
-    status: runs.status,
-  })
-    .from(runs).where(
+  const staleRuns = (await db
+    .select({
+      id: runs.id,
+      accountId: runs.accountId,
+      status: runs.status,
+    })
+    .from(runs)
+    .where(
       and(
         inArray(runs.status, ["pending", "queued"]),
         isNull(runs.serviceId),
@@ -128,35 +140,38 @@ export async function reenqueueStaleUnclaimedRuns(
         ),
       ),
     )
-    .limit(50).all() as Array<StaleRun & { status: string }>;
+    .limit(50)
+    .all()) as Array<StaleRun & { status: string }>;
 
   if (staleRuns.length === 0) return;
 
-  logInfo(
-    `Found ${staleRuns.length} stale unclaimed runs, re-enqueuing`,
-    { module: "runner_cron" },
-  );
+  logInfo(`Found ${staleRuns.length} stale unclaimed runs, re-enqueuing`, {
+    module: "runner_cron",
+  });
 
   for (const run of staleRuns) {
     // A stale pending/queued run can happen if the queue message was lost
     // after DB creation. Duplicate queue messages are safe: queue handling
     // claims only queued, unowned runs and acks everything else.
-    const resetResult = await db.update(runs).set({
-      status: "queued",
-      serviceId: null,
-      serviceHeartbeat: recoveryHeartbeat,
-    }).where(
-      and(
-        eq(runs.id, run.id),
-        inArray(runs.status, ["pending", "queued"]),
-        isNull(runs.serviceId),
-        lt(runs.createdAt, staleThreshold),
-        or(
-          isNull(runs.serviceHeartbeat),
-          lt(runs.serviceHeartbeat, staleThreshold),
+    const resetResult = await db
+      .update(runs)
+      .set({
+        status: "queued",
+        serviceId: null,
+        serviceHeartbeat: recoveryHeartbeat,
+      })
+      .where(
+        and(
+          eq(runs.id, run.id),
+          inArray(runs.status, ["pending", "queued"]),
+          isNull(runs.serviceId),
+          lt(runs.createdAt, staleThreshold),
+          or(
+            isNull(runs.serviceHeartbeat),
+            lt(runs.serviceHeartbeat, staleThreshold),
+          ),
         ),
-      ),
-    );
+      );
 
     if (affectedRowCount(resetResult) > 0) {
       try {
@@ -195,16 +210,16 @@ export async function handleScheduled(
     return;
   }
 
-  const staleThreshold = new Date(Date.now() - STALE_WORKER_THRESHOLD_MS)
-    .toISOString();
+  const staleThreshold = new Date(
+    Date.now() - STALE_WORKER_THRESHOLD_MS,
+  ).toISOString();
   await reenqueueStaleRunningRuns(env, staleThreshold);
   await reenqueueStaleUnclaimedRuns(env, staleThreshold);
 
   // Clean up old tool_operations records (24h retention)
   try {
-    const { cleanupStaleOperations } = await import(
-      "../../application/tools/idempotency.ts"
-    );
+    const { cleanupStaleOperations } =
+      await import("../../application/tools/idempotency.ts");
     const cleaned = await cleanupStaleOperations(env.DB);
     if (cleaned > 0) {
       logInfo(`Cleaned ${cleaned} stale tool_operations records`, {

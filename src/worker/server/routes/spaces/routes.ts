@@ -21,6 +21,7 @@ import {
   getModelBackend as getModelBackendForModel,
   isModelSelectable,
   normalizeModelId,
+  resolveExecutionModel,
   resolveModelCatalog,
   resolveHistoryTokenBudget,
 } from "../../../application/services/agent/index.ts";
@@ -43,7 +44,7 @@ import { logWarn } from "../../../shared/utils/logger.ts";
 
 const VALID_SECURITY_POSTURES = ["standard", "restricted_egress"] as const;
 const VALID_MODEL_BACKENDS = ["openai", "anthropic", "google"] as const;
-type ModelBackend = typeof VALID_MODEL_BACKENDS[number];
+type ModelBackend = (typeof VALID_MODEL_BACKENDS)[number];
 
 function normalizeModelBackendInput(
   modelBackend?: string | null,
@@ -67,17 +68,20 @@ function resolveModelBackendAlias(
 async function buildModelSettingsResponse(
   c: Context<AuthenticatedRouteEnv>,
   model: string,
-  modelBackend: ModelBackend,
 ) {
   const catalog = await resolveModelCatalog(c.env, { currentModel: model });
+  const effectiveModel = isModelSelectable(catalog, model)
+    ? model
+    : resolveExecutionModel(c.env, model);
+  const modelBackend = getModelBackendForModel(effectiveModel);
   return {
-    ai_model: model,
-    model,
+    ai_model: effectiveModel,
+    model: effectiveModel,
     model_backend: modelBackend,
     available_models: catalog.availableModelsByBackend,
     catalog_status: catalog.status,
     token_limit: resolveHistoryTokenBudget(
-      model,
+      effectiveModel,
       c.env.MODEL_CONTEXT_WINDOWS,
     ),
   };
@@ -119,20 +123,20 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get("/", async (c) => {
     const user = c.get("user");
 
-    let workspaces = await listWorkspacesForUser(
+    let workspaces = await listWorkspacesForUser(c.env, user.id);
+
+    const personalWorkspace = await getOrCreatePersonalWorkspace(
       c.env,
       user.id,
     );
-
-    const personalWorkspace = await getOrCreatePersonalWorkspace(c.env, user.id);
     if (personalWorkspace) {
       if (
         !workspaces.some((workspace) => workspace.id === personalWorkspace.id)
       ) {
         workspaces = [
           personalWorkspace,
-          ...workspaces.filter((workspace) =>
-            workspace.id !== personalWorkspace.id
+          ...workspaces.filter(
+            (workspace) => workspace.id !== personalWorkspace.id,
           ),
         ];
       }
@@ -162,38 +166,40 @@ export default new Hono<AuthenticatedRouteEnv>()
 
       try {
         const { workspace, repository } = await createWorkspaceWithDefaultRepo(
-            c.env,
-            user.id,
-            body.name.trim(),
-            {
-              id: body.id,
-              description: body.description,
-              installFeaturedApps: body.installFeaturedApps ?? false,
-            },
-          );
+          c.env,
+          user.id,
+          body.name.trim(),
+          {
+            id: body.id,
+            description: body.description,
+            installFeaturedApps: body.installFeaturedApps ?? false,
+          },
+        );
 
         return c.json(
           { space: toWorkspaceResponse(workspace), repository },
           201,
         );
       } catch (err) {
-        const message = err instanceof Error
-          ? err.message
-          : "Failed to create space";
+        const message =
+          err instanceof Error ? err.message : "Failed to create space";
         throw new BadRequestError(message);
       }
     },
   )
   .get("/me", async (c) => {
     const user = c.get("user");
-    if (!await getOrCreatePersonalWorkspace(c.env, user.id)) {
+    if (!(await getOrCreatePersonalWorkspace(c.env, user.id))) {
       throw new NotFoundError("Personal space");
     }
     scheduleFeaturedAppPreinstallTick(c, user.id);
 
     const access = await requireSpaceAccess(c, "me", user.id);
 
-    const { workspace, repository } = await getWorkspaceWithRepository(c.env, access.space);
+    const { workspace, repository } = await getWorkspaceWithRepository(
+      c.env,
+      access.space,
+    );
 
     return c.json({
       space: toWorkspaceResponse(workspace),
@@ -205,9 +211,9 @@ export default new Hono<AuthenticatedRouteEnv>()
     const { space, membership } = c.get("access");
 
     const { workspace, repository } = await getWorkspaceWithRepository(
-        c.env,
-        space,
-      );
+      c.env,
+      space,
+    );
 
     return c.json({
       space: toWorkspaceResponse(workspace),
@@ -221,10 +227,11 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const db = getDb(c.env.DB);
 
-    const accessibleResourceIds = await db.select({
-      resourceId: resourceAccess.resourceId,
-      permission: resourceAccess.permission,
-    })
+    const accessibleResourceIds = await db
+      .select({
+        resourceId: resourceAccess.resourceId,
+        permission: resourceAccess.permission,
+      })
       .from(resourceAccess)
       .where(eq(resourceAccess.accountId, space.id))
       .all();
@@ -236,49 +243,55 @@ export default new Hono<AuthenticatedRouteEnv>()
     );
 
     const [repoRows, threadRows, resourceRows] = await Promise.all([
-      db.select({
-        id: repositories.id,
-        name: repositories.name,
-        updatedAt: repositories.updatedAt,
-      })
+      db
+        .select({
+          id: repositories.id,
+          name: repositories.name,
+          updatedAt: repositories.updatedAt,
+        })
         .from(repositories)
         .where(eq(repositories.accountId, space.id))
         .orderBy(desc(repositories.updatedAt))
         .all(),
-      db.select({
-        id: threads.id,
-        title: threads.title,
-        status: threads.status,
-        updatedAt: threads.updatedAt,
-      })
+      db
+        .select({
+          id: threads.id,
+          title: threads.title,
+          status: threads.status,
+          updatedAt: threads.updatedAt,
+        })
         .from(threads)
-        .where(and(
-          eq(threads.accountId, space.id),
-          ne(threads.status, "deleted"),
-        ))
+        .where(
+          and(eq(threads.accountId, space.id), ne(threads.status, "deleted")),
+        )
         .orderBy(desc(threads.updatedAt))
         .all(),
-      db.select({
-        id: resources.id,
-        name: resources.name,
-        type: resources.type,
-        ownerAccountId: resources.ownerAccountId,
-        updatedAt: resources.updatedAt,
-      }).from(resources).where(
-        and(
-          inArray(resources.type, ["d1", "r2"]),
-          ne(resources.status, "deleted"),
-          or(
-            and(
-              eq(resources.accountId, space.id),
-              eq(resources.ownerAccountId, user.id),
+      db
+        .select({
+          id: resources.id,
+          name: resources.name,
+          type: resources.type,
+          ownerAccountId: resources.ownerAccountId,
+          updatedAt: resources.updatedAt,
+        })
+        .from(resources)
+        .where(
+          and(
+            inArray(resources.type, ["d1", "r2"]),
+            ne(resources.status, "deleted"),
+            or(
+              and(
+                eq(resources.accountId, space.id),
+                eq(resources.ownerAccountId, user.id),
+              ),
+              accessibleIdSet.size > 0
+                ? inArray(resources.id, Array.from(accessibleIdSet))
+                : undefined,
             ),
-            accessibleIdSet.size > 0
-              ? inArray(resources.id, Array.from(accessibleIdSet))
-              : undefined,
           ),
-        ),
-      ).orderBy(desc(resources.updatedAt)).all(),
+        )
+        .orderBy(desc(resources.updatedAt))
+        .all(),
     ]);
 
     const exportedAt = new Date().toISOString();
@@ -289,9 +302,10 @@ export default new Hono<AuthenticatedRouteEnv>()
         id: resource.id,
         name: resource.name,
         updated_at: resource.updatedAt,
-        access_level: resource.ownerAccountId === user.id
-          ? "owner"
-          : (accessPermissionMap.get(resource.id) || "read"),
+        access_level:
+          resource.ownerAccountId === user.id
+            ? "owner"
+            : accessPermissionMap.get(resource.id) || "read",
         export_url: `/api/resources/${resource.id}/d1/export`,
         method: "POST" as const,
       }));
@@ -302,9 +316,10 @@ export default new Hono<AuthenticatedRouteEnv>()
         id: resource.id,
         name: resource.name,
         updated_at: resource.updatedAt,
-        access_level: resource.ownerAccountId === user.id
-          ? "owner"
-          : (accessPermissionMap.get(resource.id) || "read"),
+        access_level:
+          resource.ownerAccountId === user.id
+            ? "owner"
+            : accessPermissionMap.get(resource.id) || "read",
       }));
 
     return c.json({
@@ -347,13 +362,15 @@ export default new Hono<AuthenticatedRouteEnv>()
     }),
     zValidator(
       "json",
-      z.object({
-        name: z.string().optional(),
-        ai_model: z.string().optional(),
-        ai_provider: z.string().optional(),
-        model_backend: z.string().optional(),
-        security_posture: z.enum(VALID_SECURITY_POSTURES).optional(),
-      }).strict(),
+      z
+        .object({
+          name: z.string().optional(),
+          ai_model: z.string().optional(),
+          ai_provider: z.string().optional(),
+          model_backend: z.string().optional(),
+          security_posture: z.enum(VALID_SECURITY_POSTURES).optional(),
+        })
+        .strict(),
     ),
     async (c) => {
       const { space } = c.get("access");
@@ -382,14 +399,13 @@ export default new Hono<AuthenticatedRouteEnv>()
         updates.ai_model = normalizedModel;
 
         const inferredModelBackend = getModelBackendForModel(normalizedModel);
-        const modelBackendOverride = normalizeModelBackendInput(
-          modelBackend,
-        );
+        const modelBackendOverride = normalizeModelBackendInput(modelBackend);
         if (modelBackend && !modelBackendOverride) {
           throw new BadRequestError("Invalid model backend");
         }
         if (
-          modelBackendOverride && modelBackendOverride !== inferredModelBackend
+          modelBackendOverride &&
+          modelBackendOverride !== inferredModelBackend
         ) {
           throw new BadRequestError("Model backend does not match model");
         }
@@ -397,15 +413,13 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
 
       if (modelBackend) {
-        const normalizedModelBackend = normalizeModelBackendInput(
-          modelBackend,
-        );
+        const normalizedModelBackend = normalizeModelBackendInput(modelBackend);
         if (!normalizedModelBackend) {
           throw new BadRequestError("Invalid model backend");
         }
         if (!body.ai_model) {
-          const existingModel = normalizeModelId(space.ai_model) ||
-            DEFAULT_MODEL_ID;
+          const existingModel =
+            normalizeModelId(space.ai_model) || DEFAULT_MODEL_ID;
           const inferredModelBackend = getModelBackendForModel(existingModel);
           if (normalizedModelBackend !== inferredModelBackend) {
             throw new BadRequestError("Model backend does not match model");
@@ -422,11 +436,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("No valid updates provided");
       }
 
-      const workspace = await updateWorkspace(
-        c.env.DB,
-        space.id,
-        updates,
-      );
+      const workspace = await updateWorkspace(c.env.DB, space.id, updates);
       if (!workspace) {
         throw new BadRequestError("No valid updates provided");
       }
@@ -437,19 +447,10 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get("/:spaceId/model", spaceAccess(), async (c) => {
     const { space } = c.get("access");
 
-    const workspace = await getWorkspaceModelSettings(
-      c.env.DB,
-      space.id,
-    );
+    const workspace = await getWorkspaceModelSettings(c.env.DB, space.id);
 
     const model = normalizeModelId(workspace?.ai_model) || DEFAULT_MODEL_ID;
-    const inferredModelBackend = getModelBackendForModel(model);
-    const storedModelBackend = workspace?.model_backend;
-    const modelBackend = storedModelBackend === inferredModelBackend
-      ? storedModelBackend
-      : inferredModelBackend;
-
-    return c.json(await buildModelSettingsResponse(c, model, modelBackend));
+    return c.json(await buildModelSettingsResponse(c, model));
   })
   .patch(
     "/:spaceId/model",
@@ -459,12 +460,14 @@ export default new Hono<AuthenticatedRouteEnv>()
     }),
     zValidator(
       "json",
-      z.object({
-        model: z.string().optional(),
-        ai_model: z.string().optional(),
-        provider: z.string().optional(),
-        model_backend: z.string().optional(),
-      }).strict(),
+      z
+        .object({
+          model: z.string().optional(),
+          ai_model: z.string().optional(),
+          provider: z.string().optional(),
+          model_backend: z.string().optional(),
+        })
+        .strict(),
     ),
     async (c) => {
       const { space } = c.get("access");
@@ -497,12 +500,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         throw new BadRequestError("Model backend does not match model");
       }
 
-      await updateWorkspaceModel(
-        c.env.DB,
-        space.id,
-        model,
-        modelBackend,
-      );
+      await updateWorkspaceModel(c.env.DB, space.id, model, modelBackend);
 
       return c.json({
         ai_model: model,

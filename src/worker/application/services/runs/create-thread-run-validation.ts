@@ -1,5 +1,10 @@
 import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
-import { DEFAULT_MODEL_ID, normalizeModelId } from "../agent/index.ts";
+import {
+  DEFAULT_MODEL_ID,
+  normalizeModelId,
+  resolveExecutionModel,
+} from "../agent/index.ts";
+import type { AiEnv } from "../../../shared/types/env.ts";
 const MAX_RUN_NESTING_DEPTH = 5;
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import {
@@ -104,12 +109,21 @@ export async function resolveRunModel(
   db: SqlDatabaseBinding,
   spaceId: string,
   requestedModel: string | undefined,
+  env: AiEnv & {
+    OIDC_ISSUER_URL?: string;
+    OIDC_CLIENT_ID?: string;
+    ENCRYPTION_KEY?: string;
+    TAKOSUMI_ACCOUNTS_URL?: string;
+    TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
+  } = {},
 ): Promise<string> {
   const spaceModel = await createThreadRunValidationDeps.getSpaceModel(
     db,
     spaceId,
   );
-  const resolvedModel = requestedModel || spaceModel?.aiModel ||
+  const resolvedModel =
+    requestedModel ||
+    spaceModel?.aiModel ||
     createThreadRunValidationDeps.defaultModelId;
-  return validateModel(resolvedModel);
+  return resolveExecutionModel(env, validateModel(resolvedModel));
 }

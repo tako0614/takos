@@ -28,9 +28,12 @@ export {
   normalizeModelId,
   OPENAI_COMPATIBLE_MODELS,
   OPENAI_MODELS,
+  resolveExecutionModel,
   resolveModelCatalog,
   resolveHistoryTokenBudget,
   SUPPORTED_MODEL_IDS,
+  TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID,
+  usesTakosumiManagedAiGateway,
 } from "./model-catalog.ts";
 export type { RetrievedThreadMessage } from "./thread-context.ts";
 export {

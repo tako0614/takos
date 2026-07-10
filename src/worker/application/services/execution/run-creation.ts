@@ -45,20 +45,18 @@ type CreateThreadRunSuccess = {
 };
 
 export type CreateThreadRunResult =
-  | CreateThreadRunError
-  | CreateThreadRunSuccess;
+  CreateThreadRunError | CreateThreadRunSuccess;
 
 export async function createThreadRun(
   env: Env,
   input: CreateThreadRunInput,
   clock: Clock = systemClock,
 ): Promise<CreateThreadRunResult> {
-  const access = await checkThreadAccess(
-    env.DB,
-    input.threadId,
-    input.userId,
-    ["owner", "admin", "editor"] satisfies SpaceRole[],
-  );
+  const access = await checkThreadAccess(env.DB, input.threadId, input.userId, [
+    "owner",
+    "admin",
+    "editor",
+  ] satisfies SpaceRole[]);
   if (!access) {
     return {
       ok: false,
@@ -108,16 +106,20 @@ export async function createThreadRun(
   }
 
   const runId = generateId();
-  const validatedModel = await resolveRunModel(env.DB, spaceId, input.model);
+  const validatedModel = await resolveRunModel(
+    env.DB,
+    spaceId,
+    input.model,
+    env,
+  );
   const runInput = JSON.stringify(input.input || {});
   const agentType = input.agentType || "default";
   const createdAt = new Date().toISOString();
-  const rootThreadId = parentRun?.rootThreadId ?? parentRun?.threadId ??
-    input.threadId;
+  const rootThreadId =
+    parentRun?.rootThreadId ?? parentRun?.threadId ?? input.threadId;
   const rootRunId = parentRun?.rootRunId ?? parentRun?.id ?? runId;
-  const childThreadId = parentRun && parentRun.threadId !== input.threadId
-    ? input.threadId
-    : null;
+  const childThreadId =
+    parentRun && parentRun.threadId !== input.threadId ? input.threadId : null;
 
   await createPendingRun(env.DB, {
     runId,

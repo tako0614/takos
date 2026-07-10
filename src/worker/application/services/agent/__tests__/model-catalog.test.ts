@@ -7,7 +7,9 @@ import {
   clearModelCatalogCacheForTests,
   isModelSelectable,
   normalizeModelId,
+  resolveExecutionModel,
   resolveModelCatalog,
+  usesTakosumiManagedAiGateway,
 } from "../model-catalog.ts";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -26,6 +28,47 @@ test("model catalog returns fallback when OpenAI credentials are not configured"
     catalog.availableModelsByBackend.openai.map((model) => model.id),
     ["gpt-5.5", "takosumi/default", "deepseek/chat", "zai/glm", "gemini/chat"],
   );
+});
+
+test("managed Takosumi Gateway exposes only its safe default without an operator allowlist", async () => {
+  clearModelCatalogCacheForTests();
+  const env = {
+    OIDC_ISSUER_URL: "https://app.takosumi.test",
+    OIDC_CLIENT_ID: "toc_test",
+    ENCRYPTION_KEY: "test-encryption-key",
+    TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.test",
+  };
+
+  assertStrictEquals(usesTakosumiManagedAiGateway(env), true);
+  const catalog = await resolveModelCatalog(env, { currentModel: "gpt-5.5" });
+  assertStrictEquals(catalog.status, "fallback");
+  assertEquals(
+    catalog.availableModelsByBackend.openai.map((model) => ({
+      id: model.id,
+      disabled: model.disabled ?? false,
+    })),
+    [
+      { id: "gpt-5.5", disabled: true },
+      { id: "takosumi/default", disabled: false },
+    ],
+  );
+  assertStrictEquals(resolveExecutionModel(env, "gpt-5.5"), "takosumi/default");
+});
+
+test("managed Takosumi Gateway accepts only aliases the operator explicitly allows", () => {
+  const env = {
+    OIDC_ISSUER_URL: "https://app.takosumi.test",
+    OIDC_CLIENT_ID: "toc_test",
+    ENCRYPTION_KEY: "test-encryption-key",
+    TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.test",
+    TAKOS_ALLOWED_MODELS: "deepseek/chat",
+  };
+
+  assertStrictEquals(
+    resolveExecutionModel(env, "deepseek/chat"),
+    "deepseek/chat",
+  );
+  assertStrictEquals(resolveExecutionModel(env, "gpt-5.5"), "takosumi/default");
 });
 
 test("model catalog fetches direct OpenAI models and filters non-chat model ids", async () => {
@@ -88,7 +131,10 @@ test("model catalog trusts OpenAI-compatible gateway aliases and supports allowl
     catalog.availableModelsByBackend.openai.map((model) => model.id),
     ["takosumi/default", "deepseek/chat"],
   );
-  assertStrictEquals(catalog.availableModelsByBackend.openai[0].source, "gateway");
+  assertStrictEquals(
+    catalog.availableModelsByBackend.openai[0].source,
+    "gateway",
+  );
 });
 
 test("model catalog reuses stale cache when refresh fails", async () => {

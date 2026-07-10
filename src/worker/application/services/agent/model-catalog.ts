@@ -12,10 +12,7 @@ export type ModelOption = {
 
 export type ModelCatalogSource = "models_api" | "gateway" | "fallback";
 export type ModelCatalogStatus =
-  | "fresh"
-  | "cached"
-  | "fallback"
-  | "unconfigured";
+  "fresh" | "cached" | "fallback" | "unconfigured";
 
 export type AvailableModelsByBackend = Readonly<
   Record<ModelBackend, ReadonlyArray<ModelOption>>
@@ -30,6 +27,11 @@ type ModelCatalogEnv = {
   OPENAI_API_KEY?: string;
   OPENAI_BASE_URL?: string;
   TAKOS_ALLOWED_MODELS?: string;
+  OIDC_ISSUER_URL?: string;
+  OIDC_CLIENT_ID?: string;
+  ENCRYPTION_KEY?: string;
+  TAKOSUMI_ACCOUNTS_URL?: string;
+  TAKOSUMI_ACCOUNTS_INTERNAL_URL?: string;
 };
 
 type ResolveModelCatalogOptions = {
@@ -82,6 +84,8 @@ export const OPENAI_COMPATIBLE_MODELS: ReadonlyArray<ModelOption> = [
 
 export const OPENAI_MODELS = OPENAI_COMPATIBLE_MODELS;
 
+export const TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID = "takosumi/default";
+
 export const AVAILABLE_MODELS_BY_BACKEND: AvailableModelsByBackend = {
   openai: OPENAI_COMPATIBLE_MODELS,
   anthropic: [],
@@ -93,9 +97,7 @@ export const DEFAULT_MODEL_ID = OPENAI_MODELS[0].id;
 export function normalizeModelId(model?: string | null): string | null {
   if (!model) return null;
   const normalized = model.toLowerCase().trim();
-  return /^[a-z0-9][a-z0-9._:/-]{0,127}$/.test(normalized)
-    ? normalized
-    : null;
+  return /^[a-z0-9][a-z0-9._:/-]{0,127}$/.test(normalized) ? normalized : null;
 }
 
 export function getModelBackend(model: string): ModelBackend {
@@ -136,17 +138,63 @@ function withFallbackSource(
   return { ...option, source };
 }
 
-function fallbackModelCatalog(status: ModelCatalogStatus): ModelCatalog {
+function fallbackModels(env: ModelCatalogEnv): ReadonlyArray<ModelOption> {
+  if (!usesTakosumiManagedAiGateway(env)) return OPENAI_COMPATIBLE_MODELS;
+
+  const allowed = parseAllowedModels(env.TAKOS_ALLOWED_MODELS);
+  if (!allowed) {
+    return OPENAI_COMPATIBLE_MODELS.filter(
+      (option) => option.id === TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID,
+    );
+  }
+  allowed.add(TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID);
+  return OPENAI_COMPATIBLE_MODELS.filter((option) => allowed.has(option.id));
+}
+
+function fallbackModelCatalog(
+  status: ModelCatalogStatus,
+  env: ModelCatalogEnv,
+): ModelCatalog {
   return {
     status,
     availableModelsByBackend: {
-      openai: OPENAI_COMPATIBLE_MODELS.map((option) =>
-        withFallbackSource(option)
-      ),
+      openai: fallbackModels(env).map((option) => withFallbackSource(option)),
       anthropic: [],
       google: [],
     },
   };
+}
+
+function nonEmpty(value: string | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+/** True when runs obtain a short-lived credential from Takosumi Accounts. */
+export function usesTakosumiManagedAiGateway(env: ModelCatalogEnv): boolean {
+  return (
+    !nonEmpty(env.OPENAI_API_KEY) &&
+    nonEmpty(env.OIDC_ISSUER_URL) &&
+    nonEmpty(env.OIDC_CLIENT_ID) &&
+    nonEmpty(env.ENCRYPTION_KEY) &&
+    (nonEmpty(env.TAKOSUMI_ACCOUNTS_URL) ||
+      nonEmpty(env.TAKOSUMI_ACCOUNTS_INTERNAL_URL) ||
+      nonEmpty(env.OIDC_ISSUER_URL))
+  );
+}
+
+/** Resolve a saved/requested model against the credential path used at run time. */
+export function resolveExecutionModel(
+  env: ModelCatalogEnv,
+  requestedModel?: string | null,
+): string {
+  const normalized = normalizeModelId(requestedModel) ?? DEFAULT_MODEL_ID;
+  if (!usesTakosumiManagedAiGateway(env)) return normalized;
+  if (normalized === TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID) return normalized;
+
+  const allowed = parseAllowedModels(env.TAKOS_ALLOWED_MODELS);
+  return allowed?.has(normalized)
+    ? normalized
+    : TAKOSUMI_GATEWAY_DEFAULT_MODEL_ID;
 }
 
 function parseAllowedModels(value?: string | null): Set<string> | null {
@@ -212,14 +260,18 @@ function isDirectOpenAiChatModel(modelId: string): boolean {
 }
 
 function modelDisplayName(modelId: string): string {
-  const fallback = OPENAI_COMPATIBLE_MODELS.find((model) =>
-    model.id === modelId
+  const fallback = OPENAI_COMPATIBLE_MODELS.find(
+    (model) => model.id === modelId,
   );
   if (fallback) return fallback.name;
   return modelId
     .split(/[._:/-]+/)
     .filter(Boolean)
-    .map((part) => part.length <= 3 ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1))
+    .map((part) =>
+      part.length <= 3
+        ? part.toUpperCase()
+        : part[0].toUpperCase() + part.slice(1),
+    )
     .join(" ");
 }
 
@@ -235,9 +287,8 @@ function normalizeFetchedModels(
   const seen = new Set<string>();
   const out: ModelOption[] = [];
   for (const entry of data) {
-    const rawId = typeof entry === "string"
-      ? entry
-      : (entry as { id?: unknown })?.id;
+    const rawId =
+      typeof entry === "string" ? entry : (entry as { id?: unknown })?.id;
     const id = normalizeModelId(typeof rawId === "string" ? rawId : null);
     if (!id || seen.has(id)) continue;
     if (allowedModels && !allowedModels.has(id)) continue;
@@ -294,7 +345,10 @@ export async function resolveModelCatalog(
   }
 
   if (!env.OPENAI_API_KEY) {
-    return withCurrent(fallbackModelCatalog("unconfigured"));
+    const status = usesTakosumiManagedAiGateway(env)
+      ? "fallback"
+      : "unconfigured";
+    return withCurrent(fallbackModelCatalog(status, env));
   }
 
   try {
@@ -305,8 +359,8 @@ export async function resolveModelCatalog(
     const response = await fetchImpl(openAiModelsUrl(env.OPENAI_BASE_URL), {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${env.OPENAI_API_KEY}`,
-        "Accept": "application/json",
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        Accept: "application/json",
       },
     });
     if (!response.ok) {
@@ -342,7 +396,7 @@ export async function resolveModelCatalog(
     if (cached) {
       return withCurrent({ ...cached.catalog, status: "cached" });
     }
-    return withCurrent(fallbackModelCatalog("fallback"));
+    return withCurrent(fallbackModelCatalog("fallback", env));
   }
 }
 
@@ -352,8 +406,8 @@ export function isModelSelectable(
 ): boolean {
   const normalized = normalizeModelId(model);
   if (!normalized) return false;
-  return catalog.availableModelsByBackend.openai.some((option) =>
-    option.id === normalized && !option.disabled
+  return catalog.availableModelsByBackend.openai.some(
+    (option) => option.id === normalized && !option.disabled,
   );
 }
 
