@@ -14,6 +14,7 @@
     "web:dev": "bun run dev:web",
     "web:build": "bunx vite build --config web/vite.config.ts",
     "web:check": "bun run web:build",
+    "check:web-unresolved-identifiers": "bun scripts/check-web-unresolved-identifiers.ts",
     "mobile:check": "cd mobile && bun run doctor && bun run test && bun run check && bun run build",
     "mobile:doctor": "cd mobile && bun run doctor",
     "mobile:native-release-check": "cd mobile && bun run release:native-check",

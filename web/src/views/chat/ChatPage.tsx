@@ -264,10 +264,10 @@ export function ChatPage(props: ChatPageProps) {
               {(space) => (
                 <>
                   <ChatHeader
-                    selectedModel={selectedModel()}
+                    selectedModel={modelSelection.selectedModel()}
                     isLoading={false}
                     onModelChange={async (model) => {
-                      setSelectedModel(model);
+                      modelSelection.setSelectedModel(model);
                       const spaceId = selectedSpaceId();
                       if (spaceId) {
                         try {

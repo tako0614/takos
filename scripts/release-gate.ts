@@ -36,6 +36,10 @@ const gates: GateCommand[] = [
     command: ['bun', 'run', 'check'],
   },
   {
+    name: 'web-unresolved-identifiers',
+    command: ['bun', 'run', 'check:web-unresolved-identifiers'],
+  },
+  {
     name: 'lint:agent-docs',
     command: ['bun', 'run', 'lint:agent-docs'],
   },

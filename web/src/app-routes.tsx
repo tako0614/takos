@@ -20,6 +20,7 @@ import type {
   UserSettings,
 } from "./types/index.ts";
 import { SetupPage } from "./views/SetupPage.tsx";
+import { isHomeEntryPath } from "./lib/home-entry-path.ts";
 import { LoginPage } from "./views/app/AuthViews.tsx";
 import { AuthenticatedLayout } from "./components/layout/AuthenticatedLayout.tsx";
 import {
@@ -128,7 +129,7 @@ function HomeRoute() {
       <Match when={auth.user && !auth.user.setup_completed}>
         <SetupPage onComplete={() => completeSetup(auth)} />
       </Match>
-      <Match when={currentPath() !== "/"}>
+      <Match when={!isHomeEntryPath(currentPath())}>
         <NotFoundPage />
       </Match>
       <Match when={canonicalHref()}>
