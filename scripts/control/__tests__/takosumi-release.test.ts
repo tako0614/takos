@@ -322,6 +322,7 @@ test("ensure-queue-consumers skips existing Worker consumers and adds missing on
   const root = mkdtempSync(resolve(tmpdir(), "takos-release-queues-"));
   const bin = resolve(root, "bin");
   const log = resolve(root, "commands.log");
+  const propagationMarker = resolve(root, "worker-propagated");
   mkdirSync(bin, { recursive: true });
   writeFileSync(
     resolve(bin, "bunx"),
@@ -337,6 +338,11 @@ case "$*" in
     printf '[]\\n'
     ;;
   *"consumer add "*)
+    if [ ! -f '${propagationMarker}' ]; then
+      touch '${propagationMarker}'
+      echo 'This Worker does not exist on your account. [code: 10007]' >&2
+      exit 1
+    fi
     ;;
   *)
     echo "unexpected command: $*" >&2
@@ -381,6 +387,13 @@ esac
     assert.doesNotMatch(
       commands,
       /queues consumer add takos-test-runs takos-test/,
+    );
+    assert.equal(
+      (
+        commands.match(/queues consumer add takos-test-runs-dlq takos-test/g) ??
+        []
+      ).length,
+      2,
     );
     assert.match(
       commands,

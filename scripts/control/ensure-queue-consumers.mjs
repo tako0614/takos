@@ -53,6 +53,11 @@ const QUEUE_CONSUMERS = [
   },
 ];
 
+// The Workers API may accept an upload before the Queues API can resolve the
+// same Worker. Each compat request is bounded independently, so retry the
+// idempotent consumer declaration across that propagation window.
+const WORKER_PROPAGATION_RETRY_DELAYS_MS = [0, 15_000, 30_000];
+
 function usage() {
   console.error(`
 Usage: bun scripts/control/ensure-queue-consumers.mjs <environment> [--config <path>]
@@ -91,11 +96,7 @@ const wranglerGlobalArgs = [
 ];
 
 for (const consumer of QUEUE_CONSUMERS) {
-  const queueName = requireStringProperty(
-    queues,
-    consumer.queueKey,
-    "queues",
-  );
+  const queueName = requireStringProperty(queues, consumer.queueKey, "queues");
   if (
     await queueAlreadyHasConsumer(queueName, workerName, wranglerGlobalArgs)
   ) {
@@ -123,30 +124,54 @@ for (const consumer of QUEUE_CONSUMERS) {
   if (consumer.deadLetterQueueKey) {
     addArgs.push(
       "--dead-letter-queue",
-      requireStringProperty(
-        queues,
-        consumer.deadLetterQueueKey,
-        "queues",
-      ),
+      requireStringProperty(queues, consumer.deadLetterQueueKey, "queues"),
     );
   }
-  const result = spawnSync("bunx", addArgs, {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    env: process.env,
-  });
-  emitCommandResult(result);
-  const combined = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
-  if (
-    result.status !== 0 &&
-    !/already has|already exists|duplicate|consumer .* exists/i.test(combined)
-  ) {
-    throw new Error(
-      `Failed to add Queue consumer ${workerName} for ${queueName}: ${bounded(
-        combined,
-      )}`,
+  await addQueueConsumerWithRetry(addArgs, workerName, queueName);
+}
+
+async function addQueueConsumerWithRetry(addArgs, workerName, queueName) {
+  for (let attempt = 0; ; attempt += 1) {
+    const result = spawnSync("bunx", addArgs, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+    emitCommandResult(result);
+    const combined = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+    if (
+      result.status === 0 ||
+      /already has|already exists|duplicate|consumer .* exists/i.test(combined)
+    ) {
+      return;
+    }
+    const delay = WORKER_PROPAGATION_RETRY_DELAYS_MS[attempt];
+    if (
+      delay === undefined ||
+      !queueConsumerWorkerPropagationPending(combined)
+    ) {
+      throw new Error(
+        `Failed to add Queue consumer ${workerName} for ${queueName}: ${bounded(
+          combined,
+        )}`,
+      );
+    }
+    console.log(
+      `Queue consumer Worker ${workerName} is still propagating; retrying ${queueName}.`,
     );
+    if (delay > 0) await sleep(delay);
   }
+}
+
+function queueConsumerWorkerPropagationPending(output) {
+  return (
+    /worker.*does not exist/i.test(output) &&
+    /(?:code:\s*10007|\b10007\b)/i.test(output)
+  );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function readReleaseOutputs() {
