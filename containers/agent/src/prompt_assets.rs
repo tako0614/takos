@@ -24,6 +24,9 @@ pub const TOOL_RUNTIME_RULES: &str = r"## Tool Availability
 - If a tool is not listed, treat it as unavailable even if you know it exists
   elsewhere in Takos.
 - Use direct tools immediately for obvious built-in operations.
+- Answer directly when the request is already solvable from reasoning or the
+  supplied context, including simple calculations, drafting, and explanations.
+  Do not search toolbox merely because a related tool category might exist.
 - Do not wait for the user to name a tool when capability choice is unclear, an
   integration/manual may exist, or extra workspace/web context could materially
   change the next step.

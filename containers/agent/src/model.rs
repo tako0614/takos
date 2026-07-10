@@ -23,6 +23,9 @@ const DEFAULT_OPENAI_ENDPOINT: &str = "https://api.openai.com/v1/chat/completion
 /// runners observe the same upstream behaviour.
 const MODEL_HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 
+const REPEATED_TOOL_FAILURE_THRESHOLD: usize = 2;
+const TOOL_RECOVERY_INSTRUCTION: &str = "A tool has returned the same failure repeatedly. Do not call any tools in this response. Answer the user's request directly from the available context. If the task truly cannot be completed without that tool, explain the limitation once instead of retrying it.";
+
 fn build_model_http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(MODEL_HTTP_TIMEOUT)
@@ -288,22 +291,31 @@ impl TakosModelRunner {
     }
 
     fn build_openai_request(&self, input: &ModelInput) -> OpenAiChatCompletionRequest {
-        let tools = self
-            .tools
-            .iter()
-            .map(|tool| OpenAiToolDefinition {
-                r#type: "function".to_string(),
-                function: OpenAiToolSpec {
-                    name: tool.name.clone(),
-                    description: tool.description.clone(),
-                    parameters: tool.parameters.clone(),
-                },
-            })
-            .collect::<Vec<_>>();
+        let force_final_answer = has_repeated_tool_failure(input);
+        let tools = if force_final_answer {
+            Vec::new()
+        } else {
+            self.tools
+                .iter()
+                .map(|tool| OpenAiToolDefinition {
+                    r#type: "function".to_string(),
+                    function: OpenAiToolSpec {
+                        name: tool.name.clone(),
+                        description: tool.description.clone(),
+                        parameters: tool.parameters.clone(),
+                    },
+                })
+                .collect::<Vec<_>>()
+        };
         let tool_choice = if tools.is_empty() {
             None
         } else {
             Some("auto".to_string())
+        };
+        let system_prompt = if force_final_answer {
+            format!("{}\n\n{TOOL_RECOVERY_INSTRUCTION}", input.system_prompt)
+        } else {
+            input.system_prompt.clone()
         };
 
         OpenAiChatCompletionRequest {
@@ -312,7 +324,7 @@ impl TakosModelRunner {
             messages: vec![
                 OpenAiRequestMessage {
                     role: "system".to_string(),
-                    content: Some(Value::String(input.system_prompt.clone())),
+                    content: Some(Value::String(system_prompt)),
                 },
                 OpenAiRequestMessage {
                     role: "user".to_string(),
@@ -383,6 +395,24 @@ impl TakosModelRunner {
             usage: model_usage,
         })
     }
+}
+
+fn has_repeated_tool_failure(input: &ModelInput) -> bool {
+    input.tool_context.iter().any(|candidate| {
+        let Some((_, candidate_error)) = candidate.split_once(" error=") else {
+            return false;
+        };
+        let candidate_error = candidate_error.trim();
+        !candidate_error.is_empty()
+            && input
+                .tool_context
+                .iter()
+                .filter_map(|finding| finding.split_once(" error=").map(|(_, error)| error.trim()))
+                .filter(|error| *error == candidate_error)
+                .take(REPEATED_TOOL_FAILURE_THRESHOLD)
+                .count()
+                >= REPEATED_TOOL_FAILURE_THRESHOLD
+    })
 }
 
 #[async_trait]
@@ -565,13 +595,37 @@ struct OpenAiPromptTokensDetails {
 mod tests {
     use std::sync::Arc;
 
+    use serde_json::{json, Value};
     use takos_agent_engine::model::{ModelInput, ModelRunner};
     use takos_agent_engine::{LoopId, SessionId};
 
     use super::{
         is_openai_auth_failure, sanitize_api_keys, sanitize_provider_error_body, TakosModelRunner,
+        TOOL_RECOVERY_INSTRUCTION,
     };
+    use crate::control_rpc::ToolDefinition;
     use crate::engine_support::UsageTracker;
+
+    fn model_input(tool_context: Vec<String>) -> ModelInput {
+        ModelInput {
+            session_id: SessionId::new(),
+            loop_id: LoopId::new(),
+            system_prompt: "system".to_string(),
+            session_context: Vec::new(),
+            memory_context: Vec::new(),
+            tool_context,
+            user_message: "51 + 52".to_string(),
+            plan: None,
+        }
+    }
+
+    fn toolbox_definition() -> ToolDefinition {
+        ToolDefinition {
+            name: "toolbox".to_string(),
+            description: "Find and call available tools".to_string(),
+            parameters: json!({ "type": "object" }),
+        }
+    }
 
     #[test]
     fn sanitize_api_keys_filters_empty_and_duplicate_values() {
@@ -611,6 +665,53 @@ mod tests {
             runner.endpoint.as_str(),
             "https://gateway.example.test/v1/chat/completions"
         );
+    }
+
+    #[test]
+    fn repeated_same_tool_failure_forces_a_tool_free_final_request() {
+        let runner = TakosModelRunner::new_with_openai_api_keys(
+            "gateway-model",
+            None,
+            vec!["runtime-token".to_string()],
+            vec![toolbox_definition()],
+            Arc::new(UsageTracker::default()),
+        );
+        let failure = "toolbox error=tool \"math\" is missing a capability descriptor".to_string();
+
+        let request = runner.build_openai_request(&model_input(vec![
+            failure.clone(),
+            "toolbox output={\"results\":[]}".to_string(),
+            failure,
+        ]));
+
+        assert!(request.tools.is_empty());
+        assert_eq!(request.tool_choice, None);
+        assert!(matches!(
+            request.messages[0].content.as_ref(),
+            Some(Value::String(value)) if value.contains(TOOL_RECOVERY_INSTRUCTION)
+        ));
+    }
+
+    #[test]
+    fn one_tool_failure_keeps_the_catalog_available() {
+        let runner = TakosModelRunner::new_with_openai_api_keys(
+            "gateway-model",
+            None,
+            vec!["runtime-token".to_string()],
+            vec![toolbox_definition()],
+            Arc::new(UsageTracker::default()),
+        );
+
+        let request = runner.build_openai_request(&model_input(vec![
+            "toolbox error=temporary upstream failure".to_string(),
+        ]));
+
+        assert_eq!(request.tools.len(), 1);
+        assert_eq!(request.tool_choice.as_deref(), Some("auto"));
+        assert!(matches!(
+            request.messages[0].content.as_ref(),
+            Some(Value::String(value)) if !value.contains(TOOL_RECOVERY_INSTRUCTION)
+        ));
     }
 
     #[tokio::test(flavor = "current_thread")]
