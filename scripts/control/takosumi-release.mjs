@@ -2187,6 +2187,7 @@ export async function deployManagedCompatWorker(
   }
 
   const targetConfig = readReleaseWranglerTargetConfig(environment);
+  const secrets = readManagedCompatReleaseSecrets(environment);
   const assets = await uploadManagedCompatAssets({
     accountId,
     workerName,
@@ -2200,6 +2201,7 @@ export async function deployManagedCompatWorker(
   const metadata = managedCompatWorkerUploadMetadata(targetConfig, {
     mainModule: "index.js",
     assets,
+    secrets,
   });
   const form = new FormData();
   form.set(
@@ -2294,11 +2296,11 @@ function wranglerTargetConfig(parsed, environment) {
 
 function managedCompatWorkerUploadMetadata(
   targetConfig,
-  { mainModule, assets },
+  { mainModule, assets, secrets },
 ) {
   return dropUndefined({
     main_module: mainModule,
-    bindings: wranglerMetadataBindings(targetConfig),
+    bindings: wranglerMetadataBindings(targetConfig, secrets),
     containers: Array.isArray(targetConfig.containers)
       ? targetConfig.containers.map((container) => ({
           class_name: container.class_name,
@@ -2319,16 +2321,56 @@ function managedCompatWorkerUploadMetadata(
   });
 }
 
-function wranglerMetadataBindings(targetConfig) {
+function readManagedCompatReleaseSecrets(environment) {
+  const path = resolve(releaseSecretsFilePath(environment));
+  if (!existsSync(path)) {
+    throw new Error(
+      `Takosumi managed Worker upload requires the generated release secrets file at ${path}.`,
+    );
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    throw new Error(
+      `Takosumi managed Worker release secrets file is not valid JSON: ${path}`,
+    );
+  }
+  if (!isPlainObject(parsed) || Object.keys(parsed).length === 0) {
+    throw new Error(
+      `Takosumi managed Worker release secrets file must be a non-empty JSON object: ${path}`,
+    );
+  }
+  for (const [name, value] of Object.entries(parsed)) {
+    if (!/^[A-Z][A-Z0-9_]*$/u.test(name)) {
+      throw new Error(
+        `Takosumi managed Worker release secret has an invalid binding name: ${name}`,
+      );
+    }
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error(
+        `Takosumi managed Worker release secret ${name} must be a non-empty string.`,
+      );
+    }
+  }
+  return parsed;
+}
+
+function wranglerMetadataBindings(targetConfig, secrets = {}) {
   const bindings = [];
+  const secretNames = new Set(Object.keys(secrets));
   for (const [name, value] of Object.entries(
     isPlainObject(targetConfig.vars) ? targetConfig.vars : {},
   )) {
+    if (secretNames.has(name)) continue;
     bindings.push(
       typeof value === "string"
         ? { name, type: "plain_text", text: value }
         : { name, type: "json", json: value },
     );
+  }
+  for (const [name, text] of Object.entries(secrets)) {
+    bindings.push({ name, type: "secret_text", text });
   }
   for (const binding of arrayValue(targetConfig.kv_namespaces)) {
     bindings.push({

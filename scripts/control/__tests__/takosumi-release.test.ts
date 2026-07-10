@@ -1515,6 +1515,14 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
       "export default { fetch() { return new Response('ok'); } };",
     );
     writeFileSync(
+      ".takos-release-secrets.production.json",
+      JSON.stringify({
+        OIDC_CLIENT_SECRET: "oidc-secret-value",
+        ENCRYPTION_KEY: "encryption-secret-value",
+      }),
+      { mode: 0o600 },
+    );
+    writeFileSync(
       productionWranglerConfig,
       [
         'name = "takos-test"',
@@ -1692,6 +1700,8 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
       ]),
       [
         ["ADMIN_DOMAIN", "plain_text"],
+        ["OIDC_CLIENT_SECRET", "secret_text"],
+        ["ENCRYPTION_KEY", "secret_text"],
         ["HOSTNAME_ROUTING", "kv_namespace"],
         ["RUNTIME_CONTAINER", "durable_object_namespace"],
         ["RUN_QUEUE", "queue"],
@@ -1703,6 +1713,65 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
         ["ASSETS", "assets"],
       ],
     );
+    const secretBindings = (
+      metadata.bindings as Array<Record<string, unknown>>
+    ).filter((binding) => binding.type === "secret_text");
+    assert.deepEqual(secretBindings, [
+      {
+        name: "OIDC_CLIENT_SECRET",
+        type: "secret_text",
+        text: "oidc-secret-value",
+      },
+      {
+        name: "ENCRYPTION_KEY",
+        type: "secret_text",
+        text: "encryption-secret-value",
+      },
+    ]);
+    assert.equal(JSON.stringify(result).includes("oidc-secret-value"), false);
+  } finally {
+    process.chdir(previousCwd);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("deployManagedCompatWorker fails before upload when release secrets are missing", async () => {
+  const previousCwd = process.cwd();
+  const root = mkdtempSync(resolve(tmpdir(), "takos-managed-secrets-"));
+  let requestCount = 0;
+  try {
+    process.chdir(root);
+    mkdirSync("deploy/cloudflare", { recursive: true });
+    mkdirSync(releaseWranglerBundleDir("production"), { recursive: true });
+    writeFileSync(
+      resolve(releaseWranglerBundleDir("production"), "index.js"),
+      "export default {};",
+    );
+    writeFileSync(
+      productionWranglerConfig,
+      ['name = "takos-test"', 'compatibility_date = "2026-04-01"'].join("\n"),
+    );
+
+    await assert.rejects(
+      deployManagedCompatWorker(
+        {
+          ...rawOutputs,
+          cloudflare_account_id: "ts_acc_takosumi_cloud",
+        },
+        "production",
+        {
+          CLOUDFLARE_API_TOKEN: "compat-token",
+          TAKOS_CLOUDFLARE_API_BASE_URL:
+            "https://compat.example.test/client/v4",
+        },
+        async () => {
+          requestCount += 1;
+          return new Response(null, { status: 500 });
+        },
+      ),
+      /requires the generated release secrets file/u,
+    );
+    assert.equal(requestCount, 0);
   } finally {
     process.chdir(previousCwd);
     rmSync(root, { recursive: true, force: true });
