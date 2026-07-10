@@ -17,6 +17,7 @@ import {
   buildTakosumiDestroyCommands,
   buildTakosumiReleaseCommands,
   deployManagedCompatWorker,
+  ensureManagedCompatPublicRoute,
   ensureTakosumiSourceModule,
   ensureWorkersDevSubdomain,
   isRetryableBunInstallFailure,
@@ -1315,6 +1316,78 @@ test("ensureWorkersDevSubdomain skips non-workers.dev releases", async () => {
     reason: "no_workers_dev_launch_url",
   });
   assert.equal(called, false);
+});
+
+test("ensureManagedCompatPublicRoute discovers the virtual zone and creates the declared route", async () => {
+  const calls = [];
+  const result = await ensureManagedCompatPublicRoute(
+    {
+      ...rawOutputs,
+      cloudflare_account_id: "ts_acc_takosumi_cloud",
+      public_url: "https://workspace-takos.app.takos.jp",
+    },
+    {
+      TAKOS_CLOUDFLARE_TARGET_MODE: "managed_compat",
+      CLOUDFLARE_API_TOKEN: "compat-token",
+      CLOUDFLARE_API_BASE_URL:
+        "https://app.takosumi.com/compat/cloudflare/client/v4",
+    },
+    async (input, init = {}) => {
+      const request = new Request(input, init);
+      calls.push({
+        url: request.url,
+        method: request.method,
+        authorization: request.headers.get("authorization"),
+        body:
+          request.method === "POST" ? await request.clone().json() : undefined,
+      });
+      if (request.url.endsWith("/zones?name=app.takos.jp")) {
+        return Response.json({ success: true, result: [] });
+      }
+      if (request.url.endsWith("/zones?name=takos.jp")) {
+        return Response.json({
+          success: true,
+          result: [{ id: "zone_takosumi_cloud", name: "takos.jp" }],
+        });
+      }
+      return Response.json(
+        { success: true, result: { id: "route_1" } },
+        { status: 201 },
+      );
+    },
+  );
+
+  assert.equal(result.skipped, false);
+  assert.equal(result.pattern, "workspace-takos.app.takos.jp/*");
+  assert.deepEqual(calls, [
+    {
+      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones?name=workspace-takos.app.takos.jp",
+      method: "GET",
+      authorization: "Bearer compat-token",
+      body: undefined,
+    },
+    {
+      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones?name=app.takos.jp",
+      method: "GET",
+      authorization: "Bearer compat-token",
+      body: undefined,
+    },
+    {
+      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones?name=takos.jp",
+      method: "GET",
+      authorization: "Bearer compat-token",
+      body: undefined,
+    },
+    {
+      url: "https://app.takosumi.com/compat/cloudflare/client/v4/zones/zone_takosumi_cloud/workers/routes",
+      method: "POST",
+      authorization: "Bearer compat-token",
+      body: {
+        pattern: "workspace-takos.app.takos.jp/*",
+        script: "takos-test",
+      },
+    },
+  ]);
 });
 
 test("ensureWorkersDevSubdomain skips API enablement without Cloudflare API token", async () => {

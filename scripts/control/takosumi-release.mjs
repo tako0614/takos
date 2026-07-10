@@ -172,7 +172,10 @@ function optionalStringOutput(outputs, name) {
 function releaseLaunchUrl(outputs) {
   const explicitLaunchUrl =
     optionalStringOutput(outputs, "launch_url") ??
-    optionalStringOutput(outputs, "url");
+    optionalStringOutput(outputs, "url") ??
+    optionalStringOutput(outputs, "public_url") ??
+    optionalStringOutput(outputs, "app_url") ??
+    optionalStringOutput(outputs, "api_url");
   if (explicitLaunchUrl) return explicitLaunchUrl;
 
   const workerName = optionalStringOutput(outputs, "service_runtime_name");
@@ -1809,6 +1812,84 @@ export async function ensureWorkersDevSubdomain(
   );
 }
 
+function cloudflareZoneNameCandidates(hostname) {
+  const labels = hostname.toLowerCase().split(".").filter(Boolean);
+  return labels.length < 2
+    ? []
+    : labels.slice(0, -1).map((_, index) => labels.slice(index).join("."));
+}
+
+/** Reconciles the public route emitted by the OpenTofu module after a managed
+ * compatibility upload. Native Wrangler deploys reconcile `routes` directly;
+ * the managed upload path must perform the equivalent standard Cloudflare API
+ * calls because it uploads an already-built Worker bundle. */
+export async function ensureManagedCompatPublicRoute(
+  outputs,
+  env = process.env,
+  fetchImpl = globalThis.fetch,
+) {
+  if (env.TAKOS_CLOUDFLARE_TARGET_MODE !== "managed_compat") {
+    return { skipped: true, reason: "not_managed_compat" };
+  }
+  const launchUrl = releaseLaunchUrl(outputs);
+  if (!launchUrl) return { skipped: true, reason: "no_launch_url" };
+  const parsed = new URL(launchUrl);
+  if (parsed.hostname.endsWith(".workers.dev")) {
+    return { skipped: true, reason: "workers_dev_url" };
+  }
+  const apiToken = releaseApiToken(env) ?? wranglerDeployToken(env);
+  if (!apiToken) {
+    throw new Error(
+      "Managed public route sync requires a Cloudflare API token.",
+    );
+  }
+  const apiBase = releaseCloudflareApiBaseUrl(outputs, env);
+  const headers = {
+    authorization: `Bearer ${apiToken}`,
+    accept: "application/json",
+  };
+  let zone;
+  for (const candidate of cloudflareZoneNameCandidates(parsed.hostname)) {
+    const response = await fetchImpl(
+      `${apiBase}/zones?name=${encodeURIComponent(candidate)}`,
+      { headers },
+    );
+    const payload = await cloudflareApiPayload(response);
+    if (!response.ok || payload?.success === false) {
+      throw new Error(
+        `Managed public route zone discovery failed: HTTP ${response.status} ${JSON.stringify(payload?.errors ?? payload)}`,
+      );
+    }
+    zone = Array.isArray(payload?.result)
+      ? payload.result.find((entry) => entry?.id && entry?.name === candidate)
+      : undefined;
+    if (zone) break;
+  }
+  if (!zone?.id) {
+    throw new Error(
+      `Managed public route zone was not found for ${parsed.hostname}.`,
+    );
+  }
+  const workerName = requireStringOutput(outputs, "service_runtime_name");
+  const pattern = `${parsed.hostname}/*`;
+  const response = await fetchImpl(
+    `${apiBase}/zones/${encodeURIComponent(zone.id)}/workers/routes`,
+    {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ pattern, script: workerName }),
+    },
+  );
+  const payload = await cloudflareApiPayload(response);
+  if (!response.ok || payload?.success === false) {
+    throw new Error(
+      `Managed public route sync failed: HTTP ${response.status} ${JSON.stringify(payload?.errors ?? payload)}`,
+    );
+  }
+  console.log(`Reconciled managed public route ${pattern} -> ${workerName}.`);
+  return { skipped: false, pattern, workerName, result: payload?.result };
+}
+
 function cloudflareWorkerApiMissingResource(payload) {
   const errors = Array.isArray(payload?.errors) ? payload.errors : [];
   return errors.some((error) => {
@@ -2756,6 +2837,9 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           );
           await timeReleaseStep(timings, "takosumi-managed-worker-upload", () =>
             deployManagedCompatWorker(outputs, environment, deployEnv),
+          );
+          await timeReleaseStep(timings, "managed-public-route-sync", () =>
+            ensureManagedCompatPublicRoute(outputs, deployEnv),
           );
         } else {
           await timeReleaseStep(timings, "wrangler-deploy", () =>
