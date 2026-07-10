@@ -129,7 +129,11 @@ authOidcRouter.get("/oidc/login", async (c) => {
   let discovery;
   try {
     discovery = await discoverOidc(discoveryBaseUrl, issuer);
-  } catch {
+  } catch (error) {
+    logError("OIDC discovery failed", error, {
+      module: "routes/auth/oidc",
+      phase: "login",
+    });
     return c.html(
       errorPage(
         "OIDC Error",
@@ -242,7 +246,11 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   let discovery;
   try {
     discovery = await discoverOidc(discoveryBaseUrl, issuer);
-  } catch {
+  } catch (error) {
+    logError("OIDC discovery failed", error, {
+      module: "routes/auth/oidc",
+      phase: "callback",
+    });
     return oidcErrorResponse(
       "OIDC Error",
       "Takosumi Accounts discovery failed.",
