@@ -17,6 +17,10 @@ import { accounts, authIdentities } from "../../../../infra/db/schema.ts";
 import { generateCodeChallenge } from "../../../../application/services/identity/oidc-pkce.ts";
 import type { Env, User } from "../../../../shared/types/index.ts";
 import { authOidcRouter } from "../oidc.ts";
+import {
+  accountsDelegatedAuthorization,
+  storeAccountsDelegation,
+} from "../accounts-delegation.ts";
 
 type StoredOidcState = {
   state: string;
@@ -90,6 +94,7 @@ function createEnv(input: {
     ? undefined
     : createSessionStore(states, input.createdSessions);
   return {
+    ENCRYPTION_KEY: "test-oidc-delegation-encryption-key",
     PLATFORM: {
       config: {
         adminDomain: "takos.example.test",
@@ -141,7 +146,13 @@ async function createAuthTestDb(dbPath: string) {
       email_kind TEXT NOT NULL DEFAULT 'unknown',
       linked_at TEXT NOT NULL,
       last_login_at TEXT NOT NULL,
-      refresh_token_enc TEXT
+      refresh_token_enc TEXT,
+      access_token_enc TEXT,
+      access_token_expires_at TEXT,
+      token_scope TEXT,
+      delegated_workspace_id TEXT,
+      refresh_lease_id TEXT,
+      refresh_lease_expires_at TEXT
     );
     CREATE UNIQUE INDEX idx_auth_identities_provider_sub
       ON auth_identities(provider, provider_sub);
@@ -301,8 +312,12 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       tokenRequests.push(new URLSearchParams(await request.text()));
       return Response.json({
         access_token: "access-token-1",
+        refresh_token: "refresh-token-1",
         id_token: idToken,
         token_type: "Bearer",
+        expires_in: 300,
+        scope:
+          "openid profile email offline_access capsules:read capsules:write",
       });
     }
     if (request.url === "http://accounts.internal:8787/oauth/jwks") {
@@ -318,6 +333,8 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
         email: "takosumi-user@example.test",
         name: "Takosumi User",
         picture: "https://accounts.example.test/avatar.png",
+        takosumi: { space_id: "workspace-parent-1" },
+        space_memberships: ["workspace-parent-1"],
       });
     }
     return new Response("not found", { status: 404 });
@@ -390,6 +407,11 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
       providerSub: authIdentities.providerSub,
       emailSnapshot: authIdentities.emailSnapshot,
       emailKind: authIdentities.emailKind,
+      accessTokenEnc: authIdentities.accessTokenEnc,
+      accessTokenExpiresAt: authIdentities.accessTokenExpiresAt,
+      refreshTokenEnc: authIdentities.refreshTokenEnc,
+      tokenScope: authIdentities.tokenScope,
+      delegatedWorkspaceId: authIdentities.delegatedWorkspaceId,
     }).from(authIdentities).get();
     assertExists(identity);
     assertEquals(identity.userId, account.id);
@@ -400,6 +422,185 @@ test("OIDC callback exchanges code, verifies id_token, provisions app-local user
     );
     assertEquals(identity.emailSnapshot, "takosumi-user@example.test");
     assertEquals(identity.emailKind, "oidc_verified");
+    assertEquals(identity.accessTokenEnc?.includes("access-token-1"), false);
+    assertEquals(identity.refreshTokenEnc?.includes("refresh-token-1"), false);
+    assertEquals(
+      identity.tokenScope,
+      "openid profile email offline_access capsules:read capsules:write",
+    );
+    assertEquals(identity.delegatedWorkspaceId, "workspace-parent-1");
+    assertEquals(
+      Date.parse(identity.accessTokenExpiresAt ?? "") > Date.now(),
+      true,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    authDb.client.close();
+    await removeTempDir(dir);
+  }
+});
+
+test("Accounts delegation refreshes once and reuses the encrypted access token", async () => {
+  const dir = await makeTempDir();
+  const authDb = await createAuthTestDb(`${dir}/delegation.sqlite`);
+  const now = new Date().toISOString();
+  await authDb.db.insert(accounts).values({
+    id: "user-delegation",
+    type: "user",
+    status: "active",
+    name: "Delegated User",
+    slug: "delegated-user",
+    setupCompleted: true,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await authDb.db.insert(authIdentities).values({
+    id: "identity-delegation",
+    userId: "user-delegation",
+    provider: "oidc",
+    providerSub: "https://accounts.example.test#pairwise-subject",
+    emailKind: "unknown",
+    linkedAt: now,
+    lastLoginAt: now,
+  });
+  await storeAccountsDelegation({
+    db: authDb.db,
+    encryptionKey: "test-oidc-delegation-encryption-key",
+    identityId: "identity-delegation",
+    tokens: {
+      access_token: "expired-access-token",
+      refresh_token: "refresh-token-before-rotation",
+      expires_in: 300,
+      scope: "openid offline_access capsules:read capsules:write",
+    },
+    fallbackScope: "openid capsules:read capsules:write",
+    workspaceId: "workspace-delegation",
+  });
+  await authDb.db.update(authIdentities).set({
+    accessTokenExpiresAt: new Date(Date.now() - 1_000).toISOString(),
+  });
+
+  const requests: URLSearchParams[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input, init) => {
+    requests.push(new URLSearchParams(String(init?.body ?? "")));
+    return Response.json({
+      access_token: "fresh-access-token",
+      refresh_token: "refresh-token-after-rotation",
+      expires_in: 300,
+      scope: "openid offline_access capsules:read capsules:write",
+    });
+  }) as typeof fetch;
+
+  try {
+    const input = {
+      db: authDb.db,
+      encryptionKey: "test-oidc-delegation-encryption-key",
+      userId: "user-delegation",
+      issuer: "https://accounts.example.test",
+      clientId: "takos-client",
+      access: "write" as const,
+    };
+    assertEquals(await accountsDelegatedAuthorization(input), {
+      accessToken: "fresh-access-token",
+      workspaceId: "workspace-delegation",
+    });
+    assertEquals(await accountsDelegatedAuthorization(input), {
+      accessToken: "fresh-access-token",
+      workspaceId: "workspace-delegation",
+    });
+    assertEquals(requests.length, 1);
+    assertEquals(requests[0].get("grant_type"), "refresh_token");
+    assertEquals(requests[0].get("client_id"), "takos-client");
+    assertEquals(
+      requests[0].get("refresh_token"),
+      "refresh-token-before-rotation",
+    );
+    const identity = await authDb.db.select({
+      accessTokenEnc: authIdentities.accessTokenEnc,
+      refreshTokenEnc: authIdentities.refreshTokenEnc,
+      refreshLeaseId: authIdentities.refreshLeaseId,
+    }).from(authIdentities).get();
+    assertEquals(identity?.accessTokenEnc?.includes("fresh-access-token"), false);
+    assertEquals(
+      identity?.refreshTokenEnc?.includes("refresh-token-after-rotation"),
+      false,
+    );
+    assertEquals(identity?.refreshLeaseId, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+    authDb.client.close();
+    await removeTempDir(dir);
+  }
+});
+
+test("Accounts delegation retains the current refresh token when rotation is omitted", async () => {
+  const dir = await makeTempDir();
+  const authDb = await createAuthTestDb(`${dir}/delegation-no-rotation.sqlite`);
+  const now = new Date().toISOString();
+  await authDb.db.insert(accounts).values({
+    id: "user-delegation-no-rotation",
+    type: "user",
+    status: "active",
+    name: "Delegated User",
+    slug: "delegated-user-no-rotation",
+    setupCompleted: true,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await authDb.db.insert(authIdentities).values({
+    id: "identity-delegation-no-rotation",
+    userId: "user-delegation-no-rotation",
+    provider: "oidc",
+    providerSub: "https://accounts.example.test#pairwise-subject-no-rotation",
+    emailKind: "unknown",
+    linkedAt: now,
+    lastLoginAt: now,
+  });
+  await storeAccountsDelegation({
+    db: authDb.db,
+    encryptionKey: "test-oidc-delegation-encryption-key",
+    identityId: "identity-delegation-no-rotation",
+    tokens: {
+      access_token: "expired-access-token",
+      refresh_token: "stable-refresh-token",
+      expires_in: 300,
+      scope: "openid offline_access capsules:read",
+    },
+    fallbackScope: "openid capsules:read",
+    workspaceId: "workspace-delegation-no-rotation",
+  });
+  await authDb.db.update(authIdentities).set({
+    accessTokenExpiresAt: new Date(Date.now() - 1_000).toISOString(),
+  });
+  const before = await authDb.db.select({
+    refreshTokenEnc: authIdentities.refreshTokenEnc,
+  }).from(authIdentities).get();
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => Response.json({
+    access_token: "fresh-access-token-without-rotation",
+    expires_in: 300,
+    scope: "openid offline_access capsules:read",
+  })) as typeof fetch;
+
+  try {
+    const authorization = await accountsDelegatedAuthorization({
+      db: authDb.db,
+      encryptionKey: "test-oidc-delegation-encryption-key",
+      userId: "user-delegation-no-rotation",
+      issuer: "https://accounts.example.test",
+      clientId: "takos-client",
+      access: "read",
+    });
+    assertEquals(authorization, {
+      accessToken: "fresh-access-token-without-rotation",
+      workspaceId: "workspace-delegation-no-rotation",
+    });
+    const after = await authDb.db.select({
+      refreshTokenEnc: authIdentities.refreshTokenEnc,
+    }).from(authIdentities).get();
+    assertEquals(after?.refreshTokenEnc, before?.refreshTokenEnc);
   } finally {
     globalThis.fetch = originalFetch;
     authDb.client.close();
@@ -526,8 +727,12 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
     if (request.url === "http://accounts.internal:8787/oauth/token") {
       return Response.json({
         access_token: "access-token-legacy",
+        refresh_token: "refresh-token-legacy",
         id_token: idToken,
         token_type: "Bearer",
+        expires_in: 300,
+        scope:
+          "openid profile email offline_access capsules:read capsules:write",
       });
     }
     if (request.url === "http://accounts.internal:8787/oauth/jwks") {
@@ -539,6 +744,8 @@ test("OIDC callback does NOT link a new subject to an existing account by verifi
         email: "legacy@example.test",
         email_verified: true,
         name: "Accounts Name",
+        takosumi: { space_id: "workspace-parent-legacy" },
+        space_memberships: ["workspace-parent-legacy"],
       });
     }
     return new Response("not found", { status: 404 });
@@ -766,7 +973,10 @@ test("OIDC login route redirects to issuer authorization endpoint", async () => 
       redirect.searchParams.get("redirect_uri"),
       "https://takos.example.test/auth/oidc/callback",
     );
-    assertEquals(redirect.searchParams.get("scope"), "openid email profile");
+    assertEquals(
+      redirect.searchParams.get("scope"),
+      "openid profile email offline_access capsules:read capsules:write",
+    );
     assertEquals(redirect.searchParams.get("code_challenge_method"), "S256");
 
     const stored = states[0];

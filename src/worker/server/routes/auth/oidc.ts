@@ -30,6 +30,10 @@ import { logError } from "../../../shared/utils/logger.ts";
 import type { OptionalAuthRouteEnv } from "../route-auth.ts";
 import { errorPage } from "./html.ts";
 import { provisionOidcUser, sanitizeReturnTo } from "./provisioning.ts";
+import {
+  storeAccountsDelegation,
+  TAKOS_ACCOUNTS_OAUTH_SCOPES,
+} from "./accounts-delegation.ts";
 import { and, eq } from "drizzle-orm";
 import {
   type TtlMs,
@@ -64,8 +68,11 @@ type OidcDiscoveryDocument = {
 
 type OidcTokenResponse = {
   access_token?: string;
+  refresh_token?: string;
   id_token?: string;
   token_type?: string;
+  expires_in?: number;
+  scope?: string;
 };
 
 type OidcUser = {
@@ -150,7 +157,10 @@ authOidcRouter.get("/oidc/login", async (c) => {
   authorizationUrl.searchParams.set("response_type", "code");
   authorizationUrl.searchParams.set("client_id", clientId);
   authorizationUrl.searchParams.set("redirect_uri", redirectUri);
-  authorizationUrl.searchParams.set("scope", "openid email profile");
+  authorizationUrl.searchParams.set(
+    "scope",
+    TAKOS_ACCOUNTS_OAUTH_SCOPES.join(" "),
+  );
   authorizationUrl.searchParams.set("state", state);
   authorizationUrl.searchParams.set("nonce", nonce);
   authorizationUrl.searchParams.set("code_challenge", codeChallenge);
@@ -301,6 +311,7 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   const db = getDb(dbBinding);
   const providerSub = oidcProviderSub(issuer, subject);
   const identity = await db.select({
+    id: authIdentities.id,
     userId: authIdentities.userId,
   }).from(authIdentities).where(
     and(
@@ -310,7 +321,9 @@ authOidcRouter.get("/oidc/callback", async (c) => {
   ).get();
 
   let user: OidcUser | null = null;
+  let identityId: string;
   if (identity) {
+    identityId = identity.id;
     const userRow = await db.select({
       id: accounts.id,
       email: accounts.email,
@@ -357,8 +370,9 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     });
 
     const timestamp = new Date().toISOString();
+    identityId = crypto.randomUUID();
     await db.insert(authIdentities).values({
-      id: crypto.randomUUID(),
+      id: identityId,
       userId: user.id,
       provider: "oidc",
       providerSub,
@@ -373,6 +387,26 @@ authOidcRouter.get("/oidc/callback", async (c) => {
     return oidcErrorResponse(
       "OIDC Error",
       "Failed to resolve user account.",
+      500,
+    );
+  }
+
+  try {
+    await storeAccountsDelegation({
+      db: dbBinding,
+      encryptionKey: c.env.ENCRYPTION_KEY ?? "",
+      identityId,
+      tokens,
+      fallbackScope: TAKOS_ACCOUNTS_OAUTH_SCOPES.join(" "),
+      workspaceId: delegatedWorkspaceId(userInfo),
+    });
+  } catch (error) {
+    logError("OIDC delegated token storage failed", error, {
+      module: "routes/auth/oidc",
+    });
+    return oidcErrorResponse(
+      "OIDC Error",
+      "Account authorization could not be stored.",
       500,
     );
   }
@@ -632,6 +666,31 @@ function assertUserInfoSubject(
   if (userInfoSubject && userInfoSubject !== subject) {
     throw new Error("OIDC UserInfo sub mismatch");
   }
+}
+
+function delegatedWorkspaceId(
+  userInfo: Record<string, unknown>,
+): string | undefined {
+  const takosumi = userInfo.takosumi &&
+      typeof userInfo.takosumi === "object" &&
+      !Array.isArray(userInfo.takosumi)
+    ? (userInfo.takosumi as Record<string, unknown>)
+    : undefined;
+  const nestedWorkspaceId = profileString(takosumi?.space_id);
+  const memberships = Array.isArray(userInfo.space_memberships)
+    ? userInfo.space_memberships
+      .map((value) => profileString(value))
+      .filter((value): value is string => Boolean(value))
+    : [];
+  if (
+    nestedWorkspaceId &&
+    memberships.length > 0 &&
+    !memberships.includes(nestedWorkspaceId)
+  ) {
+    throw new Error("OIDC UserInfo Workspace binding mismatch");
+  }
+  if (nestedWorkspaceId) return nestedWorkspaceId;
+  return memberships.length === 1 ? memberships[0] : undefined;
 }
 
 function resolveOidcProfile(

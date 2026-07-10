@@ -40,6 +40,7 @@ import {
   spaceAccess,
   type SpaceAccessRouteEnv,
 } from "./route-auth.ts";
+import { accountsDelegatedAuthorization } from "./auth/accounts-delegation.ts";
 
 type InstallableAppApplyBody = {
   app_id?: unknown;
@@ -92,6 +93,7 @@ export const appInstallationsRouteDeps = {
   applyInstallableAppRevision,
   listInstallableAppInstallationsWithServices,
   listInstallableAppInstallationServices,
+  accountsDelegatedAuthorization,
   accountsPlaneFetch: (request: Request) => fetch(request),
 };
 
@@ -241,9 +243,10 @@ function jsonFromUpstream(
 const TAKOSUMI_ACCOUNTS_SESSION_ME_PATH = "/v1/account/session/me";
 const TAKOSUMI_ACCOUNTS_SESSION_COOKIE_NAME = "takosumi_session";
 
-type AccountsSessionCaller = {
-  kind: "accounts_session";
-  subject: string;
+type AccountsCaller = {
+  kind: "accounts_session" | "oauth_access_token";
+  subject?: string;
+  workspaceId?: string;
   headers: Headers;
 };
 
@@ -365,9 +368,33 @@ function jsonHeaders(headers: Headers): Headers {
   return next;
 }
 
-async function resolveAccountsSessionCaller(
+async function resolveAccountsCaller(
   c: Context<SpaceAccessRouteEnv>,
-): Promise<AccountsSessionCaller | null> {
+): Promise<AccountsCaller | null> {
+  const user = c.get("user");
+  const issuer = readString(c.env.OIDC_ISSUER_URL);
+  const clientId = readString(c.env.OIDC_CLIENT_ID);
+  const encryptionKey = readString(c.env.ENCRYPTION_KEY);
+  if (user && issuer && clientId && encryptionKey && c.env.DB) {
+    const authorization = await appInstallationsRouteDeps
+      .accountsDelegatedAuthorization({
+        db: c.env.DB,
+        encryptionKey,
+        userId: user.id,
+        issuer: issuer.replace(/\/+$/u, ""),
+        clientId,
+        access: c.req.method === "GET" ? "read" : "write",
+      });
+    return {
+      kind: "oauth_access_token",
+      workspaceId: authorization.workspaceId,
+      headers: new Headers({
+        accept: "application/json",
+        authorization: `Bearer ${authorization.accessToken}`,
+      }),
+    };
+  }
+
   const session = readAccountsSessionHeader(c);
   if (!session.present) return null;
   const response = await accountsPlaneJson(
@@ -390,6 +417,13 @@ async function resolveAccountsSessionCaller(
     subject,
     headers: session.headers,
   };
+}
+
+function accountsCallerWorkspaceId(
+  caller: AccountsCaller,
+  localWorkspaceId: string,
+): string {
+  return caller.workspaceId ?? localWorkspaceId;
 }
 
 function accountsInstallationsPath(installationId?: string): string {
@@ -441,7 +475,7 @@ function hasFeaturedAppVariables(entry: FeaturedAppCatalogEntry): boolean {
 
 async function postAccountsInstallationJson(
   c: Context<SpaceAccessRouteEnv>,
-  caller: AccountsSessionCaller,
+  caller: AccountsCaller,
   path: string,
   body: Record<string, unknown>,
 ): Promise<InstallableAppUpstreamResponse> {
@@ -454,16 +488,21 @@ async function postAccountsInstallationJson(
 
 async function applyFeaturedAppInstallationForRoute(
   c: Context<SpaceAccessRouteEnv>,
-  caller: AccountsSessionCaller,
+  caller: AccountsCaller,
   entry: FeaturedAppCatalogEntry,
   params: {
-    spaceId: string;
+    localWorkspaceId: string;
     mode: string;
   },
 ): Promise<InstallableAppUpstreamResponse> {
+  const workspaceId = accountsCallerWorkspaceId(
+    caller,
+    params.localWorkspaceId,
+  );
   const source = featuredAppOpenTofuSource(entry);
   const planBody: Record<string, unknown> = {
-    spaceId: params.spaceId,
+    workspaceId,
+    spaceId: workspaceId,
     source,
   };
   if (hasFeaturedAppVariables(entry)) planBody.variables = entry.variables;
@@ -476,9 +515,9 @@ async function applyFeaturedAppInstallationForRoute(
   if (plan.status >= 400) return plan;
   const expected = readAccountsExpectedGuard(plan.body);
   const applyBody: Record<string, unknown> = {
-    accountId: params.spaceId,
-    spaceId: params.spaceId,
-    createdBySubject: caller.subject,
+    workspaceId,
+    spaceId: workspaceId,
+    ...(caller.subject ? { createdBySubject: caller.subject } : {}),
     source,
     expected,
     mode: params.mode,
@@ -497,13 +536,14 @@ async function listInstallableAppInstallationsForRoute(
   c: Context<SpaceAccessRouteEnv>,
   spaceId: string,
 ): Promise<InstallableAppUpstreamResponse> {
-  const caller = await resolveAccountsSessionCaller(c);
+  const caller = await resolveAccountsCaller(c);
   if (caller) {
+    const accountsWorkspaceId = accountsCallerWorkspaceId(caller, spaceId);
     return await accountsPlaneGetJson(
       c,
       TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
       caller.headers,
-      { space_id: spaceId },
+      { space_id: accountsWorkspaceId },
     );
   }
   return await appInstallationsRouteDeps.listInstallableAppInstallations(
@@ -516,7 +556,7 @@ async function listInstallableAppInstallationServicesForRoute(
   c: Context<SpaceAccessRouteEnv>,
   installationId: string,
 ): Promise<InstallableAppUpstreamResponse> {
-  const caller = await resolveAccountsSessionCaller(c);
+  const caller = await resolveAccountsCaller(c);
   if (caller) {
     // Deploy decision D3: the retired `/services` endpoint is replaced by the
     // installation deployment-output projection.
@@ -541,7 +581,7 @@ async function listInstallableAppInstallationsWithServicesForRoute(
   c: Context<SpaceAccessRouteEnv>,
   spaceId: string,
 ): Promise<InstallableAppUpstreamResponse> {
-  const caller = await resolveAccountsSessionCaller(c);
+  const caller = await resolveAccountsCaller(c);
   if (!caller) {
     return await appInstallationsRouteDeps.listInstallableAppInstallationsWithServices(
       spaceId,
@@ -552,7 +592,7 @@ async function listInstallableAppInstallationsWithServicesForRoute(
     c,
     TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
     caller.headers,
-    { space_id: spaceId },
+    { space_id: accountsCallerWorkspaceId(caller, spaceId) },
   );
   if (upstream.status >= 400) return upstream;
   const installations = Array.isArray(upstream.body?.installations)
@@ -807,15 +847,16 @@ appInstallationsRouter.post(
       throw new BadRequestError("git_url and ref are required");
     }
     const variables = readOptionalBodyVariables(body);
-    const caller = await resolveAccountsSessionCaller(c);
+    const caller = await resolveAccountsCaller(c);
     if (caller) {
+      const accountsWorkspaceId = accountsCallerWorkspaceId(caller, space.id);
       const upstream = await postAccountsInstallationJson(
         c,
         caller,
         TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTION_PLAN_RUNS_PATH,
         {
-          workspaceId: space.id,
-          spaceId: space.id,
+          workspaceId: accountsWorkspaceId,
+          spaceId: accountsWorkspaceId,
           source: gitSourceBody(source),
           ...(variables ? { variables } : {}),
         },
@@ -867,8 +908,9 @@ appInstallationsRouter.post(
     }
     const variables = readOptionalBodyVariables(body);
 
-    const caller = await resolveAccountsSessionCaller(c);
+    const caller = await resolveAccountsCaller(c);
     if (caller) {
+      const accountsWorkspaceId = accountsCallerWorkspaceId(caller, space.id);
       const mode = readOptionalBodyMode(body) ?? "shared-cell";
       const runtimeBaseUrl = readOptionalBodyRuntimeBaseUrl(body);
       const upstream = await postAccountsInstallationJson(
@@ -876,10 +918,9 @@ appInstallationsRouter.post(
         caller,
         TAKOSUMI_ACCOUNTS_CAPSULE_PROJECTIONS_PATH,
         {
-          accountId: space.id,
-          workspaceId: space.id,
-          spaceId: space.id,
-          createdBySubject: caller.subject,
+          workspaceId: accountsWorkspaceId,
+          spaceId: accountsWorkspaceId,
+          ...(caller.subject ? { createdBySubject: caller.subject } : {}),
           source: gitSourceBody(source),
           expected: expected ?? {
             commit: expectedCommit,
@@ -949,7 +990,7 @@ appInstallationsRouter.post(
     await assertInstallationBelongsToSpace(c, space.id, installationId);
     const sourceCommit = readString(body.source_commit) ?? undefined;
     const reason = readString(body.reason) ?? undefined;
-    const caller = await resolveAccountsSessionCaller(c);
+    const caller = await resolveAccountsCaller(c);
     if (caller) {
       const upstream = await postAccountsInstallationJson(
         c,
@@ -1018,7 +1059,7 @@ appInstallationsRouter.post(
         "expected.commit, expected.planDigest, and expected.currentDeploymentId are required after deployment plan Run approval",
       );
     }
-    const caller = await resolveAccountsSessionCaller(c);
+    const caller = await resolveAccountsCaller(c);
     if (caller) {
       const path =
         operation === "rollback"
@@ -1096,7 +1137,7 @@ appInstallationsRouter.post(
     }
 
     const mode = readBodyMode(body, entry);
-    const caller = await resolveAccountsSessionCaller(c);
+    const caller = await resolveAccountsCaller(c);
     if (caller) {
       const selectedMode = featuredAppMode(entry, mode);
       const upstream = await applyFeaturedAppInstallationForRoute(
@@ -1104,7 +1145,7 @@ appInstallationsRouter.post(
         caller,
         entry,
         {
-          spaceId: space.id,
+          localWorkspaceId: space.id,
           mode: selectedMode,
         },
       );
@@ -1168,7 +1209,7 @@ appInstallationsRouter.delete(
     const body = await parseJsonBody<InstallableAppApplyBody>(c, {});
     const reason =
       body === null ? undefined : (readString(body.reason) ?? undefined);
-    const caller = await resolveAccountsSessionCaller(c);
+    const caller = await resolveAccountsCaller(c);
     if (caller) {
       const upstream = await accountsPlaneJson(
         c,

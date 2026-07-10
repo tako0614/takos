@@ -29,8 +29,9 @@ Takosumi operations runbook で管理してください。
 | `TAKOSUMI_ACCOUNTS_URL`    | no      | Accounts plane        | external Takosumi Accounts API / issuer origin     |
 | `OIDC_ISSUER_URL`          | no      | Takos auth consumer   | Takosumi Accounts issuer                           |
 | `OIDC_CLIENT_ID`           | no      | Accounts projection   | Takosumi Accounts plane が発行した client id       |
-| `OIDC_CLIENT_SECRET`       | yes     | Accounts projection   | confidential client secret                         |
+| `OIDC_CLIENT_SECRET`       | optional | Accounts projection  | confidential client の場合だけ使う secret          |
 | `OIDC_REDIRECT_URI`        | no      | Accounts projection   | `<BASE_URL>/auth/oidc/callback`                    |
+| `ENCRYPTION_KEY`           | yes     | Takos product DB      | app-local secret と委任OAuth tokenの暗号化         |
 | `TAKOS_INSTALLATION_ID`    | no      | Takos runtime         | legacy-named app-local Capsule/profile id          |
 | `DB`                       | binding | Takos product         | app-local persistence                              |
 | `SESSION_DO`               | binding | Takos product session | browser session store                              |
@@ -48,6 +49,12 @@ https://<BASE_URL>/
 未ログインなら `/auth/oidc/login` へ進み、Takosumi Accounts issuer で認証します。Takos は
 `/auth/oidc/login` / `/auth/oidc/callback` / `/auth/logout` を consumer route として受けます。upstream IdP は Accounts
 plane 側の policy で扱います。
+
+Takos の dynamic client は public PKCE client を標準とし、`openid profile email offline_access capsules:read
+capsules:write` を要求します。callback は access/refresh token と UserInfo の親 Takosumi Workspace binding を
+`ENCRYPTION_KEY` で暗号化して app-local DB に保存します。Takos 内の Workspace は product data boundary であり、
+Takosumi Workspace を同数作りません。app launcher の plan/apply/list/delete は、ログイン時に発行された親 Workspace
+binding に対して行います。
 
 ## 2. 初回 setup を完了する
 

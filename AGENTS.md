@@ -72,8 +72,10 @@ Takosumi Accounts / dashboard / deploy-control / OpenTofu runner は外部 Takos
   UI / Git / agent runtime / container callbacks を所有する。Takosumi Accounts の `/.well-known/openid-configuration`、`/oauth/*`、
   `/api/v1/*`、dashboard routes は持たない。
 - **Takosumi control plane は external dependency**。OIDC issuer と Capsule projection API は `OIDC_ISSUER_URL` /
-  `TAKOSUMI_ACCOUNTS_URL` / optional `TAKOSUMI_ACCOUNTS_INTERNAL_URL` で解決する。server-to-server Capsule calls は
-  operator が発行した `TAKOSUMI_ACCOUNTS_TOKEN` を使う。
+  `TAKOSUMI_ACCOUNTS_URL` / optional `TAKOSUMI_ACCOUNTS_INTERNAL_URL` で解決する。対話ユーザーの Capsule calls は
+  OIDC login で得た Workspace-bound OAuth access/refresh token を Takos DB に暗号化保存して使う。Takos のローカル
+  Workspace ID を Takosumi Workspace ID として送らない。`TAKOSUMI_ACCOUNTS_TOKEN` は operator automation / smoke の
+  明示的 credential であり、通常ユーザー操作の共有 fallback にしない。
 - **OpenTofu runner / Run ledger は Takosumi 側**。Takos deploy artifacts は product `DB`、KV/R2、queues、runtime/executor
   containers、Vectorize など Takos worker の backing resources だけを宣言する。`TAKOSUMI_CONTROL_DB`、`COORDINATION`、
   `RUNNER`、Takosumi runner container image は Takos deploy artifact に持ち込まない。

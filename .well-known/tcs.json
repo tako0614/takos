@@ -82,7 +82,15 @@
           "clientId": "takosumi_accounts_client_id",
           "redirectUri": "takosumi_accounts_redirect_uri"
         },
-        "callbackPath": "/auth/oidc/callback"
+        "callbackPath": "/auth/oidc/callback",
+        "scopes": [
+          "openid",
+          "profile",
+          "email",
+          "offline_access",
+          "capsules:read",
+          "capsules:write"
+        ]
       }
     ]
   }

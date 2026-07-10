@@ -203,6 +203,12 @@ export const authIdentities = sqliteTable("auth_identities", {
   linkedAt: text("linked_at").notNull(),
   lastLoginAt: text("last_login_at").notNull(),
   refreshTokenEnc: text("refresh_token_enc"),
+  accessTokenEnc: text("access_token_enc"),
+  accessTokenExpiresAt: text("access_token_expires_at"),
+  tokenScope: text("token_scope"),
+  delegatedWorkspaceId: text("delegated_workspace_id"),
+  refreshLeaseId: text("refresh_lease_id"),
+  refreshLeaseExpiresAt: text("refresh_lease_expires_at"),
 }, (table) => [
   uniqueIndex("idx_auth_identities_provider_sub").on(
     table.provider,

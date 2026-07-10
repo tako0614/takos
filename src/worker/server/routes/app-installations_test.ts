@@ -491,7 +491,7 @@ test("app-installations route proxies Git URL install apply with approval eviden
   }
 });
 
-test("app-installations route applies Git URL install with Takosumi Accounts session", async () => {
+test("app-installations route applies Git URL install to the delegated parent Workspace", async () => {
   const calls: unknown[] = [];
   routeAuthDeps.requireSpaceAccess = async (_c, spaceId, userId, roles) => {
     calls.push({ kind: "access", spaceId, userId, roles });
@@ -509,14 +509,9 @@ test("app-installations route applies Git URL install with Takosumi Accounts ses
       path: url.pathname,
       method: request.method,
       cookie: request.headers.get("cookie"),
+      authorization: request.headers.get("authorization"),
       body,
     });
-    if (url.pathname === "/v1/account/session/me") {
-      return Response.json({
-        subject: "tsub_owner",
-        expiresAt: 1_767_225_600_000,
-      });
-    }
     if (
       url.pathname === "/v1/capsule-projections" &&
       request.method === "POST"
@@ -534,6 +529,10 @@ test("app-installations route applies Git URL install with Takosumi Accounts ses
     }
     return Response.json({ error: "not_found" }, { status: 404 });
   };
+  appInstallationsRouteDeps.accountsDelegatedAuthorization = async () => ({
+    accessToken: "delegated-access-token",
+    workspaceId: "workspace-parent",
+  });
 
   try {
     const response = await createApp().request(
@@ -542,7 +541,6 @@ test("app-installations route applies Git URL install with Takosumi Accounts ses
         method: "POST",
         headers: {
           "content-type": "application/json",
-          cookie: "takosumi_session=sess_owner",
         },
         body: JSON.stringify({
           git_url: "https://github.com/example/app.git",
@@ -565,7 +563,10 @@ test("app-installations route applies Git URL install with Takosumi Accounts ses
       },
       {
         DB: {},
+        ENCRYPTION_KEY: "test-encryption-key",
         TAKOSUMI_ACCOUNTS_URL: "https://accounts.example",
+        OIDC_ISSUER_URL: "https://accounts.example",
+        OIDC_CLIENT_ID: "takos-client",
       } as Env,
     );
     const body = (await response.json()) as Record<PropertyKey, unknown>;
@@ -587,21 +588,13 @@ test("app-installations route applies Git URL install with Takosumi Accounts ses
       },
       {
         kind: "accounts",
-        path: "/v1/account/session/me",
-        method: "GET",
-        cookie: "takosumi_session=sess_owner",
-        body: null,
-      },
-      {
-        kind: "accounts",
         path: "/v1/capsule-projections",
         method: "POST",
-        cookie: "takosumi_session=sess_owner",
+        cookie: null,
+        authorization: "Bearer delegated-access-token",
         body: {
-          accountId: "space-1",
-          workspaceId: "space-1",
-          spaceId: "space-1",
-          createdBySubject: "tsub_owner",
+          workspaceId: "workspace-parent",
+          spaceId: "workspace-parent",
           source: {
             kind: "git",
             url: "https://github.com/example/app.git",
@@ -622,6 +615,52 @@ test("app-installations route applies Git URL install with Takosumi Accounts ses
           },
           mode: "shared-cell",
         },
+      },
+    ]);
+  } finally {
+    restoreDeps();
+  }
+});
+
+test("app-installations route lists from the delegated parent Workspace", async () => {
+  routeAuthDeps.requireSpaceAccess = async () =>
+    ({
+      space: { id: "local-workspace" },
+      membership: { role: "viewer" },
+    }) as never;
+  appInstallationsRouteDeps.accountsDelegatedAuthorization = async () => ({
+    accessToken: "delegated-read-token",
+    workspaceId: "workspace-parent",
+  });
+  const calls: Array<Record<string, string | null>> = [];
+  appInstallationsRouteDeps.accountsPlaneFetch = async (request) => {
+    const url = new URL(request.url);
+    calls.push({
+      path: url.pathname,
+      workspaceId: url.searchParams.get("space_id"),
+      authorization: request.headers.get("authorization"),
+    });
+    return Response.json({ installations: [] });
+  };
+
+  try {
+    const response = await createApp().request(
+      "/spaces/me/app-installations",
+      { method: "GET" },
+      {
+        DB: {},
+        ENCRYPTION_KEY: "test-encryption-key",
+        TAKOSUMI_ACCOUNTS_URL: "https://accounts.example",
+        OIDC_ISSUER_URL: "https://accounts.example",
+        OIDC_CLIENT_ID: "takos-client",
+      } as Env,
+    );
+    assertEquals(response.status, 200);
+    assertEquals(calls, [
+      {
+        path: "/v1/capsule-projections",
+        workspaceId: "workspace-parent",
+        authorization: "Bearer delegated-read-token",
       },
     ]);
   } finally {
