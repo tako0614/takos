@@ -21,8 +21,12 @@ type ExecutorLogger = {
 function readBooleanEnv(value: string | undefined): boolean {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes" ||
-    normalized === "on";
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "yes" ||
+    normalized === "on"
+  );
 }
 
 export function buildExecutorRuntimeConfig(
@@ -43,8 +47,8 @@ export function buildExecutorRuntimeConfig(
 
   const maxRunDurationMs = env.AGENT_TOTAL_TIMEOUT
     ? parseIntValue("AGENT_TOTAL_TIMEOUT", env.AGENT_TOTAL_TIMEOUT, 0, {
-      min: 1,
-    })
+        min: 1,
+      })
     : undefined;
 
   return {
@@ -52,9 +56,8 @@ export function buildExecutorRuntimeConfig(
     allowNoLlmFallback: readBooleanEnv(
       env.TAKOS_ALLOW_NO_LLM ?? env.TAKOS_LOCAL_ALLOW_NO_LLM,
     ),
-    maxRunDurationMs: maxRunDurationMs && maxRunDurationMs > 0
-      ? maxRunDurationMs
-      : undefined,
+    maxRunDurationMs:
+      maxRunDurationMs && maxRunDurationMs > 0 ? maxRunDurationMs : undefined,
     executionEnv,
   };
 }
@@ -72,7 +75,10 @@ export function buildRuntimeStartPayload(
 ): StartPayload {
   return {
     ...payload,
-    controlRpcBaseUrl: runtimeConfig.controlRpcBaseUrl,
+    controlRpcBaseUrl:
+      runtimeConfig.controlRpcBaseUrl?.trim() ||
+      payload.controlRpcBaseUrl?.trim() ||
+      undefined,
     shutdownSignal,
   };
 }
@@ -85,8 +91,8 @@ export function createExecutorApp(options: {
   runtimeConfig?: RunExecutorRuntimeConfig;
 }): Hono {
   const concurrency = options.concurrency ?? createConcurrencyGuard(5);
-  const runtimeConfig = options.runtimeConfig ??
-    buildExecutorRuntimeConfig(processEnv);
+  const runtimeConfig =
+    options.runtimeConfig ?? buildExecutorRuntimeConfig(processEnv);
   const app = new Hono();
 
   app.get("/health", (c) => {
@@ -115,16 +121,14 @@ export function createExecutorApp(options: {
     }
 
     if (!concurrency.tryAcquire()) {
-      return c.json({
-        error: "At capacity",
-        active: concurrency.activeRuns,
-        max: concurrency.maxConcurrentRuns,
-      }, 503);
-    }
-
-    if (!hasControlRpcConfiguration(runtimeConfig)) {
-      concurrency.release();
-      return c.json({ error: "Control RPC base URL not configured" }, 503);
+      return c.json(
+        {
+          error: "At capacity",
+          active: concurrency.activeRuns,
+          max: concurrency.maxConcurrentRuns,
+        },
+        503,
+      );
     }
 
     const payload = buildRuntimeStartPayload(
@@ -133,7 +137,13 @@ export function createExecutorApp(options: {
       options.shutdownSignal,
     );
 
-    options.executeRunInContainer(payload)
+    if (!payload.controlRpcBaseUrl) {
+      concurrency.release();
+      return c.json({ error: "Control RPC base URL not configured" }, 503);
+    }
+
+    options
+      .executeRunInContainer(payload)
       .catch((err) => {
         options.logger.error(
           `[executor] Unhandled error for run ${payload.runId}`,

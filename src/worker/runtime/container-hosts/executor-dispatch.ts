@@ -16,6 +16,19 @@ export interface AgentExecutorDispatchPayload {
   executorTier?: 1 | 2 | 3;
   executorContainerId?: string;
   /**
+   * Public control-plane URL the executor calls for token-scoped run I/O.
+   *
+   * A native Takos container class can derive this from its Worker env. A
+   * provider-managed ContainerService may run behind an external Durable
+   * Object namespace, so the dispatch protocol carries the URL explicitly as
+   * well. The container still receives a freshly minted per-run token from the
+   * receiving container manager; no durable provider credential is carried in
+   * this payload.
+   */
+  controlRpcBaseUrl?: string;
+  /** Optional operator start-token forwarded only across the internal DO RPC. */
+  startToken?: string;
+  /**
    * Run kind used to derive the proxy-token scope set. Defaults to `"agent"`
    * for back-compat when a dispatcher does not set it.
    */
@@ -76,9 +89,12 @@ export async function dispatchAgentExecutorStart(
     ...body,
     serviceId,
     ...controlConfig,
+    controlRpcBaseUrl:
+      controlConfig.controlRpcBaseUrl ?? body.controlRpcBaseUrl,
+    startToken: controlConfig.startToken ?? body.startToken,
   };
   const headers = new Headers({ "Content-Type": "application/json" });
-  const startToken = controlConfig.startToken?.trim();
+  const startToken = (controlConfig.startToken ?? body.startToken)?.trim();
   if (startToken) {
     headers.set("Authorization", `Bearer ${startToken}`);
   }

@@ -127,9 +127,10 @@ function createExecutorContainerClass(
 
     private async loadTokenMap(): Promise<Map<string, ProxyTokenInfo>> {
       if (this.cachedTokens) return this.cachedTokens;
-      const stored = await this.ctx.storage.get<
-        Record<string, ProxyTokenInfo>
-      >("proxyTokens");
+      const stored =
+        await this.ctx.storage.get<Record<string, ProxyTokenInfo>>(
+          "proxyTokens",
+        );
       this.cachedTokens = new Map(Object.entries(stored ?? {}));
       return this.cachedTokens;
     }
@@ -332,18 +333,33 @@ const STALE_PROXY_TOKEN_MS = 15 * 60 * 1000;
 
 function poolSlotId(env: Env, tier: ExecutorTier, index: number): string {
   const suffix = normalizePoolRevision(env.EXECUTOR_POOL_REVISION);
-  const base = tier === 1
-    ? `tier1-warm-${index}`
-    : `tier${tier}-scale-${index}`;
+  const base =
+    tier === 1 ? `tier1-warm-${index}` : `tier${tier}-scale-${index}`;
   return suffix ? `${base}-${suffix}` : base;
 }
 
 function normalizePoolRevision(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const revision = value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-")
+  const revision = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
   return revision || null;
+}
+
+function dispatchPayloadWithContainerControl(
+  env: Env,
+  body: AgentExecutorDispatchPayload,
+): AgentExecutorDispatchPayload {
+  const controlRpcBaseUrl = env.TAKOS_AGENT_CONTROL_RPC_BASE_URL?.trim();
+  const startToken = env.TAKOS_AGENT_START_TOKEN?.trim();
+  return {
+    ...body,
+    ...(controlRpcBaseUrl ? { controlRpcBaseUrl } : {}),
+    ...(startToken ? { startToken } : {}),
+  };
 }
 
 async function readPoolLoad(
@@ -356,12 +372,14 @@ async function readPoolLoad(
 }> {
   const ns = resolveContainerNamespace(env, tier);
   const stub = ns.getByName(containerId);
-  const load = stub.getLoad ? await stub.getLoad() : {
-    tier,
-    containerId,
-    active: 0,
-    capacity: resolveExecutorTierCapacity(env, tier),
-  };
+  const load = stub.getLoad
+    ? await stub.getLoad()
+    : {
+        tier,
+        containerId,
+        active: 0,
+        capacity: resolveExecutorTierCapacity(env, tier),
+      };
   return {
     stub,
     load: {
@@ -390,13 +408,11 @@ async function collectExecutorPoolLoads(env: Env): Promise<ExecutorPoolLoad[]> {
   return loads;
 }
 
-async function selectExecutorPoolSlot(env: Env): Promise<
-  {
-    tier: ExecutorTier;
-    containerId: string;
-    stub: ExecutorContainerStub;
-  } | null
-> {
+async function selectExecutorPoolSlot(env: Env): Promise<{
+  tier: ExecutorTier;
+  containerId: string;
+  stub: ExecutorContainerStub;
+} | null> {
   const config = getExecutorPoolConfig(env);
 
   for (let i = 0; i < config.tier1WarmPoolSize; i++) {
@@ -410,14 +426,12 @@ async function selectExecutorPoolSlot(env: Env): Promise<
   // scales tier 1 → tier 3 only.
   if (!env.EXECUTOR_CONTAINER_TIER3) return null;
 
-  let best:
-    | {
-      tier: ExecutorTier;
-      containerId: string;
-      stub: ExecutorContainerStub;
-      load: ExecutorPoolLoad;
-    }
-    | null = null;
+  let best: {
+    tier: ExecutorTier;
+    containerId: string;
+    stub: ExecutorContainerStub;
+    load: ExecutorPoolLoad;
+  } | null = null;
   for (let i = 0; i < config.tier3PoolSize; i++) {
     const containerId = poolSlotId(env, 3, i);
     const { stub, load } = await readPoolLoad(env, 3, containerId);
@@ -489,7 +503,7 @@ export default {
     // /dispatch — called by takos-worker via service binding (same CF account).
     // Service binding provides implicit authentication; no JWT required.
     if (path === "/dispatch" && request.method === "POST") {
-      const body = await request.json() as AgentExecutorDispatchPayload & {
+      const body = (await request.json()) as AgentExecutorDispatchPayload & {
         tier?: unknown;
       };
       const { runId } = body;
@@ -506,22 +520,28 @@ export default {
         const ns = resolveContainerNamespace(env, tier);
         const containerId = body.executorContainerId || runId;
         const stub = ns.getByName(containerId);
-        return await forwardAgentExecutorDispatch(stub, {
-          ...body,
-          executorTier: tier,
-          executorContainerId: containerId,
-        });
+        return await forwardAgentExecutorDispatch(
+          stub,
+          dispatchPayloadWithContainerControl(env, {
+            ...body,
+            executorTier: tier,
+            executorContainerId: containerId,
+          }),
+        );
       }
 
       const selected = await selectExecutorPoolSlot(env);
       if (!selected) {
         return errorJsonResponse("No executor capacity available", 503);
       }
-      return await forwardAgentExecutorDispatch(selected.stub, {
-        ...body,
-        executorTier: selected.tier,
-        executorContainerId: selected.containerId,
-      });
+      return await forwardAgentExecutorDispatch(
+        selected.stub,
+        dispatchPayloadWithContainerControl(env, {
+          ...body,
+          executorTier: selected.tier,
+          executorContainerId: selected.containerId,
+        }),
+      );
     }
 
     if (path.startsWith("/proxy/")) {
@@ -569,9 +589,10 @@ export default {
         return err("Method not allowed", 405);
       }
 
-      const body = request.method === "POST"
-        ? await request.json() as Record<string, unknown>
-        : Object.fromEntries(url.searchParams.entries());
+      const body =
+        request.method === "POST"
+          ? ((await request.json()) as Record<string, unknown>)
+          : Object.fromEntries(url.searchParams.entries());
 
       // Fail closed: bind the request target to the verified proxy token rather
       // than trusting caller-supplied ids. The container holds only this token,
@@ -606,13 +627,12 @@ export default {
         }
         const forwarded = await dispatched;
         if (
-          path === "/api/internal/v1/agent-control/heartbeat" && forwarded.ok
+          path === "/api/internal/v1/agent-control/heartbeat" &&
+          forwarded.ok
         ) {
           await stub.touchProxyToken?.(token);
         }
-        if (
-          shouldRevokeProxyTokensAfterControlForward(path, body)
-        ) {
+        if (shouldRevokeProxyTokensAfterControlForward(path, body)) {
           await revokeProxyTokenAfterTerminalResponse(forwarded, stub, token);
         }
         return forwarded;
@@ -638,13 +658,16 @@ export default {
 } satisfies PlatformHandler<Env>;
 
 function isTerminalRunStatus(status: unknown): boolean {
-  return status === "completed" || status === "failed" ||
-    status === "cancelled";
+  return (
+    status === "completed" || status === "failed" || status === "cancelled"
+  );
 }
 
 function isTerminalRunEvent(type: unknown, data: unknown): boolean {
   if (
-    type === "completed" || type === "error" || type === "cancelled" ||
+    type === "completed" ||
+    type === "error" ||
+    type === "cancelled" ||
     type === "run.failed"
   ) {
     return true;
@@ -658,8 +681,9 @@ function isTerminalRunEvent(type: unknown, data: unknown): boolean {
   }
   const run = payload.run;
   return Boolean(
-    run && typeof run === "object" &&
-      isTerminalRunStatus((run as Record<string, unknown>).status),
+    run &&
+    typeof run === "object" &&
+    isTerminalRunStatus((run as Record<string, unknown>).status),
   );
 }
 
@@ -674,14 +698,10 @@ function shouldRevokeProxyTokensAfterControlForward(
   ) {
     return true;
   }
-  if (
-    path === "/api/internal/v1/agent-control/run-event"
-  ) {
+  if (path === "/api/internal/v1/agent-control/run-event") {
     return isTerminalRunEvent(body.type, body.data);
   }
-  if (
-    path === "/api/internal/v1/agent-control/update-run-status"
-  ) {
+  if (path === "/api/internal/v1/agent-control/update-run-status") {
     return isTerminalRunStatus(body.status);
   }
   return false;
