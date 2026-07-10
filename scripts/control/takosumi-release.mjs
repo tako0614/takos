@@ -2383,18 +2383,21 @@ async function uploadManagedCompatAssets({
       )}`,
     );
   }
-  const filesToUpload = arrayValue(session.buckets).flat();
+  const uploadBuckets = arrayValue(session.buckets)
+    .map((bucket) => arrayValue(bucket))
+    .filter((bucket) => bucket.length > 0);
+  const filesToUpload = uploadBuckets.flat();
   const manifestByHash = new Map(
     Object.entries(manifest).map(([path, entry]) => [
       entry.hash,
       { path, entry },
     ]),
   );
-  let completionJwt = session.jwt;
+  let completionJwt = filesToUpload.length === 0 ? session.jwt : undefined;
   let uploadedCount = 0;
   if (filesToUpload.length > 0) {
     if (isSingleAssetUploadMode(session.jwt)) {
-      for (const hash of filesToUpload) {
+      for (const [index, hash] of filesToUpload.entries()) {
         const manifestEntry = manifestByHash.get(hash);
         if (!manifestEntry) {
           throw new Error(`Assets upload requested unknown hash ${hash}`);
@@ -2415,18 +2418,22 @@ async function uploadManagedCompatAssets({
           },
         );
         const payload = cloudflareResult(await cloudflareApiPayload(response));
-        if (!response.ok || !payload?.jwt) {
+        const finalUpload = index === filesToUpload.length - 1;
+        if (
+          !response.ok ||
+          (!payload?.jwt && (finalUpload || response.status !== 202))
+        ) {
           throw new Error(
             `Takosumi managed asset upload failed for ${hash}: HTTP ${response.status} ${JSON.stringify(
               payload,
             )}`,
           );
         }
-        completionJwt = payload.jwt;
+        if (payload?.jwt) completionJwt = payload.jwt;
         uploadedCount += 1;
       }
     } else {
-      for (const bucket of arrayValue(session.buckets)) {
+      for (const [index, bucket] of uploadBuckets.entries()) {
         const form = new FormData();
         for (const hash of arrayValue(bucket)) {
           const manifestEntry = manifestByHash.get(hash);
@@ -2457,16 +2464,25 @@ async function uploadManagedCompatAssets({
           },
         );
         const payload = cloudflareResult(await cloudflareApiPayload(response));
-        if (!response.ok || !payload?.jwt) {
+        const finalUpload = index === uploadBuckets.length - 1;
+        if (
+          !response.ok ||
+          (!payload?.jwt && (finalUpload || response.status !== 202))
+        ) {
           throw new Error(
             `Takosumi managed bulk asset upload failed: HTTP ${response.status} ${JSON.stringify(
               payload,
             )}`,
           );
         }
-        completionJwt = payload.jwt;
+        if (payload?.jwt) completionJwt = payload.jwt;
       }
     }
+  }
+  if (!completionJwt) {
+    throw new Error(
+      `Takosumi managed asset upload completed without a completion JWT for ${workerName}`,
+    );
   }
   return {
     jwt: completionJwt,

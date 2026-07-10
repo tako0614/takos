@@ -1429,6 +1429,7 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
     manifest?: Record<string, { hash: string; size: number }>;
     assetHashes?: string[];
   }[] = [];
+  let assetUploadRequestCount = 0;
   try {
     process.chdir(root);
     mkdirSync("deploy/cloudflare", { recursive: true });
@@ -1525,9 +1526,9 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
             JSON.stringify({
               success: true,
               result: {
-                buckets: [
-                  Object.values(body.manifest).map((item) => item.hash),
-                ],
+                buckets: Object.values(body.manifest).map((item) => [
+                  item.hash,
+                ]),
                 jwt: "assets-session-jwt",
               },
             }),
@@ -1537,12 +1538,16 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
         if (request.url.endsWith("/workers/assets/upload?base64=true")) {
           const form = await request.formData();
           entry.assetHashes = [...form.keys()];
+          assetUploadRequestCount += 1;
+          if (assetUploadRequestCount === 1) {
+            return new Response(null, { status: 202 });
+          }
           return new Response(
             JSON.stringify({
               success: true,
               result: { jwt: "assets-complete-jwt" },
             }),
-            { status: 200, headers: { "content-type": "application/json" } },
+            { status: 201, headers: { "content-type": "application/json" } },
           );
         }
         if (request.url.endsWith("/workers/scripts/takos-test")) {
@@ -1572,7 +1577,7 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
 
     assert.equal(result.workerName, "takos-test");
     assert.equal(result.assets?.manifestEntries, 2);
-    assert.equal(requests.length, 3);
+    assert.equal(requests.length, 4);
     assert.equal(
       requests.every(
         (request) => request.authorization === "Bearer compat-token",
@@ -1580,17 +1585,21 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
       true,
     );
     assert.equal(requests[1].assetAuthorization, "Bearer assets-session-jwt");
+    assert.equal(requests[2].assetAuthorization, "Bearer assets-session-jwt");
     assert.deepEqual(Object.keys(requests[0].manifest ?? {}).sort(), [
       "/assets/app.js",
       "/index.html",
     ]);
     assert.deepEqual(
-      requests[1].assetHashes?.sort(),
+      [
+        ...(requests[1].assetHashes ?? []),
+        ...(requests[2].assetHashes ?? []),
+      ].sort(),
       Object.values(requests[0].manifest ?? {})
         .map((entry) => entry.hash)
         .sort(),
     );
-    const metadata = requests[2].metadata ?? {};
+    const metadata = requests[3].metadata ?? {};
     assert.equal(metadata.main_module, "index.js");
     assert.deepEqual(metadata.assets, {
       jwt: "assets-complete-jwt",
