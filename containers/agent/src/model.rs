@@ -24,6 +24,8 @@ const DEFAULT_OPENAI_ENDPOINT: &str = "https://api.openai.com/v1/chat/completion
 const MODEL_HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 
 const REPEATED_TOOL_FAILURE_THRESHOLD: usize = 2;
+const TOOL_ROUTER_SENTINEL: &str = "__TAKOS_NEEDS_TOOLS__";
+const TOOL_ROUTER_INSTRUCTION: &str = "Answer the user's request directly when it can be solved from reasoning or the supplied context. If and only if external tools are required, return exactly __TAKOS_NEEDS_TOOLS__ and nothing else. Do not claim that context is missing when the user request is complete.";
 const TOOL_RECOVERY_INSTRUCTION: &str = "A tool has returned the same failure repeatedly. Do not call any tools in this response. Answer the user's request directly from the available context. If the task truly cannot be completed without that tool, explain the limitation once instead of retrying it.";
 const UNAVAILABLE_TOOL_RECOVERY_INSTRUCTION: &str = "The previous response requested a tool that is not available in this runtime. Do not call any tools in this response. Answer the user's request directly from the available context. If the task truly requires an unavailable tool, explain the limitation once.";
 
@@ -270,11 +272,23 @@ impl TakosModelRunner {
         api_key: &str,
     ) -> AppResult<ModelOutput> {
         let repeated_tool_failure = has_repeated_tool_failure(input);
-        let first_recovery_instruction = repeated_tool_failure.then_some(TOOL_RECOVERY_INSTRUCTION);
-        let output = self
-            .send_openai_request(input, api_key, first_recovery_instruction)
-            .await?;
-        if repeated_tool_failure || !self.has_unavailable_tool_call(&output) {
+        if repeated_tool_failure {
+            return self
+                .send_openai_request(input, api_key, Some(TOOL_RECOVERY_INSTRUCTION))
+                .await;
+        }
+
+        if !self.tools.is_empty() {
+            let routed = self
+                .send_openai_request(input, api_key, Some(TOOL_ROUTER_INSTRUCTION))
+                .await?;
+            if !model_requests_tools(&routed) {
+                return Ok(routed);
+            }
+        }
+
+        let output = self.send_openai_request(input, api_key, None).await?;
+        if !self.has_unavailable_tool_call(&output) {
             return Ok(output);
         }
 
@@ -432,6 +446,14 @@ impl TakosModelRunner {
             usage: model_usage,
         })
     }
+}
+
+fn model_requests_tools(output: &ModelOutput) -> bool {
+    !output.tool_calls.is_empty()
+        || output
+            .assistant_message
+            .as_deref()
+            .is_some_and(|message| message.trim() == TOOL_ROUTER_SENTINEL)
 }
 
 fn has_repeated_tool_failure(input: &ModelInput) -> bool {

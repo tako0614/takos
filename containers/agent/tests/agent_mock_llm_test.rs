@@ -318,7 +318,11 @@ fn embedding_response() -> Value {
 
 #[tokio::test(flavor = "current_thread")]
 async fn mock_llm_emits_tool_call_for_echo_tool() {
-    let server = MockOpenAiServer::start(tool_call_response()).await;
+    let server = MockOpenAiServer::start_sequence(vec![
+        assistant_message_response("__TAKOS_NEEDS_TOOLS__"),
+        tool_call_response(),
+    ])
+    .await;
     let usage = Arc::new(UsageTracker::default());
     let runner = TakosModelRunner::new_with_endpoint(
         server.endpoint(),
@@ -390,14 +394,19 @@ async fn mock_llm_emits_tool_call_for_echo_tool() {
 
     // Usage tracker should accumulate across both turns.
     let payload = runner.usage_payload();
-    assert_eq!(payload.input_tokens, 17 + 23);
-    assert_eq!(payload.output_tokens, 5 + 9);
+    assert_eq!(payload.input_tokens, 23 + 17 + 23);
+    assert_eq!(payload.output_tokens, 9 + 5 + 9);
 
     // Verify the request shape sent to the mock server included our tool
     // catalog and bearer auth header.
     let captured = server.captured_requests().await;
-    assert_eq!(captured.len(), 2, "mock server should observe both turns");
-    let first = &captured[0];
+    assert_eq!(
+        captured.len(),
+        3,
+        "router, tool call, and final answer should reach the mock server"
+    );
+    assert!(captured[0].body.get("tools").is_none());
+    let first = &captured[1];
     assert_eq!(
         first.auth_header.as_deref(),
         Some("Bearer sk-mock-key"),
@@ -426,6 +435,7 @@ async fn mock_llm_emits_tool_call_for_echo_tool() {
 #[tokio::test(flavor = "current_thread")]
 async fn unavailable_tool_call_retries_once_without_tools() {
     let server = MockOpenAiServer::start_sequence(vec![
+        assistant_message_response("__TAKOS_NEEDS_TOOLS__"),
         unavailable_tool_call_response(),
         assistant_message_response("103"),
     ])
@@ -447,18 +457,52 @@ async fn unavailable_tool_call_retries_once_without_tools() {
 
     assert_eq!(output.assistant_message.as_deref(), Some("103"));
     assert!(output.tool_calls.is_empty());
-    assert_eq!(usage.snapshot().input_tokens, 17 + 23);
-    assert_eq!(usage.snapshot().output_tokens, 5 + 9);
+    assert_eq!(usage.snapshot().input_tokens, 23 + 17 + 23);
+    assert_eq!(usage.snapshot().output_tokens, 9 + 5 + 9);
 
     let requests = server.captured_requests().await;
-    assert_eq!(requests.len(), 2);
-    assert!(requests[0].body.get("tools").is_some());
-    assert!(requests[1].body.get("tools").is_none());
-    assert!(requests[1].body.get("tool_choice").is_none());
-    let retry_system_prompt = requests[1].body["messages"][0]["content"]
+    assert_eq!(requests.len(), 3);
+    assert!(requests[0].body.get("tools").is_none());
+    assert!(requests[1].body.get("tools").is_some());
+    assert!(requests[2].body.get("tools").is_none());
+    assert!(requests[2].body.get("tool_choice").is_none());
+    let retry_system_prompt = requests[2].body["messages"][0]["content"]
         .as_str()
         .expect("retry system prompt");
     assert!(retry_system_prompt.contains("not available in this runtime"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn direct_answer_with_tools_available_uses_one_tool_free_request() {
+    let server = MockOpenAiServer::start(assistant_message_response("107")).await;
+    let usage = Arc::new(UsageTracker::default());
+    let runner = TakosModelRunner::new_with_endpoint(
+        server.endpoint(),
+        "gpt-mock",
+        Some(0.0),
+        vec!["sk-mock-key".to_string()],
+        vec![echo_tool()],
+        usage.clone(),
+    );
+
+    let output = runner
+        .run(sample_input("Return only the answer to 51 + 56."))
+        .await
+        .expect("reasoning-only request should finish without advertising tools");
+
+    assert_eq!(output.assistant_message.as_deref(), Some("107"));
+    assert!(output.tool_calls.is_empty());
+    assert_eq!(usage.snapshot().input_tokens, 23);
+    assert_eq!(usage.snapshot().output_tokens, 9);
+
+    let requests = server.captured_requests().await;
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].body.get("tools").is_none());
+    assert!(requests[0].body.get("tool_choice").is_none());
+    let system_prompt = requests[0].body["messages"][0]["content"]
+        .as_str()
+        .expect("router system prompt");
+    assert!(system_prompt.contains("__TAKOS_NEEDS_TOOLS__"));
 }
 
 #[tokio::test(flavor = "current_thread")]
