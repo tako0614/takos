@@ -27,7 +27,7 @@ permissions:
 env:
   BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun-cache/takos
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  TAKOSUMI_SOURCE_REF: f01eea7e6f43bf6bbe6a980fe04c21492f9f417e
+  TAKOSUMI_SOURCE_REF: 5075e1b9fb9608af4e2f620b1263058ea1b8ab2c
 
 jobs:
   validate:
