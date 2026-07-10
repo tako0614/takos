@@ -198,7 +198,7 @@ jobs:
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # pinned: v4.1.0 (2026)
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # pinned: v2.0.2
-        if: matrix.prebuild != ''
+        if: matrix.prebuild != '' || matrix.cloudflare_container == true
         with:
           bun-version: latest
 
