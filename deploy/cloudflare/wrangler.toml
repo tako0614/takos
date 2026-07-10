@@ -20,7 +20,11 @@ account_id = "replace-with-account-id"
 main = "../../src/worker/index.ts"
 workers_dev = true
 compatibility_date = "2026-04-01"
-compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
+# Takos consumes Takosumi Accounts over its public OIDC origin. Cloudflare
+# otherwise sends Worker-to-Worker global fetches to the zone origin and skips
+# the target Worker, so managed WfP deployments would time out during OIDC
+# discovery. The public-fetch behavior also matches non-Cloudflare targets.
+compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution", "global_fetch_strictly_public"]
 
 [alias]
 "node:sqlite" = "../../src/worker/cloudflare/node-sqlite-unavailable.ts"

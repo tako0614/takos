@@ -1528,7 +1528,7 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
         'name = "takos-test"',
         'main = "../../src/worker/index.ts"',
         'compatibility_date = "2026-04-01"',
-        'compatibility_flags = ["nodejs_compat"]',
+        'compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]',
         "",
         "[vars]",
         'ADMIN_DOMAIN = "takos-test.app.takos.jp"',
@@ -1682,6 +1682,10 @@ test("deployManagedCompatWorker uploads Wrangler bundle and assets through the c
     );
     const metadata = requests[3].metadata ?? {};
     assert.equal(metadata.main_module, "index.js");
+    assert.deepEqual(metadata.compatibility_flags, [
+      "nodejs_compat",
+      "global_fetch_strictly_public",
+    ]);
     assert.deepEqual(metadata.assets, {
       jwt: "assets-complete-jwt",
       config: { run_worker_first: true },
