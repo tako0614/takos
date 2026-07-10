@@ -54,7 +54,7 @@
     {
       "name": "build_from_source",
       "type": "boolean",
-      "defaultValue": false,
+      "defaultValue": "false",
       "advanced": true,
       "label": { "ja": "ソースからビルド", "en": "Build from source" },
       "helper": {
