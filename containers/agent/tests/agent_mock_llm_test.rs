@@ -28,6 +28,7 @@
 
 #![cfg(feature = "mock-llm")]
 
+use std::collections::VecDeque;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -60,23 +61,31 @@ struct CapturedRequest {
 
 #[derive(Clone)]
 struct MockState {
-    response: Arc<Mutex<Value>>,
+    responses: Arc<Mutex<VecDeque<Value>>>,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
 }
 
 struct MockOpenAiServer {
     addr: SocketAddr,
-    response: Arc<Mutex<Value>>,
+    responses: Arc<Mutex<VecDeque<Value>>>,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
     handle: JoinHandle<()>,
 }
 
 impl MockOpenAiServer {
     async fn start(initial_response: Value) -> Self {
-        let response = Arc::new(Mutex::new(initial_response));
+        Self::start_sequence(vec![initial_response]).await
+    }
+
+    async fn start_sequence(responses: Vec<Value>) -> Self {
+        assert!(
+            !responses.is_empty(),
+            "mock response sequence must not be empty"
+        );
+        let responses = Arc::new(Mutex::new(VecDeque::from(responses)));
         let requests = Arc::new(Mutex::new(Vec::new()));
         let state = MockState {
-            response: response.clone(),
+            responses: responses.clone(),
             requests: requests.clone(),
         };
         let app = Router::new()
@@ -92,7 +101,7 @@ impl MockOpenAiServer {
         });
         Self {
             addr,
-            response,
+            responses,
             requests,
             handle,
         }
@@ -107,7 +116,9 @@ impl MockOpenAiServer {
     }
 
     async fn set_response(&self, response: Value) {
-        *self.response.lock().await = response;
+        let mut responses = self.responses.lock().await;
+        responses.clear();
+        responses.push_back(response);
     }
 
     async fn captured_requests(&self) -> Vec<CapturedRequest> {
@@ -127,7 +138,7 @@ async fn handle_chat_completions(
     Json(body): Json<Value>,
 ) -> Json<Value> {
     capture_mock_request(&state, headers, body).await;
-    let response = state.response.lock().await.clone();
+    let response = next_mock_response(&state).await;
     Json(response)
 }
 
@@ -137,8 +148,19 @@ async fn handle_embeddings(
     Json(body): Json<Value>,
 ) -> Json<Value> {
     capture_mock_request(&state, headers, body).await;
-    let response = state.response.lock().await.clone();
+    let response = next_mock_response(&state).await;
     Json(response)
+}
+
+async fn next_mock_response(state: &MockState) -> Value {
+    let mut responses = state.responses.lock().await;
+    if responses.len() > 1 {
+        return responses.pop_front().expect("mock response must exist");
+    }
+    responses
+        .front()
+        .cloned()
+        .expect("mock response must exist")
 }
 
 async fn capture_mock_request(state: &MockState, headers: axum::http::HeaderMap, body: Value) {
@@ -203,6 +225,40 @@ fn tool_call_response() -> Value {
                             "function": {
                                 "name": "echo",
                                 "arguments": "{\"text\":\"hello from mock\"}"
+                            }
+                        }
+                    ]
+                },
+                "finish_reason": "tool_calls"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": 17,
+            "completion_tokens": 5,
+            "total_tokens": 22
+        }
+    })
+}
+
+fn unavailable_tool_call_response() -> Value {
+    json!({
+        "id": "chatcmpl-mock-tool-unavailable",
+        "object": "chat.completion",
+        "created": 1_700_000_000,
+        "model": "mock-llm",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [
+                        {
+                            "id": "call_calculate_1",
+                            "type": "function",
+                            "function": {
+                                "name": "calculate",
+                                "arguments": "{\"expression\":\"51 + 52\"}"
                             }
                         }
                     ]
@@ -365,6 +421,44 @@ async fn mock_llm_emits_tool_call_for_echo_tool() {
         vec!["echo"],
         "echo tool must be advertised to the LLM"
     );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn unavailable_tool_call_retries_once_without_tools() {
+    let server = MockOpenAiServer::start_sequence(vec![
+        unavailable_tool_call_response(),
+        assistant_message_response("103"),
+    ])
+    .await;
+    let usage = Arc::new(UsageTracker::default());
+    let runner = TakosModelRunner::new_with_endpoint(
+        server.endpoint(),
+        "gpt-mock",
+        Some(0.0),
+        vec!["sk-mock-key".to_string()],
+        vec![echo_tool()],
+        usage.clone(),
+    );
+
+    let output = runner
+        .run(sample_input("Return only the answer to 51 + 52."))
+        .await
+        .expect("unavailable tool should recover with a tool-free request");
+
+    assert_eq!(output.assistant_message.as_deref(), Some("103"));
+    assert!(output.tool_calls.is_empty());
+    assert_eq!(usage.snapshot().input_tokens, 17 + 23);
+    assert_eq!(usage.snapshot().output_tokens, 5 + 9);
+
+    let requests = server.captured_requests().await;
+    assert_eq!(requests.len(), 2);
+    assert!(requests[0].body.get("tools").is_some());
+    assert!(requests[1].body.get("tools").is_none());
+    assert!(requests[1].body.get("tool_choice").is_none());
+    let retry_system_prompt = requests[1].body["messages"][0]["content"]
+        .as_str()
+        .expect("retry system prompt");
+    assert!(retry_system_prompt.contains("not available in this runtime"));
 }
 
 #[tokio::test(flavor = "current_thread")]

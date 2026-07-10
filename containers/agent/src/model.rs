@@ -25,6 +25,7 @@ const MODEL_HTTP_TIMEOUT: Duration = Duration::from_secs(60);
 
 const REPEATED_TOOL_FAILURE_THRESHOLD: usize = 2;
 const TOOL_RECOVERY_INSTRUCTION: &str = "A tool has returned the same failure repeatedly. Do not call any tools in this response. Answer the user's request directly from the available context. If the task truly cannot be completed without that tool, explain the limitation once instead of retrying it.";
+const UNAVAILABLE_TOOL_RECOVERY_INSTRUCTION: &str = "The previous response requested a tool that is not available in this runtime. Do not call any tools in this response. Answer the user's request directly from the available context. If the task truly requires an unavailable tool, explain the limitation once.";
 
 fn build_model_http_client() -> reqwest::Client {
     reqwest::Client::builder()
@@ -268,11 +269,30 @@ impl TakosModelRunner {
         input: &ModelInput,
         api_key: &str,
     ) -> AppResult<ModelOutput> {
+        let repeated_tool_failure = has_repeated_tool_failure(input);
+        let first_recovery_instruction = repeated_tool_failure.then_some(TOOL_RECOVERY_INSTRUCTION);
+        let output = self
+            .send_openai_request(input, api_key, first_recovery_instruction)
+            .await?;
+        if repeated_tool_failure || !self.has_unavailable_tool_call(&output) {
+            return Ok(output);
+        }
+
+        self.send_openai_request(input, api_key, Some(UNAVAILABLE_TOOL_RECOVERY_INSTRUCTION))
+            .await
+    }
+
+    async fn send_openai_request(
+        &self,
+        input: &ModelInput,
+        api_key: &str,
+        recovery_instruction: Option<&str>,
+    ) -> AppResult<ModelOutput> {
         let response = self
             .client
             .post(self.endpoint.as_str())
             .bearer_auth(api_key)
-            .json(&self.build_openai_request(input))
+            .json(&self.build_openai_request_with_recovery(input, recovery_instruction))
             .send()
             .await?;
 
@@ -290,8 +310,19 @@ impl TakosModelRunner {
         self.decode_openai_response(&text)
     }
 
+    #[cfg(test)]
     fn build_openai_request(&self, input: &ModelInput) -> OpenAiChatCompletionRequest {
-        let force_final_answer = has_repeated_tool_failure(input);
+        let recovery_instruction =
+            has_repeated_tool_failure(input).then_some(TOOL_RECOVERY_INSTRUCTION);
+        self.build_openai_request_with_recovery(input, recovery_instruction)
+    }
+
+    fn build_openai_request_with_recovery(
+        &self,
+        input: &ModelInput,
+        recovery_instruction: Option<&str>,
+    ) -> OpenAiChatCompletionRequest {
+        let force_final_answer = recovery_instruction.is_some();
         let tools = if force_final_answer {
             Vec::new()
         } else {
@@ -312,11 +343,10 @@ impl TakosModelRunner {
         } else {
             Some("auto".to_string())
         };
-        let system_prompt = if force_final_answer {
-            format!("{}\n\n{TOOL_RECOVERY_INSTRUCTION}", input.system_prompt)
-        } else {
-            input.system_prompt.clone()
-        };
+        let system_prompt = recovery_instruction.map_or_else(
+            || input.system_prompt.clone(),
+            |instruction| format!("{}\n\n{instruction}", input.system_prompt),
+        );
 
         OpenAiChatCompletionRequest {
             model: self.model.clone(),
@@ -334,6 +364,13 @@ impl TakosModelRunner {
             tools,
             tool_choice,
         }
+    }
+
+    fn has_unavailable_tool_call(&self, output: &ModelOutput) -> bool {
+        output
+            .tool_calls
+            .iter()
+            .any(|call| !self.tools.iter().any(|tool| tool.name == call.name))
     }
 
     fn decode_openai_response(&self, text: &str) -> AppResult<ModelOutput> {
