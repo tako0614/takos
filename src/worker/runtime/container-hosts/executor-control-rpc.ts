@@ -305,8 +305,10 @@ export async function handleRunConfig(
   }
 
   const config = getAgentConfig(agentType ?? "default", env);
+  const embeddingConfig = takosumiGatewayEmbeddingConfig(env);
   return ok({
     ...config,
+    ...embeddingConfig,
     agentType: config.type,
     systemPrompt: config.systemPrompt,
     maxIterations: config.maxIterations ?? null,
@@ -316,6 +318,37 @@ export async function handleRunConfig(
     rateLimit: config.rateLimit ?? null,
     tools: config.tools,
   });
+}
+
+export function takosumiGatewayEmbeddingConfig(
+  env: Pick<
+    Env,
+    "OPENAI_API_KEY" | "TAKOSUMI_ACCOUNTS_URL" | "OIDC_ISSUER_URL"
+  >,
+):
+  | {
+    readonly embeddingProvider: "openai-compatible";
+    readonly embeddingModel: "takosumi/default";
+    readonly embeddingBaseUrl: string;
+  }
+  | undefined {
+  if (env.OPENAI_API_KEY?.trim()) return undefined;
+  const accountsUrl = env.TAKOSUMI_ACCOUNTS_URL?.trim() ||
+    env.OIDC_ISSUER_URL?.trim();
+  if (!accountsUrl) return undefined;
+  try {
+    const baseUrl = new URL("/gateway/ai/v1", accountsUrl);
+    if (baseUrl.protocol !== "https:" && baseUrl.protocol !== "http:") {
+      return undefined;
+    }
+    return {
+      embeddingProvider: "openai-compatible",
+      embeddingModel: "takosumi/default",
+      embeddingBaseUrl: baseUrl.toString().replace(/\/$/u, ""),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /**

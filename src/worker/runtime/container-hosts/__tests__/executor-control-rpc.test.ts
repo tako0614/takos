@@ -1,7 +1,11 @@
 import { test } from "bun:test";
 import { assertEquals, assertFalse } from "@takos/test/assert";
 import { readFile } from "node:fs/promises";
-import { handleRunConfig, handleRunEvent } from "../executor-control-rpc.ts";
+import {
+  handleRunConfig,
+  handleRunEvent,
+  takosumiGatewayEmbeddingConfig,
+} from "../executor-control-rpc.ts";
 
 test("handleRunConfig emits current camelCase fields only", async () => {
   const response = await handleRunConfig(
@@ -29,6 +33,34 @@ test("handleRunConfig emits current camelCase fields only", async () => {
   ) {
     assertFalse(field in body, `${field} must not be emitted`);
   }
+});
+
+test("handleRunConfig routes managed embeddings through the Takosumi AI Gateway", async () => {
+  const response = await handleRunConfig(
+    { agentType: "default" },
+    {
+      TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.example/",
+    } as never,
+  );
+  const body = await response.json() as Record<string, unknown>;
+
+  assertEquals(response.status, 200);
+  assertEquals(body.embeddingProvider, "openai-compatible");
+  assertEquals(body.embeddingModel, "takosumi/default");
+  assertEquals(
+    body.embeddingBaseUrl,
+    "https://app.takosumi.example/gateway/ai/v1",
+  );
+});
+
+test("direct OpenAI credentials do not inherit Takosumi embedding defaults", () => {
+  assertEquals(
+    takosumiGatewayEmbeddingConfig({
+      OPENAI_API_KEY: "direct-key",
+      TAKOSUMI_ACCOUNTS_URL: "https://app.takosumi.example",
+    }),
+    undefined,
+  );
 });
 
 test("executor run-config source does not reintroduce snake_case response fields", async () => {

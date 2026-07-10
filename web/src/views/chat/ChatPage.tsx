@@ -53,6 +53,7 @@ export function ChatPage(props: ChatPageProps) {
   const [selectedThread, setSelectedThread] = createSignal<Thread | null>(null);
   const [pendingMessage, setPendingMessage] = createSignal<string | null>(null);
   const [pendingFiles, setPendingFiles] = createSignal<File[] | null>(null);
+  const [pendingModel, setPendingModel] = createSignal<string | null>(null);
   const [showSearchModal, setShowSearchModal] = createSignal(false);
   const [jumpToMessageId, setJumpToMessageId] = createSignal<string | null>(
     props.initialMessageId ?? null,
@@ -237,6 +238,7 @@ export function ChatPage(props: ChatPageProps) {
       props.onNewThreadCreated?.(spaceId, thread);
       setPendingMessage(message);
       setPendingFiles(files ?? null);
+      setPendingModel(modelSelection.selectedModel());
       setSelectedThread(thread);
       props.onThreadChange?.(thread.id);
     } catch (err) {
@@ -315,9 +317,11 @@ export function ChatPage(props: ChatPageProps) {
                 : undefined}
               initialMessage={pendingMessage() ?? undefined}
               initialFiles={pendingFiles() ?? undefined}
+              initialModel={pendingModel() ?? undefined}
               onInitialMessageSent={() => {
                 setPendingMessage(null);
                 setPendingFiles(null);
+                setPendingModel(null);
               }}
               onUpdateTitle={(title) => {
                 setSelectedThread((prev) => prev ? { ...prev, title } : prev);
