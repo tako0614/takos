@@ -2065,6 +2065,9 @@ test("ensureTakosumiSourceModule links an existing checkout beside restored sour
 });
 
 test("Takos OpenTofu modules declare generic Takosumi post-apply release commands", () => {
+  const packageMetadata = JSON.parse(
+    readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+  ) as { version: string };
   const rootModule = readFileSync(
     new URL("../../../deploy/opentofu/outputs.tf", import.meta.url),
     "utf8",
@@ -2086,9 +2089,10 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
   );
   assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
   assert.match(rootMain, /public_url\s*=\s*var\.public_url/);
+  assert.doesNotMatch(rootMain, /path\.module[^\n]*\.\.\//);
   assert.match(
     rootMain,
-    /jsondecode\(file\("\$\{path\.module\}\/\.\.\/\.\.\/package\.json"\)\)/,
+    new RegExp(`app_version\\s*=\\s*"${packageMetadata.version}"`),
   );
   assert.match(rootMain, /app_version\s*=\s*local\.app_version/);
   assert.match(cloudflareOutputs, /version\s*=\s*var\.app_version/);
