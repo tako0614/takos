@@ -23,9 +23,9 @@ export function validateEnv(
 ): string | null {
   const missing = requiredKeys.filter((k) => !Reflect.get(env, k));
   if (missing.length === 0) return null;
-  return `[${workerName}] Missing required environment bindings: ${
-    missing.join(", ")
-  }`;
+  return `[${workerName}] Missing required environment bindings: ${missing.join(
+    ", ",
+  )}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ export function validateEnv(
 // ---------------------------------------------------------------------------
 
 const REQUIRED_KEYS = {
-  "takos": [
+  takos: [
     "DB",
     "HOSTNAME_ROUTING",
     "SESSION_DO",
@@ -60,7 +60,6 @@ const REQUIRED_KEYS = {
   "takos-runtime-host": ["RUNTIME_CONTAINER", "PLATFORM_PUBLIC_KEY"],
   "takos-executor-host": [
     "EXECUTOR_CONTAINER",
-    "TAKOS_WORKER",
     "TAKOS_AGENT_CONTROL_RPC_BASE_URL",
     "EXECUTOR_PROXY_SECRET",
   ],
@@ -74,31 +73,28 @@ export function validateWebEnv(env: object): string | null {
   return validateEnv("takos", env, REQUIRED_KEYS["takos"]);
 }
 
-export function validateDispatchEnv(
-  env: object,
-): string | null {
+export function validateDispatchEnv(env: object): string | null {
   // Custom logic: HOSTNAME_ROUTING and ROUTING_STORE are alternatives.
-  const missing = ["DISPATCHER", "ADMIN_DOMAIN"].filter((k) =>
-    !Reflect.get(env, k)
+  const missing = ["DISPATCHER", "ADMIN_DOMAIN"].filter(
+    (k) => !Reflect.get(env, k),
   );
   if (
-    !Reflect.get(env, "HOSTNAME_ROUTING") && !Reflect.get(env, "ROUTING_STORE")
+    !Reflect.get(env, "HOSTNAME_ROUTING") &&
+    !Reflect.get(env, "ROUTING_STORE")
   ) {
     missing.push("HOSTNAME_ROUTING|ROUTING_STORE");
   }
   if (missing.length === 0) return null;
-  return `[takos-dispatch] Missing required environment bindings: ${
-    missing.join(", ")
-  }`;
+  return `[takos-dispatch] Missing required environment bindings: ${missing.join(
+    ", ",
+  )}`;
 }
 
 export function validateRunnerEnv(env: object): string | null {
   return validateEnv("takos-worker", env, REQUIRED_KEYS["takos-worker"]);
 }
 
-export function validateWorkflowRunnerEnv(
-  env: object,
-): string | null {
+export function validateWorkflowRunnerEnv(env: object): string | null {
   return validateEnv(
     "takos-workflow-runner",
     env,
@@ -106,15 +102,11 @@ export function validateWorkflowRunnerEnv(
   );
 }
 
-export function validateIndexerEnv(
-  env: object,
-): string | null {
+export function validateIndexerEnv(env: object): string | null {
   return validateEnv("takos-indexer", env, REQUIRED_KEYS["takos-indexer"]);
 }
 
-export function validateRuntimeHostEnv(
-  env: object,
-): string | null {
+export function validateRuntimeHostEnv(env: object): string | null {
   const missing = validateEnv(
     "takos-runtime-host",
     env,
@@ -127,9 +119,7 @@ export function validateRuntimeHostEnv(
   return null;
 }
 
-export function validateExecutorHostEnv(
-  env: object,
-): string | null {
+export function validateExecutorHostEnv(env: object): string | null {
   return validateEnv(
     "takos-executor-host",
     env,

@@ -80,7 +80,6 @@ export interface ContainerHostEnv {
   EXECUTOR_CONTAINER?: ContainerHostBinding;
   EXECUTOR_CONTAINER_TIER2?: ContainerHostBinding;
   EXECUTOR_CONTAINER_TIER3?: ContainerHostBinding;
-  TAKOS_WORKER?: FetchBinding;
   PROXY_BASE_URL?: string;
   /**
    * Worker-mediated egress proxy URL handed to the workflow/actions container

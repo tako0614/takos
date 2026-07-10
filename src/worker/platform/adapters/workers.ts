@@ -37,15 +37,12 @@ function createInProcessRuntimeHostBinding(
   env: PlatformEnvIndex,
 ): PlatformServiceBinding | undefined {
   if (!env.RUNTIME_CONTAINER) return undefined;
-  const takosWorker = serviceBindingFromEnv(env, "TAKOS_EGRESS");
   return {
     async fetch(input: RequestInfo | URL, init?: RequestInit) {
-      const { default: runtimeHost } = await import(
-        "../../runtime/container-hosts/runtime-host.ts"
-      );
+      const { default: runtimeHost } =
+        await import("../../runtime/container-hosts/runtime-host.ts");
       return runtimeHost.fetch(new Request(input, init), {
         ...env,
-        TAKOS_WORKER: takosWorker,
         PROXY_BASE_URL: defaultContainerHostBaseUrl(env),
       } as never);
     },
@@ -56,20 +53,17 @@ function createInProcessExecutorHostBinding(
   env: PlatformEnvIndex,
 ): PlatformServiceBinding | undefined {
   if (!env.EXECUTOR_CONTAINER) return undefined;
-  const takosWorker = serviceBindingFromEnv(env, "TAKOS_EGRESS");
   return {
     async fetch(input: RequestInfo | URL, init?: RequestInit) {
-      const { default: executorHost } = await import(
-        "../../runtime/container-hosts/executor-host.ts"
-      );
+      const { default: executorHost } =
+        await import("../../runtime/container-hosts/executor-host.ts");
       // TAKOS_AGENT_CONTROL_RPC_BASE_URL keeps its dedicated env first, then
       // falls back to the shared container-host base URL.
       return executorHost.fetch(new Request(input, init), {
         ...env,
-        TAKOS_WORKER: takosWorker,
         TAKOS_AGENT_CONTROL_RPC_BASE_URL:
           getString(env, "TAKOS_AGENT_CONTROL_RPC_BASE_URL") ??
-            defaultContainerHostBaseUrl(env),
+          defaultContainerHostBaseUrl(env),
       } as never);
     },
   };
@@ -78,9 +72,11 @@ function createInProcessExecutorHostBinding(
 function buildWorkersPlatform<TBindings extends object>(
   env: TBindings & PlatformEnvIndex,
 ): ControlPlatform<TBindings> {
-  const runtimeHost = serviceBindingFromEnv(env, "RUNTIME_HOST") ??
+  const runtimeHost =
+    serviceBindingFromEnv(env, "RUNTIME_HOST") ??
     createInProcessRuntimeHostBinding(env);
-  const executorHost = serviceBindingFromEnv(env, "EXECUTOR_HOST") ??
+  const executorHost =
+    serviceBindingFromEnv(env, "EXECUTOR_HOST") ??
     createInProcessExecutorHostBinding(env);
   const bindings = {
     ...env,

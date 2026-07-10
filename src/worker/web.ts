@@ -108,7 +108,6 @@ function containerHostBaseUrl(env: Env): string {
 function withUnifiedContainerHostEnv(env: Env): Env {
   return {
     ...env,
-    TAKOS_WORKER: env.TAKOS_EGRESS,
     PROXY_BASE_URL: env.PROXY_BASE_URL ?? containerHostBaseUrl(env),
     TAKOS_AGENT_CONTROL_RPC_BASE_URL:
       env.TAKOS_AGENT_CONTROL_RPC_BASE_URL ?? containerHostBaseUrl(env),

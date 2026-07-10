@@ -11,14 +11,14 @@ function fakeContainerNamespace() {
   };
 }
 
-test("workers adapter synthesizes in-process container host bindings", () => {
+test("workers adapter synthesizes usable in-process container host bindings", async () => {
   const env = {
     ADMIN_DOMAIN: "admin.example.com",
     TENANT_BASE_DOMAIN: "app.example.com",
     AUTH_PUBLIC_BASE_URL: "https://admin.example.com",
     RUNTIME_CONTAINER: fakeContainerNamespace(),
     EXECUTOR_CONTAINER: fakeContainerNamespace(),
-    TAKOS_EGRESS: { fetch: async () => new Response("takos") },
+    EXECUTOR_PROXY_SECRET: "test-proxy-secret",
   } as unknown as Env;
 
   const platform = buildWorkersWebPlatform(env);
@@ -33,5 +33,8 @@ test("workers adapter synthesizes in-process container host bindings", () => {
     platform.services.hosts.executorHost,
     platform.bindings.EXECUTOR_HOST,
   );
+  const health = await platform.bindings.EXECUTOR_HOST.fetch(
+    new Request("https://executor/health"),
+  );
+  assertEquals(health.status, 200);
 });
-

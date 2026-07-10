@@ -44,15 +44,6 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_CONTAINER: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER2?: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER3?: ContainerNamespace;
-  /**
-   * Legacy service binding to the main takos worker. Control RPC is now
-   * dispatched in-process (dispatchControlRpc), so this binding is no longer on
-   * the control-RPC path; it is retained for env-shape compatibility with the
-   * unified container-host env (withUnifiedContainerHostEnv).
-   */
-  TAKOS_WORKER: {
-    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  };
   /** Shared secret carried into the unified container-host env. */
   EXECUTOR_PROXY_SECRET: string;
   INDEX_QUEUE?: MessageQueueBinding<IndexJobQueueMessage>;
