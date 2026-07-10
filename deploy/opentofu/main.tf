@@ -28,7 +28,7 @@ locals {
   manifest_release_container_images = local.worker_release_uses_manifest ? try(tomap(local.worker_release_manifest.containerImages), {}) : {}
   release_container_images          = merge(local.manifest_release_container_images, var.release_container_images)
   has_runtime_container_image       = anytrue([for key in ["runtime", "TakosRuntimeContainer", "takos-worker-runtime"] : contains(keys(local.release_container_images), key)])
-  has_executor_container_image = anytrue([for key in ["executor", "takos-agent-executor"] : contains(keys(local.release_container_images), key)]) || alltrue([
+  has_executor_container_image = anytrue([for key in ["executor", "takos-agent"] : contains(keys(local.release_container_images), key)]) || alltrue([
     for key in ["ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"] : contains(keys(local.release_container_images), key)
   ])
 }

@@ -128,15 +128,10 @@ const OFFICIAL_TAKOS_IMAGES: readonly OfficialImage[] = [
     context: "containers/runtime",
     dockerfile: "containers/runtime/Dockerfile",
   },
-  {
-    name: "takos-agent-executor",
-    context: "containers/executor",
-    dockerfile: "containers/executor/Dockerfile",
-  },
 ];
 const CLOUDFLARE_CONTAINER_IMAGE_NAMES = new Set([
+  "takos-agent",
   "takos-worker-runtime",
-  "takos-agent-executor",
 ]);
 
 const RELEASE_COMPONENT_CONFIGS: readonly ReleaseComponentConfig[] = [

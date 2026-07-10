@@ -166,7 +166,7 @@ async function readContainerImages(
     throw error;
   }
   const runtime = byName.get("takos-worker-runtime")?.cloudflareRegistryRef;
-  const executor = byName.get("takos-agent-executor")?.cloudflareRegistryRef;
+  const executor = byName.get("takos-agent")?.cloudflareRegistryRef;
   if (required && (!runtime || !executor)) {
     throw new Error(
       "Cloudflare runtime and executor image refs are required for the Takos Worker release artifact.",

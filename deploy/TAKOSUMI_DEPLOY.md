@@ -91,7 +91,7 @@ registry or a release without the standard image metadata:
 ```hcl
 release_container_images = {
   runtime  = "registry.cloudflare.com/<account-id>/takos-worker-runtime:0.10.10-<commit>"
-  executor = "registry.cloudflare.com/<account-id>/takos-agent-executor:0.10.10-<commit>"
+  executor = "registry.cloudflare.com/<account-id>/takos-agent:0.10.10-<commit>"
 }
 ```
 
@@ -109,8 +109,8 @@ accidental container build. A self-hosted `runner` may intentionally clear
 but that is the slow fallback rather than the normal install path.
 The canonical artifact source for hosted Takos installs is the Takos Git CI
 release workflow: it publishes `takos-worker-runtime` and
-`takos-agent-executor` to the Cloudflare managed container registry with
-`wrangler containers build --push`, records the resulting registry refs in the
+the functional Rust `takos-agent` to the Cloudflare managed container registry,
+records the resulting registry refs in the
 release manifest, and the operator passes those refs into OpenTofu as plain
 module variables. GHCR images may remain as provenance / SBOM evidence, but
 Cloudflare Worker deploys should consume the Cloudflare registry refs.
@@ -129,7 +129,7 @@ tofu apply -var-file=release.auto.tfvars.json
 
 This helper is intentionally mechanical. It only reads the Git CI release
 manifest, requires `cloudflareRegistryRef` for `takos-worker-runtime` and
-`takos-agent-executor`, and writes the `release_container_images` variable. It
+`takos-agent`, and writes the `release_container_images` variable. It
 does not fetch artifacts, choose alternate images, or bypass the Git/OpenTofu
 source of truth.
 

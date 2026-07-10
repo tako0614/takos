@@ -82,11 +82,11 @@ const stagingD1WranglerConfig =
 const runtimeImage =
   "registry.cloudflare.com/acc_123/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const executorImage =
-  "registry.cloudflare.com/acc_123/takos-agent-executor@sha256:2222222222222222222222222222222222222222222222222222222222222222";
+  "registry.cloudflare.com/acc_123/takos-agent@sha256:2222222222222222222222222222222222222222222222222222222222222222";
 const runtimeTaggedImage =
   "registry.cloudflare.com/acc_123/takos-worker-runtime:0.10.0-da3f231b8135";
 const executorTaggedImage =
-  "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-da3f231b8135";
+  "registry.cloudflare.com/acc_123/takos-agent:0.10.0-da3f231b8135";
 
 test("buildTakosumiReleaseCommands runs generic operator activation steps", () => {
   assert.deepEqual(
@@ -562,7 +562,7 @@ test("normalizeReleaseContainerImages accepts aliases and supported registry ref
     () =>
       normalizeReleaseContainerImages({
         executor:
-          "registry.cloudflare.com/acc_123/takos-agent-executor:bad tag",
+          "registry.cloudflare.com/acc_123/takos-agent:bad tag",
       }),
     /Cloudflare Containers-supported registry ref/,
   );
@@ -587,8 +587,8 @@ test("applyReleaseContainerImagesToToml rewrites container images and removes bu
       "",
       "[[containers]]",
       'class_name = "ExecutorContainerTier1"',
-      'image = "../../containers/executor/Dockerfile"',
-      'image_build_context = "../../containers/executor"',
+      'image = "../../containers/agent/Dockerfile"',
+      'image_build_context = "../../../"',
       'instance_type = "lite"',
       "",
     ].join("\n"),
@@ -1065,7 +1065,7 @@ test("preflightWranglerDeployAuth checks individual R2 bucket access used by wra
 test("releaseChildEnv preserves Takosumi Cloud compat API base for managed targets", () => {
   const containerImages = JSON.stringify({
     runtime: "registry.cloudflare.com/backend_acc/takos-worker-runtime:0.10.0",
-    executor: "registry.cloudflare.com/backend_acc/takos-agent-executor:0.10.0",
+    executor: "registry.cloudflare.com/backend_acc/takos-agent:0.10.0",
   });
 
   assert.deepEqual(
@@ -1101,7 +1101,7 @@ test("releaseWranglerAccountId can derive a native account for explicit native h
     runtime:
       "registry.cloudflare.com/backend_acc/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111",
     executor:
-      "registry.cloudflare.com/backend_acc/takos-agent-executor@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "registry.cloudflare.com/backend_acc/takos-agent@sha256:2222222222222222222222222222222222222222222222222222222222222222",
   });
 
   assert.equal(

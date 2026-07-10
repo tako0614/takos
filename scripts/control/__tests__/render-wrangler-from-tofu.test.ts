@@ -367,7 +367,7 @@ test("renderContainerApplicationNames fills only the selected environment", () =
     "",
     "[[containers]]",
     'class_name = "ExecutorContainerTier1"',
-    'image = "../../containers/executor/Dockerfile"',
+    'image = "../../containers/agent/Dockerfile"',
     "",
     "[env.staging]",
     'name = "takos-stage"',

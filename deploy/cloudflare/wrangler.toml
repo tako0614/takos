@@ -178,11 +178,10 @@ new_sqlite_classes = [
   "ExecutorContainerTier3",
 ]
 
-# Runtime / executor images build from this repo's Dockerfiles. image /
+# Runtime / agent images build from the ecosystem source checkout. image /
 # image_build_context are wrangler-config-relative (resolved from
-# takos/deploy/cloudflare). Before deploying, build each container's dist/ so
-# the image COPY succeeds: run `bun build.mjs` in containers/runtime and
-# containers/executor (or `bun run build` in each dir).
+# takos/deploy/cloudflare). Release installs replace these paths with reviewed
+# Cloudflare registry refs; source builds require sibling takos-agent-engine.
 [[containers]]
 class_name = "TakosRuntimeContainer"
 image = "../../containers/runtime/Dockerfile"
@@ -192,22 +191,22 @@ max_instances = 1
 
 [[containers]]
 class_name = "ExecutorContainerTier1"
-image = "../../containers/executor/Dockerfile"
-image_build_context = "../../containers/executor"
+image = "../../containers/agent/Dockerfile"
+image_build_context = "../../../"
 instance_type = "lite"
 max_instances = 1
 
 [[containers]]
 class_name = "ExecutorContainerTier2"
-image = "../../containers/executor/Dockerfile"
-image_build_context = "../../containers/executor"
+image = "../../containers/agent/Dockerfile"
+image_build_context = "../../../"
 instance_type = "basic"
 max_instances = 1
 
 [[containers]]
 class_name = "ExecutorContainerTier3"
-image = "../../containers/executor/Dockerfile"
-image_build_context = "../../containers/executor"
+image = "../../containers/agent/Dockerfile"
+image_build_context = "../../../"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 1
 
@@ -419,9 +418,8 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-# Runtime / executor images (staging) build from this repo's Dockerfiles, same
-# as production. Build each container's dist/ (`bun build.mjs` in
-# containers/runtime and containers/executor) before deploying.
+# Runtime / agent images (staging) use the same source/release contract as
+# production.
 [[env.staging.containers]]
 class_name = "TakosRuntimeContainer"
 image = "../../containers/runtime/Dockerfile"
@@ -431,22 +429,22 @@ max_instances = 1
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
-image = "../../containers/executor/Dockerfile"
-image_build_context = "../../containers/executor"
+image = "../../containers/agent/Dockerfile"
+image_build_context = "../../../"
 instance_type = "lite"
 max_instances = 1
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier2"
-image = "../../containers/executor/Dockerfile"
-image_build_context = "../../containers/executor"
+image = "../../containers/agent/Dockerfile"
+image_build_context = "../../../"
 instance_type = "basic"
 max_instances = 1
 
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier3"
-image = "../../containers/executor/Dockerfile"
-image_build_context = "../../containers/executor"
+image = "../../containers/agent/Dockerfile"
+image_build_context = "../../../"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 1
 

@@ -169,18 +169,13 @@ jobs:
             context: .
             dockerfile: takos/containers/agent/Dockerfile
             prebuild: ""
+            cloudflare_container: true
           - image: takos-worker-runtime
             context: takos/containers/runtime
             dockerfile: takos/containers/runtime/Dockerfile
             prebuild: bun run containers:build:runtime
             cloudflare_container: true
             cloudflare_build_path: containers/runtime
-          - image: takos-agent-executor
-            context: takos/containers/executor
-            dockerfile: takos/containers/executor/Dockerfile
-            prebuild: bun run containers:build:executor
-            cloudflare_container: true
-            cloudflare_build_path: containers/executor
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pinned: v6.0.2 (2026)
         with:
@@ -299,6 +294,9 @@ jobs:
           CLOUDFLARE_CONTAINERS_API_TOKEN: ${{ secrets.CLOUDFLARE_CONTAINERS_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           INPUT_VERSION: ${{ inputs.version }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          CLOUDFLARE_BUILD_PATH: ${{ matrix.cloudflare_build_path }}
         run: |
           set -euo pipefail
           effective_token="${CLOUDFLARE_CONTAINERS_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
@@ -319,7 +317,18 @@ jobs:
           cf_tag="${release_version}-${GITHUB_SHA::12}"
           local_tag="${{ matrix.image }}:${cf_tag}"
           set +e
-          output="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers build -p -t "${local_tag}" "${{ matrix.cloudflare_build_path }}" 2>&1)"
+          if [[ -n "${CLOUDFLARE_BUILD_PATH}" ]]; then
+            output="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers build -p -t "${local_tag}" "${CLOUDFLARE_BUILD_PATH}" 2>&1)"
+          else
+            if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Invalid OCI image digest for ${{ matrix.image }}: ${IMAGE_DIGEST}" >&2
+              exit 1
+            fi
+            source_ref="${GHCR_IMAGE}@${IMAGE_DIGEST}"
+            docker pull "${source_ref}"
+            docker tag "${source_ref}" "${local_tag}"
+            output="$(CLOUDFLARE_API_TOKEN="${effective_token}" bunx wrangler containers push "${local_tag}" 2>&1)"
+          fi
           status=$?
           set -e
           printf '%s\n' "${output}"
@@ -410,7 +419,7 @@ jobs:
 
           bun run build
           runtime_ref="$(jq -r 'select(.name == "takos-worker-runtime") | .cloudflareRegistryRef // empty' ../release-inputs/image-digests/*.json | head -n 1)"
-          executor_ref="$(jq -r 'select(.name == "takos-agent-executor") | .cloudflareRegistryRef // empty' ../release-inputs/image-digests/*.json | head -n 1)"
+          executor_ref="$(jq -r 'select(.name == "takos-agent") | .cloudflareRegistryRef // empty' ../release-inputs/image-digests/*.json | head -n 1)"
           if [[ -z "${runtime_ref}" || -z "${executor_ref}" ]]; then
             echo "Cloudflare runtime/executor image refs are required before bundling the Worker artifact." >&2
             exit 1

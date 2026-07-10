@@ -13,7 +13,7 @@ import {
 const runtimeRef =
   "registry.cloudflare.com/acc_123/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const executorRef =
-  "registry.cloudflare.com/acc_123/takos-agent-executor:0.10.0-abcdef123456";
+  "registry.cloudflare.com/acc_123/takos-agent:0.10.0-abcdef123456";
 
 function releaseManifest(overrides: Record<string, unknown> = {}) {
   return {
@@ -29,7 +29,7 @@ function releaseManifest(overrides: Record<string, unknown> = {}) {
           cloudflareRegistryRef: runtimeRef,
         },
         {
-          name: "takos-agent-executor",
+          name: "takos-agent",
           cloudflareRegistryRef: executorRef,
         },
       ],
@@ -54,7 +54,7 @@ test("releaseContainerImagesFromManifest fails closed without Cloudflare registr
             images: [
               { name: "takos-worker-runtime", cloudflareRegistryRef: null },
               {
-                name: "takos-agent-executor",
+                name: "takos-agent",
                 cloudflareRegistryRef: executorRef,
               },
             ],
@@ -78,7 +78,7 @@ test("releaseContainerImagesFromManifest rejects non-Cloudflare deploy refs", ()
                   "ghcr.io/tako0614/takos-worker-runtime@sha256:1111111111111111111111111111111111111111111111111111111111111111",
               },
               {
-                name: "takos-agent-executor",
+                name: "takos-agent",
                 cloudflareRegistryRef: executorRef,
               },
             ],

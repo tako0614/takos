@@ -532,19 +532,19 @@ const CONTAINER_IMAGE_ALIASES = {
   ExecutorContainerTier1: [
     "ExecutorContainerTier1",
     "executor",
-    "takos-agent-executor",
+    "takos-agent",
     "executor-tier1",
   ],
   ExecutorContainerTier2: [
     "ExecutorContainerTier2",
     "executor",
-    "takos-agent-executor",
+    "takos-agent",
     "executor-tier2",
   ],
   ExecutorContainerTier3: [
     "ExecutorContainerTier3",
     "executor",
-    "takos-agent-executor",
+    "takos-agent",
     "executor-tier3",
   ],
 };

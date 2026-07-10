@@ -6,7 +6,7 @@ import { normalizeReleaseContainerImages } from "./takosumi-release.mjs";
 
 const RELEASE_IMAGE_ALIASES = {
   "takos-worker-runtime": "runtime",
-  "takos-agent-executor": "executor",
+  "takos-agent": "executor",
 };
 
 function usage() {

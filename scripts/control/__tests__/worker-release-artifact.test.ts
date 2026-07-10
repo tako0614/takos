@@ -10,7 +10,7 @@ import {
 
 const runtimeImage = "registry.cloudflare.com/acc/takos-worker-runtime:v0.10.1";
 const executorImage =
-  "registry.cloudflare.com/acc/takos-agent-executor:v0.10.1";
+  "registry.cloudflare.com/acc/takos-agent:v0.10.1";
 
 test("Worker release artifact packages a verified bundle and rewrites Wrangler paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-worker-artifact-test-"));
@@ -39,7 +39,7 @@ test("Worker release artifact packages a verified bundle and rewrites Wrangler p
     await writeFile(
       join(imageDir, "executor.json"),
       JSON.stringify({
-        name: "takos-agent-executor",
+        name: "takos-agent",
         cloudflareRegistryRef: executorImage,
       }),
     );
