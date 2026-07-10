@@ -795,19 +795,12 @@ async fn handle_failure(
         "failed"
     };
     let error_message = sanitize_failure_error_message(&raw_error_message);
-    if let Err(update_err) = client
-        .update_run_status(status, usage.clone(), None, Some(&error_message))
-        .await
-    {
-        // See handle_success: a lease-lost terminal write means the run was
-        // reclaimed under a new lease, so this superseded container stops here.
-        if is_lease_lost(update_err.as_ref()) {
-            warn!(run_id = client.run_id(), error = %update_err, "executor lease lost during failure finalization; skipping terminal status write");
-            return Ok(());
-        }
-        return Err(update_err);
-    }
 
+    // add-message is lease-fenced. Persist the user-visible explanation before
+    // the terminal status write releases that lease; otherwise every normal
+    // failure reaches the UI as an empty thread. A reclaimed executor still
+    // cannot write here, and the run-scoped idempotency key prevents duplicate
+    // messages when the same lease retries.
     if status == "failed" {
         if let Some(thread_id) = thread_id {
             let user_message = user_visible_failure_message(&error_message);
@@ -831,6 +824,19 @@ async fn handle_failure(
                 }
             }
         }
+    }
+
+    if let Err(update_err) = client
+        .update_run_status(status, usage.clone(), None, Some(&error_message))
+        .await
+    {
+        // See handle_success: a lease-lost terminal write means the run was
+        // reclaimed under a new lease, so this superseded container stops here.
+        if is_lease_lost(update_err.as_ref()) {
+            warn!(run_id = client.run_id(), error = %update_err, "executor lease lost during failure finalization; skipping terminal status write");
+            return Ok(());
+        }
+        return Err(update_err);
     }
 
     client
@@ -1031,14 +1037,22 @@ fn max_tool_definitions() -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        authorize_start_with_token, collect_openai_api_keys, parse_max_concurrent_runs,
-        sanitize_failure_error_message, select_model_tools, user_visible_failure_message,
-        RunAdmission, ServiceState, StartAuthError, OPENAI_MAX_TOOL_DEFINITIONS,
+        authorize_start_with_token, collect_openai_api_keys, handle_failure,
+        parse_max_concurrent_runs, sanitize_failure_error_message, select_model_tools,
+        user_visible_failure_message, RunAdmission, ServiceState, StartAuthError,
+        OPENAI_MAX_TOOL_DEFINITIONS,
     };
-    use crate::control_rpc::ToolDefinition;
+    use crate::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition, UsagePayload};
     use crate::engine_support::safe_space_path;
+    use axum::body::Body;
+    use axum::extract::State;
+    use axum::http::Request;
     use axum::http::{header::AUTHORIZATION, HeaderMap, HeaderValue};
+    use axum::routing::post;
+    use axum::{Json, Router};
     use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
 
     fn tool(name: &str) -> ToolDefinition {
         ToolDefinition {
@@ -1071,6 +1085,67 @@ mod tests {
         let message = user_visible_failure_message("OpenAI-compatible API key is not configured");
         assert!(message.contains("no OpenAI-compatible API key is configured"));
         assert!(message.contains("OPENAI_API_KEY"));
+    }
+
+    #[tokio::test]
+    async fn failure_message_is_persisted_before_terminal_status() {
+        async fn record_request(
+            State(paths): State<Arc<Mutex<Vec<String>>>>,
+            request: Request<Body>,
+        ) -> Json<serde_json::Value> {
+            paths.lock().await.push(request.uri().path().to_string());
+            Json(serde_json::json!({}))
+        }
+
+        let paths = Arc::new(Mutex::new(Vec::new()));
+        let app = Router::new()
+            .fallback(post(record_request))
+            .with_state(paths.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("test listener should bind");
+        let address = listener.local_addr().expect("test listener address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("test server should serve");
+        });
+        let client = ControlRpcClient::new(&StartPayload {
+            run_id: "run-failure-order".to_string(),
+            worker_id: "worker-failure-order".to_string(),
+            service_id: Some("service-failure-order".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(1),
+            executor_tier: Some(1),
+            executor_container_id: Some("container-failure-order".to_string()),
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client should build");
+
+        handle_failure(
+            &client,
+            Some("thread-failure-order"),
+            &std::io::Error::other("model request failed"),
+            UsagePayload::default(),
+        )
+        .await
+        .expect("failure should be finalized");
+
+        server.abort();
+        let paths = paths.lock().await.clone();
+        let message_index = paths
+            .iter()
+            .position(|path| path.ends_with("/add-message"))
+            .expect("failure should persist an assistant message");
+        let status_index = paths
+            .iter()
+            .position(|path| path.ends_with("/update-run-status"))
+            .expect("failure should update run status");
+        assert!(
+            message_index < status_index,
+            "assistant message must be persisted before terminal status: {paths:?}",
+        );
     }
 
     #[test]
