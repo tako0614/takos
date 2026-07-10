@@ -2077,8 +2077,22 @@ test("Takos OpenTofu modules declare generic Takosumi post-apply release command
     new URL("../../../deploy/opentofu/variables.tf", import.meta.url),
     "utf8",
   );
+  const cloudflareOutputs = readFileSync(
+    new URL(
+      "../../../deploy/opentofu/modules/cloudflare/outputs.tf",
+      import.meta.url,
+    ),
+    "utf8",
+  );
   assert.match(rootModule, /output\s+"takosumi_release"\s*\{/);
   assert.match(rootMain, /public_url\s*=\s*var\.public_url/);
+  assert.match(
+    rootMain,
+    /jsondecode\(file\("\$\{path\.module\}\/\.\.\/\.\.\/package\.json"\)\)/,
+  );
+  assert.match(rootMain, /app_version\s*=\s*local\.app_version/);
+  assert.match(cloudflareOutputs, /version\s*=\s*var\.app_version/);
+  assert.doesNotMatch(cloudflareOutputs, /version\s*=\s*"[0-9]/);
   assert.match(rootVariables, /variable\s+"takosumi_source_repo_url"\s*\{/);
   assert.match(rootVariables, /variable\s+"takosumi_source_ref"\s*\{/);
   assert.match(rootVariables, /variable\s+"release_containers_rollout"\s*\{/);

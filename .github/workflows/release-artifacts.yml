@@ -430,6 +430,7 @@ jobs:
             --outdir /tmp/takos-worker-bundle \
             --containers-rollout none
           rm -f "${release_config}"
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct "${GITHUB_SHA}")"
 
           bun scripts/build-worker-release-artifact.ts \
             --release-tag "${release_tag}" \

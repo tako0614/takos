@@ -34,7 +34,7 @@ output "app_deployment" {
   value = {
     contractVersion = 1
     name            = "takos"
-    version         = "0.10.0"
+    version         = var.app_version
 
     compute = {
       web = {

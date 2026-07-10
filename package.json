@@ -1,9 +1,9 @@
 {
   "name": "@takos/takos",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "takosRelease": {
     "name": "takos",
-    "version": "0.10.1"
+    "version": "0.10.2"
   },
   "license": "AGPL-3.0-only",
   "type": "module",

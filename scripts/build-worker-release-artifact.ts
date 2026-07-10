@@ -50,14 +50,6 @@ export async function buildWorkerReleaseArtifact(options: Options) {
   try {
     await mkdir(join(packageRoot, "worker"), { recursive: true });
     await cp(join(bundleDir, "index.js"), join(packageRoot, "worker/index.js"));
-    try {
-      await cp(
-        join(bundleDir, "index.js.map"),
-        join(packageRoot, "worker/index.js.map"),
-      );
-    } catch {
-      // Source maps are optional release evidence and are not uploaded by default.
-    }
     await cp(assetsDir, join(packageRoot, "assets"), { recursive: true });
     const assetManifest = await buildAssetManifest(join(packageRoot, "assets"));
     await writeFile(
@@ -68,7 +60,19 @@ export async function buildWorkerReleaseArtifact(options: Options) {
     await mkdir(outputDir, { recursive: true });
     const archiveName = "takos-worker-release.tar.gz";
     const archivePath = join(outputDir, archiveName);
-    run("tar", ["-czf", archivePath, "-C", packageRoot, "."]);
+    run("tar", [
+      "--sort=name",
+      `--mtime=@${sourceDateEpoch()}`,
+      "--owner=0",
+      "--group=0",
+      "--numeric-owner",
+      "--pax-option=delete=atime,delete=ctime",
+      "-czf",
+      archivePath,
+      "-C",
+      packageRoot,
+      ".",
+    ]);
     const archiveBytes = await readFile(archivePath);
     const archiveSha256 = new Bun.CryptoHasher("sha256")
       .update(archiveBytes)
@@ -116,6 +120,14 @@ export async function buildWorkerReleaseArtifact(options: Options) {
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+function sourceDateEpoch() {
+  const value = Bun.env.SOURCE_DATE_EPOCH?.trim() || "0";
+  if (!/^\d+$/u.test(value)) {
+    throw new Error("SOURCE_DATE_EPOCH must be an integer Unix timestamp.");
+  }
+  return value;
 }
 
 async function buildAssetManifest(directory: string) {

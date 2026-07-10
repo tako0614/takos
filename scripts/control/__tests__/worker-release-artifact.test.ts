@@ -26,6 +26,7 @@ test("Worker release artifact packages a verified bundle and rewrites Wrangler p
       join(bundleDir, "index.js"),
       "export default { fetch() { return new Response('ok') } };\n",
     );
+    await writeFile(join(bundleDir, "index.js.map"), '{"sources":[]}\n');
     await writeFile(join(assetsDir, "index.html"), "<h1>Takos</h1>\n");
     await writeFile(join(assetsDir, "icons/logo.svg"), "<svg></svg>\n");
     await writeFile(
@@ -56,6 +57,15 @@ test("Worker release artifact packages a verified bundle and rewrites Wrangler p
       runtime: runtimeImage,
       executor: executorImage,
     });
+    const repeated = await buildWorkerReleaseArtifact({
+      bundleDir,
+      assetsDir,
+      imageDigestDir: imageDir,
+      outputDir: join(root, "output-repeated"),
+      releaseTag: "v0.10.1",
+      requireCloudflareContainerImages: true,
+    });
+    expect(repeated.artifact.sha256).toBe(manifest.artifact.sha256);
 
     const wranglerConfig = join(root, "wrangler.toml");
     await writeFile(
@@ -89,6 +99,11 @@ test("Worker release artifact packages a verified bundle and rewrites Wrangler p
     expect(await readFile(prepared.workerPath, "utf8")).toContain(
       "export default",
     );
+    expect(
+      await Bun.file(
+        join(prepared.root, "content/worker/index.js.map"),
+      ).exists(),
+    ).toBe(false);
     const rendered = await readFile(wranglerConfig, "utf8");
     expect(rendered).toContain(`main = ${JSON.stringify(prepared.workerPath)}`);
     expect(rendered).toContain(
