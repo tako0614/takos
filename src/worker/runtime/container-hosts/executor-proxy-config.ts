@@ -41,6 +41,7 @@ export interface AgentExecutorProxyConfigEnv {
 }
 
 export interface AgentExecutorContainerEnvVars extends Record<string, string> {
+  TAKOS_AGENT_BIND_HOST: string;
   TAKOS_AGENT_CONTROL_RPC_BASE_URL: string;
   TAKOS_AGENT_START_TOKEN?: string;
 }
@@ -92,6 +93,9 @@ export function buildAgentExecutorContainerEnvVars(
   env: AgentExecutorProxyConfigEnv,
 ): AgentExecutorContainerEnvVars {
   const vars: AgentExecutorContainerEnvVars = {
+    // Cloudflare and OCI container ingress reaches the process over the
+    // container's private network, not the loopback interface.
+    TAKOS_AGENT_BIND_HOST: "0.0.0.0",
     TAKOS_AGENT_CONTROL_RPC_BASE_URL: env.TAKOS_AGENT_CONTROL_RPC_BASE_URL ||
       "",
     // Operator-configured allowlist wins; otherwise the bundled distribution

@@ -14,6 +14,7 @@ test("container env omits provider keys by default (proxy mode)", () => {
   });
 
   assertEquals(vars, {
+    TAKOS_AGENT_BIND_HOST: "0.0.0.0",
     TAKOS_AGENT_CONTROL_RPC_BASE_URL: "https://host.internal/",
     TAKOS_AGENT_TOOL_ALLOWLIST: "*",
   });

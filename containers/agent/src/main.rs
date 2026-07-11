@@ -224,20 +224,11 @@ async fn main() -> AppResult<()> {
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or(8080);
-    // Safer default: bind to loopback. Operators on managed deployments where
-    // the listener is fronted by an internal proxy must explicitly opt in with
-    // `TAKOS_AGENT_BIND_PUBLIC=true` to listen on all interfaces. This avoids
-    // accidentally exposing /start (a privileged endpoint) on the public
-    // network during local development or misconfigured rollouts.
-    let bind_public = matches!(
-        env::var("TAKOS_AGENT_BIND_PUBLIC")
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase())
-            .as_deref(),
-        Some("true") | Some("1") | Some("yes"),
-    );
-    let bind_host: &str = if bind_public { "0.0.0.0" } else { "127.0.0.1" };
-    let listener = tokio::net::TcpListener::bind((bind_host, port)).await?;
+    // Native execution stays loopback-only by default. Container images and
+    // managed container hosts set this explicitly to 0.0.0.0 so the private
+    // container network can reach the process on its declared port.
+    let bind_host = resolve_bind_host(env::var("TAKOS_AGENT_BIND_HOST").ok());
+    let listener = tokio::net::TcpListener::bind((bind_host.as_str(), port)).await?;
     info!(port, host = bind_host, "takos-agent listening");
     axum::serve(listener, app).await?;
     Ok(())
@@ -1011,6 +1002,12 @@ fn parse_max_concurrent_runs(raw: Option<String>) -> usize {
         .unwrap_or(DEFAULT_MAX_CONCURRENT_RUNS)
 }
 
+fn resolve_bind_host(raw: Option<String>) -> String {
+    raw.map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "127.0.0.1".to_string())
+}
+
 fn parse_heartbeat_interval_secs(raw: Option<String>) -> u64 {
     let Some(raw) = raw else {
         return DEFAULT_HEARTBEAT_INTERVAL_SECS;
@@ -1038,9 +1035,9 @@ fn max_tool_definitions() -> usize {
 mod tests {
     use super::{
         authorize_start_with_token, collect_openai_api_keys, handle_failure,
-        parse_max_concurrent_runs, sanitize_failure_error_message, select_model_tools,
-        user_visible_failure_message, RunAdmission, ServiceState, StartAuthError,
-        OPENAI_MAX_TOOL_DEFINITIONS,
+        parse_max_concurrent_runs, resolve_bind_host, sanitize_failure_error_message,
+        select_model_tools, user_visible_failure_message, RunAdmission, ServiceState,
+        StartAuthError, OPENAI_MAX_TOOL_DEFINITIONS,
     };
     use crate::control_rpc::{ControlRpcClient, StartPayload, ToolDefinition, UsagePayload};
     use crate::engine_support::safe_space_path;
@@ -1068,6 +1065,13 @@ mod tests {
         assert_eq!(parse_max_concurrent_runs(Some(String::new())), 5);
         assert_eq!(parse_max_concurrent_runs(Some("0".to_string())), 5);
         assert_eq!(parse_max_concurrent_runs(Some("invalid".to_string())), 5);
+    }
+
+    #[test]
+    fn bind_host_defaults_to_loopback_and_honors_container_contract() {
+        assert_eq!(resolve_bind_host(None), "127.0.0.1");
+        assert_eq!(resolve_bind_host(Some(String::new())), "127.0.0.1");
+        assert_eq!(resolve_bind_host(Some(" 0.0.0.0 ".to_string())), "0.0.0.0");
     }
 
     #[test]

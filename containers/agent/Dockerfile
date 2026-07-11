@@ -21,6 +21,7 @@ RUN mkdir -p /tmp/takos-agent \
 COPY --from=builder /work/takos/containers/agent/target/release/takos-agent /usr/local/bin/takos-agent
 
 ENV PORT=8080 \
+  TAKOS_AGENT_BIND_HOST=0.0.0.0 \
   TAKOS_AGENT_DATA_DIR=/tmp/takos-agent
 
 EXPOSE 8080
