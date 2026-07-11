@@ -9,8 +9,7 @@ import {
 } from "../worker-release-artifact.mjs";
 
 const runtimeImage = "registry.cloudflare.com/acc/takos-worker-runtime:v0.10.1";
-const executorImage =
-  "registry.cloudflare.com/acc/takos-agent:v0.10.1";
+const executorImage = "registry.cloudflare.com/acc/takos-agent:v0.10.1";
 
 test("Worker release artifact packages a verified bundle and rewrites Wrangler paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "takos-worker-artifact-test-"));
@@ -23,10 +22,13 @@ test("Worker release artifact packages a verified bundle and rewrites Wrangler p
     await mkdir(join(assetsDir, "icons"), { recursive: true });
     await mkdir(imageDir, { recursive: true });
     await writeFile(
-      join(bundleDir, "index.js"),
+      join(bundleDir, "cloudflare-entrypoint.js"),
       "export default { fetch() { return new Response('ok') } };\n",
     );
-    await writeFile(join(bundleDir, "index.js.map"), '{"sources":[]}\n');
+    await writeFile(
+      join(bundleDir, "cloudflare-entrypoint.js.map"),
+      '{"sources":[]}\n',
+    );
     await writeFile(join(assetsDir, "index.html"), "<h1>Takos</h1>\n");
     await writeFile(join(assetsDir, "icons/logo.svg"), "<svg></svg>\n");
     await writeFile(
@@ -109,6 +111,31 @@ test("Worker release artifact packages a verified bundle and rewrites Wrangler p
     expect(rendered).toContain(
       `directory = ${JSON.stringify(prepared.assetsPath)}`,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Worker release artifact rejects ambiguous Wrangler entrypoints", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "takos-worker-artifact-ambiguous-"),
+  );
+  try {
+    const bundleDir = join(root, "bundle");
+    await mkdir(bundleDir, { recursive: true });
+    await writeFile(join(bundleDir, "first.js"), "export default {};\n");
+    await writeFile(join(bundleDir, "second.mjs"), "export default {};\n");
+
+    await expect(
+      buildWorkerReleaseArtifact({
+        bundleDir,
+        assetsDir: join(root, "assets"),
+        imageDigestDir: join(root, "images"),
+        outputDir: join(root, "output"),
+        releaseTag: "v0.10.1",
+        requireCloudflareContainerImages: true,
+      }),
+    ).rejects.toThrow(/exactly one JavaScript entrypoint/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

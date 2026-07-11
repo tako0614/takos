@@ -39,17 +39,14 @@ export async function buildWorkerReleaseArtifact(options: Options) {
   const bundleDir = resolve(options.bundleDir);
   const assetsDir = resolve(options.assetsDir);
   const outputDir = resolve(options.outputDir);
-  await assertRegularFile(
-    join(bundleDir, "index.js"),
-    "Worker bundle index.js",
-  );
+  const workerBundlePath = await resolveWorkerBundlePath(bundleDir);
   await assertDirectory(assetsDir, "web assets directory");
   await rm(outputDir, { recursive: true, force: true });
   const tempRoot = await mkdtemp(join(tmpdir(), "takos-worker-release-"));
   const packageRoot = join(tempRoot, "package");
   try {
     await mkdir(join(packageRoot, "worker"), { recursive: true });
-    await cp(join(bundleDir, "index.js"), join(packageRoot, "worker/index.js"));
+    await cp(workerBundlePath, join(packageRoot, "worker/index.js"));
     await cp(assetsDir, join(packageRoot, "assets"), { recursive: true });
     const assetManifest = await buildAssetManifest(join(packageRoot, "assets"));
     await writeFile(
@@ -120,6 +117,26 @@ export async function buildWorkerReleaseArtifact(options: Options) {
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+async function resolveWorkerBundlePath(bundleDir: string): Promise<string> {
+  await assertDirectory(bundleDir, "Wrangler Worker bundle directory");
+  const candidates = (await readdir(bundleDir, { withFileTypes: true }))
+    .filter(
+      (entry) =>
+        entry.isFile() && [".js", ".mjs", ".cjs"].includes(extname(entry.name)),
+    )
+    .map((entry) => join(bundleDir, entry.name))
+    .sort();
+  if (candidates.length !== 1) {
+    const found = candidates.length
+      ? candidates.map((path) => basename(path)).join(", ")
+      : "none";
+    throw new Error(
+      `Wrangler Worker bundle directory must contain exactly one JavaScript entrypoint; found ${found} in ${bundleDir}`,
+    );
+  }
+  return candidates[0];
 }
 
 function sourceDateEpoch() {
