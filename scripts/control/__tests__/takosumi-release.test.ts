@@ -2015,25 +2015,38 @@ test("waitForReleaseContainerImages waits for every release image", async () => 
     resolve(bin, "bunx"),
     `#!/bin/sh
 printf '%s\\n' "$*" >> '${log}'
-count=0
-if [ -f '${state}' ]; then
-  count=$(cat '${state}')
-fi
-count=$((count + 1))
-printf '%s' "$count" > '${state}'
-if [ "$count" = "1" ]; then
-  executor='registry.cloudflare.com/acc_123/takos-agent:old'
-else
-  executor='${executorTaggedImage}'
-fi
-cat <<JSON
+if printf '%s' "$*" | grep -q 'containers list'; then
+  cat <<JSON
 [
-  {"name":"takos-test-runtime","state":"ready","image":"${runtimeTaggedImage}"},
-  {"name":"takos-test-executor-tier1","state":"ready","image":"$executor"},
-  {"name":"takos-test-executor-tier2","state":"ready","image":"$executor"},
-  {"name":"takos-test-executor-tier3","state":"ready","image":"$executor"}
+  {"id":"runtime-id","name":"takos-test-runtime","state":"ready","image":"registry.cloudflare.com/acc_123/takos-worker-runtime:old"},
+  {"id":"tier1-id","name":"takos-test-executor-tier1","state":"ready","image":"registry.cloudflare.com/acc_123/takos-agent:old"},
+  {"id":"tier2-id","name":"takos-test-executor-tier2","state":"ready","image":"registry.cloudflare.com/acc_123/takos-agent:old"},
+  {"id":"tier3-id","name":"takos-test-executor-tier3","state":"ready","image":"registry.cloudflare.com/acc_123/takos-agent:old"}
 ]
 JSON
+elif printf '%s' "$*" | grep -q 'containers info'; then
+  case "$*" in
+    *runtime-id*) image='${runtimeTaggedImage}'; version=4 ;;
+    *) image='${executorTaggedImage}'; version=8 ;;
+  esac
+  printf '{"version":%s,"configuration":{"image":"%s"},"health":{"errors":[],"instances":{"failed":0}}}\n' "$version" "$image"
+elif printf '%s' "$*" | grep -q 'containers instances'; then
+  case "$*" in
+    *tier1-id*)
+      count=0
+      if [ -f '${state}' ]; then
+        count=$(cat '${state}')
+      fi
+      count=$((count + 1))
+      printf '%s' "$count" > '${state}'
+      if [ "$count" = "1" ]; then version=7; else version=8; fi
+      printf '[{"id":"warm-0","state":"running","version":%s}]\n' "$version"
+      ;;
+    *) printf '[]\n' ;;
+  esac
+else
+  exit 2
+fi
 `,
   );
   chmodSync(resolve(bin, "bunx"), 0o755);
@@ -2056,6 +2069,8 @@ JSON
     assert.equal(result.containers.length, 4);
     assert.equal(readFileSync(state, "utf8"), "2");
     assert.match(readFileSync(log, "utf8"), /wrangler containers list/);
+    assert.match(readFileSync(log, "utf8"), /wrangler containers info/);
+    assert.match(readFileSync(log, "utf8"), /wrangler containers instances/);
   } finally {
     process.chdir(previousCwd);
     rmSync(root, { recursive: true, force: true });

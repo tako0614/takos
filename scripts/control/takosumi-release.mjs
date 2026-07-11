@@ -33,8 +33,8 @@ const RELEASE_HEALTH_ATTEMPTS = 12;
 const RELEASE_HEALTH_INTERVAL_MS = 2500;
 const RELEASE_WORKER_API_ATTEMPTS = 12;
 const RELEASE_WORKER_API_INTERVAL_MS = 2500;
-const RELEASE_CONTAINER_API_ATTEMPTS = 60;
-const RELEASE_CONTAINER_API_INTERVAL_MS = 2000;
+const RELEASE_CONTAINER_API_ATTEMPTS = 80;
+const RELEASE_CONTAINER_API_INTERVAL_MS = 3000;
 const RELEASE_COMMAND_OUTPUT_MAX_BYTES = 64 * 1024 * 1024;
 const RELEASE_COMMAND_LOG_MAX_CHARS = 20_000;
 const DESTROY_COMMAND_RETRY_ATTEMPTS = 3;
@@ -1122,9 +1122,10 @@ const RELEASE_CONTAINER_APPLICATIONS = [
 
 /**
  * Wait until Cloudflare's asynchronous Container rollout has materialized every
- * prebuilt image selected by the reviewed release manifest. `wrangler deploy`
- * can return before the container applications converge, even with an
- * immediate rollout, so Worker health alone is not sufficient release proof.
+ * prebuilt image selected by the reviewed release manifest. The account-level
+ * list response can retain an older summary image after the application detail
+ * has advanced, so convergence is proved from each application's configuration
+ * plus the versions of any live instances.
  */
 export async function waitForReleaseContainerImages(
   outputs,
@@ -1151,7 +1152,7 @@ export async function waitForReleaseContainerImages(
     return { skipped: true, reason: "no_prebuilt_container_images" };
   }
 
-  const command = commandLine([
+  const listCommand = commandLine([
     "bunx",
     "wrangler",
     "containers",
@@ -1177,7 +1178,7 @@ export async function waitForReleaseContainerImages(
   let lastProblem = "container applications were not listed";
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const result = runShellCommand(command, env);
+    const result = runShellCommand(listCommand, env);
     if (!result.error && result.status === 0) {
       const parsed = parseWranglerJsonOutput(result.stdout ?? "");
       if (parsed.ok && Array.isArray(parsed.value)) {
@@ -1186,26 +1187,129 @@ export async function waitForReleaseContainerImages(
             .filter((entry) => entry && typeof entry === "object")
             .map((entry) => [entry.name, entry]),
         );
-        const pending = expected.filter((entry) => {
-          const application = applications.get(entry.name);
-          return (
-            application?.state !== "ready" || application?.image !== entry.image
+        const pending = [];
+        for (const entry of expected) {
+          const summary = applications.get(entry.name);
+          const applicationId =
+            typeof summary?.id === "string" ? summary.id : undefined;
+          if (!applicationId) {
+            pending.push(`${entry.name}: application is missing`);
+            continue;
+          }
+
+          const infoResult = runShellCommand(
+            commandLine([
+              "bunx",
+              "wrangler",
+              "containers",
+              "info",
+              applicationId,
+              "--config",
+              releaseWranglerConfigPath(environment),
+              ...wranglerEnvironmentArgs(environment),
+            ]),
+            env,
           );
-        });
+          if (infoResult.error || infoResult.status !== 0) {
+            pending.push(
+              `${entry.name}: container info failed (${boundedCommandLog(
+                `${infoResult.stdout ?? ""}\n${infoResult.stderr ?? ""}`.trim() ||
+                  infoResult.error?.message ||
+                  `exit ${infoResult.status ?? "unknown"}`,
+                env,
+              )})`,
+            );
+            continue;
+          }
+          const info = parseWranglerJsonOutput(infoResult.stdout ?? "");
+          if (!info.ok || !info.value || typeof info.value !== "object") {
+            pending.push(
+              `${entry.name}: invalid container info (${info.ok ? "non-object JSON" : info.error})`,
+            );
+            continue;
+          }
+          const application = info.value;
+          const actualImage = application.configuration?.image;
+          const applicationVersion = application.version;
+          const healthErrors = application.health?.errors;
+          const failedInstances = application.health?.instances?.failed;
+          if (actualImage !== entry.image) {
+            pending.push(
+              `${entry.name}: expected ${entry.image}, got ${actualImage ?? "missing"}`,
+            );
+            continue;
+          }
+          if (
+            (Array.isArray(healthErrors) && healthErrors.length > 0) ||
+            (typeof failedInstances === "number" && failedInstances > 0)
+          ) {
+            pending.push(`${entry.name}: application health reports a failure`);
+            continue;
+          }
+
+          const instancesResult = runShellCommand(
+            commandLine([
+              "bunx",
+              "wrangler",
+              "containers",
+              "instances",
+              applicationId,
+              "--config",
+              releaseWranglerConfigPath(environment),
+              ...wranglerEnvironmentArgs(environment),
+              "--json",
+            ]),
+            env,
+          );
+          if (instancesResult.error || instancesResult.status !== 0) {
+            pending.push(
+              `${entry.name}: container instances failed (${boundedCommandLog(
+                `${instancesResult.stdout ?? ""}\n${instancesResult.stderr ?? ""}`.trim() ||
+                  instancesResult.error?.message ||
+                  `exit ${instancesResult.status ?? "unknown"}`,
+                env,
+              )})`,
+            );
+            continue;
+          }
+          const instances = parseWranglerJsonOutput(
+            instancesResult.stdout ?? "",
+          );
+          if (!instances.ok || !Array.isArray(instances.value)) {
+            pending.push(
+              `${entry.name}: invalid container instances (${instances.ok ? "non-array JSON" : instances.error})`,
+            );
+            continue;
+          }
+          const staleLiveInstances = instances.value.filter((instance) => {
+            if (!instance || typeof instance !== "object") return true;
+            const state =
+              typeof instance.state === "string"
+                ? instance.state.toLowerCase()
+                : "";
+            if (state === "inactive" || state === "stopped") return false;
+            return (
+              typeof applicationVersion !== "number" ||
+              instance.version !== applicationVersion
+            );
+          });
+          if (staleLiveInstances.length > 0) {
+            pending.push(
+              `${entry.name}: ${staleLiveInstances.length} live instance(s) have not reached application version ${
+                typeof applicationVersion === "number"
+                  ? applicationVersion
+                  : "unknown"
+              }`,
+            );
+          }
+        }
         if (pending.length === 0) {
           console.log(
             `Verified ${expected.length} release container image(s) for ${workerName}.`,
           );
           return { skipped: false, containers: expected };
         }
-        lastProblem = pending
-          .map((entry) => {
-            const actual = applications.get(entry.name);
-            return `${entry.name}: expected ${entry.image}, got ${
-              actual?.image ?? "missing"
-            } (${actual?.state ?? "missing"})`;
-          })
-          .join("; ");
+        lastProblem = pending.join("; ");
       } else {
         lastProblem = parsed.ok
           ? "wrangler containers list returned a non-array JSON value"
