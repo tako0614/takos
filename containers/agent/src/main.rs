@@ -867,6 +867,12 @@ fn local_smoke_opt_in() -> bool {
 
 fn user_visible_failure_message(error: &str) -> String {
     let normalized = error.to_ascii_lowercase();
+    if normalized.contains("takosumi accounts workspace authorization must be renewed")
+        || normalized.contains("takosumi accounts authorization must be renewed")
+        || normalized.contains("takosumi ai gateway authorization is unavailable")
+    {
+        return "The agent needs renewed Takosumi authorization before it can call the language model. Sign in to this Takos app again, then retry.".to_string();
+    }
     if normalized.contains("incorrect api key")
         || normalized.contains("invalid_api_key")
         || (normalized.contains("401 unauthorized") && normalized.contains("openai"))
@@ -1089,6 +1095,16 @@ mod tests {
         let message = user_visible_failure_message("OpenAI-compatible API key is not configured");
         assert!(message.contains("no OpenAI-compatible API key is configured"));
         assert!(message.contains("OPENAI_API_KEY"));
+    }
+
+    #[test]
+    fn failure_message_for_expired_takosumi_authorization_does_not_blame_model_config() {
+        let message = user_visible_failure_message(
+            "model error: AuthenticationError: Takosumi Accounts Workspace authorization must be renewed",
+        );
+        assert!(message.contains("renewed Takosumi authorization"));
+        assert!(message.contains("Sign in to this Takos app again"));
+        assert!(!message.contains("model configuration"));
     }
 
     #[tokio::test]
