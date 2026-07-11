@@ -28,7 +28,7 @@ test("per-run control URL wins over a stale container host URL", async () => {
   assertEquals(result.ok, true);
   assertEquals(startPayload?.controlRpcBaseUrl, "https://current.example");
   assertEquals(startPayload?.controlRpcToken, "fresh-run-token");
-  assertEquals(startPayload?.checkpointProtocolVersion, 1);
+  assertEquals(startPayload?.checkpointProtocolVersion, 2);
 });
 
 test("container host control URL remains the fallback", async () => {

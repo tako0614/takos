@@ -13,6 +13,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::control_rpc::{ControlRpcClient, RpcToolResult, ToolDefinition};
 
+pub const UNCERTAIN_SIDE_EFFECT_FATAL_ERROR: &str =
+    "side-effect outcome is uncertain; verify remote state before issuing a new operation; automatic replay is blocked";
+
 /// Operator-managed allowlist of tool names that the agent is permitted to
 /// dispatch. Read from `TAKOS_AGENT_TOOL_ALLOWLIST` (comma-separated) at the
 /// time each call is evaluated. **The default is empty** — operators MUST opt
@@ -56,6 +59,10 @@ impl CompositeToolExecutor {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
+    }
+
+    pub fn fatal_error_handle(&self) -> Arc<Mutex<Option<String>>> {
+        self.fatal_error.clone()
     }
 
     fn fail_run_for_uncertain_outcome(&self, error: String) {
@@ -221,12 +228,10 @@ impl CompositeToolExecutor {
         };
 
         if rpc_result.outcome_uncertain {
-            let detail = rpc_result.error.clone().unwrap_or_else(|| {
-                format!("{tool_name} has an unknown remote side-effect outcome")
-            });
-            let error = format!(
-                "side-effect outcome is uncertain; verify remote state before issuing a new operation: {detail}"
-            );
+            // Persist a fixed, bounded reason. The Worker-owned operation ledger
+            // retains diagnostic detail; copying that untrusted remote text into
+            // every engine checkpoint would create a second secret-bearing sink.
+            let error = UNCERTAIN_SIDE_EFFECT_FATAL_ERROR.to_string();
             self.fail_run_for_uncertain_outcome(error.clone());
             let summary = format!("{tool_name} error={error}");
             self.client

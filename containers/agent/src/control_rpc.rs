@@ -1,6 +1,6 @@
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, io};
 
@@ -246,6 +246,8 @@ pub struct RpcToolResult {
 struct EngineCheckpointLoadResponse {
     checkpoint: Option<LoopState>,
     usage: UsageSnapshot,
+    #[serde(default, rename = "fatalError")]
+    fatal_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -268,6 +270,7 @@ pub struct ControlRpcClient {
     lease_version: Option<u32>,
     executor_tier: Option<u8>,
     executor_container_id: Option<String>,
+    checkpoint_protocol_version: Option<u8>,
     sequence: Arc<AtomicU64>,
 }
 
@@ -291,6 +294,7 @@ impl ControlRpcClient {
             lease_version: payload.lease_version,
             executor_tier: payload.executor_tier,
             executor_container_id: payload.executor_container_id.clone(),
+            checkpoint_protocol_version: payload.checkpoint_protocol_version,
             sequence: Arc::new(AtomicU64::new(1)),
         })
     }
@@ -437,6 +441,7 @@ impl ControlRpcClient {
             "leaseVersion": self.lease_version,
             "checkpoint": checkpoint,
             "usage": usage,
+            "checkpointProtocolVersion": self.checkpoint_protocol_version,
         });
         let _: Value = self
             .post_checkpoint_with_retry("engine-checkpoint-save", body)
@@ -444,17 +449,20 @@ impl ControlRpcClient {
         Ok(())
     }
 
-    pub async fn load_engine_checkpoint(&self) -> AppResult<(Option<LoopState>, UsageSnapshot)> {
+    pub async fn load_engine_checkpoint(
+        &self,
+    ) -> AppResult<(Option<LoopState>, UsageSnapshot, Option<String>)> {
         let response: EngineCheckpointLoadResponse = self
             .post_checkpoint_with_retry(
                 "engine-checkpoint-load",
                 json!({
                     "runId": self.run_id,
                     "leaseVersion": self.lease_version,
+                    "checkpointProtocolVersion": self.checkpoint_protocol_version,
                 }),
             )
             .await?;
-        Ok((response.checkpoint, response.usage))
+        Ok((response.checkpoint, response.usage, response.fatal_error))
     }
 
     async fn post_checkpoint_with_retry<T: DeserializeOwned>(
@@ -672,19 +680,29 @@ impl ControlRpcClient {
 pub struct ControlRpcLoopStateRepository {
     client: ControlRpcClient,
     usage_tracker: Arc<UsageTracker>,
+    fatal_error: Arc<Mutex<Option<String>>>,
 }
 
 impl ControlRpcLoopStateRepository {
-    pub const fn new(client: ControlRpcClient, usage_tracker: Arc<UsageTracker>) -> Self {
+    pub fn new(
+        client: ControlRpcClient,
+        usage_tracker: Arc<UsageTracker>,
+        fatal_error: Arc<Mutex<Option<String>>>,
+    ) -> Self {
         Self {
             client,
             usage_tracker,
+            fatal_error,
         }
     }
 
     pub async fn load_current(&self) -> AppResult<Option<LoopState>> {
-        let (checkpoint, usage) = self.client.load_engine_checkpoint().await?;
+        let (checkpoint, usage, fatal_error) = self.client.load_engine_checkpoint().await?;
         self.usage_tracker.restore(usage);
+        *self
+            .fatal_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = fatal_error;
         Ok(checkpoint)
     }
 }
@@ -693,6 +711,20 @@ impl ControlRpcLoopStateRepository {
 impl LoopStateRepository for ControlRpcLoopStateRepository {
     async fn save_checkpoint(&self, state: LoopState) -> EngineResult<()> {
         let usage = self.usage_tracker.snapshot();
+        let fatal_error = self
+            .fatal_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        // The engine already committed a Running checkpoint immediately before
+        // invoking this tool node. Once its remote outcome becomes uncertain,
+        // leave that safe pointer untouched instead of replacing it with a
+        // reasonless Cancelled/Failed checkpoint. This is also rollback-safe:
+        // a v1 Worker can drop the v2 fatal field, but recovery re-enters only
+        // the operation-ledger lookup, which cannot replay the mutation/model.
+        if fatal_error.is_some() {
+            return Ok(());
+        }
         self.client
             .save_engine_checkpoint(&state, &usage)
             .await
@@ -1057,12 +1089,24 @@ mod tests {
             "serviceId": "service-current",
             "model": "local-smoke",
             "leaseVersion": 2,
-            "checkpointProtocolVersion": 1,
+            "checkpointProtocolVersion": 2,
             "controlRpcBaseUrl": "http://127.0.0.1:1",
             "controlRpcToken": "token",
         }))
         .expect("current start payload");
         assert!(current.supports_durable_checkpoints());
+
+        let current_response =
+            serde_json::from_value::<super::EngineCheckpointLoadResponse>(json!({
+                "checkpoint": null,
+                "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "cachedInputTokens": 0
+                }
+            }))
+            .expect("checkpoint v1 response without fatalError remains compatible");
+        assert!(current_response.fatal_error.is_none());
 
         assert!(
             serde_json::from_value::<super::EngineCheckpointLoadResponse>(json!({
@@ -1444,6 +1488,7 @@ mod tests {
         use std::sync::Arc;
         use takos_agent_engine::domain::{LoopState, LoopStatus};
         use takos_agent_engine::ids::{LoopId, SessionId};
+        use takos_agent_engine::storage::LoopStateRepository;
         use tokio::sync::Mutex as AsyncMutex;
 
         #[derive(Default)]
@@ -1461,6 +1506,7 @@ mod tests {
                 .expect("request body");
             let body: serde_json::Value =
                 serde_json::from_slice(&bytes).expect("checkpoint request JSON");
+            assert_eq!(body["checkpointProtocolVersion"], 2);
             if path.ends_with("engine-checkpoint-save") {
                 assert_eq!(body["leaseVersion"], 13);
                 let mut stored = stored.lock().await;
@@ -1497,6 +1543,7 @@ mod tests {
                     }),
                     |value| value["usage"].clone(),
                 ),
+                "fatalError": crate::tool_bridge::UNCERTAIN_SIDE_EFFECT_FATAL_ERROR,
             }))
             .into_response()
         }
@@ -1520,7 +1567,7 @@ mod tests {
             lease_version: Some(13),
             executor_tier: Some(1),
             executor_container_id: Some("checkpoint-container".to_string()),
-            checkpoint_protocol_version: Some(1),
+            checkpoint_protocol_version: Some(2),
             control_rpc_base_url: format!("http://{address}"),
             control_rpc_token: "test-token".to_string(),
         })
@@ -1543,12 +1590,29 @@ mod tests {
             output_tokens: 30,
             cached_input_tokens: 20,
         };
-
-        client
-            .save_engine_checkpoint(&checkpoint, &usage)
+        let usage_tracker = Arc::new(crate::engine_support::UsageTracker::default());
+        usage_tracker.restore(usage.clone());
+        let fatal_error = Arc::new(Mutex::new(None));
+        let repository = super::ControlRpcLoopStateRepository::new(
+            client.clone(),
+            usage_tracker,
+            fatal_error.clone(),
+        );
+        repository
+            .save_checkpoint(checkpoint.clone())
             .await
             .expect("checkpoint save");
-        let (loaded, loaded_usage) = client
+        *fatal_error
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            Some(crate::tool_bridge::UNCERTAIN_SIDE_EFFECT_FATAL_ERROR.to_string());
+        let mut reasonless_terminal = checkpoint.clone();
+        reasonless_terminal.status = LoopStatus::Cancelled;
+        repository
+            .save_checkpoint(reasonless_terminal)
+            .await
+            .expect("fatal checkpoint save is intentionally skipped");
+        let (loaded, loaded_usage, loaded_fatal_error) = client
             .load_engine_checkpoint()
             .await
             .expect("checkpoint load");
@@ -1557,6 +1621,10 @@ mod tests {
         server.abort();
         assert_eq!(loaded, checkpoint);
         assert_eq!(loaded_usage, usage);
+        assert_eq!(
+            loaded_fatal_error.as_deref(),
+            Some(crate::tool_bridge::UNCERTAIN_SIDE_EFFECT_FATAL_ERROR)
+        );
         let stored = stored.lock().await;
         assert_eq!(stored.save_attempts, 2);
         assert_eq!(stored.load_attempts, 2);

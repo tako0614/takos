@@ -6,7 +6,12 @@
  */
 
 import { getDb } from "../../infra/db/index.ts";
-import { runEvents, runs, threads } from "../../infra/db/schema.ts";
+import {
+  runEvents,
+  runs,
+  threads,
+  toolOperations,
+} from "../../infra/db/schema.ts";
 import { and, eq, isNull } from "drizzle-orm";
 import { logError, logWarn } from "../../shared/utils/logger.ts";
 import { affectedRowCount } from "../../shared/utils/affected-row-count.ts";
@@ -1470,6 +1475,9 @@ type StoredEngineCheckpoint = {
   usage: EngineCheckpointUsage;
 };
 
+const UNCERTAIN_SIDE_EFFECT_FATAL_ERROR =
+  "side-effect outcome is uncertain; verify remote state before issuing a new operation; automatic replay is blocked";
+
 const EMPTY_ENGINE_CHECKPOINT_USAGE: EngineCheckpointUsage = {
   inputTokens: 0,
   outputTokens: 0,
@@ -1628,6 +1636,10 @@ function validCheckpointLeaseVersion(
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
+function supportsFatalCheckpointProtocol(value: unknown): boolean {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 2;
+}
+
 export async function handleEngineCheckpointSave(
   body: Record<string, unknown>,
   env: Env,
@@ -1745,21 +1757,61 @@ export async function handleEngineCheckpointLoad(
   const leaseError = await ensureRunLease(env, runId, body);
   if (leaseError) return leaseError;
   try {
-    const row = await getDb(env.DB)
+    const db = getDb(env.DB);
+    const row = await db
       .select({ checkpoint: runs.engineCheckpoint })
       .from(runs)
       .where(eq(runs.id, runId))
       .get();
     if (!row) return err("Run not found", 404);
+    // The operation ledger is the durable authority for commit-ambiguous side
+    // effects. It also closes the tiny crash window between tool-execute
+    // returning `outcome_uncertain` and the engine saving its next checkpoint.
+    const uncertainOperation = await db
+      .select({ id: toolOperations.id })
+      .from(toolOperations)
+      .where(
+        and(
+          eq(toolOperations.runId, runId),
+          eq(toolOperations.status, "uncertain"),
+        ),
+      )
+      .get();
+    const authoritativeFatalError = uncertainOperation
+      ? UNCERTAIN_SIDE_EFFECT_FATAL_ERROR
+      : null;
+    if (
+      authoritativeFatalError &&
+      !supportsFatalCheckpointProtocol(body.checkpointProtocolVersion)
+    ) {
+      // v1 wrappers ignore the v2 fatalError response field and would recover a
+      // Cancelled checkpoint as a generic engine failure. Return the canonical
+      // reason as a non-retryable conflict instead; released v1 wrappers already
+      // map this marker to atomic failed completion without model/tool replay.
+      return err(authoritativeFatalError, 409);
+    }
     if (!row.checkpoint) {
       return ok({
         checkpoint: null,
         usage: EMPTY_ENGINE_CHECKPOINT_USAGE,
+        fatalError: authoritativeFatalError,
       });
     }
     const parsed = await loadStoredEngineCheckpoint(env, row.checkpoint);
-    if (!parsed) return err("Stored engine checkpoint is invalid", 500);
-    return ok(parsed);
+    if (!parsed) {
+      if (authoritativeFatalError) {
+        return ok({
+          checkpoint: null,
+          usage: EMPTY_ENGINE_CHECKPOINT_USAGE,
+          fatalError: authoritativeFatalError,
+        });
+      }
+      return err("Stored engine checkpoint is invalid", 500);
+    }
+    return ok({
+      ...parsed,
+      fatalError: authoritativeFatalError,
+    });
   } catch (error) {
     logError("Engine checkpoint load failed", error, {
       module: "executor-host",

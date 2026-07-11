@@ -772,6 +772,7 @@ async fn execute_run(
         Some(Arc::new(ControlRpcLoopStateRepository::new(
             client.clone(),
             usage_tracker,
+            tool_execution_state.fatal_error_handle(),
         )))
     } else {
         None
@@ -846,7 +847,11 @@ async fn execute_run(
         .await
         .ok();
     let run_options = worker_context_run_options(cancellation_token.clone(), conversation_history);
-    let mut run_result = if let Some(checkpoint) = saved_checkpoint {
+    let mut run_result = if let Some(error) = tool_execution_state.fatal_error() {
+        // A prior executor already crossed a commit-ambiguous side-effect
+        // boundary. Do not recover the graph or invoke a model/tool again.
+        Err(EngineError::Tool(error))
+    } else if let Some(checkpoint) = saved_checkpoint {
         recover_interrupted_loop_with_options(&engine_config, &deps, checkpoint, run_options).await
     } else {
         run_turn_with_options(&engine_config, &deps, request, run_options).await
@@ -1646,6 +1651,7 @@ mod tests {
     struct AgentE2eState {
         base_url: String,
         requests: Arc<Mutex<Vec<(String, serde_json::Value)>>>,
+        checkpoint_fatal_error: bool,
     }
 
     async fn agent_e2e_handler(
@@ -1700,7 +1706,10 @@ mod tests {
                     "inputTokens": 0,
                     "outputTokens": 0,
                     "cachedInputTokens": 0
-                }
+                },
+                "fatalError": state.checkpoint_fatal_error.then_some(
+                    crate::tool_bridge::UNCERTAIN_SIDE_EFFECT_FATAL_ERROR
+                )
             }),
             "/v1/chat/completions" => serde_json::json!({
                 "choices": [{
@@ -1727,6 +1736,7 @@ mod tests {
         let state = AgentE2eState {
             base_url: format!("http://{address}"),
             requests: requests.clone(),
+            checkpoint_fatal_error: false,
         };
         let app = Router::new()
             .fallback(post(agent_e2e_handler))
@@ -1799,6 +1809,70 @@ mod tests {
         assert!(!requests
             .iter()
             .any(|(path, _)| path.ends_with("/update-run-status")));
+    }
+
+    #[tokio::test]
+    async fn recovered_uncertain_side_effect_terminalizes_without_model_or_tool_replay() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("e2e listener");
+        let address = listener.local_addr().expect("e2e address");
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let state = AgentE2eState {
+            base_url: format!("http://{address}"),
+            requests: requests.clone(),
+            checkpoint_fatal_error: true,
+        };
+        let app = Router::new()
+            .fallback(post(agent_e2e_handler))
+            .with_state(state.clone());
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("e2e server");
+        });
+        let payload = StartPayload {
+            run_id: "run-uncertain-recovery".to_string(),
+            worker_id: "service-uncertain-recovery".to_string(),
+            service_id: Some("service-uncertain-recovery".to_string()),
+            model: Some("gpt-e2e".to_string()),
+            lease_version: Some(2),
+            executor_tier: Some(1),
+            executor_container_id: Some("container-uncertain-recovery".to_string()),
+            checkpoint_protocol_version: Some(1),
+            control_rpc_base_url: state.base_url,
+            control_rpc_token: "token-e2e".to_string(),
+        };
+
+        execute_run(payload, CancellationToken::new())
+            .await
+            .expect("uncertain recovery should terminalize safely");
+        server.abort();
+        let requests = requests.lock().await.clone();
+        assert!(
+            !requests
+                .iter()
+                .any(|(path, _)| path == "/v1/chat/completions"),
+            "recovery must not invoke the model"
+        );
+        assert!(
+            !requests
+                .iter()
+                .any(|(path, _)| path.ends_with("/tool-execute")),
+            "recovery must not replay a tool"
+        );
+        let completion = requests
+            .iter()
+            .find(|(path, _)| path.ends_with("/complete-run"))
+            .map(|(_, body)| body)
+            .expect("uncertain recovery must use atomic terminal completion");
+        assert_eq!(completion["status"], "failed");
+        assert!(completion["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("side-effect outcome is uncertain")));
+        assert!(completion["messages"]
+            .as_array()
+            .and_then(|messages| messages.last())
+            .and_then(|message| message["content"].as_str())
+            .is_some_and(|content| content.contains("do not retry blindly")));
     }
 
     #[test]

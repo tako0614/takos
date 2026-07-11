@@ -90,6 +90,17 @@ async function createFixture(options: { offload?: boolean } = {}) {
       engine_checkpoint TEXT,
       engine_checkpoint_updated_at TEXT
     );
+    CREATE TABLE tool_operations (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      operation_key TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      result_output TEXT,
+      result_error TEXT,
+      created_at TEXT NOT NULL,
+      completed_at TEXT
+    );
   `);
   await client.execute({
     sql: "INSERT INTO runs (id, status, service_id, lease_version) VALUES (?, 'running', ?, ?)",
@@ -139,6 +150,7 @@ test("engine checkpoint is saved and loaded under the current run lease", async 
     assertEquals(await loaded.json(), {
       checkpoint: checkpoint(),
       usage: usage(),
+      fatalError: null,
     });
 
     const row = await client.execute({
@@ -224,6 +236,7 @@ test("a replacement lease can resume the prior container checkpoint", async () =
     assertEquals(await replacement.json(), {
       checkpoint: saved,
       usage: usage(),
+      fatalError: null,
     });
 
     const superseded = await handleEngineCheckpointLoad(
@@ -311,6 +324,85 @@ test("engine checkpoint rejects an invalid provider usage snapshot", async () =>
       env,
     );
     assertEquals(response.status, 400);
+  } finally {
+    client.close();
+  }
+});
+
+test("uncertain side-effect recovery uses the operation ledger without replacing the checkpoint", async () => {
+  const { client, env } = await createFixture();
+  try {
+    const fatalError =
+      "side-effect outcome is uncertain; verify remote state before issuing a new operation; automatic replay is blocked";
+    const saved = await handleEngineCheckpointSave(
+      {
+        runId: "run-1",
+        serviceId: "service-1",
+        leaseVersion: 7,
+        checkpoint: checkpoint("execute_tools"),
+        usage: usage(),
+      },
+      env,
+    );
+    assertEquals(saved.status, 200);
+    assertEquals(
+      await (
+        await handleEngineCheckpointLoad(
+          {
+            runId: "run-1",
+            serviceId: "service-1",
+            leaseVersion: 7,
+          },
+          env,
+        )
+      ).json(),
+      {
+        checkpoint: checkpoint("execute_tools"),
+        usage: usage(),
+        fatalError: null,
+      },
+    );
+
+    await client.execute({
+      sql: `INSERT INTO tool_operations
+        (id, run_id, operation_key, tool_name, status, created_at)
+        VALUES (?, ?, ?, ?, 'uncertain', ?)`,
+      args: ["op-1", "run-1", "key-1", "publish", new Date().toISOString()],
+    });
+    await client.execute({
+      sql: "UPDATE runs SET engine_checkpoint = NULL WHERE id = ?",
+      args: ["run-1"],
+    });
+    const operationAuthority = await handleEngineCheckpointLoad(
+      {
+        runId: "run-1",
+        serviceId: "service-1",
+        leaseVersion: 7,
+        checkpointProtocolVersion: 2,
+      },
+      env,
+    );
+    assertEquals(operationAuthority.status, 200);
+    assertEquals(await operationAuthority.json(), {
+      checkpoint: null,
+      usage: { inputTokens: 0, outputTokens: 0, cachedInputTokens: 0 },
+      fatalError,
+    });
+
+    const releasedV1Wrapper = await handleEngineCheckpointLoad(
+      {
+        runId: "run-1",
+        serviceId: "service-1",
+        leaseVersion: 7,
+        checkpointProtocolVersion: 1,
+      },
+      env,
+    );
+    assertEquals(releasedV1Wrapper.status, 409);
+    assertEquals(
+      ((await releasedV1Wrapper.json()) as { error?: string }).error,
+      fatalError,
+    );
   } finally {
     client.close();
   }

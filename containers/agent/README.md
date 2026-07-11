@@ -32,7 +32,7 @@ Rust container がrun中に持つもの:
 Takos Workerが正本として持つもの:
 
 - run queue と run lifecycle 管理
-- lease-fenced engine checkpointのdurable保存とterminal時の消去
+- cumulative usageを含むlease-fenced engine checkpointのdurable保存とterminal時の消去
 - Thread / summary / durable memory and retrieval state / Workspace state
 - remote tool catalog、authorization、execution、idempotency
 - managed/custom skill catalogと永続化
@@ -41,6 +41,8 @@ Takos Workerが正本として持つもの:
 Container diskやpool slotはproduct stateの正本ではありません。restart / 別slot後も、in-flight RunはWorker-owned checkpointから
 idempotent nodeをresumeし、別RunのconversationはTakos Workerのcanonical historyから構築します。TakosumiはCapsule / ContainerServiceのdeploy、credential、OpenTofu Run ledgerを
 管理しますが、Takos固有のconversation / memory / skill / tool-control RPCはTakos Workerが所有します。
+remote side effectのoutcomeが不明な場合はWorker-owned tool operation ledgerをauthorityとして復元し、新leaseはmodel/toolを再実行せず
+同じfail-closed outcomeをatomic completionします。
 
 ## 主要モジュール
 
@@ -108,7 +110,10 @@ tool execute / engine checkpoint save・load / heartbeat / status update / run e
 `takos-agent`はAccounts ledgerやCapsule lifecycleを所有しません。engineは
 `ExecutionProfile::ExternalContext`を明示し、local ingest / activation / distillation / session overflowを通さないbounded model/tool
 loopだけを使います。engine checkpointのdurable authorityはWorkerのRun ledgerで、container diskをrecovery authorityにしません。
-idempotent tool nodeはresumeできますが、provider-neutralなidempotency contractがないmodel nodeは自動再発行せずfail closedします。
+idempotent tool nodeはresumeできますが、`uncertain` side effectはoperation ledgerからfatal reasonを復元し、直前のRunning
+checkpointをreasonless terminal stateで上書きせず再実行を防ぎます。provider-neutralなidempotency contractがないmodel nodeも
+自動再発行せずfail closedします。
+checkpoint protocol v2はfatal responseを交渉し、rolling中のv1 wrapperには既存mapperが理解するcanonical RPC errorを返します。
 `spaceId` / `installationId`をdurable filesystem namespaceとして使いません。
 
 `/api/internal/v1/agent-control/run-config` の budget は `maxGraphSteps` / `maxToolRounds`

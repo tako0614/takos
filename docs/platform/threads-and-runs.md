@@ -20,6 +20,7 @@ Thread は対話のコンテキスト、Run は 1 回のエージェント実行
 Thread message、summary、memory、skill/tool catalogのdurable authorityはTakos Workerです。engine checkpointもRunに
 lease-fenced保存し、restart / 別pool slotではidempotent nodeからresumeできます。ただしcheckpointはconversationやmemoryの第二の
 正本ではありません。model request中断点はprovider-neutralなexactly-onceを保証できないため、自動再発行せずfail closedします。
+side-effect outcomeが不明な場合はtool operation ledgerをauthorityとしてfatal fenceを復元し、新leaseはmodel/toolを再実行しません。
 `tool_calls` / `tool_call_id`はstructured transcriptとしてprovider、tool execution、eventまで同じIDを保ちます。
 
 Run の起動には current API では Workspace を指す legacy field `spaceId` が必須です。Capsule/app 経由の Run では
